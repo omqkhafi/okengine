@@ -1,0 +1,83 @@
+import { describe, expect, test, beforeEach } from "bun:test";
+import { oke } from "./app.ts";
+import { flow, resetFlowSeq } from "./flow.ts";
+import { on, resetBindings } from "./on.ts";
+import { http } from "./triggers.ts";
+
+beforeEach(() => {
+  resetBindings();
+  resetFlowSeq();
+});
+
+describe("fx.call — untriggered flows", () => {
+  test("untriggered flow is callable via app.call and fx.call", async () => {
+    const stats = flow({
+      name: "links.stats",
+      do: ({ code }: { code: string }) => ({ code, clicks: 7 }),
+    });
+
+    const parent = on(
+      http.post("/run"),
+      flow({
+        name: "links.run",
+        effects: { calls: ["links.stats"] },
+        do: async ({ code }: { code: string }, fx) => {
+          const result = await fx.call("links.stats", { code });
+          return result;
+        },
+      }),
+    );
+
+    const app = oke({ name: "call" }).adopt(stats);
+
+    // Direct call (Linkly ⑤)
+    await expect(app.call(stats, { code: "sa" })).resolves.toEqual({
+      code: "sa",
+      clicks: 7,
+    });
+
+    // Same path through fx.call from a triggered flow
+    const res = await app.fetch(
+      new Request("http://localhost/run", {
+        method: "POST",
+        body: JSON.stringify({ code: "sa" }),
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      data: { code: "sa", clicks: 7 },
+      error: null,
+    });
+    expect(parent.triggers).toHaveLength(1);
+    expect(stats.triggers).toHaveLength(0);
+  });
+
+  test("http and signal invocations of the same flow execute identically", async () => {
+    let runs = 0;
+    const work = flow({
+      name: "work",
+      do: (input: { v: number }) => {
+        runs += 1;
+        return { out: input.v + 1 };
+      },
+    });
+
+    on(http.post("/work"), work);
+    on({ name: "tick", delivery: "broadcast" }, work);
+
+    const app = oke({ name: "identical" });
+
+    const a = await app.fetch(
+      new Request("http://localhost/work", {
+        method: "POST",
+        body: JSON.stringify({ v: 10 }),
+      }),
+    );
+    const b = await app.dispatchSignal("tick", { v: 10 });
+
+    expect(await a.json()).toEqual({ data: { out: 11 }, error: null });
+    expect(b[0]?.output).toEqual({ out: 11 });
+    expect(runs).toBe(2);
+  });
+});

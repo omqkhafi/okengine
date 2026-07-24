@@ -260,6 +260,15 @@ export interface Fx {
   step<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
 }
 
+/**
+ * Dispatch target for {@link Fx.call}. Wired by the app so untriggered
+ * flows execute through the same pipeline as triggered ones.
+ */
+export type FxCallHandler = (
+  name: string,
+  input: unknown,
+) => Promise<unknown>;
+
 /** Options for {@link createFx}. */
 export interface CreateFxOptions {
   /** Flow id — used in capability error messages. */
@@ -290,6 +299,11 @@ export interface CreateFxOptions {
     message: string,
     data?: Record<string, unknown>,
   ) => void;
+  /**
+   * Real `fx.call` dispatch. When omitted, calls are ledgered and return
+   * `undefined` (v1 stub).
+   */
+  readonly callHandler?: FxCallHandler;
 }
 
 /** Bundle returned by {@link createFxContext}. */
@@ -433,9 +447,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(signal);
       return gated("emit", name, async () => undefined);
     },
-    call(flow, _input) {
+    call(flow, input) {
       const name = resolveName(flow);
-      return gated("call", name, async () => undefined);
+      return gated("call", name, async () => {
+        if (options.callHandler) {
+          return options.callHandler(name, input);
+        }
+        return undefined;
+      });
     },
     clock,
     vault(secret) {
