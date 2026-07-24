@@ -6,6 +6,8 @@
  */
 
 import { expect } from "bun:test";
+import { createSqlStoreHandle } from "../elements/store/sql-session.ts";
+import { defineTable } from "../elements/store/table.ts";
 import type {
   FilesDriver,
   IndexDriver,
@@ -44,6 +46,40 @@ export async function runSqlConformance(
     expect(del.changes).toBeGreaterThan(0);
     expect(await primary.query(`SELECT * FROM "notes"`)).toHaveLength(0);
     expect(primary.driverId).toBe(driver.id);
+
+    // Convenience helpers — every SQL driver must prove exists + atomic increment.
+    await primary.exec(
+      `CREATE TABLE IF NOT EXISTS "counters" ("id" TEXT PRIMARY KEY, "clicks" INTEGER)`,
+    );
+    await primary.query(
+      `INSERT INTO "counters" ("id", "clicks") VALUES (?, ?) RETURNING *`,
+      ["c1", 0],
+    );
+
+    const handle = createSqlStoreHandle(`sql:conformance`, {
+      connection: primary,
+      classifications: new Map(),
+      routedRole: "primary",
+    });
+    const counters = defineTable("counters", { id: true, clicks: true });
+
+    expect(await handle.exists(counters, { id: "c1" })).toBe(true);
+    expect(await handle.exists(counters, { id: "missing" })).toBe(false);
+
+    const afterOne = await handle.increment(counters, "c1", "clicks");
+    expect(afterOne).toBe(1);
+
+    const concurrent = 100;
+    await Promise.all(
+      Array.from({ length: concurrent }, () =>
+        handle.increment(counters, "c1", "clicks"),
+      ),
+    );
+    const finalRows = await primary.query(
+      `SELECT * FROM "counters" WHERE "id" = ?`,
+      ["c1"],
+    );
+    expect(Number(finalRows[0]?.clicks)).toBe(1 + concurrent);
   } finally {
     await primary.close();
   }

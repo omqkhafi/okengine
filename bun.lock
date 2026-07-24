@@ -20,16 +20,20 @@
         "drizzle-kit": "^1.0.0-rc.4",
         "drizzle-orm": "^1.0.0-rc.4",
         "drizzle-seed": "^0.3.1",
-        "gflows": "^1.0.1",
+        "gflows": "^1.0.2",
         "typescript": "^7.0.2",
         "valibot": "^1.4.2",
         "zod": "^4.4.3",
       },
       "peerDependencies": {
-        "drizzle-orm": "^0.45.2",
+        "drizzle-kit": ">=1.0.0-rc.0",
+        "drizzle-orm": ">=1.0.0-rc.0",
+        "drizzle-seed": ">=0.3.0",
       },
       "optionalPeers": [
+        "drizzle-kit",
         "drizzle-orm",
+        "drizzle-seed",
       ],
     },
   },
@@ -290,7 +294,7 @@
 
     "get-tsconfig": ["get-tsconfig@4.14.0", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA=="],
 
-    "gflows": ["gflows@1.0.1", "", { "dependencies": { "@clack/prompts": "^1.7.0", "ink": "^7.1.1", "react": "^19.2.8" }, "bin": { "gflows": "src/cli.ts" } }, "sha512-xlA3pUXZYHeTK6dHe2d8RcYWCjSxVSXZIlfu5qNuiW6dK7Vp90f4KFFLKPDr/FQmIOAo1eaRcT2zPo51DM+qWw=="],
+    "gflows": ["gflows@1.0.2", "", { "dependencies": { "@clack/prompts": "^1.7.0", "ink": "^7.1.1", "react": "^19.2.8" }, "bin": { "gflows": "src/cli.ts" } }, "sha512-lPzUNb45gKLJQgwCFB7uzkbGor/ebiKptnWyoa+tmUHu3FCyypW4F3rcbDKoCh/R0+Y/5MUd/O4iKwaAkkDRsA=="],
 
     "indent-string": ["indent-string@5.0.0", "", {}, "sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg=="],
 

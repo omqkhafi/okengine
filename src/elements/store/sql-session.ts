@@ -82,6 +82,35 @@ export interface SqlStoreHandle {
    */
   delete(table: TableHandle | unknown, id: string): Promise<boolean>;
   /**
+   * True when at least one row matches `where` (equality map).
+   *
+   * Issued as `SELECT 1 … LIMIT 1` — not a full row fetch.
+   *
+   * @param table - Table
+   * @param where - Column equality predicates (at least one required)
+   */
+  exists(
+    table: TableHandle | unknown,
+    where: Readonly<Record<string, unknown>>,
+  ): Promise<boolean>;
+  /**
+   * Atomically add `by` to `column` on the row with primary key `id`.
+   *
+   * Single `UPDATE … SET col = col + ? … RETURNING col` — never
+   * read-modify-write. Returns the new column value.
+   *
+   * @param table - Table
+   * @param id - Primary key
+   * @param column - Numeric column to bump
+   * @param by - Delta (default `1`)
+   */
+  increment(
+    table: TableHandle | unknown,
+    id: string,
+    column: string,
+    by?: number,
+  ): Promise<number>;
+  /**
    * Raw SQL — PII masking still applied at the boundary.
    *
    * @param sql - SQL with `?` placeholders
@@ -168,6 +197,48 @@ export function createSqlStoreHandle(
         [idValue],
       );
       return result.changes > 0;
+    },
+
+    async exists(table, where) {
+      const name = resolveTableName(table);
+      const entries = Object.entries(where);
+      if (entries.length === 0) {
+        throw new Error("exists() requires at least one where predicate");
+      }
+      for (const [col] of entries) quoteIdent(col);
+      const clause = entries
+        .map(([col]) => `${quoteIdent(col)} = ?`)
+        .join(" AND ");
+      const params = entries.map(([, v]) => v);
+      const rows = await connection.query(
+        `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${clause} LIMIT 1`,
+        params,
+      );
+      return rows.length > 0;
+    },
+
+    async increment(table, idValue, column, by = 1) {
+      const name = resolveTableName(table);
+      const col = quoteIdent(column);
+      const rows = await connection.query(
+        `UPDATE ${quoteIdent(name)} SET ${col} = ${col} + ? WHERE ${quoteIdent("id")} = ? RETURNING ${col}`,
+        [by, idValue],
+      );
+      const row = rows[0];
+      if (!row) {
+        throw new Error(
+          `increment(): no row with id ${JSON.stringify(idValue)} in ${name}`,
+        );
+      }
+      const next = row[column];
+      if (typeof next === "number") return next;
+      if (typeof next === "bigint") return Number(next);
+      if (typeof next === "string" && next.trim() !== "" && !Number.isNaN(Number(next))) {
+        return Number(next);
+      }
+      throw new Error(
+        `increment(): column ${JSON.stringify(column)} is not numeric`,
+      );
     },
 
     async raw(sql, params = []) {

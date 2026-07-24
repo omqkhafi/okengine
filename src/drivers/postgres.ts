@@ -114,6 +114,40 @@ export function createPostgresFakeClient(): PostgresClientLike & {
         return rows.map((r) => ({ ...r }));
       }
 
+      const exists =
+        /^SELECT\s+1\s+AS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+(.+?)\s+LIMIT\s+1\s*$/i.exec(
+          normalised,
+        );
+      if (exists) {
+        const rows = tables.get(parseIdent(exists[2]!)) ?? [];
+        const preds = parseEqualityWhere(exists[3]!);
+        const hit = rows.some((r) =>
+          preds.every((p, i) => r[p] === values[i]),
+        );
+        return hit ? [{ [parseIdent(exists[1]!)]: 1 }] : [];
+      }
+
+      const updateReturning =
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\+\s*\?\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s+RETURNING\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*$/i.exec(
+          normalised,
+        );
+      if (updateReturning) {
+        const name = parseIdent(updateReturning[1]!);
+        const setCol = parseIdent(updateReturning[2]!);
+        const addCol = parseIdent(updateReturning[3]!);
+        const whereCol = parseIdent(updateReturning[4]!);
+        const retCol = parseIdent(updateReturning[5]!);
+        if (setCol !== addCol || setCol !== retCol) {
+          throw new Error(`postgres fake: unsupported SQL: ${sql}`);
+        }
+        const list = tables.get(name) ?? [];
+        const row = list.find((r) => r[whereCol] === values[1]);
+        if (!row) return [];
+        const next = Number(row[setCol] ?? 0) + Number(values[0]);
+        row[setCol] = next;
+        return [{ [retCol]: next }];
+      }
+
       const insertReturning =
         /^INSERT\s+INTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*RETURNING\s+\*\s*$/i.exec(
           normalised,
@@ -168,6 +202,15 @@ export function createPostgresFakeClient(): PostgresClientLike & {
       tables.clear();
     },
   };
+}
+
+/** Parse `col = ? AND col2 = ?` into ordered column names. */
+function parseEqualityWhere(clause: string): string[] {
+  return clause.split(/\s+AND\s+/i).map((part) => {
+    const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?$/.exec(part.trim());
+    if (!m) throw new Error(`postgres fake: unsupported WHERE: ${clause}`);
+    return m[1]!.replaceAll('"', "").trim();
+  });
 }
 
 /** Protocol-named postgres driver. */

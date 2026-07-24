@@ -44,7 +44,7 @@
     "drizzle-kit": "^1.0.0-rc.4",
     "drizzle-orm": "^1.0.0-rc.4",
     "drizzle-seed": "^0.3.1",
-    "gflows": "^1.0.1",
+    "gflows": "^1.0.2",
     "typescript": "^7.0.2",
     "valibot": "^1.4.2",
     "zod": "^4.4.3"

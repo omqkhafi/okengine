@@ -59,6 +59,41 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         return table.rows.map((r) => ({ ...r }));
       }
 
+      const exists =
+        /^SELECT\s+1\s+AS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+(.+?)\s+LIMIT\s+1\s*$/i.exec(
+          text,
+        );
+      if (exists) {
+        const table = getTable(parseIdent(exists[2]!));
+        const preds = parseEqualityWhere(exists[3]!);
+        const hit = table.rows.some((r) =>
+          preds.every((p, i) => r[p] === params[i]),
+        );
+        return hit ? [{ [parseIdent(exists[1]!)]: 1 }] : [];
+      }
+
+      const updateReturning =
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\+\s*\?\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s+RETURNING\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*$/i.exec(
+          text,
+        );
+      if (updateReturning) {
+        const table = getTable(parseIdent(updateReturning[1]!));
+        const setCol = parseIdent(updateReturning[2]!);
+        const addCol = parseIdent(updateReturning[3]!);
+        const whereCol = parseIdent(updateReturning[4]!);
+        const retCol = parseIdent(updateReturning[5]!);
+        if (setCol !== addCol || setCol !== retCol) {
+          throw new Error(`memory sql: unsupported query: ${sql}`);
+        }
+        const delta = Number(params[0]);
+        const idValue = params[1];
+        const row = table.rows.find((r) => r[whereCol] === idValue);
+        if (!row) return [];
+        const next = Number(row[setCol] ?? 0) + delta;
+        row[setCol] = next;
+        return [{ [retCol]: next }];
+      }
+
       const insertReturning =
         /^INSERT\s+INTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*RETURNING\s+\*\s*$/i.exec(
           text,
@@ -130,6 +165,15 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       tables.clear();
     },
   };
+}
+
+/** Parse `col = ? AND col2 = ?` into ordered column names. */
+function parseEqualityWhere(clause: string): string[] {
+  return clause.split(/\s+AND\s+/i).map((part) => {
+    const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?$/.exec(part.trim());
+    if (!m) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
+    return m[1]!.replaceAll('"', "").trim();
+  });
 }
 
 /** Memory SQL driver. */

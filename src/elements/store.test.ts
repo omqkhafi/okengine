@@ -240,6 +240,87 @@ describe("tier-1 cache invalidation from effects", () => {
   });
 });
 
+describe("exists and increment helpers", () => {
+  const counters = defineTable("counters", {
+    id: true,
+    clicks: true,
+  });
+
+  test("exists returns correctly for present / absent rows across sqlite and postgres", async () => {
+    for (const [label, driver, client] of [
+      ["sqlite", sqliteDriver, undefined],
+      ["postgres", postgresDriver, createPostgresFakeClient()],
+    ] as const) {
+      const decl = store.sql("counters");
+      const runtime = createStoreRuntime({
+        drivers: { sql: driver },
+        sql: {
+          counters: {
+            name: "counters",
+            primary: { url: ":memory:", client },
+          },
+        },
+      });
+      runtime.register(decl);
+      const handle = asSql(
+        await runtime.open(decl, {
+          effects: { writes: ["sql:counters"], reads: ["sql:counters"] },
+        }),
+      );
+      await handle.ensureTable(counters);
+      await handle
+        .insert(counters)
+        .values({ id: "c1", clicks: 0 })
+        .execute();
+
+      expect(await handle.exists(counters, { id: "c1" }), label).toBe(true);
+      expect(await handle.exists(counters, { id: "gone" }), label).toBe(false);
+      await runtime.close();
+    }
+  });
+
+  test("increment under 100 concurrent callers lands on the correct final value", async () => {
+    for (const [label, driver, client] of [
+      ["sqlite", sqliteDriver, undefined],
+      ["postgres", postgresDriver, createPostgresFakeClient()],
+    ] as const) {
+      const decl = store.sql("counters");
+      const runtime = createStoreRuntime({
+        drivers: { sql: driver },
+        sql: {
+          counters: {
+            name: "counters",
+            primary: { url: ":memory:", client },
+          },
+        },
+      });
+      runtime.register(decl);
+      const handle = asSql(
+        await runtime.open(decl, {
+          effects: { writes: ["sql:counters"], reads: ["sql:counters"] },
+        }),
+      );
+      await handle.ensureTable(counters);
+      await handle
+        .insert(counters)
+        .values({ id: "c1", clicks: 0 })
+        .execute();
+
+      const n = 100;
+      const results = await Promise.all(
+        Array.from({ length: n }, () =>
+          handle.increment(counters, "c1", "clicks"),
+        ),
+      );
+      expect(new Set(results).size, label).toBe(n);
+      expect(Math.max(...results), label).toBe(n);
+      const row = await handle.findById(counters, "c1");
+      expect(Number(row?.clicks), label).toBe(n);
+      await runtime.close();
+    }
+  });
+});
+
 describe("PII masking at the driver boundary", () => {
   test("SELECT * masks classified columns", async () => {
     const decl = store.sql("notes", {
