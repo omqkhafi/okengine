@@ -61,6 +61,8 @@ import type {
   SignalAsTrigger,
   Trigger,
 } from "./triggers.ts";
+import { createRunTelemetry } from "./run-telemetry.ts";
+import type { RunsRuntime } from "../runs/runtime.ts";
 
 /** Options for {@link oke}. */
 export interface OkeOptions {
@@ -78,6 +80,17 @@ export interface OkeOptions {
   readonly bindings?: readonly Binding[];
   /** Base fx options applied to every invocation. */
   readonly fx?: Omit<CreateFxOptions, "flow" | "effects" | "capability">;
+  /**
+   * Optional runs store. When set, every execution is recorded as one
+   * wide event with zero flow instrumentation.
+   */
+  readonly runs?: RunsRuntime;
+  /**
+   * Personal fields to archive (crypto-shred) from the validated input.
+   * Keys are input property names; values become ciphertext under the
+   * subject key.
+   */
+  readonly archiveInputFields?: readonly string[];
 }
 
 /** Payload for a CDC invocation. */
@@ -339,10 +352,13 @@ export function oke(options: OkeOptions): OkeApp {
       decorations,
     };
 
-    const { fx } = createFxContext({
+    const startedAt = options.fx?.now?.() ?? Date.now();
+    const telemetry = createRunTelemetry();
+    const { fx, ledger } = createFxContext({
       ...options.fx,
       flow: flowDef.name,
       effects: flowDef.effects ?? ({} as Effects),
+      runTelemetry: telemetry,
       callHandler: async (name, callInput) => {
         const target = flowsByName.get(name);
         if (!target) {
@@ -367,6 +383,28 @@ export function oke(options: OkeOptions): OkeApp {
       }
       return flowDef.do(ctx.input as never, fx);
     });
+
+    const endedAt = options.fx?.now?.() ?? Date.now();
+
+    if (options.runs) {
+      const archiveCleartext = archiveFromInput(
+        ctx.input,
+        options.archiveInputFields,
+      );
+      await options.runs.record(
+        {
+          flow: flowDef,
+          trigger,
+          fx,
+          ledger,
+          telemetry,
+          startedAt,
+          endedAt,
+          failure: result.failure,
+        },
+        archiveCleartext,
+      );
+    }
 
     return {
       output: result.output,
@@ -540,6 +578,27 @@ function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
     },
     aot,
   );
+}
+
+/**
+ * Pull personal fields from validated input for crypto-shred archival.
+ *
+ * @param input - Validated flow input
+ * @param fields - Property names to archive
+ */
+function archiveFromInput(
+  input: unknown,
+  fields: readonly string[] | undefined,
+): Record<string, string> | undefined {
+  if (!fields || fields.length === 0) return undefined;
+  if (!input || typeof input !== "object") return undefined;
+  const obj = input as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const name of fields) {
+    const v = obj[name];
+    if (typeof v === "string" && v.length > 0) out[name] = v;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** @internal expose smart router type for tests */

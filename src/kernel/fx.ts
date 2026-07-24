@@ -28,6 +28,7 @@ import {
 } from "./effects.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
 import type { JournalSession } from "./journal.ts";
+import type { RunTelemetry } from "./run-telemetry.ts";
 
 /** Named ref: plain string or `{ name }` element handle. */
 export type NamedRef = string | { readonly name: string };
@@ -346,6 +347,12 @@ export interface CreateFxOptions {
    * Nondeterministic ⇒ journaling forced; auto-cache disabled.
    */
   readonly aiRuntime?: AiRuntime;
+  /**
+   * Optional run telemetry collector. When set, `fx.cache` and `fx.log`
+   * accumulate dimensions / log lines for the wide-event runs store
+   * with zero flow instrumentation.
+   */
+  readonly runTelemetry?: RunTelemetry;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
   /**
@@ -548,11 +555,17 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   };
 
   const aiDisablesCache = options.aiRuntime?.autoCacheDisabled === true;
+  const telemetry = options.runTelemetry;
 
   const cache: FxCache = {
     async get<T = unknown>(key: string): Promise<T | undefined> {
       if (aiDisablesCache) return undefined;
-      return cacheStore.get(key) as T | undefined;
+      if (cacheStore.has(key)) {
+        if (telemetry) telemetry.cacheHits += 1;
+        return cacheStore.get(key) as T | undefined;
+      }
+      if (telemetry) telemetry.cacheMisses += 1;
+      return undefined;
     },
     async set(key: string, value: unknown, _ttl?: string): Promise<void> {
       if (aiDisablesCache) return;
@@ -564,7 +577,11 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       produce: () => T | Promise<T>,
     ): Promise<T> {
       if (aiDisablesCache) return await produce();
-      if (cacheStore.has(key)) return cacheStore.get(key) as T;
+      if (cacheStore.has(key)) {
+        if (telemetry) telemetry.cacheHits += 1;
+        return cacheStore.get(key) as T;
+      }
+      if (telemetry) telemetry.cacheMisses += 1;
       const value = await produce();
       cacheStore.set(key, value);
       return value;
@@ -584,22 +601,35 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     return { message: safeMessage, data: safeData };
   }
 
+  function emitLog(
+    level: "debug" | "info" | "warn" | "error",
+    message: string,
+    data?: Record<string, unknown>,
+  ): void {
+    const r = redactLog(message, data);
+    if (telemetry) {
+      telemetry.logs.push({
+        level,
+        message: r.message,
+        ...(r.data !== undefined ? { data: r.data } : {}),
+        at: now(),
+      });
+    }
+    onLog?.(level, r.message, r.data);
+  }
+
   const log: FxLog = {
     debug(message, data) {
-      const r = redactLog(message, data);
-      onLog?.("debug", r.message, r.data);
+      emitLog("debug", message, data);
     },
     info(message, data) {
-      const r = redactLog(message, data);
-      onLog?.("info", r.message, r.data);
+      emitLog("info", message, data);
     },
     warn(message, data) {
-      const r = redactLog(message, data);
-      onLog?.("warn", r.message, r.data);
+      emitLog("warn", message, data);
     },
     error(message, data) {
-      const r = redactLog(message, data);
-      onLog?.("error", r.message, r.data);
+      emitLog("error", message, data);
     },
   };
 

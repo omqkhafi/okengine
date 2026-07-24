@@ -142,3 +142,27 @@ export {
   type Runtime,
   type ServeOptions,
 } from "./runtime/index.ts";
+
+export {
+  createRunsRuntime,
+  collectWideEvent,
+  createRunTelemetry,
+  explainOutliers,
+  seedOutlierDataset,
+  privacyErase,
+  createMemorySubjectKeys,
+  subjectKeysFromVault,
+  archiveFields,
+  revealArchived,
+  eraseSubject,
+  SHREDDED,
+  filesRunsDriver,
+  memoryRunsDriver,
+  postgresRunsDriver,
+  clickhouseRunsDriver,
+  type RunsRuntime,
+  type WideEvent,
+  type CreateRunsRuntimeOptions,
+  type OutlierFinding,
+  type SubjectKeyVault,
+} from "./runs/index.ts";

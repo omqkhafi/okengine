@@ -31,6 +31,12 @@ export const managedVaultDriver: VaultDriver = {
       names() {
         return [...map.keys()];
       },
+      set(name, value) {
+        map.set(name, value);
+      },
+      delete(name) {
+        return map.delete(name);
+      },
     };
   },
 };

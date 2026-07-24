@@ -53,6 +53,20 @@ export interface VaultBag {
   get(name: string): string | undefined;
   /** All names present in this bag. */
   names(): readonly string[];
+  /**
+   * Write / overwrite a secret (mutable bags: `memory` · `managed`).
+   * Used for per-subject crypto-shred keys in the runs store.
+   *
+   * @param name - Secret name
+   * @param value - Cleartext
+   */
+  set?(name: string, value: string): void;
+  /**
+   * Delete a secret (mutable bags). Erasure deletes the key, not the bytes.
+   *
+   * @param name - Secret name
+   */
+  delete?(name: string): boolean;
   /** Close remote clients when applicable. */
   close?(): Promise<void>;
 }

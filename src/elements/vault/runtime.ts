@@ -78,6 +78,19 @@ export interface VaultRuntime {
    */
   read(name: string): string;
   /**
+   * Write / overwrite a secret on the first mutable bag (subject keys).
+   *
+   * @param name - Secret name
+   * @param value - Cleartext
+   */
+  put(name: string, value: string): void;
+  /**
+   * Delete a secret (crypto-shred). Returns whether a key was removed.
+   *
+   * @param name - Secret name
+   */
+  delete(name: string): boolean;
+  /**
    * Fingerprint for Console / traces (never the value).
    *
    * @param name - Secret name
@@ -173,6 +186,34 @@ export function createVaultRuntime(
         throw new Error(`vault: secret "${name}" is not loaded`);
       }
       return value;
+    },
+    put(name, value) {
+      if (!booted) {
+        throw new Error(`vault: put("${name}") before boot`);
+      }
+      const writable = bags.find((b) => typeof b.set === "function");
+      if (!writable?.set) {
+        throw new Error("vault: no mutable bag for put()");
+      }
+      writable.set(name, value);
+      merged.set(name, value);
+      redactor = createSecretRedactor(merged.values());
+    },
+    delete(name) {
+      if (!booted) {
+        throw new Error(`vault: delete("${name}") before boot`);
+      }
+      let deleted = false;
+      for (const bag of bags) {
+        if (typeof bag.delete === "function" && bag.delete(name)) {
+          deleted = true;
+        }
+      }
+      if (merged.delete(name)) deleted = true;
+      if (deleted) {
+        redactor = createSecretRedactor(merged.values());
+      }
+      return deleted;
     },
     fingerprint(name) {
       const value = merged.get(name);

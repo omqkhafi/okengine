@@ -29,6 +29,13 @@ export {
 } from "./effects.ts";
 
 export {
+  createRunTelemetry,
+  cacheDimensionOf,
+  type RunLogLine,
+  type RunTelemetry,
+} from "./run-telemetry.ts";
+
+export {
   fail,
   formatOkeMessage,
   lookupOkeError,
