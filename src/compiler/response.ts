@@ -23,10 +23,24 @@ export interface FailureEnvelope {
 /**
  * HTTP status for a flow-boundary failure.
  *
+ * Gate denials use the status the Gates simulator promises:
+ * `Unauthorized` → 401 · `Forbidden` → 403 · `RateLimited` → 429.
+ *
  * @param failure - Typed failure
  */
 export function statusForFailure(failure: FlowFailure): number {
-  return failure.error.code === VALIDATION_ERROR_CODE ? 422 : 400;
+  switch (failure.error.code) {
+    case VALIDATION_ERROR_CODE:
+      return 422;
+    case "Unauthorized":
+      return 401;
+    case "Forbidden":
+      return 403;
+    case "RateLimited":
+      return 429;
+    default:
+      return 400;
+  }
 }
 
 /**

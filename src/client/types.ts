@@ -76,12 +76,23 @@ export type ResolveApp<App = never> = [App] extends [never]
 /**
  * Extract a {@link ClientRouteMap} from an App type.
  *
- * @typeParam App - {@link ClientApp} or bare route map
+ * Accepts `typeof app` (OkeApp with accumulated `$routes`), {@link ClientApp},
+ * or a bare route map.
+ *
+ * @typeParam App - {@link ClientApp}, `typeof app`, or bare route map
  */
 export type RoutesOf<App> = App extends { readonly $routes: infer R }
   ? R extends ClientRouteMap
     ? R
-    : {}
+    : R extends Record<string, Record<string, FlowContract>>
+      ? R
+      : {
+          [U in keyof R]: {
+            [F in keyof R[U]]: R[U][F] extends FlowContract
+              ? R[U][F]
+              : FlowContract;
+          };
+        }
   : App extends ClientRouteMap
     ? App
     : {};
@@ -172,11 +183,17 @@ export interface ClientOptions {
   };
   /**
    * Runtime REST table (optional). Keys are `unit.flow`.
-   * When absent, the client uses `POST /_oke/{unit}/{flow}`.
+   * When absent, the client uses `POST /_oke/{unit}/{flow}` unless
+   * {@link ClientOptions.$routes} supplies HTTP method/path from adopt.
    */
   readonly routes?: Readonly<
     Record<string, { readonly method: string; readonly path: string }>
   >;
+  /**
+   * Runtime route map from `app.$routes` (typed adopt). HTTP triggers become
+   * REST; flows without method/path fall back to RPC.
+   */
+  readonly $routes?: ClientRouteMap;
 }
 
 /**
@@ -196,16 +213,24 @@ export type ClientCall<
     ? (input?: I) => Promise<ClientResult<O, E>>
     : (input: I) => Promise<ClientResult<O, E>>;
 
-/** Pull input from a contract shape (property-based, not type-param). */
-type ContractIn<C> = C extends { readonly in: infer I } ? I : void;
+/**
+ * Pull input from a contract shape (supports required or phantom-optional `in`).
+ */
+type ContractIn<C> = "in" extends keyof C
+  ? [NonNullable<C["in"]>] extends [never]
+    ? void
+    : NonNullable<C["in"]>
+  : void;
 
 /** Pull output from a contract shape. */
-type ContractOut<C> = C extends { readonly out: infer O } ? O : unknown;
+type ContractOut<C> = "out" extends keyof C
+  ? NonNullable<C["out"]>
+  : unknown;
 
 /** Pull error map from a contract shape. */
-type ContractErrors<C> = C extends { readonly errors: infer E }
-  ? E extends Record<string, unknown>
-    ? E
+type ContractErrors<C> = "errors" extends keyof C
+  ? NonNullable<C["errors"]> extends Record<string, unknown>
+    ? NonNullable<C["errors"]>
     : Record<string, never>
   : Record<string, never>;
 

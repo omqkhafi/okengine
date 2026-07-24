@@ -29,9 +29,11 @@ describe("flow — one species", () => {
   test("on() returns the same flow object and records the trigger", () => {
     const f = flow({ name: "create", do: () => 1 });
     const bound = on(http.post("/notes"), f);
-    expect(bound).toBe(f);
+    // Same runtime object; trigger stamp is type-only so identities differ at the type level.
+    expect(bound as object).toBe(f);
     expect(f.triggers).toHaveLength(1);
     expect(f.triggers[0]?.kind).toBe("http");
+    expect(bound.$trigger?.kind).toBe("http");
   });
 
   test("the same flow object is reachable from HTTP and signal triggers", async () => {

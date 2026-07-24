@@ -4,7 +4,8 @@
  * First Manifest derivation: `type App` → fully typed client, zero codegen.
  */
 
-export { createClient } from "./create.ts";
+export { createClient, flattenRoutes } from "./create.ts";
+export type { AppWithRoutes } from "./create.ts";
 export {
   isErrorCode,
   isFail,

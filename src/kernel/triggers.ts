@@ -20,11 +20,20 @@ export type HttpMethod =
 /** Gate reference attached via `.gate(...)`. */
 export type GateRef = NamedRef;
 
-/** HTTP trigger value. */
-export interface HttpTrigger {
+/**
+ * HTTP trigger value. Method and path are literal type parameters so
+ * `typeof app` / the client can derive REST wire shape from the declaration.
+ *
+ * @typeParam M - HTTP method literal
+ * @typeParam P - Path template literal (`/notes/:id`)
+ */
+export interface HttpTrigger<
+  M extends HttpMethod = HttpMethod,
+  P extends string = string,
+> {
   readonly kind: "http";
-  readonly method: HttpMethod;
-  readonly path: string;
+  readonly method: M;
+  readonly path: P;
   readonly gates: readonly GateRef[];
   /** Whether `.live()` was applied. */
   readonly isLive: boolean;
@@ -33,11 +42,11 @@ export interface HttpTrigger {
    *
    * @param gates - Gate refs
    */
-  gate(...gates: GateRef[]): HttpTrigger;
+  gate(...gates: GateRef[]): HttpTrigger<M, P>;
   /**
    * Mark the HTTP trigger as live (push result to subscribers).
    */
-  live(): HttpTrigger;
+  live(): HttpTrigger<M, P>;
 }
 
 /** Clock / interval trigger (`every("1h")`). */
@@ -84,13 +93,13 @@ export type Trigger =
 /** Trigger kind string. */
 export type TriggerKind = Trigger["kind"];
 
-function createHttpTrigger(
-  method: HttpMethod,
-  path: string,
+function createHttpTrigger<M extends HttpMethod, P extends string>(
+  method: M,
+  path: P,
   gates: readonly GateRef[] = [],
   isLive = false,
-): HttpTrigger {
-  const trigger: HttpTrigger = {
+): HttpTrigger<M, P> {
+  const trigger: HttpTrigger<M, P> = {
     kind: "http",
     method,
     path,
@@ -113,43 +122,43 @@ export const http = {
   /**
    * @param path - Route path (`/:id` params supported)
    */
-  get(path: string): HttpTrigger {
+  get<P extends string>(path: P): HttpTrigger<"GET", P> {
     return createHttpTrigger("GET", path);
   },
   /**
    * @param path - Route path
    */
-  post(path: string): HttpTrigger {
+  post<P extends string>(path: P): HttpTrigger<"POST", P> {
     return createHttpTrigger("POST", path);
   },
   /**
    * @param path - Route path
    */
-  put(path: string): HttpTrigger {
+  put<P extends string>(path: P): HttpTrigger<"PUT", P> {
     return createHttpTrigger("PUT", path);
   },
   /**
    * @param path - Route path
    */
-  patch(path: string): HttpTrigger {
+  patch<P extends string>(path: P): HttpTrigger<"PATCH", P> {
     return createHttpTrigger("PATCH", path);
   },
   /**
    * @param path - Route path
    */
-  delete(path: string): HttpTrigger {
+  delete<P extends string>(path: P): HttpTrigger<"DELETE", P> {
     return createHttpTrigger("DELETE", path);
   },
   /**
    * @param path - Route path
    */
-  options(path: string): HttpTrigger {
+  options<P extends string>(path: P): HttpTrigger<"OPTIONS", P> {
     return createHttpTrigger("OPTIONS", path);
   },
   /**
    * @param path - Route path
    */
-  head(path: string): HttpTrigger {
+  head<P extends string>(path: P): HttpTrigger<"HEAD", P> {
     return createHttpTrigger("HEAD", path);
   },
 } as const;
@@ -246,7 +255,10 @@ export const internal: InternalTrigger = { kind: "internal" };
  * @param value - Trigger or signal handle
  */
 export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
-  if (typeof value === "object" && value !== null && "kind" in value) {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError("on() expected a trigger or signal handle");
+  }
+  if ("kind" in value) {
     const kind = (value as Trigger).kind;
     if (
       kind === "http" ||
@@ -263,3 +275,14 @@ export function normalizeTrigger(value: Trigger | SignalSource): Trigger {
   }
   throw new TypeError("on() expected a trigger or signal handle");
 }
+
+/**
+ * Bound trigger type after {@link on} / {@link normalizeTrigger}.
+ *
+ * @typeParam T - Argument accepted by {@link on}
+ */
+export type BoundTriggerOf<T> = T extends Trigger
+  ? T
+  : T extends SignalSource
+    ? SignalAsTrigger
+    : Trigger;

@@ -12,6 +12,43 @@ export {
 } from "./app.ts";
 
 export {
+  bootApplication,
+  mintCapabilities,
+  type BootOptions,
+  type BootResult,
+  type ElementRuntimes,
+} from "./boot.ts";
+
+export {
+  applyPrincipal,
+  createElementPipelineHooks,
+  gateDenialFailure,
+  gateNamesOf,
+  policyContextOf,
+  recordGateEvaluations,
+  type GateDenialCode,
+  type PipelineDeps,
+  type PrincipalBag,
+  type ResolvedPrincipal,
+} from "./pipeline.ts";
+
+export {
+  claimsToPrincipal,
+  createAppAuthBinding,
+  verifyBearerToken,
+  type AppAuthBinding,
+  type CreateAppAuthBindingOptions,
+} from "./auth-resolve.ts";
+
+export type {
+  AppFlowRoute,
+  AppRouteMap,
+  FlowNamespace,
+  RouteFromFlow,
+  RoutesFromAdoptArgs,
+} from "./adopt-routes.ts";
+
+export {
   createCapabilityToken,
   effectsFieldOf,
   type CapabilityToken,
@@ -182,6 +219,7 @@ export {
   isSignalTriggerSource,
   normalizeTrigger,
   table,
+  type BoundTriggerOf,
   type CdcTrigger,
   type EveryTrigger,
   type GateRef,

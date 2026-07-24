@@ -3,6 +3,7 @@
  *
  * The Flow object is returned unchanged in species: one object, reachable
  * from any trigger kind. Bindings are collected for {@link oke} to adopt.
+ * The return type carries the bound trigger so `typeof app` can derive REST.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
 } from "./flow.ts";
 import {
   normalizeTrigger,
+  type BoundTriggerOf,
   type SignalSource,
   type Trigger,
 } from "./triggers.ts";
@@ -27,27 +29,32 @@ export interface Binding {
 const bindings: Binding[] = [];
 
 /**
- * Bind a trigger to a Flow. Returns the same Flow (one species).
+ * Bind a trigger to a Flow. Returns the same Flow (one species) with the
+ * trigger stamped into the type parameter for client route derivation.
  *
  * @param trigger - HTTP, every, signal handle, CDC, or internal
  * @param flowDef - Flow definition
  */
 export function on<
+  T extends Trigger | SignalSource,
   I = unknown,
   O = unknown,
   E extends FlowErrorMap = FlowErrorMap,
+  D extends Record<string, unknown> = {},
 >(
-  trigger: Trigger | SignalSource,
-  flowDef: FlowDef<I, O, E>,
-): FlowDef<I, O, E> {
+  trigger: T,
+  flowDef: FlowDef<I, O, E, D, Trigger | undefined>,
+): FlowDef<I, O, E, D, BoundTriggerOf<T>> {
   if (!isFlow(flowDef)) {
     throw new TypeError("on() expected a flow() definition as the second argument");
   }
   const normalized = normalizeTrigger(trigger);
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);
+  // Stamp runtime carrier for the first bound trigger (type follows BoundTriggerOf).
+  (flowDef as { $trigger: Trigger }).$trigger = normalized;
   bindings.push({ trigger: normalized, flow: flowDef as AnyFlowDef });
-  return flowDef;
+  return flowDef as unknown as FlowDef<I, O, E, D, BoundTriggerOf<T>>;
 }
 
 /**

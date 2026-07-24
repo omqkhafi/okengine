@@ -7,7 +7,10 @@
  */
 
 import type { Effects, FlowPlane, Slo } from "../manifest/types.ts";
-import type { SchemaInput } from "../validation/standard-schema.ts";
+import type {
+  InferSchemaOutput,
+  SchemaInput,
+} from "../validation/standard-schema.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
@@ -74,20 +77,67 @@ export interface FlowOptions<
 }
 
 /**
- * A Flow definition — one species, trigger-agnostic.
+ * Infer validated input from a flow options bag.
+ *
+ * @typeParam Opts - {@link FlowOptions} / call-site object
+ */
+export type InferFlowIn<Opts> = Opts extends { readonly in: infer S }
+  ? InferSchemaOutput<S>
+  : Opts extends { readonly do: FlowHandler<infer I, infer _O> }
+    ? I
+    : unknown;
+
+/**
+ * Infer success output from a flow options bag.
+ *
+ * @typeParam Opts - {@link FlowOptions} / call-site object
+ */
+export type InferFlowOut<Opts> = Opts extends { readonly out: infer S }
+  ? InferSchemaOutput<S>
+  : Opts extends { readonly do: FlowHandler<infer _I, infer O> }
+    ? O
+    : unknown;
+
+/**
+ * Infer the error schema map from a flow options bag.
+ *
+ * @typeParam Opts - {@link FlowOptions} / call-site object
+ */
+export type InferFlowErrors<Opts> = Opts extends {
+  readonly errors: infer E extends FlowErrorMap;
+}
+  ? E
+  : {};
+
+/**
+ * Phantom brand for the bound trigger type parameter. Optional so
+ * `FlowDef<…, undefined>` remains assignable into `on()` before rebinding.
+ */
+declare const triggerPhantom: unique symbol;
+
+/**
+ * A Flow definition — one species, trigger-agnostic until {@link on} binds.
  *
  * @typeParam I - Input type
  * @typeParam O - Output type
- * @typeParam E - Error map
+ * @typeParam E - Error map (schemas)
+ * @typeParam D - Accumulated decoration types from `.plug()`
+ * @typeParam T - Bound trigger (set by {@link on}; `undefined` when untriggered)
  */
 export interface FlowDef<
   I = unknown,
   O = unknown,
   E extends FlowErrorMap = FlowErrorMap,
   D extends Record<string, unknown> = {},
+  T extends Trigger | undefined = undefined,
 > {
   /** Brand for type guards. */
   readonly [flowBrand]: true;
+  /**
+   * Type-level bound trigger (phantom). Not read at runtime — use
+   * `$trigger` / `triggers[0]` for the value.
+   */
+  readonly [triggerPhantom]?: T;
   /** Stable name (auto-assigned when omitted). */
   readonly name: string;
   /** Optional unit scope. */
@@ -114,6 +164,11 @@ export interface FlowDef<
   readonly do: FlowHandler<I, O>;
   /** Triggers bound via {@link on} (zero or more). */
   readonly triggers: readonly Trigger[];
+  /**
+   * First bound trigger at runtime (`undefined` when untriggered).
+   * The precise trigger literal lives in the {@link triggerPhantom} type param.
+   */
+  readonly $trigger: Trigger | undefined;
   /** Flow-scoped hooks, registration order. */
   readonly hooks: Readonly<Partial<Record<HookStage, readonly HookFn[]>>>;
   /**
@@ -129,7 +184,7 @@ export interface FlowDef<
    * @param stage - Pipeline stage
    * @param fn - Hook function
    */
-  hook(stage: HookStage, fn: HookFn): FlowDef<I, O, E, D>;
+  hook(stage: HookStage, fn: HookFn): FlowDef<I, O, E, D, T>;
   /**
    * Attach a plugin to this flow only. Scope is the attachment point.
    *
@@ -141,7 +196,8 @@ export interface FlowDef<
     I,
     O,
     E,
-    D & (P extends PluginDef<infer PD> ? PD : Record<string, never>)
+    D & (P extends PluginDef<infer PD> ? PD : Record<string, never>),
+    T
   >;
 }
 
@@ -153,33 +209,39 @@ let flowSeq = 0;
 /**
  * Define a Flow — the one species of backend behavior.
  *
+ * Input / output types are inferred from Standard Schema `in` / `out` when
+ * present; otherwise from the `do` handler signature.
+ *
  * @param options - Contract and handler
  */
-export function flow<
-  I = unknown,
-  O = unknown,
-  E extends FlowErrorMap = FlowErrorMap,
->(options: FlowOptions<I, O, E>): FlowDef<I, O, E> {
+export function flow<Opts extends FlowOptions<any, any, any>>(
+  options: Opts,
+): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> {
   const name = options.name ?? `flow_${++flowSeq}`;
   const triggers: Trigger[] = [];
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
   const pendingPlugins: PluginDef[] = [];
 
-  const def: FlowDef<I, O, E> = {
+  const def: FlowDef<
+    InferFlowIn<Opts>,
+    InferFlowOut<Opts>,
+    InferFlowErrors<Opts>
+  > = {
     [flowBrand]: true,
     name,
     unit: options.unit,
     in: options.in,
     out: options.out,
-    errors: options.errors,
+    errors: (options.errors ?? undefined) as InferFlowErrors<Opts> | undefined,
     effects: options.effects,
     durable: options.durable ?? false,
     live: options.live ?? false,
     cache: options.cache,
     slo: options.slo,
     plane: options.plane,
-    do: options.do,
+    do: options.do as FlowHandler<InferFlowIn<Opts>, InferFlowOut<Opts>>,
     triggers,
+    $trigger: undefined,
     hooks,
     pendingPlugins,
     hook(stage, fn) {
@@ -189,7 +251,7 @@ export function flow<
     },
     plug(pluginDef) {
       pendingPlugins.push(pluginDef);
-      // Decoration accumulate on the interface; runtime object is unchanged.
+      // Decorations accumulate on the interface; runtime object is unchanged.
       return def as never;
     },
   };
@@ -202,7 +264,7 @@ export function flow<
  * Individual flows keep their `I`/`O` at the declaration site; the registry
  * cannot preserve every specialization without an erased carrier type.
  */
-export type AnyFlowDef = FlowDef<any, any, any>;
+export type AnyFlowDef = FlowDef<any, any, any, any, any>;
 
 /**
  * Type guard for {@link FlowDef}.

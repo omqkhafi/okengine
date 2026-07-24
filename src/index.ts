@@ -19,6 +19,9 @@ export {
   isFlowFailure,
   plugin,
   isPlugin,
+  bootApplication,
+  mintCapabilities,
+  gateDenialFailure,
   type OkeApp,
   type OkeOptions,
   type FlowDef,
@@ -28,6 +31,9 @@ export {
   type Binding,
   type PluginDef,
   type PluginCapabilities,
+  type BootOptions,
+  type BootResult,
+  type ElementRuntimes,
 } from "./kernel/index.ts";
 
 export {

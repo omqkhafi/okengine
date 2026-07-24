@@ -1,0 +1,173 @@
+/**
+ * Boot sequence acceptance:
+ * - missing secrets fail naming every gap at once
+ * - capability tokens minted from flow effects (Manifest)
+ * - declared cron fires on a running app without manual dispatch
+ * - real timer loop starts by default outside test env (fake wall-clock)
+ */
+
+import { afterEach, describe, expect, jest, test } from "bun:test";
+import { memoryVaultDriver } from "../drivers/index.ts";
+import { clock } from "../elements/clock.ts";
+import { vault, VaultBootError } from "../elements/vault.ts";
+import { bootApplication } from "./boot.ts";
+import { flow, resetFlowSeq } from "./flow.ts";
+import { every, http } from "./triggers.ts";
+import { oke } from "./app.ts";
+import { on, resetBindings } from "./on.ts";
+
+describe("boot — vault gaps", () => {
+  test("two missing secrets fail naming both at once", async () => {
+    try {
+      await bootApplication({
+        env: "prod",
+        secrets: [
+          vault("STRIPE_KEY", { description: "Payments gateway key" }),
+          vault("DATABASE_URL", { description: "Primary SQL URL" }),
+        ],
+        vault: {
+          allowDevFallbacks: false,
+          chain: [{ driver: memoryVaultDriver, options: { secrets: {} } }],
+        },
+      });
+      expect.unreachable("boot should fail");
+    } catch (err) {
+      expect(err).toBeInstanceOf(VaultBootError);
+      const boot = err as VaultBootError;
+      expect(boot.gaps.map((g) => g.name).sort()).toEqual([
+        "DATABASE_URL",
+        "STRIPE_KEY",
+      ]);
+      expect(boot.message).toContain("STRIPE_KEY");
+      expect(boot.message).toContain("DATABASE_URL");
+    }
+  });
+});
+
+describe("boot — capabilities from Manifest effects", () => {
+  test("tokens cover declared effects only", async () => {
+    const charge = flow({
+      name: "payments.charge",
+      effects: { secrets: ["STRIPE_KEY"], writes: ["sql:orders"] },
+      do: () => ({ ok: true }),
+    });
+    const result = await bootApplication({
+      env: "test",
+      secrets: [vault("STRIPE_KEY", { dev: "sk_test" })],
+      vault: { allowDevFallbacks: true, chain: [] },
+      flows: [charge],
+    });
+    const cap = result.capabilities.get("payments.charge");
+    expect(cap).toBeDefined();
+    expect(cap!.allows("secret", "STRIPE_KEY")).toBe(true);
+    expect(cap!.allows("write", "sql:orders")).toBe(true);
+    expect(cap!.allows("secret", "OTHER")).toBe(false);
+    await result.close();
+  });
+});
+
+describe("boot — cron fires without manual dispatch", () => {
+  test("scheduler tick runs a due every-binding", async () => {
+    resetBindings();
+    resetFlowSeq();
+
+    let ran = 0;
+    on(
+      every("1h"),
+      flow({
+        name: "cleanup.expire",
+        do: () => {
+          ran += 1;
+        },
+      }),
+    );
+
+    const app = oke({
+      name: "cron-boot",
+      clocks: [clock("expire-stale", { every: "1h" })],
+      env: "test",
+    });
+
+    await app.boot({
+      env: "test",
+      startScheduler: false,
+      clocks: [clock("expire-stale", { every: "1h" })],
+    });
+
+    const rt = app.bootResult!.clock!;
+    // First tick — due (never ran).
+    const { ran: names } = await rt.tick();
+    expect(names.length).toBeGreaterThan(0);
+    expect(ran).toBeGreaterThanOrEqual(1);
+
+    // Advance past the effective every; tick again without dispatchEvery.
+    rt.advance("1h");
+    const before = ran;
+    await rt.tick();
+    expect(ran).toBeGreaterThan(before);
+
+    await app.bootResult?.close();
+  });
+});
+
+describe("boot — HTTP gate wiring lives behind boot", () => {
+  test("unbooted app still serves without gates (legacy)", async () => {
+    resetBindings();
+    resetFlowSeq();
+    on(
+      http.get("/ping"),
+      flow({
+        name: "ping",
+        do: () => ({ ok: true }),
+      }),
+    );
+    const app = oke({ name: "legacy" });
+    const res = await app.fetch(
+      new Request("http://localhost/ping", { method: "GET" }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("boot — cron autostart via real timer loop", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("booted app (non-test) fires every() with no manual tick/runNow", async () => {
+    resetBindings();
+    resetFlowSeq();
+    jest.useFakeTimers({ now: 1_000_000 });
+
+    let ran = 0;
+    on(
+      every("10m"),
+      flow({
+        name: "cleanup.autostart",
+        do: () => {
+          ran += 1;
+        },
+      }),
+    );
+
+    // env: "dev" → startScheduler defaults ON. No createTestApp / advance.
+    const app = oke({
+      name: "cron-autostart",
+      env: "dev",
+      schedulerIntervalMs: 1000,
+    });
+    await app.boot();
+
+    expect(ran).toBe(0);
+
+    // Drive the wall-clock interval that boot installed — not clock.advance /
+    // runNow / dispatchEvery (those prove the harness, not autostart).
+    jest.advanceTimersByTime(1000);
+    // Interval callback does `void clock.tick()`; drain the async store walk.
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+
+    expect(ran).toBeGreaterThanOrEqual(1);
+
+    await app.stop();
+  });
+});

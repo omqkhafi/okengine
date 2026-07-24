@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,6 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.1",
-    "@duckdb/node-api": "^1.5.5-r.1",
     "age-encryption": "^0.3.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
@@ -42,17 +41,27 @@
     "@sinclair/typebox": "^0.34.52",
     "@types/bun": "latest",
     "arktype": "^2.2.3",
-    "drizzle-orm": "^0.45.2",
-    "gflows": "^1.0.0",
+    "drizzle-kit": "^1.0.0-rc.4",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "drizzle-seed": "^0.3.1",
+    "gflows": "^1.0.1",
     "typescript": "^7.0.2",
     "valibot": "^1.4.2",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "drizzle-orm": ">=0.39.0"
+    "drizzle-kit": ">=1.0.0-rc.0",
+    "drizzle-orm": ">=1.0.0-rc.0",
+    "drizzle-seed": ">=0.3.0"
   },
   "peerDependenciesMeta": {
+    "drizzle-kit": {
+      "optional": true
+    },
     "drizzle-orm": {
+      "optional": true
+    },
+    "drizzle-seed": {
       "optional": true
     }
   },
