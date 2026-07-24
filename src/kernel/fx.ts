@@ -12,6 +12,7 @@
 import type { Effects, ResourceRef } from "../manifest/types.ts";
 import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
+import { parseDurationMs } from "../elements/clock/duration.ts";
 import {
   createCapabilityToken,
   type CapabilityToken,
@@ -23,6 +24,7 @@ import {
   type EffectLedger,
 } from "./effects.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
+import type { JournalSession } from "./journal.ts";
 
 /** Named ref: plain string or `{ name }` element handle. */
 export type NamedRef = string | { readonly name: string };
@@ -55,15 +57,17 @@ export interface FxTenant {
   readonly id: string | null;
 }
 
-/** In-memory clock surface. */
+/** Clock surface on `fx`. */
 export interface FxClock {
   /** Current epoch-ms (injectable via {@link CreateFxOptions.now}). */
   now(): number;
   /**
-   * Durable sleep stub — resolves immediately in v1.
+   * Durable sleep — when the flow is `durable`, journals the wake time and
+   * survives restart / deploy. Without a journal, resolves immediately
+   * (non-durable flows).
    *
    * @param label - Step label for the journal
-   * @param duration - Duration string (e.g. `"7d"`); ignored by the stub
+   * @param duration - Duration string (e.g. `"7d"`, `"2m"`)
    */
   sleep(label: string, duration: string): Promise<void>;
 }
@@ -259,7 +263,7 @@ export interface Fx {
    */
   fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E>;
   /**
-   * Named durable step stub — runs `fn` once (no journal replay in v1).
+   * Named durable step — never re-runs on journal replay.
    *
    * @param name - Step name
    * @param fn - Step body
@@ -324,6 +328,13 @@ export interface CreateFxOptions {
   readonly signalRuntime?: SignalRuntime;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
+  /**
+   * Active journal session when the flow is durable. Every `fx` call is
+   * recorded; `step` / `sleep` replay from the journal on resume.
+   */
+  readonly journal?: JournalSession;
+  /** When true (or when `journal` is set), journal every fx call. */
+  readonly durable?: boolean;
 }
 
 /** Bundle returned by {@link createFxContext}. */
@@ -371,6 +382,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   };
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: FxTenant = options.tenant ?? { id: null };
+  const journal = options.journal;
 
   async function gated<T>(
     kind: Parameters<CapabilityToken["assert"]>[0],
@@ -378,7 +390,11 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     body: () => T | Promise<T>,
   ): Promise<T> {
     capability.assert(kind, resource);
-    return recordEffect(ledger, kind, resource, now, body);
+    const execute = () => recordEffect(ledger, kind, resource, now, body);
+    if (journal) {
+      return journal.effect(kind, resource, execute);
+    }
+    return execute();
   }
 
   function stubStoreHandle(ref: ResourceRef): FxStoreHandle {
@@ -500,8 +516,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
 
   const clock: FxClock = {
     now,
-    async sleep(_label: string, _duration: string): Promise<void> {
-      /* durable sleep is a no-op stub in v1 */
+    async sleep(label: string, duration: string): Promise<void> {
+      if (journal) {
+        await journal.sleep(label, duration, parseDurationMs);
+        return;
+      }
+      /* non-durable: resolve immediately (tests / sync flows) */
+      void label;
+      void duration;
     },
   };
 
@@ -602,7 +624,10 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     operator,
     tenant,
     fail,
-    async step<T>(_name: string, fn: () => T | Promise<T>): Promise<T> {
+    async step<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+      if (journal) {
+        return journal.step(name, fn);
+      }
       return await fn();
     },
   };

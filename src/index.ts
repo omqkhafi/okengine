@@ -52,6 +52,29 @@ export {
 } from "./elements/signal.ts";
 
 export {
+  clock,
+  createClockRuntime,
+  createTestClockRuntime,
+  createTimeTravel,
+  runDurable,
+  reconcileClocks,
+  detectDstAmbiguity,
+  type ClockDecl,
+  type ClockRuntime,
+  type TimeTravel,
+  type DurableResult,
+} from "./elements/clock.ts";
+
+export {
+  createJournal,
+  createMemoryJournalStore,
+  createFileJournalStore,
+  type Journal,
+  type JournalStore,
+  type JournalRun,
+} from "./kernel/journal.ts";
+
+export {
   validate,
   isStandardSchema,
   fromTypeBox,

@@ -41,3 +41,22 @@ export type {
   SignalRuntime,
   CreateSignalRuntimeOptions,
 } from "./signal.ts";
+
+export {
+  clock,
+  createClockRuntime,
+  createTestClockRuntime,
+  createTimeTravel,
+  runDurable,
+  reconcileClocks,
+  detectDstAmbiguity,
+  parseDurationMs,
+} from "./clock.ts";
+export type {
+  ClockDecl,
+  ClockOptions,
+  ClockRuntime,
+  TimeTravel,
+  CronRow,
+  DurableResult,
+} from "./clock.ts";

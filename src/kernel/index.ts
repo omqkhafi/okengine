@@ -81,6 +81,21 @@ export {
 } from "./fx.ts";
 
 export {
+  createJournal,
+  createMemoryJournalStore,
+  createFileJournalStore,
+  isJournalSuspend,
+  JournalSuspend,
+  type Journal,
+  type JournalEntry,
+  type JournalRun,
+  type JournalRunStatus,
+  type JournalSession,
+  type JournalStore,
+  type CreateJournalOptions,
+} from "./journal.ts";
+
+export {
   AFTER_HANDLER_STAGES,
   BEFORE_HANDLER_STAGES,
   HOOK_STAGES,
