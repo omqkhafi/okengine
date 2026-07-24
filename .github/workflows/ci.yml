@@ -7,7 +7,7 @@ on:
 
 jobs:
   ci:
-    name: install · typecheck · test · cold-start
+    name: install · typecheck · test · budgets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +25,11 @@ jobs:
       - name: Test
         run: bun run test
 
+      - name: Client tests
+        run: bun run test:client
+
       - name: Cold-start budget (< 50 ms)
         run: bun run bench:cold-start
+
+      - name: Client bundle budget (< 3 kB gzipped)
+        run: bun run bench:client

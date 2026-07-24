@@ -1,5 +1,26 @@
 #!/usr/bin/env bun
 /**
- * `oke` CLI entry. Scaffolding only.
+ * `oke` CLI entry.
  */
-process.exit(0);
+
+import { clientAddCli } from "./client-add.ts";
+
+const argv = process.argv.slice(2);
+const [cmd, sub, ...rest] = argv;
+
+if (cmd === "client" && sub === "add") {
+  process.exit(await clientAddCli(rest));
+}
+
+if (cmd === undefined || cmd === "--help" || cmd === "-h") {
+  console.log(`oke — okengine CLI
+
+Commands:
+  oke client add <url> [--out oke-client.d.ts]
+`);
+  process.exit(cmd ? 0 : 1);
+}
+
+console.error(`Unknown command: ${cmd}${sub ? ` ${sub}` : ""}`);
+console.error("Run `oke --help` for usage.");
+process.exit(1);

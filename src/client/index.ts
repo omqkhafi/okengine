@@ -1,5 +1,34 @@
 /**
  * Typed client (+ live). Subpath: `okengine/client`.
- * Scaffolding only.
+ *
+ * First Manifest derivation: `type App` → fully typed client, zero codegen.
  */
-export {};
+
+export { createClient } from "./create.ts";
+export {
+  isErrorCode,
+  isFail,
+  isOk,
+  isTransportError,
+} from "./errors.ts";
+export { createTransport } from "./transport.ts";
+export type { Transport } from "./transport.ts";
+export type {
+  AppOf,
+  Client,
+  ClientApp,
+  ClientCall,
+  ClientDescriptor,
+  ClientError,
+  ClientFetch,
+  ClientFromRoutes,
+  ClientHeaders,
+  ClientOptions,
+  ClientResult,
+  ClientRouteMap,
+  FlowContract,
+  Register,
+  ResolveApp,
+  RoutesOf,
+  TransportError,
+} from "./types.ts";

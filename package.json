@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.8",
+  "version": "0.0.10",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -11,9 +11,11 @@
     "test:manifest": "bun test --coverage src/manifest",
     "test:runtime": "bun test src/runtime",
     "test:compiler": "bun test src/validation src/compiler/aot src/compiler/differential src/compiler/extract",
+    "test:client": "bun test src/client src/cli/client-add.test.ts",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
+    "bench:client": "bun test src/client/budget.test.ts",
     "example": "bun ./example/bookings.ts",
-    "ci": "bun run typecheck && bun run test",
+    "ci": "bun run typecheck && bun run test && bun run bench:client",
     "g": "gflows"
   },
   "dependencies": {
