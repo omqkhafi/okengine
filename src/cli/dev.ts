@@ -194,16 +194,17 @@ export async function runDev(
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
-      const server = Bun.serve({
+      const { serveConsole: serveConsoleKernel } = await import(
+        "../console/server/serve.ts"
+      );
+      const server = await serveConsoleKernel({
         port,
         hostname: "127.0.0.1",
-        fetch() {
-          return new Response(
-            `<!doctype html><title>oke Console</title><h1>oke Console</h1><p>Derived panels load here.</p>`,
-            { headers: { "content-type": "text/html; charset=utf-8" } },
-          );
-        },
+        cwd,
+        env: "dev",
+        silentClaim: false,
       });
+      write(`oke Console http://127.0.0.1:${server.port}\n`);
       return {
         stop() {
           server.stop(true);
