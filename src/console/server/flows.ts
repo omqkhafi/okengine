@@ -9,9 +9,11 @@ import {
   authenticateOperator,
   createOperator,
   issueSession,
+  userPrincipal,
   type IssuedSession,
 } from "../../auth/index.ts";
 import { fail, flow, http, type Binding } from "../../kernel/index.ts";
+import type { Flow as ManifestFlow } from "../../manifest/types.ts";
 import { bindHttp } from "./bind.ts";
 import { verifyClaimCode } from "./claim.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
@@ -97,9 +99,54 @@ const StructuralOut = z.object({
   applied: z.literal(false),
 });
 
+const IdentitiesOut = z.object({
+  identities: z.array(
+    z.object({
+      id: z.string(),
+      email: z.string(),
+      name: z.string(),
+      status: z.enum(["active", "disabled"]),
+      scopes: z.array(z.string()),
+    }),
+  ),
+});
+
+const InvokeIn = z.object({
+  flowId: z.string().min(1),
+  body: z.unknown(),
+  asUserId: z.string().min(1),
+  /** Typed confirmation phrase for irreversible production invokes. */
+  confirmation: z.string().optional(),
+  /** Recorded reason for irreversible production invokes. */
+  reason: z.string().optional(),
+});
+
+const InvokeOut = z.object({
+  ok: z.literal(true),
+  flowId: z.string(),
+  asUserId: z.string(),
+  trigger: z.enum(["http", "signal", "clock", "internal", "durable"]),
+  response: z.unknown(),
+  peakTier: z.enum([
+    "none",
+    "reads",
+    "writes",
+    "emits",
+    "external",
+    "capabilities",
+  ]),
+  auditedAt: z.number(),
+});
+
 const SetupClosed = z.object({ reason: z.string() });
 const ClaimFailed = z.object({ reason: z.string() });
 const AuthFailed = z.object({});
+const NotFound = z.object({ flowId: z.string() });
+const InvokeDenied = z.object({ reason: z.string() });
+const ConfirmRequired = z.object({
+  phrase: z.literal("INVOKE"),
+  reason: z.string(),
+});
 
 /**
  * Build all Console HTTP bindings against shared state.
@@ -124,6 +171,10 @@ export function createConsoleBindings(state: ConsoleState): {
     readonly structural: {
       readonly propose: ReturnType<typeof createStructuralPropose>;
     };
+    readonly flows: {
+      readonly identities: ReturnType<typeof createFlowsIdentities>;
+      readonly invoke: ReturnType<typeof createFlowsInvoke>;
+    };
   };
 } {
   const setupStatus = createSetupStatus(state);
@@ -135,6 +186,8 @@ export function createConsoleBindings(state: ConsoleState): {
   const runsList = createRunsList(state);
   const actionPing = createActionPing(state);
   const structuralPropose = createStructuralPropose(state);
+  const flowsIdentities = createFlowsIdentities(state);
+  const flowsInvoke = createFlowsInvoke(state);
 
   const bindings: Binding[] = [
     bindHttp(http.get("/console/setup/status"), setupStatus),
@@ -146,6 +199,8 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.get("/console/runs"), runsList),
     bindHttp(http.post("/console/action/ping"), actionPing),
     bindHttp(http.post("/console/structural/propose"), structuralPropose),
+    bindHttp(http.get("/console/flows/identities"), flowsIdentities),
+    bindHttp(http.post("/console/flows/invoke"), flowsInvoke),
   ];
 
   return {
@@ -157,6 +212,7 @@ export function createConsoleBindings(state: ConsoleState): {
       runs: { list: runsList },
       action: { ping: actionPing },
       structural: { propose: structuralPropose },
+      flows: { identities: flowsIdentities, invoke: flowsInvoke },
     },
   };
 }
@@ -344,6 +400,147 @@ function createStructuralPropose(state: ConsoleState) {
       return { id: proposal.id, path: proposal.path, applied: false as const };
     },
   });
+}
+
+function createFlowsIdentities(state: ConsoleState) {
+  return flow({
+    name: "console.flows.identities",
+    unit: "console",
+    plane: "operator",
+    out: IdentitiesOut,
+    errors: { AuthFailed },
+    do: (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return {
+        identities: state.identities.map((i) => ({
+          id: i.id,
+          email: i.email,
+          name: i.name,
+          status: i.status,
+          scopes: [...i.scopes],
+        })),
+      };
+    },
+  });
+}
+
+function createFlowsInvoke(state: ConsoleState) {
+  return flow({
+    name: "console.flows.invoke",
+    unit: "console",
+    plane: "operator",
+    in: InvokeIn,
+    out: InvokeOut,
+    errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired },
+    do: (input: z.infer<typeof InvokeIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const manifest = state.manifest;
+      const declared = manifest?.flows?.[input.flowId];
+      if (!declared) {
+        return fail("NotFound", { flowId: input.flowId });
+      }
+
+      const identity = state.identities.find((i) => i.id === input.asUserId);
+      if (!identity || identity.status !== "active") {
+        return fail("InvokeDenied", { reason: "identity not found or disabled" });
+      }
+
+      // Operators hold no application scopes — `console:flows:invoke-as`
+      // (covered by session `console:*`) is the grant to assume a user principal.
+      const assumed = userPrincipal({
+        userId: identity.id,
+        scopes: identity.scopes,
+        verified: true,
+      });
+
+      const peakTier = peakTierOf(declared);
+      if (peakTier === "external" && state.production) {
+        if (input.confirmation !== "INVOKE" || (input.reason?.trim().length ?? 0) < 3) {
+          return fail("ConfirmRequired", {
+            phrase: "INVOKE" as const,
+            reason: "irreversible production invoke requires typed confirmation",
+          });
+        }
+      }
+
+      const trigger = triggerKindOf(declared);
+      const response = stubResponse(declared, input.body);
+      fx.log.info("console.flows.invoke", {
+        operatorId: fx.operator.id,
+        flowId: input.flowId,
+        asUserId: assumed.userId,
+        scopes: [...assumed.scopes],
+        peakTier,
+        reason: input.reason,
+      });
+
+      return {
+        ok: true as const,
+        flowId: input.flowId,
+        asUserId: input.asUserId,
+        trigger,
+        response,
+        peakTier,
+        auditedAt: state.now(),
+      };
+    },
+  });
+}
+
+function peakTierOf(
+  flow: ManifestFlow,
+): "none" | "reads" | "writes" | "emits" | "external" | "capabilities" {
+  const e = flow.effects;
+  if (!e) return "none";
+  if ((e.sends?.length ?? 0) > 0 || (e.asks?.length ?? 0) > 0) return "external";
+  if ((e.secrets?.length ?? 0) > 0) return "capabilities";
+  if ((e.emits?.length ?? 0) > 0) return "emits";
+  if ((e.writes?.length ?? 0) > 0) return "writes";
+  if ((e.reads?.length ?? 0) > 0) return "reads";
+  return "none";
+}
+
+function triggerKindOf(
+  flow: ManifestFlow,
+): "http" | "signal" | "clock" | "internal" | "durable" {
+  if (flow.durable) return "durable";
+  if (flow.trigger?.http) return "http";
+  if (flow.trigger?.signal) return "signal";
+  if (flow.trigger?.cron || flow.trigger?.every) return "clock";
+  return "internal";
+}
+
+/**
+ * Deterministic stub response for Console invoke — echoes the request under
+ * `echo` and fills required `out` string fields when declared.
+ *
+ * @param flow - Manifest flow
+ * @param body - Request body
+ */
+function stubResponse(flow: ManifestFlow, body: unknown): unknown {
+  const out = flow.out;
+  if (out && typeof out === "object" && !Array.isArray(out)) {
+    const props = (out.properties ?? {}) as Record<string, unknown>;
+    const required = Array.isArray(out.required)
+      ? (out.required as string[])
+      : Object.keys(props);
+    const result: Record<string, unknown> = { echo: body };
+    for (const key of required) {
+      if (key === "id") result.id = `inv_${hashShort(body)}`;
+      else if (!(key in result)) result[key] = null;
+    }
+    return result;
+  }
+  return { echo: body, ok: true };
+}
+
+function hashShort(value: unknown): string {
+  const text = JSON.stringify(value) ?? "";
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
 }
 
 async function issueOperatorSession(

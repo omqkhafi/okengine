@@ -69,6 +69,8 @@ export function createConsoleApp(
         runsList: routes.runs.list,
         actionPing: routes.action.ping,
         structuralPropose: routes.structural.propose,
+        flowsIdentities: routes.flows.identities,
+        flowsInvoke: routes.flows.invoke,
       },
     });
 

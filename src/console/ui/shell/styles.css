@@ -6,9 +6,12 @@
   --oke-muted: #9aa3b2;
   --oke-line: color-mix(in oklab, var(--oke-fg) 12%, transparent);
   --oke-accent: #3d9a6a;
+  /* Effect-tier accent — irreversible / external only (console §9.1). */
+  --oke-external: #d97706;
   --oke-danger: #c44b4b;
   --oke-font: "IBM Plex Sans", "Segoe UI", sans-serif;
   --oke-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --oke-dim: 0.38;
 }
 
 @font-face {
@@ -57,4 +60,16 @@ a {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

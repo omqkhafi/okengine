@@ -51,6 +51,7 @@ export {
   createConsoleState,
   publishLive,
   setManifest,
+  type ConsoleIdentity,
   type ConsoleLiveMessage,
   type ConsoleState,
   type CreateConsoleStateOptions,

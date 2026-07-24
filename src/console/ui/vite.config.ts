@@ -22,7 +22,17 @@ export default defineConfig({
     cssCodeSplit: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks(id) {
+          if (
+            id.includes("/console/ui/shell/panels/flows/") ||
+            id.includes("/console/ui/shell/panels/Flows.") ||
+            id.includes("/console/ui/flows/") ||
+            id.includes("@codemirror/")
+          ) {
+            return "panel-flows";
+          }
+          return undefined;
+        },
       },
     },
   },

@@ -1,14 +1,15 @@
 /**
- * Console shell root — setup gate + overview.
+ * Console shell root — setup gate + routed panels.
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { Outlet } from "@tanstack/react-router";
 import { consoleCalls } from "./client.ts";
-import { OverviewPanel } from "./panels/Overview.tsx";
+import { Shell } from "./layout/Shell.tsx";
 import { SetupWizard } from "./setup/Wizard.tsx";
 
 /**
- * Root application view.
+ * Root application view — auth gate then shell + outlet.
  */
 export function App() {
   const status = useQuery({
@@ -48,8 +49,8 @@ export function App() {
   }
 
   return (
-    <main>
-      <OverviewPanel />
-    </main>
+    <Shell>
+      <Outlet />
+    </Shell>
   );
 }

@@ -7,13 +7,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  Outlet,
+  lazyRouteComponent,
   RouterProvider,
 } from "@tanstack/react-router";
-import { StrictMode } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
+import { parseFlowsSearch } from "../flows/search.ts";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
+import { OverviewPanel } from "./panels/Overview.tsx";
 import "./styles.css";
 
 restoreAccessToken();
@@ -28,17 +30,34 @@ const queryClient = new QueryClient({
 });
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: App,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: App,
+  component: OverviewPanel,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute]);
-const router = createRouter({ routeTree });
+const flowsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/flows",
+  validateSearch: (search: Record<string, unknown>) => parseFlowsSearch(search),
+  component: lazyRouteComponent(
+    () => import("./panels/Flows.tsx"),
+    "default",
+  ),
+});
+
+const routeTree = rootRoute.addChildren([indexRoute, flowsRoute]);
+const router = createRouter({
+  routeTree,
+  defaultPendingComponent: () => (
+    <div className="grid h-full place-items-center text-[var(--oke-muted)]">
+      Loading panel…
+    </div>
+  ),
+});
 
 declare module "@tanstack/react-router" {
   interface Register {
@@ -52,7 +71,15 @@ if (!el) throw new Error("missing #root");
 createRoot(el).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <Suspense
+        fallback={
+          <div className="grid h-full place-items-center text-[var(--oke-muted)]">
+            Loading…
+          </div>
+        }
+      >
+        <RouterProvider router={router} />
+      </Suspense>
     </QueryClientProvider>
   </StrictMode>,
 );

@@ -12,6 +12,15 @@ import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
 
+/** User-plane identity row for the Flows invoke-as picker. */
+export interface ConsoleIdentity {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly status: "active" | "disabled";
+  readonly scopes: readonly string[];
+}
+
 /** Mutable Console runtime state for one process. */
 export interface ConsoleState {
   readonly operators: OperatorStore;
@@ -29,6 +38,10 @@ export interface ConsoleState {
   readonly liveSubscribers: Set<(msg: ConsoleLiveMessage) => void>;
   /** Bound after Console app boot — reads the runs store. */
   listRuns: () => Promise<WideEvent[]>;
+  /** User-plane identities available for invoke-as. */
+  readonly identities: ConsoleIdentity[];
+  /** Whether this process is treated as production (typed confirm). */
+  readonly production: boolean;
   /** Whether first operator exists (wizard permanently closed). */
   get setupClosed(): boolean;
 }
@@ -51,6 +64,10 @@ export interface CreateConsoleStateOptions {
   readonly manifest?: Manifest | null;
   /** Skip printing the claim code (tests). */
   readonly silentClaim?: boolean;
+  /** Seed identities for the invoke-as picker. */
+  readonly identities?: readonly ConsoleIdentity[];
+  /** Production flag — irreversible invokes require typed confirm. */
+  readonly production?: boolean;
 }
 
 /**
@@ -81,6 +98,8 @@ export function createConsoleState(
     manifest: options.manifest ?? null,
     liveSubscribers,
     listRuns: async () => [],
+    identities: [...(options.identities ?? defaultDevIdentities())],
+    production: options.production ?? process.env.NODE_ENV === "production",
     get setupClosed() {
       return operators.operators.size > 0;
     },
@@ -121,4 +140,26 @@ export function setManifest(state: ConsoleState, manifest: Manifest): void {
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });
   }
+}
+
+/**
+ * Default development identities for the invoke-as picker.
+ */
+function defaultDevIdentities(): ConsoleIdentity[] {
+  return [
+    {
+      id: "user_demo",
+      email: "demo@example.com",
+      name: "Demo User",
+      status: "active",
+      scopes: ["booking:create", "member"],
+    },
+    {
+      id: "user_member",
+      email: "member@example.com",
+      name: "Member",
+      status: "active",
+      scopes: ["member"],
+    },
+  ];
 }
