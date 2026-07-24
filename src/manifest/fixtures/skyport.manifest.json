@@ -1,0 +1,153 @@
+{
+  "oke": "1.0",
+  "app": "skyport",
+  "flows": {
+    "bookings.create": {
+      "trigger": { "http": { "method": "POST", "path": "/bookings" } },
+      "gates": ["member", "booking:create", "rate:sliding-window-counter:300/1m"],
+      "in": {
+        "type": "object",
+        "required": ["flightId", "seats"],
+        "properties": {
+          "flightId": { "type": "string" },
+          "seats": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "out": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" }
+        }
+      },
+      "errors": ["FlightFull"],
+      "effects": {
+        "reads": ["sql:bookings"],
+        "writes": ["sql:bookings"],
+        "emits": ["order-placed", "seat-feed"],
+        "secrets": []
+      },
+      "slo": { "availability": "99.9%", "latency": { "p99": "200ms" } },
+      "source": "src/flows/bookings/index.ts:18",
+      "plane": "user"
+    },
+    "bookings.mine": {
+      "trigger": { "http": { "method": "GET", "path": "/bookings" } },
+      "gates": ["member"],
+      "live": true,
+      "cacheKeys": "computed:sql:bookings/userId",
+      "effects": {
+        "reads": ["sql:bookings"]
+      },
+      "source": "src/flows/bookings/index.ts:42"
+    },
+    "payments.chargeBooking": {
+      "durable": true,
+      "steps": ["create-intent", "confirm"],
+      "effects": { "secrets": ["STRIPE_KEY"] },
+      "source": "src/flows/payments/index.ts:12"
+    },
+    "support.createTicket": {
+      "trigger": { "http": { "method": "POST", "path": "/tickets" } },
+      "gates": ["member"],
+      "effects": {
+        "writes": ["sql:tickets"],
+        "asks": ["ticket-triage@3"]
+      },
+      "nondeterministic": true,
+      "cost": { "estimatePerCall": 0.011, "budget": 0.02 },
+      "pii": "masked",
+      "source": "src/flows/support/index.ts:8"
+    }
+  },
+  "signals": {
+    "order-placed": { "delivery": "once", "retries": 5, "deadLetter": true },
+    "seat-feed": { "delivery": "live" }
+  },
+  "stores": {
+    "db": {
+      "facet": "sql",
+      "tables": {
+        "bookings": {
+          "classifications": {
+            "passengerEmail": { "pii": true, "retain": "7y" }
+          }
+        },
+        "tickets": {
+          "classifications": {
+            "body": { "pii": true }
+          }
+        }
+      }
+    }
+  },
+  "clocks": {
+    "expire-holds": { "every": "10m", "overridable": true }
+  },
+  "gates": {
+    "member": { "kind": "policy", "roles": ["member"] },
+    "booking:create": { "kind": "policy", "scopes": ["booking:create"] },
+    "fair": {
+      "kind": "rate",
+      "strategy": "sliding-window-counter",
+      "max": 300,
+      "per": "1m",
+      "keyBy": "user"
+    }
+  },
+  "vault": {
+    "STRIPE_KEY": {
+      "description": "Payments gateway key",
+      "rotate": "90d",
+      "schema": { "type": "string" }
+    }
+  },
+  "channels": {
+    "booking-confirmed": { "medium": "email", "locales": ["en", "ar"] }
+  },
+  "ai": {
+    "models": { "smart": { "provider": "anthropic", "tier": "opus" } },
+    "prompts": {
+      "ticket-triage": {
+        "version": 3,
+        "evals": "./evals/triage.jsonl",
+        "budget": { "maxCostPerCall": 0.02 }
+      }
+    },
+    "agents": {
+      "support": {
+        "tools": ["bookings.getBooking", "bookings.refundBooking"],
+        "maxSteps": 6
+      }
+    }
+  },
+  "plugins": {
+    "audit": {
+      "origin": "local",
+      "version": "1.0.0",
+      "declares": ["store.sql:audit", "consolePanel:audit"],
+      "intercepts": ["afterHandle"]
+    }
+  },
+  "journeys": {
+    "book-a-flight": {
+      "slo": { "availability": "99.5%" },
+      "composes": "99.6%",
+      "flows": ["bookings.create", "payments.chargeBooking"]
+    }
+  },
+  "drivers": {
+    "prod": ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"]
+  },
+  "tenancy": { "isolation": "row" },
+  "i18n": {
+    "locales": ["en", "ar"],
+    "default": "ar",
+    "dir": { "ar": "rtl" }
+  },
+  "topology": "monolith",
+  "images": {
+    "store.sql": "pgvector/pgvector:pg17",
+    "store.kv": "valkey/valkey:8-alpine"
+  }
+}

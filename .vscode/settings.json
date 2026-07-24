@@ -1,0 +1,23 @@
+{
+	"files.exclude": {
+		"**/dist": true,
+		"**/.next": true,
+		"**/.turbo": true,
+		"**/.motia": true,
+		"**/.intlayer": true,
+		"**/.wrangler": true,
+		"**/bun.lock": true,
+		"**/node_modules": true,
+		"**/next-env.d.ts": true,
+		"**/worker-configuration.d.ts": true
+	},
+	"editor.formatOnSave": true,
+	"files.associations": {
+		"*.css": "tailwindcss",
+	},
+	"editor.codeActionsOnSave": {
+		"source.organizeImports.biome": "explicit",
+		// "source.organizeImports": "always",
+		"source.fixAll.biome": "explicit",
+	}
+}

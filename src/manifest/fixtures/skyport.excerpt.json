@@ -1,0 +1,51 @@
+{
+  "oke": "1.0",
+  "app": "skyport",
+  "flows": {
+    "bookings.create": {
+      "trigger": { "http": { "method": "POST", "path": "/bookings" } },
+      "gates": ["member", "booking:create", "rate:sliding-window-counter:300/1m"],
+      "in": "…",
+      "out": "…",
+      "errors": ["FlightFull"],
+      "effects": {
+        "reads": ["sql:bookings"],
+        "writes": ["sql:bookings"],
+        "emits": ["order-placed", "seat-feed"],
+        "secrets": []
+      },
+      "slo": { "availability": "99.9%", "latency": { "p99": "200ms" } },
+      "source": "src/flows/bookings/index.ts:18"
+    },
+    "bookings.mine": { "live": true, "cacheKeys": "computed:sql:bookings/userId" },
+    "payments.chargeBooking": {
+      "durable": true,
+      "steps": ["create-intent", "confirm"],
+      "effects": { "secrets": ["STRIPE_KEY"] }
+    },
+    "support.createTicket": {
+      "effects": { "writes": ["sql:tickets"], "asks": ["ticket-triage@3"] },
+      "nondeterministic": true,
+      "cost": { "estimatePerCall": 0.011, "budget": 0.02 },
+      "pii": "masked"
+    }
+  },
+  "signals": {
+    "order-placed": { "delivery": "once", "retries": 5, "deadLetter": true },
+    "seat-feed": { "delivery": "live" }
+  },
+  "channels": { "booking-confirmed": { "medium": "email", "locales": ["en", "ar"] } },
+  "ai": {
+    "models": { "smart": { "provider": "anthropic", "tier": "opus" } },
+    "prompts": { "ticket-triage": { "version": 3, "evals": "./evals/triage.jsonl" } },
+    "agents": {
+      "support": {
+        "tools": ["bookings.getBooking", "bookings.refundBooking"],
+        "maxSteps": 6
+      }
+    }
+  },
+  "journeys": { "book-a-flight": { "slo": { "availability": "99.5%" }, "composes": "99.6%" } },
+  "drivers": { "prod": ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"] },
+  "tenancy": { "isolation": "row" }
+}

@@ -1,0 +1,623 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oke.dev/spec/manifest.v1.schema.json",
+  "title": "OKE Manifest v1",
+  "description": "Runtime-neutral, versioned description of an OKE system. Versioned independently of the okengine runtime via the `oke` field. Within a major version, changes are additive only. A reader needs only this schema — not okengine source — to interpret a document.",
+  "type": "object",
+  "required": ["oke", "app"],
+  "additionalProperties": false,
+  "properties": {
+    "oke": {
+      "description": "Manifest schema major.minor. Independent of the runtime package version.",
+      "const": "1.0"
+    },
+    "app": {
+      "description": "Application identity.",
+      "type": "string",
+      "minLength": 1
+    },
+    "flows": {
+      "description": "Every Flow: behaviour as on(Trigger) → Effects.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Flow" }
+    },
+    "signals": {
+      "description": "Data in motion — delivery physics is mandatory.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Signal" }
+    },
+    "stores": {
+      "description": "Data at rest, keyed by store id.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Store" }
+    },
+    "clocks": {
+      "description": "Named schedules and durable time sources.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Clock" }
+    },
+    "gates": {
+      "description": "Named policies and rate strategies.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Gate" }
+    },
+    "vault": {
+      "description": "Secret contracts (capabilities), never values.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/SecretContract" }
+    },
+    "channels": {
+      "description": "Human-reaching templates.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Channel" }
+    },
+    "ai": {
+      "$ref": "#/$defs/Ai"
+    },
+    "plugins": {
+      "description": "Plugged extensions with declared vs intercepting capabilities.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Plugin" }
+    },
+    "drivers": {
+      "description": "Protocol-named drivers in use, keyed by environment.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 },
+        "uniqueItems": true
+      }
+    },
+    "tenancy": {
+      "$ref": "#/$defs/Tenancy"
+    },
+    "i18n": {
+      "$ref": "#/$defs/I18n"
+    },
+    "journeys": {
+      "description": "Cross-flow SLO compositions.",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/Journey" }
+    },
+    "topology": {
+      "description": "Deployable split axis.",
+      "type": "string",
+      "enum": ["monolith", "services"]
+    },
+    "images": {
+      "description": "Vendor image pins keyed by role (e.g. store.sql).",
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "JsonSchema": {
+      "description": "A JSON Schema document, or an opaque string ref produced by extraction.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "object" }
+      ]
+    },
+    "ResourceRef": {
+      "description": "Store resource: facet:name (sql:table, kv:namespace, files:bucket, index:name).",
+      "type": "string",
+      "pattern": "^(sql|kv|files|index):.+$"
+    },
+    "SignalRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "TemplateRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "PromptRef": {
+      "description": "Prompt name, optionally pinned as name@version.",
+      "type": "string",
+      "minLength": 1
+    },
+    "SecretRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "FlowRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "Effects": {
+      "description": "Load-bearing effect surface. secrets are a capability; calls portal to transitive effects; sends/asks are irreversible.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reads": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ResourceRef" },
+          "uniqueItems": true
+        },
+        "writes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ResourceRef" },
+          "uniqueItems": true
+        },
+        "emits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SignalRef" },
+          "uniqueItems": true
+        },
+        "sends": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TemplateRef" },
+          "uniqueItems": true
+        },
+        "asks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PromptRef" },
+          "uniqueItems": true
+        },
+        "secrets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SecretRef" },
+          "uniqueItems": true
+        },
+        "calls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FlowRef" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "HttpTrigger": {
+      "type": "object",
+      "required": ["method", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "CdcTrigger": {
+      "type": "object",
+      "required": ["table"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "type": "string", "minLength": 1 },
+        "column": { "type": "string", "minLength": 1 },
+        "store": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Trigger": {
+      "description": "Discriminated trigger. A flow with no trigger is call-only (internal).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "http": { "$ref": "#/$defs/HttpTrigger" },
+        "signal": { "type": "string", "minLength": 1 },
+        "cron": { "type": "string", "minLength": 1 },
+        "every": { "type": "string", "minLength": 1 },
+        "cdc": { "$ref": "#/$defs/CdcTrigger" }
+      }
+    },
+    "Slo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?%$"
+        },
+        "latency": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "Deprecated": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "since": { "type": "string", "minLength": 1 },
+            "replaceWith": { "type": "string", "minLength": 1 },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "FlowCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "estimatePerCall": { "type": "number", "minimum": 0 },
+        "budget": { "type": "number", "minimum": 0 }
+      }
+    },
+    "Flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trigger": { "$ref": "#/$defs/Trigger" },
+        "gates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "in": { "$ref": "#/$defs/JsonSchema" },
+        "out": { "$ref": "#/$defs/JsonSchema" },
+        "errors": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            {
+              "type": "object",
+              "propertyNames": { "type": "string", "minLength": 1 },
+              "additionalProperties": { "$ref": "#/$defs/JsonSchema" }
+            }
+          ]
+        },
+        "effects": { "$ref": "#/$defs/Effects" },
+        "source": {
+          "description": "file:line origin in the producing codebase.",
+          "type": "string",
+          "minLength": 1
+        },
+        "plane": {
+          "type": "string",
+          "enum": ["user", "operator"]
+        },
+        "durable": { "type": "boolean" },
+        "live": { "type": "boolean" },
+        "cache": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "cacheKeys": {
+          "description": "Computed invalidation key expression (derived or declared).",
+          "type": "string",
+          "minLength": 1
+        },
+        "slo": { "$ref": "#/$defs/Slo" },
+        "deprecated": { "$ref": "#/$defs/Deprecated" },
+        "steps": {
+          "description": "Named durable steps when durable is true.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "nondeterministic": { "type": "boolean" },
+        "cost": { "$ref": "#/$defs/FlowCost" },
+        "pii": {
+          "type": "string",
+          "enum": ["masked", "allow", "denied"]
+        },
+        "breaking": {
+          "description": "Author intends a contract break; CI still surfaces it, but allows the undeclared-break gate to pass when true.",
+          "type": "boolean"
+        }
+      }
+    },
+    "Signal": {
+      "type": "object",
+      "required": ["delivery"],
+      "additionalProperties": false,
+      "properties": {
+        "delivery": {
+          "type": "string",
+          "enum": ["once", "broadcast", "live"]
+        },
+        "retries": { "type": "integer", "minimum": 0 },
+        "deadLetter": { "type": "boolean" },
+        "schema": { "$ref": "#/$defs/JsonSchema" },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "ColumnClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pii": { "type": "boolean" },
+        "sensitive": { "type": "boolean" },
+        "retain": { "type": "string", "minLength": 1 }
+      }
+    },
+    "Table": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/ColumnClassification" }
+        },
+        "classifications": {
+          "description": "Field → classification tags (pii, sensitive, retain duration).",
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              { "$ref": "#/$defs/ColumnClassification" }
+            ]
+          }
+        }
+      }
+    },
+    "Store": {
+      "type": "object",
+      "required": ["facet"],
+      "additionalProperties": false,
+      "properties": {
+        "facet": {
+          "type": "string",
+          "enum": ["sql", "kv", "files", "index"]
+        },
+        "tables": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/Table" }
+        },
+        "namespaces": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "buckets": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "indexes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "classifications": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              { "$ref": "#/$defs/ColumnClassification" }
+            ]
+          }
+        }
+      }
+    },
+    "Clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cron": { "type": "string", "minLength": 1 },
+        "every": { "type": "string", "minLength": 1 },
+        "timezone": { "type": "string", "minLength": 1 },
+        "overridable": { "type": "boolean" }
+      }
+    },
+    "Gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["policy", "rate"]
+        },
+        "policy": { "type": "string", "minLength": 1 },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "sliding-window-counter",
+            "fixed-window",
+            "sliding-log",
+            "token-bucket",
+            "leaky-bucket"
+          ]
+        },
+        "max": { "type": "number", "exclusiveMinimum": 0 },
+        "per": { "type": "string", "minLength": 1 },
+        "keyBy": { "type": "string", "minLength": 1 },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "SecretContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "rotate": { "type": "string", "minLength": 1 },
+        "schema": { "$ref": "#/$defs/JsonSchema" }
+      }
+    },
+    "Channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "medium": {
+          "type": "string",
+          "enum": ["email", "sms", "whatsapp", "push", "any"]
+        },
+        "locales": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "schema": { "$ref": "#/$defs/JsonSchema" },
+        "from": { "type": "string", "minLength": 1 }
+      }
+    },
+    "AiModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "tier": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "AiPromptBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxCostPerCall": { "type": "number", "minimum": 0 },
+        "maxCostPerRun": { "type": "number", "minimum": 0 }
+      }
+    },
+    "AiPrompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "evals": { "type": "string", "minLength": 1 },
+        "budget": { "$ref": "#/$defs/AiPromptBudget" },
+        "model": { "type": "string", "minLength": 1 },
+        "in": { "$ref": "#/$defs/JsonSchema" },
+        "out": { "$ref": "#/$defs/JsonSchema" }
+      }
+    },
+    "AiAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FlowRef" },
+          "uniqueItems": true
+        },
+        "maxSteps": { "type": "integer", "minimum": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "budget": { "$ref": "#/$defs/AiPromptBudget" }
+      }
+    },
+    "Ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "models": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/AiModel" }
+        },
+        "prompts": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/AiPrompt" }
+        },
+        "agents": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/AiAgent" }
+        }
+      }
+    },
+    "Plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["core", "local", "community"]
+        },
+        "version": { "type": "string", "minLength": 1 },
+        "declares": {
+          "description": "Boot-time contributions (schema, elements, drivers, panels, CLI).",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "intercepts": {
+          "description": "Per-request hooks.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "Tenancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "isolation": {
+          "type": "string",
+          "enum": ["row", "schema", "database"]
+        }
+      }
+    },
+    "I18n": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locales": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "default": { "type": "string", "minLength": 1 },
+        "dir": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["ltr", "rtl"]
+          }
+        }
+      }
+    },
+    "Journey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slo": { "$ref": "#/$defs/Slo" },
+        "composes": {
+          "description": "Computed composition of member-flow availabilities.",
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?%$"
+        },
+        "flows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FlowRef" },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

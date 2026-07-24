@@ -1,0 +1,112 @@
+{
+  "oke": "1.0",
+  "app": "demo",
+  "flows": {
+    "reports.export": {
+      "trigger": { "http": { "method": "GET", "path": "/reports/export" } },
+      "gates": ["staff"],
+      "in": {
+        "type": "object",
+        "properties": {
+          "format": { "type": "string", "enum": ["csv", "json"] }
+        }
+      },
+      "out": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string" }
+        }
+      },
+      "errors": ["NotFound", "Forbidden"],
+      "effects": {
+        "reads": ["sql:reports"],
+        "writes": [],
+        "emits": [],
+        "sends": [],
+        "asks": [],
+        "secrets": [],
+        "calls": []
+      },
+      "plane": "user",
+      "source": "src/flows/reports.ts:10",
+      "slo": { "availability": "99.9%", "latency": { "p99": "200ms" } }
+    },
+    "orders.create": {
+      "trigger": { "http": { "method": "POST", "path": "/orders" } },
+      "gates": ["member", "rate:sliding-window-counter:300/1m"],
+      "in": {
+        "type": "object",
+        "required": ["sku"],
+        "properties": {
+          "sku": { "type": "string" },
+          "qty": { "type": "integer" }
+        }
+      },
+      "out": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "errors": ["OutOfStock"],
+      "effects": {
+        "reads": ["sql:orders"],
+        "writes": ["sql:orders"],
+        "emits": ["order-placed"]
+      },
+      "source": "src/flows/orders.ts:4"
+    }
+  },
+  "signals": {
+    "order-placed": { "delivery": "once", "retries": 5, "deadLetter": true }
+  },
+  "stores": {
+    "db": {
+      "facet": "sql",
+      "tables": {
+        "orders": {
+          "classifications": {
+            "email": { "pii": true }
+          }
+        },
+        "reports": {}
+      }
+    }
+  },
+  "clocks": {
+    "nightly": { "cron": "0 0 * * *", "timezone": "UTC" }
+  },
+  "gates": {
+    "staff": { "kind": "policy", "roles": ["staff"] },
+    "member": { "kind": "policy", "roles": ["member"] }
+  },
+  "vault": {
+    "STRIPE_KEY": { "description": "stripe", "schema": { "type": "string" } }
+  },
+  "channels": {
+    "order-confirmed": { "medium": "email", "locales": ["en"] }
+  },
+  "ai": {
+    "models": { "smart": { "provider": "anthropic", "tier": "opus" } },
+    "prompts": {
+      "triage": { "version": 1, "evals": "./evals/t.jsonl", "budget": { "maxCostPerCall": 0.01 } }
+    },
+    "agents": {
+      "support": { "tools": ["orders.create"], "maxSteps": 3 }
+    }
+  },
+  "plugins": {
+    "audit": {
+      "origin": "local",
+      "version": "1.0.0",
+      "declares": ["consolePanel:audit"],
+      "intercepts": []
+    }
+  },
+  "drivers": {
+    "prod": ["postgres", "redis"]
+  },
+  "tenancy": { "isolation": "schema" },
+  "i18n": { "locales": ["en", "ar"], "default": "en" },
+  "topology": "monolith"
+}

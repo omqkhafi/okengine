@@ -1,0 +1,7 @@
+[install]
+peer = true
+
+[test]
+# Project-wide discovery; pass a path (e.g. `bun test src/manifest`) to narrow.
+root = "."
+coverageSkipTestFiles = true
