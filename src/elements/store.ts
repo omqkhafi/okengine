@@ -1,0 +1,89 @@
+/**
+ * Store element — data at rest.
+ *
+ * Facets: `sql` · `kv` · `files` · `index`.
+ * Drivers are protocol-named and live under `src/drivers/*`.
+ * All world access still goes through `fx`; this module only declares
+ * resources and provides runtime helpers (cache, replica routing, PII).
+ */
+
+export { store, sql, kv, files, index } from "./store/declare.ts";
+export type {
+  StoreDecl,
+  SqlStoreDecl,
+  KvStoreDecl,
+  FilesStoreDecl,
+  IndexStoreDecl,
+  SqlStoreOptions,
+  KvStoreOptions,
+  FilesStoreOptions,
+  IndexStoreOptions,
+} from "./store/declare.ts";
+
+export {
+  classify,
+  buildClassificationMap,
+  maskRows,
+  isPiiColumn,
+  tableFromSql,
+  PII_MASK,
+} from "./store/classify.ts";
+export type { MaskRowsOptions } from "./store/classify.ts";
+
+export {
+  createStoreCache,
+  computedCacheKey,
+  tier1KeysForReads,
+  resourcesTouchedByWrites,
+  isInvalidatedByWrite,
+  parseTtlMs,
+} from "./store/cache.ts";
+export type {
+  CacheTier,
+  CacheEntry,
+  InvalidationEvent,
+  StoreCache,
+} from "./store/cache.ts";
+
+export {
+  isReadOnlyStoreFlow,
+  sqlRoleForEffects,
+  resolveSqlTarget,
+} from "./store/replica.ts";
+export type { SqlBindingConfig } from "./store/replica.ts";
+
+export {
+  defineTable,
+  resolveTableName,
+  classificationsFromTable,
+  id,
+  now,
+} from "./store/table.ts";
+export type { ColumnDef, TableHandle } from "./store/table.ts";
+
+export {
+  createSqlStoreHandle,
+} from "./store/sql-session.ts";
+export type {
+  SqlStoreHandle,
+  SelectBuilder,
+  InsertBuilder,
+  InsertValuesBuilder,
+  SqlSessionOptions,
+} from "./store/sql-session.ts";
+
+export {
+  createStoreRuntime,
+  putTier2,
+} from "./store/runtime.ts";
+export type {
+  StoreRuntime,
+  StoreDriverBundle,
+  StoreHandle,
+  StoreInvokeContext,
+  CreateStoreRuntimeOptions,
+  SqlRuntimeBinding,
+  KvStoreFxHandle,
+  FilesStoreFxHandle,
+  IndexStoreFxHandle,
+} from "./store/runtime.ts";

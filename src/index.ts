@@ -31,6 +31,19 @@ export {
 } from "./kernel/index.ts";
 
 export {
+  store,
+  classify,
+  id,
+  now,
+  defineTable,
+  createStoreRuntime,
+  type StoreDecl,
+  type StoreRuntime,
+  type SqlStoreHandle,
+  type TableHandle,
+} from "./elements/store.ts";
+
+export {
   validate,
   isStandardSchema,
   fromTypeBox,

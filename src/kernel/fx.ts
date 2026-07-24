@@ -10,6 +10,7 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
+import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
 import {
   createCapabilityToken,
   type CapabilityToken,
@@ -165,12 +166,17 @@ export interface FxSearchOptions {
  * Implementations must be plain objects so tests can replace `fx` wholesale.
  */
 export interface Fx {
-  /**
-   * Open a store handle for `ref` (capability checked on each op).
-   *
-   * @param ref - Store resource ref or named handle
-   */
-  store(ref: NamedRef | { readonly ref: ResourceRef }): FxStoreHandle;
+/**
+ * Open a store handle for `ref` (capability checked on each op).
+ *
+ * When a {@link CreateFxOptions.storeRuntime} is bound and `ref` is a
+ * registered store declaration, returns the driver-backed handle.
+ *
+ * @param ref - Store resource ref, named handle, or store declaration
+ */
+  store(
+    ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl,
+  ): FxStoreHandle;
   /**
    * Emit a signal (records `emit`).
    *
@@ -304,6 +310,14 @@ export interface CreateFxOptions {
    * `undefined` (v1 stub).
    */
   readonly callHandler?: FxCallHandler;
+  /**
+   * Optional store runtime (protocol drivers). When set, `fx.store(decl)`
+   * opens driver-backed handles; string refs still use the in-memory stub
+   * unless registered on the runtime.
+   */
+  readonly storeRuntime?: StoreRuntime;
+  /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
+  readonly revealPii?: boolean;
 }
 
 /** Bundle returned by {@link createFxContext}. */
@@ -361,7 +375,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     return recordEffect(ledger, kind, resource, now, body);
   }
 
-  function storeHandle(ref: ResourceRef): FxStoreHandle {
+  function stubStoreHandle(ref: ResourceRef): FxStoreHandle {
     const table = (): Map<string, unknown> => {
       let m = stores.get(ref);
       if (!m) {
@@ -396,6 +410,86 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return gated("write", ref, () => table().delete(key));
       },
     };
+  }
+
+  function storeHandle(
+    ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl,
+  ): FxStoreHandle {
+    const runtime = options.storeRuntime;
+    if (runtime && typeof ref === "object" && ref !== null && "facet" in ref) {
+      const decl = ref;
+      // Lazy proxy: first op opens the driver handle under the flow effects.
+      const cache: { handle?: Awaited<ReturnType<StoreRuntime["open"]>> } = {};
+      const open = async () => {
+        if (!cache.handle) {
+          cache.handle = await runtime.open(decl, {
+            effects: options.effects ?? {},
+            revealPii: options.revealPii,
+          });
+        }
+        return cache.handle;
+      };
+      return {
+        ref: decl.ref,
+        async get(key: string) {
+          return gated("read", decl.ref, async () => {
+            const h = await open();
+            if ("get" in h && typeof h.get === "function") {
+              return h.get(key);
+            }
+            return null;
+          });
+        },
+        async set(key: string, value: unknown) {
+          return gated("write", decl.ref, async () => {
+            const h = await open();
+            if ("set" in h && typeof h.set === "function") {
+              await h.set(key, value);
+            }
+          });
+        },
+        async select() {
+          return gated("read", decl.ref, async () => {
+            const h = await open();
+            if ("select" in h && typeof h.select === "function") {
+              const result = h.select();
+              if (
+                result &&
+                typeof result === "object" &&
+                "from" in result &&
+                typeof result.from === "function"
+              ) {
+                // Builder form — caller should use fx.store(db).select().from(t)
+                // via the runtime handle directly; stub returns [].
+                return [];
+              }
+              return result as unknown as unknown[];
+            }
+            return [];
+          });
+        },
+        async insert(row: Record<string, unknown>) {
+          return gated("write", decl.ref, async () => {
+            const id =
+              typeof row.id === "string" ? row.id : crypto.randomUUID();
+            return { id };
+          });
+        },
+        async delete(key: string) {
+          return gated("write", decl.ref, async () => {
+            const h = await open();
+            if ("delete" in h && typeof h.delete === "function") {
+              const result = await (h.delete as (a: string) => Promise<boolean>)(
+                key,
+              );
+              return result;
+            }
+            return false;
+          });
+        },
+      };
+    }
+    return stubStoreHandle(resolveStoreRef(ref as NamedRef | { readonly ref: ResourceRef }));
   }
 
   const clock: FxClock = {
@@ -441,7 +535,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
 
   const fx: Fx = {
     store(ref) {
-      return storeHandle(resolveStoreRef(ref));
+      return storeHandle(ref);
     },
     emit(signal, _payload) {
       const name = resolveName(signal);

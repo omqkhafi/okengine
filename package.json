@@ -12,6 +12,7 @@
     "test:runtime": "bun test src/runtime",
     "test:compiler": "bun test src/validation src/compiler/aot src/compiler/differential src/compiler/extract",
     "test:client": "bun test src/client src/cli/client-add.test.ts",
+    "test:store": "bun test src/elements/store src/drivers",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
     "bench:client": "bun test src/client/budget.test.ts",
     "example": "bun ./example/bookings.ts",
@@ -28,10 +29,19 @@
     "@sinclair/typebox": "^0.34.52",
     "@types/bun": "latest",
     "arktype": "^2.2.3",
+    "drizzle-orm": "^0.45.2",
     "gflows": "latest",
     "typescript": "^7.0.2",
     "valibot": "^1.4.2",
     "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.39.0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "engines": {
     "bun": ">=1.3"
@@ -45,6 +55,8 @@
     "./test": "./src/test/index.ts",
     "./config": "./src/config/index.ts",
     "./auth": "./src/auth/index.ts",
+    "./store": "./src/elements/store.ts",
+    "./drivers": "./src/drivers/index.ts",
     "./drivers/*": "./src/drivers/*"
   },
   "files": [
