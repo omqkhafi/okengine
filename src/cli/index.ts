@@ -4,6 +4,7 @@
  */
 
 import { clientAddCli } from "./client-add.ts";
+import { evalCli } from "./eval.ts";
 import { gatesListCli } from "./gates-list.ts";
 
 const argv = process.argv.slice(2);
@@ -17,12 +18,17 @@ if (cmd === "gates" && sub === "list") {
   process.exit(await gatesListCli(rest));
 }
 
+if (cmd === "eval") {
+  process.exit(await evalCli(sub ? [sub, ...rest] : rest));
+}
+
 if (cmd === undefined || cmd === "--help" || cmd === "-h") {
   console.log(`oke — okengine CLI
 
 Commands:
   oke client add <url> [--out oke-client.d.ts]
   oke gates list [--manifest oke.manifest.json]
+  oke eval [--manifest oke.manifest.json]
 `);
   process.exit(cmd ? 0 : 1);
 }

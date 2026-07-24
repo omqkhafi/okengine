@@ -153,6 +153,11 @@ export interface Flow {
   nondeterministic?: boolean;
   cost?: FlowCost;
   pii?: "masked" | "allow" | "denied";
+  /**
+   * Explicit acknowledgement that PII may reach a third-party model.
+   * Alias of `pii: "allow"` for AI egress governance.
+   */
+  allowPii?: boolean;
   /** Author acknowledges an intentional contract break. */
   breaking?: boolean;
 }

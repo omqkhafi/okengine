@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -16,6 +16,9 @@
     "test:signal": "bun test src/elements/signal",
     "test:clock": "bun test src/elements/clock",
     "test:gate": "bun test src/elements/gate",
+    "test:vault": "bun test src/elements/vault",
+    "test:channel": "bun test src/elements/channel",
+    "test:ai": "bun test src/elements/ai",
     "test:auth": "bun test src/auth",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
     "bench:client": "bun test src/client/budget.test.ts",
@@ -24,9 +27,11 @@
     "g": "gflows"
   },
   "dependencies": {
+    "age-encryption": "^0.3.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "oxc-parser": "^0.141.0"
+    "oxc-parser": "^0.141.0",
+    "sently": "^0.8.0"
   },
   "devDependencies": {
     "@oxc-project/types": "^0.141.0",
@@ -63,6 +68,9 @@
     "./signal": "./src/elements/signal.ts",
     "./clock": "./src/elements/clock.ts",
     "./gate": "./src/elements/gate.ts",
+    "./vault": "./src/elements/vault.ts",
+    "./channel": "./src/elements/channel.ts",
+    "./ai": "./src/elements/ai.ts",
     "./drivers": "./src/drivers/index.ts",
     "./drivers/*": "./src/drivers/*"
   },

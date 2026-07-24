@@ -57,7 +57,6 @@ export type {
   ClockOptions,
   ClockRuntime,
   TimeTravel,
-  CronRow,
   DurableResult,
 } from "./clock.ts";
 
@@ -77,3 +76,63 @@ export type {
   RateOptions,
   RateTakeResult,
 } from "./gate.ts";
+
+export {
+  vault,
+  createVaultRuntime,
+  VaultBootError,
+  SECRET_MASK,
+  fingerprintSecret,
+  fingerprintSecretSync,
+  createSecretRedactor,
+} from "./vault.ts";
+export type {
+  VaultSecretDecl,
+  VaultSecretOptions,
+  VaultRuntime,
+  VaultGap,
+  VaultChainLayer,
+  CreateVaultRuntimeOptions,
+} from "./vault.ts";
+
+export {
+  channel,
+  createChannelRuntime,
+  createConsentStore,
+  createReceiptLedger,
+  SentlyError,
+  RetryTransport,
+  FallbackTransport,
+  FallbackError,
+} from "./channel.ts";
+export type {
+  ChannelTemplateDecl,
+  ChannelTemplateOptions,
+  ChannelRuntime,
+  ChannelSendOptions,
+  CreateChannelRuntimeOptions,
+  ConsentStore,
+  DeliveryReceipt,
+  ReceiptLedger,
+  Transport,
+} from "./channel.ts";
+
+export {
+  ai,
+  createAiRuntime,
+  assertAllowPiiForAsk,
+  AiPiiBuildError,
+  runPromptEvals,
+  parseEvalJsonl,
+} from "./ai.ts";
+export type {
+  AiModelDecl,
+  AiPromptDecl,
+  AiAgentDecl,
+  AiEmbedDecl,
+  AiRuntime,
+  AgentDenial,
+  CreateAiRuntimeOptions,
+  EvalCase,
+  EvalSuiteResult,
+} from "./ai.ts";

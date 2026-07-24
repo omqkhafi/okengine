@@ -924,6 +924,10 @@ function registerFlow(args: {
   } else if (inferred.nondeterministic) {
     flow.pii = "masked";
   }
+  if (boolProp(opts, "allowPii") === true || pii === "allow") {
+    flow.allowPii = true;
+    flow.pii = "allow";
+  }
 
   const plane = stringProp(opts, "plane");
   if (plane === "user" || plane === "operator") flow.plane = plane;

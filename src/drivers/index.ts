@@ -112,3 +112,69 @@ export {
   runFilesConformance,
   runIndexConformance,
 } from "./conformance.ts";
+
+export type {
+  VaultDriverId,
+  VaultOpenOptions,
+  VaultBag,
+  VaultDriver,
+} from "./vault-types.ts";
+
+export { memoryVaultDriver } from "./vault-memory.ts";
+export { envVaultDriver } from "./vault-env.ts";
+export {
+  sopsVaultDriver,
+  buildSopsFixture,
+  sopsEncryptValue,
+} from "./vault-sops.ts";
+export { openbaoVaultDriver } from "./vault-openbao.ts";
+export { infisicalVaultDriver } from "./vault-infisical.ts";
+export { managedVaultDriver } from "./vault-managed.ts";
+
+export type {
+  ChannelDriverId,
+  ChannelMediumId,
+  ChannelMessage,
+  ChannelAttempt,
+  ChannelSendResult,
+  ChannelTransport,
+  ChannelDriver,
+  ChannelOpenOptions,
+  ChannelInbox,
+  ChannelInboxEntry,
+} from "./channel-types.ts";
+export { createChannelInbox } from "./channel-types.ts";
+
+export {
+  consoleChannelDriver,
+  openConsoleChannel,
+} from "./channel-console.ts";
+export { smtpChannelDriver, openSmtpChannel } from "./channel-smtp.ts";
+export { resendChannelDriver, openResendChannel } from "./channel-resend.ts";
+export {
+  unifonicChannelDriver,
+  openUnifonicChannel,
+} from "./channel-unifonic.ts";
+export {
+  waCloudChannelDriver,
+  openWaCloudChannel,
+} from "./channel-wa-cloud.ts";
+export { fcmChannelDriver, openFcmChannel } from "./channel-fcm.ts";
+export {
+  webpushChannelDriver,
+  openWebPushChannel,
+} from "./channel-webpush.ts";
+
+export type {
+  AiDriverId,
+  AiMessage,
+  AiCompleteOptions,
+  AiCompleteResult,
+  AiEmbedOptions,
+  AiEmbedResult,
+  AiModelClient,
+  AiOpenOptions,
+  AiDriver,
+} from "./ai-types.ts";
+
+export { mockAiDriver, createMockAiDriver } from "./ai-mock.ts";

@@ -12,6 +12,9 @@
 import type { Effects, ResourceRef } from "../manifest/types.ts";
 import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
+import type { VaultRuntime } from "../elements/vault.ts";
+import type { ChannelRuntime } from "../elements/channel.ts";
+import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import {
   createCapabilityToken,
@@ -328,6 +331,21 @@ export interface CreateFxOptions {
    * configured driver (postgres = same transaction as store writes).
    */
   readonly signalRuntime?: SignalRuntime;
+  /**
+   * Optional vault runtime. When set, `fx.vault` reads through it and
+   * `fx.log` redacts loaded secret values automatically.
+   */
+  readonly vaultRuntime?: VaultRuntime;
+  /**
+   * Optional channel runtime. When set, `fx.send` delivers through it
+   * (templates, consent, fallback chains, receipts).
+   */
+  readonly channelRuntime?: ChannelRuntime;
+  /**
+   * Optional AI runtime. When set, `fx.ask` routes through it.
+   * Nondeterministic ⇒ journaling forced; auto-cache disabled.
+   */
+  readonly aiRuntime?: AiRuntime;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
   /**
@@ -529,11 +547,15 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
   };
 
+  const aiDisablesCache = options.aiRuntime?.autoCacheDisabled === true;
+
   const cache: FxCache = {
     async get<T = unknown>(key: string): Promise<T | undefined> {
+      if (aiDisablesCache) return undefined;
       return cacheStore.get(key) as T | undefined;
     },
     async set(key: string, value: unknown, _ttl?: string): Promise<void> {
+      if (aiDisablesCache) return;
       cacheStore.set(key, value);
     },
     async getOrSet<T>(
@@ -541,6 +563,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       _ttl: string,
       produce: () => T | Promise<T>,
     ): Promise<T> {
+      if (aiDisablesCache) return await produce();
       if (cacheStore.has(key)) return cacheStore.get(key) as T;
       const value = await produce();
       cacheStore.set(key, value);
@@ -548,18 +571,35 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
   };
 
+  function redactLog(
+    message: string,
+    data?: Record<string, unknown>,
+  ): { message: string; data?: Record<string, unknown> } {
+    const vault = options.vaultRuntime;
+    if (!vault) return { message, data };
+    const safeMessage = vault.redactString(message);
+    const safeData = data
+      ? (vault.redact(data) as Record<string, unknown>)
+      : undefined;
+    return { message: safeMessage, data: safeData };
+  }
+
   const log: FxLog = {
     debug(message, data) {
-      onLog?.("debug", message, data);
+      const r = redactLog(message, data);
+      onLog?.("debug", r.message, r.data);
     },
     info(message, data) {
-      onLog?.("info", message, data);
+      const r = redactLog(message, data);
+      onLog?.("info", r.message, r.data);
     },
     warn(message, data) {
-      onLog?.("warn", message, data);
+      const r = redactLog(message, data);
+      onLog?.("warn", r.message, r.data);
     },
     error(message, data) {
-      onLog?.("error", message, data);
+      const r = redactLog(message, data);
+      onLog?.("error", r.message, r.data);
     },
   };
 
@@ -590,7 +630,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       // vault is sync in the public examples; check + record synchronously
       capability.assert("secret", name);
       const timestamp = now();
-      const value = secrets[name] ?? `[secret:${name}]`;
+      const value = options.vaultRuntime
+        ? options.vaultRuntime.read(name)
+        : (secrets[name] ?? `[secret:${name}]`);
       ledger.record({
         kind: "secret",
         resource: name,
@@ -601,13 +643,30 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       return value;
     },
     cache,
-    send(template, _opts) {
+    send(template, opts) {
       const name = resolveName(template);
-      return gated("send", name, async () => ({ ok: true as const }));
+      return gated("send", name, async () => {
+        if (options.channelRuntime) {
+          const result = await options.channelRuntime.send(name, {
+            to: opts?.to ?? "",
+            data: opts?.data,
+            via: opts?.via?.map(resolveName),
+          });
+          return { ok: result.ok as true };
+        }
+        return { ok: true as const };
+      });
     },
-    ask(prompt, _input, _opts) {
+    ask(prompt, input, opts) {
       const name = resolveName(prompt);
-      return gated("ask", name, async () => ({}));
+      return gated("ask", name, async () => {
+        if (options.aiRuntime) {
+          return options.aiRuntime.ask(name, input, {
+            via: opts?.via?.map(resolveName),
+          });
+        }
+        return {};
+      });
     },
     search(embed, _query, _opts) {
       const name = resolveName(embed);

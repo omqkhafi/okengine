@@ -77,6 +77,37 @@ export {
 } from "./elements/gate.ts";
 
 export {
+  vault,
+  createVaultRuntime,
+  VaultBootError,
+  SECRET_MASK,
+  type VaultSecretDecl,
+  type VaultRuntime,
+} from "./elements/vault.ts";
+
+export {
+  channel,
+  createChannelRuntime,
+  createConsentStore,
+  createReceiptLedger,
+  type ChannelTemplateDecl,
+  type ChannelRuntime,
+} from "./elements/channel.ts";
+
+export {
+  ai,
+  createAiRuntime,
+  assertAllowPiiForAsk,
+  AiPiiBuildError,
+  runPromptEvals,
+  parseEvalJsonl,
+  type AiModelDecl,
+  type AiPromptDecl,
+  type AiAgentDecl,
+  type AiRuntime,
+} from "./elements/ai.ts";
+
+export {
   createJournal,
   createMemoryJournalStore,
   createFileJournalStore,
