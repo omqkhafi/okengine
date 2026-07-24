@@ -84,6 +84,8 @@ export {
 
 export {
   vault,
+  fromStack,
+  FROM_STACK_PREFIX,
   createVaultRuntime,
   VaultBootError,
   SECRET_MASK,
@@ -145,10 +147,11 @@ export {
   createBunRuntime,
   createWebStandardRuntime,
   APP_PORT,
+  CONSOLE_PORT,
+  MCP_PORT,
   type Runtime,
   type ServeOptions,
 } from "./runtime/index.ts";
-
 export {
   createRunsRuntime,
   collectWideEvent,

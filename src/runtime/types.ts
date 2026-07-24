@@ -11,6 +11,12 @@
 /** Default application listen port (O·K·E mnemonic). */
 export const APP_PORT = 6530;
 
+/** Default Console listen port (O·K·E mnemonic). */
+export const CONSOLE_PORT = 6533;
+
+/** Default MCP listen port (O·K·E mnemonic). */
+export const MCP_PORT = 6535;
+
 /**
  * Minimal app surface a runtime can serve.
  * Satisfied by {@link import("../kernel/app.ts").OkeApp}.

@@ -9,7 +9,13 @@
  * registered at boot — cleartext never appears even when passed to `fx.log`.
  */
 
-export { vault } from "./vault/declare.ts";
+export {
+  vault,
+  fromStack,
+  FROM_STACK_PREFIX,
+  isFromStack,
+  fromStackRole,
+} from "./vault/declare.ts";
 export type {
   VaultSecretDecl,
   VaultSecretOptions,

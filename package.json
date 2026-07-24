@@ -21,6 +21,7 @@
     "test:ai": "bun test src/elements/ai",
     "test:auth": "bun test src/auth",
     "test:runs": "bun test src/runs",
+    "test:cli": "bun test src/cli src/docker",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
     "bench:client": "bun test src/client/budget.test.ts",
     "bench:runs": "bun test src/runs/bench.test.ts",
@@ -44,7 +45,7 @@
     "drizzle-kit": "^1.0.0-rc.4",
     "drizzle-orm": "^1.0.0-rc.4",
     "drizzle-seed": "^0.3.1",
-    "gflows": "^1.0.2",
+    "gflows": "^1.0.4",
     "typescript": "^7.0.2",
     "valibot": "^1.4.2",
     "zod": "^4.4.3"

@@ -1,0 +1,186 @@
+/**
+ * `oke docker` / `oke stack` / `oke images pin` / `oke schema` / `oke dev --stack`.
+ */
+
+import { describe, expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runDev } from "./dev.ts";
+import { runDockerDerive } from "./docker.ts";
+import { runImagesPin } from "./images.ts";
+import { emitSchemaSource, runSchemaGenerate } from "./schema.ts";
+import { runStackPreview } from "./stack.ts";
+import { runStart, resolveStartEntry } from "./start.ts";
+import { vaultCli } from "./vault-cmd.ts";
+
+const images = {
+  "store.sql": "pgvector/pgvector:pg17",
+} as const;
+
+const credentials = {
+  "store.sql": {
+    user: "oke",
+    password: "test-password-not-in-yaml",
+    database: "oke",
+  },
+} as const;
+
+describe("oke docker CLI", () => {
+  test("writes Dockerfile and compose without credentials in YAML", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-docker-"));
+    const logs: string[] = [];
+    const { code, result } = await runDockerDerive({
+      cwd: dir,
+      outDir: dir,
+      images,
+      credentials,
+      write: (t) => logs.push(t),
+    });
+    expect(code).toBe(0);
+    expect(result).toBeDefined();
+    expect(await Bun.file(join(dir, "Dockerfile")).exists()).toBe(true);
+    expect(await Bun.file(join(dir, "compose.store.sql.yml")).exists()).toBe(
+      true,
+    );
+    const yml = await Bun.file(join(dir, "compose.store.sql.yml")).text();
+    expect(yml).not.toContain("test-password-not-in-yaml");
+    expect(logs.join("")).toContain("compose.override.yml");
+  });
+});
+
+describe("oke stack", () => {
+  test("previews without writing files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-stack-"));
+    let out = "";
+    const code = await runStackPreview({
+      cwd: dir,
+      images,
+      write: (t) => {
+        out += t;
+      },
+    });
+    expect(code).toBe(0);
+    expect(out).toContain("store.sql");
+    expect(out).toContain("postgres");
+    expect(await Bun.file(join(dir, "compose.yml")).exists()).toBe(false);
+  });
+});
+
+describe("oke images pin", () => {
+  test("writes oke.images.lock via injected resolver", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-pin-"));
+    const code = await runImagesPin({
+      cwd: dir,
+      images,
+      resolveDigest: async () => "sha256:abc123",
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    const lock = await Bun.file(join(dir, "oke.images.lock")).json();
+    expect(lock.images["store.sql"].digest).toBe("sha256:abc123");
+  });
+});
+
+describe("oke schema generate", () => {
+  test("emits schema/oke.ts and --check catches drift", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-schema-"));
+    const code = await runSchemaGenerate({
+      cwd: dir,
+      extraTables: ["bookings"],
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    const src = await Bun.file(join(dir, "schema/oke.ts")).text();
+    expect(src).toContain("bookings");
+    expect(src).toContain("oke_roles");
+
+    const checkOk = await runSchemaGenerate({
+      cwd: dir,
+      extraTables: ["bookings"],
+      check: true,
+      write: () => {},
+    });
+    expect(checkOk).toBe(0);
+
+    await Bun.write(join(dir, "schema/oke.ts"), emitSchemaSource(["other"]));
+    const checkFail = await runSchemaGenerate({
+      cwd: dir,
+      extraTables: ["bookings"],
+      check: true,
+      write: () => {},
+    });
+    expect(checkFail).toBe(1);
+  });
+});
+
+describe("oke dev --stack", () => {
+  test("plans stack with postgres and writes nothing on dryRun", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-dev-dry-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    const { code, plan } = await runDev({
+      cwd: dir,
+      stack: ["store.sql"],
+      images,
+      credentials,
+      dryRun: true,
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    expect(plan?.stackRoles).toEqual(["store.sql"]);
+    expect(plan?.composeFiles?.some((f) => f.includes("store.sql"))).toBe(true);
+    expect(plan?.stackEnv?.DATABASE_URL).toContain("postgres://");
+    expect(await Bun.file(join(dir, "compose.yml")).exists()).toBe(false);
+  });
+});
+
+describe("oke start", () => {
+  test("resolves entry and invokes runEntry", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-start-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    const entry = await resolveStartEntry(dir);
+    expect(entry).toEndWith("src/app.ts");
+    let ran = "";
+    const code = await runStart({
+      cwd: dir,
+      runEntry: async (e) => {
+        ran = e;
+      },
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    expect(ran).toBe(entry);
+  });
+});
+
+describe("oke vault", () => {
+  test("set and list", async () => {
+    const store = new Map<string, string>();
+    const bag = {
+      get: (n: string) => store.get(n),
+      set: (n: string, v: string) => {
+        store.set(n, v);
+      },
+      names: () => [...store.keys()],
+    };
+    let out = "";
+    expect(
+      await vaultCli(["set", "STRIPE_KEY", "sk_test"], {
+        store: bag,
+        write: (t) => {
+          out += t;
+        },
+      }),
+    ).toBe(0);
+    out = "";
+    expect(
+      await vaultCli(["list"], {
+        store: bag,
+        write: (t) => {
+          out += t;
+        },
+      }),
+    ).toBe(0);
+    expect(out).toContain("STRIPE_KEY");
+  });
+});

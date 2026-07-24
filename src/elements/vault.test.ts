@@ -37,6 +37,32 @@ describe("vault declaration", () => {
     const b = vault.secret("DATABASE_URL", { dev: "postgres://local" });
     expect(b.name).toBe("DATABASE_URL");
     expect(b.dev).toBe("postgres://local");
+
+    const fromStack = vault.fromStack("store.sql");
+    expect(fromStack).toStartWith("__oke_from_stack__:");
+    const c = vault.secret("DATABASE_URL", { dev: fromStack });
+    expect(c.dev).toBe(fromStack);
+  });
+
+  test("fromStack resolves via OKE_<ROLE>_URL without env-var names in the kernel", async () => {
+    const prev = process.env.OKE_STORE_SQL_URL;
+    process.env.OKE_STORE_SQL_URL = "postgres://oke:x@127.0.0.1:5432/oke";
+    try {
+      const runtime = createVaultRuntime({
+        secrets: [
+          vault.secret("DATABASE_URL", { dev: vault.fromStack("store.sql") }),
+        ],
+        chain: [],
+        allowDevFallbacks: true,
+      });
+      await runtime.boot();
+      expect(runtime.read("DATABASE_URL")).toBe(
+        "postgres://oke:x@127.0.0.1:5432/oke",
+      );
+    } finally {
+      if (prev === undefined) delete process.env.OKE_STORE_SQL_URL;
+      else process.env.OKE_STORE_SQL_URL = prev;
+    }
   });
 });
 

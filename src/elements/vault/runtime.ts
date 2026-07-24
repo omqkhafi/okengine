@@ -3,6 +3,7 @@
  */
 
 import type { VaultBag, VaultDriver } from "../../drivers/vault-types.ts";
+import { fromStackRole, isFromStack } from "./declare.ts";
 import type { VaultSecretDecl } from "./declare.ts";
 import { fingerprintSecretSync } from "./fingerprint.ts";
 import { createSecretRedactor, SECRET_MASK } from "./redact.ts";
@@ -146,7 +147,8 @@ export function createVaultRuntime(
     if (options.allowDevFallbacks) {
       for (const c of contracts.values()) {
         if (c.dev !== undefined && !merged.has(c.name)) {
-          merged.set(c.name, c.dev);
+          const resolved = resolveDevFallback(c.dev);
+          if (resolved !== undefined) merged.set(c.name, resolved);
         }
       }
     }
@@ -239,6 +241,27 @@ export function createVaultRuntime(
       booted = false;
     },
   };
+}
+
+/**
+ * Resolve a `dev` fallback, expanding {@link import("./declare.ts").fromStack}
+ * markers via stack env (`OKE_<ROLE>_URL`) without teaching the kernel
+ * image-specific env-var names.
+ *
+ * @param dev - Declared fallback
+ */
+function resolveDevFallback(dev: string): string | undefined {
+  if (!isFromStack(dev)) return dev;
+  const role = fromStackRole(dev);
+  const key = `OKE_${role.replaceAll(".", "_").toUpperCase()}_URL`;
+  const fromEnv =
+    (typeof Bun !== "undefined" ? Bun.env[key] : undefined) ??
+    process.env[key] ??
+    (role === "store.sql"
+      ? (typeof Bun !== "undefined" ? Bun.env.DATABASE_URL : undefined) ??
+        process.env.DATABASE_URL
+      : undefined);
+  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
 }
 
 export { SECRET_MASK };
