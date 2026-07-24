@@ -68,8 +68,12 @@ export interface FlowFailure<E = unknown> {
 
 /** Payload carried by a flow-boundary failure. */
 export interface FlowErrorValue<E = unknown> {
-  /** Declared error name (e.g. `"FlightFull"`), not an OKE#### code. */
-  readonly name: string;
+  /**
+   * Declared error code from the flow's `errors` map
+   * (e.g. `"FlightFull"`, `"ValidationError"`) — not an OKE#### number.
+   * Clients narrow with `error?.code === "FlightFull"`.
+   */
+  readonly code: string;
   /** Typed error data from the flow. */
   readonly data: E;
   /** Optional localized or custom message. */
@@ -182,18 +186,18 @@ export function lookupOkeError(
 /**
  * Create a flow-boundary failure value (does not throw).
  *
- * @param name - Declared error name from the flow's `errors` map
+ * @param code - Declared error code from the flow's `errors` map
  * @param data - Error payload
  * @param opts - Optional message override
  */
 export function fail<E>(
-  name: string,
+  code: string,
   data: E,
   opts?: FailOptions,
 ): FlowFailure<E> {
   const error: FlowErrorValue<E> = opts?.message !== undefined
-    ? { name, data, message: opts.message }
-    : { name, data };
+    ? { code, data, message: opts.message }
+    : { code, data };
   return { data: null, error };
 }
 

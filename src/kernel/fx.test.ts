@@ -213,7 +213,7 @@ describe("errors — registry", () => {
     });
     expect(result).toEqual({
       data: null,
-      error: { name: "FlightFull", data: { seatsLeft: 0 }, message: "full" },
+      error: { code: "FlightFull", data: { seatsLeft: 0 }, message: "full" },
     });
   });
 

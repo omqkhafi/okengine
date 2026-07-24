@@ -7,29 +7,21 @@
  */
 
 import type { Effects, Slo } from "../manifest/types.ts";
+import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
 import type { Trigger } from "./triggers.ts";
 
-/** Standard Schema V1 duck-type (Zod 4, Valibot, ArkType, TypeBox). */
-export interface StandardSchemaV1<Output = unknown> {
-  readonly "~standard": {
-    readonly version: 1;
-    readonly vendor: string;
-    readonly validate: (
-      value: unknown,
-    ) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
-  };
-}
+export type {
+  SchemaInput,
+  StandardSchemaV1,
+} from "../validation/standard-schema.ts";
 
-/** Result of a Standard Schema validate call. */
+/** Result of a Standard Schema validate call (re-export shape). */
 export type StandardSchemaResult<Output> =
   | { readonly value: Output; readonly issues?: undefined }
   | { readonly issues: ReadonlyArray<{ readonly message: string }> };
-
-/** Accept plain schemas or anything with a Standard Schema slot. */
-export type SchemaInput = StandardSchemaV1 | unknown;
 
 /** Map of declared flow-boundary error names to their schemas. */
 export type FlowErrorMap = Readonly<Record<string, SchemaInput>>;

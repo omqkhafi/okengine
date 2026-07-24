@@ -1,16 +1,22 @@
 /**
  * `oke({ name })` — the application shell.
  *
- * Adopts bindings from {@link on}, builds the HTTP router, runs the hook
+ * Adopts bindings from {@link on}, builds the HTTP router, compiles
+ * per-route parse/validate handlers (AoT or dynamic), runs the hook
  * pipeline, and wires `fx.call` to untriggered (and triggered) flows.
  */
 
+import {
+  compileRoute,
+  encodeExecuteResult,
+  encodeFailure,
+  type CompiledRoute,
+} from "../compiler/index.ts";
 import type { Effects } from "../manifest/types.ts";
+import { validate } from "../validation/standard-schema.ts";
 import {
   isFlow,
   type AnyFlowDef,
-  type SchemaInput,
-  type StandardSchemaV1,
 } from "./flow.ts";
 import {
   createFxContext,
@@ -50,6 +56,12 @@ export interface OkeOptions {
   readonly name: string;
   /** Router preset — `default` (RegExp+Trie) or `edge` (Linear+Trie). */
   readonly router?: RouterPreset;
+  /**
+   * AoT compile per-route parse/validate handlers (`new Function`).
+   * Set `false` on eval-restricted runtimes (Cloudflare / some edge).
+   * Default `true`.
+   */
+  readonly aot?: boolean;
   /** Extra bindings (in addition to the global {@link on} registry). */
   readonly bindings?: readonly Binding[];
   /** Base fx options applied to every invocation. */
@@ -88,6 +100,8 @@ export interface UnitHooks {
 export interface OkeApp {
   /** App name. */
   readonly name: string;
+  /** Whether AoT compilation is enabled. */
+  readonly aot: boolean;
   /** Active HTTP router (after build). */
   readonly router: Router<Binding>;
   /**
@@ -128,7 +142,7 @@ export interface OkeApp {
    * @param flowDef - Flow to run
    * @param input - Input payload
    * @param trigger - Trigger for this invocation
-   * @param extras - Request / params
+   * @param extras - Request / params / parse flags
    */
   execute(
     flowDef: AnyFlowDef,
@@ -137,6 +151,8 @@ export interface OkeApp {
     extras?: {
       readonly request?: Request;
       readonly params?: Record<string, string>;
+      /** Skip execute-time schema validation (already done by the HTTP compiler). */
+      readonly validated?: boolean;
     },
   ): Promise<ExecuteResult>;
   /**
@@ -182,6 +198,12 @@ export interface OkeApp {
   call(ref: NamedRef | AnyFlowDef, input?: unknown): Promise<unknown>;
   /** All adopted bindings. */
   readonly bindings: readonly Binding[];
+  /**
+   * Look up the compiled parse/validate handler for an HTTP binding.
+   *
+   * @param binding - HTTP binding
+   */
+  compiledFor(binding: Binding): CompiledRoute | undefined;
 }
 
 /**
@@ -190,6 +212,7 @@ export interface OkeApp {
  * @param options - App name and router preset
  */
 export function oke(options: OkeOptions): OkeApp {
+  const aot = options.aot !== false;
   const adopted: Binding[] = [
     ...listBindings(),
     ...(options.bindings ?? []),
@@ -198,11 +221,13 @@ export function oke(options: OkeOptions): OkeApp {
   const appHooks: HookMap = {};
   const unitHooks = new Map<string, HookMap>();
   const flowsByName = new Map<string, AnyFlowDef>();
+  const compiled = new WeakMap<Binding, CompiledRoute>();
 
   const smart = createRouter<Binding>(options.router ?? "default");
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
       smart.add(b.trigger.method, b.trigger.path, b);
+      compiled.set(b, compileHttpBinding(b, aot));
     }
   }
   smart.build();
@@ -212,7 +237,6 @@ export function oke(options: OkeOptions): OkeApp {
     flowsByName.set(flowDef.name, flowDef);
   }
 
-  // Index every flow object that appears (including multi-bind)
   for (const b of adopted) {
     registerFlow(b.flow);
   }
@@ -224,6 +248,7 @@ export function oke(options: OkeOptions): OkeApp {
     extras?: {
       readonly request?: Request;
       readonly params?: Record<string, string>;
+      readonly validated?: boolean;
     },
   ): Promise<ExecuteResult> {
     registerFlow(flowDef);
@@ -258,10 +283,16 @@ export function oke(options: OkeOptions): OkeApp {
       },
     });
 
+    const alreadyValidated = extras?.validated === true;
+
     const result = await runPipeline(ctx, fx, hooks, async () => {
-      const parsed = await maybeParse(flowDef.in, ctx.input);
-      ctx.input = parsed;
-      return flowDef.do(parsed as never, fx);
+      if (!alreadyValidated) {
+        const parsed = await validate(flowDef.in, ctx.input);
+        if (!parsed.ok) return parsed.failure;
+        ctx.input = parsed.value;
+        return flowDef.do(parsed.value as never, fx);
+      }
+      return flowDef.do(ctx.input as never, fx);
     });
 
     return {
@@ -275,6 +306,7 @@ export function oke(options: OkeOptions): OkeApp {
 
   const app: OkeApp = {
     name: options.name,
+    aot,
     router,
     bindings: adopted,
     plug(_plugin?: unknown) {
@@ -317,42 +349,36 @@ export function oke(options: OkeOptions): OkeApp {
         return new Response("Not Found", { status: 404 });
       }
       const { value: binding, params } = matched;
-      let body: unknown = undefined;
-      if (method !== "GET" && method !== "HEAD") {
-        const text = await request.text();
-        if (text.length > 0) {
-          try {
-            body = JSON.parse(text) as unknown;
-          } catch {
-            body = text;
-          }
-        }
+
+      let route = compiled.get(binding);
+      if (!route && binding.trigger.kind === "http") {
+        route = compileHttpBinding(binding, aot);
+        compiled.set(binding, route);
       }
-      const input =
-        body !== undefined && typeof body === "object" && body !== null
-          ? { ...params, ...(body as Record<string, unknown>) }
-          : Object.keys(params).length > 0
-            ? { ...params, ...(body !== undefined ? { body } : {}) }
-            : body;
+
+      let input: unknown;
+      let validated = false;
+
+      if (route) {
+        const parsed = await route.parseValidate(request, params);
+        if (!parsed.ok) {
+          return encodeFailure(parsed.failure);
+        }
+        input = parsed.input;
+        validated = true;
+      } else {
+        // Non-compiled path (should not happen for HTTP bindings)
+        input = undefined;
+      }
 
       const result = await execute(
         binding.flow,
         input,
         binding.trigger,
-        { request, params },
+        { request, params, validated },
       );
 
-      if (result.response) return result.response;
-      if (result.failure) {
-        return Response.json(
-          { data: null, error: result.failure.error },
-          { status: 400 },
-        );
-      }
-      if (result.output === undefined) {
-        return new Response(null, { status: 204 });
-      }
-      return Response.json({ data: result.output, error: null });
+      return encodeExecuteResult(result);
     },
     async dispatchSignal(signal, payload) {
       const name = resolveName(signal);
@@ -397,7 +423,6 @@ export function oke(options: OkeOptions): OkeApp {
       if (!flowDef) {
         return undefined;
       }
-      // Ensure callable flows are indexed even with zero triggers
       registerFlow(flowDef);
       const trigger: Trigger =
         flowDef.triggers[0] ?? ({ kind: "internal" } satisfies InternalTrigger);
@@ -405,32 +430,32 @@ export function oke(options: OkeOptions): OkeApp {
       if (result.failure) return result.failure;
       return result.output;
     },
+    compiledFor(binding) {
+      return compiled.get(binding);
+    },
   };
 
   return app;
 }
 
-async function maybeParse(
-  schema: SchemaInput | undefined,
-  input: unknown,
-): Promise<unknown> {
-  if (schema === undefined || schema === null) return input;
-  if (!isStandardSchema(schema)) return input;
-  const result = await schema["~standard"].validate(input);
-  if (result.issues) {
-    throw new Error(
-      `Input validation failed: ${result.issues.map((i) => i.message).join("; ")}`,
-    );
+function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
+  const trigger = binding.trigger as HttpTrigger;
+  const hookFns: Array<(...args: never[]) => unknown> = [];
+  for (const list of Object.values(binding.flow.hooks)) {
+    if (!list) continue;
+    for (const fn of list) {
+      hookFns.push(fn as (...args: never[]) => unknown);
+    }
   }
-  return result.value;
-}
-
-function isStandardSchema(value: unknown): value is StandardSchemaV1 {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "~standard" in value &&
-    typeof (value as StandardSchemaV1)["~standard"]?.validate === "function"
+  return compileRoute(
+    {
+      method: trigger.method,
+      path: trigger.path,
+      handler: binding.flow.do as (...args: never[]) => unknown,
+      hooks: hookFns,
+      schema: binding.flow.in,
+    },
+    aot,
   );
 }
 

@@ -246,11 +246,11 @@ export interface Fx {
   /**
    * Flow-boundary failure value (does not throw).
    *
-   * @param name - Declared error name
+   * @param code - Declared error code (narrowed by clients via `error.code`)
    * @param data - Error payload
    * @param opts - Optional message
    */
-  fail<E>(name: string, data: E, opts?: FailOptions): FlowFailure<E>;
+  fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E>;
   /**
    * Named durable step stub — runs `fn` once (no journal replay in v1).
    *
