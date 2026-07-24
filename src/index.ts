@@ -44,6 +44,14 @@ export {
 } from "./elements/store.ts";
 
 export {
+  signal,
+  createSignalRuntime,
+  type SignalDecl,
+  type SignalOptions,
+  type SignalRuntime,
+} from "./elements/signal.ts";
+
+export {
   validate,
   isStandardSchema,
   fromTypeBox,

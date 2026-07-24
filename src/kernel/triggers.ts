@@ -165,7 +165,7 @@ export function every(interval: string): EveryTrigger {
 
 /**
  * Signal declaration handle — enough for `on(linkClicked, …)` before the
- * full `signal()` element lands.
+ * full `signal()` element (see `src/elements/signal.ts`).
  */
 export interface SignalSource {
   readonly name: string;

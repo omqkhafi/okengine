@@ -33,3 +33,11 @@ export type {
   TableHandle,
   ColumnDef,
 } from "./store.ts";
+
+export { signal, createSignalRuntime } from "./signal.ts";
+export type {
+  SignalDecl,
+  SignalOptions,
+  SignalRuntime,
+  CreateSignalRuntimeOptions,
+} from "./signal.ts";

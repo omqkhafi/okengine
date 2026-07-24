@@ -11,6 +11,7 @@
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
 import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
+import type { SignalRuntime } from "../elements/signal.ts";
 import {
   createCapabilityToken,
   type CapabilityToken,
@@ -316,6 +317,11 @@ export interface CreateFxOptions {
    * unless registered on the runtime.
    */
   readonly storeRuntime?: StoreRuntime;
+  /**
+   * Optional signal runtime. When set, `fx.emit` enrols through the
+   * configured driver (postgres = same transaction as store writes).
+   */
+  readonly signalRuntime?: SignalRuntime;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
 }
@@ -537,9 +543,13 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     store(ref) {
       return storeHandle(ref);
     },
-    emit(signal, _payload) {
+    emit(signal, payload) {
       const name = resolveName(signal);
-      return gated("emit", name, async () => undefined);
+      return gated("emit", name, async () => {
+        if (options.signalRuntime) {
+          await options.signalRuntime.emit(name, payload);
+        }
+      });
     },
     call(flow, input) {
       const name = resolveName(flow);

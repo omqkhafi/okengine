@@ -29,6 +29,19 @@ export type {
 } from "./types.ts";
 export { classificationKey } from "./types.ts";
 
+export type {
+  SignalDriverId,
+  SignalDriver,
+  SignalBus,
+  SignalMessage,
+  SignalFailureReason,
+  DeadLetter,
+  SignalTransaction,
+  SignalOpenOptions,
+  SignalRedisClientLike,
+  SignalNatsClientLike,
+} from "./signal-types.ts";
+
 export {
   memorySqlDriver,
   memoryKvDriver,
@@ -62,6 +75,30 @@ export {
 } from "./s3.ts";
 
 export { pgvectorDriver, openPgvectorIndex } from "./pgvector.ts";
+
+export {
+  memorySignalDriver,
+  openMemorySignal,
+} from "./signal-memory.ts";
+
+export {
+  postgresSignalDriver,
+  openPostgresSignal,
+  createPostgresSignalFake,
+  type PostgresSignalSql,
+} from "./signal-postgres.ts";
+
+export {
+  redisSignalDriver,
+  openRedisSignal,
+  createSignalRedisFake,
+} from "./signal-redis.ts";
+
+export {
+  natsSignalDriver,
+  openNatsSignal,
+  createSignalNatsFake,
+} from "./signal-nats.ts";
 
 export {
   runSqlConformance,
