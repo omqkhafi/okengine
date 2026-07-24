@@ -1,5 +1,5 @@
 /**
- * Compiler: AoT (Sucrose + `new Function`) · dynamic fallback.
+ * Compiler: Manifest extraction (oxc) · AoT (Sucrose + `new Function`) · dynamic fallback.
  */
 
 export {
@@ -42,3 +42,26 @@ export {
   type FailureEnvelope,
   type SuccessEnvelope,
 } from "./response.ts";
+
+export {
+  deepMatch,
+  extractFromSources,
+  extractManifest,
+  lineAt,
+  type ExtractManifestOptions,
+  type SourceFile,
+} from "./extract.ts";
+
+export {
+  inferEffects,
+  type InferBinding,
+  type InferEffectsOptions,
+  type InferredEffects,
+} from "./effects-infer.ts";
+
+export {
+  emitManifest,
+  manifestPathIn,
+  MANIFEST_FILENAME,
+  type EmitManifestOptions,
+} from "./emit.ts";

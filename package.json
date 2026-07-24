@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "bun test --pass-with-no-tests",
     "test:manifest": "bun test --coverage src/manifest",
     "test:runtime": "bun test src/runtime",
-    "test:compiler": "bun test src/validation src/compiler/aot src/compiler/differential",
+    "test:compiler": "bun test src/validation src/compiler/aot src/compiler/differential src/compiler/extract",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
     "example": "bun ./example/bookings.ts",
     "ci": "bun run typecheck && bun run test",
@@ -18,9 +18,11 @@
   },
   "dependencies": {
     "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "oxc-parser": "^0.141.0"
   },
   "devDependencies": {
+    "@oxc-project/types": "^0.141.0",
     "@sinclair/typebox": "^0.34.52",
     "@types/bun": "latest",
     "arktype": "^2.2.3",
