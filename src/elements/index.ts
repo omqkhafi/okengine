@@ -60,3 +60,20 @@ export type {
   CronRow,
   DurableResult,
 } from "./clock.ts";
+
+export {
+  gate,
+  createGateRuntime,
+  takeRate,
+  deriveModuleActions,
+  formatGatesList,
+  ALL_RATE_STRATEGIES,
+  DEFAULT_RATE_STRATEGY,
+} from "./gate.ts";
+export type {
+  GateDecl,
+  GatePolicyContext,
+  GateRuntime,
+  RateOptions,
+  RateTakeResult,
+} from "./gate.ts";

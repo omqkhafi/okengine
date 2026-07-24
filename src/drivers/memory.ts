@@ -2,6 +2,7 @@
  * `memory` driver — in-process backends for sql · kv · files · index (test/dev).
  */
 
+import { LuaKvStore } from "./kv-lua.ts";
 import type {
   FilesBucket,
   FilesDriver,
@@ -147,6 +148,9 @@ export const memoryKvDriver: KvDriver = {
   async open(options: KvOpenOptions): Promise<KvNamespace> {
     const store = new Map<string, unknown>();
     const prefix = `${options.name}:`;
+    const lua = new LuaKvStore(options.nowMs);
+    /** Serialize EVAL so concurrent rate checks stay atomic. */
+    let evalChain: Promise<unknown> = Promise.resolve();
     return {
       driverId: "memory",
       async get(key) {
@@ -157,6 +161,24 @@ export const memoryKvDriver: KvDriver = {
       },
       async delete(key) {
         return store.delete(prefix + key);
+      },
+      async eval<T = unknown>(
+        script: string,
+        keys: readonly string[],
+        args: readonly string[] = [],
+      ): Promise<T> {
+        const run = evalChain.then(() =>
+          lua.eval(
+            script,
+            keys.map((k) => prefix + k),
+            args,
+          ),
+        );
+        evalChain = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run as Promise<T>;
       },
       async close() {
         store.clear();

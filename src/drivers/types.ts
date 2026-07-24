@@ -103,6 +103,20 @@ export interface KvNamespace {
    * @param key - Entry key
    */
   delete(key: string): Promise<boolean>;
+  /**
+   * Atomically evaluate a Lua script (redis `EVAL` semantics).
+   *
+   * Keys are namespaced by the driver. Used by Gate rate strategies.
+   *
+   * @param script - Lua source
+   * @param keys - KEYS table entries (unprefixed)
+   * @param args - ARGV table entries
+   */
+  eval<T = unknown>(
+    script: string,
+    keys: readonly string[],
+    args?: readonly string[],
+  ): Promise<T>;
   /** Close / release. */
   close(): Promise<void>;
 }
@@ -115,6 +129,8 @@ export interface KvOpenOptions {
   readonly url?: string;
   /** Injected client for tests. */
   readonly client?: KvClientLike;
+  /** Injectable clock for Lua EVAL TTLs (memory / fakes). */
+  readonly nowMs?: () => number;
 }
 
 /** Minimal Redis-like client used by the redis driver (and test fakes). */
@@ -122,6 +138,25 @@ export interface KvClientLike {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, opts?: { ex?: number }): Promise<unknown>;
   del(...keys: string[]): Promise<number>;
+  /**
+   * Redis `EVAL` — required for atomic Gate rate strategies.
+   *
+   * @param script - Lua source
+   * @param numkeys - KEYS count
+   * @param keysAndArgs - KEYS then ARGV
+   */
+  eval?(
+    script: string,
+    numkeys: number,
+    ...keysAndArgs: string[]
+  ): Promise<unknown>;
+  /**
+   * Raw command send (Bun.RedisClient). Used when `eval` is absent.
+   *
+   * @param command - Redis command name
+   * @param args - Command arguments
+   */
+  send?(command: string, args: string[]): Promise<unknown>;
 }
 
 /** KV driver factory. */

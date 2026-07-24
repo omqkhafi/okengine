@@ -326,11 +326,12 @@ function visitDeclarationCall(
 
     if (obj === "gate" && prop === "rate") {
       const opts = objectArg(call.arguments[0]);
-      const strategy = stringProp(opts, "strategy") as RateStrategy | undefined;
+      const strategy = (stringProp(opts, "strategy") ??
+        "sliding-window-counter") as RateStrategy;
       const max = numberProp(opts, "max");
       const per = stringProp(opts, "per");
       const keyBy = stringProp(opts, "keyBy");
-      if (strategy && max !== undefined && per) {
+      if (max !== undefined && per) {
         const expr = `rate:${strategy}:${max}/${per}`;
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {

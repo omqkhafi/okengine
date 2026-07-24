@@ -6,7 +6,7 @@
  * Flow and is callable via `fx.call` (unified-theory §4, Linkly ⑤).
  */
 
-import type { Effects, Slo } from "../manifest/types.ts";
+import type { Effects, FlowPlane, Slo } from "../manifest/types.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
@@ -64,6 +64,11 @@ export interface FlowOptions<
   readonly cache?: boolean | string;
   /** Declared service-level objective. */
   readonly slo?: Slo;
+  /**
+   * Plane — `user` (application) or `operator` (Console).
+   * Cross-plane invocation is a compile error.
+   */
+  readonly plane?: FlowPlane;
   /** The behavior. */
   readonly do: FlowHandler<I, O>;
 }
@@ -103,6 +108,8 @@ export interface FlowDef<
   readonly cache: boolean | string | undefined;
   /** SLO. */
   readonly slo: Slo | undefined;
+  /** Plane (user vs operator). */
+  readonly plane: FlowPlane | undefined;
   /** Handler body. */
   readonly do: FlowHandler<I, O>;
   /** Triggers bound via {@link on} (zero or more). */
@@ -170,6 +177,7 @@ export function flow<
     live: options.live ?? false,
     cache: options.cache,
     slo: options.slo,
+    plane: options.plane,
     do: options.do,
     triggers,
     hooks,

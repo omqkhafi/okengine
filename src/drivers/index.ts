@@ -66,6 +66,12 @@ export {
   createRedisFakeClient,
 } from "./redis.ts";
 
+export {
+  LuaKvStore,
+  registerLuaScript,
+  hasLuaScript,
+} from "./kv-lua.ts";
+
 export { fsDriver, openFsBucket } from "./fs.ts";
 
 export {

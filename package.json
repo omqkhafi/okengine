@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -15,6 +15,8 @@
     "test:store": "bun test src/elements/store src/drivers",
     "test:signal": "bun test src/elements/signal",
     "test:clock": "bun test src/elements/clock",
+    "test:gate": "bun test src/elements/gate",
+    "test:auth": "bun test src/auth",
     "bench:cold-start": "bun test src/runtime/cold-start.test.ts",
     "bench:client": "bun test src/client/budget.test.ts",
     "example": "bun ./example/bookings.ts",
@@ -60,6 +62,7 @@
     "./store": "./src/elements/store.ts",
     "./signal": "./src/elements/signal.ts",
     "./clock": "./src/elements/clock.ts",
+    "./gate": "./src/elements/gate.ts",
     "./drivers": "./src/drivers/index.ts",
     "./drivers/*": "./src/drivers/*"
   },

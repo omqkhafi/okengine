@@ -4,6 +4,7 @@
  * Protocol-named: Valkey, Dragonfly, KeyDB, Upstash all speak redis.
  */
 
+import { LuaKvStore } from "./kv-lua.ts";
 import type {
   KvClientLike,
   KvDriver,
@@ -50,6 +51,25 @@ export async function openRedisKv(
       const n = await client.del(prefix + key);
       return n > 0;
     },
+    async eval<T = unknown>(
+      script: string,
+      keys: readonly string[],
+      args: readonly string[] = [],
+    ): Promise<T> {
+      const prefixed = keys.map((k) => prefix + k);
+      const keysAndArgs = [...prefixed, ...args];
+      if (client.eval) {
+        return (await client.eval(script, prefixed.length, ...keysAndArgs)) as T;
+      }
+      if (client.send) {
+        return (await client.send("EVAL", [
+          script,
+          String(prefixed.length),
+          ...keysAndArgs,
+        ])) as T;
+      }
+      throw new Error("redis kv.eval: client lacks eval/send");
+    },
     async close() {
       /* Bun.redis is process-scoped; injected fakes may no-op */
     },
@@ -89,18 +109,29 @@ function createBunRedisClient(url?: string): KvClientLike {
       return redis.set(key, value);
     },
     del: (...keys) => redis.del(...keys),
+    async eval(script, numkeys, ...keysAndArgs) {
+      return redis.send("EVAL", [script, String(numkeys), ...keysAndArgs]);
+    },
+    send: (command, args) => redis.send(command, args),
   };
 }
 
 /**
  * In-memory redis-protocol fake for conformance without a server.
+ * Supports `EVAL` via {@link LuaKvStore} for Gate rate strategies.
  */
-export function createRedisFakeClient(): KvClientLike & {
+export function createRedisFakeClient(nowMs?: () => number): KvClientLike & {
   readonly data: Map<string, string>;
+  readonly lua: LuaKvStore;
 } {
   const data = new Map<string, string>();
+  const lua = new LuaKvStore(nowMs);
+  /** Serialize EVAL for concurrency tests. */
+  let evalChain: Promise<unknown> = Promise.resolve();
+
   return {
     data,
+    lua,
     async get(key) {
       return data.get(key) ?? null;
     },
@@ -114,6 +145,16 @@ export function createRedisFakeClient(): KvClientLike & {
         if (data.delete(k)) n++;
       }
       return n;
+    },
+    async eval(script, numkeys, ...keysAndArgs) {
+      const keys = keysAndArgs.slice(0, numkeys);
+      const args = keysAndArgs.slice(numkeys);
+      const run = evalChain.then(() => lua.eval(script, keys, args));
+      evalChain = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
     },
   };
 }

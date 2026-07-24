@@ -45,6 +45,8 @@ export function resolveStoreRef(ref: NamedRef | { readonly ref: ResourceRef }): 
 export interface FxAuth {
   readonly userId: string | null;
   readonly scopes: ReadonlySet<string>;
+  /** Whether the identity has completed verification (email / MFA). */
+  readonly verified?: boolean;
 }
 
 /** Operator principal on the Console plane. */

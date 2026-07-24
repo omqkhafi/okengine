@@ -1,5 +1,96 @@
 /**
- * Auth: built-in + provider seam. Subpath: `okengine/auth`.
- * Scaffolding only.
+ * Auth: built-in flagship (hybrid JWT + revocable refresh, ABAC, MFA)
+ * plus a provider seam. Subpath: `okengine/auth`.
+ *
+ * Two planes — `fx.operator` vs `fx.auth` — permanently separated.
  */
-export {};
+
+export { auth, type AuthPluginOptions } from "./plugin.ts";
+
+export {
+  assertPlaneAccess,
+  operatorPrincipal,
+  userPrincipal,
+  CrossPlaneError,
+  type AuthPlane,
+  type OperatorPrincipal,
+  type Principal,
+  type UserPrincipal,
+} from "./planes.ts";
+
+export {
+  assertCrossPlane,
+  checkCrossPlane,
+  type CrossPlaneDiagnostic,
+  type PlaneSourceFile,
+} from "./cross-plane.ts";
+
+export {
+  attenuateScopes,
+  assertAttenuated,
+  AttenuationError,
+  type AttenuationResult,
+} from "./attenuation.ts";
+
+export {
+  createApiKey,
+  createApiKeyStore,
+  authenticateApiKey,
+  hashApiKeySecret,
+  type ApiKeyStore,
+  type CreateApiKeyOptions,
+  type CreatedApiKey,
+} from "./api-keys.ts";
+
+export {
+  createSessionStore,
+  issueSession,
+  issueSessionWithScopes,
+  rotateRefresh,
+  verifyAccess,
+  revokeFamily,
+  bindSessionScopes,
+  ACCESS_TTL_MS,
+  REFRESH_TTL_MS,
+  SessionError,
+  type AccessClaims,
+  type IssuedSession,
+  type SessionCrypto,
+  type SessionStore,
+} from "./sessions.ts";
+
+export {
+  createOperatorStore,
+  createOperator,
+  removeOperatorCredential,
+  linkOperatorSso,
+  authenticateOperator,
+  OperatorError,
+  type CreateOperatorOptions,
+  type OperatorStore,
+} from "./operator.ts";
+
+export {
+  createRoleStore,
+  upsertRole,
+  setRoleGrants,
+  scopesForRoles,
+  listRoleGrants,
+  type RoleStore,
+} from "./roles.ts";
+
+export { invokeAs, type InvokeAsOptions } from "./invoke-as.ts";
+
+export {
+  AUTH_TABLES,
+  type ApiKeyRow,
+  type IdentityRow,
+  type OperatorCredentialRow,
+  type OperatorRow,
+  type OperatorSsoLinkRow,
+  type RefreshTokenRow,
+  type RoleGrantRow,
+  type RoleRow,
+  type SessionRow,
+  type TablePlane,
+} from "./tables.ts";

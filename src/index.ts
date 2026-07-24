@@ -66,6 +66,17 @@ export {
 } from "./elements/clock.ts";
 
 export {
+  gate,
+  createGateRuntime,
+  takeRate,
+  deriveModuleActions,
+  ALL_RATE_STRATEGIES,
+  type GateDecl,
+  type GateRuntime,
+  type RateOptions,
+} from "./elements/gate.ts";
+
+export {
   createJournal,
   createMemoryJournalStore,
   createFileJournalStore,
