@@ -11,6 +11,7 @@ import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
+import type { PluginDef } from "./plugin.ts";
 import type { Trigger } from "./triggers.ts";
 
 export type {
@@ -78,6 +79,7 @@ export interface FlowDef<
   I = unknown,
   O = unknown,
   E extends FlowErrorMap = FlowErrorMap,
+  D extends Record<string, unknown> = {},
 > {
   /** Brand for type guards. */
   readonly [flowBrand]: true;
@@ -108,12 +110,32 @@ export interface FlowDef<
   /** Flow-scoped hooks, registration order. */
   readonly hooks: Readonly<Partial<Record<HookStage, readonly HookFn[]>>>;
   /**
+   * Plugins queued via {@link FlowDef.plug} until an app registry adopts them.
+   * @internal
+   */
+  readonly pendingPlugins: readonly PluginDef[];
+  /** Accumulated decoration types from `.plug()` (type-level only). */
+  readonly decorations?: D;
+  /**
    * Register a flow-scoped hook (registration order, no priority numbers).
    *
    * @param stage - Pipeline stage
    * @param fn - Hook function
    */
-  hook(stage: HookStage, fn: HookFn): FlowDef<I, O, E>;
+  hook(stage: HookStage, fn: HookFn): FlowDef<I, O, E, D>;
+  /**
+   * Attach a plugin to this flow only. Scope is the attachment point.
+   *
+   * @param pluginDef - Plugin from {@link plugin}
+   */
+  plug<P extends PluginDef>(
+    pluginDef: P,
+  ): FlowDef<
+    I,
+    O,
+    E,
+    D & (P extends PluginDef<infer PD> ? PD : Record<string, never>)
+  >;
 }
 
 /** Unique brand symbol for {@link FlowDef}. */
@@ -134,6 +156,7 @@ export function flow<
   const name = options.name ?? `flow_${++flowSeq}`;
   const triggers: Trigger[] = [];
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
+  const pendingPlugins: PluginDef[] = [];
 
   const def: FlowDef<I, O, E> = {
     [flowBrand]: true,
@@ -150,10 +173,16 @@ export function flow<
     do: options.do,
     triggers,
     hooks,
+    pendingPlugins,
     hook(stage, fn) {
       const list = hooks[stage] ?? (hooks[stage] = []);
       list.push(fn);
       return def;
+    },
+    plug(pluginDef) {
+      pendingPlugins.push(pluginDef);
+      // Decoration accumulate on the interface; runtime object is unchanged.
+      return def as never;
     },
   };
 

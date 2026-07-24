@@ -46,6 +46,7 @@ describe("hooks — order and composition", () => {
           input: undefined,
           params: {},
           state: {},
+          decorations: {},
         },
         // fx unused
         null as never,

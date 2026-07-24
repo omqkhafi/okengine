@@ -74,6 +74,11 @@ export interface InvocationContext {
   response?: Response;
   /** Arbitrary per-request bag. */
   readonly state: Record<string, unknown>;
+  /**
+   * Context decorations from plugins in scope (app → unit → flow).
+   * Types accumulate through `.plug()`.
+   */
+  readonly decorations: Record<string, unknown>;
 }
 
 /**

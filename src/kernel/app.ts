@@ -36,6 +36,18 @@ import {
 } from "./hooks.ts";
 import { listBindings, type Binding } from "./on.ts";
 import {
+  appPluginScope,
+  applyPlugin,
+  flowPluginScope,
+  unitPluginScope,
+  type AccumulateDecorations,
+} from "./plug.ts";
+import type { PluginCapabilities, PluginDef } from "./plugin.ts";
+import {
+  createPluginRegistry,
+  type PluginRegistry,
+} from "./registry.ts";
+import {
   createRouter,
   type Router,
   type RouterPreset,
@@ -83,43 +95,65 @@ export interface ExecuteResult {
   readonly fx: Fx;
 }
 
-/** Unit-scoped hook registry handle. */
-export interface UnitHooks {
+/**
+ * Unit-scoped attachment point — hooks and plugins cover this unit only.
+ *
+ * @typeParam D - Accumulated decoration types from unit `.plug()`
+ */
+export interface UnitHooks<D extends Record<string, unknown> = {}> {
   /**
    * Register a unit-level hook.
    *
    * @param stage - Pipeline stage
    * @param fn - Hook function
    */
-  hook(stage: HookStage, fn: HookFn): UnitHooks;
+  hook(stage: HookStage, fn: HookFn): UnitHooks<D>;
+  /**
+   * Attach a plugin to this unit only. Scope is the attachment point.
+   *
+   * @param pluginDef - Plugin from {@link plugin}
+   */
+  plug<P extends PluginDef>(
+    pluginDef: P,
+  ): UnitHooks<AccumulateDecorations<D, P>>;
 }
 
 /**
  * Application instance — adopts flows, routes HTTP, runs the pipeline.
+ *
+ * @typeParam D - Accumulated decoration types from app `.plug()`
  */
-export interface OkeApp {
+export interface OkeApp<D extends Record<string, unknown> = {}> {
   /** App name. */
   readonly name: string;
   /** Whether AoT compilation is enabled. */
   readonly aot: boolean;
   /** Active HTTP router (after build). */
   readonly router: Router<Binding>;
+  /** Plugin registry (identity dedup, conflicts, capability capture). */
+  readonly plugins: PluginRegistry;
   /**
-   * Plugin placeholder — returns `this` for chaining.
-   * Real plugin accumulation lands with the plugin engine.
+   * Attach a plugin app-wide. Scope is the attachment point.
+   * Types accumulate — decorations are visible on downstream handlers.
    *
-   * @param _plugin - Plugin value (ignored in v1)
+   * @param pluginDef - Plugin from {@link plugin}
    */
-  plug(_plugin?: unknown): OkeApp;
+  plug<P extends PluginDef>(
+    pluginDef: P,
+  ): OkeApp<AccumulateDecorations<D, P>>;
+  /**
+   * Captured plugin capabilities for the Manifest.
+   */
+  pluginCapabilities(): Record<string, PluginCapabilities>;
   /**
    * Register an app-level hook (registration order).
    *
    * @param stage - Pipeline stage
    * @param fn - Hook function
    */
-  hook(stage: HookStage, fn: HookFn): OkeApp;
+  hook(stage: HookStage, fn: HookFn): OkeApp<D>;
   /**
-   * Unit-level hook scope.
+   * Unit-level attachment point (hooks + plugins).
    *
    * @param name - Unit name
    */
@@ -222,6 +256,8 @@ export function oke(options: OkeOptions): OkeApp {
   const unitHooks = new Map<string, HookMap>();
   const flowsByName = new Map<string, AnyFlowDef>();
   const compiled = new WeakMap<Binding, CompiledRoute>();
+  const pluginRegistry = createPluginRegistry();
+  const flushedPlugins = new WeakMap<AnyFlowDef, Set<PluginDef>>();
 
   const smart = createRouter<Binding>(options.router ?? "default");
   for (const b of adopted) {
@@ -233,8 +269,22 @@ export function oke(options: OkeOptions): OkeApp {
   smart.build();
   const router: Router<Binding> = smart;
 
+  function flushFlowPlugins(flowDef: AnyFlowDef): void {
+    let done = flushedPlugins.get(flowDef);
+    if (!done) {
+      done = new Set();
+      flushedPlugins.set(flowDef, done);
+    }
+    for (const p of flowDef.pendingPlugins) {
+      if (done.has(p)) continue;
+      done.add(p);
+      applyPlugin(pluginRegistry, p, flowPluginScope(flowDef));
+    }
+  }
+
   function registerFlow(flowDef: AnyFlowDef): void {
     flowsByName.set(flowDef.name, flowDef);
+    flushFlowPlugins(flowDef);
   }
 
   for (const b of adopted) {
@@ -255,7 +305,29 @@ export function oke(options: OkeOptions): OkeApp {
 
     const unitBag =
       flowDef.unit !== undefined ? unitHooks.get(flowDef.unit) : undefined;
-    const hooks = mergeHooks(appHooks, unitBag, flowDef.hooks as HookMap);
+    // app (hooks + plugs) → unit (hooks + plugs) → flow (hooks + plugs)
+    const hooks = mergeHooks(
+      mergeHooks(
+        appHooks,
+        pluginRegistry.hooksAt("app", flowDef.unit, flowDef.name),
+        undefined,
+      ),
+      mergeHooks(
+        unitBag,
+        pluginRegistry.hooksAt("unit", flowDef.unit, flowDef.name),
+        undefined,
+      ),
+      mergeHooks(
+        flowDef.hooks as HookMap,
+        pluginRegistry.hooksAt("flow", flowDef.unit, flowDef.name),
+        undefined,
+      ),
+    );
+
+    const decorations = pluginRegistry.decorationsFor(
+      flowDef.unit,
+      flowDef.name,
+    );
 
     const ctx: InvocationContext = {
       trigger,
@@ -264,6 +336,7 @@ export function oke(options: OkeOptions): OkeApp {
       params: extras?.params ? { ...extras.params } : {},
       request: extras?.request,
       state: {},
+      decorations,
     };
 
     const { fx } = createFxContext({
@@ -309,8 +382,14 @@ export function oke(options: OkeOptions): OkeApp {
     aot,
     router,
     bindings: adopted,
-    plug(_plugin?: unknown) {
-      return app;
+    plugins: pluginRegistry,
+    plug(pluginDef) {
+      applyPlugin(pluginRegistry, pluginDef, appPluginScope);
+      // Decoration accumulate on the interface; runtime object is unchanged.
+      return app as never;
+    },
+    pluginCapabilities() {
+      return pluginRegistry.capabilities();
     },
     hook(stage, fn) {
       const list = appHooks[stage] ?? (appHooks[stage] = []);
@@ -328,6 +407,10 @@ export function oke(options: OkeOptions): OkeApp {
           const list = bag![stage] ?? (bag![stage] = []);
           list.push(fn);
           return handle;
+        },
+        plug(pluginDef) {
+          applyPlugin(pluginRegistry, pluginDef, unitPluginScope(name));
+          return handle as never;
         },
       };
       return handle;

@@ -17,6 +17,8 @@ export {
   createFx,
   isFlow,
   isFlowFailure,
+  plugin,
+  isPlugin,
   type OkeApp,
   type OkeOptions,
   type FlowDef,
@@ -24,6 +26,8 @@ export {
   type FlowErrorValue,
   type Fx,
   type Binding,
+  type PluginDef,
+  type PluginCapabilities,
 } from "./kernel/index.ts";
 
 export {

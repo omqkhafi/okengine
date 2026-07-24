@@ -1,5 +1,5 @@
 /**
- * Kernel: `on` · `flow` · `fx` · effect system · hooks · router · `oke`.
+ * Kernel: `on` · `flow` · `fx` · effect system · hooks · router · `oke` · `plugin`.
  */
 
 export {
@@ -100,6 +100,43 @@ export {
   resetBindings,
   type Binding,
 } from "./on.ts";
+
+export {
+  isPlugin,
+  plugin,
+  type CliContribution,
+  type ClientExtensionContribution,
+  type ConsolePanelContribution,
+  type DecorationsOf,
+  type DriverContribution,
+  type ImageRecipeContribution,
+  type PluginApi,
+  type PluginCapabilities,
+  type PluginDef,
+  type PluginElement,
+  type PluginIdentity,
+  type PluginOptions,
+  type PluginRegistration,
+  type TableContribution,
+} from "./plugin.ts";
+
+export {
+  appPluginScope,
+  applyPlugin,
+  flowPluginScope,
+  unitPluginScope,
+  type AccumulateDecorations,
+  type Pluggable,
+} from "./plug.ts";
+
+export {
+  createPluginRegistry,
+  createRecordingApi,
+  samePluginConfig,
+  type InstalledPlugin,
+  type PluginRegistry,
+  type PluginScope,
+} from "./registry.ts";
 
 export {
   createRouter,
