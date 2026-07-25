@@ -1,0 +1,71 @@
+/**
+ * Doc-drift parser / containment unit tests.
+ */
+
+import { describe, expect, test } from "bun:test";
+import {
+  checkDocDrift,
+  normalizeTs,
+  parseClaimedFences,
+} from "./doc-drift.ts";
+
+describe("doc-drift", () => {
+  test("normalizeTs trims trailing whitespace", () => {
+    expect(normalizeTs("a  \n  b\t\n")).toBe("a\n  b");
+  });
+
+  test("parseClaimedFences picks headed typescript only", () => {
+    const md = `# 1 · BASIC — Notes
+
+### \`oke.config.ts\`
+
+\`\`\`typescript
+export default 1;
+\`\`\`
+
+Unheaded illustration:
+
+\`\`\`typescript
+const t = 1;
+\`\`\`
+
+# 2 · INTERMEDIATE — Linkly
+
+### \`src/gates.ts\` — gates
+
+\`\`\`ts
+export const g = 1;
+\`\`\`
+
+# REFERENCE
+`;
+    const fences = parseClaimedFences(md);
+    expect(fences).toHaveLength(2);
+    expect(fences[0]).toMatchObject({
+      app: "notes",
+      relPath: "oke.config.ts",
+      body: "export default 1;",
+    });
+    expect(fences[1]).toMatchObject({
+      app: "linkly",
+      relPath: "src/gates.ts",
+      body: "export const g = 1;",
+    });
+  });
+
+  test("checkDocDrift reports missing files", async () => {
+    const { ok, failures } = await checkDocDrift(
+      [
+        {
+          app: "notes",
+          relPath: "does-not-exist.ts",
+          body: "x",
+          headingLine: 1,
+        },
+      ],
+      import.meta.dir,
+    );
+    expect(ok).toBe(false);
+    expect(failures[0]).toContain("does not contain claimed fence");
+  });
+});

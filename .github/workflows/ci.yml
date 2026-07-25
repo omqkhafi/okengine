@@ -33,3 +33,12 @@ jobs:
 
       - name: Client bundle budget (< 3 kB gzipped)
         run: bun run bench:client
+
+      - name: Doc-drift (four-applications fences)
+        run: bun run test:doc-drift
+
+      - name: Example apps
+        run: bun run test:examples
+
+      - name: Skyport oke docker smoke
+        run: bun run test:skyport-docker

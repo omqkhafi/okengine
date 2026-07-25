@@ -100,7 +100,7 @@ export async function runDurable<O = unknown>(
   const { fx } = createFxContext({
     ...options.fx,
     flow: options.flow.name,
-    effects: options.flow.effects ?? {},
+    effects: options.flow.effects,
     now,
     journal: session,
     durable: true,

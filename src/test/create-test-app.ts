@@ -194,7 +194,10 @@ export async function createTestApp<App extends OkeApp>(
   let aiCost = 0;
 
   const clock = createTestClockRuntime(0);
+  const appOpts = app.$options;
   const channel = createChannelRuntime({
+    defaultLocale: "ar",
+    ...(appOpts.channel ?? {}),
     ...(options.boot?.channel ?? {}),
     drivers: options.boot?.channel?.drivers ?? [
       openConsoleChannel({ inbox }),
@@ -202,6 +205,7 @@ export async function createTestApp<App extends OkeApp>(
     now: () => clock.now(),
   });
   const ai = createAiRuntime({
+    ...(appOpts.ai ?? {}),
     ...(options.boot?.ai ?? {}),
     defaultDriver:
       options.boot?.ai?.defaultDriver ?? createMockAiDriver(mockResponses),
@@ -221,9 +225,10 @@ export async function createTestApp<App extends OkeApp>(
     ...(options.boot ?? {}),
     env: "test",
     startScheduler: options.startScheduler ?? options.boot?.startScheduler ?? false,
-    gates: options.gates ?? options.boot?.gates,
-    secrets: options.secrets ?? options.boot?.secrets,
-    signals: options.signals ?? options.boot?.signals,
+    gates: options.gates ?? options.boot?.gates ?? appOpts.gates,
+    secrets: options.secrets ?? options.boot?.secrets ?? appOpts.secrets,
+    signals: options.signals ?? options.boot?.signals ?? appOpts.signals,
+    stores: options.boot?.stores ?? appOpts.stores,
     vault: {
       allowDevFallbacks: true,
       chain: [
@@ -412,10 +417,24 @@ function findFlowByUnit(
     string,
     Record<string, { readonly method?: string; readonly path?: string }>
   >;
-  if (routes[unit]?.[flowName]) {
+  const route = routes[unit]?.[flowName];
+  if (route) {
     const dotted = `${unit}.${flowName}`;
     const byName = app.flow(dotted);
     if (byName) return byName;
+    // Adopt stamps $routes with method/path even when the flow was
+    // auto-named (`flow_N`) — resolve via the HTTP trigger contract.
+    if (route.method && route.path) {
+      for (const b of app.bindings) {
+        if (
+          b.trigger.kind === "http" &&
+          b.trigger.method === route.method &&
+          b.trigger.path === route.path
+        ) {
+          return b.flow;
+        }
+      }
+    }
   }
   for (const b of app.bindings) {
     if (b.flow.unit === unit && (b.flow.name === flowName || b.flow.name.endsWith(`.${flowName}`))) {
@@ -424,8 +443,74 @@ function findFlowByUnit(
     // Auto-named flows: match export-style via name suffix after adopt.
     if (b.flow.name === `${unit}.${flowName}`) return b.flow;
   }
+
+  // REST heuristic for Notes-style flows without explicit unit/name.
+  const rest = matchRestHeuristic(app, unit, flowName);
+  if (rest) return rest;
+
+  // Match HTTP path containing the unit and a conventional verb name.
+  for (const b of app.bindings) {
+    if (b.trigger.kind !== "http") continue;
+    const path = b.trigger.path;
+    if (!path.includes(`/${unit}`) && path !== `/${unit}` && !path.startsWith(`/${unit}/`)) {
+      // Allow `GET /:code` style when unit is links and flow is redirect.
+      if (!(flowName === "redirect" && path.includes(":"))) continue;
+    }
+    const exportHint = flowName.toLowerCase();
+    const method = b.trigger.method;
+    if (exportHint === "shorten" && method === "POST") return b.flow;
+    if (exportHint === "redirect" && method === "GET" && path.includes(":")) {
+      return b.flow;
+    }
+    if (exportHint === "report" && method === "GET" && path.includes("report")) {
+      return b.flow;
+    }
+  }
+
   // Last resort: scan adopted flows by bare name when unit matches prefix.
   return app.flow(flowName);
+}
+
+/**
+ * Map `api.notes.create` → POST /notes, etc.
+ *
+ * @param app - App
+ * @param unit - Unit segment
+ * @param flowName - Export-style name
+ */
+function matchRestHeuristic(
+  app: OkeApp,
+  unit: string,
+  flowName: string,
+): ReturnType<OkeApp["flow"]> {
+  const collection = `/${unit}`;
+  const item = `/${unit}/:id`;
+  for (const b of app.bindings) {
+    if (b.trigger.kind !== "http") continue;
+    const { method, path } = b.trigger;
+    switch (flowName) {
+      case "create":
+        if (method === "POST" && (path === collection || path.endsWith(collection))) {
+          return b.flow;
+        }
+        break;
+      case "list":
+        if (method === "GET" && path === collection) return b.flow;
+        break;
+      case "get":
+        if (method === "GET" && (path === item || path.includes(`/${unit}/:`))) {
+          return b.flow;
+        }
+        break;
+      case "remove":
+      case "delete":
+        if (method === "DELETE" && path.includes(`/${unit}`)) return b.flow;
+        break;
+      default:
+        break;
+    }
+  }
+  return undefined;
 }
 
 function toPrincipal(

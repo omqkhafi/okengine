@@ -1,0 +1,15 @@
+{
+  "name": "@oke/example-provisions",
+  "version": "0.0.21",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "okengine": "file:../..",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "test": "bun test",
+    "dev": "oke dev"
+  }
+}

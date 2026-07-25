@@ -423,8 +423,7 @@ export function mintCapabilities(
 ): Map<string, CapabilityToken> {
   const map = new Map<string, CapabilityToken>();
   for (const f of flows) {
-    const effects: Effects = f.effects ?? {};
-    map.set(f.name, createCapabilityToken(f.name, effects));
+    map.set(f.name, createCapabilityToken(f.name, f.effects));
   }
   return map;
 }

@@ -65,30 +65,38 @@ export interface CapabilityToken {
 /**
  * Mint a capability token from a flow's declared effects.
  *
+ * When `declared` is `undefined` (compiler has not yet stamped effects),
+ * the token is open — every access is allowed and ledgered. An explicit
+ * `{}` or partial declaration is least-privilege (missing keys = deny).
+ *
  * @param flow - Flow id (used in error messages)
- * @param declared - Declared effect surface (missing keys = empty allow-list)
+ * @param declared - Declared effect surface, or `undefined` for open
  */
 export function createCapabilityToken(
   flow: string,
-  declared: Effects = {},
+  declared?: Effects,
 ): CapabilityToken {
+  const open = declared === undefined;
+  const effects = declared ?? {};
   const sets: Record<EffectKind, ReadonlySet<string>> = {
-    read: new Set(declared.reads ?? []),
-    write: new Set(declared.writes ?? []),
-    emit: new Set(declared.emits ?? []),
-    send: new Set(declared.sends ?? []),
-    ask: new Set(declared.asks ?? []),
-    secret: new Set(declared.secrets ?? []),
-    call: new Set(declared.calls ?? []),
+    read: new Set(effects.reads ?? []),
+    write: new Set(effects.writes ?? []),
+    emit: new Set(effects.emits ?? []),
+    send: new Set(effects.sends ?? []),
+    ask: new Set(effects.asks ?? []),
+    secret: new Set(effects.secrets ?? []),
+    call: new Set(effects.calls ?? []),
   };
 
   return {
     flow,
-    declared,
+    declared: effects,
     allows(kind: EffectKind, resource: string): boolean {
+      if (open) return true;
       return sets[kind].has(resource);
     },
     assert(kind: EffectKind, resource: string): void {
+      if (open) return;
       if (sets[kind].has(resource)) return;
       throwOke(UNDECLARED_KEY[kind], { flow, resource });
     },

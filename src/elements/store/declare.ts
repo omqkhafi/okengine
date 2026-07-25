@@ -5,7 +5,26 @@
  */
 
 import type { ColumnClassification, ResourceRef, StoreFacet } from "../../manifest/types.ts";
-import type { TableHandle } from "./table.ts";
+import { resolveTableName, type TableHandle } from "./table.ts";
+
+/** CDC trigger shape (mirrors kernel `CdcTrigger` without importing it). */
+export interface StoreCdcTrigger {
+  readonly kind: "cdc";
+  readonly table: string;
+  readonly column?: string;
+  readonly store?: string;
+}
+
+/** Handle from {@link SqlStoreDecl.table}. */
+export interface StoreTableCdc {
+  readonly name: string;
+  /**
+   * CDC trigger when `column` (or any column) changes.
+   *
+   * @param column - Optional column name
+   */
+  changed(column?: string): StoreCdcTrigger;
+}
 
 /** Base fields shared by every facet declaration. */
 export interface StoreDeclBase {
@@ -39,6 +58,12 @@ export interface SqlStoreDecl extends StoreDeclBase {
   readonly ref: `sql:${string}`;
   readonly schema?: SqlStoreOptions["schema"];
   readonly classify?: SqlStoreOptions["classify"];
+  /**
+   * CDC handle — `db.table(orders).changed("status")`.
+   *
+   * @param table - Table handle or Drizzle table
+   */
+  table(table: TableHandle | unknown): StoreTableCdc;
 }
 
 /** Options for {@link store.kv}. */
@@ -94,13 +119,25 @@ export type StoreDecl =
  * @param options - Schema / classification
  */
 export function sql(name: string, options: SqlStoreOptions = {}): SqlStoreDecl {
-  return {
+  const decl: SqlStoreDecl = {
     facet: "sql",
     name,
     ref: `sql:${name}`,
     schema: options.schema,
     classify: options.classify,
+    table(table) {
+      const tableName = resolveTableName(table);
+      return {
+        name: tableName,
+        changed(column?: string): StoreCdcTrigger {
+          return column === undefined
+            ? { kind: "cdc", table: tableName, store: name }
+            : { kind: "cdc", table: tableName, column, store: name };
+        },
+      };
+    },
   };
+  return decl;
 }
 
 /**

@@ -63,13 +63,16 @@ export type { ColumnDef, TableHandle } from "./store/table.ts";
 
 export {
   createSqlStoreHandle,
+  resolvePkColumn,
 } from "./store/sql-session.ts";
 export type {
   SqlStoreHandle,
   SelectBuilder,
+  SelectFromBuilder,
   InsertBuilder,
   InsertValuesBuilder,
   SqlSessionOptions,
+  WhereMap,
 } from "./store/sql-session.ts";
 
 export {

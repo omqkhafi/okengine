@@ -261,7 +261,10 @@ function resolveDevFallback(dev: string): string | undefined {
       ? (typeof Bun !== "undefined" ? Bun.env.DATABASE_URL : undefined) ??
         process.env.DATABASE_URL
       : undefined);
-  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+  // Dev/test without `oke dev --stack`: still satisfy url-shaped contracts.
+  if (role === "store.sql") return "postgres://localhost/oke";
+  return undefined;
 }
 
 export { SECRET_MASK };

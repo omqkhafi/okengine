@@ -44,19 +44,41 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
     role,
     async query(sql, params = []) {
       const text = sql.trim();
-      const select = /^SELECT\s+\*\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?)?\s*$/i.exec(
+      const selectStar = /^SELECT\s+\*\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?)?\s*$/i.exec(
         text,
       );
-      if (select) {
-        const table = getTable(parseIdent(select[1]!));
-        if (select[2]) {
-          const col = parseIdent(select[2]!);
+      if (selectStar) {
+        const table = getTable(parseIdent(selectStar[1]!));
+        if (selectStar[2]) {
+          const col = parseIdent(selectStar[2]!);
           const want = params[0];
           return table.rows
             .filter((r) => r[col] === want)
             .map((r) => ({ ...r }));
         }
         return table.rows.map((r) => ({ ...r }));
+      }
+
+      const selectCols =
+        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?(?:\s+ORDER\s+BY\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?))?\s*$/i.exec(
+          text,
+        );
+      if (selectCols) {
+        const table = getTable(parseIdent(selectCols[2]!));
+        const cols = selectCols[1]!.split(",").map((c) => parseIdent(c.trim()));
+        const whereCol = parseIdent(selectCols[3]!);
+        const orderCol = selectCols[4] ? parseIdent(selectCols[4]) : undefined;
+        let rows = table.rows.filter((r) => r[whereCol] === params[0]);
+        if (orderCol) {
+          rows = [...rows].sort((a, b) =>
+            String(a[orderCol] ?? "").localeCompare(String(b[orderCol] ?? "")),
+          );
+        }
+        return rows.map((r) => {
+          const out: SqlRow = {};
+          for (const c of cols) out[c] = r[c];
+          return out;
+        });
       }
 
       const exists =
@@ -157,6 +179,53 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         const before = table.rows.length;
         table.rows = table.rows.filter((r) => r[col] !== params[0]);
         return { changes: before - table.rows.length };
+      }
+
+      const delLt =
+        /^DELETE\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*<\s*\?\s*$/i.exec(
+          text,
+        );
+      if (delLt) {
+        const table = getTable(parseIdent(delLt[1]!));
+        const col = parseIdent(delLt[2]!);
+        const cutoff = Number(params[0]);
+        const before = table.rows.length;
+        table.rows = table.rows.filter((r) => Number(r[col] ?? 0) >= cutoff);
+        return { changes: before - table.rows.length };
+      }
+
+      const updateIncAnd =
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\+\s*1\s+WHERE\s+(.+)\s*$/i.exec(
+          text,
+        );
+      if (updateIncAnd) {
+        const table = getTable(parseIdent(updateIncAnd[1]!));
+        const setCol = parseIdent(updateIncAnd[2]!);
+        const addCol = parseIdent(updateIncAnd[3]!);
+        if (setCol !== addCol) {
+          throw new Error(`memory sql: unsupported exec: ${sql}`);
+        }
+        const preds = parseEqualityWhere(updateIncAnd[4]!);
+        const row = table.rows.find((r) =>
+          preds.every((p, i) => r[p] === params[i]),
+        );
+        if (!row) return { changes: 0 };
+        row[setCol] = Number(row[setCol] ?? 0) + 1;
+        return { changes: 1 };
+      }
+
+      const updateSet =
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s*$/i.exec(
+          text,
+        );
+      if (updateSet) {
+        const table = getTable(parseIdent(updateSet[1]!));
+        const setCol = parseIdent(updateSet[2]!);
+        const whereCol = parseIdent(updateSet[3]!);
+        const row = table.rows.find((r) => r[whereCol] === params[1]);
+        if (!row) return { changes: 0 };
+        row[setCol] = params[0];
+        return { changes: 1 };
       }
 
       throw new Error(`memory sql: unsupported exec: ${sql}`);

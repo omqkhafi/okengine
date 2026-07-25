@@ -53,6 +53,20 @@ export function defineTable(
   return { name, columns: resolved };
 }
 
+/** One introspected column (TableHandle or Drizzle). */
+export interface ResolvedColumn {
+  /** JS / object key (e.g. `createdAt`). */
+  readonly key: string;
+  /** Database column name (e.g. `created_at`). */
+  readonly sqlName: string;
+  /** Whether this column is the primary key. */
+  readonly primary: boolean;
+  /** SQL type hint for DDL. */
+  readonly sqlType: "TEXT" | "INTEGER" | "REAL" | "BLOB";
+  /** Optional `$defaultFn` from Drizzle. */
+  readonly defaultFn?: () => unknown;
+}
+
 /**
  * Resolve a table name from an okengine {@link TableHandle} or a Drizzle table.
  *
@@ -62,10 +76,10 @@ export function resolveTableName(table: unknown): string {
   if (typeof table === "string") return table;
   if (table && typeof table === "object") {
     const t = table as Record<string, unknown>;
-    if (typeof t.name === "string" && !isDrizzleInternal(t)) return t.name;
+    if (typeof t.name === "string" && !isDrizzleTable(t)) return t.name;
     // Drizzle stores the name on an internal symbol; also expose via _.name / [Symbol]
     for (const key of Object.getOwnPropertySymbols(t)) {
-      const val = t[key as unknown as string];
+      const val = (t as Record<symbol, unknown>)[key];
       if (typeof val === "string" && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(val)) {
         return val;
       }
@@ -79,9 +93,163 @@ export function resolveTableName(table: unknown): string {
   throw new TypeError("Unable to resolve table name from value");
 }
 
-function isDrizzleInternal(t: Record<string, unknown>): boolean {
-  // Plain TableHandle always has `columns`; drizzle tables do not.
-  return !("columns" in t) && ("$" in t || "_" in t);
+/**
+ * True when `table` looks like a Drizzle table object.
+ *
+ * @param t - Candidate
+ */
+export function isDrizzleTable(t: Record<string, unknown>): boolean {
+  if ("columns" in t && t.columns && typeof t.columns === "object") {
+    // okengine TableHandle
+    return false;
+  }
+  for (const key of Object.getOwnPropertySymbols(t)) {
+    if (String(key).includes("IsDrizzleTable")) {
+      return (t as Record<symbol, unknown>)[key] === true;
+    }
+  }
+  return ("$" in t || "_" in t) && !("columns" in t);
+}
+
+/**
+ * Introspect columns from a TableHandle or Drizzle table.
+ *
+ * @param table - Table-like value
+ */
+export function resolveColumns(table: unknown): ResolvedColumn[] {
+  if (table && typeof table === "object") {
+    const t = table as Record<string, unknown>;
+    if ("columns" in t && t.columns && typeof t.columns === "object") {
+      return Object.entries(t.columns as Record<string, ColumnDef>).map(
+        ([key, col]) => ({
+          key,
+          sqlName: col.name,
+          primary: col.name === "id" || key === "id",
+          sqlType: "TEXT" as const,
+        }),
+      );
+    }
+    if (isDrizzleTable(t)) {
+      return drizzleColumns(t);
+    }
+  }
+  return [];
+}
+
+function drizzleColumns(t: Record<string, unknown>): ResolvedColumn[] {
+  let cols: Record<string, unknown> | undefined;
+  for (const key of Object.getOwnPropertySymbols(t)) {
+    if (String(key).includes("Columns") && !String(key).includes("Extra")) {
+      const val = (t as Record<symbol, unknown>)[key];
+      if (val && typeof val === "object") {
+        cols = val as Record<string, unknown>;
+        break;
+      }
+    }
+  }
+  if (!cols) {
+    // Fallback: own enumerable column keys on the table object.
+    cols = {};
+    for (const [key, val] of Object.entries(t)) {
+      if (val && typeof val === "object" && "name" in (val as object)) {
+        cols[key] = val;
+      }
+    }
+  }
+  const out: ResolvedColumn[] = [];
+  for (const [key, raw] of Object.entries(cols)) {
+    if (!raw || typeof raw !== "object") continue;
+    const col = raw as {
+      name?: string;
+      primary?: boolean;
+      columnType?: string;
+      dataType?: string;
+      defaultFn?: () => unknown;
+      config?: { primaryKey?: boolean };
+    };
+    const sqlName = typeof col.name === "string" ? col.name : key;
+    const primary = Boolean(
+      col.primary || col.config?.primaryKey || sqlName === "id",
+    );
+    const sqlType = drizzleSqlType(col.columnType, col.dataType);
+    out.push({
+      key,
+      sqlName,
+      primary,
+      sqlType,
+      ...(typeof col.defaultFn === "function"
+        ? { defaultFn: col.defaultFn.bind(col) }
+        : {}),
+    });
+  }
+  return out;
+}
+
+function drizzleSqlType(
+  columnType: string | undefined,
+  dataType: string | undefined,
+): ResolvedColumn["sqlType"] {
+  const ct = (columnType ?? "").toLowerCase();
+  const dt = (dataType ?? "").toLowerCase();
+  if (ct.includes("int") || dt.includes("int") || dt.includes("number")) {
+    return "INTEGER";
+  }
+  if (ct.includes("real") || ct.includes("numeric") || dt.includes("float")) {
+    return "REAL";
+  }
+  if (ct.includes("blob") || dt.includes("buffer")) return "BLOB";
+  return "TEXT";
+}
+
+/**
+ * Map a JS-keyed row to SQL column names; apply Drizzle `$defaultFn`s.
+ *
+ * @param table - Table-like value
+ * @param row - Incoming values (JS keys)
+ */
+export function prepareInsertRow(
+  table: unknown,
+  row: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const cols = resolveColumns(table);
+  if (cols.length === 0) return { ...row };
+  const out: Record<string, unknown> = {};
+  const byKey = new Map(cols.map((c) => [c.key, c]));
+  const bySql = new Map(cols.map((c) => [c.sqlName, c]));
+
+  for (const col of cols) {
+    let value: unknown;
+    if (col.key in row) value = row[col.key];
+    else if (col.sqlName in row) value = row[col.sqlName];
+    else if (col.defaultFn) value = col.defaultFn();
+    else continue;
+    out[col.sqlName] = value;
+  }
+  // Pass through unknown keys as-is (already SQL names).
+  for (const [k, v] of Object.entries(row)) {
+    if (byKey.has(k) || bySql.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Map a SQL-keyed row back to JS keys when Drizzle/TableHandle metadata exists.
+ *
+ * @param table - Table-like value
+ * @param row - Driver row
+ */
+export function mapRowToJs(
+  table: unknown,
+  row: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const cols = resolveColumns(table);
+  if (cols.length === 0) return { ...row };
+  const out: Record<string, unknown> = { ...row };
+  for (const col of cols) {
+    if (col.sqlName in row) out[col.key] = row[col.sqlName];
+  }
+  return out;
 }
 
 /**

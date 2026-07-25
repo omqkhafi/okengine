@@ -22,6 +22,9 @@ export {
   bootApplication,
   mintCapabilities,
   gateDenialFailure,
+  journey,
+  unit,
+  rateLimit,
   type OkeApp,
   type OkeOptions,
   type FlowDef,
@@ -34,6 +37,8 @@ export {
   type BootOptions,
   type BootResult,
   type ElementRuntimes,
+  type JourneyDecl,
+  type UnitBag,
 } from "./kernel/index.ts";
 
 export {

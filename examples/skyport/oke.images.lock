@@ -1,0 +1,4 @@
+{
+  "store.sql": "pgvector/pgvector:pg17",
+  "store.kv": "valkey/valkey:8-alpine"
+}

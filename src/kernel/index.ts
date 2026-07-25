@@ -232,3 +232,21 @@ export {
   type Trigger,
   type TriggerKind,
 } from "./triggers.ts";
+
+export {
+  journey,
+  listJourneys,
+  resetJourneys,
+  type JourneyDecl,
+  type JourneyOptions,
+  type JourneySlo,
+} from "./journey.ts";
+
+export {
+  unit,
+  consumeUnitPlugins,
+  resetUnitPlugins,
+  type UnitBag,
+} from "./unit.ts";
+
+export { rateLimit, type RateLimitPluginOptions } from "./rate-limit.ts";

@@ -7,8 +7,25 @@
 /** Environment role keys used in driver maps. */
 export type ConfigEnv = "dev" | "test" | "prod";
 
-/** Per-environment driver id (string) or `{ driver }` object. */
-export type DriverRef = string | { readonly driver: string };
+/** Pool options for SQL drivers. */
+export interface DriverPoolOptions {
+  readonly max?: number;
+  readonly min?: number;
+}
+
+/**
+ * Per-environment driver id (string) or rich `{ driver, url, … }` object.
+ * Replica URLs are listed for read-only routing.
+ */
+export type DriverRef =
+  | string
+  | {
+      readonly driver: string;
+      readonly url?: unknown;
+      readonly pool?: DriverPoolOptions;
+      readonly replicas?: readonly unknown[];
+      readonly key?: unknown;
+    };
 
 /** Map of env → driver ref. */
 export type EnvDriverMap = Partial<Record<ConfigEnv, DriverRef>>;
@@ -55,10 +72,36 @@ export interface I18nConfig {
   readonly dir?: Readonly<Record<string, "ltr" | "rtl">>;
 }
 
+/** Context passed to {@link TenancyConfig.resolve} (Skyport / multi-tenant). */
+export interface TenancyResolveContext {
+  readonly auth: {
+    readonly orgId?: string | null;
+  };
+  readonly [key: string]: unknown;
+}
+
 /** Tenancy config. */
 export interface TenancyConfig {
   readonly isolation?: "row" | "schema" | "database";
-  readonly resolve?: string;
+  /** Tenant resolver — opaque string id or function (Skyport). */
+  readonly resolve?:
+    | string
+    | ((ctx: TenancyResolveContext) => string | null | undefined);
+}
+
+/** Port overrides (defaults: app 6530 · console 6533 · mcp 6535). */
+export interface PortsConfig {
+  readonly app?: number;
+  readonly console?: number;
+  readonly mcp?: number;
+}
+
+/** Console production surface. */
+export interface ConsoleConfig {
+  readonly prod?: {
+    readonly enabled?: boolean;
+    readonly auth?: "required" | "optional" | "none";
+  };
 }
 
 /**
@@ -70,6 +113,8 @@ export interface OkeConfig {
   readonly i18n?: I18nConfig;
   readonly tenancy?: TenancyConfig;
   readonly topology?: "monolith" | "services";
+  readonly ports?: PortsConfig;
+  readonly console?: ConsoleConfig;
 }
 
 /**

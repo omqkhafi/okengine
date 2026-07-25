@@ -381,7 +381,23 @@ export function plugin(
     },
     element(element) {
       steps.push((api) => {
-        api.element(element);
+        // Accept StoreDecl-like `{ facet, name }` from `store.sql(...)`.
+        const el = element as PluginElement & {
+          readonly facet?: string;
+          readonly name?: string;
+        };
+        if (el.kind && el.name) {
+          api.element(el);
+        } else if (typeof el.facet === "string" && typeof el.name === "string") {
+          api.element({
+            kind: el.facet.startsWith("store.")
+              ? el.facet
+              : `store.${el.facet}`,
+            name: el.name,
+          });
+        } else {
+          api.element(el as PluginElement);
+        }
       });
       return def;
     },

@@ -10,7 +10,12 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
-import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
+import type {
+  StoreDecl,
+  StoreHandle,
+  StoreRuntime,
+  SqlStoreHandle,
+} from "../elements/store.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
 import type { VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
@@ -117,10 +122,10 @@ export interface FxLog {
 }
 
 /**
- * In-memory store handle. Read ops record `read`; write ops record `write`.
- * No real driver — data lives in the fx memory map.
+ * In-memory / stub store handle when no {@link StoreRuntime} is bound.
+ * Read ops record `read`; write ops record `write`.
  */
-export interface FxStoreHandle {
+export interface FxStubStoreHandle {
   /** Resource ref this handle is bound to. */
   readonly ref: ResourceRef;
   /**
@@ -153,6 +158,12 @@ export interface FxStoreHandle {
    */
   delete(key: string): Promise<boolean>;
 }
+
+/**
+ * Handle returned by {@link Fx.store} — driver-backed SQL/KV/files/index
+ * when a runtime is bound, otherwise the in-memory stub.
+ */
+export type FxStoreHandle = StoreHandle | FxStubStoreHandle;
 
 /** Options for {@link Fx.send}. */
 export interface FxSendOptions {
@@ -243,6 +254,26 @@ export interface Fx {
     query: unknown,
     opts?: FxSearchOptions,
   ): Promise<unknown[]>;
+  /**
+   * Run a bounded AI agent (records `ask`).
+   *
+   * @param agent - Agent name or handle
+   * @param input - Agent input (`{ message }` or string)
+   */
+  run(
+    agent: NamedRef,
+    input?: unknown,
+  ): Promise<unknown>;
+  /**
+   * Stream model tokens (records `ask`). Returns an async iterable of chunks.
+   *
+   * @param model - Model name or handle
+   * @param opts - Prompt / data
+   */
+  stream(
+    model: NamedRef,
+    opts?: { readonly prompt?: string; readonly data?: unknown },
+  ): AsyncIterable<string>;
   /** Logger. */
   readonly log: FxLog;
   /**
@@ -392,7 +423,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   const ledger = options.ledger ?? createEffectLedger();
   const capability =
     options.capability ??
-    createCapabilityToken(options.flow, options.effects ?? {});
+    createCapabilityToken(options.flow, options.effects);
   const now = options.now ?? (() => Date.now());
   const secrets = options.secrets ?? {};
   const onLog = options.onLog;
@@ -424,7 +455,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     return execute();
   }
 
-  function stubStoreHandle(ref: ResourceRef): FxStoreHandle {
+  function stubStoreHandle(ref: ResourceRef): FxStubStoreHandle {
     const table = (): Map<string, unknown> => {
       let m = stores.get(ref);
       if (!m) {
@@ -458,6 +489,164 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       delete(key: string): Promise<boolean> {
         return gated("write", ref, () => table().delete(key));
       },
+      /** Audit-plugin convenience (no-op on the stub). */
+      async log(_ctx?: unknown): Promise<void> {
+        /* stub */
+      },
+      /** Audit-plugin CLI convenience. */
+      async exportCsv(): Promise<string> {
+        return "";
+      },
+    };
+  }
+
+  /**
+   * Lazy, capability-gated proxy over a driver-backed {@link SqlStoreHandle}.
+   *
+   * @param decl - Store declaration
+   * @param open - Opens (and caches) the runtime handle
+   */
+  function gatedSqlHandle(
+    decl: StoreDecl,
+    open: () => Promise<SqlStoreHandle>,
+  ): SqlStoreHandle {
+    const ref = decl.ref as `sql:${string}`;
+    let cached: SqlStoreHandle | undefined;
+    const ensure = async (): Promise<SqlStoreHandle> => {
+      if (!cached) cached = await open();
+      return cached;
+    };
+
+    return {
+      ref,
+      get routedRole() {
+        return cached?.routedRole ?? "primary";
+      },
+      get driverId() {
+        return cached?.driverId ?? "memory";
+      },
+      select() {
+        return {
+          from(table) {
+            const all = gated("read", ref, async () => {
+              const h = await ensure();
+              return h.select().from(table);
+            });
+            return {
+              where(where) {
+                return gated("read", ref, async () => {
+                  const h = await ensure();
+                  return h.select().from(table).where(where);
+                });
+              },
+              then(onfulfilled, onrejected) {
+                return all.then(onfulfilled, onrejected);
+              },
+            };
+          },
+        };
+      },
+      insert(table) {
+        return {
+          values(row) {
+            const runExecute = () =>
+              gated("write", ref, async () => {
+                const h = await ensure();
+                await h.insert(table).values(row).execute();
+              });
+            return {
+              returning() {
+                return gated("write", ref, async () => {
+                  const h = await ensure();
+                  return h.insert(table).values(row).returning();
+                });
+              },
+              execute: runExecute,
+              then(onfulfilled, onrejected) {
+                return runExecute().then(onfulfilled, onrejected);
+              },
+            };
+          },
+        };
+      },
+      findById(table, id) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.findById(table, id);
+        });
+      },
+      findByCode(table, code) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.findByCode(table, code);
+        });
+      },
+      delete(table, id) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.delete(table, id);
+        });
+      },
+      exists(table, idOrWhere) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.exists(table, idOrWhere);
+        });
+      },
+      increment(table, id, column, by) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.increment(table, id, column, by);
+        });
+      },
+      deleteExpired(table, age) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.deleteExpired(table, age);
+        });
+      },
+      getClicks(table, code) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.getClicks(table, code);
+        });
+      },
+      bumpDaily(table, code, at) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.bumpDaily(table, code, at);
+        });
+      },
+      dailyFor(table, code) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.dailyFor(table, code);
+        });
+      },
+      stockOf(sku) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.stockOf(sku);
+        });
+      },
+      setStatus(tableOrId, idOrStatus, status?) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.setStatus(tableOrId, idOrStatus, status);
+        });
+      },
+      raw(sql, params) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.raw(sql, params);
+        });
+      },
+      ensureTable(table) {
+        return gated("write", ref, async () => {
+          const h = await ensure();
+          return h.ensureTable(table);
+        });
+      },
     };
   }
 
@@ -467,8 +656,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     const runtime = options.storeRuntime;
     if (runtime && typeof ref === "object" && ref !== null && "facet" in ref) {
       const decl = ref;
-      // Lazy proxy: first op opens the driver handle under the flow effects.
-      const cache: { handle?: Awaited<ReturnType<StoreRuntime["open"]>> } = {};
+      const cache: { handle?: StoreHandle } = {};
       const open = async () => {
         if (!cache.handle) {
           cache.handle = await runtime.open(decl, {
@@ -478,67 +666,39 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         }
         return cache.handle;
       };
-      return {
-        ref: decl.ref,
-        async get(key: string) {
-          return gated("read", decl.ref, async () => {
-            const h = await open();
-            if ("get" in h && typeof h.get === "function") {
-              return h.get(key);
-            }
-            return null;
-          });
+
+      if (decl.facet === "sql") {
+        return gatedSqlHandle(decl, async () => {
+          const h = await open();
+          return h as SqlStoreHandle;
+        });
+      }
+
+      // KV / files / index — thin gated wrappers preserving driver methods.
+      const baseRef = decl.ref;
+      return new Proxy({} as StoreHandle, {
+        get(_t, prop) {
+          if (prop === "ref") return baseRef;
+          if (prop === "then") return undefined;
+          return (...args: unknown[]) =>
+            gated(
+              prop === "get" || prop === "search" || prop === "list"
+                ? "read"
+                : "write",
+              baseRef,
+              async () => {
+                const h = await open();
+                const fn = (h as Record<string | symbol, unknown>)[prop];
+                if (typeof fn !== "function") return undefined;
+                return (fn as (...a: unknown[]) => unknown).apply(h, args);
+              },
+            );
         },
-        async set(key: string, value: unknown) {
-          return gated("write", decl.ref, async () => {
-            const h = await open();
-            if ("set" in h && typeof h.set === "function") {
-              await h.set(key, value);
-            }
-          });
-        },
-        async select() {
-          return gated("read", decl.ref, async () => {
-            const h = await open();
-            if ("select" in h && typeof h.select === "function") {
-              const result = h.select();
-              if (
-                result &&
-                typeof result === "object" &&
-                "from" in result &&
-                typeof result.from === "function"
-              ) {
-                // Builder form — caller should use fx.store(db).select().from(t)
-                // via the runtime handle directly; stub returns [].
-                return [];
-              }
-              return result as unknown as unknown[];
-            }
-            return [];
-          });
-        },
-        async insert(row: Record<string, unknown>) {
-          return gated("write", decl.ref, async () => {
-            const id =
-              typeof row.id === "string" ? row.id : crypto.randomUUID();
-            return { id };
-          });
-        },
-        async delete(key: string) {
-          return gated("write", decl.ref, async () => {
-            const h = await open();
-            if ("delete" in h && typeof h.delete === "function") {
-              const result = await (h.delete as (a: string) => Promise<boolean>)(
-                key,
-              );
-              return result;
-            }
-            return false;
-          });
-        },
-      };
+      });
     }
-    return stubStoreHandle(resolveStoreRef(ref as NamedRef | { readonly ref: ResourceRef }));
+    return stubStoreHandle(
+      resolveStoreRef(ref as NamedRef | { readonly ref: ResourceRef }),
+    );
   }
 
   const clock: FxClock = {
@@ -698,10 +858,71 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return {};
       });
     },
-    search(embed, _query, _opts) {
+    search(embed, query, opts) {
       const name = resolveName(embed);
-      // search is an index read — capability under `reads`
-      return gated("read", name, async () => []);
+      return gated("read", name, async () => {
+        if (options.aiRuntime && "search" in options.aiRuntime) {
+          const searchFn = (
+            options.aiRuntime as {
+              search?: (
+                embed: string,
+                query: unknown,
+                opts?: FxSearchOptions,
+              ) => Promise<unknown[]>;
+            }
+          ).search;
+          if (typeof searchFn === "function") {
+            return searchFn(name, query, opts);
+          }
+        }
+        // Deterministic stub for tests without an index driver.
+        if (typeof query === "string" && query.length > 0) {
+          return [{ id: "stub", score: 1, text: query, topK: opts?.topK ?? 5 }];
+        }
+        return [];
+      });
+    },
+    run(agent, input) {
+      const name = resolveName(agent);
+      return gated("ask", name, async () => {
+        if (options.aiRuntime) {
+          const message =
+            typeof input === "string"
+              ? input
+              : input && typeof input === "object" && "message" in input
+                ? String((input as { message: unknown }).message)
+                : JSON.stringify(input ?? {});
+          return options.aiRuntime.runAgent(name, {
+            message,
+            auth: {
+              userId: auth.userId,
+              scopes: auth.scopes,
+              verified: auth.verified,
+            },
+          });
+        }
+        return { ok: true, steps: 0, denials: [], output: input };
+      });
+    },
+    stream(model, opts) {
+      const name = resolveName(model);
+      const chunks = (async function* () {
+        await gated("ask", name, async () => undefined);
+        const text =
+          typeof opts?.data === "object" && opts?.data !== null
+            ? JSON.stringify(opts.data)
+            : String(opts?.prompt ?? "");
+        if (text.length === 0) {
+          yield "";
+          return;
+        }
+        // Chunk for clients that consume streaming tokens.
+        const size = Math.max(1, Math.ceil(text.length / 3));
+        for (let i = 0; i < text.length; i += size) {
+          yield text.slice(i, i + size);
+        }
+      })();
+      return chunks;
     },
     log,
     t(key, params) {

@@ -1,10 +1,13 @@
 {
   "name": "okengine",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "workspaces": [
+    "examples/*"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
@@ -30,8 +33,10 @@
     "bench:client": "bun test src/client/budget.test.ts",
     "bench:console": "bun test src/console/budget.test.ts",
     "bench:runs": "bun test src/runs/bench.test.ts",
-    "example": "bun ./example/bookings.ts",
-    "ci": "bun run typecheck && bun run test && bun run bench:client",
+    "test:examples": "bun test examples/notes && bun test examples/linkly && bun test examples/provisions && bun test examples/skyport",
+    "test:doc-drift": "bun src/cli/doc-drift.ts",
+    "test:skyport-docker": "bun test examples/skyport/tests/docker.test.ts",
+    "ci": "bun run typecheck && bun run test && bun run bench:client && bun run test:doc-drift && bun run test:examples && bun run test:skyport-docker",
     "g": "gflows"
   },
   "dependencies": {
@@ -65,7 +70,8 @@
     "drizzle-kit": "^1.0.0-rc.4",
     "drizzle-orm": "^1.0.0-rc.4",
     "drizzle-seed": "^0.3.1",
-    "gflows": "^1.1.1",
+    "drizzle-zod": "^0.8.3",
+    "gflows": "^1.2.0",
     "happy-dom": "^20.11.1",
     "playwright": "^1.62.0",
     "react": "^19.2.8",

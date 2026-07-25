@@ -385,6 +385,11 @@ export interface OkeApp<
    * @param binding - HTTP binding
    */
   compiledFor(binding: Binding): CompiledRoute | undefined;
+  /**
+   * Construction options — used by the test harness to re-bind channel /
+   * secrets / gates without re-declaring them.
+   */
+  readonly $options: OkeOptions;
 }
 
 /**
@@ -398,6 +403,8 @@ export function oke(options: OkeOptions): OkeApp {
     ...listBindings(),
     ...(options.bindings ?? []),
   ];
+  /** Retained for test harness / boot merges. */
+  const $options = options;
 
   const appHooks: HookMap = {};
   const unitHooks = new Map<string, HookMap>();
@@ -655,7 +662,7 @@ export function oke(options: OkeOptions): OkeApp {
     const { fx, ledger } = createFxContext({
       ...options.fx,
       flow: flowDef.name,
-      effects: flowDef.effects ?? ({} as Effects),
+      effects: flowDef.effects,
       runTelemetry: telemetry,
       now,
       ...(principals
@@ -770,6 +777,7 @@ export function oke(options: OkeOptions): OkeApp {
     $routes: routes as OkeApp["$routes"],
     router,
     bindings: adopted,
+    $options,
     plugins: pluginRegistry,
     get booted() {
       return bootResult !== undefined;
