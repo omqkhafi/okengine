@@ -25,11 +25,14 @@ export {
   createVaultRuntime,
   VaultBootError,
   SECRET_MASK,
+  resolveLayerSource,
 } from "./vault/runtime.ts";
 export type {
   CreateVaultRuntimeOptions,
   VaultChainLayer,
   VaultGap,
+  VaultResolutionSource,
+  VaultResolutionStep,
   VaultRuntime,
 } from "./vault/runtime.ts";
 

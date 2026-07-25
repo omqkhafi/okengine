@@ -2,6 +2,8 @@
  * AI runtime — prompts, agents (flow tools + gates), embeds, journaling.
  *
  * Nondeterministic ⇒ journaling forced, auto-cache disabled.
+ * Schema-validation failures are their own class (console §9.10).
+ * Agent denials are recorded on the denial ledger — not errors.
  */
 
 import type {
@@ -17,8 +19,14 @@ import type {
   AiModelDecl,
   AiPromptDecl,
 } from "./declare.ts";
+import {
+  AiSchemaValidationError,
+  coerceModelObject,
+  validatePromptOut,
+  type AiSchemaMismatch,
+} from "./schema.ts";
 
-/** Recorded agent tool denial. */
+/** Recorded agent tool denial (containment proof — not an error). */
 export interface AgentDenial {
   readonly agent: string;
   readonly tool: string;
@@ -27,11 +35,69 @@ export interface AgentDenial {
   readonly at: number;
 }
 
+/** Effect on a tool flow — same vocabulary as Flows / Traces. */
+export interface AgentToolEffect {
+  readonly kind:
+    | "read"
+    | "write"
+    | "emit"
+    | "send"
+    | "ask"
+    | "secret"
+    | "call";
+  readonly resource: string;
+}
+
+/**
+ * One tool-call line in an agent run.
+ * Denied calls are status `"denied"` — never classified as errors.
+ */
+export interface AgentToolStep {
+  readonly tool: string;
+  readonly status: "ok" | "denied";
+  readonly effects: readonly AgentToolEffect[];
+  readonly denial?: AgentDenial;
+  readonly at: number;
+}
+
+/** Full agent run recorded on the denial / trail ledger. */
+export interface AgentRunRecord {
+  readonly id: string;
+  readonly agent: string;
+  readonly message: string;
+  readonly ok: boolean;
+  readonly steps: number;
+  readonly trail: readonly AgentToolStep[];
+  readonly denials: readonly AgentDenial[];
+  readonly output?: unknown;
+  readonly at: number;
+  readonly cost: number;
+}
+
 /** Fallback attempt for model routing (`via` chains). */
 export interface AiFallbackAttempt {
   readonly model: string;
   readonly ok: boolean;
   readonly error?: string;
+  readonly cost?: number;
+  readonly latencyMs?: number;
+  readonly at: number;
+}
+
+/** Ask outcome class — schema failure is not a provider error. */
+export type AiAskOutcome = "ok" | "provider_error" | "schema_invalid";
+
+/** Journal entry for a nondeterministic ask. */
+export interface AiJournalEntry {
+  readonly prompt: string;
+  readonly version?: number;
+  readonly input: unknown;
+  readonly output: unknown;
+  readonly attempts: readonly AiFallbackAttempt[];
+  readonly outcome: AiAskOutcome;
+  readonly cost: number;
+  readonly latencyMs: number;
+  readonly schemaMismatch?: AiSchemaMismatch;
   readonly at: number;
 }
 
@@ -66,6 +132,13 @@ export interface CreateAiRuntimeOptions {
    * @param flowName - Flow name
    */
   readonly gatesForFlow?: (flowName: string) => readonly string[];
+  /**
+   * Resolve declared effects for a tool flow (Manifest).
+   * The UI must not re-derive these — they come from the runtime ledger.
+   *
+   * @param flowName - Flow name
+   */
+  readonly effectsForFlow?: (flowName: string) => readonly AgentToolEffect[];
   /** Index stores for embeds (`into` name → store). */
   readonly indexes?: Readonly<Record<string, IndexStore>>;
   /** Injectable clock. */
@@ -91,15 +164,6 @@ export interface AiAgentRunOptions {
   readonly meta?: GatePolicyContext["meta"];
 }
 
-/** Journal entry for a nondeterministic ask. */
-export interface AiJournalEntry {
-  readonly prompt: string;
-  readonly input: unknown;
-  readonly output: unknown;
-  readonly attempts: readonly AiFallbackAttempt[];
-  readonly at: number;
-}
-
 /** AI runtime surface. */
 export interface AiRuntime {
   readonly prompts: ReadonlyMap<string, AiPromptDecl>;
@@ -109,8 +173,10 @@ export interface AiRuntime {
   readonly autoCacheDisabled: true;
   /** Whether journaling is forced for asks. */
   readonly journalingForced: boolean;
-  /** Agent denials recorded this process. */
+  /** Agent denials recorded this process (the denial ledger). */
   readonly denials: readonly AgentDenial[];
+  /** Agent runs with full tool trails. */
+  readonly agentRuns: readonly AgentRunRecord[];
   /** Journal of ask results (replay without re-calling the model). */
   readonly journal: readonly AiJournalEntry[];
   /**
@@ -138,7 +204,9 @@ export interface AiRuntime {
     readonly ok: boolean;
     readonly steps: number;
     readonly denials: readonly AgentDenial[];
+    readonly trail: readonly AgentToolStep[];
     readonly output?: unknown;
+    readonly cost: number;
   }>;
   /**
    * Embed text into the configured index store.
@@ -175,9 +243,11 @@ export function createAiRuntime(
     Object.entries(options.clients ?? {}),
   );
   const denials: AgentDenial[] = [];
+  const agentRuns: AgentRunRecord[] = [];
   const journal: AiJournalEntry[] = [];
   const now = options.now ?? (() => Date.now());
   const journalingForced = options.forceJournal !== false;
+  let runSeq = 0;
 
   async function clientFor(name: string): Promise<AiModelClient> {
     const existing = clients.get(name);
@@ -193,25 +263,8 @@ export function createAiRuntime(
     return opened;
   }
 
-  function validateOut(
-    _decl: AiPromptDecl,
-    value: unknown,
-  ): Record<string, unknown> {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          return parsed as Record<string, unknown>;
-        }
-      } catch {
-        return { text: value };
-      }
-      return { text: value };
-    }
-    return { value };
+  function effectsFor(tool: string): readonly AgentToolEffect[] {
+    return options.effectsForFlow?.(tool) ?? [];
   }
 
   return {
@@ -221,10 +274,13 @@ export function createAiRuntime(
     autoCacheDisabled: true,
     journalingForced,
     denials,
+    agentRuns,
     journal,
     async ask(prompt, input, opts) {
       const decl = prompts.get(prompt);
       if (!decl) throw new Error(`ai: unknown prompt "${prompt}"`);
+      const version = decl.version;
+      const started = now();
 
       // Replay from journal when input matches (nondeterministic contract)
       if (journalingForced) {
@@ -233,6 +289,7 @@ export function createAiRuntime(
           .find(
             (e) =>
               e.prompt === prompt &&
+              e.outcome === "ok" &&
               JSON.stringify(e.input) === JSON.stringify(input),
           );
         if (hit) {
@@ -245,8 +302,11 @@ export function createAiRuntime(
         (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
       const attempts: AiFallbackAttempt[] = [];
       let lastError: string | undefined;
+      let lastSchema: AiSchemaMismatch | undefined;
+      let totalCost = 0;
 
       for (const modelName of via) {
+        const attemptStart = now();
         try {
           const client = await clientFor(modelName);
           const result = await client.complete({
@@ -255,32 +315,81 @@ export function createAiRuntime(
               {
                 role: "user",
                 content:
-                  typeof input === "string" ? input : JSON.stringify(input ?? {}),
+                  typeof input === "string"
+                    ? input
+                    : JSON.stringify(input ?? {}),
               },
             ],
             responseFormat: decl.out,
           });
-          const output = validateOut(
-            decl,
-            result.raw !== undefined ? result.raw : result.text,
-          );
-          attempts.push({ model: modelName, ok: true, at: now() });
-          if (journalingForced) {
-            journal.push({
-              prompt,
-              input,
-              output,
-              attempts: [...attempts],
+          const attemptCost = result.usage?.cost ?? 0;
+          totalCost += attemptCost;
+          const latencyMs = Math.max(0, now() - attemptStart);
+          const raw =
+            result.raw !== undefined ? result.raw : result.text;
+
+          try {
+            const output = decl.out
+              ? validatePromptOut(prompt, version, decl.out, raw)
+              : coerceModelObject(raw);
+            attempts.push({
+              model: modelName,
+              ok: true,
+              cost: attemptCost,
+              latencyMs,
               at: now(),
             });
+            if (journalingForced) {
+              journal.push({
+                prompt,
+                ...(version !== undefined ? { version } : {}),
+                input,
+                output,
+                attempts: [...attempts],
+                outcome: "ok",
+                cost: totalCost,
+                latencyMs: Math.max(0, now() - started),
+                at: now(),
+              });
+            }
+            return output;
+          } catch (err) {
+            if (err instanceof AiSchemaValidationError) {
+              lastSchema = err.mismatch;
+              attempts.push({
+                model: modelName,
+                ok: true,
+                cost: attemptCost,
+                latencyMs,
+                at: now(),
+              });
+              if (journalingForced) {
+                journal.push({
+                  prompt,
+                  ...(version !== undefined ? { version } : {}),
+                  input,
+                  output: coerceModelObject(raw),
+                  attempts: [...attempts],
+                  outcome: "schema_invalid",
+                  cost: totalCost,
+                  latencyMs: Math.max(0, now() - started),
+                  schemaMismatch: err.mismatch,
+                  at: now(),
+                });
+              }
+              throw err;
+            }
+            throw err;
           }
-          return output;
         } catch (err) {
+          if (err instanceof AiSchemaValidationError) throw err;
           lastError = err instanceof Error ? err.message : String(err);
           attempts.push({
             model: modelName,
             ok: false,
             error: lastError,
+            cost: 0,
+            latencyMs: Math.max(0, now() - attemptStart),
             at: now(),
           });
         }
@@ -289,9 +398,14 @@ export function createAiRuntime(
       if (journalingForced) {
         journal.push({
           prompt,
+          ...(version !== undefined ? { version } : {}),
           input,
           output: { error: lastError },
           attempts,
+          outcome: lastSchema ? "schema_invalid" : "provider_error",
+          cost: totalCost,
+          latencyMs: Math.max(0, now() - started),
+          ...(lastSchema ? { schemaMismatch: lastSchema } : {}),
           at: now(),
         });
       }
@@ -305,13 +419,16 @@ export function createAiRuntime(
       if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
       const maxSteps = decl.maxSteps ?? 6;
       const runDenials: AgentDenial[] = [];
+      const trail: AgentToolStep[] = [];
       let steps = 0;
       let output: unknown = { message: runOpts.message };
+      const started = now();
 
       // Simple tool loop: try each declared tool once (bounded).
       for (const tool of decl.tools) {
         if (steps >= maxSteps) break;
         steps++;
+        const effects = effectsFor(tool);
         const requiredGates = options.gatesForFlow?.(tool) ?? [];
         if (requiredGates.length > 0 && options.gates) {
           const ctx: GatePolicyContext = {
@@ -334,6 +451,13 @@ export function createAiRuntime(
             };
             runDenials.push(denial);
             denials.push(denial);
+            trail.push({
+              tool,
+              status: "denied",
+              effects,
+              denial,
+              at: denial.at,
+            });
             continue;
           }
         }
@@ -347,18 +471,47 @@ export function createAiRuntime(
           };
           runDenials.push(denial);
           denials.push(denial);
+          trail.push({
+            tool,
+            status: "denied",
+            effects,
+            denial,
+            at: denial.at,
+          });
           continue;
         }
         output = await options.callFlow(tool, {
           message: runOpts.message,
         });
+        trail.push({
+          tool,
+          status: "ok",
+          effects,
+          at: now(),
+        });
       }
 
-      return {
+      const record: AgentRunRecord = {
+        id: `agent-run-${++runSeq}`,
+        agent,
+        message: runOpts.message,
         ok: runDenials.length === 0,
         steps,
+        trail,
         denials: runDenials,
         output,
+        at: started,
+        cost: 0,
+      };
+      agentRuns.push(record);
+
+      return {
+        ok: record.ok,
+        steps,
+        denials: runDenials,
+        trail,
+        output,
+        cost: record.cost,
       };
     },
 
@@ -382,3 +535,6 @@ export function createAiRuntime(
     },
   };
 }
+
+export { AiSchemaValidationError } from "./schema.ts";
+export type { AiSchemaMismatch } from "./schema.ts";

@@ -31,12 +31,17 @@ describe("vault declaration", () => {
       rotate: "90d",
     });
     expect(a.kind).toBe("secret");
+    expect(a.sensitive).toBe(true);
     expect(a.name).toBe("STRIPE_KEY");
     expect(a.description).toBe("Payments gateway key");
 
     const b = vault.secret("DATABASE_URL", { dev: "postgres://local" });
     expect(b.name).toBe("DATABASE_URL");
     expect(b.dev).toBe("postgres://local");
+
+    const cfg = vault.config("PUBLIC_APP_URL", { dev: "http://localhost" });
+    expect(cfg.kind).toBe("config");
+    expect(cfg.sensitive).toBe(false);
 
     const fromStack = vault.fromStack("store.sql");
     expect(fromStack).toStartWith("__oke_from_stack__:");
@@ -116,12 +121,25 @@ describe("resolution chain", () => {
     const runtime = createVaultRuntime({
       secrets: [vault("KEY")],
       chain: [
-        { driver: memoryVaultDriver, options: { secrets: { KEY: "from-a" } } },
-        { driver: memoryVaultDriver, options: { secrets: { KEY: "from-b" } } },
+        {
+          driver: memoryVaultDriver,
+          source: "process.env",
+          options: { secrets: { KEY: "from-a" } },
+        },
+        {
+          driver: memoryVaultDriver,
+          source: "driver",
+          options: { secrets: { KEY: "from-b" } },
+        },
       ],
     });
     await runtime.boot();
     expect(runtime.read("KEY")).toBe("from-a");
+    expect(runtime.resolution("KEY")).toBe("process.env");
+    const chain = runtime.resolutionChain("KEY");
+    expect(chain.find((s) => s.source === "process.env")?.won).toBe(true);
+    expect(chain.find((s) => s.source === "driver")?.present).toBe(true);
+    expect(chain.find((s) => s.source === "driver")?.won).toBe(false);
   });
 
   test("env layer resolves process env", async () => {
@@ -130,12 +148,60 @@ describe("resolution chain", () => {
       chain: [
         {
           driver: envVaultDriver,
+          source: "process.env",
           options: { env: { OKE_TEST_SECRET: "from-env" } },
         },
       ],
     });
     await runtime.boot();
     expect(runtime.read("OKE_TEST_SECRET")).toBe("from-env");
+    expect(runtime.resolution("OKE_TEST_SECRET")).toBe("process.env");
+  });
+
+  test("last-read timestamp updates on read", async () => {
+    let now = 1000;
+    const runtime = createVaultRuntime({
+      secrets: [vault("KEY")],
+      chain: [
+        {
+          driver: memoryVaultDriver,
+          options: { secrets: { KEY: "v" } },
+        },
+      ],
+      now: () => now,
+    });
+    await runtime.boot();
+    expect(runtime.lastReadAt("KEY")).toBeUndefined();
+    runtime.read("KEY");
+    expect(runtime.lastReadAt("KEY")).toBe(1000);
+    now = 2000;
+    runtime.read("KEY");
+    expect(runtime.lastReadAt("KEY")).toBe(2000);
+  });
+
+  test("config cleartext is exposed; secrets are not", async () => {
+    const runtime = createVaultRuntime({
+      secrets: [
+        vault.secret("STRIPE_KEY"),
+        vault.config("PUBLIC_URL"),
+      ],
+      chain: [
+        {
+          driver: memoryVaultDriver,
+          options: {
+            secrets: {
+              STRIPE_KEY: "sk_secret",
+              PUBLIC_URL: "https://example.com",
+            },
+          },
+        },
+      ],
+    });
+    await runtime.boot();
+    expect(runtime.cleartext("STRIPE_KEY")).toBeUndefined();
+    expect(runtime.cleartext("PUBLIC_URL")).toBe("https://example.com");
+    expect(runtime.fingerprint("STRIPE_KEY")).toBeDefined();
+    expect(runtime.fingerprint("PUBLIC_URL")).toBeUndefined();
   });
 });
 

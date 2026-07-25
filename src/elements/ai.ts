@@ -24,14 +24,19 @@ export type {
   AiPromptOptions,
 } from "./ai/declare.ts";
 
-export { createAiRuntime } from "./ai/runtime.ts";
+export { createAiRuntime, AiSchemaValidationError } from "./ai/runtime.ts";
 export type {
   AgentDenial,
+  AgentRunRecord,
+  AgentToolEffect,
+  AgentToolStep,
   AiAgentRunOptions,
   AiAskOptions,
+  AiAskOutcome,
   AiFallbackAttempt,
   AiJournalEntry,
   AiRuntime,
+  AiSchemaMismatch,
   CreateAiRuntimeOptions,
 } from "./ai/runtime.ts";
 

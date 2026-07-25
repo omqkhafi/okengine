@@ -90,6 +90,26 @@ describe("API key attenuation", () => {
     });
     expect(ok.row.scopes).toEqual(["bookings:list"]);
     expect(ok.secret.startsWith("oke_")).toBe(true);
+    expect(ok.row.createdAt).toBeGreaterThan(0);
+    expect(ok.row.revokedAt).toBeNull();
+  });
+
+  test("revoke and rotate — secret once on rotate", async () => {
+    const { revokeApiKey, rotateApiKey } = await import("./api-keys.ts");
+    const store = createApiKeyStore();
+    const created = await createApiKey(store, {
+      plane: "user",
+      name: "rot",
+      scopes: ["bookings:list"],
+      creatorId: "u1",
+      creatorScopes: ["bookings:list"],
+    });
+    const rotated = await rotateApiKey(store, created.row.id);
+    expect(rotated?.secret).toBeTruthy();
+    expect(rotated?.secret).not.toBe(created.secret);
+    const revoked = revokeApiKey(store, created.row.id);
+    expect(revoked?.revokedAt).not.toBeNull();
+    expect(await rotateApiKey(store, created.row.id)).toBeNull();
   });
 });
 

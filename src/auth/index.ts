@@ -28,6 +28,8 @@ export {
 export {
   attenuateScopes,
   assertAttenuated,
+  expandHeldScopes,
+  grantableScopes,
   AttenuationError,
   type AttenuationResult,
 } from "./attenuation.ts";
@@ -37,10 +39,21 @@ export {
   createApiKeyStore,
   authenticateApiKey,
   hashApiKeySecret,
+  revokeApiKey,
+  rotateApiKey,
   type ApiKeyStore,
   type CreateApiKeyOptions,
   type CreatedApiKey,
 } from "./api-keys.ts";
+
+export {
+  createOperatorInviteStore,
+  createOperatorInvite,
+  isInviteExpired,
+  INVITE_TTL_MS,
+  type CreateInviteOptions,
+  type OperatorInviteStore,
+} from "./invites.ts";
 
 export {
   createSessionStore,
@@ -88,6 +101,7 @@ export {
   type ApiKeyRow,
   type IdentityRow,
   type OperatorCredentialRow,
+  type OperatorInviteRow,
   type OperatorRow,
   type OperatorSsoLinkRow,
   type RefreshTokenRow,

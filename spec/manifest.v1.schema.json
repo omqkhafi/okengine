@@ -463,7 +463,8 @@
       "properties": {
         "description": { "type": "string" },
         "rotate": { "type": "string", "minLength": 1 },
-        "schema": { "$ref": "#/$defs/JsonSchema" }
+        "schema": { "$ref": "#/$defs/JsonSchema" },
+        "sensitive": { "type": "boolean" }
       }
     },
     "Channel": {

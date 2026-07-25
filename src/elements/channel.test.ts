@@ -150,7 +150,43 @@ describe("consent and i18n", () => {
     });
     const result = await runtime.send("news", { to: "user@example.com" });
     expect(result.ok).toBe(false);
-    expect(runtime.receipts.all()[0]!.status).toBe("opted-out");
+    expect(runtime.receipts.all()[0]!.status).toBe("suppressed/opted-out");
+  });
+
+  test("prior hard bounce suppresses and records protective state", async () => {
+    const runtime = createChannelRuntime({
+      templates: [channel.template("news", { medium: "email" })],
+      drivers: [openConsoleChannel()],
+    });
+    await runtime.send("news", { to: "bounce@example.com" });
+    const sent = runtime.receipts.all()[0]!;
+    runtime.ingestOutcome({
+      messageId: sent.messageId!,
+      state: "hard-bounce",
+      to: "bounce@example.com",
+      medium: "email",
+    });
+    const blocked = await runtime.send("news", { to: "bounce@example.com" });
+    expect(blocked.ok).toBe(false);
+    expect(runtime.receipts.all().at(-1)!.status).toBe(
+      "suppressed/prior-bounce",
+    );
+  });
+
+  test("locale chain is recorded on the receipt", async () => {
+    const runtime = createChannelRuntime({
+      templates: [channel.template("hello", { medium: "email" })],
+      drivers: [openConsoleChannel()],
+      defaultLocale: "en",
+      catalog: { hello: { ar: { text: "أهلا" }, en: { text: "Hi" } } },
+    });
+    await runtime.send("hello", {
+      to: "a@b.c",
+      acceptLanguage: "ar-SA,en;q=0.8",
+    });
+    const receipt = runtime.receipts.all()[0]!;
+    expect(receipt.locale).toBe("ar-SA");
+    expect(receipt.localeChain).toEqual(["accept-language:ar-SA"]);
   });
 
   test("locale selects catalog body", async () => {

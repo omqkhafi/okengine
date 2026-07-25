@@ -91,7 +91,21 @@ export interface ApiKeyRow {
   ipAllowlist: string[];
   creatorId: string;
   creatorScopes: string[];
+  /** Epoch-ms when the key was created (hygiene: unused 90d+). */
+  createdAt: number;
   lastUsedAt: number | null;
+  /** Epoch-ms when revoked; `null` while active. */
+  revokedAt: number | null;
+}
+
+/** Pending operator invitation (invite-only plane). */
+export interface OperatorInviteRow {
+  id: string;
+  email: string;
+  invitedBy: string;
+  createdAt: number;
+  expiresAt: number;
+  acceptedAt: number | null;
 }
 
 /** Hybrid session (short JWT + revocable refresh). */

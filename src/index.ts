@@ -112,6 +112,7 @@ export {
   createAiRuntime,
   assertAllowPiiForAsk,
   AiPiiBuildError,
+  AiSchemaValidationError,
   runPromptEvals,
   parseEvalJsonl,
   type AiModelDecl,

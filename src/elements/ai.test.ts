@@ -18,6 +18,7 @@ import { createFx } from "../kernel/fx.ts";
 import {
   ai,
   AiPiiBuildError,
+  AiSchemaValidationError,
   assertAllowPiiForAsk,
   createAiRuntime,
   parseEvalJsonl,
@@ -307,5 +308,86 @@ describe("model fallback chain", () => {
     expect(entry.attempts).toHaveLength(2);
     expect(entry.attempts[0]).toMatchObject({ model: "smart", ok: false });
     expect(entry.attempts[1]).toMatchObject({ model: "fast", ok: true });
+    expect(entry.outcome).toBe("ok");
+  });
+});
+
+describe("schema-validation is its own class", () => {
+  test("model answered but shape wrong → AiSchemaValidationError", async () => {
+    const smart = ai.model("smart", { provider: "mock" });
+    const triage = smart.prompt("ticket-triage", {
+      version: 3,
+      out: {
+        type: "object",
+        properties: {
+          urgency: { type: "string" },
+          team: { type: "string" },
+        },
+        required: ["urgency", "team"],
+      },
+    });
+    const client = await createMockAiDriver({
+      "*": { urgency: "high" },
+    }).open();
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [triage],
+      clients: { smart: client },
+    });
+
+    let thrown: unknown;
+    try {
+      await runtime.ask("ticket-triage", { subject: "x" });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(AiSchemaValidationError);
+    expect((thrown as AiSchemaValidationError).code).toBe("AiSchemaInvalid");
+    expect((thrown as AiSchemaValidationError).mismatch.missing).toContain(
+      "team",
+    );
+    expect(runtime.journal[0]!.outcome).toBe("schema_invalid");
+    expect(runtime.journal[0]!.outcome).not.toBe("provider_error");
+  });
+});
+
+describe("agent tool trail carries effects; denials are not errors", () => {
+  test("denied tool is a denial line with Manifest effects", async () => {
+    const member = gate.policy("member", ({ auth }) => !!auth.verified);
+    const gates = createGateRuntime({ gates: [member] });
+    const runtime = createAiRuntime({
+      agents: [
+        ai.agent("support", {
+          tools: ["bookings.refundBooking"],
+          maxSteps: 1,
+        }),
+      ],
+      gates,
+      gatesForFlow: () => ["member"],
+      effectsForFlow: (name) =>
+        name === "bookings.refundBooking"
+          ? [
+              { kind: "write", resource: "sql:bookings" },
+              { kind: "send", resource: "refund-notice" },
+            ]
+          : [],
+      callFlow: async () => ({ ok: true }),
+    });
+
+    const result = await runtime.runAgent("support", {
+      message: "refund",
+      auth: { userId: "u1", scopes: new Set(), verified: false },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.trail).toHaveLength(1);
+    expect(result.trail[0]!.status).toBe("denied");
+    expect(result.trail[0]!.denial?.gate).toBe("member");
+    expect(result.trail[0]!.effects).toEqual([
+      { kind: "write", resource: "sql:bookings" },
+      { kind: "send", resource: "refund-notice" },
+    ]);
+    expect(runtime.agentRuns).toHaveLength(1);
+    expect(runtime.denials).toHaveLength(1);
   });
 });

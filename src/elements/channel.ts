@@ -35,10 +35,66 @@ export {
 } from "./channel/consent.ts";
 
 export {
+  createSuppressionStore,
+  type SuppressionEntry,
+  type SuppressionReason,
+  type SuppressionStore,
+} from "./channel/suppression.ts";
+
+export {
   createReceiptLedger,
   type DeliveryReceipt,
+  type DeliveryStatus,
+  type IngestOutcomeInput,
   type ReceiptLedger,
 } from "./channel/receipts.ts";
+
+export {
+  buildOutcomeRows,
+  CONSEQUENCE_WEIGHT,
+  DELIVERY_OUTCOME_STATES,
+  formatAttemptChain,
+  isDeliveryOutcomeState,
+  rankByConsequence,
+  VERDICT_BY_STATE,
+  type DeliveryOutcomeState,
+  type DeliveryVerdict,
+  type OutcomeRow,
+} from "./channel/outcomes.ts";
+
+export {
+  formatLocaleChain,
+  isRtlLocale,
+  parseAcceptLanguage,
+  resolveLocale,
+  type LocaleChainStep,
+  type LocaleResolution,
+  type ResolveLocaleOptions,
+} from "./channel/locale.ts";
+
+export {
+  costOf,
+  DEFAULT_MEDIUM_COSTS,
+  fallbackWeeklyCostDelta,
+  type FallbackWeeklyCostDelta,
+  type MediumCosts,
+} from "./channel/costs.ts";
+
+export {
+  CHANNEL_PII_MASK,
+  maskEmail,
+  maskPhone,
+  maskRecipient,
+} from "./channel/mask.ts";
+
+export {
+  domainFromFrom,
+  verifyEmailAuth,
+  type AuthCheckStatus,
+  type DnsTxtLookup,
+  type EmailAuthResult,
+  type VerifyEmailAuthOptions,
+} from "./channel/email-auth.ts";
 
 export {
   SentlyError,

@@ -18,16 +18,28 @@ import type {
   ChannelSendResult,
 } from "../../drivers/channel-types.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
+import type { ConsentStore } from "./consent.ts";
 import type { ChannelTemplateDecl } from "./declare.ts";
 import {
-  createConsentStore,
-  type ConsentStore,
-} from "./consent.ts";
+  DEFAULT_MEDIUM_COSTS,
+  type MediumCosts,
+} from "./costs.ts";
+import {
+  resolveLocale,
+  type LocaleChainStep,
+} from "./locale.ts";
+import type { DeliveryOutcomeState } from "./outcomes.ts";
 import {
   createReceiptLedger,
   type DeliveryReceipt,
+  type DeliveryStatus,
+  type IngestOutcomeInput,
   type ReceiptLedger,
 } from "./receipts.ts";
+import {
+  createSuppressionStore,
+  type SuppressionStore,
+} from "./suppression.ts";
 
 /** Locale catalog: template → locale → rendered body. */
 export type TemplateCatalog = Readonly<
@@ -54,10 +66,17 @@ export interface CreateChannelRuntimeOptions {
   readonly catalog?: TemplateCatalog;
   /** Default locale. */
   readonly defaultLocale?: string;
-  /** Consent store (created if omitted). */
+  /** Suppression store (created if omitted). */
+  readonly suppression?: SuppressionStore;
+  /**
+   * Consent store — wrapped into suppression when `suppression` is omitted.
+   * Prefer {@link CreateChannelRuntimeOptions.suppression}.
+   */
   readonly consent?: ConsentStore;
   /** Receipt ledger (created if omitted). */
   readonly receipts?: ReceiptLedger;
+  /** Medium unit costs (USD / message). */
+  readonly costs?: MediumCosts;
   /** Wrap email transports with sently RetryTransport. */
   readonly retry?: boolean;
   /** Injectable clock. */
@@ -69,6 +88,8 @@ export interface ChannelSendOptions {
   readonly to: string;
   readonly data?: Readonly<Record<string, unknown>>;
   readonly locale?: string;
+  readonly profileLocale?: string;
+  readonly acceptLanguage?: string;
   readonly via?: readonly string[];
   readonly subject?: string;
   readonly pushSubscription?: ChannelMessage["pushSubscription"];
@@ -77,8 +98,9 @@ export interface ChannelSendOptions {
 /** Channel runtime surface. */
 export interface ChannelRuntime {
   readonly templates: ReadonlyMap<string, ChannelTemplateDecl>;
-  readonly consent: ConsentStore;
+  readonly suppression: SuppressionStore;
   readonly receipts: ReceiptLedger;
+  readonly costs: MediumCosts;
   /**
    * Send a template through the driver chain.
    *
@@ -89,6 +111,14 @@ export interface ChannelRuntime {
     template: string,
     options: ChannelSendOptions,
   ): Promise<ChannelSendResult>;
+  /**
+   * Ingest a post-send provider outcome (bounce / complaint / …).
+   * Hard bounce auto-adds suppression. Console projects the ledger — never
+   * raw webhooks.
+   *
+   * @param input - Normalized outcome
+   */
+  ingestOutcome(input: IngestOutcomeInput): DeliveryReceipt;
 }
 
 /**
@@ -103,8 +133,13 @@ export function createChannelRuntime(
   for (const t of options.templates ?? []) {
     templates.set(t.name, t);
   }
-  const consent = options.consent ?? createConsentStore();
+  const suppression =
+    options.suppression ??
+    createSuppressionStore(
+      options.consent ? { consent: options.consent } : {},
+    );
   const receipts = options.receipts ?? createReceiptLedger();
+  const costs = options.costs ?? { ...DEFAULT_MEDIUM_COSTS };
   const catalog = options.catalog ?? {};
   const defaultLocale = options.defaultLocale ?? "en";
   const now = options.now ?? (() => Date.now());
@@ -206,8 +241,6 @@ export function createChannelRuntime(
         at: now(),
         messageId: mailResult.messageId,
       });
-      // Ensure failed attempts before success are present when FallbackTransport
-      // short-circuits without calling onFallback in some paths.
       return {
         result: {
           ok: true,
@@ -219,7 +252,6 @@ export function createChannelRuntime(
         attempts,
       };
     } catch (err) {
-      // FallbackError carries all attempts
       const fbAttempts =
         err &&
         typeof err === "object" &&
@@ -285,38 +317,120 @@ export function createChannelRuntime(
     };
   }
 
+  function classifySendFailure(
+    attempts: readonly ChannelAttempt[],
+  ): DeliveryOutcomeState {
+    const err = attempts
+      .map((a) => a.error ?? "")
+      .join(" ")
+      .toLowerCase();
+    if (
+      /invalid.*(address|email|recipient)|unknown user|no such user|mailbox unavailable|550 5\.1\.1/.test(
+        err,
+      )
+    ) {
+      return "blocked/invalid-address";
+    }
+    return "provider-error";
+  }
+
   return {
     templates,
-    consent,
+    suppression,
     receipts,
+    costs,
+    ingestOutcome(input) {
+      const at = input.at ?? now();
+      const existing = receipts.byMessageId(input.messageId);
+      if (input.state === "hard-bounce") {
+        const subject = input.to ?? existing?.to;
+        const medium = (input.medium ??
+          existing?.medium ??
+          "email") as ChannelMedium;
+        if (subject) {
+          suppression.addPriorBounce(
+            subject,
+            medium === "any" ? "email" : medium,
+          );
+        }
+      }
+
+      if (existing) {
+        const updated = receipts.updateStatus(input.messageId, {
+          status: input.state,
+          at,
+          error: input.error,
+        });
+        return updated ?? existing;
+      }
+
+      const receipt: DeliveryReceipt = {
+        id: crypto.randomUUID(),
+        template: input.template ?? "unknown",
+        to: input.to ?? "unknown",
+        medium: input.medium ?? "email",
+        status: input.state,
+        messageId: input.messageId,
+        attempts: [],
+        at,
+        ...(input.error !== undefined ? { error: input.error } : {}),
+      };
+      receipts.record(receipt);
+      return receipt;
+    },
     async send(template, opts) {
       const decl = templates.get(template);
       if (!decl) {
         throw new Error(`channel: unknown template "${template}"`);
       }
       const medium = decl.medium;
-      if (consent.isOptedOut(opts.to, medium === "any" ? "email" : medium)) {
+      const checkMedium: ChannelMedium =
+        medium === "any" ? "email" : medium;
+
+      const suppressed = suppression.isSuppressed(opts.to, checkMedium);
+      if (suppressed.suppressed) {
+        const status: DeliveryStatus =
+          suppressed.reason === "opted-out"
+            ? "suppressed/opted-out"
+            : "suppressed/prior-bounce";
+        const resolved = resolveLocale({
+          locale: opts.locale,
+          profileLocale: opts.profileLocale,
+          acceptLanguage: opts.acceptLanguage,
+          defaultLocale,
+        });
         const receipt: DeliveryReceipt = {
           id: crypto.randomUUID(),
           template,
           to: opts.to,
           medium,
-          locale: opts.locale,
-          status: "opted-out",
+          locale: resolved.locale,
+          localeChain: resolved.chain,
+          status,
           attempts: [],
           at: now(),
-          error: "opted out",
+          error:
+            suppressed.reason === "opted-out"
+              ? "opted out"
+              : "prior hard bounce",
         };
         receipts.record(receipt);
         return {
           ok: false,
           messageId: receipt.id,
-          driverId: "consent",
+          driverId: "suppression",
           attempts: [],
         };
       }
 
-      const locale = opts.locale ?? defaultLocale;
+      const resolved = resolveLocale({
+        locale: opts.locale,
+        profileLocale: opts.profileLocale,
+        acceptLanguage: opts.acceptLanguage,
+        defaultLocale,
+      });
+      const locale = resolved.locale;
+      const localeChain: readonly LocaleChainStep[] = resolved.chain;
       const body = resolveBody(template, locale, opts.data ?? {});
       const chain = driversFor(medium, opts.via);
 
@@ -353,11 +467,13 @@ export function createChannelRuntime(
         attempts = sendResult.attempts;
       }
 
-      const status: DeliveryReceipt["status"] = result.ok
-        ? attempts.filter((a) => !a.ok).length > 0
-          ? "fallback"
-          : "sent"
-        : "failed";
+      let status: DeliveryStatus;
+      if (result.ok) {
+        status =
+          attempts.filter((a) => !a.ok).length > 0 ? "fallback" : "sent";
+      } else {
+        status = classifySendFailure(attempts);
+      }
 
       receipts.record({
         id: crypto.randomUUID(),
@@ -365,6 +481,7 @@ export function createChannelRuntime(
         to: opts.to,
         medium,
         locale,
+        localeChain,
         status,
         messageId: result.messageId,
         driverId: result.driverId,

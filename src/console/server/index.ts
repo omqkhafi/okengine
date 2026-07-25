@@ -3,13 +3,62 @@
  */
 
 export {
+  accessCreateKey,
+  accessRevokeKey,
+  accessRotateKey,
+  accessSetRoleGrants,
+  effectivePermissions,
+  expandAccessCeiling,
+  isKeyUnused90d,
+  keyBlastRadius,
+  KEY_UNUSED_MS,
+  projectAccessPanel,
+  residualAccessNote,
+  type AccessEffectivePermissions,
+  type AccessHygiene,
+  type AccessKeyBlastRadius,
+  type AccessKeyRow,
+  type AccessPanelProjection,
+  type AccessPlaneSection,
+  type AccessScopeProvenance,
+  type ProjectAccessOptions,
+} from "./access.ts";
+export {
+  bindManifestClockRuntime,
   bindManifestSignalBus,
+  bindManifestStoreRuntime,
+  bindManifestVaultRuntime,
   bootConsoleApp,
   createConsoleApp,
   type ConsoleApp,
   type ConsoleAppHandle,
   type CreateConsoleAppOptions,
 } from "./app.ts";
+export {
+  aggregateWaitingOn,
+  createManifestClockRuntime,
+  flowIdsForCronRow,
+  projectClocksList,
+  projectWaitingOn,
+  type ConsoleClockList,
+  type ConsoleClockRow,
+  type ConsoleTimelineEvent,
+  type ConsoleWaitingOnRow,
+  type ProjectClocksOptions,
+  type WaitingOnCount,
+} from "./clock.ts";
+export {
+  blastRadiusOf,
+  createManifestVaultRuntime,
+  projectVaultList,
+  readersOf,
+  rotateVaultValue,
+  setVaultValue,
+  type ConsoleVaultBlastRadius,
+  type ConsoleVaultRow,
+  type ProjectVaultOptions,
+  type VaultWriteInput,
+} from "./vault.ts";
 export {
   CLAIM_RATE_LIMIT,
   CLAIM_RATE_WINDOW_MS,
@@ -63,3 +112,16 @@ export {
   type EmitStructuralDiffOptions,
   type StructuralProposal,
 } from "./structural.ts";
+export {
+  countRunsByFlowLastWeek,
+  formatBlastLine,
+  formatRunCount,
+  formatWeeklyBill,
+  projectManifestDiff,
+  weeklyCostDeltaUsd,
+  WEEK_MS,
+  type ConsoleDiffChange,
+  type ConsoleDiffProjection,
+  type DiffCiGate,
+  type ProjectManifestDiffOptions,
+} from "./diff.ts";

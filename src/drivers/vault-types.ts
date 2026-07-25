@@ -17,8 +17,8 @@ export type VaultDriverId =
 /** Options when opening a vault backend. */
 export interface VaultOpenOptions {
   /**
-   * Path to a SOPS-encrypted file (`sops` driver).
-   * Prefer JSON / ENV formats produced by `sops -e`.
+   * Path to a SOPS-encrypted file (`sops` driver) or a dotenv file (`env` driver).
+   * Prefer JSON / ENV formats produced by `sops -e` for SOPS.
    */
   readonly path?: string;
   /** Inline SOPS ciphertext (tests). */

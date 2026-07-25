@@ -14,6 +14,8 @@ import {
 import { CONSOLE_PORT, type ServerHandle } from "../../runtime/types.ts";
 import {
   bindManifestSignalBus,
+  bindManifestStoreRuntime,
+  bindManifestVaultRuntime,
   bootConsoleApp,
   createConsoleApp,
   type ConsoleAppHandle,
@@ -65,6 +67,8 @@ export async function serveConsole(
     return runs.all();
   };
   await bindManifestSignalBus(handle.state);
+  await bindManifestStoreRuntime(handle.state);
+  await bindManifestVaultRuntime(handle.state);
 
   const staticDir =
     options.staticDir ?? new URL("../ui/dist/", import.meta.url).pathname;

@@ -3,6 +3,7 @@
  */
 
 import { resolve } from "node:path";
+import { parseDotenv, formatDotenv } from "../drivers/vault-dotenv-parse.ts";
 
 /** In-memory / file-backed vault bag for CLI (dotenv-shaped). */
 export interface VaultCliStore {
@@ -30,20 +31,8 @@ export async function openEnvStore(path: string): Promise<VaultCliStore> {
   const map = new Map<string, string>();
   const file = Bun.file(path);
   if (await file.exists()) {
-    for (const line of (await file.text()).split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      map.set(key, value);
+    for (const [k, v] of parseDotenv(await file.text())) {
+      map.set(k, v);
     }
   }
   return {
@@ -53,10 +42,7 @@ export async function openEnvStore(path: string): Promise<VaultCliStore> {
     },
     names: () => [...map.keys()].sort(),
     async save() {
-      const body =
-        [...map.entries()].map(([k, v]) => `${k}=${escape(v)}`).join("\n") +
-        "\n";
-      await Bun.write(path, body);
+      await Bun.write(path, formatDotenv(map));
     },
   };
 }
@@ -151,11 +137,4 @@ oke vault key rotate
 
   console.error(`Unknown vault command: ${sub}`);
   return 1;
-}
-
-function escape(value: string): string {
-  if (/[\s#"'$\\]/.test(value)) {
-    return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-  }
-  return value;
 }

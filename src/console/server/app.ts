@@ -7,14 +7,21 @@ import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
+import { createManifestAiRuntime } from "./ai.ts";
 import { createConsoleBindings } from "./flows.ts";
 import { consolePlugin } from "./plugin.ts";
 import {
+  bindAiRuntime,
+  bindManifestGateRuntime,
   createConsoleState,
   type ConsoleState,
   type CreateConsoleStateOptions,
 } from "./state.ts";
+import { createManifestChannelRuntime } from "./channels.ts";
+import { createManifestClockRuntime } from "./clock.ts";
 import { createManifestStoreRuntime } from "./store.ts";
+import { VaultBootError } from "../../elements/vault.ts";
+import { createManifestVaultRuntime } from "./vault.ts";
 import { printClaimCodeOnce } from "./claim.ts";
 
 /** Options for {@link createConsoleApp}. */
@@ -88,6 +95,31 @@ export function createConsoleApp(
         storePurgeCache: routes.store.purgeCache,
         storeSql: routes.store.sql,
         storePreview: routes.store.preview,
+        vaultList: routes.vault.list,
+        vaultSet: routes.vault.set,
+        vaultRotate: routes.vault.rotate,
+        aiList: routes.ai.list,
+        gatesList: routes.gates.list,
+        gatesSimulate: routes.gates.simulate,
+        gatesPowers: routes.gates.powers,
+        accessList: routes.access.list,
+        accessEffective: routes.access.effective,
+        accessKeyBlast: routes.access.keyBlast,
+        accessCreateKey: routes.access.createKey,
+        accessRevokeKey: routes.access.revokeKey,
+        accessRotateKey: routes.access.rotateKey,
+        accessSetRoleGrants: routes.access.setRoleGrants,
+        diffList: routes.diff.list,
+        clockList: routes.clock.list,
+        clockRunNow: routes.clock.runNow,
+        clockPause: routes.clock.pause,
+        clockEditSchedule: routes.clock.editSchedule,
+        clockWakeEarly: routes.clock.wakeEarly,
+        channelsList: routes.channel.list,
+        channelPreview: routes.channel.preview,
+        channelVerifyAuth: routes.channel.verifyAuth,
+        channelReveal: routes.channel.reveal,
+        channelSendTest: routes.channel.sendTest,
       },
     });
 
@@ -110,7 +142,104 @@ export async function bootConsoleApp(
   };
   await bindManifestSignalBus(handle.state);
   await bindManifestStoreRuntime(handle.state);
+  await bindManifestVaultRuntime(handle.state);
+  await bindManifestGateRuntime(handle.state);
+  await bindManifestClockRuntime(handle.state);
+  bindManifestAiRuntime(handle.state);
+  bindManifestChannelRuntime(handle.state);
   return handle.app;
+}
+
+/**
+ * Bind a ChannelRuntime + console inbox from the Manifest when no host
+ * runtime is attached — Console surfaces real receipts / inbox, not mocks.
+ *
+ * @param state - Console state
+ */
+export function bindManifestChannelRuntime(state: ConsoleState): void {
+  if (state.channelRuntime) return;
+  if (
+    !state.manifest?.channels ||
+    Object.keys(state.manifest.channels).length === 0
+  ) {
+    return;
+  }
+  const bound = createManifestChannelRuntime(state.manifest, {
+    now: state.now,
+    catalog: state.channelCatalog,
+    inbox: state.channelInbox ?? undefined,
+  });
+  state.channelRuntime = bound.runtime;
+  state.channelInbox = bound.inbox;
+}
+
+/**
+ * Open a ClockRuntime from Manifest clocks when no host runtime is attached.
+ *
+ * @param state - Console state
+ */
+export async function bindManifestClockRuntime(
+  state: ConsoleState,
+): Promise<void> {
+  if (state.clockRuntime) return;
+  const hasClocks =
+    (state.manifest?.clocks &&
+      Object.keys(state.manifest.clocks).length > 0) ||
+    Object.values(state.manifest?.flows ?? {}).some(
+      (f) => f.trigger?.cron || f.trigger?.every,
+    );
+  if (!hasClocks) return;
+  state.clockRuntime = createManifestClockRuntime(state.manifest, {
+    now: state.now,
+  });
+  await state.clockRuntime.reconcile();
+}
+
+/**
+ * Bind an AiRuntime from the Manifest when no host runtime is attached.
+ *
+ * @param state - Console state
+ */
+export function bindManifestAiRuntime(state: ConsoleState): void {
+  if (state.aiRuntime) return;
+  const hasAi =
+    state.manifest?.ai &&
+    (Object.keys(state.manifest.ai.prompts ?? {}).length > 0 ||
+      Object.keys(state.manifest.ai.agents ?? {}).length > 0 ||
+      Object.keys(state.manifest.ai.models ?? {}).length > 0);
+  if (!hasAi) return;
+  bindAiRuntime(
+    state,
+    createManifestAiRuntime(state.manifest, { now: state.now }),
+  );
+}
+
+/**
+ * Open a VaultRuntime from the Manifest when no host runtime is attached.
+ * Uses the standard resolution chain (process.env → .env.local → .env.stack
+ * → driver) — Console never parses dotenv itself.
+ *
+ * @param state - Console state
+ */
+export async function bindManifestVaultRuntime(
+  state: ConsoleState,
+): Promise<void> {
+  if (state.vaultRuntime) return;
+  if (!state.manifest?.vault || Object.keys(state.manifest.vault).length === 0) {
+    return;
+  }
+  try {
+    state.vaultRuntime = await createManifestVaultRuntime(state.manifest, {
+      cwd: state.cwd,
+      env: state.production ? "prod" : "dev",
+      allowDevFallbacks: !state.production,
+      now: state.now,
+    });
+  } catch (err) {
+    // Gaps are a doctor concern — Console still lists contracts from Manifest.
+    if (!(err instanceof VaultBootError)) throw err;
+    state.vaultRuntime = null;
+  }
 }
 
 /**

@@ -3,23 +3,49 @@
  */
 
 import {
+  ACCESS_TTL_MS,
+  createOperatorInviteStore,
   createOperatorStore,
   createSessionStore,
+  type ApiKeyStore,
+  type OperatorInviteStore,
   type OperatorStore,
+  type RoleStore,
   type SessionStore,
 } from "../../auth/index.ts";
+import {
+  accessCreateInvite,
+  accessCreateKey,
+  accessRevokeKey,
+  accessRotateKey,
+  accessSetRoleGrants,
+  effectivePermissions,
+  keyBlastRadius,
+  projectAccessPanel,
+  type AccessEffectivePermissions,
+  type AccessKeyBlastRadius,
+  type AccessKeyRow,
+  type AccessPanelProjection,
+} from "./access.ts";
+import { deriveModuleActions, type GateRuntime } from "../../elements/gate.ts";
 import type {
   SignalBus,
   SignalDiscardOptions,
   SignalReplayOptions,
   SignalReplayResult,
 } from "../../drivers/signal-types.ts";
+import type { AiRuntime, EvalSuiteResult } from "../../elements/ai.ts";
 import {
   createMemorySignalConfigStore,
   type SignalConfigStore,
 } from "../../elements/signal/reconcile.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
+import {
+  effectsForFlowFromManifest,
+  projectAiPanel,
+  type ConsoleAiProjection,
+} from "./ai.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
 import {
   discardViaBus,
@@ -41,8 +67,53 @@ import {
   type StoreQueryInput,
   type StoreQueryResult,
 } from "./store.ts";
+import type { ClockRuntime, EditScheduleInput } from "../../elements/clock.ts";
 import type { StoreRuntime } from "../../elements/store.ts";
+import type { VaultRuntime } from "../../elements/vault.ts";
+import type { JournalStore } from "../../kernel/journal.ts";
 import type { ResourceRef } from "../../manifest/types.ts";
+import {
+  editCronSchedule,
+  pauseCronNow,
+  projectClocksList,
+  runCronNow,
+  wakeEarlyNow,
+  type ConsoleClockList,
+} from "./clock.ts";
+import {
+  createDefaultGateAuthStores,
+  createManifestGateRuntime,
+  powersForPrincipal,
+  projectGatesPanel,
+  simulateGates,
+  type GatesPanelProjection,
+  type SimulateGatesInput,
+  type SimulateGatesResult,
+} from "./gates.ts";
+import {
+  projectVaultList,
+  rotateVaultValue,
+  setVaultValue,
+  type ConsoleVaultRow,
+  type VaultWriteInput,
+} from "./vault.ts";
+import type { ChannelInbox } from "../../drivers/channel-types.ts";
+import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
+import {
+  createManifestChannelRuntime,
+  previewChannelTemplate,
+  projectChannelsList,
+  revealChannelRecipient,
+  sendChannelTest,
+  verifyChannelAuth,
+  type ConsoleChannelPreview,
+  type ConsoleChannelsList,
+  type EmailAuthResult,
+} from "./channels.ts";
+import {
+  projectManifestDiff,
+  type ConsoleDiffProjection,
+} from "./diff.ts";
 
 /** User-plane identity row for the Flows invoke-as picker. */
 export interface ConsoleIdentity {
@@ -66,8 +137,75 @@ export interface ConsoleState {
   readonly cwd: string;
   /** Latest Manifest snapshot fed to the live channel. */
   manifest: Manifest | null;
+  /** Previous Manifest — for permission-widening deploy diff. */
+  previousManifest: Manifest | null;
   /** Live-channel subscribers. */
   readonly liveSubscribers: Set<(msg: ConsoleLiveMessage) => void>;
+  /** Role store (data, not code) — Gates · Access. */
+  readonly roles: RoleStore;
+  /** API key store — first-class principals. */
+  readonly apiKeys: ApiKeyStore;
+  /** Operator invitations — Access hygiene. */
+  readonly invites: OperatorInviteStore;
+  /** Access-token TTL (ms) from auth config — residual revoke delay. */
+  readonly accessTtlMs: number;
+  /** roleId → member principal ids. */
+  readonly roleMembers: Map<string, string[]>;
+  /** Project Access panel (planes · grantable · hygiene). */
+  listAccess: (actorScopes: Iterable<string>) => Promise<AccessPanelProjection>;
+  /** Effective permissions with provenance. */
+  accessEffective: (input: {
+    readonly kind: "operator" | "user" | "role" | "key";
+    readonly id: string;
+  }) => Promise<AccessEffectivePermissions | null>;
+  /** Blast radius for a key from Runs. */
+  accessKeyBlast: (keyId: string) => Promise<AccessKeyBlastRadius>;
+  /** Create an attenuated API key (secret once). */
+  accessCreateKey: (input: {
+    readonly plane: "user" | "operator";
+    readonly name: string;
+    readonly scopes: readonly string[];
+    readonly creatorId: string;
+    readonly creatorScopes: Iterable<string>;
+    readonly expiresAt?: number | null;
+    readonly rateLimit?: { max: number; per: string } | null;
+    readonly ipAllowlist?: readonly string[];
+  }) => Promise<{ readonly row: AccessKeyRow; readonly secret: string }>;
+  /** Revoke a key (irreversible). */
+  accessRevokeKey: (keyId: string) => Promise<AccessKeyRow | null>;
+  /** Rotate a key secret (shown once). */
+  accessRotateKey: (
+    keyId: string,
+  ) => Promise<{ readonly row: AccessKeyRow; readonly secret: string } | null>;
+  /** Replace role grants (grantable scopes only). */
+  accessSetRoleGrants: (input: {
+    readonly roleId: string;
+    readonly scopes: readonly string[];
+    readonly actorScopes: Iterable<string>;
+  }) => Promise<void>;
+  /** Invite an operator. */
+  accessCreateInvite: (input: {
+    readonly email: string;
+    readonly invitedBy: string;
+  }) => Promise<{ readonly id: string; readonly email: string; readonly expiresAt: number }>;
+  /**
+   * Live GateRuntime from host boot (A). Bound after boot; Manifest
+   * reconstruction is the Console-only fallback.
+   */
+  gateRuntime: GateRuntime | null;
+  /** Project Gates panel (inquiry surfaces + audit + widenings). */
+  listGates: () => Promise<GatesPanelProjection>;
+  /** Evaluate-only simulator — never invokes the flow handler. */
+  simulateGates: (input: SimulateGatesInput) => Promise<SimulateGatesResult>;
+  /** Principal → powers (scopes + allowed flows). */
+  powersForPrincipal: (input: {
+    readonly kind: "role" | "key" | "user";
+    readonly id: string;
+  }) => Promise<{
+    readonly scopes: readonly string[];
+    readonly allowedFlowIds: readonly string[];
+    readonly deniedFlowIds: readonly string[];
+  }>;
   /** Bound after Console app boot — reads the runs store. */
   listRuns: () => Promise<WideEvent[]>;
   /** Signal config store (`oke_signal_config`) — retains orphaned rows. */
@@ -125,10 +263,105 @@ export interface ConsoleState {
     readonly masked: boolean;
     readonly routedRole: "primary" | "replica";
   }>;
+  /**
+   * Live Clock runtime. Bound after boot from Manifest clocks
+   * or host injection (A — reuse reconciliation / lease / DST).
+   */
+  clockRuntime: ClockRuntime | null;
+  /** Project Clock panel (timeline + waiting-on + cron health). */
+  listClocks: () => Promise<ConsoleClockList>;
+  /** Run a cron now (lease-gated). */
+  runCronNow: (name: string) => Promise<{ readonly ran: boolean }>;
+  /** Pause a cron. */
+  pauseCron: (name: string) => Promise<{ readonly name: string; readonly status: string }>;
+  /** Edit overridable schedule. */
+  editSchedule: (
+    input: EditScheduleInput,
+  ) => Promise<{ readonly name: string; readonly effectiveCron?: string; readonly effectiveEvery?: string }>;
+  /** Wake a sleeping durable run early and resume. */
+  wakeEarly: (runId: string) => Promise<{
+    readonly runId: string;
+    readonly wakeAt: number;
+    readonly resumed: boolean;
+  }>;
+  /**
+   * Live vault runtime. Bound after boot from Manifest (standard chain)
+   * or host injection.
+   */
+  vaultRuntime: VaultRuntime | null;
+  /** Durable journal for rotation blast radius + Clock waiting-on. */
+  journalStore: JournalStore | null;
+  /** Current environment label for fingerprint columns. */
+  vaultEnv: string;
+  /** Project operator-plane vault rows (fingerprints only for secrets). */
+  listVault: () => Promise<{
+    readonly secrets: readonly ConsoleVaultRow[];
+    readonly env: string;
+  }>;
+  /** Set a vault value (write-only). */
+  setVault: (
+    input: VaultWriteInput,
+  ) => Promise<{ readonly name: string; readonly fingerprint: string | null }>;
+  /** Rotate a vault value (write-only; distinct confirm phrase). */
+  rotateVault: (
+    input: VaultWriteInput,
+  ) => Promise<{ readonly name: string; readonly fingerprint: string | null }>;
   /** User-plane identities available for invoke-as. */
   readonly identities: ConsoleIdentity[];
   /** Whether this process is treated as production (typed confirm). */
   readonly production: boolean;
+  /**
+   * Live AI runtime — journal, denial ledger, agent trails (console §9.10).
+   * Bound after host boot; null until wired.
+   */
+  aiRuntime: AiRuntime | null;
+  /** Eval suite history for score distributions. */
+  evalResults: EvalSuiteResult[];
+  /** Project AI panel from runtime + Manifest + runs. */
+  listAi: () => Promise<ConsoleAiProjection>;
+  /**
+   * Project Manifest Diff — `diffManifest` + Runs traffic + weekly bill
+   * (console §9.12).
+   */
+  listDiff: () => Promise<ConsoleDiffProjection>;
+  /**
+   * Live Channel runtime + shared console inbox (console §9.9).
+   * Bound after boot from Manifest or host injection.
+   */
+  channelRuntime: ChannelRuntime | null;
+  /** Dev console-driver inbox (all media land here). */
+  channelInbox: ChannelInbox | null;
+  /** Optional i18n body catalog for previews. */
+  channelCatalog: TemplateCatalog;
+  /** Project Channels panel (inbox / deliverability). */
+  listChannels: () => Promise<ConsoleChannelsList>;
+  /** Locale-resolved template preview. */
+  previewChannel: (input: {
+    readonly template: string;
+    readonly locale?: string;
+    readonly profileLocale?: string;
+    readonly acceptLanguage?: string;
+    readonly data?: Readonly<Record<string, unknown>>;
+  }) => Promise<ConsoleChannelPreview>;
+  /** SPF/DKIM/DMARC for a From domain. */
+  verifyChannelAuth: (fromOrDomain: string) => Promise<EmailAuthResult>;
+  /** Audited recipient reveal. */
+  revealChannel: (id: string) => Promise<{
+    readonly id: string;
+    readonly to: string;
+  } | null>;
+  /** Real send-test through the Channel runtime. */
+  sendChannelTest: (input: {
+    readonly template: string;
+    readonly to: string;
+    readonly locale?: string;
+    readonly data?: Readonly<Record<string, unknown>>;
+  }) => Promise<{
+    readonly ok: boolean;
+    readonly messageId: string;
+    readonly status: string;
+    readonly chain: string;
+  }>;
   /** Whether first operator exists (wizard permanently closed). */
   get setupClosed(): boolean;
 }
@@ -155,6 +388,26 @@ export interface CreateConsoleStateOptions {
   readonly identities?: readonly ConsoleIdentity[];
   /** Production flag — irreversible invokes require typed confirm. */
   readonly production?: boolean;
+  /** Access-token TTL override (ms) — residual revoke delay note. */
+  readonly accessTtlMs?: number;
+  /** Injected vault runtime (tests / host). */
+  readonly vaultRuntime?: VaultRuntime | null;
+  /** Injected journal store for blast-radius / waiting-on queries. */
+  readonly journalStore?: JournalStore | null;
+  /** Environment label for vault fingerprints. */
+  readonly vaultEnv?: string;
+  /** Injected GateRuntime (tests / host). */
+  readonly gateRuntime?: GateRuntime | null;
+  /** Injected ClockRuntime (tests / host). */
+  readonly clockRuntime?: ClockRuntime | null;
+  /** Previous Manifest for widenings (tests). */
+  readonly previousManifest?: Manifest | null;
+  /** Injected ChannelRuntime (tests / host). */
+  readonly channelRuntime?: ChannelRuntime | null;
+  /** Injected console inbox (tests / host). */
+  readonly channelInbox?: ChannelInbox | null;
+  /** Template body catalog for previews. */
+  readonly channelCatalog?: TemplateCatalog;
 }
 
 /**
@@ -176,6 +429,9 @@ export function createConsoleState(
   const liveSubscribers = new Set<(msg: ConsoleLiveMessage) => void>();
 
   const signalConfig = createMemorySignalConfigStore();
+  const gateAuth = createDefaultGateAuthStores();
+  const invites = createOperatorInviteStore();
+  seedAccessDemoData(gateAuth.apiKeys, invites, now);
 
   const state: ConsoleState = {
     operators,
@@ -185,7 +441,121 @@ export function createConsoleState(
     now,
     cwd: options.cwd ?? process.cwd(),
     manifest: options.manifest ?? null,
+    previousManifest: options.previousManifest ?? null,
     liveSubscribers,
+    roles: gateAuth.roles,
+    apiKeys: gateAuth.apiKeys,
+    invites,
+    accessTtlMs: options.accessTtlMs ?? ACCESS_TTL_MS,
+    roleMembers: gateAuth.roleMembers,
+    listAccess: async (actorScopes) => {
+      return projectAccessPanel({
+        manifest: state.manifest,
+        roles: state.roles,
+        apiKeys: state.apiKeys,
+        operators: state.operators,
+        invites: state.invites,
+        identities: state.identities,
+        roleMembers: state.roleMembers,
+        actorScopes,
+        accessTtlMs: state.accessTtlMs,
+        now: state.now,
+      });
+    },
+    accessEffective: async (input) => {
+      return effectivePermissions({
+        ...input,
+        roles: state.roles,
+        apiKeys: state.apiKeys,
+        operators: state.operators,
+        identities: state.identities,
+        roleMembers: state.roleMembers,
+      });
+    },
+    accessKeyBlast: async (keyId) => {
+      const runs = await state.listRuns();
+      return keyBlastRadius({
+        keyId,
+        apiKeys: state.apiKeys,
+        runs,
+        accessTtlMs: state.accessTtlMs,
+      });
+    },
+    accessCreateKey: async (input) => {
+      return accessCreateKey(state.apiKeys, {
+        ...input,
+        catalog: accessCatalog(state),
+        now: state.now,
+      });
+    },
+    accessRevokeKey: async (keyId) => {
+      return accessRevokeKey({
+        apiKeys: state.apiKeys,
+        sessions: state.sessions,
+        keyId,
+        now: state.now,
+      });
+    },
+    accessRotateKey: async (keyId) => accessRotateKey(state.apiKeys, keyId),
+    accessSetRoleGrants: async (input) => {
+      accessSetRoleGrants({
+        roles: state.roles,
+        roleId: input.roleId,
+        scopes: input.scopes,
+        actorScopes: input.actorScopes,
+        catalog: accessCatalog(state),
+      });
+    },
+    accessCreateInvite: async (input) => {
+      const row = accessCreateInvite(state.invites, {
+        ...input,
+        now: state.now,
+      });
+      return { id: row.id, email: row.email, expiresAt: row.expiresAt };
+    },
+    gateRuntime: options.gateRuntime ?? null,
+    listGates: async () => {
+      const operatorRoles = new Map<string, readonly string[]>();
+      const ops = new Map<string, { name: string; email: string }>();
+      for (const [id, roleIds] of operators.roles) {
+        operatorRoles.set(id, roleIds);
+      }
+      for (const op of operators.operators.values()) {
+        ops.set(op.id, { name: op.name, email: op.email });
+      }
+      return projectGatesPanel({
+        manifest: state.manifest,
+        roles: state.roles,
+        apiKeys: state.apiKeys,
+        identities: state.identities,
+        operatorRoles,
+        operators: ops,
+        roleMembers: state.roleMembers,
+        previousManifest: state.previousManifest,
+      });
+    },
+    simulateGates: async (input) => {
+      return simulateGates({
+        ...input,
+        manifest: state.manifest,
+        gateRuntime: state.gateRuntime,
+        roles: state.roles,
+        apiKeys: state.apiKeys,
+        identities: state.identities,
+        now: state.now,
+      });
+    },
+    powersForPrincipal: async (input) => {
+      return powersForPrincipal({
+        ...input,
+        manifest: state.manifest,
+        gateRuntime: state.gateRuntime,
+        roles: state.roles,
+        apiKeys: state.apiKeys,
+        identities: state.identities,
+        now: state.now,
+      });
+    },
     listRuns: async () => [],
     signalConfig,
     signalBus: null,
@@ -270,14 +640,164 @@ export function createConsoleState(
       }
       return runStoreSql(state.storeRuntime, ref, sqlText, options);
     },
+    clockRuntime: options.clockRuntime ?? null,
+    listClocks: async () => {
+      return projectClocksList({
+        manifest: state.manifest,
+        runtime: state.clockRuntime,
+        journal: state.journalStore,
+        now: state.now,
+      });
+    },
+    runCronNow: async (name) => {
+      if (!state.clockRuntime) {
+        throw new Error("Clock runtime not bound");
+      }
+      return runCronNow(state.clockRuntime, name);
+    },
+    pauseCron: async (name) => {
+      if (!state.clockRuntime) {
+        throw new Error("Clock runtime not bound");
+      }
+      const row = await pauseCronNow(state.clockRuntime, name);
+      return { name: row.name, status: row.status };
+    },
+    editSchedule: async (input) => {
+      if (!state.clockRuntime) {
+        throw new Error("Clock runtime not bound");
+      }
+      const row = await editCronSchedule(state.clockRuntime, input);
+      return {
+        name: row.name,
+        effectiveCron: row.effectiveCron,
+        effectiveEvery: row.effectiveEvery,
+      };
+    },
+    wakeEarly: async (runId) => {
+      if (!state.journalStore) {
+        throw new Error("Journal store not bound");
+      }
+      const result = await wakeEarlyNow(state.journalStore, runId, {
+        now: state.now,
+      });
+      return {
+        runId: result.runId,
+        wakeAt: result.wakeAt,
+        resumed: result.resumed,
+      };
+    },
+    vaultRuntime: options.vaultRuntime ?? null,
+    journalStore: options.journalStore ?? null,
+    vaultEnv: options.vaultEnv ?? "dev",
+    listVault: async () => {
+      return projectVaultList({
+        manifest: state.manifest,
+        runtime: state.vaultRuntime,
+        journal: state.journalStore,
+        env: state.vaultEnv,
+        now: state.now,
+      });
+    },
+    setVault: async (input) => {
+      if (!state.vaultRuntime) {
+        throw new Error("Vault runtime not bound");
+      }
+      return setVaultValue(state.vaultRuntime, input);
+    },
+    rotateVault: async (input) => {
+      if (!state.vaultRuntime) {
+        throw new Error("Vault runtime not bound");
+      }
+      return rotateVaultValue(state.vaultRuntime, input);
+    },
     identities: [...(options.identities ?? defaultDevIdentities())],
     production: options.production ?? process.env.NODE_ENV === "production",
+    aiRuntime: null,
+    evalResults: [],
+    listAi: async () => {
+      const runs = await state.listRuns();
+      return projectAiPanel({
+        manifest: state.manifest,
+        aiRuntime: state.aiRuntime,
+        runs,
+        evalResults: state.evalResults,
+      });
+    },
+    listDiff: async () => {
+      const runs = await state.listRuns();
+      return projectManifestDiff({
+        before: state.previousManifest,
+        after: state.manifest,
+        runs,
+        now: state.now(),
+      });
+    },
+    channelRuntime: options.channelRuntime ?? null,
+    channelInbox: options.channelInbox ?? null,
+    channelCatalog: options.channelCatalog ?? {},
+    listChannels: async () =>
+      projectChannelsList({
+        manifest: state.manifest,
+        runtime: state.channelRuntime,
+        inbox: state.channelInbox,
+        production: state.production,
+        now: state.now,
+        catalog: state.channelCatalog,
+      }),
+    previewChannel: async (input) =>
+      previewChannelTemplate({
+        runtime: state.channelRuntime,
+        manifest: state.manifest,
+        catalog: state.channelCatalog,
+        template: input.template,
+        locale: input.locale,
+        profileLocale: input.profileLocale,
+        acceptLanguage: input.acceptLanguage,
+        data: input.data,
+      }),
+    verifyChannelAuth: async (fromOrDomain) =>
+      verifyChannelAuth(fromOrDomain),
+    revealChannel: async (id) =>
+      revealChannelRecipient({
+        runtime: state.channelRuntime,
+        inbox: state.channelInbox,
+        id,
+      }),
+    sendChannelTest: async (input) => {
+      if (!state.channelRuntime) {
+        throw new Error("Channel runtime not bound");
+      }
+      return sendChannelTest(state.channelRuntime, input);
+    },
     get setupClosed() {
       return operators.operators.size > 0;
     },
   };
 
   return state;
+}
+
+/**
+ * Bind a live {@link AiRuntime} and wire Manifest effects into agent trails.
+ *
+ * @param state - Console state
+ * @param runtime - AI runtime
+ */
+export function bindAiRuntime(state: ConsoleState, runtime: AiRuntime): void {
+  state.aiRuntime = runtime;
+}
+
+/**
+ * Resolve tool-flow effects from the current Manifest (for AiRuntime options).
+ *
+ * @param state - Console state
+ * @param flowName - Tool flow
+ */
+export function consoleEffectsForFlow(
+  state: ConsoleState,
+  flowName: string,
+): ReturnType<typeof effectsForFlowFromManifest> {
+  return effectsForFlowFromManifest(state.manifest, flowName);
 }
 
 /**
@@ -307,11 +827,49 @@ export function publishLive(
  */
 export function setManifest(state: ConsoleState, manifest: Manifest): void {
   const before = state.manifest;
+  if (before) state.previousManifest = before;
   state.manifest = manifest;
   publishLive(state, { type: "manifest", manifest });
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });
   }
+}
+
+/**
+ * Bind a live {@link GateRuntime} from the host app (preferred over Manifest
+ * reconstruction).
+ *
+ * @param state - Console state
+ * @param runtime - Gate runtime
+ */
+export function bindGateRuntime(
+  state: ConsoleState,
+  runtime: GateRuntime,
+): void {
+  state.gateRuntime = runtime;
+}
+
+/**
+ * Open a GateRuntime from the Manifest when no host runtime is attached.
+ *
+ * @param state - Console state
+ */
+export async function bindManifestGateRuntime(
+  state: ConsoleState,
+): Promise<void> {
+  if (state.gateRuntime) return;
+  if (!state.manifest?.gates && !state.manifest?.flows) return;
+  const hasGates =
+    Object.keys(state.manifest.gates ?? {}).length > 0 ||
+    Object.values(state.manifest.flows ?? {}).some(
+      (f) => (f.gates?.length ?? 0) > 0,
+    );
+  if (!hasGates) return;
+  const { runtime } = await createManifestGateRuntime(
+    state.manifest,
+    state.now,
+  );
+  state.gateRuntime = runtime;
 }
 
 /**
@@ -334,4 +892,56 @@ function defaultDevIdentities(): ConsoleIdentity[] {
       scopes: ["member"],
     },
   ];
+}
+
+function accessCatalog(state: ConsoleState): string[] {
+  if (state.manifest) return deriveModuleActions(state.manifest);
+  const set = new Set<string>();
+  for (const grants of state.roles.grants.values()) {
+    for (const g of grants) set.add(g);
+  }
+  for (const key of state.apiKeys.keys.values()) {
+    for (const s of key.scopes) set.add(s);
+  }
+  return [...set];
+}
+
+/**
+ * Seed hygiene demos that do not close the setup wizard (no operators).
+ * Never-signed-in operators appear once real invites land with lastSeenAt null.
+ */
+function seedAccessDemoData(
+  apiKeys: ApiKeyStore,
+  invites: OperatorInviteStore,
+  now: () => number,
+): void {
+  const t = now();
+  const staleCreated = t - 100 * 24 * 60 * 60 * 1000;
+  if (!apiKeys.keys.has("key_stale")) {
+    apiKeys.keys.set("key_stale", {
+      id: "key_stale",
+      plane: "user",
+      hash: "stale",
+      name: "Stale unused key",
+      scopes: ["member"],
+      expiresAt: null,
+      rateLimit: null,
+      ipAllowlist: [],
+      creatorId: "user_demo",
+      creatorScopes: ["member"],
+      createdAt: staleCreated,
+      lastUsedAt: null,
+      revokedAt: null,
+    });
+  }
+  if (!invites.invites.has("invite_expired")) {
+    invites.invites.set("invite_expired", {
+      id: "invite_expired",
+      email: "expired@example.com",
+      invitedBy: "seed",
+      createdAt: t - 14 * 24 * 60 * 60 * 1000,
+      expiresAt: t - 24 * 60 * 60 * 1000,
+      acceptedAt: null,
+    });
+  }
 }

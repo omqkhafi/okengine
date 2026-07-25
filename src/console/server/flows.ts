@@ -9,6 +9,7 @@ import {
   authenticateOperator,
   createOperator,
   issueSession,
+  scopesForRoles,
   userPrincipal,
   type IssuedSession,
 } from "../../auth/index.ts";
@@ -18,6 +19,10 @@ import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts"
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { verifyClaimCode } from "./claim.ts";
+import {
+  ClockResourceNotFoundError,
+  ScheduleNotOverridableError,
+} from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
 import { tenancyDeclared } from "./store.ts";
@@ -330,9 +335,848 @@ const AuthFailed = z.object({});
 const NotFound = z.object({ flowId: z.string() });
 const InvokeDenied = z.object({ reason: z.string() });
 const ConfirmRequired = z.object({
-  phrase: z.enum(["INVOKE", "REPLAY", "DISCARD", "EDIT", "DELETE", "PURGE"]),
+  phrase: z.enum([
+    "INVOKE",
+    "REPLAY",
+    "DISCARD",
+    "EDIT",
+    "DELETE",
+    "PURGE",
+    "SET",
+    "ROTATE",
+    "REVOKE",
+    "RUN",
+    "SEND",
+  ]),
   reason: z.string(),
 });
+
+const ChannelNotFound = z.object({ template: z.string() });
+
+const ChannelOutcomeOut = z.object({
+  state: z.enum([
+    "suppressed/opted-out",
+    "suppressed/prior-bounce",
+    "blocked/invalid-address",
+    "soft-bounce",
+    "hard-bounce",
+    "provider-error",
+    "delivered-then-complained",
+  ]),
+  count: z.number(),
+  verdict: z.enum(["correct", "retry", "suppress", "review"]),
+  weight: z.number(),
+});
+
+const ChannelsListOut = z.object({
+  face: z.enum(["inbox", "deliverability"]),
+  production: z.boolean(),
+  templates: z.array(
+    z.object({
+      name: z.string(),
+      medium: z.string(),
+      locales: z.array(z.string()),
+      from: z.string().nullable(),
+      schema: z.unknown(),
+    }),
+  ),
+  outcomes: z.array(ChannelOutcomeOut),
+  fallback: z.object({
+    template: z.string().nullable(),
+    chainExample: z.string(),
+    fallbackRate: z.number(),
+    fallbackCount: z.number(),
+    totalCount: z.number(),
+    weeklyDeltaUsd: z.number(),
+    primaryMedium: z.string(),
+    fallbackMedium: z.string(),
+    summary: z.string(),
+  }),
+  inbox: z.array(
+    z.object({
+      id: z.string(),
+      medium: z.string(),
+      toMasked: z.string(),
+      subject: z.string().nullable(),
+      text: z.string().nullable(),
+      html: z.string().nullable(),
+      template: z.string().nullable(),
+      locale: z.string().nullable(),
+      at: z.number(),
+    }),
+  ),
+  receipts: z.array(
+    z.object({
+      id: z.string(),
+      template: z.string(),
+      toMasked: z.string(),
+      medium: z.string(),
+      locale: z.string().nullable(),
+      localeChain: z.array(z.string()),
+      status: z.string(),
+      chain: z.string(),
+      messageId: z.string().nullable(),
+      at: z.number(),
+      error: z.string().nullable(),
+    }),
+  ),
+  suppression: z.array(
+    z.object({
+      subjectMasked: z.string(),
+      medium: z.string(),
+      reason: z.enum(["opted-out", "prior-bounce"]),
+      at: z.number(),
+    }),
+  ),
+});
+
+const ChannelPreviewIn = z.object({
+  template: z.string().min(1),
+  locale: z.string().optional(),
+  profileLocale: z.string().optional(),
+  acceptLanguage: z.string().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+});
+
+const ChannelPreviewOut = z.object({
+  template: z.string(),
+  locale: z.string(),
+  localeChain: z.array(z.string()),
+  dir: z.enum(["ltr", "rtl"]),
+  subject: z.string().nullable(),
+  text: z.string().nullable(),
+  html: z.string().nullable(),
+});
+
+const ChannelVerifyAuthIn = z.object({
+  from: z.string().min(1),
+});
+
+const ChannelVerifyAuthOut = z.object({
+  domain: z.string(),
+  spf: z.enum(["pass", "fail", "missing"]),
+  dkim: z.enum(["pass", "fail", "missing"]),
+  dmarc: z.enum(["pass", "fail", "missing"]),
+  checkedAt: z.number(),
+});
+
+const ChannelRevealIn = z.object({
+  id: z.string().min(1),
+});
+
+const ChannelRevealOut = z.object({
+  ok: z.literal(true),
+  id: z.string(),
+  to: z.string(),
+  at: z.number(),
+});
+
+const ChannelSendTestIn = z.object({
+  template: z.string().min(1),
+  to: z.string().min(1),
+  locale: z.string().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const ChannelSendTestOut = z.object({
+  ok: z.boolean(),
+  messageId: z.string(),
+  status: z.string(),
+  chain: z.string(),
+  at: z.number(),
+});
+
+const VaultNotFound = z.object({ name: z.string() });
+const ClockNotFound = z.object({ kind: z.enum(["cron", "run"]), id: z.string() });
+const ScheduleNotOverridable = z.object({ name: z.string() });
+
+const CronHealthOut = z.object({
+  driftMs: z.number().nullable(),
+  overdue: z.boolean(),
+  missedRuns: z.number(),
+  catchUp: z.literal("one"),
+  leaderInstanceId: z.string().optional(),
+  leaderLeaseUntil: z.number().optional(),
+});
+
+const ClockCronOut = z.object({
+  name: z.string(),
+  status: z.enum(["active", "paused", "orphaned"]),
+  timezone: z.string(),
+  overridable: z.boolean(),
+  declaredCron: z.string().optional(),
+  declaredEvery: z.string().optional(),
+  effectiveCron: z.string().optional(),
+  effectiveEvery: z.string().optional(),
+  lastRunAt: z.number().optional(),
+  nextRunAt: z.number().optional(),
+  health: CronHealthOut,
+  dstAmbiguity: z
+    .object({
+      kind: z.enum(["gap", "overlap"]),
+      reason: z.string(),
+      on: z.string(),
+      localTime: z.string(),
+    })
+    .nullable(),
+  external: z.boolean(),
+  flowIds: z.array(z.string()),
+});
+
+const WaitingOnOut = z.object({
+  runId: z.string(),
+  flow: z.string(),
+  label: z.string(),
+  wakeAt: z.number(),
+  wakeInMs: z.number(),
+  step: z.string().nullable(),
+});
+
+const ClockListOut = z.object({
+  now: z.number(),
+  crons: z.array(ClockCronOut),
+  waitingOn: z.array(WaitingOnOut),
+  waitingOnCounts: z.array(
+    z.object({ label: z.string(), count: z.number() }),
+  ),
+  timeline: z.array(
+    z.object({
+      at: z.number(),
+      kind: z.enum(["cron", "wake"]),
+      name: z.string(),
+      meta: z.string().optional(),
+    }),
+  ),
+});
+
+const ClockRunNowIn = z.object({
+  name: z.string().min(1),
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const ClockRunNowOut = z.object({
+  ok: z.literal(true),
+  name: z.string(),
+  ran: z.boolean(),
+  at: z.number(),
+});
+
+const ClockPauseIn = z.object({ name: z.string().min(1) });
+const ClockPauseOut = z.object({
+  ok: z.literal(true),
+  name: z.string(),
+  status: z.string(),
+  at: z.number(),
+});
+
+const ClockEditIn = z.object({
+  name: z.string().min(1),
+  cron: z.string().optional(),
+  every: z.string().optional(),
+});
+
+const ClockEditOut = z.object({
+  ok: z.literal(true),
+  name: z.string(),
+  effectiveCron: z.string().optional(),
+  effectiveEvery: z.string().optional(),
+  at: z.number(),
+});
+
+const ClockWakeEarlyIn = z.object({ runId: z.string().min(1) });
+const ClockWakeEarlyOut = z.object({
+  ok: z.literal(true),
+  runId: z.string(),
+  wakeAt: z.number(),
+  resumed: z.boolean(),
+  at: z.number(),
+});
+
+const VaultResolutionStepOut = z.object({
+  source: z.enum([
+    "process.env",
+    ".env.local",
+    ".env.stack",
+    "driver",
+    "dev-fallback",
+  ]),
+  present: z.boolean(),
+  won: z.boolean(),
+});
+
+const VaultBlastRadiusOut = z.object({
+  count: z.number(),
+  longestWakeAt: z.number().nullable(),
+  longestOutstandingMs: z.number().nullable(),
+  runIds: z.array(z.string()),
+});
+
+const VaultRowOut = z.object({
+  name: z.string(),
+  kind: z.enum(["secret", "config"]),
+  sensitive: z.boolean(),
+  description: z.string().optional(),
+  rotate: z.string().optional(),
+  fingerprints: z.record(z.string(), z.string()),
+  fingerprint: z.string().nullable(),
+  cleartext: z.string().nullable(),
+  winner: z
+    .enum([
+      "process.env",
+      ".env.local",
+      ".env.stack",
+      "driver",
+      "dev-fallback",
+    ])
+    .nullable(),
+  resolution: z.array(VaultResolutionStepOut),
+  readers: z.array(z.string()),
+  blastRadius: VaultBlastRadiusOut,
+  lastReadAt: z.number().nullable(),
+  sharedFingerprintEnvs: z.array(z.string()),
+});
+
+const VaultListOut = z.object({
+  secrets: z.array(VaultRowOut),
+  env: z.string(),
+});
+
+const VaultWriteIn = z.object({
+  name: z.string().min(1),
+  value: z.string().min(1),
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const VaultWriteOut = z.object({
+  ok: z.literal(true),
+  name: z.string(),
+  fingerprint: z.string().nullable(),
+  at: z.number(),
+});
+
+const AiMetricOut = z.object({
+  samples: z.array(z.number()),
+  mean: z.number(),
+  p50: z.number(),
+  p95: z.number(),
+  buckets: z.array(
+    z.object({
+      min: z.number(),
+      max: z.number(),
+      count: z.number(),
+    }),
+  ),
+});
+
+const AiListOut = z.object({
+  prompts: z.array(
+    z.object({
+      name: z.string(),
+      version: z.number().optional(),
+      model: z.string().optional(),
+      evals: z.string().optional(),
+      budgetMaxCostPerCall: z.number().nullable(),
+      manifestDiffPath: z.string(),
+    }),
+  ),
+  agents: z.array(
+    z.object({
+      name: z.string(),
+      tools: z.array(z.string()),
+      maxSteps: z.number().optional(),
+      model: z.string().optional(),
+      budgetMaxCostPerRun: z.number().nullable(),
+    }),
+  ),
+  versions: z.array(
+    z.object({
+      prompt: z.string(),
+      version: z.number(),
+      sampleCount: z.number(),
+      cost: AiMetricOut,
+      latencyMs: AiMetricOut,
+      evalScore: AiMetricOut,
+      schemaInvalidRate: z.number(),
+      providerErrorRate: z.number(),
+      okRate: z.number(),
+      overBudgetRate: z.number(),
+      budgetMaxCostPerCall: z.number().nullable(),
+      outcomeCounts: z.object({
+        ok: z.number(),
+        provider_error: z.number(),
+        schema_invalid: z.number(),
+      }),
+    }),
+  ),
+  allowPii: z.array(
+    z.object({
+      flowId: z.string(),
+      asks: z.array(z.string()),
+      pii: z.enum(["masked", "allow", "denied"]).nullable(),
+      allowPii: z.boolean(),
+      source: z.string().nullable(),
+    }),
+  ),
+  fallbackChains: z.array(
+    z.object({
+      prompt: z.string(),
+      version: z.number().optional(),
+      attempts: z.array(
+        z.object({
+          model: z.string(),
+          ok: z.boolean(),
+          error: z.string().optional(),
+          cost: z.number().optional(),
+          latencyMs: z.number().optional(),
+          at: z.number(),
+        }),
+      ),
+      actualCost: z.number(),
+      primaryOnlyCost: z.number().nullable(),
+      costConsequence: z.number().nullable(),
+      at: z.number(),
+    }),
+  ),
+  agentRuns: z.array(
+    z.object({
+      id: z.string(),
+      agent: z.string(),
+      message: z.string(),
+      ok: z.boolean(),
+      steps: z.number(),
+      cost: z.number(),
+      at: z.number(),
+      trail: z.array(
+        z.object({
+          tool: z.string(),
+          status: z.enum(["ok", "denied"]),
+          effects: z.array(
+            z.object({
+              kind: z.enum([
+                "read",
+                "write",
+                "emit",
+                "send",
+                "ask",
+                "secret",
+                "call",
+              ]),
+              resource: z.string(),
+            }),
+          ),
+          denial: z
+            .object({
+              agent: z.string(),
+              tool: z.string(),
+              gate: z.string(),
+              reason: z.string(),
+              at: z.number(),
+            })
+            .nullable(),
+          at: z.number(),
+        }),
+      ),
+      denials: z.array(
+        z.object({
+          agent: z.string(),
+          tool: z.string(),
+          gate: z.string(),
+          reason: z.string(),
+          at: z.number(),
+        }),
+      ),
+    }),
+  ),
+  denials: z.array(
+    z.object({
+      agent: z.string(),
+      tool: z.string(),
+      gate: z.string(),
+      reason: z.string(),
+      at: z.number(),
+    }),
+  ),
+});
+
+const GatesListOut = z.object({
+  moduleActions: z.array(z.string()),
+  flows: z.array(
+    z.object({
+      flowId: z.string(),
+      plane: z.enum(["user", "operator"]),
+      gates: z.array(z.string()),
+      unguarded: z.boolean(),
+    }),
+  ),
+  gates: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.enum(["policy", "rate"]),
+      scopes: z.array(z.string()),
+      roles: z.array(z.string()),
+      strategy: z.string().optional(),
+      max: z.number().optional(),
+      per: z.string().optional(),
+      keyBy: z.string().optional(),
+      overridable: z.boolean(),
+      attachedTo: z.array(z.string()),
+    }),
+  ),
+  principals: z.array(
+    z.object({
+      kind: z.enum(["role", "key", "user"]),
+      id: z.string(),
+      name: z.string(),
+      plane: z.enum(["user", "operator"]),
+      scopes: z.array(z.string()),
+      memberCount: z.number().optional(),
+      email: z.string().optional(),
+    }),
+  ),
+  violations: z.array(
+    z.object({
+      kind: z.literal("operator-application-scope"),
+      operatorId: z.string(),
+      name: z.string(),
+      email: z.string(),
+      applicationScopes: z.array(z.string()),
+    }),
+  ),
+  audit: z.object({
+    unguardedFlows: z.array(z.string()),
+    orphanPermissions: z.array(z.string()),
+    emptyRoles: z.array(z.string()),
+    unattachedGates: z.array(z.string()),
+  }),
+  widenings: z.array(
+    z.object({
+      path: z.string(),
+      category: z.string(),
+      kind: z.string(),
+      summary: z.string(),
+      before: z.unknown().optional(),
+      after: z.unknown().optional(),
+    }),
+  ),
+});
+
+const DiffChangeOut = z.object({
+  path: z.string(),
+  category: z.enum([
+    "contract-breaking",
+    "permission-widening",
+    "effect-widening",
+    "no-impact",
+  ]),
+  kind: z.enum(["added", "removed", "changed"]),
+  summary: z.string(),
+  before: z.unknown().optional(),
+  after: z.unknown().optional(),
+  flowName: z.string().nullable(),
+  runCountLastWeek: z.number(),
+  blastLine: z.string().nullable(),
+  weeklyDeltaUsd: z.number().nullable(),
+  weeklyBillLine: z.string().nullable(),
+  ciGate: z.enum(["blocked", "acknowledged"]).nullable(),
+});
+
+const DiffListOut = z.object({
+  hasBaseline: z.boolean(),
+  severity: z
+    .enum([
+      "contract-breaking",
+      "permission-widening",
+      "effect-widening",
+      "no-impact",
+    ])
+    .nullable(),
+  blockedCount: z.number(),
+  acknowledgedCount: z.number(),
+  changes: z.array(DiffChangeOut),
+});
+
+const GatesSimulateIn = z.object({
+  flowId: z.string().min(1),
+  principal: z.object({
+    kind: z.enum(["role", "key", "user"]),
+    id: z.string().min(1),
+  }),
+  meta: z
+    .object({
+      ip: z.string().optional(),
+    })
+    .optional(),
+});
+
+const GatesSimulateOut = z.object({
+  flowId: z.string(),
+  gates: z.array(z.string()),
+  evaluations: z.array(
+    z.object({
+      name: z.string(),
+      allowed: z.boolean(),
+      kind: z.enum(["policy", "rate"]),
+      remaining: z.number().optional(),
+      retryAfterMs: z.number().optional(),
+      reason: z.string().optional(),
+    }),
+  ),
+  deniedAt: z.string().nullable(),
+  denial: z
+    .object({
+      code: z.enum(["Unauthorized", "Forbidden", "RateLimited"]),
+      data: z.record(z.string(), z.unknown()),
+      status: z.union([z.literal(401), z.literal(403), z.literal(429)]),
+    })
+    .nullable(),
+  allowed: z.boolean(),
+});
+
+const GatesPowersIn = z.object({
+  kind: z.enum(["role", "key", "user"]),
+  id: z.string().min(1),
+});
+
+const GatesPowersOut = z.object({
+  scopes: z.array(z.string()),
+  allowedFlowIds: z.array(z.string()),
+  deniedFlowIds: z.array(z.string()),
+});
+
+const AccessPlaneSection = z.object({
+  plane: z.enum(["user", "operator"]),
+  operators: z
+    .array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string(),
+        status: z.enum(["active", "suspended", "invited"]),
+        roles: z.array(z.string()),
+        scopes: z.array(z.string()),
+        lastSeenAt: z.number().nullable(),
+        neverSignedIn: z.boolean(),
+      }),
+    )
+    .optional(),
+  users: z
+    .array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string(),
+        status: z.enum(["active", "disabled"]),
+        roles: z.array(z.string()),
+        scopes: z.array(z.string()),
+      }),
+    )
+    .optional(),
+  roles: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      plane: z.enum(["user", "operator"]),
+      description: z.string(),
+      scopes: z.array(z.string()),
+      memberCount: z.number(),
+    }),
+  ),
+  keys: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      plane: z.enum(["user", "operator"]),
+      scopes: z.array(z.string()),
+      createdAt: z.number(),
+      lastUsedAt: z.number().nullable(),
+      expiresAt: z.number().nullable(),
+      revokedAt: z.number().nullable(),
+      rateLimit: z
+        .object({ max: z.number(), per: z.string() })
+        .nullable(),
+      ipAllowlist: z.array(z.string()),
+      unused90d: z.boolean(),
+    }),
+  ),
+  invites: z
+    .array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        invitedBy: z.string(),
+        createdAt: z.number(),
+        expiresAt: z.number(),
+        expired: z.boolean(),
+      }),
+    )
+    .optional(),
+  grantableScopes: z.array(z.string()),
+});
+
+const AccessListOut = z.object({
+  operatorPlane: AccessPlaneSection,
+  userPlane: AccessPlaneSection,
+  hygiene: z.object({
+    unusedKeys: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        plane: z.enum(["user", "operator"]),
+        scopes: z.array(z.string()),
+        createdAt: z.number(),
+        lastUsedAt: z.number().nullable(),
+        expiresAt: z.number().nullable(),
+        revokedAt: z.number().nullable(),
+        rateLimit: z
+          .object({ max: z.number(), per: z.string() })
+          .nullable(),
+        ipAllowlist: z.array(z.string()),
+        unused90d: z.boolean(),
+      }),
+    ),
+    neverSignedInOperators: z.array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        name: z.string(),
+        status: z.enum(["active", "suspended", "invited"]),
+        roles: z.array(z.string()),
+        scopes: z.array(z.string()),
+        lastSeenAt: z.number().nullable(),
+        neverSignedIn: z.boolean(),
+      }),
+    ),
+    expiredInvitations: z.array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        invitedBy: z.string(),
+        createdAt: z.number(),
+        expiresAt: z.number(),
+        expired: z.boolean(),
+      }),
+    ),
+  }),
+  accessTtlMs: z.number(),
+  catalog: z.array(z.string()),
+});
+
+const AccessEffectiveIn = z.object({
+  kind: z.enum(["operator", "user", "role", "key"]),
+  id: z.string().min(1),
+});
+
+const AccessEffectiveOut = z.object({
+  kind: z.enum(["operator", "user", "role", "key"]),
+  id: z.string(),
+  plane: z.enum(["user", "operator"]),
+  scopes: z.array(
+    z.object({
+      scope: z.string(),
+      sources: z.array(
+        z.object({
+          kind: z.enum(["role", "direct"]),
+          id: z.string(),
+          name: z.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
+const AccessKeyBlastIn = z.object({
+  keyId: z.string().min(1),
+});
+
+const AccessKeyBlastOut = z.object({
+  callVolume: z.number(),
+  lastUsedAt: z.number().nullable(),
+  sourceAddresses: z.array(z.string()),
+  accessTtlMs: z.number(),
+  residualAccessNote: z.string(),
+});
+
+const AccessCreateKeyIn = z.object({
+  plane: z.enum(["user", "operator"]),
+  name: z.string().min(1),
+  scopes: z.array(z.string()),
+  expiresAt: z.number().nullable().optional(),
+  rateLimit: z
+    .object({ max: z.number(), per: z.string() })
+    .nullable()
+    .optional(),
+  ipAllowlist: z.array(z.string()).optional(),
+});
+
+const AccessCreateKeyOut = z.object({
+  key: z.object({
+    id: z.string(),
+    name: z.string(),
+    plane: z.enum(["user", "operator"]),
+    scopes: z.array(z.string()),
+    createdAt: z.number(),
+    lastUsedAt: z.number().nullable(),
+    expiresAt: z.number().nullable(),
+    revokedAt: z.number().nullable(),
+    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
+    ipAllowlist: z.array(z.string()),
+    unused90d: z.boolean(),
+  }),
+  /** Raw secret — returned exactly once. */
+  secret: z.string(),
+});
+
+const AccessRevokeKeyIn = z.object({
+  keyId: z.string().min(1),
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const AccessRevokeKeyOut = z.object({
+  key: z.object({
+    id: z.string(),
+    name: z.string(),
+    plane: z.enum(["user", "operator"]),
+    scopes: z.array(z.string()),
+    createdAt: z.number(),
+    lastUsedAt: z.number().nullable(),
+    expiresAt: z.number().nullable(),
+    revokedAt: z.number().nullable(),
+    rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
+    ipAllowlist: z.array(z.string()),
+    unused90d: z.boolean(),
+  }),
+  blastRadius: AccessKeyBlastOut,
+});
+
+const AccessRotateKeyIn = z.object({
+  keyId: z.string().min(1),
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const AccessRotateKeyOut = z.object({
+  key: AccessCreateKeyOut.shape.key,
+  secret: z.string(),
+  blastRadius: AccessKeyBlastOut,
+});
+
+const AccessSetRoleGrantsIn = z.object({
+  roleId: z.string().min(1),
+  scopes: z.array(z.string()),
+});
+
+const AccessSetRoleGrantsOut = z.object({
+  roleId: z.string(),
+  scopes: z.array(z.string()),
+});
+
+const AccessGrantDenied = z.object({ reason: z.string() });
+const AccessKeyNotFound = z.object({ keyId: z.string() });
 
 const SignalNotFound = z.object({ signal: z.string() });
 const DryRunUnsafe = z.object({
@@ -583,6 +1427,45 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly sql: ReturnType<typeof createStoreSql>;
       readonly preview: ReturnType<typeof createStorePreview>;
     };
+    readonly vault: {
+      readonly list: ReturnType<typeof createVaultList>;
+      readonly set: ReturnType<typeof createVaultSet>;
+      readonly rotate: ReturnType<typeof createVaultRotate>;
+    };
+    readonly ai: {
+      readonly list: ReturnType<typeof createAiList>;
+    };
+    readonly gates: {
+      readonly list: ReturnType<typeof createGatesList>;
+      readonly simulate: ReturnType<typeof createGatesSimulate>;
+      readonly powers: ReturnType<typeof createGatesPowers>;
+    };
+    readonly access: {
+      readonly list: ReturnType<typeof createAccessList>;
+      readonly effective: ReturnType<typeof createAccessEffective>;
+      readonly keyBlast: ReturnType<typeof createAccessKeyBlast>;
+      readonly createKey: ReturnType<typeof createAccessCreateKey>;
+      readonly revokeKey: ReturnType<typeof createAccessRevokeKey>;
+      readonly rotateKey: ReturnType<typeof createAccessRotateKey>;
+      readonly setRoleGrants: ReturnType<typeof createAccessSetRoleGrants>;
+    };
+    readonly diff: {
+      readonly list: ReturnType<typeof createDiffList>;
+    };
+    readonly clock: {
+      readonly list: ReturnType<typeof createClockList>;
+      readonly runNow: ReturnType<typeof createClockRunNow>;
+      readonly pause: ReturnType<typeof createClockPause>;
+      readonly editSchedule: ReturnType<typeof createClockEditSchedule>;
+      readonly wakeEarly: ReturnType<typeof createClockWakeEarly>;
+    };
+    readonly channel: {
+      readonly list: ReturnType<typeof createChannelsList>;
+      readonly preview: ReturnType<typeof createChannelPreview>;
+      readonly verifyAuth: ReturnType<typeof createChannelVerifyAuth>;
+      readonly reveal: ReturnType<typeof createChannelReveal>;
+      readonly sendTest: ReturnType<typeof createChannelSendTest>;
+    };
   };
 } {
   const setupStatus = createSetupStatus(state);
@@ -609,6 +1492,31 @@ export function createConsoleBindings(state: ConsoleState): {
   const storePurgeCache = createStorePurgeCache(state);
   const storeSql = createStoreSql(state);
   const storePreview = createStorePreview(state);
+  const vaultList = createVaultList(state);
+  const vaultSet = createVaultSet(state);
+  const vaultRotate = createVaultRotate(state);
+  const aiList = createAiList(state);
+  const gatesList = createGatesList(state);
+  const gatesSimulate = createGatesSimulate(state);
+  const gatesPowers = createGatesPowers(state);
+  const accessList = createAccessList(state);
+  const accessEffective = createAccessEffective(state);
+  const accessKeyBlast = createAccessKeyBlast(state);
+  const accessCreateKeyFlow = createAccessCreateKey(state);
+  const accessRevokeKeyFlow = createAccessRevokeKey(state);
+  const accessRotateKeyFlow = createAccessRotateKey(state);
+  const accessSetRoleGrantsFlow = createAccessSetRoleGrants(state);
+  const diffList = createDiffList(state);
+  const clockList = createClockList(state);
+  const clockRunNow = createClockRunNow(state);
+  const clockPause = createClockPause(state);
+  const clockEditSchedule = createClockEditSchedule(state);
+  const clockWakeEarly = createClockWakeEarly(state);
+  const channelsList = createChannelsList(state);
+  const channelPreview = createChannelPreview(state);
+  const channelVerifyAuth = createChannelVerifyAuth(state);
+  const channelReveal = createChannelReveal(state);
+  const channelSendTest = createChannelSendTest(state);
 
   const bindings: Binding[] = [
     bindHttp(http.get("/console/setup/status"), setupStatus),
@@ -635,6 +1543,34 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/store/purge-cache"), storePurgeCache),
     bindHttp(http.post("/console/store/sql"), storeSql),
     bindHttp(http.post("/console/store/preview"), storePreview),
+    bindHttp(http.get("/console/vault"), vaultList),
+    bindHttp(http.post("/console/vault/set"), vaultSet),
+    bindHttp(http.post("/console/vault/rotate"), vaultRotate),
+    bindHttp(http.get("/console/ai"), aiList),
+    bindHttp(http.get("/console/gates"), gatesList),
+    bindHttp(http.post("/console/gates/simulate"), gatesSimulate),
+    bindHttp(http.post("/console/gates/powers"), gatesPowers),
+    bindHttp(http.get("/console/access"), accessList),
+    bindHttp(http.post("/console/access/effective"), accessEffective),
+    bindHttp(http.post("/console/access/key-blast"), accessKeyBlast),
+    bindHttp(http.post("/console/access/keys"), accessCreateKeyFlow),
+    bindHttp(http.post("/console/access/keys/revoke"), accessRevokeKeyFlow),
+    bindHttp(http.post("/console/access/keys/rotate"), accessRotateKeyFlow),
+    bindHttp(
+      http.post("/console/access/roles/grants"),
+      accessSetRoleGrantsFlow,
+    ),
+    bindHttp(http.get("/console/diff"), diffList),
+    bindHttp(http.get("/console/clock"), clockList),
+    bindHttp(http.post("/console/clock/run-now"), clockRunNow),
+    bindHttp(http.post("/console/clock/pause"), clockPause),
+    bindHttp(http.post("/console/clock/edit-schedule"), clockEditSchedule),
+    bindHttp(http.post("/console/clock/wake-early"), clockWakeEarly),
+    bindHttp(http.get("/console/channels"), channelsList),
+    bindHttp(http.post("/console/channels/preview"), channelPreview),
+    bindHttp(http.post("/console/channels/verify-auth"), channelVerifyAuth),
+    bindHttp(http.post("/console/channels/reveal"), channelReveal),
+    bindHttp(http.post("/console/channels/send-test"), channelSendTest),
   ];
 
   return {
@@ -663,6 +1599,41 @@ export function createConsoleBindings(state: ConsoleState): {
         purgeCache: storePurgeCache,
         sql: storeSql,
         preview: storePreview,
+      },
+      vault: {
+        list: vaultList,
+        set: vaultSet,
+        rotate: vaultRotate,
+      },
+      ai: { list: aiList },
+      gates: {
+        list: gatesList,
+        simulate: gatesSimulate,
+        powers: gatesPowers,
+      },
+      access: {
+        list: accessList,
+        effective: accessEffective,
+        keyBlast: accessKeyBlast,
+        createKey: accessCreateKeyFlow,
+        revokeKey: accessRevokeKeyFlow,
+        rotateKey: accessRotateKeyFlow,
+        setRoleGrants: accessSetRoleGrantsFlow,
+      },
+      diff: { list: diffList },
+      clock: {
+        list: clockList,
+        runNow: clockRunNow,
+        pause: clockPause,
+        editSchedule: clockEditSchedule,
+        wakeEarly: clockWakeEarly,
+      },
+      channel: {
+        list: channelsList,
+        preview: channelPreview,
+        verifyAuth: channelVerifyAuth,
+        reveal: channelReveal,
+        sendTest: channelSendTest,
       },
     },
   };
@@ -1277,11 +2248,21 @@ async function issueOperatorSession(
   state: ConsoleState,
   operatorId: string,
 ): Promise<IssuedSession> {
-  return issueSession(state.sessions, { secret: state.secret, now: state.now }, {
-    id: operatorId,
-    plane: "operator",
-    scopes: ["console:*"],
-  });
+  const op = state.operators.operators.get(operatorId);
+  if (op) op.lastSeenAt = state.now();
+  return issueSession(
+    state.sessions,
+    {
+      secret: state.secret,
+      now: state.now,
+      accessTtlMs: state.accessTtlMs,
+    },
+    {
+      id: operatorId,
+      plane: "operator",
+      scopes: ["console:*"],
+    },
+  );
 }
 
 function sessionPayload(
@@ -1642,6 +2623,876 @@ function createStorePreview(state: ConsoleState) {
         return fail("DryRunUnsafe", {
           ref: input.ref,
           reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  });
+}
+
+function createVaultList(state: ConsoleState) {
+  return flow({
+    name: "console.vault.list",
+    unit: "console",
+    plane: "operator",
+    out: VaultListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listVault();
+    },
+  });
+}
+
+function createVaultSet(state: ConsoleState) {
+  return flow({
+    name: "console.vault.set",
+    unit: "console",
+    plane: "operator",
+    in: VaultWriteIn,
+    out: VaultWriteOut,
+    errors: { AuthFailed, VaultNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (!(await vaultNameKnown(state, input.name))) {
+        return fail("VaultNotFound", { name: input.name });
+      }
+      if (state.production) {
+        if (input.confirmation !== "SET" || !input.reason || input.reason.length < 3) {
+          return fail("ConfirmRequired", {
+            phrase: "SET" as const,
+            reason: "Type SET and provide a reason to write a secret in production",
+          });
+        }
+      }
+      try {
+        const result = await state.setVault({
+          name: input.name,
+          value: input.value,
+        });
+        // Never log the value — name + fingerprint only.
+        fx.log.info("console.vault.set", {
+          operatorId: fx.operator.id,
+          name: result.name,
+          fingerprint: result.fingerprint,
+          reason: input.reason,
+        });
+        return {
+          ok: true as const,
+          name: result.name,
+          fingerprint: result.fingerprint,
+          at: state.now(),
+        };
+      } catch (err) {
+        return fail("VaultNotFound", {
+          name: `${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    },
+  });
+}
+
+function createVaultRotate(state: ConsoleState) {
+  return flow({
+    name: "console.vault.rotate",
+    unit: "console",
+    plane: "operator",
+    in: VaultWriteIn,
+    out: VaultWriteOut,
+    errors: { AuthFailed, VaultNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (!(await vaultNameKnown(state, input.name))) {
+        return fail("VaultNotFound", { name: input.name });
+      }
+      // Rotate always requires typed confirm (console §6 · §9.8).
+      if (
+        input.confirmation !== "ROTATE" ||
+        !input.reason ||
+        input.reason.length < 3
+      ) {
+        return fail("ConfirmRequired", {
+          phrase: "ROTATE" as const,
+          reason:
+            "Type ROTATE and provide a reason — in-flight durable runs may wake holding the new key",
+        });
+      }
+      try {
+        const result = await state.rotateVault({
+          name: input.name,
+          value: input.value,
+        });
+        fx.log.info("console.vault.rotate", {
+          operatorId: fx.operator.id,
+          name: result.name,
+          fingerprint: result.fingerprint,
+          reason: input.reason,
+        });
+        return {
+          ok: true as const,
+          name: result.name,
+          fingerprint: result.fingerprint,
+          at: state.now(),
+        };
+      } catch (err) {
+        return fail("VaultNotFound", {
+          name: `${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    },
+  });
+}
+
+/**
+ * Whether a vault contract name is known to Manifest or the live runtime.
+ *
+ * @param state - Console state
+ * @param name - Contract name
+ */
+async function vaultNameKnown(
+  state: ConsoleState,
+  name: string,
+): Promise<boolean> {
+  if (state.manifest?.vault?.[name]) return true;
+  if (state.vaultRuntime?.contracts.has(name)) return true;
+  if (state.vaultRuntime?.names().includes(name)) return true;
+  const listed = await state.listVault();
+  return listed.secrets.some((s) => s.name === name);
+}
+
+function createAiList(state: ConsoleState) {
+  return flow({
+    name: "console.ai.list",
+    unit: "console",
+    plane: "operator",
+    out: AiListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const projection = await state.listAi();
+      return {
+        prompts: projection.prompts.map((p) => ({
+          name: p.name,
+          ...(p.version !== undefined ? { version: p.version } : {}),
+          ...(p.model !== undefined ? { model: p.model } : {}),
+          ...(p.evals !== undefined ? { evals: p.evals } : {}),
+          budgetMaxCostPerCall: p.budgetMaxCostPerCall,
+          manifestDiffPath: p.manifestDiffPath,
+        })),
+        agents: projection.agents.map((a) => ({
+          name: a.name,
+          tools: [...a.tools],
+          ...(a.maxSteps !== undefined ? { maxSteps: a.maxSteps } : {}),
+          ...(a.model !== undefined ? { model: a.model } : {}),
+          budgetMaxCostPerRun: a.budgetMaxCostPerRun,
+        })),
+        versions: projection.versions.map((v) => ({
+          ...v,
+          outcomeCounts: { ...v.outcomeCounts },
+        })),
+        allowPii: projection.allowPii.map((r) => ({
+          ...r,
+          asks: [...r.asks],
+        })),
+        fallbackChains: projection.fallbackChains.map((c) => ({
+          prompt: c.prompt,
+          ...(c.version !== undefined ? { version: c.version } : {}),
+          attempts: c.attempts.map((a) => ({ ...a })),
+          actualCost: c.actualCost,
+          primaryOnlyCost: c.primaryOnlyCost,
+          costConsequence: c.costConsequence,
+          at: c.at,
+        })),
+        agentRuns: projection.agentRuns.map((r) => ({
+          ...r,
+          trail: r.trail.map((t) => ({
+            ...t,
+            effects: t.effects.map((e) => ({ ...e })),
+            denial: t.denial ? { ...t.denial } : null,
+          })),
+          denials: r.denials.map((d) => ({ ...d })),
+        })),
+        denials: projection.denials.map((d) => ({ ...d })),
+      };
+    },
+  });
+}
+
+function createGatesList(state: ConsoleState) {
+  return flow({
+    name: "console.gates.list",
+    unit: "console",
+    plane: "operator",
+    out: GatesListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const projection = await state.listGates();
+      return {
+        moduleActions: [...projection.moduleActions],
+        flows: projection.flows.map((f) => ({
+          flowId: f.flowId,
+          plane: f.plane,
+          gates: [...f.gates],
+          unguarded: f.unguarded,
+        })),
+        gates: projection.gates.map((g) => ({
+          name: g.name,
+          kind: g.kind,
+          scopes: [...g.scopes],
+          roles: [...g.roles],
+          ...(g.strategy !== undefined ? { strategy: g.strategy } : {}),
+          ...(g.max !== undefined ? { max: g.max } : {}),
+          ...(g.per !== undefined ? { per: g.per } : {}),
+          ...(g.keyBy !== undefined ? { keyBy: g.keyBy } : {}),
+          overridable: g.overridable,
+          attachedTo: [...g.attachedTo],
+        })),
+        principals: projection.principals.map((p) => ({
+          kind: p.kind,
+          id: p.id,
+          name: p.name,
+          plane: p.plane,
+          scopes: [...p.scopes],
+          ...(p.memberCount !== undefined
+            ? { memberCount: p.memberCount }
+            : {}),
+          ...(p.email !== undefined ? { email: p.email } : {}),
+        })),
+        violations: projection.violations.map((v) => ({
+          kind: v.kind,
+          operatorId: v.operatorId,
+          name: v.name,
+          email: v.email,
+          applicationScopes: [...v.applicationScopes],
+        })),
+        audit: {
+          unguardedFlows: [...projection.audit.unguardedFlows],
+          orphanPermissions: [...projection.audit.orphanPermissions],
+          emptyRoles: [...projection.audit.emptyRoles],
+          unattachedGates: [...projection.audit.unattachedGates],
+        },
+        widenings: projection.widenings.map((w) => ({
+          path: w.path,
+          category: w.category,
+          kind: w.kind,
+          summary: w.summary,
+          ...(w.before !== undefined ? { before: w.before } : {}),
+          ...(w.after !== undefined ? { after: w.after } : {}),
+        })),
+      };
+    },
+  });
+}
+
+function createDiffList(state: ConsoleState) {
+  return flow({
+    name: "console.diff.list",
+    unit: "console",
+    plane: "operator",
+    out: DiffListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const projection = await state.listDiff();
+      return {
+        hasBaseline: projection.hasBaseline,
+        severity: projection.severity,
+        blockedCount: projection.blockedCount,
+        acknowledgedCount: projection.acknowledgedCount,
+        changes: projection.changes.map((c) => ({
+          path: c.path,
+          category: c.category,
+          kind: c.kind,
+          summary: c.summary,
+          ...(c.before !== undefined ? { before: c.before } : {}),
+          ...(c.after !== undefined ? { after: c.after } : {}),
+          flowName: c.flowName,
+          runCountLastWeek: c.runCountLastWeek,
+          blastLine: c.blastLine,
+          weeklyDeltaUsd: c.weeklyDeltaUsd,
+          weeklyBillLine: c.weeklyBillLine,
+          ciGate: c.ciGate,
+        })),
+      };
+    },
+  });
+}
+
+function createGatesSimulate(state: ConsoleState) {
+  return flow({
+    name: "console.gates.simulate",
+    unit: "console",
+    plane: "operator",
+    in: GatesSimulateIn,
+    out: GatesSimulateOut,
+    errors: { AuthFailed },
+    do: async (input: z.infer<typeof GatesSimulateIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const result = await state.simulateGates(input);
+      return {
+        flowId: result.flowId,
+        gates: [...result.gates],
+        evaluations: result.evaluations.map((e) => ({
+          name: e.name,
+          allowed: e.allowed,
+          kind: e.kind,
+          ...(e.remaining !== undefined ? { remaining: e.remaining } : {}),
+          ...(e.retryAfterMs !== undefined
+            ? { retryAfterMs: e.retryAfterMs }
+            : {}),
+          ...(e.reason !== undefined ? { reason: e.reason } : {}),
+        })),
+        deniedAt: result.deniedAt,
+        denial: result.denial
+          ? {
+              code: result.denial.code,
+              data: { ...result.denial.data },
+              status: result.denial.status,
+            }
+          : null,
+        allowed: result.allowed,
+      };
+    },
+  });
+}
+
+function createGatesPowers(state: ConsoleState) {
+  return flow({
+    name: "console.gates.powers",
+    unit: "console",
+    plane: "operator",
+    in: GatesPowersIn,
+    out: GatesPowersOut,
+    errors: { AuthFailed },
+    do: async (input: z.infer<typeof GatesPowersIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const result = await state.powersForPrincipal(input);
+      return {
+        scopes: [...result.scopes],
+        allowedFlowIds: [...result.allowedFlowIds],
+        deniedFlowIds: [...result.deniedFlowIds],
+      };
+    },
+  });
+}
+
+/**
+ * Actor grant ceiling — role scopes plus session `console:*`.
+ *
+ * @param state - Console state
+ * @param operatorId - Acting operator
+ */
+function actorScopesOf(state: ConsoleState, operatorId: string): string[] {
+  const roleIds = state.operators.roles.get(operatorId) ?? [];
+  const fromRoles = [...scopesForRoles(state.roles, roleIds, "operator")];
+  // Console sessions mint `console:*` (see issueOperatorSession).
+  return [...new Set([...fromRoles, "console:*"])];
+}
+
+function createAccessList(state: ConsoleState) {
+  return flow({
+    name: "console.access.list",
+    unit: "console",
+    plane: "operator",
+    out: AccessListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listAccess(actorScopesOf(state, fx.operator.id));
+    },
+  });
+}
+
+function createAccessEffective(state: ConsoleState) {
+  return flow({
+    name: "console.access.effective",
+    unit: "console",
+    plane: "operator",
+    in: AccessEffectiveIn,
+    out: AccessEffectiveOut,
+    errors: { AuthFailed, NotFound },
+    do: async (input: z.infer<typeof AccessEffectiveIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const result = await state.accessEffective(input);
+      if (!result) {
+        return fail("NotFound", { flowId: `${input.kind}:${input.id}` });
+      }
+      return {
+        kind: result.kind,
+        id: result.id,
+        plane: result.plane,
+        scopes: result.scopes.map((s) => ({
+          scope: s.scope,
+          sources: s.sources.map((src) => ({ ...src })),
+        })),
+      };
+    },
+  });
+}
+
+function createAccessKeyBlast(state: ConsoleState) {
+  return flow({
+    name: "console.access.keyBlast",
+    unit: "console",
+    plane: "operator",
+    in: AccessKeyBlastIn,
+    out: AccessKeyBlastOut,
+    errors: { AuthFailed, AccessKeyNotFound },
+    do: async (input: z.infer<typeof AccessKeyBlastIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (!state.apiKeys.keys.has(input.keyId)) {
+        return fail("AccessKeyNotFound", { keyId: input.keyId });
+      }
+      return state.accessKeyBlast(input.keyId);
+    },
+  });
+}
+
+function createAccessCreateKey(state: ConsoleState) {
+  return flow({
+    name: "console.access.createKey",
+    unit: "console",
+    plane: "operator",
+    in: AccessCreateKeyIn,
+    out: AccessCreateKeyOut,
+    errors: { AuthFailed, AccessGrantDenied },
+    do: async (input: z.infer<typeof AccessCreateKeyIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const created = await state.accessCreateKey({
+          plane: input.plane,
+          name: input.name,
+          scopes: input.scopes,
+          creatorId: fx.operator.id,
+          creatorScopes: actorScopesOf(state, fx.operator.id),
+          expiresAt: input.expiresAt,
+          rateLimit: input.rateLimit,
+          ipAllowlist: input.ipAllowlist,
+        });
+        fx.log.info("console.access.createKey", {
+          keyId: created.row.id,
+          plane: created.row.plane,
+          operatorId: fx.operator.id,
+        });
+        return { key: { ...created.row }, secret: created.secret };
+      } catch (err) {
+        return fail("AccessGrantDenied", {
+          reason: err instanceof Error ? err.message : "grant denied",
+        });
+      }
+    },
+  });
+}
+
+function createAccessRevokeKey(state: ConsoleState) {
+  return flow({
+    name: "console.access.revokeKey",
+    unit: "console",
+    plane: "operator",
+    in: AccessRevokeKeyIn,
+    out: AccessRevokeKeyOut,
+    errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof AccessRevokeKeyIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (
+        input.confirmation !== "REVOKE" ||
+        (input.reason?.trim().length ?? 0) < 3
+      ) {
+        return fail("ConfirmRequired", {
+          phrase: "REVOKE" as const,
+          reason:
+            "Type REVOKE and provide a reason — revocation is irreversible",
+        });
+      }
+      const blastRadius = await state.accessKeyBlast(input.keyId);
+      const key = await state.accessRevokeKey(input.keyId);
+      if (!key) {
+        return fail("AccessKeyNotFound", { keyId: input.keyId });
+      }
+      fx.log.info("console.access.revokeKey", {
+        keyId: key.id,
+        operatorId: fx.operator.id,
+        reason: input.reason,
+        callVolume: blastRadius.callVolume,
+      });
+      return { key: { ...key }, blastRadius };
+    },
+  });
+}
+
+function createAccessRotateKey(state: ConsoleState) {
+  return flow({
+    name: "console.access.rotateKey",
+    unit: "console",
+    plane: "operator",
+    in: AccessRotateKeyIn,
+    out: AccessRotateKeyOut,
+    errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof AccessRotateKeyIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (
+        input.confirmation !== "ROTATE" ||
+        (input.reason?.trim().length ?? 0) < 3
+      ) {
+        return fail("ConfirmRequired", {
+          phrase: "ROTATE" as const,
+          reason:
+            "Type ROTATE and provide a reason — the old secret dies immediately",
+        });
+      }
+      const blastRadius = await state.accessKeyBlast(input.keyId);
+      const rotated = await state.accessRotateKey(input.keyId);
+      if (!rotated) {
+        return fail("AccessKeyNotFound", { keyId: input.keyId });
+      }
+      fx.log.info("console.access.rotateKey", {
+        keyId: rotated.row.id,
+        operatorId: fx.operator.id,
+        reason: input.reason,
+      });
+      return {
+        key: { ...rotated.row },
+        secret: rotated.secret,
+        blastRadius,
+      };
+    },
+  });
+}
+
+function createAccessSetRoleGrants(state: ConsoleState) {
+  return flow({
+    name: "console.access.setRoleGrants",
+    unit: "console",
+    plane: "operator",
+    in: AccessSetRoleGrantsIn,
+    out: AccessSetRoleGrantsOut,
+    errors: { AuthFailed, AccessGrantDenied },
+    do: async (input: z.infer<typeof AccessSetRoleGrantsIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        await state.accessSetRoleGrants({
+          roleId: input.roleId,
+          scopes: input.scopes,
+          actorScopes: actorScopesOf(state, fx.operator.id),
+        });
+        fx.log.info("console.access.setRoleGrants", {
+          roleId: input.roleId,
+          operatorId: fx.operator.id,
+          scopes: input.scopes,
+        });
+        return { roleId: input.roleId, scopes: [...input.scopes] };
+      } catch (err) {
+        return fail("AccessGrantDenied", {
+          reason: err instanceof Error ? err.message : "grant denied",
+        });
+      }
+    },
+  });
+}
+
+function createClockList(state: ConsoleState) {
+  return flow({
+    name: "console.clock.list",
+    unit: "console",
+    plane: "operator",
+    out: ClockListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listClocks();
+    },
+  });
+}
+
+function createClockRunNow(state: ConsoleState) {
+  return flow({
+    name: "console.clock.runNow",
+    unit: "console",
+    plane: "operator",
+    in: ClockRunNowIn,
+    out: ClockRunNowOut,
+    errors: { AuthFailed, ClockNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof ClockRunNowIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const list = await state.listClocks();
+      const cron = list.crons.find((c) => c.name === input.name);
+      if (!cron) {
+        return fail("ClockNotFound", { kind: "cron" as const, id: input.name });
+      }
+      if (state.production && cron.external) {
+        if (
+          input.confirmation !== "RUN" ||
+          !input.reason ||
+          input.reason.length < 3
+        ) {
+          return fail("ConfirmRequired", {
+            phrase: "RUN" as const,
+            reason:
+              "Type RUN and provide a reason — this cron has an external effect",
+          });
+        }
+      }
+      try {
+        const result = await state.runCronNow(input.name);
+        fx.log.info("console.clock.runNow", {
+          operatorId: fx.operator.id,
+          name: input.name,
+          ran: result.ran,
+          reason: input.reason,
+        });
+        return {
+          ok: true as const,
+          name: input.name,
+          ran: result.ran,
+          at: state.now(),
+        };
+      } catch (err) {
+        if (err instanceof ClockResourceNotFoundError) {
+          return fail("ClockNotFound", { kind: err.kind, id: err.id });
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+function createClockPause(state: ConsoleState) {
+  return flow({
+    name: "console.clock.pause",
+    unit: "console",
+    plane: "operator",
+    in: ClockPauseIn,
+    out: ClockPauseOut,
+    errors: { AuthFailed, ClockNotFound },
+    do: async (input: z.infer<typeof ClockPauseIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const result = await state.pauseCron(input.name);
+        fx.log.info("console.clock.pause", {
+          operatorId: fx.operator.id,
+          name: result.name,
+        });
+        return {
+          ok: true as const,
+          name: result.name,
+          status: result.status,
+          at: state.now(),
+        };
+      } catch (err) {
+        if (err instanceof ClockResourceNotFoundError) {
+          return fail("ClockNotFound", { kind: err.kind, id: err.id });
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+function createClockEditSchedule(state: ConsoleState) {
+  return flow({
+    name: "console.clock.editSchedule",
+    unit: "console",
+    plane: "operator",
+    in: ClockEditIn,
+    out: ClockEditOut,
+    errors: { AuthFailed, ClockNotFound, ScheduleNotOverridable },
+    do: async (input: z.infer<typeof ClockEditIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const result = await state.editSchedule({
+          name: input.name,
+          cron: input.cron,
+          every: input.every,
+        });
+        fx.log.info("console.clock.editSchedule", {
+          operatorId: fx.operator.id,
+          name: result.name,
+        });
+        return {
+          ok: true as const,
+          name: result.name,
+          effectiveCron: result.effectiveCron,
+          effectiveEvery: result.effectiveEvery,
+          at: state.now(),
+        };
+      } catch (err) {
+        if (err instanceof ScheduleNotOverridableError) {
+          return fail("ScheduleNotOverridable", { name: err.cronName });
+        }
+        if (err instanceof ClockResourceNotFoundError) {
+          return fail("ClockNotFound", { kind: err.kind, id: err.id });
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+function createClockWakeEarly(state: ConsoleState) {
+  return flow({
+    name: "console.clock.wakeEarly",
+    unit: "console",
+    plane: "operator",
+    in: ClockWakeEarlyIn,
+    out: ClockWakeEarlyOut,
+    errors: { AuthFailed, ClockNotFound },
+    do: async (input: z.infer<typeof ClockWakeEarlyIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const result = await state.wakeEarly(input.runId);
+        fx.log.info("console.clock.wakeEarly", {
+          operatorId: fx.operator.id,
+          runId: result.runId,
+          resumed: result.resumed,
+        });
+        return {
+          ok: true as const,
+          runId: result.runId,
+          wakeAt: result.wakeAt,
+          resumed: result.resumed,
+          at: state.now(),
+        };
+      } catch (err) {
+        if (err instanceof ClockResourceNotFoundError) {
+          return fail("ClockNotFound", { kind: err.kind, id: err.id });
+        }
+        throw err;
+      }
+    },
+  });
+}
+
+function createChannelsList(state: ConsoleState) {
+  return flow({
+    name: "console.channel.list",
+    unit: "console",
+    plane: "operator",
+    out: ChannelsListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listChannels();
+    },
+  });
+}
+
+function createChannelPreview(state: ConsoleState) {
+  return flow({
+    name: "console.channel.preview",
+    unit: "console",
+    plane: "operator",
+    in: ChannelPreviewIn,
+    out: ChannelPreviewOut,
+    errors: { AuthFailed, ChannelNotFound },
+    do: async (input: z.infer<typeof ChannelPreviewIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (
+        state.manifest?.channels &&
+        !(input.template in state.manifest.channels) &&
+        !state.channelRuntime?.templates.has(input.template)
+      ) {
+        return fail("ChannelNotFound", { template: input.template });
+      }
+      return state.previewChannel(input);
+    },
+  });
+}
+
+function createChannelVerifyAuth(state: ConsoleState) {
+  return flow({
+    name: "console.channel.verifyAuth",
+    unit: "console",
+    plane: "operator",
+    in: ChannelVerifyAuthIn,
+    out: ChannelVerifyAuthOut,
+    errors: { AuthFailed },
+    do: async (input: z.infer<typeof ChannelVerifyAuthIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.verifyChannelAuth(input.from);
+    },
+  });
+}
+
+function createChannelReveal(state: ConsoleState) {
+  return flow({
+    name: "console.channel.reveal",
+    unit: "console",
+    plane: "operator",
+    in: ChannelRevealIn,
+    out: ChannelRevealOut,
+    errors: { AuthFailed, ChannelNotFound },
+    do: async (input: z.infer<typeof ChannelRevealIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const revealed = await state.revealChannel(input.id);
+      if (!revealed) {
+        return fail("ChannelNotFound", { template: input.id });
+      }
+      fx.log.info("console.channel.reveal", {
+        operatorId: fx.operator.id,
+        id: revealed.id,
+      });
+      return {
+        ok: true as const,
+        id: revealed.id,
+        to: revealed.to,
+        at: state.now(),
+      };
+    },
+  });
+}
+
+function createChannelSendTest(state: ConsoleState) {
+  return flow({
+    name: "console.channel.sendTest",
+    unit: "console",
+    plane: "operator",
+    in: ChannelSendTestIn,
+    out: ChannelSendTestOut,
+    errors: { AuthFailed, ChannelNotFound, ConfirmRequired },
+    do: async (input: z.infer<typeof ChannelSendTestIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (state.production) {
+        if (
+          input.confirmation !== "SEND" ||
+          (input.reason?.trim().length ?? 0) < 3
+        ) {
+          return fail("ConfirmRequired", {
+            phrase: "SEND" as const,
+            reason:
+              "send test is a real external send — typed confirmation required",
+          });
+        }
+      }
+      if (!state.channelRuntime) {
+        return fail("ChannelNotFound", { template: input.template });
+      }
+      if (
+        !state.channelRuntime.templates.has(input.template) &&
+        !(state.manifest?.channels && input.template in state.manifest.channels)
+      ) {
+        return fail("ChannelNotFound", { template: input.template });
+      }
+      try {
+        const result = await state.sendChannelTest({
+          template: input.template,
+          to: input.to,
+          locale: input.locale,
+          data: input.data,
+        });
+        fx.log.info("console.channel.sendTest", {
+          operatorId: fx.operator.id,
+          template: input.template,
+          messageId: result.messageId,
+          ok: result.ok,
+          reason: input.reason,
+        });
+        return {
+          ...result,
+          at: state.now(),
+        };
+      } catch (err) {
+        return fail("ChannelNotFound", {
+          template: `${input.template}: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
     },

@@ -220,11 +220,16 @@ export interface Gate {
   roles?: string[];
 }
 
-/** Vault secret contract (never a value). */
+/** Vault secret / config contract (never a secret value). */
 export interface SecretContract {
   description?: string;
   rotate?: string;
   schema?: JsonSchema;
+  /**
+   * When `false`, the value is non-sensitive config — Console may show it
+   * in the clear. Defaults to `true` (secret).
+   */
+  sensitive?: boolean;
 }
 
 /** Channel template. */

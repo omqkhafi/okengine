@@ -2,8 +2,9 @@
  * API keys are first-class principals with attenuation.
  *
  * A key can never exceed the permissions of whoever created it.
+ * The raw secret is returned exactly once on create / rotate.
  *
- * @see docs/spec/console.md §3.3
+ * @see docs/spec/console.md §3.3 · §9.14
  */
 
 import { assertAttenuated } from "./attenuation.ts";
@@ -72,6 +73,7 @@ export async function createApiKey(
 ): Promise<CreatedApiKey> {
   assertAttenuated(options.creatorScopes, options.scopes, "api key");
 
+  const now = options.now ?? (() => Date.now());
   const id = options.id ?? crypto.randomUUID();
   const secret = options.secret ?? `oke_${id.replace(/-/g, "")}_${randomSecret()}`;
   const hash = options.hash ?? (await hashApiKeySecret(secret));
@@ -88,14 +90,16 @@ export async function createApiKey(
     ipAllowlist: [...(options.ipAllowlist ?? [])],
     creatorId: options.creatorId,
     creatorScopes,
+    createdAt: now(),
     lastUsedAt: null,
+    revokedAt: null,
   };
   store.keys.set(id, row);
   return { row, secret };
 }
 
 /**
- * Resolve a key by raw secret; enforces expiry.
+ * Resolve a key by raw secret; enforces expiry and revocation.
  *
  * @param store - Key store
  * @param secret - Raw secret
@@ -109,11 +113,53 @@ export async function authenticateApiKey(
   const hash = await hashApiKeySecret(secret);
   for (const row of store.keys.values()) {
     if (row.hash !== hash) continue;
+    if (row.revokedAt !== null) return null;
     if (row.expiresAt !== null && row.expiresAt <= now()) return null;
     row.lastUsedAt = now();
     return row;
   }
   return null;
+}
+
+/**
+ * Revoke an API key — irreversible. The row remains for audit / hygiene.
+ *
+ * @param store - Key store
+ * @param id - Key id
+ * @param now - Clock
+ */
+export function revokeApiKey(
+  store: ApiKeyStore,
+  id: string,
+  now: () => number = () => Date.now(),
+): ApiKeyRow | null {
+  const row = store.keys.get(id);
+  if (!row || row.revokedAt !== null) return null;
+  row.revokedAt = now();
+  return row;
+}
+
+/**
+ * Rotate an API key secret — new value shown exactly once; old hash dies.
+ *
+ * @param store - Key store
+ * @param id - Key id
+ * @param options - Optional secret override / clock
+ */
+export async function rotateApiKey(
+  store: ApiKeyStore,
+  id: string,
+  options: {
+    readonly secret?: string;
+    readonly now?: () => number;
+  } = {},
+): Promise<CreatedApiKey | null> {
+  const row = store.keys.get(id);
+  if (!row || row.revokedAt !== null) return null;
+  const secret =
+    options.secret ?? `oke_${id.replace(/-/g, "")}_${randomSecret()}`;
+  row.hash = await hashApiKeySecret(secret);
+  return { row, secret };
 }
 
 function randomSecret(): string {

@@ -15,17 +15,20 @@ const NAV: ReadonlyArray<{
   readonly label: string;
   readonly enabled: boolean;
 }> = [
-  { to: "/", label: "Overview", enabled: true },
+  { to: "/overview", label: "Overview", enabled: true },
   { to: "/flows", label: "Flows", enabled: true },
   { to: "/signals", label: "Signals", enabled: true },
   { to: "/store", label: "Store", enabled: true },
-  { to: "/clock", label: "Clock", enabled: false },
-  { to: "/gates", label: "Gates", enabled: false },
-  { to: "/vault", label: "Vault", enabled: false },
-  { to: "/channels", label: "Channels", enabled: false },
-  { to: "/ai", label: "AI", enabled: false },
+  { to: "/clock", label: "Clock", enabled: true },
+  { to: "/gates", label: "Gates", enabled: true },
+  { to: "/vault", label: "Vault", enabled: true },
+  { to: "/channels", label: "Channels", enabled: true },
+  { to: "/ai", label: "AI", enabled: true },
+  { to: "/architecture", label: "Architecture", enabled: true },
+  { to: "/access", label: "Access", enabled: true },
   { to: "/traces", label: "Traces", enabled: true },
   { to: "/runs", label: "Runs", enabled: true },
+  { to: "/manifest-diff", label: "Manifest Diff", enabled: true },
 ];
 
 /**
@@ -58,11 +61,17 @@ export function Shell({ children }: { readonly children?: ReactNode }) {
               to={item.to}
               className={clsx(
                 "inline-flex min-h-8 items-center px-2 text-sm",
-                pathname === item.to
+                pathname === item.to ||
+                  (item.to === "/manifest-diff" && pathname === "/diff")
                   ? "text-[var(--oke-fg)]"
                   : "text-[var(--oke-muted)]",
               )}
-              aria-current={pathname === item.to ? "page" : undefined}
+              aria-current={
+                pathname === item.to ||
+                (item.to === "/manifest-diff" && pathname === "/diff")
+                  ? "page"
+                  : undefined
+              }
             >
               {item.label}
             </Link>

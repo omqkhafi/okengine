@@ -55,3 +55,26 @@ export {
   type DurableResult,
   type RunDurableOptions,
 } from "./clock/durable.ts";
+
+export {
+  cronHealth,
+  type CatchUpPolicy,
+  type CronHealth,
+} from "./clock/health.ts";
+
+export {
+  nextOccurrences,
+  previousOccurrence,
+  countMissedOccurrences,
+} from "./clock/schedule.ts";
+
+export {
+  pauseCron,
+  editSchedule,
+  wakeEarly,
+  ScheduleNotOverridableError,
+  ClockResourceNotFoundError,
+  type EditScheduleInput,
+  type WakeEarlyOptions,
+  type WakeEarlyResult,
+} from "./clock/actions.ts";

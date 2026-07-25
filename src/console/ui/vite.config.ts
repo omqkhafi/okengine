@@ -59,6 +59,48 @@ export default defineConfig({
           ) {
             return "panel-store";
           }
+          if (
+            id.includes("/console/ui/shell/panels/clock/") ||
+            id.includes("/console/ui/shell/panels/Clock.") ||
+            id.includes("/console/ui/clock/")
+          ) {
+            return "panel-clock";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/vault/") ||
+            id.includes("/console/ui/shell/panels/Vault.") ||
+            id.includes("/console/ui/vault/")
+          ) {
+            return "panel-vault";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/ai/") ||
+            id.includes("/console/ui/shell/panels/Ai.") ||
+            id.includes("/console/ui/ai/")
+          ) {
+            return "panel-ai";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/diff/") ||
+            id.includes("/console/ui/shell/panels/Diff.") ||
+            id.includes("/console/ui/diff/")
+          ) {
+            return "panel-diff";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/architecture/") ||
+            id.includes("/console/ui/shell/panels/Architecture.") ||
+            id.includes("/console/ui/architecture/")
+          ) {
+            return "panel-architecture";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/access/") ||
+            id.includes("/console/ui/shell/panels/Access.") ||
+            id.includes("/console/ui/access/")
+          ) {
+            return "panel-access";
+          }
           return undefined;
         },
       },

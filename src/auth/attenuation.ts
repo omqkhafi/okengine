@@ -14,6 +14,31 @@ export interface AttenuationResult {
 }
 
 /**
+ * Expand held scopes against a catalog — `console:*` covers every
+ * `console:…` pair in the catalog (Access · MCP inheritance).
+ *
+ * @param held - Raw scopes from the principal / session
+ * @param catalog - Manifest-derived Module:Action pairs
+ */
+export function expandHeldScopes(
+  held: Iterable<string>,
+  catalog: readonly string[],
+): Set<string> {
+  const out = new Set<string>();
+  let star = false;
+  for (const s of held) {
+    out.add(s);
+    if (s === "console:*") star = true;
+  }
+  if (star) {
+    for (const scope of catalog) {
+      if (scope.startsWith("console:")) out.add(scope);
+    }
+  }
+  return out;
+}
+
+/**
  * Whether `requested` is a subset of `creator` scopes.
  *
  * @param creatorScopes - Creator's Module:Action set
@@ -30,6 +55,28 @@ export function attenuateScopes(
     if (!creator.has(scope)) excess.push(scope);
   }
   return { ok: excess.length === 0, excess };
+}
+
+/**
+ * Scopes a principal may grant on a plane — intersection of catalog,
+ * plane membership, and {@link attenuateScopes} against the expanded
+ * ceiling. Impossibility is taught by absence (console §9.14).
+ *
+ * @param options - Held scopes, catalog, plane predicate
+ */
+export function grantableScopes(options: {
+  readonly held: Iterable<string>;
+  readonly catalog: readonly string[];
+  readonly planeOf: (scope: string) => "user" | "operator";
+  readonly plane: "user" | "operator";
+}): string[] {
+  const ceiling = expandHeldScopes(options.held, options.catalog);
+  return options.catalog
+    .filter((scope) => {
+      if (options.planeOf(scope) !== options.plane) return false;
+      return attenuateScopes(ceiling, [scope]).ok;
+    })
+    .sort((a, b) => a.localeCompare(b));
 }
 
 /**
