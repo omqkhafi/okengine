@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build / local
+dist/
+out/
+*.tgz
+.oke/
+
+# logs & coverage
+logs/
+*.log
+coverage/
+*.lcov
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

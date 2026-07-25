@@ -5,6 +5,7 @@
  * and rate-limited (console §2.5 · §10.4).
  */
 
+import { formatClaimNote } from "../../term.ts";
 import {
   AUTH_RATE_LIMIT,
   AUTH_RATE_WINDOW_MS,
@@ -67,13 +68,7 @@ export function printClaimCodeOnce(
 ): void {
   if (state.printed) return;
   state.printed = true;
-  write("");
-  write("┌─────────────────────────────────────────────────────────┐");
-  write("│  oke Console — first-admin claim code (expires 30 min)  │");
-  write(`│  ${state.code}  │`);
-  write("│  Whoever can read this log already owns the server.     │");
-  write("└─────────────────────────────────────────────────────────┘");
-  write("");
+  write(formatClaimNote(state.code));
 }
 
 /** Result of {@link verifyClaimCode}. */

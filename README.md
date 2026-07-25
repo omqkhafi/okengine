@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
-**Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **Docs:** [oke.dev](https://oke.dev) · **License:** MIT
+**Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **Docs:** [okengine.vercel.app](https://okengine.vercel.app) · **License:** MIT
 
 ### Install
 
@@ -35,7 +35,7 @@ Eight elements cover what a backend needs. Ten exports are the whole public voca
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Handbook: [oke.dev/docs](https://oke.dev/docs). Spec depth: [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md).
+Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Handbook: [handbook](https://okengine.vercel.app/docs). Spec depth: [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md).
 
 ---
 
@@ -131,7 +131,7 @@ The rest of the scaffold is small and ordinary: `oke.config.ts` (drivers by prot
 
 ## How to learn (read in order)
 
-Start on the site if you want the handbook path: [Introduction](https://oke.dev/docs/get-started/introduction) → [Installation](https://oke.dev/docs/get-started/installation) → [Basic usage](https://oke.dev/docs/get-started/basic-usage).
+Start on the site if you want the handbook path: [Introduction](https://okengine.vercel.app/docs/get-started/introduction) → [Installation](https://okengine.vercel.app/docs/get-started/installation) → [Basic usage](https://okengine.vercel.app/docs/get-started/basic-usage).
 
 Each teaching app adds the smallest next set of ideas. Do not skip ahead.
 
@@ -153,8 +153,8 @@ Same path in the spec: [`docs/spec/four-applications.md`](docs/spec/four-applica
 
 ## Documentation
 
-- **Site** — [oke.dev](https://oke.dev) (landing) · [oke.dev/docs](https://oke.dev/docs) (handbook) · [changelog](https://oke.dev/changelog)
-- **Agents on the site** — [`/llms.txt`](https://oke.dev/llms.txt) index · [`/llms-full.txt`](https://oke.dev/llms-full.txt) full text · `/llms.mdx/docs/...` per-page markdown
+- **Site** — [okengine.vercel.app](https://okengine.vercel.app) (landing) · [handbook](https://okengine.vercel.app/docs) (handbook) · [changelog](https://okengine.vercel.app/changelog)
+- **Agents on the site** — [`/llms.txt`](https://okengine.vercel.app/llms.txt) index · [`/llms-full.txt`](https://okengine.vercel.app/llms-full.txt) full text · `/llms.mdx/docs/...` per-page markdown
 - **Docs MCP** — `:6536` · tools `oke.docs.search` / `oke.docs.get` (read-only; Host/Origin validated like the other surfaces)
 - **App MCP** — `:6535` · live Manifest, schemas, effects, traces, Console-safe actions (Bearer + confirmation for writes)
 - **Canonical specs in-repo** — [`docs/spec/`](docs/spec) (unified theory, four applications, Console)
@@ -204,7 +204,7 @@ flowchart TD
 
 Seventeen panels on `:6533` (app `:6530`, MCP `:6535`): Overview, Flows, Signals, Store, Clock, Gates, Vault, Channels, AI, Architecture, Traces, Runs, Manifest Diff, Access, Plugins — plus Privacy and Tenancy when those plugins are plugged.
 
-Operator and user planes stay separate. Every Console action is a real flow through `fx`, so the audit log is the trace. Spec: [`docs/spec/console.md`](docs/spec/console.md) · handbook: [oke.dev/docs/console](https://oke.dev/docs/console/overview).
+Operator and user planes stay separate. Every Console action is a real flow through `fx`, so the audit log is the trace. Spec: [`docs/spec/console.md`](docs/spec/console.md) · handbook: [console handbook](https://okengine.vercel.app/docs/console/overview).
 
 ---
 
@@ -348,11 +348,11 @@ Measured size and latency caps — see [`BUDGETS.md`](BUDGETS.md). Refresh with 
 
 ## Status
 
-Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). Docs at [oke.dev](https://oke.dev). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
+Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). Docs at [okengine.vercel.app](https://okengine.vercel.app). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
 
 | Resource | Path |
 |---|---|
-| Docs site | [oke.dev](https://oke.dev) · [handbook](https://oke.dev/docs) · [changelog](https://oke.dev/changelog) |
+| Docs site | [okengine.vercel.app](https://okengine.vercel.app) · [handbook](https://okengine.vercel.app/docs) · [changelog](https://okengine.vercel.app/changelog) |
 | Unified theory | [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md) |
 | Four applications | [`docs/spec/four-applications.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/four-applications.md) |
 | Console | [`docs/spec/console.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/console.md) |

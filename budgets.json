@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-25T19:20:55.194Z",
+  "measuredAt": "2026-07-25T20:51:40.420Z",
   "version": "0.2.1",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 8969,
+      "value": 9000,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 26.252,
+      "value": 43.532,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 42158,
-      "limit": 43002,
+      "value": 42195,
+      "limit": 43039,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -105,8 +105,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 8681,
-      "limit": 8937,
+      "value": 8721,
+      "limit": 8977,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 63123,
-      "limit": 64386,
+      "value": 63343,
+      "limit": 64610,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

@@ -86,11 +86,11 @@ import {
   memo,
   useCallback,
   useEffect,
-  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { OkeLogo } from '@/components/oke-logo';
 import { cn } from '@/lib/cn';
 import { ELEMENTS, ZOO_CONCERN_GROUPS, ZOO_CONCERNS } from '@/lib/elements';
 import { toneForElementName } from '@/lib/element-tones';
@@ -112,6 +112,9 @@ const CONCERN_RING = 152;
 const ELEMENT_RING = 88;
 const ELEMENT_R = 14;
 const HUB_R = 36;
+/** Wordmark size inside the law hub (viewBox units; aspect matches OkeLogo). */
+const HUB_LOGO_W = 50;
+const HUB_LOGO_H = (HUB_LOGO_W * 87) / 327;
 
 /** Every concern the eight elements replace. */
 const TOTAL = ZOO_CONCERNS.length;
@@ -842,9 +845,9 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       className={PANEL_SVG}
       role="img"
       aria-label={`All ${TOTAL} infrastructure concerns the eight elements replace — ${ZOO_CONCERNS.map((c) => c.label).join(', ')} — wired to each other wherever they genuinely meet: credentials, invalidation, ordering, delivery. Not every pair, but ${zooSeamCount(TOTAL)} seams once all ${TOTAL} are present, and ${zooBusiest(TOTAL).label} alone owns ${zooBusiest(TOTAL).seams} of them.`}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-      animate={reduced ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-      exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 1.03 }}
+      initial={false}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={fade}
     >
       {/*
@@ -1019,9 +1022,9 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       className={PANEL_SVG}
       role="img"
       aria-label={`The same ${TOTAL} concerns — ${ZOO_CONCERNS.map((c) => c.label).join(', ')} — collapsed onto eight elements — ${ELEMENTS.map((e) => e.name).join(', ')} — each concern attached to its element and each element bound once to the law, on(Trigger) gives Effects. ${treeEdgeCount(TOTAL)} edges instead of ${zooSeamCount(TOTAL)} seams, and one change is always ${TREE_CHANGE_COST} of them.`}
-      initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
-      animate={reduced ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-      exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 1.03 }}
+      initial={false}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={fade}
     >
       <title>{`okengine: ${TOTAL} concerns collapse onto eight elements bound to one law — ${treeEdgeCount(TOTAL)} edges`}</title>
@@ -1211,16 +1214,14 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               : { duration: 0.85, delay: BEAT_MS / 2 / 1000, ease: 'easeOut' }
           }
         />
-        <text
-          x={C}
-          y={C + 4}
-          textAnchor="middle"
-          fontSize="11.5"
-          fontFamily="var(--font-mono, ui-monospace, monospace)"
-          fill="var(--color-fd-foreground)"
-        >
-          okengine
-        </text>
+        <OkeLogo
+          x={C - HUB_LOGO_W / 2}
+          y={C - HUB_LOGO_H / 2}
+          width={HUB_LOGO_W}
+          height={HUB_LOGO_H}
+          className="text-[var(--color-fd-foreground)]"
+          aria-hidden
+        />
       </g>
 
       {CONCERNS.map((concern, i) => {
@@ -1294,13 +1295,12 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
  */
 export function CollapseDiagram() {
   const [tab, setTab] = useState<TabId>('zoo');
-  const [step, setStep] = useState(0);
+  /** Open on the finished graph; Play / step controls still walk the pass. */
+  const [step, setStep] = useState(LAST_STEP);
   const [playing, setPlaying] = useState(false);
   const [steered, setSteered] = useState(false);
   const [hover, setHover] = useState<Hover | null>(null);
   const [tick, setTick] = useState(0);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const autoplayed = useRef(false);
 
   /*
    * The preference decides what is rendered, not just how fast it gets there.
@@ -1316,22 +1316,6 @@ export function CollapseDiagram() {
 
   /** The change feed yields to the step animation and to a real hover. */
   const feeding = !reduced && !running && hover === null;
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node || reduced) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting || autoplayed.current) return;
-        autoplayed.current = true;
-        setPlaying(true);
-        observer.disconnect();
-      },
-      { threshold: 0.35 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [reduced]);
 
   useEffect(() => {
     if (!running) return;
@@ -1368,10 +1352,7 @@ export function CollapseDiagram() {
      * transform animates and warn under the OS preference.
      */
     <MotionConfig reducedMotion="never" transition={reduced ? INSTANT : FADE}>
-      <div
-        ref={containerRef}
-        className="w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      >
+      <div className="w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-fd-border px-4 py-2.5">
           <div className="flex items-center gap-2">
             <span

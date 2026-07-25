@@ -17,6 +17,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { APP_PORT, type FetchApp } from "../runtime/types.ts";
+import { formatAppReadyLine } from "../term.ts";
 
 /** Stable Bun.serve id so `--hot` reuses the socket across soft reloads. */
 export const DEV_APP_SERVE_ID = "oke-dev-app";
@@ -59,8 +60,11 @@ const handle = createBunRuntime().serve(mod.app, {
   id: DEV_APP_SERVE_ID,
 });
 
-const line = `oke app http://${formatHostForUrl(hostname)}:${handle.port}\n`;
-process.stdout.write(line);
+process.stdout.write(
+  formatAppReadyLine(
+    `http://${formatHostForUrl(hostname)}:${handle.port}`,
+  ),
+);
 
 if (readyPath !== undefined && readyPath.length > 0) {
   await Bun.write(readyPath, `${handle.port}\n`);

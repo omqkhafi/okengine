@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -35,6 +35,7 @@
     "test:mcp": "bun test src/mcp",
     "test:console:smoke": "bunx playwright test tests/console/smoke.spec.ts",
     "build:console": "bunx vite build --config src/console/ui/vite.config.ts",
+    "prepack": "bun run build:console",
     "bench:cold-start": "bun test ./src/runtime/cold-start.bench.ts",
     "bench:client": "bun test src/client/budget.test.ts",
     "bench:console": "bun test src/console/budget.test.ts",

@@ -20,6 +20,7 @@ import {
   type ExampleId,
   type TemplateId,
 } from "./templates.ts";
+import { agentsMdContent } from "./agents-md.ts";
 import {
   sanitizeProjectName,
   shouldSkipTemplatePath,
@@ -41,6 +42,8 @@ export type ScaffoldOptions = {
   readonly name: string;
   /** Template or teaching-example source. */
   readonly source: ScaffoldSource;
+  /** Write root `AGENTS.md` (default true). */
+  readonly writeAgentsMd?: boolean;
 };
 
 /** Result of a successful scaffold. */
@@ -97,6 +100,12 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
     ) as ScaffoldPackageJson;
     const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
     writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
+
+    if (options.writeAgentsMd !== false) {
+      const agentsPath = join(targetDir, "AGENTS.md");
+      writeFileSync(agentsPath, agentsMdContent(name), "utf8");
+      if (!written.includes("AGENTS.md")) written.push("AGENTS.md");
+    }
 
     written.sort();
     return {

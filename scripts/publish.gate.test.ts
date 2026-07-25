@@ -104,7 +104,51 @@ describe("publish workflow", () => {
     // Both paths appear; versions in dry-run output share one arrow target.
     const match = stderr.match(/→\s+(\d+\.\d+\.\d+)/);
     expect(match?.[1]).toBeTruthy();
+    // Starters are never part of the lockstep bump.
+    expect(stderr).not.toMatch(/templates\//);
+    expect(stderr).not.toMatch(/examples\//);
   });
+
+  test("templates and examples stay at seed version 0.0.1", async () => {
+    const { readdirSync } = await import("node:fs");
+    for (const kind of ["templates", "examples"] as const) {
+      const root = join(ROOT, kind);
+      for (const id of readdirSync(root)) {
+        const pkgPath = join(root, id, "package.json");
+        if (!existsSync(pkgPath)) continue;
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+          version?: string;
+        };
+        expect(pkg.version, `${kind}/${id}`).toBe("0.0.1");
+      }
+    }
+  });
+});
+
+describe("npm pack includes Console SPA", () => {
+  test("okengine tarball contains src/console/ui/dist/index.html", async () => {
+    const build = Bun.spawn(["bun", "run", "build:console"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const buildCode = await build.exited;
+    expect(buildCode).toBe(0);
+
+    const pack = Bun.spawn(["npm", "pack", "--dry-run"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(pack.stdout).text(),
+      new Response(pack.stderr).text(),
+      pack.exited,
+    ]);
+    expect(code).toBe(0);
+    const out = `${stdout}\n${stderr}`;
+    expect(out).toMatch(/src\/console\/ui\/dist\/index\.html/);
+  }, 180_000);
 });
 
 describe("jsr publish --dry-run", () => {

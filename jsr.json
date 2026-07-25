@@ -1,6 +1,6 @@
 {
   "name": "@omqkhafi/okengine",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "exports": {
@@ -32,7 +32,25 @@
       "jsr.json"
     ],
     "exclude": [
-      "src/console/ui",
+      "src/console/ui/shell",
+      "src/console/ui/access",
+      "src/console/ui/ai",
+      "src/console/ui/architecture",
+      "src/console/ui/channels",
+      "src/console/ui/clock",
+      "src/console/ui/diff",
+      "src/console/ui/flows",
+      "src/console/ui/gates",
+      "src/console/ui/overview",
+      "src/console/ui/plugins",
+      "src/console/ui/runs",
+      "src/console/ui/signals",
+      "src/console/ui/store",
+      "src/console/ui/traces",
+      "src/console/ui/vault",
+      "src/console/ui/vite.config.ts",
+      "src/console/ui/tsconfig.json",
+      "src/console/ui/**/*.test.ts",
       "src/compiler/fixtures",
       "**/*.test.ts",
       "**/tests/**"

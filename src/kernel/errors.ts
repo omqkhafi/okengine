@@ -6,6 +6,8 @@
  * permanent from the moment they enter this registry.
  */
 
+import { docsUrl as absoluteDocsUrl } from "../docs-origin.ts";
+
 /** Numeric OKE error code (permanent once published). */
 export type OkeErrorCode = number;
 
@@ -45,7 +47,7 @@ export class OkeError extends Error {
   constructor(definition: OkeErrorDefinition, params: OkeErrorParams = {}) {
     const causeText = interpolate(definition.cause, params);
     const fix = interpolate(definition.fix, params);
-    const docsUrl = `https://oke.dev/e/${definition.code}`;
+    const docsUrl = absoluteDocsUrl(`/e/${definition.code}`);
     const message = formatOkeMessage(definition.code, causeText, fix, docsUrl);
     super(message);
     this.name = "OkeError";

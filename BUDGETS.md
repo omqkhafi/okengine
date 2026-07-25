@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.2.1 · measured 2026-07-25T19:20:55.194Z_
+_okengine v0.2.1 · measured 2026-07-25T20:51:40.420Z_
 
 Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `age-encryption`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,24 +10,24 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 
 | | Measured | Limit |
 |---|---|---|
-| Kernel (edge profile) | 8.76 kB | 15.00 kB |
+| Kernel (edge profile) | 8.79 kB | 15.00 kB |
 | Client runtime | 1.67 kB | 3.00 kB |
 | Console initial load | 84.61 kB | 300.00 kB |
-| Cold start on Bun | 26.252 ms | 75.000 ms |
+| Cold start on Bun | 43.532 ms | 75.000 ms |
 | p99 routing overhead | 0.001 ms | 1.000 ms |
 
 ## Exports
 
 | | Measured | Ceiling |
 |---|---|---|
-| okengine | 41.17 kB | 41.99 kB |
+| okengine | 41.21 kB | 42.03 kB |
 | ai | 3.35 kB | 3.60 kB |
 | auth | 4.83 kB | 5.08 kB |
 | channel | 4.57 kB | 4.82 kB |
 | client | 1.80 kB | 2.05 kB |
-| clock | 8.48 kB | 8.73 kB |
+| clock | 8.52 kB | 8.77 kB |
 | config | 314 B | 570 B |
-| console | 61.64 kB | 62.88 kB |
+| console | 61.86 kB | 63.10 kB |
 | gate | 3.80 kB | 4.05 kB |
 | mcp | 8.26 kB | 8.51 kB |
 | runs | 6.15 kB | 6.40 kB |

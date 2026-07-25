@@ -10,7 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://oke.dev'),
+  // Live: okengine.vercel.app · planned: oke.omqkhafi.dev (keep in sync with src/docs-origin.ts)
+  metadataBase: new URL('https://okengine.vercel.app'),
   title: {
     default: 'okengine',
     template: '%s | okengine',

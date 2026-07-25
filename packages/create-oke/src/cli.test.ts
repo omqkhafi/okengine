@@ -3,7 +3,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -72,14 +78,39 @@ describe("shouldPrompt", () => {
     expect(shouldPrompt(parseArgs([]), true)).toBe(true);
   });
 
-  test("non-TTY or any explicit input → no prompts", () => {
+  test("TTY + name alone → still interactive (confirm name / template)", () => {
+    expect(shouldPrompt(parseArgs(["my-app"]), true)).toBe(true);
+  });
+
+  test("non-TTY, --yes, or config flags → no prompts", () => {
     expect(shouldPrompt(parseArgs([]), false)).toBe(false);
-    expect(shouldPrompt(parseArgs(["my-app"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app"]), false)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app", "--yes"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app", "--template", "hello"]), true)).toBe(
+      false,
+    );
     expect(shouldPrompt(parseArgs(["--template", "hello"]), true)).toBe(false);
     expect(shouldPrompt(parseArgs(["--from-example", "notes"]), true)).toBe(
       false,
     );
     expect(shouldPrompt(parseArgs(["--help"]), true)).toBe(false);
+  });
+});
+
+describe("parseArgs flags", () => {
+  test("accepts --yes / --install / --no-install / --no-agents-md", () => {
+    expect(parseArgs(["x", "--yes"]).yes).toBe(true);
+    expect(parseArgs(["x", "-y"]).yes).toBe(true);
+    expect(parseArgs(["x", "--install"]).install).toBe(true);
+    expect(parseArgs(["x", "--no-install"]).install).toBe(false);
+    expect(parseArgs(["x", "--no-agents-md"]).agentsMd).toBe(false);
+    expect(parseArgs(["x"]).agentsMd).toBe(true);
+  });
+
+  test("rejects --install with --no-install", () => {
+    expect(() => parseArgs(["x", "--install", "--no-install"])).toThrow(
+      /install/,
+    );
   });
 });
 
@@ -98,7 +129,12 @@ describe("sourceFromArgs", () => {
 describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
   test("each --template path matches interactive choice", () => {
     for (const id of TEMPLATES) {
-      const answers: InteractiveAnswers = { name: "x", choice: id };
+      const answers: InteractiveAnswers = {
+        name: "x",
+        choice: id,
+        installAndRun: false,
+        agentsMd: true,
+      };
       const fromAnswers = scaffoldArgsFromAnswers(answers);
       const fromFlags = scaffoldArgsFromCli(
         parseArgs(["x", "--template", id]),
@@ -114,6 +150,8 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
         name: "x",
         choice: FROM_EXAMPLE_CHOICE,
         example: id,
+        installAndRun: false,
+        agentsMd: true,
       };
       const fromAnswers = scaffoldArgsFromAnswers(answers);
       const fromFlags = scaffoldArgsFromCli(
@@ -144,6 +182,7 @@ describe("transformPackageJson", () => {
       "0.0.26",
     );
     expect(next.name).toBe("my-app");
+    expect(next.version).toBe("0.0.1");
     expect(next.dependencies?.["okengine"]).toBe("0.0.26");
     expect(next.dependencies?.["okengine"]).not.toBe("file:../..");
     expect(next.dependencies?.["zod"]).toBe("^4.4.3");
@@ -186,7 +225,20 @@ describe("scaffold structure", () => {
           name: `app-${id}`,
           source: { kind: "template", id },
         });
-        expect([...result.files].sort()).toEqual(expected);
+        expect([...result.files].sort()).toEqual(
+          [...expected, "AGENTS.md"].sort(),
+        );
+        expect(result.files).toContain(".gitignore");
+        expect(result.files).toContain("README.md");
+        expect(
+          readFileSync(join(result.targetDir, "AGENTS.md"), "utf8"),
+        ).toMatch(/one law|on\(Trigger\)/i);
+        const readme = readFileSync(join(result.targetDir, "README.md"), "utf8");
+        expect(readme).toMatch(/oke dev/);
+        expect(readme).toMatch(new RegExp(`^# ${id}`, "m"));
+        expect(
+          readFileSync(join(result.targetDir, ".gitignore"), "utf8"),
+        ).toMatch(/node_modules/);
         const pkg = JSON.parse(
           readFileSync(join(result.targetDir, "package.json"), "utf8"),
         ) as { name: string; dependencies: { okengine: string } };
@@ -271,8 +323,25 @@ describe("scaffold structure", () => {
         name: "from-notes",
         source: { kind: "example", id: "notes" },
       });
-      expect([...result.files].sort()).toEqual(expected);
+      expect([...result.files].sort()).toEqual(
+        [...expected, "AGENTS.md"].sort(),
+      );
       expect(result.files).toContain("src/flows/notes/index.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--no-agents-md skips AGENTS.md", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-no-agents-"));
+    try {
+      const result = scaffold({
+        targetDir: join(dir, "hello"),
+        name: "no-agents",
+        source: { kind: "template", id: "hello" },
+        writeAgentsMd: false,
+      });
+      expect(result.files).not.toContain("AGENTS.md");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -281,7 +350,7 @@ describe("scaffold structure", () => {
 
 describe("non-TTY CLI", () => {
   test("no args + non-TTY → zero prompts, exit 1", async () => {
-    const code = await run([], { stdinIsTTY: false });
+    const code = await run([], { stdinIsTTY: false, runPostScaffold: false });
     expect(code).toBe(1);
   });
 
@@ -308,11 +377,12 @@ describe("non-TTY CLI", () => {
     const target = join(root, "flag-app");
     try {
       const code = await run(
-        [target, "--template", "hello"],
-        { stdinIsTTY: false },
+        [target, "--template", "hello", "--no-install"],
+        { stdinIsTTY: false, runPostScaffold: false },
       );
       expect(code).toBe(0);
       expect(readdirSync(target).length).toBeGreaterThan(0);
+      expect(existsSync(join(target, "AGENTS.md"))).toBe(true);
       const result = {
         targetDir: target,
         name: "flag-app",
@@ -323,6 +393,7 @@ describe("non-TTY CLI", () => {
       };
       expect(nextStepsText(result)).toContain("oke dev");
       expect(nextStepsText(result)).toContain("bun install");
+      expect(nextStepsText(result)).toContain("okengine.vercel.app");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

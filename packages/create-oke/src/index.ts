@@ -4,6 +4,7 @@
  *
  * ```bash
  * bunx create-oke@latest my-app
+ * bunx create-oke@latest my-app --yes
  * bunx create-oke@latest my-app --template hello
  * bunx create-oke@latest my-app --from-example notes
  * ```

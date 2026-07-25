@@ -65,7 +65,7 @@
     },
     "examples/linkly": {
       "name": "@oke/example-linkly",
-      "version": "0.1.7",
+      "version": "0.2.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -74,7 +74,7 @@
     },
     "examples/notes": {
       "name": "@oke/example-notes",
-      "version": "0.1.7",
+      "version": "0.2.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "drizzle-zod": "^0.8.3",
@@ -84,7 +84,7 @@
     },
     "examples/provisions": {
       "name": "@oke/example-provisions",
-      "version": "0.1.7",
+      "version": "0.2.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -93,7 +93,7 @@
     },
     "examples/skyport": {
       "name": "@oke/example-skyport",
-      "version": "0.1.7",
+      "version": "0.2.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -102,7 +102,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.1.7",
+      "version": "0.2.1",
       "bin": {
         "create-oke": "src/index.ts",
       },

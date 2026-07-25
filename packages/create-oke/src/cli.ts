@@ -4,14 +4,17 @@
  * ```bash
  * bunx create-oke@latest <name> [--template hello|minimal|standard|full]
  * bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+ * bunx create-oke@latest <name> --yes
  * bunx create-oke@latest   # interactive when stdin is a TTY
  * ```
  */
 
 import {
   cancel,
+  confirm,
   intro,
   isCancel,
+  note,
   outro,
   select,
   spinner,
@@ -19,6 +22,8 @@ import {
 } from "@clack/prompts";
 import { basename, relative, resolve } from "node:path";
 import { existsSync, rmSync } from "node:fs";
+import { agentsMdContent } from "./agents-md.ts";
+import { docsUrl } from "./docs-origin.ts";
 import { scaffold, type ScaffoldResult, type ScaffoldSource } from "./scaffold.ts";
 import {
   DEFAULT_TEMPLATE,
@@ -40,6 +45,15 @@ export type CliArgs = {
   /** True when `--template` / `-t` was present on the argv. */
   readonly templateExplicit: boolean;
   readonly help: boolean;
+  /** Skip all prompts; use defaults. */
+  readonly yes: boolean;
+  /**
+   * Install after scaffold.
+   * `undefined` = default (interactive asks; `--yes` installs; else skip).
+   */
+  readonly install: boolean | undefined;
+  /** Write `AGENTS.md` (default true). */
+  readonly agentsMd: boolean;
   readonly targetDir: string | undefined;
 };
 
@@ -54,11 +68,15 @@ export type InteractiveAnswers =
   | {
       readonly name: string;
       readonly choice: TemplateId;
+      readonly installAndRun: boolean;
+      readonly agentsMd: boolean;
     }
   | {
       readonly name: string;
       readonly choice: typeof FROM_EXAMPLE_CHOICE;
       readonly example: ExampleId;
+      readonly installAndRun: boolean;
+      readonly agentsMd: boolean;
     };
 
 /**
@@ -68,6 +86,7 @@ export type ScaffoldCallArgs = {
   readonly name: string;
   readonly targetDir: string;
   readonly source: ScaffoldSource;
+  readonly agentsMd: boolean;
 };
 
 /**
@@ -81,12 +100,35 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let fromExample: ExampleId | undefined;
   let templateExplicit = false;
   let help = false;
+  let yes = false;
+  let install: boolean | undefined;
+  let agentsMd = true;
   let targetDir: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--help" || a === "-h") {
       help = true;
+      continue;
+    }
+    if (a === "--yes" || a === "-y") {
+      yes = true;
+      continue;
+    }
+    if (a === "--install") {
+      install = true;
+      continue;
+    }
+    if (a === "--no-install") {
+      install = false;
+      continue;
+    }
+    if (a === "--no-agents-md") {
+      agentsMd = false;
+      continue;
+    }
+    if (a === "--agents-md") {
+      agentsMd = true;
       continue;
     }
     if (a === "--template" || a === "-t") {
@@ -147,11 +189,25 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     );
   }
 
+  if (argv.includes("--install") && argv.includes("--no-install")) {
+    throw new Error("create-oke: use either --install or --no-install, not both");
+  }
+
   if (name !== undefined) {
     targetDir = resolve(name);
   }
 
-  return { name, template, fromExample, templateExplicit, help, targetDir };
+  return {
+    name,
+    template,
+    fromExample,
+    templateExplicit,
+    help,
+    yes,
+    install,
+    agentsMd,
+    targetDir,
+  };
 }
 
 /**
@@ -179,6 +235,8 @@ Next steps:
   cd ${formatCdPath(result.targetDir)}
   bun install
   oke dev          # app :6530 · Console :6533 · MCP :6535
+
+Docs: ${docsUrl("/docs")}
 `;
 }
 
@@ -199,7 +257,18 @@ export function helpText(): string {
 Usage:
   bunx create-oke@latest <name> [--template hello|minimal|standard|full]
   bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+  bunx create-oke@latest <name> --yes
   bunx create-oke@latest          # interactive (TTY only)
+
+Options:
+  -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
+  --from-example <id>   Teaching example (non-interactive)
+  -y, --yes             No prompts; defaults + bun install (no oke dev)
+  --install             Run bun install after scaffold
+  --no-install          Skip bun install
+  --agents-md           Write AGENTS.md (default)
+  --no-agents-md        Skip AGENTS.md
+  -h, --help            Show this help
 
 Templates (clean starters from templates/):
 ${templateLines}
@@ -208,16 +277,17 @@ ${templateLines}
 comments — most new projects want --template instead):
 ${exampleLines}
 
-No telemetry. Bun only. Interactive prompts only when stdin is a TTY and no
-name / --template / --from-example is given.
+No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
+(confirm name, template, install). Non-TTY / --yes / --template /
+--from-example stay fully scriptable.
 `;
 }
 
 /**
- * Whether the CLI should open the two-question interactive flow.
+ * Whether the CLI should open the interactive Clack flow.
  *
- * Mirrors oke / gflows: bare invocation is interactive only in a real terminal;
- * any explicit flag or positional name stays fully scriptable.
+ * TTY humans get the wizard even when a name is pre-filled. Config flags
+ * (`--template`, `--from-example`) or `--yes` skip prompts for CI/agents.
  *
  * @param args - Parsed args
  * @param stdinIsTTY - `process.stdin.isTTY`
@@ -228,7 +298,7 @@ export function shouldPrompt(
 ): boolean {
   if (!stdinIsTTY) return false;
   if (args.help) return false;
-  if (args.name !== undefined) return false;
+  if (args.yes) return false;
   if (args.templateExplicit) return false;
   if (args.fromExample !== undefined) return false;
   return true;
@@ -261,6 +331,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     name: basename(resolve(args.name)),
     targetDir: args.targetDir,
     source: sourceFromArgs(args),
+    agentsMd: args.agentsMd,
   };
 }
 
@@ -282,12 +353,14 @@ export function scaffoldArgsFromAnswers(
       name,
       targetDir,
       source: { kind: "example", id: answers.example },
+      agentsMd: answers.agentsMd,
     };
   }
   return {
     name,
     targetDir,
     source: { kind: "template", id: answers.choice },
+    agentsMd: answers.agentsMd,
   };
 }
 
@@ -296,34 +369,32 @@ export function scaffoldArgsFromAnswers(
  *
  * Injectable for tests; production uses {@link askInteractiveAnswers}.
  *
- * @param partial - Name already known (skipped in the prompt)
+ * @param partial - Name already known (pre-filled in the prompt)
  */
 export type AskInteractiveFn = (
-  partial: { readonly name?: string },
+  partial: { readonly name?: string; readonly agentsMd?: boolean },
 ) => Promise<InteractiveAnswers | null>;
 
 /**
  * Collect interactive answers via `@clack/prompts`.
  *
- * @param partial - Optional pre-filled project name
+ * @param partial - Optional pre-filled project name / agents-md default
  * @returns Answers, or `null` if the user cancelled
  */
 export async function askInteractiveAnswers(
-  partial: { readonly name?: string } = {},
+  partial: { readonly name?: string; readonly agentsMd?: boolean } = {},
 ): Promise<InteractiveAnswers | null> {
-  let name = partial.name;
-  if (name === undefined) {
-    const nameValue = await text({
-      message: "Project name",
-      placeholder: "my-app",
-      validate: (value) => {
-        if (!value?.trim()) return "Project name is required";
-        return undefined;
-      },
-    });
-    if (isCancel(nameValue)) return null;
-    name = String(nameValue).trim();
-  }
+  const nameValue = await text({
+    message: "Project name",
+    placeholder: "my-app",
+    initialValue: partial.name ?? "my-app",
+    validate: (value) => {
+      if (!value?.trim()) return "Project name is required";
+      return undefined;
+    },
+  });
+  if (isCancel(nameValue)) return null;
+  const name = String(nameValue).trim();
 
   const templateValue = await select({
     message: "Template",
@@ -343,6 +414,8 @@ export async function askInteractiveAnswers(
   });
   if (isCancel(templateValue)) return null;
 
+  const agentsMd = partial.agentsMd ?? true;
+
   if (templateValue === "__example__") {
     const exampleValue = await select({
       message: "Example",
@@ -353,21 +426,52 @@ export async function askInteractiveAnswers(
       })),
     });
     if (isCancel(exampleValue)) return null;
+
+    const installAndRunValue = await confirm({
+      message: "Install dependencies and start oke dev?",
+      initialValue: true,
+    });
+    if (isCancel(installAndRunValue)) return null;
+
     return {
       name,
       choice: FROM_EXAMPLE_CHOICE,
       example: exampleValue as ExampleId,
+      installAndRun: Boolean(installAndRunValue),
+      agentsMd,
     };
   }
 
-  return { name, choice: templateValue as TemplateId };
+  const installAndRunValue = await confirm({
+    message: "Install dependencies and start oke dev?",
+    initialValue: true,
+  });
+  if (isCancel(installAndRunValue)) return null;
+
+  return {
+    name,
+    choice: templateValue as TemplateId,
+    installAndRun: Boolean(installAndRunValue),
+    agentsMd,
+  };
+}
+
+/**
+ * Resolve whether to run `bun install` after scaffold (non-interactive).
+ *
+ * @param args - Parsed args
+ */
+export function shouldInstall(args: CliArgs): boolean {
+  if (args.install === true) return true;
+  if (args.install === false) return false;
+  return args.yes;
 }
 
 /**
  * Run the CLI.
  *
  * @param argv - Args after the binary
- * @param options - Test seams (stdin TTY, ask injection)
+ * @param options - Test seams (stdin TTY, ask injection, skip real install/dev)
  * @returns Exit code
  */
 export async function run(
@@ -375,6 +479,8 @@ export async function run(
   options: {
     readonly stdinIsTTY?: boolean | undefined;
     readonly ask?: AskInteractiveFn;
+    /** When false, skip spawning bun install / oke dev (tests). Default true. */
+    readonly runPostScaffold?: boolean;
   } = {},
 ): Promise<number> {
   let args: CliArgs;
@@ -392,34 +498,49 @@ export async function run(
 
   const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
   if (shouldPrompt(args, stdinIsTTY)) {
-    return runInteractive(args, options.ask ?? askInteractiveAnswers);
+    return runInteractive(args, options.ask ?? askInteractiveAnswers, options);
   }
 
   if (args.name === undefined) {
     console.log(helpText());
-    console.error("create-oke: missing <name>");
+    console.error(
+      "create-oke: missing <name>. Pass a name, or run in a TTY for the wizard.",
+    );
+    console.error("  Example: bunx create-oke@latest my-app --yes");
     return 1;
+  }
+
+  if (args.yes) {
+    const source = sourceFromArgs(args);
+    console.log(
+      `Using defaults: ${source.kind}=${source.id} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
+    );
   }
 
   return runScaffold({
     ...scaffoldArgsFromCli(args),
     interactive: false,
+    install: shouldInstall(args),
+    startDev: false,
+    runPostScaffold: options.runPostScaffold ?? true,
   });
 }
 
 /**
  * Interactive TTY flow — ask → map answers → scaffold.
  *
- * @param args - Parsed args (name may already be set if ever called that way)
+ * @param args - Parsed args (name may already be set)
  * @param ask - Injectable ask step
+ * @param options - Post-scaffold seams
  */
 async function runInteractive(
   args: CliArgs,
   ask: AskInteractiveFn,
+  options: { readonly runPostScaffold?: boolean },
 ): Promise<number> {
   intro("create-oke");
 
-  const answers = await ask({ name: args.name });
+  const answers = await ask({ name: args.name, agentsMd: args.agentsMd });
   if (answers === null) {
     cancel("Cancelled.");
     return 1;
@@ -428,18 +549,35 @@ async function runInteractive(
   return runScaffold({
     ...scaffoldArgsFromAnswers(answers),
     interactive: true,
+    install: answers.installAndRun,
+    startDev: answers.installAndRun,
+    runPostScaffold: options.runPostScaffold ?? true,
   });
 }
 
 /**
  * Scaffold with optional spinner / outro, cleaning up on failure or cancel.
  *
- * @param options - Scaffold inputs + interactive flag
+ * @param options - Scaffold inputs + interactive / install flags
  */
 async function runScaffold(
-  options: ScaffoldCallArgs & { readonly interactive: boolean },
+  options: ScaffoldCallArgs & {
+    readonly interactive: boolean;
+    readonly install: boolean;
+    readonly startDev: boolean;
+    readonly runPostScaffold: boolean;
+  },
 ): Promise<number> {
-  const { name, targetDir, source, interactive } = options;
+  const {
+    name,
+    targetDir,
+    source,
+    agentsMd,
+    interactive,
+    install,
+    startDev,
+    runPostScaffold,
+  } = options;
   const existed = existsSync(targetDir);
   let spun: ReturnType<typeof spinner> | undefined;
 
@@ -462,14 +600,53 @@ async function runScaffold(
       spun = spinner();
       spun.start("Scaffolding…");
     }
-    const result = scaffold({ targetDir, name, source });
+    const result = scaffold({
+      targetDir,
+      name,
+      source,
+      writeAgentsMd: agentsMd,
+    });
     if (spun) spun.stop("Scaffolded.");
+
+    if (runPostScaffold && install) {
+      const installSpun = interactive ? spinner() : undefined;
+      installSpun?.start("Installing dependencies…");
+      const installOk = await runCommand(["bun", "install"], targetDir);
+      if (!installOk) {
+        installSpun?.stop("Install failed.");
+        cleanup();
+        console.error("create-oke: bun install failed");
+        return 1;
+      }
+      installSpun?.stop("Installed.");
+    }
+
     const message = nextStepsText(result);
     if (interactive) {
+      note(
+        [
+          `App      http://127.0.0.1:6530`,
+          `Console  http://127.0.0.1:6533`,
+          `MCP      http://127.0.0.1:6535`,
+          `Docs     ${docsUrl("/docs")}`,
+          agentsMd ? `Agents   AGENTS.md` : undefined,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        "Ports",
+      );
       outro(message.trim());
     } else {
       console.log(message);
     }
+
+    if (runPostScaffold && startDev) {
+      const ok = await runCommand(["bun", "run", "dev"], targetDir, {
+        inherit: true,
+      });
+      return ok ? 0 : 1;
+    }
+
     return 0;
   } catch (e) {
     spun?.stop("Failed.");
@@ -480,3 +657,32 @@ async function runScaffold(
     process.off("SIGINT", onSigInt);
   }
 }
+
+/**
+ * Spawn a command in `cwd`.
+ *
+ * @param cmd - Argv
+ * @param cwd - Working directory
+ * @param options - Inherit stdio for long-running processes
+ */
+async function runCommand(
+  cmd: readonly string[],
+  cwd: string,
+  options: { readonly inherit?: boolean } = {},
+): Promise<boolean> {
+  const proc = Bun.spawn([...cmd], {
+    cwd,
+    stdout: options.inherit ? "inherit" : "pipe",
+    stderr: options.inherit ? "inherit" : "pipe",
+    stdin: options.inherit ? "inherit" : undefined,
+  });
+  const code = await proc.exited;
+  if (code !== 0 && !options.inherit) {
+    const err = await new Response(proc.stderr).text();
+    if (err.trim()) console.error(err);
+  }
+  return code === 0;
+}
+
+/** Re-export for tests that assert agents content shape. */
+export { agentsMdContent };

@@ -268,12 +268,16 @@ async function publishOne(
   const version = syncVersion(pkg.dir);
   console.error(`[publish] ${pkg.npmName}@${version} (${label})`);
 
-  // create-oke templates are filled by prepack for npm; JSR has no prepack hook.
+  // okengine ships prebuilt Console SPA; create-oke templates need a prepack sync.
+  const needsConsoleBuild = pkg.npmName === "okengine";
   const needsTemplateSync =
     pkg.npmName === "create-oke" &&
     existsSync(join(pkg.dir, "src/sync-templates.ts"));
 
   if (flags.dryRun) {
+    if (needsConsoleBuild) {
+      console.error(`  would: bun run build:console  (cwd=${label})`);
+    }
     if (needsTemplateSync) {
       console.error(`  would: bun ./src/sync-templates.ts  (cwd=${label})`);
     }
@@ -282,6 +286,14 @@ async function publishOne(
       console.error(`  would: bunx jsr publish --allow-dirty  (cwd=${label})`);
     }
     return;
+  }
+
+  if (needsConsoleBuild) {
+    const ok = await run(["bun", "run", "build:console"], { cwd: pkg.dir });
+    if (!ok) {
+      console.error(`[publish] Console UI build failed.`);
+      process.exit(2);
+    }
   }
 
   if (needsTemplateSync) {

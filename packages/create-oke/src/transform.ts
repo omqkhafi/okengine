@@ -62,6 +62,8 @@ export function transformPackageJson(
   return {
     ...source,
     name: projectName,
+    // Starter apps always begin at 0.0.1 — never the framework lockstep version.
+    version: "0.0.1",
     dependencies,
   };
 }

@@ -43,7 +43,7 @@ describe("fx — capability enforcement", () => {
     expect(oke.fix).toBe(
       'Add "sql:users" to this flow\'s effects.reads.',
     );
-    expect(oke.docsUrl).toBe("https://oke.dev/e/1001");
+    expect(oke.docsUrl).toBe("https://okengine.vercel.app/e/1001");
     expect(oke.message).toBe(
       formatOkeMessage(1001, oke.causeText, oke.fix, oke.docsUrl),
     );
@@ -218,7 +218,7 @@ describe("errors — registry", () => {
     });
     expect(err.message).toContain("OKE1042");
     expect(err.message).toContain("no subscriber");
-    expect(err.message).toContain("https://oke.dev/e/1042");
+    expect(err.message).toContain("https://okengine.vercel.app/e/1042");
     expect(err.message).toContain("→");
   });
 

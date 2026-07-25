@@ -22,7 +22,7 @@ import type * as PageTree from 'fumadocs-core/page-tree';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DocsTreeNav } from '@/components/chrome/docs-sidebar';
 import { ExternalArrow, GithubMark } from '@/components/chrome/icons';
-import { OkeWordmark } from '@/components/chrome/wordmark';
+import { OkeLogo } from '@/components/oke-logo';
 import { cn } from '@/lib/cn';
 import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from '@/lib/nav';
 import { gitConfig } from '@/lib/shared';
@@ -125,14 +125,14 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
               href="/"
               className="flex h-full items-center px-4 text-fd-foreground transition-opacity hover:opacity-80"
             >
-              <OkeWordmark />
+              <OkeLogo className="h-4 w-auto" />
             </Link>
           </motion.div>
 
           {/* Mobile bar. */}
           <div className="flex w-full items-center gap-1 px-3 lg:hidden">
             <Link href="/" className="mr-auto flex items-center text-fd-foreground">
-              <OkeWordmark />
+              <OkeLogo className="h-4 w-auto" />
             </Link>
             <button
               type="button"

@@ -23,6 +23,11 @@ import {
   CONSOLE_PORT,
   MCP_PORT,
 } from "../runtime/types.ts";
+import {
+  formatDevBanner,
+  formatServiceLine,
+  formatStatusLine,
+} from "../term.ts";
 import { clientAdd } from "./client-add.ts";
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
@@ -258,7 +263,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           }
         });
       await up(composeFiles, cwd);
-      write(`oke dev: stack up (${stackRoles.join(", ")})\n`);
+      write(formatStatusLine(`stack up (${stackRoles.join(", ")})`));
     }
   }
 
@@ -272,10 +277,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stackEnv,
   };
 
-  write(
-    `oke dev: app :${appPort} · Console :${consolePort} · MCP :${mcpPort}\n`,
-  );
-  write("oke dev: watching — client types regenerate on save\n");
+  write(formatDevBanner());
 
   if (options.dryRun) return { code: 0, plan };
 
@@ -312,7 +314,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           ? { manifest: seedManifest }
           : {}),
       });
-      write(`oke Console http://127.0.0.1:${server.port}\n`);
+      write(
+        formatServiceLine(
+          "Console",
+          `http://127.0.0.1:${server.port}`,
+        ),
+      );
       return {
         console: server.console,
         port: server.port,
@@ -334,7 +341,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         context: mcpOptions.context,
         now: mcpOptions.now,
       });
-      write(`oke MCP http://127.0.0.1:${server.port}\n`);
+      write(formatServiceLine("MCP", `http://127.0.0.1:${server.port}`));
       return {
         port: server.port,
         url: server.url,
@@ -352,7 +359,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           url: appUrl,
           out: resolve(cwd, "oke-client.d.ts"),
         });
-        write("oke dev: regenerated oke-client.d.ts\n");
+        write(formatStatusLine("regenerated oke-client.d.ts"));
       } catch {
         // App may not be ready yet — ignore until next save.
       }
@@ -515,7 +522,7 @@ async function startAppHot(
       proc,
       APP_READY_TIMEOUT_MS,
     );
-    // Child prints `oke app http://…` (again on each soft reload).
+    // Child prints the App ready line (again on each soft reload).
     const url = new URL(`http://${hostname}:${boundPort}/`);
     return { stop, port: boundPort, url };
   } catch (err) {

@@ -3,7 +3,8 @@
  * Atomically bump `okengine` and `create-oke` to the same version.
  *
  * Updates both package.json files and both jsr.json files in lockstep.
- * Does not touch git. Examples keep their own versions (workspace-local).
+ * Does not touch git. Never touches `templates/*` or `examples/*` — those
+ * starter trees stay at `0.0.1` (project seed version, not framework version).
  *
  * Usage:
  *   bun run scripts/bump-version.ts [patch|minor|major] [--dry-run]

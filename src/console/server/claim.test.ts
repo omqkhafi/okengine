@@ -52,10 +52,13 @@ describe("claim code", () => {
 
   test("prints to boot log exactly once", () => {
     const state = mintClaimCode(() => 1);
-    const lines: string[] = [];
-    printClaimCodeOnce(state, (l) => lines.push(l));
-    printClaimCodeOnce(state, (l) => lines.push(l));
-    expect(lines.filter((l) => l.includes(state.code)).length).toBe(1);
+    const chunks: string[] = [];
+    printClaimCodeOnce(state, (l) => chunks.push(l));
+    printClaimCodeOnce(state, (l) => chunks.push(l));
+    const joined = chunks.join("");
+    expect(joined).toContain(state.code);
+    expect(joined).toContain("Claim code");
+    expect(chunks.length).toBe(1);
   });
 
   test("constantTimeEqual is length-safe", () => {
