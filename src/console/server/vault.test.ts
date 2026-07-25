@@ -28,7 +28,7 @@ const SECRET = "sk_live_console_vault_test_do_not_leak";
 function manifest(): Manifest {
   return {
     oke: "1.0",
-    name: "vault-test",
+    app: "vault-test",
     vault: {
       STRIPE_KEY: {
         description: "Payments",
@@ -41,15 +41,15 @@ function manifest(): Manifest {
     },
     flows: {
       "payments.charge": {
-        trigger: { kind: "http", method: "POST", path: "/charge" },
+        trigger: { http: { method: "POST", path: "/charge" } },
         effects: { secrets: ["STRIPE_KEY"] },
       },
       "site.render": {
-        trigger: { kind: "http", method: "GET", path: "/" },
+        trigger: { http: { method: "GET", path: "/" } },
         effects: { secrets: ["PUBLIC_APP_URL"] },
       },
     },
-  } as Manifest;
+  };
 }
 
 async function runtime() {
@@ -207,7 +207,7 @@ describe("projectVaultList", () => {
     expect(blast.count).toBe(2);
     expect(blast.longestWakeAt).toBe(now + 60_000);
     expect(blast.longestOutstandingMs).toBe(60_000);
-    expect(blast.runIds.sort()).toEqual(["r1", "r2"]);
+    expect([...blast.runIds].sort()).toEqual(["r1", "r2"]);
 
     const journal = createMemoryJournalStore(runs);
     const rt = await runtime();

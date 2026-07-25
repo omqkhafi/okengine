@@ -1,8 +1,9 @@
 /**
- * `oke doctor` — missing secret, port conflict, schema drift.
+ * `oke doctor` — missing secret, port conflict, schema drift, PII→ask.
  */
 
 import { describe, expect, test } from "bun:test";
+import type { Manifest } from "../manifest/types.ts";
 import { runDoctor } from "./doctor.ts";
 
 describe("oke doctor", () => {
@@ -61,5 +62,89 @@ describe("oke doctor", () => {
     });
     expect(code).toBe(0);
     expect(findings).toHaveLength(0);
+  });
+
+  test("fails with flow name when PII reaches unguarded ask", async () => {
+    const manifest: Manifest = {
+      oke: "1.0",
+      app: "test",
+      flows: {
+        "support.createTicket": {
+          pii: "masked",
+          in: {
+            type: "object",
+            properties: {
+              subject: { type: "string" },
+              email: { type: "string" },
+              body: { type: "string" },
+            },
+          },
+          effects: { asks: ["ticket-triage@3"] },
+        },
+      },
+      stores: {
+        db: {
+          facet: "sql",
+          classifications: { email: { pii: true } },
+        },
+      },
+      ai: {
+        models: { smart: { provider: "anthropic", tier: "opus" } },
+        prompts: { "ticket-triage": { version: 3, model: "smart" } },
+      },
+    };
+
+    const { code, findings } = await runDoctor({
+      manifest,
+      secrets: [],
+      ports: [],
+      currentSchemaFingerprint: null,
+      write: () => {},
+    });
+
+    expect(code).toBe(1);
+    const hit = findings.find((f) => f.code === "pii_ask");
+    expect(hit).toBeDefined();
+    expect(hit!.message).toContain("support.createTicket");
+    expect(hit!.message).toContain("allowPii");
+  });
+
+  test("passes PII→ask when allowPii is declared", async () => {
+    const manifest: Manifest = {
+      oke: "1.0",
+      app: "test",
+      flows: {
+        "support.createTicket": {
+          allowPii: true,
+          pii: "allow",
+          in: {
+            type: "object",
+            properties: { email: { type: "string" } },
+          },
+          effects: { asks: ["ticket-triage"] },
+        },
+      },
+      stores: {
+        db: {
+          facet: "sql",
+          classifications: { email: { pii: true } },
+        },
+      },
+      ai: {
+        models: { smart: { provider: "anthropic" } },
+        prompts: { "ticket-triage": { model: "smart" } },
+      },
+    };
+
+    const { code, findings } = await runDoctor({
+      manifest,
+      secrets: [],
+      ports: [],
+      expectedSchemaFingerprint: "same",
+      currentSchemaFingerprint: "same",
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    expect(findings.some((f) => f.code === "pii_ask")).toBe(false);
   });
 });

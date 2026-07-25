@@ -122,3 +122,49 @@ describe("secureFetch", () => {
     expect(await res.text()).toContain("Host");
   });
 });
+
+describe("Host/Origin entry points (6530 / 6533 / 6535)", () => {
+  test("every HTTP surface routes through checkRequestSecurity", async () => {
+    /**
+     * Entry-point map (source of truth for §10.1):
+     * - App :6530  → runtime/bun.ts + runtime/web-standard.ts → secureFetch
+     * - Console :6533 → console/server/serve.ts → secureFetch (HTTP)
+     *   and checkRequestSecurity before WebSocket upgrade on /console/live
+     * - MCP :6535 → mcp/server.ts → checkRequestSecurity (same primitive;
+     *   secureFetch is a thin wrapper around it)
+     */
+    const surfaces: ReadonlyArray<{
+      readonly file: string;
+      readonly mustInclude: readonly string[];
+    }> = [
+      {
+        file: `${import.meta.dir}/bun.ts`,
+        mustInclude: ["secureFetch"],
+      },
+      {
+        file: `${import.meta.dir}/web-standard.ts`,
+        mustInclude: ["secureFetch"],
+      },
+      {
+        file: `${import.meta.dir}/../console/server/serve.ts`,
+        mustInclude: ["secureFetch", "checkRequestSecurity"],
+      },
+      {
+        file: `${import.meta.dir}/../mcp/server.ts`,
+        mustInclude: ["checkRequestSecurity", "forbiddenResponse"],
+      },
+    ];
+
+    for (const surface of surfaces) {
+      const text = await Bun.file(surface.file).text();
+      for (const needle of surface.mustInclude) {
+        expect(text.includes(needle)).toBe(true);
+      }
+    }
+
+    // secureFetch is exclusively checkRequestSecurity + forbiddenResponse.
+    const security = await Bun.file(`${import.meta.dir}/security.ts`).text();
+    expect(security).toContain("checkRequestSecurity(request, allowed)");
+    expect(security).toContain("export function secureFetch");
+  });
+});

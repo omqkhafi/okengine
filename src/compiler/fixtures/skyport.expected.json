@@ -70,6 +70,9 @@
     },
     "bookings.refundBooking": {
       "effects": {
+        "reads": [
+          "sql:bookings"
+        ],
         "writes": [
           "sql:bookings"
         ]
@@ -235,3 +238,4 @@
     "store.kv": "valkey/valkey:8-alpine"
   }
 }
+

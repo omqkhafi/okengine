@@ -194,11 +194,11 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
     }
   };
 
-  const beforeHandle: HookFn = async (ctx, fx) => {
+  const beforeHandle: HookFn = async (ctx, fxOrErr) => {
     const names = gateNamesOf(ctx.trigger);
     if (names.length === 0 || !deps.gates) return;
 
-    const policyCtx = policyContextOf(fx, ctx);
+    const policyCtx = policyContextOf(fxOrErr as Fx, ctx);
     const evaluations = await deps.gates.check(names, policyCtx);
     recordGateEvaluations(deps.telemetry, evaluations);
 

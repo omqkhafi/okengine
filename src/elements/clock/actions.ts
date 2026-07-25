@@ -12,27 +12,35 @@ import type { CronRow, CronStore } from "./reconcile.ts";
 
 /** Error when edit is refused. */
 export class ScheduleNotOverridableError extends Error {
-  readonly name = "ScheduleNotOverridableError";
+  override readonly name = "ScheduleNotOverridableError";
+  /** Cron name that refused edit. */
+  readonly cronName: string;
+
   /**
    * @param cronName - Cron name
    */
-  constructor(readonly cronName: string) {
+  constructor(cronName: string) {
     super(`clock "${cronName}" is not overridable`);
+    this.cronName = cronName;
   }
 }
 
 /** Error when a cron / run is missing. */
 export class ClockResourceNotFoundError extends Error {
-  readonly name = "ClockResourceNotFoundError";
+  override readonly name = "ClockResourceNotFoundError";
+  /** Resource kind. */
+  readonly kind: "cron" | "run";
+  /** Name or run id. */
+  readonly id: string;
+
   /**
    * @param kind - Resource kind
    * @param id - Name or run id
    */
-  constructor(
-    readonly kind: "cron" | "run",
-    readonly id: string,
-  ) {
+  constructor(kind: "cron" | "run", id: string) {
     super(`${kind} "${id}" not found`);
+    this.kind = kind;
+    this.id = id;
   }
 }
 

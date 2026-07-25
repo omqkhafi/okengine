@@ -438,10 +438,10 @@ export function createSqlStoreHandle(
       return masked[0] ?? null;
     },
 
-    delete(
+    delete: ((
       table: TableHandle | unknown,
       idValue?: string,
-    ): DeleteBuilder | Promise<boolean> {
+    ): DeleteBuilder | Promise<boolean> => {
       if (idValue !== undefined) {
         return (async () => {
           await ensureFromMeta(table);
@@ -454,7 +454,7 @@ export function createSqlStoreHandle(
           return result.changes > 0;
         })();
       }
-      return {
+      const builder: DeleteBuilder = {
         async where(where) {
           await ensureFromMeta(table);
           const name = resolveTableName(table);
@@ -469,7 +469,8 @@ export function createSqlStoreHandle(
           return result.changes;
         },
       };
-    },
+      return builder;
+    }) as SqlStoreHandle["delete"],
 
     async exists(table, idOrWhere) {
       await ensureFromMeta(table);

@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import type { Manifest } from "../manifest/types.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
+import { checkManifestPiiAsks } from "./doctor-pii.ts";
 import { loadManifest } from "./load-config.ts";
 import { schemaFingerprint, readSchemaFingerprint } from "./schema.ts";
 
@@ -16,7 +17,8 @@ export interface DoctorFinding {
     | "port_conflict"
     | "schema_drift"
     | "tenancy"
-    | "driver";
+    | "driver"
+    | "pii_ask";
   readonly severity: "error" | "warn";
   readonly message: string;
 }
@@ -129,6 +131,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
     // (Resolver is code — absence of flows is not an error here.)
   }
 
+  if (manifest) {
+    findings.push(...checkManifestPiiAsks(manifest));
+  }
+
   if (findings.length === 0) {
     write("oke doctor: ok\n");
     return { code: 0, findings };
@@ -161,7 +167,7 @@ export async function doctorCli(args: readonly string[]): Promise<number> {
       console.log(`oke doctor [--manifest oke.manifest.json]
 oke doctor --diff [--before <path> --after <path>] [--base <branch>]
 
-Verify secrets, ports, and schema drift before serving requests.
+Verify secrets, ports, schema drift, and PII→model egress before serving.
 
 --diff  CI gate: block undeclared contract breaks (Manifest Diff).
         Default baseline is git merge-base (main/master) vs the working

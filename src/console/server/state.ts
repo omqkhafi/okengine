@@ -46,6 +46,10 @@ import {
   projectAiPanel,
   type ConsoleAiProjection,
 } from "./ai.ts";
+import {
+  createLoginAttemptBag,
+  type LoginAttemptBag,
+} from "./auth-rate.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
 import {
   discardViaBus,
@@ -54,7 +58,6 @@ import {
   type ConsoleSignalRow,
 } from "./signals.ts";
 import {
-  createManifestStoreRuntime,
   deleteStore,
   editStore,
   projectStoresList,
@@ -100,7 +103,6 @@ import {
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
 import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
 import {
-  createManifestChannelRuntime,
   previewChannelTemplate,
   projectChannelsList,
   revealChannelRecipient,
@@ -379,6 +381,11 @@ export interface ConsoleState {
   }>;
   /** Whether first operator exists (wizard permanently closed). */
   get setupClosed(): boolean;
+  /**
+   * Per-email login attempt timestamps for credential-check rate limiting
+   * (console §10.4 — same 5/60s strategy as setup-claim).
+   */
+  readonly loginAttempts: LoginAttemptBag;
 }
 
 /** Live channel message kinds. */
@@ -456,6 +463,7 @@ export function createConsoleState(
     operators,
     sessions,
     claim,
+    loginAttempts: createLoginAttemptBag(),
     secret,
     now,
     cwd: options.cwd ?? process.cwd(),
@@ -623,10 +631,7 @@ export function createConsoleState(
           flow: r.flow,
           replicaLagMs: r.replicaLagMs,
           tenant: r.tenant,
-          effects: r.effects.map((e) => ({
-            kind: e.kind,
-            resource: e.resource,
-          })),
+          effects: r.effects,
         })),
       });
     },

@@ -1,9 +1,11 @@
 /**
  * MCP HTTP server on port 6535.
  *
- * Host/Origin validation is mandatory (console §10.1). Authentication is
- * required even on localhost. The caller's token is never forwarded to
- * Console or upstream services — adapters receive structured operator ids.
+ * Host/Origin validation uses the shared {@link checkRequestSecurity}
+ * validator (same rules as Console's {@link secureFetch} — port differs,
+ * allow-list logic does not). Authentication is required even on localhost.
+ * The caller's token is never forwarded to Console or upstream services —
+ * adapters receive structured operator ids.
  */
 
 import {

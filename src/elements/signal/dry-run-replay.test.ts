@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
-import { createFx } from "../../kernel/fx.ts";
+import { createFx, type FxStubStoreHandle } from "../../kernel/fx.ts";
 import type { ChannelRuntime } from "../channel/runtime.ts";
 import { signal } from "./declare.ts";
 import { createSignalRuntime } from "./runtime.ts";
@@ -58,7 +58,8 @@ describe("signal dry-run replay — external effects stubbed", () => {
         storeData: { "sql:shipments": {} },
       });
       const id = String((msg.payload as { id?: string }).id ?? "x");
-      await fx.store("sql:shipments").set(id, { ok: true });
+      const store = fx.store("sql:shipments") as FxStubStoreHandle;
+      await store.set(id, { ok: true });
       await fx.send("booking-confirmed", { to: "ops@example.com" });
     });
 

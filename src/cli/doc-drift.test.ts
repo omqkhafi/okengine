@@ -53,6 +53,41 @@ export const g = 1;
     });
   });
 
+  test("parseClaimedFences accepts examples/<app>/… headings without app sections", () => {
+    const md = `## Quick start
+
+### \`examples/notes/src/app.ts\`
+
+\`\`\`typescript
+export const app = 1;
+\`\`\`
+
+### \`examples/notes/src/flows/notes/index.ts\`
+
+\`\`\`ts
+export const create = 2;
+\`\`\`
+
+Unheaded:
+
+\`\`\`typescript
+const skip = true;
+\`\`\`
+`;
+    const fences = parseClaimedFences(md);
+    expect(fences).toHaveLength(2);
+    expect(fences[0]).toMatchObject({
+      app: "notes",
+      relPath: "src/app.ts",
+      body: "export const app = 1;",
+    });
+    expect(fences[1]).toMatchObject({
+      app: "notes",
+      relPath: "src/flows/notes/index.ts",
+      body: "export const create = 2;",
+    });
+  });
+
   test("checkDocDrift reports missing files", async () => {
     const { ok, failures } = await checkDocDrift(
       [

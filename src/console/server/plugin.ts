@@ -4,7 +4,12 @@
  * Uses only the public plugin API (unified-theory §14).
  */
 
-import { fail, plugin, type PluginDef } from "../../kernel/index.ts";
+import {
+  fail,
+  plugin,
+  type Fx,
+  type PluginDef,
+} from "../../kernel/index.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./flows.ts";
 
 /**
@@ -25,7 +30,8 @@ export function consolePlugin(): PluginDef {
       entry: "./panels/traces.js",
     })
     .table("oke_console_prefs", { plane: "operator" })
-    .hook("beforeHandle", (ctx, fx) => {
+    .hook("beforeHandle", (ctx, fxOrErr) => {
+      const fx = fxOrErr as Fx;
       const name = ctx.flow.name;
       const plane = ctx.flow.plane ?? "user";
 

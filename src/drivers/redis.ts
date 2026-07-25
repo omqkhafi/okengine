@@ -150,7 +150,15 @@ function ttlToSeconds(ttl: string): number {
   }
 }
 
-function createBunRedisClient(url?: string): KvClientLike {
+/**
+ * Bind {@link Bun.RedisClient} / {@link Bun.redis} to {@link KvClientLike}.
+ *
+ * Uses typed `scan` (Bun ≥1.3). `EVAL` still goes through `send` — Bun 1.3.14
+ * has no typed `eval` yet (platform limitation, not an OKE stub).
+ *
+ * @param url - Optional Redis URL
+ */
+export function createBunRedisClient(url?: string): KvClientLike {
   const redis =
     url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
 
@@ -163,7 +171,21 @@ function createBunRedisClient(url?: string): KvClientLike {
       return redis.set(key, value);
     },
     del: (...keys) => redis.del(...keys),
+    async scan(cursor, opts) {
+      // Typed Bun.RedisClient.scan — closed gap vs earlier send("SCAN") only.
+      if (opts?.match !== undefined && opts.count !== undefined) {
+        return redis.scan(cursor, "MATCH", opts.match, "COUNT", opts.count);
+      }
+      if (opts?.match !== undefined) {
+        return redis.scan(cursor, "MATCH", opts.match);
+      }
+      if (opts?.count !== undefined) {
+        return redis.scan(cursor, "COUNT", opts.count);
+      }
+      return redis.scan(cursor);
+    },
     async eval(script, numkeys, ...keysAndArgs) {
+      // Bun 1.3.14: no typed eval — raw send remains the native path.
       return redis.send("EVAL", [script, String(numkeys), ...keysAndArgs]);
     },
     send: (command, args) => redis.send(command, args),

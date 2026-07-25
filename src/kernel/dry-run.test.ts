@@ -4,7 +4,7 @@ import {
   isDryRun,
   withDryRun,
 } from "./dry-run.ts";
-import { createFx } from "./fx.ts";
+import { createFx, type FxStubStoreHandle } from "./fx.ts";
 
 describe("fx dry-run stubbing", () => {
   test("send/ask are intercepted; writes still execute then roll back", async () => {
@@ -39,15 +39,14 @@ describe("fx dry-run stubbing", () => {
 
     const stubbed = await withDryRun(async () => {
       expect(isDryRun()).toBe(true);
-      const row = (await fx.store("sql:t").get("sku")) as { qty: number };
+      const store = fx.store("sql:t") as FxStubStoreHandle;
+      const row = (await store.get("sku")) as { qty: number };
       row.qty -= 1;
-      await fx.store("sql:t").set("sku", row);
-      expect(
-        ((await fx.store("sql:t").get("sku")) as { qty: number }).qty,
-      ).toBe(99);
+      await store.set("sku", row);
+      expect(((await store.get("sku")) as { qty: number }).qty).toBe(99);
       await fx.send("mail", { to: "a@b.c" });
       await fx.ask("p@1", {});
-      return fx.store("sql:t").get("sku");
+      return store.get("sku");
     });
 
     expect(await stubbed.result).toEqual({ qty: 99 });
@@ -58,7 +57,8 @@ describe("fx dry-run stubbing", () => {
       { kind: "ask", resource: "p@1" },
     ]);
     // Rolled back — store is byte-for-byte restored.
-    expect(await fx.store("sql:t").get("sku")).toEqual({ qty: 100 });
+    const store = fx.store("sql:t") as FxStubStoreHandle;
+    expect(await store.get("sku")).toEqual({ qty: 100 });
     expect(stockRow.qty).toBe(100);
   });
 });

@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
-import { createFx } from "../../kernel/fx.ts";
+import { createFx, type FxStubStoreHandle } from "../../kernel/fx.ts";
 import { signal } from "./declare.ts";
 import { createSignalRuntime } from "./runtime.ts";
 
@@ -51,7 +51,8 @@ describe("signal dry-run replay — write isolation", () => {
         },
         storeData: { "sql:inventory": { "sku-1": stockRow } },
       });
-      const row = (await fx.store("sql:inventory").get("sku-1")) as {
+      const store = fx.store("sql:inventory") as FxStubStoreHandle;
+      const row = (await store.get("sku-1")) as {
         qty: number;
       };
       if (row.qty <= 0) {
@@ -60,7 +61,7 @@ describe("signal dry-run replay — write isolation", () => {
         throw err;
       }
       row.qty -= 1;
-      await fx.store("sql:inventory").set("sku-1", row);
+      await store.set("sku-1", row);
       void msg;
     });
 

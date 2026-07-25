@@ -123,7 +123,28 @@ export function linkOperatorSso(
 }
 
 /**
+ * Dummy argon2id hash used when no credential exists so missing-user and
+ * bad-password paths both pay a verify round-trip (timing oracle defence).
+ */
+let dummyPasswordHash: string | null = null;
+
+async function dummyHash(
+  crypto: ReturnType<typeof createBunCrypto>,
+): Promise<string> {
+  if (dummyPasswordHash === null) {
+    dummyPasswordHash = await crypto.hashPassword(
+      "oke-operator-timing-dummy",
+      "argon2id",
+    );
+  }
+  return dummyPasswordHash;
+}
+
+/**
  * Verify local password login.
+ *
+ * Always runs a password verify (against a dummy hash when the account is
+ * missing / disabled) so response time does not reveal account existence.
  *
  * @param store - Operator store
  * @param email - Email
@@ -136,11 +157,15 @@ export async function authenticateOperator(
 ): Promise<OperatorRow | null> {
   const crypto = createBunCrypto();
   const op = [...store.operators.values()].find((o) => o.email === email);
-  if (!op || op.status !== "active") return null;
-  const cred = store.credentials.get(op.id);
-  if (!cred || !cred.loginEnabled) return null;
-  const ok = await crypto.verifyPassword(password, cred.passwordHash);
-  return ok ? op : null;
+  const cred =
+    op && op.status === "active" ? store.credentials.get(op.id) : undefined;
+  const hash =
+    cred && cred.loginEnabled ? cred.passwordHash : await dummyHash(crypto);
+  const ok = await crypto.verifyPassword(password, hash);
+  if (!ok || !op || !cred || !cred.loginEnabled || op.status !== "active") {
+    return null;
+  }
+  return op;
 }
 
 /** Operator-plane error. */

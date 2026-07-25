@@ -70,6 +70,7 @@ export {
   redisDriver,
   openRedisKv,
   createRedisFakeClient,
+  createBunRedisClient,
 } from "./redis.ts";
 
 export {
@@ -104,6 +105,8 @@ export {
   redisSignalDriver,
   openRedisSignal,
   createSignalRedisFake,
+  createBunSignalRedisClient,
+  parseXreadgroupReply,
 } from "./signal-redis.ts";
 
 export {
@@ -184,3 +187,8 @@ export type {
 } from "./ai-types.ts";
 
 export { mockAiDriver, createMockAiDriver } from "./ai-mock.ts";
+export { anthropicAiDriver, openAnthropic } from "./ai-anthropic.ts";
+export {
+  openaiCompatibleAiDriver,
+  openOpenaiCompatible,
+} from "./ai-openai-compatible.ts";

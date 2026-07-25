@@ -1,19 +1,75 @@
 /**
- * `oke dev` — watch · hot reload · Console :6533 · client types on save.
+ * `oke dev` — watch · hot reload · Console :6533 · MCP :6535 · client types on save.
  * `oke dev --stack` also boots generated compose.
  */
 
 import { watch } from "node:fs";
 import { resolve } from "node:path";
+import type { SessionStore } from "../auth/sessions.ts";
+import type { ConsoleAppHandle } from "../console/server/app.ts";
+import type { ConsoleState } from "../console/server/state.ts";
 import {
   deriveInfrastructure,
   formatStackEnv,
   writeDerivedFiles,
   type DeriveOptions,
 } from "../docker/index.ts";
+import type { Manifest } from "../manifest/types.ts";
+import type { McpContext } from "../mcp/tools.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
 import { clientAdd } from "./client-add.ts";
-import { loadOkeConfig, resolveImages } from "./load-config.ts";
+import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
+import { mcpContextFromConsole } from "./mcp-from-console.ts";
+
+/** Stoppable surface handle. */
+export interface DevSurfaceHandle {
+  readonly stop: () => void;
+}
+
+/** Console surface returned by {@link DevOptions.serveConsole}. */
+export interface DevConsoleHandle extends DevSurfaceHandle {
+  /**
+   * Live Console kernel — when present, MCP binds to this state
+   * (same Manifest / sessions / runs).
+   */
+  readonly console?: ConsoleAppHandle;
+  /** Bound listen port (may differ from the requested port when `0`). */
+  readonly port?: number;
+}
+
+/** MCP surface returned by {@link DevOptions.serveMcp}. */
+export interface DevMcpHandle extends DevSurfaceHandle {
+  /** Bound listen port. */
+  readonly port?: number;
+  /** Base URL of the MCP server. */
+  readonly url?: URL;
+}
+
+/** Options for {@link DevOptions.serveMcp}. */
+export interface DevServeMcpOptions {
+  readonly port: number;
+  readonly sessions: SessionStore;
+  readonly secret: string;
+  readonly context: McpContext;
+  readonly now?: () => number;
+  readonly hostname?: string;
+}
+
+/** Live `oke dev` session — returned when {@link DevOptions.keepAlive} is false. */
+export interface DevSession {
+  readonly plan: DevPlan;
+  /** Stop app · Console · MCP · watcher. */
+  readonly stop: () => void;
+  readonly appPort: number;
+  readonly consolePort: number;
+  readonly mcpPort: number;
+  readonly mcpUrl: URL | null;
+  /** Shared with Console — mint `oke-mcp` tokens against this store/secret. */
+  readonly secret: string | null;
+  readonly sessions: SessionStore | null;
+  /** Same Console state MCP reads through (tests seed Manifest / runs here). */
+  readonly consoleState: ConsoleState | null;
+}
 
 /** Options for {@link runDev}. */
 export interface DevOptions {
@@ -25,6 +81,23 @@ export interface DevOptions {
   readonly write?: (text: string) => void;
   /** Skip spawning the watcher / servers (unit tests). */
   readonly dryRun?: boolean;
+  /**
+   * When false, return a {@link DevSession} after boot instead of hanging
+   * (integration tests). Default true for the CLI.
+   */
+  readonly keepAlive?: boolean;
+  /** Called once all surfaces are listening (before keep-alive). */
+  readonly onReady?: (session: DevSession) => void | Promise<void>;
+  /** Operator auth secret (shared by Console + MCP). */
+  readonly secret?: string;
+  /** Seed Manifest into Console (and therefore MCP). */
+  readonly manifest?: Manifest | null;
+  /** Suppress claim-code print (tests). */
+  readonly silentClaim?: boolean;
+  /** Port overrides (use `0` for ephemeral in tests). */
+  readonly appPort?: number;
+  readonly consolePort?: number;
+  readonly mcpPort?: number;
   /**
    * Boot compose stack (injectable).
    *
@@ -41,15 +114,20 @@ export interface DevOptions {
    * @param appUrl - App base URL
    */
   readonly regenClient?: (appUrl: string) => Promise<void>;
-  /** Serve Console stub (injectable). */
-  readonly serveConsole?: (port: number) => Promise<{ stop(): void }>;
+  /** Serve Console (injectable). */
+  readonly serveConsole?: (port: number) => Promise<DevConsoleHandle>;
+  /**
+   * Serve MCP against the live Console context (injectable).
+   * Default: {@link serveMcp} on :6535.
+   */
+  readonly serveMcp?: (options: DevServeMcpOptions) => Promise<DevMcpHandle>;
   /** Start app under bun --hot (injectable). */
   readonly startApp?: (entry: string, env: Record<string, string>) => Promise<{
     stop(): void;
   }>;
 }
 
-/** Result of a dry-run / prepared dev session. */
+/** Result of a dry-run / prepared / live-but-detached dev session. */
 export interface DevPlan {
   readonly entry: string;
   readonly appPort: number;
@@ -60,19 +138,26 @@ export interface DevPlan {
   readonly stackEnv: Readonly<Record<string, string>> | null;
 }
 
+/** Result of {@link runDev}. */
+export interface DevResult {
+  readonly code: number;
+  readonly plan?: DevPlan;
+  /** Present when {@link DevOptions.keepAlive} is false. */
+  readonly session?: DevSession;
+}
+
 /**
  * Prepare (and optionally run) a dev session.
  *
  * @param options - Flags
  */
-export async function runDev(
-  options: DevOptions = {},
-): Promise<{ readonly code: number; readonly plan?: DevPlan }> {
+export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
-  const appPort = Number(Bun.env.PORT ?? APP_PORT);
-  const consolePort = CONSOLE_PORT;
-  const mcpPort = MCP_PORT;
+  const appPort = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
+  const consolePort = options.consolePort ?? CONSOLE_PORT;
+  const mcpPort = options.mcpPort ?? MCP_PORT;
+  const keepAlive = options.keepAlive ?? true;
 
   let entry = options.entry;
   if (!entry) {
@@ -191,6 +276,11 @@ export async function runDev(
       };
     });
 
+  const seedManifest =
+    options.manifest !== undefined
+      ? options.manifest
+      : await tryLoadProjectManifest(cwd);
+
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
@@ -202,10 +292,38 @@ export async function runDev(
         hostname: "127.0.0.1",
         cwd,
         env: "dev",
-        silentClaim: false,
+        silentClaim: options.silentClaim ?? false,
+        ...(options.secret !== undefined ? { secret: options.secret } : {}),
+        ...(seedManifest !== undefined && seedManifest !== null
+          ? { manifest: seedManifest }
+          : {}),
       });
       write(`oke Console http://127.0.0.1:${server.port}\n`);
       return {
+        console: server.console,
+        port: server.port,
+        stop() {
+          server.stop(true);
+        },
+      };
+    });
+
+  const serveMcpSurface =
+    options.serveMcp ??
+    (async (mcpOptions) => {
+      const { serveMcp } = await import("../mcp/server.ts");
+      const server = await serveMcp({
+        port: mcpOptions.port,
+        hostname: mcpOptions.hostname ?? "127.0.0.1",
+        sessions: mcpOptions.sessions,
+        secret: mcpOptions.secret,
+        context: mcpOptions.context,
+        now: mcpOptions.now,
+      });
+      write(`oke MCP http://127.0.0.1:${server.port}\n`);
+      return {
+        port: server.port,
+        url: server.url,
         stop() {
           server.stop(true);
         },
@@ -228,6 +346,30 @@ export async function runDev(
 
   const app = await startApp(plan.entry, env);
   const consoleServer = await serveConsole(consolePort);
+  const boundConsolePort = consoleServer.port ?? consolePort;
+
+  let mcpServer: DevMcpHandle | null = null;
+  let consoleState: ConsoleState | null = null;
+  let secret: string | null = null;
+  let sessions: SessionStore | null = null;
+
+  if (consoleServer.console) {
+    const state = consoleServer.console.state;
+    consoleState = state;
+    secret = state.secret;
+    sessions = state.sessions;
+    mcpServer = await serveMcpSurface({
+      port: mcpPort,
+      sessions: state.sessions,
+      secret: state.secret,
+      context: mcpContextFromConsole(state),
+      now: state.now,
+      hostname: "127.0.0.1",
+    });
+  }
+
+  const boundMcpPort = mcpServer?.port ?? mcpPort;
+  const mcpUrl = mcpServer?.url ?? null;
 
   const appUrl = `http://127.0.0.1:${appPort}`;
   await regen(appUrl);
@@ -240,23 +382,67 @@ export async function runDev(
     },
   );
 
+  let stopped = false;
   const stop = () => {
+    if (stopped) return;
+    stopped = true;
     watcher.close();
     app.stop();
     consoleServer.stop();
+    mcpServer?.stop();
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
   };
-  process.on("SIGINT", () => {
+
+  const onSignal = () => {
     stop();
     process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    stop();
-    process.exit(0);
-  });
+  };
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+
+  const session: DevSession = {
+    plan: {
+      ...plan,
+      consolePort: boundConsolePort,
+      mcpPort: boundMcpPort,
+    },
+    stop,
+    appPort,
+    consolePort: boundConsolePort,
+    mcpPort: boundMcpPort,
+    mcpUrl,
+    secret,
+    sessions,
+    consoleState,
+  };
+
+  if (options.onReady) await options.onReady(session);
+
+  if (!keepAlive) {
+    return { code: 0, plan: session.plan, session };
+  }
 
   // Keep the process alive.
   await new Promise(() => {});
-  return { code: 0, plan };
+  return { code: 0, plan: session.plan, session };
+}
+
+/**
+ * Load `oke.manifest.json` / `manifest.oke.json` when present.
+ *
+ * @param cwd - Project root
+ */
+async function tryLoadProjectManifest(
+  cwd: string,
+): Promise<Manifest | null | undefined> {
+  for (const name of ["oke.manifest.json", "manifest.oke.json"]) {
+    const path = resolve(cwd, name);
+    if (await Bun.file(path).exists()) {
+      return loadManifest(path);
+    }
+  }
+  return undefined;
 }
 
 /**

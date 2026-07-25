@@ -16,8 +16,8 @@ import {
 } from "./clock.ts";
 
 const manifest: Manifest = {
-  name: "clock-test",
-  version: "0",
+  oke: "1.0",
+  app: "clock-test",
   clocks: {
     "expire-holds": {
       every: "10m",

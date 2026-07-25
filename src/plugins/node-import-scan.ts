@@ -65,14 +65,9 @@ function importSpecifier(node: AstNode): string | null {
   }
   if (node.type === "ImportExpression") {
     const arg = (node as AstNode & { source?: AstNode }).source;
-    if (arg?.type === "Literal" && typeof (arg as { value?: unknown }).value === "string") {
-      return (arg as { value: string }).value;
-    }
-    if (
-      arg?.type === "StringLiteral" &&
-      typeof (arg as { value?: unknown }).value === "string"
-    ) {
-      return (arg as { value: string }).value;
+    if (arg?.type === "Literal" || arg?.type === "StringLiteral") {
+      const value = (arg as unknown as { value?: unknown }).value;
+      if (typeof value === "string") return value;
     }
   }
   if (node.type === "CallExpression") {
@@ -86,12 +81,9 @@ function importSpecifier(node: AstNode): string | null {
       (callee as { name?: string }).name === "require";
     if (!isRequire) return null;
     const arg0 = call.arguments?.[0];
-    if (
-      arg0 &&
-      (arg0.type === "Literal" || arg0.type === "StringLiteral") &&
-      typeof (arg0 as { value?: unknown }).value === "string"
-    ) {
-      return (arg0 as { value: string }).value;
+    if (arg0 && (arg0.type === "Literal" || arg0.type === "StringLiteral")) {
+      const value = (arg0 as unknown as { value?: unknown }).value;
+      if (typeof value === "string") return value;
     }
   }
   return null;

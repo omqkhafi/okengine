@@ -5,14 +5,20 @@
  * and rate-limited (console §2.5 · §10.4).
  */
 
+import {
+  AUTH_RATE_LIMIT,
+  AUTH_RATE_WINDOW_MS,
+  touchRateLimit,
+} from "./auth-rate.ts";
+
 /** Claim-code lifetime (30 minutes). */
 export const CLAIM_TTL_MS = 30 * 60 * 1000;
 
-/** Max verification attempts per window. */
-export const CLAIM_RATE_LIMIT = 5;
+/** Max verification attempts per window (same strategy as operator login). */
+export const CLAIM_RATE_LIMIT = AUTH_RATE_LIMIT;
 
-/** Rate-limit window. */
-export const CLAIM_RATE_WINDOW_MS = 60 * 1000;
+/** Rate-limit window (same strategy as operator login). */
+export const CLAIM_RATE_WINDOW_MS = AUTH_RATE_WINDOW_MS;
 
 /** In-memory claim-code state for one Console boot. */
 export interface ClaimCodeState {
@@ -96,14 +102,9 @@ export function verifyClaimCode(
   }
 
   const t = now();
-  // Drop attempts outside the window.
-  while (state.attempts.length > 0 && state.attempts[0]! <= t - CLAIM_RATE_WINDOW_MS) {
-    state.attempts.shift();
-  }
-  if (state.attempts.length >= CLAIM_RATE_LIMIT) {
+  if (touchRateLimit(state.attempts, t) === "rate_limited") {
     return { ok: false, reason: "rate_limited" };
   }
-  state.attempts.push(t);
 
   if (t >= state.expiresAt) {
     return { ok: false, reason: "expired" };

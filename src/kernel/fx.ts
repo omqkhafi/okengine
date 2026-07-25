@@ -826,13 +826,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       emitLog("warn", message, data);
     },
     error(message, data) {
-      const text =
-        typeof message === "string"
-          ? message
-          : message instanceof Error
-            ? message.message
-            : String(message);
-      emitLog("error", text, data);
+      emitLog("error", message, data);
     },
   };
 

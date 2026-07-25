@@ -2,6 +2,10 @@
  * XSS build gate — no `dangerouslySetInnerHTML` / raw HTML injection in Console UI.
  *
  * console §10.2: this is a build gate, not a review convention.
+ *
+ * The scan walks all of `src/console/ui` recursively (not a hard-coded panel
+ * list from Prompt 16). The panel-directory assertion below fails the build
+ * if a new `ui/<panel>` folder appears without being covered by that walk.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -9,6 +13,29 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const UI_ROOT = `${import.meta.dir}/ui`;
+
+/**
+ * Panel feature directories that must be covered by the XSS scan today.
+ * Update this list when a 18th panel lands — the recursive walk already
+ * covers it; the list makes coverage explicit in CI output.
+ */
+export const CONSOLE_UI_PANEL_DIRS = [
+  "access",
+  "ai",
+  "architecture",
+  "channels",
+  "clock",
+  "diff",
+  "flows",
+  "gates",
+  "overview",
+  "plugins",
+  "runs",
+  "signals",
+  "store",
+  "traces",
+  "vault",
+] as const;
 
 /** Patterns that fail the gate. */
 const FORBIDDEN = [
@@ -50,6 +77,22 @@ export function findXssViolations(text: string): string[] {
 }
 
 describe("console XSS gate", () => {
+  test("scan glob covers every ui/<panel> directory that exists today", async () => {
+    const entries = await readdir(UI_ROOT, { withFileTypes: true });
+    const dirs = entries
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .filter((name) => name !== "dist" && name !== "shell" && name !== "node_modules")
+      .sort();
+    expect(dirs).toEqual([...CONSOLE_UI_PANEL_DIRS].sort());
+
+    const files = await collectSources(UI_ROOT);
+    for (const panel of CONSOLE_UI_PANEL_DIRS) {
+      const hit = files.some((f) => f.includes(`/ui/${panel}/`) || f.includes(`\\ui\\${panel}\\`));
+      expect(hit).toBe(true);
+    }
+  });
+
   test("no dangerouslySetInnerHTML or raw HTML sinks in Console UI", async () => {
     const files = await collectSources(UI_ROOT);
     expect(files.length).toBeGreaterThan(0);

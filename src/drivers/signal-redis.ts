@@ -5,6 +5,9 @@
  * After commit, a relay pushes to Redis Streams (`once`) or pub/sub
  * (`broadcast` / `live`). Consumer delivery is driven from the outbox so
  * exactly-once / fan-out physics stay correct under `drain()`.
+ *
+ * Production bind: {@link createBunSignalRedisClient} (typed `publish` /
+ * `subscribe`; Streams via `send` — Bun 1.3.14 has no typed `xadd` yet).
  */
 
 import { createSignalEngine } from "./signal-engine.ts";
@@ -14,6 +17,111 @@ import type {
   SignalOpenOptions,
   SignalRedisClientLike,
 } from "./signal-types.ts";
+
+/**
+ * Bind {@link Bun.RedisClient} to {@link SignalRedisClientLike}.
+ *
+ * Streams (`XADD` / `XGROUP` / `XREADGROUP` / `XACK`) use `send` because
+ * Bun 1.3.14 still lacks typed stream helpers — that is a Bun limitation.
+ * Pub/sub uses typed `publish` / `subscribe` (gap closed vs earlier fake-only).
+ *
+ * @param url - Optional Redis URL
+ */
+export function createBunSignalRedisClient(
+  url?: string,
+): SignalRedisClientLike {
+  const redis =
+    url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
+  /** Subscribe blocks a connection — keep a dedicated client. */
+  let sub:
+    | InstanceType<typeof Bun.RedisClient>
+    | undefined;
+
+  function subClient(): InstanceType<typeof Bun.RedisClient> {
+    if (!sub) {
+      sub = url !== undefined ? new Bun.RedisClient(url) : new Bun.RedisClient();
+    }
+    return sub;
+  }
+
+  return {
+    async xadd(key, id, fields) {
+      const args: string[] = [key, id];
+      for (const [k, v] of Object.entries(fields)) {
+        args.push(k, v);
+      }
+      return String(await redis.send("XADD", args));
+    },
+    async xgroupCreate(key, group, id, opts) {
+      const args = ["CREATE", key, group, id];
+      if (opts?.mkstream) args.push("MKSTREAM");
+      try {
+        await redis.send("XGROUP", args);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/BUSYGROUP/i.test(msg)) throw err;
+      }
+    },
+    async xreadgroup(group, consumer, key, count) {
+      const reply = await redis.send("XREADGROUP", [
+        "GROUP",
+        group,
+        consumer,
+        "COUNT",
+        String(count),
+        "STREAMS",
+        key,
+        ">",
+      ]);
+      return parseXreadgroupReply(reply);
+    },
+    async xack(key, group, id) {
+      return Number(await redis.send("XACK", [key, group, id]));
+    },
+    async publish(channel, message) {
+      return redis.publish(channel, message);
+    },
+    async subscribe(channel, listener) {
+      const client = subClient();
+      await client.subscribe(channel, (message) => {
+        listener(message);
+      });
+      return () => {
+        void client.unsubscribe(channel);
+      };
+    },
+  };
+}
+
+/**
+ * Parse Redis `XREADGROUP` nested-array reply into field maps.
+ *
+ * @param reply - Raw `send` result
+ */
+export function parseXreadgroupReply(
+  reply: unknown,
+): Array<{ id: string; fields: Record<string, string> }> {
+  if (reply == null || !Array.isArray(reply)) return [];
+  const out: Array<{ id: string; fields: Record<string, string> }> = [];
+  for (const stream of reply) {
+    if (!Array.isArray(stream) || stream.length < 2) continue;
+    const entries = stream[1];
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (!Array.isArray(entry) || entry.length < 2) continue;
+      const id = String(entry[0]);
+      const flat = entry[1];
+      const fields: Record<string, string> = {};
+      if (Array.isArray(flat)) {
+        for (let i = 0; i + 1 < flat.length; i += 2) {
+          fields[String(flat[i])] = String(flat[i + 1]);
+        }
+      }
+      out.push({ id, fields });
+    }
+  }
+  return out;
+}
 
 /**
  * In-memory redis-protocol fake for signal streams + pub/sub.
@@ -105,7 +213,9 @@ export function createSignalRedisFake(): SignalRedisClientLike & {
 export async function openRedisSignal(
   options: SignalOpenOptions,
 ): Promise<SignalBus> {
-  const redis = options.redis ?? createSignalRedisFake();
+  // Same DI shape as postgres/redis/s3: inject a client in tests; production
+  // binds Bun.redis (Streams via send until Bun ships typed xadd).
+  const redis = options.redis ?? createBunSignalRedisClient();
   const outbox = await createSignalEngine("redis", options);
 
   async function relayToRedis(signal: string, payload: unknown): Promise<void> {

@@ -87,6 +87,26 @@ export async function measureClientGzipBytes(): Promise<number> {
   return Bun.gzipSync(new Uint8Array(raw)).byteLength;
 }
 
+/** One Console asset's gzip size. */
+export interface ConsoleAssetGzip {
+  /** File name under `dist/` or `dist/assets/`. */
+  readonly name: string;
+  /** Gzipped byte length. */
+  readonly gzip: number;
+}
+
+/** Definitive Console bundle breakdown (initial vs lazy panel chunks). */
+export interface ConsoleBundleBreakdown {
+  /** Bytes the first navigation downloads (html + script/link/modulepreload). */
+  readonly initialGzipBytes: number;
+  /** Assets counted in the initial load. */
+  readonly initial: readonly ConsoleAssetGzip[];
+  /** Lazy `panel-*` chunks (not in the initial navigation). */
+  readonly panels: readonly ConsoleAssetGzip[];
+  /** Other assets neither initial nor panel (should stay empty / tiny). */
+  readonly other: readonly ConsoleAssetGzip[];
+}
+
 /**
  * Gzip size of Console initial load (html + entry js/css).
  *
@@ -95,12 +115,33 @@ export async function measureClientGzipBytes(): Promise<number> {
 export async function measureConsoleInitialGzipBytes(
   distDir = `${import.meta.dir}/../console/ui/dist`,
 ): Promise<number> {
+  const breakdown = await measureConsoleBundleBreakdown(distDir);
+  return breakdown.initialGzipBytes;
+}
+
+/**
+ * Build the Console SPA and return an initial-vs-lazy breakdown.
+ *
+ * Initial load is defined as what `index.html` actually references
+ * (`<script>`, stylesheet `<link>`, and `modulepreload` hrefs) — not
+ * "every asset whose filename lacks `panel-`". That earlier heuristic
+ * mis-counted Overview/Gates/Channels lazy chunks and inflated the number.
+ *
+ * @param distDir - Vite outDir
+ */
+export async function measureConsoleBundleBreakdown(
+  distDir = `${import.meta.dir}/../console/ui/dist`,
+): Promise<ConsoleBundleBreakdown> {
+  // Force production minify. `bun test` sets NODE_ENV=test, which yields an
+  // unminified SPA (~136 kB gzip) and was the unexplained Prompt-21 (≈90 kB)
+  // vs later (~138 kB) gap — methodology, not a panel leak.
   const build = Bun.spawnSync(
     ["bunx", "vite", "build", "--config", "src/console/ui/vite.config.ts"],
     {
       cwd: ROOT,
       stdout: "pipe",
       stderr: "pipe",
+      env: { ...process.env, NODE_ENV: "production" },
     },
   );
   if (build.exitCode !== 0) {
@@ -108,7 +149,7 @@ export async function measureConsoleInitialGzipBytes(
       `console build failed:\n${build.stdout.toString()}\n${build.stderr.toString()}`,
     );
   }
-  return initialGzipBytes(distDir);
+  return consoleBundleBreakdown(distDir);
 }
 
 /**
@@ -304,27 +345,82 @@ function formatValue(value: number, unit: BudgetSample["unit"]): string {
   return `${value.toFixed(3)} ms`;
 }
 
-async function initialGzipBytes(dir: string): Promise<number> {
-  const assetsDir = join(dir, "assets");
-  let total = 0;
+/**
+ * Parse `index.html` for first-navigation asset hrefs.
+ *
+ * @param html - index.html text
+ */
+function initialAssetHrefs(html: string): string[] {
+  const hrefs: string[] = [];
+  const re =
+    /(?:src|href)=["'](\/?assets\/[^"']+\.(?:js|css))["']/g;
+  for (const match of html.matchAll(re)) {
+    const href = match[1];
+    if (href) hrefs.push(href.replace(/^\//, ""));
+  }
+  return [...new Set(hrefs)];
+}
 
-  const index = Bun.file(join(dir, "index.html"));
-  if (await index.exists()) {
-    total += Bun.gzipSync(new Uint8Array(await index.arrayBuffer())).byteLength;
+async function gzipFile(path: string): Promise<number> {
+  const raw = await Bun.file(path).arrayBuffer();
+  return Bun.gzipSync(new Uint8Array(raw)).byteLength;
+}
+
+/**
+ * Classify built Console assets into initial / panel / other.
+ *
+ * @param dir - Vite outDir
+ */
+export async function consoleBundleBreakdown(
+  dir: string,
+): Promise<ConsoleBundleBreakdown> {
+  const assetsDir = join(dir, "assets");
+  const indexPath = join(dir, "index.html");
+  const indexFile = Bun.file(indexPath);
+  const initial: ConsoleAssetGzip[] = [];
+  const panels: ConsoleAssetGzip[] = [];
+  const other: ConsoleAssetGzip[] = [];
+
+  if (await indexFile.exists()) {
+    const html = await indexFile.text();
+    initial.push({
+      name: "index.html",
+      gzip: Bun.gzipSync(new TextEncoder().encode(html)).byteLength,
+    });
+    for (const href of initialAssetHrefs(html)) {
+      const name = href.replace(/^assets\//, "");
+      const path = join(dir, href);
+      if (!(await Bun.file(path).exists())) continue;
+      initial.push({ name, gzip: await gzipFile(path) });
+    }
   }
 
+  const initialNames = new Set(initial.map((a) => a.name));
   let entries: string[] = [];
   try {
     entries = await readdir(assetsDir);
   } catch {
-    return total;
+    entries = [];
   }
 
   for (const name of entries) {
-    if (name.includes("lazy") || name.includes("panel-")) continue;
     if (!/\.(js|css)$/.test(name)) continue;
-    const raw = await Bun.file(join(assetsDir, name)).arrayBuffer();
-    total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
+    if (initialNames.has(name)) continue;
+    const gzip = await gzipFile(join(assetsDir, name));
+    if (name.includes("panel-") || name.includes("lazy")) {
+      panels.push({ name, gzip });
+    } else {
+      other.push({ name, gzip });
+    }
   }
-  return total;
+
+  panels.sort((a, b) => a.name.localeCompare(b.name));
+  other.sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    initialGzipBytes: initial.reduce((sum, a) => sum + a.gzip, 0),
+    initial,
+    panels,
+    other,
+  };
 }

@@ -30,8 +30,12 @@ import {
 } from "../../elements/gate.ts";
 import { statusForFailure } from "../../compiler/response.ts";
 import { gateDenialFailure } from "../../kernel/index.ts";
-import { diffManifest, type ManifestChange } from "../../manifest/diff.ts";
-import type { Gate as ManifestGate, Manifest } from "../../manifest/types.ts";
+import { diffManifest } from "../../manifest/diff.ts";
+import type {
+  Gate as ManifestGate,
+  Manifest,
+  ManifestChange,
+} from "../../manifest/types.ts";
 
 /** Identity slice needed for Gates (avoids circular import with state). */
 export interface GatesIdentity {

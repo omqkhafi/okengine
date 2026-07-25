@@ -1,16 +1,27 @@
 #!/usr/bin/env bun
 /**
- * Doc-drift checker — claimed TypeScript fences in `four-applications.md`
- * must be contained (whitespace-normalized) under `examples/<app>/`.
+ * Doc-drift checker — claimed TypeScript fences in markdown docs must be
+ * contained (whitespace-normalized) under `examples/<app>/`.
  *
- * Claimed fences are those under a heading like `### \`path/to/file.ts\``.
- * Unheaded fences are illustrations and are ignored.
+ * Claimed fences are those under a heading like `### \`path/to/file.ts\``
+ * (relative, under an app section in four-applications.md) or
+ * `### \`examples/<app>/path/to/file.ts\`` (absolute from repo root — used by
+ * README.md). Unheaded fences are illustrations and are ignored.
+ *
+ * Usage:
+ *   bun src/cli/doc-drift.ts
+ *   bun src/cli/doc-drift.ts docs/spec/four-applications.md README.md
  */
 
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "../..");
-const SPEC = resolve(ROOT, "docs/spec/four-applications.md");
+
+/** Default docs checked when no CLI paths are passed. */
+const DEFAULT_DOCS: readonly string[] = [
+  resolve(ROOT, "docs/spec/four-applications.md"),
+  resolve(ROOT, "README.md"),
+];
 
 /** App section heading → example package directory name. */
 const APP_SECTIONS: ReadonlyArray<{ readonly re: RegExp; readonly app: string }> =
@@ -35,7 +46,7 @@ export function normalizeTs(text: string): string {
     .trim();
 }
 
-/** One claimed fence extracted from the spec. */
+/** One claimed fence extracted from a markdown document. */
 export interface ClaimedFence {
   readonly app: string;
   readonly relPath: string;
@@ -44,9 +55,45 @@ export interface ClaimedFence {
 }
 
 /**
- * Parse claimed fences from four-applications markdown.
+ * Read the typescript/ts fence immediately after a heading line.
  *
- * @param markdown - Spec document
+ * @param lines - Document lines
+ * @param headingIndex - Index of the `### \`…\`` heading
+ * @param relPath - Path shown in the heading (for error messages)
+ */
+function readFenceAfterHeading(
+  lines: readonly string[],
+  headingIndex: number,
+  relPath: string,
+): { readonly body: string; readonly endIndex: number } | undefined {
+  let j = headingIndex + 1;
+  while (j < lines.length && lines[j]!.trim() === "") j++;
+  const open = lines[j];
+  if (!open || !/^```(?:typescript|ts)\s*$/.test(open)) return undefined;
+
+  j++;
+  const bodyLines: string[] = [];
+  while (j < lines.length && !lines[j]!.startsWith("```")) {
+    bodyLines.push(lines[j]!);
+    j++;
+  }
+  if (j >= lines.length || !lines[j]!.startsWith("```")) {
+    throw new Error(
+      `doc-drift: unclosed fence after ### \`${relPath}\` (line ${headingIndex + 1})`,
+    );
+  }
+
+  return { body: bodyLines.join("\n"), endIndex: j };
+}
+
+/**
+ * Parse claimed fences from a markdown document.
+ *
+ * Supports (1) app-section context + relative `### \`src/…\`` headings
+ * (four-applications.md) and (2) absolute `### \`examples/<app>/…\`` headings
+ * (README.md). Stops at `# REFERENCE` / `# 5 ·` as in the four-apps spec.
+ *
+ * @param markdown - Spec or README document
  */
 export function parseClaimedFences(markdown: string): ClaimedFence[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -67,37 +114,35 @@ export function parseClaimedFences(markdown: string): ClaimedFence[] {
       }
     }
 
-    if (!app) continue;
-
     const heading = /^### `([^`]+)`/.exec(line);
     if (!heading) continue;
 
-    const relPath = heading[1]!;
-    // Find the next fenced typescript (or ts) block.
-    let j = i + 1;
-    while (j < lines.length && lines[j]!.trim() === "") j++;
-    const open = lines[j];
-    if (!open || !/^```(?:typescript|ts)\s*$/.test(open)) continue;
+    const claimedPath = heading[1]!;
+    const examplesMatch = /^examples\/([^/]+)\/(.+)$/.exec(claimedPath);
 
-    j++;
-    const bodyLines: string[] = [];
-    while (j < lines.length && !lines[j]!.startsWith("```")) {
-      bodyLines.push(lines[j]!);
-      j++;
+    let fenceApp: string | undefined;
+    let relPath: string;
+
+    if (examplesMatch) {
+      fenceApp = examplesMatch[1]!;
+      relPath = examplesMatch[2]!;
+    } else if (app) {
+      fenceApp = app;
+      relPath = claimedPath;
+    } else {
+      continue;
     }
-    if (j >= lines.length || !lines[j]!.startsWith("```")) {
-      throw new Error(
-        `doc-drift: unclosed fence after ### \`${relPath}\` (line ${i + 1})`,
-      );
-    }
+
+    const fence = readFenceAfterHeading(lines, i, claimedPath);
+    if (!fence) continue;
 
     fences.push({
-      app,
+      app: fenceApp,
       relPath,
-      body: bodyLines.join("\n"),
+      body: fence.body,
       headingLine: i + 1,
     });
-    i = j;
+    i = fence.endIndex;
   }
 
   return fences;
@@ -164,25 +209,64 @@ export async function checkDocDrift(
   return { ok: failures.length === 0, failures };
 }
 
+/**
+ * Run doc-drift over one or more markdown files.
+ *
+ * @param paths - Absolute or repo-relative markdown paths
+ */
+export async function runDocDrift(
+  paths: readonly string[],
+): Promise<{ readonly ok: boolean; readonly messages: readonly string[] }> {
+  const messages: string[] = [];
+  let ok = true;
+  let total = 0;
+
+  for (const path of paths) {
+    const abs = resolve(ROOT, path);
+    const label = abs.startsWith(ROOT + "/")
+      ? abs.slice(ROOT.length + 1)
+      : abs;
+    const markdown = await Bun.file(abs).text();
+    const fences = parseClaimedFences(markdown);
+    if (fences.length === 0) {
+      messages.push(`doc-drift: no claimed fences found in ${label}`);
+      ok = false;
+      continue;
+    }
+
+    const result = await checkDocDrift(fences);
+    total += fences.length;
+    if (!result.ok) {
+      ok = false;
+      messages.push(
+        `doc-drift: ${result.failures.length} failure(s) in ${label}`,
+      );
+      for (const f of result.failures) messages.push(`  · ${f}`);
+    } else {
+      messages.push(
+        `doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`,
+      );
+    }
+  }
+
+  if (ok && paths.length > 1) {
+    messages.push(
+      `doc-drift: ok — ${total} claimed fence(s) across ${paths.length} file(s)`,
+    );
+  }
+
+  return { ok, messages };
+}
+
 async function main(): Promise<number> {
-  const markdown = await Bun.file(SPEC).text();
-  const fences = parseClaimedFences(markdown);
-  if (fences.length === 0) {
-    console.error("doc-drift: no claimed fences found");
-    return 1;
+  const args = process.argv.slice(2);
+  const paths = args.length > 0 ? args : DEFAULT_DOCS;
+  const { ok, messages } = await runDocDrift(paths);
+  for (const m of messages) {
+    if (ok) console.log(m);
+    else console.error(m);
   }
-
-  const { ok, failures } = await checkDocDrift(fences);
-  if (!ok) {
-    console.error(`doc-drift: ${failures.length} failure(s)\n`);
-    for (const f of failures) console.error(`  · ${f}`);
-    return 1;
-  }
-
-  console.log(
-    `doc-drift: ok — ${fences.length} claimed fence(s) contained under examples/`,
-  );
-  return 0;
+  return ok ? 0 : 1;
 }
 
 if (import.meta.main) {

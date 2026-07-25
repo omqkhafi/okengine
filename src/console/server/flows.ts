@@ -18,7 +18,12 @@ import { fail, flow, http, type Binding } from "../../kernel/index.ts";
 import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
+import { touchLoginRateLimit } from "./auth-rate.ts";
 import { verifyClaimCode } from "./claim.ts";
+import {
+  maskWideEventForConsole,
+  piiFieldNamesFromManifest,
+} from "./runs-pii.ts";
 import {
   ClockResourceNotFoundError,
   ScheduleNotOverridableError,
@@ -332,6 +337,7 @@ const InvokeOut = z.object({
 const SetupClosed = z.object({ reason: z.string() });
 const ClaimFailed = z.object({ reason: z.string() });
 const AuthFailed = z.object({});
+const AuthRateLimited = z.object({ reason: z.string() });
 const NotFound = z.object({ flowId: z.string() });
 const InvokeDenied = z.object({ reason: z.string() });
 const ConfirmRequired = z.object({
@@ -1783,8 +1789,16 @@ function createSessionLogin(state: ConsoleState) {
     plane: "operator",
     in: LoginIn,
     out: SessionOut,
-    errors: { AuthFailed },
+    errors: { AuthFailed, AuthRateLimited },
     do: async (input: z.infer<typeof LoginIn>, fx) => {
+      if (
+        touchLoginRateLimit(state.loginAttempts, input.email, state.now()) ===
+        "rate_limited"
+      ) {
+        return fail("AuthRateLimited", {
+          reason: "too many login attempts; retry after 60s",
+        });
+      }
       const op = await authenticateOperator(
         state.operators,
         input.email,
@@ -1859,8 +1873,9 @@ function createRunsList(state: ConsoleState) {
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
+      const piiFields = piiFieldNamesFromManifest(state.manifest);
       return {
-        runs: all.map((r) => projectRun(r)),
+        runs: all.map((r) => projectRun(r, piiFields)),
       };
     },
   });
@@ -1869,11 +1884,19 @@ function createRunsList(state: ConsoleState) {
 /**
  * Project a wide event for GET /console/runs (Runs · Traces · Overview).
  *
+ * PII-classified fields are masked centrally here so every panel that reads
+ * the shared wide-event store sees the same redaction as Store's row browser.
+ *
  * @param r - Stored wide event
+ * @param piiFields - Classified field names from the Manifest
  */
-function projectRun(r: WideEvent) {
+export function projectRun(
+  r: WideEvent,
+  piiFields: ReadonlySet<string> = new Set(),
+) {
+  const masked = maskWideEventForConsole(r, piiFields);
   const dimensions: Record<string, string | number | boolean | null> = {};
-  for (const [k, v] of Object.entries(r.dimensions)) {
+  for (const [k, v] of Object.entries(masked.dimensions)) {
     if (v === undefined) continue;
     dimensions[k] = v;
   }
@@ -1896,16 +1919,16 @@ function projectRun(r: WideEvent) {
     startedAt: r.startedAt,
     endedAt: r.endedAt,
     durationMs: r.durationMs,
-    error: r.error?.code ?? null,
-    sampled: r.error ? ("error" as const) : ("sample" as const),
-    effects: r.effects.map((e) => ({
+    error: masked.error?.code ?? null,
+    sampled: masked.error ? ("error" as const) : ("sample" as const),
+    effects: masked.effects.map((e) => ({
       kind: e.kind,
       resource: e.resource,
       timestamp: e.timestamp,
       duration: e.duration,
       reversibility: e.reversibility,
     })),
-    logs: r.logs.map((line) => ({
+    logs: masked.logs.map((line) => ({
       level: line.level,
       message: line.message,
       ...(line.data !== undefined ? { data: line.data } : {}),
