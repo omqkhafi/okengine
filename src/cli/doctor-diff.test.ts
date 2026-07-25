@@ -48,7 +48,7 @@ describe("oke doctor --diff", () => {
       after,
       write: () => {},
     });
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(undeclared.length).toBeGreaterThan(0);
   });
 

@@ -92,10 +92,10 @@ export async function startCli(args: readonly string[]): Promise<number> {
   let port: number | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--entry") entry = args[++i];
+    if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--port" || a === "-p") port = Number(args[++i]);
     else if (a === "--help" || a === "-h") {
-      console.log(`oke start [--entry src/app.ts] [--port 6530]
+      console.log(`oke start [--entry|-e src/app.ts] [--port|-p 6530]
 
 Run exactly what production runs. This is the Docker CMD.
 `);

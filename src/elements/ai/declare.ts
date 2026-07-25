@@ -96,9 +96,36 @@ function toolName(tool: { readonly name: string } | string): string {
 }
 
 /**
+ * Shape of the {@link ai} element namespace.
+ */
+export interface AiNamespace {
+  /**
+   * Declare a model binding.
+   *
+   * @param name - Logical model name (`smart`, `fast`, …)
+   * @param options - Provider / tier / model id
+   */
+  model(name: string, options?: AiModelOptions): AiModelDecl;
+  /**
+   * Declare an embedding pipeline into a store.index.
+   *
+   * @param name - Embed id
+   * @param options - Model + destination index
+   */
+  embed(name: string, options?: AiEmbedOptions): AiEmbedDecl;
+  /**
+   * Declare a bounded agent whose tools are the app's own flows.
+   *
+   * @param name - Agent id
+   * @param options - Tools / maxSteps / model / budget
+   */
+  agent(name: string, options?: AiAgentOptions): AiAgentDecl;
+}
+
+/**
  * AI element namespace.
  */
-export const ai = {
+export const ai: AiNamespace = {
   /**
    * Declare a model binding.
    *
@@ -176,4 +203,4 @@ export const ai = {
           : {}),
     };
   },
-} as const;
+};

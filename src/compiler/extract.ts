@@ -6,7 +6,6 @@
  * from source to `manifest.oke.json`.
  */
 
-import { Glob } from "bun";
 import { parseSync } from "oxc-parser";
 
 import type {
@@ -196,7 +195,8 @@ async function readSources(
   rootDir: string,
   pattern: string,
 ): Promise<SourceFile[]> {
-  const glob = new Glob(pattern);
+  // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
+  const glob = new Bun.Glob(pattern);
   const files: SourceFile[] = [];
   for await (const path of glob.scan({
     cwd: rootDir,

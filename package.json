@@ -5,6 +5,10 @@
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omqkhafi/okengine.git"
+  },
   "workspaces": [
     "examples/*"
   ],
@@ -40,9 +44,15 @@
     "gate:errors": "bun test src/kernel/errors.registry.test.ts",
     "gate:codemods": "bun test src/upgrade/codemods.test.ts",
     "test:examples": "bun test examples/notes && bun test examples/linkly && bun test examples/provisions && bun test examples/skyport",
+    "test:create-oke": "bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test packages/create-oke/tests/scaffold.integration.test.ts packages/create-oke/tests/dev.integration.test.ts",
     "test:doc-drift": "bun src/cli/doc-drift.ts",
     "test:skyport-docker": "bun test examples/skyport/tests/docker.test.ts",
-    "ci": "bun run typecheck && bun run test && bun run budgets && bun run gate:doctor-diff && bun run gate:errors && bun run gate:codemods && bun run test:doc-drift && bun run test:examples && bun run test:skyport-docker",
+    "ci": "bun run typecheck && bun run test && bun run budgets && bun run gate:doctor-diff && bun run gate:errors && bun run gate:codemods && bun run test:doc-drift && bun run test:examples && bun run test:skyport-docker && bun run test:create-oke",
+    "gate:publish": "bun test scripts/publish.gate.test.ts",
+    "bump": "bun run scripts/bump-version.ts",
+    "publish:all": "bun run scripts/publish.ts",
+    "publish:npm": "bun run scripts/publish.ts -- --npm-only",
+    "publish:jsr": "bun run scripts/publish.ts -- --jsr-only",
     "g": "gflows"
   },
   "dependencies": {
@@ -79,6 +89,7 @@
     "drizzle-zod": "^0.8.3",
     "gflows": "^1.2.0",
     "happy-dom": "^20.11.1",
+    "mermaid": "^11.16.0",
     "playwright": "^1.62.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

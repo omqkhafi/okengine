@@ -6,7 +6,6 @@
  * then fails on undeclared contract breaks.
  */
 
-import { Glob } from "bun";
 import { resolve } from "node:path";
 import { extractManifest, type SourceFile } from "../compiler/extract.ts";
 import { undeclaredContractBreaks } from "../manifest/undeclared.ts";
@@ -68,7 +67,8 @@ async function extractAtRevision(
   appRel: string,
 ): Promise<Awaited<ReturnType<typeof extractManifest>> | null> {
   const workingRoot = resolve(repoRoot, appRel);
-  const glob = new Glob("**/*.{ts,tsx}");
+  // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
+  const glob = new Bun.Glob("**/*.{ts,tsx}");
   const files: SourceFile[] = [];
 
   for await (const rel of glob.scan({

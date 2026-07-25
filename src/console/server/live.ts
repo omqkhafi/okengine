@@ -4,13 +4,28 @@
  * Spec §5.1: code edit → oxc re-parses → Manifest → WebSocket → Console.
  */
 
-import type { ServerWebSocket } from "bun";
 import type { ConsoleLiveMessage, ConsoleState } from "./state.ts";
 import { publishLive } from "./state.ts";
 
 /** WebSocket data bag for Console live clients. */
 export interface ConsoleLiveData {
   readonly kind: "console-live";
+}
+
+/**
+ * Minimal Bun `ServerWebSocket` surface used by the Console live channel.
+ *
+ * Declared locally so the public graph does not bare-import `"bun"` (JSR
+ * rejects that specifier; `bun:` is allowed, but there is no `bun:websocket`
+ * type entry). `send` matches Bun's signature so handlers remain assignable
+ * to `Bun.serve` websocket callbacks — not a public API change.
+ */
+export interface ConsoleServerWebSocket<T = undefined> {
+  readonly data: T;
+  send(
+    data: string | ArrayBuffer | Uint8Array,
+    compress?: boolean,
+  ): number;
 }
 
 /**
@@ -36,14 +51,17 @@ export function subscribeLive(
  * @param state - Console state
  */
 export function createLiveWebsocket(state: ConsoleState): {
-  readonly open: (ws: ServerWebSocket<ConsoleLiveData>) => void;
+  readonly open: (ws: ConsoleServerWebSocket<ConsoleLiveData>) => void;
   readonly message: (
-    ws: ServerWebSocket<ConsoleLiveData>,
+    ws: ConsoleServerWebSocket<ConsoleLiveData>,
     message: string | Buffer,
   ) => void;
-  readonly close: (ws: ServerWebSocket<ConsoleLiveData>) => void;
+  readonly close: (ws: ConsoleServerWebSocket<ConsoleLiveData>) => void;
 } {
-  const unsubs = new WeakMap<ServerWebSocket<ConsoleLiveData>, () => void>();
+  const unsubs = new WeakMap<
+    ConsoleServerWebSocket<ConsoleLiveData>,
+    () => void
+  >();
 
   return {
     open(ws) {

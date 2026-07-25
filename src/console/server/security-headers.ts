@@ -3,7 +3,7 @@
  */
 
 /** Strict Content-Security-Policy for the Console document. */
-export const CONSOLE_CSP = [
+export const CONSOLE_CSP: string = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -18,7 +18,7 @@ export const CONSOLE_CSP = [
 ].join("; ");
 
 /** CSP for sandboxed plugin panel iframes (no operator session reach). */
-export const PLUGIN_FRAME_CSP = [
+export const PLUGIN_FRAME_CSP: string = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -31,7 +31,7 @@ export const PLUGIN_FRAME_CSP = [
 ].join("; ");
 
 /** Sandbox attribute for plugin panels — no `allow-same-origin`. */
-export const PLUGIN_IFRAME_SANDBOX = "allow-scripts allow-forms";
+export const PLUGIN_IFRAME_SANDBOX: string = "allow-scripts allow-forms";
 
 /**
  * Apply Console security headers to a response.

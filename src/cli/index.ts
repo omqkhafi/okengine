@@ -6,13 +6,16 @@
 import { branchCli } from "./branch.ts";
 import { buildCli } from "./build.ts";
 import { clientAddCli } from "./client-add.ts";
+import { completionCli } from "./completion.ts";
 import { devCli } from "./dev.ts";
 import { doctorCli } from "./doctor.ts";
 import { dockerCli } from "./docker.ts";
 import { evalCli } from "./eval.ts";
+import { EXIT_CODE_HELP, EXIT_OK, EXIT_USAGE } from "./exit.ts";
 import { gatesListCli } from "./gates-list.ts";
 import { imagesCli } from "./images.ts";
 import { privacyEraseCli } from "./privacy-erase.ts";
+import { formatOkeHelp } from "./registry.ts";
 import { schemaCli } from "./schema.ts";
 import { stackCli } from "./stack.ts";
 import { startCli } from "./start.ts";
@@ -82,30 +85,15 @@ if (cmd === "gates" && sub === "list") {
   process.exit(await gatesListCli(rest));
 }
 
-if (cmd === undefined || cmd === "--help" || cmd === "-h") {
-  console.log(`oke — okengine CLI
+if (cmd === "completion") {
+  process.exit(completionCli(sub ? [sub, ...rest] : rest));
+}
 
-Commands:
-  oke dev [--stack|-s [roles]]   watch · hot reload · Console · client types
-  oke start                      production entry (Docker CMD)
-  oke doctor                     secrets · ports · schema drift
-  oke doctor --diff              CI gate: undeclared contract breaks
-  oke stack                      preview images/tags/ports (writes nothing)
-  oke schema generate [--check]  core + plugin tables → schema/oke.ts
-  oke client add <url>           ambient types for a separate frontend repo
-  oke vault set|list|import|key rotate
-  oke docker [--prod]            Dockerfile + compose.<role>.yml
-  oke images pin                 tags → digests in oke.images.lock
-  oke build [--target edge]      tree-shaken bundle
-  oke eval                       prompt eval sets (CI gate)
-  oke branch <name> --at <when>  fork journaled state
-  oke privacy erase --subject    crypto-shred
-  oke upgrade [--apply]          breaking-change codemods + diff
-  oke gates list                 gate catalogue from Manifest
-`);
-  process.exit(cmd ? 0 : 1);
+if (cmd === undefined || cmd === "--help" || cmd === "-h" || cmd === "help") {
+  console.log(`${formatOkeHelp()}${EXIT_CODE_HELP}`);
+  process.exit(cmd ? EXIT_OK : EXIT_USAGE);
 }
 
 console.error(`Unknown command: ${cmd}${sub ? ` ${sub}` : ""}`);
 console.error("Run `oke --help` for usage.");
-process.exit(1);
+process.exit(EXIT_USAGE);

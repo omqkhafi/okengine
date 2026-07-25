@@ -72,10 +72,10 @@ export async function buildCli(args: readonly string[]): Promise<number> {
     const a = args[i]!;
     if (a === "--target" || a === "-t") {
       target = args[++i] as BuildOptions["target"];
-    } else if (a === "--entry") entry = args[++i];
+    } else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--outdir" || a === "-o") outdir = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke build [--target bun|node|edge] [--entry src/app.ts]
+      console.log(`oke build [--target|-t bun|node|edge] [--entry|-e src/app.ts]
 
 Tree-shaken bundle. --target edge aims at the <15 kB kernel budget.
 `);

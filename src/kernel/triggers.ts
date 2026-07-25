@@ -116,9 +116,45 @@ function createHttpTrigger<M extends HttpMethod, P extends string>(
 }
 
 /**
+ * Shape of the {@link http} trigger namespace. Each method keeps `P` as a
+ * generic type parameter so callers (and the client) retain literal path
+ * types for param extraction.
+ */
+export interface HttpTriggerNamespace {
+  /**
+   * @param path - Route path (`/:id` params supported)
+   */
+  get<P extends string>(path: P): HttpTrigger<"GET", P>;
+  /**
+   * @param path - Route path
+   */
+  post<P extends string>(path: P): HttpTrigger<"POST", P>;
+  /**
+   * @param path - Route path
+   */
+  put<P extends string>(path: P): HttpTrigger<"PUT", P>;
+  /**
+   * @param path - Route path
+   */
+  patch<P extends string>(path: P): HttpTrigger<"PATCH", P>;
+  /**
+   * @param path - Route path
+   */
+  delete<P extends string>(path: P): HttpTrigger<"DELETE", P>;
+  /**
+   * @param path - Route path
+   */
+  options<P extends string>(path: P): HttpTrigger<"OPTIONS", P>;
+  /**
+   * @param path - Route path
+   */
+  head<P extends string>(path: P): HttpTrigger<"HEAD", P>;
+}
+
+/**
  * HTTP trigger constructors — `http.get("/notes")`, `http.post("/links")`, …
  */
-export const http = {
+export const http: HttpTriggerNamespace = {
   /**
    * @param path - Route path (`/:id` params supported)
    */
@@ -161,7 +197,7 @@ export const http = {
   head<P extends string>(path: P): HttpTrigger<"HEAD", P> {
     return createHttpTrigger("HEAD", path);
   },
-} as const;
+};
 
 /**
  * Clock trigger — run on an interval (`every("10m")`, `every("1h")`).

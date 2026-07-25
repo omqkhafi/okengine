@@ -3,14 +3,20 @@
  */
 
 import { createSignalEngine } from "./signal-engine.ts";
-import type { SignalDriver, SignalOpenOptions } from "./signal-types.ts";
+import type {
+  SignalBus,
+  SignalDriver,
+  SignalOpenOptions,
+} from "./signal-types.ts";
 
 /**
  * Open an in-memory signal bus.
  *
  * @param options - Declarations / durable path / clock
  */
-export async function openMemorySignal(options: SignalOpenOptions) {
+export async function openMemorySignal(
+  options: SignalOpenOptions,
+): Promise<SignalBus> {
   return createSignalEngine("memory", options);
 }
 

@@ -5,6 +5,7 @@
 
 import { watch } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { SessionStore } from "../auth/sessions.ts";
 import type { ConsoleAppHandle } from "../console/server/app.ts";
 import type { ConsoleState } from "../console/server/state.ts";
@@ -16,14 +17,34 @@ import {
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
-import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
+import { createBunRuntime } from "../runtime/bun.ts";
+import {
+  APP_PORT,
+  CONSOLE_PORT,
+  MCP_PORT,
+  type FetchApp,
+} from "../runtime/types.ts";
 import { clientAdd } from "./client-add.ts";
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
+/** App entry shape — FetchApp plus boot before serve. */
+type BootableApp = FetchApp & {
+  boot(): Promise<unknown>;
+};
+
 /** Stoppable surface handle. */
 export interface DevSurfaceHandle {
   readonly stop: () => void;
+}
+
+/** App surface returned by {@link DevOptions.startApp}. */
+export interface DevAppHandle {
+  readonly stop: () => void;
+  /** Bound listen port (set when serve chooses an ephemeral port). */
+  readonly port?: number;
+  /** Base URL of the app server. */
+  readonly url?: URL;
 }
 
 /** Console surface returned by {@link DevOptions.serveConsole}. */
@@ -121,10 +142,14 @@ export interface DevOptions {
    * Default: {@link serveMcp} on :6535.
    */
   readonly serveMcp?: (options: DevServeMcpOptions) => Promise<DevMcpHandle>;
-  /** Start app under bun --hot (injectable). */
-  readonly startApp?: (entry: string, env: Record<string, string>) => Promise<{
-    stop(): void;
-  }>;
+  /**
+   * Boot + serve the app entry (injectable).
+   * Default: `import` → `app.boot()` → `createBunRuntime().serve` on `PORT`.
+   */
+  readonly startApp?: (
+    entry: string,
+    env: Record<string, string>,
+  ) => Promise<DevAppHandle>;
 }
 
 /** Result of a dry-run / prepared / live-but-detached dev session. */
@@ -265,14 +290,33 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const startApp =
     options.startApp ??
     (async (entryPath, appEnv) => {
-      const proc = Bun.spawn(
-        ["bun", "--hot", entryPath],
-        { cwd, env: appEnv, stdout: "inherit", stderr: "inherit" },
-      );
+      const port = Number(appEnv["PORT"] ?? APP_PORT);
+      Object.assign(process.env, appEnv);
+      const absoluteEntry = resolve(cwd, entryPath);
+      const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
+        app?: BootableApp;
+      };
+      if (
+        mod.app === undefined ||
+        typeof mod.app.boot !== "function" ||
+        typeof mod.app.fetch !== "function"
+      ) {
+        throw new Error(
+          `oke dev: ${entryPath} must export app with boot() and fetch()`,
+        );
+      }
+      await mod.app.boot();
+      const handle = createBunRuntime().serve(mod.app, {
+        port,
+        hostname: "127.0.0.1",
+      });
+      write(`oke app http://127.0.0.1:${handle.port}\n`);
       return {
         stop() {
-          proc.kill();
+          handle.stop(true);
         },
+        port: handle.port,
+        url: handle.url,
       };
     });
 
@@ -345,6 +389,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     });
 
   const app = await startApp(plan.entry, env);
+  const boundAppPort = app.port ?? appPort;
   const consoleServer = await serveConsole(consolePort);
   const boundConsolePort = consoleServer.port ?? consolePort;
 
@@ -371,7 +416,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const boundMcpPort = mcpServer?.port ?? mcpPort;
   const mcpUrl = mcpServer?.url ?? null;
 
-  const appUrl = `http://127.0.0.1:${appPort}`;
+  const appUrl =
+    app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
   await regen(appUrl);
 
   const watcher = watch(
@@ -404,11 +450,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const session: DevSession = {
     plan: {
       ...plan,
+      appPort: boundAppPort,
       consolePort: boundConsolePort,
       mcpPort: boundMcpPort,
     },
     stop,
-    appPort,
+    appPort: boundAppPort,
     consolePort: boundConsolePort,
     mcpPort: boundMcpPort,
     mcpUrl,
@@ -463,9 +510,9 @@ export async function devCli(args: readonly string[]): Promise<number> {
       } else {
         stack = true;
       }
-    } else if (a === "--entry") entry = args[++i];
+    } else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke dev [--stack|-s [roles]] [--entry src/app.ts]
+      console.log(`oke dev [--stack|-s [roles]] [--entry|-e src/app.ts]
 
 Watch · hot reload · Console :6533 · app :6530 · MCP :6535
 Regenerates client types on every save.

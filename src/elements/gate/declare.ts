@@ -69,9 +69,31 @@ export interface RateGateDecl {
 export type GateDecl = PolicyGateDecl | RateGateDecl;
 
 /**
+ * Shape of the {@link gate} element namespace.
+ */
+export interface GateNamespace {
+  /**
+   * Declare a named ABAC / auth policy.
+   *
+   * @param name - Policy id (also a Module:Action when it contains `:`)
+   * @param check - Predicate over {@link GatePolicyContext}
+   */
+  policy(
+    name: string,
+    check: (ctx: GatePolicyContext) => boolean | Promise<boolean>,
+  ): PolicyGateDecl;
+  /**
+   * Declare a rate limit (atomic Lua on the kv driver).
+   *
+   * @param options - Strategy / max / per / keyBy
+   */
+  rate(options: RateOptions): RateGateDecl;
+}
+
+/**
  * Gate element namespace — `gate.policy` · `gate.rate`.
  */
-export const gate = {
+export const gate: GateNamespace = {
   /**
    * Declare a named ABAC / auth policy.
    *
@@ -109,4 +131,4 @@ export const gate = {
       overridable: options.overridable ?? false,
     };
   },
-} as const;
+};

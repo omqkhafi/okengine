@@ -66,12 +66,12 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<number> 
 export async function upgradeCli(args: readonly string[]): Promise<number> {
   let dryRun = true;
   for (const a of args) {
-    if (a === "--apply") dryRun = false;
+    if (a === "--apply" || a === "-a") dryRun = false;
     else if (a === "--help" || a === "-h") {
-      console.log(`oke upgrade [--apply]
+      console.log(`oke upgrade [--apply|-a]
 
 Run codemods for a breaking change and print the diff.
-Pass --apply to write files (default is dry-run).
+Pass --apply to write files (default is dry-run — never writes without it).
 Codemods ship with every breaking change (unified-theory §22).
 `);
       return 0;

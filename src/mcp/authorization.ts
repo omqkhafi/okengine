@@ -219,8 +219,8 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
 ];
 
 /** Lookup map. */
-export const MCP_POLICY_BY_NAME = new Map(
-  MCP_TOOL_POLICIES.map((p) => [p.name, p]),
+export const MCP_POLICY_BY_NAME: ReadonlyMap<string, McpToolPolicy> = new Map(
+  MCP_TOOL_POLICIES.map((p) => [p.name, p] as const),
 );
 
 /**

@@ -16,7 +16,7 @@ describe("oke doctor", () => {
       expectedSchemaFingerprint: undefined,
       write: () => {},
     });
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(findings.some((f) => f.code === "missing_secret")).toBe(true);
     expect(
       findings.find((f) => f.message.includes("STRIPE_KEY")),
@@ -32,7 +32,7 @@ describe("oke doctor", () => {
       expectedSchemaFingerprint: "abc",
       write: () => {},
     });
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(findings.some((f) => f.code === "port_conflict")).toBe(true);
     expect(findings[0]!.message).toContain("6530");
   });
@@ -46,7 +46,7 @@ describe("oke doctor", () => {
       currentSchemaFingerprint: "bbb",
       write: () => {},
     });
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(findings.some((f) => f.code === "schema_drift")).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe("oke doctor", () => {
       write: () => {},
     });
 
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     const hit = findings.find((f) => f.code === "pii_ask");
     expect(hit).toBeDefined();
     expect(hit!.message).toContain("support.createTicket");

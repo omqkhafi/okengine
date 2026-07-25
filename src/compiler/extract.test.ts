@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { Glob } from "bun";
 
 import {
   deepMatch,
@@ -20,7 +19,7 @@ const excerptUrl = new URL(
 async function loadSkyportFiles(): Promise<
   { path: string; source: string }[]
 > {
-  const glob = new Glob("**/*.{ts,tsx}");
+  const glob = new Bun.Glob("**/*.{ts,tsx}");
   const files: { path: string; source: string }[] = [];
   for await (const path of glob.scan({ cwd: skyportRoot, onlyFiles: true })) {
     files.push({

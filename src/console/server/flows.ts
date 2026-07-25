@@ -14,7 +14,7 @@ import {
   type IssuedSession,
 } from "../../auth/index.ts";
 import { DryRunWriteIsolationError } from "../../kernel/dry-run.ts";
-import { fail, flow, http, type Binding } from "../../kernel/index.ts";
+import { fail, flow, http, type AnyFlowDef, type Binding } from "../../kernel/index.ts";
 import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
@@ -1486,84 +1486,84 @@ export function createConsoleBindings(state: ConsoleState): {
   readonly bindings: Binding[];
   readonly routes: {
     readonly setup: {
-      readonly status: ReturnType<typeof createSetupStatus>;
-      readonly claim: ReturnType<typeof createSetupClaim>;
+      readonly status: AnyFlowDef;
+      readonly claim: AnyFlowDef;
     };
     readonly session: {
-      readonly login: ReturnType<typeof createSessionLogin>;
-      readonly me: ReturnType<typeof createSessionMe>;
-      readonly logout: ReturnType<typeof createSessionLogout>;
+      readonly login: AnyFlowDef;
+      readonly me: AnyFlowDef;
+      readonly logout: AnyFlowDef;
     };
-    readonly manifest: { readonly get: ReturnType<typeof createManifestGet> };
-    readonly runs: { readonly list: ReturnType<typeof createRunsList> };
-    readonly action: { readonly ping: ReturnType<typeof createActionPing> };
+    readonly manifest: { readonly get: AnyFlowDef };
+    readonly runs: { readonly list: AnyFlowDef };
+    readonly action: { readonly ping: AnyFlowDef };
     readonly structural: {
-      readonly propose: ReturnType<typeof createStructuralPropose>;
+      readonly propose: AnyFlowDef;
     };
     readonly flows: {
-      readonly identities: ReturnType<typeof createFlowsIdentities>;
-      readonly invoke: ReturnType<typeof createFlowsInvoke>;
+      readonly identities: AnyFlowDef;
+      readonly invoke: AnyFlowDef;
     };
     readonly traces: {
-      readonly replay: ReturnType<typeof createTracesReplay>;
+      readonly replay: AnyFlowDef;
     };
     readonly signals: {
-      readonly list: ReturnType<typeof createSignalsList>;
-      readonly replay: ReturnType<typeof createSignalsReplay>;
-      readonly dryRunReplay: ReturnType<typeof createSignalsDryRunReplay>;
-      readonly discard: ReturnType<typeof createSignalsDiscard>;
+      readonly list: AnyFlowDef;
+      readonly replay: AnyFlowDef;
+      readonly dryRunReplay: AnyFlowDef;
+      readonly discard: AnyFlowDef;
     };
     readonly store: {
-      readonly list: ReturnType<typeof createStoreList>;
-      readonly query: ReturnType<typeof createStoreQuery>;
-      readonly reveal: ReturnType<typeof createStoreReveal>;
-      readonly edit: ReturnType<typeof createStoreEdit>;
-      readonly delete: ReturnType<typeof createStoreDelete>;
-      readonly purgeCache: ReturnType<typeof createStorePurgeCache>;
-      readonly sql: ReturnType<typeof createStoreSql>;
-      readonly preview: ReturnType<typeof createStorePreview>;
+      readonly list: AnyFlowDef;
+      readonly query: AnyFlowDef;
+      readonly reveal: AnyFlowDef;
+      readonly edit: AnyFlowDef;
+      readonly delete: AnyFlowDef;
+      readonly purgeCache: AnyFlowDef;
+      readonly sql: AnyFlowDef;
+      readonly preview: AnyFlowDef;
     };
     readonly vault: {
-      readonly list: ReturnType<typeof createVaultList>;
-      readonly set: ReturnType<typeof createVaultSet>;
-      readonly rotate: ReturnType<typeof createVaultRotate>;
+      readonly list: AnyFlowDef;
+      readonly set: AnyFlowDef;
+      readonly rotate: AnyFlowDef;
     };
     readonly ai: {
-      readonly list: ReturnType<typeof createAiList>;
+      readonly list: AnyFlowDef;
     };
     readonly gates: {
-      readonly list: ReturnType<typeof createGatesList>;
-      readonly simulate: ReturnType<typeof createGatesSimulate>;
-      readonly powers: ReturnType<typeof createGatesPowers>;
+      readonly list: AnyFlowDef;
+      readonly simulate: AnyFlowDef;
+      readonly powers: AnyFlowDef;
     };
     readonly access: {
-      readonly list: ReturnType<typeof createAccessList>;
-      readonly effective: ReturnType<typeof createAccessEffective>;
-      readonly keyBlast: ReturnType<typeof createAccessKeyBlast>;
-      readonly createKey: ReturnType<typeof createAccessCreateKey>;
-      readonly revokeKey: ReturnType<typeof createAccessRevokeKey>;
-      readonly rotateKey: ReturnType<typeof createAccessRotateKey>;
-      readonly setRoleGrants: ReturnType<typeof createAccessSetRoleGrants>;
+      readonly list: AnyFlowDef;
+      readonly effective: AnyFlowDef;
+      readonly keyBlast: AnyFlowDef;
+      readonly createKey: AnyFlowDef;
+      readonly revokeKey: AnyFlowDef;
+      readonly rotateKey: AnyFlowDef;
+      readonly setRoleGrants: AnyFlowDef;
     };
     readonly diff: {
-      readonly list: ReturnType<typeof createDiffList>;
+      readonly list: AnyFlowDef;
     };
     readonly plugin: {
-      readonly list: ReturnType<typeof createPluginsList>;
+      readonly list: AnyFlowDef;
     };
     readonly clock: {
-      readonly list: ReturnType<typeof createClockList>;
-      readonly runNow: ReturnType<typeof createClockRunNow>;
-      readonly pause: ReturnType<typeof createClockPause>;
-      readonly editSchedule: ReturnType<typeof createClockEditSchedule>;
-      readonly wakeEarly: ReturnType<typeof createClockWakeEarly>;
+      readonly list: AnyFlowDef;
+      readonly runNow: AnyFlowDef;
+      readonly pause: AnyFlowDef;
+      readonly editSchedule: AnyFlowDef;
+      readonly wakeEarly: AnyFlowDef;
     };
     readonly channel: {
-      readonly list: ReturnType<typeof createChannelsList>;
-      readonly preview: ReturnType<typeof createChannelPreview>;
-      readonly verifyAuth: ReturnType<typeof createChannelVerifyAuth>;
-      readonly reveal: ReturnType<typeof createChannelReveal>;
-      readonly sendTest: ReturnType<typeof createChannelSendTest>;
+      readonly list: AnyFlowDef;
+      readonly preview: AnyFlowDef;
+      readonly verifyAuth: AnyFlowDef;
+      readonly reveal: AnyFlowDef;
+      readonly sendTest: AnyFlowDef;
     };
   };
 } {

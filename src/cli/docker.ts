@@ -93,7 +93,7 @@ export async function runDockerDerive(
 }
 
 /**
- * CLI entry for `oke docker [--prod] [--out dir]`.
+ * CLI entry for `oke docker [--prod|-p] [--out|-o dir]`.
  *
  * @param args - Args after `docker`
  */
@@ -104,15 +104,15 @@ export async function dockerCli(args: readonly string[]): Promise<number> {
   let manifestPath: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--prod") prod = true;
-    else if (a === "--out") outDir = args[++i];
-    else if (a === "--config") configPath = args[++i];
+    if (a === "--prod" || a === "-p") prod = true;
+    else if (a === "--out" || a === "-o") outDir = args[++i];
+    else if (a === "--config" || a === "-c") configPath = args[++i];
     else if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke docker [--prod] [--out .] [--config oke.config.ts]
+      console.log(`oke docker [--prod|-p] [--out|-o .] [--config|-c oke.config.ts]
 
 Derive Dockerfile + compose.<role>.yml files.
-Credentials are never written into YAML.
+--prod is opt-in (never the default). Credentials are never written into YAML.
 `);
       return 0;
     }

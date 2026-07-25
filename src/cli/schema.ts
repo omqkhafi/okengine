@@ -143,7 +143,7 @@ export async function readSchemaFingerprint(
 export async function schemaCli(args: readonly string[]): Promise<number> {
   const [sub, ...rest] = args;
   if (sub !== "generate") {
-    console.error("Usage: oke schema generate [--check]");
+    console.error("Usage: oke schema generate [--check|-c]");
     return 1;
   }
   let check = false;
@@ -151,11 +151,11 @@ export async function schemaCli(args: readonly string[]): Promise<number> {
   let out: string | undefined;
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === "--check") check = true;
+    if (a === "--check" || a === "-c") check = true;
     else if (a === "--manifest" || a === "-m") manifestPath = rest[++i];
-    else if (a === "--out") out = rest[++i];
+    else if (a === "--out" || a === "-o") out = rest[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke schema generate [--check] [--out schema/oke.ts]
+      console.log(`oke schema generate [--check|-c] [--out|-o schema/oke.ts]
 
 Emit core + plugin tables. Use --check in CI to fail on drift.
 `);

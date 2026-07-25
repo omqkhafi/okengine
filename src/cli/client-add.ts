@@ -55,11 +55,11 @@ export async function clientAddCli(args: readonly string[]): Promise<number> {
     return 1;
   }
   let out = "oke-client.d.ts";
-  const outIdx = args.indexOf("--out");
+  const outIdx = args.findIndex((a) => a === "--out" || a === "-o");
   if (outIdx !== -1) {
     const next = args[outIdx + 1];
     if (!next) {
-      console.error("--out requires a path");
+      console.error("--out|-o requires a path");
       return 1;
     }
     out = next;

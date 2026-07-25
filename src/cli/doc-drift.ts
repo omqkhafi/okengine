@@ -8,12 +8,16 @@
  * `### \`examples/<app>/path/to/file.ts\`` (absolute from repo root — used by
  * README.md). Unheaded fences are illustrations and are ignored.
  *
+ * Also validates ```mermaid fences with Mermaid's own parser (happy-dom
+ * provides the DOM surface Bun needs for sanitize hooks).
+ *
  * Usage:
  *   bun src/cli/doc-drift.ts
  *   bun src/cli/doc-drift.ts docs/spec/four-applications.md README.md
  */
 
 import { resolve } from "node:path";
+import { Window } from "happy-dom";
 
 const ROOT = resolve(import.meta.dir, "../..");
 
@@ -22,6 +26,36 @@ const DEFAULT_DOCS: readonly string[] = [
   resolve(ROOT, "docs/spec/four-applications.md"),
   resolve(ROOT, "README.md"),
 ];
+
+let mermaidReady: Promise<typeof import("mermaid").default> | undefined;
+
+/**
+ * Install a minimal DOM so Mermaid's sanitize hooks can run under Bun.
+ */
+function ensureDom(): void {
+  const g = globalThis as typeof globalThis & { document?: unknown };
+  if (g.document !== undefined) return;
+  const window = new Window({ url: "https://localhost/" });
+  Object.assign(g, {
+    window,
+    document: window.document,
+    HTMLElement: window.HTMLElement,
+    Element: window.Element,
+    Node: window.Node,
+    DOMParser: window.DOMParser,
+    navigator: window.navigator,
+    getComputedStyle: window.getComputedStyle.bind(window),
+  });
+}
+
+/**
+ * Lazy-load Mermaid after the DOM polyfill is in place.
+ */
+async function loadMermaid(): Promise<typeof import("mermaid").default> {
+  ensureDom();
+  mermaidReady ??= import("mermaid").then((m) => m.default);
+  return mermaidReady;
+}
 
 /** App section heading → example package directory name. */
 const APP_SECTIONS: ReadonlyArray<{ readonly re: RegExp; readonly app: string }> =
@@ -52,6 +86,75 @@ export interface ClaimedFence {
   readonly relPath: string;
   readonly body: string;
   readonly headingLine: number;
+}
+
+/** One ```mermaid fence extracted from a markdown document. */
+export interface MermaidFence {
+  readonly body: string;
+  readonly startLine: number;
+}
+
+/**
+ * Extract every fenced Mermaid diagram from a markdown document.
+ *
+ * @param markdown - Spec or README document
+ */
+export function parseMermaidFences(markdown: string): MermaidFence[] {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const fences: MermaidFence[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^```mermaid\s*$/.test(lines[i]!)) continue;
+    const startLine = i + 1;
+    i++;
+    const bodyLines: string[] = [];
+    while (i < lines.length && !lines[i]!.startsWith("```")) {
+      bodyLines.push(lines[i]!);
+      i++;
+    }
+    if (i >= lines.length || !lines[i]!.startsWith("```")) {
+      throw new Error(
+        `doc-drift: unclosed mermaid fence (line ${startLine})`,
+      );
+    }
+    fences.push({ body: bodyLines.join("\n").trim(), startLine });
+  }
+
+  return fences;
+}
+
+/**
+ * Validate Mermaid fence bodies with Mermaid's parser.
+ *
+ * @param fences - Extracted mermaid fences
+ */
+export async function checkMermaidSyntax(
+  fences: readonly MermaidFence[],
+): Promise<{ readonly ok: boolean; readonly failures: readonly string[] }> {
+  if (fences.length === 0) {
+    return { ok: true, failures: [] };
+  }
+
+  const mermaid = await loadMermaid();
+  const failures: string[] = [];
+
+  for (const fence of fences) {
+    try {
+      const result = await mermaid.parse(fence.body);
+      if (!result) {
+        failures.push(
+          `mermaid: parse returned false (line ${fence.startLine})`,
+        );
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      failures.push(
+        `mermaid: invalid syntax (line ${fence.startLine}): ${detail.split("\n")[0]}`,
+      );
+    }
+  }
+
+  return { ok: failures.length === 0, failures };
 }
 
 /**
@@ -220,6 +323,7 @@ export async function runDocDrift(
   const messages: string[] = [];
   let ok = true;
   let total = 0;
+  let mermaidTotal = 0;
 
   for (const path of paths) {
     const abs = resolve(ROOT, path);
@@ -247,11 +351,30 @@ export async function runDocDrift(
         `doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`,
       );
     }
+
+    const mermaidFences = parseMermaidFences(markdown);
+    if (mermaidFences.length > 0) {
+      mermaidTotal += mermaidFences.length;
+      const mermaidResult = await checkMermaidSyntax(mermaidFences);
+      if (!mermaidResult.ok) {
+        ok = false;
+        messages.push(
+          `doc-drift: ${mermaidResult.failures.length} mermaid failure(s) in ${label}`,
+        );
+        for (const f of mermaidResult.failures) messages.push(`  · ${f}`);
+      } else {
+        messages.push(
+          `doc-drift: ok — ${mermaidFences.length} mermaid fence(s) in ${label}`,
+        );
+      }
+    }
   }
 
   if (ok && paths.length > 1) {
+    const mermaidNote =
+      mermaidTotal > 0 ? ` · ${mermaidTotal} mermaid fence(s)` : "";
     messages.push(
-      `doc-drift: ok — ${total} claimed fence(s) across ${paths.length} file(s)`,
+      `doc-drift: ok — ${total} claimed fence(s) across ${paths.length} file(s)${mermaidNote}`,
     );
   }
 

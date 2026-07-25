@@ -58,9 +58,9 @@ export async function branchCli(args: readonly string[]): Promise<number> {
   let at: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--at") at = args[++i];
+    if (a === "--at" || a === "-a") at = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke branch <name> --at "yesterday"
+      console.log(`oke branch <name> --at|-a "yesterday"
 
 Fork journaled state into a sandbox for replay / time-travel.
 `);

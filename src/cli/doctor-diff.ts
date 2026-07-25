@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import { diffManifest } from "../manifest/diff.ts";
 import type { Manifest, ManifestChange } from "../manifest/types.ts";
 import { undeclaredContractBreaks } from "../manifest/undeclared.ts";
+import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import { loadManifest } from "./load-config.ts";
 
 /** Default remote base branch candidates. */
@@ -82,7 +83,7 @@ export async function runDoctorDiff(
         ? "oke doctor --diff: ok (no behavioural changes)\n"
         : `oke doctor --diff: ok (${all.length} change(s), no undeclared contract breaks)\n`,
     );
-    return { code: 0, undeclared, allChanges: all };
+    return { code: EXIT_OK, undeclared, allChanges: all };
   }
 
   write(
@@ -94,7 +95,7 @@ export async function runDoctorDiff(
   write(
     "Acknowledge intentional breaks with `breaking: true` on the owning flow.\n",
   );
-  return { code: 1, undeclared, allChanges: all };
+  return { code: EXIT_RUNTIME, undeclared, allChanges: all };
 }
 
 /**
@@ -240,20 +241,20 @@ export async function doctorDiffCli(args: readonly string[]): Promise<number> {
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--diff") continue;
-    if (a === "--before") beforePath = args[++i];
-    else if (a === "--after") afterPath = args[++i];
-    else if (a === "--base") baseBranch = args[++i];
+    if (a === "--diff" || a === "-d") continue;
+    if (a === "--before" || a === "-b") beforePath = args[++i];
+    else if (a === "--after" || a === "-a") afterPath = args[++i];
+    else if (a === "--base" || a === "-B") baseBranch = args[++i];
     else if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--cwd") cwd = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke doctor --diff [--before <path> --after <path>] [--base main]
+      console.log(`oke doctor --diff|-d [--before|-b <path> --after|-a <path>] [--base|-B main]
 
 CI gate: fail on undeclared contract-breaking Manifest changes.
 Default: git merge-base (main/master) vs working-tree manifest.
 Acknowledge intentional breaks with breaking: true on the flow.
 `);
-      return 0;
+      return EXIT_OK;
     }
   }
 
@@ -268,6 +269,6 @@ Acknowledge intentional breaks with breaking: true on the flow.
     return code;
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
-    return 1;
+    return EXIT_USAGE;
   }
 }

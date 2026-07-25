@@ -82,6 +82,41 @@ describe("oke images pin", () => {
   });
 });
 
+describe("oke images list", () => {
+  test("lists recipe/image/tag/digest/size without writing", async () => {
+    const { runImagesList } = await import("./images.ts");
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-images-list-"));
+    let out = "";
+    const code = await runImagesList({
+      cwd: dir,
+      images,
+      lock: {
+        oke: "1.0",
+        images: {
+          "store.sql": {
+            image: "pgvector/pgvector:pg17@sha256:abc123",
+            digest: "sha256:abc123",
+            pinnedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      },
+      write: (t) => {
+        out += t;
+      },
+    });
+    expect(code).toBe(0);
+    expect(out).toContain("RECIPE");
+    expect(out).toContain("DIGEST");
+    expect(out).toContain("SIZE");
+    expect(out).toContain("store.sql");
+    expect(out).toContain("postgres");
+    expect(out).toContain("pgvector/pgvector");
+    expect(out).toContain("pg17");
+    expect(out).toContain("sha256:abc123");
+    expect(await Bun.file(join(dir, "oke.images.lock")).exists()).toBe(false);
+  });
+});
+
 describe("oke schema generate", () => {
   test("emits schema/oke.ts and --check catches drift", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-cli-schema-"));

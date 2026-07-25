@@ -5,8 +5,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   checkDocDrift,
+  checkMermaidSyntax,
   normalizeTs,
   parseClaimedFences,
+  parseMermaidFences,
 } from "./doc-drift.ts";
 
 describe("doc-drift", () => {
@@ -102,5 +104,43 @@ const skip = true;
     );
     expect(ok).toBe(false);
     expect(failures[0]).toContain("does not contain claimed fence");
+  });
+
+  test("parseMermaidFences extracts mermaid blocks", () => {
+    const md = `## Architecture
+
+\`\`\`mermaid
+flowchart LR
+  A --> B
+\`\`\`
+
+\`\`\`typescript
+const skip = true;
+\`\`\`
+`;
+    const fences = parseMermaidFences(md);
+    expect(fences).toHaveLength(1);
+    expect(fences[0]!.body).toContain("flowchart LR");
+  });
+
+  test("checkMermaidSyntax accepts valid flowchart", async () => {
+    const { ok, failures } = await checkMermaidSyntax([
+      {
+        body: `flowchart TD
+  code["your code"] -->|compile| manifest["manifest.oke.json"]
+  manifest --> client["typed client (+ live queries)"]`,
+        startLine: 1,
+      },
+    ]);
+    expect(ok).toBe(true);
+    expect(failures).toEqual([]);
+  });
+
+  test("checkMermaidSyntax rejects invalid syntax", async () => {
+    const { ok, failures } = await checkMermaidSyntax([
+      { body: "flowchart LR\n  A-->", startLine: 9 },
+    ]);
+    expect(ok).toBe(false);
+    expect(failures[0]).toContain("mermaid: invalid syntax (line 9)");
   });
 });

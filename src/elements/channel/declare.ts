@@ -74,9 +74,30 @@ function mediumBinder(
 }
 
 /**
+ * Shape of the {@link channel} element namespace.
+ */
+export interface ChannelNamespace {
+  /**
+   * Medium-agnostic template.
+   *
+   * @param name - Template id
+   * @param options - Medium / locales / schema
+   */
+  template(name: string, options?: ChannelTemplateOptions): ChannelTemplateDecl;
+  /** Email medium binder. */
+  email(options?: ChannelMediumOptions): ChannelMediumBinder;
+  /** SMS medium binder. */
+  sms(options?: ChannelMediumOptions): ChannelMediumBinder;
+  /** WhatsApp medium binder. */
+  whatsapp(options?: ChannelMediumOptions): ChannelMediumBinder;
+  /** Push medium binder. */
+  push(options?: ChannelMediumOptions): ChannelMediumBinder;
+}
+
+/**
  * Channel element namespace.
  */
-export const channel = {
+export const channel: ChannelNamespace = {
   /**
    * Medium-agnostic template.
    *
@@ -117,4 +138,4 @@ export const channel = {
   push(options?: ChannelMediumOptions): ChannelMediumBinder {
     return mediumBinder("push", options);
   },
-} as const;
+};

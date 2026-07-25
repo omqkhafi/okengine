@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { Manifest } from "../manifest/types.ts";
-import { gatesList } from "./gates-list.ts";
+import { gatesList, gatesListCli } from "./gates-list.ts";
 
 describe("oke gates list", () => {
   test("prints every pair derived from the Manifest", async () => {
@@ -28,5 +28,20 @@ describe("oke gates list", () => {
     expect(out).toContain("flights:search");
     expect(out).toContain("booking:create");
     expect(out).toContain("console:flows:invoke-as");
+  });
+
+  test("CLI help documents --json|-j", async () => {
+    let out = "";
+    const orig = console.log;
+    console.log = (...args: unknown[]) => {
+      out += args.map(String).join(" ");
+    };
+    try {
+      expect(await gatesListCli(["--help"])).toBe(0);
+    } finally {
+      console.log = orig;
+    }
+    expect(out).toContain("--json");
+    expect(out).toContain("-j");
   });
 });

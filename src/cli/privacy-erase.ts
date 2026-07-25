@@ -42,10 +42,10 @@ export function runPrivacyErase(
  */
 export async function privacyEraseCli(argv: readonly string[]): Promise<number> {
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(`oke privacy erase --subject <id>
+    console.log(`oke privacy erase --subject|-s <id>
 
 Crypto-shred a subject's archived fields by deleting their per-subject
-Vault key. Parquet partitions are not rewritten.
+Vault key. --subject is required (no default). Parquet partitions are not rewritten.
 `);
     return 0;
   }
@@ -63,7 +63,7 @@ Vault key. Parquet partitions are not rewritten.
   }
 
   if (!subjectId) {
-    console.error("oke privacy erase: --subject <id> is required");
+    console.error("oke privacy erase: --subject|-s <id> is required");
     return 1;
   }
 

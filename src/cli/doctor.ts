@@ -6,7 +6,9 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import type { Manifest } from "../manifest/types.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
+import { hasFlag, wantsJson } from "./args.ts";
 import { checkManifestPiiAsks } from "./doctor-pii.ts";
+import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
 import { loadManifest } from "./load-config.ts";
 import { schemaFingerprint, readSchemaFingerprint } from "./schema.ts";
 
@@ -41,10 +43,17 @@ export interface DoctorOptions {
   /** Current schema fingerprint (tests). */
   readonly currentSchemaFingerprint?: string | null;
   readonly write?: (text: string) => void;
+  /** Write hints / progress (defaults to stderr). */
+  readonly writeErr?: (text: string) => void;
+  /** Emit only JSON on stdout. */
+  readonly json?: boolean;
 }
 
 /**
- * Run doctor checks. Exit 1 when any error-severity finding exists.
+ * Run doctor checks.
+ *
+ * Exit {@link EXIT_RUNTIME} when any error-severity finding exists;
+ * {@link EXIT_OK} otherwise (including warn-only).
  *
  * @param options - Manifest / probes
  */
@@ -53,6 +62,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   readonly findings: readonly DoctorFinding[];
 }> {
   const write = options.write ?? ((t) => process.stdout.write(t));
+  const writeErr = options.writeErr ?? ((t) => process.stderr.write(t));
+  const json = options.json ?? false;
   const cwd = options.cwd ?? process.cwd();
   const findings: DoctorFinding[] = [];
 
@@ -135,16 +146,26 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
     findings.push(...checkManifestPiiAsks(manifest));
   }
 
+  const ok = !findings.some((f) => f.severity === "error");
+  const code = ok ? EXIT_OK : EXIT_RUNTIME;
+
+  if (json) {
+    write(`${JSON.stringify({ ok, findings }, null, 2)}\n`);
+    if (!ok) {
+      writeErr("Hint: fix error-severity findings, then re-run oke doctor.\n");
+    }
+    return { code, findings };
+  }
+
   if (findings.length === 0) {
     write("oke doctor: ok\n");
-    return { code: 0, findings };
+    return { code: EXIT_OK, findings };
   }
 
   write(`oke doctor: ${findings.length} finding(s)\n`);
   for (const f of findings) {
     write(`  [${f.severity}] ${f.code}: ${f.message}\n`);
   }
-  const code = findings.some((f) => f.severity === "error") ? 1 : 0;
   return { code, findings };
 }
 
@@ -154,29 +175,32 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
  * @param args - Args after `doctor`
  */
 export async function doctorCli(args: readonly string[]): Promise<number> {
-  if (args.includes("--diff")) {
+  if (hasFlag(args, "--diff", "-d")) {
     const { doctorDiffCli } = await import("./doctor-diff.ts");
     return doctorDiffCli(args);
   }
 
   let manifestPath: string | undefined;
+  const json = wantsJson(args);
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke doctor [--manifest oke.manifest.json]
-oke doctor --diff [--before <path> --after <path>] [--base <branch>]
+      console.log(`oke doctor [--manifest|-m path] [--json|-j]
+oke doctor --diff|-d [--before|-b <path> --after|-a <path>] [--base|-B <branch>]
 
 Verify secrets, ports, schema drift, and PII→model egress before serving.
 
 --diff  CI gate: block undeclared contract breaks (Manifest Diff).
         Default baseline is git merge-base (main/master) vs the working
         tree; pass --before/--after for an explicit comparison.
+
+--json  Machine-parseable JSON on stdout; hints on stderr.
 `);
-      return 0;
+      return EXIT_OK;
     }
   }
-  const { code } = await runDoctor({ manifestPath });
+  const { code } = await runDoctor({ manifestPath, json });
   return code;
 }
 
