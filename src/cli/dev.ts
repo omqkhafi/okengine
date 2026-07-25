@@ -4,8 +4,9 @@
  */
 
 import { watch } from "node:fs";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { SessionStore } from "../auth/sessions.ts";
 import type { ConsoleAppHandle } from "../console/server/app.ts";
 import type { ConsoleState } from "../console/server/state.ts";
@@ -17,21 +18,17 @@ import {
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
-import { createBunRuntime } from "../runtime/bun.ts";
 import {
   APP_PORT,
   CONSOLE_PORT,
   MCP_PORT,
-  type FetchApp,
 } from "../runtime/types.ts";
 import { clientAdd } from "./client-add.ts";
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
-/** App entry shape — FetchApp plus boot before serve. */
-type BootableApp = FetchApp & {
-  boot(): Promise<unknown>;
-};
+/** Max wait for the `bun --hot` app child to bind a port. */
+const APP_READY_TIMEOUT_MS = 30_000;
 
 /** Stoppable surface handle. */
 export interface DevSurfaceHandle {
@@ -144,7 +141,9 @@ export interface DevOptions {
   readonly serveMcp?: (options: DevServeMcpOptions) => Promise<DevMcpHandle>;
   /**
    * Boot + serve the app entry (injectable).
-   * Default: `import` → `app.boot()` → `createBunRuntime().serve` on `PORT`.
+   * Default: spawn `bun --hot` on the shipped {@link ./dev-app-runner.ts}
+   * (import → `app.boot()` → `createBunRuntime().serve`) so Bun soft-reloads
+   * app code while preserving the listen socket.
    */
   readonly startApp?: (
     entry: string,
@@ -289,36 +288,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   const startApp =
     options.startApp ??
-    (async (entryPath, appEnv) => {
-      const port = Number(appEnv["PORT"] ?? APP_PORT);
-      Object.assign(process.env, appEnv);
-      const absoluteEntry = resolve(cwd, entryPath);
-      const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
-        app?: BootableApp;
-      };
-      if (
-        mod.app === undefined ||
-        typeof mod.app.boot !== "function" ||
-        typeof mod.app.fetch !== "function"
-      ) {
-        throw new Error(
-          `oke dev: ${entryPath} must export app with boot() and fetch()`,
-        );
-      }
-      await mod.app.boot();
-      const handle = createBunRuntime().serve(mod.app, {
-        port,
-        hostname: "127.0.0.1",
-      });
-      write(`oke app http://127.0.0.1:${handle.port}\n`);
-      return {
-        stop() {
-          handle.stop(true);
-        },
-        port: handle.port,
-        url: handle.url,
-      };
-    });
+    ((entryPath, appEnv) => startAppHot(cwd, entryPath, appEnv));
 
   const seedManifest =
     options.manifest !== undefined
@@ -490,6 +460,101 @@ async function tryLoadProjectManifest(
     }
   }
   return undefined;
+}
+
+/**
+ * Default app boot: `bun --hot` on the shipped runner (socket-preserving).
+ *
+ * @param cwd - Project root
+ * @param entryPath - App entry (absolute or cwd-relative)
+ * @param appEnv - Env overlay (`PORT`, stack vars, …)
+ */
+async function startAppHot(
+  cwd: string,
+  entryPath: string,
+  appEnv: Record<string, string>,
+): Promise<DevAppHandle> {
+  const absoluteEntry = resolve(cwd, entryPath);
+  const runner = resolve(import.meta.dir, "dev-app-runner.ts");
+  const readyPath = join(
+    tmpdir(),
+    `oke-dev-ready-${crypto.randomUUID()}.txt`,
+  );
+  const hostname = "127.0.0.1";
+  const env: Record<string, string> = {
+    ...appEnv,
+    OKE_ENTRY: absoluteEntry,
+    OKE_HOSTNAME: hostname,
+    OKE_READY_PATH: readyPath,
+  };
+
+  const proc = Bun.spawn(["bun", "--hot", runner], {
+    cwd,
+    env,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      proc.kill();
+    } catch {
+      // already exited
+    }
+    void unlink(readyPath).catch(() => {});
+  };
+
+  try {
+    const boundPort = await waitForAppReady(
+      readyPath,
+      proc,
+      APP_READY_TIMEOUT_MS,
+    );
+    // Child prints `oke app http://…` (again on each soft reload).
+    const url = new URL(`http://${hostname}:${boundPort}/`);
+    return { stop, port: boundPort, url };
+  } catch (err) {
+    stop();
+    throw err;
+  }
+}
+
+/**
+ * Poll the ready file until the app child binds a port (or exits).
+ *
+ * @param readyPath - Path the runner writes
+ * @param proc - Child process
+ * @param timeoutMs - Max wait
+ */
+async function waitForAppReady(
+  readyPath: string,
+  proc: Bun.Subprocess,
+  timeoutMs: number,
+): Promise<number> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const exitCode = proc.exitCode;
+    if (exitCode !== null) {
+      throw new Error(
+        `oke dev: app process exited before ready (code ${exitCode})`,
+      );
+    }
+    if (await Bun.file(readyPath).exists()) {
+      const text = (await Bun.file(readyPath).text()).trim();
+      const port = Number(text);
+      if (!Number.isFinite(port) || port <= 0) {
+        throw new Error(`oke dev: invalid ready port from app child: ${text}`);
+      }
+      return port;
+    }
+    await Bun.sleep(25);
+  }
+  throw new Error(
+    `oke dev: app did not become ready within ${timeoutMs}ms`,
+  );
 }
 
 /**

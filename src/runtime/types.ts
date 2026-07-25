@@ -55,6 +55,12 @@ export interface ServeOptions {
   /** Listen hostname. Defaults to `127.0.0.1`. */
   readonly hostname?: string;
   /**
+   * Stable {@link Bun.serve} identity for `bun --hot` soft reload.
+   * When set, Bun updates handlers on the existing socket instead of
+   * opening a second listener.
+   */
+  readonly id?: string;
+  /**
    * Extra hostnames accepted in `Host` / `Origin` (reverse proxies).
    * Always merged with loopback defaults and the listen hostname —
    * never replaces the mandatory check.

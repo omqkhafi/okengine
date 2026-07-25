@@ -109,6 +109,7 @@ function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
   const server = Bun.serve({
     port,
     hostname,
+    ...(options?.id !== undefined ? { id: options.id } : {}),
     routes: Object.keys(routes).length > 0 ? routes : undefined,
     fetch: fetchHandler,
   });

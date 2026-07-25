@@ -7,6 +7,8 @@
 
 **Package:** `okengine` · **CLI:** `oke` · **License:** MIT
 
+JSR (`@omqkhafi/okengine`) does not support npm-style `exports` wildcards — import deep drivers (`okengine/drivers/…`) from the npm package, not JSR. The `okengine/drivers` index is available on both.
+
 ---
 
 ## Start here

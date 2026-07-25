@@ -1,5 +1,6 @@
 /**
- * `oke dev` — MCP boot wiring (Prompts 15/19 residual).
+ * `oke dev` — MCP boot wiring (Prompts 15/19 residual) plus default
+ * startApp boot correctness and `bun --hot` soft-reload gates.
  *
  * Boots the real Console + MCP surfaces against one live Manifest/runs
  * context and exercises `oke.manifest.get` over HTTP on :6535.
@@ -8,13 +9,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
-import { runDev, type DevSession } from "./dev.ts";
+import { runDev, type DevOptions, type DevSession } from "./dev.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
+
+/** Repo public entry — absolute import so temp apps need no install. */
+const OKE_INDEX = resolve(import.meta.dir, "../index.ts");
 
 const SECRET = "oke-dev-mcp-integration-secret";
 
@@ -273,4 +277,159 @@ describe("oke dev MCP live wiring", () => {
     expect(consoleStopped).toBe(true);
     expect(mcpStopped).toBe(true);
   });
+});
+
+/**
+ * Write a minimal HTTP flow app whose `do` returns `{ version }`.
+ *
+ * @param dir - Project root (`src/app.ts` / `src/flows/ping.ts`)
+ * @param version - Marker returned by the flow
+ */
+async function writePingApp(dir: string, version: string): Promise<void> {
+  await Bun.write(
+    join(dir, "src/flows/ping.ts"),
+    `import { on, flow, http } from ${JSON.stringify(OKE_INDEX)};
+
+export const ping = on(http.get("/ping"), flow({
+  name: "ping",
+  do: () => ({ version: ${JSON.stringify(version)} as const }),
+}));
+
+export const slow = on(http.get("/slow"), flow({
+  name: "slow",
+  do: async () => {
+    const started = ${JSON.stringify(version)};
+    await Bun.sleep(800);
+    return { version: started as typeof started };
+  },
+}));
+`,
+  );
+  await Bun.write(
+    join(dir, "src/app.ts"),
+    `import { oke } from ${JSON.stringify(OKE_INDEX)};
+import * as ping from "./flows/ping.ts";
+
+export const app = oke({ name: "dev-hot", env: "test" }).adopt({ ping });
+`,
+  );
+}
+
+/** Stub Console + MCP so boot/hot tests isolate the app child. */
+function stubSurfaces(): Pick<
+  DevOptions,
+  | "serveConsole"
+  | "serveMcp"
+  | "regenClient"
+  | "write"
+  | "silentClaim"
+  | "keepAlive"
+> {
+  return {
+    silentClaim: true,
+    keepAlive: false,
+    regenClient: async () => {},
+    write: () => {},
+    serveConsole: async () => ({ stop() {} }),
+    serveMcp: async () => ({ stop() {} }),
+  };
+}
+
+describe("oke dev default startApp boot", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
+  test("default startApp boots and serves a flow request", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-boot-"));
+    await writePingApp(dir, "boot-ok");
+
+    const result = await runDev({
+      cwd: dir,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      ...stubSurfaces(),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    expect(session).toBeDefined();
+    if (!session) return;
+
+    expect(session.appPort).toBeGreaterThan(0);
+    const res = await fetch(`http://127.0.0.1:${session.appPort}/ping`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      data: { version: "boot-ok" },
+      error: null,
+    });
+  }, 60_000);
+});
+
+describe("oke dev hot reload", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
+  test("editing a flow do handler is reflected without restarting oke dev", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-hot-"));
+    await writePingApp(dir, "v1");
+
+    const result = await runDev({
+      cwd: dir,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      ...stubSurfaces(),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    expect(session).toBeDefined();
+    if (!session) return;
+
+    const base = `http://127.0.0.1:${session.appPort}`;
+    const first = await fetch(`${base}/ping`);
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      data: { version: "v1" },
+      error: null,
+    });
+
+    // In-flight request must survive the soft reload (socket preserved).
+    const inflight = fetch(`${base}/slow`);
+    await Bun.sleep(100);
+    await writePingApp(dir, "v2");
+
+    const inflightRes = await inflight;
+    expect(inflightRes.status).toBe(200);
+    const inflightBody = (await inflightRes.json()) as {
+      data: { version: string };
+    };
+    expect(inflightBody.data.version).toBe("v1");
+
+    let seen: unknown;
+    for (let i = 0; i < 80; i++) {
+      await Bun.sleep(50);
+      const res = await fetch(`${base}/ping`);
+      expect(res.status).toBe(200);
+      seen = await res.json();
+      if (
+        seen &&
+        typeof seen === "object" &&
+        "data" in seen &&
+        (seen as { data: { version: string } }).data.version === "v2"
+      ) {
+        break;
+      }
+    }
+    expect(seen).toEqual({ data: { version: "v2" }, error: null });
+  }, 60_000);
 });
