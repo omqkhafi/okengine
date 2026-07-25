@@ -117,6 +117,12 @@ export interface KvNamespace {
     keys: readonly string[],
     args?: readonly string[],
   ): Promise<T>;
+  /**
+   * List keys in this namespace, optionally by prefix (Console Store browser).
+   *
+   * @param prefix - Key prefix filter
+   */
+  list(prefix?: string): Promise<string[]>;
   /** Close / release. */
   close(): Promise<void>;
 }
@@ -157,6 +163,16 @@ export interface KvClientLike {
    * @param args - Command arguments
    */
   send?(command: string, args: string[]): Promise<unknown>;
+  /**
+   * Redis `SCAN` cursor iteration — optional; used for Console key browse.
+   *
+   * @param cursor - Cursor string
+   * @param opts - MATCH / COUNT
+   */
+  scan?(
+    cursor: string,
+    opts?: { readonly match?: string; readonly count?: number },
+  ): Promise<[string, string[]]>;
 }
 
 /** KV driver factory. */

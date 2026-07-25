@@ -10,15 +10,24 @@ import { dirname } from "node:path";
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
+import {
+  DryRunWriteIsolationError,
+  setDryRunMessageId,
+  withDryRun,
+} from "../kernel/dry-run.ts";
 import type {
   DeadLetter,
   LiveHandler,
   SignalBus,
+  SignalDiscardOptions,
   SignalDriverId,
   SignalFailureReason,
   SignalHandler,
   SignalMessage,
   SignalOpenOptions,
+  SignalReplayOptions,
+  SignalReplayResult,
+  SignalStats,
   SignalTransaction,
   SignalUnsubscribe,
 } from "./signal-types.ts";
@@ -77,7 +86,73 @@ export async function createSignalEngine(
   const consumers: Consumer[] = [];
   const liveHandlers = new Map<string, Set<LiveHandler>>();
   const onCommitted = new Set<() => void>();
+  /** Trailing delivery timestamps for throughput (ms). */
+  const deliveredAt: number[] = [];
+  /** Recent live payloads per signal (newest last, capped). */
+  const recentLive = new Map<string, unknown[]>();
+  /** Per-subscriber error counts (broadcast). */
+  const subscriberErrors = new Map<string, number>();
   let closed = false;
+
+  function noteDelivered(): void {
+    const t = now();
+    deliveredAt.push(t);
+    while (deliveredAt.length > 0 && deliveredAt[0]! < t - 1_000) {
+      deliveredAt.shift();
+    }
+  }
+
+  function pushLive(signal: string, payload: unknown): void {
+    let list = recentLive.get(signal);
+    if (!list) {
+      list = [];
+      recentLive.set(signal, list);
+    }
+    list.push(payload);
+    while (list.length > 50) list.shift();
+  }
+
+  function failureFromError(
+    err: unknown,
+    attempt: number,
+  ): SignalFailureReason {
+    const code =
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      typeof (err as { code: unknown }).code === "string"
+        ? (err as { code: string }).code
+        : err instanceof Error && err.name !== "Error"
+          ? err.name
+          : "handler_error";
+    return {
+      code,
+      message: err instanceof Error ? err.message : String(err),
+      at: now(),
+      attempt,
+    };
+  }
+
+  function throughputPerSec(): number {
+    const t = now();
+    let n = 0;
+    for (let i = deliveredAt.length - 1; i >= 0; i--) {
+      if (deliveredAt[i]! < t - 1_000) break;
+      n += 1;
+    }
+    return n;
+  }
+
+  function outboxLagMs(signalName: string): number | null {
+    const t = now();
+    let oldest: number | null = null;
+    for (const m of messages) {
+      if (m.signal !== signalName) continue;
+      if (m.status !== "pending" && m.status !== "inflight") continue;
+      if (oldest === null || m.createdAt < oldest) oldest = m.createdAt;
+    }
+    return oldest === null ? null : Math.max(0, t - oldest);
+  }
 
   if (durablePath) {
     const snap = await loadSnapshot(durablePath);
@@ -262,14 +337,9 @@ export async function createSignalEngine(
       await consumer.handler(toPublic(m));
       m.status = "delivered";
       m.lockedBy = null;
+      noteDelivered();
     } catch (err) {
-      const reason: SignalFailureReason = {
-        code: "handler_error",
-        message: err instanceof Error ? err.message : String(err),
-        at: now(),
-        attempt: m.attempts,
-      };
-      m.failures.push(reason);
+      m.failures.push(failureFromError(err, m.attempts));
       m.lockedBy = null;
       if (m.attempts > decl.retries) {
         if (decl.deadLetter) {
@@ -314,14 +384,11 @@ export async function createSignalEngine(
         try {
           await sub.handler(toPublic(m));
           m.deliveredTo.add(sub.subscriberId);
+          noteDelivered();
         } catch (err) {
-          const reason: SignalFailureReason = {
-            code: "handler_error",
-            message: err instanceof Error ? err.message : String(err),
-            at: now(),
-            attempt: m.attempts,
-          };
-          m.failures.push(reason);
+          m.failures.push(failureFromError(err, m.attempts));
+          const key = `${m.signal}::${sub.subscriberId}`;
+          subscriberErrors.set(key, (subscriberErrors.get(key) ?? 0) + 1);
         }
       }
       if (
@@ -344,7 +411,9 @@ export async function createSignalEngine(
           await h(m.payload);
         }
       }
+      pushLive(m.signal, m.payload);
       m.status = "delivered";
+      noteDelivered();
       progress = true;
     }
     return progress;
@@ -366,6 +435,221 @@ export async function createSignalEngine(
       .map((m) => ({ ...toPublic(m), status: "dead" as const }));
   }
 
+  function statsFor(name: string): SignalStats | null {
+    const decl = signals.get(name);
+    if (!decl) return null;
+    let pending = 0;
+    let inflight = 0;
+    let dead = 0;
+    let delivered = 0;
+    const deadList: DeadLetter[] = [];
+    for (const m of messages) {
+      if (m.signal !== name) continue;
+      if (m.status === "pending") pending += 1;
+      else if (m.status === "inflight") inflight += 1;
+      else if (m.status === "dead") {
+        dead += 1;
+        deadList.push({ ...toPublic(m), status: "dead" });
+      } else if (m.status === "delivered") delivered += 1;
+    }
+    const subs = consumers.filter((c) => c.signal === name);
+    const subscribers = subs.map((c) => {
+      let lag = 0;
+      for (const m of messages) {
+        if (m.signal !== name || m.delivery !== "broadcast") continue;
+        if (m.status === "dead" || m.status === "delivered") continue;
+        if (!m.deliveredTo.has(c.subscriberId)) lag += 1;
+      }
+      return {
+        id: c.subscriberId,
+        lag,
+        errorCount: subscriberErrors.get(`${name}::${c.subscriberId}`) ?? 0,
+      };
+    });
+    return {
+      signal: name,
+      delivery: decl.delivery,
+      pending,
+      inflight,
+      dead,
+      delivered,
+      retries: decl.retries,
+      deadLetterEnabled: decl.deadLetter,
+      outboxLagMs: outboxLagMs(name),
+      subscribers,
+      connections: liveHandlers.get(name)?.size ?? 0,
+      throughputPerSec: throughputPerSec(),
+      schema: decl.schema,
+      recentLive: [...(recentLive.get(name) ?? [])],
+      deadLetters: deadList,
+    };
+  }
+
+  async function inspect(signal?: string): Promise<readonly SignalStats[]> {
+    if (signal) {
+      const one = statsFor(signal);
+      return one ? [one] : [];
+    }
+    const out: SignalStats[] = [];
+    for (const name of signals.keys()) {
+      const s = statsFor(name);
+      if (s) out.push(s);
+    }
+    return out;
+  }
+
+  async function replay(
+    options: SignalReplayOptions,
+  ): Promise<SignalReplayResult> {
+    requireDecl(options.signal);
+    const rate = Math.max(1, options.ratePerSec);
+    const intervalMs = Math.floor(1_000 / rate);
+    const ids =
+      options.messageIds && options.messageIds.length > 0
+        ? new Set(options.messageIds)
+        : null;
+    const targets = messages.filter(
+      (m) =>
+        m.signal === options.signal &&
+        m.status === "dead" &&
+        (ids === null || ids.has(m.id)),
+    );
+    const results: SignalReplayResult["results"][number][] = [];
+    const wouldHaveFired: SignalReplayResult["wouldHaveFired"][number][] = [];
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      if (i > 0 && intervalMs > 0) {
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      const m = targets[i]!;
+      // Never mutate stored payload during dry-run — override is view-only.
+      if (
+        !options.dryRun &&
+        options.payloads &&
+        options.payloads[m.id] !== undefined
+      ) {
+        m.payload = options.payloads[m.id];
+      }
+
+      const handlers = consumers.filter((c) => {
+        if (c.signal !== m.signal) return false;
+        if (options.subscriberId) return c.subscriberId === options.subscriberId;
+        return true;
+      });
+
+      if (handlers.length === 0) {
+        const err = {
+          code: "no_consumer",
+          message: "No consumer registered for replay",
+        };
+        results.push({ id: m.id, ok: false, error: err });
+        failed += 1;
+        continue;
+      }
+
+      let ok = true;
+      let lastErr: { code: string; message: string } | undefined;
+      for (const h of handlers) {
+        try {
+          const publicMsg = toPublic(m);
+          const msg =
+            options.payloads?.[m.id] !== undefined
+              ? { ...publicMsg, payload: options.payloads[m.id] }
+              : publicMsg;
+          if (options.dryRun) {
+            // Stub send/ask; stub-store writes roll back when withDryRun exits.
+            const stubbed = await withDryRun(async () => {
+              setDryRunMessageId(m.id);
+              await h.handler(msg);
+            });
+            for (const w of stubbed.wouldHaveFired) {
+              wouldHaveFired.push({
+                kind: w.kind,
+                resource: w.resource,
+                messageId: w.messageId ?? m.id,
+              });
+            }
+          } else {
+            await h.handler(msg);
+          }
+        } catch (err) {
+          if (options.dryRun && err instanceof DryRunWriteIsolationError) {
+            return {
+              attempted: 0,
+              succeeded: 0,
+              failed: 0,
+              dryRun: true,
+              results: [],
+              wouldHaveFired: [],
+              refused: {
+                code: "dry_run_unsafe",
+                reason: err.message,
+              },
+            };
+          }
+          ok = false;
+          const reason = failureFromError(err, m.attempts + 1);
+          lastErr = { code: reason.code, message: reason.message };
+          if (!options.dryRun) m.failures.push(reason);
+        }
+      }
+
+      if (ok) {
+        succeeded += 1;
+        results.push({ id: m.id, ok: true });
+        if (!options.dryRun) {
+          m.status = "pending";
+          m.lockedBy = null;
+          m.availableAt = now();
+          m.attempts = 0;
+          if (m.delivery === "broadcast") {
+            if (options.subscriberId) {
+              // Re-target one subscriber — others keep their ack.
+              m.deliveredTo.delete(options.subscriberId);
+            } else {
+              m.deliveredTo.clear();
+            }
+          }
+        }
+      } else {
+        failed += 1;
+        results.push({ id: m.id, ok: false, error: lastErr });
+      }
+    }
+
+    if (!options.dryRun) await persist();
+    return {
+      attempted: targets.length,
+      succeeded,
+      failed,
+      dryRun: options.dryRun,
+      results,
+      wouldHaveFired,
+    };
+  }
+
+  async function discard(
+    options: SignalDiscardOptions,
+  ): Promise<{ readonly discarded: number }> {
+    const ids = new Set(options.messageIds);
+    let discarded = 0;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]!;
+      if (
+        m.signal === options.signal &&
+        m.status === "dead" &&
+        ids.has(m.id)
+      ) {
+        messages.splice(i, 1);
+        discarded += 1;
+      }
+    }
+    await persist();
+    return { discarded };
+  }
+
   async function getWrite(key: string): Promise<unknown> {
     return writes.get(key);
   }
@@ -375,6 +659,9 @@ export async function createSignalEngine(
     consumers.length = 0;
     liveHandlers.clear();
     onCommitted.clear();
+    deliveredAt.length = 0;
+    recentLive.clear();
+    subscriberErrors.clear();
   }
 
   return {
@@ -386,6 +673,9 @@ export async function createSignalEngine(
     live,
     drain,
     deadLetters,
+    inspect,
+    replay,
+    discard,
     getWrite,
     close,
   };

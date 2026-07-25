@@ -40,6 +40,12 @@ export type {
   SignalOpenOptions,
   SignalRedisClientLike,
   SignalNatsClientLike,
+  SignalStats,
+  SignalSubscriberStats,
+  SignalReplayOptions,
+  SignalReplayResult,
+  SignalReplayMessageResult,
+  SignalDiscardOptions,
 } from "./signal-types.ts";
 
 export {

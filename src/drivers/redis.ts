@@ -51,6 +51,14 @@ export async function openRedisKv(
       const n = await client.del(prefix + key);
       return n > 0;
     },
+    async list(listPrefix = "") {
+      const match = prefix + listPrefix + "*";
+      const keys = await scanAll(client, match);
+      return keys
+        .filter((k) => k.startsWith(prefix))
+        .map((k) => k.slice(prefix.length))
+        .sort();
+    },
     async eval<T = unknown>(
       script: string,
       keys: readonly string[],
@@ -74,6 +82,52 @@ export async function openRedisKv(
       /* Bun.redis is process-scoped; injected fakes may no-op */
     },
   };
+}
+
+/**
+ * SCAN the keyspace (or fall back to a fake client's in-memory map).
+ *
+ * @param client - Redis-like client
+ * @param match - MATCH pattern
+ */
+async function scanAll(
+  client: KvClientLike,
+  match: string,
+): Promise<string[]> {
+  if (client.scan) {
+    const out: string[] = [];
+    let cursor = "0";
+    do {
+      const [next, batch] = await client.scan(cursor, {
+        match,
+        count: 100,
+      });
+      out.push(...batch);
+      cursor = next;
+    } while (cursor !== "0");
+    return out;
+  }
+  if (client.send) {
+    const out: string[] = [];
+    let cursor = "0";
+    do {
+      const reply = (await client.send("SCAN", [
+        cursor,
+        "MATCH",
+        match,
+        "COUNT",
+        "100",
+      ])) as [string, string[]];
+      const next = String(reply[0]);
+      const batch = reply[1] ?? [];
+      out.push(...batch);
+      cursor = next;
+    } while (cursor !== "0");
+    return out;
+  }
+  throw new Error(
+    "redis kv.list: client lacks SCAN — key browse refused rather than KEYS *",
+  );
 }
 
 function ttlToSeconds(ttl: string): number {
@@ -145,6 +199,17 @@ export function createRedisFakeClient(nowMs?: () => number): KvClientLike & {
         if (data.delete(k)) n++;
       }
       return n;
+    },
+    async scan(cursor, opts) {
+      const match = opts?.match ?? "*";
+      const prefix =
+        match.endsWith("*") ? match.slice(0, -1) : match;
+      const all = [...data.keys()].filter((k) =>
+        match.endsWith("*") ? k.startsWith(prefix) : k === match,
+      );
+      // Single-page fake SCAN.
+      if (cursor !== "0") return ["0", []];
+      return ["0", all];
     },
     async eval(script, numkeys, ...keysAndArgs) {
       const keys = keysAndArgs.slice(0, numkeys);

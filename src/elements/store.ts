@@ -90,3 +90,10 @@ export type {
   FilesStoreFxHandle,
   IndexStoreFxHandle,
 } from "./store/runtime.ts";
+
+export {
+  fileKeyWarnings,
+  contentAddressedKey,
+  projectFileKeys,
+} from "./store/files-policy.ts";
+export type { FileKeyWarning } from "./store/files-policy.ts";

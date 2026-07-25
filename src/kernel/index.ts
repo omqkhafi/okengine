@@ -125,6 +125,19 @@ export {
 } from "./fx.ts";
 
 export {
+  DryRunWriteIsolationError,
+  dryRunWouldHaveFired,
+  getDryRunContext,
+  isDryRun,
+  recordWouldHaveFired,
+  setDryRunMessageId,
+  touchDryRunStore,
+  withDryRun,
+  type DryRunContext,
+  type DryRunWouldHaveFired,
+} from "./dry-run.ts";
+
+export {
   createJournal,
   createMemoryJournalStore,
   createFileJournalStore,

@@ -43,6 +43,115 @@ export interface DeadLetter extends SignalMessage {
   readonly status: "dead";
 }
 
+/** Per-subscriber lag / errors (broadcast physics). */
+export interface SignalSubscriberStats {
+  /** Stable subscriber id. */
+  readonly id: string;
+  /** Undelivered message count for this subscriber. */
+  readonly lag: number;
+  /** Handler failures attributed to this subscriber. */
+  readonly errorCount: number;
+}
+
+/**
+ * Operator-plane snapshot of one signal's live queue state.
+ *
+ * Reads the real bus — the Console must not reimplement delivery physics.
+ */
+export interface SignalStats {
+  /** Signal name. */
+  readonly signal: string;
+  /** Delivery physics. */
+  readonly delivery: SignalDelivery;
+  /** Competing / fan-out pending count. */
+  readonly pending: number;
+  /** Claimed but not yet acked (`once`). */
+  readonly inflight: number;
+  /** Dead-letter count. */
+  readonly dead: number;
+  /** Successfully delivered count. */
+  readonly delivered: number;
+  /** Declared retry budget. */
+  readonly retries: number;
+  /** Whether exhausted messages enter the DLQ. */
+  readonly deadLetterEnabled: boolean;
+  /**
+   * Age (ms) of the oldest committed-but-not-yet-relayed/consumed message.
+   * Surfaces transactional outbox lag (postgres-default case).
+   */
+  readonly outboxLagMs: number | null;
+  /** Broadcast subscriber rows. */
+  readonly subscribers: readonly SignalSubscriberStats[];
+  /** Live connection count (`delivery: "live"`). */
+  readonly connections: number;
+  /** Deliveries completed in the last trailing second. */
+  readonly throughputPerSec: number;
+  /** Declared payload schema when present. */
+  readonly schema: unknown;
+  /** Recent live payloads (newest last) for the payload monitor. */
+  readonly recentLive: readonly unknown[];
+  /** Dead-letter entries with typed per-attempt failures. */
+  readonly deadLetters: readonly DeadLetter[];
+}
+
+/** Options for {@link SignalBus.replay}. */
+export interface SignalReplayOptions {
+  /** Signal name. */
+  readonly signal: string;
+  /** Dead-letter message ids to replay (empty = all dead for the signal). */
+  readonly messageIds?: readonly string[];
+  /** Broadcast: target a single subscriber. */
+  readonly subscriberId?: string;
+  /** Max replays per second — never an unthrottled flood. */
+  readonly ratePerSec: number;
+  /** When true, invoke handlers but leave DLQ rows untouched. */
+  readonly dryRun: boolean;
+  /** Optional payload overrides keyed by message id (schema form edits). */
+  readonly payloads?: Readonly<Record<string, unknown>>;
+}
+
+/** Per-message result from a replay / dry-run pass. */
+export interface SignalReplayMessageResult {
+  readonly id: string;
+  readonly ok: boolean;
+  readonly error?: { readonly code: string; readonly message: string };
+}
+
+/** Irreversible effect intercepted during a dry-run replay. */
+export interface SignalDryRunStub {
+  readonly kind: "send" | "ask";
+  readonly resource: string;
+  readonly messageId?: string;
+}
+
+/** Aggregate result of {@link SignalBus.replay}. */
+export interface SignalReplayResult {
+  readonly attempted: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly dryRun: boolean;
+  readonly results: readonly SignalReplayMessageResult[];
+  /**
+   * Irreversible effects recorded as "would have fired" during dry-run.
+   * Empty for live replay.
+   */
+  readonly wouldHaveFired: readonly SignalDryRunStub[];
+  /**
+   * When set, dry-run was refused because a safe stubbed run is impossible
+   * for this consumer shape (same refusal spirit as Traces).
+   */
+  readonly refused?: {
+    readonly code: "dry_run_unsafe";
+    readonly reason: string;
+  };
+}
+
+/** Options for {@link SignalBus.discard}. */
+export interface SignalDiscardOptions {
+  readonly signal: string;
+  readonly messageIds: readonly string[];
+}
+
 /** Unsubscribe handle. */
 export type SignalUnsubscribe = () => void | Promise<void>;
 
@@ -179,6 +288,24 @@ export interface SignalBus {
    * @param signal - Signal name
    */
   deadLetters(signal: string): Promise<readonly DeadLetter[]>;
+  /**
+   * Operator inspect — queue depths, subscribers, outbox lag, DLQ.
+   *
+   * @param signal - Optional name; omit for every registered signal
+   */
+  inspect(signal?: string): Promise<readonly SignalStats[]>;
+  /**
+   * Replay dead letters at a controlled rate (or dry-run without mutating).
+   *
+   * @param options - Target messages, rate, dry-run, payload overrides
+   */
+  replay(options: SignalReplayOptions): Promise<SignalReplayResult>;
+  /**
+   * Permanently discard dead-letter messages.
+   *
+   * @param options - Signal + message ids
+   */
+  discard(options: SignalDiscardOptions): Promise<{ readonly discarded: number }>;
   /**
    * Read a durable paired write (post-commit / post-recovery).
    *

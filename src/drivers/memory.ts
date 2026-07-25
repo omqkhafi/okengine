@@ -340,6 +340,13 @@ export const memoryKvDriver: KvDriver = {
       async delete(key) {
         return store.delete(prefix + key);
       },
+      async list(listPrefix = "") {
+        const full = prefix + listPrefix;
+        return [...store.keys()]
+          .filter((k) => k.startsWith(full))
+          .map((k) => k.slice(prefix.length))
+          .sort();
+      },
       async eval<T = unknown>(
         script: string,
         keys: readonly string[],

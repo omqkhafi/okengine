@@ -93,6 +93,12 @@ export interface KvStoreFxHandle {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, ttl?: string): Promise<void>;
   delete(key: string): Promise<boolean>;
+  /**
+   * List keys (Console Store browser).
+   *
+   * @param prefix - Optional prefix filter
+   */
+  list(prefix?: string): Promise<string[]>;
 }
 
 /** Files handle on `fx.store`. */
@@ -248,6 +254,7 @@ export function createStoreRuntime(
       get: (key) => ns!.get(key),
       set: (key, value, ttl) => ns!.set(key, value, ttl),
       delete: (key) => ns!.delete(key),
+      list: (prefix) => ns!.list(prefix),
     };
   }
 

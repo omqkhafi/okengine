@@ -17,8 +17,8 @@ const NAV: ReadonlyArray<{
 }> = [
   { to: "/", label: "Overview", enabled: true },
   { to: "/flows", label: "Flows", enabled: true },
-  { to: "/signals", label: "Signals", enabled: false },
-  { to: "/store", label: "Store", enabled: false },
+  { to: "/signals", label: "Signals", enabled: true },
+  { to: "/store", label: "Store", enabled: true },
   { to: "/clock", label: "Clock", enabled: false },
   { to: "/gates", label: "Gates", enabled: false },
   { to: "/vault", label: "Vault", enabled: false },

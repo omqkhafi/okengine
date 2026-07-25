@@ -3,6 +3,7 @@
  */
 
 export {
+  bindManifestSignalBus,
   bootConsoleApp,
   createConsoleApp,
   type ConsoleApp,

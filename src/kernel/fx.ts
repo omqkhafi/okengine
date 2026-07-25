@@ -31,6 +31,12 @@ import {
   reversibilityOf,
   type EffectLedger,
 } from "./effects.ts";
+import {
+  DryRunWriteIsolationError,
+  isDryRun,
+  recordWouldHaveFired,
+  touchDryRunStore,
+} from "./dry-run.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
 import type { JournalSession } from "./journal.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
@@ -470,13 +476,20 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         m = new Map();
         stores.set(ref, m);
       }
+      // Snapshot before any dry-run touch so writes can be rolled back.
+      touchDryRunStore(ref, m);
       return m;
     };
 
     return {
       ref,
       get(key: string): Promise<unknown> {
-        return gated("read", ref, () => table().get(key) ?? null);
+        return gated("read", ref, () => {
+          const v = table().get(key);
+          if (v === undefined || v === null) return null;
+          // Clone during dry-run so in-place mutation cannot leak past rollback.
+          return isDryRun() ? structuredClone(v) : v;
+        });
       },
       set(key: string, value: unknown): Promise<void> {
         return gated("write", ref, () => {
@@ -484,7 +497,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         });
       },
       select(): Promise<unknown[]> {
-        return gated("read", ref, () => [...table().values()]);
+        return gated("read", ref, () => {
+          const values = [...table().values()];
+          return isDryRun()
+            ? values.map((v) => structuredClone(v))
+            : values;
+        });
       },
       insert(row: Record<string, unknown>): Promise<{ id: string }> {
         return gated("write", ref, () => {
@@ -523,6 +541,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     const ensure = async (): Promise<SqlStoreHandle> => {
       if (!cached) cached = await open();
       return cached;
+    };
+    /** Driver-backed SQL has no dry-run transaction — refuse writes. */
+    const refuseDryRunWrite = (): void => {
+      if (isDryRun()) {
+        throw new DryRunWriteIsolationError(
+          `Driver-backed store "${ref}" cannot isolate writes during dry-run; dry-run refused rather than risk a double-write.`,
+        );
+      }
     };
 
     return {
@@ -570,12 +596,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           values(row) {
             const runExecute = () =>
               gated("write", ref, async () => {
+                refuseDryRunWrite();
                 const h = await ensure();
                 await h.insert(table).values(row).execute();
               });
             return {
               returning() {
                 return gated("write", ref, async () => {
+                  refuseDryRunWrite();
                   const h = await ensure();
                   return h.insert(table).values(row).returning();
                 });
@@ -594,6 +622,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             return {
               where(where) {
                 return gated("write", ref, async () => {
+                  refuseDryRunWrite();
                   const h = await ensure();
                   return h.update(table).set(row).where(where);
                 });
@@ -611,6 +640,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       delete(table: Parameters<SqlStoreHandle["delete"]>[0], id?: string) {
         if (id !== undefined) {
           return gated("write", ref, async () => {
+            refuseDryRunWrite();
             const h = await ensure();
             return h.delete(table, id);
           });
@@ -618,6 +648,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return {
           where(where: unknown) {
             return gated("write", ref, async () => {
+              refuseDryRunWrite();
               const h = await ensure();
               return h.delete(table).where(where);
             });
@@ -632,6 +663,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       },
       increment(table, id, column, by) {
         return gated("write", ref, async () => {
+          refuseDryRunWrite();
           const h = await ensure();
           return h.increment(table, id, column, by);
         });
@@ -644,6 +676,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       },
       ensureTable(table) {
         return gated("write", ref, async () => {
+          refuseDryRunWrite();
           const h = await ensure();
           return h.ensureTable(table);
         });
@@ -681,21 +714,22 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         get(_t, prop) {
           if (prop === "ref") return baseRef;
           if (prop === "then") return undefined;
+          const isRead =
+            prop === "get" || prop === "search" || prop === "list";
           return (...args: unknown[]) =>
-            gated(
-              prop === "get" || prop === "search" || prop === "list"
-                ? "read"
-                : "write",
-              baseRef,
-              async () => {
-                const h = await open();
-                const fn = (h as unknown as Record<string | symbol, unknown>)[
-                  prop
-                ];
-                if (typeof fn !== "function") return undefined;
-                return (fn as (...a: unknown[]) => unknown).apply(h, args);
-              },
-            );
+            gated(isRead ? "read" : "write", baseRef, async () => {
+              if (!isRead && isDryRun()) {
+                throw new DryRunWriteIsolationError(
+                  `Driver-backed store "${baseRef}" cannot isolate writes during dry-run; dry-run refused rather than risk a double-write.`,
+                );
+              }
+              const h = await open();
+              const fn = (h as unknown as Record<string | symbol, unknown>)[
+                prop
+              ];
+              if (typeof fn !== "function") return undefined;
+              return (fn as (...a: unknown[]) => unknown).apply(h, args);
+            });
         },
       });
     }
@@ -845,6 +879,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     send(template, opts) {
       const name = resolveName(template);
       return gated("send", name, async () => {
+        // Dry-run: record "would have fired" — never contact a real channel
+        // (console §9.1 · §9.3 · §9.4).
+        if (isDryRun()) {
+          recordWouldHaveFired("send", name);
+          return { ok: true as const };
+        }
         if (options.channelRuntime) {
           const result = await options.channelRuntime.send(name, {
             to: opts?.to ?? "",
@@ -859,6 +899,11 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     ask(prompt, input, opts) {
       const name = resolveName(prompt);
       return gated("ask", name, async () => {
+        // Dry-run: stub the model call the same way as send.
+        if (isDryRun()) {
+          recordWouldHaveFired("ask", name);
+          return {};
+        }
         if (options.aiRuntime) {
           return options.aiRuntime.ask(name, input, {
             via: opts?.via?.map(resolveName),

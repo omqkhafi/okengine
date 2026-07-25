@@ -150,6 +150,9 @@ export async function openRedisSignal(
     live: (signal, handler) => outbox.live(signal, handler),
     drain: () => outbox.drain(),
     deadLetters: (s) => outbox.deadLetters(s),
+    inspect: (s) => outbox.inspect(s),
+    replay: (opts) => outbox.replay(opts),
+    discard: (opts) => outbox.discard(opts),
     getWrite: (k) => outbox.getWrite(k),
     close: () => outbox.close(),
   };

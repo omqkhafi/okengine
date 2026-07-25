@@ -7,15 +7,24 @@
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
+import {
+  DryRunWriteIsolationError,
+  setDryRunMessageId,
+  withDryRun,
+} from "../kernel/dry-run.ts";
 import type {
   DeadLetter,
   LiveHandler,
   SignalBus,
+  SignalDiscardOptions,
   SignalDriver,
   SignalFailureReason,
   SignalHandler,
   SignalMessage,
   SignalOpenOptions,
+  SignalReplayOptions,
+  SignalReplayResult,
+  SignalStats,
   SignalTransaction,
   SignalUnsubscribe,
 } from "./signal-types.ts";
@@ -207,6 +216,16 @@ export function createPostgresSignalFake(options?: {
         return [{ value: JSON.stringify(v) }];
       }
 
+      const byId =
+        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s*$/i.exec(
+          text,
+        );
+      if (byId) {
+        return state.messages
+          .filter((m) => m.id === params[0])
+          .map((m) => ({ ...m }));
+      }
+
       const selLive =
         /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'live'\s+ORDER\s+BY\s+created_at\s+ASC\s*$/i.exec(
           text,
@@ -225,6 +244,26 @@ export function createPostgresSignalFake(options?: {
       const state = view();
 
       if (/^CREATE\s+TABLE/i.test(text)) return { changes: 0 };
+
+      const delDead =
+        /^DELETE\s+FROM\s+oke_signal_messages\s+WHERE\s+id\s*=\s*\?\s+AND\s+signal\s*=\s*\?\s+AND\s+status\s*=\s*'dead'\s*$/i.exec(
+          text,
+        );
+      if (delDead) {
+        let changes = 0;
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+          const m = state.messages[i]!;
+          if (
+            m.id === params[0] &&
+            m.signal === params[1] &&
+            m.status === "dead"
+          ) {
+            state.messages.splice(i, 1);
+            changes += 1;
+          }
+        }
+        return { changes };
+      }
 
       const insertMsg =
         /^INSERT\s+INTO\s+oke_signal_messages\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)\s*$/i.exec(
@@ -398,8 +437,50 @@ export async function openPostgresSignal(
     handler: SignalHandler;
   }> = [];
   const liveHandlers = new Map<string, Set<LiveHandler>>();
+  const deliveredAt: number[] = [];
+  const recentLive = new Map<string, unknown[]>();
+  const subscriberErrors = new Map<string, number>();
   let unlisten: (() => void) | null = null;
   let draining: Promise<void> | null = null;
+
+  function failureFromError(
+    err: unknown,
+    attempt: number,
+  ): SignalFailureReason {
+    const code =
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      typeof (err as { code: unknown }).code === "string"
+        ? (err as { code: string }).code
+        : err instanceof Error && err.name !== "Error"
+          ? err.name
+          : "handler_error";
+    return {
+      code,
+      message: err instanceof Error ? err.message : String(err),
+      at: now(),
+      attempt,
+    };
+  }
+
+  function noteDelivered(): void {
+    const t = now();
+    deliveredAt.push(t);
+    while (deliveredAt.length > 0 && deliveredAt[0]! < t - 1_000) {
+      deliveredAt.shift();
+    }
+  }
+
+  function throughputPerSec(): number {
+    const t = now();
+    let n = 0;
+    for (let i = deliveredAt.length - 1; i >= 0; i--) {
+      if (deliveredAt[i]! < t - 1_000) break;
+      n += 1;
+    }
+    return n;
+  }
 
   unlisten = await sql.listen(CHANNEL, () => {
     void drainQuiet();
@@ -551,16 +632,9 @@ export async function openPostgresSignal(
         `UPDATE oke_signal_messages SET status = ?, locked_by = NULL WHERE id = ?`,
         ["delivered", msg.id],
       );
+      noteDelivered();
     } catch (err) {
-      const failures = [
-        ...msg.failures,
-        {
-          code: "handler_error",
-          message: err instanceof Error ? err.message : String(err),
-          at: now(),
-          attempt: msg.attempts,
-        } satisfies SignalFailureReason,
-      ];
+      const failures = [...msg.failures, failureFromError(err, msg.attempts)];
       if (msg.attempts > decl.retries) {
         await sql.exec(
           `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, failures = ? WHERE id = ?`,
@@ -652,16 +726,14 @@ export async function openPostgresSignal(
         const msg = rowToMessage(current);
         try {
           await consumer.handler(msg);
+          noteDelivered();
         } catch (err) {
           const failures = [
             ...msg.failures,
-            {
-              code: "handler_error",
-              message: err instanceof Error ? err.message : String(err),
-              at: now(),
-              attempt: Number(current.attempts) + 1,
-            } satisfies SignalFailureReason,
+            failureFromError(err, Number(current.attempts) + 1),
           ];
+          const key = `${consumer.signal}::${consumer.subscriberId}`;
+          subscriberErrors.set(key, (subscriberErrors.get(key) ?? 0) + 1);
           await sql.exec(
             `UPDATE oke_signal_messages SET failures = ? WHERE id = ?`,
             [JSON.stringify(failures), row.id],
@@ -681,10 +753,19 @@ export async function openPostgresSignal(
       if (row.delivery !== "live") continue;
       progress = true;
       const handlers = liveHandlers.get(String(row.signal));
+      const payload = JSON.parse(String(row.payload));
       if (handlers) {
-        const payload = JSON.parse(String(row.payload));
         for (const h of handlers) await h(payload);
       }
+      const sig = String(row.signal);
+      let list = recentLive.get(sig);
+      if (!list) {
+        list = [];
+        recentLive.set(sig, list);
+      }
+      list.push(payload);
+      while (list.length > 50) list.shift();
+      noteDelivered();
       await sql.exec(
         `UPDATE oke_signal_messages SET status = 'delivered', locked_by = NULL WHERE id = ?`,
         [row.id],
@@ -721,6 +802,251 @@ export async function openPostgresSignal(
     return rows.map((r) => ({ ...rowToMessage(r), status: "dead" as const }));
   }
 
+  async function statsFor(name: string): Promise<SignalStats | null> {
+    const decl = signals.get(name);
+    if (!decl) return null;
+    const rows = await sql.query(
+      `SELECT * FROM oke_signal_messages WHERE signal = ?`,
+      [name],
+    );
+    let pending = 0;
+    let inflight = 0;
+    let dead = 0;
+    let delivered = 0;
+    let oldestPending: number | null = null;
+    const deadList: DeadLetter[] = [];
+    for (const row of rows) {
+      const status = String(row.status);
+      if (status === "pending") {
+        pending += 1;
+        const created = Number(row.created_at);
+        if (oldestPending === null || created < oldestPending) {
+          oldestPending = created;
+        }
+      } else if (status === "inflight") {
+        inflight += 1;
+        const created = Number(row.created_at);
+        if (oldestPending === null || created < oldestPending) {
+          oldestPending = created;
+        }
+      } else if (status === "dead") {
+        dead += 1;
+        deadList.push({ ...rowToMessage(row), status: "dead" });
+      } else if (status === "delivered") {
+        delivered += 1;
+      }
+    }
+    const subs = consumers.filter((c) => c.signal === name);
+    const subscribers = await Promise.all(
+      subs.map(async (c) => {
+        let lag = 0;
+        for (const row of rows) {
+          if (row.delivery !== "broadcast") continue;
+          if (row.status === "dead" || row.status === "delivered") continue;
+          const deliveredTo = new Set(
+            JSON.parse(String(row.delivered_to ?? "[]")) as string[],
+          );
+          if (!deliveredTo.has(c.subscriberId)) lag += 1;
+        }
+        return {
+          id: c.subscriberId,
+          lag,
+          errorCount: subscriberErrors.get(`${name}::${c.subscriberId}`) ?? 0,
+        };
+      }),
+    );
+    return {
+      signal: name,
+      delivery: decl.delivery,
+      pending,
+      inflight,
+      dead,
+      delivered,
+      retries: decl.retries,
+      deadLetterEnabled: decl.deadLetter,
+      outboxLagMs:
+        oldestPending === null ? null : Math.max(0, now() - oldestPending),
+      subscribers,
+      connections: liveHandlers.get(name)?.size ?? 0,
+      throughputPerSec: throughputPerSec(),
+      schema: decl.schema,
+      recentLive: [...(recentLive.get(name) ?? [])],
+      deadLetters: deadList,
+    };
+  }
+
+  async function inspect(signal?: string): Promise<readonly SignalStats[]> {
+    if (signal) {
+      const one = await statsFor(signal);
+      return one ? [one] : [];
+    }
+    const out: SignalStats[] = [];
+    for (const name of signals.keys()) {
+      const s = await statsFor(name);
+      if (s) out.push(s);
+    }
+    return out;
+  }
+
+  async function replay(
+    options: SignalReplayOptions,
+  ): Promise<SignalReplayResult> {
+    requireDecl(options.signal);
+    const rate = Math.max(1, options.ratePerSec);
+    const intervalMs = Math.floor(1_000 / rate);
+    const dead = await deadLetters(options.signal);
+    const ids =
+      options.messageIds && options.messageIds.length > 0
+        ? new Set(options.messageIds)
+        : null;
+    const targets = dead.filter((m) => ids === null || ids.has(m.id));
+    const results: SignalReplayResult["results"][number][] = [];
+    const wouldHaveFired: SignalReplayResult["wouldHaveFired"][number][] = [];
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      if (i > 0 && intervalMs > 0) {
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      const m = targets[i]!;
+      const payload =
+        options.payloads?.[m.id] !== undefined
+          ? options.payloads[m.id]
+          : m.payload;
+      if (
+        options.payloads?.[m.id] !== undefined &&
+        !options.dryRun
+      ) {
+        await sql.exec(
+          `UPDATE oke_signal_messages SET payload = ? WHERE id = ?`,
+          [JSON.stringify(payload), m.id],
+        );
+      }
+
+      const handlers = consumers.filter((c) => {
+        if (c.signal !== m.signal) return false;
+        if (options.subscriberId) return c.subscriberId === options.subscriberId;
+        return true;
+      });
+
+      if (handlers.length === 0) {
+        results.push({
+          id: m.id,
+          ok: false,
+          error: {
+            code: "no_consumer",
+            message: "No consumer registered for replay",
+          },
+        });
+        failed += 1;
+        continue;
+      }
+
+      let ok = true;
+      let lastErr: { code: string; message: string } | undefined;
+      for (const h of handlers) {
+        try {
+          const msg = { ...m, payload };
+          if (options.dryRun) {
+            const stubbed = await withDryRun(async () => {
+              setDryRunMessageId(m.id);
+              await h.handler(msg);
+            });
+            for (const w of stubbed.wouldHaveFired) {
+              wouldHaveFired.push({
+                kind: w.kind,
+                resource: w.resource,
+                messageId: w.messageId ?? m.id,
+              });
+            }
+          } else {
+            await h.handler(msg);
+          }
+        } catch (err) {
+          if (options.dryRun && err instanceof DryRunWriteIsolationError) {
+            return {
+              attempted: 0,
+              succeeded: 0,
+              failed: 0,
+              dryRun: true,
+              results: [],
+              wouldHaveFired: [],
+              refused: {
+                code: "dry_run_unsafe",
+                reason: err.message,
+              },
+            };
+          }
+          ok = false;
+          const reason = failureFromError(err, m.attempts + 1);
+          lastErr = { code: reason.code, message: reason.message };
+          if (!options.dryRun) {
+            const failures = [...m.failures, reason];
+            await sql.exec(
+              `UPDATE oke_signal_messages SET failures = ? WHERE id = ?`,
+              [JSON.stringify(failures), m.id],
+            );
+          }
+        }
+      }
+
+      if (ok) {
+        succeeded += 1;
+        results.push({ id: m.id, ok: true });
+        if (!options.dryRun) {
+          if (options.subscriberId && m.delivery === "broadcast") {
+            const row = (
+              await sql.query(
+                `SELECT * FROM oke_signal_messages WHERE id = ?`,
+                [m.id],
+              )
+            )[0];
+            const deliveredTo = new Set(
+              JSON.parse(String(row?.delivered_to ?? "[]")) as string[],
+            );
+            deliveredTo.delete(options.subscriberId);
+            await sql.exec(
+              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, attempts = 0, available_at = ?, delivered_to = ? WHERE id = ?`,
+              [now(), JSON.stringify([...deliveredTo]), m.id],
+            );
+          } else {
+            await sql.exec(
+              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, attempts = 0, available_at = ?, delivered_to = '[]' WHERE id = ?`,
+              [now(), m.id],
+            );
+          }
+        }
+      } else {
+        failed += 1;
+        results.push({ id: m.id, ok: false, error: lastErr });
+      }
+    }
+
+    return {
+      attempted: targets.length,
+      succeeded,
+      failed,
+      dryRun: options.dryRun,
+      results,
+      wouldHaveFired,
+    };
+  }
+
+  async function discard(
+    options: SignalDiscardOptions,
+  ): Promise<{ readonly discarded: number }> {
+    let discarded = 0;
+    for (const id of options.messageIds) {
+      const result = await sql.exec(
+        `DELETE FROM oke_signal_messages WHERE id = ? AND signal = ? AND status = 'dead'`,
+        [id, options.signal],
+      );
+      discarded += result.changes;
+    }
+    return { discarded };
+  }
+
   async function getWrite(key: string): Promise<unknown> {
     const rows = await sql.query(
       `SELECT value FROM oke_signal_writes WHERE key = ?`,
@@ -741,6 +1067,9 @@ export async function openPostgresSignal(
     live,
     drain,
     deadLetters,
+    inspect,
+    replay,
+    discard,
     getWrite,
     async close() {
       unlisten?.();

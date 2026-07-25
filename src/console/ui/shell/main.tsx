@@ -14,6 +14,8 @@ import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { parseFlowsSearch } from "../flows/search.ts";
 import { parseRunsSearch } from "../runs/search.ts";
+import { parseSignalsSearch } from "../signals/search.ts";
+import { parseStoreSearch } from "../store/search.ts";
 import { parseTracesSearch } from "../traces/search.ts";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
@@ -73,9 +75,33 @@ const runsRoute = createRoute({
   ),
 });
 
+const signalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signals",
+  validateSearch: (search: Record<string, unknown>) =>
+    parseSignalsSearch(search),
+  component: lazyRouteComponent(
+    () => import("./panels/Signals.tsx"),
+    "default",
+  ),
+});
+
+const storeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/store",
+  validateSearch: (search: Record<string, unknown>) =>
+    parseStoreSearch(search),
+  component: lazyRouteComponent(
+    () => import("./panels/Store.tsx"),
+    "default",
+  ),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   flowsRoute,
+  signalsRoute,
+  storeRoute,
   tracesRoute,
   runsRoute,
 ]);

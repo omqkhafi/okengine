@@ -45,6 +45,20 @@ export default defineConfig({
           ) {
             return "panel-runs";
           }
+          if (
+            id.includes("/console/ui/shell/panels/signals/") ||
+            id.includes("/console/ui/shell/panels/Signals.") ||
+            id.includes("/console/ui/signals/")
+          ) {
+            return "panel-signals";
+          }
+          if (
+            id.includes("/console/ui/shell/panels/store/") ||
+            id.includes("/console/ui/shell/panels/Store.") ||
+            id.includes("/console/ui/store/")
+          ) {
+            return "panel-store";
+          }
           return undefined;
         },
       },
