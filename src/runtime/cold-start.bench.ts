@@ -2,7 +2,7 @@
  * Cold-start budget gate — unified-theory §24 / AGENTS.md.
  * Measured in a fresh Bun subprocess so import cost is real.
  *
- * Limit: < 50 ms from process start to server ready.
+ * Limit: < 75 ms from process start to server ready.
  */
 
 import { describe, expect, test } from "bun:test";

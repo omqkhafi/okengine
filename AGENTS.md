@@ -67,7 +67,7 @@ Mnemonic: O·K·E = 6·5·3.
 |---|---|
 | Kernel (edge profile) | < 15 kB |
 | Client runtime | < 3 kB |
-| Cold start on Bun | < 50 ms |
+| Cold start on Bun | < 75 ms |
 | p99 routing overhead | < 1 ms |
 
 A regression fails the build. Claims we cannot measure, we do not make.

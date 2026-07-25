@@ -211,7 +211,7 @@ process.stdout.write(String(ms));
  * Median cold-start ms across Bun subprocesses.
  *
  * Takes the best of up to five rounds (early-exit when under budget) so
- * noisy shared CI runners do not fail a real sub-50 ms cold start.
+ * noisy shared CI runners do not fail a real sub-budget cold start.
  */
 export async function measureColdStartMedianMs(): Promise<number> {
   let best = Number.POSITIVE_INFINITY;

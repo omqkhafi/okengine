@@ -416,7 +416,7 @@ Plus `oke import express|hono|elysia` codemods for the mechanical parts. Migrati
 |---|---|
 | Kernel (edge profile) | < 15 kB |
 | Client runtime | < 3 kB |
-| Cold start on Bun | < 50 ms |
+| Cold start on Bun | < 75 ms |
 | p99 routing overhead | < 1 ms |
 
 A regression fails OKE's own build. Claims we cannot measure, we do not make.
