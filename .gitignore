@@ -16,10 +16,13 @@ out
 dist
 *.tgz
 
-# docs site (Next.js)
+# docs site (Next.js) — workspace package; never keep a nested lockfile
+# (Turbopack mis-detects root when site/bun.lock exists alongside the repo lock)
 site/.next
 site/out
 site/.source
+site/bun.lock
+site/bun.lockb
 
 # code coverage
 coverage
