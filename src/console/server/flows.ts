@@ -30,14 +30,10 @@ import {
 } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
+import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { tenancyDeclared } from "./store.ts";
 
-/** Flows that may run without an operator session. */
-export const PUBLIC_CONSOLE_FLOWS = new Set([
-  "console.setup.status",
-  "console.setup.claim",
-  "console.session.login",
-]);
+export { PUBLIC_CONSOLE_FLOWS };
 
 const SetupStatusOut = z.object({
   setupClosed: z.boolean(),

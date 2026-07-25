@@ -116,12 +116,7 @@ export {
   createSignalNatsFake,
 } from "./signal-nats.ts";
 
-export {
-  runSqlConformance,
-  runKvConformance,
-  runFilesConformance,
-  runIndexConformance,
-} from "./conformance.ts";
+// Conformance helpers are test-only — import from `okengine/drivers/conformance`.
 
 export type {
   VaultDriverId,

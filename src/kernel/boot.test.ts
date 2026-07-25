@@ -7,10 +7,14 @@
  */
 
 import { afterEach, describe, expect, jest, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { memoryVaultDriver } from "../drivers/index.ts";
 import { clock } from "../elements/clock.ts";
+import { store } from "../elements/store.ts";
 import { vault, VaultBootError } from "../elements/vault.ts";
-import { bootApplication } from "./boot.ts";
+import { bootApplication, resolveElementNeeds } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
 import { every, http } from "./triggers.ts";
 import { oke } from "./app.ts";
@@ -40,6 +44,86 @@ describe("boot — vault gaps", () => {
       ]);
       expect(boot.message).toContain("STRIPE_KEY");
       expect(boot.message).toContain("DATABASE_URL");
+    }
+  });
+
+  test("three missing secrets still list every gap at once", async () => {
+    try {
+      await bootApplication({
+        env: "prod",
+        secrets: [
+          vault("A", { description: "one" }),
+          vault("B", { description: "two" }),
+          vault("C", { description: "three" }),
+        ],
+        vault: {
+          allowDevFallbacks: false,
+          chain: [{ driver: memoryVaultDriver, options: { secrets: {} } }],
+        },
+      });
+      expect.unreachable("boot should fail");
+    } catch (err) {
+      expect(err).toBeInstanceOf(VaultBootError);
+      const boot = err as VaultBootError;
+      expect(boot.gaps.map((g) => g.name).sort()).toEqual(["A", "B", "C"]);
+    }
+  });
+});
+
+describe("boot — lazy element needs", () => {
+  test("Store-only declarations do not require AI/channel/vault", () => {
+    const needs = resolveElementNeeds({
+      stores: [store.sql("notes", { schema: {} as never })],
+    });
+    expect(needs.store).toBe(true);
+    expect(needs.ai).toBe(false);
+    expect(needs.channel).toBe(false);
+    expect(needs.vault).toBe(false);
+    expect(needs.signal).toBe(false);
+  });
+
+  test("oke() Store-only graph stays under the prior 41.4 kB baseline", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
+    const entry = join(dir, "entry.ts");
+    const appPath = join(import.meta.dir, "app.ts");
+    const storePath = join(import.meta.dir, "../elements/store.ts");
+    await Bun.write(
+      entry,
+      `import { oke } from ${JSON.stringify(appPath)};\n` +
+        `import { store } from ${JSON.stringify(storePath)};\n` +
+        `export const app = oke({ name: "notes" });\n` +
+        `export { store };\n`,
+    );
+    try {
+      const result = await Bun.build({
+        entrypoints: [entry],
+        minify: true,
+        target: "bun",
+        format: "esm",
+        external: [
+          "@duckdb/node-api",
+          "@duckdb/*",
+          "age-encryption",
+          "sently",
+          "sently/*",
+          "ajv",
+          "ajv/*",
+          "ajv-formats",
+          "oxc-parser",
+          "zod",
+        ],
+      });
+      expect(result.success).toBe(true);
+      let total = 0;
+      for (const o of result.outputs) {
+        const raw = await o.arrayBuffer();
+        if (raw.byteLength === 0) continue;
+        total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
+      }
+      // Prior eager-bind baseline: ~41.4 kB for oke() alone.
+      expect(total).toBeLessThan(41_400);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });

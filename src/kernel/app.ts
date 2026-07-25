@@ -22,7 +22,7 @@ import {
 // `./boot.ts` pulls in every element + driver module (vault, store, signal,
 // clock, gate, channel, ai, runs) — a type-only import here keeps that whole
 // graph out of the cold-start path; `doBoot` below loads it lazily, only
-// when an app actually boots (AGENTS.md budget: cold start < 75 ms).
+// when an app actually boots (AGENTS.md / unified-theory budget: cold start < 75 ms).
 import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
 import {

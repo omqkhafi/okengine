@@ -18,3 +18,12 @@ export const COLD_START_BUDGET_MS = 75;
 
 /** p99 HTTP routing overhead (match only). */
 export const ROUTING_P99_BUDGET_MS = 1;
+
+/**
+ * Regression tolerance for published-export gzip samples.
+ * Allowed growth = max(floor bytes, ratio × previous).
+ */
+export const EXPORT_REGRESSION_TOLERANCE_RATIO = 0.02;
+
+/** Minimum allowed growth (bytes) before a subpath export fails regression. */
+export const EXPORT_REGRESSION_TOLERANCE_FLOOR_BYTES = 256;

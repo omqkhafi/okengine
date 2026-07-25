@@ -7,12 +7,16 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  FROM_EXAMPLE_CHOICE,
   formatCdPath,
   nextStepsText,
   parseArgs,
   run,
+  scaffoldArgsFromAnswers,
+  scaffoldArgsFromCli,
   shouldPrompt,
   sourceFromArgs,
+  type InteractiveAnswers,
 } from "./cli.ts";
 import { listTemplateFiles, scaffold } from "./scaffold.ts";
 import {
@@ -88,6 +92,40 @@ describe("sourceFromArgs", () => {
       kind: "template",
       id: DEFAULT_TEMPLATE,
     });
+  });
+});
+
+describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
+  test("each --template path matches interactive choice", () => {
+    for (const id of TEMPLATES) {
+      const answers: InteractiveAnswers = { name: "x", choice: id };
+      const fromAnswers = scaffoldArgsFromAnswers(answers);
+      const fromFlags = scaffoldArgsFromCli(
+        parseArgs(["x", "--template", id]),
+      );
+      expect(fromAnswers).toEqual(fromFlags);
+      expect(fromAnswers.source).toEqual({ kind: "template", id });
+    }
+  });
+
+  test("each --from-example path matches interactive from-example choice", () => {
+    for (const id of EXAMPLES) {
+      const answers: InteractiveAnswers = {
+        name: "x",
+        choice: FROM_EXAMPLE_CHOICE,
+        example: id,
+      };
+      const fromAnswers = scaffoldArgsFromAnswers(answers);
+      const fromFlags = scaffoldArgsFromCli(
+        parseArgs(["x", "--from-example", id]),
+      );
+      expect(fromAnswers).toEqual(fromFlags);
+      expect(fromAnswers.source).toEqual({ kind: "example", id });
+    }
+  });
+
+  test("8 paths cover every template and every example", () => {
+    expect(TEMPLATES.length + EXAMPLES.length).toBe(8);
   });
 });
 

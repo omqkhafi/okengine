@@ -229,6 +229,8 @@ export async function createTestApp<App extends OkeApp>(
     secrets: options.secrets ?? options.boot?.secrets ?? appOpts.secrets,
     signals: options.signals ?? options.boot?.signals ?? appOpts.signals,
     stores: options.boot?.stores ?? appOpts.stores,
+    // Harness surfaces `t.runs()` / evaluated gates — always open a runs store.
+    runs: options.boot?.runs ?? appOpts.runs ?? { driver: "memory" },
     vault: {
       allowDevFallbacks: true,
       chain: [

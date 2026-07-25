@@ -467,6 +467,18 @@ export interface StoreEditInput {
   readonly confirmed?: boolean;
 }
 
+/** Result of a direct store edit (preview or applied). */
+export interface StoreEditResult {
+  readonly ok: true;
+  readonly dryRun: boolean;
+  readonly willNotFire: ConsoleWillNotFire;
+  readonly applied: boolean;
+  readonly wouldHaveFired: ReadonlyArray<{
+    readonly kind: "send" | "ask";
+    readonly resource: string;
+  }>;
+}
+
 /**
  * Preview or apply a direct row/key edit. Direct edit is NOT a flow execution.
  *
@@ -483,16 +495,7 @@ export async function editStore(
     readonly production: boolean;
     readonly dryRun?: boolean;
   },
-): Promise<{
-  readonly ok: true;
-  readonly dryRun: boolean;
-  readonly willNotFire: ConsoleWillNotFire;
-  readonly applied: boolean;
-  readonly wouldHaveFired: ReadonlyArray<{
-    readonly kind: "send" | "ask";
-    readonly resource: string;
-  }>;
-}> {
+): Promise<StoreEditResult> {
   const effectRef = (
     input.child && input.ref.startsWith("sql:")
       ? `sql:${input.child}`

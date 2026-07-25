@@ -3,14 +3,31 @@
  *
  * Pure TypeScript, in-process. No Go `sops` / `age` binary.
  * Decrypts the SOPS data key with age, then AES-256-GCM value payloads.
+ *
+ * `age-encryption` is an optional peer — loaded only when this driver runs.
  */
 
-import * as age from "age-encryption";
 import type {
   VaultBag,
   VaultDriver,
   VaultOpenOptions,
 } from "./vault-types.ts";
+
+/** Minimal Typage surface used by this driver. */
+type AgeModule = typeof import("age-encryption");
+
+/**
+ * Lazy-load Typage so apps that never open a sops vault skip the dependency.
+ */
+async function loadAge(): Promise<AgeModule> {
+  try {
+    return await import("age-encryption");
+  } catch {
+    throw new Error(
+      "sops vault: install optional peer `age-encryption` (bun add age-encryption)",
+    );
+  }
+}
 
 /** SOPS metadata block. */
 interface SopsMeta {
@@ -109,6 +126,7 @@ async function decryptDataKey(
   identity: string,
   encBlock: string,
 ): Promise<Uint8Array> {
+  const age = await loadAge();
   const d = new age.Decrypter();
   d.addIdentity(identity.trim());
   const trimmed = encBlock.trim();
@@ -182,6 +200,7 @@ export async function buildSopsFixture(
   recipient: string,
   dataKey?: Uint8Array,
 ): Promise<{ json: string; dataKey: Uint8Array }> {
+  const age = await loadAge();
   const key = dataKey ?? crypto.getRandomValues(new Uint8Array(32));
   const e = new age.Encrypter();
   e.addRecipient(recipient);

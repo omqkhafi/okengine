@@ -10,7 +10,7 @@ import {
   type Fx,
   type PluginDef,
 } from "../../kernel/index.ts";
-import { PUBLIC_CONSOLE_FLOWS } from "./flows.ts";
+import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 
 /**
  * Builtin Console plugin.

@@ -14,8 +14,10 @@ export {
 export {
   bootApplication,
   mintCapabilities,
+  resolveElementNeeds,
   type BootOptions,
   type BootResult,
+  type ElementNeeds,
   type ElementRuntimes,
 } from "./boot.ts";
 

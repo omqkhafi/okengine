@@ -44,6 +44,33 @@ export type CliArgs = {
 };
 
 /**
+ * Sentinel choice for "Start from a worked example" in interactive answers.
+ * Distinct from clack's internal select value (`__example__`).
+ */
+export const FROM_EXAMPLE_CHOICE = "from-example" as const;
+
+/** Answers collected by the interactive ask step (no clack types). */
+export type InteractiveAnswers =
+  | {
+      readonly name: string;
+      readonly choice: TemplateId;
+    }
+  | {
+      readonly name: string;
+      readonly choice: typeof FROM_EXAMPLE_CHOICE;
+      readonly example: ExampleId;
+    };
+
+/**
+ * Canonical scaffold invocation — shared by interactive and flag-driven paths.
+ */
+export type ScaffoldCallArgs = {
+  readonly name: string;
+  readonly targetDir: string;
+  readonly source: ScaffoldSource;
+};
+
+/**
  * Parse argv after the binary name.
  *
  * @param argv - Process arguments (no node/bun binary)
@@ -220,57 +247,71 @@ export function sourceFromArgs(args: CliArgs): ScaffoldSource {
 }
 
 /**
- * Run the CLI.
+ * Map flag-driven {@link CliArgs} to scaffold call args.
  *
- * @param argv - Args after the binary
- * @param options - Test seams (stdin TTY, etc.)
- * @returns Exit code
+ * Requires a positional project name (and thus `targetDir`).
+ *
+ * @param args - Parsed CLI args with `name` set
  */
-export async function run(
-  argv: readonly string[],
-  options: { readonly stdinIsTTY?: boolean | undefined } = {},
-): Promise<number> {
-  let args: CliArgs;
-  try {
-    args = parseArgs(argv);
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : e);
-    return 1;
+export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
+  if (args.name === undefined || args.targetDir === undefined) {
+    throw new Error("create-oke: missing <name>");
   }
-
-  if (args.help) {
-    console.log(helpText());
-    return 0;
-  }
-
-  const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
-  if (shouldPrompt(args, stdinIsTTY)) {
-    return runInteractive(args);
-  }
-
-  if (args.name === undefined) {
-    console.log(helpText());
-    console.error("create-oke: missing <name>");
-    return 1;
-  }
-
-  return runScaffold({
+  return {
     name: basename(resolve(args.name)),
-    targetDir: args.targetDir!,
+    targetDir: args.targetDir,
     source: sourceFromArgs(args),
-    interactive: false,
-  });
+  };
 }
 
 /**
- * Interactive TTY flow — name + template (or example) select, then scaffold.
+ * Pure map from interactive answers → scaffold call args.
  *
- * @param args - Parsed args (name may already be set if ever called that way)
+ * Independent of clack — unit-tested against {@link scaffoldArgsFromCli}
+ * for every template and every `--from-example` choice.
+ *
+ * @param answers - Collected interactive answers
  */
-async function runInteractive(args: CliArgs): Promise<number> {
-  intro("create-oke");
+export function scaffoldArgsFromAnswers(
+  answers: InteractiveAnswers,
+): ScaffoldCallArgs {
+  const targetDir = resolve(answers.name.trim());
+  const name = basename(targetDir);
+  if (answers.choice === FROM_EXAMPLE_CHOICE) {
+    return {
+      name,
+      targetDir,
+      source: { kind: "example", id: answers.example },
+    };
+  }
+  return {
+    name,
+    targetDir,
+    source: { kind: "template", id: answers.choice },
+  };
+}
 
-  let name = args.name;
+/**
+ * Ask step — clack prompts only. Returns answers or `null` on cancel.
+ *
+ * Injectable for tests; production uses {@link askInteractiveAnswers}.
+ *
+ * @param partial - Name already known (skipped in the prompt)
+ */
+export type AskInteractiveFn = (
+  partial: { readonly name?: string },
+) => Promise<InteractiveAnswers | null>;
+
+/**
+ * Collect interactive answers via `@clack/prompts`.
+ *
+ * @param partial - Optional pre-filled project name
+ * @returns Answers, or `null` if the user cancelled
+ */
+export async function askInteractiveAnswers(
+  partial: { readonly name?: string } = {},
+): Promise<InteractiveAnswers | null> {
+  let name = partial.name;
   if (name === undefined) {
     const nameValue = await text({
       message: "Project name",
@@ -280,10 +321,7 @@ async function runInteractive(args: CliArgs): Promise<number> {
         return undefined;
       },
     });
-    if (isCancel(nameValue)) {
-      cancel("Cancelled.");
-      return 1;
-    }
+    if (isCancel(nameValue)) return null;
     name = String(nameValue).trim();
   }
 
@@ -303,12 +341,8 @@ async function runInteractive(args: CliArgs): Promise<number> {
     ],
     initialValue: DEFAULT_TEMPLATE,
   });
-  if (isCancel(templateValue)) {
-    cancel("Cancelled.");
-    return 1;
-  }
+  if (isCancel(templateValue)) return null;
 
-  let source: ScaffoldSource;
   if (templateValue === "__example__") {
     const exampleValue = await select({
       message: "Example",
@@ -318,20 +352,81 @@ async function runInteractive(args: CliArgs): Promise<number> {
         hint: EXAMPLE_NEW_IDEAS[id],
       })),
     });
-    if (isCancel(exampleValue)) {
-      cancel("Cancelled.");
-      return 1;
-    }
-    source = { kind: "example", id: exampleValue as ExampleId };
-  } else {
-    source = { kind: "template", id: templateValue as TemplateId };
+    if (isCancel(exampleValue)) return null;
+    return {
+      name,
+      choice: FROM_EXAMPLE_CHOICE,
+      example: exampleValue as ExampleId,
+    };
   }
 
-  const targetDir = resolve(name);
+  return { name, choice: templateValue as TemplateId };
+}
+
+/**
+ * Run the CLI.
+ *
+ * @param argv - Args after the binary
+ * @param options - Test seams (stdin TTY, ask injection)
+ * @returns Exit code
+ */
+export async function run(
+  argv: readonly string[],
+  options: {
+    readonly stdinIsTTY?: boolean | undefined;
+    readonly ask?: AskInteractiveFn;
+  } = {},
+): Promise<number> {
+  let args: CliArgs;
+  try {
+    args = parseArgs(argv);
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : e);
+    return 1;
+  }
+
+  if (args.help) {
+    console.log(helpText());
+    return 0;
+  }
+
+  const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
+  if (shouldPrompt(args, stdinIsTTY)) {
+    return runInteractive(args, options.ask ?? askInteractiveAnswers);
+  }
+
+  if (args.name === undefined) {
+    console.log(helpText());
+    console.error("create-oke: missing <name>");
+    return 1;
+  }
+
   return runScaffold({
-    name: basename(targetDir),
-    targetDir,
-    source,
+    ...scaffoldArgsFromCli(args),
+    interactive: false,
+  });
+}
+
+/**
+ * Interactive TTY flow — ask → map answers → scaffold.
+ *
+ * @param args - Parsed args (name may already be set if ever called that way)
+ * @param ask - Injectable ask step
+ */
+async function runInteractive(
+  args: CliArgs,
+  ask: AskInteractiveFn,
+): Promise<number> {
+  intro("create-oke");
+
+  const answers = await ask({ name: args.name });
+  if (answers === null) {
+    cancel("Cancelled.");
+    return 1;
+  }
+
+  return runScaffold({
+    ...scaffoldArgsFromAnswers(answers),
     interactive: true,
   });
 }
@@ -341,12 +436,9 @@ async function runInteractive(args: CliArgs): Promise<number> {
  *
  * @param options - Scaffold inputs + interactive flag
  */
-async function runScaffold(options: {
-  readonly name: string;
-  readonly targetDir: string;
-  readonly source: ScaffoldSource;
-  readonly interactive: boolean;
-}): Promise<number> {
+async function runScaffold(
+  options: ScaffoldCallArgs & { readonly interactive: boolean },
+): Promise<number> {
   const { name, targetDir, source, interactive } = options;
   const existed = existsSync(targetDir);
   let spun: ReturnType<typeof spinner> | undefined;

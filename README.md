@@ -17,23 +17,6 @@ bun add okengine                 # npm (recommended — ships the `oke` CLI)
 bunx jsr add @omqkhafi/okengine  # JSR — library API only
 bunx create-oke@latest my-app --template hello   # scaffold from npm
 ```
-
-| Package | npm | JSR |
-|---|---|---|
-| Framework | [`okengine`](https://www.npmjs.com/package/okengine) | [`@omqkhafi/okengine`](https://jsr.io/@omqkhafi/okengine) |
-| Scaffold | [`create-oke`](https://www.npmjs.com/package/create-oke) | [`@omqkhafi/create-oke`](https://jsr.io/@omqkhafi/create-oke) |
-
-### npm vs JSR
-
-| Surface | npm | JSR |
-|---|---|---|
-| Library imports (`okengine`, `/client`, `/drivers`, …) | yes | yes |
-| Deep drivers (`okengine/drivers/postgres`, …) | yes | no — use `okengine/drivers`, or install from npm |
-| `oke` CLI | yes | no |
-| `create-oke` binary | yes | no — prefer `bunx create-oke@latest` from npm |
-
-JSR cannot rewrite the CLI’s dynamic imports of your app entry (`oke dev` / `oke start` / config load). Install `okengine` from npm when you need the binary. Deep driver subpaths use npm `exports` wildcards, which JSR does not support.
-
 ---
 
 ## Start here
@@ -340,6 +323,12 @@ The Console is treated as internet-facing even on localhost. Host header validat
 **One package** — `okengine` with subpath exports, not a monorepo of many packages to assemble. Small enough to be *finished* ([§27](docs/spec/unified-theory.md#27-package-structure-one-published-package), [§29](docs/spec/unified-theory.md#29-why-this-survives-a-hundred-years)).
 
 **MIT** — no BSL/SSPL; self-host first; drivers as the community surface. Adopt what exists; bind through Bun’s native clients ([§9](docs/spec/unified-theory.md#9-adopt-dont-reinvent--but-bind-natively), [§16](docs/spec/unified-theory.md#16-the-default-table), [§29](docs/spec/unified-theory.md#29-why-this-survives-a-hundred-years)).
+
+---
+
+## Budgets
+
+Measured size and latency caps — see [`BUDGETS.md`](BUDGETS.md). Refresh with `bun run budgets`.
 
 ---
 

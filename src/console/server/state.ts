@@ -13,19 +13,11 @@ import {
   type RoleStore,
   type SessionStore,
 } from "../../auth/index.ts";
-import {
-  accessCreateInvite,
-  accessCreateKey,
-  accessRevokeKey,
-  accessRotateKey,
-  accessSetRoleGrants,
-  effectivePermissions,
-  keyBlastRadius,
-  projectAccessPanel,
-  type AccessEffectivePermissions,
-  type AccessKeyBlastRadius,
-  type AccessKeyRow,
-  type AccessPanelProjection,
+import type {
+  AccessEffectivePermissions,
+  AccessKeyBlastRadius,
+  AccessKeyRow,
+  AccessPanelProjection,
 } from "./access.ts";
 import { deriveModuleActions, type GateRuntime } from "../../elements/gate.ts";
 import type {
@@ -34,94 +26,61 @@ import type {
   SignalReplayOptions,
   SignalReplayResult,
 } from "../../drivers/signal-types.ts";
-import type { AiRuntime, EvalSuiteResult } from "../../elements/ai.ts";
+import type {
+  AgentToolEffect,
+  AiRuntime,
+  EvalSuiteResult,
+} from "../../elements/ai.ts";
 import {
   createMemorySignalConfigStore,
   type SignalConfigStore,
 } from "../../elements/signal/reconcile.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
-import {
-  effectsForFlowFromManifest,
-  projectAiPanel,
-  type ConsoleAiProjection,
-} from "./ai.ts";
+import type { ConsoleAiProjection } from "./ai.ts";
 import {
   createLoginAttemptBag,
   type LoginAttemptBag,
 } from "./auth-rate.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
-import {
-  discardViaBus,
-  projectSignalsList,
-  replayViaBus,
-  type ConsoleSignalRow,
-} from "./signals.ts";
-import {
-  deleteStore,
-  editStore,
-  projectStoresList,
-  purgeStoreCache,
-  queryStore,
-  runStoreSql,
-  type ConsoleStoreRow,
-  type StoreDeleteInput,
-  type StoreEditInput,
-  type StoreQueryInput,
-  type StoreQueryResult,
+import type { ConsoleSignalRow } from "./signals.ts";
+import type {
+  ConsoleStoreRow,
+  StoreDeleteInput,
+  StoreEditInput,
+  StoreEditResult,
+  StoreQueryInput,
+  StoreQueryResult,
 } from "./store.ts";
 import type { ClockRuntime, EditScheduleInput } from "../../elements/clock.ts";
 import type { StoreRuntime } from "../../elements/store.ts";
 import type { VaultRuntime } from "../../elements/vault.ts";
 import type { JournalStore } from "../../kernel/journal.ts";
 import type { ResourceRef } from "../../manifest/types.ts";
-import {
-  editCronSchedule,
-  pauseCronNow,
-  projectClocksList,
-  runCronNow,
-  wakeEarlyNow,
-  type ConsoleClockList,
-} from "./clock.ts";
+import type { ConsoleClockList } from "./clock.ts";
 import {
   createDefaultGateAuthStores,
   createManifestGateRuntime,
-  powersForPrincipal,
-  projectGatesPanel,
-  simulateGates,
   type GatesPanelProjection,
   type SimulateGatesInput,
   type SimulateGatesResult,
 } from "./gates.ts";
-import {
-  projectVaultList,
-  rotateVaultValue,
-  setVaultValue,
-  type ConsoleVaultRow,
-  type VaultWriteInput,
-} from "./vault.ts";
+import type { ConsoleVaultRow, VaultWriteInput } from "./vault.ts";
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
 import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
-import {
-  previewChannelTemplate,
-  projectChannelsList,
-  revealChannelRecipient,
-  sendChannelTest,
-  verifyChannelAuth,
-  type ConsoleChannelPreview,
-  type ConsoleChannelsList,
-  type EmailAuthResult,
+import type {
+  ConsoleChannelPreview,
+  ConsoleChannelsList,
+  EmailAuthResult,
 } from "./channels.ts";
 import type { OkeConfig } from "../../config/index.ts";
 import type { PluginRegistry } from "../../kernel/registry.ts";
+import type { ConsolePluginsList } from "./plugins.ts";
+import type { ConsoleDiffProjection } from "./diff.ts";
 import {
-  projectPluginsList,
-  type ConsolePluginsList,
-} from "./plugins.ts";
-import {
-  projectManifestDiff,
-  type ConsoleDiffProjection,
-} from "./diff.ts";
+  loadConsolePanel,
+  type ConsolePanelId,
+} from "./panel-load.ts";
 
 /** User-plane identity row for the Flows invoke-as picker. */
 export interface ConsoleIdentity {
@@ -149,6 +108,11 @@ export interface ConsoleState {
   previousManifest: Manifest | null;
   /** Live-channel subscribers. */
   readonly liveSubscribers: Set<(msg: ConsoleLiveMessage) => void>;
+  /**
+   * Panel backends constructed on first access (lazy). Empty after
+   * {@link createConsoleState}; grows as panels are visited.
+   */
+  readonly constructedPanels: ReadonlySet<ConsolePanelId>;
   /** Role store (data, not code) — Gates · Access. */
   readonly roles: RoleStore;
   /** API key store — first-class principals. */
@@ -248,7 +212,7 @@ export interface ConsoleState {
   editStore: (
     input: StoreEditInput,
     options?: { readonly dryRun?: boolean },
-  ) => Promise<Awaited<ReturnType<typeof editStore>>>;
+  ) => Promise<StoreEditResult>;
   /** Delete rows/keys. */
   deleteStore: (
     input: StoreDeleteInput,
@@ -457,7 +421,15 @@ export function createConsoleState(
   const signalConfig = createMemorySignalConfigStore();
   const gateAuth = createDefaultGateAuthStores();
   const invites = createOperatorInviteStore();
-  seedAccessDemoData(gateAuth.apiKeys, invites, now);
+  const constructed = new Set<ConsolePanelId>();
+  let accessSeeded = false;
+
+  const markPanel = async <T>(
+    id: ConsolePanelId,
+  ): Promise<T> => {
+    constructed.add(id);
+    return loadConsolePanel<T>(id);
+  };
 
   const state: ConsoleState = {
     operators,
@@ -470,13 +442,21 @@ export function createConsoleState(
     manifest: options.manifest ?? null,
     previousManifest: options.previousManifest ?? null,
     liveSubscribers,
+    get constructedPanels() {
+      return constructed;
+    },
     roles: gateAuth.roles,
     apiKeys: gateAuth.apiKeys,
     invites,
     accessTtlMs: options.accessTtlMs ?? ACCESS_TTL_MS,
     roleMembers: gateAuth.roleMembers,
     listAccess: async (actorScopes) => {
-      return projectAccessPanel({
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      if (!accessSeeded) {
+        seedAccessDemoData(state.apiKeys, state.invites, state.now);
+        accessSeeded = true;
+      }
+      return access.projectAccessPanel({
         manifest: state.manifest,
         roles: state.roles,
         apiKeys: state.apiKeys,
@@ -490,7 +470,8 @@ export function createConsoleState(
       });
     },
     accessEffective: async (input) => {
-      return effectivePermissions({
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      return access.effectivePermissions({
         ...input,
         roles: state.roles,
         apiKeys: state.apiKeys,
@@ -500,8 +481,9 @@ export function createConsoleState(
       });
     },
     accessKeyBlast: async (keyId) => {
+      const access = await markPanel<typeof import("./access.ts")>("access");
       const runs = await state.listRuns();
-      return keyBlastRadius({
+      return access.keyBlastRadius({
         keyId,
         apiKeys: state.apiKeys,
         runs,
@@ -509,23 +491,29 @@ export function createConsoleState(
       });
     },
     accessCreateKey: async (input) => {
-      return accessCreateKey(state.apiKeys, {
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      return access.accessCreateKey(state.apiKeys, {
         ...input,
         catalog: accessCatalog(state),
         now: state.now,
       });
     },
     accessRevokeKey: async (keyId) => {
-      return accessRevokeKey({
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      return access.accessRevokeKey({
         apiKeys: state.apiKeys,
         sessions: state.sessions,
         keyId,
         now: state.now,
       });
     },
-    accessRotateKey: async (keyId) => accessRotateKey(state.apiKeys, keyId),
+    accessRotateKey: async (keyId) => {
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      return access.accessRotateKey(state.apiKeys, keyId);
+    },
     accessSetRoleGrants: async (input) => {
-      accessSetRoleGrants({
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      access.accessSetRoleGrants({
         roles: state.roles,
         roleId: input.roleId,
         scopes: input.scopes,
@@ -534,7 +522,8 @@ export function createConsoleState(
       });
     },
     accessCreateInvite: async (input) => {
-      const row = accessCreateInvite(state.invites, {
+      const access = await markPanel<typeof import("./access.ts")>("access");
+      const row = access.accessCreateInvite(state.invites, {
         ...input,
         now: state.now,
       });
@@ -542,6 +531,9 @@ export function createConsoleState(
     },
     gateRuntime: options.gateRuntime ?? null,
     listGates: async () => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "gates");
+      const gates = await markPanel<typeof import("./gates.ts")>("gates");
       const operatorRoles = new Map<string, readonly string[]>();
       const ops = new Map<string, { name: string; email: string }>();
       for (const [id, roleIds] of operators.roles) {
@@ -550,7 +542,7 @@ export function createConsoleState(
       for (const op of operators.operators.values()) {
         ops.set(op.id, { name: op.name, email: op.email });
       }
-      return projectGatesPanel({
+      return gates.projectGatesPanel({
         manifest: state.manifest,
         roles: state.roles,
         apiKeys: state.apiKeys,
@@ -562,7 +554,8 @@ export function createConsoleState(
       });
     },
     simulateGates: async (input) => {
-      return simulateGates({
+      const gates = await markPanel<typeof import("./gates.ts")>("gates");
+      return gates.simulateGates({
         ...input,
         manifest: state.manifest,
         gateRuntime: state.gateRuntime,
@@ -573,7 +566,8 @@ export function createConsoleState(
       });
     },
     powersForPrincipal: async (input) => {
-      return powersForPrincipal({
+      const gates = await markPanel<typeof import("./gates.ts")>("gates");
+      return gates.powersForPrincipal({
         ...input,
         manifest: state.manifest,
         gateRuntime: state.gateRuntime,
@@ -587,8 +581,11 @@ export function createConsoleState(
     signalConfig,
     signalBus: null,
     listSignals: async () => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "signals");
+      const signals = await markPanel<typeof import("./signals.ts")>("signals");
       const runs = await state.listRuns();
-      return projectSignalsList({
+      return signals.projectSignalsList({
         manifest: state.manifest,
         config: state.signalConfig,
         bus: state.signalBus,
@@ -604,6 +601,7 @@ export function createConsoleState(
       });
     },
     replaySignals: async (opts) => {
+      const signals = await markPanel<typeof import("./signals.ts")>("signals");
       if (!state.signalBus) {
         return {
           attempted: 0,
@@ -614,16 +612,20 @@ export function createConsoleState(
           wouldHaveFired: [],
         };
       }
-      return replayViaBus(state.signalBus, opts);
+      return signals.replayViaBus(state.signalBus, opts);
     },
     discardSignals: async (opts) => {
+      const signals = await markPanel<typeof import("./signals.ts")>("signals");
       if (!state.signalBus) return { discarded: 0 };
-      return discardViaBus(state.signalBus, opts);
+      return signals.discardViaBus(state.signalBus, opts);
     },
     storeRuntime: null,
     listStores: async () => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "store");
+      const store = await markPanel<typeof import("./store.ts")>("store");
       const runs = await state.listRuns();
-      return projectStoresList({
+      return store.projectStoresList({
         manifest: state.manifest,
         runtime: state.storeRuntime,
         cwd: state.cwd,
@@ -636,37 +638,45 @@ export function createConsoleState(
       });
     },
     queryStore: async (input) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         return { facet: input.ref.split(":")[0] as "sql", rows: [], masked: true };
       }
-      return queryStore(state.storeRuntime, state.manifest, input);
+      return store.queryStore(state.storeRuntime, state.manifest, input);
     },
     editStore: async (input, opts) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         throw new Error("Store runtime not bound");
       }
-      return editStore(state.storeRuntime, state.manifest, input, {
+      return store.editStore(state.storeRuntime, state.manifest, input, {
         production: state.production,
         dryRun: opts?.dryRun,
       });
     },
     deleteStore: async (input) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) return { deleted: 0 };
-      return deleteStore(state.storeRuntime, input);
+      return store.deleteStore(state.storeRuntime, input);
     },
     purgeStoreCache: async (resource) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) return { keys: [] };
-      return purgeStoreCache(state.storeRuntime, resource);
+      return store.purgeStoreCache(state.storeRuntime, resource);
     },
     runStoreSql: async (ref, sqlText, options) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         throw new Error("Store runtime not bound");
       }
-      return runStoreSql(state.storeRuntime, ref, sqlText, options);
+      return store.runStoreSql(state.storeRuntime, ref, sqlText, options);
     },
     clockRuntime: options.clockRuntime ?? null,
     listClocks: async () => {
-      return projectClocksList({
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "clock");
+      const clock = await markPanel<typeof import("./clock.ts")>("clock");
+      return clock.projectClocksList({
         manifest: state.manifest,
         runtime: state.clockRuntime,
         journal: state.journalStore,
@@ -674,23 +684,26 @@ export function createConsoleState(
       });
     },
     runCronNow: async (name) => {
+      const clock = await markPanel<typeof import("./clock.ts")>("clock");
       if (!state.clockRuntime) {
         throw new Error("Clock runtime not bound");
       }
-      return runCronNow(state.clockRuntime, name);
+      return clock.runCronNow(state.clockRuntime, name);
     },
     pauseCron: async (name) => {
+      const clock = await markPanel<typeof import("./clock.ts")>("clock");
       if (!state.clockRuntime) {
         throw new Error("Clock runtime not bound");
       }
-      const row = await pauseCronNow(state.clockRuntime, name);
+      const row = await clock.pauseCronNow(state.clockRuntime, name);
       return { name: row.name, status: row.status };
     },
     editSchedule: async (input) => {
+      const clock = await markPanel<typeof import("./clock.ts")>("clock");
       if (!state.clockRuntime) {
         throw new Error("Clock runtime not bound");
       }
-      const row = await editCronSchedule(state.clockRuntime, input);
+      const row = await clock.editCronSchedule(state.clockRuntime, input);
       return {
         name: row.name,
         effectiveCron: row.effectiveCron,
@@ -698,10 +711,11 @@ export function createConsoleState(
       };
     },
     wakeEarly: async (runId) => {
+      const clock = await markPanel<typeof import("./clock.ts")>("clock");
       if (!state.journalStore) {
         throw new Error("Journal store not bound");
       }
-      const result = await wakeEarlyNow(state.journalStore, runId, {
+      const result = await clock.wakeEarlyNow(state.journalStore, runId, {
         now: state.now,
       });
       return {
@@ -714,7 +728,10 @@ export function createConsoleState(
     journalStore: options.journalStore ?? null,
     vaultEnv: options.vaultEnv ?? "dev",
     listVault: async () => {
-      return projectVaultList({
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "vault");
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      return vault.projectVaultList({
         manifest: state.manifest,
         runtime: state.vaultRuntime,
         journal: state.journalStore,
@@ -723,24 +740,29 @@ export function createConsoleState(
       });
     },
     setVault: async (input) => {
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
       if (!state.vaultRuntime) {
         throw new Error("Vault runtime not bound");
       }
-      return setVaultValue(state.vaultRuntime, input);
+      return vault.setVaultValue(state.vaultRuntime, input);
     },
     rotateVault: async (input) => {
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
       if (!state.vaultRuntime) {
         throw new Error("Vault runtime not bound");
       }
-      return rotateVaultValue(state.vaultRuntime, input);
+      return vault.rotateVaultValue(state.vaultRuntime, input);
     },
     identities: [...(options.identities ?? defaultDevIdentities())],
     production: options.production ?? process.env.NODE_ENV === "production",
     aiRuntime: null,
     evalResults: [],
     listAi: async () => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "ai");
+      const ai = await markPanel<typeof import("./ai.ts")>("ai");
       const runs = await state.listRuns();
-      return projectAiPanel({
+      return ai.projectAiPanel({
         manifest: state.manifest,
         aiRuntime: state.aiRuntime,
         runs,
@@ -748,8 +770,9 @@ export function createConsoleState(
       });
     },
     listDiff: async () => {
+      const diff = await markPanel<typeof import("./diff.ts")>("diff");
       const runs = await state.listRuns();
-      return projectManifestDiff({
+      return diff.projectManifestDiff({
         before: state.previousManifest,
         after: state.manifest,
         runs,
@@ -758,29 +781,36 @@ export function createConsoleState(
     },
     okeConfig: options.okeConfig ?? null,
     pluginRegistry: options.pluginRegistry ?? null,
-    listPlugins: async () =>
-      projectPluginsList({
+    listPlugins: async () => {
+      const plugins = await markPanel<typeof import("./plugins.ts")>("plugins");
+      return plugins.projectPluginsList({
         manifest: state.manifest,
         config: state.okeConfig,
         registry: state.pluginRegistry,
         cwd: state.cwd,
         now: state.now,
         fetchNpm: false,
-      }),
+      });
+    },
     channelRuntime: options.channelRuntime ?? null,
     channelInbox: options.channelInbox ?? null,
     channelCatalog: options.channelCatalog ?? {},
-    listChannels: async () =>
-      projectChannelsList({
+    listChannels: async () => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "channels");
+      const channels = await markPanel<typeof import("./channels.ts")>("channels");
+      return channels.projectChannelsList({
         manifest: state.manifest,
         runtime: state.channelRuntime,
         inbox: state.channelInbox,
         production: state.production,
         now: state.now,
         catalog: state.channelCatalog,
-      }),
-    previewChannel: async (input) =>
-      previewChannelTemplate({
+      });
+    },
+    previewChannel: async (input) => {
+      const channels = await markPanel<typeof import("./channels.ts")>("channels");
+      return channels.previewChannelTemplate({
         runtime: state.channelRuntime,
         manifest: state.manifest,
         catalog: state.channelCatalog,
@@ -789,20 +819,26 @@ export function createConsoleState(
         profileLocale: input.profileLocale,
         acceptLanguage: input.acceptLanguage,
         data: input.data,
-      }),
-    verifyChannelAuth: async (fromOrDomain) =>
-      verifyChannelAuth(fromOrDomain),
-    revealChannel: async (id) =>
-      revealChannelRecipient({
+      });
+    },
+    verifyChannelAuth: async (fromOrDomain) => {
+      const channels = await markPanel<typeof import("./channels.ts")>("channels");
+      return channels.verifyChannelAuth(fromOrDomain);
+    },
+    revealChannel: async (id) => {
+      const channels = await markPanel<typeof import("./channels.ts")>("channels");
+      return channels.revealChannelRecipient({
         runtime: state.channelRuntime,
         inbox: state.channelInbox,
         id,
-      }),
+      });
+    },
     sendChannelTest: async (input) => {
+      const channels = await markPanel<typeof import("./channels.ts")>("channels");
       if (!state.channelRuntime) {
         throw new Error("Channel runtime not bound");
       }
-      return sendChannelTest(state.channelRuntime, input);
+      return channels.sendChannelTest(state.channelRuntime, input);
     },
     get setupClosed() {
       return operators.operators.size > 0;
@@ -823,16 +859,17 @@ export function bindAiRuntime(state: ConsoleState, runtime: AiRuntime): void {
 }
 
 /**
- * Resolve tool-flow effects from the current Manifest (for AiRuntime options).
+ * Resolve tool-flow effects from the current Manifest (lazy AI panel module).
  *
  * @param state - Console state
  * @param flowName - Tool flow
  */
-export function consoleEffectsForFlow(
+export async function consoleEffectsForFlow(
   state: ConsoleState,
   flowName: string,
-): ReturnType<typeof effectsForFlowFromManifest> {
-  return effectsForFlowFromManifest(state.manifest, flowName);
+): Promise<readonly AgentToolEffect[]> {
+  const ai = await loadConsolePanel<typeof import("./ai.ts")>("ai");
+  return ai.effectsForFlowFromManifest(state.manifest, flowName);
 }
 
 /**

@@ -60,13 +60,13 @@
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.1",
-    "age-encryption": "^0.3.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "oxc-parser": "^0.141.0",
     "sently": "^0.8.0"
   },
   "devDependencies": {
+    "age-encryption": "^0.3.0",
     "@base-ui/react": "^1.6.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-json": "^6.0.2",
@@ -103,11 +103,16 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "age-encryption": "^0.3.0",
     "drizzle-kit": ">=1.0.0-rc.0",
     "drizzle-orm": ">=1.0.0-rc.0",
-    "drizzle-seed": ">=0.3.0"
+    "drizzle-seed": ">=0.3.0",
+    "zod": ">=3.23.0"
   },
   "peerDependenciesMeta": {
+    "age-encryption": {
+      "optional": true
+    },
     "drizzle-kit": {
       "optional": true
     },
@@ -115,6 +120,9 @@
       "optional": true
     },
     "drizzle-seed": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

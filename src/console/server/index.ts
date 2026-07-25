@@ -30,6 +30,7 @@ export {
   bindManifestVaultRuntime,
   bootConsoleApp,
   createConsoleApp,
+  ensureConsolePanelRuntimes,
   type ConsoleApp,
   type ConsoleAppHandle,
   type CreateConsoleAppOptions,
@@ -72,8 +73,8 @@ export {
 } from "./claim.ts";
 export {
   createConsoleBindings,
-  PUBLIC_CONSOLE_FLOWS,
 } from "./flows.ts";
+export { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 export {
   createLiveWebsocket,
   feedManifest,

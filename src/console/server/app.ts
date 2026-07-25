@@ -140,14 +140,51 @@ export async function bootConsoleApp(
     if (!runs) return [];
     return runs.all();
   };
-  await bindManifestSignalBus(handle.state);
-  await bindManifestStoreRuntime(handle.state);
-  await bindManifestVaultRuntime(handle.state);
-  await bindManifestGateRuntime(handle.state);
-  await bindManifestClockRuntime(handle.state);
-  bindManifestAiRuntime(handle.state);
-  bindManifestChannelRuntime(handle.state);
+  // Element runtimes bind lazily on first panel access (see ensure* below
+  // via list* methods / bindManifest* callers) — not all seventeen at boot.
   return handle.app;
+}
+
+/**
+ * Ensure Manifest-backed element runtimes for a panel are bound (idempotent).
+ *
+ * @param state - Console state
+ * @param panel - Panel id that was visited
+ */
+export async function ensureConsolePanelRuntimes(
+  state: ConsoleState,
+  panel:
+    | "signals"
+    | "store"
+    | "vault"
+    | "gates"
+    | "clock"
+    | "ai"
+    | "channels",
+): Promise<void> {
+  switch (panel) {
+    case "signals":
+      await bindManifestSignalBus(state);
+      break;
+    case "store":
+      await bindManifestStoreRuntime(state);
+      break;
+    case "vault":
+      await bindManifestVaultRuntime(state);
+      break;
+    case "gates":
+      await bindManifestGateRuntime(state);
+      break;
+    case "clock":
+      await bindManifestClockRuntime(state);
+      break;
+    case "ai":
+      bindManifestAiRuntime(state);
+      break;
+    case "channels":
+      bindManifestChannelRuntime(state);
+      break;
+  }
 }
 
 /**

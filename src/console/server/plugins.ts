@@ -6,7 +6,6 @@
  * Never installs — hands a `bun add …` command for community packages.
  */
 
-import { runDoctorDiff } from "../../cli/doctor-diff.ts";
 import {
   allHookCostSummaries,
   type HookCostSummary,
@@ -23,11 +22,9 @@ import {
   isCorePluginOn,
   type PluginConfigProbe,
 } from "../../plugins/catalogue.ts";
-import {
-  projectSupplyChain,
-  projectSupplyChainSync,
-  type PackageJsonProbe,
-  type SupplyChainSignals,
+import type {
+  PackageJsonProbe,
+  SupplyChainSignals,
 } from "../../plugins/supply-chain.ts";
 import type { ScanSourceFile } from "../../plugins/node-import-scan.ts";
 
@@ -308,6 +305,9 @@ async function buildRow(input: {
     fetchNpm: input.options.fetchNpm,
   };
 
+  const { projectSupplyChain, projectSupplyChainSync } = await import(
+    "../../plugins/supply-chain.ts"
+  );
   const supplyChain = input.options.syncSupplyChain
     ? projectSupplyChainSync(supplyOpts)
     : await projectSupplyChain(supplyOpts);
@@ -357,6 +357,7 @@ export async function loadCapabilityDiffByPlugin(
   manifest: Manifest | null,
 ): Promise<Readonly<Record<string, readonly ManifestChange[]>>> {
   try {
+    const { runDoctorDiff } = await import("../../cli/doctor-diff.ts");
     const result = await runDoctorDiff({
       cwd,
       ...(manifest ? { after: manifest } : {}),

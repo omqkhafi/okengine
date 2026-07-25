@@ -6,7 +6,6 @@
       "name": "okengine",
       "dependencies": {
         "@duckdb/node-api": "^1.5.5-r.1",
-        "age-encryption": "^0.3.0",
         "ajv": "^8.20.0",
         "ajv-formats": "^3.0.1",
         "oxc-parser": "^0.141.0",
@@ -29,6 +28,7 @@
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^6.0.4",
+        "age-encryption": "^0.3.0",
         "arktype": "^2.2.3",
         "axe-core": "^4.12.1",
         "clsx": "^2.1.1",
@@ -49,19 +49,23 @@
         "zod": "^4.4.3",
       },
       "peerDependencies": {
+        "age-encryption": "^0.3.0",
         "drizzle-kit": ">=1.0.0-rc.0",
         "drizzle-orm": ">=1.0.0-rc.0",
         "drizzle-seed": ">=0.3.0",
+        "zod": ">=3.23.0",
       },
       "optionalPeers": [
+        "age-encryption",
         "drizzle-kit",
         "drizzle-orm",
         "drizzle-seed",
+        "zod",
       ],
     },
     "examples/linkly": {
       "name": "@oke/example-linkly",
-      "version": "0.1.1",
+      "version": "0.1.6",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -70,7 +74,7 @@
     },
     "examples/notes": {
       "name": "@oke/example-notes",
-      "version": "0.1.1",
+      "version": "0.1.6",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "drizzle-zod": "^0.8.3",
@@ -80,7 +84,7 @@
     },
     "examples/provisions": {
       "name": "@oke/example-provisions",
-      "version": "0.1.1",
+      "version": "0.1.6",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -89,7 +93,7 @@
     },
     "examples/skyport": {
       "name": "@oke/example-skyport",
-      "version": "0.1.1",
+      "version": "0.1.6",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",

@@ -12,65 +12,48 @@
  * 8. Caps      — mint per-flow capability tokens from the Manifest / effects
  * ```
  *
+ * Element runtimes are loaded via `new URL("./boot-bind/"+name+".ts", …)` so
+ * unused binders stay out of the `oke()` bundle (semantic tree-shaking).
+ * Vault still loads whenever secrets are declared and lists every gap in one
+ * failure; capability minting uses flow effect refs only — no element modules.
+ *
  * The scheduler reads the effective state from the Store after reconciliation,
  * never the code directly (console §5).
  */
 
-import {
-  createAiRuntime,
-  type AiRuntime,
-  type CreateAiRuntimeOptions,
+import type { ConfigEnv, OkeConfig } from "../config/index.ts";
+import type {
+  AiRuntime,
+  CreateAiRuntimeOptions,
 } from "../elements/ai.ts";
-import {
-  createChannelRuntime,
-  type ChannelRuntime,
-  type CreateChannelRuntimeOptions,
+import type {
+  ChannelRuntime,
+  CreateChannelRuntimeOptions,
 } from "../elements/channel.ts";
-import {
-  clock as declareClock,
-  createClockRuntime,
-  createTestClockRuntime,
-  type ClockDecl,
-  type ClockRuntime,
+import type {
+  ClockDecl,
+  ClockRuntime,
 } from "../elements/clock.ts";
-import {
-  createGateRuntime,
-  type GateDecl,
-  type GateRuntime,
+import type {
+  GateDecl,
+  GateRuntime,
 } from "../elements/gate.ts";
-import {
-  createSignalRuntime,
-  type SignalDecl,
-  type SignalRuntime,
+import type {
+  SignalDecl,
+  SignalRuntime,
 } from "../elements/signal.ts";
-import {
-  createStoreRuntime,
-  type StoreDecl,
-  type StoreRuntime,
+import type {
+  StoreDecl,
+  StoreRuntime,
 } from "../elements/store.ts";
-import {
-  createVaultRuntime,
-  type CreateVaultRuntimeOptions,
-  type VaultRuntime,
-  type VaultSecretDecl,
+import type {
+  CreateVaultRuntimeOptions,
+  VaultRuntime,
+  VaultSecretDecl,
 } from "../elements/vault.ts";
-import {
-  memoryDrivers,
-  memorySignalDriver,
-  memoryVaultDriver,
-  openConsoleChannel,
-  mockAiDriver,
-} from "../drivers/index.ts";
-import {
-  resolveDriverId,
-  type ConfigEnv,
-  type OkeConfig,
-} from "../config/index.ts";
-import {
-  createRunsRuntime,
-  memoryRunsDriver,
-  type CreateRunsRuntimeOptions,
-  type RunsRuntime,
+import type {
+  CreateRunsRuntimeOptions,
+  RunsRuntime,
 } from "../runs/index.ts";
 import {
   createCapabilityToken,
@@ -171,6 +154,88 @@ export interface BootResult {
   close(): Promise<void>;
 }
 
+/** Which element runtimes a boot must construct / import. */
+export interface ElementNeeds {
+  readonly vault: boolean;
+  readonly store: boolean;
+  readonly signal: boolean;
+  readonly clock: boolean;
+  readonly gate: boolean;
+  readonly channel: boolean;
+  readonly ai: boolean;
+  readonly runs: boolean;
+}
+
+/**
+ * Decide which element runtimes are required from BootOptions alone —
+ * declaration arrays, pre-built runtimes, flow effects, and bindings.
+ * Does not import any element runtime module.
+ *
+ * @param options - Boot declarations
+ */
+export function resolveElementNeeds(options: BootOptions): ElementNeeds {
+  const pre = options.elements ?? {};
+  let vault =
+    pre.vault !== undefined ||
+    (options.vault?.secrets ?? options.secrets ?? []).length > 0;
+  let store = pre.store !== undefined || (options.stores?.length ?? 0) > 0;
+  let signal = pre.signal !== undefined || (options.signals?.length ?? 0) > 0;
+  let clock = pre.clock !== undefined || (options.clocks?.length ?? 0) > 0;
+  let gate = pre.gate !== undefined || (options.gates?.length ?? 0) > 0;
+  let channel = pre.channel !== undefined || options.channel !== undefined;
+  let ai = pre.ai !== undefined || options.ai !== undefined;
+  let runs = pre.runs !== undefined || options.runs !== undefined;
+
+  const considerFlow = (f: AnyFlowDef): void => {
+    const e = f.effects;
+    if ((e?.reads?.length ?? 0) > 0 || (e?.writes?.length ?? 0) > 0) {
+      store = true;
+    }
+    if ((e?.emits?.length ?? 0) > 0) signal = true;
+    if ((e?.secrets?.length ?? 0) > 0) vault = true;
+    if ((e?.sends?.length ?? 0) > 0) channel = true;
+    if ((e?.asks?.length ?? 0) > 0) ai = true;
+    for (const t of f.triggers) {
+      if (t.kind === "every") clock = true;
+      if (t.kind === "signal") signal = true;
+      if (t.kind === "cdc") store = true;
+      if (t.kind === "http" && t.gates.length > 0) gate = true;
+    }
+  };
+
+  for (const f of options.flows ?? []) considerFlow(f);
+  for (const b of options.bindings ?? []) {
+    considerFlow(b.flow);
+    const t = b.trigger;
+    if (t.kind === "every") clock = true;
+    if (t.kind === "signal") signal = true;
+    if (t.kind === "cdc") store = true;
+    if (t.kind === "http" && t.gates.length > 0) gate = true;
+  }
+
+  // AI agents share the gate runtime for tool checks.
+  if (ai) gate = true;
+  if (
+    options.onSignal &&
+    (options.bindings ?? []).some((b) => b.trigger.kind === "signal")
+  ) {
+    signal = true;
+  }
+
+  return { vault, store, signal, clock, gate, channel, ai, runs };
+}
+
+/**
+ * Dynamically load a boot-bind module without pulling it into the bundler
+ * graph (expression `new URL` — Bun resolves at runtime).
+ *
+ * @param name - Binder file stem (`store`, `vault`, …)
+ */
+async function loadBind<T>(name: string): Promise<T> {
+  const url = new URL(`./boot-bind/${name}.ts`, import.meta.url);
+  return import(url.href) as Promise<T>;
+}
+
 /**
  * Run the ordered boot sequence. Fails fast — a missing secret throws
  * before store/signal/… open, so no request can be served.
@@ -183,204 +248,177 @@ export async function bootApplication(
   const env: ConfigEnv = options.env ?? "dev";
   const pre = options.elements ?? {};
   const now = options.now ?? (() => Date.now());
+  const needs = resolveElementNeeds(options);
 
-  // 1. Vault boot — resolve every declared secret; list all gaps at once.
-  const vaultSecrets =
-    options.vault?.secrets ?? options.secrets ?? [];
+  // 1. Vault — module loads only when secrets (or a pre-built vault) exist.
   let vault = pre.vault;
-  if (!vault && vaultSecrets.length > 0) {
-    vault = createVaultRuntime({
-      secrets: vaultSecrets,
-      chain: options.vault?.chain ?? [
-        {
-          driver: memoryVaultDriver,
-          options: { secrets: {} },
-        },
-      ],
-      allowDevFallbacks:
-        options.vault?.allowDevFallbacks ?? env !== "prod",
-    });
-  }
-  if (vault && !vault.booted) {
-    await vault.boot();
+  if (needs.vault) {
+    if (!vault) {
+      const { bindVault } = await loadBind<
+        typeof import("./boot-bind/vault.ts")
+      >("vault");
+      vault = await bindVault(options, env);
+    } else if (!vault.booted) {
+      await vault.boot();
+    }
   }
 
-  // 2. Bind store drivers per environment; open connections.
+  // Parallel-load remaining binders after Vault fail-fast.
+  const binderLoads: Promise<unknown>[] = [];
+  type StoreBind = typeof import("./boot-bind/store.ts");
+  type SignalBind = typeof import("./boot-bind/signal.ts");
+  type ClockBind = typeof import("./boot-bind/clock.ts");
+  type GateBind = typeof import("./boot-bind/gate.ts");
+  type ChannelBind = typeof import("./boot-bind/channel.ts");
+  type AiBind = typeof import("./boot-bind/ai.ts");
+  type RunsBind = typeof import("./boot-bind/runs.ts");
+
+  let storeBind: StoreBind | undefined;
+  let signalBind: SignalBind | undefined;
+  let clockBind: ClockBind | undefined;
+  let gateBind: GateBind | undefined;
+  let channelBind: ChannelBind | undefined;
+  let aiBind: AiBind | undefined;
+  let runsBind: RunsBind | undefined;
+
+  if (needs.store && !pre.store) {
+    binderLoads.push(
+      loadBind<StoreBind>("store").then((m) => {
+        storeBind = m;
+      }),
+    );
+  }
+  if (needs.signal && !pre.signal) {
+    binderLoads.push(
+      loadBind<SignalBind>("signal").then((m) => {
+        signalBind = m;
+      }),
+    );
+  }
+  if (needs.clock) {
+    binderLoads.push(
+      loadBind<ClockBind>("clock").then((m) => {
+        clockBind = m;
+      }),
+    );
+  }
+  if (needs.gate && !pre.gate) {
+    binderLoads.push(
+      loadBind<GateBind>("gate").then((m) => {
+        gateBind = m;
+      }),
+    );
+  }
+  if (needs.channel && !pre.channel) {
+    binderLoads.push(
+      loadBind<ChannelBind>("channel").then((m) => {
+        channelBind = m;
+      }),
+    );
+  }
+  if (needs.ai && !pre.ai) {
+    binderLoads.push(
+      loadBind<AiBind>("ai").then((m) => {
+        aiBind = m;
+      }),
+    );
+  }
+  if (
+    needs.runs &&
+    !pre.runs &&
+    !(options.runs && isRunsRuntime(options.runs))
+  ) {
+    binderLoads.push(
+      loadBind<RunsBind>("runs").then((m) => {
+        runsBind = m;
+      }),
+    );
+  }
+  await Promise.all(binderLoads);
+
+  // 2. Store
   let store = pre.store;
-  if (!store) {
-    const sqlId =
-      resolveDriverId(options.config?.drivers?.store?.sql, env) ?? "memory";
-    const kvId =
-      resolveDriverId(options.config?.drivers?.store?.kv, env) ?? "memory";
-    // Protocol ids → memory bundle for test/dev when not otherwise injected.
-    void sqlId;
-    void kvId;
-    store = createStoreRuntime({
-      drivers: {
-        sql: memoryDrivers.sql,
-        kv: memoryDrivers.kv,
-        files: memoryDrivers.files,
-        index: memoryDrivers.index,
-      },
-      now,
-    });
-  }
-  for (const decl of options.stores ?? []) {
-    store.register?.(decl);
-  }
-
-  // 3. Register signals; start consumers.
-  let signal = pre.signal;
-  if (!signal) {
-    const signalId =
-      resolveDriverId(options.config?.drivers?.signal, env) ?? "memory";
-    void signalId;
-    signal = createSignalRuntime({
-      driver: memorySignalDriver,
-      now,
-    });
-  }
-  for (const decl of options.signals ?? []) {
-    signal.register(decl);
-  }
-  // Also register signal-as-trigger names from bindings.
-  for (const b of options.bindings ?? []) {
-    if (b.trigger.kind === "signal") {
-      if (!signal.declarations.has(b.trigger.name)) {
-        // Minimal decl so the bus knows the name; optional to avoid orphan fail.
-        signal.register({
-          name: b.trigger.name,
-          delivery: "once",
-          retries: 3,
-          deadLetter: true,
-          optional: true,
-        });
+  if (needs.store) {
+    if (!store) {
+      store = storeBind!.bindStore(options, env, now);
+    } else {
+      for (const decl of options.stores ?? []) {
+        store.register?.(decl);
       }
     }
   }
-  const bus = await signal.start();
 
-  if (options.onSignal) {
-    const handler = options.onSignal;
-    const seen = new Set<string>();
-    for (const b of options.bindings ?? []) {
-      if (b.trigger.kind !== "signal") continue;
-      const name = b.trigger.name;
-      if (seen.has(name)) continue;
-      seen.add(name);
-      await bus.subscribe(name, `oke:${name}`, async (msg) => {
-        await handler(name, msg.payload);
-      });
-    }
-  }
-
-  // 4. Reconcile clocks into the store; start scheduler with leader election.
-  const clockDriver =
-    resolveDriverId(options.config?.drivers?.clock, env) ??
-    (env === "test" ? "frozen" : "memory");
-  let clock = pre.clock;
-  if (!clock) {
-    clock =
-      clockDriver === "frozen" || env === "test"
-        ? createTestClockRuntime(now(), { instanceId: options.instanceId })
-        : createClockRuntime({ instanceId: options.instanceId, now });
-  }
-
-  const clockDecls = new Map<string, ClockDecl>();
-  for (const c of options.clocks ?? []) {
-    clockDecls.set(c.name, c);
-  }
-  // every("1h") bindings → named clocks the scheduler can fire.
-  for (const b of options.bindings ?? []) {
-    if (b.trigger.kind === "every" && !clockDecls.has(b.trigger.interval)) {
-      clockDecls.set(
-        b.trigger.interval,
-        declareClock(b.trigger.interval, { every: b.trigger.interval }),
-      );
-    }
-  }
-  for (const decl of clockDecls.values()) {
-    clock.register(decl);
-  }
-  await clock.reconcile();
-
-  if (options.onCronFire) {
-    const fire = options.onCronFire;
-    for (const name of clockDecls.keys()) {
-      clock.onCron(name, async () => {
-        await fire(name);
-      });
-    }
-  }
-
-  // Default ON outside test — a declared every()/cron must fire with zero
-  // further application calls (Clock element's core promise).
-  const startScheduler =
-    options.startScheduler ?? (env !== "test");
-  let schedulerTimer: ReturnType<typeof setInterval> | undefined;
-  if (startScheduler) {
-    const period = options.schedulerIntervalMs ?? 1000;
-    schedulerTimer = setInterval(() => {
-      void clock!.tick();
-    }, period);
-    // Don't keep the process alive solely for the scheduler in tests.
-    schedulerTimer.unref?.();
-  }
-
-  // Gate runtime (needs kv from store drivers) — used by the request
-  // pipeline and AI agents. Constructed before channel/AI bind.
-  let gate = pre.gate;
-  if (!gate) {
-    const kvNs = await memoryDrivers.kv.open({ name: "oke:gates" });
-    gate = createGateRuntime({
-      gates: options.gates ?? [],
-      kv: kvNs,
-      now,
-    });
-  }
-
-  // 5. Bind channel runtime.
-  let channel = pre.channel;
-  if (!channel) {
-    channel = createChannelRuntime({
-      ...(options.channel ?? {}),
-      drivers: options.channel?.drivers ?? [openConsoleChannel()],
-      now,
-    });
-  }
-
-  // 6. Bind AI runtime (shares the gate runtime for agent tool checks).
-  let ai = pre.ai;
-  if (!ai) {
-    ai = createAiRuntime({
-      ...(options.ai ?? {}),
-      defaultDriver: options.ai?.defaultDriver ?? mockAiDriver,
-      gates: options.ai?.gates ?? gate,
-      now,
-    });
-  }
-
-  // 7. Open the runs store.
-  let runs = pre.runs;
-  if (!runs) {
-    if (options.runs && isRunsRuntime(options.runs)) {
-      runs = options.runs;
+  // 3. Signals
+  let signal = pre.signal;
+  if (needs.signal) {
+    if (!signal) {
+      signal = await signalBind!.bindSignal(options, env, now);
     } else {
-      const runsOpts =
-        options.runs && !isRunsRuntime(options.runs)
-          ? options.runs
-          : undefined;
-      runs = createRunsRuntime({
-        driver: runsOpts?.driver ?? memoryRunsDriver,
-        ...(runsOpts ?? {}),
-      });
+      // Pre-built: still register decls / start if needed.
+      for (const decl of options.signals ?? []) {
+        signal.register(decl);
+      }
+      if (!signal.bus) {
+        await signal.start();
+      }
     }
   }
-  if (runs && !runs.store) {
-    await runs.open();
+
+  // 4. Clocks + optional scheduler
+  let clock = pre.clock;
+  let schedulerTimer: ReturnType<typeof setInterval> | undefined;
+  if (needs.clock) {
+    const bound = await clockBind!.bindClock(options, env, now, clock);
+    clock = bound.clock;
+    const startScheduler = options.startScheduler ?? env !== "test";
+    if (startScheduler) {
+      const period = options.schedulerIntervalMs ?? 1000;
+      const clockRt = clock;
+      schedulerTimer = setInterval(() => {
+        void clockRt.tick();
+      }, period);
+      schedulerTimer.unref?.();
+    }
   }
 
-  // 8. Mint per-flow capability tokens from declared effects (Manifest).
+  // Gate (before AI)
+  let gate = pre.gate;
+  if (needs.gate && !gate) {
+    gate = await gateBind!.bindGate(options, now);
+  }
+
+  // 5. Channel
+  let channel = pre.channel;
+  if (needs.channel && !channel) {
+    channel = channelBind!.bindChannel(options, now);
+  }
+
+  // 6. AI
+  let ai = pre.ai;
+  if (needs.ai && !ai) {
+    ai = aiBind!.bindAi(options, gate, now);
+  }
+
+  // 7. Runs
+  let runs = pre.runs;
+  if (needs.runs) {
+    if (!runs) {
+      if (options.runs && isRunsRuntime(options.runs)) {
+        runs = options.runs;
+        if (!runs.store) await runs.open();
+      } else {
+        const runsOpts =
+          options.runs && !isRunsRuntime(options.runs)
+            ? options.runs
+            : undefined;
+        runs = await runsBind!.bindRuns(runsOpts);
+      }
+    } else if (!runs.store) {
+      await runs.open();
+    }
+  }
+
+  // 8. Caps — effect refs only; no element modules.
   const capabilities = mintCapabilities(options.flows ?? []);
 
   return {
