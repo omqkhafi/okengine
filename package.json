@@ -53,6 +53,9 @@
     "publish:all": "bun run scripts/publish.ts",
     "publish:npm": "bun run scripts/publish.ts -- --npm-only",
     "publish:jsr": "bun run scripts/publish.ts -- --jsr-only",
+    "publish:all:dry": "bun run scripts/publish.ts -- --dry-run",
+    "publish:npm:dry": "bun run scripts/publish.ts -- --dry-run --npm-only",
+    "publish:jsr:dry": "bun run scripts/publish.ts -- --dry-run --jsr-only",
     "g": "gflows"
   },
   "dependencies": {
