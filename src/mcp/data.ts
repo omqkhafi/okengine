@@ -19,6 +19,7 @@ export type McpDataProvenance =
   | "store-record"
   | "action-result"
   | "catalog"
+  | "docs"
   | "error";
 
 /**

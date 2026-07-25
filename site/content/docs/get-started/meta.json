@@ -1,0 +1,10 @@
+{
+  "title": "Get Started",
+  "icon": "Rocket",
+  "pages": [
+    "introduction",
+    "comparison",
+    "installation",
+    "basic-usage"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "title": "Console",
+  "icon": "LayoutDashboard",
+  "pages": [
+    "overview",
+    "flows",
+    "signals",
+    "store",
+    "clock",
+    "gates",
+    "vault",
+    "channels",
+    "ai",
+    "architecture",
+    "traces",
+    "runs",
+    "manifest-diff",
+    "access",
+    "plugins",
+    "privacy",
+    "tenancy"
+  ]
+}

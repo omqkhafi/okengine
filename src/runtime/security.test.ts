@@ -123,7 +123,7 @@ describe("secureFetch", () => {
   });
 });
 
-describe("Host/Origin entry points (6530 / 6533 / 6535)", () => {
+describe("Host/Origin entry points (6530 / 6533 / 6535 / 6536)", () => {
   test("every HTTP surface routes through checkRequestSecurity", async () => {
     /**
      * Entry-point map (source of truth for §10.1):
@@ -132,6 +132,7 @@ describe("Host/Origin entry points (6530 / 6533 / 6535)", () => {
      *   and checkRequestSecurity before WebSocket upgrade on /console/live
      * - MCP :6535 → mcp/server.ts → checkRequestSecurity (same primitive;
      *   secureFetch is a thin wrapper around it)
+     * - Docs MCP :6536 → mcp/docs-server.ts → checkRequestSecurity
      */
     const surfaces: ReadonlyArray<{
       readonly file: string;
@@ -151,6 +152,10 @@ describe("Host/Origin entry points (6530 / 6533 / 6535)", () => {
       },
       {
         file: `${import.meta.dir}/../mcp/server.ts`,
+        mustInclude: ["checkRequestSecurity", "forbiddenResponse"],
+      },
+      {
+        file: `${import.meta.dir}/../mcp/docs-server.ts`,
         mustInclude: ["checkRequestSecurity", "forbiddenResponse"],
       },
     ];

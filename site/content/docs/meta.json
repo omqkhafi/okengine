@@ -1,0 +1,17 @@
+{
+  "title": "Documentation",
+  "icon": "BookOpen",
+  "pages": [
+    "index",
+    "---",
+    "get-started",
+    "learn",
+    "elements",
+    "console",
+    "---",
+    "plugins",
+    "cli",
+    "security",
+    "ai"
+  ]
+}

@@ -1,9 +1,7 @@
 /**
- * MCP AI surface on port 6535 (console §10.3 · unified-theory §25).
- *
- * Exposes the Manifest, schemas, effects, traces, and Console-safe runtime
- * actions to agents — read-only by default, write tools gated by fresh
- * human confirmation, every return wrapped as inert data.
+ * MCP AI surfaces (console §10.3 · unified-theory §25):
+ * - App MCP `:6535` — Manifest, schemas, effects, traces, Console-safe actions
+ * - Docs MCP `:6536` — read-only documentation search / fetch
  *
  * Subpath: `okengine/mcp`
  * @module
@@ -79,3 +77,29 @@ export {
   type McpServerHandle,
   type ServeMcpOptions,
 } from "./server.ts";
+
+export {
+  defaultDocsContentDir,
+  loadDocsIndex,
+  parseDocsFrontmatter,
+  stripYamlFrontmatter,
+  type DocsIndex,
+  type DocsPage,
+  type DocsSearchHit,
+} from "./docs-index.ts";
+
+export {
+  createDocsToolRuntime,
+  DOCS_MCP_TOOLS,
+  type DocsToolCallResult,
+  type DocsToolDescriptor,
+} from "./docs-tools.ts";
+
+export {
+  createDocsMcpServer,
+  serveDocsMcp,
+  type CreateDocsMcpServerOptions,
+  type DocsMcpServer,
+  type DocsMcpServerHandle,
+  type ServeDocsMcpOptions,
+} from "./docs-server.ts";

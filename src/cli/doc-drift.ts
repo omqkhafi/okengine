@@ -14,6 +14,10 @@
  * Usage:
  *   bun src/cli/doc-drift.ts
  *   bun src/cli/doc-drift.ts docs/spec/four-applications.md README.md
+ *   bun src/cli/doc-drift.ts site/content/docs/learn/notes.md
+ *
+ * Default paths: four-applications.md, README.md, and every markdown/MDX file
+ * under site/content/docs (claimed fences only — prose-only pages skip).
  */
 
 import { resolve } from "node:path";
@@ -21,8 +25,27 @@ import { Window } from "happy-dom";
 
 const ROOT = resolve(import.meta.dir, "../..");
 
-/** Default docs checked when no CLI paths are passed. */
-const DEFAULT_DOCS: readonly string[] = [
+/**
+ * Discover site content markdown that may contain claimed fences.
+ *
+ * @param root - Repo root
+ */
+async function discoverSiteDocs(root: string): Promise<string[]> {
+  const docsDir = resolve(root, "site/content/docs");
+  const out: string[] = [];
+  try {
+    const glob = new Bun.Glob("**/*.{md,mdx}");
+    for await (const rel of glob.scan({ cwd: docsDir, onlyFiles: true })) {
+      out.push(resolve(docsDir, rel));
+    }
+  } catch {
+    // site/ not present yet — skip
+  }
+  return out.sort();
+}
+
+/** Core docs that must contain claimed fences. */
+const REQUIRED_DOCS: readonly string[] = [
   resolve(ROOT, "docs/spec/four-applications.md"),
   resolve(ROOT, "README.md"),
 ];
@@ -315,6 +338,9 @@ export async function checkDocDrift(
 /**
  * Run doc-drift over one or more markdown files.
  *
+ * Site content under `site/` may have zero claimed fences (prose-only pages);
+ * only `docs/spec/four-applications.md` and `README.md` require at least one.
+ *
  * @param paths - Absolute or repo-relative markdown paths
  */
 export async function runDocDrift(
@@ -324,32 +350,36 @@ export async function runDocDrift(
   let ok = true;
   let total = 0;
   let mermaidTotal = 0;
+  let checkedFiles = 0;
 
   for (const path of paths) {
     const abs = resolve(ROOT, path);
     const label = abs.startsWith(ROOT + "/")
       ? abs.slice(ROOT.length + 1)
       : abs;
+    const requireClaimed = !label.startsWith("site/");
     const markdown = await Bun.file(abs).text();
     const fences = parseClaimedFences(markdown);
     if (fences.length === 0) {
-      messages.push(`doc-drift: no claimed fences found in ${label}`);
-      ok = false;
-      continue;
-    }
-
-    const result = await checkDocDrift(fences);
-    total += fences.length;
-    if (!result.ok) {
-      ok = false;
-      messages.push(
-        `doc-drift: ${result.failures.length} failure(s) in ${label}`,
-      );
-      for (const f of result.failures) messages.push(`  · ${f}`);
+      if (requireClaimed) {
+        messages.push(`doc-drift: no claimed fences found in ${label}`);
+        ok = false;
+      }
     } else {
-      messages.push(
-        `doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`,
-      );
+      checkedFiles++;
+      const result = await checkDocDrift(fences);
+      total += fences.length;
+      if (!result.ok) {
+        ok = false;
+        messages.push(
+          `doc-drift: ${result.failures.length} failure(s) in ${label}`,
+        );
+        for (const f of result.failures) messages.push(`  · ${f}`);
+      } else {
+        messages.push(
+          `doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`,
+        );
+      }
     }
 
     const mermaidFences = parseMermaidFences(markdown);
@@ -370,11 +400,11 @@ export async function runDocDrift(
     }
   }
 
-  if (ok && paths.length > 1) {
+  if (ok && checkedFiles > 1) {
     const mermaidNote =
       mermaidTotal > 0 ? ` · ${mermaidTotal} mermaid fence(s)` : "";
     messages.push(
-      `doc-drift: ok — ${total} claimed fence(s) across ${paths.length} file(s)${mermaidNote}`,
+      `doc-drift: ok — ${total} claimed fence(s) across ${checkedFiles} file(s)${mermaidNote}`,
     );
   }
 
@@ -383,7 +413,10 @@ export async function runDocDrift(
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
-  const paths = args.length > 0 ? args : DEFAULT_DOCS;
+  const paths =
+    args.length > 0
+      ? args
+      : [...REQUIRED_DOCS, ...(await discoverSiteDocs(ROOT))];
   const { ok, messages } = await runDocDrift(paths);
   for (const m of messages) {
     if (ok) console.log(m);

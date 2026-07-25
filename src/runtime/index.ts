@@ -30,6 +30,7 @@ export {
 export {
   APP_PORT,
   CONSOLE_PORT,
+  DOCS_MCP_PORT,
   MCP_PORT,
   type FetchApp,
   type PasswordAlgorithm,

@@ -126,7 +126,8 @@ export interface McpInitializeResult {
     readonly tools: { readonly listChanged: false };
   };
   readonly serverInfo: {
-    readonly name: "okengine-mcp";
+    /** App MCP (`okengine-mcp`) or docs MCP (`okengine-docs-mcp`). */
+    readonly name: "okengine-mcp" | "okengine-docs-mcp";
     readonly version: string;
   };
   /** Cryptographically random transport session id. */

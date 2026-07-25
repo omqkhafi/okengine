@@ -1,11 +1,19 @@
 # dependencies (bun install)
 node_modules
 docs
+# `docs` also matches site/content/docs — keep the Fumadocs content tree trackable
+!site/content/docs/
+!site/content/docs/**
 
 # output
 out
 dist
 *.tgz
+
+# docs site (Next.js)
+site/.next
+site/out
+site/.source
 
 # code coverage
 coverage

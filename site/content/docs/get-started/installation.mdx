@@ -1,0 +1,83 @@
+---
+title: Installation
+description: Install okengine, scaffold an app with create-oke, and open the Console.
+source: README.md
+icon: Download
+---
+
+This page gets you from zero to a running app. Prefer Bun throughout — the engine targets **Bun ≥ 1.3**.
+
+<Steps>
+
+### Prerequisites
+
+- [Bun](https://bun.sh) ≥ 1.3 (`bun --version`)
+- A terminal and a code editor
+
+### Install the package
+
+Add the framework (ships the `oke` CLI):
+
+```bash title="Terminal"
+bun add okengine
+```
+
+<Callout title="JSR">
+Library API only: `bunx jsr add @omqkhafi/okengine`. Prefer npm / `bun add` when you want the `oke` CLI on your PATH via the package.
+</Callout>
+
+### Scaffold with create-oke
+
+Pick a template by how much surface you want on day one:
+
+```bash title="Terminal"
+bunx create-oke@latest my-app --template hello
+bunx create-oke@latest my-app --template minimal
+bunx create-oke@latest my-app --template full
+bunx create-oke@latest my-notes --from-example notes
+```
+
+| Template / flag | Purpose |
+|---|---|
+| `hello` | Fastest “it works” — one flow, no Store |
+| `minimal` | Smallest shape you'd ship — Store + 1–2 flows |
+| `standard` | Full recommended layout, empty scaffolding (default) |
+| `full` | Every element wired, no business logic |
+| `--from-example notes\|linkly\|provisions\|skyport` | Teaching apps with business logic + comments |
+
+<Callout type="info" title="New to OKE?">
+Start with <code>--from-example notes</code>. The [Basic Usage](/docs/get-started/basic-usage) page walks the same files step by step.
+</Callout>
+
+### Run the app
+
+```bash title="Terminal"
+cd my-app
+oke dev
+```
+
+Three ports come up together (mnemonic: **O·K·E = 6·5·3**):
+
+| Port | Surface |
+|---|---|
+| `:6530` | Your app |
+| `:6533` | Console |
+| `:6535` | MCP |
+
+Open the Console — flows, contracts, effects, and an architecture diagram are already there. **Derived, not configured.**
+
+### Verify the install
+
+Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked.
+
+</Steps>
+
+## Next steps
+
+Continue to [Basic Usage](/docs/get-started/basic-usage) for your first flows, typed client, and tests — or jump into [Notes](/docs/learn/notes) for the full progressive path.
+
+<Cards>
+  <Card title="Basic Usage" description="First flows, client, and tests." href="/docs/get-started/basic-usage" />
+  <Card title="CLI Reference" description="oke and create-oke commands." href="/docs/cli" />
+  <Card title="Notes" description="Teaching app walkthrough." href="/docs/learn/notes" />
+</Cards>

@@ -18,6 +18,12 @@ export const CONSOLE_PORT = 6533;
 export const MCP_PORT = 6535;
 
 /**
+ * Default docs MCP listen port (read-only documentation search/fetch).
+ * Distinct from {@link MCP_PORT} — serves docs content, not a live Manifest.
+ */
+export const DOCS_MCP_PORT = 6536;
+
+/**
  * Minimal app surface a runtime can serve.
  * Satisfied by {@link import("../kernel/app.ts").OkeApp}.
  */
