@@ -36,7 +36,7 @@
         "drizzle-orm": "^1.0.0-rc.4",
         "drizzle-seed": "^0.3.1",
         "drizzle-zod": "^0.8.3",
-        "gflows": "^1.2.0",
+        "gflows": "^1.2.1",
         "happy-dom": "^20.11.1",
         "mermaid": "^11.16.0",
         "playwright": "^1.62.0",
@@ -61,7 +61,7 @@
     },
     "examples/linkly": {
       "name": "@oke/example-linkly",
-      "version": "0.0.26",
+      "version": "0.1.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -70,7 +70,7 @@
     },
     "examples/notes": {
       "name": "@oke/example-notes",
-      "version": "0.0.26",
+      "version": "0.1.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "drizzle-zod": "^0.8.3",
@@ -80,7 +80,7 @@
     },
     "examples/provisions": {
       "name": "@oke/example-provisions",
-      "version": "0.0.26",
+      "version": "0.1.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -89,7 +89,7 @@
     },
     "examples/skyport": {
       "name": "@oke/example-skyport",
-      "version": "0.0.26",
+      "version": "0.1.1",
       "dependencies": {
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
@@ -680,7 +680,7 @@
 
     "get-tsconfig": ["get-tsconfig@4.14.0", "", { "dependencies": { "resolve-pkg-maps": "^1.0.0" } }, "sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA=="],
 
-    "gflows": ["gflows@1.2.0", "", { "dependencies": { "@clack/prompts": "^1.7.0", "ink": "^7.1.1", "react": "^19.2.8" }, "bin": { "gflows": "src/cli.ts" } }, "sha512-GFM1bLhf4g1VkGt19EN5B8zCFQhcRTCLW8FcK3Oc/3vVZTN4lvtODNP9t8CFPkBHrYZ3ULC+ro6utJ3YgQWn+Q=="],
+    "gflows": ["gflows@1.2.1", "", { "dependencies": { "@clack/prompts": "^1.7.0", "ink": "^7.1.1", "react": "^19.2.8" }, "bin": { "gflows": "src/cli.ts" } }, "sha512-Ah3L633aeHAicKWbjLp4ZQlwsVqkpjYPACwNNB+V+DaWpSqRZsOYZ3peUcJuwyiGLkuLO9Ep31uSVzjmS40K+g=="],
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
 
