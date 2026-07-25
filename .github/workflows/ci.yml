@@ -7,10 +7,14 @@ on:
 
 jobs:
   ci:
-    name: install · typecheck · test · budgets
+    name: install · typecheck · test · budgets · gates
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -19,26 +23,18 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Typecheck
-        run: bun run typecheck
+      - name: CI gate
+        run: bun run ci
 
-      - name: Test
-        run: bun run test
-
-      - name: Client tests
-        run: bun run test:client
-
-      - name: Cold-start budget (< 50 ms)
-        run: bun run bench:cold-start
-
-      - name: Client bundle budget (< 3 kB gzipped)
-        run: bun run bench:client
-
-      - name: Doc-drift (four-applications fences)
-        run: bun run test:doc-drift
-
-      - name: Example apps
-        run: bun run test:examples
-
-      - name: Skyport oke docker smoke
-        run: bun run test:skyport-docker
+      - name: Commit budgets.json on main
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          if git diff --quiet -- budgets.json; then
+            echo "budgets.json unchanged"
+          else
+            git config user.name "okengine-ci"
+            git config user.email "ci@oke.dev"
+            git add budgets.json
+            git commit -m "chore: update budgets.json snapshot"
+            git push
+          fi

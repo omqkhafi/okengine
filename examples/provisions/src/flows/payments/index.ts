@@ -1,6 +1,8 @@
 import { stripe } from "./stripe";
+import { eq } from "drizzle-orm";
 import { orderNews } from "../orders/signals";
 import { db } from "../../core";
+import { orders } from "../../schema";
 
 import { flow } from "okengine";
 import { z } from "zod";
@@ -20,13 +22,13 @@ export const chargeOrder = flow({
   },
 });
 
-// When fx.call returns at the durable sleep boundary, the orders consumer
-// cannot finish setStatus/emit. On journal resume, complete that work here.
+// Durable sleep returns early from fx.call; finish status + notify on resume.
 const charged = chargeOrder.do;
 (chargeOrder as { do: typeof charged }).do = async (input, fx) => {
   const paid = await charged(input, fx);
   if (paid) {
-    await fx.store(db).setStatus(input.orderId, "confirmed");
+    await fx.store(db).update(orders).set({ status: "confirmed" })
+      .where(eq(orders.id, input.orderId));
     await fx.emit(orderNews, { orderId: input.orderId, status: "confirmed" });
   }
   return paid;

@@ -5,3 +5,5 @@ peer = true
 # Project-wide discovery; pass a path (e.g. `bun test src/manifest`) to narrow.
 root = "."
 coverageSkipTestFiles = true
+# Playwright specs use @playwright/test — run via `bun run test:console:smoke`.
+pathIgnorePatterns = ["tests/console/**"]

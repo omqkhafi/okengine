@@ -30,7 +30,7 @@ on(
   every("10m"),
   flow({
     name: "triggers.every",
-    do: (_, fx) => fx.store(db).deleteExpired(links, "30d"),
+    do: (_, fx) => fx.store(db).delete(links).where({ createdAt: 0 }),
   }),
 );
 
@@ -61,6 +61,9 @@ export const stats = on(
   internal,
   flow({
     name: "triggers.internal",
-    do: ({ code }, fx) => fx.store(db).getClicks(links, code),
+    do: async ({ code }, fx) => {
+      const [row] = await fx.store(db).select().from(links).where({ code });
+      return row?.clicks ?? 0;
+    },
   }),
 );

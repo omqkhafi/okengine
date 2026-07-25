@@ -140,25 +140,31 @@ export const remove = on(http.delete("/notes/:id"), flow({
 
 ```typescript
 import { oke } from "okengine";
-import "./flows/notes";
+import * as notes from "./flows/notes";
 
-export const app = oke({ name: "notes" });
+export const app = oke({ name: "notes" }).adopt({ notes });
 
 export type App = typeof app;   // ← the client needs nothing else
 ```
+
+`on()` still registers each flow with the router and the Manifest — `.adopt()` exists so the type of `app` accumulates every contract in `notes`, which is what lets the client below need no hand-written types and no separate codegen step. The namespace key (`notes`) becomes the client's namespace; each export becomes a method.
 
 ### The client
 
 ```typescript
 import { createClient } from "okengine/client";
 import type { App } from "../src/app";
+import { app } from "../src/app";
 
-const api = createClient<App>("http://localhost:6530");
+const api = createClient<App>("http://localhost:6530", { $routes: app.$routes });
+// equivalently: const api = createClient(app, "http://localhost:6530");
 
 const { data, error } = await api.notes.get({ id: "n_1" });
 
 if (error?.code === "NotFound") show("gone");
 else console.log(data.title);          // ← typed, no codegen ✅
+// GET /notes/n_1 — the method and path are derived from the flow's own trigger,
+// not from a separate RPC convention.
 ```
 
 ### `tests/notes.test.ts`
@@ -252,6 +258,30 @@ export const fair = gate.rate({
 
 Five strategies exist (`fixed-window`, `sliding-log`, `token-bucket`, `leaky-bucket`); this one is the default because it has the best accuracy-to-cost ratio.
 
+### `src/schema.ts`
+
+```typescript
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+export const links = sqliteTable("links", {
+  id:        text("id").primaryKey(),               // `increment` targets this column
+  code:      text("code").notNull().unique(),        // the short, human-facing key
+  url:       text("url").notNull(),
+  userId:    text("user_id").notNull(),
+  clicks:    integer("clicks").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const daily = sqliteTable("daily", {
+  id:     text("id").primaryKey(),
+  code:   text("code").notNull(),
+  day:    text("day").notNull(),                      // "YYYY-MM-DD"
+  clicks: integer("clicks").notNull().default(0),
+});
+```
+
+A generated `id` plus a separate unique `code` is the standard shape for a shortener: `increment` — see below — is a store-level primitive that targets a row by its primary key, so every table it touches needs one.
+
 ### `src/flows/links/signals.ts`
 
 ```typescript
@@ -276,6 +306,7 @@ export const linkStats = signal("link-stats", {
 
 ```typescript
 import { on, flow, http, every } from "okengine";
+import { eq, lt } from "drizzle-orm";
 import { db } from "../../core";
 import { member, fair } from "../../gates";
 import { linkClicked, linkStats } from "./signals";
@@ -286,8 +317,10 @@ import { links } from "../../schema";
 export const shorten = on(http.post("/links").gate(member, fair), flow({
   in: NewLink, out: LinkCode, errors: { Taken },
   do: async ({ url, code }, fx) => {
-    if (await fx.store(db).exists(links, code)) return fx.fail("Taken", {});
-    await fx.store(db).insert(links).values({ code, url, userId: fx.auth.userId, clicks: 0 });
+    if (await fx.store(db).exists(links, { code })) return fx.fail("Taken", {});
+    const id = fx.id();
+    await fx.store(db).insert(links).values(
+      { id, code, url, userId: fx.auth.userId, clicks: 0, createdAt: Date.now() });
     return { code };
   },
 }));
@@ -296,7 +329,7 @@ export const shorten = on(http.post("/links").gate(member, fair), flow({
 export const redirect = on(http.get("/:code").gate(fair), flow({
   in: LinkCode, out: Link, errors: { NotFound },
   do: async ({ code }, fx) => {
-    const link = await fx.store(db).findByCode(links, code);
+    const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
     if (!link) return fx.fail("NotFound", {});
 
     await fx.emit(linkClicked, { code, at: Date.now() });   // same transaction as any write
@@ -307,20 +340,28 @@ export const redirect = on(http.get("/:code").gate(fair), flow({
 // ③ SIGNAL — "a queue consumer", and the same species as ① and ②
 on(linkClicked, flow({
   do: async ({ code }, fx) => {
-    const clicks = await fx.store(db).increment(links, code, "clicks");
+    const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
+    const clicks = await fx.store(db).increment(links, link.id, "clicks");
     await fx.emit(linkStats, { code, clicks });             // live: pushed to subscribers
   },
 }));
 
 // ④ CLOCK — "a cron job", and still the same species
 on(every("1h"), flow({
-  do: (_, fx) => fx.store(db).deleteExpired(links, "30d"),
+  do: (_, fx) => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;   // 30 days
+    return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
+  },
 }));
 
 // ⑤ A plain flow with no trigger — callable, not "private"
 export const stats = flow({
   in: LinkCode, out: z.object({ clicks: z.number() }),
-  do: ({ code }, fx) => fx.store(db).getClicks(links, code),
+  do: async ({ code }, fx) => {
+    const [link] = await fx.store(db).select({ clicks: links.clicks })
+      .from(links).where(eq(links.code, code)).limit(1);
+    return link ?? { clicks: 0 };
+  },
 });
 ```
 
@@ -330,21 +371,44 @@ export const stats = flow({
 
 ```typescript
 import { on, flow, http } from "okengine";
+import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import { linkClicked } from "../links/signals";
 import { db } from "../../core";
+import { member } from "../../gates";
 import { daily } from "../../schema";
 
 on(linkClicked, flow({                    // a second consumer of the same signal
-  do: ({ code, at }, fx) => fx.store(db).bumpDaily(daily, code, at),
+  do: async ({ code, at }, fx) => {
+    const day = new Date(at).toISOString().slice(0, 10);
+    const [row] = await fx.store(db).select().from(daily)
+      .where(and(eq(daily.code, code), eq(daily.day, day))).limit(1);
+
+    if (row) await fx.store(db).increment(daily, row.id, "clicks");
+    else await fx.store(db).insert(daily).values({ id: fx.id(), code, day, clicks: 1 });
+  },
 }));
 
 export const report = on(http.get("/links/:code/report").gate(member), flow({
   out: z.array(z.object({ day: z.string(), clicks: z.number() })),
-  do: ({ code }, fx) => fx.store(db).dailyFor(daily, code),
+  do: ({ code }, fx) => fx.store(db).select({ day: daily.day, clicks: daily.clicks })
+    .from(daily).where(eq(daily.code, code)),
 }));
 ```
 
 This unit never imports anything from `links` except the signal declaration. Decoupling is structural, not a discipline.
+
+### `src/app.ts`
+
+```typescript
+import { oke } from "okengine";
+import * as links from "./flows/links";
+import * as analytics from "./flows/analytics";
+
+export const app = oke({ name: "linkly" }).adopt({ links, analytics });
+
+export type App = typeof app;
+```
 
 ### The client — realtime with no realtime code
 
@@ -410,6 +474,27 @@ provisions/
 
 **The layout rule from here on: whoever *produces* an element declares it; consumers import it.** Shared concerns (the database, shared gates, secrets, channels) sit at the root. The framework never forces this — the Manifest is built from the import graph — but the tree teaches the vocabulary.
 
+### `src/schema.ts`
+
+```typescript
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+export const products = sqliteTable("products", {
+  sku:   text("sku").primaryKey(),
+  name:  text("name").notNull(),
+  stock: integer("stock").notNull().default(0),
+});
+
+export const orders = sqliteTable("orders", {
+  id:        text("id").primaryKey(),
+  userId:    text("user_id").notNull(),
+  sku:       text("sku").notNull(),
+  qty:       integer("qty").notNull(),
+  status:    text("status").notNull().default("pending"),
+  createdAt: integer("created_at").notNull(),
+});
+```
+
 ### `src/vault.ts`
 
 ```typescript
@@ -458,24 +543,28 @@ Recipient address, language and opt-out consent are resolved from the user autom
 
 ```typescript
 import { on, flow, gate, http } from "okengine";
+import { eq } from "drizzle-orm";
 import { db } from "../../core";
 import { member } from "../../gates";
 import { orderPlaced, orderNews } from "./signals";
 import { chargeOrder } from "../payments";
 import { NewOrder, OrderId, OrderRow, OutOfStock } from "./shapes";
-import { orders } from "../../schema";
+import { orders, products } from "../../schema";
 
 const canOrder = gate.policy("order:create", ({ auth }) => auth.scopes.has("order:create"));
 
 export const create = on(http.post("/orders").gate(member, canOrder), flow({
   in: NewOrder, out: OrderId, errors: { OutOfStock },
   do: async (input, fx) => {
-    const left = await fx.store(db).stockOf(input.sku);
-    if (left < input.qty) return fx.fail("OutOfStock", { left },
-                                         { message: fx.t("order.outOfStock", { left }) });
+    const [product] = await fx.store(db).select({ stock: products.stock })
+      .from(products).where(eq(products.sku, input.sku)).limit(1);
+    if (!product || product.stock < input.qty) return fx.fail("OutOfStock",
+      { left: product?.stock ?? 0 },
+      { message: fx.t("order.outOfStock", { left: product?.stock ?? 0 }) });
 
     const id = fx.id();
-    await fx.store(db).insert(orders).values({ id, userId: fx.auth.userId, ...input });
+    await fx.store(db).insert(orders).values(
+      { id, userId: fx.auth.userId, ...input, status: "pending", createdAt: Date.now() });
     await fx.emit(orderPlaced, { orderId: id });
     return { id };
   },
@@ -484,14 +573,23 @@ export const create = on(http.post("/orders").gate(member, canOrder), flow({
 // LIVE QUERY — realtime and auto-caching from one flag
 export const mine = on(http.get("/orders").gate(member).live(), flow({
   out: OrderRow.array(),
-  do: (_, fx) => fx.store(db).select().from(orders).where({ userId: fx.auth.userId }),
+  do: (_, fx) => fx.store(db).select().from(orders).where(eq(orders.userId, fx.auth.userId)),
 }));
+
+export const getOrder = flow({
+  in: OrderId, out: OrderRow,
+  do: async ({ id }, fx) => {
+    const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id)).limit(1);
+    return order;
+  },
+});
 
 // SIGNAL consumer
 on(orderPlaced, flow({
   do: async ({ orderId }, fx) => {
     const paid = await fx.call(chargeOrder, { orderId });
-    await fx.store(db).setStatus(orderId, paid ? "confirmed" : "failed");
+    await fx.store(db).update(orders).set({ status: paid ? "confirmed" : "failed" })
+      .where(eq(orders.id, orderId));
     await fx.emit(orderNews, { orderId, status: paid ? "confirmed" : "failed" });
   },
 }));
@@ -579,19 +677,22 @@ export const audit = plugin("audit", { version: "1.0.0" })
 import { oke } from "okengine";
 import { auth } from "okengine/auth";
 import { audit } from "./plugins/audit";
-import { orders } from "./flows/orders";
-import "./flows/payments";
-import "./flows/notifications";
+import * as orders from "./flows/orders";
+import * as payments from "./flows/payments";
+import * as notifications from "./flows/notifications";
 
 export const app = oke({ name: "provisions" })
+  .adopt({ orders, payments, notifications })
   .plug(auth())                       // zero ceremony: uses your configured store
   .plug(audit)                        // app-wide
   .hook("onError", (ctx, err, fx) => fx.log.error(err));
 
-orders.plug(rateLimit({ max: 30 }));  // this unit only
+app.unit("orders").plug(rateLimit({ max: 30 }));  // this unit only
+
+export type App = typeof app;
 ```
 
-`app.plug()` is app-wide, `unit.plug()` covers one unit, `flow.plug()` covers one flow. **The position is the scope** — no `global: true`, no inheritance rule to remember.
+`app.plug()` is app-wide, `app.unit(name).plug()` covers one unit, `flow.plug()` covers one flow. **The position is the scope** — no `global: true`, no inheritance rule to remember. `.adopt()` is what makes `typeof app` carry every flow's contract for the client; `on()` inside each flow file still does the actual trigger registration.
 
 **Auth needs no adapter.** The framework already knows your store; its tables come from `oke schema generate`. Options exist when you want them, and the identity provider is a seam — `auth({ provider: betterAuth(...) })`, `clerk()`, `supabase()`, `auth0()`, `kinde()` all normalise to the same `fx.auth`, so gates, ABAC, rate limits and channel recipients keep working unchanged when you switch.
 
@@ -655,7 +756,7 @@ skyport/
 │   ├── locales/{en,ar}.ts · schema.ts · schema/oke.ts (generated)
 │   ├── plugins/audit.ts
 │   └── flows/
-│       ├── bookings/{index.ts,shapes.ts,signals.ts}
+│       ├── bookings/{index.ts,shapes.ts,signals.ts}   # flights + FlightFull live here
 │       ├── payments/{index.ts,shapes.ts}
 │       ├── notifications/index.ts
 │       ├── support/index.ts          # AI triage, RAG, a bounded agent
@@ -709,6 +810,113 @@ export default defineConfig({
   topology: "monolith",                               // flip to "services" — code unchanged
   ports:    { app: 6530, console: 6533, mcp: 6535 },  // O·K·E = 6·5·3
   console:  { prod: { enabled: true, auth: "required" } },
+});
+```
+
+### `src/schema.ts` (excerpt — the tables this section uses)
+
+```typescript
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { id } from "okengine/store";
+
+export const bookings = sqliteTable("bookings", {
+  id:        text("id").primaryKey().$defaultFn(id),
+  userId:    text("user_id").notNull(),
+  flightId:  text("flight_id").notNull(),
+  seats:     integer("seats").notNull(),
+  status:    text("status").notNull().default("pending"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const flights = sqliteTable("flights", {
+  id:    text("id").primaryKey(),
+  seatsAvailable: integer("seats_available").notNull(),
+});
+
+export const tickets = sqliteTable("tickets", {
+  id: text("id").primaryKey(), subject: text("subject").notNull(),
+  body: text("body").notNull(), urgency: text("urgency"), team: text("team"),
+  summary: text("summary"),
+});
+```
+
+### `src/flows/bookings/shapes.ts`
+
+```typescript
+import { z } from "zod";
+
+export const NewBooking  = z.object({ flightId: z.string(), seats: z.number().min(1).max(9) });
+export const BookingId   = z.object({ id: z.string() });
+export const BookingRow  = z.object({ id: z.string(), status: z.string(), seats: z.number() });
+export const FlightFull  = z.object({ seatsLeft: z.number() });
+```
+
+### `src/flows/bookings/signals.ts`
+
+```typescript
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderPlaced = signal("order-placed", {
+  schema: z.object({ orderId: z.string() }), delivery: "once", retries: 5, deadLetter: true,
+});
+export const seatFeed = signal("seat-feed", {
+  schema: z.object({ flightId: z.string(), left: z.number() }), delivery: "live",
+});
+```
+
+### `src/flows/bookings/index.ts`
+
+```typescript
+import { on, flow, gate, http } from "okengine";
+import { eq } from "drizzle-orm";
+import { db } from "../../core";
+import { member, fair } from "../../gates";
+import { orderPlaced, seatFeed } from "./signals";
+import { NewBooking, BookingId, BookingRow, FlightFull } from "./shapes";
+import { bookings, flights } from "../../schema";
+
+export const canBook = gate.policy("booking:create", ({ auth }) => auth.scopes.has("booking:create"));
+
+export const create = on(http.post("/bookings").gate(member, canBook, fair), flow({
+  slo: { availability: "99.9%", latency: { p99: "200ms" } },
+  in: NewBooking, out: BookingId, errors: { FlightFull },
+  do: async ({ flightId, seats }, fx) => {
+    const [flight] = await fx.store(db).select().from(flights).where(eq(flights.id, flightId)).limit(1);
+    if (!flight || flight.seatsAvailable < seats)
+      return fx.fail("FlightFull", { seatsLeft: flight?.seatsAvailable ?? 0 });
+
+    const id = fx.id();
+    await fx.store(db).insert(bookings).values(
+      { id, userId: fx.auth.userId, flightId, seats, status: "pending", createdAt: Date.now() });
+    await fx.emit(orderPlaced, { orderId: id });
+    await fx.emit(seatFeed, { flightId, left: flight.seatsAvailable - seats });
+    return { id };
+  },
+}));
+
+export const mine = on(http.get("/bookings").gate(member).live(), flow({
+  out: BookingRow.array(),
+  do: (_, fx) => fx.store(db).select().from(bookings).where(eq(bookings.userId, fx.auth.userId)),
+}));
+
+export const getBooking = flow({
+  in: BookingId, out: BookingRow,
+  do: async ({ id }, fx) => {
+    const [b] = await fx.store(db).select().from(bookings).where(eq(bookings.id, id)).limit(1);
+    return b;
+  },
+});
+
+// The agent's second tool — refunding is a distinct, gated capability, never the same
+// permission as reading a booking, since the agent's tool list is exactly its authority.
+export const refundBooking = flow({
+  in: BookingId, out: BookingRow,
+  do: async ({ id }, fx) => {
+    await fx.store(db).update(bookings).set({ status: "refunded" }).where(eq(bookings.id, id));
+    const [b] = await fx.store(db).select().from(bookings).where(eq(bookings.id, id)).limit(1);
+    return b;
+  },
 });
 ```
 
@@ -795,10 +1003,11 @@ export const supportAgent = on(http.post("/support").gate(member), flow({
 ### Declaring what "working" means
 
 ```typescript
-// on a flow
+// on a flow — this is bookings.create, shown in full above
 export const create = on(http.post("/bookings").gate(member, canBook, fair), flow({
   slo: { availability: "99.9%", latency: { p99: "200ms" } },
-  /* … */
+  in: NewBooking, out: BookingId, errors: { FlightFull },
+  do: /* as shown above */,
 }));
 
 // on a user journey — because a service SLO is not a user SLO
@@ -821,6 +1030,29 @@ Forty services at 99.9% in sequence yield 96.1% for the user. Because the causal
 | **Split** (`topology`) | one deployable, or one per unit? | `monolith` = in-process calls · `services` = a container per unit, `fx.call` becomes network — code unchanged |
 | **Clone** (horizontal) | how many copies of the app? | run N instances: `once` signals deliver to exactly one, crons leader-elect, live queries fan out. `oke docker --prod` emits `deploy.replicas` |
 | **Data replicas** | how many copies of the data? | `replicas:` on the driver; read-only flows auto-route, derived from effects |
+
+### `src/app.ts`
+
+```typescript
+import { oke } from "okengine";
+import { auth } from "okengine/auth";
+import { audit } from "./plugins/audit";
+import * as bookings from "./flows/bookings";
+import * as payments from "./flows/payments";
+import * as notifications from "./flows/notifications";
+import * as support from "./flows/support";
+import * as users from "./flows/users";
+
+export const app = oke({ name: "skyport" })
+  .adopt({ bookings, payments, notifications, support, users })
+  .plug(auth())
+  .plug(audit)
+  .hook("onError", (ctx, err, fx) => fx.log.error(err));
+
+export type App = typeof app;
+```
+
+Same shape as Provisions — `.adopt()` for the client's types, `.plug()` for cross-cutting concerns, `on()` inside each flow file for the actual trigger registration. Nothing about composition changes as an application grows from one unit to five.
 
 ### `tests/` — deterministic even with AI
 
@@ -928,6 +1160,12 @@ oke upgrade                      # run codemods for a breaking change, print the
 Seventeen panels, all derived and never hand-maintained: **Overview · Flows · Signals · Store · Clock · Gates · Vault · Channels · AI · Architecture · Traces · Runs · Manifest Diff · Access · Plugins**, plus **Privacy** and **Tenancy** when their optional core plugins are plugged.
 
 Runtime actions execute directly; structural changes arrive as reviewable diffs in your working tree. Every Console action is a real flow through `fx`, so **the audit log is the trace**.
+
+## Store reference
+
+**Why Drizzle is a required peer dependency, not an abstraction.** The framework commits to one query builder rather than supporting several, because the effect inferencer performs real static analysis on Drizzle's own shapes — a table object, `.select().from(t)`, `.insert(t).values()` — to derive `reads`/`writes`/PII classification with no annotation from you. Supporting N ORMs would mean either analysing N different query builders (and getting it wrong for the ones nobody tests) or falling back to hints, which is exactly the annotation burden the effect system exists to remove. One committed ORM is what makes automatic cache invalidation and least-privilege capability tokens possible at all.
+
+**When you still need `fx.id()` despite `$defaultFn(id)`.** The schema default fills the `id` column at insert time — fine when nothing in the flow needs the value beforehand, as in Notes' `create` (the id is only read back from `.returning()`). Generate it explicitly with `fx.id()`, and pass it into `.values({ id, … })` yourself, whenever the flow needs the same id *before or alongside* the insert — to reference it in an emitted signal payload, to use it as a foreign key in a second insert in the same flow, or to return it without a round-trip. Linkly's `shorten` is the pattern: `const id = fx.id()` because the row and any signal about it need to agree on the same identifier within one flow body.
 
 ## Element checklist across the four applications
 

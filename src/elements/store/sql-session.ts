@@ -1,13 +1,17 @@
 /**
  * Driver-agnostic SQL session used by `fx.store(sqlStore)`.
  *
- * Same flow code runs against sqlite, postgres, and memory — only the
- * bound {@link SqlConnection} changes.
+ * Thin, protocol-agnostic subset — never domain-named helpers.
+ * Same flow code runs against sqlite, postgres, and memory.
  */
 
-import { parseDurationMs } from "../clock/duration.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
 import { maskRows, tableFromSql } from "./classify.ts";
+import {
+  compileWhere,
+  resolveSelectColumns,
+  type WhereMap,
+} from "./sql-condition.ts";
 import {
   mapRowToJs,
   prepareInsertRow,
@@ -15,6 +19,8 @@ import {
   resolveTableName,
   type TableHandle,
 } from "./table.ts";
+
+export type { WhereMap } from "./sql-condition.ts";
 
 /** Options for a SQL session. */
 export interface SqlSessionOptions {
@@ -26,23 +32,31 @@ export interface SqlSessionOptions {
   readonly revealPii?: boolean;
   /** Which connection was chosen — exposed for replica proofs. */
   readonly routedRole: "primary" | "replica";
-  /** Clock for {@link SqlStoreHandle.deleteExpired} (defaults to Date.now). */
-  readonly now?: () => number;
 }
 
-/** Equality map for where clauses. */
-export type WhereMap = Readonly<Record<string, unknown>>;
+/**
+ * Continuations after `.where(...)` on a select — awaitable, optional `.limit`.
+ */
+export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
+  /**
+   * Cap the number of returned rows.
+   *
+   * @param n - Max rows
+   */
+  limit(n: number): Promise<SqlRow[]>;
+}
 
 /**
  * Result of `.from(table)` — awaitable (all rows) or chain `.where(...)`.
  */
 export interface SelectFromBuilder extends PromiseLike<SqlRow[]> {
   /**
-   * Filter by column equality.
+   * Filter with a plain equality map or a Drizzle SQL condition
+   * (`eq`, `and`, `lt`, …).
    *
-   * @param where - Column equality predicates
+   * @param where - Condition
    */
-  where(where: WhereMap): Promise<SqlRow[]>;
+  where(where: unknown): SelectWhereBuilder;
 }
 
 /** Fluent select builder. */
@@ -76,10 +90,40 @@ export interface InsertValuesBuilder extends PromiseLike<void> {
   execute(): Promise<void>;
 }
 
+/** Fluent delete after `delete(table)` (no id). */
+export interface DeleteBuilder {
+  /**
+   * Delete rows matching a condition.
+   *
+   * @param where - Equality map or Drizzle SQL
+   */
+  where(where: unknown): Promise<number>;
+}
+
+/** Fluent update builder. */
+export interface UpdateBuilder {
+  /**
+   * Columns to set.
+   *
+   * @param row - Partial row (JS keys)
+   */
+  set(row: SqlRow): UpdateSetBuilder;
+}
+
+/** Continuations after `.set(...)`. */
+export interface UpdateSetBuilder {
+  /**
+   * Restrict the update.
+   *
+   * @param where - Equality map or Drizzle SQL
+   */
+  where(where: unknown): Promise<number>;
+}
+
 /**
  * SQL handle returned by `fx.store(db)` for the sql facet.
  *
- * Includes helpers assumed by the four reference applications.
+ * Generic v1 subset + Prompt 9.1 helpers. No business-named methods.
  */
 export interface SqlStoreHandle {
   /** Resource ref (`sql:name`). */
@@ -88,14 +132,25 @@ export interface SqlStoreHandle {
   readonly routedRole: "primary" | "replica";
   /** Underlying driver id. */
   readonly driverId: SqlConnection["driverId"];
-  /** Start a select. */
-  select(): SelectBuilder;
+  /**
+   * Start a select. Optional column map projects / aliases columns
+   * (`select({ clicks: links.clicks })`).
+   *
+   * @param columns - Optional `{ alias: drizzleColumn }` map
+   */
+  select(columns?: unknown): SelectBuilder;
   /**
    * Start an insert into `table`.
    *
    * @param table - Target table
    */
   insert(table: TableHandle | unknown): InsertBuilder;
+  /**
+   * Start an update on `table`.
+   *
+   * @param table - Target table
+   */
+  update(table: TableHandle | unknown): UpdateBuilder;
   /**
    * Find a row by primary key.
    *
@@ -104,18 +159,12 @@ export interface SqlStoreHandle {
    */
   findById(table: TableHandle | unknown, id: string): Promise<SqlRow | null>;
   /**
-   * Find a row by `code` column.
+   * Delete by primary key, or start a fluent `.where(...)` delete.
    *
    * @param table - Table
-   * @param code - Code value
+   * @param id - Primary key when using the two-arg form
    */
-  findByCode(table: TableHandle | unknown, code: string): Promise<SqlRow | null>;
-  /**
-   * Delete a row by primary key.
-   *
-   * @param table - Table
-   * @param id - Primary key value
-   */
+  delete(table: TableHandle | unknown): DeleteBuilder;
   delete(table: TableHandle | unknown, id: string): Promise<boolean>;
   /**
    * True when at least one row matches.
@@ -142,66 +191,6 @@ export interface SqlStoreHandle {
     by?: number,
   ): Promise<number>;
   /**
-   * Delete rows whose expiry column is older than `age` ago.
-   *
-   * Looks for `expiresAt` / `expires_at` / `createdAt` + age.
-   *
-   * @param table - Table
-   * @param age - Duration string (e.g. `"30d"`)
-   */
-  deleteExpired(table: TableHandle | unknown, age: string): Promise<number>;
-  /**
-   * Read the `clicks` column for a row keyed by `code`.
-   *
-   * @param table - Table
-   * @param code - Code value
-   */
-  getClicks(table: TableHandle | unknown, code: string): Promise<number>;
-  /**
-   * Upsert a daily click counter row.
-   *
-   * @param table - Daily stats table (`code`, `day`, `clicks`)
-   * @param code - Link code
-   * @param at - Epoch-ms timestamp
-   */
-  bumpDaily(
-    table: TableHandle | unknown,
-    code: string,
-    at: number,
-  ): Promise<void>;
-  /**
-   * List daily click rows for a code.
-   *
-   * @param table - Daily stats table
-   * @param code - Link code
-   */
-  dailyFor(
-    table: TableHandle | unknown,
-    code: string,
-  ): Promise<Array<{ day: string; clicks: number }>>;
-  /**
-   * Remaining stock for a SKU (reads `stock` / `products` / `inventory`).
-   *
-   * @param sku - Stock-keeping unit
-   */
-  stockOf(sku: string): Promise<number>;
-  /**
-   * Set a status column.
-   *
-   * Overloads:
-   * - `setStatus(id, status)` — updates `orders` by id
-   * - `setStatus(table, id, status)` — updates the given table
-   *
-   * @param tableOrId - Table handle, or order id when two-arg form
-   * @param idOrStatus - Id, or status when two-arg form
-   * @param status - Status when three-arg form
-   */
-  setStatus(
-    tableOrId: TableHandle | unknown | string,
-    idOrStatus: string,
-    status?: string,
-  ): Promise<void>;
-  /**
    * Raw SQL — PII masking still applied at the boundary.
    *
    * @param sql - SQL with `?` placeholders
@@ -227,7 +216,6 @@ export function createSqlStoreHandle(
   options: SqlSessionOptions,
 ): SqlStoreHandle {
   const { connection, classifications, revealPii } = options;
-  const now = options.now ?? (() => Date.now());
 
   function mask(rows: SqlRow[], table?: string): SqlRow[] {
     return maskRows(rows, { classifications, table, revealPii });
@@ -256,7 +244,7 @@ export function createSqlStoreHandle(
     return rows.map((r) => mapRowToJs(table, r) as SqlRow);
   }
 
-  function normalizeWhere(
+  function normalizeWhereMap(
     table: TableHandle | unknown,
     where: WhereMap,
   ): WhereMap {
@@ -270,56 +258,103 @@ export function createSqlStoreHandle(
     return out;
   }
 
-  async function selectWhere(
+  function compileTableWhere(
     table: TableHandle | unknown,
-    where?: WhereMap,
+    where: unknown,
+  ): ReturnType<typeof compileWhere> {
+    if (
+      where &&
+      typeof where === "object" &&
+      !Array.isArray(where) &&
+      !("queryChunks" in (where as object))
+    ) {
+      return compileWhere(normalizeWhereMap(table, where as WhereMap));
+    }
+    return compileWhere(where);
+  }
+
+  async function runSelect(
+    table: TableHandle | unknown,
+    projection: ReturnType<typeof resolveSelectColumns>,
+    where: unknown | undefined,
+    limit?: number,
   ): Promise<SqlRow[]> {
     await ensureFromMeta(table);
     const name = resolveTableName(table);
-    if (!where || Object.keys(where).length === 0) {
-      const rows = await connection.query(`SELECT * FROM ${quoteIdent(name)}`);
+    const selectList =
+      projection === null
+        ? "*"
+        : projection
+            .map((c) =>
+              c.alias === c.sqlName
+                ? quoteIdent(c.sqlName)
+                : `${quoteIdent(c.sqlName)} AS ${quoteIdent(c.alias)}`,
+            )
+            .join(", ");
+
+    let sql = `SELECT ${selectList} FROM ${quoteIdent(name)}`;
+    const params: unknown[] = [];
+    if (where !== undefined) {
+      const compiled = compileTableWhere(table, where);
+      if (compiled.clause) {
+        sql += ` WHERE ${compiled.clause}`;
+        params.push(...compiled.params);
+      }
+    }
+    if (limit !== undefined) {
+      sql += ` LIMIT ${Math.max(0, Math.floor(limit))}`;
+    }
+
+    const rows = await connection.query(sql, params);
+    if (projection === null) {
       return toJs(table, mask(rows, name));
     }
-    const normalized = normalizeWhere(table, where);
-    const entries = Object.entries(normalized);
-    const clause = entries
-      .map(([col]) => `${quoteIdent(col)} = ?`)
-      .join(" AND ");
-    const params = entries.map(([, v]) => v);
-    const rows = await connection.query(
-      `SELECT * FROM ${quoteIdent(name)} WHERE ${clause}`,
-      params,
+    // Projected aliases are already the returned keys.
+    return mask(
+      rows.map((r) => {
+        const out: SqlRow = {};
+        for (const c of projection) {
+          out[c.alias] = r[c.alias] ?? r[c.sqlName];
+        }
+        return out;
+      }),
+      name,
     );
-    return toJs(table, mask(rows, name));
   }
 
-  function selectFrom(table: TableHandle | unknown): SelectFromBuilder {
-    const all = selectWhere(table);
-    const builder = {
-      where(where: WhereMap) {
-        return selectWhere(table, where);
+  function selectFrom(
+    table: TableHandle | unknown,
+    columns?: unknown,
+  ): SelectFromBuilder {
+    const projection = resolveSelectColumns(columns);
+    const all = runSelect(table, projection, undefined);
+    return {
+      where(where) {
+        const filtered = runSelect(table, projection, where);
+        return {
+          limit(n) {
+            return runSelect(table, projection, where, n);
+          },
+          then(onfulfilled, onrejected) {
+            return filtered.then(onfulfilled, onrejected);
+          },
+        };
       },
-      then<TResult1 = SqlRow[], TResult2 = never>(
-        onfulfilled?:
-          | ((value: SqlRow[]) => TResult1 | PromiseLike<TResult1>)
-          | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-      ) {
+      then(onfulfilled, onrejected) {
         return all.then(onfulfilled, onrejected);
       },
     };
-    return builder;
   }
 
-  return {
+  const handle: SqlStoreHandle = {
     ref,
     routedRole: options.routedRole,
     driverId: connection.driverId,
 
-    select(): SelectBuilder {
+    select(columns?) {
       return {
         from(table) {
-          return selectFrom(table);
+          return selectFrom(table, columns);
         },
       };
     },
@@ -359,6 +394,38 @@ export function createSqlStoreHandle(
       };
     },
 
+    update(table): UpdateBuilder {
+      const name = resolveTableName(table);
+      return {
+        set(row) {
+          return {
+            async where(where) {
+              await ensureFromMeta(table);
+              const prepared = prepareInsertRow(table, row);
+              const setEntries = Object.entries(prepared);
+              if (setEntries.length === 0) return 0;
+              const setSql = setEntries
+                .map(([col]) => `${quoteIdent(col)} = ?`)
+                .join(", ");
+              const compiled = compileTableWhere(table, where);
+              if (!compiled.clause) {
+                throw new Error("update().set().where(): condition required");
+              }
+              const params = [
+                ...setEntries.map(([, v]) => v),
+                ...compiled.params,
+              ];
+              const result = await connection.exec(
+                `UPDATE ${quoteIdent(name)} SET ${setSql} WHERE ${compiled.clause}`,
+                params,
+              );
+              return result.changes;
+            },
+          };
+        },
+      };
+    },
+
     async findById(table, idValue) {
       await ensureFromMeta(table);
       const name = resolveTableName(table);
@@ -371,26 +438,37 @@ export function createSqlStoreHandle(
       return masked[0] ?? null;
     },
 
-    async findByCode(table, code) {
-      await ensureFromMeta(table);
-      const name = resolveTableName(table);
-      const rows = await connection.query(
-        `SELECT * FROM ${quoteIdent(name)} WHERE ${quoteIdent("code")} = ?`,
-        [code],
-      );
-      const masked = toJs(table, mask(rows, name));
-      return masked[0] ?? null;
-    },
-
-    async delete(table, idValue) {
-      await ensureFromMeta(table);
-      const name = resolveTableName(table);
-      const pk = resolvePkColumn(table);
-      const result = await connection.exec(
-        `DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`,
-        [idValue],
-      );
-      return result.changes > 0;
+    delete(
+      table: TableHandle | unknown,
+      idValue?: string,
+    ): DeleteBuilder | Promise<boolean> {
+      if (idValue !== undefined) {
+        return (async () => {
+          await ensureFromMeta(table);
+          const name = resolveTableName(table);
+          const pk = resolvePkColumn(table);
+          const result = await connection.exec(
+            `DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`,
+            [idValue],
+          );
+          return result.changes > 0;
+        })();
+      }
+      return {
+        async where(where) {
+          await ensureFromMeta(table);
+          const name = resolveTableName(table);
+          const compiled = compileTableWhere(table, where);
+          if (!compiled.clause) {
+            throw new Error("delete().where(): condition required");
+          }
+          const result = await connection.exec(
+            `DELETE FROM ${quoteIdent(name)} WHERE ${compiled.clause}`,
+            compiled.params,
+          );
+          return result.changes;
+        },
+      };
     },
 
     async exists(table, idOrWhere) {
@@ -399,19 +477,14 @@ export function createSqlStoreHandle(
       const where: WhereMap =
         typeof idOrWhere === "string"
           ? { [resolvePkColumn(table)]: idOrWhere }
-          : normalizeWhere(table, idOrWhere);
-      const entries = Object.entries(where);
-      if (entries.length === 0) {
+          : normalizeWhereMap(table, idOrWhere);
+      const compiled = compileWhere(where);
+      if (!compiled.clause) {
         throw new Error("exists() requires at least one where predicate");
       }
-      for (const [col] of entries) quoteIdent(col);
-      const clause = entries
-        .map(([col]) => `${quoteIdent(col)} = ?`)
-        .join(" AND ");
-      const params = entries.map(([, v]) => v);
       const rows = await connection.query(
-        `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${clause} LIMIT 1`,
-        params,
+        `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${compiled.clause} LIMIT 1`,
+        compiled.params,
       );
       return rows.length > 0;
     },
@@ -437,106 +510,6 @@ export function createSqlStoreHandle(
       return asNumber(row[sqlCol], sqlCol);
     },
 
-    async deleteExpired(table, age) {
-      await ensureFromMeta(table);
-      const name = resolveTableName(table);
-      const ms = parseDurationMs(age);
-      const cutoff = now() - ms;
-      // Prefer expires_at / expiresAt; fall back to created_at / createdAt.
-      for (const col of ["expires_at", "expiresAt", "created_at", "createdAt"]) {
-        try {
-          const result = await connection.exec(
-            `DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(col)} < ?`,
-            [cutoff],
-          );
-          return result.changes;
-        } catch {
-          /* try next column */
-        }
-      }
-      return 0;
-    },
-
-    async getClicks(table, code) {
-      const row = await this.findByCode(table, code);
-      if (!row) return 0;
-      const clicks = row.clicks;
-      if (typeof clicks === "number") return clicks;
-      if (typeof clicks === "bigint") return Number(clicks);
-      if (typeof clicks === "string") return Number(clicks) || 0;
-      return 0;
-    },
-
-    async bumpDaily(table, code, at) {
-      await ensureFromMeta(table);
-      const name = resolveTableName(table);
-      const day = new Date(at).toISOString().slice(0, 10);
-      // Try update-first; insert when no row.
-      const updated = await connection.exec(
-        `UPDATE ${quoteIdent(name)} SET ${quoteIdent("clicks")} = ${quoteIdent("clicks")} + 1 WHERE ${quoteIdent("code")} = ? AND ${quoteIdent("day")} = ?`,
-        [code, day],
-      );
-      if (updated.changes > 0) return;
-      await connection.exec(
-        `INSERT INTO ${quoteIdent(name)} (${quoteIdent("code")}, ${quoteIdent("day")}, ${quoteIdent("clicks")}) VALUES (?, ?, ?)`,
-        [code, day, 1],
-      );
-    },
-
-    async dailyFor(table, code) {
-      await ensureFromMeta(table);
-      const name = resolveTableName(table);
-      const rows = await connection.query(
-        `SELECT ${quoteIdent("day")}, ${quoteIdent("clicks")} FROM ${quoteIdent(name)} WHERE ${quoteIdent("code")} = ? ORDER BY ${quoteIdent("day")}`,
-        [code],
-      );
-      return rows.map((r) => ({
-        day: String(r.day ?? ""),
-        clicks: asNumber(r.clicks, "clicks"),
-      }));
-    },
-
-    async stockOf(sku) {
-      for (const table of ["stock", "products", "inventory"]) {
-        try {
-          const rows = await connection.query(
-            `SELECT * FROM ${quoteIdent(table)} WHERE ${quoteIdent("sku")} = ? LIMIT 1`,
-            [sku],
-          );
-          const row = rows[0];
-          if (!row) return 0;
-          for (const key of ["qty", "stock", "left"]) {
-            if (row[key] !== undefined && row[key] !== null) {
-              return asNumber(row[key], key);
-            }
-          }
-          return 0;
-        } catch {
-          /* try next table name */
-        }
-      }
-      // Dev-friendly default when no stock table exists yet.
-      return 999;
-    },
-
-    async setStatus(tableOrId, idOrStatus, status?) {
-      if (status !== undefined) {
-        const name = resolveTableName(tableOrId);
-        const pk = resolvePkColumn(tableOrId);
-        await connection.exec(
-          `UPDATE ${quoteIdent(name)} SET ${quoteIdent("status")} = ? WHERE ${quoteIdent(pk)} = ?`,
-          [status, idOrStatus],
-        );
-        return;
-      }
-      const id = String(tableOrId);
-      const next = idOrStatus;
-      await connection.exec(
-        `UPDATE ${quoteIdent("orders")} SET ${quoteIdent("status")} = ? WHERE ${quoteIdent("id")} = ?`,
-        [next, id],
-      );
-    },
-
     async raw(sql, params = []) {
       const table = tableFromSql(sql);
       const rows = await connection.query(sql, params);
@@ -551,7 +524,10 @@ export function createSqlStoreHandle(
           const typ =
             c.name === pk
               ? "TEXT PRIMARY KEY"
-              : c.name === "clicks" || c.name === "qty" || c.name === "createdAt" || c.name === "created_at"
+              : c.name === "clicks" ||
+                  c.name === "qty" ||
+                  c.name === "createdAt" ||
+                  c.name === "created_at"
                 ? "INTEGER"
                 : "TEXT";
           return `${quoteIdent(c.name)} ${typ}`;
@@ -562,6 +538,8 @@ export function createSqlStoreHandle(
       );
     },
   };
+
+  return handle;
 }
 
 /**

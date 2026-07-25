@@ -1,4 +1,5 @@
 import { on, flow, http } from "okengine";
+import { eq } from "drizzle-orm";
 import { db } from "../../core.ts";
 import { member, canBook, fair } from "../../gates.ts";
 import { bookings } from "../../schema.ts";
@@ -39,7 +40,7 @@ export const mine = on(
     name: "bookings.mine",
     live: true,
     do: (_, fx) =>
-      fx.store(db).select().from(bookings).where({ userId: fx.auth.userId }),
+      fx.store(db).select().from(bookings).where(eq(bookings.userId as never, fx.auth.userId)),
   }),
 );
 
@@ -50,5 +51,8 @@ export const getBooking = flow({
 
 export const refundBooking = flow({
   name: "bookings.refundBooking",
-  do: ({ id }, fx) => fx.store(db).setStatus(bookings, id, "refunded"),
+  do: async ({ id }, fx) => {
+    await fx.store(db).update(bookings).set({ status: "refunded" }).where({ id });
+    return fx.store(db).findById(bookings, id);
+  },
 });

@@ -17,5 +17,3 @@ export const sendOtp = flow({
   do: ({ userId, code }, fx) => fx.send(otpCode, { to: userId, via: [wa, sms], data: { code } }),
   //                                                     ↑ fallback chain: WhatsApp, else SMS
 });
-
-Object.assign(sendOtp, { name: "notifications.sendOtp" });

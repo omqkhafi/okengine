@@ -88,9 +88,14 @@ export interface InvocationContext {
  * @param ctx - Invocation context
  * @param fx - The `fx` door for this invocation
  */
+/**
+ * Standard hook — `(ctx, fx)`.
+ * `onError` may also be declared as `(ctx, err, fx)` (four-applications).
+ */
 export type HookFn = (
   ctx: InvocationContext,
-  fx: Fx,
+  fxOrErr: Fx | unknown,
+  fx?: Fx,
 ) =>
   | void
   | Response
@@ -238,7 +243,11 @@ async function runStage(
   for (const fn of list) {
     let returned: void | Response | FlowFailure;
     try {
-      returned = await fn(ctx, fx);
+      // Spec apps use `.hook("onError", (ctx, err, fx) => …)`.
+      returned =
+        stage === "onError"
+          ? await fn(ctx, ctx.error, fx)
+          : await fn(ctx, fx);
     } catch (err) {
       ctx.error = err;
       return "error";

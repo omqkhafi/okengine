@@ -1,0 +1,46 @@
+{
+  "measuredAt": "2026-07-25T00:48:41.730Z",
+  "version": "0.0.22",
+  "budgets": [
+    {
+      "id": "kernelEdgeGzipBytes",
+      "label": "Kernel (edge profile)",
+      "value": 8426,
+      "limit": 15360,
+      "unit": "bytes",
+      "ok": true
+    },
+    {
+      "id": "clientGzipBytes",
+      "label": "Client runtime",
+      "value": 1715,
+      "limit": 3072,
+      "unit": "bytes",
+      "ok": true
+    },
+    {
+      "id": "consoleInitialGzipBytes",
+      "label": "Console initial load",
+      "value": 91900,
+      "limit": 307200,
+      "unit": "bytes",
+      "ok": true
+    },
+    {
+      "id": "coldStartMedianMs",
+      "label": "Cold start on Bun",
+      "value": 25.064,
+      "limit": 50,
+      "unit": "ms",
+      "ok": true
+    },
+    {
+      "id": "routingP99Ms",
+      "label": "p99 routing overhead",
+      "value": 0.001,
+      "limit": 1,
+      "unit": "ms",
+      "ok": true
+    }
+  ]
+}

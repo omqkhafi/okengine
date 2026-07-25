@@ -44,39 +44,48 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
     role,
     async query(sql, params = []) {
       const text = sql.trim();
-      const selectStar = /^SELECT\s+\*\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?)?\s*$/i.exec(
-        text,
-      );
-      if (selectStar) {
-        const table = getTable(parseIdent(selectStar[1]!));
-        if (selectStar[2]) {
-          const col = parseIdent(selectStar[2]!);
-          const want = params[0];
-          return table.rows
-            .filter((r) => r[col] === want)
-            .map((r) => ({ ...r }));
-        }
-        return table.rows.map((r) => ({ ...r }));
-      }
 
-      const selectCols =
-        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?(?:\s+ORDER\s+BY\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?))?\s*$/i.exec(
+      const selectGeneric =
+        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?))?(?:\s+LIMIT\s+(\d+))?\s*$/i.exec(
           text,
         );
-      if (selectCols) {
-        const table = getTable(parseIdent(selectCols[2]!));
-        const cols = selectCols[1]!.split(",").map((c) => parseIdent(c.trim()));
-        const whereCol = parseIdent(selectCols[3]!);
-        const orderCol = selectCols[4] ? parseIdent(selectCols[4]) : undefined;
-        let rows = table.rows.filter((r) => r[whereCol] === params[0]);
+      if (selectGeneric && !/^\s*1\s+AS\s+/i.test(selectGeneric[1]!)) {
+        const table = getTable(parseIdent(selectGeneric[2]!));
+        const selectList = selectGeneric[1]!.trim();
+        const whereClause = selectGeneric[3]?.trim();
+        const orderCol = selectGeneric[4]
+          ? parseIdent(selectGeneric[4])
+          : undefined;
+        const limit = selectGeneric[5]
+          ? Number(selectGeneric[5])
+          : undefined;
+        let rows = table.rows.map((r) => ({ ...r }));
+        if (whereClause) {
+          const preds = parseWherePredicates(whereClause);
+          rows = rows.filter((r) =>
+            preds.every((p, i) => compareRow(r[p.column], params[i], p.op)),
+          );
+        }
         if (orderCol) {
           rows = [...rows].sort((a, b) =>
             String(a[orderCol] ?? "").localeCompare(String(b[orderCol] ?? "")),
           );
         }
+        if (limit !== undefined) rows = rows.slice(0, limit);
+        if (selectList === "*") return rows;
+        const cols = selectList.split(",").map((part) => {
+          const as = /^\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+AS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*$/i.exec(
+            part,
+          );
+          if (as) {
+            return { sql: parseIdent(as[1]!), alias: parseIdent(as[2]!) };
+          }
+          const name = parseIdent(part.trim());
+          return { sql: name, alias: name };
+        });
         return rows.map((r) => {
           const out: SqlRow = {};
-          for (const c of cols) out[c] = r[c];
+          for (const c of cols) out[c.alias] = r[c.sql];
           return out;
         });
       }
@@ -215,16 +224,27 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       }
 
       const updateSet =
-        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s*$/i.exec(
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+(.+?)\s+WHERE\s+(.+)\s*$/i.exec(
           text,
         );
       if (updateSet) {
         const table = getTable(parseIdent(updateSet[1]!));
-        const setCol = parseIdent(updateSet[2]!);
-        const whereCol = parseIdent(updateSet[3]!);
-        const row = table.rows.find((r) => r[whereCol] === params[1]);
+        const setParts = updateSet[2]!.split(",").map((p) => p.trim());
+        const setCols = setParts.map((part) => {
+          const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?$/.exec(part);
+          if (!m) throw new Error(`memory sql: unsupported SET: ${part}`);
+          return parseIdent(m[1]!);
+        });
+        const preds = parseWherePredicates(updateSet[3]!);
+        const row = table.rows.find((r) =>
+          preds.every((p, i) =>
+            compareRow(r[p.column], params[setCols.length + i], p.op),
+          ),
+        );
         if (!row) return { changes: 0 };
-        row[setCol] = params[0];
+        setCols.forEach((col, i) => {
+          row[col] = params[i];
+        });
         return { changes: 1 };
       }
 
@@ -238,11 +258,56 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
 
 /** Parse `col = ? AND col2 = ?` into ordered column names. */
 function parseEqualityWhere(clause: string): string[] {
-  return clause.split(/\s+AND\s+/i).map((part) => {
-    const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?$/.exec(part.trim());
-    if (!m) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
-    return m[1]!.replaceAll('"', "").trim();
+  return parseWherePredicates(clause).map((p) => {
+    if (p.op !== "=") {
+      throw new Error(`memory sql: unsupported WHERE: ${clause}`);
+    }
+    return p.column;
   });
+}
+
+/** One WHERE predicate for the memory SQL driver. */
+interface WherePred {
+  readonly column: string;
+  readonly op: "=" | "<" | ">" | "<=" | ">=" | "!=";
+}
+
+/** Parse `col = ? AND col2 < ?` into ordered predicates. */
+function parseWherePredicates(clause: string): WherePred[] {
+  return clause.split(/\s+AND\s+/i).map((part) => {
+    const m =
+      /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(=|<=|>=|<>|!=|<|>)\s*\?$/.exec(
+        part.trim(),
+      );
+    if (!m) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
+    const opRaw = m[2]!;
+    const op: WherePred["op"] =
+      opRaw === "<>" ? "!=" : (opRaw as WherePred["op"]);
+    return { column: m[1]!.replaceAll('"', "").trim(), op };
+  });
+}
+
+function compareRow(
+  cell: unknown,
+  want: unknown,
+  op: WherePred["op"],
+): boolean {
+  if (op === "=") return cell === want;
+  if (op === "!=") return cell !== want;
+  const a = Number(cell ?? 0);
+  const b = Number(want ?? 0);
+  switch (op) {
+    case "<":
+      return a < b;
+    case ">":
+      return a > b;
+    case "<=":
+      return a <= b;
+    case ">=":
+      return a >= b;
+    default:
+      return false;
+  }
 }
 
 /** Memory SQL driver. */

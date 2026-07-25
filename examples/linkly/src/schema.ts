@@ -1,18 +1,17 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-import { now } from "okengine/store";
 
-/** Short links — primary key is `code`. */
 export const links = sqliteTable("links", {
-  code: text("code").primaryKey(),
-  url: text("url").notNull(),
-  userId: text("user_id"),
-  clicks: integer("clicks").notNull().default(0),
-  createdAt: integer("created_at").notNull().$defaultFn(now),
+  id:        text("id").primaryKey(),               // `increment` targets this column
+  code:      text("code").notNull().unique(),        // the short, human-facing key
+  url:       text("url").notNull(),
+  userId:    text("user_id").notNull(),
+  clicks:    integer("clicks").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
 });
 
-/** Per-day click counters. */
 export const daily = sqliteTable("daily", {
-  code: text("code").notNull(),
-  day: text("day").notNull(),
+  id:     text("id").primaryKey(),
+  code:   text("code").notNull(),
+  day:    text("day").notNull(),                      // "YYYY-MM-DD"
   clicks: integer("clicks").notNull().default(0),
 });

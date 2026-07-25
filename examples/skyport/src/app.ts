@@ -1,6 +1,5 @@
-import { oke } from "okengine";
 import { db } from "./core";
-import { member, canBook, fair } from "./gates";
+import { member, fair } from "./gates";
 import {
   dbUrl,
   dbReplica1,
@@ -9,28 +8,35 @@ import {
 } from "./vault";
 import { bookingConfirmed } from "./channels";
 import { orderPlaced, seatFeed } from "./flows/bookings/signals";
-import { smart, fast, triage, embed, support } from "./ai";
-import { create, mine, getBooking, refundBooking } from "./flows/bookings";
-import { chargeBooking } from "./flows/payments";
-import { send } from "./flows/notifications";
 import {
-  createTicket,
-  askDocs,
-  supportAgent,
-} from "./flows/support";
-import { me } from "./flows/users";
-import { audit } from "./plugins/audit";
+  smart,
+  fast,
+  triage,
+  embed,
+  support as supportAgentDecl,
+} from "./ai";
+import { canBook } from "./flows/bookings";
 import "./journeys";
-import "./flows/bookings";
-import "./flows/payments";
-import "./flows/notifications";
-import "./flows/support";
-import "./flows/users";
 import "./ai";
 import "./channels";
 import "./gates";
 
-export const app = oke({ name: "skyport" }).plug(audit);
+import { oke } from "okengine";
+import { auth } from "okengine/auth";
+import { audit } from "./plugins/audit";
+import * as bookings from "./flows/bookings";
+import * as payments from "./flows/payments";
+import * as notifications from "./flows/notifications";
+import * as support from "./flows/support";
+import * as users from "./flows/users";
+
+export const app = oke({ name: "skyport" })
+  .adopt({ bookings, payments, notifications, support, users })
+  .plug(auth())
+  .plug(audit)
+  .hook("onError", (ctx, err, fx) => fx.log.error(err));
+
+export type App = typeof app;
 
 Object.assign(app.$options, {
   env: "test",
@@ -46,18 +52,6 @@ Object.assign(app.$options, {
     models: [smart, fast],
     prompts: [triage],
     embeds: [embed],
-    agents: [support],
+    agents: [supportAgentDecl],
   },
 });
-
-app.adopt(
-  {
-    bookings: { create, mine, getBooking, refundBooking },
-    payments: { chargeBooking },
-    notifications: { send },
-    support: { createTicket, askDocs, supportAgent },
-    users: { me },
-  },
-);
-
-export type App = typeof app;

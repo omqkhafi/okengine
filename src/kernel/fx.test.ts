@@ -8,7 +8,17 @@ import {
   OKE_ERRORS,
   OkeError,
 } from "./errors.ts";
-import { createFx, createFxContext, type Fx } from "./fx.ts";
+import {
+  createFx,
+  createFxContext,
+  type Fx,
+  type FxStubStoreHandle,
+} from "./fx.ts";
+
+/** Narrow stub handle for tests that exercise the in-memory store. */
+function stub(fx: Fx, ref: string): FxStubStoreHandle {
+  return fx.store(ref) as FxStubStoreHandle;
+}
 
 describe("fx — capability enforcement", () => {
   test("undeclared store read throws OKE1001 with flow, resource, and fix", async () => {
@@ -19,7 +29,7 @@ describe("fx — capability enforcement", () => {
 
     let err: unknown;
     try {
-      await fx.store("sql:users").get("u1");
+      await stub(fx, "sql:users").get("u1");
     } catch (e) {
       err = e;
     }
@@ -45,7 +55,7 @@ describe("fx — capability enforcement", () => {
       effects: { reads: ["sql:bookings"] },
       storeData: { "sql:bookings": { b1: { id: "b1" } } },
     });
-    await expect(fx.store("sql:bookings").get("b1")).resolves.toEqual({
+    await expect(stub(fx, "sql:bookings").get("b1")).resolves.toEqual({
       id: "b1",
     });
   });
@@ -64,8 +74,8 @@ describe("fx — effect ledger", () => {
       ledger,
     });
 
-    await fx.store("sql:bookings").get("b1");
-    await fx.store("sql:bookings").insert({ seats: 2 });
+    await stub(fx, "sql:bookings").get("b1");
+    await stub(fx, "sql:bookings").insert({ seats: 2 });
     await fx.emit("order-placed", { orderId: "o1" });
 
     expect(ledger.entries).toHaveLength(3);
@@ -103,8 +113,8 @@ describe("fx — effect ledger", () => {
       secrets: { STRIPE_KEY: "sk_test" },
     });
 
-    await fx.store("sql:bookings").get("x");
-    await fx.store("sql:bookings").set("x", { ok: true });
+    await stub(fx, "sql:bookings").get("x");
+    await stub(fx, "sql:bookings").set("x", { ok: true });
     await fx.emit("order-placed", {});
     await fx.send("order-confirmed", { to: "u1" });
     await fx.ask("triage@1", {});
@@ -162,6 +172,12 @@ describe("fx — wholesale swap", () => {
       },
       async search() {
         return [];
+      },
+      async run() {
+        return {};
+      },
+      async *stream() {
+        /* empty */
       },
       log: {
         debug() {},

@@ -78,7 +78,6 @@ import {
 } from "./capability.ts";
 import type { AnyFlowDef } from "./flow.ts";
 import type { Binding } from "./on.ts";
-import type { Effects } from "../manifest/types.ts";
 
 /** Pre-built or partially-built element runtimes. */
 export interface ElementRuntimes {

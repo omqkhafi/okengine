@@ -12,7 +12,6 @@ import {
   encodeFailure,
   type CompiledRoute,
 } from "../compiler/index.ts";
-import type { Effects } from "../manifest/types.ts";
 import { validate } from "../validation/standard-schema.ts";
 import {
   accumulateAdoptArgs,

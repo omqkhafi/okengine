@@ -2,12 +2,13 @@
  * `oke upgrade` — run codemods for a breaking change, print the diff.
  */
 
+import {
+  runCodemods,
+  type CodemodChange,
+} from "../upgrade/codemods.ts";
+
 /** One file rewrite produced by a codemod. */
-export interface UpgradeChange {
-  readonly path: string;
-  readonly before: string;
-  readonly after: string;
-}
+export type UpgradeChange = CodemodChange;
 
 /** Options for {@link runUpgrade}. */
 export interface UpgradeOptions {
@@ -32,12 +33,7 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<number> 
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
   const dryRun = options.dryRun ?? true;
-  const run =
-    options.runCodemods ??
-    (async () => {
-      // Built-in transforms ship with breaking releases; none pending.
-      return [] as UpgradeChange[];
-    });
+  const run = options.runCodemods ?? runCodemods;
 
   try {
     const changes = await run(cwd);
@@ -76,6 +72,7 @@ export async function upgradeCli(args: readonly string[]): Promise<number> {
 
 Run codemods for a breaking change and print the diff.
 Pass --apply to write files (default is dry-run).
+Codemods ship with every breaking change (unified-theory §22).
 `);
       return 0;
     }

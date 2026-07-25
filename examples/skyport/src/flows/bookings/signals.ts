@@ -2,11 +2,8 @@ import { signal } from "okengine";
 import { z } from "zod";
 
 export const orderPlaced = signal("order-placed", {
-  delivery: "once",
-  schema: z.object({ id: z.string() }),
+  schema: z.object({ orderId: z.string() }), delivery: "once", retries: 5, deadLetter: true,
 });
-
 export const seatFeed = signal("seat-feed", {
-  delivery: "live",
-  schema: z.object({}).passthrough(),
+  schema: z.object({ flightId: z.string(), left: z.number() }), delivery: "live",
 });

@@ -148,14 +148,24 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
  * @param args - Args after `doctor`
  */
 export async function doctorCli(args: readonly string[]): Promise<number> {
+  if (args.includes("--diff")) {
+    const { doctorDiffCli } = await import("./doctor-diff.ts");
+    return doctorDiffCli(args);
+  }
+
   let manifestPath: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--help" || a === "-h") {
       console.log(`oke doctor [--manifest oke.manifest.json]
+oke doctor --diff [--before <path> --after <path>] [--base <branch>]
 
 Verify secrets, ports, and schema drift before serving requests.
+
+--diff  CI gate: block undeclared contract breaks (Manifest Diff).
+        Default baseline is git merge-base (main/master) vs the working
+        tree; pass --before/--after for an explicit comparison.
 `);
       return 0;
     }

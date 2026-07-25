@@ -157,6 +157,14 @@ export interface FxStubStoreHandle {
    * @param key - Row key
    */
   delete(key: string): Promise<boolean>;
+  /**
+   * Audit-plugin convenience (no-op on the stub).
+   *
+   * @param _ctx - Unused context
+   */
+  log(_ctx?: unknown): Promise<void>;
+  /** Audit-plugin CLI convenience. */
+  exportCsv(): Promise<string>;
 }
 
 /**
@@ -525,19 +533,30 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       get driverId() {
         return cached?.driverId ?? "memory";
       },
-      select() {
+      select(columns?) {
         return {
           from(table) {
             const all = gated("read", ref, async () => {
               const h = await ensure();
-              return h.select().from(table);
+              return h.select(columns).from(table);
             });
             return {
               where(where) {
-                return gated("read", ref, async () => {
+                const filtered = gated("read", ref, async () => {
                   const h = await ensure();
-                  return h.select().from(table).where(where);
+                  return h.select(columns).from(table).where(where);
                 });
+                return {
+                  limit(n) {
+                    return gated("read", ref, async () => {
+                      const h = await ensure();
+                      return h.select(columns).from(table).where(where).limit(n);
+                    });
+                  },
+                  then(onfulfilled, onrejected) {
+                    return filtered.then(onfulfilled, onrejected);
+                  },
+                };
               },
               then(onfulfilled, onrejected) {
                 return all.then(onfulfilled, onrejected);
@@ -569,23 +588,41 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           },
         };
       },
+      update(table) {
+        return {
+          set(row) {
+            return {
+              where(where) {
+                return gated("write", ref, async () => {
+                  const h = await ensure();
+                  return h.update(table).set(row).where(where);
+                });
+              },
+            };
+          },
+        };
+      },
       findById(table, id) {
         return gated("read", ref, async () => {
           const h = await ensure();
           return h.findById(table, id);
         });
       },
-      findByCode(table, code) {
-        return gated("read", ref, async () => {
-          const h = await ensure();
-          return h.findByCode(table, code);
-        });
-      },
-      delete(table, id) {
-        return gated("write", ref, async () => {
-          const h = await ensure();
-          return h.delete(table, id);
-        });
+      delete(table: Parameters<SqlStoreHandle["delete"]>[0], id?: string) {
+        if (id !== undefined) {
+          return gated("write", ref, async () => {
+            const h = await ensure();
+            return h.delete(table, id);
+          });
+        }
+        return {
+          where(where: unknown) {
+            return gated("write", ref, async () => {
+              const h = await ensure();
+              return h.delete(table).where(where);
+            });
+          },
+        };
       },
       exists(table, idOrWhere) {
         return gated("read", ref, async () => {
@@ -597,42 +634,6 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return gated("write", ref, async () => {
           const h = await ensure();
           return h.increment(table, id, column, by);
-        });
-      },
-      deleteExpired(table, age) {
-        return gated("write", ref, async () => {
-          const h = await ensure();
-          return h.deleteExpired(table, age);
-        });
-      },
-      getClicks(table, code) {
-        return gated("read", ref, async () => {
-          const h = await ensure();
-          return h.getClicks(table, code);
-        });
-      },
-      bumpDaily(table, code, at) {
-        return gated("write", ref, async () => {
-          const h = await ensure();
-          return h.bumpDaily(table, code, at);
-        });
-      },
-      dailyFor(table, code) {
-        return gated("read", ref, async () => {
-          const h = await ensure();
-          return h.dailyFor(table, code);
-        });
-      },
-      stockOf(sku) {
-        return gated("read", ref, async () => {
-          const h = await ensure();
-          return h.stockOf(sku);
-        });
-      },
-      setStatus(tableOrId, idOrStatus, status?) {
-        return gated("write", ref, async () => {
-          const h = await ensure();
-          return h.setStatus(tableOrId, idOrStatus, status);
         });
       },
       raw(sql, params) {
@@ -647,7 +648,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return h.ensureTable(table);
         });
       },
-    };
+    } as SqlStoreHandle;
   }
 
   function storeHandle(
@@ -688,7 +689,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               baseRef,
               async () => {
                 const h = await open();
-                const fn = (h as Record<string | symbol, unknown>)[prop];
+                const fn = (h as unknown as Record<string | symbol, unknown>)[
+                  prop
+                ];
                 if (typeof fn !== "function") return undefined;
                 return (fn as (...a: unknown[]) => unknown).apply(h, args);
               },
@@ -789,7 +792,13 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       emitLog("warn", message, data);
     },
     error(message, data) {
-      emitLog("error", message, data);
+      const text =
+        typeof message === "string"
+          ? message
+          : message instanceof Error
+            ? message.message
+            : String(message);
+      emitLog("error", text, data);
     },
   };
 

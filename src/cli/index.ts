@@ -89,6 +89,7 @@ Commands:
   oke dev [--stack|-s [roles]]   watch · hot reload · Console · client types
   oke start                      production entry (Docker CMD)
   oke doctor                     secrets · ports · schema drift
+  oke doctor --diff              CI gate: undeclared contract breaks
   oke stack                      preview images/tags/ports (writes nothing)
   oke schema generate [--check]  core + plugin tables → schema/oke.ts
   oke client add <url>           ambient types for a separate frontend repo
