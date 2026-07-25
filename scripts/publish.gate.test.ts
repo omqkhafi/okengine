@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const WORKFLOW = join(ROOT, ".github/workflows/publish.yml");
+const WORKFLOW = join(ROOT, ".github/workflows/ci.yml");
 
 /** Package roots published in lockstep. */
 const PACKAGES = [
@@ -19,7 +19,7 @@ const PACKAGES = [
 ] as const;
 
 describe("publish workflow", () => {
-  test("publish.yml parses and mirrors gflows gate → split npm/JSR publish", () => {
+  test("ci.yml parses and mirrors gflows gate → split npm/JSR publish", () => {
     expect(existsSync(WORKFLOW)).toBe(true);
     const yml = readFileSync(WORKFLOW, "utf-8");
     type PublishJob = {
@@ -30,19 +30,19 @@ describe("publish workflow", () => {
     };
     const parsed = Bun.YAML.parse(yml) as {
       jobs?: {
-        "test-and-lint"?: unknown;
+        ci?: unknown;
         "publish-npm"?: PublishJob;
         "publish-jsr"?: PublishJob;
       };
     };
 
-    expect(parsed.jobs?.["test-and-lint"]).toBeTruthy();
+    expect(parsed.jobs?.ci).toBeTruthy();
     expect(parsed.jobs?.["publish-npm"]).toBeTruthy();
     expect(parsed.jobs?.["publish-jsr"]).toBeTruthy();
 
     for (const key of ["publish-npm", "publish-jsr"] as const) {
       const job = parsed.jobs?.[key];
-      expect(job?.needs).toBe("test-and-lint");
+      expect(job?.needs).toBe("ci");
       expect(job?.environment).toBe("production");
       expect(job?.permissions?.contents).toBe("read");
       expect(job?.permissions?.["id-token"]).toBe("write");
