@@ -7,6 +7,14 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.1 — 2026-07-25
+
+### Fixed
+
+- Docs site build in CI: remove the nested `site/bun.lock` that made Turbopack
+  treat `site/app` as the project root and miss `next`, and pin
+  `turbopack.root` to the monorepo root.
+
 ## v0.2.0 — 2026-07-25
 
 ### Added
