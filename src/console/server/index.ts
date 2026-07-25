@@ -125,3 +125,17 @@ export {
   type DiffCiGate,
   type ProjectManifestDiffOptions,
 } from "./diff.ts";
+export {
+  filterCapabilityDiffForPlugin,
+  groupPluginChanges,
+  loadCapabilityDiffByPlugin,
+  PLUGIN_STATE_DERIVATION,
+  projectPluginsList,
+  type ConsolePluginRow,
+  type ConsolePluginsList,
+  type PluginCapabilityChange,
+  type PluginInterceptView,
+  type PluginScopeView,
+  type PluginState,
+  type ProjectPluginsOptions,
+} from "./plugins.ts";

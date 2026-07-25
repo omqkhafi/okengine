@@ -110,6 +110,12 @@ import {
   type ConsoleChannelsList,
   type EmailAuthResult,
 } from "./channels.ts";
+import type { OkeConfig } from "../../config/index.ts";
+import type { PluginRegistry } from "../../kernel/registry.ts";
+import {
+  projectPluginsList,
+  type ConsolePluginsList,
+} from "./plugins.ts";
 import {
   projectManifestDiff,
   type ConsoleDiffProjection,
@@ -325,6 +331,15 @@ export interface ConsoleState {
    */
   listDiff: () => Promise<ConsoleDiffProjection>;
   /**
+   * Project Plugins panel — origin × state, supply-chain, capability diff
+   * (console §9.15). Read-only; never installs.
+   */
+  listPlugins: () => Promise<ConsolePluginsList>;
+  /** Loaded oke.config for CORE tenancy/privacy state derivation. */
+  okeConfig: OkeConfig | null;
+  /** Live plugin registry from host boot (optional). */
+  pluginRegistry: PluginRegistry | null;
+  /**
    * Live Channel runtime + shared console inbox (console §9.9).
    * Bound after boot from Manifest or host injection.
    */
@@ -408,6 +423,10 @@ export interface CreateConsoleStateOptions {
   readonly channelInbox?: ChannelInbox | null;
   /** Template body catalog for previews. */
   readonly channelCatalog?: TemplateCatalog;
+  /** Loaded oke.config (tenancy / privacy state derivation). */
+  readonly okeConfig?: OkeConfig | null;
+  /** Host plugin registry for scopes / capabilities. */
+  readonly pluginRegistry?: PluginRegistry | null;
 }
 
 /**
@@ -732,6 +751,17 @@ export function createConsoleState(
         now: state.now(),
       });
     },
+    okeConfig: options.okeConfig ?? null,
+    pluginRegistry: options.pluginRegistry ?? null,
+    listPlugins: async () =>
+      projectPluginsList({
+        manifest: state.manifest,
+        config: state.okeConfig,
+        registry: state.pluginRegistry,
+        cwd: state.cwd,
+        now: state.now,
+        fetchNpm: false,
+      }),
     channelRuntime: options.channelRuntime ?? null,
     channelInbox: options.channelInbox ?? null,
     channelCatalog: options.channelCatalog ?? {},

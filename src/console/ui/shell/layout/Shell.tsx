@@ -29,6 +29,7 @@ const NAV: ReadonlyArray<{
   { to: "/traces", label: "Traces", enabled: true },
   { to: "/runs", label: "Runs", enabled: true },
   { to: "/manifest-diff", label: "Manifest Diff", enabled: true },
+  { to: "/plugins", label: "Plugins", enabled: true },
 ];
 
 /**

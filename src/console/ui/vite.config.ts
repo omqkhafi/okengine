@@ -101,6 +101,13 @@ export default defineConfig({
           ) {
             return "panel-access";
           }
+          if (
+            id.includes("/console/ui/shell/panels/plugins/") ||
+            id.includes("/console/ui/shell/panels/Plugins.") ||
+            id.includes("/console/ui/plugins/")
+          ) {
+            return "panel-plugins";
+          }
           return undefined;
         },
       },

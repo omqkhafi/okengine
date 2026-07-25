@@ -26,6 +26,19 @@ describe("rankedFindings", () => {
     expect(sources.has("architecture")).toBe(true);
     expect(sources.has("plugins")).toBe(true);
     expect(sources.has("ai")).toBe(true);
+    expect(sources.has("access")).toBe(true);
+  });
+
+  test("Access hygiene findings appear in the ranked union", () => {
+    const view = composeOverview(OVERVIEW_INPUTS_FIXTURE);
+    const access = view.findings.filter((f) => f.source === "access");
+    expect(access.length).toBeGreaterThan(0);
+    expect(access.some((f) => f.detail.includes("unused 90d"))).toBe(true);
+    expect(access.some((f) => f.detail.includes("never signed in"))).toBe(true);
+    expect(access.some((f) => f.detail.includes("expired invitation"))).toBe(
+      true,
+    );
+    expect(access.every((f) => f.href === "/access")).toBe(true);
   });
 
   test("compareFindings orders by harm, then irreversibility, then trend", () => {
@@ -80,6 +93,11 @@ describe("rankedFindings", () => {
       architectureGraph: graph,
       diffChanges: [],
       aiVersions: [],
+      accessHygiene: {
+        unusedKeys: [],
+        neverSignedInOperators: [],
+        expiredInvitations: [],
+      },
       now: OVERVIEW_INPUTS_FIXTURE.now,
     });
     expect(findings.some((f) => f.source === "architecture")).toBe(true);

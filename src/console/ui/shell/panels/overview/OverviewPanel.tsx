@@ -12,6 +12,7 @@ import type { Manifest } from "../../../../../manifest/types.ts";
 import type { AiListResponse } from "../../../ai/types.ts";
 import type { ChannelsListResponse } from "../../../channels/types.ts";
 import type { ClockListResponse } from "../../../clock/types.ts";
+import type { AccessListResponse } from "../../../access/types.ts";
 import type { DiffListResponse } from "../../../diff/types.ts";
 import type { GatesListResponse } from "../../../gates/types.ts";
 import {
@@ -119,6 +120,16 @@ export function OverviewPanel() {
     refetchInterval: 15_000,
   });
 
+  const accessQuery = useQuery({
+    queryKey: ["console.access.list"],
+    queryFn: async () => {
+      const res = await consoleCalls.accessList();
+      if (res.error) throw new Error(res.error.code);
+      return res.data as AccessListResponse;
+    },
+    refetchInterval: 30_000,
+  });
+
   const view = useMemo(() => {
     const now = clockQuery.data?.now ?? Date.now();
     return composeOverview({
@@ -131,6 +142,7 @@ export function OverviewPanel() {
       channels: channelsQuery.data ?? null,
       ai: aiQuery.data ?? null,
       diff: diffQuery.data ?? null,
+      access: accessQuery.data ?? null,
       now,
     });
   }, [
@@ -143,6 +155,7 @@ export function OverviewPanel() {
     channelsQuery.data,
     aiQuery.data,
     diffQuery.data,
+    accessQuery.data,
   ]);
 
   const loading =

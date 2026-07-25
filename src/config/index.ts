@@ -105,6 +105,20 @@ export interface ConsoleConfig {
 }
 
 /**
+ * Runs retention / redaction at the config surface (privacy state derivation).
+ * Distinct from {@link DriversConfig.runs} (driver map under `drivers`).
+ */
+export interface RunsConfig {
+  /** Field → retention duration for redaction (privacy on when present). */
+  readonly redact?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Optional privacy block — presence turns CORE `privacy` on in Plugins panel.
+ */
+export type PrivacyConfig = Readonly<Record<string, unknown>>;
+
+/**
  * Application config returned by {@link defineConfig}.
  */
 export interface OkeConfig {
@@ -112,6 +126,16 @@ export interface OkeConfig {
   readonly images?: ImagesConfig;
   readonly i18n?: I18nConfig;
   readonly tenancy?: TenancyConfig;
+  /**
+   * Privacy tooling / redact policy. Presence (or {@link RunsConfig.redact})
+   * marks CORE `privacy` as on — not a separate `.plug()` call.
+   */
+  readonly privacy?: PrivacyConfig;
+  /**
+   * Top-level runs retention. `runs.redact` turns CORE `privacy` on.
+   * Not the same key as `drivers.runs`.
+   */
+  readonly runs?: RunsConfig;
   readonly topology?: "monolith" | "services";
   readonly ports?: PortsConfig;
   readonly console?: ConsoleConfig;

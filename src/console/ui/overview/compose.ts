@@ -15,6 +15,7 @@ import type { ClockListResponse } from "../clock/types.ts";
 import type { SignalRecord } from "../signals/types.ts";
 import type { VaultListResponse } from "../vault/types.ts";
 import type { ChannelsListResponse } from "../channels/types.ts";
+import type { AccessListResponse } from "../access/types.ts";
 import type { RunRecord } from "../runs/types.ts";
 import { firstSloInvite } from "./busiest.ts";
 import { computeCostBudgets } from "./cost.ts";
@@ -35,6 +36,7 @@ export interface OverviewInputs {
   readonly channels: ChannelsListResponse | null;
   readonly ai: AiListResponse | null;
   readonly diff: DiffListResponse | null;
+  readonly access: AccessListResponse | null;
   readonly now: number;
   /** Optional prebuilt graph (tests); otherwise built from Manifest. */
   readonly architectureGraph?: CausalityGraph | null;
@@ -56,6 +58,7 @@ export function composeOverview(inputs: OverviewInputs): OverviewView {
     channels,
     ai,
     diff,
+    access,
     now,
   } = inputs;
 
@@ -83,6 +86,11 @@ export function composeOverview(inputs: OverviewInputs): OverviewView {
     architectureGraph: graph,
     diffChanges: diff?.changes ?? [],
     aiVersions: ai?.versions ?? [],
+    accessHygiene: access?.hygiene ?? {
+      unusedKeys: [],
+      neverSignedInOperators: [],
+      expiredInvitations: [],
+    },
     now,
   });
   const whatChanged = diff

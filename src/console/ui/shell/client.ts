@@ -1023,6 +1023,67 @@ interface ConsoleClient {
         ciGate: "blocked" | "acknowledged" | null;
       }>;
     }>;
+    pluginsList: (input: Record<string, never>) => CallResult<{
+      stateDerivation: string;
+      plugins: Array<{
+        id: string;
+        origin: "core" | "local" | "community";
+        state: "on" | "off";
+        version: string | null;
+        summary: string | null;
+        scopes: Array<{ kind: "app" | "unit" | "flow"; name?: string }>;
+        declares: string[];
+        intercepts: Array<{
+          stage: string;
+          meanMs: number | null;
+          count: number;
+        }>;
+        hookCost: {
+          count: number;
+          meanMs: number;
+          p50Ms: number;
+          p95Ms: number;
+          lastMs: number | null;
+        } | null;
+        supplyChain: {
+          lifecycleScripts: {
+            state: string;
+            scripts: string[];
+            detail: string;
+          };
+          releaseCooldown: {
+            state: string;
+            publishedAt: number | null;
+            holdUntil: number | null;
+            detail: string;
+          };
+          nodeImportScan: {
+            state: string;
+            findings: Array<{
+              source: string;
+              specifier: string;
+              line: number | null;
+            }>;
+            detail: string;
+          };
+          npmProvenance: { state: string; detail: string };
+          bootConflicts: {
+            state: string;
+            conflicts: string[];
+            detail: string;
+          };
+        };
+        capabilityDiff: Array<{
+          path: string;
+          category: string;
+          kind: string;
+          summary: string;
+        }>;
+        installCommand: string | null;
+        enableHint: string | null;
+        packageName: string | null;
+      }>;
+    }>;
   };
 }
 
@@ -1158,6 +1219,7 @@ export const consoleApi = createClient(
         path: "/console/access/roles/grants",
       },
       "console.diffList": { method: "GET", path: "/console/diff" },
+      "console.pluginsList": { method: "GET", path: "/console/plugins" },
     },
   },
 ) as unknown as ConsoleClient;
@@ -1643,5 +1705,11 @@ export const consoleCalls = {
    */
   async diffList() {
     return consoleApi.console.diffList({});
+  },
+  /**
+   * Plugins panel — origin × state, supply-chain, capability diff (read-only).
+   */
+  async pluginsList() {
+    return consoleApi.console.pluginsList({});
   },
 };

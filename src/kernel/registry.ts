@@ -14,6 +14,7 @@
 
 import type { FlowErrorMap } from "./flow.ts";
 import type { HookFn, HookMap, HookStage } from "./hooks.ts";
+import { tagHookWithPlugin } from "./hook-timing.ts";
 import type {
   CliContribution,
   ClientExtensionContribution,
@@ -86,7 +87,8 @@ export function createRecordingApi(identity: {
   const api: PluginApi = {
     hook(stage, fn) {
       const list = hooks[stage] ?? (hooks[stage] = []);
-      list.push(fn);
+      // Tag so runPipeline can attribute real wall-clock cost to this plugin.
+      list.push(tagHookWithPlugin(identity.name, fn));
       pushIntercept(stage);
       return api;
     },

@@ -14,6 +14,7 @@
 import type { AnyFlowDef } from "./flow.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
+import { pluginIdOfHook, recordHookCost } from "./hook-timing.ts";
 import type { Trigger } from "./triggers.ts";
 
 /**
@@ -242,6 +243,8 @@ async function runStage(
 
   for (const fn of list) {
     let returned: void | Response | FlowFailure;
+    const pluginId = pluginIdOfHook(fn);
+    const started = pluginId !== undefined ? performance.now() : 0;
     try {
       // Spec apps use `.hook("onError", (ctx, err, fx) => …)`.
       returned =
@@ -249,8 +252,14 @@ async function runStage(
           ? await fn(ctx, ctx.error, fx)
           : await fn(ctx, fx);
     } catch (err) {
+      if (pluginId !== undefined) {
+        recordHookCost(pluginId, stage, performance.now() - started);
+      }
       ctx.error = err;
       return "error";
+    }
+    if (pluginId !== undefined) {
+      recordHookCost(pluginId, stage, performance.now() - started);
     }
 
     if (returned instanceof Response) {

@@ -899,6 +899,96 @@ const DiffListOut = z.object({
   changes: z.array(DiffChangeOut),
 });
 
+const SupplySignalStates = z.enum([
+  "pass",
+  "fail",
+  "hold",
+  "not-applicable",
+  "unknown",
+  "clean",
+  "conflict",
+]);
+
+const PluginsListOut = z.object({
+  stateDerivation: z.string(),
+  plugins: z.array(
+    z.object({
+      id: z.string(),
+      origin: z.enum(["core", "local", "community"]),
+      state: z.enum(["on", "off"]),
+      version: z.string().nullable(),
+      summary: z.string().nullable(),
+      scopes: z.array(
+        z.object({
+          kind: z.enum(["app", "unit", "flow"]),
+          name: z.string().optional(),
+        }),
+      ),
+      declares: z.array(z.string()),
+      intercepts: z.array(
+        z.object({
+          stage: z.string(),
+          meanMs: z.number().nullable(),
+          count: z.number(),
+        }),
+      ),
+      hookCost: z
+        .object({
+          count: z.number(),
+          meanMs: z.number(),
+          p50Ms: z.number(),
+          p95Ms: z.number(),
+          lastMs: z.number().nullable(),
+        })
+        .nullable(),
+      supplyChain: z.object({
+        lifecycleScripts: z.object({
+          state: SupplySignalStates,
+          scripts: z.array(z.string()),
+          detail: z.string(),
+        }),
+        releaseCooldown: z.object({
+          state: SupplySignalStates,
+          publishedAt: z.number().nullable(),
+          holdUntil: z.number().nullable(),
+          detail: z.string(),
+        }),
+        nodeImportScan: z.object({
+          state: SupplySignalStates,
+          findings: z.array(
+            z.object({
+              source: z.string(),
+              specifier: z.string(),
+              line: z.number().nullable(),
+            }),
+          ),
+          detail: z.string(),
+        }),
+        npmProvenance: z.object({
+          state: SupplySignalStates,
+          detail: z.string(),
+        }),
+        bootConflicts: z.object({
+          state: SupplySignalStates,
+          conflicts: z.array(z.string()),
+          detail: z.string(),
+        }),
+      }),
+      capabilityDiff: z.array(
+        z.object({
+          path: z.string(),
+          category: z.string(),
+          kind: z.string(),
+          summary: z.string(),
+        }),
+      ),
+      installCommand: z.string().nullable(),
+      enableHint: z.string().nullable(),
+      packageName: z.string().nullable(),
+    }),
+  ),
+});
+
 const GatesSimulateIn = z.object({
   flowId: z.string().min(1),
   principal: z.object({
@@ -1452,6 +1542,9 @@ export function createConsoleBindings(state: ConsoleState): {
     readonly diff: {
       readonly list: ReturnType<typeof createDiffList>;
     };
+    readonly plugin: {
+      readonly list: ReturnType<typeof createPluginsList>;
+    };
     readonly clock: {
       readonly list: ReturnType<typeof createClockList>;
       readonly runNow: ReturnType<typeof createClockRunNow>;
@@ -1507,6 +1600,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const accessRotateKeyFlow = createAccessRotateKey(state);
   const accessSetRoleGrantsFlow = createAccessSetRoleGrants(state);
   const diffList = createDiffList(state);
+  const pluginsList = createPluginsList(state);
   const clockList = createClockList(state);
   const clockRunNow = createClockRunNow(state);
   const clockPause = createClockPause(state);
@@ -1561,6 +1655,7 @@ export function createConsoleBindings(state: ConsoleState): {
       accessSetRoleGrantsFlow,
     ),
     bindHttp(http.get("/console/diff"), diffList),
+    bindHttp(http.get("/console/plugins"), pluginsList),
     bindHttp(http.get("/console/clock"), clockList),
     bindHttp(http.post("/console/clock/run-now"), clockRunNow),
     bindHttp(http.post("/console/clock/pause"), clockPause),
@@ -1621,6 +1716,7 @@ export function createConsoleBindings(state: ConsoleState): {
         setRoleGrants: accessSetRoleGrantsFlow,
       },
       diff: { list: diffList },
+      plugin: { list: pluginsList },
       clock: {
         list: clockList,
         runNow: clockRunNow,
@@ -2914,6 +3010,20 @@ function createDiffList(state: ConsoleState) {
           ciGate: c.ciGate,
         })),
       };
+    },
+  });
+}
+
+function createPluginsList(state: ConsoleState) {
+  return flow({
+    name: "console.plugin.list",
+    unit: "console",
+    plane: "operator",
+    out: PluginsListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listPlugins();
     },
   });
 }

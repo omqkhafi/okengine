@@ -15,7 +15,8 @@ export type FindingSource =
   | "channels"
   | "architecture"
   | "plugins"
-  | "ai";
+  | "ai"
+  | "access";
 
 /**
  * One ranked finding in the Overview union.

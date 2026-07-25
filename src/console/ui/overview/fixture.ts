@@ -3,6 +3,7 @@
  */
 
 import type { Manifest } from "../../../manifest/types.ts";
+import { ACCESS_LIST_FIXTURE } from "../access/fixture.ts";
 import { AI_LIST_FIXTURE } from "../ai/fixture.ts";
 import { ARCHITECTURE_TEST_MANIFEST } from "../architecture/fixture.ts";
 import { CHANNELS_LIST_FIXTURE } from "../channels/fixture.ts";
@@ -140,6 +141,7 @@ export const OVERVIEW_INPUTS_FIXTURE: OverviewInputs = {
   channels: CHANNELS_LIST_FIXTURE,
   ai: AI_LIST_FIXTURE,
   diff: OVERVIEW_DIFF_FIXTURE,
+  access: ACCESS_LIST_FIXTURE,
   now: OVERVIEW_NOW,
 };
 

@@ -26,6 +26,7 @@ import { parseSignalsSearch } from "../signals/search.ts";
 import { parseStoreSearch } from "../store/search.ts";
 import { parseTracesSearch } from "../traces/search.ts";
 import { parseVaultSearch } from "../vault/search.ts";
+import { parsePluginsSearch } from "../plugins/search.ts";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
 import "./styles.css";
@@ -215,6 +216,17 @@ const diffAliasRoute = createRoute({
   ),
 });
 
+const pluginsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/plugins",
+  validateSearch: (search: Record<string, unknown>) =>
+    parsePluginsSearch(search),
+  component: lazyRouteComponent(
+    () => import("./panels/Plugins.tsx"),
+    "default",
+  ),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   overviewRoute,
@@ -232,6 +244,7 @@ const routeTree = rootRoute.addChildren([
   runsRoute,
   manifestDiffRoute,
   diffAliasRoute,
+  pluginsRoute,
 ]);
 const router = createRouter({
   routeTree,

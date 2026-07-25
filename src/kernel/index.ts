@@ -167,6 +167,19 @@ export {
 } from "./hooks.ts";
 
 export {
+  HOOK_PLUGIN_ID,
+  allHookCostSummaries,
+  hookCostSummary,
+  listHookCostSamples,
+  pluginIdOfHook,
+  recordHookCost,
+  resetHookCosts,
+  tagHookWithPlugin,
+  type HookCostSample,
+  type HookCostSummary,
+} from "./hook-timing.ts";
+
+export {
   listBindings,
   on,
   resetBindings,

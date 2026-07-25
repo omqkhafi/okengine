@@ -21,6 +21,8 @@ import { overBudgetFindings } from "../ai/findings.ts";
 import type { PromptVersionMetrics } from "../ai/types.ts";
 import { pluginCapabilityFindings } from "../plugins/findings.ts";
 import type { DiffChangeRecord } from "../diff/types.ts";
+import { hygieneLines } from "../access/hygiene.ts";
+import type { AccessHygieneRecord } from "../access/types.ts";
 import type { OverviewFinding } from "./types.ts";
 
 /** Inputs collected from each panel's real finding source. */
@@ -33,6 +35,8 @@ export interface FindingInputs {
   readonly architectureGraph: CausalityGraph | null;
   readonly diffChanges: readonly DiffChangeRecord[];
   readonly aiVersions: readonly PromptVersionMetrics[];
+  /** Access hygiene — unused keys, never signed in, expired invites. */
+  readonly accessHygiene: AccessHygieneRecord;
   readonly now: number;
 }
 
@@ -51,6 +55,7 @@ export function rankedFindings(inputs: FindingInputs): readonly OverviewFinding[
     ...mapCycles(inputs.architectureGraph),
     ...mapPlugins(inputs.diffChanges),
     ...mapAiBudget(inputs.aiVersions),
+    ...mapAccessHygiene(inputs.accessHygiene),
   ];
 
   return findings.sort(compareFindings);
@@ -182,5 +187,24 @@ function mapAiBudget(
     userHarm: 45,
     irreversibility: 50,
     trend: Math.round(f.overBudgetRate * 100),
+  }));
+}
+
+function mapAccessHygiene(hygiene: AccessHygieneRecord): OverviewFinding[] {
+  // Access already computed unused keys / never signed in / expired invites.
+  return hygieneLines(hygiene).map((line) => ({
+    id: `access:hygiene:${line.code}`,
+    source: "access" as const,
+    title: "Access hygiene",
+    detail: line.message,
+    href: "/access",
+    userHarm: 40,
+    irreversibility: 35,
+    trend:
+      line.code === "unused-keys"
+        ? hygiene.unusedKeys.length
+        : line.code === "never-signed-in"
+          ? hygiene.neverSignedInOperators.length
+          : hygiene.expiredInvitations.length,
   }));
 }
