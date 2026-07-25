@@ -500,7 +500,9 @@ async function startAppHot(
     if (stopped) return;
     stopped = true;
     try {
-      proc.kill();
+      // SIGKILL so `bun --hot` cannot linger and hold the project directory
+      // open (create-oke afterEach `rmSync` otherwise races the child exit).
+      proc.kill("SIGKILL");
     } catch {
       // already exited
     }

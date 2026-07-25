@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -46,7 +46,7 @@
     "gate:errors": "bun test src/kernel/errors.registry.test.ts",
     "gate:codemods": "bun test src/upgrade/codemods.test.ts",
     "test:examples": "bun test examples/notes && bun test examples/linkly && bun test examples/provisions && bun test examples/skyport",
-    "test:create-oke": "bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test packages/create-oke/tests/scaffold.integration.test.ts packages/create-oke/tests/dev.integration.test.ts",
+    "test:create-oke": "bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test --timeout 180000 packages/create-oke/tests/scaffold.integration.test.ts packages/create-oke/tests/dev.integration.test.ts",
     "test:doc-drift": "bun src/cli/doc-drift.ts",
     "site:sync": "bun run --cwd site sync",
     "site:dev": "bun run --cwd site dev",

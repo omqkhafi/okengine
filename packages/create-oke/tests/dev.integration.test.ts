@@ -25,14 +25,26 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
   let session: DevSession | undefined;
   let root: string | undefined;
 
-  afterEach(() => {
-    session?.stop();
+  afterEach(async () => {
+    const live = session;
     session = undefined;
+    live?.stop();
+    // App child + watcher must release cwd before rmSync (default hook
+    // timeout is short; wait, then retry deletes).
     if (root) {
-      rmSync(root, { recursive: true, force: true });
+      const doomed = root;
       root = undefined;
+      for (let attempt = 0; attempt < 25; attempt++) {
+        try {
+          rmSync(doomed, { recursive: true, force: true });
+          return;
+        } catch {
+          await Bun.sleep(100);
+        }
+      }
+      rmSync(doomed, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   test(
     "scaffolded hello · bun install · oke dev · flow request · clean stop",

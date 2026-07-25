@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
-**Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **License:** MIT
+**Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **Docs:** [oke.dev](https://oke.dev) · **License:** MIT
 
 ### Install
 
@@ -35,7 +35,7 @@ Eight elements cover what a backend needs. Ten exports are the whole public voca
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Detail and comparisons live in [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md).
+Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Handbook: [oke.dev/docs](https://oke.dev/docs). Spec depth: [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md).
 
 ---
 
@@ -51,7 +51,9 @@ oke dev
 |---|---|
 | `:6530` | your app |
 | `:6533` | Console |
-| `:6535` | MCP |
+| `:6535` | MCP (your live Manifest, for agents) |
+
+Mnemonic: **O·K·E = 6·5·3**. Docs MCP for the handbook is a separate surface on `:6536` (search/fetch only — see [Documentation](#documentation)).
 
 That scaffolds the **hello** starter — one flow, no Store, the fastest true "it works" moment. Default without `--template` is **standard** (full recommended file layout, empty scaffolding). Open the Console — flows, contracts, effects, and an architecture diagram are already there. Derived, not configured.
 
@@ -129,7 +131,9 @@ The rest of the scaffold is small and ordinary: `oke.config.ts` (drivers by prot
 
 ## How to learn (read in order)
 
-Each app adds the smallest next set of ideas. Do not skip ahead.
+Start on the site if you want the handbook path: [Introduction](https://oke.dev/docs/get-started/introduction) → [Installation](https://oke.dev/docs/get-started/installation) → [Basic usage](https://oke.dev/docs/get-started/basic-usage).
+
+Each teaching app adds the smallest next set of ideas. Do not skip ahead.
 
 1. **Notes** — `oke`, `on`, `flow`, `http`, `store.sql`, `fx`, typed errors, typed client  
    → [`examples/notes`](examples/notes)
@@ -143,7 +147,17 @@ Each app adds the smallest next set of ideas. Do not skip ahead.
 4. **Skyport** — `ai`, multi-tenancy, SLOs, distributed topology, scaling axes  
    → [`examples/skyport`](examples/skyport)
 
-Spec that teaches the same path: [`docs/spec/four-applications.md`](docs/spec/four-applications.md).
+Same path in the spec: [`docs/spec/four-applications.md`](docs/spec/four-applications.md).
+
+---
+
+## Documentation
+
+- **Site** — [oke.dev](https://oke.dev) (landing) · [oke.dev/docs](https://oke.dev/docs) (handbook) · [changelog](https://oke.dev/changelog)
+- **Agents on the site** — [`/llms.txt`](https://oke.dev/llms.txt) index · [`/llms-full.txt`](https://oke.dev/llms-full.txt) full text · `/llms.mdx/docs/...` per-page markdown
+- **Docs MCP** — `:6536` · tools `oke.docs.search` / `oke.docs.get` (read-only; Host/Origin validated like the other surfaces)
+- **App MCP** — `:6535` · live Manifest, schemas, effects, traces, Console-safe actions (Bearer + confirmation for writes)
+- **Canonical specs in-repo** — [`docs/spec/`](docs/spec) (unified theory, four applications, Console)
 
 ---
 
@@ -190,7 +204,7 @@ flowchart TD
 
 Seventeen panels on `:6533` (app `:6530`, MCP `:6535`): Overview, Flows, Signals, Store, Clock, Gates, Vault, Channels, AI, Architecture, Traces, Runs, Manifest Diff, Access, Plugins — plus Privacy and Tenancy when those plugins are plugged.
 
-Operator and user planes stay separate. Every Console action is a real flow through `fx`, so the audit log is the trace. → [`docs/spec/console.md`](docs/spec/console.md)
+Operator and user planes stay separate. Every Console action is a real flow through `fx`, so the audit log is the trace. Spec: [`docs/spec/console.md`](docs/spec/console.md) · handbook: [oke.dev/docs/console](https://oke.dev/docs/console/overview).
 
 ---
 
@@ -312,7 +326,7 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 
 `.plug()` attaches a plugin. Scope is the attachment point: `app.plug()` app-wide, `unit.plug()` one unit, `flow.plug()` one flow. No `global: true`, no inheritance rule — [unified theory §14](docs/spec/unified-theory.md#14-plugins--the-extensibility-law).
 
-The Console is treated as internet-facing even on localhost. Host header validation, Origin validation, and authentication are mandatory on `:6530`, `:6533`, and `:6535` ([console.md §10](docs/spec/console.md#10-security-posture)): two-plane auth (operator vs user), capability-scoped tokens.
+The Console is treated as internet-facing even on localhost. Host header validation, Origin validation, and authentication are mandatory on `:6530`, `:6533`, and `:6535` ([console.md §10](docs/spec/console.md#10-security-posture)): two-plane auth (operator vs user), capability-scoped tokens. Docs MCP `:6536` uses the same Host/Origin checks and stays read-only (no Bearer writes).
 
 ---
 
@@ -334,11 +348,13 @@ Measured size and latency caps — see [`BUDGETS.md`](BUDGETS.md). Refresh with 
 
 ## Status
 
-Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
+Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). Docs at [oke.dev](https://oke.dev). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
 
-| Spec | Path |
+| Resource | Path |
 |---|---|
+| Docs site | [oke.dev](https://oke.dev) · [handbook](https://oke.dev/docs) · [changelog](https://oke.dev/changelog) |
 | Unified theory | [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md) |
 | Four applications | [`docs/spec/four-applications.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/four-applications.md) |
 | Console | [`docs/spec/console.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/console.md) |
 | Scaffold | [`packages/create-oke`](https://github.com/omqkhafi/okengine/tree/main/packages/create-oke) |
+| Changelog source | [`docs/changelog.md`](docs/changelog.md) |

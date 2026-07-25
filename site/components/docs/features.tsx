@@ -61,6 +61,12 @@ import Link from 'next/link';
 import { useId, useState, type ReactNode, type SVGProps } from 'react';
 import { cn } from '@/lib/cn';
 import { ELEMENTS, type ElementPreviewKind } from '@/lib/elements';
+import {
+  CHIP_TONE,
+  ELEMENT_CHIP,
+  elementTone,
+  type ElementChipTone,
+} from '@/lib/element-tones';
 import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
 
 /** Snappy spring — micro-interactions, not ambient loops. */
@@ -116,6 +122,7 @@ function FeatureCard({
   index: number;
 }) {
   const Icon = feature.icon;
+  const tone = elementTone(feature.preview);
   const [active, setActive] = useState(false);
 
   return (
@@ -131,7 +138,12 @@ function FeatureCard({
         <Grid kind={feature.preview} />
 
         <div className="relative z-0 flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] text-fd-muted-foreground/70">
+          <span
+            className={cn(
+              'font-mono text-[10px] transition-colors',
+              active ? tone.mark : 'text-fd-muted-foreground/70',
+            )}
+          >
             {String(index + 1).padStart(2, '0')}
           </span>
           <motion.span
@@ -140,7 +152,7 @@ function FeatureCard({
             transition={CHIP_SPRING}
             className={cn(
               'transition-colors',
-              active ? 'text-fd-foreground' : 'text-fd-muted-foreground/70',
+              active ? tone.mark : 'text-fd-muted-foreground/70',
             )}
           >
             <Icon className="size-3.5" aria-hidden />
@@ -165,48 +177,11 @@ function FeatureCard({
   );
 }
 
-/** Soft accent palette for preview chips — muted at rest, clearer on card hover. */
-type ChipTone = 'sky' | 'amber' | 'emerald' | 'teal' | 'rose' | 'orange';
-
-/** Border / wash / text for each tone (light + dark). */
-const CHIP_TONE: Record<ChipTone, { idle: string; active: string; icon: string }> = {
-  sky: {
-    idle: 'border-sky-500/25 bg-sky-500/[0.06] text-sky-800/80 dark:text-sky-300/80',
-    active: 'border-sky-500/45 bg-sky-500/15 text-sky-900 dark:text-sky-200',
-    icon: 'text-sky-600 dark:text-sky-400',
-  },
-  amber: {
-    idle: 'border-amber-500/25 bg-amber-500/[0.06] text-amber-900/80 dark:text-amber-300/80',
-    active: 'border-amber-500/45 bg-amber-500/15 text-amber-950 dark:text-amber-200',
-    icon: 'text-amber-600 dark:text-amber-400',
-  },
-  emerald: {
-    idle: 'border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-800/80 dark:text-emerald-300/80',
-    active: 'border-emerald-500/45 bg-emerald-500/15 text-emerald-900 dark:text-emerald-200',
-    icon: 'text-emerald-600 dark:text-emerald-400',
-  },
-  teal: {
-    idle: 'border-teal-500/25 bg-teal-500/[0.06] text-teal-800/80 dark:text-teal-300/80',
-    active: 'border-teal-500/45 bg-teal-500/15 text-teal-900 dark:text-teal-200',
-    icon: 'text-teal-600 dark:text-teal-400',
-  },
-  rose: {
-    idle: 'border-rose-500/25 bg-rose-500/[0.06] text-rose-800/80 dark:text-rose-300/80',
-    active: 'border-rose-500/45 bg-rose-500/15 text-rose-900 dark:text-rose-200',
-    icon: 'text-rose-600 dark:text-rose-400',
-  },
-  orange: {
-    idle: 'border-orange-500/25 bg-orange-500/[0.06] text-orange-900/80 dark:text-orange-300/80',
-    active: 'border-orange-500/45 bg-orange-500/15 text-orange-950 dark:text-orange-200',
-    icon: 'text-orange-600 dark:text-orange-400',
-  },
-};
-
 /** One labeled chip in a multi-pill preview. */
 type PreviewPillItem = {
   readonly label: string;
   readonly icon: LucideIcon;
-  readonly tone: ChipTone;
+  readonly tone: ElementChipTone;
 };
 
 /**
@@ -225,10 +200,12 @@ const CHIP_SHELL = 'rounded-md border px-2 py-1 font-mono text-[10px] leading-no
  * @param active - Whether the parent card is hovered or focused
  */
 function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
+  /** Primary chip always uses the element's canonical ink. */
+  const primary = ELEMENT_CHIP[kind];
   switch (kind) {
     case 'flow':
       return (
-        <PreviewChip active={active} icon={ArrowRight} tone="sky">
+        <PreviewChip active={active} icon={ArrowRight} tone={primary}>
           on(http.post) → writes
         </PreviewChip>
       );
@@ -237,8 +214,8 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: 'once', icon: CircleDot, tone: 'sky' },
-            { label: 'broadcast', icon: Share2, tone: 'amber' },
+            { label: 'once', icon: CircleDot, tone: primary },
+            { label: 'broadcast', icon: Share2, tone: 'orange' },
             { label: 'live', icon: Activity, tone: 'emerald' },
           ]}
         />
@@ -248,28 +225,28 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: 'sql', icon: Database, tone: 'sky' },
+            { label: 'sql', icon: Database, tone: primary },
             { label: 'kv', icon: Braces, tone: 'amber' },
-            { label: 'files', icon: FolderOpen, tone: 'teal' },
+            { label: 'files', icon: FolderOpen, tone: 'cyan' },
             { label: 'index', icon: Search, tone: 'orange' },
           ]}
         />
       );
     case 'clock':
       return (
-        <PreviewChip active={active} icon={Timer} tone="amber">
+        <PreviewChip active={active} icon={Timer} tone={primary}>
           every(&quot;10m&quot;)
         </PreviewChip>
       );
     case 'gate':
       return (
-        <PreviewChip active={active} icon={ShieldCheck} tone="emerald">
+        <PreviewChip active={active} icon={ShieldCheck} tone={primary}>
           .gate(member)
         </PreviewChip>
       );
     case 'vault':
       return (
-        <PreviewChip active={active} icon={Fingerprint} tone="orange">
+        <PreviewChip active={active} icon={Fingerprint} tone={primary}>
           <span className="tracking-wider">fp:••••a7c3</span>
         </PreviewChip>
       );
@@ -278,7 +255,7 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
         <PreviewPills
           active={active}
           items={[
-            { label: 'email', icon: Mail, tone: 'sky' },
+            { label: 'email', icon: Mail, tone: primary },
             { label: 'SMS', icon: MessageSquare, tone: 'teal' },
             { label: 'push', icon: Bell, tone: 'amber' },
           ]}
@@ -286,7 +263,7 @@ function previewFor(kind: ElementPreviewKind, active: boolean): ReactNode {
       );
     case 'ai':
       return (
-        <PreviewChip active={active} icon={ShieldBan} tone="rose">
+        <PreviewChip active={active} icon={ShieldBan} tone={primary}>
           allowPii: denied
         </PreviewChip>
       );
@@ -309,7 +286,7 @@ function PreviewChip({
 }: {
   active: boolean;
   icon: LucideIcon;
-  tone: ChipTone;
+  tone: ElementChipTone;
   children: ReactNode;
 }) {
   const reduced = useClientReducedMotion();

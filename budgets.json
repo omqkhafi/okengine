@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-25T12:36:58.568Z",
-  "version": "0.1.6",
+  "measuredAt": "2026-07-25T19:20:55.194Z",
+  "version": "0.2.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 24.615,
+      "value": 26.252,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -145,8 +145,8 @@
     {
       "id": "export:./mcp",
       "label": "mcp",
-      "value": 6769,
-      "limit": 7025,
+      "value": 8459,
+      "limit": 8715,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

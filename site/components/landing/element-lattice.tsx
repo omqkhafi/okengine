@@ -26,7 +26,8 @@ import type { Transition, Variants } from 'framer-motion';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/cn';
-import { ELEMENTS, type ElementPreviewKind } from '@/lib/elements';
+import { ELEMENTS } from '@/lib/elements';
+import { elementTone } from '@/lib/element-tones';
 import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
 
 /** One spring for every lattice transition, so the panel moves as one object. */
@@ -34,64 +35,6 @@ const SPRING: Transition = { type: 'spring', stiffness: 380, damping: 34, mass: 
 
 /** Idle walk period — one element per beat, eight beats per pass. */
 const BEAT_MS = 2400;
-
-/**
- * Soft wash per element — active cell gets a pastel tint, beat walk a fainter
- * echo. Tones stay muted so the lattice reads as one panel, not a rainbow.
- */
-const ELEMENT_TONE: Record<
-  ElementPreviewKind,
-  { readonly wash: string; readonly lit: string; readonly hairline: string; readonly mark: string }
-> = {
-  flow: {
-    wash: 'bg-sky-500/14 dark:bg-sky-400/16',
-    lit: 'bg-sky-500/[0.07] dark:bg-sky-400/[0.09]',
-    hairline: 'bg-sky-500/55 dark:bg-sky-400/50',
-    mark: 'text-sky-700 dark:text-sky-300',
-  },
-  signal: {
-    wash: 'bg-amber-500/14 dark:bg-amber-400/16',
-    lit: 'bg-amber-500/[0.07] dark:bg-amber-400/[0.09]',
-    hairline: 'bg-amber-500/55 dark:bg-amber-400/50',
-    mark: 'text-amber-800 dark:text-amber-300',
-  },
-  store: {
-    wash: 'bg-teal-500/14 dark:bg-teal-400/16',
-    lit: 'bg-teal-500/[0.07] dark:bg-teal-400/[0.09]',
-    hairline: 'bg-teal-500/55 dark:bg-teal-400/50',
-    mark: 'text-teal-700 dark:text-teal-300',
-  },
-  clock: {
-    wash: 'bg-orange-500/14 dark:bg-orange-400/16',
-    lit: 'bg-orange-500/[0.07] dark:bg-orange-400/[0.09]',
-    hairline: 'bg-orange-500/55 dark:bg-orange-400/50',
-    mark: 'text-orange-800 dark:text-orange-300',
-  },
-  gate: {
-    wash: 'bg-emerald-500/14 dark:bg-emerald-400/16',
-    lit: 'bg-emerald-500/[0.07] dark:bg-emerald-400/[0.09]',
-    hairline: 'bg-emerald-500/55 dark:bg-emerald-400/50',
-    mark: 'text-emerald-700 dark:text-emerald-300',
-  },
-  vault: {
-    wash: 'bg-yellow-500/14 dark:bg-yellow-400/14',
-    lit: 'bg-yellow-500/[0.07] dark:bg-yellow-400/[0.08]',
-    hairline: 'bg-yellow-600/50 dark:bg-yellow-400/45',
-    mark: 'text-yellow-800 dark:text-yellow-300',
-  },
-  channel: {
-    wash: 'bg-cyan-500/14 dark:bg-cyan-400/16',
-    lit: 'bg-cyan-500/[0.07] dark:bg-cyan-400/[0.09]',
-    hairline: 'bg-cyan-500/55 dark:bg-cyan-400/50',
-    mark: 'text-cyan-700 dark:text-cyan-300',
-  },
-  ai: {
-    wash: 'bg-rose-500/14 dark:bg-rose-400/16',
-    lit: 'bg-rose-500/[0.07] dark:bg-rose-400/[0.09]',
-    hairline: 'bg-rose-500/55 dark:bg-rose-400/50',
-    mark: 'text-rose-700 dark:text-rose-300',
-  },
-};
 
 /** Panel parts arrive top to bottom; the grid runs its own stagger inside. */
 const PANEL: Variants = {
@@ -226,7 +169,7 @@ export function ElementLattice() {
           <motion.ul variants={GRID} className="grid grid-cols-2 gap-px bg-fd-border sm:grid-cols-4">
             {ELEMENTS.map((element, i) => {
               const Icon = element.icon;
-              const tone = ELEMENT_TONE[element.preview];
+              const tone = elementTone(element.preview);
               const isActive = active === i;
               const isLit = lit === i;
               const highlighted = isActive || isLit;

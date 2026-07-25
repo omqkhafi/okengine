@@ -2,8 +2,12 @@
 node_modules
 # anchored: an unanchored `docs` also swallows site/components/docs and
 # site/content/docs, which hides real source from git and from Tailwind's
-# source scanner (it skips gitignored files)
-/docs
+# source scanner (it skips gitignored files). Keep the canonical changelog
+# and specs trackable — everything else under /docs stays ignored.
+/docs/**
+!/docs/changelog.md
+!/docs/spec/
+!/docs/spec/**
 !site/content/docs/
 !site/content/docs/**
 

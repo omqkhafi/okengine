@@ -12,7 +12,7 @@ import { join } from "node:path";
 export interface DocsPage {
   /** URL slug under `/docs` (`""` for the index page). */
   readonly slug: string;
-  /** Content-relative path (e.g. `get-started/introduction.md`). */
+  /** Content-relative path (e.g. `get-started/introduction.mdx`). */
   readonly path: string;
   /** Frontmatter title. */
   readonly title: string;
@@ -39,7 +39,7 @@ export interface DocsIndex {
   /**
    * Look up a page by slug or content path.
    *
-   * @param id - Slug (`get-started/introduction`) or path (`…/introduction.md`)
+   * @param id - Slug (`get-started/introduction`) or path (`…/introduction.mdx`)
    */
   readonly get: (id: string) => DocsPage | null;
   /**
@@ -130,14 +130,14 @@ export function defaultDocsContentDir(): string {
 }
 
 /**
- * Load every `.md` file under a docs content directory into an index.
+ * Load every `.md` / `.mdx` file under a docs content directory into an index.
  *
  * @param contentDir - Absolute `content/docs` directory
  */
 export async function loadDocsIndex(
   contentDir: string = defaultDocsContentDir(),
 ): Promise<DocsIndex> {
-  const files = await listMarkdownFiles(contentDir);
+  const files = await listDocsSourceFiles(contentDir);
   const pages: DocsPage[] = [];
 
   for (const abs of files) {
@@ -170,6 +170,9 @@ export async function loadDocsIndex(
         .replace(/\/$/, "");
       if (bySlug.has(normalized)) return bySlug.get(normalized) ?? null;
       if (byPath.has(normalized)) return byPath.get(normalized) ?? null;
+      if (byPath.has(`${normalized}.mdx`)) {
+        return byPath.get(`${normalized}.mdx`) ?? null;
+      }
       if (byPath.has(`${normalized}.md`)) {
         return byPath.get(`${normalized}.md`) ?? null;
       }
@@ -200,10 +203,10 @@ export async function loadDocsIndex(
 }
 
 /**
- * @param relativePath - e.g. `get-started/introduction.md`
+ * @param relativePath - e.g. `get-started/introduction.mdx`
  */
 function pathToSlug(relativePath: string): string {
-  const noExt = relativePath.replace(/\.md$/i, "");
+  const noExt = relativePath.replace(/\.mdx?$/i, "");
   if (noExt === "index") return "";
   if (noExt.endsWith("/index")) {
     return noExt.slice(0, -"/index".length);
@@ -214,14 +217,17 @@ function pathToSlug(relativePath: string): string {
 /**
  * @param dir - Absolute directory
  */
-async function listMarkdownFiles(dir: string): Promise<string[]> {
+async function listDocsSourceFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
-      out.push(...(await listMarkdownFiles(abs)));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      out.push(...(await listDocsSourceFiles(abs)));
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))
+    ) {
       out.push(abs);
     }
   }

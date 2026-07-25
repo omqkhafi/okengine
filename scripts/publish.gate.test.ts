@@ -1,8 +1,8 @@
 /**
  * Publish gate: workflow shape + JSR dry-run for both packages.
  *
- * Real npm/JSR publish is NOT part of this gate — that runs on push to main
- * after platform trusted-publisher / JSR linking is configured.
+ * Real npm/JSR publish is NOT part of this gate — that runs on version-tag
+ * push (`v*`) after platform trusted-publisher / JSR linking is configured.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -26,15 +26,23 @@ describe("publish workflow", () => {
       needs?: string | string[];
       environment?: string;
       permissions?: { contents?: string; "id-token"?: string };
-      if?: string;
     };
     const parsed = Bun.YAML.parse(yml) as {
+      on?: {
+        push?: {
+          tags?: string | string[];
+        };
+      };
       jobs?: {
         ci?: unknown;
         "publish-npm"?: PublishJob;
         "publish-jsr"?: PublishJob;
       };
     };
+
+    const tags = parsed.on?.push?.tags;
+    const tagList = Array.isArray(tags) ? tags : tags ? [tags] : [];
+    expect(tagList).toContain("v*");
 
     expect(parsed.jobs?.ci).toBeTruthy();
     expect(parsed.jobs?.["publish-npm"]).toBeTruthy();
@@ -46,8 +54,6 @@ describe("publish workflow", () => {
       expect(job?.environment).toBe("production");
       expect(job?.permissions?.contents).toBe("read");
       expect(job?.permissions?.["id-token"]).toBe("write");
-      expect(job?.if).toContain("push");
-      expect(job?.if).toContain("refs/heads/main");
     }
 
     // Step commands (string search — Bun.YAML keeps step `run` as strings)

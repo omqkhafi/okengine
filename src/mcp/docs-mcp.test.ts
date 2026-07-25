@@ -138,7 +138,7 @@ describe("docs MCP tools", () => {
     expect(content.slug).toBe(slug);
 
     const raw = await Bun.file(
-      join(CONTENT, "get-started", "introduction.md"),
+      join(CONTENT, "get-started", "introduction.mdx"),
     ).text();
     expect(content.body).toBe(stripYamlFrontmatter(raw));
   });
@@ -152,7 +152,7 @@ describe("docs MCP tools", () => {
       method: "tools/call",
       params: {
         name: "oke.docs.search",
-        arguments: { query: "Eight Elements" },
+        arguments: { query: "eight elements" },
       },
     });
     expect(res.status).toBe(200);
@@ -167,7 +167,10 @@ describe("docs MCP tools", () => {
     };
     expect(content.hits.length).toBeGreaterThan(0);
     expect(
-      content.hits.some((h) => h.slug.includes("introduction") || h.slug.includes("elements")),
+      content.hits.some(
+        (h) =>
+          h.slug.includes("introduction") || h.slug.includes("elements"),
+      ),
     ).toBe(true);
   });
 });
