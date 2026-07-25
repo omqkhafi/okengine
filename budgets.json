@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-25T10:13:18.504Z",
-  "version": "0.1.1",
+  "measuredAt": "2026-07-25T11:18:41.615Z",
+  "version": "0.1.5",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -29,15 +29,15 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 49.234,
-      "limit": 50,
+      "value": 25.392,
+      "limit": 75,
       "unit": "ms",
       "ok": true
     },
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0.002,
+      "value": 0.001,
       "limit": 1,
       "unit": "ms",
       "ok": true

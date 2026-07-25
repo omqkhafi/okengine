@@ -4,29 +4,35 @@
 
 [![npm](https://img.shields.io/npm/v/okengine.svg)](https://www.npmjs.com/package/okengine)
 [![JSR](https://jsr.io/badges/@omqkhafi/okengine)](https://jsr.io/@omqkhafi/okengine)
+[![npm](https://img.shields.io/npm/v/create-oke.svg)](https://www.npmjs.com/package/create-oke)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
-**Package:** `okengine` · **CLI:** `oke` · **Scaffold:** `create-oke` · **License:** MIT
+**Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **License:** MIT
 
 ### Install
 
 ```bash
-bun add okengine                 # npm registry (recommended — ships the `oke` CLI)
+bun add okengine                 # npm (recommended — ships the `oke` CLI)
 bunx jsr add @omqkhafi/okengine  # JSR — library API only
-bunx create-oke@latest my-app    # scaffold (npm)
+bunx create-oke@latest my-app    # scaffold from npm
 ```
+
+| Package | npm | JSR |
+|---|---|---|
+| Framework | [`okengine`](https://www.npmjs.com/package/okengine) | [`@omqkhafi/okengine`](https://jsr.io/@omqkhafi/okengine) |
+| Scaffold | [`create-oke`](https://www.npmjs.com/package/create-oke) | [`@omqkhafi/create-oke`](https://jsr.io/@omqkhafi/create-oke) |
 
 ### npm vs JSR
 
-| Surface | npm | JSR (`@omqkhafi/…`) |
+| Surface | npm | JSR |
 |---|---|---|
 | Library imports (`okengine`, `/client`, `/drivers`, …) | yes | yes |
-| Deep drivers (`okengine/drivers/postgres`, …) | yes | no — use the `/drivers` index, or install from npm |
+| Deep drivers (`okengine/drivers/postgres`, …) | yes | no — use `okengine/drivers`, or install from npm |
 | `oke` CLI | yes | no |
-| `create-oke` scaffold | yes (`create-oke`) | library only (`@omqkhafi/create-oke`) |
+| `create-oke` binary | yes | no — prefer `bunx create-oke@latest` from npm |
 
-JSR cannot rewrite the CLI’s dynamic imports of your app entry (`oke dev` / `oke start` / config load). Install `okengine` from npm when you need the binary. Deep driver subpaths use npm `exports` wildcards, which JSR does not support — import named drivers from `okengine/drivers` on either registry, or pin a deep path from the npm package.
+JSR cannot rewrite the CLI’s dynamic imports of your app entry (`oke dev` / `oke start` / config load). Install `okengine` from npm when you need the binary. Deep driver subpaths use npm `exports` wildcards, which JSR does not support.
 
 ---
 
@@ -46,7 +52,7 @@ Eight elements cover what a backend needs. Ten exports are the whole public voca
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Detail and comparisons live in [`docs/spec/unified-theory.md`](docs/spec/unified-theory.md).
+Batteries included for the Bun era: contract-first APIs, typed client, infrastructure primitives, Console, auth — pure TypeScript, MIT, self-hostable, no cloud lock-in. Detail and comparisons live in [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md).
 
 ---
 
@@ -64,7 +70,7 @@ oke dev
 | `:6533` | Console |
 | `:6535` | MCP |
 
-That scaffolds the **Notes** app (same tree as [`examples/notes`](examples/notes)). Open the Console — flows, contracts, effects, and an architecture diagram are already there. Derived, not configured.
+That scaffolds the **Notes** app (same tree as [`examples/notes`](https://github.com/omqkhafi/okengine/tree/main/examples/notes)). Open the Console — flows, contracts, effects, and an architecture diagram are already there. Derived, not configured.
 
 ### The idea, in one file
 
@@ -337,10 +343,11 @@ The Console is treated as internet-facing even on localhost. Host header validat
 
 ## Status
 
-Pre-1.0. MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
+Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
 
 | Spec | Path |
 |---|---|
-| Unified theory | [`docs/spec/unified-theory.md`](docs/spec/unified-theory.md) |
-| Four applications | [`docs/spec/four-applications.md`](docs/spec/four-applications.md) |
-| Console | [`docs/spec/console.md`](docs/spec/console.md) |
+| Unified theory | [`docs/spec/unified-theory.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/unified-theory.md) |
+| Four applications | [`docs/spec/four-applications.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/four-applications.md) |
+| Console | [`docs/spec/console.md`](https://github.com/omqkhafi/okengine/blob/main/docs/spec/console.md) |
+| Scaffold | [`packages/create-oke`](https://github.com/omqkhafi/okengine/tree/main/packages/create-oke) |
