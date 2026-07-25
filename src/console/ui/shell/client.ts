@@ -76,8 +76,37 @@ interface ConsoleClient {
     runsList: (input: Record<string, never>) => CallResult<{
       runs: Array<{
         id: string;
+        parentId: string | null;
         flow: string;
+        unit: string | null;
+        trigger: string;
+        plane: string;
         startedAt: number;
+        endedAt: number;
+        durationMs: number;
+        error: string | null;
+        cost: number | null;
+        sampled: "full" | "error" | "sample" | "boost";
+        effects: Array<{
+          kind:
+            | "read"
+            | "write"
+            | "emit"
+            | "send"
+            | "ask"
+            | "secret"
+            | "call";
+          resource: string;
+          timestamp: number;
+          duration: number;
+          reversibility:
+            | "none"
+            | "reversible"
+            | "deferred"
+            | "irreversible"
+            | "capability"
+            | "portal";
+        }>;
       }>;
     }>;
     actionPing: (input: { note?: string }) => CallResult<{
@@ -108,6 +137,15 @@ interface ConsoleClient {
       response: unknown;
       peakTier: string;
       auditedAt: number;
+    }>;
+    tracesReplay: (input: {
+      rootId: string;
+      dryRun: boolean;
+    }) => CallResult<{
+      ok: true;
+      rootId: string;
+      dryRun: boolean;
+      at: number;
     }>;
   };
 }
@@ -142,6 +180,10 @@ export const consoleApi = createClient(
       "console.flowsInvoke": {
         method: "POST",
         path: "/console/flows/invoke",
+      },
+      "console.tracesReplay": {
+        method: "POST",
+        path: "/console/traces/replay",
       },
     },
   },
@@ -221,5 +263,13 @@ export const consoleCalls = {
     reason?: string;
   }) {
     return consoleApi.console.flowsInvoke(body);
+  },
+  /**
+   * Replay a trace from the journal (dry-run when external effects present).
+   *
+   * @param body - Replay payload
+   */
+  async tracesReplay(body: { rootId: string; dryRun: boolean }) {
+    return consoleApi.console.tracesReplay(body);
   },
 };

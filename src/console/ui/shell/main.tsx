@@ -13,6 +13,7 @@ import {
 import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { parseFlowsSearch } from "../flows/search.ts";
+import { parseTracesSearch } from "../traces/search.ts";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
 import { OverviewPanel } from "./panels/Overview.tsx";
@@ -49,7 +50,22 @@ const flowsRoute = createRoute({
   ),
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, flowsRoute]);
+const tracesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/traces",
+  validateSearch: (search: Record<string, unknown>) =>
+    parseTracesSearch(search),
+  component: lazyRouteComponent(
+    () => import("./panels/Traces.tsx"),
+    "default",
+  ),
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  flowsRoute,
+  tracesRoute,
+]);
 const router = createRouter({
   routeTree,
   defaultPendingComponent: () => (

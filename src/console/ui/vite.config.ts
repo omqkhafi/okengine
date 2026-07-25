@@ -31,6 +31,13 @@ export default defineConfig({
           ) {
             return "panel-flows";
           }
+          if (
+            id.includes("/console/ui/shell/panels/traces/") ||
+            id.includes("/console/ui/shell/panels/Traces.") ||
+            id.includes("/console/ui/traces/")
+          ) {
+            return "panel-traces";
+          }
           return undefined;
         },
       },

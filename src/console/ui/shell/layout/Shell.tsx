@@ -6,7 +6,10 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { clsx } from "clsx";
 import type { ReactNode } from "react";
 
-/** Primary nav entries for v1 (Overview + Flows; others listed-but-off). */
+/**
+ * Primary nav — eight elements, then cross-cutting panels (console §9).
+ * Listed-but-off entries stay visible so navigation teaches the framework.
+ */
 const NAV: ReadonlyArray<{
   readonly to: string;
   readonly label: string;
@@ -21,6 +24,7 @@ const NAV: ReadonlyArray<{
   { to: "/vault", label: "Vault", enabled: false },
   { to: "/channels", label: "Channels", enabled: false },
   { to: "/ai", label: "AI", enabled: false },
+  { to: "/traces", label: "Traces", enabled: true },
 ];
 
 /**

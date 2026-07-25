@@ -63,17 +63,59 @@ const ManifestOut = z.object({
   manifest: z.unknown().nullable(),
 });
 
+const EffectEntryOut = z.object({
+  kind: z.enum([
+    "read",
+    "write",
+    "emit",
+    "send",
+    "ask",
+    "secret",
+    "call",
+  ]),
+  resource: z.string(),
+  timestamp: z.number(),
+  duration: z.number(),
+  reversibility: z.enum([
+    "none",
+    "reversible",
+    "deferred",
+    "irreversible",
+    "capability",
+    "portal",
+  ]),
+});
+
 const RunsListOut = z.object({
   runs: z.array(
     z.object({
       id: z.string(),
+      parentId: z.string().nullable(),
       flow: z.string(),
+      unit: z.string().nullable(),
+      trigger: z.string(),
       plane: z.string(),
       startedAt: z.number(),
       endedAt: z.number(),
+      durationMs: z.number(),
       error: z.string().nullable(),
+      cost: z.number().nullable(),
+      sampled: z.enum(["full", "error", "sample", "boost"]),
+      effects: z.array(EffectEntryOut),
     }),
   ),
+});
+
+const TracesReplayIn = z.object({
+  rootId: z.string().min(1),
+  dryRun: z.boolean(),
+});
+
+const TracesReplayOut = z.object({
+  ok: z.literal(true),
+  rootId: z.string(),
+  dryRun: z.boolean(),
+  at: z.number(),
 });
 
 const ActionPingIn = z.object({
@@ -175,6 +217,9 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly identities: ReturnType<typeof createFlowsIdentities>;
       readonly invoke: ReturnType<typeof createFlowsInvoke>;
     };
+    readonly traces: {
+      readonly replay: ReturnType<typeof createTracesReplay>;
+    };
   };
 } {
   const setupStatus = createSetupStatus(state);
@@ -188,6 +233,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const structuralPropose = createStructuralPropose(state);
   const flowsIdentities = createFlowsIdentities(state);
   const flowsInvoke = createFlowsInvoke(state);
+  const tracesReplay = createTracesReplay(state);
 
   const bindings: Binding[] = [
     bindHttp(http.get("/console/setup/status"), setupStatus),
@@ -201,6 +247,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/structural/propose"), structuralPropose),
     bindHttp(http.get("/console/flows/identities"), flowsIdentities),
     bindHttp(http.post("/console/flows/invoke"), flowsInvoke),
+    bindHttp(http.post("/console/traces/replay"), tracesReplay),
   ];
 
   return {
@@ -213,6 +260,7 @@ export function createConsoleBindings(state: ConsoleState): {
       action: { ping: actionPing },
       structural: { propose: structuralPropose },
       flows: { identities: flowsIdentities, invoke: flowsInvoke },
+      traces: { replay: tracesReplay },
     },
   };
 }
@@ -344,12 +392,54 @@ function createRunsList(state: ConsoleState) {
       return {
         runs: all.map((r) => ({
           id: r.id,
+          parentId: r.parentId ?? null,
           flow: r.flow,
+          unit: r.unit ?? null,
+          trigger: r.trigger,
           plane: r.plane,
           startedAt: r.startedAt,
           endedAt: r.endedAt,
+          durationMs: r.durationMs,
           error: r.error?.code ?? null,
+          cost: r.cost ?? null,
+          sampled: r.error ? ("error" as const) : ("sample" as const),
+          effects: r.effects.map((e) => ({
+            kind: e.kind,
+            resource: e.resource,
+            timestamp: e.timestamp,
+            duration: e.duration,
+            reversibility: e.reversibility,
+          })),
         })),
+      };
+    },
+  });
+}
+
+function createTracesReplay(state: ConsoleState) {
+  return flow({
+    name: "console.traces.replay",
+    unit: "console",
+    plane: "operator",
+    in: TracesReplayIn,
+    out: TracesReplayOut,
+    errors: { AuthFailed, NotFound },
+    do: async (input: z.infer<typeof TracesReplayIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const all = await state.listRuns();
+      const root = all.find((r) => r.id === input.rootId);
+      if (!root) return fail("NotFound", { flowId: input.rootId });
+      fx.log.info("console.traces.replay", {
+        operatorId: fx.operator.id,
+        rootId: input.rootId,
+        dryRun: input.dryRun,
+        flow: root.flow,
+      });
+      return {
+        ok: true as const,
+        rootId: input.rootId,
+        dryRun: input.dryRun,
+        at: Date.now(),
       };
     },
   });
