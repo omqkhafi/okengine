@@ -1,5 +1,7 @@
 import { Inter } from 'next/font/google';
 import { Provider } from '@/components/provider';
+import { Topbar } from '@/components/chrome/topbar';
+import { source } from '@/lib/source';
 import type { Metadata } from 'next';
 import './global.css';
 
@@ -17,11 +19,19 @@ export const metadata: Metadata = {
     'One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era.',
 };
 
+/**
+ * The header lives here, not in the per-surface layouts: its brand cell width is a
+ * share of the surface below it, so it has to stay mounted across navigation for
+ * that width — and the active tab marker — to animate rather than snap.
+ */
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={inter.className} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
-        <Provider>{children}</Provider>
+        <Provider>
+          <Topbar tree={source.getPageTree()} />
+          {children}
+        </Provider>
       </body>
     </html>
   );

@@ -1,7 +1,9 @@
 # dependencies (bun install)
 node_modules
-docs
-# `docs` also matches site/content/docs — keep the Fumadocs content tree trackable
+# anchored: an unanchored `docs` also swallows site/components/docs and
+# site/content/docs, which hides real source from git and from Tailwind's
+# source scanner (it skips gitignored files)
+/docs
 !site/content/docs/
 !site/content/docs/**
 

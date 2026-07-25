@@ -31,7 +31,7 @@ skyport/
 └── tests/
 ```
 
-### `examples/skyport/oke.config.ts` — the complete surface
+### `oke.config.ts` — the complete surface
 
 ```typescript
 import { defineConfig } from "okengine/config";
@@ -80,7 +80,7 @@ export default defineConfig({
 });
 ```
 
-### `examples/skyport/src/schema.ts` (excerpt — the tables this section uses)
+### `src/schema.ts` (excerpt — the tables this section uses)
 
 ```typescript
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
@@ -187,7 +187,7 @@ export const refundBooking = flow({
 });
 ```
 
-### `examples/skyport/src/ai.ts` — the eighth element
+### `src/ai.ts` — the eighth element
 
 ```typescript
 import { ai, store } from "okengine";
@@ -321,7 +321,7 @@ export type App = typeof app;
 
 Same shape as Provisions — `.adopt()` for the client's types, `.plug()` for cross-cutting concerns, `on()` inside each flow file for the actual trigger registration. Nothing about composition changes as an application grows from one unit to five.
 
-### `examples/skyport/tests/` — deterministic even with AI
+### `tests/` — deterministic even with AI
 
 ```typescript
 const t = await createTestApp(app);

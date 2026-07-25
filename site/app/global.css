@@ -1,7 +1,58 @@
 @import 'tailwindcss';
+
+/* Register component sources explicitly: automatic detection skips any path a
+ * .gitignore rule matches, so a stray pattern can silently drop whole
+ * directories from the utility build. */
+@source '../components';
+@source '../lib';
+
 @import 'fumadocs-ui/css/generated/glass.css';
 @import 'fumadocs-ui/css/black.css';
 @import 'fumadocs-ui/css/preset.css';
+
+/*
+ * The whole shell aligns on two numbers. The topbar height is what anything
+ * pinned below the header offsets itself by; the left pane width is shared by
+ * the header's brand cell, the docs sidebar, and the docs content inset. Change
+ * either here and the header, sidebar, and article stay flush. Same contract as
+ * better-auth's docs app (see site/NOTICE).
+ */
+:root {
+  --landing-topbar-height: 48px;
+  --landing-left-pane-width: min(22vw, 300px);
+
+  /*
+   * Soft element inks for SVG (collapse diagram). Presentation attributes bind
+   * to these — Tailwind fill/stroke utilities are not in the Fumadocs preset
+   * build and would silently fall back to black. Light theme: mid chroma on
+   * pale cards; dark theme below: pastel on near-black.
+   */
+  --oke-el-flow: oklch(0.52 0.12 230);
+  --oke-el-signal: oklch(0.55 0.12 75);
+  --oke-el-store: oklch(0.5 0.09 195);
+  --oke-el-clock: oklch(0.55 0.12 45);
+  --oke-el-gate: oklch(0.5 0.11 155);
+  --oke-el-vault: oklch(0.52 0.1 95);
+  --oke-el-channel: oklch(0.5 0.1 210);
+  --oke-el-ai: oklch(0.52 0.12 15);
+}
+
+.dark {
+  --oke-el-flow: oklch(0.74 0.09 230);
+  --oke-el-signal: oklch(0.78 0.1 75);
+  --oke-el-store: oklch(0.74 0.08 195);
+  --oke-el-clock: oklch(0.78 0.1 45);
+  --oke-el-gate: oklch(0.74 0.09 155);
+  --oke-el-vault: oklch(0.8 0.09 95);
+  --oke-el-channel: oklch(0.74 0.08 210);
+  --oke-el-ai: oklch(0.76 0.1 15);
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --landing-topbar-height: 44px;
+  }
+}
 
 /* Grid utilities adapted from better-auth docs/app/globals.css */
 @layer utilities {
@@ -17,6 +68,53 @@
 
   .bg-grid-white\/\[0\.02\] {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.02)'%3e%3cpath d='m0 .5h32m-32 32v-32'/%3e%3c/svg%3e");
+  }
+}
+
+/*
+ * Collapse-diagram change-feed dash. Native stroke-dashoffset — Framer's
+ * pathOffset pair was leaving a frozen fleck on the lit seams.
+ * pathLength="1" on the SVG path makes the dasharray unitless (0–1).
+ */
+@keyframes oke-seam-trace {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+.oke-seam-trace {
+  animation-name: oke-seam-trace;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/*
+ * A lit seam is mounted rather than re-styled — the diagram draws the light on
+ * a small overlay so a hover never rewrites its whole mesh — so it fades in
+ * from a keyframe instead of transitioning. No `to`, so it lands on whatever
+ * opacity the element itself carries.
+ */
+@keyframes oke-seam-lit {
+  from {
+    opacity: 0;
+  }
+}
+
+.oke-seam-lit {
+  animation-name: oke-seam-lit;
+  animation-duration: 280ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oke-seam-trace {
+    animation: none;
+    opacity: 0 !important;
+  }
+
+  .oke-seam-lit {
+    animation: none;
   }
 }
 
@@ -42,8 +140,37 @@ html > body[data-scroll-locked] {
   margin-top: 1.5rem;
 }
 
+/*
+ * Fumadocs' own chrome is disabled on /docs (nav, sidebar, search toggle, theme
+ * switch), so the grid gets zero sidebar and toc columns to work with and the
+ * inset comes from padding instead. Two variables do the rest of the work:
+ * `--fd-banner-height` feeds Fumadocs' `--fd-docs-row-1`, which keeps the sticky
+ * table of contents clear of the pinned topbar, and `--fd-docs-height` stops the
+ * grid's viewport-height floor from adding the topbar's height to the page.
+ * Same technique as better-auth's `.docs-layout` rule (see site/NOTICE).
+ */
+.docs-layout {
+  --fd-layout-width: 100vw;
+  --fd-layout-offset: 0px;
+  --fd-banner-height: var(--landing-topbar-height);
+  --fd-docs-height: calc(100dvh - var(--landing-topbar-height));
+}
+
+@media (min-width: 64rem) {
+  .docs-layout {
+    --fd-layout-width: min(calc(100vw - var(--landing-left-pane-width)), 1200px);
+    padding-inline-start: var(--landing-left-pane-width);
+  }
+}
+
 /* Sidebar icon alignment (lucide size-4) */
 #nd-sidebar [data-active='true'] {
   font-weight: 500;
+}
+
+/* Our sidebar owns scrolling; keep its scrollbar from stealing visual weight. */
+.oke-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-fd-border) transparent;
 }
 

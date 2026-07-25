@@ -18,7 +18,10 @@ async function listMarkdownFiles(dir: string): Promise<string[]> {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...(await listMarkdownFiles(abs)));
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+    } else if (
+      entry.isFile() &&
+      (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))
+    ) {
       out.push(abs);
     }
   }

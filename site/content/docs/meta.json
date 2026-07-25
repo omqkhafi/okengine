@@ -3,12 +3,10 @@
   "icon": "BookOpen",
   "pages": [
     "index",
-    "---",
     "get-started",
-    "learn",
     "elements",
     "console",
-    "---",
+    "learn",
     "plugins",
     "cli",
     "security",

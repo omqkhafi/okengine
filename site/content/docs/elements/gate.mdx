@@ -1,0 +1,53 @@
+---
+title: "Gate"
+description: "permission to act — Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run."
+icon: "ShieldCheck"
+source: "docs/spec/unified-theory.md"
+---
+
+Gate is the element for **permission to act**.
+
+Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run.
+
+<Callout title="Governing rule">
+Permission sits at the trigger. Auth is built-in (hybrid session, argon2id) with zero-config defaults.
+</Callout>
+
+## At a glance
+
+<Cards>
+  <Card title="Gate" description="Essence: permission to act. Replaces: auth · session · ABAC · rate limit · quota · feature flag." />
+</Cards>
+
+## Drivers available
+
+<Cards>
+  <Card title="auth" description="Built-in hybrid session; alternatives via protocol adapters." />
+  <Card title="rate limit" description="Default `sliding-window-counter`." />
+  <Card title="ABAC · flags" description="Permission, quota, and feature-flag gates." />
+</Cards>
+
+## Example from the teaching apps
+
+Claimed fence from **linkly** — same source the doc-drift gate checks:
+
+### `examples/linkly/src/gates.ts`
+
+```typescript
+import { gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth?.verified);
+
+export const fair = gate.rate({
+  strategy: "sliding-window-counter",   // near-exact, two keys, no boundary bursts
+  max: 60, per: "1m", keyBy: "ip",
+});
+```
+
+## Next
+
+<Cards>
+  <Card title="Vault" description="Continue to Vault." href="/docs/elements/vault" />
+  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
+  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+</Cards>

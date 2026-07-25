@@ -120,6 +120,7 @@
       "dependencies": {
         "@orama/orama": "^3.1.18",
         "cnfast": "^0.0.8",
+        "framer-motion": "^12.42.2",
         "fumadocs-core": "16.12.1",
         "fumadocs-mdx": "15.2.0",
         "fumadocs-ui": "npm:@fumadocs/base-ui@16.12.1",

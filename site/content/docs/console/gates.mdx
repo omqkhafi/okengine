@@ -1,0 +1,28 @@
+---
+title: "Gates"
+description: "Permission matrix, rate counters, MFA map."
+icon: "Shield"
+source: "docs/spec/console.md"
+---
+
+Answers: **permission matrix, rate counters, MFA map**
+
+<Callout title="Governing rule">
+Refuse the giant roles×permissions matrix as the entry point — inquire from principal or from flow.
+</Callout>
+
+## What this panel shows
+
+<Cards>
+  <Card title="Simulator" description="Gate chain in evaluation order — where a 403 stopped." />
+  <Card title="Unguarded flows" description="Continuous audit: public user-plane flows after deploy." />
+  <Card title="Deploy diff" description="Permission widening caught from Manifest Diff." />
+  <Card title="Plane separation" description="Operator holding an application scope is a violation." />
+</Cards>
+
+## Catalog
+
+<Cards>
+  <Card title="Dev" description="full" />
+  <Card title="Prod" description="limits if `overridable`" />
+</Cards>

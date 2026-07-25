@@ -1,0 +1,28 @@
+---
+title: "Channels"
+description: "Templates, delivery receipts, bounces, opt-outs."
+icon: "Mailbox"
+source: "docs/spec/console.md"
+---
+
+Answers: **templates, delivery receipts, bounces, opt-outs, deliverability (SPF/DKIM/DMARC)**
+
+<Callout title="Governing rule">
+Suppression is not failure — the taxonomy of “did not arrive” has seven states with verdicts.
+</Callout>
+
+## What this panel shows
+
+<Cards>
+  <Card title="Dev inbox" description="`console` driver lands every medium locally." />
+  <Card title="Deliverability" description="SPF/DKIM/DMARC, bounces, complaints, suppression list." />
+  <Card title="Fallback chains" description="Recorded as chains (e.g. WhatsApp → SMS), not single outcomes." />
+  <Card title="Locale previews" description="Template data bound to schema; RTL-accurate previews." />
+</Cards>
+
+## Catalog
+
+<Cards>
+  <Card title="Dev" description="full + console inbox" />
+  <Card title="Prod" description="send test, inspect delivery" />
+</Cards>

@@ -24,6 +24,13 @@ interface Page {
   readonly icon?: string;
 }
 
+/** Card descriptor for MDX Cards grids. */
+interface CardSpec {
+  readonly title: string;
+  readonly description: string;
+  readonly href?: string;
+}
+
 /**
  * Read a repo-relative UTF-8 file.
  *
@@ -98,52 +105,45 @@ function demoteHeadings(md: string): string {
 /**
  * Rewrite relative claimed-fence headings to `examples/<app>/…`.
  *
- * @param md - Learn-page body
- * @param app - Example package name
+ * @param md - Section body
+ * @param app - Teaching app slug
  */
 function absolutizeClaimedPaths(md: string, app: string): string {
   return md.replace(
-    /^### `((?!examples\/)[^`]+)`/gm,
+    /^### `(?!examples\/)([^`]+)`$/gm,
     (_m, rel: string) => `### \`examples/${app}/${rel}\``,
   );
 }
 
 /**
- * Read the typescript fence after a `### \`relPath\`` heading (suffix allowed).
+ * Read the fenced TypeScript body immediately after a path heading in four-apps.
  *
- * @param md - Spec markdown
- * @param relPath - Path inside the heading backticks
+ * @param four - four-applications.md text
+ * @param rel - Relative path under the app (e.g. `src/core.ts`)
  */
-function readFenceAfterPath(md: string, relPath: string): string {
-  const lines = md.replace(/\r\n/g, "\n").split("\n");
-  const prefix = `### \`${relPath}\``;
-  for (let i = 0; i < lines.length; i++) {
-    if (!lines[i]!.startsWith(prefix)) continue;
-    let j = i + 1;
-    while (j < lines.length && lines[j]!.trim() === "") j++;
-    if (!lines[j] || !/^```(?:typescript|ts)\s*$/.test(lines[j]!)) {
-      throw new Error(`sync-content: no ts fence after ${relPath}`);
-    }
-    j++;
-    const body: string[] = [];
-    while (j < lines.length && !lines[j]!.startsWith("```")) {
-      body.push(lines[j]!);
-      j++;
-    }
-    if (j >= lines.length) {
-      throw new Error(`sync-content: unclosed fence after ${relPath}`);
-    }
-    return body.join("\n");
+function readFenceAfterPath(four: string, rel: string): string {
+  const heading = new RegExp(
+    `^### \`${rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``,
+    "m",
+  );
+  const hm = heading.exec(four);
+  if (!hm || hm.index === undefined) {
+    throw new Error(`sync-content: claimed path missing: ${rel}`);
   }
-  throw new Error(`sync-content: heading not found: ${relPath}`);
+  const after = four.slice(hm.index + hm[0].length);
+  const fence = /```(?:typescript|ts)?\n([\s\S]*?)```/.exec(after);
+  if (!fence?.[1]) {
+    throw new Error(`sync-content: fence missing after ${rel}`);
+  }
+  return fence[1].replace(/\n$/, "");
 }
 
 /**
- * Claimed fence block with absolute examples/ path for doc-drift.
+ * Claimed teaching fence block (doc-drift visible heading).
  *
- * @param app - Example app
- * @param rel - Relative path under the app
- * @param body - Fence body
+ * @param app - Teaching app
+ * @param rel - Path under app
+ * @param body - Source body
  */
 function claimedBlock(app: string, rel: string, body: string): string {
   return [
@@ -200,33 +200,34 @@ async function writePage(page: Page): Promise<void> {
 }
 
 /**
- * Element table row from unified-theory §5.
+ * Parse §5 element row (replaces + essence).
  *
  * @param theory - Spec text
  * @param title - Element name
  */
-function elementTableRow(theory: string, title: string): string {
+function elementRowParts(
+  theory: string,
+  title: string,
+): { replaces: string; essence: string } {
   const re = new RegExp(
     `^\\| \\*\\*${title}\\*\\* \\|([^|]+)\\|([^|]+)\\|`,
     "m",
   );
   const m = re.exec(theory);
   if (!m) throw new Error(`sync-content: element row missing: ${title}`);
-  return [
-    "| Element | Replaces the zoo of | Essence |",
-    "|---|---|---|",
-    `| **${title}** |${m[1]}|${m[2]}|`,
-    "",
-  ].join("\n");
+  return { replaces: m[1]!.trim(), essence: m[2]!.trim() };
 }
 
 /**
- * Catalog row for a conditional Console panel.
+ * Catalog cells for a Console panel.
  *
  * @param consoleSpec - Console spec text
  * @param title - Panel title
  */
-function conditionalCatalogRow(consoleSpec: string, title: string): string {
+function catalogCells(
+  consoleSpec: string,
+  title: string,
+): { n: string; answers: string; dev: string; prod: string } {
   const re = new RegExp(
     `^\\| (\\d+) \\| \\*\\*${title}\\*\\*([^|]*)\\|([^|]+)\\|([^|]+)\\|([^|]+)\\|`,
     "m",
@@ -235,12 +236,50 @@ function conditionalCatalogRow(consoleSpec: string, title: string): string {
   if (!row) {
     throw new Error(`sync-content: catalog row missing: ${title}`);
   }
-  return [
-    "| # | Panel | Answers | Dev | Prod |",
-    "|---|---|---|---|---|",
-    `| ${row[1]} | **${title}**${row[2]}|${row[3]}|${row[4]}|${row[5]}|`,
-    "",
-  ].join("\n");
+  return {
+    n: row[1]!,
+    answers: row[3]!.trim(),
+    dev: row[4]!.trim(),
+    prod: row[5]!.trim(),
+  };
+}
+
+/**
+ * Emit a Fumadocs Callout MDX block.
+ *
+ * @param title - Callout title
+ * @param body - Inner markdown (single short sentence preferred)
+ */
+function calloutBlock(title: string, body: string): string {
+  return [`<Callout title="${title}">`, body.trim(), `</Callout>`, ""].join(
+    "\n",
+  );
+}
+
+/**
+ * Emit a Fumadocs Cards grid.
+ *
+ * @param cards - Card specs
+ */
+function cardsBlock(cards: ReadonlyArray<CardSpec>): string {
+  const lines = ["<Cards>"];
+  for (const c of cards) {
+    const href = c.href ? ` href="${c.href}"` : "";
+    lines.push(
+      `  <Card title="${escapeAttr(c.title)}" description="${escapeAttr(c.description)}"${href} />`,
+    );
+  }
+  lines.push("</Cards>", "");
+  return lines.join("\n");
+}
+
+/**
+ * Escape double quotes for MDX attribute values.
+ *
+ * @param s - Raw string
+ */
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
 async function main(): Promise<void> {
@@ -258,6 +297,7 @@ async function main(): Promise<void> {
     "console",
     "ai",
     "index.md",
+    "index.mdx",
     "plugins.md",
     "cli.md",
     "security.md",
@@ -323,14 +363,18 @@ async function main(): Promise<void> {
     });
   }
 
-  // ── Elements ─────────────────────────────────────────────────────────────
+  // ── Elements (structured MDX) ────────────────────────────────────────────
   const elementSpecs: ReadonlyArray<{
     slug: string;
     title: string;
     essence: string;
     blurb: string;
+    rule: string;
+    icon: string;
+    drivers: ReadonlyArray<CardSpec>;
+    whyCallout?: string;
+    whyCards?: ReadonlyArray<CardSpec>;
     next?: { href: string; label: string };
-    extra?: { start: string | RegExp; end: string | RegExp | null };
     fenceApp: string;
     fenceRel: string;
   }> = [
@@ -340,6 +384,26 @@ async function main(): Promise<void> {
       essence: "behavior",
       blurb:
         "Endpoints, jobs, consumers, and workflows are one species. You bind a typed trigger with `on`, declare contracts, and implement `do` through `fx`.",
+      rule: "Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of endpoints, jobs, and consumers.",
+      icon: "Workflow",
+      drivers: [
+        {
+          title: "http",
+          description: "Request triggers — the API endpoint case.",
+        },
+        {
+          title: "every / clock",
+          description: "Cron and schedule triggers.",
+        },
+        {
+          title: "signal",
+          description: "Consume emits — the queue-consumer case.",
+        },
+        {
+          title: "store change",
+          description: "CDC-style table change triggers.",
+        },
+      ],
       next: { href: "/docs/elements/signal", label: "Signal" },
       fenceApp: "notes",
       fenceRel: "src/flows/notes/index.ts",
@@ -350,11 +414,43 @@ async function main(): Promise<void> {
       essence: "data in motion",
       blurb:
         "Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default.",
+      rule: "`delivery` is mandatory with no default. Delivery physics is a semantic decision; guessing it produces silent, expensive bugs.",
+      icon: "Radio",
+      drivers: [
+        {
+          title: "memory",
+          description: "Dev default — in-process, no extra service.",
+        },
+        {
+          title: "postgres",
+          description: "Prod default — transactional with your data.",
+        },
+        {
+          title: "redis",
+          description: "Explicit alternative for throughput; outbox relay kept.",
+        },
+        {
+          title: "nats · kafka",
+          description: "Explicit high-throughput alternatives.",
+        },
+      ],
+      whyCallout:
+        "Queue, pub/sub, and stream were always the same object with different delivery physics — so delivery is an option, not three ecosystems.",
+      whyCards: [
+        {
+          title: "once",
+          description: "Queue semantics: competing consumers, retries, DLQ.",
+        },
+        {
+          title: "broadcast",
+          description: "Pub/sub: fan-out to every subscriber.",
+        },
+        {
+          title: "live",
+          description: "Stream: client-subscribable, replayable.",
+        },
+      ],
       next: { href: "/docs/elements/store", label: "Store" },
-      extra: {
-        start: "### Why queue, pub/sub, and stream collapse into one Signal",
-        end: "### Why Channel is an element and not a library",
-      },
       fenceApp: "linkly",
       fenceRel: "src/flows/links/signals.ts",
     },
@@ -364,6 +460,26 @@ async function main(): Promise<void> {
       essence: "data at rest (sql · kv · files · index)",
       blurb:
         "SQL, KV, files, and search index are facets of one Store surface. Drivers are named after protocols, not vendors.",
+      rule: "Drivers are named after protocols, not vendors. Vendor choice lives in `images`, keyed by role.",
+      icon: "Database",
+      drivers: [
+        {
+          title: "store.sql",
+          description: "Dev `sqlite` · prod `postgres` via Bun.sql / bun:sqlite.",
+        },
+        {
+          title: "store.kv",
+          description: "Dev `memory` · prod `redis` (protocol, not vendor).",
+        },
+        {
+          title: "store.files",
+          description: "Dev `fs` · prod `s3` via Bun.S3.",
+        },
+        {
+          title: "store.index",
+          description: "Default `pgvector` — RAG without another service.",
+        },
+      ],
       next: { href: "/docs/elements/clock", label: "Clock" },
       fenceApp: "notes",
       fenceRel: "src/core.ts",
@@ -374,6 +490,18 @@ async function main(): Promise<void> {
       essence: "time",
       blurb:
         "Cron, delay, timeout, durable sleep, and TTL — time as an element, not a bolted-on scheduler library.",
+      rule: "Clock defaults to `postgres` — durability needs transactional storage.",
+      icon: "Clock",
+      drivers: [
+        {
+          title: "postgres",
+          description: "Default — durable schedules and wakes.",
+        },
+        {
+          title: "every / delay / sleep",
+          description: "Cron, delay, timeout, durable sleep, TTL.",
+        },
+      ],
       next: { href: "/docs/elements/gate", label: "Gate" },
       fenceApp: "linkly",
       fenceRel: "src/flows/links/index.ts",
@@ -384,6 +512,22 @@ async function main(): Promise<void> {
       essence: "permission to act",
       blurb:
         "Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run.",
+      rule: "Permission sits at the trigger. Auth is built-in (hybrid session, argon2id) with zero-config defaults.",
+      icon: "ShieldCheck",
+      drivers: [
+        {
+          title: "auth",
+          description: "Built-in hybrid session; alternatives via protocol adapters.",
+        },
+        {
+          title: "rate limit",
+          description: "Default `sliding-window-counter`.",
+        },
+        {
+          title: "ABAC · flags",
+          description: "Permission, quota, and feature-flag gates.",
+        },
+      ],
       next: { href: "/docs/elements/vault", label: "Vault" },
       fenceApp: "linkly",
       fenceRel: "src/gates.ts",
@@ -394,6 +538,18 @@ async function main(): Promise<void> {
       essence: "protected knowledge",
       blurb:
         "Secrets, config, and environment with typed contracts — protected knowledge, not a loose bag of env vars.",
+      rule: "Secrets are write-only in the Console — set and rotate, never reveal. Flows read via `fx.vault`.",
+      icon: "KeyRound",
+      drivers: [
+        {
+          title: ".env.local",
+          description: "Dev default — local files, no invented format.",
+        },
+        {
+          title: "sops / age",
+          description: "Prod default — existing standard.",
+        },
+      ],
       next: { href: "/docs/elements/channel", label: "Channel" },
       fenceApp: "provisions",
       fenceRel: "src/vault.ts",
@@ -404,11 +560,35 @@ async function main(): Promise<void> {
       essence: "reaching humans",
       blurb:
         "Email, SMS, WhatsApp, and push have physics Signal cannot express: consent, locale, receipts, and fallback chains.",
+      rule: "Reaching a human has physics Signal cannot express: consent, locale, receipts, and fallback chains.",
+      icon: "Mail",
+      drivers: [
+        {
+          title: "channel.email",
+          description: "Dev `console` inbox · prod `smtp`.",
+        },
+        {
+          title: "SMS · WhatsApp · push",
+          description: "Human mediums with consent and fallback chains.",
+        },
+      ],
+      whyCallout:
+        "Channel is an element because human reach has irreducible physics — consent, locale, receipts — that machine messaging does not.",
+      whyCards: [
+        {
+          title: "consent",
+          description: "Opt-out and suppression are first-class.",
+        },
+        {
+          title: "locale",
+          description: "Localized templates and resolution chains.",
+        },
+        {
+          title: "fallback",
+          description: "Cross-medium chains recorded as chains, not outcomes.",
+        },
+      ],
       next: { href: "/docs/elements/ai", label: "AI" },
-      extra: {
-        start: "### Why Channel is an element and not a library",
-        end: "### Why AI is an element and not a library",
-      },
       fenceApp: "provisions",
       fenceRel: "src/channels.ts",
     },
@@ -418,34 +598,65 @@ async function main(): Promise<void> {
       essence: "reaching machine intelligence",
       blurb:
         "Models, prompts, agents, and RAG earn an element slot: non-determinism, cost, versioned prompts, egress privacy, and different test physics.",
+      rule: "Prod model choice is never guessed — must be declared. Dev uses `mock` for determinism. AI + `pii` is denied unless `allowPii`.",
+      icon: "Bot",
+      drivers: [
+        {
+          title: "mock",
+          description: "Dev default — deterministic tests.",
+        },
+        {
+          title: "declared provider",
+          description: "Prod: Anthropic · openai-compatible · Bedrock · Vertex · Ollama.",
+        },
+      ],
+      whyCallout:
+        "Channel reaches humans; AI reaches machine intelligence. Neither can be expressed by Store or Signal alone.",
+      whyCards: [
+        {
+          title: "non-determinism",
+          description: "Different test physics than ordinary effects.",
+        },
+        {
+          title: "cost",
+          description: "Price per call is a first-class dimension.",
+        },
+        {
+          title: "egress",
+          description: "PII governance enforced at build time.",
+        },
+      ],
       next: { href: "/docs/learn/notes", label: "Learn · Notes" },
-      extra: {
-        start: "### Why AI is an element and not a library",
-        end: "## 6. Ten exports",
-      },
       fenceApp: "skyport",
       fenceRel: "src/ai.ts",
     },
   ];
 
   for (const el of elementSpecs) {
+    const row = elementRowParts(theory, el.title);
     const parts = [
       `${el.title} is the element for **${el.essence}**.`,
       "",
       el.blurb,
       "",
-      "An element earns its place only if it has **irreducible physics**. New infrastructure becomes a new **driver** for an existing element — never a ninth element.",
-      "",
+      calloutBlock("Governing rule", el.rule),
       "## At a glance",
       "",
-      elementTableRow(theory, el.title),
-      el.extra
+      cardsBlock([
+        {
+          title: el.title,
+          description: `Essence: ${row.essence}. Replaces: ${row.replaces}.`,
+        },
+      ]),
+      "## Drivers available",
+      "",
+      cardsBlock([...el.drivers]),
+      el.whyCallout
         ? [
             "## Why this is an element",
             "",
-            demoteHeadings(
-              extractBetween(theory, el.extra.start, el.extra.end),
-            ),
+            calloutBlock("Why", el.whyCallout),
+            el.whyCards ? cardsBlock([...el.whyCards]) : "",
           ].join("\n")
         : "",
       "## Example from the teaching apps",
@@ -461,170 +672,494 @@ async function main(): Promise<void> {
         ? [
             "## Next",
             "",
-            `- [${el.next.label}](${el.next.href})`,
-            `- [Introduction](/docs/get-started/introduction) — eight elements overview`,
-            `- [Console](/docs/console/overview) — panels derived from the Manifest`,
-            "",
+            cardsBlock([
+              {
+                title: el.next.label,
+                description: `Continue to ${el.next.label}.`,
+                href: el.next.href,
+              },
+              {
+                title: "Introduction",
+                description: "Eight elements overview.",
+                href: "/docs/get-started/introduction",
+              },
+              {
+                title: "Console",
+                description: "Panels derived from the Manifest.",
+                href: "/docs/console/overview",
+              },
+            ]),
           ].join("\n")
         : "",
     ];
     pages.push({
-      path: `elements/${el.slug}.md`,
+      path: `elements/${el.slug}.mdx`,
       title: el.title,
       description: `${el.essence} — ${el.blurb}`,
+      icon: el.icon,
       source: "docs/spec/unified-theory.md",
       body: parts.join("\n").replace(/\n{3,}/g, "\n\n"),
     });
   }
 
-  // ── Console panels (17) ──────────────────────────────────────────────────
-  const panelCatalog = demoteHeadings(
-    extractBetween(consoleSpec, "## 9. Panel catalog", "### 9.1 "),
-  );
-
+  // ── Console panels (structured MDX) ──────────────────────────────────────
   const consolePanels: ReadonlyArray<{
     slug: string;
     title: string;
+    icon: string;
     description: string;
-    sections: ReadonlyArray<{
-      start: string | RegExp;
-      end: string | RegExp | null;
-    }>;
+    rule: string;
+    shows: ReadonlyArray<CardSpec>;
+    conditional?: boolean;
   }> = [
     {
       slug: "overview",
       title: "Overview",
+      icon: "Activity",
       description: "Is the system healthy right now?",
-      sections: [
-        { start: "### 9.16 Overview", end: "## 10. Security posture" },
+      rule: "Built on declared objectives — burn rate and ranked findings, not a wall of charts nobody reads.",
+      shows: [
+        {
+          title: "Declared SLOs",
+          description: "Objectives enter the Manifest; lowering a target is a reviewable code change.",
+        },
+        {
+          title: "Burn rate",
+          description: "Error rate over tolerable rate — pages and investigates with clear thresholds.",
+        },
+        {
+          title: "Journeys",
+          description: "Causal paths, not service lists — impossible compositions rejected at compile.",
+        },
+        {
+          title: "Ranked findings",
+          description: "Union of panel findings: user harm first, then irreversibility, then trend.",
+        },
       ],
     },
     {
       slug: "flows",
       title: "Flows",
+      icon: "GitBranch",
       description: "What exists; call it; read its contract.",
-      sections: [{ start: "### 9.1 Flows panel", end: "### 9.3 Traces" }],
+      rule: "Renders the one law as three columns: `Causes ← Flows → Effects` — not a tree.",
+      shows: [
+        {
+          title: "Causes column",
+          description: "Triggers and callers — what runs this.",
+        },
+        {
+          title: "Flows column",
+          description: "Context-adaptive centre with contracts and invoke.",
+        },
+        {
+          title: "Effects column",
+          description: "What changes — store, signal, channel, AI, vault.",
+        },
+        {
+          title: "Flow drawer",
+          description: "Workshop peek/expand — save as bun:test from a real response.",
+        },
+      ],
     },
     {
       slug: "signals",
       title: "Signals",
+      icon: "Radio",
       description: "Queue depth, in-flight, DLQ, live monitors.",
-      sections: [{ start: "### 9.4 Signals", end: "### 9.5 Store" }],
+      rule: "One list grouped by delivery physics — not three tabs that re-split the element.",
+      shows: [
+        {
+          title: "once",
+          description: "Pending, in-flight, DLQ, retry policy.",
+        },
+        {
+          title: "broadcast",
+          description: "Per-subscriber lag and targeted replay.",
+        },
+        {
+          title: "live",
+          description: "Connection count, throughput, payload monitor.",
+        },
+        {
+          title: "DLQ repair",
+          description: "Schema form, typed errors, causal chain, dry-run bulk replay.",
+        },
+      ],
     },
     {
       slug: "store",
       title: "Store",
+      icon: "Database",
       description: "Browse sql/kv/files/index; cache keys; replica lag.",
-      sections: [{ start: "### 9.5 Store", end: "### 9.6 Clock" }],
+      rule: "The most dangerous panel in production — gates, tenant isolation, PII masking, and audit on the data path.",
+      shows: [
+        {
+          title: "Four facets",
+          description: "sql · kv · files · index with adaptive detail.",
+        },
+        {
+          title: "PII masking",
+          description: "Follows schema classification, including raw SQL.",
+        },
+        {
+          title: "Cache keys",
+          description: "Which read produced a key; which write invalidates it.",
+        },
+        {
+          title: "Direct edit warning",
+          description: "Names what will not happen — not a silent row patch.",
+        },
+      ],
     },
     {
       slug: "clock",
       title: "Clock",
+      icon: "Clock",
       description: "Upcoming crons, sleeping durable flows, journal.",
-      sections: [{ start: "### 9.6 Clock", end: "### 9.7 Gates" }],
+      rule: "Looks like time — a forward timeline for schedules and pending wakes, not a flat grid.",
+      shows: [
+        {
+          title: "Schedules",
+          description: "Recurring crons with drift, overdue, catch-up, lease holder.",
+        },
+        {
+          title: "Pending wakes",
+          description: "Every sleeping durable flow and when it wakes.",
+        },
+        {
+          title: "DST warnings",
+          description: "Only when the schedule falls in an ambiguous window.",
+        },
+        {
+          title: "Actions",
+          description: "Run now, wake early, pause, edit when overridable.",
+        },
+      ],
     },
     {
       slug: "gates",
       title: "Gates",
+      icon: "Shield",
       description: "Permission matrix, rate counters, MFA map.",
-      sections: [{ start: "### 9.7 Gates", end: "### 9.8 Vault" }],
+      rule: "Refuse the giant roles×permissions matrix as the entry point — inquire from principal or from flow.",
+      shows: [
+        {
+          title: "Simulator",
+          description: "Gate chain in evaluation order — where a 403 stopped.",
+        },
+        {
+          title: "Unguarded flows",
+          description: "Continuous audit: public user-plane flows after deploy.",
+        },
+        {
+          title: "Deploy diff",
+          description: "Permission widening caught from Manifest Diff.",
+        },
+        {
+          title: "Plane separation",
+          description: "Operator holding an application scope is a violation.",
+        },
+      ],
     },
     {
       slug: "vault",
       title: "Vault",
+      icon: "KeyRound",
       description: "Secret contracts, who can read each, rotation due.",
-      sections: [{ start: "### 9.8 Vault", end: "### 9.9 Channels" }],
+      rule: "Secrets are write-only — the panel can set and rotate; it can never reveal.",
+      shows: [
+        {
+          title: "Fingerprints",
+          description: "Salted hash per environment — rotation and drift without exposure.",
+        },
+        {
+          title: "Resolution chain",
+          description: "Which source won: env, files, vault driver, or fallback.",
+        },
+        {
+          title: "Who can read",
+          description: "Derived from effects that declare `fx.vault`.",
+        },
+        {
+          title: "Rotation blast radius",
+          description: "In-flight durable runs that wake with a new key.",
+        },
+      ],
     },
     {
       slug: "channels",
       title: "Channels",
+      icon: "Mailbox",
       description: "Templates, delivery receipts, bounces, opt-outs.",
-      sections: [{ start: "### 9.9 Channels", end: "### 9.10 AI" }],
+      rule: "Suppression is not failure — the taxonomy of “did not arrive” has seven states with verdicts.",
+      shows: [
+        {
+          title: "Dev inbox",
+          description: "`console` driver lands every medium locally.",
+        },
+        {
+          title: "Deliverability",
+          description: "SPF/DKIM/DMARC, bounces, complaints, suppression list.",
+        },
+        {
+          title: "Fallback chains",
+          description: "Recorded as chains (e.g. WhatsApp → SMS), not single outcomes.",
+        },
+        {
+          title: "Locale previews",
+          description: "Template data bound to schema; RTL-accurate previews.",
+        },
+      ],
     },
     {
       slug: "ai",
       title: "AI",
+      icon: "Sparkles",
       description: "Prompt versions, eval scores, cost, agent runs.",
-      sections: [{ start: "### 9.10 AI", end: "### 9.11 Runs" }],
+      rule: "Everything else in the Console is deterministic; this panel is built on distributions, not single values.",
+      shows: [
+        {
+          title: "Prompt versions",
+          description: "A version bump is Manifest Diff blast radius.",
+        },
+        {
+          title: "Eval + shape",
+          description: "Schema-validation failure is its own class.",
+        },
+        {
+          title: "Agent tools",
+          description: "Tools are the app’s own flows — undeclared reach is denied and shown.",
+        },
+        {
+          title: "Budgets",
+          description: "Cost, semantic cache, and `allowPii` as standing review surfaces.",
+        },
+      ],
     },
     {
       slug: "architecture",
       title: "Architecture",
+      icon: "Network",
       description: "How it all connects — the diagram that is the code.",
-      sections: [{ start: "### 9.13 Architecture", end: "### 9.14 Access" }],
+      rule: "Flows answers “which one”; Architecture answers “what shape”. Never shows the whole system by default.",
+      shows: [
+        {
+          title: "Unit clusters",
+          description: "Default aggregated edges; focus one or two hops.",
+        },
+        {
+          title: "Element layers",
+          description: "Toggle data, messaging, time, external edges.",
+        },
+        {
+          title: "Live traffic",
+          description: "Edge thickness from real traffic; dashed = never traversed.",
+        },
+        {
+          title: "Pathologies",
+          description: "Cycles, god nodes, orphan signals, SPOFs — computed from the graph.",
+        },
+      ],
     },
     {
       slug: "traces",
       title: "Traces",
+      icon: "Route",
       description: "One timeline across http → store → signal → durable steps.",
-      sections: [{ start: "### 9.3 Traces", end: "### 9.4 Signals" }],
+      rule: "Folded time across async boundaries — a seven-day sleep is not 99.99% empty waterfall.",
+      shows: [
+        {
+          title: "Causal chain",
+          description: "Join parent/child across emit boundaries.",
+        },
+        {
+          title: "Effect tiers",
+          description: "Spans coloured by the same vocabulary as Flows.",
+        },
+        {
+          title: "Filter by effect",
+          description: "Everything that wrote a table, sent mail, or cost more than X.",
+        },
+        {
+          title: "Why slow / why fail",
+          description: "Critical path highlight; open on the failing span.",
+        },
+      ],
     },
     {
       slug: "runs",
       title: "Runs",
+      icon: "Play",
       description: "Wide events — one record per flow execution.",
-      sections: [
-        { start: "### 9.11 Runs", end: "### 9.12 Manifest Diff" },
+      rule: "One flow execution = one wide event = one span. Analysis by dimension, not a text search box.",
+      shows: [
+        {
+          title: "Wide events",
+          description: "Dimensions from effects — no manual instrumentation tax.",
+        },
+        {
+          title: "Outlier explanation",
+          description: "Compare all dimensions between slow and baseline populations.",
+        },
+        {
+          title: "Storage tiers",
+          description: "Default Parquet + DuckDB; optional postgres / clickhouse.",
+        },
+        {
+          title: "Lifecycle",
+          description: "Retain by default; redaction and crypto-shredding for compliance.",
+        },
       ],
     },
     {
       slug: "manifest-diff",
       title: "Manifest Diff",
+      icon: "Diff",
       description: "Blast radius of a deploy: new effects, widened permissions.",
-      sections: [
-        { start: "### 9.12 Manifest Diff", end: "### 9.13 Architecture" },
+      rule: "Compares meaning rather than lines — behaviour change, sorted by blast radius.",
+      shows: [
+        {
+          title: "Contract breaking",
+          description: "Existing clients will fail.",
+        },
+        {
+          title: "Permission widening",
+          description: "Attack surface grew — gate removed or scope widened.",
+        },
+        {
+          title: "Effect widening",
+          description: "New write, external effect, or secret read.",
+        },
+        {
+          title: "CI gate",
+          description: "Blocks undeclared breaks; intended breaks need `breaking: true`.",
+        },
       ],
     },
     {
       slug: "access",
       title: "Access",
+      icon: "Users",
       description: "Identities, roles, API keys.",
-      sections: [{ start: "### 9.14 Access", end: "### 9.15 Plugins" }],
+      rule: "Granting an application scope to an operator is impossible in the UI — taught by absence, not refusal.",
+      shows: [
+        {
+          title: "Two planes",
+          description: "Operators and application users never mix.",
+        },
+        {
+          title: "Key creation",
+          description: "Value shown once; attenuation to creator scopes only.",
+        },
+        {
+          title: "Revocation",
+          description: "Blast radius plus honest JWT validity delay.",
+        },
+        {
+          title: "Hygiene",
+          description: "Unused keys, never-signed-in operators, expired invites.",
+        },
+      ],
     },
     {
       slug: "plugins",
       title: "Plugins",
+      icon: "Puzzle",
       description: "Installed plugins and their contributed panels.",
-      sections: [{ start: "### 9.15 Plugins", end: "### 9.16 Overview" }],
+      rule: "Scope is the attachment point — `app.plug()` / `unit.plug()` / `flow.plug()`. The Console never installs anything.",
+      shows: [
+        {
+          title: "Origin × state",
+          description: "Core / Local / Community; state derived from code, not a flag.",
+        },
+        {
+          title: "Declares vs intercepts",
+          description: "Boot contributions vs per-request hooks with measured cost.",
+        },
+        {
+          title: "Supply chain",
+          description: "No lifecycle scripts; capability widening hits Manifest Diff.",
+        },
+        {
+          title: "Install path",
+          description: "Shows state and hands you the command — no browser install.",
+        },
+      ],
     },
     {
       slug: "privacy",
       title: "Privacy",
+      icon: "EyeOff",
       description: "Where PII lives, who touches it, export/erase (conditional).",
-      sections: [],
+      rule: "Conditional panel — appears when the privacy plugin is plugged. Catalog row is the durable reference.",
+      shows: [
+        {
+          title: "PII map",
+          description: "Where personal data lives and who touches it.",
+        },
+        {
+          title: "Export / erase",
+          description: "`oke privacy export|erase --subject` across stores.",
+        },
+      ],
+      conditional: true,
     },
     {
       slug: "tenancy",
       title: "Tenancy",
+      icon: "Building2",
       description: "Per-tenant usage, limits, isolation checks (conditional).",
-      sections: [],
+      rule: "Conditional panel — appears when the tenancy plugin is plugged. Catalog row is the durable reference.",
+      shows: [
+        {
+          title: "Usage & limits",
+          description: "Per-tenant usage and configured limits.",
+        },
+        {
+          title: "Isolation",
+          description: "Checks that tenant boundaries hold.",
+        },
+      ],
+      conditional: true,
     },
   ];
 
   for (const panel of consolePanels) {
-    let body: string;
-    if (panel.sections.length === 0) {
-      body = [
-        panelCatalog,
-        "",
-        `## ${panel.title}`,
-        "",
-        conditionalCatalogRow(consoleSpec, panel.title),
-        "",
-        "This panel is **conditional** — it appears when the optional core plugin is plugged. The panel catalog above is the durable reference; there is no separate detailed subsection in the Console specification beyond that row.",
-        "",
-      ].join("\n");
-    } else {
-      body = panel.sections
-        .map((s) => demoteHeadings(extractBetween(consoleSpec, s.start, s.end)))
-        .join("\n\n");
-    }
+    const cells = catalogCells(consoleSpec, panel.title);
+    const parts = [
+      `Answers: **${cells.answers}**`,
+      "",
+      calloutBlock("Governing rule", panel.rule),
+      "## What this panel shows",
+      "",
+      cardsBlock([...panel.shows]),
+      "## Catalog",
+      "",
+      cardsBlock([
+        {
+          title: `Dev`,
+          description: cells.dev,
+        },
+        {
+          title: `Prod`,
+          description: cells.prod,
+        },
+      ]),
+      panel.conditional
+        ? calloutBlock(
+            "Conditional",
+            "This panel appears when the optional core plugin is plugged. There is no separate detailed subsection beyond the catalog row.",
+          )
+        : "",
+    ];
     pages.push({
-      path: `console/${panel.slug}.md`,
+      path: `console/${panel.slug}.mdx`,
       title: panel.title,
       description: panel.description,
+      icon: panel.icon,
       source: "docs/spec/console.md",
-      body,
+      body: parts.join("\n").replace(/\n{3,}/g, "\n\n"),
     });
   }
 
@@ -713,41 +1248,70 @@ async function main(): Promise<void> {
     ].join("\n"),
   });
 
+  // ── Docs index (section Cards) ───────────────────────────────────────────
   pages.push({
-    path: "index.md",
+    path: "index.mdx",
     title: "Documentation",
     description: "One law. Eight elements. Ten exports.",
+    icon: "BookOpen",
     source: "docs/spec/unified-theory.md",
     body: [
-      "Welcome to the okengine handbook. Start with **Get Started** if you are new; use **Learn** for progressive teaching apps; open **Elements** or **Console** when you need a reference page.",
+      "Welcome to the okengine handbook. Pick a section below — or start with Get Started if you are new.",
       "",
-      "## The one law",
+      calloutBlock(
+        "The one law",
+        "Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values.",
+      ),
+      "```ts",
+      'on(http.post("/bookings"), createBooking);',
+      'on(every("10m"), expireStale);',
+      "on(orderPlaced, sendReceipt);",
+      "```",
       "",
-      demoteHeadings(
-        extractBetween(
-          theory,
-          "## 4. The One Law",
-          "## 5. The Eight Elements",
-        ),
-      )
-        // Drop the demoted "## 4. …" heading — page title already covers it.
-        .replace(/^### 4\. The One Law\n+/m, ""),
+      "## Browse by section",
       "",
-      "## Recommended path",
-      "",
-      "1. [Introduction](/docs/get-started/introduction) — one law, eight elements, ten exports",
-      "2. [Installation](/docs/get-started/installation) — `bun add` + `create-oke`",
-      "3. [Basic Usage](/docs/get-started/basic-usage) — first flows, client, and tests",
-      "4. [Notes](/docs/learn/notes) — full Basic teaching walkthrough",
-      "",
-      "## Browse by topic",
-      "",
-      "- [Comparison](/docs/get-started/comparison) — vs Hono, Elysia, Encore.ts, iii",
-      "- [Elements](/docs/elements/flow) — Flow → AI, one page each",
-      "- [Console](/docs/console/overview) — seventeen panels from the Manifest",
-      "- [CLI Reference](/docs/cli) — `oke` and `create-oke`",
-      "- [AI Resources](/docs/ai/resources) — AGENTS.md, MCP `:6535`, `/llms.txt`",
-      "",
+      cardsBlock([
+        {
+          title: "Get Started",
+          description: "One law → install → first flows.",
+          href: "/docs/get-started/introduction",
+        },
+        {
+          title: "Learn",
+          description: "Progressive teaching apps: Notes → Skyport.",
+          href: "/docs/learn/notes",
+        },
+        {
+          title: "Elements",
+          description: "Flow → AI reference, one page each.",
+          href: "/docs/elements/flow",
+        },
+        {
+          title: "Console",
+          description: "Seventeen Manifest-derived panels.",
+          href: "/docs/console/overview",
+        },
+        {
+          title: "Plugins",
+          description: "The extensibility law — public plugin API only.",
+          href: "/docs/plugins",
+        },
+        {
+          title: "CLI Reference",
+          description: "`oke` and `create-oke` everyday commands.",
+          href: "/docs/cli",
+        },
+        {
+          title: "Security",
+          description: "Console security posture — Host, Origin, MCP.",
+          href: "/docs/security",
+        },
+        {
+          title: "AI Resources",
+          description: "AGENTS.md, MCP `:6535`, `/llms.txt`.",
+          href: "/docs/ai/resources",
+        },
+      ]),
     ].join("\n"),
   });
 
@@ -760,12 +1324,10 @@ async function main(): Promise<void> {
     icon: "BookOpen",
     pages: [
       "index",
-      "---",
       "get-started",
-      "learn",
       "elements",
       "console",
-      "---",
+      "learn",
       "plugins",
       "cli",
       "security",

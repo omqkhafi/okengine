@@ -48,7 +48,11 @@ async function collectNavSlugs(
     }
 
     const mdPath = join(dir, `${entry}.md`);
-    if (await Bun.file(mdPath).exists()) {
+    const mdxPath = join(dir, `${entry}.mdx`);
+    if (
+      (await Bun.file(mdPath).exists()) ||
+      (await Bun.file(mdxPath).exists())
+    ) {
       const slug =
         entry === "index" && prefix.length === 0
           ? ""
@@ -63,7 +67,7 @@ async function collectNavSlugs(
 }
 
 /**
- * Collect every `.md` file under content/docs as URL slugs.
+ * Collect every `.md` / `.mdx` file under content/docs as URL slugs.
  *
  * @param dir - Absolute content root
  */
@@ -82,8 +86,10 @@ async function collectDiskSlugs(dir: string): Promise<string[]> {
         await walk(abs, [...prefix, entry.name]);
         continue;
       }
-      if (!entry.name.endsWith(".md")) continue;
-      const base = entry.name.slice(0, -".md".length);
+      const isMd = entry.name.endsWith(".md");
+      const isMdx = entry.name.endsWith(".mdx");
+      if (!isMd && !isMdx) continue;
+      const base = entry.name.slice(0, isMdx ? -".mdx".length : -".md".length);
       if (base === "index") {
         out.push(prefix.join("/"));
       } else {

@@ -1,0 +1,28 @@
+---
+title: "Runs"
+description: "Wide events — one record per flow execution."
+icon: "Play"
+source: "docs/spec/console.md"
+---
+
+Answers: **wide events — one record per flow execution, queried by dimension**
+
+<Callout title="Governing rule">
+One flow execution = one wide event = one span. Analysis by dimension, not a text search box.
+</Callout>
+
+## What this panel shows
+
+<Cards>
+  <Card title="Wide events" description="Dimensions from effects — no manual instrumentation tax." />
+  <Card title="Outlier explanation" description="Compare all dimensions between slow and baseline populations." />
+  <Card title="Storage tiers" description="Default Parquet + DuckDB; optional postgres / clickhouse." />
+  <Card title="Lifecycle" description="Retain by default; redaction and crypto-shredding for compliance." />
+</Cards>
+
+## Catalog
+
+<Cards>
+  <Card title="Dev" description="✓" />
+  <Card title="Prod" description="✓" />
+</Cards>

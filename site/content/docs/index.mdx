@@ -1,0 +1,31 @@
+---
+title: "Documentation"
+description: "One law. Eight elements. Ten exports."
+icon: "BookOpen"
+source: "docs/spec/unified-theory.md"
+---
+
+Welcome to the okengine handbook. Pick a section below — or start with Get Started if you are new.
+
+<Callout title="The one law">
+Every backend behavior is a Flow: `on(Trigger) → Effects`. One species; triggers are typed values.
+</Callout>
+
+```ts
+on(http.post("/bookings"), createBooking);
+on(every("10m"), expireStale);
+on(orderPlaced, sendReceipt);
+```
+
+## Browse by section
+
+<Cards>
+  <Card title="Get Started" description="One law → install → first flows." href="/docs/get-started/introduction" />
+  <Card title="Learn" description="Progressive teaching apps: Notes → Skyport." href="/docs/learn/notes" />
+  <Card title="Elements" description="Flow → AI reference, one page each." href="/docs/elements/flow" />
+  <Card title="Console" description="Seventeen Manifest-derived panels." href="/docs/console/overview" />
+  <Card title="Plugins" description="The extensibility law — public plugin API only." href="/docs/plugins" />
+  <Card title="CLI Reference" description="`oke` and `create-oke` everyday commands." href="/docs/cli" />
+  <Card title="Security" description="Console security posture — Host, Origin, MCP." href="/docs/security" />
+  <Card title="AI Resources" description="AGENTS.md, MCP `:6535`, `/llms.txt`." href="/docs/ai/resources" />
+</Cards>

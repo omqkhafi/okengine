@@ -1,0 +1,50 @@
+---
+title: "Store"
+description: "data at rest (sql · kv · files · index) — SQL, KV, files, and search index are facets of one Store surface. Drivers are named after protocols, not vendors."
+icon: "Database"
+source: "docs/spec/unified-theory.md"
+---
+
+Store is the element for **data at rest (sql · kv · files · index)**.
+
+SQL, KV, files, and search index are facets of one Store surface. Drivers are named after protocols, not vendors.
+
+<Callout title="Governing rule">
+Drivers are named after protocols, not vendors. Vendor choice lives in `images`, keyed by role.
+</Callout>
+
+## At a glance
+
+<Cards>
+  <Card title="Store" description="Essence: data at rest (`sql` · `kv` · `files` · `index`). Replaces: database · cache · KV · file storage · search index." />
+</Cards>
+
+## Drivers available
+
+<Cards>
+  <Card title="store.sql" description="Dev `sqlite` · prod `postgres` via Bun.sql / bun:sqlite." />
+  <Card title="store.kv" description="Dev `memory` · prod `redis` (protocol, not vendor)." />
+  <Card title="store.files" description="Dev `fs` · prod `s3` via Bun.S3." />
+  <Card title="store.index" description="Default `pgvector` — RAG without another service." />
+</Cards>
+
+## Example from the teaching apps
+
+Claimed fence from **notes** — same source the doc-drift gate checks:
+
+### `examples/notes/src/core.ts`
+
+```typescript
+import { store } from "okengine";
+import * as schema from "./schema";
+
+export const db = store.sql("notes", { schema });
+```
+
+## Next
+
+<Cards>
+  <Card title="Clock" description="Continue to Clock." href="/docs/elements/clock" />
+  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
+  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+</Cards>

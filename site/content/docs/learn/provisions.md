@@ -163,7 +163,7 @@ on(db.table(orders).changed("status"), flow({
 
 **`.live()` is the whole of realtime.** The result is cached, invalidated by exactly the writes that touch those rows, and pushed to subscribed clients on exactly those writes. No cache code, no socket code.
 
-### `examples/provisions/src/flows/payments/index.ts` — durability is a flag
+### `src/flows/payments/index.ts` — durability is a flag
 
 ```typescript
 import { flow } from "okengine";
@@ -187,7 +187,7 @@ export const chargeOrder = flow({
 
 **Workflows are not a separate API.** They are ordinary flows with one option. A process killed between the two steps resumes at `confirm` — the card is not charged twice.
 
-### `examples/provisions/src/flows/notifications/index.ts` — reaching humans
+### `src/flows/notifications/index.ts` — reaching humans
 
 ```typescript
 import { on, flow } from "okengine";
@@ -213,7 +213,7 @@ export const sendOtp = flow({
 
 Fallback is recorded as a **chain**, not an outcome — so the Console can tell you that 23% of OTPs fell back to SMS this week and what that cost.
 
-### `examples/provisions/src/plugins/audit.ts` — every extension point in one file
+### `src/plugins/audit.ts` — every extension point in one file
 
 ```typescript
 import { plugin, store } from "okengine";
@@ -232,7 +232,7 @@ export const audit = plugin("audit", { version: "1.0.0" })
   .cli("audit:export", ({ fx }) => fx.store("audit").exportCsv());
 ```
 
-### `examples/provisions/src/app.ts` — scope is the attachment point
+### `src/app.ts` — scope is the attachment point
 
 ```typescript
 import { oke } from "okengine";

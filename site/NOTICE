@@ -1,0 +1,46 @@
+Third-party notices for the okengine documentation site
+=======================================================
+
+better-auth (docs structural components)
+----------------------------------------
+Portions of the application shell — the header tab strip, the docs sidebar, the
+changelog layout, the homepage hero layout, and the Features grid component —
+were adapted from the better-auth documentation application:
+
+  https://github.com/better-auth/better-auth
+
+Upstream paths:
+  docs/app/page.tsx
+  docs/app/docs/layout.tsx
+  docs/app/globals.css
+  docs/app/changelog/page.tsx
+  docs/app/changelog/changelog-content.tsx
+  docs/components/landing/staggered-nav-files.tsx
+  docs/components/docs/docs-sidebar.tsx
+  docs/components/version-switcher.tsx
+  docs/components/landing/hero-title.tsx
+  docs/components/docs/features.tsx
+
+Licence: MIT License (LICENSE.md in that repository)
+Copyright (c) 2024 - present, Bereket Engida
+
+The MIT grant covers that software and associated documentation files.
+Their brand assets, marketing copy, Trusted By lists, Ask AI widget, and
+sign-in demos were not copied. okengine content, the okengine mark and
+wordmark, and the Manifest-derivation diagram are original to this project.
+
+Two behavioural differences from upstream are worth recording, because they are
+not oversights: our sidebar is driven by the Fumadocs page tree rather than a
+hand-written contents array, so meta.json stays the only source of navigation
+truth; and the changelog is parsed from a committed docs/changelog.md rather
+than fetched from the GitHub releases API, so the static export is
+deterministic and builds with no network.
+
+iii (diagram concept only)
+--------------------------
+The idea of arguing the problem with a tabbed panel whose first view is a
+complete-graph mesh of infrastructure concerns ("problem space") comes from the
+iii framework's site. No code, markup, or copy was taken: the geometry, node
+list, labels, and prose in `site/components/landing/collapse-diagram.tsx` were
+written from scratch, and the nodes are drawn from okengine's own `replaces`
+lists in `site/lib/elements.ts`.

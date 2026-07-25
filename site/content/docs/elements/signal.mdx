@@ -1,0 +1,71 @@
+---
+title: "Signal"
+description: "data in motion — Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default."
+icon: "Radio"
+source: "docs/spec/unified-theory.md"
+---
+
+Signal is the element for **data in motion**.
+
+Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default.
+
+<Callout title="Governing rule">
+`delivery` is mandatory with no default. Delivery physics is a semantic decision; guessing it produces silent, expensive bugs.
+</Callout>
+
+## At a glance
+
+<Cards>
+  <Card title="Signal" description="Essence: data in motion. Replaces: queue · pub/sub · stream · websocket · SSE · event bus." />
+</Cards>
+
+## Drivers available
+
+<Cards>
+  <Card title="memory" description="Dev default — in-process, no extra service." />
+  <Card title="postgres" description="Prod default — transactional with your data." />
+  <Card title="redis" description="Explicit alternative for throughput; outbox relay kept." />
+  <Card title="nats · kafka" description="Explicit high-throughput alternatives." />
+</Cards>
+
+## Why this is an element
+
+<Callout title="Why">
+Queue, pub/sub, and stream were always the same object with different delivery physics — so delivery is an option, not three ecosystems.
+</Callout>
+
+<Cards>
+  <Card title="once" description="Queue semantics: competing consumers, retries, DLQ." />
+  <Card title="broadcast" description="Pub/sub: fan-out to every subscriber." />
+  <Card title="live" description="Stream: client-subscribable, replayable." />
+</Cards>
+
+## Example from the teaching apps
+
+Claimed fence from **linkly** — same source the doc-drift gate checks:
+
+### `examples/linkly/src/flows/links/signals.ts`
+
+```typescript
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const linkClicked = signal("link-clicked", {
+  schema: z.object({ code: z.string(), at: z.number(), referrer: z.string().optional() }),
+  delivery: "once",                       // queue physics: one consumer, retries, DLQ
+  retries: 3, deadLetter: true,
+});
+
+export const linkStats = signal("link-stats", {
+  schema: z.object({ code: z.string(), clicks: z.number() }),
+  delivery: "live",                       // stream physics: clients subscribe
+});
+```
+
+## Next
+
+<Cards>
+  <Card title="Store" description="Continue to Store." href="/docs/elements/store" />
+  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
+  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+</Cards>
