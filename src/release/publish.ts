@@ -2,8 +2,8 @@
 /**
  * Measure every published budget, print the report, write `budgets.json`.
  *
- * Exit 1 on any regression. On `main` CI the updated snapshot is committed
- * so numbers are comparable across git history.
+ * Exit 1 on any regression. CI runs this as a gate; the snapshot is written
+ * locally and committed with releases — not auto-pushed from Actions.
  */
 
 import { resolve } from "node:path";

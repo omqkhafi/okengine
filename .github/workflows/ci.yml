@@ -9,8 +9,6 @@ jobs:
   ci:
     name: install · typecheck · test · budgets · gates
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,16 +23,3 @@ jobs:
 
       - name: CI gate
         run: bun run ci
-
-      - name: Commit budgets.json on main
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        run: |
-          if git diff --quiet -- budgets.json; then
-            echo "budgets.json unchanged"
-          else
-            git config user.name "okengine-ci"
-            git config user.email "ci@oke.dev"
-            git add budgets.json
-            git commit -m "chore: update budgets.json snapshot"
-            git push
-          fi
