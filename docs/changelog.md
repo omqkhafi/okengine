@@ -7,6 +7,33 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.3 — 2026-07-26
+
+### Added
+
+- `oke dev` probes app / Console / MCP ports and increments until free
+  (Next.js-style), so a busy `:6530` no longer fails the session.
+- Default Docker image pins derived from prod drivers when `images` is omitted
+  (`postgres` → `postgres:18-alpine`, `redis` → `redis:8-alpine`).
+- Durable Console operators under `.oke/console.sqlite` with a stable
+  `.oke/console.secret`, so the claim wizard closes permanently across restarts.
+- Console wordmark + favicon; site favicon resolve via `app/icon.svg`.
+
+### Changed
+
+- Bare `oke` help is commands-only; Flags / JSON / exit-code notes stay on
+  `--help`.
+- `oke dev` extracts the Manifest from `src/` and feeds the Console on boot and
+  on save, so Overview and element panels are no longer empty by default.
+- Standard and full templates pin default `images` for `oke dev -s`.
+
+### Fixed
+
+- Second `oke dev` run no longer reprints a claim code or leaves Console stuck
+  on Loading after the first operator exists.
+- Stale Console session tokens are cleared when claim is required again; setup
+  status errors surface instead of spinning forever.
+
 ## v0.2.2 — 2026-07-26
 
 ### Added

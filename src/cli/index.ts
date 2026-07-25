@@ -90,7 +90,10 @@ if (cmd === "completion") {
 }
 
 if (cmd === undefined || cmd === "--help" || cmd === "-h" || cmd === "help") {
-  console.log(`${formatOkeHelp()}${EXIT_CODE_HELP}`);
+  // Bare `oke` — commands only. Exit-code table only on explicit --help.
+  const help =
+    cmd === undefined ? formatOkeHelp() : `${formatOkeHelp()}${EXIT_CODE_HELP}`;
+  console.log(help);
   process.exit(cmd ? EXIT_OK : EXIT_USAGE);
 }
 

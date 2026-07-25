@@ -346,6 +346,11 @@ export interface ConsoleState {
   /** Whether first operator exists (wizard permanently closed). */
   get setupClosed(): boolean;
   /**
+   * Persist an operator after claim/create (SQLite under `.oke/`).
+   * No-op when persistence is disabled (tests / memory-only).
+   */
+  persistOperator: (operatorId: string) => void;
+  /**
    * Per-email login attempt timestamps for credential-check rate limiting
    * (console §10.4 — same 5/60s strategy as setup-claim).
    */
@@ -398,6 +403,10 @@ export interface CreateConsoleStateOptions {
   readonly okeConfig?: OkeConfig | null;
   /** Host plugin registry for scopes / capabilities. */
   readonly pluginRegistry?: PluginRegistry | null;
+  /** Pre-hydrated operator store (from `.oke/console.sqlite`). */
+  readonly operators?: OperatorStore;
+  /** Persist hook after claim/create. */
+  readonly persistOperator?: (operatorId: string) => void;
 }
 
 /**
@@ -413,10 +422,12 @@ export function createConsoleState(
     process.env.OKE_CONSOLE_SECRET ??
     `oke-console-dev-${crypto.randomUUID()}`;
   const now = options.now ?? (() => Date.now());
+  const operators = options.operators ?? createOperatorStore();
   const claim = mintClaimCode(now);
-  const operators = createOperatorStore();
   const sessions = createSessionStore();
   const liveSubscribers = new Set<(msg: ConsoleLiveMessage) => void>();
+  const persistOperator =
+    options.persistOperator ?? ((_operatorId: string) => {});
 
   const signalConfig = createMemorySignalConfigStore();
   const gateAuth = createDefaultGateAuthStores();
@@ -843,6 +854,7 @@ export function createConsoleState(
     get setupClosed() {
       return operators.operators.size > 0;
     },
+    persistOperator,
   };
 
   return state;

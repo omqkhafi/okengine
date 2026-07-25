@@ -1771,6 +1771,7 @@ function createSetupClaim(state: ConsoleState) {
         name: input.name,
         password: input.password,
       });
+      state.persistOperator(op.id);
       const issued = await issueOperatorSession(state, op.id);
       fx.log.info("console.setup.claim", { operatorId: op.id });
       return sessionPayload(op.id, op.email, op.name, issued);

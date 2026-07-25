@@ -73,7 +73,7 @@ console.log("listening", server.port);
 
       // No lockfile — adjust Dockerfile install for the fixture.
       const derived = deriveInfrastructure({
-        images: { "store.sql": "postgres:16-alpine" },
+        images: { "store.sql": "postgres:18-alpine" },
         credentials: {
           "store.sql": {
             user: "oke",

@@ -57,6 +57,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Console / Playwright
 tests/console/.claim-code
+.oke/
 playwright-report/
 test-results/
 blob-report/

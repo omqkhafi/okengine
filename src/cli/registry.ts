@@ -373,10 +373,6 @@ export function formatOkeHelp(): string {
     }
   }
   lines.push("");
-  lines.push("Flags: long form is canonical; short form is convenience only.");
-  lines.push("JSON:  doctor · stack · images list · gates list accept --json|-j");
-  lines.push("       (stdout = JSON only; hints/progress on stderr).");
-  lines.push("");
   return `${lines.join("\n")}\n`;
 }
 

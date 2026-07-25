@@ -35,7 +35,7 @@ describe("oke dev --stack postgres integration", () => {
     const project = `oke-pg-${Date.now()}`;
     try {
       const derived = deriveInfrastructure({
-        images: { "store.sql": "postgres:16-alpine" },
+        images: { "store.sql": "postgres:18-alpine" },
         credentials: {
           "store.sql": {
             user: "oke",

@@ -2,7 +2,6 @@
  * `oke doctor` — verify secrets, ports, drivers, tenancy, schema drift.
  */
 
-import { createServer } from "node:net";
 import { resolve } from "node:path";
 import type { Manifest } from "../manifest/types.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
@@ -10,7 +9,10 @@ import { hasFlag, wantsJson } from "./args.ts";
 import { checkManifestPiiAsks } from "./doctor-pii.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
 import { loadManifest } from "./load-config.ts";
+import { isPortInUse } from "./ports.ts";
 import { schemaFingerprint, readSchemaFingerprint } from "./schema.ts";
+
+export { isPortInUse } from "./ports.ts";
 
 /** One doctor finding. */
 export interface DoctorFinding {
@@ -204,20 +206,3 @@ Verify secrets, ports, schema drift, and PII→model egress before serving.
   return code;
 }
 
-/**
- * True when something is already listening on `port`.
- *
- * @param port - TCP port
- */
-export function isPortInUse(port: number): Promise<boolean> {
-  return new Promise((resolvePromise) => {
-    const server = createServer();
-    server.once("error", (err: NodeJS.ErrnoException) => {
-      resolvePromise(err.code === "EADDRINUSE");
-    });
-    server.once("listening", () => {
-      server.close(() => resolvePromise(false));
-    });
-    server.listen(port, "127.0.0.1");
-  });
-}

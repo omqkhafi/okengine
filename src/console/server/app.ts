@@ -49,7 +49,8 @@ export function createConsoleApp(
   options: CreateConsoleAppOptions = {},
 ): ConsoleAppHandle {
   const state = createConsoleState(options);
-  if (!options.silentClaim) {
+  // Spec §2.5 — claim prints only while setup is open (no operators yet).
+  if (!options.silentClaim && !state.setupClosed) {
     printClaimCodeOnce(state.claim);
   }
 

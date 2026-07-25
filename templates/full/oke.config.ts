@@ -19,5 +19,9 @@ export default defineConfig({
       test: "mock",
     },
   },
+  images: {
+    "store.sql": "postgres:18-alpine",
+    "store.kv": "redis:8-alpine",
+  },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

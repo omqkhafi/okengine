@@ -42,7 +42,7 @@ describe("oke --json stdout discipline", () => {
   test("stack --json is valid JSON only on stdout", async () => {
     let out = "";
     const code = await runStackPreview({
-      images: { "store.sql": "postgres:16-alpine" },
+      images: { "store.sql": "postgres:18-alpine" },
       json: true,
       write: (t) => {
         out += t;

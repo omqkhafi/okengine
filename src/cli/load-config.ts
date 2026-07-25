@@ -3,8 +3,67 @@
  */
 
 import { resolve } from "node:path";
-import type { OkeConfig } from "../config/index.ts";
+import type { DriverRef, OkeConfig } from "../config/index.ts";
 import type { Manifest } from "../manifest/types.ts";
+
+/** Default image pins when `images` is omitted but prod drivers need containers. */
+const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
+const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
+const DEFAULT_KV_IMAGE = "redis:8-alpine";
+
+/**
+ * Extract protocol id from a driver ref.
+ *
+ * @param ref - String or `{ driver }` object
+ */
+function driverId(ref: DriverRef | undefined): string | undefined {
+  if (ref === undefined) return undefined;
+  return typeof ref === "string" ? ref : ref.driver;
+}
+
+/**
+ * Derive default image pins from prod driver protocols.
+ *
+ * Used when `oke.config.ts` omits `images` but declares postgres/redis (etc.)
+ * so `oke dev -s` / `oke stack` / `oke docker` have something to run.
+ *
+ * @param config - Loaded config
+ */
+export function defaultImagesFromConfig(
+  config: OkeConfig,
+): Readonly<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const sql = driverId(config.drivers?.store?.sql?.prod);
+  const index = driverId(config.drivers?.store?.index?.prod);
+  const kv = driverId(config.drivers?.store?.kv?.prod);
+  const signal = driverId(config.drivers?.signal?.prod);
+  const clock = driverId(config.drivers?.clock?.prod);
+
+  const needsSql =
+    sql === "postgres" ||
+    sql === "pgvector" ||
+    index === "pgvector" ||
+    signal === "postgres" ||
+    clock === "postgres" ||
+    (config.drivers?.prod ?? []).some(
+      (p) => p === "postgres" || p === "pgvector",
+    );
+
+  if (needsSql) {
+    out["store.sql"] =
+      sql === "pgvector" || index === "pgvector"
+        ? DEFAULT_PGVECTOR_IMAGE
+        : DEFAULT_SQL_IMAGE;
+  }
+
+  const needsKv =
+    kv === "redis" || (config.drivers?.prod ?? []).includes("redis");
+  if (needsKv) {
+    out["store.kv"] = DEFAULT_KV_IMAGE;
+  }
+
+  return out;
+}
 
 /** Result of loading project config. */
 export interface LoadedConfig {
@@ -60,6 +119,9 @@ export async function loadManifest(path: string): Promise<Manifest> {
 /**
  * Resolve images map from config or Manifest.
  *
+ * When neither declares `images`, derive defaults from prod driver protocols
+ * so `oke dev -s` works on scaffolded templates without an explicit pin map.
+ *
  * @param config - Optional config
  * @param manifest - Optional manifest
  */
@@ -67,5 +129,8 @@ export function resolveImages(
   config?: OkeConfig,
   manifest?: Manifest,
 ): Readonly<Record<string, string>> {
-  return config?.images ?? manifest?.images ?? {};
+  const explicit = config?.images ?? manifest?.images;
+  if (explicit && Object.keys(explicit).length > 0) return explicit;
+  if (config) return defaultImagesFromConfig(config);
+  return {};
 }

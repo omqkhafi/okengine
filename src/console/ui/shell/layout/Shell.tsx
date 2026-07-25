@@ -5,6 +5,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { clsx } from "clsx";
 import type { ReactNode } from "react";
+import { OkeLogo } from "../components/oke-logo.tsx";
 
 /**
  * Primary nav — eight elements, then cross-cutting panels (console §9).
@@ -52,9 +53,7 @@ export function Shell({ children }: { readonly children?: ReactNode }) {
         aria-label="Console"
         className="flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--oke-line)] px-3"
       >
-        <span className="mr-3 font-mono text-xs tracking-[0.2em] text-[var(--oke-muted)]">
-          oke
-        </span>
+        <OkeLogo className="mr-3 h-4 w-auto shrink-0 text-[var(--oke-fg)]" />
         {NAV.map((item) =>
           item.enabled ? (
             <Link

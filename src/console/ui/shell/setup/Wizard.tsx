@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { consoleCalls, setAccessToken } from "../client.ts";
+import { OkeLogo } from "../components/oke-logo.tsx";
 import { Button, Field, Input } from "../components/ui.tsx";
 
 /**
@@ -55,7 +56,8 @@ export function SetupWizard() {
   if (status.data?.setupClosed) {
     return (
       <section className="mx-auto flex max-w-md flex-col gap-4 px-6 py-16">
-        <h1 className="text-2xl font-semibold tracking-tight">oke Console</h1>
+        <OkeLogo className="h-7 w-auto text-[var(--oke-fg)]" />
+        <h1 className="text-2xl font-semibold tracking-tight">Console</h1>
         <p className="text-[var(--oke-muted)]">
           Setup is closed. Sign in with an existing operator account.
         </p>
@@ -73,10 +75,11 @@ export function SetupWizard() {
   return (
     <section className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
       <header className="flex flex-col gap-2">
+        <OkeLogo className="h-7 w-auto text-[var(--oke-fg)]" />
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">
           First admin
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight">oke Console</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Console</h1>
         <p className="text-[var(--oke-muted)]">
           Enter the claim code printed once to the boot log. This wizard closes
           permanently after the first operator.

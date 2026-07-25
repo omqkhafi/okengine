@@ -31,6 +31,7 @@ import {
 import { clientAdd } from "./client-add.ts";
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
+import { resolveDevPorts } from "./ports.ts";
 
 /** Max wait for the `bun --hot` app child to bind a port. */
 const APP_READY_TIMEOUT_MS = 30_000;
@@ -183,9 +184,27 @@ export interface DevResult {
 export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
-  const appPort = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
-  const consolePort = options.consolePort ?? CONSOLE_PORT;
-  const mcpPort = options.mcpPort ?? MCP_PORT;
+  const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
+  const preferredConsole = options.consolePort ?? CONSOLE_PORT;
+  const preferredMcp = options.mcpPort ?? MCP_PORT;
+  // Explicit overrides (incl. `0` ephemeral) skip probing; otherwise +1 until free.
+  const ports =
+    options.appPort !== undefined ||
+    options.consolePort !== undefined ||
+    options.mcpPort !== undefined
+      ? {
+          app: preferredApp,
+          console: preferredConsole,
+          mcp: preferredMcp,
+        }
+      : await resolveDevPorts({
+          app: preferredApp,
+          console: preferredConsole,
+          mcp: preferredMcp,
+        });
+  const appPort = ports.app;
+  const consolePort = ports.console;
+  const mcpPort = ports.mcp;
   const keepAlive = options.keepAlive ?? true;
 
   let entry = options.entry;
@@ -297,6 +316,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       ? options.manifest
       : await tryLoadProjectManifest(cwd);
 
+  async function refreshManifestInto(
+    state: ConsoleState | null,
+  ): Promise<void> {
+    if (!state) return;
+    try {
+      const { extractManifest } = await import("../compiler/extract.ts");
+      const { feedManifest } = await import("../console/server/live.ts");
+      const next = await extractManifest({ rootDir: cwd });
+      feedManifest(state, next);
+    } catch {
+      // Source may be mid-edit — keep the last good Manifest.
+    }
+  }
+
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
@@ -402,6 +435,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     { recursive: true },
     () => {
       void regen(appUrl);
+      // Only live-extract when the host did not pin a Manifest (tests).
+      if (options.manifest === undefined) {
+        void refreshManifestInto(consoleState);
+      }
     },
   );
 
@@ -453,20 +490,45 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 }
 
 /**
- * Load `oke.manifest.json` / `manifest.oke.json` when present.
+ * True when a Manifest has no declared flows (scaffold / empty extract).
+ *
+ * @param manifest - Candidate
+ */
+function isSparseManifest(manifest: Manifest): boolean {
+  const flows = manifest.flows;
+  if (!flows || typeof flows !== "object") return true;
+  return Object.keys(flows).length === 0;
+}
+
+/**
+ * Load Manifest — prefer AoT extract from `src/` when it has flows;
+ * otherwise on-disk JSON snapshots; otherwise a sparse extract.
  *
  * @param cwd - Project root
  */
 async function tryLoadProjectManifest(
   cwd: string,
 ): Promise<Manifest | null | undefined> {
+  let extracted: Manifest | undefined;
+  try {
+    const { extractManifest } = await import("../compiler/extract.ts");
+    extracted = await extractManifest({ rootDir: cwd });
+  } catch {
+    // Fall through to JSON snapshots.
+  }
+
+  let fromDisk: Manifest | undefined;
   for (const name of ["oke.manifest.json", "manifest.oke.json"]) {
     const path = resolve(cwd, name);
     if (await Bun.file(path).exists()) {
-      return loadManifest(path);
+      fromDisk = await loadManifest(path);
+      break;
     }
   }
-  return undefined;
+
+  if (extracted && !isSparseManifest(extracted)) return extracted;
+  if (fromDisk) return fromDisk;
+  return extracted;
 }
 
 /**

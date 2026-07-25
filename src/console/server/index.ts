@@ -72,6 +72,11 @@ export {
   type ClaimVerifyResult,
 } from "./claim.ts";
 export {
+  openConsolePersistence,
+  resolveConsoleSecret,
+  type ConsolePersistence,
+} from "./operator-db.ts";
+export {
   createConsoleBindings,
 } from "./flows.ts";
 export { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";

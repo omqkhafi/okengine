@@ -188,6 +188,14 @@ export function OverviewPanel() {
       </header>
 
       <main id="overview-main" className="flex flex-col gap-8 px-6 py-6">
+        {!loading && !manifestQuery.data ? (
+          <p className="text-sm text-[var(--oke-muted)]">
+            No Manifest yet — save a Flow under{" "}
+            <code className="font-mono text-[var(--oke-fg)]">src/</code> and
+            the Console will refresh.
+          </p>
+        ) : null}
+
         {view.hasDeclaredSlos ? (
           <BudgetStrip
             label="Error budgets"

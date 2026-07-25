@@ -23,7 +23,9 @@ import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
  */
 export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   if (!options.images || Object.keys(options.images).length === 0) {
-    throw new Error("oke docker: no images configured — set `images` in oke.config.ts");
+    throw new Error(
+      "oke docker: no images configured — set `images` in oke.config.ts (or prod drivers postgres/redis for defaults)",
+    );
   }
 
   const specs = buildSpecs(options);

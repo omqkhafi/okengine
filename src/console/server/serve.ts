@@ -22,6 +22,7 @@ import {
   type CreateConsoleAppOptions,
 } from "./app.ts";
 import { createLiveWebsocket, type ConsoleLiveData } from "./live.ts";
+import { openConsolePersistence } from "./operator-db.ts";
 import {
   CONSOLE_COOKIES,
   consoleSessionCookie,
@@ -37,6 +38,11 @@ export interface ServeConsoleOptions extends CreateConsoleAppOptions {
   readonly staticDir?: string;
   /** Boot environment — use `"dev"` / `"prod"` so Bearer auth is production-like. */
   readonly env?: "dev" | "prod" | "test";
+  /**
+   * Persist operators + secret under `.oke/` (default true).
+   * Set false for ephemeral test servers.
+   */
+  readonly persist?: boolean;
 }
 
 /** Running Console server handle. */
@@ -54,9 +60,24 @@ export async function serveConsole(
 ): Promise<ConsoleServerHandle> {
   const hostname = options.hostname ?? "127.0.0.1";
   const port = options.port ?? CONSOLE_PORT;
+  const cwd = options.cwd ?? process.cwd();
+  const wantPersist = options.persist !== false && options.operators === undefined;
+  const persistence = wantPersist
+    ? await openConsolePersistence(cwd, {
+        envSecret: options.secret ?? process.env.OKE_CONSOLE_SECRET,
+      })
+    : null;
   const handle = createConsoleApp({
     ...options,
+    cwd,
     silentClaim: options.silentClaim ?? false,
+    ...(persistence
+      ? {
+          secret: options.secret ?? persistence.secret,
+          operators: persistence.operators,
+          persistOperator: persistence.persistOperator,
+        }
+      : {}),
   });
 
   const env = options.env ?? "dev";
@@ -160,6 +181,7 @@ export async function serveConsole(
     stop(closeActive = false) {
       server.stop(closeActive);
       void handle.app.stop();
+      persistence?.close();
     },
   };
 }
@@ -172,11 +194,28 @@ export async function serveConsole(
 export async function startConsoleApp(
   options: CreateConsoleAppOptions & {
     readonly env?: "dev" | "prod" | "test";
+    /** Opt-in durable operators under `.oke/` (default false for unit tests). */
+    readonly persist?: boolean;
   } = {},
 ): Promise<ConsoleAppHandle> {
+  const cwd = options.cwd ?? process.cwd();
+  const persistence =
+    options.persist === true && options.operators === undefined
+      ? await openConsolePersistence(cwd, {
+          envSecret: options.secret ?? process.env.OKE_CONSOLE_SECRET,
+        })
+      : null;
   const handle = createConsoleApp({
     ...options,
+    cwd,
     silentClaim: options.silentClaim ?? true,
+    ...(persistence
+      ? {
+          secret: options.secret ?? persistence.secret,
+          operators: persistence.operators,
+          persistOperator: persistence.persistOperator,
+        }
+      : {}),
   });
   await bootConsoleApp(handle);
   return handle;

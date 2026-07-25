@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   },
   description:
     'One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era.',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+  },
 };
 
 /**

@@ -16,7 +16,7 @@ describe("oke safe-default overrides", () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-safe-docker-"));
     await Bun.write(
       join(dir, "oke.config.ts"),
-      `export default { images: { "store.sql": "postgres:16-alpine" } }\n`,
+      `export default { images: { "store.sql": "postgres:18-alpine" } }\n`,
     );
     // Without --prod, derive still runs but prod overlays are not requested.
     // We assert the parser default by calling runDockerDerive via dockerCli
@@ -25,7 +25,7 @@ describe("oke safe-default overrides", () => {
     const off = await runDockerDerive({
       cwd: dir,
       outDir: dir,
-      images: { "store.sql": "postgres:16-alpine" },
+      images: { "store.sql": "postgres:18-alpine" },
       dryRun: true,
       write: () => {},
     });
@@ -35,7 +35,7 @@ describe("oke safe-default overrides", () => {
     const on = await runDockerDerive({
       cwd: dir,
       outDir: dir,
-      images: { "store.sql": "postgres:16-alpine" },
+      images: { "store.sql": "postgres:18-alpine" },
       prod: true,
       dryRun: true,
       write: () => {},

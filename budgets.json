@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-25T20:51:40.420Z",
-  "version": "0.2.1",
+  "measuredAt": "2026-07-25T21:56:51.430Z",
+  "version": "0.2.3",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 86645,
+      "value": 88270,
       "limit": 307200,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 43.532,
+      "value": 25.141,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 63343,
-      "limit": 64610,
+      "value": 64840,
+      "limit": 66137,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
