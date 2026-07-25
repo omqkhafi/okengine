@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -25,7 +25,7 @@
     "test:auth": "bun test src/auth",
     "test:runs": "bun test src/runs",
     "test:cli": "bun test src/cli src/docker",
-    "test:console": "bun test src/console/server && bun test src/console/ui/flows && bun test src/console/ui/traces && bun test src/console/xss.gate.test.ts src/console/budget.test.ts",
+    "test:console": "bun test src/console/server && bun test src/console/ui/flows && bun test src/console/ui/traces && bun test src/console/ui/runs && bun test src/console/xss.gate.test.ts src/console/budget.test.ts",
     "test:mcp": "bun test src/mcp",
     "test:console:smoke": "bunx playwright test tests/console/smoke.spec.ts",
     "build:console": "bunx vite build --config src/console/ui/vite.config.ts",

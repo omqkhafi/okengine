@@ -14,6 +14,7 @@ import {
 } from "../../auth/index.ts";
 import { fail, flow, http, type Binding } from "../../kernel/index.ts";
 import type { Flow as ManifestFlow } from "../../manifest/types.ts";
+import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { verifyClaimCode } from "./claim.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
@@ -86,6 +87,14 @@ const EffectEntryOut = z.object({
   ]),
 });
 
+const LogLineOut = z.object({
+  level: z.enum(["debug", "info", "warn", "error"]),
+  message: z.string(),
+  data: z.record(z.string(), z.unknown()).optional(),
+  at: z.number(),
+});
+
+/** Wide-event projection — Runs · Traces · Overview share one store (console §9.11). */
 const RunsListOut = z.object({
   runs: z.array(
     z.object({
@@ -95,13 +104,28 @@ const RunsListOut = z.object({
       unit: z.string().nullable(),
       trigger: z.string(),
       plane: z.string(),
+      tenant: z.string().nullable(),
+      principal: z.string().nullable(),
+      gates: z.array(z.string()),
+      cache: z.enum(["hit", "miss", "none"]),
+      replica: z.enum(["primary", "replica"]).nullable(),
+      replicaLagMs: z.number().nullable(),
+      cost: z.number().nullable(),
+      promptVersion: z.number().nullable(),
+      buildVersion: z.string().nullable(),
       startedAt: z.number(),
       endedAt: z.number(),
       durationMs: z.number(),
       error: z.string().nullable(),
-      cost: z.number().nullable(),
       sampled: z.enum(["full", "error", "sample", "boost"]),
       effects: z.array(EffectEntryOut),
+      /** `fx.log` lines — a field on the run, not a parallel stream. */
+      logs: z.array(LogLineOut),
+      /** All queryable dimensions for population analysis. */
+      dimensions: z.record(
+        z.string(),
+        z.union([z.string(), z.number(), z.boolean(), z.null()]),
+      ),
     }),
   ),
 });
@@ -390,30 +414,59 @@ function createRunsList(state: ConsoleState) {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
       return {
-        runs: all.map((r) => ({
-          id: r.id,
-          parentId: r.parentId ?? null,
-          flow: r.flow,
-          unit: r.unit ?? null,
-          trigger: r.trigger,
-          plane: r.plane,
-          startedAt: r.startedAt,
-          endedAt: r.endedAt,
-          durationMs: r.durationMs,
-          error: r.error?.code ?? null,
-          cost: r.cost ?? null,
-          sampled: r.error ? ("error" as const) : ("sample" as const),
-          effects: r.effects.map((e) => ({
-            kind: e.kind,
-            resource: e.resource,
-            timestamp: e.timestamp,
-            duration: e.duration,
-            reversibility: e.reversibility,
-          })),
-        })),
+        runs: all.map((r) => projectRun(r)),
       };
     },
   });
+}
+
+/**
+ * Project a wide event for GET /console/runs (Runs · Traces · Overview).
+ *
+ * @param r - Stored wide event
+ */
+function projectRun(r: WideEvent) {
+  const dimensions: Record<string, string | number | boolean | null> = {};
+  for (const [k, v] of Object.entries(r.dimensions)) {
+    if (v === undefined) continue;
+    dimensions[k] = v;
+  }
+  return {
+    id: r.id,
+    parentId: r.parentId ?? null,
+    flow: r.flow,
+    unit: r.unit ?? null,
+    trigger: r.trigger,
+    plane: r.plane,
+    tenant: r.tenant ?? null,
+    principal: r.principal ?? null,
+    gates: [...r.gates],
+    cache: r.cache,
+    replica: r.replica ?? null,
+    replicaLagMs: r.replicaLagMs ?? null,
+    cost: r.cost ?? null,
+    promptVersion: r.promptVersion ?? null,
+    buildVersion: r.buildVersion ?? null,
+    startedAt: r.startedAt,
+    endedAt: r.endedAt,
+    durationMs: r.durationMs,
+    error: r.error?.code ?? null,
+    sampled: r.error ? ("error" as const) : ("sample" as const),
+    effects: r.effects.map((e) => ({
+      kind: e.kind,
+      resource: e.resource,
+      timestamp: e.timestamp,
+      duration: e.duration,
+      reversibility: e.reversibility,
+    })),
+    logs: r.logs.map((line) => ({
+      level: line.level,
+      message: line.message,
+      ...(line.data !== undefined ? { data: line.data } : {}),
+      at: line.at,
+    })),
+    dimensions,
+  };
 }
 
 function createTracesReplay(state: ConsoleState) {

@@ -81,11 +81,19 @@ interface ConsoleClient {
         unit: string | null;
         trigger: string;
         plane: string;
+        tenant: string | null;
+        principal: string | null;
+        gates: string[];
+        cache: "hit" | "miss" | "none";
+        replica: "primary" | "replica" | null;
+        replicaLagMs: number | null;
+        cost: number | null;
+        promptVersion: number | null;
+        buildVersion: string | null;
         startedAt: number;
         endedAt: number;
         durationMs: number;
         error: string | null;
-        cost: number | null;
         sampled: "full" | "error" | "sample" | "boost";
         effects: Array<{
           kind:
@@ -107,6 +115,13 @@ interface ConsoleClient {
             | "capability"
             | "portal";
         }>;
+        logs: Array<{
+          level: "debug" | "info" | "warn" | "error";
+          message: string;
+          data?: Record<string, unknown>;
+          at: number;
+        }>;
+        dimensions: Record<string, string | number | boolean | null>;
       }>;
     }>;
     actionPing: (input: { note?: string }) => CallResult<{

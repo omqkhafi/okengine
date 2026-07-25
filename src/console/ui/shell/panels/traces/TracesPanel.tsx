@@ -3,7 +3,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { clsx } from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import { createRowBuffer, matchesQuery } from "../../../flows/buffer.ts";
@@ -322,6 +322,13 @@ export function TracesPanel() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Link
+                    to="/runs"
+                    search={{ run: chain.current.id }}
+                    className="inline-flex min-h-8 items-center border border-[var(--oke-line)] px-3 text-sm"
+                  >
+                    Open in Runs
+                  </Link>
                   <Button
                     type="button"
                     variant={

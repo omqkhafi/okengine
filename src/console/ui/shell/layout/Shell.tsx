@@ -25,6 +25,7 @@ const NAV: ReadonlyArray<{
   { to: "/channels", label: "Channels", enabled: false },
   { to: "/ai", label: "AI", enabled: false },
   { to: "/traces", label: "Traces", enabled: true },
+  { to: "/runs", label: "Runs", enabled: true },
 ];
 
 /**

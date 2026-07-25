@@ -176,6 +176,7 @@ export function TracesA11yView(props: TracesA11yViewProps) {
               })}
             </ul>
 
+            <a href={`/runs?run=${chain.current.id}`}>Open in Runs</a>
             <button
               type="button"
               style={{ minHeight: 32, minWidth: 24 }}

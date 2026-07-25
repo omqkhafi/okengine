@@ -38,6 +38,13 @@ export default defineConfig({
           ) {
             return "panel-traces";
           }
+          if (
+            id.includes("/console/ui/shell/panels/runs/") ||
+            id.includes("/console/ui/shell/panels/Runs.") ||
+            id.includes("/console/ui/runs/")
+          ) {
+            return "panel-runs";
+          }
           return undefined;
         },
       },
