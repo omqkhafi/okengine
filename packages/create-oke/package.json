@@ -18,7 +18,8 @@
   },
   "files": [
     "src",
-    "templates"
+    "templates",
+    "examples"
   ],
   "scripts": {
     "prepack": "bun ./src/sync-templates.ts",
@@ -28,6 +29,9 @@
   },
   "engines": {
     "bun": ">=1.3"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -1,2 +1,3 @@
-# Filled by `prepack` / `bun ./src/sync-templates.ts` from ../../examples.
+# Filled by `prepack` / `bun ./src/sync-templates.ts` from ../../templates and ../../examples.
 templates/
+examples/

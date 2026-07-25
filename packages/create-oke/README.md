@@ -3,7 +3,7 @@
 Scaffold an [okengine](https://www.npmjs.com/package/okengine) app.
 
 ```bash
-bunx create-oke@latest my-app
+bunx create-oke@latest my-app --template hello
 cd my-app
 oke dev
 ```
@@ -14,20 +14,36 @@ oke dev
 | `:6533` | Console |
 | `:6535` | MCP |
 
-Default template is **Notes** (same tree as [`examples/notes`](https://github.com/omqkhafi/okengine/tree/main/examples/notes)). Pick another with `--template`:
+Default template is **standard** (full recommended file layout, empty scaffolding).
+Pick another with `--template`, or start from a teaching example with `--from-example`:
 
 ```bash
-bunx create-oke@latest my-links --template linkly
-bunx create-oke@latest my-shop --template provisions
-bunx create-oke@latest my-sky --template skyport
+bunx create-oke@latest my-app --template hello
+bunx create-oke@latest my-app --template minimal
+bunx create-oke@latest my-app --template full
+bunx create-oke@latest my-notes --from-example notes
 ```
 
-| Template | Adds |
+| Template | Purpose |
+|---|---|
+| `hello` | Fastest possible "it works" — one flow, no Store |
+| `minimal` | Smallest shape you'd actually ship — Store + 1–2 flows |
+| `standard` | Full recommended file layout, empty scaffolding (default) |
+| `full` | Every element present and wired, no business logic |
+
+`--from-example` copies a teaching example (including its business logic and
+comments) — most new projects want `--template` instead.
+
+| Example | Adds |
 |---|---|
 | `notes` | `oke` · `flow` · `http` · `store.sql` · typed client |
 | `linkly` | `signal` · `clock` · `gate` |
 | `provisions` | durable flows · `vault` · `channel` · plugins |
 | `skyport` | `ai` · multi-tenancy · distributed topology |
+
+With no arguments in a real terminal, create-oke asks for a project name and
+template interactively. Non-TTY / CI / any explicit flag stays fully scriptable
+— zero prompts.
 
 ## Registries
 

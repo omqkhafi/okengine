@@ -15,7 +15,7 @@
 ```bash
 bun add okengine                 # npm (recommended — ships the `oke` CLI)
 bunx jsr add @omqkhafi/okengine  # JSR — library API only
-bunx create-oke@latest my-app    # scaffold from npm
+bunx create-oke@latest my-app --template hello   # scaffold from npm
 ```
 
 | Package | npm | JSR |
@@ -59,7 +59,7 @@ Batteries included for the Bun era: contract-first APIs, typed client, infrastru
 ## Run something in two minutes
 
 ```bash
-bunx create-oke@latest my-app
+bunx create-oke@latest my-app --template hello
 cd my-app
 oke dev
 ```
@@ -70,7 +70,9 @@ oke dev
 | `:6533` | Console |
 | `:6535` | MCP |
 
-That scaffolds the **Notes** app (same tree as [`examples/notes`](https://github.com/omqkhafi/okengine/tree/main/examples/notes)). Open the Console — flows, contracts, effects, and an architecture diagram are already there. Derived, not configured.
+That scaffolds the **hello** starter — one flow, no Store, the fastest true "it works" moment. Default without `--template` is **standard** (full recommended file layout, empty scaffolding). Open the Console — flows, contracts, effects, and an architecture diagram are already there. Derived, not configured.
+
+Prefer a worked teaching app (business logic + comments)? Use `--from-example notes|linkly|provisions|skyport` instead.
 
 ### The idea, in one file
 

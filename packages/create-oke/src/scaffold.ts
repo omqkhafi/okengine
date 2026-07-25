@@ -1,5 +1,5 @@
 /**
- * Copy an `examples/<template>` tree and apply the package.json transform.
+ * Copy a template or example tree and apply the package.json transform.
  */
 
 import {
@@ -8,13 +8,16 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import {
+  resolveExampleDir,
   resolveLocalOkengineRoot,
   resolveTemplateDir,
+  type ExampleId,
   type TemplateId,
 } from "./templates.ts";
 import {
@@ -25,35 +28,46 @@ import {
   type ScaffoldPackageJson,
 } from "./transform.ts";
 
+/** Where the scaffold copies from. */
+export type ScaffoldSource =
+  | { readonly kind: "template"; readonly id: TemplateId }
+  | { readonly kind: "example"; readonly id: ExampleId };
+
 /** Options for {@link scaffold}. */
 export type ScaffoldOptions = {
   /** Destination directory (created). Absolute or cwd-relative. */
   readonly targetDir: string;
   /** npm package / folder name. */
   readonly name: string;
-  /** Template id (default: notes). */
-  readonly template: TemplateId;
+  /** Template or teaching-example source. */
+  readonly source: ScaffoldSource;
 };
 
 /** Result of a successful scaffold. */
 export type ScaffoldResult = {
   readonly targetDir: string;
   readonly name: string;
-  readonly template: TemplateId;
+  readonly source: ScaffoldSource;
+  /** Display label (`standard`, `notes`, …). */
+  readonly label: string;
   readonly okengineDependency: string;
   /** Relative paths written (POSIX), sorted. */
   readonly files: readonly string[];
 };
 
 /**
- * Scaffold a new okengine project from `examples/<template>`.
+ * Scaffold a new okengine project from a clean template or teaching example.
  *
- * @param options - Name, template, destination
+ * @param options - Name, source, destination
  */
 export function scaffold(options: ScaffoldOptions): ScaffoldResult {
   const name = sanitizeProjectName(options.name);
   const targetDir = resolve(options.targetDir);
-  const templateDir = resolveTemplateDir(options.template);
+  const sourceDir =
+    options.source.kind === "template"
+      ? resolveTemplateDir(options.source.id)
+      : resolveExampleDir(options.source.id);
+  const label = options.source.id;
 
   if (existsSync(targetDir)) {
     const entries = readdirSync(targetDir);
@@ -66,33 +80,37 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
     mkdirSync(targetDir, { recursive: true });
   }
 
-  const okengineDependency = resolveOkengineDependency(
-    resolveLocalOkengineRoot(),
-  );
-  const written: string[] = [];
-
-  copyTree(templateDir, targetDir, "", written);
-
-  const pkgPath = join(targetDir, "package.json");
-  if (!existsSync(pkgPath)) {
-    throw new Error(
-      `create-oke: template "${options.template}" has no package.json`,
+  try {
+    const okengineDependency = resolveOkengineDependency(
+      resolveLocalOkengineRoot(),
     );
-  }
-  const sourcePkg = JSON.parse(
-    readFileSync(pkgPath, "utf8"),
-  ) as ScaffoldPackageJson;
-  const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
-  writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
+    const written: string[] = [];
 
-  written.sort();
-  return {
-    targetDir,
-    name,
-    template: options.template,
-    okengineDependency,
-    files: written,
-  };
+    copyTree(sourceDir, targetDir, "", written);
+
+    const pkgPath = join(targetDir, "package.json");
+    if (!existsSync(pkgPath)) {
+      throw new Error(`create-oke: source "${label}" has no package.json`);
+    }
+    const sourcePkg = JSON.parse(
+      readFileSync(pkgPath, "utf8"),
+    ) as ScaffoldPackageJson;
+    const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
+    writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
+
+    written.sort();
+    return {
+      targetDir,
+      name,
+      source: options.source,
+      label,
+      okengineDependency,
+      files: written,
+    };
+  } catch (e) {
+    rmSync(targetDir, { recursive: true, force: true });
+    throw e;
+  }
 }
 
 /**
@@ -129,7 +147,7 @@ function copyTree(
 }
 
 /**
- * List relative file paths in an example tree using the same skip rules as scaffold.
+ * List relative file paths in a source tree using the same skip rules as scaffold.
  *
  * @param templateDir - Absolute template directory
  */

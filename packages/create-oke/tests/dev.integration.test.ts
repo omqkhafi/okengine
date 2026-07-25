@@ -1,5 +1,5 @@
 /**
- * Gate: a create-oke-scaffolded `notes` project boots under default `oke dev`
+ * Gate: a create-oke-scaffolded `hello` project boots under default `oke dev`
  * (Prompt 24 harness: `keepAlive: false`, ephemeral `port: 0`, clean stop)
  * and serves one real flow request — then shuts down with no lingering port.
  *
@@ -35,11 +35,15 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
   });
 
   test(
-    "scaffolded notes · bun install · oke dev · flow request · clean stop",
+    "scaffolded hello · bun install · oke dev · flow request · clean stop",
     async () => {
       root = mkdtempSync(join(tmpdir(), "create-oke-dev-"));
-      const targetDir = join(root, "notes-app");
-      scaffold({ targetDir, name: "notes-app", template: "notes" });
+      const targetDir = join(root, "hello-app");
+      scaffold({
+        targetDir,
+        name: "hello-app",
+        source: { kind: "template", id: "hello" },
+      });
 
       const install = Bun.spawn(["bun", "install"], {
         cwd: targetDir,
@@ -85,19 +89,15 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
       expect(health.status).toBe(200);
       expect(await health.json()).toEqual({ ok: true, surface: "mcp" });
 
-      // One real request to a scaffolded flow (notes.create).
-      const createRes = await fetch(new URL("/notes", appUrl), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "First", body: "Hello" }),
-      });
-      expect(createRes.status).toBe(200);
-      const createBody = (await createRes.json()) as {
-        data: { id: string } | null;
+      // One real request to a scaffolded flow (hello.hello).
+      const helloRes = await fetch(new URL("/hello", appUrl));
+      expect(helloRes.status).toBe(200);
+      const helloBody = (await helloRes.json()) as {
+        data: { message: string } | null;
         error: unknown;
       };
-      expect(createBody.error).toBeNull();
-      expect(createBody.data?.id).toBeTruthy();
+      expect(helloBody.error).toBeNull();
+      expect(helloBody.data?.message).toBe("ok");
 
       session.stop();
       session = undefined;
@@ -106,7 +106,7 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
       await expect(
         fetch(`${mcpBase}/health`, { headers: { host: mcpHost } }),
       ).rejects.toThrow();
-      await expect(fetch(new URL("/notes", appUrl))).rejects.toThrow();
+      await expect(fetch(new URL("/hello", appUrl))).rejects.toThrow();
     },
     TIMEOUT_MS,
   );

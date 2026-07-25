@@ -6,8 +6,10 @@ peer = true
 root = "."
 coverageSkipTestFiles = true
 # Playwright specs use @playwright/test — run via `bun run test:console:smoke`.
-# create-oke templates/ is filled by prepack from examples/; not a workspace app.
+# Starter templates and create-oke prepack copies are not workspace apps.
 pathIgnorePatterns = [
   "tests/console/**",
+  "templates/**",
   "packages/create-oke/templates/**",
+  "packages/create-oke/examples/**",
 ]

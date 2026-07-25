@@ -76,7 +76,7 @@ A regression fails the build. Claims we cannot measure, we do not make.
 
 Published packages:
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
-- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke`; templates are the `examples/*` trees.
+- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke`; clean starters are `templates/*`, teaching apps stay in `examples/*` (`--from-example`).
 
 Engine: Bun `>=1.3`.
 

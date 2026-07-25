@@ -1,17 +1,34 @@
 /**
- * `create-oke` CLI — one command, sensible default, done.
+ * `create-oke` CLI — clean templates by default; teaching examples opt-in.
  *
  * ```bash
- * bunx create-oke@latest <name> [--template notes|linkly|provisions|skyport]
+ * bunx create-oke@latest <name> [--template hello|minimal|standard|full]
+ * bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+ * bunx create-oke@latest   # interactive when stdin is a TTY
  * ```
  */
 
+import {
+  cancel,
+  intro,
+  isCancel,
+  outro,
+  select,
+  spinner,
+  text,
+} from "@clack/prompts";
 import { basename, relative, resolve } from "node:path";
-import { scaffold } from "./scaffold.ts";
+import { existsSync, rmSync } from "node:fs";
+import { scaffold, type ScaffoldResult, type ScaffoldSource } from "./scaffold.ts";
 import {
   DEFAULT_TEMPLATE,
+  EXAMPLE_NEW_IDEAS,
+  EXAMPLES,
+  TEMPLATE_PURPOSES,
   TEMPLATES,
+  isExampleId,
   isTemplateId,
+  type ExampleId,
   type TemplateId,
 } from "./templates.ts";
 
@@ -19,6 +36,9 @@ import {
 export type CliArgs = {
   readonly name: string | undefined;
   readonly template: TemplateId;
+  readonly fromExample: ExampleId | undefined;
+  /** True when `--template` / `-t` was present on the argv. */
+  readonly templateExplicit: boolean;
   readonly help: boolean;
   readonly targetDir: string | undefined;
 };
@@ -31,6 +51,8 @@ export type CliArgs = {
 export function parseArgs(argv: readonly string[]): CliArgs {
   let name: string | undefined;
   let template: TemplateId = DEFAULT_TEMPLATE;
+  let fromExample: ExampleId | undefined;
+  let templateExplicit = false;
   let help = false;
   let targetDir: string | undefined;
 
@@ -48,6 +70,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         );
       }
       template = next;
+      templateExplicit = true;
       continue;
     }
     if (a.startsWith("--template=")) {
@@ -58,6 +81,27 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         );
       }
       template = value;
+      templateExplicit = true;
+      continue;
+    }
+    if (a === "--from-example") {
+      const next = argv[++i];
+      if (!next || !isExampleId(next)) {
+        throw new Error(
+          `create-oke: --from-example must be one of ${EXAMPLES.join("|")}`,
+        );
+      }
+      fromExample = next;
+      continue;
+    }
+    if (a.startsWith("--from-example=")) {
+      const value = a.slice("--from-example=".length);
+      if (!isExampleId(value)) {
+        throw new Error(
+          `create-oke: --from-example must be one of ${EXAMPLES.join("|")}`,
+        );
+      }
+      fromExample = value;
       continue;
     }
     if (a.startsWith("-")) {
@@ -70,11 +114,17 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     throw new Error(`create-oke: unexpected argument ${a}`);
   }
 
+  if (templateExplicit && fromExample !== undefined) {
+    throw new Error(
+      "create-oke: use either --template or --from-example, not both",
+    );
+  }
+
   if (name !== undefined) {
     targetDir = resolve(name);
   }
 
-  return { name, template, help, targetDir };
+  return { name, template, fromExample, templateExplicit, help, targetDir };
 }
 
 /**
@@ -89,31 +139,97 @@ export function formatCdPath(targetDir: string): string {
 }
 
 /**
+ * Post-scaffold next-steps block — shared by interactive and flag-driven paths.
+ *
+ * @param result - Successful scaffold result
+ */
+export function nextStepsText(result: ScaffoldResult): string {
+  return `
+Scaffolded ${result.label} → ${result.targetDir}
+
+Next steps:
+
+  cd ${formatCdPath(result.targetDir)}
+  bun install
+  oke dev          # app :6530 · Console :6533 · MCP :6535
+`;
+}
+
+/**
  * Help text — next steps match four-applications.md (`bun install` · `oke dev`).
  */
 export function helpText(): string {
+  const templateLines = TEMPLATES.map(
+    (id) =>
+      `  ${id.padEnd(12)}${TEMPLATE_PURPOSES[id]}${id === DEFAULT_TEMPLATE ? "  (default)" : ""}`,
+  ).join("\n");
+  const exampleLines = EXAMPLES.map(
+    (id) => `  ${id.padEnd(12)}${EXAMPLE_NEW_IDEAS[id]}`,
+  ).join("\n");
+
   return `create-oke — scaffold an okengine app
 
 Usage:
-  bunx create-oke@latest <name> [--template notes|linkly|provisions|skyport]
+  bunx create-oke@latest <name> [--template hello|minimal|standard|full]
+  bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+  bunx create-oke@latest          # interactive (TTY only)
 
-Templates (from examples/):
-  notes        basic — Flow · Store                         (default)
-  linkly       intermediate — + Signal · Clock · Gate
-  provisions   advanced — + Vault · Channel · plugins
-  skyport      complex — all eight elements · AI · tenancy
+Templates (clean starters from templates/):
+${templateLines}
 
-No telemetry. Bun only. No interactive wizard.
+--from-example (copies a teaching example, including its business logic and
+comments — most new projects want --template instead):
+${exampleLines}
+
+No telemetry. Bun only. Interactive prompts only when stdin is a TTY and no
+name / --template / --from-example is given.
 `;
+}
+
+/**
+ * Whether the CLI should open the two-question interactive flow.
+ *
+ * Mirrors oke / gflows: bare invocation is interactive only in a real terminal;
+ * any explicit flag or positional name stays fully scriptable.
+ *
+ * @param args - Parsed args
+ * @param stdinIsTTY - `process.stdin.isTTY`
+ */
+export function shouldPrompt(
+  args: CliArgs,
+  stdinIsTTY: boolean | undefined,
+): boolean {
+  if (!stdinIsTTY) return false;
+  if (args.help) return false;
+  if (args.name !== undefined) return false;
+  if (args.templateExplicit) return false;
+  if (args.fromExample !== undefined) return false;
+  return true;
+}
+
+/**
+ * Build the {@link ScaffoldSource} for a flag-driven invocation.
+ *
+ * @param args - Parsed args
+ */
+export function sourceFromArgs(args: CliArgs): ScaffoldSource {
+  if (args.fromExample !== undefined) {
+    return { kind: "example", id: args.fromExample };
+  }
+  return { kind: "template", id: args.template };
 }
 
 /**
  * Run the CLI.
  *
  * @param argv - Args after the binary
+ * @param options - Test seams (stdin TTY, etc.)
  * @returns Exit code
  */
-export async function run(argv: readonly string[]): Promise<number> {
+export async function run(
+  argv: readonly string[],
+  options: { readonly stdinIsTTY?: boolean | undefined } = {},
+): Promise<number> {
   let args: CliArgs;
   try {
     args = parseArgs(argv);
@@ -122,35 +238,153 @@ export async function run(argv: readonly string[]): Promise<number> {
     return 1;
   }
 
-  if (args.help || args.name === undefined) {
+  if (args.help) {
     console.log(helpText());
-    if (args.name === undefined && !args.help) {
-      console.error("create-oke: missing <name>");
-      return 1;
-    }
-    return args.help ? 0 : 1;
+    return 0;
   }
 
-  const projectName = basename(resolve(args.name));
-  try {
-    const result = scaffold({
-      targetDir: args.targetDir!,
-      name: projectName,
-      template: args.template,
+  const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
+  if (shouldPrompt(args, stdinIsTTY)) {
+    return runInteractive(args);
+  }
+
+  if (args.name === undefined) {
+    console.log(helpText());
+    console.error("create-oke: missing <name>");
+    return 1;
+  }
+
+  return runScaffold({
+    name: basename(resolve(args.name)),
+    targetDir: args.targetDir!,
+    source: sourceFromArgs(args),
+    interactive: false,
+  });
+}
+
+/**
+ * Interactive TTY flow — name + template (or example) select, then scaffold.
+ *
+ * @param args - Parsed args (name may already be set if ever called that way)
+ */
+async function runInteractive(args: CliArgs): Promise<number> {
+  intro("create-oke");
+
+  let name = args.name;
+  if (name === undefined) {
+    const nameValue = await text({
+      message: "Project name",
+      placeholder: "my-app",
+      validate: (value) => {
+        if (!value?.trim()) return "Project name is required";
+        return undefined;
+      },
     });
+    if (isCancel(nameValue)) {
+      cancel("Cancelled.");
+      return 1;
+    }
+    name = String(nameValue).trim();
+  }
 
-    console.log(`
-Scaffolded ${result.template} → ${result.targetDir}
+  const templateValue = await select({
+    message: "Template",
+    options: [
+      ...TEMPLATES.map((id) => ({
+        value: id as string,
+        label: id,
+        hint: TEMPLATE_PURPOSES[id],
+      })),
+      {
+        value: "__example__",
+        label: "Start from a worked example",
+        hint: "Teaching apps with business logic — most projects want a template",
+      },
+    ],
+    initialValue: DEFAULT_TEMPLATE,
+  });
+  if (isCancel(templateValue)) {
+    cancel("Cancelled.");
+    return 1;
+  }
 
-Next steps:
+  let source: ScaffoldSource;
+  if (templateValue === "__example__") {
+    const exampleValue = await select({
+      message: "Example",
+      options: EXAMPLES.map((id) => ({
+        value: id,
+        label: id,
+        hint: EXAMPLE_NEW_IDEAS[id],
+      })),
+    });
+    if (isCancel(exampleValue)) {
+      cancel("Cancelled.");
+      return 1;
+    }
+    source = { kind: "example", id: exampleValue as ExampleId };
+  } else {
+    source = { kind: "template", id: templateValue as TemplateId };
+  }
 
-  cd ${formatCdPath(result.targetDir)}
-  bun install
-  oke dev          # app :6530 · Console :6533 · MCP :6535
-`);
+  const targetDir = resolve(name);
+  return runScaffold({
+    name: basename(targetDir),
+    targetDir,
+    source,
+    interactive: true,
+  });
+}
+
+/**
+ * Scaffold with optional spinner / outro, cleaning up on failure or cancel.
+ *
+ * @param options - Scaffold inputs + interactive flag
+ */
+async function runScaffold(options: {
+  readonly name: string;
+  readonly targetDir: string;
+  readonly source: ScaffoldSource;
+  readonly interactive: boolean;
+}): Promise<number> {
+  const { name, targetDir, source, interactive } = options;
+  const existed = existsSync(targetDir);
+  let spun: ReturnType<typeof spinner> | undefined;
+
+  const cleanup = (): void => {
+    if (!existed && existsSync(targetDir)) {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  };
+
+  const onSigInt = (): void => {
+    spun?.stop("Cancelled.");
+    cleanup();
+    if (interactive) cancel("Cancelled.");
+    process.exit(1);
+  };
+  process.once("SIGINT", onSigInt);
+
+  try {
+    if (interactive) {
+      spun = spinner();
+      spun.start("Scaffolding…");
+    }
+    const result = scaffold({ targetDir, name, source });
+    if (spun) spun.stop("Scaffolded.");
+    const message = nextStepsText(result);
+    if (interactive) {
+      outro(message.trim());
+    } else {
+      console.log(message);
+    }
     return 0;
   } catch (e) {
+    spun?.stop("Failed.");
+    cleanup();
     console.error(e instanceof Error ? e.message : e);
     return 1;
+  } finally {
+    process.off("SIGINT", onSigInt);
   }
 }

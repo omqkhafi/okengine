@@ -1,11 +1,12 @@
 /**
- * Rewrites applied when copying an `examples/<template>` tree into a new project.
+ * Rewrites applied when copying a `templates/<id>` or `examples/<id>` tree
+ * into a new project.
  *
  * Exactly:
  * 1. `package.json` `"name"` → the user-provided project name
  * 2. `package.json` `"okengine": "file:../.."` → an installable reference
  *    (absolute `file:<okengine-root>` in the monorepo; registry version otherwise)
- * 3. Drop monorepo-only files that import paths outside the example tree
+ * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
  */
 

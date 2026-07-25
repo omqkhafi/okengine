@@ -1,0 +1,14 @@
+{
+  "name": "@oke/template-hello",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "okengine": "file:../..",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "test": "bun test",
+    "dev": "oke dev"
+  }
+}

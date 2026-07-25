@@ -10,6 +10,7 @@
     "include": [
       "src",
       "templates",
+      "examples",
       "README.md",
       "package.json",
       "jsr.json"

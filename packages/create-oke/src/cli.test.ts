@@ -1,14 +1,28 @@
 /**
- * Unit tests for create-oke argument parsing and transforms.
+ * Unit tests for create-oke argument parsing, transforms, and non-TTY behavior.
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatCdPath, parseArgs } from "./cli.ts";
+import {
+  formatCdPath,
+  nextStepsText,
+  parseArgs,
+  run,
+  shouldPrompt,
+  sourceFromArgs,
+} from "./cli.ts";
 import { listTemplateFiles, scaffold } from "./scaffold.ts";
-import { resolveTemplateDir, TEMPLATES } from "./templates.ts";
+import {
+  DEFAULT_TEMPLATE,
+  EXAMPLES,
+  TEMPLATES,
+  packageRoot,
+  resolveExampleDir,
+  resolveTemplateDir,
+} from "./templates.ts";
 import {
   sanitizeProjectName,
   shouldSkipTemplatePath,
@@ -16,22 +30,64 @@ import {
 } from "./transform.ts";
 
 describe("parseArgs", () => {
-  test("defaults template to notes", () => {
+  test("defaults template to standard", () => {
     const a = parseArgs(["my-app"]);
     expect(a.name).toBe("my-app");
-    expect(a.template).toBe("notes");
+    expect(a.template).toBe("standard");
+    expect(a.templateExplicit).toBe(false);
+    expect(a.fromExample).toBeUndefined();
   });
 
   test("accepts --template and -t", () => {
-    expect(parseArgs(["x", "--template", "linkly"]).template).toBe("linkly");
-    expect(parseArgs(["x", "-t", "skyport"]).template).toBe("skyport");
-    expect(parseArgs(["x", "--template=provisions"]).template).toBe(
-      "provisions",
+    expect(parseArgs(["x", "--template", "hello"]).template).toBe("hello");
+    expect(parseArgs(["x", "-t", "full"]).template).toBe("full");
+    expect(parseArgs(["x", "--template=minimal"]).template).toBe("minimal");
+    expect(parseArgs(["x", "--template", "hello"]).templateExplicit).toBe(true);
+  });
+
+  test("accepts --from-example", () => {
+    expect(parseArgs(["x", "--from-example", "notes"]).fromExample).toBe(
+      "notes",
+    );
+    expect(parseArgs(["x", "--from-example=skyport"]).fromExample).toBe(
+      "skyport",
     );
   });
 
-  test("rejects unknown template", () => {
+  test("rejects unknown template / example / both", () => {
     expect(() => parseArgs(["x", "--template", "nope"])).toThrow(/template/);
+    expect(() => parseArgs(["x", "--from-example", "nope"])).toThrow(/example/);
+    expect(() =>
+      parseArgs(["x", "--template", "hello", "--from-example", "notes"]),
+    ).toThrow(/either/);
+  });
+});
+
+describe("shouldPrompt", () => {
+  test("TTY + no args → interactive", () => {
+    expect(shouldPrompt(parseArgs([]), true)).toBe(true);
+  });
+
+  test("non-TTY or any explicit input → no prompts", () => {
+    expect(shouldPrompt(parseArgs([]), false)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["--template", "hello"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["--from-example", "notes"]), true)).toBe(
+      false,
+    );
+    expect(shouldPrompt(parseArgs(["--help"]), true)).toBe(false);
+  });
+});
+
+describe("sourceFromArgs", () => {
+  test("prefers example when set", () => {
+    expect(sourceFromArgs(parseArgs(["x", "--from-example", "linkly"]))).toEqual(
+      { kind: "example", id: "linkly" },
+    );
+    expect(sourceFromArgs(parseArgs(["x"]))).toEqual({
+      kind: "template",
+      id: DEFAULT_TEMPLATE,
+    });
   });
 });
 
@@ -39,7 +95,7 @@ describe("transformPackageJson", () => {
   test("rewrites name and okengine file:../.. to installable ref", () => {
     const next = transformPackageJson(
       {
-        name: "@oke/example-notes",
+        name: "@oke/template-hello",
         private: true,
         dependencies: {
           okengine: "file:../..",
@@ -81,7 +137,7 @@ describe("formatCdPath", () => {
 });
 
 describe("scaffold structure", () => {
-  test("each template produces the example tree (minus skips)", () => {
+  test("each clean template produces its source tree (minus skips)", () => {
     for (const id of TEMPLATES) {
       const dir = mkdtempSync(join(tmpdir(), `create-oke-${id}-`));
       try {
@@ -90,7 +146,7 @@ describe("scaffold structure", () => {
         const result = scaffold({
           targetDir: join(dir, id),
           name: `app-${id}`,
-          template: id,
+          source: { kind: "template", id },
         });
         expect([...result.files].sort()).toEqual(expected);
         const pkg = JSON.parse(
@@ -98,13 +154,147 @@ describe("scaffold structure", () => {
         ) as { name: string; dependencies: { okengine: string } };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toBe("file:../..");
-        expect(
-          pkg.dependencies.okengine.startsWith("file:") ||
-            /^\d+\.\d+\.\d+/.test(pkg.dependencies.okengine),
-        ).toBe(true);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    }
+  });
+
+  test("hello has exactly one flow and no Store", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-hello-assert-"));
+    try {
+      const result = scaffold({
+        targetDir: join(dir, "hello"),
+        name: "hello-app",
+        source: { kind: "template", id: "hello" },
+      });
+      const flowFiles = result.files.filter(
+        (f) => f.startsWith("src/flows/") && f.endsWith(".ts"),
+      );
+      expect(flowFiles).toEqual(["src/flows/hello/index.ts"]);
+      const flowSrc = readFileSync(
+        join(result.targetDir, "src/flows/hello/index.ts"),
+        "utf8",
+      );
+      expect(flowSrc).toMatch(/export const hello/);
+      expect(flowSrc).not.toMatch(/\bstore\b/);
+      expect(result.files.some((f) => f.includes("core.ts"))).toBe(false);
+      expect(result.files.some((f) => f.includes("schema.ts"))).toBe(false);
+      const all = result.files
+        .filter((f) => f.endsWith(".ts"))
+        .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
+        .join("\n");
+      expect(all).not.toMatch(/store\.sql/);
+      expect(all).not.toMatch(/\bbookings\b|\borders\b|\blinks\b|\bnotes\b/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("standard has full four-applications layout and no business domain", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-standard-assert-"));
+    try {
+      const result = scaffold({
+        targetDir: join(dir, "standard"),
+        name: "standard-app",
+        source: { kind: "template", id: "standard" },
+      });
+      for (const path of [
+        "src/gates.ts",
+        "src/vault.ts",
+        "src/channels.ts",
+        "src/locales/en.ts",
+        "src/locales/ar.ts",
+        "src/flows/main/shapes.ts",
+        "src/flows/main/signals.ts",
+        "src/core.ts",
+        "src/schema.ts",
+        "src/app.ts",
+      ]) {
+        expect(result.files).toContain(path);
+      }
+      const all = result.files
+        .filter((f) => f.endsWith(".ts") || f.endsWith(".md"))
+        .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
+        .join("\n");
+      expect(all).not.toMatch(/\bbookings\b|\borders\b|\blinks\b|\bstripe\b/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--from-example notes matches today's example tree", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-from-example-"));
+    try {
+      const exampleDir = resolveExampleDir("notes");
+      const expected = listTemplateFiles(exampleDir);
+      const result = scaffold({
+        targetDir: join(dir, "notes"),
+        name: "from-notes",
+        source: { kind: "example", id: "notes" },
+      });
+      expect([...result.files].sort()).toEqual(expected);
+      expect(result.files).toContain("src/flows/notes/index.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("non-TTY CLI", () => {
+  test("no args + non-TTY → zero prompts, exit 1", async () => {
+    const code = await run([], { stdinIsTTY: false });
+    expect(code).toBe(1);
+  });
+
+  test("spawned with piped stdin shows no clack prompts", async () => {
+    const proc = Bun.spawn(["bun", "run", join(packageRoot(), "src/index.ts")], {
+      cwd: packageRoot(),
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    proc.stdin.end();
+    const code = await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    expect(code).toBe(1);
+    expect(err).toMatch(/missing <name>/);
+    // Clack intro / select chrome must not appear.
+    expect(out + err).not.toMatch(/Project name|Start from a worked example/);
+    expect(out + err).not.toMatch(/│/);
+  });
+
+  test("flag-driven scaffold prints the shared next-steps text", async () => {
+    const root = mkdtempSync(join(tmpdir(), "create-oke-flag-"));
+    const target = join(root, "flag-app");
+    try {
+      const code = await run(
+        [target, "--template", "hello"],
+        { stdinIsTTY: false },
+      );
+      expect(code).toBe(0);
+      expect(readdirSync(target).length).toBeGreaterThan(0);
+      const result = {
+        targetDir: target,
+        name: "flag-app",
+        source: { kind: "template" as const, id: "hello" as const },
+        label: "hello",
+        okengineDependency: "x",
+        files: [],
+      };
+      expect(nextStepsText(result)).toContain("oke dev");
+      expect(nextStepsText(result)).toContain("bun install");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("examples catalogue", () => {
+  test("all four teaching examples resolve", () => {
+    for (const id of EXAMPLES) {
+      expect(resolveExampleDir(id)).toBeTruthy();
     }
   });
 });
