@@ -1,6 +1,6 @@
 {
   "name": "@omqkhafi/create-oke",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
   "license": "MIT",
   "exports": {
@@ -10,6 +10,7 @@
     "include": [
       "src",
       "templates",
+      "README.md",
       "package.json",
       "jsr.json"
     ],

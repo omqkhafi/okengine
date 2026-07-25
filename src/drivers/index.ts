@@ -2,6 +2,7 @@
  * Protocol-named drivers, tree-shaken by the Manifest.
  *
  * Subpath: `okengine/drivers/*`
+ * @module
  */
 
 export type {

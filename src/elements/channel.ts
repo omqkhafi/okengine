@@ -8,6 +8,7 @@
  * MIME, attachments, retry, and the unified error hierarchy come from sently.
  * OKE adds: declared templates with i18n, consent/opt-out, fallback chains
  * recorded as chains, and delivery receipts.
+ * @module
  */
 
 export { channel } from "./channel/declare.ts";

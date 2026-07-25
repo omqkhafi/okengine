@@ -2,12 +2,31 @@
 
 *"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
 
+[![npm](https://img.shields.io/npm/v/okengine.svg)](https://www.npmjs.com/package/okengine)
+[![JSR](https://jsr.io/badges/@omqkhafi/okengine)](https://jsr.io/@omqkhafi/okengine)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
-**Package:** `okengine` · **CLI:** `oke` · **License:** MIT
+**Package:** `okengine` · **CLI:** `oke` · **Scaffold:** `create-oke` · **License:** MIT
 
-JSR (`@omqkhafi/okengine`) does not support npm-style `exports` wildcards — import deep drivers (`okengine/drivers/…`) from the npm package, not JSR. The `okengine/drivers` index is available on both.
+### Install
+
+```bash
+bun add okengine                 # npm registry (recommended — ships the `oke` CLI)
+bunx jsr add @omqkhafi/okengine  # JSR — library API only
+bunx create-oke@latest my-app    # scaffold (npm)
+```
+
+### npm vs JSR
+
+| Surface | npm | JSR (`@omqkhafi/…`) |
+|---|---|---|
+| Library imports (`okengine`, `/client`, `/drivers`, …) | yes | yes |
+| Deep drivers (`okengine/drivers/postgres`, …) | yes | no — use the `/drivers` index, or install from npm |
+| `oke` CLI | yes | no |
+| `create-oke` scaffold | yes (`create-oke`) | library only (`@omqkhafi/create-oke`) |
+
+JSR cannot rewrite the CLI’s dynamic imports of your app entry (`oke dev` / `oke start` / config load). Install `okengine` from npm when you need the binary. Deep driver subpaths use npm `exports` wildcards, which JSR does not support — import named drivers from `okengine/drivers` on either registry, or pin a deep path from the npm package.
 
 ---
 

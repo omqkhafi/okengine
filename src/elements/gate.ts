@@ -5,6 +5,7 @@
  * Rate strategies are atomic Lua on the kv driver.
  *
  * Drivers: inherits `store.kv` (`memory` · `redis`).
+ * @module
  */
 
 export { gate } from "./gate/declare.ts";

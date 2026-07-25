@@ -3,6 +3,7 @@
  *
  * Delivery physics: `once` · `broadcast` · `live` (mandatory, no default).
  * Drivers: `memory` · `postgres` (default / transactional) · `redis` · `nats`.
+ * @module
  */
 
 export { signal } from "./signal/declare.ts";

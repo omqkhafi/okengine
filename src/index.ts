@@ -3,6 +3,15 @@
  *
  * Full ten-export surface lands as elements ship; this entry exposes the
  * executable core (oke · on · flow · http · fx · contracts).
+ *
+ * @example
+ * ```ts
+ * import { oke, on, flow, http } from "okengine";
+ *
+ * export const app = oke({ name: "notes" });
+ * ```
+ *
+ * @module
  */
 
 export {

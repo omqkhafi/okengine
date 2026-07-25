@@ -7,6 +7,7 @@
  * A declaration is a contract, never a value. Boot validates every contract
  * and lists all gaps at once. Logs/traces receive fingerprints and redaction
  * registered at boot — cleartext never appears even when passed to `fx.log`.
+ * @module
  */
 
 export {

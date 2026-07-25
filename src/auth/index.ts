@@ -3,6 +3,7 @@
  * plus a provider seam. Subpath: `okengine/auth`.
  *
  * Two planes — `fx.operator` vs `fx.auth` — permanently separated.
+ * @module
  */
 
 export { auth, type AuthPluginOptions } from "./plugin.ts";

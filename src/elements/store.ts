@@ -5,6 +5,7 @@
  * Drivers are protocol-named and live under `src/drivers/*`.
  * All world access still goes through `fx`; this module only declares
  * resources and provides runtime helpers (cache, replica routing, PII).
+ * @module
  */
 
 export { store, sql, kv, files, index } from "./store/declare.ts";

@@ -3,6 +3,7 @@
  *
  * Not a ninth element: observability derived from the effect system.
  * Subpath: planned as part of the Console / runtime surface.
+ * @module
  */
 
 export type {

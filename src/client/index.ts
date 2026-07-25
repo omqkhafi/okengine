@@ -2,6 +2,7 @@
  * Typed client (+ live). Subpath: `okengine/client`.
  *
  * First Manifest derivation: `type App` → fully typed client, zero codegen.
+ * @module
  */
 
 export { createClient, flattenRoutes } from "./create.ts";

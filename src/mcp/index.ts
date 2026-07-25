@@ -6,6 +6,7 @@
  * human confirmation, every return wrapped as inert data.
  *
  * Subpath: `okengine/mcp`
+ * @module
  */
 
 export {

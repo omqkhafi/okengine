@@ -3,6 +3,7 @@
  *
  * Built on `createClient<ConsoleApp>`. Every action is a real flow through `fx`;
  * the audit log is the trace (docs/spec/console.md).
+ * @module
  */
 
 export {

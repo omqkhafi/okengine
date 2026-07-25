@@ -1,5 +1,6 @@
 /**
  * Test harness (`createTestApp`). Subpath: `okengine/test`.
+ * @module
  */
 
 export {

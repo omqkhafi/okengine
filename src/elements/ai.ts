@@ -9,6 +9,7 @@
  * (`oke eval` gates CI). Agents' tools are the app's own flows (gates apply).
  * PII fields cannot reach a third-party model without explicit `allowPii`.
  * Nondeterministic ⇒ journaling forced, auto-cache disabled.
+ * @module
  */
 
 export { ai } from "./ai/declare.ts";

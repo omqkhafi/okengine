@@ -7,6 +7,7 @@
  * Durability lives on the Flow (`durable: true`); the journal records every
  * `fx` call. Crons leader-elect; schedules are reconciled into the Store at
  * boot (console §5).
+ * @module
  */
 
 export { clock } from "./clock/declare.ts";

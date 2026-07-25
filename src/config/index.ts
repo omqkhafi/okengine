@@ -2,6 +2,7 @@
  * `oke.config.ts` surface. Subpath: `okengine/config`.
  *
  * Driver maps are protocol-named; vendor/image choice lives in `images`.
+ * @module
  */
 
 /** Environment role keys used in driver maps. */
