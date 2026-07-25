@@ -7,6 +7,26 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.2 — 2026-07-26
+
+### Added
+
+- TTY `create-oke` wizard with optional `bun install` and `oke dev`, plus
+  `AGENTS.md` on scaffold (`--agents-md` / `--no-agents-md`).
+- Shared docs origin helper and Clack-style terminal chrome for `oke` boot
+  logs and the Console claim note.
+- Starter `/` welcome flows, and template README / `.gitignore` files.
+- Prebuilt Console SPA ships in the published npm/JSR package.
+
+### Changed
+
+- Docs links point at [okengine.vercel.app](https://okengine.vercel.app);
+  site wordmark replaced with OKE logo assets.
+- JSR excludes narrow to Console UI sources so `dist` ships; publish builds
+  Console before packing.
+- Version bump keeps `templates/*` and `examples/*` at `0.0.1` (project seed,
+  not framework version). Root `CLAUDE.md` removed in favor of `AGENTS.md`.
+
 ## v0.2.1 — 2026-07-25
 
 ### Fixed
