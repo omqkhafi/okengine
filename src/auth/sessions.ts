@@ -38,6 +38,11 @@ export interface AccessClaims {
   readonly scopes: string[];
   readonly iat: number;
   readonly exp: number;
+  /**
+   * Intended audience (`oke-console` · `oke-mcp` · `oke-app`).
+   * Validated when the verifier supplies {@link VerifyAccessOptions.audience}.
+   */
+  readonly aud?: string;
 }
 
 /** Options for {@link createSessionStore}. */
@@ -47,6 +52,22 @@ export interface SessionCrypto {
   readonly now?: () => number;
   readonly accessTtlMs?: number;
   readonly refreshTtlMs?: number;
+  /**
+   * Audience stamped on issued access tokens.
+   * MCP tokens must use `"oke-mcp"` (console §10.3 — never accept another aud).
+   */
+  readonly audience?: string;
+}
+
+/** Options for {@link verifyAccess}. */
+export interface VerifyAccessOptions {
+  /** Clock (defaults to `Date.now`). */
+  readonly now?: () => number;
+  /**
+   * When set, the token's `aud` must match exactly.
+   * Tokens minted for another audience (or missing `aud`) are rejected.
+   */
+  readonly audience?: string;
 }
 
 /**
@@ -89,6 +110,9 @@ export async function issueSession(
     expiresAt: t + refreshTtl,
   };
   store.sessions.set(sessionId, session);
+  if (crypto.audience !== undefined) {
+    sessionAudiences.set(sessionId, crypto.audience);
+  }
 
   const refreshRaw = `rt_${cryptoRandomId()}`;
   const refreshRow: RefreshTokenRow = {
@@ -110,6 +134,7 @@ export async function issueSession(
     scopes: [...principal.scopes],
     iat: t,
     exp: accessExpiresAt,
+    ...(crypto.audience !== undefined ? { aud: crypto.audience } : {}),
   });
 
   return { session, accessToken, refreshToken: refreshRaw, accessExpiresAt };
@@ -172,6 +197,7 @@ export async function rotateRefresh(
   // a side map would be ideal; for builtin we re-sign with empty and let
   // callers pass scopes through verify. We keep scopes on a claim cache:
   const priorScopes = sessionScopes.get(session.id) ?? [];
+  const priorAud = sessionAudiences.get(session.id);
   const accessExpiresAt = t + accessTtl;
   const accessToken = await signAccess(crypto.secret, {
     sub: session.principalId,
@@ -180,6 +206,7 @@ export async function rotateRefresh(
     scopes: priorScopes,
     iat: t,
     exp: accessExpiresAt,
+    ...(priorAud !== undefined ? { aud: priorAud } : {}),
   });
 
   return {
@@ -193,6 +220,9 @@ export async function rotateRefresh(
 /** Session id → scopes (access-token material). */
 const sessionScopes = new Map<string, string[]>();
 
+/** Session id → audience stamped at issue time. */
+const sessionAudiences = new Map<string, string>();
+
 /**
  * Remember scopes for refresh rotation (call after {@link issueSession}).
  *
@@ -204,6 +234,19 @@ export function bindSessionScopes(
   scopes: Iterable<string>,
 ): void {
   sessionScopes.set(sessionId, [...scopes]);
+}
+
+/**
+ * Remember audience for refresh rotation (call after {@link issueSession}).
+ *
+ * @param sessionId - Session id
+ * @param audience - Audience claim
+ */
+export function bindSessionAudience(
+  sessionId: string,
+  audience: string,
+): void {
+  sessionAudiences.set(sessionId, audience);
 }
 
 /**
@@ -224,30 +267,53 @@ export async function issueSessionWithScopes(
 ): Promise<IssuedSession> {
   const issued = await issueSession(store, crypto, principal);
   bindSessionScopes(issued.session.id, principal.scopes);
+  if (crypto.audience !== undefined) {
+    bindSessionAudience(issued.session.id, crypto.audience);
+  }
   return issued;
 }
 
 /**
- * Verify an access token; rejects revoked sessions.
+ * Verify an access token; rejects revoked sessions and wrong audiences.
+ *
+ * The third argument may be a clock function (legacy) or
+ * {@link VerifyAccessOptions}. Prefer the options form when validating
+ * audience (console §10.3 — never accept a token minted for another surface).
  *
  * @param store - Session store
  * @param secret - HMAC secret
  * @param token - Access token
- * @param now - Clock
+ * @param nowOrOptions - Clock, or options including expected audience
  */
 export async function verifyAccess(
   store: SessionStore,
   secret: string,
   token: string,
-  now: () => number = () => Date.now(),
+  nowOrOptions: (() => number) | VerifyAccessOptions = () => Date.now(),
 ): Promise<AccessClaims> {
+  const options: VerifyAccessOptions =
+    typeof nowOrOptions === "function"
+      ? { now: nowOrOptions }
+      : nowOrOptions;
+  const now = options.now ?? (() => Date.now());
   const claims = await verifyAccessSignature(secret, token);
   if (claims.exp <= now()) {
     throw new SessionError("access token expired");
   }
+  if (options.audience !== undefined) {
+    if (claims.aud !== options.audience) {
+      throw new SessionError(
+        `access token audience mismatch: expected ${options.audience}`,
+      );
+    }
+  }
   const session = store.sessions.get(claims.sid);
   if (!session || session.revokedAt !== null) {
     throw new SessionError("session revoked");
+  }
+  // Per-request: session must still belong to the token subject.
+  if (session.principalId !== claims.sub) {
+    throw new SessionError("session does not belong to requester");
   }
   return claims;
 }

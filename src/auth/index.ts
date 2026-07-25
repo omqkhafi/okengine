@@ -50,6 +50,7 @@ export {
   verifyAccess,
   revokeFamily,
   bindSessionScopes,
+  bindSessionAudience,
   ACCESS_TTL_MS,
   REFRESH_TTL_MS,
   SessionError,
@@ -57,6 +58,7 @@ export {
   type IssuedSession,
   type SessionCrypto,
   type SessionStore,
+  type VerifyAccessOptions,
 } from "./sessions.ts";
 
 export {
