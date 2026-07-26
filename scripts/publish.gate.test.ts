@@ -123,6 +123,20 @@ describe("publish workflow", () => {
       }
     }
   });
+
+  test("package.json has no publish lifecycle script (npm re-entry footgun)", () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(pkg.scripts?.publish).toBeUndefined();
+    expect(pkg.scripts?.postpublish).toBeUndefined();
+    expect(pkg.scripts?.release).toBe("bun run scripts/publish.ts");
+  });
+
+  test("publish.ts passes --ignore-scripts to npm publish", () => {
+    const src = readFileSync(join(ROOT, "scripts/publish.ts"), "utf-8");
+    expect(src).toContain("--ignore-scripts");
+  });
 });
 
 describe("npm pack includes Console SPA", () => {

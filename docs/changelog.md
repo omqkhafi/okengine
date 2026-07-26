@@ -7,6 +7,15 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.6 — 2026-07-26
+
+### Fixed
+
+- npm release no longer re-enters the release script after publishing
+  `okengine` (a package.json script named `publish` is an npm lifecycle hook).
+  Renamed to `release`, and `npm publish` now uses `--ignore-scripts` so
+  `create-oke` can publish in the same lockstep run.
+
 ## v0.2.5 — 2026-07-26
 
 ### Changed

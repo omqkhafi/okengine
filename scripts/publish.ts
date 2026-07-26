@@ -7,7 +7,10 @@
  * with an extra loop over the two published packages.
  *
  * Usage:
- *   bun run publish -- [--dry-run] [--npm-only | --jsr-only] [--force]
+ *   bun run release -- [--dry-run] [--npm-only | --jsr-only] [--force]
+ *
+ * Do not name the package.json script `publish` — npm treats that as a
+ * lifecycle hook and re-enters this script after `npm publish` succeeds.
  *
  * Flags:
  *   --dry-run    Sync versions only; print intended commands; do not publish.
@@ -308,9 +311,12 @@ async function publishOne(
   const doJsr = !flags.npmOnly;
 
   if (doNpm) {
-    const ok = await run(["npm", "publish", "--access", "public"], {
-      cwd: pkg.dir,
-    });
+    // --ignore-scripts: prepack work already ran above; also blocks a
+    // recursive lifecycle if package.json ever regains a `publish` script.
+    const ok = await run(
+      ["npm", "publish", "--access", "public", "--ignore-scripts"],
+      { cwd: pkg.dir },
+    );
     if (!ok) {
       console.error(`[publish] npm publish failed for ${pkg.npmName}.`);
       process.exit(2);

@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
     "site:build": "bun run --cwd site build",
     "ci": "bun run bench && bun run typecheck && bun run test && bun run budgets && bun run gate && bun run site:build && bun run test:integration",
     "bump": "bun run scripts/bump-version.ts",
-    "publish": "bun run scripts/publish.ts",
+    "release": "bun run scripts/publish.ts",
     "g": "gflows"
   },
   "dependencies": {
