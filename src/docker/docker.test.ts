@@ -125,7 +125,12 @@ describe("deriveInfrastructure", () => {
     expect(sqlYml).toContain("pgvector/pgvector:pg17");
     expect(sqlYml).toContain("POSTGRES_PASSWORD");
     expect(sqlYml).toContain("${OKE_STORE_SQL_PASSWORD}");
+    expect(sqlYml).toContain("../.env.stack");
     expect(sqlYml).not.toContain(fixedCreds["store.sql"].password);
+
+    const baseYml = result.files.find((f) => f.path === "compose.yml")!.content;
+    expect(baseYml).toContain("context: \"..\"");
+    expect(baseYml).toContain("app:");
 
     for (const f of result.files) {
       assertNoCredentialsInYaml(
@@ -138,6 +143,20 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_SQL_PASSWORD).toBe(
       fixedCreds["store.sql"].password,
     );
+  });
+
+  test("includeApp false omits app service (infra-only stack)", () => {
+    const result = deriveInfrastructure({
+      images: { "store.sql": "postgres:16" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      includeApp: false,
+      app: "dev",
+    });
+    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    expect(base).toContain("oke-dev");
+    expect(base).toContain("networks:");
+    expect(base).not.toContain("app:");
+    expect(base).not.toContain("build:");
   });
 
   test("prod overlay adds deploy.replicas and is layer 3", () => {
@@ -160,15 +179,20 @@ describe("deriveInfrastructure", () => {
   });
 
   test("writeDerivedFiles never writes compose.override.yml", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-docker-"));
+    const root = await mkdtemp(join(tmpdir(), "oke-docker-"));
+    const dockerDir = join(root, "docker");
     const result = deriveInfrastructure({
       images: { "store.sql": "postgres:16" },
       credentials: { "store.sql": fixedCreds["store.sql"] },
     });
-    const written = await writeDerivedFiles(result, dir, { writeStackEnv: true });
+    const written = await writeDerivedFiles(result, dockerDir, {
+      writeStackEnv: true,
+      stackEnvDir: root,
+    });
     expect(written.some((p) => p.endsWith(COMPOSE_OVERRIDE))).toBe(false);
-    expect(await Bun.file(join(dir, ".env.stack")).exists()).toBe(true);
-    const envText = await Bun.file(join(dir, ".env.stack")).text();
+    expect(await Bun.file(join(root, ".env.stack")).exists()).toBe(true);
+    expect(await Bun.file(join(dockerDir, "compose.yml")).exists()).toBe(true);
+    const envText = await Bun.file(join(root, ".env.stack")).text();
     expect(envText).toContain("DATABASE_URL=");
     expect(formatStackEnv(result.stackEnv)).toContain("OKE_STORE_SQL_PASSWORD=");
   });

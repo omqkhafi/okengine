@@ -7,7 +7,7 @@
  * with an extra loop over the two published packages.
  *
  * Usage:
- *   bun run scripts/publish.ts [--dry-run] [--npm-only | --jsr-only] [--force]
+ *   bun run publish -- [--dry-run] [--npm-only | --jsr-only] [--force]
  *
  * Flags:
  *   --dry-run    Sync versions only; print intended commands; do not publish.
@@ -276,7 +276,7 @@ async function publishOne(
 
   if (flags.dryRun) {
     if (needsConsoleBuild) {
-      console.error(`  would: bun run build:console  (cwd=${label})`);
+      console.error(`  would: bun run build  (cwd=${label})`);
     }
     if (needsTemplateSync) {
       console.error(`  would: bun ./src/sync-templates.ts  (cwd=${label})`);
@@ -289,7 +289,7 @@ async function publishOne(
   }
 
   if (needsConsoleBuild) {
-    const ok = await run(["bun", "run", "build:console"], { cwd: pkg.dir });
+    const ok = await run(["bun", "run", "build"], { cwd: pkg.dir });
     if (!ok) {
       console.error(`[publish] Console UI build failed.`);
       process.exit(2);

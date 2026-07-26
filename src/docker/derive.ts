@@ -2,6 +2,7 @@
  * Derive Dockerfile + compose files from config image pins.
  */
 
+import { mkdirSync } from "node:fs";
 import {
   assertNoCredentialsInYaml,
   buildSpecs,
@@ -11,6 +12,7 @@ import {
 } from "./compose.ts";
 import { emitDockerfile } from "./dockerfile.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
+import { DEFAULT_DOCKER_DIR } from "./types.ts";
 
 /**
  * Derive infrastructure files from normalised image pins.
@@ -28,15 +30,22 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     );
   }
 
-  const specs = buildSpecs(options);
+  const normalised: DeriveOptions = {
+    ...options,
+    composeDir: options.composeDir ?? DEFAULT_DOCKER_DIR,
+    includeApp: options.includeApp !== false,
+  };
+
+  const specs = buildSpecs(normalised);
   const { files: composeFilesContent, composeFiles } = emitComposeLayers(
     specs,
-    options,
+    normalised,
   );
   const dockerfile: GeneratedFile = {
     path: "Dockerfile",
-    content: emitDockerfile({ appPort: options.appPort }),
+    content: emitDockerfile({ appPort: normalised.appPort }),
   };
+  // Always emit Dockerfile for deploy; stack-only runs ignore it.
   const files = [dockerfile, ...composeFilesContent];
 
   for (const f of files) {
@@ -50,8 +59,8 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
 
   const stackEnv = buildStackEnv(
     specs,
-    options.recipes ?? [],
-    options.host ?? "127.0.0.1",
+    normalised.recipes ?? [],
+    normalised.host ?? "127.0.0.1",
   );
 
   return { specs, files, stackEnv, composeFiles };
@@ -62,22 +71,33 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
  * credential values into YAML. Optionally writes `.env.stack`.
  *
  * @param result - Derive result
- * @param outDir - Destination
+ * @param outDir - Destination for Dockerfile / compose (usually `docker/`)
  * @param options - Write controls
  */
 export async function writeDerivedFiles(
   result: DeriveResult,
   outDir: string,
-  options: { readonly writeStackEnv?: boolean } = {},
+  options: {
+    readonly writeStackEnv?: boolean;
+    /**
+     * Directory for `.env.stack` (project root). Defaults to `outDir`.
+     * Prefer the project cwd when compose lives under `docker/`.
+     */
+    readonly stackEnvDir?: string;
+  } = {},
 ): Promise<readonly string[]> {
   const written: string[] = [];
+  const root = outDir.replace(/\/$/, "");
+  mkdirSync(root, { recursive: true });
   for (const file of result.files) {
-    const path = `${outDir.replace(/\/$/, "")}/${file.path}`;
+    const path = `${root}/${file.path}`;
     await Bun.write(path, file.content);
     written.push(path);
   }
   if (options.writeStackEnv) {
-    const envPath = `${outDir.replace(/\/$/, "")}/.env.stack`;
+    const envRoot = (options.stackEnvDir ?? outDir).replace(/\/$/, "");
+    mkdirSync(envRoot, { recursive: true });
+    const envPath = `${envRoot}/.env.stack`;
     await Bun.write(envPath, formatStackEnv(result.stackEnv));
     written.push(envPath);
   }

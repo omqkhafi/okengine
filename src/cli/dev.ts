@@ -1,6 +1,6 @@
 /**
  * `oke dev` — watch · hot reload · Console :6533 · MCP :6535 · client types on save.
- * `oke dev --stack` also boots generated compose.
+ * `oke dev --stack` boots infra compose and binds prod store drivers (Postgres/Redis).
  */
 
 import { watch } from "node:fs";
@@ -11,8 +11,12 @@ import type { SessionStore } from "../auth/sessions.ts";
 import type { ConsoleAppHandle } from "../console/server/app.ts";
 import type { ConsoleState } from "../console/server/state.ts";
 import {
+  DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
   formatStackEnv,
+  loadExistingStackCredentials,
+  stackAppSlug,
+  stackInstanceId,
   writeDerivedFiles,
   type DeriveOptions,
 } from "../docker/index.ts";
@@ -25,11 +29,22 @@ import {
 } from "../runtime/types.ts";
 import {
   formatDevBanner,
+  formatDevLogSeparator,
   formatServiceLine,
+  formatStackSummary,
   formatStatusLine,
 } from "../term.ts";
 import { clientAdd } from "./client-add.ts";
-import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
+import { resolveDriverId } from "../config/index.ts";
+import {
+  buildDevHeroSnapshot,
+  encodeHeroSnapshot,
+} from "./hero-meta.ts";
+import {
+  loadManifest,
+  loadOkeConfig,
+  resolveImages,
+} from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
 
@@ -224,16 +239,36 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   let stackRoles: string[] | null = null;
   let composeFiles: string[] | null = null;
   let stackEnv: Record<string, string> | null = null;
+  let stackSqlDriver = "postgres";
+  let stackKvDriver = "redis";
+  let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null =
+    null;
+  try {
+    loadedConfig = (await loadOkeConfig(cwd)).config;
+  } catch {
+    loadedConfig = null;
+  }
 
   if (options.stack) {
     let images = options.images;
     if (!images) {
+      if (!loadedConfig) {
+        try {
+          const loaded = await loadOkeConfig(cwd);
+          loadedConfig = loaded.config;
+          images = resolveImages(loaded.config);
+        } catch (err) {
+          console.error(err instanceof Error ? err.message : String(err));
+          return { code: 1 };
+        }
+      } else {
+        images = resolveImages(loadedConfig);
+      }
+    } else if (!loadedConfig) {
       try {
-        const loaded = await loadOkeConfig(cwd);
-        images = resolveImages(loaded.config);
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : String(err));
-        return { code: 1 };
+        loadedConfig = (await loadOkeConfig(cwd)).config;
+      } catch {
+        loadedConfig = null;
       }
     }
     if (Array.isArray(options.stack)) {
@@ -246,16 +281,31 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       stackRoles = Object.keys(images);
     }
 
+    stackSqlDriver =
+      resolveDriverId(loadedConfig?.drivers?.store?.sql, "prod") ?? "postgres";
+    stackKvDriver =
+      resolveDriverId(loadedConfig?.drivers?.store?.kv, "prod") ?? "redis";
+
+    const composeDir = DEFAULT_DOCKER_DIR;
+    const dockerOut = resolve(cwd, composeDir);
+    const instanceId = stackInstanceId(cwd);
+    const appSlug = stackAppSlug(cwd);
+    const reusedCreds =
+      options.credentials ??
+      (await loadExistingStackCredentials(cwd, stackRoles));
     const derived = deriveInfrastructure({
       images,
-      app: "dev",
+      app: appSlug,
       prod: false,
-      ...(options.credentials ? { credentials: options.credentials } : {}),
+      includeApp: false,
+      composeDir,
+      instanceId,
+      ...(reusedCreds ? { credentials: reusedCreds } : {}),
       host: "127.0.0.1",
     });
     // Layer 4 is user-owned — include only if the file already exists.
     const existingOverride = await Bun.file(
-      resolve(cwd, "compose.override.yml"),
+      resolve(dockerOut, "compose.override.yml"),
     ).exists();
     composeFiles = derived.composeFiles.filter(
       (f) => f !== "compose.override.yml" || existingOverride,
@@ -263,8 +313,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stackEnv = { ...derived.stackEnv };
 
     if (!options.dryRun) {
-      await writeDerivedFiles(derived, cwd, { writeStackEnv: true });
-      // Ensure .env.stack is loaded for the app process
+      await writeDerivedFiles(derived, dockerOut, {
+        writeStackEnv: true,
+        stackEnvDir: cwd,
+      });
+      // Ensure .env.stack is at project root for the host Bun app / vault.
       await Bun.write(resolve(cwd, ".env.stack"), formatStackEnv(stackEnv));
       const up =
         options.composeUp ??
@@ -281,8 +334,27 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             throw new Error(`oke dev --stack: docker compose exited ${code}`);
           }
         });
-      await up(composeFiles, cwd);
-      write(formatStatusLine(`stack up (${stackRoles.join(", ")})`));
+      // Compose files live under docker/; cwd for compose is that directory.
+      await up(composeFiles, dockerOut);
+      const roleLabel = (role: string): string => {
+        if (role === "store.sql") return "postgres";
+        if (role === "store.kv") return "redis";
+        return role;
+      };
+      const appDrivers = [
+        ...(stackRoles.includes("store.sql") ? [stackSqlDriver] : []),
+        ...(stackRoles.includes("store.kv") ? [stackKvDriver] : []),
+      ];
+      write(
+        formatStackSummary({
+          project: `oke-${appSlug}`,
+          services: derived.specs.map((spec) => ({
+            label: roleLabel(spec.role),
+            hostPort: spec.hostPort,
+          })),
+          appDrivers,
+        }),
+      );
     }
   }
 
@@ -296,7 +368,34 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stackEnv,
   };
 
-  write(formatDevBanner());
+  let okeVersion = "0.0.0";
+  try {
+    const pkg = (await Bun.file(
+      resolve(import.meta.dir, "../../package.json"),
+    ).json()) as { version?: string };
+    if (typeof pkg.version === "string") okeVersion = pkg.version;
+  } catch {
+    // shipped binary may not sit next to package.json
+  }
+
+  const heroSnapshot = buildDevHeroSnapshot({
+    config: loadedConfig,
+    stack: Boolean(options.stack),
+    sqlDriver: options.stack ? stackSqlDriver : undefined,
+    kvDriver: options.stack ? stackKvDriver : undefined,
+    version: okeVersion,
+    nodeEnv: "development",
+  });
+
+  write(
+    formatDevBanner({
+      profile: heroSnapshot.profile,
+      runtimeEnv: heroSnapshot.runtimeEnv,
+      system: heroSnapshot.system,
+      elements: heroSnapshot.elements,
+      version: okeVersion,
+    }),
+  );
 
   if (options.dryRun) return { code: 0, plan };
 
@@ -304,8 +403,21 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     ...(process.env as Record<string, string>),
     NODE_ENV: "development",
     PORT: String(appPort),
+    OKE_DEV_REQUEST_LOG: "1",
+    /** Soft-reload hero reprint (Console / MCP URLs + element snapshot). */
+    OKE_DEV_HERO_CONSOLE: `http://127.0.0.1:${consolePort}`,
+    OKE_DEV_HERO_MCP: `http://127.0.0.1:${mcpPort}`,
+    OKE_DEV_HERO_META: encodeHeroSnapshot(heroSnapshot),
     ...(stackEnv ?? {}),
+    ...(stackEnv
+      ? {
+          OKE_STACK: "1",
+          OKE_SQL_DRIVER: stackSqlDriver,
+          OKE_KV_DRIVER: stackKvDriver,
+        }
+      : {}),
   };
+  process.env.OKE_DEV_REQUEST_LOG = "1";
 
   const startApp =
     options.startApp ??
@@ -429,6 +541,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const appUrl =
     app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
   await regen(appUrl);
+  write(formatDevLogSeparator());
 
   const watcher = watch(
     resolve(cwd, "src"),
@@ -555,9 +668,13 @@ async function startAppHot(
     OKE_ENTRY: absoluteEntry,
     OKE_HOSTNAME: hostname,
     OKE_READY_PATH: readyPath,
+    OKE_DEV_REQUEST_LOG: "1",
+    OKE_DEV_SURFACE: "App",
   };
 
-  const proc = Bun.spawn(["bun", "--hot", runner], {
+  // `--no-clear-screen`: Bun must not wipe the hero; the runner clears only
+  // request logs on soft reload and reprints App / Console / MCP URLs.
+  const proc = Bun.spawn(["bun", "--hot", "--no-clear-screen", runner], {
     cwd,
     env,
     stdout: "inherit",
@@ -652,7 +769,9 @@ export async function devCli(args: readonly string[]): Promise<number> {
 
 Watch · hot reload · Console :6533 · app :6530 · MCP :6535
 Regenerates client types on every save.
---stack boots generated compose (partial roles: -s store.sql,signal).
+--stack boots infra under docker/ and runs the app on host Bun with prod
+store drivers (Postgres/Redis) so local mimics the server.
+Partial roles: -s store.sql,store.kv.
 `);
       return 0;
     }

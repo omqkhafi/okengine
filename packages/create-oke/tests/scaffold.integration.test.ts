@@ -3,7 +3,7 @@
  * directory, run `bun install` + `bun test` in each, and assert pass.
  *
  * Opt-in via `CREATE_OKE_INTEGRATION=1` so root `bun test` stays fast.
- * Invoked by `bun run test:create-oke`.
+ * Invoked by `bun run test:integration`.
  */
 
 import { describe, expect, test } from "bun:test";

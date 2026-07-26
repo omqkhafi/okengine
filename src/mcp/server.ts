@@ -9,6 +9,10 @@
  */
 
 import {
+  logDevRequest,
+  shouldLogDevRequests,
+} from "../runtime/dev-request-log.ts";
+import {
   checkRequestSecurity,
   forbiddenResponse,
   resolveAllowedHosts,
@@ -67,28 +71,48 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
   const transportSessions = new Set<string>();
 
   const fetch = async (request: Request): Promise<Response> => {
-    const security = checkRequestSecurity(request, allowed);
-    if (!security.ok) return forbiddenResponse(security.reason);
-
+    const started = performance.now();
+    let flowLabel: string | undefined;
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") {
-      return Response.json({ ok: true, surface: "mcp" });
+    const method = request.method.toUpperCase();
+
+    const respond = (response: Response): Response => {
+      if (shouldLogDevRequests()) {
+        logDevRequest({
+          surface: "MCP",
+          method,
+          path: url.pathname,
+          flow: flowLabel,
+          status: response.status,
+          ms: Math.round(performance.now() - started),
+        });
+      }
+      return response;
+    };
+
+    const security = checkRequestSecurity(request, allowed);
+    if (!security.ok) return respond(forbiddenResponse(security.reason));
+
+    if (method === "GET" && url.pathname === "/health") {
+      return respond(Response.json({ ok: true, surface: "mcp" }));
     }
 
-    if (request.method !== "POST" || url.pathname !== "/mcp") {
-      return new Response("Not Found", { status: 404 });
+    if (method !== "POST" || url.pathname !== "/mcp") {
+      return respond(new Response("Not Found", { status: 404 }));
     }
 
     const bearer = extractBearer(request.headers.get("authorization"));
     if (bearer === null) {
-      return jsonRpcHttp(
-        rpcError(
-          null,
-          RpcErrorCode.unauthorized,
-          "Bearer token required",
-          asData({ reason: "missing-token" }, "error"),
+      return respond(
+        jsonRpcHttp(
+          rpcError(
+            null,
+            RpcErrorCode.unauthorized,
+            "Bearer token required",
+            asData({ reason: "missing-token" }, "error"),
+          ),
+          401,
         ),
-        401,
       );
     }
 
@@ -103,14 +127,16 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     } catch (err) {
       const message =
         err instanceof SessionError ? err.message : "authentication failed";
-      return jsonRpcHttp(
-        rpcError(
-          null,
-          RpcErrorCode.unauthorized,
-          message,
-          asData({ reason: "auth-failed", message }, "error"),
+      return respond(
+        jsonRpcHttp(
+          rpcError(
+            null,
+            RpcErrorCode.unauthorized,
+            message,
+            asData({ reason: "auth-failed", message }, "error"),
+          ),
+          401,
         ),
-        401,
       );
     }
 
@@ -122,22 +148,27 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     try {
       body = await request.json();
     } catch {
-      return jsonRpcHttp(
-        rpcError(null, RpcErrorCode.parse, "invalid JSON body"),
-        400,
+      return respond(
+        jsonRpcHttp(
+          rpcError(null, RpcErrorCode.parse, "invalid JSON body"),
+          400,
+        ),
       );
     }
 
     const parsed = parseJsonRpcRequest(body);
     if (!parsed.ok) {
-      return jsonRpcHttp(
-        rpcError(null, RpcErrorCode.invalidRequest, parsed.message),
-        400,
+      return respond(
+        jsonRpcHttp(
+          rpcError(null, RpcErrorCode.invalidRequest, parsed.message),
+          400,
+        ),
       );
     }
 
     const { request: rpc } = parsed;
     const id: JsonRpcId = rpc.id;
+    flowLabel = rpc.method;
 
     switch (rpc.method) {
       case "initialize": {
@@ -149,10 +180,10 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
           serverInfo: { name: "okengine-mcp", version },
           sessionId,
         };
-        return jsonRpcHttp(rpcSuccess(id, result));
+        return respond(jsonRpcHttp(rpcSuccess(id, result)));
       }
       case "ping":
-        return jsonRpcHttp(rpcSuccess(id, { ok: true }));
+        return respond(jsonRpcHttp(rpcSuccess(id, { ok: true })));
       case "tools/list": {
         const listed = tools.listTools().map((t) => ({
           name: t.name,
@@ -163,22 +194,27 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
             destructiveHint: t.mutability === "write",
           },
         }));
-        return jsonRpcHttp(
-          rpcSuccess(id, {
-            tools: listed,
-            // Catalogue itself is data.
-            _oke: asData({ count: listed.length }, "catalog"),
-          }),
+        return respond(
+          jsonRpcHttp(
+            rpcSuccess(id, {
+              tools: listed,
+              // Catalogue itself is data.
+              _oke: asData({ count: listed.length }, "catalog"),
+            }),
+          ),
         );
       }
       case "tools/call": {
         const call = parseToolsCallParams(rpc.params);
         if (!call.ok) {
-          return jsonRpcHttp(
-            rpcError(id, RpcErrorCode.invalidParams, call.message),
-            400,
+          return respond(
+            jsonRpcHttp(
+              rpcError(id, RpcErrorCode.invalidParams, call.message),
+              400,
+            ),
           );
         }
+        flowLabel = call.name;
         const result = await tools.callTool(
           requester,
           call.name,
@@ -193,34 +229,40 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
                 : result.code === "not-found"
                   ? RpcErrorCode.methodNotFound
                   : RpcErrorCode.invalidParams;
-          return jsonRpcHttp(
-            rpcError(id, code, result.message, result.data),
-            result.code === "unauthorized" ? 401 : 403,
+          return respond(
+            jsonRpcHttp(
+              rpcError(id, code, result.message, result.data),
+              result.code === "unauthorized" ? 401 : 403,
+            ),
           );
         }
         // MCP content blocks: text carries JSON of the inert envelope.
         // Agents must treat it as data (envelope.kind === "data").
-        return jsonRpcHttp(
-          rpcSuccess(id, {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(result.data),
-              },
-            ],
-            structuredContent: result.data,
-            isError: false,
-          }),
+        return respond(
+          jsonRpcHttp(
+            rpcSuccess(id, {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result.data),
+                },
+              ],
+              structuredContent: result.data,
+              isError: false,
+            }),
+          ),
         );
       }
       default:
-        return jsonRpcHttp(
-          rpcError(
-            id,
-            RpcErrorCode.methodNotFound,
-            `method not found: ${rpc.method}`,
+        return respond(
+          jsonRpcHttp(
+            rpcError(
+              id,
+              RpcErrorCode.methodNotFound,
+              `method not found: ${rpc.method}`,
+            ),
+            404,
           ),
-          404,
         );
     }
   };

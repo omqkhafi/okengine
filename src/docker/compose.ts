@@ -21,11 +21,31 @@ import type {
   ServiceCredentials,
   ServiceSpec,
 } from "./types.ts";
+import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { generateCredentials } from "./credentials.ts";
+import { hostPortForInstance } from "./stack-id.ts";
 import { APP_PORT } from "../runtime/types.ts";
 
 /** Canonical layer-4 filename — never written by derivation. */
 export const COMPOSE_OVERRIDE = "compose.override.yml";
+
+/**
+ * Relative path refs for compose files living under {@link DeriveOptions.composeDir}.
+ *
+ * @param composeDir - Directory relative to project root (`docker` or `.`)
+ */
+export function composePathRefs(composeDir: string = DEFAULT_DOCKER_DIR): {
+  readonly envFile: string;
+  readonly buildContext: string;
+  readonly dockerfile: string;
+} {
+  const flat = composeDir === "." || composeDir === "";
+  return {
+    envFile: flat ? ".env.stack" : "../.env.stack",
+    buildContext: flat ? "." : "..",
+    dockerfile: "Dockerfile",
+  };
+}
 
 /**
  * Build normalised {@link ServiceSpec} list from image pins.
@@ -40,12 +60,15 @@ export function buildSpecs(options: DeriveOptions): ServiceSpec[] {
     const creds =
       options.credentials?.[role] ?? generateCredentials(role);
     const port = recipe.port;
+    const hostPort = options.instanceId
+      ? hostPortForInstance(role, port, options.instanceId)
+      : defaultHostPort(role, port);
     specs.push({
       role,
       serviceName: serviceNameFor(role),
       image,
       port,
-      hostPort: defaultHostPort(role, port),
+      hostPort,
       credentials: creds,
     });
   }
@@ -65,24 +88,31 @@ export function emitComposeLayers(
   const recipes = options.recipes ?? [];
   const appPort = options.appPort ?? APP_PORT;
   const app = options.app ?? "app";
+  const includeApp = options.includeApp !== false;
+  const paths = composePathRefs(options.composeDir ?? DEFAULT_DOCKER_DIR);
   const files: GeneratedFile[] = [];
 
-  // Layer 1 — app + network
-  const base = {
+  // Layer 1 — project name + network (+ optional app for deploy / oke docker)
+  const base: Record<string, unknown> = {
     name: `oke-${app}`,
-    services: {
+    networks: { oke: { driver: "bridge" } },
+  };
+  if (includeApp) {
+    base.services = {
       app: {
-        build: { context: ".", dockerfile: "Dockerfile" },
+        build: {
+          context: paths.buildContext,
+          dockerfile: paths.dockerfile,
+        },
         ports: [`${appPort}:${appPort}`],
-        env_file: [".env.stack"],
+        env_file: [paths.envFile],
         depends_on: Object.fromEntries(
           specs.map((s) => [s.serviceName, { condition: "service_healthy" }]),
         ),
         networks: ["oke"],
       },
-    },
-    networks: { oke: { driver: "bridge" } },
-  };
+    };
+  }
   files.push({ path: "compose.yml", content: `${toYaml(base)}\n` });
 
   // Layer 2 — per-role
@@ -93,7 +123,7 @@ export function emitComposeLayers(
       image: spec.image,
       ports: [`${spec.hostPort}:${spec.port}`],
       networks: ["oke"],
-      env_file: [".env.stack"],
+      env_file: [paths.envFile],
     };
     if (applied.environment) service.environment = applied.environment;
     if (applied.command) service.command = applied.command;
@@ -111,8 +141,9 @@ export function emitComposeLayers(
 
   // Layer 3 — prod overlay
   if (options.prod) {
-    const prodServices: Record<string, unknown> = {
-      app: {
+    const prodServices: Record<string, unknown> = {};
+    if (includeApp) {
+      prodServices.app = {
         deploy: {
           replicas: 1,
           resources: {
@@ -120,8 +151,8 @@ export function emitComposeLayers(
           },
         },
         secrets: specs.flatMap((s) => secretNames(s)),
-      },
-    };
+      };
+    }
     for (const spec of specs) {
       prodServices[spec.serviceName] = {
         deploy: {

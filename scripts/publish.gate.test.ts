@@ -127,7 +127,7 @@ describe("publish workflow", () => {
 
 describe("npm pack includes Console SPA", () => {
   test("okengine tarball contains src/console/ui/dist/index.html", async () => {
-    const build = Bun.spawn(["bun", "run", "build:console"], {
+    const build = Bun.spawn(["bun", "run", "build"], {
       cwd: ROOT,
       stdout: "pipe",
       stderr: "pipe",

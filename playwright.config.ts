@@ -16,7 +16,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "bun run build:console && bun ./tests/console/serve-fixture.ts",
+      "bun run build && bun ./tests/console/serve-fixture.ts",
     url: "http://127.0.0.1:6533/console/setup/status",
     reuseExistingServer: false,
     timeout: 120_000,

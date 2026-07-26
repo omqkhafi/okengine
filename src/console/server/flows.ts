@@ -2366,7 +2366,7 @@ async function issueOperatorSession(
 ): Promise<IssuedSession> {
   const op = state.operators.operators.get(operatorId);
   if (op) op.lastSeenAt = state.now();
-  return issueSession(
+  const issued = await issueSession(
     state.sessions,
     {
       secret: state.secret,
@@ -2379,6 +2379,8 @@ async function issueOperatorSession(
       scopes: ["console:*"],
     },
   );
+  state.persistSessions();
+  return issued;
 }
 
 function sessionPayload(

@@ -76,8 +76,17 @@ export interface ElementRuntimes {
 
 /** Declarations + options consumed by {@link bootApplication}. */
 export interface BootOptions {
-  /** Active environment (defaults to `dev`). */
+  /**
+   * Active environment (defaults to `dev`, or `stack` when
+   * {@link stack} / `OKE_STACK=1`).
+   */
   readonly env?: ConfigEnv;
+  /**
+   * Local-server mode (`oke dev -s` / `OKE_STACK=1`): force driver maps to the
+   * `stack` profile and prefer compose URLs (`.env.stack`).
+   * When unset, derived from `process.env.OKE_STACK`.
+   */
+  readonly stack?: boolean;
   /** Optional `oke.config.ts` document. */
   readonly config?: OkeConfig;
   /** Pre-built runtimes (skip construction when present). */
@@ -243,9 +252,24 @@ async function loadBind<T>(name: string): Promise<T> {
  * @param options - Declarations, config, pre-built runtimes
  */
 export async function bootApplication(
-  options: BootOptions = {},
+  input: BootOptions = {},
 ): Promise<BootResult> {
-  const env: ConfigEnv = options.env ?? "dev";
+  const stack =
+    input.stack === true ||
+    (input.stack !== false && process.env.OKE_STACK === "1");
+  // `-s` always selects the `stack` driver profile — not a mix of test/dev +
+  // prod store overrides (templates often pin `env: "test"` for harnesses).
+  const env: ConfigEnv = stack ? "stack" : (input.env ?? "dev");
+  let config = input.config;
+  if (config === undefined) {
+    try {
+      const { loadOkeConfig } = await import("../cli/load-config.ts");
+      config = (await loadOkeConfig(process.cwd())).config;
+    } catch {
+      config = undefined;
+    }
+  }
+  const options: BootOptions = { ...input, config, env, stack };
   const pre = options.elements ?? {};
   const now = options.now ?? (() => Date.now());
   const needs = resolveElementNeeds(options);
@@ -340,7 +364,7 @@ export async function bootApplication(
   let store = pre.store;
   if (needs.store) {
     if (!store) {
-      store = storeBind!.bindStore(options, env, now);
+      store = storeBind!.bindStore(options, env, now, stack);
     } else {
       for (const decl of options.stores ?? []) {
         store.register?.(decl);

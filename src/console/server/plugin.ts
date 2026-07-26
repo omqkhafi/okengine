@@ -30,6 +30,26 @@ export function consolePlugin(): PluginDef {
       entry: "./panels/traces.js",
     })
     .table("oke_console_prefs", { plane: "operator" })
+    // Public flows must not 401 when a stale Bearer/cookie is present —
+    // kernel onAuth verifies before beforeHandle's public-flow exemption.
+    // Rebuild from URL: `new Request(req, { headers })` re-copies Authorization.
+    .hook("onRequest", (ctx) => {
+      if (!PUBLIC_CONSOLE_FLOWS.has(ctx.flow.name) || !ctx.request) return;
+      const auth = ctx.request.headers.get("authorization");
+      if (!auth?.startsWith("Bearer ")) return;
+      const headers = new Headers();
+      for (const [key, value] of ctx.request.headers) {
+        if (key.toLowerCase() === "authorization") continue;
+        headers.set(key, value);
+      }
+      const method = ctx.request.method;
+      const init: RequestInit = { method, headers };
+      if (method !== "GET" && method !== "HEAD") {
+        init.body = ctx.request.body;
+        (init as RequestInit & { duplex: "half" }).duplex = "half";
+      }
+      ctx.request = new Request(ctx.request.url, init);
+    })
     .hook("beforeHandle", (ctx, fxOrErr) => {
       const fx = fxOrErr as Fx;
       const name = ctx.flow.name;

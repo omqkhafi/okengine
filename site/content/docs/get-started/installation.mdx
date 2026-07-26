@@ -66,6 +66,14 @@ Three ports come up together (mnemonic: **O·K·E = 6·5·3**):
 
 Open the Console — flows, contracts, effects, and an architecture diagram are already there. **Derived, not configured.**
 
+Want Postgres/Redis like production while the app stays on host Bun?
+
+```bash title="Terminal"
+oke dev --stack   # or: oke dev -s
+```
+
+That uses the `stack` driver profile in `oke.config.ts` (filled from `prod` when omitted). Compose files land under `docker/`; secrets under `.env.stack`.
+
 ### Verify the install
 
 Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked.

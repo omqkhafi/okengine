@@ -100,7 +100,18 @@ export interface DeriveOptions {
   readonly appPort?: number;
   /** When true, emit prod overlays (limits, secret refs, deploy.replicas). */
   readonly prod?: boolean;
-  /** Output directory (default `.`). */
+  /**
+   * Include the `app` service in `compose.yml` (default true).
+   * `oke dev --stack` sets false — host Bun runs the app; Docker is infra only.
+   */
+  readonly includeApp?: boolean;
+  /**
+   * Compose artefact directory relative to the project root (default `docker`).
+   * Controls generated `env_file` / `build.context` paths (e.g. `../.env.stack`).
+   * Pass `"."` for legacy root-level layout.
+   */
+  readonly composeDir?: string;
+  /** Output directory (default `docker`). */
   readonly outDir?: string;
   /** Inject credentials (tests). Defaults to generated randoms. */
   readonly credentials?: Readonly<Record<string, ServiceCredentials>>;
@@ -108,7 +119,15 @@ export interface DeriveOptions {
   readonly host?: string;
   /** Extra image recipes (plugins). */
   readonly recipes?: readonly ImageRecipe[];
+  /**
+   * Local stack instance id (6-hex). When set, host ports are offset so two
+   * `oke dev -s` projects do not share one Postgres on `:5432`.
+   */
+  readonly instanceId?: string;
 }
+
+/** Default relative directory for generated Docker / compose artefacts. */
+export const DEFAULT_DOCKER_DIR = "docker";
 
 /** One generated file. */
 export interface GeneratedFile {

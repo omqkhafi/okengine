@@ -23,7 +23,7 @@ From the monorepo root:
 ```bash
 bun run site:dev
 bun run site:build
-bun run test:doc-drift   # includes site/content/docs claimed fences
+bun run gate             # includes doc-drift for site/content/docs claimed fences
 ```
 
 ## Deployment

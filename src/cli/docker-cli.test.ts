@@ -27,25 +27,25 @@ const credentials = {
 } as const;
 
 describe("oke docker CLI", () => {
-  test("writes Dockerfile and compose without credentials in YAML", async () => {
+  test("writes Dockerfile and compose under docker/ by default", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-cli-docker-"));
     const logs: string[] = [];
     const { code, result } = await runDockerDerive({
       cwd: dir,
-      outDir: dir,
       images,
       credentials,
       write: (t) => logs.push(t),
     });
     expect(code).toBe(0);
     expect(result).toBeDefined();
-    expect(await Bun.file(join(dir, "Dockerfile")).exists()).toBe(true);
-    expect(await Bun.file(join(dir, "compose.store.sql.yml")).exists()).toBe(
-      true,
-    );
-    const yml = await Bun.file(join(dir, "compose.store.sql.yml")).text();
+    expect(await Bun.file(join(dir, "docker/Dockerfile")).exists()).toBe(true);
+    expect(
+      await Bun.file(join(dir, "docker/compose.store.sql.yml")).exists(),
+    ).toBe(true);
+    const yml = await Bun.file(join(dir, "docker/compose.store.sql.yml")).text();
     expect(yml).not.toContain("test-password-not-in-yaml");
-    expect(logs.join("")).toContain("compose.override.yml");
+    expect(yml).toContain("../.env.stack");
+    expect(logs.join("")).toContain("docker/compose.override.yml");
   });
 });
 
@@ -164,8 +164,10 @@ describe("oke dev --stack", () => {
     expect(code).toBe(0);
     expect(plan?.stackRoles).toEqual(["store.sql"]);
     expect(plan?.composeFiles?.some((f) => f.includes("store.sql"))).toBe(true);
+    expect(plan?.composeFiles).toContain("compose.yml");
     expect(plan?.stackEnv?.DATABASE_URL).toContain("postgres://");
     expect(await Bun.file(join(dir, "compose.yml")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "docker/compose.yml")).exists()).toBe(false);
   });
 });
 

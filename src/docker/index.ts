@@ -19,11 +19,14 @@ export type {
   ServiceSpec,
 } from "./types.ts";
 
+export { DEFAULT_DOCKER_DIR } from "./types.ts";
+
 export {
   COMPOSE_OVERRIDE,
   assertNoCredentialsInYaml,
   buildSpecs,
   buildStackEnv,
+  composePathRefs,
   emitComposeLayers,
   formatStackEnv,
 } from "./compose.ts";
@@ -43,6 +46,13 @@ export {
   resolveStack,
   type StackRow,
 } from "./stack.ts";
+export {
+  hostPortForInstance,
+  loadExistingStackCredentials,
+  parseStackCredentials,
+  stackAppSlug,
+  stackInstanceId,
+} from "./stack-id.ts";
 export {
   formatImagesLock,
   pinImages,

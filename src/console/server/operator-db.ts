@@ -2,7 +2,8 @@
  * Durable operator plane for Console — `.oke/console.sqlite` + secret file.
  *
  * Spec: wizard closes permanently once the first operator exists (console §2.5).
- * Claim codes stay ephemeral; operators and the signing secret must survive restarts.
+ * Claim codes stay ephemeral; operators, sessions, and the signing secret must
+ * survive restarts.
  */
 
 import { mkdirSync } from "node:fs";
@@ -12,10 +13,16 @@ import {
   createOperatorStore,
   type OperatorStore,
 } from "../../auth/operator.ts";
+import {
+  createSessionStore,
+  type SessionStore,
+} from "../../auth/sessions.ts";
 import type {
   OperatorCredentialRow,
   OperatorRow,
   OperatorSsoLinkRow,
+  RefreshTokenRow,
+  SessionRow,
 } from "../../auth/tables.ts";
 import { AUTH_TABLES } from "../../auth/tables.ts";
 
@@ -30,8 +37,12 @@ export interface ConsolePersistence {
   readonly secret: string;
   /** Hydrated operator Maps. */
   readonly operators: OperatorStore;
+  /** Hydrated session + refresh Maps. */
+  readonly sessions: SessionStore;
   /** Persist (or update) one operator + credential + roles/sso. */
   readonly persistOperator: (operatorId: string) => void;
+  /** Persist the full session store (issue / revoke). */
+  readonly persistSessions: () => void;
   /** Close the SQLite connection. */
   readonly close: () => void;
 }
@@ -97,12 +108,17 @@ export async function openConsolePersistence(
   db.exec("PRAGMA journal_mode = WAL;");
   migrateOperatorSchema(db);
   const operators = loadOperatorStore(db);
+  const sessions = loadSessionStore(db);
 
   return {
     secret,
     operators,
+    sessions,
     persistOperator(operatorId: string) {
       persistOperator(db, operators, operatorId);
+    },
+    persistSessions() {
+      persistSessions(db, sessions);
     },
     close() {
       db.close();
@@ -145,7 +161,137 @@ export function migrateOperatorSchema(db: Database): void {
       PRIMARY KEY (operator_id, role),
       FOREIGN KEY (operator_id) REFERENCES ${AUTH_TABLES.operators}(id)
     );
+    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.sessions} (
+      id TEXT PRIMARY KEY NOT NULL,
+      plane TEXT NOT NULL,
+      principal_id TEXT NOT NULL,
+      family_id TEXT NOT NULL,
+      revoked_at INTEGER,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.refreshTokens} (
+      id TEXT PRIMARY KEY NOT NULL,
+      session_id TEXT NOT NULL,
+      family_id TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      used_at INTEGER,
+      revoked_at INTEGER
+    );
   `);
+}
+
+/**
+ * Hydrate a {@link SessionStore} from SQLite.
+ *
+ * @param db - Open database
+ */
+export function loadSessionStore(db: Database): SessionStore {
+  const store = createSessionStore();
+
+  const sessionRows = db
+    .query(
+      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at
+       FROM ${AUTH_TABLES.sessions}`,
+    )
+    .all() as Array<{
+    id: string;
+    plane: SessionRow["plane"];
+    principal_id: string;
+    family_id: string;
+    revoked_at: number | null;
+    created_at: number;
+    expires_at: number;
+  }>;
+
+  for (const row of sessionRows) {
+    const session: SessionRow = {
+      id: row.id,
+      plane: row.plane,
+      principalId: row.principal_id,
+      familyId: row.family_id,
+      revokedAt: row.revoked_at,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    };
+    store.sessions.set(session.id, session);
+  }
+
+  const refreshRows = db
+    .query(
+      `SELECT id, session_id, family_id, hash, expires_at, used_at, revoked_at
+       FROM ${AUTH_TABLES.refreshTokens}`,
+    )
+    .all() as Array<{
+    id: string;
+    session_id: string;
+    family_id: string;
+    hash: string;
+    expires_at: number;
+    used_at: number | null;
+    revoked_at: number | null;
+  }>;
+
+  for (const row of refreshRows) {
+    const token: RefreshTokenRow = {
+      id: row.id,
+      sessionId: row.session_id,
+      familyId: row.family_id,
+      hash: row.hash,
+      expiresAt: row.expires_at,
+      usedAt: row.used_at,
+      revokedAt: row.revoked_at,
+    };
+    store.refresh.set(token.id, token);
+  }
+
+  return store;
+}
+
+/**
+ * Replace session tables with the in-memory store snapshot.
+ *
+ * @param db - Open database
+ * @param store - In-memory session store
+ */
+export function persistSessions(db: Database, store: SessionStore): void {
+  db.exec(`DELETE FROM ${AUTH_TABLES.refreshTokens}`);
+  db.exec(`DELETE FROM ${AUTH_TABLES.sessions}`);
+
+  const insertSession = db.query(
+    `INSERT INTO ${AUTH_TABLES.sessions}
+      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at)
+     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires)`,
+  );
+  for (const session of store.sessions.values()) {
+    insertSession.run({
+      $id: session.id,
+      $plane: session.plane,
+      $principal: session.principalId,
+      $family: session.familyId,
+      $revoked: session.revokedAt,
+      $created: session.createdAt,
+      $expires: session.expiresAt,
+    });
+  }
+
+  const insertRefresh = db.query(
+    `INSERT INTO ${AUTH_TABLES.refreshTokens}
+      (id, session_id, family_id, hash, expires_at, used_at, revoked_at)
+     VALUES ($id, $session, $family, $hash, $expires, $used, $revoked)`,
+  );
+  for (const token of store.refresh.values()) {
+    insertRefresh.run({
+      $id: token.id,
+      $session: token.sessionId,
+      $family: token.familyId,
+      $hash: token.hash,
+      $expires: token.expiresAt,
+      $used: token.usedAt,
+      $revoked: token.revokedAt,
+    });
+  }
 }
 
 /**

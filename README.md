@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/public/OKE-W.svg" />
+    <img alt="OKE" src="site/public/OKE-B.svg" width="220" />
+  </picture>
+</p>
+
 # okengine
 
 *"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
@@ -225,7 +232,7 @@ oke images list                  # recipe · image · tag · digest · size (wri
 3. **Derive Docker / compose**, then pin digests so tags cannot drift:
 
 ```bash
-oke docker                       # Dockerfile + compose.store.sql.yml · compose.store.kv.yml · …
+oke docker                       # writes under docker/ (Dockerfile + compose.<role>.yml · …)
 oke docker --prod                # -p  healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images pin                   # tags → digests in oke.images.lock
 ```
@@ -251,8 +258,8 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  also boot the real infra stack (generated compose)
-oke dev -s store.sql,signal      #     partial: only these roles get real backends
+oke dev --stack                  # -s  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
+oke dev -s store.sql,store.kv    #     partial: only these roles get real backends
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
@@ -269,7 +276,7 @@ oke schema generate              # core + plugin tables → schema/oke.ts   (--c
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # Dockerfile + compose.store.sql.yml · compose.store.kv.yml · …
+oke docker                       # artefacts under docker/ (Dockerfile + compose.<role>.yml · …)
 oke docker --prod                # -p  healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images list                  # recipe · image · tag · digest · size (--json|-j)
 oke images pin                   # tags → digests in oke.images.lock
@@ -343,6 +350,25 @@ The Console is treated as internet-facing even on localhost. Host header validat
 ## Budgets
 
 Measured size and latency caps — see [`BUDGETS.md`](BUDGETS.md). Refresh with `bun run budgets`.
+
+---
+
+## Local framework link (try changes without publishing)
+
+To exercise a local `okengine` checkout inside an app (e.g. `oke-1`) without npm publish:
+
+```bash
+# in the okengine repo
+bun link
+# if you changed the Console SPA:
+bun run build
+
+# in the app repo
+bun link okengine
+# edit okengine → restart `bun dev` in the app
+```
+
+Alternatively set `"okengine": "file:../okengine"` in the app `package.json` and run `bun install`.
 
 ---
 

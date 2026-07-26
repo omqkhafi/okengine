@@ -22,7 +22,18 @@ function driverId(ref: DriverRef | undefined): string | undefined {
 }
 
 /**
- * Derive default image pins from prod driver protocols.
+ * Prefer `stack` then `prod` for a driver map (local server ≈ production).
+ *
+ * @param map - Env driver map
+ */
+function stackOrProdId(
+  map: { readonly stack?: DriverRef; readonly prod?: DriverRef } | undefined,
+): string | undefined {
+  return driverId(map?.stack) ?? driverId(map?.prod);
+}
+
+/**
+ * Derive default image pins from stack/prod driver protocols.
  *
  * Used when `oke.config.ts` omits `images` but declares postgres/redis (etc.)
  * so `oke dev -s` / `oke stack` / `oke docker` have something to run.
@@ -33,11 +44,11 @@ export function defaultImagesFromConfig(
   config: OkeConfig,
 ): Readonly<Record<string, string>> {
   const out: Record<string, string> = {};
-  const sql = driverId(config.drivers?.store?.sql?.prod);
-  const index = driverId(config.drivers?.store?.index?.prod);
-  const kv = driverId(config.drivers?.store?.kv?.prod);
-  const signal = driverId(config.drivers?.signal?.prod);
-  const clock = driverId(config.drivers?.clock?.prod);
+  const sql = stackOrProdId(config.drivers?.store?.sql);
+  const index = stackOrProdId(config.drivers?.store?.index);
+  const kv = stackOrProdId(config.drivers?.store?.kv);
+  const signal = stackOrProdId(config.drivers?.signal);
+  const clock = stackOrProdId(config.drivers?.clock);
 
   const needsSql =
     sql === "postgres" ||
@@ -133,4 +144,71 @@ export function resolveImages(
   if (explicit && Object.keys(explicit).length > 0) return explicit;
   if (config) return defaultImagesFromConfig(config);
   return {};
+}
+
+/** Compact driver mismatch for {@link formatStackSummary}. */
+export type StackDriverMismatch = {
+  /** Short label (`sql`, `kv`). */
+  readonly label: string;
+  /** Active `drivers.*.stack` (→ prod) id. */
+  readonly using: string;
+  /** Driver that would use the container. */
+  readonly container: string;
+};
+
+/**
+ * Detect when `oke dev -s` containers will not back the app because the
+ * `stack` driver profile still points at local/memory backends.
+ *
+ * @param config - Loaded config
+ * @param stackRoles - Roles being composed
+ */
+export function stackDevDriverMismatches(
+  config: OkeConfig,
+  stackRoles: readonly string[],
+): readonly StackDriverMismatch[] {
+  const roles = new Set(stackRoles);
+  const out: StackDriverMismatch[] = [];
+  const sqlStack =
+    driverId(config.drivers?.store?.sql?.stack) ??
+    driverId(config.drivers?.store?.sql?.prod);
+  const kvStack =
+    driverId(config.drivers?.store?.kv?.stack) ??
+    driverId(config.drivers?.store?.kv?.prod);
+
+  if (
+    roles.has("store.sql") &&
+    (sqlStack === "sqlite" || sqlStack === "memory" || sqlStack === undefined)
+  ) {
+    out.push({
+      label: "sql",
+      using: sqlStack ?? "unset",
+      container: "postgres",
+    });
+  }
+  if (
+    roles.has("store.kv") &&
+    (kvStack === "memory" || kvStack === undefined)
+  ) {
+    out.push({
+      label: "kv",
+      using: kvStack ?? "memory",
+      container: "redis",
+    });
+  }
+  return out;
+}
+
+/**
+ * @deprecated Use {@link stackDevDriverMismatches} — kept for older call sites.
+ * @param config - Loaded config
+ * @param stackRoles - Roles being composed
+ */
+export function stackDevDriverWarnings(
+  config: OkeConfig,
+  stackRoles: readonly string[],
+): readonly string[] {
+  return stackDevDriverMismatches(config, stackRoles).map(
+    (m) => `${m.label}: ${m.using}`,
+  );
 }

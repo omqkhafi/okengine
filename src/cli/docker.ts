@@ -4,6 +4,7 @@
 
 import { resolve } from "node:path";
 import {
+  DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
   writeDerivedFiles,
   type DeriveOptions,
@@ -38,7 +39,15 @@ export async function runDockerDerive(
 ): Promise<{ readonly code: number; readonly result?: DeriveResult }> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
-  const outDir = resolve(cwd, options.outDir ?? ".");
+  const composeDirOpt = options.outDir ?? DEFAULT_DOCKER_DIR;
+  const outDir = resolve(cwd, composeDirOpt);
+  // Relative dir for env_file / build.context rewriting (`.` when out === cwd).
+  const composeDir =
+    outDir === cwd
+      ? "."
+      : outDir.startsWith(`${cwd}/`) || outDir.startsWith(`${cwd}\\`)
+        ? outDir.slice(cwd.length + 1)
+        : ".";
 
   let images = options.images;
   let app = "app";
@@ -70,6 +79,8 @@ export async function runDockerDerive(
       app,
       prod: options.prod ?? false,
       outDir,
+      composeDir,
+      includeApp: true,
       ...(options.credentials ? { credentials: options.credentials } : {}),
     });
 
@@ -77,13 +88,13 @@ export async function runDockerDerive(
       await writeDerivedFiles(result, outDir, { writeStackEnv: false });
     }
 
-    write(`oke docker: wrote ${result.files.length} file(s)\n`);
-    for (const f of result.files) write(`  ${f.path}\n`);
+    write(`oke docker: wrote ${result.files.length} file(s) → ${composeDir}/\n`);
+    for (const f of result.files) write(`  ${composeDir}/${f.path}\n`);
     write(
-      `compose merge order:\n${result.composeFiles.map((f) => `  -f ${f}`).join("\n")}\n`,
+      `compose merge order (cwd ${composeDir}/):\n${result.composeFiles.map((f) => `  -f ${f}`).join("\n")}\n`,
     );
     write(
-      "(compose.override.yml is layer 4 — user-owned, never written by oke)\n",
+      `(${composeDir}/compose.override.yml is layer 4 — user-owned, never written by oke)\n`,
     );
     return { code: 0, result };
   } catch (err) {
@@ -109,9 +120,9 @@ export async function dockerCli(args: readonly string[]): Promise<number> {
     else if (a === "--config" || a === "-c") configPath = args[++i];
     else if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke docker [--prod|-p] [--out|-o .] [--config|-c oke.config.ts]
+      console.log(`oke docker [--prod|-p] [--out|-o docker] [--config|-c oke.config.ts]
 
-Derive Dockerfile + compose.<role>.yml files.
+Derive Dockerfile + compose.<role>.yml under docker/ (default).
 --prod is opt-in (never the default). Credentials are never written into YAML.
 `);
       return 0;

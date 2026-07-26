@@ -46,6 +46,11 @@ import {
   type NamedRef,
 } from "./fx.ts";
 import {
+  currentDevSurface,
+  logDevRequest,
+  shouldLogDevRequests,
+} from "../runtime/dev-request-log.ts";
+import {
   mergeHooks,
   runPipeline,
   type HookFn,
@@ -126,6 +131,11 @@ export interface OkeOptions {
   readonly archiveInputFields?: readonly string[];
   /** Active environment for {@link OkeApp.boot} (defaults to `dev`). */
   readonly env?: BootOptions["env"];
+  /**
+   * Local-server mode (`oke dev -s` / `OKE_STACK=1`) — force the `stack`
+   * driver profile at boot.
+   */
+  readonly stack?: BootOptions["stack"];
   /** Optional `oke.config.ts` document consumed at boot. */
   readonly config?: BootOptions["config"];
   /** Pre-built element runtimes (skip construction at boot when present). */
@@ -483,6 +493,7 @@ export function oke(options: OkeOptions): OkeApp {
     bootEnv = overrides?.env ?? options.env ?? "dev";
     const merged: BootOptions = {
       env: bootEnv,
+      stack: overrides?.stack ?? options.stack,
       config: overrides?.config ?? options.config,
       elements: overrides?.elements ?? options.elements,
       secrets: overrides?.secrets ?? options.secrets,
@@ -892,13 +903,31 @@ export function oke(options: OkeOptions): OkeApp {
     },
     execute,
     async fetch(request) {
+      const started = performance.now();
+      let flowLabel: string | undefined;
       const url = new URL(request.url);
       const method = request.method.toUpperCase();
 
+      const respond = (response: Response): Response => {
+        if (shouldLogDevRequests()) {
+          logDevRequest({
+            surface: currentDevSurface(),
+            method,
+            path: url.pathname,
+            flow: flowLabel,
+            status: response.status,
+            ms: Math.round(performance.now() - started),
+          });
+        }
+        return response;
+      };
+
       if (method === "GET" && url.pathname === "/_oke/client.json") {
-        return new Response(JSON.stringify(routes), {
-          headers: { "content-type": "application/json" },
-        });
+        return respond(
+          new Response(JSON.stringify(routes), {
+            headers: { "content-type": "application/json" },
+          }),
+        );
       }
 
       if (method === "POST" && url.pathname.startsWith("/_oke/")) {
@@ -910,8 +939,9 @@ export function oke(options: OkeOptions): OkeApp {
           const target =
             flowsByName.get(`${unit}.${flowName}`) ?? flowsByName.get(flowName);
           if (!target) {
-            return new Response("Not Found", { status: 404 });
+            return respond(new Response("Not Found", { status: 404 }));
           }
+          flowLabel = target.name;
           let internalInput: unknown;
           try {
             internalInput = await request.json();
@@ -924,15 +954,16 @@ export function oke(options: OkeOptions): OkeApp {
             { kind: "internal" } satisfies InternalTrigger,
             { request },
           );
-          return encodeExecuteResult(internalResult);
+          return respond(encodeExecuteResult(internalResult));
         }
       }
 
       const matched = router.match(method, url.pathname);
       if (!matched) {
-        return new Response("Not Found", { status: 404 });
+        return respond(new Response("Not Found", { status: 404 }));
       }
       const { value: binding, params } = matched;
+      flowLabel = binding.flow.name;
 
       let route = compiled.get(binding);
       if (!route && binding.trigger.kind === "http") {
@@ -946,7 +977,7 @@ export function oke(options: OkeOptions): OkeApp {
       if (route) {
         const parsed = await route.parseValidate(request, params);
         if (!parsed.ok) {
-          return encodeFailure(parsed.failure);
+          return respond(encodeFailure(parsed.failure));
         }
         input = parsed.input;
         validated = true;
@@ -962,7 +993,7 @@ export function oke(options: OkeOptions): OkeApp {
         { request, params, validated },
       );
 
-      return encodeExecuteResult(result);
+      return respond(encodeExecuteResult(result));
     },
     async dispatchSignal(signal, payload) {
       const name = resolveName(signal);

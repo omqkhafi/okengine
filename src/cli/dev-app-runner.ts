@@ -11,16 +11,28 @@
  * - `PORT` — listen port (`0` = ephemeral)
  * - `OKE_HOSTNAME` — listen hostname (default `127.0.0.1`)
  * - `OKE_READY_PATH` — when set, write bound port here once listening
+ * - `OKE_DEV_HERO_CONSOLE` / `OKE_DEV_HERO_MCP` — URL lines for soft-reload hero
+ * - `OKE_DEV_HERO_META` — JSON {@link import("./hero-meta.ts").DevHeroSnapshot}
  */
 
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { APP_PORT, type FetchApp } from "../runtime/types.ts";
-import { formatAppReadyLine } from "../term.ts";
+import {
+  clearTerminalScreen,
+  formatAppReadyLine,
+  formatDevHero,
+} from "../term.ts";
+import { decodeHeroSnapshot } from "./hero-meta.ts";
 
 /** Stable Bun.serve id so `--hot` reuses the socket across soft reloads. */
 export const DEV_APP_SERVE_ID = "oke-dev-app";
+
+/** Survives `bun --hot` soft reload — marks second+ evaluation. */
+type DevRunnerGlobals = typeof globalThis & {
+  __okeDevSoftReload?: boolean;
+};
 
 /** App entry shape — FetchApp plus boot before serve. */
 type BootableApp = FetchApp & {
@@ -36,6 +48,9 @@ if (entry === undefined || entry.length === 0) {
 const port = Number(Bun.env["PORT"] ?? APP_PORT);
 const hostname = Bun.env["OKE_HOSTNAME"] ?? "127.0.0.1";
 const readyPath = Bun.env["OKE_READY_PATH"];
+const consoleUrl = Bun.env["OKE_DEV_HERO_CONSOLE"];
+const mcpUrl = Bun.env["OKE_DEV_HERO_MCP"];
+const heroMeta = decodeHeroSnapshot(Bun.env["OKE_DEV_HERO_META"]);
 
 const absoluteEntry = resolve(entry);
 const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
@@ -60,11 +75,35 @@ const handle = createBunRuntime().serve(mod.app, {
   id: DEV_APP_SERVE_ID,
 });
 
-process.stdout.write(
-  formatAppReadyLine(
-    `http://${formatHostForUrl(hostname)}:${handle.port}`,
-  ),
-);
+const appUrl = `http://${formatHostForUrl(hostname)}:${handle.port}`;
+const g = globalThis as DevRunnerGlobals;
+const isSoftReload = g.__okeDevSoftReload === true;
+g.__okeDevSoftReload = true;
+
+if (
+  isSoftReload &&
+  consoleUrl !== undefined &&
+  consoleUrl.length > 0 &&
+  mcpUrl !== undefined &&
+  mcpUrl.length > 0
+) {
+  // Drop request logs; keep the hero (Bun --no-clear-screen + our reprint).
+  process.stdout.write(clearTerminalScreen());
+  process.stdout.write(
+    formatDevHero({
+      appUrl,
+      consoleUrl,
+      mcpUrl,
+      profile: heroMeta?.profile,
+      runtimeEnv: heroMeta?.runtimeEnv,
+      system: heroMeta?.system,
+      elements: heroMeta?.elements,
+      version: heroMeta?.version,
+    }),
+  );
+} else {
+  process.stdout.write(formatAppReadyLine(appUrl));
+}
 
 if (readyPath !== undefined && readyPath.length > 0) {
   await Bun.write(readyPath, `${handle.port}\n`);

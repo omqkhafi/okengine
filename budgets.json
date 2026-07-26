@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-25T21:56:51.430Z",
-  "version": "0.2.3",
+  "measuredAt": "2026-07-26T01:08:53.710Z",
+  "version": "0.2.4",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 88270,
+      "value": 88313,
       "limit": 307200,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 25.141,
+      "value": 29.511,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 42195,
-      "limit": 43039,
+      "value": 43944,
+      "limit": 44823,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -115,8 +115,8 @@
     {
       "id": "export:./config",
       "label": "config",
-      "value": 314,
-      "limit": 570,
+      "value": 612,
+      "limit": 868,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 64840,
-      "limit": 66137,
+      "value": 67075,
+      "limit": 68417,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./mcp",
       "label": "mcp",
-      "value": 8459,
-      "limit": 8715,
+      "value": 9483,
+      "limit": 9739,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

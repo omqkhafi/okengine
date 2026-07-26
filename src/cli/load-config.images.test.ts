@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultImagesFromConfig,
   resolveImages,
+  stackDevDriverMismatches,
 } from "./load-config.ts";
 
 describe("defaultImagesFromConfig", () => {
@@ -71,5 +72,55 @@ describe("resolveImages", () => {
     });
     expect(images["store.sql"]).toBe("postgres:18-alpine");
     expect(images["store.kv"]).toBe("redis:8-alpine");
+  });
+});
+
+describe("stackDevDriverMismatches", () => {
+  test("flags stack/prod sqlite/memory when containers are up", () => {
+    const mismatches = stackDevDriverMismatches(
+      {
+        drivers: {
+          store: {
+            sql: { dev: "sqlite", stack: "sqlite", prod: "sqlite" },
+            kv: { dev: "memory", stack: "memory", prod: "memory" },
+          },
+        },
+      },
+      ["store.sql", "store.kv"],
+    );
+    expect(mismatches).toEqual([
+      { label: "sql", using: "sqlite", container: "postgres" },
+      { label: "kv", using: "memory", container: "redis" },
+    ]);
+  });
+
+  test("silent when stack profile matches containers", () => {
+    const mismatches = stackDevDriverMismatches(
+      {
+        drivers: {
+          store: {
+            sql: { dev: "sqlite", stack: "postgres", prod: "postgres" },
+            kv: { dev: "memory", stack: "redis", prod: "redis" },
+          },
+        },
+      },
+      ["store.sql", "store.kv"],
+    );
+    expect(mismatches).toEqual([]);
+  });
+
+  test("silent when only prod is set (stack falls back to prod)", () => {
+    const mismatches = stackDevDriverMismatches(
+      {
+        drivers: {
+          store: {
+            sql: { dev: "sqlite", prod: "postgres" },
+            kv: { dev: "memory", prod: "redis" },
+          },
+        },
+      },
+      ["store.sql", "store.kv"],
+    );
+    expect(mismatches).toEqual([]);
   });
 });

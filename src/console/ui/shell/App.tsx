@@ -17,7 +17,10 @@ export function App() {
     queryKey: ["console.setup.status"],
     queryFn: async () => {
       const res = await consoleCalls.setupStatus();
-      if (res.error) throw new Error(res.error.code);
+      if (res.error) {
+        if (res.error.code === "Unauthorized") setAccessToken(null);
+        throw new Error(res.error.code);
+      }
       return res.data as { setupClosed: boolean; claimRequired: boolean };
     },
     retry: 2,
@@ -36,7 +39,12 @@ export function App() {
     retry: false,
     queryFn: async () => {
       const res = await consoleCalls.sessionMe();
-      if (res.error) throw new Error(res.error.code);
+      if (res.error) {
+        if (res.error.code === "Unauthorized" || res.error.code === "AuthFailed") {
+          setAccessToken(null);
+        }
+        throw new Error(res.error.code);
+      }
       return res.data;
     },
   });

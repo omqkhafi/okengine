@@ -12,7 +12,7 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  also boot the real infra stack (generated compose)
+oke dev --stack                  # -s  infra compose under docker/ (no app container; host Bun)
 oke dev -s store.sql,signal      #     partial: only these roles get real backends
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
@@ -23,7 +23,7 @@ oke schema generate              # core + plugin tables → schema/oke.ts   (--c
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # Dockerfile + compose.store.sql.yml · compose.store.kv.yml · …
+oke docker                       # docker/Dockerfile + docker/compose.<role>.yml · …
 oke docker --prod                # healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images pin                   # tags → digests in oke.images.lock
 
@@ -45,8 +45,8 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  also boot the real infra stack (generated compose)
-oke dev -s store.sql,signal      #     partial: only these roles get real backends
+oke dev --stack                  # -s  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
+oke dev -s store.sql,store.kv    #     partial: only these roles get real backends
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
@@ -63,7 +63,7 @@ oke schema generate              # core + plugin tables → schema/oke.ts   (--c
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # Dockerfile + compose.store.sql.yml · compose.store.kv.yml · …
+oke docker                       # artefacts under docker/ (Dockerfile + compose.<role>.yml · …)
 oke docker --prod                # -p  healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images list                  # recipe · image · tag · digest · size (--json|-j)
 oke images pin                   # tags → digests in oke.images.lock

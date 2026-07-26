@@ -7,6 +7,50 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.4 — 2026-07-26
+
+### Added
+
+- `oke dev` prints colored request lines (App / Console / MCP) with flow name,
+  duration, and status — gated by `OKE_DEV_REQUEST_LOG` (on by default in
+  `oke dev`).
+- Soft reload clears request logs and reprints the App / Console / MCP hero
+  (`bun --hot --no-clear-screen`), so the banner no longer disappears on save.
+- `oke dev` hero uses an OKE wordmark, profile / env / system, and the eight
+  elements with active drivers; `Logs` section title; silences
+  `/_oke/client.json` regen noise.
+- `oke.config.ts` driver maps gain a `stack` profile for `oke dev -s` (local
+  server). Boot forces `env: "stack"` under `OKE_STACK=1` so every element uses
+  server drivers — not a mix of `dev`/`test` + prod store.
+- `defineConfig` copies missing `stack` pins from `prod` (vault `sops` →
+  `dotenv` for `.env.stack`), so server protocols are available under `-s`
+  without duplicating every map by hand.
+- Durable Console sessions in `.oke/console.sqlite`, so operator login survives
+  `oke dev` restarts without clearing cookies.
+- `oke dev -s` warns when the `stack` driver profile still points at
+  sqlite/memory while stack images run.
+
+### Changed
+
+- Generated Docker artefacts default to `docker/` (`.env.stack` stays at project
+  root). `oke docker --out` still overrides the directory.
+- `oke dev --stack` is infra-only: compose boots role services under `docker/`
+  without building/running an `app` container; the host Bun process remains the
+  app with hot reload.
+- Each `oke dev -s` project gets a unique compose name (`oke-dev-<hash>`) and
+  host ports, so two apps no longer share one Postgres/Redis; `.env.stack`
+  credentials are reused across restarts.
+- `oke dev -s` stack log is a short scannable block (project, ports, drivers).
+- `oke dev -s` sets `OKE_STACK=1` and binds drivers from the `stack` profile
+  (compose-backed store, etc.) so local stack mimics the server, not sqlite.
+- Version bump keeps `templates/*` and `examples/*` at `0.0.1` (project seed,
+  not framework version).
+
+### Fixed
+
+- Public Console flows ignore a stale Bearer so `setup.status` cannot 401 the
+  SPA after a process restart.
+
 ## v0.2.3 — 2026-07-26
 
 ### Added

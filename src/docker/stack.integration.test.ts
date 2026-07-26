@@ -32,6 +32,7 @@ describe("oke dev --stack postgres integration", () => {
     }
 
     const dir = await mkdtemp(join(tmpdir(), "oke-stack-pg-"));
+    const dockerDir = join(dir, "docker");
     const project = `oke-pg-${Date.now()}`;
     try {
       const derived = deriveInfrastructure({
@@ -45,11 +46,16 @@ describe("oke dev --stack postgres integration", () => {
         },
         app: "stacktest",
         host: "127.0.0.1",
+        includeApp: false,
+        composeDir: "docker",
       });
-      await writeDerivedFiles(derived, dir, { writeStackEnv: true });
+      await writeDerivedFiles(derived, dockerDir, {
+        writeStackEnv: true,
+        stackEnvDir: dir,
+      });
 
-      // Stack-only: no app service — just the role compose file.
-      const composeFiles = ["compose.store.sql.yml"];
+      // Infra-only: network + role compose (no app build).
+      const composeFiles = ["compose.yml", "compose.store.sql.yml"];
       const up = Bun.spawn(
         [
           "docker",
@@ -61,7 +67,7 @@ describe("oke dev --stack postgres integration", () => {
           "-d",
         ],
         {
-          cwd: dir,
+          cwd: dockerDir,
           stdout: "pipe",
           stderr: "pipe",
           env: {
@@ -92,7 +98,7 @@ describe("oke dev --stack postgres integration", () => {
             "--format",
             "json",
           ],
-          { cwd: dir, stdout: "pipe", stderr: "pipe" },
+          { cwd: dockerDir, stdout: "pipe", stderr: "pipe" },
         );
         const text = await new Response(ps.stdout).text();
         await ps.exited;
@@ -115,11 +121,12 @@ describe("oke dev --stack postgres integration", () => {
       }
 
       // Prove credentials live in .env.stack, not YAML.
-      const yml = await Bun.file(join(dir, "compose.store.sql.yml")).text();
+      const yml = await Bun.file(join(dockerDir, "compose.store.sql.yml")).text();
       expect(yml).not.toContain("stack-integration-pass");
       expect(formatStackEnv(derived.stackEnv)).toContain(
         "stack-integration-pass",
       );
+      expect(await Bun.file(join(dir, ".env.stack")).exists()).toBe(true);
     } finally {
       await Bun.spawn(
         [
@@ -128,11 +135,13 @@ describe("oke dev --stack postgres integration", () => {
           "-p",
           project,
           "-f",
+          "compose.yml",
+          "-f",
           "compose.store.sql.yml",
           "down",
           "-v",
         ],
-        { cwd: dir, stdout: "pipe", stderr: "pipe" },
+        { cwd: dockerDir, stdout: "pipe", stderr: "pipe" },
       ).exited.catch(() => {});
       await rm(dir, { recursive: true, force: true }).catch(() => {});
     }

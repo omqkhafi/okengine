@@ -351,6 +351,11 @@ export interface ConsoleState {
    */
   persistOperator: (operatorId: string) => void;
   /**
+   * Persist sessions after issue / revoke (SQLite under `.oke/`).
+   * No-op when persistence is disabled (tests / memory-only).
+   */
+  persistSessions: () => void;
+  /**
    * Per-email login attempt timestamps for credential-check rate limiting
    * (console §10.4 — same 5/60s strategy as setup-claim).
    */
@@ -405,8 +410,12 @@ export interface CreateConsoleStateOptions {
   readonly pluginRegistry?: PluginRegistry | null;
   /** Pre-hydrated operator store (from `.oke/console.sqlite`). */
   readonly operators?: OperatorStore;
+  /** Pre-hydrated session store (from `.oke/console.sqlite`). */
+  readonly sessions?: SessionStore;
   /** Persist hook after claim/create. */
   readonly persistOperator?: (operatorId: string) => void;
+  /** Persist hook after session issue / revoke. */
+  readonly persistSessions?: () => void;
 }
 
 /**
@@ -424,10 +433,11 @@ export function createConsoleState(
   const now = options.now ?? (() => Date.now());
   const operators = options.operators ?? createOperatorStore();
   const claim = mintClaimCode(now);
-  const sessions = createSessionStore();
+  const sessions = options.sessions ?? createSessionStore();
   const liveSubscribers = new Set<(msg: ConsoleLiveMessage) => void>();
   const persistOperator =
     options.persistOperator ?? ((_operatorId: string) => {});
+  const persistSessions = options.persistSessions ?? (() => {});
 
   const signalConfig = createMemorySignalConfigStore();
   const gateAuth = createDefaultGateAuthStores();
@@ -855,6 +865,7 @@ export function createConsoleState(
       return operators.operators.size > 0;
     },
     persistOperator,
+    persistSessions,
   };
 
   return state;

@@ -3,16 +3,56 @@ import { defineConfig } from "okengine/config";
 export default defineConfig({
   drivers: {
     store: {
-      sql: { dev: "sqlite", test: "memory", prod: "postgres" },
-      kv: { dev: "memory", test: "memory", prod: "redis" },
+      sql: {
+        dev: "sqlite",
+        stack: "postgres",
+        test: "memory",
+        prod: "postgres",
+      },
+      kv: {
+        dev: "memory",
+        stack: "redis",
+        test: "memory",
+        prod: "redis",
+      },
     },
-    signal: { dev: "memory", test: "memory", prod: "postgres" },
-    clock: { dev: "memory", test: "frozen", prod: "postgres" },
-    vault: { dev: "dotenv", test: "memory", prod: "sops" },
+    signal: {
+      dev: "memory",
+      stack: "postgres",
+      test: "memory",
+      prod: "postgres",
+    },
+    clock: {
+      dev: "memory",
+      stack: "postgres",
+      test: "frozen",
+      prod: "postgres",
+    },
+    vault: {
+      dev: "dotenv",
+      stack: "dotenv",
+      test: "memory",
+      prod: "sops",
+    },
     channel: {
-      email: { dev: "console", test: "console", prod: "smtp" },
-      sms: { dev: "console", test: "console", prod: "unifonic" },
-      whatsapp: { dev: "console", test: "console", prod: "wa-cloud" },
+      email: {
+        dev: "console",
+        stack: "smtp",
+        test: "console",
+        prod: "smtp",
+      },
+      sms: {
+        dev: "console",
+        stack: "unifonic",
+        test: "console",
+        prod: "unifonic",
+      },
+      whatsapp: {
+        dev: "console",
+        stack: "wa-cloud",
+        test: "console",
+        prod: "wa-cloud",
+      },
     },
   },
   images: {

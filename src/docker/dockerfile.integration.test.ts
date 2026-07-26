@@ -82,6 +82,8 @@ console.log("listening", server.port);
           },
         },
         app: "fixture",
+        // Flat fixture root (build context `.`).
+        composeDir: ".",
       });
       await writeDerivedFiles(derived, dir);
 

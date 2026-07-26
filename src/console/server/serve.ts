@@ -11,6 +11,7 @@ import {
   resolveAllowedHosts,
   secureFetch,
 } from "../../runtime/security.ts";
+import { runWithDevSurface } from "../../runtime/dev-request-log.ts";
 import { CONSOLE_PORT, type ServerHandle } from "../../runtime/types.ts";
 import {
   bindManifestSignalBus,
@@ -75,7 +76,9 @@ export async function serveConsole(
       ? {
           secret: options.secret ?? persistence.secret,
           operators: persistence.operators,
+          sessions: persistence.sessions,
           persistOperator: persistence.persistOperator,
+          persistSessions: persistence.persistSessions,
         }
       : {}),
   });
@@ -109,7 +112,9 @@ export async function serveConsole(
     const authed = withCookieAuth(request);
 
     if (url.pathname.startsWith("/console/")) {
-      const response = await handle.app.fetch(authed);
+      const response = await runWithDevSurface("Console", () =>
+        handle.app.fetch(authed),
+      );
       const withCookies = await attachSessionCookies(authed, response);
       return withConsoleSecurityHeaders(withCookies);
     }
@@ -213,7 +218,9 @@ export async function startConsoleApp(
       ? {
           secret: options.secret ?? persistence.secret,
           operators: persistence.operators,
+          sessions: persistence.sessions,
           persistOperator: persistence.persistOperator,
+          persistSessions: persistence.persistSessions,
         }
       : {}),
   });

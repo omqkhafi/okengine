@@ -5,8 +5,15 @@
  * @module
  */
 
-/** Environment role keys used in driver maps. */
-export type ConfigEnv = "dev" | "test" | "prod";
+/**
+ * Environment role keys used in driver maps.
+ *
+ * - `dev` — local laptop (`oke dev`)
+ * - `stack` — local server (`oke dev -s` / compose infra + host Bun)
+ * - `test` — automated tests
+ * - `prod` — production deploy
+ */
+export type ConfigEnv = "dev" | "stack" | "test" | "prod";
 
 /** Pool options for SQL drivers. */
 export interface DriverPoolOptions {
@@ -143,16 +150,89 @@ export interface OkeConfig {
 }
 
 /**
- * Define an `oke.config.ts` document (identity function + type check).
+ * Fill missing `stack` pins from `prod` (local server ≈ production protocols).
+ *
+ * Vault is the exception: `prod: "sops"` becomes `stack: "dotenv"` so
+ * `oke dev -s` can read `.env.stack` without age keys.
+ *
+ * @param map - Env → driver map
+ * @param options - Element-specific defaults
+ */
+export function fillStackFromProd(
+  map: EnvDriverMap | undefined,
+  options: { readonly vault?: boolean } = {},
+): EnvDriverMap | undefined {
+  if (!map) return undefined;
+  if (map.stack !== undefined || map.prod === undefined) return map;
+  if (options.vault) {
+    const prodId = typeof map.prod === "string" ? map.prod : map.prod.driver;
+    if (prodId === "sops") {
+      return { ...map, stack: "dotenv" };
+    }
+  }
+  return { ...map, stack: map.prod };
+}
+
+/**
+ * Copy production driver pins onto `stack` wherever `stack` is omitted.
+ *
+ * @param drivers - Drivers block
+ */
+export function fillDriversStackFromProd(
+  drivers: DriversConfig | undefined,
+): DriversConfig | undefined {
+  if (!drivers) return undefined;
+  const store = drivers.store
+    ? {
+        ...drivers.store,
+        sql: fillStackFromProd(drivers.store.sql),
+        kv: fillStackFromProd(drivers.store.kv),
+        files: fillStackFromProd(drivers.store.files),
+        index: fillStackFromProd(drivers.store.index),
+      }
+    : undefined;
+  const channel = drivers.channel
+    ? {
+        ...drivers.channel,
+        email: fillStackFromProd(drivers.channel.email),
+        sms: fillStackFromProd(drivers.channel.sms),
+        whatsapp: fillStackFromProd(drivers.channel.whatsapp),
+        push: fillStackFromProd(drivers.channel.push),
+      }
+    : undefined;
+  return {
+    ...drivers,
+    ...(store !== undefined ? { store } : {}),
+    signal: fillStackFromProd(drivers.signal),
+    clock: fillStackFromProd(drivers.clock),
+    vault: fillStackFromProd(drivers.vault, { vault: true }),
+    ...(channel !== undefined ? { channel } : {}),
+    ai: fillStackFromProd(drivers.ai),
+    runs: fillStackFromProd(drivers.runs),
+  };
+}
+
+/**
+ * Define an `oke.config.ts` document.
+ *
+ * Missing `stack` driver pins are filled from `prod` so `oke dev -s` uses the
+ * same server protocols as production (vault → dotenv for `.env.stack`).
  *
  * @param config - Driver / tenancy / i18n / topology
  */
-export function defineConfig<C extends OkeConfig>(config: C): C {
-  return config;
+export function defineConfig(config: OkeConfig): OkeConfig {
+  if (!config.drivers) return config;
+  return {
+    ...config,
+    drivers: fillDriversStackFromProd(config.drivers),
+  };
 }
 
 /**
  * Resolve a driver id for an env from an {@link EnvDriverMap}.
+ *
+ * `stack` falls back to `prod` then `dev` so existing configs keep working
+ * until an explicit `stack:` pin is added.
  *
  * @param map - Env → driver map
  * @param env - Active environment
@@ -162,7 +242,10 @@ export function resolveDriverId(
   env: ConfigEnv,
 ): string | undefined {
   if (!map) return undefined;
-  const ref = map[env] ?? map.dev ?? map.test;
+  const ref =
+    env === "stack"
+      ? (map.stack ?? map.prod ?? map.dev ?? map.test)
+      : (map[env] ?? map.dev ?? map.test);
   if (ref === undefined) return undefined;
   return typeof ref === "string" ? ref : ref.driver;
 }

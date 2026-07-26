@@ -12,6 +12,12 @@ out/
 *.tgz
 .oke/
 
+# oke-generated compose (keep user override)
+/docker/Dockerfile
+/docker/compose.yml
+/docker/compose.*.yml
+!/docker/compose.override.yml
+
 # logs & coverage
 logs/
 *.log

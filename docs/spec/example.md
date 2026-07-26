@@ -43,7 +43,16 @@ import { defineConfig } from "okengine/config";
 
 export default defineConfig({
   drivers: {
-    store: { sql: { dev: "sqlite", test: "memory", prod: "postgres" } },
+    // `stack` = `oke dev -s` (local server). Omitting it copies `prod`
+    // (defineConfig); vault `sops` becomes stack `dotenv` for `.env.stack`.
+    store: {
+      sql: {
+        dev: "sqlite",
+        stack: "postgres",
+        test: "memory",
+        prod: "postgres",
+      },
+    },
   },
 });
 ```
@@ -1132,7 +1141,7 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  also boot the real infra stack (generated compose)
+oke dev --stack                  # -s  infra compose under docker/ (no app container; host Bun)
 oke dev -s store.sql,signal      #     partial: only these roles get real backends
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
@@ -1143,7 +1152,7 @@ oke schema generate              # core + plugin tables → schema/oke.ts   (--c
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # Dockerfile + compose.store.sql.yml · compose.store.kv.yml · …
+oke docker                       # docker/Dockerfile + docker/compose.<role>.yml · …
 oke docker --prod                # healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images pin                   # tags → digests in oke.images.lock
 
