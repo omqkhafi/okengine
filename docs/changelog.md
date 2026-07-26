@@ -7,6 +7,14 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.2.5 — 2026-07-26
+
+### Changed
+
+- Lockstep republish: npm rejected a second `okengine@0.2.4` publish, so
+  `create-oke@0.2.4` never landed on npm. Bump both packages to `0.2.5` so CI
+  can publish cleanly (same surface as v0.2.4).
+
 ## v0.2.4 — 2026-07-26
 
 ### Added
