@@ -252,6 +252,30 @@ export function prepareInsertRow(
 }
 
 /**
+ * Map a JS-keyed partial row to SQL column names for `UPDATE … SET`.
+ * Unlike {@link prepareInsertRow}, `$defaultFn`s are never applied — column
+ * defaults are insert physics, not update physics.
+ *
+ * @param table - Table-like value
+ * @param row - Incoming values (JS keys)
+ */
+export function prepareUpdateRow(
+  table: unknown,
+  row: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const cols = resolveColumns(table);
+  if (cols.length === 0) return { ...row };
+  const byKey = new Map(cols.map((c) => [c.key, c]));
+  const bySql = new Map(cols.map((c) => [c.sqlName, c]));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    const col = byKey.get(k) ?? bySql.get(k);
+    out[col?.sqlName ?? k] = v;
+  }
+  return out;
+}
+
+/**
  * Map a SQL-keyed row back to JS keys when Drizzle/TableHandle metadata exists.
  *
  * @param table - Table-like value

@@ -118,7 +118,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.2.6",
+      "version": "0.2.8",
       "bin": {
         "create-oke": "src/index.ts",
       },

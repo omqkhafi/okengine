@@ -46,26 +46,23 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       const text = sql.trim();
 
       const selectGeneric =
-        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?))?(?:\s+LIMIT\s+(\d+))?\s*$/i.exec(
+        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?\s*$/i.exec(
           text,
         );
       if (selectGeneric && !/^\s*1\s+AS\s+/i.test(selectGeneric[1]!)) {
         const table = getTable(parseIdent(selectGeneric[2]!));
         const selectList = selectGeneric[1]!.trim();
         const whereClause = selectGeneric[3]?.trim();
-        const orderCol = selectGeneric[4] ? parseIdent(selectGeneric[4]) : undefined;
+        const orderClause = selectGeneric[4]?.trim();
         const limit = selectGeneric[5] ? Number(selectGeneric[5]) : undefined;
         let rows = table.rows.map((r) => ({ ...r }));
         if (whereClause) {
-          const preds = parseWherePredicates(whereClause);
-          rows = rows.filter((r) =>
-            preds.every((p, i) => compareRow(r[p.column], params[i], p.op)),
-          );
+          const ast = parseWhere(whereClause);
+          rows = rows.filter((r) => evalWhere(ast, r, params, { i: 0 }));
         }
-        if (orderCol) {
-          rows = [...rows].sort((a, b) =>
-            String(a[orderCol] ?? "").localeCompare(String(b[orderCol] ?? "")),
-          );
+        if (orderClause) {
+          const terms = parseOrderTerms(orderClause);
+          rows = [...rows].sort((a, b) => compareByTerms(a, b, terms));
         }
         if (limit !== undefined) rows = rows.slice(0, limit);
         if (selectList === "*") return rows;
@@ -224,10 +221,8 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
           if (!m) throw new Error(`memory sql: unsupported SET: ${part}`);
           return parseIdent(m[1]!);
         });
-        const preds = parseWherePredicates(updateSet[3]!);
-        const row = table.rows.find((r) =>
-          preds.every((p, i) => compareRow(r[p.column], params[setCols.length + i], p.op)),
-        );
+        const ast = parseWhere(updateSet[3]!);
+        const row = table.rows.find((r) => evalWhere(ast, r, params, { i: setCols.length }));
         if (!row) return { changes: 0 };
         setCols.forEach((col, i) => {
           row[col] = params[i];
@@ -243,50 +238,230 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
   };
 }
 
-/** Parse `col = ? AND col2 = ?` into ordered column names. */
+/** One comparison operator for the memory SQL driver. */
+type WhereOp = "=" | "<" | ">" | "<=" | ">=" | "!=" | "like" | "ilike";
+
+/** WHERE condition AST node — leaf comparison or AND/OR group. */
+type WhereNode =
+  | { readonly kind: "cmp"; readonly column: string; readonly op: WhereOp }
+  | { readonly kind: "and"; readonly children: readonly WhereNode[] }
+  | { readonly kind: "or"; readonly children: readonly WhereNode[] };
+
+/** One `ORDER BY` term. */
+interface OrderTerm {
+  readonly column: string;
+  readonly direction: "ASC" | "DESC";
+}
+
+/**
+ * Parse a WHERE clause into an AST. Supports parenthesized groups, `AND` /
+ * `OR`, binary comparisons, and `like` / `ilike` — the shapes the store
+ * session compiler emits. Anything else throws.
+ *
+ * @param clause - WHERE text (without the `WHERE` keyword)
+ */
+function parseWhere(clause: string): WhereNode {
+  const tokens = tokenizeWhere(clause);
+  const unsupported = (): Error => new Error(`memory sql: unsupported WHERE: ${clause}`);
+  let pos = 0;
+
+  const peek = (): string | undefined => tokens[pos];
+  const parseLevel = (keyword: "AND" | "OR", down: () => WhereNode): WhereNode => {
+    const first = down();
+    if (peek()?.toUpperCase() !== keyword) return first;
+    const rest: WhereNode[] = [];
+    do {
+      pos++;
+      rest.push(down());
+    } while (peek()?.toUpperCase() === keyword);
+    const children = [first, ...rest];
+    return keyword === "AND" ? { kind: "and", children } : { kind: "or", children };
+  };
+  const parseFactor = (): WhereNode => {
+    if (peek() === "(") {
+      pos++;
+      const node = parseLevel("OR", () => parseLevel("AND", parseFactor));
+      if (peek() !== ")") throw unsupported();
+      pos++;
+      return node;
+    }
+    const colTok = tokens[pos++];
+    const opTok = tokens[pos++];
+    const paramTok = tokens[pos++];
+    if (colTok === undefined || opTok === undefined || paramTok !== "?") throw unsupported();
+    const op = asWhereOp(opTok);
+    if (op === undefined) throw unsupported();
+    return { kind: "cmp", column: colTok.replaceAll('"', "").trim(), op };
+  };
+
+  const node = parseLevel("OR", () => parseLevel("AND", parseFactor));
+  if (pos !== tokens.length) throw unsupported();
+  return node;
+}
+
+function tokenizeWhere(clause: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < clause.length) {
+    const ch = clause[i]!;
+    if (/\s/.test(ch)) {
+      i++;
+      continue;
+    }
+    if (ch === "(" || ch === ")" || ch === "?") {
+      out.push(ch);
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      const end = clause.indexOf('"', i + 1);
+      if (end === -1) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
+      out.push(clause.slice(i, end + 1));
+      i = end + 1;
+      continue;
+    }
+    const two = clause.slice(i, i + 2);
+    if (two === "<=" || two === ">=" || two === "<>" || two === "!=") {
+      out.push(two);
+      i += 2;
+      continue;
+    }
+    if (ch === "=" || ch === "<" || ch === ">") {
+      out.push(ch);
+      i++;
+      continue;
+    }
+    const word = /^[a-zA-Z_][a-zA-Z0-9_]*/.exec(clause.slice(i));
+    if (word) {
+      out.push(word[0]);
+      i += word[0].length;
+      continue;
+    }
+    throw new Error(`memory sql: unsupported WHERE: ${clause}`);
+  }
+  return out;
+}
+
+function asWhereOp(token: string): WhereOp | undefined {
+  switch (token.toLowerCase()) {
+    case "=":
+      return "=";
+    case "<":
+      return "<";
+    case ">":
+      return ">";
+    case "<=":
+      return "<=";
+    case ">=":
+      return ">=";
+    case "!=":
+    case "<>":
+      return "!=";
+    case "like":
+      return "like";
+    case "ilike":
+      return "ilike";
+    default:
+      return undefined;
+  }
+}
+
+/** Evaluate a WHERE AST against a row, consuming `?` params in order. */
+function evalWhere(
+  node: WhereNode,
+  row: SqlRow,
+  params: readonly unknown[],
+  state: { i: number },
+): boolean {
+  if (node.kind === "and") {
+    return node.children.every((c) => evalWhere(c, row, params, state));
+  }
+  if (node.kind === "or") {
+    return node.children.some((c) => evalWhere(c, row, params, state));
+  }
+  const want = params[state.i++];
+  return compareRow(row[node.column], want, node.op);
+}
+
+/** Parse `col = ? AND col2 = ?` into ordered column names (equality-only). */
 function parseEqualityWhere(clause: string): string[] {
-  return parseWherePredicates(clause).map((p) => {
-    if (p.op !== "=") {
+  const node = parseWhere(clause);
+  const cols: string[] = [];
+  const walk = (n: WhereNode): void => {
+    if (n.kind === "and") {
+      n.children.forEach(walk);
+      return;
+    }
+    if (n.kind === "or" || n.op !== "=") {
       throw new Error(`memory sql: unsupported WHERE: ${clause}`);
     }
-    return p.column;
+    cols.push(n.column);
+  };
+  walk(node);
+  return cols;
+}
+
+/** Parse `"a" DESC, "b"` into ordered terms (default ASC). */
+function parseOrderTerms(clause: string): OrderTerm[] {
+  return clause.split(",").map((part) => {
+    const m = /^\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)(?:\s+(ASC|DESC))?\s*$/i.exec(part);
+    if (!m) throw new Error(`memory sql: unsupported ORDER BY: ${clause}`);
+    return {
+      column: m[1]!.replaceAll('"', "").trim(),
+      direction: (m[2]?.toUpperCase() ?? "ASC") as OrderTerm["direction"],
+    };
   });
 }
 
-/** One WHERE predicate for the memory SQL driver. */
-interface WherePred {
-  readonly column: string;
-  readonly op: "=" | "<" | ">" | "<=" | ">=" | "!=";
+function compareByTerms(a: SqlRow, b: SqlRow, terms: readonly OrderTerm[]): number {
+  for (const term of terms) {
+    const av = a[term.column];
+    const bv = b[term.column];
+    let cmp: number;
+    if (typeof av === "number" && typeof bv === "number") {
+      cmp = av - bv;
+    } else {
+      cmp = String(av ?? "").localeCompare(String(bv ?? ""));
+    }
+    if (cmp !== 0) return term.direction === "DESC" ? -cmp : cmp;
+  }
+  return 0;
 }
 
-/** Parse `col = ? AND col2 < ?` into ordered predicates. */
-function parseWherePredicates(clause: string): WherePred[] {
-  return clause.split(/\s+AND\s+/i).map((part) => {
-    const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(=|<=|>=|<>|!=|<|>)\s*\?$/.exec(part.trim());
-    if (!m) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
-    const opRaw = m[2]!;
-    const op: WherePred["op"] = opRaw === "<>" ? "!=" : (opRaw as WherePred["op"]);
-    return { column: m[1]!.replaceAll('"', "").trim(), op };
-  });
-}
-
-function compareRow(cell: unknown, want: unknown, op: WherePred["op"]): boolean {
+function compareRow(cell: unknown, want: unknown, op: WhereOp): boolean {
   if (op === "=") return cell === want;
   if (op === "!=") return cell !== want;
-  const a = Number(cell ?? 0);
-  const b = Number(want ?? 0);
+  // sqlite parity: LIKE is case-insensitive for ASCII; ILIKE matches it.
+  if (op === "like" || op === "ilike") return likeMatch(cell, want);
+  let cmp: number;
+  if (typeof cell === "number" && typeof want === "number") {
+    cmp = cell - want;
+  } else if (typeof cell === "string" && typeof want === "string") {
+    cmp = cell.localeCompare(want);
+  } else {
+    cmp = Number(cell ?? 0) - Number(want ?? 0);
+  }
   switch (op) {
     case "<":
-      return a < b;
+      return cmp < 0;
     case ">":
-      return a > b;
+      return cmp > 0;
     case "<=":
-      return a <= b;
+      return cmp <= 0;
     case ">=":
-      return a >= b;
+      return cmp >= 0;
     default:
       return false;
   }
+}
+
+function likeMatch(cell: unknown, pattern: unknown): boolean {
+  const text = String(cell ?? "");
+  const source = String(pattern ?? "")
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/%/g, ".*")
+    .replace(/_/g, ".");
+  return new RegExp(`^${source}$`, "i").test(text);
 }
 
 /** Memory SQL driver. */

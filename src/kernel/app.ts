@@ -62,7 +62,7 @@ import {
   isJournalSuspend,
   type JournalSession,
 } from "./journal.ts";
-import { listBindings, type Binding } from "./on.ts";
+import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
   applyPrincipal,
   createElementPipelineHooks,
@@ -102,8 +102,23 @@ export interface OkeOptions {
    * Default `true`.
    */
   readonly aot?: boolean;
-  /** Extra bindings (in addition to the global {@link on} registry). */
+  /**
+   * Extra bindings. Combined with the global {@link on} registry unless
+   * {@link OkeOptions.registry} is `"ignore"` — then this is the only source.
+   */
   readonly bindings?: readonly Binding[];
+  /**
+   * How the global {@link on} registry is treated at construction.
+   *
+   * - `"consume"` (default) — adopt registered bindings, then clear the
+   *   registry so a later {@link oke} in the same process cannot inherit
+   *   this app's flows.
+   * - `"keep"` — adopt registered bindings and leave the registry intact
+   *   (legacy behavior).
+   * - `"ignore"` — adopt only {@link OkeOptions.bindings}; the registry is
+   *   neither read nor cleared (embedding / Console).
+   */
+  readonly registry?: "consume" | "keep" | "ignore";
   /** Base fx options applied to every invocation. */
   readonly fx?: Omit<CreateFxOptions, "flow" | "effects" | "capability">;
   /**
@@ -383,7 +398,12 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
  */
 export function oke(options: OkeOptions): OkeApp {
   const aot = options.aot !== false;
-  const adopted: Binding[] = [...listBindings(), ...(options.bindings ?? [])];
+  const registry = options.registry ?? "consume";
+  const adopted: Binding[] =
+    registry === "ignore"
+      ? [...(options.bindings ?? [])]
+      : [...listBindings(), ...(options.bindings ?? [])];
+  if (registry === "consume") resetBindings();
   /** Retained for test harness / boot merges. */
   const $options = options;
 

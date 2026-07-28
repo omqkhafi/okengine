@@ -10,10 +10,16 @@ import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/typ
 import { throwOke } from "../../kernel/errors.ts";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
-import { compileWhere, resolveSelectColumns, type WhereMap } from "./sql-condition.ts";
+import {
+  compileOrderBy,
+  compileWhere,
+  resolveSelectColumns,
+  type WhereMap,
+} from "./sql-condition.ts";
 import {
   mapRowToJs,
   prepareInsertRow,
+  prepareUpdateRow,
   resolveColumns,
   resolveTableName,
   type TableHandle,
@@ -40,9 +46,9 @@ export interface SqlSessionOptions {
 }
 
 /**
- * Continuations after `.where(...)` on a select — awaitable, optional `.limit`.
+ * Continuations after `.orderBy(...)` — awaitable, optional `.limit`.
  */
-export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
+export interface SelectOrderBuilder extends PromiseLike<SqlRow[]> {
   /**
    * Cap the number of returned rows.
    *
@@ -52,16 +58,48 @@ export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
 }
 
 /**
- * Result of `.from(table)` — awaitable (all rows) or chain `.where(...)`.
+ * Continuations after `.where(...)` on a select — awaitable, optional
+ * `.orderBy(...)` / `.limit(...)`.
+ */
+export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
+  /**
+   * Order rows with Drizzle `asc()` / `desc()` terms.
+   *
+   * @param orders - Order terms
+   */
+  orderBy(...orders: readonly unknown[]): SelectOrderBuilder;
+  /**
+   * Cap the number of returned rows.
+   *
+   * @param n - Max rows
+   */
+  limit(n: number): Promise<SqlRow[]>;
+}
+
+/**
+ * Result of `.from(table)` — awaitable (all rows) or chain
+ * `.where(...)` / `.orderBy(...)` / `.limit(...)` in any order.
  */
 export interface SelectFromBuilder extends PromiseLike<SqlRow[]> {
   /**
    * Filter with a plain equality map or a Drizzle SQL condition
-   * (`eq`, `and`, `lt`, …).
+   * (`eq`, `and`, `or`, `lt`, `like`, …).
    *
    * @param where - Condition
    */
   where(where: unknown): SelectWhereBuilder;
+  /**
+   * Order rows with Drizzle `asc()` / `desc()` terms.
+   *
+   * @param orders - Order terms
+   */
+  orderBy(...orders: readonly unknown[]): SelectOrderBuilder;
+  /**
+   * Cap the number of returned rows.
+   *
+   * @param n - Max rows
+   */
+  limit(n: number): Promise<SqlRow[]>;
 }
 
 /** Fluent select builder. */
@@ -287,11 +325,17 @@ export function createSqlStoreHandle(
     return compileWhere(where);
   }
 
+  /** Accumulated select state across the fluent chain. */
+  interface SelectPlan {
+    readonly where?: unknown;
+    readonly orders?: readonly unknown[];
+    readonly limit?: number;
+  }
+
   async function runSelect(
     table: TableHandle | unknown,
     projection: ReturnType<typeof resolveSelectColumns>,
-    where: unknown | undefined,
-    limit?: number,
+    plan: SelectPlan = {},
   ): Promise<SqlRow[]> {
     await ensureFromMeta(table);
     const name = resolveTableName(table);
@@ -308,15 +352,19 @@ export function createSqlStoreHandle(
 
     let sql = `SELECT ${selectList} FROM ${quoteIdent(name)}`;
     const params: unknown[] = [];
-    if (where !== undefined) {
-      const compiled = compileTableWhere(table, where);
+    if (plan.where !== undefined) {
+      const compiled = compileTableWhere(table, plan.where);
       if (compiled.clause) {
         sql += ` WHERE ${compiled.clause}`;
         params.push(...compiled.params);
       }
     }
-    if (limit !== undefined) {
-      sql += ` LIMIT ${Math.max(0, Math.floor(limit))}`;
+    if (plan.orders !== undefined && plan.orders.length > 0) {
+      const terms = compileOrderBy(plan.orders);
+      sql += ` ORDER BY ${terms.map((o) => `${quoteIdent(o.column)} ${o.direction}`).join(", ")}`;
+    }
+    if (plan.limit !== undefined) {
+      sql += ` LIMIT ${Math.max(0, Math.floor(plan.limit))}`;
     }
 
     const rows = await query(sql, params);
@@ -338,21 +386,34 @@ export function createSqlStoreHandle(
 
   function selectFrom(table: TableHandle | unknown, columns?: unknown): SelectFromBuilder {
     const projection = resolveSelectColumns(columns);
-    const all = runSelect(table, projection, undefined);
+
+    // Builders are lazy: the query runs on the first await / `.limit(n)`,
+    // so a chained `where → orderBy → limit` issues exactly one SELECT.
+    function tail(plan: SelectPlan): SelectOrderBuilder {
+      return {
+        limit(n) {
+          return runSelect(table, projection, { ...plan, limit: n });
+        },
+        then(onfulfilled, onrejected) {
+          return runSelect(table, projection, plan).then(onfulfilled, onrejected);
+        },
+      };
+    }
+
+    function filtered(where: unknown): SelectWhereBuilder {
+      const plan: SelectPlan = where === undefined ? {} : { where };
+      return {
+        ...tail(plan),
+        orderBy(...orders) {
+          return tail({ ...plan, orders });
+        },
+      };
+    }
+
     return {
+      ...filtered(undefined),
       where(where) {
-        const filtered = runSelect(table, projection, where);
-        return {
-          limit(n) {
-            return runSelect(table, projection, where, n);
-          },
-          then(onfulfilled, onrejected) {
-            return filtered.then(onfulfilled, onrejected);
-          },
-        };
-      },
-      then(onfulfilled, onrejected) {
-        return all.then(onfulfilled, onrejected);
+        return filtered(where);
       },
     };
   }
@@ -412,7 +473,7 @@ export function createSqlStoreHandle(
           return {
             async where(where) {
               await ensureFromMeta(table);
-              const prepared = prepareInsertRow(table, row);
+              const prepared = prepareUpdateRow(table, row);
               const setEntries = Object.entries(prepared);
               if (setEntries.length === 0) return 0;
               const setSql = setEntries.map(([col]) => `${quoteIdent(col)} = ?`).join(", ");

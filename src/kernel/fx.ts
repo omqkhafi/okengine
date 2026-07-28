@@ -10,7 +10,14 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
-import type { StoreDecl, StoreHandle, StoreRuntime, SqlStoreHandle } from "../elements/store.ts";
+import type {
+  SelectOrderBuilder,
+  StoreDecl,
+  StoreHandle,
+  StoreRuntime,
+  SqlStoreHandle,
+} from "../elements/store.ts";
+import type { SqlRow } from "../drivers/types.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
 import type { VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
@@ -523,30 +530,45 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       select(columns?) {
         return {
           from(table) {
-            const all = gated("read", ref, async () => {
-              const h = await ensure();
-              return h.select(columns).from(table);
-            });
-            return {
-              where(where) {
-                const filtered = gated("read", ref, async () => {
-                  const h = await ensure();
-                  return h.select(columns).from(table).where(where);
-                });
-                return {
-                  limit(n) {
-                    return gated("read", ref, async () => {
-                      const h = await ensure();
-                      return h.select(columns).from(table).where(where).limit(n);
-                    });
-                  },
-                  then(onfulfilled, onrejected) {
-                    return filtered.then(onfulfilled, onrejected);
-                  },
-                };
+            const run = (plan: {
+              where?: unknown;
+              orders?: readonly unknown[];
+              limit?: number;
+            }): Promise<SqlRow[]> =>
+              gated("read", ref, async () => {
+                const h = await ensure();
+                const from = h.select(columns).from(table);
+                const filtered = plan.where === undefined ? from : from.where(plan.where);
+                const ordered =
+                  plan.orders === undefined ? filtered : filtered.orderBy(...plan.orders);
+                return plan.limit === undefined ? ordered : ordered.limit(plan.limit);
+              });
+
+            const tail = (plan: {
+              where?: unknown;
+              orders?: readonly unknown[];
+            }): SelectOrderBuilder => ({
+              limit(n) {
+                return run({ ...plan, limit: n });
               },
               then(onfulfilled, onrejected) {
-                return all.then(onfulfilled, onrejected);
+                return run(plan).then(onfulfilled, onrejected);
+              },
+            });
+
+            return {
+              where(where) {
+                return {
+                  ...tail({ where }),
+                  orderBy: (...orders: readonly unknown[]) => tail({ where, orders }),
+                };
+              },
+              orderBy: (...orders: readonly unknown[]) => tail({ orders }),
+              limit(n: number) {
+                return run({ limit: n });
+              },
+              then(onfulfilled, onrejected) {
+                return run({}).then(onfulfilled, onrejected);
               },
             };
           },

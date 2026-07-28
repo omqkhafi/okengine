@@ -83,6 +83,8 @@ export type {
   SqlStoreHandle,
   SelectBuilder,
   SelectFromBuilder,
+  SelectWhereBuilder,
+  SelectOrderBuilder,
   InsertBuilder,
   InsertValuesBuilder,
   SqlSessionOptions,

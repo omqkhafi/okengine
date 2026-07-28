@@ -1,6 +1,6 @@
 /**
- * Compile Drizzle SQL operators (`eq`, `and`, `lt`, …) and plain equality
- * maps into `WHERE` SQL + bound params for {@link SqlConnection}.
+ * Compile Drizzle SQL operators (`eq`, `and`, `or`, `lt`, `like`, …) and plain
+ * equality maps into `WHERE` SQL + bound params for {@link SqlConnection}.
  *
  * Table-agnostic query-builder support — not domain helpers.
  */
@@ -11,7 +11,7 @@ export type WhereMap = Readonly<Record<string, unknown>>;
 /** One compiled predicate (`col op ?`). */
 export interface CompiledPredicate {
   readonly column: string;
-  readonly op: "=" | "<" | ">" | "<=" | ">=" | "!=";
+  readonly op: "=" | "<" | ">" | "<=" | ">=" | "!=" | "like" | "ilike";
   readonly value: unknown;
 }
 
@@ -21,6 +21,21 @@ export interface CompiledWhere {
   readonly params: readonly unknown[];
   readonly predicates: readonly CompiledPredicate[];
 }
+
+/** One compiled `ORDER BY` term. */
+export interface CompiledOrder {
+  readonly column: string;
+  readonly direction: "ASC" | "DESC";
+}
+
+/** Intermediate compiled node — a leaf comparison or a joined group. */
+interface CompiledNode {
+  readonly clause: string;
+  readonly params: readonly unknown[];
+  readonly predicates: readonly CompiledPredicate[];
+}
+
+const EMPTY_NODE: CompiledNode = { clause: "", params: [], predicates: [] };
 
 /**
  * True when `value` looks like a Drizzle `SQL` wrapper (`eq` / `and` / …).
@@ -40,7 +55,11 @@ export function isDrizzleSql(value: unknown): boolean {
  *
  * Accepts:
  * - plain {@link WhereMap} equality maps
- * - Drizzle `SQL` from `eq` / `and` / `lt` / …
+ * - Drizzle `SQL` from `eq` / `and` / `or` / `lt` / `like` / …
+ *
+ * Nested `and(...)` / `or(...)` compile to parenthesized groups — `or` is
+ * never flattened into `AND`. Unsupported operators throw rather than
+ * silently dropping predicates.
  *
  * @param where - Condition
  */
@@ -50,8 +69,8 @@ export function compileWhere(where: unknown): CompiledWhere {
   }
 
   if (isDrizzleSql(where)) {
-    const predicates = extractPredicates(where);
-    return predicatesToWhere(predicates);
+    const node = compileSqlNode(where);
+    return { clause: node.clause, params: node.params, predicates: node.predicates };
   }
 
   if (typeof where === "object" && !Array.isArray(where)) {
@@ -69,7 +88,50 @@ export function compileWhere(where: unknown): CompiledWhere {
 }
 
 /**
- * Turn predicates into `col = ? AND …` form.
+ * Compile Drizzle `asc()` / `desc()` terms into `ORDER BY` entries.
+ * Bare column references default to `ASC`.
+ *
+ * @param orders - Order terms (`asc(col)` / `desc(col)` SQL or columns)
+ */
+export function compileOrderBy(orders: readonly unknown[]): readonly CompiledOrder[] {
+  return orders.map((order) => {
+    if (isDrizzleSql(order)) {
+      let column: string | undefined;
+      let text = "";
+      for (const chunk of chunksOf(order)) {
+        if (isDrizzleSql(chunk)) {
+          throw new TypeError("orderBy(): nested SQL is not supported");
+        }
+        const chunkString = chunkText(chunk);
+        if (chunkString !== undefined) {
+          text += chunkString;
+          continue;
+        }
+        const col = asColumn(chunk);
+        if (col === undefined) {
+          throw new TypeError("orderBy(): expected drizzle asc()/desc() SQL");
+        }
+        if (column !== undefined) {
+          throw new TypeError("orderBy(): one column per term");
+        }
+        column = col;
+      }
+      if (column === undefined) {
+        throw new TypeError("orderBy(): expected drizzle asc()/desc() SQL");
+      }
+      const dir = text.trim().toLowerCase();
+      if (dir === "" || dir === "asc") return { column, direction: "ASC" } as const;
+      if (dir === "desc") return { column, direction: "DESC" } as const;
+      throw new TypeError(`orderBy(): unsupported direction ${JSON.stringify(text.trim())}`);
+    }
+    const col = asColumn(order);
+    if (col !== undefined) return { column: col, direction: "ASC" } as const;
+    throw new TypeError("orderBy(): expected drizzle asc()/desc() SQL or a column");
+  });
+}
+
+/**
+ * Turn predicates into `col = ? AND …` form (plain equality maps only).
  *
  * @param predicates - Ordered predicates
  */
@@ -86,41 +148,123 @@ function predicatesToWhere(predicates: readonly CompiledPredicate[]): CompiledWh
 }
 
 /**
- * Walk Drizzle `queryChunks` and collect simple binary comparisons.
+ * Recursively compile one Drizzle `SQL` node. Nodes with nested `SQL`
+ * children are groups joined by `AND` / `OR` (detected from the separator
+ * chunks Drizzle emits); nodes without are leaf comparisons.
  *
- * @param node - Drizzle SQL or nested chunk
+ * @param node - Drizzle SQL wrapper
  */
-function extractPredicates(node: unknown): CompiledPredicate[] {
-  const out: CompiledPredicate[] = [];
-  walk(node, out);
-  return out;
+function compileSqlNode(node: unknown): CompiledNode {
+  const chunks = chunksOf(node);
+  const nested = chunks.filter(isDrizzleSql);
+
+  if (nested.length === 0) {
+    return compileLeaf(chunks);
+  }
+
+  // Group level: only structural parens and ` and ` / ` or ` separators may
+  // appear next to nested conditions — anything else is a loud failure.
+  let joiner: "AND" | "OR" | undefined;
+  for (const chunk of chunks) {
+    if (isDrizzleSql(chunk)) continue;
+    const text = chunkText(chunk);
+    if (text === undefined) {
+      throw new TypeError("sql where: unsupported mixed condition");
+    }
+    const token = text.trim().toLowerCase();
+    if (token === "" || token === "(" || token === ")") continue;
+    if (token === "and" || token === "or") {
+      const next = token.toUpperCase() as "AND" | "OR";
+      if (joiner !== undefined && joiner !== next) {
+        throw new TypeError("sql where: mixed AND/OR at one level — parenthesize explicitly");
+      }
+      joiner = next;
+      continue;
+    }
+    throw new TypeError(`sql where: unsupported fragment ${JSON.stringify(text)}`);
+  }
+
+  const children = nested.map(compileSqlNode).filter((c) => c.clause !== "");
+  if (children.length === 0) return EMPTY_NODE;
+  if (children.length === 1) return children[0] ?? EMPTY_NODE;
+  const sep = joiner ?? "AND";
+  return {
+    clause: children.map((c) => `(${c.clause})`).join(` ${sep} `),
+    params: children.flatMap((c) => c.params),
+    predicates: children.flatMap((c) => c.predicates),
+  };
 }
 
-function walk(node: unknown, out: CompiledPredicate[]): void {
-  if (!node || typeof node !== "object") return;
-  const chunks = (node as { queryChunks?: unknown[] }).queryChunks;
-  if (!Array.isArray(chunks)) return;
+/**
+ * Compile a leaf node (`col op ?`) from chunks with no nested `SQL`.
+ * Structural paren chunks are ignored; every other chunk must be part of the
+ * comparison or it throws.
+ *
+ * @param chunks - Drizzle query chunks
+ */
+function compileLeaf(chunks: readonly unknown[]): CompiledNode {
+  let column: string | undefined;
+  let op: CompiledPredicate["op"] | undefined;
+  let value: unknown;
+  let state: "start" | "column" | "op" | "done" = "start";
 
-  // Flatten nested SQL wrappers first so we can scan for col / op / param.
-  const flat: unknown[] = [];
-  for (const c of chunks) {
-    if (c && typeof c === "object" && "queryChunks" in (c as object)) {
-      walk(c, out);
-    } else {
-      flat.push(c);
+  for (const chunk of chunks) {
+    const text = chunkText(chunk);
+    if (text !== undefined) {
+      const token = text.trim();
+      if (token === "" || token === "(" || token === ")") continue;
+      if (state === "column") {
+        op = asOperator(token);
+        if (op === undefined) {
+          throw new TypeError(`sql where: unsupported operator ${JSON.stringify(token)}`);
+        }
+        state = "op";
+        continue;
+      }
+      throw new TypeError(`sql where: unsupported fragment ${JSON.stringify(text)}`);
     }
+    const col = asColumn(chunk);
+    if (col !== undefined) {
+      if (state !== "start") {
+        throw new TypeError("sql where: unsupported condition shape");
+      }
+      column = col;
+      state = "column";
+      continue;
+    }
+    const param = asParamValue(chunk);
+    if (param.found) {
+      if (state !== "op") {
+        throw new TypeError("sql where: unsupported condition shape");
+      }
+      value = param.value;
+      state = "done";
+      continue;
+    }
+    throw new TypeError("sql where: unsupported condition chunk");
   }
 
-  for (let i = 0; i < flat.length; i++) {
-    const col = asColumn(flat[i]);
-    if (!col) continue;
-    const op = asOperator(flat[i + 1]);
-    if (!op) continue;
-    const param = asParam(flat[i + 2]);
-    if (param === undefined) continue;
-    out.push({ column: col, op, value: param });
-    i += 2;
+  if (state === "start") return EMPTY_NODE;
+  if (state !== "done" || column === undefined || op === undefined) {
+    throw new TypeError("sql where: incomplete condition");
   }
+  const predicate: CompiledPredicate = { column, op, value };
+  return {
+    clause: `${quoteIdent(column)} ${op} ?`,
+    params: [value],
+    predicates: [predicate],
+  };
+}
+
+function chunksOf(node: unknown): readonly unknown[] {
+  return (node as { queryChunks: unknown[] }).queryChunks;
+}
+
+/** Joined text of a Drizzle `StringChunk` (`{ value: string[] }`). */
+function chunkText(chunk: unknown): string | undefined {
+  if (!chunk || typeof chunk !== "object") return undefined;
+  const value = (chunk as { value?: unknown }).value;
+  return Array.isArray(value) ? value.join("") : undefined;
 }
 
 function asColumn(chunk: unknown): string | undefined {
@@ -129,12 +273,8 @@ function asColumn(chunk: unknown): string | undefined {
   return typeof name === "string" && name.length > 0 ? name : undefined;
 }
 
-function asOperator(chunk: unknown): CompiledPredicate["op"] | undefined {
-  if (!chunk || typeof chunk !== "object") return undefined;
-  const value = (chunk as { value?: unknown }).value;
-  const text = Array.isArray(value) ? value.join("") : typeof value === "string" ? value : "";
-  const trimmed = text.trim();
-  switch (trimmed) {
+function asOperator(token: string): CompiledPredicate["op"] | undefined {
+  switch (token.toLowerCase()) {
     case "=":
       return "=";
     case "<":
@@ -148,18 +288,28 @@ function asOperator(chunk: unknown): CompiledPredicate["op"] | undefined {
     case "!=":
     case "<>":
       return "!=";
+    case "like":
+      return "like";
+    case "ilike":
+      return "ilike";
     default:
       return undefined;
   }
 }
 
-function asParam(chunk: unknown): unknown {
-  if (!chunk || typeof chunk !== "object") return undefined;
-  if (!("value" in (chunk as object))) return undefined;
-  // StringChunk also has `.value` (array of strings) — skip those.
-  if (Array.isArray((chunk as { value: unknown }).value)) return undefined;
-  if ((chunk as { name?: unknown }).name) return undefined;
-  return (chunk as { value: unknown }).value;
+/**
+ * Param values arrive either as Drizzle `Param` instances (wrapped by
+ * `bindIfParam`) or as raw primitives interpolated by `sql` templates
+ * (`like`, `ilike`, …).
+ */
+function asParamValue(chunk: unknown): { readonly found: boolean; readonly value?: unknown } {
+  if (chunk === undefined) return { found: false };
+  if (chunk === null || typeof chunk !== "object") return { found: true, value: chunk };
+  if (Array.isArray(chunk)) return { found: false };
+  if (!("value" in (chunk as object))) return { found: false };
+  if (Array.isArray((chunk as { value: unknown }).value)) return { found: false };
+  if ((chunk as { name?: unknown }).name) return { found: false };
+  return { found: true, value: (chunk as { value: unknown }).value };
 }
 
 /**

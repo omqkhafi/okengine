@@ -56,6 +56,8 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
 
   const app = oke({
     name: options.name ?? "console",
+    // Isolated source — leftover host `on()` registrations never enter Console.
+    registry: "ignore",
     bindings,
     autoBoot: false,
     fx: { now: state.now },
