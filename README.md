@@ -36,6 +36,7 @@ bunx create-oke@latest my-app --template hello     # scaffold
 bunx create-oke@latest my-app --template hello
 cd my-app
 oke dev
+# or: oke mode docker && oke dev   # compose infra · app on host Bun
 ```
 
 | Port    | Surface                                     |
@@ -48,6 +49,10 @@ oke dev
 Mnemonic: **O·K·E = 6·5·3**.
 
 Every backend behavior is a Flow: `on(Trigger) → Effects`. World access goes through `fx`.
+
+Store apps sync schema with `oke db push|generate|migrate` (local `oke dev`
+auto-pushes). Prefer `store.schema.table` + `field.*` (see Linkly) or keep a
+hand-written Drizzle `schema.ts`.
 
 ### `examples/notes/src/flows/notes/index.ts`
 

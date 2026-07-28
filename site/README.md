@@ -4,10 +4,12 @@ Next.js + [Fumadocs](https://fumadocs.dev) documentation site (black/glass theme
 better-auth-style how-tos).
 
 - **Get Started** (`content/docs/get-started/*.mdx`) is hand-authored handbook MDX
-  (Introduction → Comparison → Installation → Basic Usage).
+  (Introduction → Comparison → Installation → Basic Usage → Deploy).
 - **Learn / Elements / Console / …** are **transcluded** from `docs/spec/` via
   `scripts/sync-content.ts` — the site organizes and renders; it does not invent
   facts.
+- **Changelog** (`/changelog`) is derived from `docs/changelog.md` — keep that
+  file in lockstep with the published `okengine` version.
 
 ## Commands
 

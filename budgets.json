@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-28T20:23:27.410Z",
-  "version": "0.2.7",
+  "measuredAt": "2026-07-28T21:36:59.125Z",
+  "version": "0.2.8",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 25.347,
+      "value": 24.623,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",

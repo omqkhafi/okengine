@@ -7,18 +7,20 @@ Fastest possible “it works” — one unit, two HTTP flows, **no Store**.
 ```bash
 bun install
 oke dev          # app :6530 · Console :6533 · MCP :6535
+# or: oke mode docker && oke dev   # compose infra on host Bun
 ```
 
-| Port | Try |
-|---|---|
+| Port    | Try                    |
+| ------- | ---------------------- |
 | `:6530` | `GET /` · `GET /hello` |
-| `:6533` | Console |
-| `:6535` | MCP |
+| `:6533` | Console                |
+| `:6535` | MCP                    |
 
 ## What’s in this template
 
 ```text
 hello/
+├── .env.example               # copied to .env.local by create-oke
 ├── oke.config.ts
 ├── src/
 │   ├── app.ts                 # oke({ name: "hello" }).adopt({ hello })

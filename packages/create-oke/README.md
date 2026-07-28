@@ -12,11 +12,11 @@ On a TTY, create-oke opens a Clack wizard: confirm name, pick a template, and
 optionally install + start `oke dev`. Pass `--yes` or `--template` /
 `--from-example` for non-interactive (CI / agents).
 
-| Port    | What     |
-| ------- | -------- |
-| `:6530` | your app |
-| `:6533` | Console  |
-| `:6535` | MCP      |
+| Port    | What                |
+| ------- | ------------------- |
+| `:6530` | your app            |
+| `:6533` | Console             |
+| `:6535` | MCP (live Manifest) |
 
 Default template is **standard** (full recommended file layout, empty scaffolding).
 Pick another with `--template`, or start from a teaching example with `--from-example`:
@@ -37,6 +37,10 @@ schema. Pass `--sql postgres` to rewrite `src/schema.ts` to `pgTable` /
 `postgres`. The interactive wizard does not ask — same dual-mode default
 (skipped entirely for `hello`, which has no Store).
 
+Store-bearing scaffolds ship `drizzle.config.ts` and `.env.example`. Local
+`oke dev` auto-runs `oke db push` on schema change; use `oke mode docker` /
+`oke dev --docker` for compose infra.
+
 | Template   | Purpose                                                   |
 | ---------- | --------------------------------------------------------- |
 | `hello`    | Fastest possible "it works" — one flow, no Store          |
@@ -53,7 +57,7 @@ comments) — most new projects want `--template` instead.
 | Example      | Adds                                                 |
 | ------------ | ---------------------------------------------------- |
 | `notes`      | `oke` · `flow` · `http` · `store.sql` · typed client |
-| `linkly`     | `signal` · `clock` · `gate`                          |
+| `linkly`     | `signal` · `clock` · `gate` · abstract `schema.decl` |
 | `provisions` | durable flows · `vault` · `channel` · plugins        |
 | `skyport`    | `ai` · multi-tenancy · distributed topology          |
 

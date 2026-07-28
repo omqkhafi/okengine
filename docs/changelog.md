@@ -9,31 +9,17 @@ an `### Added` / `### Changed` / `### Fixed` group.
 
 ## Unreleased
 
-### Changed
-
-- Docs now state the relational-query limit explicitly (investigated, not a
-  feature): Drizzle RQB `db.query.*.findMany({ with: … })` is **not**
-  supported through `fx` — `fx.store` is a single-table session, so effect
-  inference, cache keys, and PII masking stay exact. Compose separate
-  single-table `fx.store` reads (or `fx.call`); each table then appears in
-  Manifest `reads` / `writes`.
-- Driver-map env roles `dev` → `local`, `stack` → `docker`. Bare `oke dev`
-  prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults to `local`
-  with no prompt, no compose boot, and no save. Session flags:
-  `--local`/`-l`, `--docker`/`-d [roles]`. `oke mode [local|docker]` reads or
-  sets the saved default.
-- Compose credentials live in `docker/.env.docker` (`OKE_DOCKER=1`), beside
-  compose; generated dotenv is role-grouped with operator comments. Vault
-  soft-reads a legacy project-root `.env.docker` when present.
-  `vault.fromDocker` replaces `vault.fromStack`.
-- Soft-compat: legacy `dev`/`stack` keys in `oke.config.ts` warn and normalize.
-  Hard-removed: `--stack`/`-s`, `OKE_STACK`, `.env.stack`, `fromStack`
-  (`oke upgrade` rewrites leftovers).
-- Extra published ports (Mailpit UI `8025`, RustFS console `9001`) are offset
-  per stack `instanceId` so multiple `oke dev --docker` projects do not collide.
+## v0.2.8 — 2026-07-29
 
 ### Added
 
+- Abstract store schema: `store.schema.table` + `field.text` / `field.integer`
+  (modifiers + `.pii()` / `.sensitive()` / `.retain()`). ORM-agnostic declare
+  site; `oke db push|generate|migrate` emits dialect-specific Drizzle
+  (`src/schema.generated.ts`) as a pre-step from `src/schema.decl.ts` and/or
+  live plugged plugin tables — not a third schema CLI. Hand-written `schema.ts`
+  remains the escape hatch. Prompt 42 / OKE1101 / docker-prod never-auto-DDL
+  unchanged.
 - Store foreign keys and relations: `field.*.references(() => table.col)` and
   `store.schema.relations({ … }, (r) => …)` mirroring drizzle-orm@1.0.0-rc.4
   `defineRelations` (`r.one.*` / `r.many.*` + `from` / `to`). Same emitter
@@ -41,13 +27,6 @@ an `### Added` / `### Changed` / `### Fixed` group.
   Linkly’s `daily`→`links` relationship is the first real usage. Many-to-many
   is a junction table with two one/many relations — no separate API. Declared
   relations do not change Manifest `reads` (`fx.store` remains single-table).
-- Abstract store schema: `store.schema.table` + `field.text` / `field.integer`
-  (modifiers + `.pii()` / `.sensitive()` / `.retain()`). ORM-agnostic declare
-  site; `oke db push|generate|migrate` emits dialect-specific Drizzle
-  (`src/schema.generated.ts`) as a pre-step from `src/schema.decl.ts` and/or
-  live plugged plugin tables — not a third schema CLI. Hand-written `schema.ts`
-  remains the escape hatch. Prompt 42 /
-  OKE1101 / docker-prod never-auto-DDL unchanged.
 - Plugin `.table(name, columns?, options?)` accepts `field.*` column maps;
   contributions merge into the same emitter. **`oke db` loads the live app
   entry** (`src/app.ts` / `db.entry`) and merges `app.plugins.tableContributions()`
@@ -58,20 +37,77 @@ an `### Added` / `### Changed` / `### Fixed` group.
   `store.schema.table` columns + PII into `stores.*.tables.*.columns`.
 - `oke db push|generate|migrate` — domain schema sync via drizzle-kit
   (distinct from `oke schema generate` core/plugin stubs). Local `oke dev`
-  auto-runs `oke db push` when `schema.ts` changes (opt out: `--no-db-push`
-  or `db: { autoPush: false }`). Docker/prod never auto-apply DDL;
-  missing tables remapped to `OKE1101` with fix `oke db migrate`.
+  auto-runs `oke db push` when `schema.ts` / `schema.decl.ts` / `app.ts`
+  changes (opt out: `--no-db-push` or `db: { autoPush: false }`). Docker/prod
+  never auto-apply DDL; missing tables remapped to `OKE1101` with fix
+  `oke db migrate`.
 - Templates/examples ship `drizzle.config.ts` (`out: ./drizzle`) plus
   `drizzle-kit` as a devDependency.
-- `create-oke --sql postgres` (opt-in) rewrites `src/schema.ts` to the
-  matching Drizzle dialect and pins `oke.config.ts` `store.sql`
-  local/docker/prod. Default scaffold keeps dual-mode (`local: sqlite` ·
-  `docker`/`prod: postgres`); the interactive wizard no longer asks.
+
+### Changed
+
+- Docs now state the relational-query limit explicitly (investigated, not a
+  feature): Drizzle RQB `db.query.*.findMany({ with: … })` is **not**
+  supported through `fx` — `fx.store` is a single-table session, so effect
+  inference, cache keys, and PII masking stay exact. Compose separate
+  single-table `fx.store` reads (or `fx.call`); each table then appears in
+  Manifest `reads` / `writes`.
+- `create-oke` interactive wizard no longer asks for Store SQL driver; default
+  dual-mode (`local: sqlite` · `docker`/`prod: postgres`) stays, with
+  `--sql postgres` still opt-in for a pinned `pgTable` scaffold.
+- Soft-compat: legacy `dev`/`stack` keys in `oke.config.ts` warn and normalize
+  to `local`/`docker`. CLI stack flags remain hard-removed (`--stack`/`-s`,
+  `OKE_STACK`, `.env.stack`, `fromStack` — `oke upgrade` rewrites leftovers).
+
+## v0.2.7 — 2026-07-28
+
+### Added
+
+- `create-oke --sql sqlite|postgres` (wizard prompt too): `postgres` rewrites
+  `src/schema.ts` to `pgTable` and pins `oke.config.ts` `store.sql`
+  local/docker/prod; default `sqlite` keeps the dual-mode template pins with
+  `sqliteTable`.
+- Handbook **Get Started → Deploy**: protocols from `oke.config.ts`, connection
+  values from `process.env`, staging as a second deploy, `oke docker --prod` /
+  `oke start`. Template `.env.example` and READMEs document `DATABASE_URL` /
+  `REDIS_URL` vs vault app secrets.
+- `resolveConfigEnv` — boot selects `docker` / `prod` / `test` / `local` from
+  `OKE_DOCKER` and `NODE_ENV` when `$options.env` is unset (templates no longer
+  hardcode `env: "test"`).
 - Mailpit and RustFS image recipes for local SMTP catcher / S3-compatible
   object storage under `oke dev --docker`.
 - `CONTRIBUTING.md` and `docs/guides/writing-a-driver.md` (ClickHouse runs
   worked example).
 - `.env.example` for every template and teaching example, with inline docs.
+
+### Fixed
+
+- `docker/.env.docker` is recipe-accurate: Postgres keeps USER/PASSWORD/DB;
+  Redis emits PASSWORD (+ `REDIS_URL`) only; S3 uses ACCESS_KEY/SECRET_KEY/
+  BUCKET (+ `S3_*` / `AWS_*` aliases and console `UI_URL`); Mailpit emits
+  SMTP URL (+ `SMTP_URL`) and UI URL — no fake USER/PASSWORD/DB.
+
+### Changed
+
+- `oke.config.ts` driver maps: `dev` → `local`, `stack` → `docker`. Boot uses
+  `env: "local"` by default and `env: "docker"` under `OKE_DOCKER=1`.
+  Compose credentials write `docker/.env.docker` (legacy project-root
+  `.env.docker` still read). Soft-compat for `--stack`/`-s`, `OKE_STACK`,
+  `.env.stack`, and `vault.fromStack` is removed — use `--docker`/`-d`,
+  `OKE_DOCKER=1`, `docker/.env.docker`, and `vault.fromDocker`.
+- Per-project docker stacks offset Mailpit UI (`8025`) and RustFS console
+  (`9001`) host ports, so a second `oke dev -d` no longer fails with
+  “port is already allocated”.
+- `docker/.env.docker` and template `.env.example` files are commented and
+  grouped by role (Vault vs compose services) instead of a flat dump.
+- `oke dev --local` / `-l` forces laptop drivers for one session;
+  `oke dev --docker` / `-d` boots compose infra with the app on host Bun.
+- Bare `oke dev`: TTY prompts once (local vs docker) and saves `.oke/mode`;
+  non-TTY defaults to `local` with no prompt and no save. Change the default
+  with `oke mode local|docker`. A saved `docker` preference that fails to boot
+  fails loudly (hint: `oke mode local`) — never silent downgrade.
+- `oke upgrade` includes a codemod for the driver-map key rename
+  (`dev`→`local`, `stack`→`docker`) and `fromStack`→`fromDocker`.
 
 ## v0.2.6 — 2026-07-26
 

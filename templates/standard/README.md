@@ -8,19 +8,25 @@ business logic. Default `create-oke` template.
 ```bash
 bun install
 oke dev          # app :6530 · Console :6533 · MCP :6535
+# or: oke mode docker && oke dev   # postgres · redis · Mailpit · RustFS · sops
 ```
 
-| Port | Try |
-|---|---|
-| `:6530` | `GET /` · `GET /health` |
-| `:6533` | Console |
-| `:6535` | MCP |
+Local `oke dev` auto-runs `oke db push` when `schema.ts` changes (opt out:
+`--no-db-push`). Docker/prod never auto-apply DDL — use `oke db migrate`.
+
+| Port    | Try                       |
+| ------- | ------------------------- |
+| `:6530` | `GET /` · `GET /health`   |
+| `:6533` | Console                   |
+| `:6535` | MCP                       |
 
 ## What’s in this template
 
 ```text
 standard/
-├── oke.config.ts
+├── .env.example               # copied to .env.local by create-oke
+├── drizzle.config.ts          # oke db push|generate|migrate
+├── oke.config.ts              # local: sqlite · docker/prod: postgres
 ├── src/
 │   ├── app.ts                 # adopt({ main }); wires stores + side modules
 │   ├── core.ts / schema.ts    # Store (replace the placeholder table)
@@ -39,8 +45,19 @@ standard/
 - **Unit:** `main`
 - **Flows to replace:** `root`, `health` — delete or rename once your domain exists
 
-Fill `schema.ts`, then add real flows under `src/flows/<unit>/`. Prefer this
-layout for new products; use `hello` / `minimal` only when you want less surface.
+Fill `schema.ts` (or `schema.decl.ts` + `oke db`), then add real flows under
+`src/flows/<unit>/`. Prefer this layout for new products; use `hello` / `minimal`
+only when you want less surface.
+
+## Docker mode (`oke dev --docker`)
+
+Closest to production protocols: Postgres, Redis, SMTP (Mailpit), S3 (RustFS),
+vault `sops`/age. Compose credentials land in `docker/.env.docker`.
+
+| Surface        | URL                                              |
+| -------------- | ------------------------------------------------ |
+| Mailpit UI     | [http://127.0.0.1:8025](http://127.0.0.1:8025)   |
+| RustFS console | [http://127.0.0.1:9001](http://127.0.0.1:9001)   |
 
 ## Agent contract
 

@@ -15,8 +15,8 @@ const ROOT = join(import.meta.dir, "../..");
 const FORBIDDEN_STACK_FLAG = ["--", "stack"].join("");
 /** Forbidden compose env filename. */
 const FORBIDDEN_ENV_STACK = [".env.", "stack"].join("");
-/** Forbidden env var. */
-const FORBIDDEN_OKE_STACK = ["OKE_", "STACK"].join("");
+/** Forbidden env var — name avoids the contiguous token so this file is clean. */
+const FORBIDDEN_LEGACY_ENV = ["OKE_", "STACK"].join("");
 /** Forbidden vault helper. */
 const FORBIDDEN_FROM_STACK = ["from", "Stack"].join("");
 
@@ -56,7 +56,7 @@ describe("legacy stack-mode removal gate", () => {
   });
 
   test("tracked tree has zero legacy OKE env outside changelog", () => {
-    assertZeroGitGrep(FORBIDDEN_OKE_STACK, ["docs/changelog.md:"]);
+    assertZeroGitGrep(FORBIDDEN_LEGACY_ENV, ["docs/changelog.md:"]);
   });
 
   test("tracked tree has zero legacy vault helper outside changelog + upgrade", () => {
