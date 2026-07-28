@@ -44,7 +44,6 @@
     "sently": "^0.8.0"
   },
   "devDependencies": {
-    "age-encryption": "^0.3.0",
     "@base-ui/react": "^1.6.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-json": "^6.0.2",
@@ -61,6 +60,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "age-encryption": "^0.3.0",
     "arktype": "^2.2.3",
     "axe-core": "^4.12.1",
     "clsx": "^2.1.1",
@@ -70,6 +70,7 @@
     "drizzle-zod": "^0.8.3",
     "gflows": "^1.2.1",
     "happy-dom": "^20.11.1",
+    "hono": "^4.12.0",
     "mermaid": "^11.16.0",
     "playwright": "^1.62.0",
     "react": "^19.2.8",
