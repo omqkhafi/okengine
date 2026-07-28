@@ -103,7 +103,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -117,7 +117,7 @@
     },
     "packages/vscode-okengine": {
       "name": "vscode-okengine",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "dependencies": {
         "oxc-parser": "^0.141.0",
       },
@@ -162,7 +162,6 @@
       "name": "@oke/template-full",
       "version": "0.0.1",
       "dependencies": {
-        "age-encryption": "^0.3.0",
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
         "zod": "^4.4.3",
@@ -189,7 +188,6 @@
       "name": "@oke/template-standard",
       "version": "0.0.1",
       "dependencies": {
-        "age-encryption": "^0.3.0",
         "drizzle-orm": "^1.0.0-rc.4",
         "okengine": "file:../..",
         "zod": "^4.4.3",
