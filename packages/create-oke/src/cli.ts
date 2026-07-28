@@ -33,9 +33,11 @@ import {
   TEMPLATES,
   isExampleId,
   isTemplateId,
+  resolveLocalOkengineRoot,
   type ExampleId,
   type TemplateId,
 } from "./templates.ts";
+import { shouldBunLinkLocalOkengine, type SqlDriverId, DEFAULT_SQL_DRIVER, isSqlDriverId, SQL_DRIVERS } from "./transform.ts";
 
 /** Parsed CLI arguments. */
 export type CliArgs = {
@@ -44,6 +46,10 @@ export type CliArgs = {
   readonly fromExample: ExampleId | undefined;
   /** True when `--template` / `-t` was present on the argv. */
   readonly templateExplicit: boolean;
+  /** Store SQL driver (`sqlite` default). */
+  readonly sqlDriver: SqlDriverId;
+  /** True when `--sql` was present on the argv. */
+  readonly sqlDriverExplicit: boolean;
   readonly help: boolean;
   /** Skip all prompts; use defaults. */
   readonly yes: boolean;
@@ -68,6 +74,7 @@ export type InteractiveAnswers =
   | {
       readonly name: string;
       readonly choice: TemplateId;
+      readonly sqlDriver: SqlDriverId;
       readonly installAndRun: boolean;
       readonly agentsMd: boolean;
     }
@@ -75,6 +82,7 @@ export type InteractiveAnswers =
       readonly name: string;
       readonly choice: typeof FROM_EXAMPLE_CHOICE;
       readonly example: ExampleId;
+      readonly sqlDriver: SqlDriverId;
       readonly installAndRun: boolean;
       readonly agentsMd: boolean;
     };
@@ -87,6 +95,7 @@ export type ScaffoldCallArgs = {
   readonly targetDir: string;
   readonly source: ScaffoldSource;
   readonly agentsMd: boolean;
+  readonly sqlDriver: SqlDriverId;
 };
 
 /**
@@ -99,6 +108,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let template: TemplateId = DEFAULT_TEMPLATE;
   let fromExample: ExampleId | undefined;
   let templateExplicit = false;
+  let sqlDriver: SqlDriverId = DEFAULT_SQL_DRIVER;
+  let sqlDriverExplicit = false;
   let help = false;
   let yes = false;
   let install: boolean | undefined;
@@ -129,6 +140,28 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
     if (a === "--agents-md") {
       agentsMd = true;
+      continue;
+    }
+    if (a === "--sql") {
+      const next = argv[++i];
+      if (!next || !isSqlDriverId(next)) {
+        throw new Error(
+          `create-oke: --sql must be one of ${SQL_DRIVERS.join("|")}`,
+        );
+      }
+      sqlDriver = next;
+      sqlDriverExplicit = true;
+      continue;
+    }
+    if (a.startsWith("--sql=")) {
+      const value = a.slice("--sql=".length);
+      if (!isSqlDriverId(value)) {
+        throw new Error(
+          `create-oke: --sql must be one of ${SQL_DRIVERS.join("|")}`,
+        );
+      }
+      sqlDriver = value;
+      sqlDriverExplicit = true;
       continue;
     }
     if (a === "--template" || a === "-t") {
@@ -202,6 +235,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     template,
     fromExample,
     templateExplicit,
+    sqlDriver,
+    sqlDriverExplicit,
     help,
     yes,
     install,
@@ -225,15 +260,22 @@ export function formatCdPath(targetDir: string): string {
  * Post-scaffold next-steps block — shared by interactive and flag-driven paths.
  *
  * @param result - Successful scaffold result
+ * @param options - Whether a local `bun link okengine` step applies
  */
-export function nextStepsText(result: ScaffoldResult): string {
+export function nextStepsText(
+  result: ScaffoldResult,
+  options: { readonly bunLinkOkengine?: boolean } = {},
+): string {
+  const linkLine = options.bunLinkOkengine
+    ? "\n  bun link okengine   # use your local okengine (after `bun link` in the repo)"
+    : "";
   return `
 Scaffolded ${result.label} → ${result.targetDir}
 
 Next steps:
 
   cd ${formatCdPath(result.targetDir)}
-  bun install
+  bun install${linkLine}
   oke dev          # app :6530 · Console :6533 · MCP :6535
 
 Docs: ${docsUrl("/docs")}
@@ -263,6 +305,9 @@ Usage:
 Options:
   -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
   --from-example <id>   Teaching example (non-interactive)
+  --sql <id>            Store SQL driver: ${SQL_DRIVERS.join("|")} (default: ${DEFAULT_SQL_DRIVER})
+                        postgres → pgTable + pin store.sql; sqlite → sqliteTable
+                        (keeps dual-mode local/docker/prod pins)
   -y, --yes             No prompts; defaults + bun install (no oke dev)
   --install             Run bun install after scaffold
   --no-install          Skip bun install
@@ -278,7 +323,7 @@ comments — most new projects want --template instead):
 ${exampleLines}
 
 No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
-(confirm name, template, install). Non-TTY / --yes / --template /
+(confirm name, template, SQL driver, install). Non-TTY / --yes / --template /
 --from-example stay fully scriptable.
 `;
 }
@@ -332,6 +377,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     targetDir: args.targetDir,
     source: sourceFromArgs(args),
     agentsMd: args.agentsMd,
+    sqlDriver: args.sqlDriver,
   };
 }
 
@@ -354,6 +400,7 @@ export function scaffoldArgsFromAnswers(
       targetDir,
       source: { kind: "example", id: answers.example },
       agentsMd: answers.agentsMd,
+      sqlDriver: answers.sqlDriver,
     };
   }
   return {
@@ -361,6 +408,7 @@ export function scaffoldArgsFromAnswers(
     targetDir,
     source: { kind: "template", id: answers.choice },
     agentsMd: answers.agentsMd,
+    sqlDriver: answers.sqlDriver,
   };
 }
 
@@ -427,6 +475,9 @@ export async function askInteractiveAnswers(
     });
     if (isCancel(exampleValue)) return null;
 
+    const sqlDriver = await askSqlDriver();
+    if (sqlDriver === null) return null;
+
     const installAndRunValue = await confirm({
       message: "Install dependencies and start oke dev?",
       initialValue: true,
@@ -437,10 +488,17 @@ export async function askInteractiveAnswers(
       name,
       choice: FROM_EXAMPLE_CHOICE,
       example: exampleValue as ExampleId,
+      sqlDriver,
       installAndRun: Boolean(installAndRunValue),
       agentsMd,
     };
   }
+
+  const templateId = templateValue as TemplateId;
+  // hello has no Store — skip the SQL prompt.
+  const sqlDriver =
+    templateId === "hello" ? DEFAULT_SQL_DRIVER : await askSqlDriver();
+  if (sqlDriver === null) return null;
 
   const installAndRunValue = await confirm({
     message: "Install dependencies and start oke dev?",
@@ -450,10 +508,37 @@ export async function askInteractiveAnswers(
 
   return {
     name,
-    choice: templateValue as TemplateId,
+    choice: templateId,
+    sqlDriver,
     installAndRun: Boolean(installAndRunValue),
     agentsMd,
   };
+}
+
+/**
+ * Ask which store.sql driver to pin (schema dialect + config).
+ *
+ * @returns Chosen driver, or `null` on cancel
+ */
+async function askSqlDriver(): Promise<SqlDriverId | null> {
+  const value = await select({
+    message: "Store SQL driver",
+    options: [
+      {
+        value: "sqlite" as const,
+        label: "sqlite",
+        hint: "File DB — fastest local start",
+      },
+      {
+        value: "postgres" as const,
+        label: "postgres",
+        hint: "pgTable schema · same dialect for local/docker/prod",
+      },
+    ],
+    initialValue: DEFAULT_SQL_DRIVER,
+  });
+  if (isCancel(value)) return null;
+  return value as SqlDriverId;
 }
 
 /**
@@ -513,7 +598,7 @@ export async function run(
   if (args.yes) {
     const source = sourceFromArgs(args);
     console.log(
-      `Using defaults: ${source.kind}=${source.id} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
+      `Using defaults: ${source.kind}=${source.id} sql=${args.sqlDriver} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
     );
   }
 
@@ -573,6 +658,7 @@ async function runScaffold(
     targetDir,
     source,
     agentsMd,
+    sqlDriver,
     interactive,
     install,
     startDev,
@@ -605,23 +691,56 @@ async function runScaffold(
       name,
       source,
       writeAgentsMd: agentsMd,
+      sqlDriver,
     });
     if (spun) spun.stop("Scaffolded.");
 
+    const localRoot = resolveLocalOkengineRoot();
+    const bunLinkOkengine = shouldBunLinkLocalOkengine(
+      result.okengineDependency,
+      localRoot,
+    );
+
     if (runPostScaffold && install) {
-      const installSpun = interactive ? spinner() : undefined;
-      installSpun?.start("Installing dependencies…");
-      const installOk = await runCommand(["bun", "install"], targetDir);
-      if (!installOk) {
-        installSpun?.stop("Install failed.");
-        cleanup();
-        console.error("create-oke: bun install failed");
-        return 1;
+      // Interactive: inherit stdio so progress is visible (a spinner + piped
+      // bun install can look "stuck" and historically deadlocked on full pipes).
+      if (interactive) {
+        console.log("Installing dependencies…");
+        const installOk = await runCommand(["bun", "install"], targetDir, {
+          inherit: true,
+        });
+        if (!installOk) {
+          cleanup();
+          console.error("create-oke: bun install failed");
+          return 1;
+        }
+      } else {
+        const installOk = await runCommand(["bun", "install"], targetDir);
+        if (!installOk) {
+          cleanup();
+          console.error("create-oke: bun install failed");
+          return 1;
+        }
       }
-      installSpun?.stop("Installed.");
+
+      // After a fast registry install, swap in the globally `bun link`ed
+      // okengine so unreleased local/docker UX is what `oke dev` runs.
+      if (bunLinkOkengine) {
+        if (interactive) console.log("Linking local okengine…");
+        const linkOk = await runCommand(["bun", "link", "okengine"], targetDir, {
+          inherit: interactive,
+        });
+        if (!linkOk) {
+          console.warn(
+            "create-oke: bun link okengine failed — in the okengine repo run: bun link",
+          );
+        } else if (interactive) {
+          console.log("Linked local okengine.");
+        }
+      }
     }
 
-    const message = nextStepsText(result);
+    const message = nextStepsText(result, { bunLinkOkengine });
     if (interactive) {
       note(
         [
@@ -630,6 +749,7 @@ async function runScaffold(
           `MCP      http://127.0.0.1:6535`,
           `Docs     ${docsUrl("/docs")}`,
           agentsMd ? `Agents   AGENTS.md` : undefined,
+          bunLinkOkengine ? `Local    okengine via bun link` : undefined,
         ]
           .filter(Boolean)
           .join("\n"),
@@ -661,26 +781,36 @@ async function runScaffold(
 /**
  * Spawn a command in `cwd`.
  *
+ * When stdio is piped, stdout/stderr are drained concurrently — otherwise a
+ * chatty child (e.g. `bun install`) can fill the pipe buffer and deadlock.
+ *
  * @param cmd - Argv
  * @param cwd - Working directory
- * @param options - Inherit stdio for long-running processes
+ * @param options - Inherit stdio for long-running / interactive processes
  */
 async function runCommand(
   cmd: readonly string[],
   cwd: string,
   options: { readonly inherit?: boolean } = {},
 ): Promise<boolean> {
+  const inherit = options.inherit === true;
   const proc = Bun.spawn([...cmd], {
     cwd,
-    stdout: options.inherit ? "inherit" : "pipe",
-    stderr: options.inherit ? "inherit" : "pipe",
-    stdin: options.inherit ? "inherit" : undefined,
+    stdout: inherit ? "inherit" : "pipe",
+    stderr: inherit ? "inherit" : "pipe",
+    stdin: inherit ? "inherit" : undefined,
   });
-  const code = await proc.exited;
-  if (code !== 0 && !options.inherit) {
-    const err = await new Response(proc.stderr).text();
-    if (err.trim()) console.error(err);
+  if (inherit) {
+    return (await proc.exited) === 0;
   }
+  const stdout = proc.stdout;
+  const stderr = proc.stderr;
+  const [, errText, code] = await Promise.all([
+    stdout ? new Response(stdout).text() : Promise.resolve(""),
+    stderr ? new Response(stderr).text() : Promise.resolve(""),
+    proc.exited,
+  ]);
+  if (code !== 0 && errText.trim()) console.error(errText);
   return code === 0;
 }
 

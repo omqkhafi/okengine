@@ -2,7 +2,7 @@
  * Vault element — protected knowledge.
  *
  * Physics: secrets · config · environment.
- * Drivers: `sops` (Typage/age) · `env` · `openbao` · `infisical` · `managed`.
+ * Drivers: `sops` (Typage/age) · `env` · `infisical` · `managed`.
  *
  * A declaration is a contract, never a value. Boot validates every contract
  * and lists all gaps at once. Logs/traces receive fingerprints and redaction
@@ -12,10 +12,10 @@
 
 export {
   vault,
-  fromStack,
-  FROM_STACK_PREFIX,
-  isFromStack,
-  fromStackRole,
+  fromDocker,
+  FROM_DOCKER_PREFIX,
+  isFromDocker,
+  fromDockerRole,
 } from "./vault/declare.ts";
 export type {
   VaultSecretDecl,
@@ -36,6 +36,20 @@ export type {
   VaultResolutionStep,
   VaultRuntime,
 } from "./vault/runtime.ts";
+
+export {
+  defaultVaultResolutionChain,
+  resolveAgeIdentity,
+  resolveSopsPath,
+  DEFAULT_SOPS_PATH,
+  type DefaultVaultChainOptions,
+} from "./vault/chain.ts";
+
+export {
+  ensureSopsScaffold,
+  hasSopsBag,
+  type SopsScaffoldResult,
+} from "./vault/sops-scaffold.ts";
 
 export {
   fingerprintSecret,

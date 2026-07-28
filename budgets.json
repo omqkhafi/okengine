@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-26T01:08:53.710Z",
-  "version": "0.2.6",
+  "measuredAt": "2026-07-28T00:28:57.628Z",
+  "version": "0.2.7",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 88313,
+      "value": 88312,
       "limit": 307200,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 29.511,
+      "value": 28.144,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 43944,
-      "limit": 44823,
+      "value": 46949,
+      "limit": 47888,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -115,8 +115,8 @@
     {
       "id": "export:./config",
       "label": "config",
-      "value": 612,
-      "limit": 868,
+      "value": 991,
+      "limit": 1247,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 67075,
-      "limit": 68417,
+      "value": 69219,
+      "limit": 70604,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -155,8 +155,8 @@
     {
       "id": "export:./runs",
       "label": "runs",
-      "value": 6295,
-      "limit": 6551,
+      "value": 7907,
+      "limit": 8163,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 5800,
-      "limit": 6056,
+      "value": 5833,
+      "limit": 6089,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -195,8 +195,8 @@
     {
       "id": "export:./vault",
       "label": "vault",
-      "value": 2358,
-      "limit": 2614,
+      "value": 4745,
+      "limit": 5001,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +205,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 20070,
-      "limit": 20472,
+      "value": 19981,
+      "limit": 20381,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -375,8 +375,8 @@
     {
       "id": "export:./drivers/s3",
       "label": "s3",
-      "value": 825,
-      "limit": 1081,
+      "value": 894,
+      "limit": 1150,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -487,16 +487,6 @@
       "label": "vault-memory",
       "value": 375,
       "limit": 631,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "drivers",
-      "ok": true
-    },
-    {
-      "id": "export:./drivers/vault-openbao",
-      "label": "vault-openbao",
-      "value": 608,
-      "limit": 864,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

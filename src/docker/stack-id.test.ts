@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   hostPortForInstance,
+  instancePortOffset,
   parseStackCredentials,
   stackAppSlug,
   stackInstanceId,
@@ -45,13 +46,40 @@ describe("parseStackCredentials", () => {
 OKE_STORE_SQL_USER=oke
 OKE_STORE_SQL_PASSWORD=s3cret
 OKE_STORE_SQL_DB=oke
-OKE_STORE_KV_USER=oke
 OKE_STORE_KV_PASSWORD=kvpass
-OKE_STORE_KV_DB=oke
+OKE_STORE_FILES_ACCESS_KEY=ak
+OKE_STORE_FILES_SECRET_KEY=sk
+OKE_STORE_FILES_BUCKET=bucket
 `;
-    const creds = parseStackCredentials(text, ["store.sql", "store.kv"]);
+    const creds = parseStackCredentials(text, [
+      "store.sql",
+      "store.kv",
+      "store.files",
+      "channel.email",
+    ]);
     expect(creds["store.sql"]?.password).toBe("s3cret");
     expect(creds["store.kv"]?.password).toBe("kvpass");
+    expect(creds["store.kv"]?.user).toBe("oke");
+    expect(creds["store.files"]).toEqual({
+      user: "ak",
+      password: "sk",
+      database: "bucket",
+    });
+    expect(creds["channel.email"]).toBeUndefined();
+  });
+
+  test("soft-compat: files USER/PASSWORD/DB still parse", () => {
+    const text = `
+OKE_STORE_FILES_USER=legacy
+OKE_STORE_FILES_PASSWORD=legpass
+OKE_STORE_FILES_DB=legdb
+`;
+    const creds = parseStackCredentials(text, ["store.files"]);
+    expect(creds["store.files"]).toEqual({
+      user: "legacy",
+      password: "legpass",
+      database: "legdb",
+    });
   });
 });
 
@@ -82,5 +110,47 @@ describe("deriveInfrastructure instanceId", () => {
     expect(base).toContain("oke-dev-abcdef");
     expect(result.stackEnv.DATABASE_URL).toMatch(/:15\d{3}\//);
     expect(result.stackEnv.REDIS_URL).toMatch(/:16\d{3}/);
+  });
+
+  test("offsets Mailpit UI and RustFS console so stacks do not share 8025/9001", () => {
+    const id = "abcd12";
+    const n = instancePortOffset(id);
+    const result = deriveInfrastructure({
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      },
+      app: `dev-${id}`,
+      instanceId: id,
+      includeApp: false,
+      credentials: {
+        "channel.email": {
+          user: "oke",
+          password: "stack-id-test-mail-password",
+          database: "oke",
+        },
+        "store.files": {
+          user: "oke",
+          password: "stack-id-test-files-password",
+          database: "oke",
+        },
+      },
+    });
+    const mailYml = result.files.find(
+      (f) => f.path === "compose.channel.email.yml",
+    )!.content;
+    const filesYml = result.files.find(
+      (f) => f.path === "compose.store.files.yml",
+    )!.content;
+    expect(mailYml).toContain(`${8025 + n}:8025`);
+    expect(mailYml).not.toContain("8025:8025");
+    expect(filesYml).toContain(`${9001 + n}:9001`);
+    expect(filesYml).not.toContain("9001:9001");
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_UI_URL).toBe(
+      `http://127.0.0.1:${8025 + n}`,
+    );
+    expect(result.stackEnv.OKE_STORE_FILES_UI_URL).toBe(
+      `http://127.0.0.1:${9001 + n}`,
+    );
   });
 });

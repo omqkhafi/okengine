@@ -6,7 +6,7 @@
 
 /** One CLI flag (long form is canonical; short is convenience only). */
 export interface CliFlag {
-  /** Canonical long form including leading dashes (e.g. `--stack`). */
+  /** Canonical long form including leading dashes (e.g. `--docker`). */
   readonly long: string;
   /** Optional short form including leading dash (e.g. `-s`). */
   readonly short?: string;
@@ -97,8 +97,13 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     leaf: true,
     flags: [
       {
-        long: "--stack",
-        short: "-s",
+        long: "--local",
+        short: "-l",
+        summary: "Laptop drivers for this session",
+      },
+      {
+        long: "--docker",
+        short: "-d",
         takesValue: true,
         valueName: "roles",
         summary: "Boot generated compose (optional role list)",
@@ -106,6 +111,12 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
       ENTRY,
       HELP,
     ],
+  },
+  {
+    name: "mode",
+    summary: "get/set default oke dev mode (local|docker)",
+    leaf: true,
+    flags: [HELP],
   },
   {
     name: "start",
@@ -439,8 +450,8 @@ function formatCommandUsage(cmd: CliCommand): string {
 function formatFlagHint(f: CliFlag): string {
   const name = f.short ? `${f.long}|${f.short}` : f.long;
   if (f.takesValue) {
-    // Optional value (e.g. --stack [roles]) when valueName is roles-like.
-    if (f.long === "--stack") return `[${name} [${f.valueName}]]`;
+    // Optional value (e.g. --docker [roles]) when valueName is roles-like.
+    if (f.long === "--docker") return `[${name} [${f.valueName}]]`;
     return `[${name} ${f.valueName}]`;
   }
   return `[${name}]`;

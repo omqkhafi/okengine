@@ -601,7 +601,7 @@ const VaultResolutionStepOut = z.object({
   source: z.enum([
     "process.env",
     ".env.local",
-    ".env.stack",
+    ".env.docker",
     "driver",
     "dev-fallback",
   ]),
@@ -629,7 +629,7 @@ const VaultRowOut = z.object({
     .enum([
       "process.env",
       ".env.local",
-      ".env.stack",
+      ".env.docker",
       "driver",
       "dev-fallback",
     ])

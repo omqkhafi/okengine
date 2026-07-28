@@ -481,7 +481,7 @@ interface ConsoleClient {
         winner:
           | "process.env"
           | ".env.local"
-          | ".env.stack"
+          | ".env.docker"
           | "driver"
           | "dev-fallback"
           | null;
@@ -489,7 +489,7 @@ interface ConsoleClient {
           source:
             | "process.env"
             | ".env.local"
-            | ".env.stack"
+            | ".env.docker"
             | "driver"
             | "dev-fallback";
           present: boolean;

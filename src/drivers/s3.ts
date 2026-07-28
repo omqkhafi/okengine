@@ -1,7 +1,7 @@
 /**
  * `s3` driver — binds `Bun.S3` / `Bun.S3Client` (never aws-sdk).
  *
- * Protocol-named: AWS S3 · R2 · MinIO · SeaweedFS · Garage · Backblaze.
+ * Protocol-named: AWS S3 · R2 · RustFS · SeaweedFS · Garage · Backblaze.
  */
 
 import type {
@@ -14,14 +14,19 @@ import type {
 /**
  * Open a files bucket over the S3 protocol.
  *
- * @param options - Bucket name / injected client
+ * @param options - Bucket name / endpoint / credentials / injected client
  */
 export async function openS3Bucket(
   options: FilesOpenOptions,
 ): Promise<FilesBucket> {
   const client: S3ClientLike =
     options.client ??
-    createBunS3Client(options.root ?? options.name);
+    createBunS3Client({
+      bucket: options.root ?? options.name,
+      endpoint: options.endpoint,
+      accessKeyId: options.accessKeyId,
+      secretAccessKey: options.secretAccessKey,
+    });
 
   const prefix = "";
 
@@ -54,8 +59,28 @@ export async function openS3Bucket(
   };
 }
 
-function createBunS3Client(bucket: string): S3ClientLike {
-  const s3 = new Bun.S3Client({ bucket });
+/** Bun.S3Client construction options. */
+interface BunS3ClientOptions {
+  readonly bucket: string;
+  readonly endpoint?: string;
+  readonly accessKeyId?: string;
+  readonly secretAccessKey?: string;
+}
+
+/**
+ * Build a Bun S3 client, optionally pointed at a compatible endpoint (RustFS).
+ *
+ * @param options - Bucket + optional endpoint/creds
+ */
+function createBunS3Client(options: BunS3ClientOptions): S3ClientLike {
+  const s3 = new Bun.S3Client({
+    bucket: options.bucket,
+    ...(options.endpoint ? { endpoint: options.endpoint } : {}),
+    ...(options.accessKeyId ? { accessKeyId: options.accessKeyId } : {}),
+    ...(options.secretAccessKey
+      ? { secretAccessKey: options.secretAccessKey }
+      : {}),
+  });
   return {
     file(key: string) {
       const f = s3.file(key);
@@ -66,8 +91,8 @@ function createBunS3Client(bucket: string): S3ClientLike {
         delete: () => f.delete(),
       };
     },
-    async list(options) {
-      const result = await s3.list({ prefix: options?.prefix });
+    async list(listOptions) {
+      const result = await s3.list({ prefix: listOptions?.prefix });
       return {
         contents: (result.contents ?? []).map((o) => ({
           key: o.key,

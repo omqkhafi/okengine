@@ -129,13 +129,13 @@ export interface OkeOptions {
    * subject key.
    */
   readonly archiveInputFields?: readonly string[];
-  /** Active environment for {@link OkeApp.boot} (defaults to `dev`). */
+  /** Active environment for {@link OkeApp.boot} (defaults to `local`). */
   readonly env?: BootOptions["env"];
   /**
-   * Local-server mode (`oke dev -s` / `OKE_STACK=1`) — force the `stack`
+   * Compose-infra mode (`oke dev -d` / `OKE_DOCKER=1`) — force the `docker`
    * driver profile at boot.
    */
-  readonly stack?: BootOptions["stack"];
+  readonly docker?: BootOptions["docker"];
   /** Optional `oke.config.ts` document consumed at boot. */
   readonly config?: BootOptions["config"];
   /** Pre-built element runtimes (skip construction at boot when present). */
@@ -459,7 +459,7 @@ export function oke(options: OkeOptions): OkeApp {
   // --- boot (vault → store → signal → clock → channel → AI → runs → caps) ---
   let bootResult: BootResult | undefined;
   let bootPromise: Promise<BootResult> | undefined;
-  let bootEnv: BootOptions["env"] = options.env ?? "dev";
+  let bootEnv: BootOptions["env"] = options.env ?? "local";
   let authBinding: AppAuthBinding | undefined =
     options.auth !== undefined
       ? createAppAuthBinding({
@@ -490,10 +490,15 @@ export function oke(options: OkeOptions): OkeApp {
 
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
     const { bootApplication } = await import("./boot.ts");
-    bootEnv = overrides?.env ?? options.env ?? "dev";
+    const { resolveConfigEnv } = await import("../config/index.ts");
+    const dockerOpt = overrides?.docker ?? options.docker;
+    bootEnv = resolveConfigEnv({
+      env: overrides?.env ?? options.env,
+      docker: dockerOpt,
+    });
     const merged: BootOptions = {
       env: bootEnv,
-      stack: overrides?.stack ?? options.stack,
+      docker: dockerOpt,
       config: overrides?.config ?? options.config,
       elements: overrides?.elements ?? options.elements,
       secrets: overrides?.secrets ?? options.secrets,

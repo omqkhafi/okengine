@@ -1,61 +1,72 @@
 /**
- * `defineConfig` fills missing `stack` pins from `prod`.
+ * `defineConfig` fills missing `docker` pins from `prod`.
  */
 
 import { describe, expect, test } from "bun:test";
-import { defineConfig, fillStackFromProd } from "./index.ts";
+import { defineConfig, fillDockerFromProd } from "./index.ts";
 
-describe("fillStackFromProd / defineConfig", () => {
-  test("copies prod onto stack when stack is omitted", () => {
-    const filled = fillStackFromProd({
-      dev: "sqlite",
+describe("fillDockerFromProd / defineConfig", () => {
+  test("copies prod onto docker when docker is omitted", () => {
+    const filled = fillDockerFromProd({
+      local: "sqlite",
       prod: "postgres",
     });
-    expect(filled?.stack).toBe("postgres");
-    expect(filled?.dev).toBe("sqlite");
+    expect(filled?.docker).toBe("postgres");
+    expect(filled?.local).toBe("sqlite");
   });
 
-  test("does not overwrite an explicit stack pin", () => {
+  test("does not overwrite an explicit docker pin", () => {
     expect(
-      fillStackFromProd({
-        dev: "sqlite",
-        stack: "memory",
+      fillDockerFromProd({
+        local: "sqlite",
+        docker: "memory",
         prod: "postgres",
-      })?.stack,
+      })?.docker,
     ).toBe("memory");
   });
 
-  test("vault sops → stack dotenv", () => {
+  test("vault sops → docker sops (prod parity)", () => {
     expect(
-      fillStackFromProd({ dev: "dotenv", prod: "sops" }, { vault: true })
-        ?.stack,
-    ).toBe("dotenv");
+      fillDockerFromProd({ local: "dotenv", prod: "sops" })?.docker,
+    ).toBe("sops");
   });
 
   test("defineConfig fills every element from prod", () => {
     const cfg = defineConfig({
       drivers: {
         store: {
-          sql: { dev: "sqlite", prod: "postgres" },
-          kv: { dev: "memory", prod: "redis" },
-          files: { dev: "fs", prod: "s3" },
+          sql: { local: "sqlite", prod: "postgres" },
+          kv: { local: "memory", prod: "redis" },
+          files: { local: "fs", prod: "s3" },
         },
-        signal: { dev: "memory", prod: "postgres" },
-        clock: { dev: "memory", prod: "postgres" },
-        vault: { dev: "dotenv", prod: "sops" },
+        signal: { local: "memory", prod: "postgres" },
+        clock: { local: "memory", prod: "postgres" },
+        vault: { local: "dotenv", prod: "sops" },
         channel: {
-          email: { dev: "console", prod: "smtp" },
+          email: { local: "console", prod: "smtp" },
         },
-        ai: { dev: "mock", prod: "anthropic" },
+        ai: { local: "mock", prod: "anthropic" },
       },
     });
-    expect(cfg.drivers?.store?.sql?.stack).toBe("postgres");
-    expect(cfg.drivers?.store?.kv?.stack).toBe("redis");
-    expect(cfg.drivers?.store?.files?.stack).toBe("s3");
-    expect(cfg.drivers?.signal?.stack).toBe("postgres");
-    expect(cfg.drivers?.clock?.stack).toBe("postgres");
-    expect(cfg.drivers?.vault?.stack).toBe("dotenv");
-    expect(cfg.drivers?.channel?.email?.stack).toBe("smtp");
-    expect(cfg.drivers?.ai?.stack).toBe("anthropic");
+    expect(cfg.drivers?.store?.sql?.docker).toBe("postgres");
+    expect(cfg.drivers?.store?.kv?.docker).toBe("redis");
+    expect(cfg.drivers?.store?.files?.docker).toBe("s3");
+    expect(cfg.drivers?.signal?.docker).toBe("postgres");
+    expect(cfg.drivers?.clock?.docker).toBe("postgres");
+    expect(cfg.drivers?.vault?.docker).toBe("sops");
+    expect(cfg.drivers?.channel?.email?.docker).toBe("smtp");
+    expect(cfg.drivers?.ai?.docker).toBe("anthropic");
+  });
+
+  test("defineConfig normalizes legacy dev/stack keys", () => {
+    const cfg = defineConfig({
+      drivers: {
+        store: {
+          sql: { dev: "sqlite", stack: "postgres", prod: "postgres" } as never,
+        },
+      },
+    });
+    expect(cfg.drivers?.store?.sql?.local).toBe("sqlite");
+    expect(cfg.drivers?.store?.sql?.docker).toBe("postgres");
   });
 });

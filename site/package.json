@@ -3,7 +3,7 @@
   "version": "0.0.8",
   "private": true,
   "scripts": {
-    "sync": "bun scripts/sync-content.ts",
+    "sync": "bun scripts/sync-content.ts && fumadocs-mdx",
     "predev": "bun run sync",
     "dev": "next dev",
     "prebuild": "bun run sync",

@@ -1,6 +1,6 @@
 {
   "name": "create-oke",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
   "license": "MIT",
   "type": "module",
@@ -25,7 +25,7 @@
     "prepack": "bun ./src/sync-templates.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "test:integration": "CREATE_OKE_INTEGRATION=1 bun test tests/scaffold.integration.test.ts tests/dev.integration.test.ts"
+    "test:integration": "CREATE_OKE_INTEGRATION=1 bun test --timeout 180000 tests/"
   },
   "engines": {
     "bun": ">=1.3"

@@ -4,15 +4,34 @@
  *
  * Exactly:
  * 1. `package.json` `"name"` → the user-provided project name
- * 2. `package.json` `"okengine": "file:../.."` → an installable reference
- *    (absolute `file:<okengine-root>` in the monorepo; registry version otherwise)
+ * 2. `package.json` `"okengine": "file:../.."` → registry version (or
+ *    `file:<okengine-root>` when `CREATE_OKE_OKENGINE` is set)
  * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
+ * 4. Optional `--sql` / wizard choice → Drizzle dialect + `store.sql` pins
  */
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { packageRoot } from "./templates.ts";
+
+/** SQL store drivers selectable at scaffold time. */
+export const SQL_DRIVERS = ["sqlite", "postgres"] as const;
+
+/** A known store.sql driver id for create-oke. */
+export type SqlDriverId = (typeof SQL_DRIVERS)[number];
+
+/** Default when `--sql` / wizard choice is omitted (matches template sources). */
+export const DEFAULT_SQL_DRIVER: SqlDriverId = "sqlite";
+
+/**
+ * Whether `value` is a known {@link SqlDriverId}.
+ *
+ * @param value - Candidate string
+ */
+export function isSqlDriverId(value: string): value is SqlDriverId {
+  return (SQL_DRIVERS as readonly string[]).includes(value);
+}
 
 /** Shape of an example / scaffolded `package.json`. */
 export type ScaffoldPackageJson = {
@@ -28,18 +47,50 @@ export type ScaffoldPackageJson = {
 /**
  * Resolve the `okengine` dependency string written into the scaffolded package.json.
  *
- * - Monorepo / local: `file:<absolute-okengine-root>` (installable; not `file:../..`)
- * - Published create-oke: the version of this package (kept in lockstep with okengine)
+ * - Explicit `CREATE_OKE_OKENGINE` → `file:<monorepo>` (escape hatch only)
+ * - Otherwise → registry version of this package
+ *
+ * Linking the whole monorepo via file: makes bun install traverse the
+ * workspace (and any circular template node_modules/okengine nests) and
+ * appears hung — never do that by default. In-repo DX uses a registry install
+ * plus bun link okengine (see shouldBunLinkLocalOkengine).
  *
  * @param localOkengineRoot - Absolute path when available
+ * @param _cwd - Directory create-oke was invoked from (unused; kept for call sites)
  */
 export function resolveOkengineDependency(
   localOkengineRoot: string | null,
+  _cwd: string = process.cwd(),
 ): string {
-  if (localOkengineRoot) return `file:${localOkengineRoot}`;
+  const envForced = process.env["CREATE_OKE_OKENGINE"];
+  if (envForced && localOkengineRoot) {
+    return `file:${resolve(localOkengineRoot)}`;
+  }
   const pkgPath = join(packageRoot(), "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version: string };
   return pkg.version;
+}
+
+/**
+ * Whether the scaffolded app should run `bun link okengine` after install.
+ *
+ * Used when create-oke is `bun link`ed (or otherwise sees the monorepo) but the
+ * package.json keeps a registry version so install stays fast — then the global
+ * `bun link` of okengine swaps in local framework code.
+ *
+ * Skip when the dep is already `file:` (in-repo / CREATE_OKE_OKENGINE), or when
+ * `CREATE_OKE_NO_LINK=1`.
+ *
+ * @param okengineDep - Value written into package.json
+ * @param localOkengineRoot - Detected monorepo root, if any
+ */
+export function shouldBunLinkLocalOkengine(
+  okengineDep: string,
+  localOkengineRoot: string | null,
+): boolean {
+  if (process.env["CREATE_OKE_NO_LINK"] === "1") return false;
+  if (!localOkengineRoot) return false;
+  return !okengineDep.startsWith("file:");
 }
 
 /**
@@ -92,6 +143,49 @@ export function shouldSkipTemplatePath(relativePath: string): boolean {
   // Monorepo CI fixture — not part of the four-applications app tree.
   if (relativePath.replace(/\\/g, "/") === "tests/docker.test.ts") return true;
   return false;
+}
+
+/**
+ * Rewrite a Drizzle schema file to the dialect for `driver`.
+ *
+ * Templates ship as `sqliteTable` / `drizzle-orm/sqlite-core`. Choosing
+ * `postgres` swaps to `pgTable` / `pg-core` (and the reverse is idempotent).
+ *
+ * @param source - Schema TypeScript source
+ * @param driver - Target store.sql driver
+ */
+export function transformSchemaForSqlDriver(
+  source: string,
+  driver: SqlDriverId,
+): string {
+  if (driver === "postgres") {
+    return source
+      .replaceAll("drizzle-orm/sqlite-core", "drizzle-orm/pg-core")
+      .replaceAll("sqliteTable", "pgTable");
+  }
+  return source
+    .replaceAll("drizzle-orm/pg-core", "drizzle-orm/sqlite-core")
+    .replaceAll("pgTable", "sqliteTable");
+}
+
+/**
+ * Pin `store.sql` `local` / `docker` / `prod` in `oke.config.ts` to `driver`.
+ *
+ * Leaves `test: "memory"` (and every other facet) untouched.
+ *
+ * @param source - Config TypeScript source
+ * @param driver - Target store.sql driver
+ */
+export function transformConfigForSqlDriver(
+  source: string,
+  driver: SqlDriverId,
+): string {
+  return source.replace(/sql:\s*\{[\s\S]*?\n\s*\}/, (block) =>
+    block
+      .replace(/local:\s*"(?:sqlite|postgres)"/, `local: "${driver}"`)
+      .replace(/docker:\s*"(?:sqlite|postgres)"/, `docker: "${driver}"`)
+      .replace(/prod:\s*"(?:sqlite|postgres)"/, `prod: "${driver}"`),
+  );
 }
 
 /**

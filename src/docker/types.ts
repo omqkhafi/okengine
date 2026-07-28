@@ -37,7 +37,7 @@ export interface ServiceSpec {
   readonly port: number;
   /** Host port published in compose (dev defaults). */
   readonly hostPort: number;
-  /** Credential placeholders (values live in `.env.stack`, not YAML). */
+  /** Credential placeholders (values live in `.env.docker`, not YAML). */
   readonly credentials: ServiceCredentials;
 }
 
@@ -50,6 +50,12 @@ export interface ComposeHealthcheck {
   readonly start_period?: string;
 }
 
+/** Extra published host↔container port pair from a recipe. */
+export interface RecipeExtraPort {
+  readonly host: number;
+  readonly container: number;
+}
+
 /** Image-specific compose fragment from {@link ImageRecipe.apply}. */
 export interface RecipeApplyResult {
   readonly environment?: Readonly<Record<string, string>>;
@@ -57,6 +63,8 @@ export interface RecipeApplyResult {
   readonly healthcheck?: ComposeHealthcheck;
   readonly volumes?: readonly string[];
   readonly user?: string;
+  /** Additional published ports (e.g. Mailpit UI, RustFS console). */
+  readonly extraPorts?: readonly RecipeExtraPort[];
 }
 
 /**
@@ -102,12 +110,12 @@ export interface DeriveOptions {
   readonly prod?: boolean;
   /**
    * Include the `app` service in `compose.yml` (default true).
-   * `oke dev --stack` sets false — host Bun runs the app; Docker is infra only.
+   * `oke dev --docker` sets false — host Bun runs the app; Docker is infra only.
    */
   readonly includeApp?: boolean;
   /**
    * Compose artefact directory relative to the project root (default `docker`).
-   * Controls generated `env_file` / `build.context` paths (e.g. `../.env.stack`).
+   * Controls generated `build.context` paths; `.env.docker` lives beside compose.
    * Pass `"."` for legacy root-level layout.
    */
   readonly composeDir?: string;
@@ -144,7 +152,7 @@ export interface DeriveResult {
   /** Generated files (Dockerfile + compose layers). */
   readonly files: readonly GeneratedFile[];
   /**
-   * Stack env contents for `.env.stack` — written by `oke dev --stack`,
+   * Stack env contents for `.env.docker` — written by `oke dev --docker`,
    * never embedded in YAML.
    */
   readonly stackEnv: Readonly<Record<string, string>>;

@@ -3,7 +3,7 @@
  */
 
 import type { VaultBag, VaultDriver } from "../../drivers/vault-types.ts";
-import { fromStackRole, isFromStack } from "./declare.ts";
+import { fromDockerRole, isFromDocker } from "./declare.ts";
 import type { VaultSecretDecl } from "./declare.ts";
 import { fingerprintSecretSync } from "./fingerprint.ts";
 import { createSecretRedactor, SECRET_MASK } from "./redact.ts";
@@ -39,12 +39,12 @@ export class VaultBootError extends Error {
 
 /**
  * Named layer in the resolution chain (console §9.8).
- * Spec order: process.env → .env.local → .env.stack → driver → dev-fallback.
+ * Spec order: process.env → .env.local → .env.docker → driver → dev-fallback.
  */
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.stack"
+  | ".env.docker"
   | "driver"
   | "dev-fallback";
 
@@ -393,8 +393,8 @@ export function resolveLayerSource(
     if (path.endsWith(".env.local") || path.includes("/.env.local")) {
       return ".env.local";
     }
-    if (path.endsWith(".env.stack") || path.includes("/.env.stack")) {
-      return ".env.stack";
+    if (path.endsWith(".env.docker") || path.includes("/.env.docker")) {
+      return ".env.docker";
     }
   }
   if (layer.driver.id === "env" && path === undefined) {
@@ -404,15 +404,15 @@ export function resolveLayerSource(
 }
 
 /**
- * Resolve a `dev` fallback, expanding {@link import("./declare.ts").fromStack}
- * markers via stack env (`OKE_<ROLE>_URL`) without teaching the kernel
+ * Resolve a `dev` fallback, expanding {@link import("./declare.ts").fromDocker}
+ * markers via compose env (`OKE_<ROLE>_URL`) without teaching the kernel
  * image-specific env-var names.
  *
  * @param dev - Declared fallback
  */
 function resolveDevFallback(dev: string): string | undefined {
-  if (!isFromStack(dev)) return dev;
-  const role = fromStackRole(dev);
+  if (!isFromDocker(dev)) return dev;
+  const role = fromDockerRole(dev);
   const key = `OKE_${role.replaceAll(".", "_").toUpperCase()}_URL`;
   const fromEnv =
     (typeof Bun !== "undefined" ? Bun.env[key] : undefined) ??
@@ -422,7 +422,7 @@ function resolveDevFallback(dev: string): string | undefined {
         process.env.DATABASE_URL
       : undefined);
   if (fromEnv && fromEnv.length > 0) return fromEnv;
-  // Dev/test without `oke dev --stack`: still satisfy url-shaped contracts.
+  // Local/test without `oke dev --docker`: still satisfy url-shaped contracts.
   if (role === "store.sql") return "postgres://localhost/oke";
   return undefined;
 }

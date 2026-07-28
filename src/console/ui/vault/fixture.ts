@@ -26,7 +26,7 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
     resolution: [
       { source: "process.env", present: false, won: false },
       { source: ".env.local", present: true, won: true },
-      { source: ".env.stack", present: false, won: false },
+      { source: ".env.docker", present: false, won: false },
       { source: "driver", present: false, won: false },
       { source: "dev-fallback", present: false, won: false },
     ],
@@ -52,7 +52,7 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
     resolution: [
       { source: "process.env", present: true, won: true },
       { source: ".env.local", present: false, won: false },
-      { source: ".env.stack", present: false, won: false },
+      { source: ".env.docker", present: false, won: false },
       { source: "driver", present: false, won: false },
       { source: "dev-fallback", present: false, won: false },
     ],
@@ -71,5 +71,5 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
 /** List response matching `console.vault.list`. */
 export const VAULT_LIST_FIXTURE: VaultListResponse = {
   secrets: VAULT_FIXTURE,
-  env: "dev",
+  env: "local",
 };

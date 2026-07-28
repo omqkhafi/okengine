@@ -23,8 +23,8 @@ export const DEFAULT_TEMPLATE: TemplateId = "standard";
 export const TEMPLATE_PURPOSES: Readonly<Record<TemplateId, string>> = {
   hello: 'Fastest possible "it works" — one flow, no Store',
   minimal: "Smallest shape you'd actually ship — Store + 1–2 flows",
-  standard: "Full recommended file layout, empty scaffolding",
-  full: "Every element present and wired, no business logic",
+  standard: "Recommended layout — real ping unit (Store·Gate·Vault·Signal·Channel·Clock)",
+  full: "Everything in standard, plus a real AI mock prompt",
 };
 
 /** Teaching example ids — match `examples/*` and four-applications.md. */

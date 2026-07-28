@@ -14,7 +14,6 @@ export type App = typeof app;
 app.adopt({ links: { report: analytics.report } });
 
 Object.assign(app.$options, {
-  env: "test",
   gates: [member, fair],
   signals: [linkClicked, linkStats],
   stores: [db],

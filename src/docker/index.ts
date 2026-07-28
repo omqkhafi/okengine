@@ -14,6 +14,7 @@ export type {
   GeneratedFile,
   ImageRecipe,
   RecipeApplyResult,
+  RecipeExtraPort,
   ServiceCredentials,
   ServiceEndpoint,
   ServiceSpec,
@@ -37,9 +38,11 @@ export { credEnv, envPrefix, serviceNameFor } from "./helpers.ts";
 export { generateCredentials } from "./credentials.ts";
 export {
   builtinRecipes,
+  mailpit,
   postgres,
   recipeFor,
   redis,
+  rustfs,
 } from "./recipes/index.ts";
 export {
   formatStackPreview,
@@ -48,6 +51,7 @@ export {
 } from "./stack.ts";
 export {
   hostPortForInstance,
+  instancePortOffset,
   loadExistingStackCredentials,
   parseStackCredentials,
   stackAppSlug,

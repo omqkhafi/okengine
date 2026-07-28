@@ -35,8 +35,8 @@ export default defineConfig({
   drivers: {
     store: {
       sql: {
-        dev: "sqlite",
-        stack: "postgres",
+        local: "sqlite",
+        docker: "postgres",
         test: "memory",
         prod: "postgres",
       },

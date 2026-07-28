@@ -24,7 +24,7 @@ async function dockerAvailable(): Promise<boolean> {
   }
 }
 
-describe("oke dev --stack postgres integration", () => {
+describe("oke dev --docker postgres integration", () => {
   test("compose brings up postgres and the app talks to it", async () => {
     if (!(await dockerAvailable())) {
       console.warn("skipping: docker daemon not available");
@@ -51,7 +51,6 @@ describe("oke dev --stack postgres integration", () => {
       });
       await writeDerivedFiles(derived, dockerDir, {
         writeStackEnv: true,
-        stackEnvDir: dir,
       });
 
       // Infra-only: network + role compose (no app build).
@@ -120,13 +119,13 @@ describe("oke dev --stack postgres integration", () => {
         await sql.close();
       }
 
-      // Prove credentials live in .env.stack, not YAML.
+      // Prove credentials live in .env.docker, not YAML.
       const yml = await Bun.file(join(dockerDir, "compose.store.sql.yml")).text();
       expect(yml).not.toContain("stack-integration-pass");
       expect(formatStackEnv(derived.stackEnv)).toContain(
         "stack-integration-pass",
       );
-      expect(await Bun.file(join(dir, ".env.stack")).exists()).toBe(true);
+      expect(await Bun.file(join(dockerDir, ".env.docker")).exists()).toBe(true);
     } finally {
       await Bun.spawn(
         [

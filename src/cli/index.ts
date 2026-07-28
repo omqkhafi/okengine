@@ -14,6 +14,7 @@ import { evalCli } from "./eval.ts";
 import { EXIT_CODE_HELP, EXIT_OK, EXIT_USAGE } from "./exit.ts";
 import { gatesListCli } from "./gates-list.ts";
 import { imagesCli } from "./images.ts";
+import { modeCli } from "./mode.ts";
 import { privacyEraseCli } from "./privacy-erase.ts";
 import { formatOkeHelp } from "./registry.ts";
 import { schemaCli } from "./schema.ts";
@@ -27,6 +28,10 @@ const [cmd, sub, ...rest] = argv;
 
 if (cmd === "dev") {
   process.exit(await devCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "mode") {
+  process.exit(await modeCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "start") {

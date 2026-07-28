@@ -39,6 +39,8 @@ describe("image recipes", () => {
   test("postgres and redis match vendor images by protocol", () => {
     expect(recipeFor("pgvector/pgvector:pg17").id).toBe("postgres");
     expect(recipeFor("valkey/valkey:8-alpine").id).toBe("redis");
+    expect(recipeFor("axllent/mailpit:v1.22.3").id).toBe("mailpit");
+    expect(recipeFor("rustfs/rustfs:1.0.0-beta.11").id).toBe("rustfs");
     expect(postgres.match("postgres:16")).toBe(true);
     expect(redis.match("redis:7")).toBe(true);
   });
@@ -50,6 +52,85 @@ describe("image recipes", () => {
       .split("\n")
       .filter((l) => l.trim().length > 0);
     expect(exportLines.length).toBeLessThanOrEqual(15);
+  });
+
+  test("mailpit and rustfs publish extra UI ports", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      },
+      includeApp: false,
+      credentials: {
+        "channel.email": {
+          user: "mail",
+          password: "unused-mail-password-xyz",
+          database: "mail",
+        },
+        "store.files": {
+          user: "oke",
+          password: "s3cret-files-password-xyz",
+          database: "oke",
+        },
+      },
+    });
+    const mailYml = result.files.find(
+      (f) => f.path === "compose.channel.email.yml",
+    )!.content;
+    const filesYml = result.files.find(
+      (f) => f.path === "compose.store.files.yml",
+    )!.content;
+    expect(mailYml).toContain("8025:8025");
+    expect(filesYml).toContain("9001:9001");
+    expect(filesYml).toContain("${OKE_STORE_FILES_ACCESS_KEY}");
+    expect(filesYml).toContain("${OKE_STORE_FILES_SECRET_KEY}");
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_URL).toContain("smtp://");
+    expect(result.stackEnv.SMTP_URL).toBe(result.stackEnv.OKE_CHANNEL_EMAIL_URL);
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_UI_URL).toContain("http://127.0.0.1:8025");
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_USER).toBeUndefined();
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_PASSWORD).toBeUndefined();
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_DB).toBeUndefined();
+    expect(result.stackEnv.OKE_STORE_FILES_ACCESS_KEY).toBe("oke");
+    expect(result.stackEnv.OKE_STORE_FILES_SECRET_KEY).toBe(
+      "s3cret-files-password-xyz",
+    );
+    expect(result.stackEnv.OKE_STORE_FILES_BUCKET).toBe("oke");
+    expect(result.stackEnv.OKE_STORE_FILES_USER).toBeUndefined();
+    expect(result.stackEnv.S3_ENDPOINT).toBe("http://127.0.0.1:9000");
+    expect(result.stackEnv.OKE_STORE_FILES_UI_URL).toContain(":9001");
+    expect(result.stackEnv.OKE_STORE_FILES_URL).toContain("127.0.0.1:9000");
+  });
+
+  test("stack env is recipe-accurate (no fake USER/DB on redis/mail)", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        "store.kv": "redis:8-alpine",
+        "channel.email": "axllent/mailpit:v1.22.3",
+      },
+      includeApp: false,
+      credentials: {
+        "store.sql": fixedCreds["store.sql"],
+        "store.kv": fixedCreds["store.kv"],
+        "channel.email": {
+          user: "unused",
+          password: "unused-mail",
+          database: "unused",
+        },
+      },
+    });
+    expect(result.stackEnv.OKE_STORE_SQL_USER).toBe("oke");
+    expect(result.stackEnv.DATABASE_URL).toContain("postgres://");
+    expect(result.stackEnv.OKE_STORE_KV_PASSWORD).toBe(
+      fixedCreds["store.kv"].password,
+    );
+    expect(result.stackEnv.OKE_STORE_KV_USER).toBeUndefined();
+    expect(result.stackEnv.OKE_STORE_KV_DB).toBeUndefined();
+    expect(result.stackEnv.REDIS_URL).toContain("redis://");
+    const text = formatStackEnv(result.stackEnv);
+    expect(text).toContain("# ── channel.email — SMTP (Mailpit)");
+    expect(text).not.toContain("OKE_CHANNEL_EMAIL_USER=");
+    expect(text).not.toContain("OKE_STORE_KV_USER=");
   });
 
   test("recipe.url builds a connection string without env-var names in the kernel", () => {
@@ -125,7 +206,8 @@ describe("deriveInfrastructure", () => {
     expect(sqlYml).toContain("pgvector/pgvector:pg17");
     expect(sqlYml).toContain("POSTGRES_PASSWORD");
     expect(sqlYml).toContain("${OKE_STORE_SQL_PASSWORD}");
-    expect(sqlYml).toContain("../.env.stack");
+    expect(sqlYml).toContain(".env.docker");
+    expect(sqlYml).not.toContain("../.env.docker");
     expect(sqlYml).not.toContain(fixedCreds["store.sql"].password);
 
     const baseYml = result.files.find((f) => f.path === "compose.yml")!.content;
@@ -187,13 +269,14 @@ describe("deriveInfrastructure", () => {
     });
     const written = await writeDerivedFiles(result, dockerDir, {
       writeStackEnv: true,
-      stackEnvDir: root,
     });
     expect(written.some((p) => p.endsWith(COMPOSE_OVERRIDE))).toBe(false);
-    expect(await Bun.file(join(root, ".env.stack")).exists()).toBe(true);
+    expect(await Bun.file(join(dockerDir, ".env.docker")).exists()).toBe(true);
     expect(await Bun.file(join(dockerDir, "compose.yml")).exists()).toBe(true);
-    const envText = await Bun.file(join(root, ".env.stack")).text();
+    const envText = await Bun.file(join(dockerDir, ".env.docker")).text();
     expect(envText).toContain("DATABASE_URL=");
+    expect(envText).toContain("# docker/.env.docker — generated by");
+    expect(envText).toContain("# ── store.sql — Postgres");
     expect(formatStackEnv(result.stackEnv)).toContain("OKE_STORE_SQL_PASSWORD=");
   });
 

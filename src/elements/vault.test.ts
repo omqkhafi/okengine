@@ -18,6 +18,7 @@ import {
 import { createFx } from "../kernel/fx.ts";
 import {
   createVaultRuntime,
+  defaultVaultResolutionChain,
   fingerprintSecretSync,
   SECRET_MASK,
   vault,
@@ -43,19 +44,19 @@ describe("vault declaration", () => {
     expect(cfg.kind).toBe("config");
     expect(cfg.sensitive).toBe(false);
 
-    const fromStack = vault.fromStack("store.sql");
-    expect(fromStack).toStartWith("__oke_from_stack__:");
-    const c = vault.secret("DATABASE_URL", { dev: fromStack });
-    expect(c.dev).toBe(fromStack);
+    const fromDocker = vault.fromDocker("store.sql");
+    expect(fromDocker).toStartWith("__oke_from_docker__:");
+    const c = vault.secret("DATABASE_URL", { dev: fromDocker });
+    expect(c.dev).toBe(fromDocker);
   });
 
-  test("fromStack resolves via OKE_<ROLE>_URL without env-var names in the kernel", async () => {
+  test("fromDocker resolves via OKE_<ROLE>_URL without env-var names in the kernel", async () => {
     const prev = process.env.OKE_STORE_SQL_URL;
     process.env.OKE_STORE_SQL_URL = "postgres://oke:x@127.0.0.1:5432/oke";
     try {
       const runtime = createVaultRuntime({
         secrets: [
-          vault.secret("DATABASE_URL", { dev: vault.fromStack("store.sql") }),
+          vault.secret("DATABASE_URL", { dev: vault.fromDocker("store.sql") }),
         ],
         chain: [],
         allowDevFallbacks: true,
@@ -113,6 +114,14 @@ describe("boot lists every missing secret", () => {
     });
     await runtime.boot();
     expect(runtime.read("STRIPE_KEY")).toBe("sk_test_local");
+  });
+});
+
+describe("defaultVaultResolutionChain", () => {
+  test("documented order — process.env → .env.local → .env.docker → driver (no bare .env)", () => {
+    expect(
+      defaultVaultResolutionChain("/tmp/oke-app").map((l) => l.source),
+    ).toEqual(["process.env", ".env.local", ".env.docker", "driver"]);
   });
 });
 

@@ -30,11 +30,11 @@ describe("term", () => {
     expect(out).toContain("╗");
   });
 
-  test("formatDevBanner shows profile env system elements", () => {
+  test("formatDevBanner shows mode system elements (not misleading env local)", () => {
     const out = formatDevBanner({
       color: false,
       version: "0.2.4",
-      profile: "local-server",
+      profile: "docker",
       runtimeEnv: "local",
       system: "darwin 25.4.0 · bun 1.3.14",
       elements: [
@@ -44,10 +44,10 @@ describe("term", () => {
       ],
     });
     expect(out).toContain("oke dev  v0.2.4");
-    expect(out).toContain("profile");
-    expect(out).toContain("local-server");
-    expect(out).toContain("env");
-    expect(out).toContain("local");
+    expect(out).toContain("mode");
+    expect(out).toContain("docker");
+    expect(out).not.toContain("env");
+    expect(out).not.toMatch(/\benv\s+local\b/);
     expect(out).toContain("system");
     expect(out).toContain("bun 1.3.14");
     expect(out).toContain("elements");
@@ -137,7 +137,7 @@ describe("term", () => {
       appDrivers: ["postgres", "redis"],
       color: false,
     });
-    expect(out).toContain("Stack");
+    expect(out).toContain("Docker");
     expect(out).toContain(":15975");
     expect(out).not.toMatch(/\u001b\[/);
   });

@@ -1,3 +1,5 @@
+/** Locale strings for channel templates. */
 export default {
-  "welcome.subject": "أهلاً",
+  "ping-notice.subject": "إشارة {{id}}",
+  "ping-notice.text": "{{note}}",
 };

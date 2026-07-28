@@ -1,7 +1,8 @@
 import { db } from "./core";
-import "./gates";
-import "./vault";
-import "./channels";
+import { burst, cheap, exact, fair } from "./gates";
+import { appSecret } from "./vault";
+import { pingNotice } from "./channels";
+import { pinged } from "./flows/main/signals";
 import "./locales/en";
 import "./locales/ar";
 
@@ -13,6 +14,13 @@ export const app = oke({ name: "standard" }).adopt({ main });
 export type App = typeof app;
 
 Object.assign(app.$options, {
-  env: "test",
+  gates: [fair, cheap, exact, burst],
+
+  secrets: [appSecret],
+  signals: [pinged],
   stores: [db],
+  channel: {
+    templates: [pingNotice],
+    defaultLocale: "en",
+  },
 });

@@ -6,7 +6,7 @@
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.stack"
+  | ".env.docker"
   | "driver"
   | "dev-fallback";
 

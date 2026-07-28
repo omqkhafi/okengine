@@ -84,7 +84,10 @@ export async function serveConsole(
   });
 
   const env = options.env ?? "dev";
-  await handle.app.boot({ env });
+  // Console serve still uses `"dev"` for auth flavor; ConfigEnv is `local`.
+  await handle.app.boot({
+    env: env === "dev" ? "local" : env,
+  });
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
     if (!runs) return [];

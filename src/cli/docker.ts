@@ -56,13 +56,15 @@ export async function runDockerDerive(
       const loaded = await loadOkeConfig(cwd, options.configPath);
       images = resolveImages(loaded.config);
       app = "app";
-    } catch {
+    } catch (err) {
       if (options.manifestPath) {
         const manifest = await loadManifest(options.manifestPath);
         images = resolveImages(undefined, manifest);
         app = manifest.app;
       } else {
+        const detail = err instanceof Error ? err.message : String(err);
         write("oke docker: no oke.config.ts / images — nothing to derive\n");
+        write(`  ${detail}\n`);
         return { code: 1 };
       }
     }

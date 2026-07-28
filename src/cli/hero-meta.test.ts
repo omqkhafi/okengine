@@ -15,31 +15,31 @@ import {
 const SAMPLE: OkeConfig = {
   drivers: {
     store: {
-      sql: { dev: "sqlite", stack: "postgres", prod: "postgres" },
-      kv: { dev: "memory", stack: "redis", prod: "redis" },
+      sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
+      kv: { local: "memory", docker: "redis", prod: "redis" },
     },
-    signal: { dev: "memory", stack: "postgres", prod: "postgres" },
-    clock: { dev: "memory", stack: "postgres", prod: "postgres" },
-    vault: { dev: "dotenv", stack: "dotenv", prod: "sops" },
+    signal: { local: "memory", docker: "postgres", prod: "postgres" },
+    clock: { local: "memory", docker: "postgres", prod: "postgres" },
+    vault: { local: "dotenv", docker: "dotenv", prod: "sops" },
     channel: {
-      email: { dev: "console", stack: "smtp", prod: "smtp" },
+      email: { local: "console", docker: "smtp", prod: "smtp" },
     },
-    ai: { dev: "mock", stack: "mock" },
+    ai: { local: "mock", docker: "mock" },
   },
 };
 
 describe("hero-meta", () => {
   test("resolveDevProfile maps stack and NODE_ENV", () => {
-    expect(resolveDevProfile({ stack: false })).toBe("local");
-    expect(resolveDevProfile({ stack: true })).toBe("local-server");
-    expect(resolveDevProfile({ stack: false, nodeEnv: "test" })).toBe("test");
-    expect(resolveDevProfile({ stack: false, nodeEnv: "production" })).toBe(
+    expect(resolveDevProfile({ docker: false })).toBe("local");
+    expect(resolveDevProfile({ docker: true })).toBe("docker");
+    expect(resolveDevProfile({ docker: false, nodeEnv: "test" })).toBe("test");
+    expect(resolveDevProfile({ docker: false, nodeEnv: "production" })).toBe(
       "production",
     );
   });
 
   test("resolveHeroElements lists eight elements with drivers", () => {
-    const rows = resolveHeroElements(SAMPLE, { stack: false });
+    const rows = resolveHeroElements(SAMPLE, { docker: false });
     expect(rows.map((r) => r.element)).toEqual([
       "flow",
       "signal",
@@ -56,7 +56,7 @@ describe("hero-meta", () => {
 
   test("stack profile applies to every element", () => {
     const rows = resolveHeroElements(SAMPLE, {
-      stack: true,
+      docker: true,
       sqlDriver: "postgres",
       kvDriver: "redis",
     });
@@ -72,13 +72,13 @@ describe("hero-meta", () => {
   test("encode/decode round-trips", () => {
     const snap = buildDevHeroSnapshot({
       config: SAMPLE,
-      stack: true,
+      docker: true,
       sqlDriver: "postgres",
       kvDriver: "redis",
       version: "0.2.4",
       nodeEnv: "development",
     });
-    expect(snap.profile).toBe("local-server");
+    expect(snap.profile).toBe("docker");
     expect(snap.runtimeEnv).toBe("local");
     expect(decodeHeroSnapshot(encodeHeroSnapshot(snap))).toEqual(snap);
   });

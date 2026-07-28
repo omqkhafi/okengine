@@ -98,8 +98,8 @@ export {
 
 export {
   vault,
-  fromStack,
-  FROM_STACK_PREFIX,
+  fromDocker,
+  FROM_DOCKER_PREFIX,
   createVaultRuntime,
   VaultBootError,
   SECRET_MASK,
@@ -161,11 +161,14 @@ export {
 export {
   createBunRuntime,
   createWebStandardRuntime,
+  mount,
   APP_PORT,
   CONSOLE_PORT,
   MCP_PORT,
   type Runtime,
   type ServeOptions,
+  type MountHandle,
+  type MountOptions,
 } from "./runtime/index.ts";
 export {
   createRunsRuntime,
@@ -184,9 +187,14 @@ export {
   memoryRunsDriver,
   postgresRunsDriver,
   clickhouseRunsDriver,
+  withOtelExport,
+  createOtelStore,
+  wideEventToOtlpSpan,
+  wideEventToOtlpExportRequest,
   type RunsRuntime,
   type WideEvent,
   type CreateRunsRuntimeOptions,
   type OutlierFinding,
   type SubjectKeyVault,
+  type OtelExportOptions,
 } from "./runs/index.ts";

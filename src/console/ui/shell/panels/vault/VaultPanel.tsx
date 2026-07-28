@@ -53,7 +53,7 @@ export function VaultPanel() {
   });
 
   const secrets = listQuery.data?.secrets ?? [];
-  const env = listQuery.data?.env ?? "dev";
+  const env = listQuery.data?.env ?? "local";
   const groups = useMemo(
     () => groupByKind(secrets, search.q ?? ""),
     [secrets, search.q],

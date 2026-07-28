@@ -1,6 +1,6 @@
 /**
  * `env` vault driver — resolves secrets from the process environment
- * and/or a dotenv file path (`.env.local`, `.env.stack`, …).
+ * and/or a dotenv file path (`.env.local`, `.env.docker`, …).
  *
  * Resolution order is owned by {@link createVaultRuntime}; this driver only
  * exposes one layer of the chain. Layer identity (`process.env` vs file)

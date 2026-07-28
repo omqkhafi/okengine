@@ -6,6 +6,8 @@
  * from source to `manifest.oke.json`.
  */
 
+import { readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import { parseSync } from "oxc-parser";
 
 import type {
@@ -195,16 +197,53 @@ async function readSources(
   rootDir: string,
   pattern: string,
 ): Promise<SourceFile[]> {
+  // Walk the tree ourselves so we never enter `node_modules` — Bun.Glob
+  // follows `file:` symlinks, and monorepo template installs can cycle
+  // (templates/*/node_modules/okengine → repo root → templates again).
   // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
   const glob = new Bun.Glob(pattern);
+  const root = rootDir.replace(/\/$/, "");
+  const candidates: string[] = [];
+
+  const walk = (dir: string): void => {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (
+        entry === "node_modules" ||
+        entry === ".git" ||
+        entry === "dist" ||
+        entry === ".oke"
+      ) {
+        continue;
+      }
+      const abs = join(dir, entry);
+      let st: ReturnType<typeof statSync>;
+      try {
+        st = statSync(abs);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      if (!st.isFile()) continue;
+      const rel = relative(root, abs).split(/[/\\]/).join("/");
+      if (rel.endsWith(".test.ts") || rel.endsWith(".test.tsx")) continue;
+      if (glob.match(rel)) candidates.push(rel);
+    }
+  };
+
+  walk(root);
+
   const files: SourceFile[] = [];
-  for await (const path of glob.scan({
-    cwd: rootDir,
-    onlyFiles: true,
-  })) {
-    if (path.includes("node_modules/") || path.endsWith(".test.ts")) continue;
-    const abs = `${rootDir.replace(/\/$/, "")}/${path}`;
-    files.push({ path, source: await Bun.file(abs).text() });
+  for (const path of candidates) {
+    files.push({ path, source: await Bun.file(`${root}/${path}`).text() });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
   return files;
@@ -355,7 +394,8 @@ function visitDeclarationCall(
       }
     }
 
-    if (obj === "channel" && prop === "template") {
+    // channel.template(...) or mail.template(...) after channel.email(...)
+    if (prop === "template") {
       const templateName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (templateName) {

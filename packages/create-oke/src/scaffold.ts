@@ -22,11 +22,15 @@ import {
 } from "./templates.ts";
 import { agentsMdContent } from "./agents-md.ts";
 import {
+  DEFAULT_SQL_DRIVER,
   sanitizeProjectName,
   shouldSkipTemplatePath,
+  transformConfigForSqlDriver,
   transformPackageJson,
+  transformSchemaForSqlDriver,
   resolveOkengineDependency,
   type ScaffoldPackageJson,
+  type SqlDriverId,
 } from "./transform.ts";
 
 /** Where the scaffold copies from. */
@@ -44,6 +48,11 @@ export type ScaffoldOptions = {
   readonly source: ScaffoldSource;
   /** Write root `AGENTS.md` (default true). */
   readonly writeAgentsMd?: boolean;
+  /**
+   * Store SQL driver — rewrites `src/schema.ts` dialect and pins
+   * `oke.config.ts` `store.sql` local/docker/prod. Default `sqlite`.
+   */
+  readonly sqlDriver?: SqlDriverId;
 };
 
 /** Result of a successful scaffold. */
@@ -54,6 +63,8 @@ export type ScaffoldResult = {
   /** Display label (`standard`, `notes`, …). */
   readonly label: string;
   readonly okengineDependency: string;
+  /** Store SQL driver applied to schema + config. */
+  readonly sqlDriver: SqlDriverId;
   /** Relative paths written (POSIX), sorted. */
   readonly files: readonly string[];
 };
@@ -71,6 +82,7 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
       ? resolveTemplateDir(options.source.id)
       : resolveExampleDir(options.source.id);
   const label = options.source.id;
+  const sqlDriver = options.sqlDriver ?? DEFAULT_SQL_DRIVER;
 
   if (existsSync(targetDir)) {
     const entries = readdirSync(targetDir);
@@ -86,6 +98,7 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
   try {
     const okengineDependency = resolveOkengineDependency(
       resolveLocalOkengineRoot(),
+      process.cwd(),
     );
     const written: string[] = [];
 
@@ -101,10 +114,21 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
     const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
     writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
 
+    applySqlDriverTransforms(targetDir, sqlDriver);
+
     if (options.writeAgentsMd !== false) {
       const agentsPath = join(targetDir, "AGENTS.md");
       writeFileSync(agentsPath, agentsMdContent(name), "utf8");
       if (!written.includes("AGENTS.md")) written.push("AGENTS.md");
+    }
+
+    // Post-scaffold: copy `.env.example` → `.env.local` so Vault resolves on
+    // first `oke dev` without a manual step. `.env.local` stays gitignored.
+    const envExample = join(targetDir, ".env.example");
+    const envLocal = join(targetDir, ".env.local");
+    if (existsSync(envExample) && !existsSync(envLocal)) {
+      cpSync(envExample, envLocal);
+      if (!written.includes(".env.local")) written.push(".env.local");
     }
 
     written.sort();
@@ -114,11 +138,47 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
       source: options.source,
       label,
       okengineDependency,
+      sqlDriver,
       files: written,
     };
   } catch (e) {
     rmSync(targetDir, { recursive: true, force: true });
     throw e;
+  }
+}
+
+/**
+ * Rewrite schema dialect + (for postgres) `store.sql` pins.
+ *
+ * `sqlite` keeps the template dual-mode config (`local: sqlite` ·
+ * `docker`/`prod: postgres`) — only the Drizzle dialect is ensured.
+ * `postgres` writes `pgTable` and pins local/docker/prod to postgres.
+ *
+ * @param targetDir - Scaffolded project root
+ * @param sqlDriver - Chosen store.sql driver
+ */
+function applySqlDriverTransforms(
+  targetDir: string,
+  sqlDriver: SqlDriverId,
+): void {
+  const schemaPath = join(targetDir, "src/schema.ts");
+  if (existsSync(schemaPath)) {
+    const next = transformSchemaForSqlDriver(
+      readFileSync(schemaPath, "utf8"),
+      sqlDriver,
+    );
+    writeFileSync(schemaPath, next, "utf8");
+  }
+
+  if (sqlDriver !== "postgres") return;
+
+  const configPath = join(targetDir, "oke.config.ts");
+  if (existsSync(configPath)) {
+    const next = transformConfigForSqlDriver(
+      readFileSync(configPath, "utf8"),
+      sqlDriver,
+    );
+    writeFileSync(configPath, next, "utf8");
   }
 }
 

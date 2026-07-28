@@ -65,7 +65,16 @@ export interface CreateStoreRuntimeOptions {
   readonly kv?: Readonly<Record<string, { readonly url?: string; readonly client?: unknown }>>;
   /** Files open options keyed by store name. */
   readonly files?: Readonly<
-    Record<string, { readonly root?: string; readonly client?: unknown }>
+    Record<
+      string,
+      {
+        readonly root?: string;
+        readonly endpoint?: string;
+        readonly accessKeyId?: string;
+        readonly secretAccessKey?: string;
+        readonly client?: unknown;
+      }
+    >
   >;
   /** Index open options keyed by store name. */
   readonly index?: Readonly<
@@ -267,6 +276,9 @@ export function createStoreRuntime(
       bucket = await driver.open({
         name: decl.name,
         root: binding.root,
+        endpoint: binding.endpoint,
+        accessKeyId: binding.accessKeyId,
+        secretAccessKey: binding.secretAccessKey,
         client: binding.client as never,
       });
       fileBuckets.set(decl.name, bucket);

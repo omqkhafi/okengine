@@ -39,7 +39,6 @@ export const app = oke({ name: "skyport" })
 export type App = typeof app;
 
 Object.assign(app.$options, {
-  env: "test",
   gates: [member, canBook, fair],
   secrets: [dbUrl, dbReplica1, anthropicKey, stripeKey],
   signals: [orderPlaced, seatFeed],

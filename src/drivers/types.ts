@@ -225,6 +225,12 @@ export interface FilesOpenOptions {
   readonly name: string;
   /** Local root path (`fs`) or S3 bucket name. */
   readonly root?: string;
+  /** S3-compatible API endpoint (RustFS · R2 · …). */
+  readonly endpoint?: string;
+  /** Access key for S3-compatible endpoints. */
+  readonly accessKeyId?: string;
+  /** Secret key for S3-compatible endpoints. */
+  readonly secretAccessKey?: string;
   /** Injected S3-like client for tests. */
   readonly client?: S3ClientLike;
 }

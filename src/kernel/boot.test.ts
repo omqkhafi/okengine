@@ -234,10 +234,10 @@ describe("boot — cron autostart via real timer loop", () => {
       }),
     );
 
-    // env: "dev" → startScheduler defaults ON. No createTestApp / advance.
+    // env: "local" → startScheduler defaults ON. No createTestApp / advance.
     const app = oke({
       name: "cron-autostart",
-      env: "dev",
+      env: "local",
       schedulerIntervalMs: 1000,
     });
     await app.boot();

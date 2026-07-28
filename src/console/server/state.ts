@@ -747,7 +747,7 @@ export function createConsoleState(
     },
     vaultRuntime: options.vaultRuntime ?? null,
     journalStore: options.journalStore ?? null,
-    vaultEnv: options.vaultEnv ?? "dev",
+    vaultEnv: options.vaultEnv ?? "local",
     listVault: async () => {
       const { ensureConsolePanelRuntimes } = await import("./app.ts");
       await ensureConsolePanelRuntimes(state, "vault");

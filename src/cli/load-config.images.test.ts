@@ -45,6 +45,17 @@ describe("defaultImagesFromConfig", () => {
       }),
     ).toEqual({});
   });
+
+  test("maps s3 files → rustfs and smtp email → mailpit", () => {
+    const images = defaultImagesFromConfig({
+      drivers: {
+        store: { files: { prod: "s3" } },
+        channel: { email: { prod: "smtp" } },
+      },
+    });
+    expect(images["store.files"]).toStartWith("rustfs/rustfs:");
+    expect(images["channel.email"]).toStartWith("axllent/mailpit:");
+  });
 });
 
 describe("resolveImages", () => {
@@ -76,13 +87,13 @@ describe("resolveImages", () => {
 });
 
 describe("stackDevDriverMismatches", () => {
-  test("flags stack/prod sqlite/memory when containers are up", () => {
+  test("flags docker/prod sqlite/memory when containers are up", () => {
     const mismatches = stackDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", stack: "sqlite", prod: "sqlite" },
-            kv: { dev: "memory", stack: "memory", prod: "memory" },
+            sql: { local: "sqlite", docker: "sqlite", prod: "sqlite" },
+            kv: { local: "memory", docker: "memory", prod: "memory" },
           },
         },
       },
@@ -94,13 +105,13 @@ describe("stackDevDriverMismatches", () => {
     ]);
   });
 
-  test("silent when stack profile matches containers", () => {
+  test("silent when docker profile matches containers", () => {
     const mismatches = stackDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", stack: "postgres", prod: "postgres" },
-            kv: { dev: "memory", stack: "redis", prod: "redis" },
+            sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
+            kv: { local: "memory", docker: "redis", prod: "redis" },
           },
         },
       },
@@ -109,13 +120,13 @@ describe("stackDevDriverMismatches", () => {
     expect(mismatches).toEqual([]);
   });
 
-  test("silent when only prod is set (stack falls back to prod)", () => {
+  test("silent when only prod is set (docker falls back to prod)", () => {
     const mismatches = stackDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", prod: "postgres" },
-            kv: { dev: "memory", prod: "redis" },
+            sql: { local: "sqlite", prod: "postgres" },
+            kv: { local: "memory", prod: "redis" },
           },
         },
       },

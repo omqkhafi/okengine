@@ -1,2 +1,5 @@
-/** Locale strings — add keys as channel templates need them. */
-export default {};
+/** Locale strings for channel templates. */
+export default {
+  "ping-notice.subject": "Ping {{id}}",
+  "ping-notice.text": "{{note}}",
+};

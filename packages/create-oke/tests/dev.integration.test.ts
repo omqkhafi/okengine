@@ -68,6 +68,19 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
         throw new Error(`bun install failed: ${err}`);
       }
 
+      const link = Bun.spawn(["bun", "link", "okengine"], {
+        cwd: targetDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const linkCode = await link.exited;
+      if (linkCode !== 0) {
+        const err = await new Response(link.stderr).text();
+        throw new Error(
+          `bun link okengine failed (run \`bun link\` in the okengine repo): ${err}`,
+        );
+      }
+
       const result = await runDev({
         cwd: targetDir,
         secret: SECRET,

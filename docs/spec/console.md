@@ -466,7 +466,7 @@ Actions: run now, wake early, pause, and edit the schedule where `overridable`. 
 
 **Fingerprints.** A short salted hash of the value, shown per environment. This answers the questions people actually ask — did the rotation reach production? do staging and production share a key, and is that intended? — without a single character being exposed. `prod = staging` is rendered as a warning rather than an error, because it may be deliberate; claiming to know intent produces false alarms, and false alarms get muted.
 
-**The resolution chain is shown in full** — which of `process.env`, `.env.local`, `.env.stack`, the vault driver or the dev fallback actually won. "Why is the app using the wrong key?" becomes a glance instead of an investigation.
+**The resolution chain is shown in full** — which of `process.env`, `.env.local`, `.env.docker`, the vault driver or the dev fallback actually won. "Why is the app using the wrong key?" becomes a glance instead of an investigation.
 
 **Who can read it is derived from effects** — the flows that declare `fx.vault(x)`. Least-privilege review becomes a query.
 

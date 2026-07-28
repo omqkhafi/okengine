@@ -55,7 +55,7 @@ import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from
 | `store` | Data at rest (`sql` · `kv` · `files` · `index`) |
 | `clock` | Time (cron, delay, sleep, TTL) |
 | `gate` | Permission to act (auth, ABAC, limits) |
-| `vault` | Secrets and config |
+| `vault` | Secrets and config (`dotenv` local · `sops` prod) |
 | `channel` | Reach humans (email, SMS, …) |
 | `ai` | Reach models / agents |
 | `plugin` | Extend the runtime without a ninth element |
@@ -78,7 +78,7 @@ Everything a backend has ever needed reduces to eight typed elements. An element
 | **Store** | database · cache · KV · file storage · search index |
 | **Clock** | cron · delay · timeout · durable sleep · TTL |
 | **Gate** | auth · session · ABAC · rate limit · quota · feature flag |
-| **Vault** | secrets · config · environment |
+| **Vault** | secrets · config · environment (`dotenv` local · `sops` prod) |
 | **Channel** | email · SMS · WhatsApp · push |
 | **AI** | model calls · prompts · embeddings · agents · RAG |
 

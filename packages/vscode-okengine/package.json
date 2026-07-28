@@ -1,0 +1,41 @@
+{
+  "name": "vscode-okengine",
+  "displayName": "OKE",
+  "description": "Effects CodeLens from the real OKE Manifest extractor",
+  "version": "0.2.7",
+  "publisher": "omqkhafi",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages", "Other"],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oke.refreshEffectsCodeLens",
+        "title": "OKE: Refresh Effects CodeLens"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "bun run ./scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "evidence": "bun run ./scripts/evidence-notes.ts"
+  },
+  "dependencies": {
+    "oxc-parser": "^0.141.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/bun": "latest",
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -103,6 +103,17 @@ export const app = oke({ name: "notes" }).adopt({ notes });
 export type App = typeof app;   // ← the client needs nothing else
 ```
 
+## Already on Hono or Express?
+
+Mount the same app under a host path — gates and effects stay enforced:
+
+```ts title="mount"
+import { mount } from "okengine";
+
+await app.boot();
+host.mount("/oke", mount(app).fetch);  // Hono — zero conversion
+```
+
 ## Typed client
 
 No separate codegen project to keep in sync — import the app type (and optionally `$routes`):
@@ -154,10 +165,13 @@ After this page you should be able to:
 - [ ] Write a flow with `in` / `out` / `do` and use `fx.store`
 - [ ] Call that flow from `createClient`
 - [ ] Cover it with `createTestApp` + `bun test`
+- [ ] Optionally mount into an existing Hono/Express host via `mount()`
+- [ ] Optionally export Runs to OpenTelemetry (`createRunsRuntime({ otel })`) — additive
 
 ## What's next
 
 <Cards>
+  <Card title="Deploy" description="Prod protocols, platform env, staging as a second copy." href="/docs/get-started/deploy" />
   <Card title="Notes" description="Full Basic walkthrough — contracts, errors, client." href="/docs/learn/notes" />
   <Card title="Elements" description="One page per element, starting with Flow." href="/docs/elements/flow" />
   <Card title="Console" description="Seventeen panels derived from the Manifest." href="/docs/console/overview" />

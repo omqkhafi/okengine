@@ -90,6 +90,22 @@ async function assertSourceWorks(
     throw new Error(`bun install failed for ${id}: ${installErr}`);
   }
 
+  // Registry dep → swap in the globally `bun link`ed local okengine (same as CLI).
+  if (!pkg.dependencies.okengine.startsWith("file:")) {
+    const link = Bun.spawn(["bun", "link", "okengine"], {
+      cwd: targetDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const linkCode = await link.exited;
+    if (linkCode !== 0) {
+      const linkErr = await new Response(link.stderr).text();
+      throw new Error(
+        `bun link okengine failed for ${id} (run \`bun link\` in the okengine repo): ${linkErr}`,
+      );
+    }
+  }
+
   const testProc = Bun.spawn(["bun", "test"], {
     cwd: targetDir,
     stdout: "pipe",

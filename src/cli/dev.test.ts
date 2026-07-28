@@ -15,6 +15,7 @@ import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
 import { runDev, type DevOptions, type DevSession } from "./dev.ts";
+import { readDevMode, writeDevMode } from "./dev-mode.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
 /** Repo public entry — absolute import so temp apps need no install. */
@@ -432,4 +433,163 @@ describe("oke dev hot reload", () => {
     }
     expect(seen).toEqual({ data: { version: "v2" }, error: null });
   }, 60_000);
+});
+
+describe("oke dev mode resolution", () => {
+  async function writeMinimalApp(dir: string): Promise<void> {
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    await Bun.write(
+      join(dir, "oke.config.ts"),
+      `import { defineConfig } from ${JSON.stringify(resolve(import.meta.dir, "../config/index.ts"))};
+export default defineConfig({
+  drivers: {
+    store: {
+      sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
+      kv: { local: "memory", docker: "redis", prod: "redis" },
+    },
+  },
+  images: {
+    "store.sql": "postgres:18-alpine",
+    "store.kv": "redis:8-alpine",
+  },
+});
+`,
+    );
+  }
+
+  const baseOpts = {
+    secret: SECRET,
+    silentClaim: true,
+    keepAlive: false,
+    consolePort: 0,
+    mcpPort: 0,
+    appPort: 0,
+    startApp: async () => ({ stop() {} }),
+    regenClient: async () => {},
+    write: () => {},
+    serveConsole: async () => ({ stop() {} }),
+    serveMcp: async () => ({
+      port: 0,
+      url: new URL("http://127.0.0.1:0"),
+      stop() {},
+    }),
+  } satisfies Partial<DevOptions>;
+
+  test("non-TTY + unset mode → local, zero ask, zero docker, no save", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-nontty-"));
+    await writeMinimalApp(dir);
+    let askCalls = 0;
+    let composeCalls = 0;
+
+    const result = await runDev({
+      ...baseOpts,
+      cwd: dir,
+      stdinIsTTY: false,
+      ask: async () => {
+        askCalls++;
+        return "docker";
+      },
+      composeUp: async () => {
+        composeCalls++;
+      },
+      dryRun: true,
+    });
+
+    expect(result.code).toBe(0);
+    expect(askCalls).toBe(0);
+    expect(composeCalls).toBe(0);
+    expect(result.plan?.stackRoles).toBeNull();
+    expect(await readDevMode(dir)).toBeNull();
+  });
+
+  test("TTY + injectable ask docker → saves mode and boots compose", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-ask-"));
+    await writeMinimalApp(dir);
+    let askCalls = 0;
+    let composeCalls = 0;
+
+    const first = await runDev({
+      ...baseOpts,
+      cwd: dir,
+      stdinIsTTY: true,
+      ask: async () => {
+        askCalls++;
+        return "docker";
+      },
+      composeUp: async () => {
+        composeCalls++;
+      },
+      dryRun: true,
+    });
+
+    expect(first.code).toBe(0);
+    expect(askCalls).toBe(1);
+    expect(await readDevMode(dir)).toBe("docker");
+    // dryRun skips composeUp — second run without dryRun proves no re-ask
+    const second = await runDev({
+      ...baseOpts,
+      cwd: dir,
+      stdinIsTTY: true,
+      ask: async () => {
+        askCalls++;
+        return "local";
+      },
+      composeUp: async () => {
+        composeCalls++;
+      },
+    });
+    expect(second.code).toBe(0);
+    expect(askCalls).toBe(1);
+    expect(composeCalls).toBe(1);
+    expect(await readDevMode(dir)).toBe("docker");
+  });
+
+  test("explicit --local skips prompt and does not write mode", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-local-flag-"));
+    await writeMinimalApp(dir);
+    let askCalls = 0;
+
+    const result = await runDev({
+      ...baseOpts,
+      cwd: dir,
+      local: true,
+      stdinIsTTY: true,
+      ask: async () => {
+        askCalls++;
+        return "docker";
+      },
+      dryRun: true,
+    });
+
+    expect(result.code).toBe(0);
+    expect(askCalls).toBe(0);
+    expect(await readDevMode(dir)).toBeNull();
+  });
+
+  test("saved docker + compose failure fails loudly with oke mode local hint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-docker-fail-"));
+    await writeMinimalApp(dir);
+    await writeDevMode(dir, "docker");
+
+    const errors: string[] = [];
+    const prevErr = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    };
+    try {
+      const result = await runDev({
+        ...baseOpts,
+        cwd: dir,
+        stdinIsTTY: false,
+        composeUp: async () => {
+          throw new Error("oke dev --docker: docker compose exited 1");
+        },
+      });
+      expect(result.code).toBe(1);
+      expect(errors.some((e) => e.includes("oke mode local"))).toBe(true);
+      expect(await readDevMode(dir)).toBe("docker");
+    } finally {
+      console.error = prevErr;
+    }
+  });
 });

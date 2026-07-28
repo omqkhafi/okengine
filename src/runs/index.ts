@@ -80,4 +80,26 @@ export {
 } from "./privacy.ts";
 
 export { createRunsPostgresFake } from "./drivers/postgres.ts";
-export { createRunsClickHouseFake } from "./drivers/clickhouse.ts";
+export {
+  createRunsClickHouseFake,
+  createRunsClickHouseHttp,
+  ensureClickHouseRunsTable,
+} from "./drivers/clickhouse.ts";
+
+export {
+  withOtelExport,
+  createOtelStore,
+  otlpHttpJsonTransport,
+  type OtelExportOptions,
+  type OtelTransport,
+} from "./drivers/otel.ts";
+
+export {
+  wideEventToOtlpSpan,
+  wideEventToOtlpExportRequest,
+  toOtelId,
+  msToUnixNano,
+  type OtlpSpan,
+  type OtlpExportTracesServiceRequest,
+  type WideEventOtlpOptions,
+} from "./otel-map.ts";

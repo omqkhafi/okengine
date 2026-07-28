@@ -18,6 +18,108 @@ changing backend code. Handbook: ${handbook}
 
 **If the docs are silent, stop and ask.**
 
+## How to use OKE
+
+**Mental model:** every backend behavior is a Flow. All world access goes
+through \`fx\`. New infrastructure is a **driver** on an existing element —
+never a ninth element.
+
+### Canonical Flow
+
+Same species for HTTP, cron, and signal consumers — only the trigger changes:
+
+\`\`\`typescript
+import { on, flow, http, every } from "okengine";
+
+export const create = on(
+  http.post("/pings").gate(fair),
+  flow({
+    name: "main.create",
+    in: NewPing,
+    out: PingId,
+    do: async (input, fx) => {
+      const [row] = await fx.store(db).insert(pings).values(input).returning();
+      await fx.emit(pinged, { id: row.id, note: row.note, at: Date.now() });
+      return { id: row.id };
+    },
+  }),
+);
+
+on(pinged, flow({
+  name: "main.onPinged",
+  do: async ({ id, note }, fx) => {
+    await fx.send(pingNotice, { to: "dev@localhost", data: { id, note } });
+  },
+}));
+
+on(every("1h"), flow({
+  name: "main.prune",
+  do: (_input, fx) => fx.store(db).delete(pings).where(/* … */),
+}));
+\`\`\`
+
+- **Trigger** — \`http.*\`, \`every(...)\`, or a signal — always \`on(Trigger, flow)\`
+- **Contracts** — \`in\` / \`out\` / \`errors\` (Standard Schema)
+- **Body** — \`do(input, fx)\` only. No raw \`fetch\`, \`node:fs\`, or vendor SDKs
+
+### \`fx\` surface
+
+| Call | Element |
+|---|---|
+| \`fx.store(db)\` | Store |
+| \`fx.emit(signal, payload)\` | Signal |
+| \`fx.vault(secret)\` | Vault |
+| \`fx.send(template, opts)\` | Channel |
+| \`fx.ask(prompt, input)\` | AI |
+| \`fx.call(flow, input)\` | Flow (untriggered / named) |
+| \`fx.fail("ErrorName", data)\` | typed error result |
+| \`fx.clock.now()\` / \`fx.clock.sleep(label, duration)\` | Clock |
+
+Effects are inferred from what the Flow touches through \`fx\`.
+
+### App wiring
+
+\`\`\`typescript
+import { oke } from "okengine";
+import * as main from "./flows/main";
+
+export const app = oke({ name: "${projectName}" }).adopt({ main });
+
+Object.assign(app.$options, {
+  gates: [fair],
+  secrets: [appSecret],
+  signals: [pinged],
+  stores: [db],
+  channel: { templates: [pingNotice], defaultLocale: "en" },
+});
+\`\`\`
+
+### App file layout
+
+\`\`\`text
+oke.config.ts          # drivers + images
+src/app.ts             # oke().adopt + register elements
+src/schema.ts          # tables
+src/core.ts            # store handle (db)
+src/flows/<unit>/
+  index.ts             # on(…) + flow({…})
+  shapes.ts            # contracts
+  signals.ts           # signal declarations
+src/gates.ts · vault.ts · channels.ts
+\`\`\`
+
+### Config rule
+
+- \`drivers\` — protocols by mode (\`postgres\`, \`redis\`, \`s3\`, \`smtp\`, …)
+- \`images\` — vendor choice for Docker (\`postgres:18-alpine\`, …)
+- Never name a driver after a vendor (\`neon\`, \`minio\`, …)
+
+**Deploy:** \`prod\` protocols in \`oke.config.ts\`; connection values
+(\`DATABASE_URL\`, \`REDIS_URL\`, vault secret names) from host \`process.env\`.
+Staging = second deploy with different env values. See
+${docsUrl("/docs/get-started/deploy")}. Generate with \`oke docker --prod\`;
+entry is \`oke start\`.
+
 ## The one law
 
 Every backend behavior is a Flow:
@@ -78,22 +180,29 @@ Mnemonic: O·K·E = 6·5·3.
 \`\`\`bash
 bun install
 oke dev          # or: bun run dev
+# oke mode docker && oke dev   # postgres/redis like prod (laptop)
 \`\`\`
 
 App \`:6530\` · Console \`:6533\` · MCP \`:6535\`.
 
-## Common mistakes
+Deploy: \`oke docker --prod\` then host the \`docker/\` artefacts; set env on the
+platform (see ${docsUrl("/docs/get-started/deploy")}).
 
-- ❌ I/O outside \`fx\` (raw \`fetch\`, \`node:fs\`, vendor SDKs in flow bodies)
-- ✅ \`fx.store\` / \`fx.emit\` / \`fx.ask\` / channel sends through \`fx\`
-- ❌ Inventing a ninth “element” or a parallel handler stack beside Flows
-- ✅ New capability = new **driver** on an existing element, or a new Flow
-- ❌ Untyped HTTP handlers that skip \`on\` / \`flow\` / contracts
-- ✅ \`on(http.get("/…"), flow({ in, out, do }))\`
+## Do / Don't
+
+| Don't | Do |
+|---|---|
+| I/O outside \`fx\` (\`fetch\`, \`node:fs\`, vendor SDKs in flow bodies) | \`fx.store\` / \`fx.emit\` / \`fx.send\` / \`fx.vault\` / \`fx.ask\` |
+| Invent endpoints, jobs, or handlers beside Flows | \`on(trigger, flow({…}))\` |
+| Add a ninth “element” | New **driver** on an existing element |
+| Driver id = vendor (\`neon\`, \`minio\`) | Protocol id + vendor in \`images\` |
+| Guess behavior the docs do not define | Stop and ask |
 
 ## Learn more
 
 - Handbook: ${handbook}
 - Get started: ${docsUrl("/docs/get-started/introduction")}
+- Deploy: ${docsUrl("/docs/get-started/deploy")}
+- AI resources: ${docsUrl("/docs/ai/resources")}
 `;
 }

@@ -12,8 +12,10 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  infra compose under docker/ (no app container; host Bun)
-oke dev -s store.sql,signal      #     partial: only these roles get real backends
+oke dev --local                  # -l  laptop drivers for this session
+oke dev --docker                 # -d  infra compose under docker/ (no app container; host Bun)
+oke dev -d store.sql,signal      #     partial: only these roles get real backends
+oke mode local|docker            # get/set default oke dev mode (saved in .oke/mode)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
@@ -29,10 +31,33 @@ oke images pin                   # tags → digests in oke.images.lock
 
 oke build --target edge          # < 15 kB kernel profile
 oke eval                         # run prompt eval sets; fails CI on regression
-oke ai cost --since 7d           # cost per flow, per tenant, per prompt version
 oke branch prod --at "yesterday" # fork journaled state into a sandbox
 oke privacy erase --subject <id> # crypto-shredding: deletes the key, not the terabytes
 oke upgrade                      # run codemods for a breaking change, print the diff
+```
+
+#### Incremental adoption — `mount()`
+
+Already on Hono or Express? Mount OKE under a path — host routes stay; mounted flows keep gates and effects:
+
+```typescript
+import { mount } from "okengine";
+
+await app.boot();
+host.mount("/oke", mount(app).fetch);            // Hono — zero conversion
+// app.use("/oke", mount(okeApp).asExpress());   // Express
+```
+
+#### OpenTelemetry export (optional)
+
+Wide events still land in Console Runs/Traces. Pass an OTLP/HTTP endpoint to also POST spans to your collector:
+
+```typescript
+import { createRunsRuntime } from "okengine";
+
+createRunsRuntime({
+  otel: { endpoint: "http://127.0.0.1:4318/v1/traces" },
+});
 ```
 
 
@@ -45,8 +70,10 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
-oke dev -s store.sql,store.kv    #     partial: only these roles get real backends
+oke dev --local                  # -l  laptop drivers for this session
+oke dev --docker                 # -d  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
+oke dev -d store.sql,store.kv    #     partial: only these roles get real backends
+oke mode local|docker            # get/set default oke dev mode (saved in .oke/mode)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
@@ -88,7 +115,8 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 
 | Long | Short | Where |
 |------|-------|--------|
-| `--stack` | `-s` | `dev` |
+| `--local` | `-l` | `dev` |
+| `--docker` | `-d` | `dev` |
 | `--prod` | `-p` | `docker` |
 | `--port` | `-p` | `start` |
 | `--check` | `-c` | `schema generate` |

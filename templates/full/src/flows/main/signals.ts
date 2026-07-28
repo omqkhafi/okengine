@@ -1,8 +1,12 @@
 import { signal } from "okengine";
 import { z } from "zod";
 
-/** Trivial signal — replace with real events. */
+/** Emitted by `create` — consumed once to send a channel notice. */
 export const pinged = signal("pinged", {
-  schema: z.object({ at: z.number() }),
+  schema: z.object({
+    id: z.string(),
+    note: z.string(),
+    at: z.number(),
+  }),
   delivery: "once",
 });

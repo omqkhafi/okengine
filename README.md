@@ -7,7 +7,7 @@
 
 # okengine
 
-*"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
+*"Stop gluing APIs, jobs, and queues into one backend. One law collapses them — client, Console, and infra come free. Yours to host."*
 
 [![npm](https://img.shields.io/npm/v/okengine.svg)](https://www.npmjs.com/package/okengine)
 [![JSR](https://jsr.io/badges/@omqkhafi/okengine)](https://jsr.io/@omqkhafi/okengine)
@@ -16,6 +16,9 @@
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
 **Framework:** [`okengine`](https://www.npmjs.com/package/okengine) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke) · **Docs:** [okengine.vercel.app](https://okengine.vercel.app) · **License:** MIT
+
+> **Pre-1.0 — not production-ready.**
+> OKE is under active, intensive development. APIs and behavior can change sharply between releases — expect frequent breaking changes. You are welcome to try it, build with it, and follow the changelog as the design settles. We will announce clearly when it reaches a stable bar ahead of the 1.0 release.
 
 ### Install
 
@@ -134,6 +137,18 @@ export type App = typeof app;   // ← the client needs nothing else
 
 The rest of the scaffold is small and ordinary: `oke.config.ts` (drivers by protocol), `src/schema.ts` (Drizzle table), `src/core.ts` (`store.sql`). Full walkthrough: [`docs/spec/four-applications.md`](docs/spec/four-applications.md) · §1 Notes.
 
+### Already on Hono or Express?
+
+Mount OKE under a path — host routes stay; mounted flows keep gates and effects:
+
+```typescript
+import { mount } from "okengine";
+
+await app.boot();
+host.mount("/oke", mount(app).fetch);            // Hono — zero conversion
+// app.use("/oke", mount(okeApp).asExpress());   // Express
+```
+
 ---
 
 ## How to learn (read in order)
@@ -179,7 +194,7 @@ An element earns its place only if it has irreducible physics. New tech becomes 
 | **Store** | data at rest | DB, cache, KV, files, search (`sql` · `kv` · `files` · `index`) |
 | **Clock** | time | cron, delay, timeout, durable sleep, TTL |
 | **Gate** | permission to act | auth, session, ABAC, rate limit, quota, flags |
-| **Vault** | protected knowledge | secrets, config, env |
+| **Vault** | protected knowledge (`dotenv` local · `sops` prod) | secrets, config, env |
 | **Channel** | reaching humans | email, SMS, WhatsApp, push |
 | **AI** | reaching machine intelligence | models, prompts, embeddings, agents, RAG |
 
@@ -212,6 +227,16 @@ flowchart TD
 Seventeen panels on `:6533` (app `:6530`, MCP `:6535`): Overview, Flows, Signals, Store, Clock, Gates, Vault, Channels, AI, Architecture, Traces, Runs, Manifest Diff, Access, Plugins — plus Privacy and Tenancy when those plugins are plugged.
 
 Operator and user planes stay separate. Every Console action is a real flow through `fx`, so the audit log is the trace. Spec: [`docs/spec/console.md`](docs/spec/console.md) · handbook: [console handbook](https://okengine.vercel.app/docs/console/overview).
+
+Optional OpenTelemetry export is additive — Console Runs/Traces keep reading the primary store; pass an OTLP/HTTP endpoint to also POST spans to your collector:
+
+```typescript
+import { createRunsRuntime } from "okengine";
+
+createRunsRuntime({
+  otel: { endpoint: "http://127.0.0.1:4318/v1/traces" },
+});
+```
 
 ---
 
@@ -247,6 +272,11 @@ Horizontal scale is the **Clone** axis: run N instances; `oke docker --prod` emi
 
 There is no separate “deploy to our cloud” product. You take the derived Dockerfile/compose and run them on whatever host you choose.
 
+**Protocols vs values:** `oke.config.ts` pins `prod` drivers (postgres, redis, …);
+the host env panel supplies `DATABASE_URL`, `REDIS_URL`, and vault secret names.
+Staging is a second deploy with different env values — not a fifth driver-map key.
+Handbook: [Deploy](https://okengine.vercel.app/docs/get-started/deploy).
+
 ---
 
 ## CLI
@@ -258,8 +288,10 @@ bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
                                  #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
-oke dev -s store.sql,store.kv    #     partial: only these roles get real backends
+oke dev --local                  # -l  laptop drivers for this session
+oke dev --docker                 # -d  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
+oke dev -d store.sql,store.kv    #     partial: only these roles get real backends
+oke mode local|docker            # get/set default oke dev mode (saved in .oke/mode)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
@@ -301,7 +333,8 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 
 | Long | Short | Where |
 |------|-------|--------|
-| `--stack` | `-s` | `dev` |
+| `--local` | `-l` | `dev` |
+| `--docker` | `-d` | `dev` |
 | `--prod` | `-p` | `docker` |
 | `--port` | `-p` | `start` |
 | `--check` | `-c` | `schema generate` |
@@ -355,26 +388,42 @@ Measured size and latency caps — see [`BUDGETS.md`](BUDGETS.md). Refresh with 
 
 ## Local framework link (try changes without publishing)
 
-To exercise a local `okengine` checkout inside an app (e.g. `oke-1`) without npm publish:
+One-time setup in the okengine repo (and `packages/create-oke` if you scaffold apps):
 
 ```bash
-# in the okengine repo
+# repo root — registers global `okengine`
 bun link
 # if you changed the Console SPA:
 bun run build
 
+# optional — so `create-oke` / `bunx create-oke` uses this checkout
+cd packages/create-oke && bun link && cd ../..
+```
+
+Then from anywhere:
+
+```bash
+create-oke oke-1
+# install stays on the registry version (fast), then create-oke runs
+# `bun link okengine` for you so `oke dev` uses your local checkout
+```
+
+Manual app link (same idea):
+
+```bash
 # in the app repo
+bun install
 bun link okengine
 # edit okengine → restart `bun dev` in the app
 ```
 
-Alternatively set `"okengine": "file:../okengine"` in the app `package.json` and run `bun install`.
+Opt out of the auto-link: `CREATE_OKE_NO_LINK=1`. Force a `file:` dep instead: `CREATE_OKE_OKENGINE=/path/to/okengine`.
 
 ---
 
 ## Status
 
-Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). Docs at [okengine.vercel.app](https://okengine.vercel.app). MIT. No `CONTRIBUTING` yet — issues and PRs welcome.
+Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine) (`okengine` + `create-oke`, lockstep). Docs at [okengine.vercel.app](https://okengine.vercel.app). MIT. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/guides/writing-a-driver.md`](docs/guides/writing-a-driver.md).
 
 | Resource | Path |
 |---|---|

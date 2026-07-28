@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "type": "module",
@@ -12,6 +12,7 @@
   "workspaces": [
     "packages/*",
     "examples/*",
+    "templates/*",
     "site"
   ],
   "scripts": {
@@ -19,12 +20,13 @@
     "test": "bun test --pass-with-no-tests",
     "test:coverage": "bun test --coverage --pass-with-no-tests",
     "test:console:smoke": "bunx playwright test tests/console/smoke.spec.ts",
-    "test:integration": "bun test examples/notes examples/linkly examples/provisions examples/skyport examples/skyport/tests/docker.test.ts && bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test --timeout 180000 packages/create-oke/tests/scaffold.integration.test.ts packages/create-oke/tests/dev.integration.test.ts",
+    "test:create-oke": "bun link && bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test --timeout 180000 packages/create-oke/tests/",
+    "test:integration": "bun test examples/notes examples/linkly examples/provisions examples/skyport examples/skyport/tests/docker.test.ts && bun run test:create-oke",
     "build": "bunx vite build --config src/console/ui/vite.config.ts",
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
-    "gate": "bun src/cli/doctor-diff-examples.ts && bun test src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts scripts/publish.gate.test.ts && bun src/cli/doc-drift.ts",
+    "gate": "bun src/cli/doctor-diff-examples.ts && bun test src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts src/cli/doc-staleness.test.ts scripts/publish.gate.test.ts && bun src/cli/doc-drift.ts",
     "site:sync": "bun run --cwd site sync",
     "site:dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
@@ -34,6 +36,7 @@
     "g": "gflows"
   },
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "@duckdb/node-api": "^1.5.5-r.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",

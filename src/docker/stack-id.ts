@@ -1,13 +1,14 @@
 /**
  * Per-project local stack identity — unique compose project + host ports.
  *
- * `oke dev --stack` must not share one `oke-dev` Postgres across every app on
+ * `oke dev --docker` must not share one `oke-dev` Postgres across every app on
  * the machine. Identity is a stable short hash of the project cwd.
  */
 
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type { ServiceCredentials } from "./types.ts";
+import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { defaultHostPort, envPrefix } from "./helpers.ts";
 
 /**
@@ -32,6 +33,15 @@ export function stackAppSlug(cwd: string): string {
 }
 
 /**
+ * Stable 0–999 offset derived from a stack instance id.
+ *
+ * @param instanceId - 6-hex stack id
+ */
+export function instancePortOffset(instanceId: string): number {
+  return Number.parseInt(instanceId.slice(0, 4), 16) % 1000;
+}
+
+/**
  * Host port for a role, offset by instance id so two stacks can run at once.
  *
  * @param role - Role key
@@ -43,7 +53,7 @@ export function hostPortForInstance(
   containerPort: number,
   instanceId: string,
 ): number {
-  const n = Number.parseInt(instanceId.slice(0, 4), 16) % 1000;
+  const n = instancePortOffset(instanceId);
   if (role === "store.sql") return 15_000 + n;
   if (role === "store.kv") return 16_000 + n;
   if (role === "signal") return 17_000 + n;
@@ -51,7 +61,7 @@ export function hostPortForInstance(
 }
 
 /**
- * Parse role credentials from an existing `.env.stack` body (reuse on restart).
+ * Parse role credentials from an existing `.env.docker` body (reuse on restart).
  *
  * @param text - Dotenv contents
  * @param roles - Roles to look up
@@ -80,6 +90,34 @@ export function parseStackCredentials(
   const out: Record<string, ServiceCredentials> = {};
   for (const role of roles) {
     const prefix = envPrefix(role);
+    // Mailpit has no durable secrets — regenerate placeholders each time.
+    if (role === "channel.email") continue;
+
+    if (role === "store.files") {
+      const user =
+        map.get(`${prefix}_ACCESS_KEY`) ?? map.get(`${prefix}_USER`);
+      const password =
+        map.get(`${prefix}_SECRET_KEY`) ?? map.get(`${prefix}_PASSWORD`);
+      const database =
+        map.get(`${prefix}_BUCKET`) ?? map.get(`${prefix}_DB`);
+      if (user && password && database) {
+        out[role] = { user, password, database };
+      }
+      continue;
+    }
+
+    if (role === "store.kv") {
+      const password = map.get(`${prefix}_PASSWORD`);
+      if (password) {
+        out[role] = {
+          user: map.get(`${prefix}_USER`) ?? "oke",
+          password,
+          database: map.get(`${prefix}_DB`) ?? "0",
+        };
+      }
+      continue;
+    }
+
     const user = map.get(`${prefix}_USER`);
     const password = map.get(`${prefix}_PASSWORD`);
     const database = map.get(`${prefix}_DB`);
@@ -91,7 +129,9 @@ export function parseStackCredentials(
 }
 
 /**
- * Load credentials from project `.env.stack` when present.
+ * Load credentials from `docker/.env.docker` when present.
+ *
+ * Soft-compat: also reads legacy project-root `.env.docker`.
  *
  * @param cwd - Project root
  * @param roles - Image roles
@@ -100,9 +140,15 @@ export async function loadExistingStackCredentials(
   cwd: string,
   roles: readonly string[],
 ): Promise<Readonly<Record<string, ServiceCredentials>> | undefined> {
-  const path = resolve(cwd, ".env.stack");
-  const file = Bun.file(path);
-  if (!(await file.exists())) return undefined;
-  const parsed = parseStackCredentials(await file.text(), roles);
-  return Object.keys(parsed).length > 0 ? parsed : undefined;
+  const candidates = [
+    resolve(cwd, DEFAULT_DOCKER_DIR, ".env.docker"),
+    resolve(cwd, ".env.docker"),
+  ];
+  for (const path of candidates) {
+    const file = Bun.file(path);
+    if (!(await file.exists())) continue;
+    const parsed = parseStackCredentials(await file.text(), roles);
+    if (Object.keys(parsed).length > 0) return parsed;
+  }
+  return undefined;
 }

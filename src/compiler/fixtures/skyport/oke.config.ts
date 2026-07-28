@@ -4,7 +4,7 @@ export default defineConfig({
   drivers: {
     prod: ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"],
     store: {
-      sql: { dev: "sqlite", prod: { driver: "postgres" } },
+      sql: { local: "sqlite", prod: { driver: "postgres" } },
       kv: { prod: "redis" },
       files: { prod: "s3" },
       index: { prod: "pgvector" },

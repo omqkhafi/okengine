@@ -25,7 +25,6 @@ app.unit("orders").plug(rateLimit({ max: 30 }));  // this unit only
 export type App = typeof app;
 
 Object.assign(app.$options, {
-  env: "test",
   gates: [member, canOrder],
   secrets: [stripeKey, dbUrl],
   signals: [orderPlaced, orderNews],

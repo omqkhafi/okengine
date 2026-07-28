@@ -8,6 +8,8 @@ node_modules
 !/docs/changelog.md
 !/docs/spec/
 !/docs/spec/**
+!/docs/guides/
+!/docs/guides/**
 !site/content/docs/
 !site/content/docs/**
 
@@ -42,7 +44,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.test.local
 .env.production.local
 .env.local
-.env.stack
+.env.docker
 
 # caches
 .eslintcache
@@ -61,3 +63,11 @@ tests/console/.claim-code
 playwright-report/
 test-results/
 blob-report/
+
+# Local implementation reports (never commit)
+reports/
+
+# Template-local install artefacts from running template tests in-tree
+templates/*/bun.lock
+templates/*/bun.lockb
+templates/*/node_modules/

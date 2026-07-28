@@ -1,0 +1,93 @@
+---
+title: Deploy
+description: Protocols from oke.config.ts, connection values from process.env — staging and production as two copies.
+icon: CloudUpload
+---
+
+OKE does not invent a host. You generate Docker artefacts, run them on Dokploy, Railway, Fly, your VPS, or any compose-aware platform. What the framework owns is **which protocol** each element uses, and **where connection values come from**.
+
+## Two layers
+
+| Layer | Source | Example |
+|---|---|---|
+| **Protocol** (what?) | `oke.config.ts` → `drivers.*.prod` | `sql: "postgres"`, `kv: "redis"` |
+| **Value** (where?) | Platform env → `process.env` | `DATABASE_URL=…`, `REDIS_URL=…` |
+
+`src/vault.ts` declares **app secrets** you read through `fx.vault` (API keys, `APP_SECRET`). Infrastructure URLs for Postgres/Redis are **not** required there — the store binder reads them from the environment when the `prod` (or `docker`) driver is `postgres` / `redis`.
+
+<Callout title="Resolution order">
+<code>process.env</code> → <code>.env.local</code> → <code>docker/.env.docker</code> → vault driver (e.g. sops) → optional <code>dev:</code> fallback.
+</Callout>
+
+On a host, you only set platform env vars. `docker/.env.docker` is for **`oke dev --docker` on a laptop** — do not treat it as the production secrets source.
+
+## Boot profile
+
+| Situation | `ConfigEnv` | How |
+|---|---|---|
+| `oke start` / Docker `CMD` (`NODE_ENV=production`) | `prod` | Inferred |
+| `oke dev --docker` (`OKE_DOCKER=1`) | `docker` | Inferred |
+| `oke dev` / laptop | `local` | Inferred |
+| `createTestApp` / `bun test` | `test` | Explicit harness |
+
+There is **no `staging` key** in driver maps. Staging is a second deploy of the same app with `prod` protocols and different env values.
+
+## Generate artefacts
+
+```bash title="Terminal"
+oke docker --prod
+```
+
+Writes under `docker/`:
+
+- `Dockerfile` — `CMD` is `oke start`
+- `compose.yml` + `compose.<role>.yml` — infra roles from `images`
+- `compose.prod.yml` — healthchecks, limits, secret refs, `deploy.replicas`
+
+Credentials are **never** written into YAML. Point Dokploy / Railway / compose at these files (or only the app image + managed Postgres/Redis).
+
+## Env vars per environment
+
+Set these in each platform env panel (staging and production separately):
+
+| Variable | When | Role |
+|---|---|---|
+| `DATABASE_URL` | `store.sql` → `postgres` | SQL |
+| `REDIS_URL` | `store.kv` → `redis` | KV |
+| `S3_ENDPOINT` · `S3_BUCKET` · `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` | `store.files` → `s3` | Object storage |
+| `SMTP_URL` (or `SMTP_HOST` / `SMTP_PORT`) | `channel.email` → `smtp` | Email |
+| Names from `src/vault.ts` | declared secrets | e.g. `APP_SECRET` |
+
+Local `oke dev --docker` writes the same ideas into `docker/.env.docker` with
+role-accurate names (`OKE_STORE_FILES_ACCESS_KEY`, `OKE_CHANNEL_EMAIL_UI_URL`, …)
+— not a shared USER/PASSWORD/DB template for every service.
+
+Managed databases are fine: paste the vendor URL into `DATABASE_URL`. Drivers are named after **protocols**, not vendors.
+
+## Staging vs production
+
+```text
+same git tree · same oke.config.ts (prod drivers)
+        │
+        ├─ staging deploy  →  DATABASE_URL=staging…  APP_SECRET=…
+        └─ production deploy →  DATABASE_URL=prod…     APP_SECRET=…
+```
+
+Give the Console a distinct **environment name and accent** per copy so operators never confuse staging with production.
+
+## Checklist
+
+- [ ] `oke.config.ts` pins `prod` (and usually `docker`) protocols + `images`
+- [ ] `oke docker --prod` artefacts reviewed / imported on the host
+- [ ] Staging and production each have their own env panel
+- [ ] `DATABASE_URL` / `REDIS_URL` / vault secret names present where drivers need them
+- [ ] `oke start` (or the generated Dockerfile) is the process entry
+- [ ] Optional: declare `DATABASE_URL` in `vault.ts` with `vault.fromDocker("store.sql")` only if Flows must read it via `fx.vault`
+
+## Next
+
+<Cards>
+  <Card title="Installation" description="Scaffold and oke dev — including --docker." href="/docs/get-started/installation" />
+  <Card title="Vault" description="Secret contracts and the resolution chain." href="/docs/elements/vault" />
+  <Card title="CLI Reference" description="oke docker, oke start, oke doctor." href="/docs/cli" />
+</Cards>

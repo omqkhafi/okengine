@@ -42,25 +42,25 @@ export default defineConfig({
   // (Bun.sql, bun:sqlite, Bun.redis, Bun.S3) — zero npm client dependencies.
   drivers: {
     store: {
-      sql: { dev: "sqlite", test: "memory",
+      sql: { local: "sqlite", test: "memory",
              prod: { driver: "postgres", url: dbUrl, pool: { max: 20 },
                      replicas: [dbReplica1] } },      // read-only flows auto-route here
-      kv:    { dev: "memory",   test: "memory", prod: "redis" },   // Redis · Valkey · Dragonfly
-      files: { dev: "fs",       test: "memory", prod: "s3" },      // S3 · R2 · SeaweedFS · MinIO
-      index: { dev: "pgvector", test: "memory", prod: "pgvector" },
+      kv:    { local: "memory",   test: "memory", prod: "redis" },   // Redis · Valkey · Dragonfly
+      files: { local: "fs",       test: "memory", prod: "s3" },      // S3 · R2 · RustFS · SeaweedFS
+      index: { local: "pgvector", test: "memory", prod: "pgvector" },
     },
-    signal:  { dev: "memory", test: "memory", prod: "postgres" },
-    clock:   { dev: "memory", test: "frozen", prod: "postgres" },
-    vault:   { dev: "dotenv", test: "memory", prod: "sops" },      // SOPS/age — committable
-    runs:    { dev: "files",  test: "memory", prod: "files" },     // Parquet + DuckDB
+    signal:  { local: "memory", test: "memory", prod: "postgres" },
+    clock:   { local: "memory", test: "frozen", prod: "postgres" },
+    vault:   { local: "dotenv", test: "memory", prod: "sops" },      // SOPS/age — committable
+    runs:    { local: "files",  test: "memory", prod: "files" },     // Parquet + DuckDB
     channel: {
-      email:    { dev: "console", prod: "smtp" },
-      sms:      { dev: "console", prod: "unifonic" },
-      whatsapp: { dev: "console", prod: "wa-cloud" },
-      push:     { dev: "console", prod: "fcm" },
+      email:    { local: "console", prod: "smtp" },
+      sms:      { local: "console", prod: "unifonic" },
+      whatsapp: { local: "console", prod: "wa-cloud" },
+      push:     { local: "console", prod: "fcm" },
     },
     ai: {
-      dev:  "mock",                                   // deterministic — tests never call out
+      local: "mock",                                   // deterministic — tests never call out
       prod: { driver: "anthropic", key: anthropicKey },
       // no prod default: model choice is never guessed.
       // "openai-compatible" covers vLLM · Groq · Together · LM Studio · most self-hosted

@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Extension: OKE CodeLens",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode-okengine",
+        "${workspaceFolder}/examples/notes"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/vscode-okengine/out/**/*.js"]
+    }
+  ]
+}

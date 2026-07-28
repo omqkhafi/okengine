@@ -217,11 +217,11 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "auth-forge",
       gates: [member],
-      env: "dev",
+      env: "local",
       auth: { secret: "hmac-secret-for-tests", sessions },
       startScheduler: false,
     });
-    await app.boot({ env: "dev", gates: [member], startScheduler: false });
+    await app.boot({ env: "local", gates: [member], startScheduler: false });
 
     const res = await app.fetch(
       new Request("http://localhost/secure", {
@@ -272,13 +272,13 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "auth-expired",
       gates: [member],
-      env: "dev",
+      env: "local",
       auth: { secret, sessions, now: () => nowMs },
       elements: { clock: clockRt },
       startScheduler: false,
     });
     await app.boot({
-      env: "dev",
+      env: "local",
       gates: [member],
       startScheduler: false,
       elements: { clock: clockRt },
@@ -324,10 +324,10 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "no-inject",
       gates: [member],
-      env: "dev",
+      env: "local",
       startScheduler: false,
     });
-    await app.boot({ env: "dev", gates: [member], startScheduler: false });
+    await app.boot({ env: "local", gates: [member], startScheduler: false });
 
     const result = await app.execute(
       app.flow("orders.inject")!,

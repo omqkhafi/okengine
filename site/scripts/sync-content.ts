@@ -678,6 +678,16 @@ async function main(): Promise<void> {
                 description: `Continue to ${el.next.label}.`,
                 href: el.next.href,
               },
+              ...(el.slug === "vault"
+                ? [
+                    {
+                      title: "Deploy",
+                      description:
+                        "Prod protocols vs platform env; staging as a second copy.",
+                      href: "/docs/get-started/deploy",
+                    },
+                  ]
+                : []),
               {
                 title: "Introduction",
                 description: "Eight elements overview.",
@@ -1221,7 +1231,7 @@ async function main(): Promise<void> {
     extractBetween(theory, "## 25. The AI contract", "## 26. Roadmap"),
   );
   const agentsExcerpt = demoteHeadings(
-    extractBetween(agents, "# OKE — Agent Contract", "## The one law"),
+    extractBetween(agents, "# OKE — Agent Contract", "## How to use OKE"),
   );
   pages.push({
     path: "ai/resources.md",

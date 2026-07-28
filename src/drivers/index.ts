@@ -132,7 +132,6 @@ export {
   buildSopsFixture,
   sopsEncryptValue,
 } from "./vault-sops.ts";
-export { openbaoVaultDriver } from "./vault-openbao.ts";
 export { infisicalVaultDriver } from "./vault-infisical.ts";
 export { managedVaultDriver } from "./vault-managed.ts";
 

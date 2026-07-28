@@ -21,7 +21,8 @@ OKE is the first backend an AI can fully read, safely operate, and provably not 
 
 ## OKE — Agent Contract
 
-This file is loaded by every later session. It prevents drift. Specs live in `docs/spec/`. **If the spec is silent, stop and ask.**
+This file is for coding agents. Read it before changing OKE apps or this
+repo. Specs live in `docs/spec/`. **If the spec is silent, stop and ask.**
 
 
 ## Machine-readable docs

@@ -4,13 +4,22 @@
 
 import type { ServiceSpec } from "./types.ts";
 
+/** Credential / identity fields referenced from compose as `${OKE_…}`. */
+export type CredEnvField =
+  | "USER"
+  | "PASSWORD"
+  | "DB"
+  | "ACCESS_KEY"
+  | "SECRET_KEY"
+  | "BUCKET";
+
 /**
  * Env-var *reference* for a credential field — value never enters YAML.
  *
  * @param spec - Service
- * @param field - USER | PASSWORD | DB
+ * @param field - Role field name
  */
-export function credEnv(spec: ServiceSpec, field: "USER" | "PASSWORD" | "DB"): string {
+export function credEnv(spec: ServiceSpec, field: CredEnvField): string {
   const key = `OKE_${spec.role.replaceAll(".", "_").toUpperCase()}_${field}`;
   return `\${${key}}`;
 }
@@ -42,6 +51,8 @@ export function envPrefix(role: string): string {
 export function defaultHostPort(role: string, containerPort: number): number {
   if (role === "store.sql") return 5432;
   if (role === "store.kv") return 6379;
+  if (role === "store.files") return 9000;
+  if (role === "channel.email") return 1025;
   if (role === "signal") return 4222;
   return containerPort;
 }

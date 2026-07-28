@@ -254,7 +254,7 @@ export function bindManifestAiRuntime(state: ConsoleState): void {
 
 /**
  * Open a VaultRuntime from the Manifest when no host runtime is attached.
- * Uses the standard resolution chain (process.env → .env.local → .env.stack
+ * Uses the standard resolution chain (process.env → .env.local → .env.docker
  * → driver) — Console never parses dotenv itself.
  *
  * @param state - Console state
@@ -269,7 +269,7 @@ export async function bindManifestVaultRuntime(
   try {
     state.vaultRuntime = await createManifestVaultRuntime(state.manifest, {
       cwd: state.cwd,
-      env: state.production ? "prod" : "dev",
+      env: state.production ? "prod" : "local",
       allowDevFallbacks: !state.production,
       now: state.now,
     });

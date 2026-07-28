@@ -5,6 +5,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   CODEMODS,
+  rewriteConfigEnvKeys,
+  rewriteFromStackMarkers,
   runCodemods,
   validateCodemodRegistry,
   type Codemod,
@@ -54,5 +56,24 @@ describe("codemod registry", () => {
     expect(changes).toEqual([
       { path: "src/x.ts", before: "old", after: "new" },
     ]);
+  });
+
+  test("rewriteConfigEnvKeys renames driver map keys", () => {
+    const before = `drivers: {\n  store: { sql: { dev: "sqlite", stack: "postgres", prod: "postgres" } },\n}`;
+    expect(rewriteConfigEnvKeys(before)).toContain('local: "sqlite"');
+    expect(rewriteConfigEnvKeys(before)).toContain('docker: "postgres"');
+    expect(rewriteConfigEnvKeys(before)).not.toMatch(/\bdev:/);
+    expect(rewriteConfigEnvKeys(before)).not.toMatch(/\bstack:/);
+  });
+
+  test("rewriteFromStackMarkers renames vault helpers", () => {
+    const before =
+      'dev: vault.fromStack("store.sql"),\n' +
+      'import { fromStack, FROM_STACK_PREFIX } from "okengine";\n';
+    const after = rewriteFromStackMarkers(before);
+    expect(after).toContain('vault.fromDocker("store.sql")');
+    expect(after).toContain("fromDocker, FROM_DOCKER_PREFIX");
+    expect(after).not.toMatch(/fromStack/);
+    expect(after).not.toMatch(/FROM_STACK/);
   });
 });

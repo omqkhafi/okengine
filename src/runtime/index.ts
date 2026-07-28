@@ -45,3 +45,16 @@ export {
 } from "./types.ts";
 
 export { createWebStandardRuntime } from "./web-standard.ts";
+
+export {
+  mount,
+  createExpressMiddleware,
+  nodeRequestToWeb,
+  webResponseToNode,
+  type MountOptions,
+  type MountHandle,
+  type ExpressLikeRequest,
+  type ExpressLikeResponse,
+  type ExpressMiddleware,
+  type ExpressNext,
+} from "./mount.ts";

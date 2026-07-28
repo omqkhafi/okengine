@@ -25,8 +25,6 @@ If the laws are right, the framework stays complete for a hundred years regardle
 
 > **OKE is the batteries-included TypeScript backend for the Bun era:** contract-first APIs with end-to-end type safety, declarative infrastructure primitives, an OpenTelemetry-native Console, secure-by-default auth and ABAC — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.
 
-*"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
-
 | | Hono | Elysia | Encore.ts | iii | **OKE** |
 |---|---|---|---|---|---|
 | Primary runtime | Multi (Web Std) | Bun-first | Node + Rust core | Rust engine, polyglot | **Bun-first, Web-Std portable** |
@@ -207,7 +205,7 @@ Two things get called "native." We mean the first, never the second:
 
 **We build only what genuinely does not exist:** the effect system, the Manifest and its derivations, the Console, the AoT compiler, the plugin engine, and the thin adapters connecting eight elements to real software.
 
-**Everything else is adopted:** Postgres · Redis/Valkey · NATS · S3-compatible storage · SOPS/age · OpenBao · Infisical · SMTP · OpenTelemetry · Drizzle.
+**Everything else is adopted:** Postgres · Redis/Valkey · NATS · S3-compatible storage · SOPS/age · Infisical · SMTP · OpenTelemetry · Drizzle.
 
 ## 10. Drivers are named after protocols; images after vendors
 
@@ -217,10 +215,10 @@ Welding a vendor name into the architecture is a design bug. `kv: "dragonfly"` i
 |---|---|---|
 | `store.sql` | `sqlite` · `postgres` | Postgres · Neon · Supabase · RDS · Timescale · pgvector |
 | `store.kv` | `memory` · `redis` | Redis · Valkey · Dragonfly · KeyDB · Upstash |
-| `store.files` | `fs` · `s3` | AWS S3 · R2 · MinIO · SeaweedFS · RustFS · Garage · Backblaze |
+| `store.files` | `fs` · `s3` | AWS S3 · R2 · RustFS · SeaweedFS · Garage · Backblaze |
 | `signal` | `memory` · `postgres` · `redis` · `nats` · `kafka` | the matching servers, any vendor |
 | `clock` | `memory` · `postgres` | — |
-| `vault` | `env` · `sops` · `openbao` · `infisical` · managed | — |
+| `vault` | `env` · `sops` · `infisical` · managed | — |
 | `channel.*` | `smtp` · `resend` · `ses` · `unifonic` · `twilio` · `wa-cloud` · `fcm` | any SMTP server |
 | `store.index` | `pgvector` · `qdrant` · `meilisearch` · `typesense` | vector + full-text search for RAG |
 | `ai` | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` | `openai-compatible` covers vLLM, Groq, Together, LM Studio, and most self-hosted servers |
@@ -322,7 +320,7 @@ Reads truth from the Manifest + OpenTelemetry. Runs in **development and product
 | `store.files` | dev `fs` · prod `s3` | SeaweedFS · RustFS (beta) · MinIO · R2 | `Bun.S3` |
 | `signal` | dev `memory` · prod **`postgres`** | `redis` · `nats` · `kafka` (explicit) | transactional with your data |
 | `clock` | `postgres` | — | durability needs transactional storage |
-| `vault` | dev `.env.local` · prod `sops`/age | OpenBao · Infisical · managed | existing standard, no invented format |
+| `vault` | dev `.env.local` · prod `sops`/age | Infisical · managed | existing standard, no invented format |
 | `channel.email` | dev `console` · prod `smtp` | Resend · SES | no vendor lock-in |
 | `delivery` | **none — must be declared** | — | semantic decision, never guessed |
 | `store.index` | `pgvector` | Qdrant · Meilisearch · Typesense | RAG without another service |

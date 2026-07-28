@@ -1,6 +1,6 @@
 /**
  * `oke dev` — watch · hot reload · Console :6533 · MCP :6535 · client types on save.
- * `oke dev --stack` boots infra compose and binds prod store drivers (Postgres/Redis).
+ * `oke dev --docker` boots infra compose and binds prod store drivers (Postgres/Redis).
  */
 
 import { watch } from "node:fs";
@@ -13,7 +13,6 @@ import type { ConsoleState } from "../console/server/state.ts";
 import {
   DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
-  formatStackEnv,
   loadExistingStackCredentials,
   stackAppSlug,
   stackInstanceId,
@@ -34,8 +33,16 @@ import {
   formatStackSummary,
   formatStatusLine,
 } from "../term.ts";
+import { askDevMode, type AskDevModeFn } from "./ask-dev-mode.ts";
 import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
+import { ensureSopsScaffold } from "../elements/vault.ts";
+import {
+  readDevMode,
+  shouldAskDevMode,
+  writeDevMode,
+  type DevMode,
+} from "./dev-mode.ts";
 import {
   buildDevHeroSnapshot,
   encodeHeroSnapshot,
@@ -114,7 +121,15 @@ export interface DevSession {
 export interface DevOptions {
   readonly cwd?: string;
   readonly entry?: string;
-  readonly stack?: boolean | readonly string[];
+  /**
+   * Explicit docker mode for this session (`true` or role list).
+   * Does not write `.oke/mode`.
+   */
+  readonly docker?: boolean | readonly string[];
+  /**
+   * Explicit local mode for this session. Does not write `.oke/mode`.
+   */
+  readonly local?: boolean;
   readonly images?: Readonly<Record<string, string>>;
   readonly credentials?: DeriveOptions["credentials"];
   readonly write?: (text: string) => void;
@@ -138,10 +153,10 @@ export interface DevOptions {
   readonly consolePort?: number;
   readonly mcpPort?: number;
   /**
-   * Boot compose stack (injectable).
+   * Boot compose infra (injectable).
    *
    * @param composeFiles - `-f` list excluding override if missing
-   * @param cwd - Project root
+   * @param cwd - Compose directory
    */
   readonly composeUp?: (
     composeFiles: readonly string[],
@@ -170,6 +185,79 @@ export interface DevOptions {
     entry: string,
     env: Record<string, string>,
   ) => Promise<DevAppHandle>;
+  /**
+   * Override `process.stdin.isTTY` (tests).
+   * When unset mode + non-TTY → local with no prompt / no save.
+   */
+  readonly stdinIsTTY?: boolean | undefined;
+  /**
+   * Injectable mode prompt (tests). Production uses {@link askDevMode}.
+   */
+  readonly ask?: AskDevModeFn;
+}
+
+/**
+ * Resolve which infrastructure mode this `oke dev` session should use.
+ *
+ * Explicit flags win. Saved `.oke/mode` is next. Unset + TTY prompts once and
+ * saves. Unset + non-TTY → `local` with no prompt and no save.
+ *
+ * @param options - Dev options
+ * @param cwd - Project root
+ */
+export async function resolveSessionDevMode(
+  options: DevOptions,
+  cwd: string,
+): Promise<
+  | { readonly ok: true; readonly mode: DevMode; readonly dockerRoles: readonly string[] | true | null }
+  | { readonly ok: false; readonly code: number }
+> {
+  const explicitDocker = options.docker;
+  const explicitLocal = options.local === true;
+  if (explicitLocal && explicitDocker !== undefined) {
+    console.error("oke dev: use either --local or --docker, not both");
+    return { ok: false, code: 1 };
+  }
+  if (explicitLocal) {
+    return { ok: true, mode: "local", dockerRoles: null };
+  }
+  if (explicitDocker !== undefined) {
+    const roles =
+      Array.isArray(explicitDocker) ? explicitDocker : (true as const);
+    return { ok: true, mode: "docker", dockerRoles: roles };
+  }
+
+  const saved = await readDevMode(cwd);
+  const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
+  if (
+    shouldAskDevMode({
+      saved,
+      explicit: false,
+      stdinIsTTY,
+    })
+  ) {
+    const ask = options.ask ?? askDevMode;
+    const chosen = await ask();
+    if (chosen === null) {
+      console.error("oke dev: cancelled");
+      return { ok: false, code: 1 };
+    }
+    await writeDevMode(cwd, chosen);
+    return {
+      ok: true,
+      mode: chosen,
+      dockerRoles: chosen === "docker" ? true : null,
+    };
+  }
+  if (saved !== null) {
+    return {
+      ok: true,
+      mode: saved,
+      dockerRoles: saved === "docker" ? true : null,
+    };
+  }
+  // non-TTY, unset — lightest option, no save
+  return { ok: true, mode: "local", dockerRoles: null };
 }
 
 /** Result of a dry-run / prepared / live-but-detached dev session. */
@@ -199,6 +287,12 @@ export interface DevResult {
 export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
+
+  const resolved = await resolveSessionDevMode(options, cwd);
+  if (!resolved.ok) return { code: resolved.code };
+  const useDocker = resolved.mode === "docker";
+  const dockerSpec = resolved.dockerRoles;
+
   const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
   const preferredConsole = options.consolePort ?? CONSOLE_PORT;
   const preferredMcp = options.mcpPort ?? MCP_PORT;
@@ -249,7 +343,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     loadedConfig = null;
   }
 
-  if (options.stack) {
+  if (useDocker) {
     let images = options.images;
     if (!images) {
       if (!loadedConfig) {
@@ -271,8 +365,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         loadedConfig = null;
       }
     }
-    if (Array.isArray(options.stack)) {
-      const allow = new Set(options.stack);
+    if (Array.isArray(dockerSpec)) {
+      const allow = new Set(dockerSpec);
       images = Object.fromEntries(
         Object.entries(images).filter(([role]) => allow.has(role)),
       );
@@ -315,10 +409,18 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     if (!options.dryRun) {
       await writeDerivedFiles(derived, dockerOut, {
         writeStackEnv: true,
-        stackEnvDir: cwd,
       });
-      // Ensure .env.stack is at project root for the host Bun app / vault.
-      await Bun.write(resolve(cwd, ".env.stack"), formatStackEnv(stackEnv));
+      const vaultDriver =
+        resolveDriverId(loadedConfig?.drivers?.vault, "docker") ??
+        resolveDriverId(loadedConfig?.drivers?.vault, "prod");
+      if (vaultDriver === "sops") {
+        const scaffold = await ensureSopsScaffold(cwd);
+        if (scaffold.created) {
+          console.log(
+            "oke vault: scaffolded AGE_SECRET_KEY (.env.local) + secrets.enc.json",
+          );
+        }
+      }
       const up =
         options.composeUp ??
         (async (files, dir) => {
@@ -331,14 +433,25 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           });
           const code = await proc.exited;
           if (code !== 0) {
-            throw new Error(`oke dev --stack: docker compose exited ${code}`);
+            throw new Error(`oke dev --docker: docker compose exited ${code}`);
           }
         });
       // Compose files live under docker/; cwd for compose is that directory.
-      await up(composeFiles, dockerOut);
+      try {
+        await up(composeFiles, dockerOut);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(msg);
+        console.error(
+          "oke dev: docker mode failed — fix Docker/compose, or run `oke mode local`",
+        );
+        return { code: 1 };
+      }
       const roleLabel = (role: string): string => {
         if (role === "store.sql") return "postgres";
         if (role === "store.kv") return "redis";
+        if (role === "store.files") return "rustfs";
+        if (role === "channel.email") return "mailpit";
         return role;
       };
       const appDrivers = [
@@ -380,9 +493,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   const heroSnapshot = buildDevHeroSnapshot({
     config: loadedConfig,
-    stack: Boolean(options.stack),
-    sqlDriver: options.stack ? stackSqlDriver : undefined,
-    kvDriver: options.stack ? stackKvDriver : undefined,
+    docker: useDocker,
+    sqlDriver: useDocker ? stackSqlDriver : undefined,
+    kvDriver: useDocker ? stackKvDriver : undefined,
     version: okeVersion,
     nodeEnv: "development",
   });
@@ -411,7 +524,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     ...(stackEnv ?? {}),
     ...(stackEnv
       ? {
-          OKE_STACK: "1",
+          OKE_DOCKER: "1",
           OKE_SQL_DRIVER: stackSqlDriver,
           OKE_KV_DRIVER: stackKvDriver,
         }
@@ -746,38 +859,47 @@ async function waitForAppReady(
 }
 
 /**
- * CLI entry for `oke dev [--stack|-s [roles]]`.
+ * CLI entry for `oke dev [--local|-l] [--docker|-d [roles]]`.
  *
  * @param args - Args after `dev`
  */
 export async function devCli(args: readonly string[]): Promise<number> {
-  let stack: boolean | string[] | undefined;
+  let docker: boolean | string[] | undefined;
+  let local = false;
   let entry: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--stack" || a === "-s") {
+    if (a === "--local" || a === "-l") {
+      local = true;
+    } else if (a === "--docker" || a === "-d") {
       const next = args[i + 1];
       if (next && !next.startsWith("-") && /^[\w.,]+$/.test(next)) {
-        stack = next.split(",").map((s) => s.trim()).filter(Boolean);
+        docker = next.split(",").map((s) => s.trim()).filter(Boolean);
         i++;
       } else {
-        stack = true;
+        docker = true;
       }
     } else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke dev [--stack|-s [roles]] [--entry|-e src/app.ts]
+      console.log(`oke dev [--local|-l] [--docker|-d [roles]] [--entry|-e src/app.ts]
 
 Watch · hot reload · Console :6533 · app :6530 · MCP :6535
 Regenerates client types on every save.
---stack boots infra under docker/ and runs the app on host Bun with prod
-store drivers (Postgres/Redis) so local mimics the server.
-Partial roles: -s store.sql,store.kv.
+
+With no flags: use saved .oke/mode, or prompt once on a TTY
+(non-TTY defaults to local without saving).
+--local   laptop drivers (sqlite/memory) for this session
+--docker  boots infra under docker/ and runs the app on host Bun with
+          prod store drivers (Postgres/Redis). Partial roles:
+          -d store.sql,store.kv
+Change the saved default with: oke mode local|docker
 `);
       return 0;
     }
   }
   const { code } = await runDev({
-    stack: stack === undefined ? undefined : stack,
+    ...(local ? { local: true } : {}),
+    ...(docker === undefined ? {} : { docker }),
     entry,
   });
   return code;

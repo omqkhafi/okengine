@@ -6,6 +6,10 @@ import { collectWideEvent, type CollectWideEventInput } from "./collect.ts";
 import { clickhouseRunsDriver } from "./drivers/clickhouse.ts";
 import { filesRunsDriver } from "./drivers/files.ts";
 import { memoryRunsDriver } from "./drivers/memory.ts";
+import {
+  withOtelExport,
+  type OtelExportOptions,
+} from "./drivers/otel.ts";
 import { postgresRunsDriver } from "./drivers/postgres.ts";
 import {
   explainOutliers,
@@ -38,6 +42,11 @@ export interface CreateRunsRuntimeOptions extends RunsOpenOptions {
   readonly subjectKeys?: SubjectKeyVault;
   /** Build version stamped on collected events. */
   readonly buildVersion?: string;
+  /**
+   * Optional OTLP/HTTP JSON export — additive beside the storage driver.
+   * Console Runs/Traces keep reading the primary store unchanged.
+   */
+  readonly otel?: OtelExportOptions;
 }
 
 /** Runs runtime surface. */
@@ -134,7 +143,8 @@ export function resolveRunsDriver(
 export function createRunsRuntime(
   options: CreateRunsRuntimeOptions = {},
 ): RunsRuntime {
-  const driver = resolveRunsDriver(options.driver);
+  const base = resolveRunsDriver(options.driver);
+  const driver = options.otel ? withOtelExport(base, options.otel) : base;
   let store: RunsStore | undefined;
   const subjectKeys = options.subjectKeys;
 

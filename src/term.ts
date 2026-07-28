@@ -70,7 +70,7 @@ export type DevHeroElement = {
 
 /** Shared options for the `oke dev` hero / banner. */
 export type DevHeroMeta = {
-  /** `local` · `local-server` · `test` · `production` */
+  /** `local` · `docker` · `test` · `production` */
   readonly profile?: string;
   /** Data plane: `local` · `production` */
   readonly runtimeEnv?: string;
@@ -118,12 +118,14 @@ export function formatDevHeroDetails(
   const lines: string[] = [];
   if (options.profile) {
     lines.push(
-      `${bar}  ${label("profile")} ${s.cyan}${options.profile}${s.reset}`,
+      `${bar}  ${label("mode")} ${s.cyan}${options.profile}${s.reset}`,
     );
   }
-  if (options.runtimeEnv) {
+  // `runtimeEnv` is deploy plane (local machine vs production). Only print when
+  // it adds signal — never "env local" next to mode docker (misleading).
+  if (options.runtimeEnv === "production") {
     lines.push(
-      `${bar}  ${label("env")} ${s.cyan}${options.runtimeEnv}${s.reset}`,
+      `${bar}  ${label("deploy")} ${s.cyan}production${s.reset}`,
     );
   }
   if (options.system) {
@@ -374,7 +376,7 @@ export function formatRequestLine(
 }
 
 /**
- * Compact `oke dev -s` summary — project, ports, app driver mode.
+ * Compact `oke dev --docker` summary — project, ports, app driver mode.
  *
  * @param options - Project name, services, driver labels
  */
@@ -391,7 +393,7 @@ export function formatStackSummary(
   const bar = `${s.dim}│${s.reset}`;
   const pad = (label: string) => label.padEnd(8);
   const lines: string[] = [
-    `${s.green}◇${s.reset}  ${s.bold}Stack${s.reset}     ${s.cyan}${options.project}${s.reset}`,
+    `${s.green}◇${s.reset}  ${s.bold}Docker${s.reset}    ${s.cyan}${options.project}${s.reset}`,
   ];
   for (const svc of options.services) {
     lines.push(

@@ -6,11 +6,12 @@
  * rotation blast radius are derived — never reimplemented in the UI.
  */
 
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ConfigEnv } from "../../config/index.ts";
-import { envVaultDriver, memoryVaultDriver } from "../../drivers/index.ts";
 import {
   createVaultRuntime,
+  defaultVaultResolutionChain,
   vault as declareVault,
   type VaultResolutionSource,
   type VaultResolutionStep,
@@ -103,7 +104,7 @@ export async function projectVaultList(
   readonly secrets: readonly ConsoleVaultRow[];
   readonly env: VaultEnvLabel;
 }> {
-  const env = options.env ?? "dev";
+  const env = options.env ?? "local";
   const now = options.now ?? (() => Date.now());
   const names = collectNames(options.manifest, options.runtime);
   const journalRuns = options.journal
@@ -209,8 +210,9 @@ export function rotateVaultValue(
 /**
  * Build a VaultRuntime from Manifest contracts when no host runtime is attached.
  *
- * Uses the standard resolution chain: process.env → .env.local → .env.stack
- * → memory driver → (optional) dev fallback. Does not parse dotenv in the UI.
+ * Uses the same canonical chain as app boot
+ * ({@link defaultVaultResolutionChain}): process.env → .env.local →
+ * .env.docker → driver → (optional) `dev` fallback.
  *
  * @param manifest - Manifest snapshot
  * @param options - cwd / env / allowDevFallbacks / seed
@@ -247,30 +249,21 @@ export async function createManifestVaultRuntime(
     });
   });
 
-  const seed = options.seed ?? {};
+  const env = options.env ?? "local";
+  const ageIdentity =
+    process.env.AGE_SECRET_KEY?.trim() ||
+    process.env.OKE_AGE_IDENTITY?.trim();
+  const sopsPath = resolve(cwd, process.env.OKE_SOPS_PATH?.trim() || "secrets.enc.json");
+  const useSops = Boolean(ageIdentity && existsSync(sopsPath));
   const runtime = createVaultRuntime({
     secrets,
     allowDevFallbacks:
-      options.allowDevFallbacks ?? (options.env ?? "dev") !== "prod",
+      options.allowDevFallbacks ?? env !== "prod",
     now: options.now,
-    chain: [
-      { driver: envVaultDriver, source: "process.env" },
-      {
-        driver: envVaultDriver,
-        source: ".env.local",
-        options: { path: resolve(cwd, ".env.local") },
-      },
-      {
-        driver: envVaultDriver,
-        source: ".env.stack",
-        options: { path: resolve(cwd, ".env.stack") },
-      },
-      {
-        driver: memoryVaultDriver,
-        source: "driver",
-        options: { secrets: seed },
-      },
-    ],
+    chain: defaultVaultResolutionChain(cwd, {
+      seed: options.seed,
+      ...(useSops ? { driverId: "sops" as const } : {}),
+    }),
   });
   await runtime.boot();
   return runtime;

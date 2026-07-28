@@ -6,6 +6,9 @@
  * registry is the checklist.
  */
 
+import { readdir } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+
 /** One file rewrite produced by a codemod. */
 export interface CodemodChange {
   /** Path relative to the project root. */
@@ -35,10 +38,136 @@ export interface Codemod {
 }
 
 /**
- * Built-in transforms. Empty until the next intentional breaking release —
- * the infrastructure is the gate; entries are added with the break.
+ * Rewrite driver-map keys `dev:` → `local:` and `stack:` → `docker:`.
+ *
+ * @param source - File contents
  */
-export const CODEMODS: readonly Codemod[] = [];
+export function rewriteConfigEnvKeys(source: string): string {
+  return source
+    .replace(/(^|[^\w.])dev(\s*:)/gm, "$1local$2")
+    .replace(/(^|[^\w.])stack(\s*:)/gm, "$1docker$2");
+}
+
+/**
+ * Rewrite removed vault stack markers to docker equivalents.
+ *
+ * @param source - File contents
+ */
+export function rewriteFromStackMarkers(source: string): string {
+  return source
+    .replace(/\bfromStack\b/g, "fromDocker")
+    .replace(/\bFROM_STACK_PREFIX\b/g, "FROM_DOCKER_PREFIX")
+    .replace(/\bisFromStack\b/g, "isFromDocker")
+    .replace(/\bfromStackRole\b/g, "fromDockerRole")
+    .replace(/__oke_from_stack__/g, "__oke_from_docker__");
+}
+
+/**
+ * Collect `oke.config.*` files under a project root.
+ *
+ * Vault `dev:` fallbacks are intentionally excluded from the env-key rewrite —
+ * that option is not a {@link import("../config/index.ts").ConfigEnv} key.
+ *
+ * @param cwd - Project root
+ */
+async function collectConfigCandidates(cwd: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const name of [
+    "oke.config.ts",
+    "oke.config.mts",
+    "oke.config.js",
+  ]) {
+    const path = resolve(cwd, name);
+    if (await Bun.file(path).exists()) out.push(path);
+  }
+  for (const dir of ["src", "templates", "examples"]) {
+    const root = resolve(cwd, dir);
+    try {
+      const entries = await readdir(root, { recursive: true });
+      for (const entry of entries) {
+        if (
+          typeof entry === "string" &&
+          /(^|\/)oke\.config\.(ts|mts|js)$/.test(entry)
+        ) {
+          out.push(join(root, entry));
+        }
+      }
+    } catch {
+      // directory may not exist
+    }
+  }
+  return out;
+}
+
+/**
+ * Collect TypeScript sources that may still call `fromStack`.
+ *
+ * @param cwd - Project root
+ */
+async function collectVaultCandidates(cwd: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const dir of ["src", "templates", "examples", "."]) {
+    const root = resolve(cwd, dir);
+    try {
+      const entries =
+        dir === "."
+          ? (await Bun.file(resolve(cwd, "vault.ts")).exists())
+            ? ["vault.ts"]
+            : []
+          : await readdir(root, { recursive: true });
+      for (const entry of entries) {
+        if (typeof entry === "string" && /(^|\/)vault\.ts$/.test(entry)) {
+          out.push(join(root, entry));
+        }
+      }
+    } catch {
+      // directory may not exist
+    }
+  }
+  return out;
+}
+
+/**
+ * Built-in transforms.
+ */
+export const CODEMODS: readonly Codemod[] = [
+  {
+    id: "0.3.0-config-env-local-docker",
+    from: "0.2.0",
+    to: "0.3.0",
+    description:
+      "Rename driver map keys dev→local and stack→docker; fromStack→fromDocker",
+    async apply(cwd) {
+      const changes: CodemodChange[] = [];
+      const seen = new Set<string>();
+      for (const abs of await collectConfigCandidates(cwd)) {
+        const before = await Bun.file(abs).text();
+        const after = rewriteFromStackMarkers(rewriteConfigEnvKeys(before));
+        if (after !== before) {
+          seen.add(abs);
+          changes.push({
+            path: relative(cwd, abs),
+            before,
+            after,
+          });
+        }
+      }
+      for (const abs of await collectVaultCandidates(cwd)) {
+        if (seen.has(abs)) continue;
+        const before = await Bun.file(abs).text();
+        const after = rewriteFromStackMarkers(before);
+        if (after !== before) {
+          changes.push({
+            path: relative(cwd, abs),
+            before,
+            after,
+          });
+        }
+      }
+      return changes;
+    },
+  },
+];
 
 /**
  * Validate the registry (unique ids, non-empty metadata, apply present).

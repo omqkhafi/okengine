@@ -10,6 +10,8 @@ import type { Manifest } from "../manifest/types.ts";
 const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
 const DEFAULT_KV_IMAGE = "redis:8-alpine";
+const DEFAULT_FILES_IMAGE = "rustfs/rustfs:1.0.0-beta.11";
+const DEFAULT_EMAIL_IMAGE = "axllent/mailpit:v1.22.3";
 
 /**
  * Extract protocol id from a driver ref.
@@ -22,21 +24,26 @@ function driverId(ref: DriverRef | undefined): string | undefined {
 }
 
 /**
- * Prefer `stack` then `prod` for a driver map (local server ≈ production).
+ * Prefer `docker` then `prod` for a driver map (compose ≈ production).
  *
  * @param map - Env driver map
  */
-function stackOrProdId(
-  map: { readonly stack?: DriverRef; readonly prod?: DriverRef } | undefined,
+function dockerOrProdId(
+  map:
+    | {
+        readonly docker?: DriverRef;
+        readonly prod?: DriverRef;
+      }
+    | undefined,
 ): string | undefined {
-  return driverId(map?.stack) ?? driverId(map?.prod);
+  return driverId(map?.docker) ?? driverId(map?.prod);
 }
 
 /**
- * Derive default image pins from stack/prod driver protocols.
+ * Derive default image pins from docker/prod driver protocols.
  *
  * Used when `oke.config.ts` omits `images` but declares postgres/redis (etc.)
- * so `oke dev -s` / `oke stack` / `oke docker` have something to run.
+ * so `oke dev -d` / `oke stack` / `oke docker` have something to run.
  *
  * @param config - Loaded config
  */
@@ -44,11 +51,11 @@ export function defaultImagesFromConfig(
   config: OkeConfig,
 ): Readonly<Record<string, string>> {
   const out: Record<string, string> = {};
-  const sql = stackOrProdId(config.drivers?.store?.sql);
-  const index = stackOrProdId(config.drivers?.store?.index);
-  const kv = stackOrProdId(config.drivers?.store?.kv);
-  const signal = stackOrProdId(config.drivers?.signal);
-  const clock = stackOrProdId(config.drivers?.clock);
+  const sql = dockerOrProdId(config.drivers?.store?.sql);
+  const index = dockerOrProdId(config.drivers?.store?.index);
+  const kv = dockerOrProdId(config.drivers?.store?.kv);
+  const signal = dockerOrProdId(config.drivers?.signal);
+  const clock = dockerOrProdId(config.drivers?.clock);
 
   const needsSql =
     sql === "postgres" ||
@@ -71,6 +78,20 @@ export function defaultImagesFromConfig(
     kv === "redis" || (config.drivers?.prod ?? []).includes("redis");
   if (needsKv) {
     out["store.kv"] = DEFAULT_KV_IMAGE;
+  }
+
+  const files = dockerOrProdId(config.drivers?.store?.files);
+  const needsFiles =
+    files === "s3" || (config.drivers?.prod ?? []).includes("s3");
+  if (needsFiles) {
+    out["store.files"] = DEFAULT_FILES_IMAGE;
+  }
+
+  const email = dockerOrProdId(config.drivers?.channel?.email);
+  const needsEmail =
+    email === "smtp" || (config.drivers?.prod ?? []).includes("smtp");
+  if (needsEmail) {
+    out["channel.email"] = DEFAULT_EMAIL_IMAGE;
   }
 
   return out;
@@ -131,7 +152,7 @@ export async function loadManifest(path: string): Promise<Manifest> {
  * Resolve images map from config or Manifest.
  *
  * When neither declares `images`, derive defaults from prod driver protocols
- * so `oke dev -s` works on scaffolded templates without an explicit pin map.
+ * so `oke dev -d` works on scaffolded templates without an explicit pin map.
  *
  * @param config - Optional config
  * @param manifest - Optional manifest
@@ -150,15 +171,15 @@ export function resolveImages(
 export type StackDriverMismatch = {
   /** Short label (`sql`, `kv`). */
   readonly label: string;
-  /** Active `drivers.*.stack` (→ prod) id. */
+  /** Active `drivers.*.docker` (→ prod) id. */
   readonly using: string;
   /** Driver that would use the container. */
   readonly container: string;
 };
 
 /**
- * Detect when `oke dev -s` containers will not back the app because the
- * `stack` driver profile still points at local/memory backends.
+ * Detect when `oke dev -d` containers will not back the app because the
+ * `docker` driver profile still points at local/memory backends.
  *
  * @param config - Loaded config
  * @param stackRoles - Roles being composed
@@ -169,30 +190,30 @@ export function stackDevDriverMismatches(
 ): readonly StackDriverMismatch[] {
   const roles = new Set(stackRoles);
   const out: StackDriverMismatch[] = [];
-  const sqlStack =
-    driverId(config.drivers?.store?.sql?.stack) ??
+  const sqlDocker =
+    driverId(config.drivers?.store?.sql?.docker) ??
     driverId(config.drivers?.store?.sql?.prod);
-  const kvStack =
-    driverId(config.drivers?.store?.kv?.stack) ??
+  const kvDocker =
+    driverId(config.drivers?.store?.kv?.docker) ??
     driverId(config.drivers?.store?.kv?.prod);
 
   if (
     roles.has("store.sql") &&
-    (sqlStack === "sqlite" || sqlStack === "memory" || sqlStack === undefined)
+    (sqlDocker === "sqlite" || sqlDocker === "memory" || sqlDocker === undefined)
   ) {
     out.push({
       label: "sql",
-      using: sqlStack ?? "unset",
+      using: sqlDocker ?? "unset",
       container: "postgres",
     });
   }
   if (
     roles.has("store.kv") &&
-    (kvStack === "memory" || kvStack === undefined)
+    (kvDocker === "memory" || kvDocker === undefined)
   ) {
     out.push({
       label: "kv",
-      using: kvStack ?? "memory",
+      using: kvDocker ?? "memory",
       container: "redis",
     });
   }

@@ -34,6 +34,7 @@ Pick a template by how much surface you want on day one:
 bunx create-oke@latest my-app --template hello
 bunx create-oke@latest my-app --template minimal
 bunx create-oke@latest my-app --template full
+bunx create-oke@latest my-app --sql postgres
 bunx create-oke@latest my-notes --from-example notes
 ```
 
@@ -43,6 +44,7 @@ bunx create-oke@latest my-notes --from-example notes
 | `minimal` | Smallest shape you'd ship — Store + 1–2 flows |
 | `standard` | Full recommended layout, empty scaffolding (default) |
 | `full` | Every element wired, no business logic |
+| `--sql postgres` | `pgTable` schema + pin `store.sql` (default: `sqlite`) |
 | `--from-example notes\|linkly\|provisions\|skyport` | Teaching apps with business logic + comments |
 
 <Callout type="info" title="New to OKE?">
@@ -69,23 +71,35 @@ Open the Console — flows, contracts, effects, and an architecture diagram are 
 Want Postgres/Redis like production while the app stays on host Bun?
 
 ```bash title="Terminal"
-oke dev --stack   # or: oke dev -s
+oke dev --docker   # or: oke dev -d
 ```
 
-That uses the `stack` driver profile in `oke.config.ts` (filled from `prod` when omitted). Compose files land under `docker/`; secrets under `.env.stack`.
+That uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when omitted). Compose files and secrets land under `docker/` (including `docker/.env.docker`). Force laptop drivers for one session with `oke dev --local` (`-l`), or persist the default with `oke mode local|docker`.
+
+### Already on Hono or Express?
+
+Mount OKE under a path — host routes stay; mounted flows keep gates and effects:
+
+```ts title="mount"
+import { mount } from "okengine";
+
+await app.boot();
+host.mount("/oke", mount(app).fetch);  // Hono
+```
 
 ### Verify the install
 
-Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked.
+Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked. Optional: export wide events to an OTLP collector with `createRunsRuntime({ otel: { endpoint: "…" } })` — Console Runs/Traces stay primary; OTel is additive.
 
 </Steps>
 
 ## Next steps
 
-Continue to [Basic Usage](/docs/get-started/basic-usage) for your first flows, typed client, and tests — or jump into [Notes](/docs/learn/notes) for the full progressive path.
+Continue to [Basic Usage](/docs/get-started/basic-usage) for your first flows, typed client, and tests — or [Deploy](/docs/get-started/deploy) when you are ready to run staging/production with platform env vars.
 
 <Cards>
   <Card title="Basic Usage" description="First flows, client, and tests." href="/docs/get-started/basic-usage" />
+  <Card title="Deploy" description="Protocols vs env values; staging and production." href="/docs/get-started/deploy" />
   <Card title="CLI Reference" description="oke and create-oke commands." href="/docs/cli" />
   <Card title="Notes" description="Teaching app walkthrough." href="/docs/learn/notes" />
 </Cards>

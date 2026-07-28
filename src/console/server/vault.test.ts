@@ -3,9 +3,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { memoryVaultDriver } from "../../drivers/index.ts";
 import {
   createVaultRuntime,
+  defaultVaultResolutionChain,
   fingerprintSecretSync,
   vault,
 } from "../../elements/vault.ts";
@@ -17,6 +21,7 @@ import type { Manifest } from "../../manifest/types.ts";
 import {
   assertNoSecretLeak,
   blastRadiusOf,
+  createManifestVaultRuntime,
   projectVaultList,
   readersOf,
   rotateVaultValue,
@@ -82,13 +87,13 @@ describe("projectVaultList", () => {
     const { secrets, env } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "dev",
+      env: "local",
       peerFingerprints: {
         STRIPE_KEY: { staging: fingerprintSecretSync(SECRET) },
       },
     });
 
-    expect(env).toBe("dev");
+    expect(env).toBe("local");
     const stripe = secrets.find((s) => s.name === "STRIPE_KEY");
     const pub = secrets.find((s) => s.name === "PUBLIC_APP_URL");
     expect(stripe?.sensitive).toBe(true);
@@ -131,7 +136,7 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: null,
       runtime: rt,
-      env: "dev",
+      env: "local",
     });
     const row = secrets.find((s) => s.name === "KEY");
     expect(row?.winner).toBe(".env.local");
@@ -152,7 +157,7 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "dev",
+      env: "local",
     });
     expect(secrets.find((s) => s.name === "STRIPE_KEY")?.lastReadAt).toBe(
       1_700_000_000_000,
@@ -215,7 +220,7 @@ describe("projectVaultList", () => {
       manifest: manifest(),
       runtime: rt,
       journal,
-      env: "dev",
+      env: "local",
       now: () => now,
     });
     expect(secrets.find((s) => s.name === "STRIPE_KEY")?.blastRadius.count).toBe(
@@ -247,5 +252,53 @@ describe("set / rotate", () => {
       value: "sk_new",
     });
     expect(result.fingerprint).toBe(fingerprintSecretSync("sk_new"));
+  });
+});
+
+describe("app ↔ Console chain consistency", () => {
+  test("same sources and same .env.local fingerprint for APP_SECRET", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "oke-vault-chain-"));
+    writeFileSync(join(cwd, ".env.local"), "APP_SECRET=dev-only-secret\n");
+
+    const chainSources = defaultVaultResolutionChain(cwd).map((l) => l.source);
+    expect(chainSources).toEqual([
+      "process.env",
+      ".env.local",
+      ".env.docker",
+      "driver",
+    ]);
+
+    const prev = process.env["APP_SECRET"];
+    delete process.env["APP_SECRET"];
+    try {
+      const appRt = createVaultRuntime({
+        secrets: [vault.secret("APP_SECRET")],
+        chain: defaultVaultResolutionChain(cwd),
+        allowDevFallbacks: false,
+      });
+      await appRt.boot();
+
+      const consoleRt = await createManifestVaultRuntime(
+        {
+          oke: "1.0",
+          app: "chain-test",
+          vault: { APP_SECRET: { description: "Application secret" } },
+        },
+        { cwd, env: "local", allowDevFallbacks: false },
+      );
+      expect(consoleRt).not.toBeNull();
+
+      expect(appRt.resolution("APP_SECRET")).toBe(".env.local");
+      expect(consoleRt!.resolution("APP_SECRET")).toBe(".env.local");
+      expect(consoleRt!.fingerprint("APP_SECRET")).toBe(
+        appRt.fingerprint("APP_SECRET"),
+      );
+      expect(consoleRt!.resolutionChain("APP_SECRET").map((s) => s.source)).toEqual(
+        appRt.resolutionChain("APP_SECRET").map((s) => s.source),
+      );
+    } finally {
+      if (prev === undefined) delete process.env["APP_SECRET"];
+      else process.env["APP_SECRET"] = prev;
+    }
   });
 });

@@ -88,10 +88,10 @@ function declareConfig(
 }
 
 /**
- * Marker prefix for {@link vault.fromStack} dev fallbacks.
- * Resolved from `.env.stack` by `oke dev --stack` / vault boot.
+ * Marker prefix for {@link vault.fromDocker} dev fallbacks.
+ * Resolved from `.env.docker` by `oke dev --docker` / vault boot.
  */
-export const FROM_STACK_PREFIX = "__oke_from_stack__:";
+export const FROM_DOCKER_PREFIX = "__oke_from_docker__:";
 
 /**
  * Dev fallback that reads the URL built by the image recipe for `role`.
@@ -99,30 +99,30 @@ export const FROM_STACK_PREFIX = "__oke_from_stack__:";
  *
  * @param role - Image role (`store.sql`, …)
  */
-export function fromStack(role: string): string {
-  if (!role) throw new TypeError("vault.fromStack: role is required");
-  return `${FROM_STACK_PREFIX}${role}`;
+export function fromDocker(role: string): string {
+  if (!role) throw new TypeError("vault.fromDocker: role is required");
+  return `${FROM_DOCKER_PREFIX}${role}`;
 }
 
 /**
- * Whether a dev fallback is a {@link fromStack} marker.
+ * Whether a dev fallback is a {@link fromDocker} marker.
  *
  * @param value - Candidate
  */
-export function isFromStack(value: string): boolean {
-  return value.startsWith(FROM_STACK_PREFIX);
+export function isFromDocker(value: string): boolean {
+  return value.startsWith(FROM_DOCKER_PREFIX);
 }
 
 /**
- * Role encoded in a {@link fromStack} marker.
+ * Role encoded in a {@link fromDocker} marker.
  *
- * @param value - Marker from {@link fromStack}
+ * @param value - Marker from {@link fromDocker}
  */
-export function fromStackRole(value: string): string {
-  if (!isFromStack(value)) {
-    throw new TypeError(`vault: not a fromStack marker: ${value}`);
+export function fromDockerRole(value: string): string {
+  if (value.startsWith(FROM_DOCKER_PREFIX)) {
+    return value.slice(FROM_DOCKER_PREFIX.length);
   }
-  return value.slice(FROM_STACK_PREFIX.length);
+  throw new TypeError(`vault: not a fromDocker marker: ${value}`);
 }
 
 /**
@@ -135,9 +135,9 @@ export const vault: {
   (name: string, options?: VaultSecretOptions): VaultSecretDecl;
   secret(name: string, options?: VaultSecretOptions): VaultSecretDecl;
   config(name: string, options?: VaultSecretOptions): VaultSecretDecl;
-  fromStack(role: string): string;
+  fromDocker(role: string): string;
 } = Object.assign(declareSecret, {
   secret: declareSecret,
   config: declareConfig,
-  fromStack,
+  fromDocker,
 });

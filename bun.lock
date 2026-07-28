@@ -5,6 +5,7 @@
     "": {
       "name": "okengine",
       "dependencies": {
+        "@clack/prompts": "^1.7.0",
         "@duckdb/node-api": "^1.5.5-r.1",
         "ajv": "^8.20.0",
         "ajv-formats": "^3.0.1",
@@ -102,7 +103,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.2.4",
+      "version": "0.2.6",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -111,6 +112,19 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "^7.0.2",
+      },
+    },
+    "packages/vscode-okengine": {
+      "name": "vscode-okengine",
+      "version": "0.2.6",
+      "dependencies": {
+        "oxc-parser": "^0.141.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/vscode": "^1.85.0",
+        "esbuild": "^0.25.0",
         "typescript": "^7.0.2",
       },
     },
@@ -142,6 +156,43 @@
         "serve": "^14.2.6",
         "tailwindcss": "^4.3.3",
         "typescript": "^6.0.3",
+      },
+    },
+    "templates/full": {
+      "name": "@oke/template-full",
+      "version": "0.0.1",
+      "dependencies": {
+        "age-encryption": "^0.3.0",
+        "drizzle-orm": "^1.0.0-rc.4",
+        "okengine": "file:../..",
+        "zod": "^4.4.3",
+      },
+    },
+    "templates/hello": {
+      "name": "@oke/template-hello",
+      "version": "0.0.1",
+      "dependencies": {
+        "okengine": "file:../..",
+        "zod": "^4.4.3",
+      },
+    },
+    "templates/minimal": {
+      "name": "@oke/template-minimal",
+      "version": "0.0.1",
+      "dependencies": {
+        "drizzle-orm": "^1.0.0-rc.4",
+        "okengine": "file:../..",
+        "zod": "^4.4.3",
+      },
+    },
+    "templates/standard": {
+      "name": "@oke/template-standard",
+      "version": "0.0.1",
+      "dependencies": {
+        "age-encryption": "^0.3.0",
+        "drizzle-orm": "^1.0.0-rc.4",
+        "okengine": "file:../..",
+        "zod": "^4.4.3",
       },
     },
   },
@@ -460,6 +511,14 @@
 
     "@oke/example-skyport": ["@oke/example-skyport@workspace:examples/skyport"],
 
+    "@oke/template-full": ["@oke/template-full@workspace:templates/full"],
+
+    "@oke/template-hello": ["@oke/template-hello@workspace:templates/hello"],
+
+    "@oke/template-minimal": ["@oke/template-minimal@workspace:templates/minimal"],
+
+    "@oke/template-standard": ["@oke/template-standard@workspace:templates/standard"],
+
     "@orama/orama": ["@orama/orama@3.1.18", "", {}, "sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA=="],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.141.0", "", { "os": "android", "cpu": "arm" }, "sha512-jk7086MFvR/T4DG9IY7MKBVt1PMxvSZoz/TvnifodvS0pjghVwJHRttnAExhlwdMOgHv1TmLdENnbNpYk2zjvA=="],
@@ -705,6 +764,8 @@
     "@types/trusted-types": ["@types/trusted-types@2.0.7", "", {}, "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw=="],
 
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
+
+    "@types/vscode": ["@types/vscode@1.125.0", "", {}, "sha512-0icm/ZQAaism87P0ekHqi4/Ju9du+Tm0RUW+y7vqRsxY2cY0FNRX1nAnaW7nT6npPt2tfHiheZ55Zm9UhqonFA=="],
 
     "@types/whatwg-mimetype": ["@types/whatwg-mimetype@3.0.2", "", {}, "sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA=="],
 
@@ -2043,6 +2104,8 @@
     "vfile-message": ["vfile-message@4.0.3", "", { "dependencies": { "@types/unist": "^3.0.0", "unist-util-stringify-position": "^4.0.0" } }, "sha512-QTHzsGd1EhbZs4AsQ20JX1rC3cOlt/IWJruk893DfLRr57lcnOeMaWG4K0JrRta4mIJZKth2Au3mM3u03/JWKw=="],
 
     "vite": ["vite@8.1.5", "", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.5", "postcss": "^8.5.17", "rolldown": "~1.1.5", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.3.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw=="],
+
+    "vscode-okengine": ["vscode-okengine@workspace:packages/vscode-okengine"],
 
     "w3c-keyname": ["w3c-keyname@2.2.8", "", {}, "sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ=="],
 

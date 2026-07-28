@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "vscode-okengine: build",
+      "type": "shell",
+      "command": "bun run --cwd packages/vscode-okengine build",
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}

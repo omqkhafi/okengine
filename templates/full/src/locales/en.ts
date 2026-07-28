@@ -1,3 +1,5 @@
+/** Locale strings for channel templates. */
 export default {
-  "welcome.subject": "Welcome",
+  "ping-notice.subject": "Ping {{id}}",
+  "ping-notice.text": "{{note}}",
 };

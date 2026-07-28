@@ -21,7 +21,11 @@
  * never the code directly (console §5).
  */
 
-import type { ConfigEnv, OkeConfig } from "../config/index.ts";
+import {
+  resolveConfigEnv,
+  type ConfigEnv,
+  type OkeConfig,
+} from "../config/index.ts";
 import type {
   AiRuntime,
   CreateAiRuntimeOptions,
@@ -77,16 +81,16 @@ export interface ElementRuntimes {
 /** Declarations + options consumed by {@link bootApplication}. */
 export interface BootOptions {
   /**
-   * Active environment (defaults to `dev`, or `stack` when
-   * {@link stack} / `OKE_STACK=1`).
+   * Active environment (defaults to `local`, or `docker` when
+   * {@link docker} / `OKE_DOCKER=1`).
    */
   readonly env?: ConfigEnv;
   /**
-   * Local-server mode (`oke dev -s` / `OKE_STACK=1`): force driver maps to the
-   * `stack` profile and prefer compose URLs (`.env.stack`).
-   * When unset, derived from `process.env.OKE_STACK`.
+   * Compose-infra mode (`oke dev -d` / `OKE_DOCKER=1`): force driver maps to the
+   * `docker` profile and prefer compose URLs (`.env.docker`).
+   * When unset, derived from `process.env.OKE_DOCKER`.
    */
-  readonly stack?: boolean;
+  readonly docker?: boolean;
   /** Optional `oke.config.ts` document. */
   readonly config?: OkeConfig;
   /** Pre-built runtimes (skip construction when present). */
@@ -254,12 +258,16 @@ async function loadBind<T>(name: string): Promise<T> {
 export async function bootApplication(
   input: BootOptions = {},
 ): Promise<BootResult> {
-  const stack =
-    input.stack === true ||
-    (input.stack !== false && process.env.OKE_STACK === "1");
-  // `-s` always selects the `stack` driver profile — not a mix of test/dev +
-  // prod store overrides (templates often pin `env: "test"` for harnesses).
-  const env: ConfigEnv = stack ? "stack" : (input.env ?? "dev");
+  const docker =
+    input.docker === true ||
+    (input.docker !== false && process.env.OKE_DOCKER === "1");
+  // `-d` / `OKE_DOCKER=1` always select the `docker` driver profile.
+  // Otherwise: explicit `env`, else `NODE_ENV=production` → `prod`,
+  // `NODE_ENV=test` → `test`, default `local` (see {@link resolveConfigEnv}).
+  const env: ConfigEnv = resolveConfigEnv({
+    env: input.env,
+    docker: input.docker,
+  });
   let config = input.config;
   if (config === undefined) {
     try {
@@ -269,7 +277,7 @@ export async function bootApplication(
       config = undefined;
     }
   }
-  const options: BootOptions = { ...input, config, env, stack };
+  const options: BootOptions = { ...input, config, env, docker };
   const pre = options.elements ?? {};
   const now = options.now ?? (() => Date.now());
   const needs = resolveElementNeeds(options);
@@ -364,7 +372,7 @@ export async function bootApplication(
   let store = pre.store;
   if (needs.store) {
     if (!store) {
-      store = storeBind!.bindStore(options, env, now, stack);
+      store = storeBind!.bindStore(options, env, now, docker);
     } else {
       for (const decl of options.stores ?? []) {
         store.register?.(decl);
@@ -414,7 +422,7 @@ export async function bootApplication(
   // 5. Channel
   let channel = pre.channel;
   if (needs.channel && !channel) {
-    channel = channelBind!.bindChannel(options, now);
+    channel = channelBind!.bindChannel(options, now, env);
   }
 
   // 6. AI
