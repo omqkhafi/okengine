@@ -5,12 +5,7 @@
  * without mounting the full SPA.
  */
 
-export {
-  createRowBuffer,
-  matchesQuery,
-  type BufferedRow,
-  type RowBuffer,
-} from "./buffer.ts";
+export { createRowBuffer, matchesQuery, type BufferedRow, type RowBuffer } from "./buffer.ts";
 export {
   confirmationFor,
   createUndoStack,

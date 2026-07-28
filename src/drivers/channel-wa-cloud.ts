@@ -15,9 +15,7 @@ import type {
  *
  * @param options - `token` (access token) + `from` (phone number id)
  */
-export function openWaCloudChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openWaCloudChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   const token = options.token ?? options.apiKey;
   const phoneNumberId = options.from;
   const fetchFn = options.fetch ?? globalThis.fetch;
@@ -67,9 +65,7 @@ export function openWaCloudChannel(
         ok: true,
         messageId: id,
         driverId: "wa-cloud",
-        attempts: [
-          { driverId: "wa-cloud", ok: true, at: Date.now(), messageId: id },
-        ],
+        attempts: [{ driverId: "wa-cloud", ok: true, at: Date.now(), messageId: id }],
       };
     },
   };

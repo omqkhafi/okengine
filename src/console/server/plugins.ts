@@ -6,26 +6,11 @@
  * Never installs — hands a `bun add …` command for community packages.
  */
 
-import {
-  allHookCostSummaries,
-  type HookCostSummary,
-} from "../../kernel/hook-timing.ts";
+import { allHookCostSummaries, type HookCostSummary } from "../../kernel/hook-timing.ts";
 import type { PluginRegistry } from "../../kernel/registry.ts";
-import type {
-  Manifest,
-  ManifestChange,
-  Plugin,
-  PluginOrigin,
-} from "../../manifest/types.ts";
-import {
-  CORE_PLUGINS,
-  isCorePluginOn,
-  type PluginConfigProbe,
-} from "../../plugins/catalogue.ts";
-import type {
-  PackageJsonProbe,
-  SupplyChainSignals,
-} from "../../plugins/supply-chain.ts";
+import type { Manifest, ManifestChange, Plugin, PluginOrigin } from "../../manifest/types.ts";
+import { CORE_PLUGINS, isCorePluginOn, type PluginConfigProbe } from "../../plugins/catalogue.ts";
+import type { PackageJsonProbe, SupplyChainSignals } from "../../plugins/supply-chain.ts";
 import type { ScanSourceFile } from "../../plugins/node-import-scan.ts";
 
 /** Plugin on/off — derived, never a config flag. */
@@ -93,21 +78,15 @@ export interface ProjectPluginsOptions {
   readonly cwd: string;
   readonly now: () => number;
   /** Injected capability-diff changes keyed by plugin id (tests). */
-  readonly capabilityDiffByPlugin?: Readonly<
-    Record<string, readonly ManifestChange[]>
-  >;
+  readonly capabilityDiffByPlugin?: Readonly<Record<string, readonly ManifestChange[]>>;
   /** When true, run doctor merge-base diff (default true). */
   readonly resolveCapabilityDiff?: boolean;
   /** Injected hook cost summaries (tests). */
   readonly hookCosts?: Readonly<Record<string, HookCostSummary>>;
   /** Per-plugin sources for oxc scan. */
-  readonly sourcesByPlugin?: Readonly<
-    Record<string, readonly ScanSourceFile[]>
-  >;
+  readonly sourcesByPlugin?: Readonly<Record<string, readonly ScanSourceFile[]>>;
   /** Per-plugin package.json injections (tests). */
-  readonly packageJsonByPlugin?: Readonly<
-    Record<string, PackageJsonProbe | null>
-  >;
+  readonly packageJsonByPlugin?: Readonly<Record<string, PackageJsonProbe | null>>;
   /** Per-plugin boot conflicts. */
   readonly bootConflictsByPlugin?: Readonly<Record<string, readonly string[]>>;
   /** Skip npm network. */
@@ -143,12 +122,7 @@ export async function projectPluginsList(
   const rows: ConsolePluginRow[] = [];
 
   for (const spec of CORE_PLUGINS) {
-    const on = isCorePluginOn(
-      spec.id,
-      options.manifest,
-      options.config,
-      new Set(plugged.keys()),
-    );
+    const on = isCorePluginOn(spec.id, options.manifest, options.config, new Set(plugged.keys()));
     const meta = plugged.get(spec.id);
     const manifestPlugin = options.manifest?.plugins?.[spec.id];
     rows.push(
@@ -242,12 +216,8 @@ function collectPlugged(
       const scopes = [...(prev?.scopes ?? []), scope];
       out.set(id, {
         version: caps.version ?? prev?.version ?? null,
-        declares: caps.declares.length
-          ? [...caps.declares]
-          : (prev?.declares ?? []),
-        intercepts: caps.intercepts.length
-          ? [...caps.intercepts]
-          : (prev?.intercepts ?? []),
+        declares: caps.declares.length ? [...caps.declares] : (prev?.declares ?? []),
+        intercepts: caps.intercepts.length ? [...caps.intercepts] : (prev?.intercepts ?? []),
         scopes,
         origin: prev?.origin,
       });
@@ -280,13 +250,10 @@ async function buildRow(input: {
   readonly options: ProjectPluginsOptions;
   readonly enableHint: string | null;
 }): Promise<ConsolePluginRow> {
-  const packageName =
-    input.origin === "community" ? communityPackageName(input.id) : null;
+  const packageName = input.origin === "community" ? communityPackageName(input.id) : null;
   const cost = input.costs[input.id] ?? null;
   const intercepts = input.interceptStages.map((stage) => {
-    const stageCost = cost?.byStage[
-      stage as keyof NonNullable<typeof cost>["byStage"]
-    ];
+    const stageCost = cost?.byStage[stage as keyof NonNullable<typeof cost>["byStage"]];
     return {
       stage,
       meanMs: stageCost?.meanMs ?? null,
@@ -305,9 +272,8 @@ async function buildRow(input: {
     fetchNpm: input.options.fetchNpm,
   };
 
-  const { projectSupplyChain, projectSupplyChainSync } = await import(
-    "../../plugins/supply-chain.ts"
-  );
+  const { projectSupplyChain, projectSupplyChainSync } =
+    await import("../../plugins/supply-chain.ts");
   const supplyChain = input.options.syncSupplyChain
     ? projectSupplyChainSync(supplyOpts)
     : await projectSupplyChain(supplyOpts);
@@ -337,10 +303,7 @@ async function buildRow(input: {
       kind: c.kind,
       summary: c.summary,
     })),
-    installCommand:
-      input.origin === "community" && packageName
-        ? `bun add ${packageName}`
-        : null,
+    installCommand: input.origin === "community" && packageName ? `bun add ${packageName}` : null,
     enableHint: input.enableHint,
     packageName,
   };
@@ -400,9 +363,7 @@ export function filterCapabilityDiffForPlugin(
   pluginId: string,
 ): readonly ManifestChange[] {
   const prefix = `/plugins/${pluginId}`;
-  return changes.filter(
-    (c) => c.path === prefix || c.path.startsWith(`${prefix}/`),
-  );
+  return changes.filter((c) => c.path === prefix || c.path.startsWith(`${prefix}/`));
 }
 
 function communityPackageName(id: string): string {
@@ -421,7 +382,7 @@ function enableHintForCore(id: string, on: boolean): string | null {
     case "rate-limit":
       return "app.plug(rateLimit({ max: 30 }))  // or unit.plug / flow.plug";
     case "tenancy":
-      return "oke.config.ts → tenancy: { isolation: \"row\", resolve: … }";
+      return 'oke.config.ts → tenancy: { isolation: "row", resolve: … }';
     case "privacy":
       return "oke.config.ts → privacy: { … }  // or runs: { redact: { … } }";
     default:

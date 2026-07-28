@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { generateCompletion } from "./completion.ts";
-import {
-  OKE_COMMANDS,
-  commandNames,
-  type CliCommand,
-} from "./registry.ts";
+import { OKE_COMMANDS, commandNames, type CliCommand } from "./registry.ts";
 
 describe("oke completion", () => {
   test("bash script lists every registry command", () => {

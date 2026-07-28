@@ -52,8 +52,7 @@ export const DOCS_MCP_TOOLS: readonly DocsToolDescriptor[] = [
       properties: {
         slug: {
           type: "string",
-          description:
-            "Page slug (e.g. get-started/introduction) or path (…/introduction.mdx)",
+          description: "Page slug (e.g. get-started/introduction) or path (…/introduction.mdx)",
         },
       },
       required: ["slug"],
@@ -69,10 +68,7 @@ export const DOCS_MCP_TOOLS: readonly DocsToolDescriptor[] = [
  */
 export function createDocsToolRuntime(index: DocsIndex): {
   readonly listTools: () => readonly DocsToolDescriptor[];
-  readonly callTool: (
-    name: string,
-    args: Record<string, unknown>,
-  ) => DocsToolCallResult;
+  readonly callTool: (name: string, args: Record<string, unknown>) => DocsToolCallResult;
 } {
   return {
     listTools: () => DOCS_MCP_TOOLS,

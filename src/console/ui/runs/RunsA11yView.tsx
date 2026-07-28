@@ -6,15 +6,9 @@
 import { explainDurationOutliers } from "./explain.ts";
 import { RUNS_CHAIN_FIXTURE, runsOutlierFixture } from "./fixture.ts";
 import { groupByDimension } from "./group.ts";
-import {
-  durationHistogram,
-  formatDurationMs,
-} from "./histogram.ts";
+import { durationHistogram, formatDurationMs } from "./histogram.ts";
 import { filterRuns, parseDimensionQuery } from "./query.ts";
-import {
-  shouldOfferTracesLink,
-  tracesHrefForRun,
-} from "./trace-link.ts";
+import { shouldOfferTracesLink, tracesHrefForRun } from "./trace-link.ts";
 
 /** Props for {@link RunsA11yView}. */
 export interface RunsA11yViewProps {
@@ -103,8 +97,7 @@ export function RunsA11yView(props: RunsA11yViewProps) {
             }}
           >
             {buckets.map((b, i) => {
-              const selected =
-                b.minMs <= range.maxMs && b.maxMs >= range.minMs;
+              const selected = b.minMs <= range.maxMs && b.maxMs >= range.minMs;
               return (
                 <button
                   key={i}
@@ -224,13 +217,7 @@ export function RunsA11yView(props: RunsA11yViewProps) {
               </div>
               <div>
                 <dt>error</dt>
-                <dd>
-                  {open.error ? (
-                    <span role="status">{open.error}</span>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
+                <dd>{open.error ? <span role="status">{open.error}</span> : "—"}</dd>
               </div>
             </dl>
             <h3>Effects</h3>
@@ -252,9 +239,7 @@ export function RunsA11yView(props: RunsA11yViewProps) {
               </ul>
             </details>
             {shouldOfferTracesLink(population, open.id) ? (
-              <a href={tracesHrefForRun(population, open.id)}>
-                Open in Traces
-              </a>
+              <a href={tracesHrefForRun(population, open.id)}>Open in Traces</a>
             ) : null}
             <button type="button" style={{ minHeight: 32, minWidth: 24 }}>
               Close

@@ -3,11 +3,7 @@
  * journal / channel receipts). Deletes the Vault key, not the terabytes.
  */
 
-import {
-  eraseSubject,
-  subjectKeyName,
-  type SubjectKeyVault,
-} from "./shred.ts";
+import { eraseSubject, subjectKeyName, type SubjectKeyVault } from "./shred.ts";
 
 /** Options for {@link privacyErase}. */
 export interface PrivacyEraseOptions {
@@ -34,9 +30,7 @@ export interface PrivacyEraseResult {
  *
  * @param options - Subject + vault
  */
-export function privacyErase(
-  options: PrivacyEraseOptions,
-): PrivacyEraseResult {
+export function privacyErase(options: PrivacyEraseOptions): PrivacyEraseResult {
   const key = subjectKeyName(options.subjectId);
   const deleted = eraseSubject(options.subjectKeys, options.subjectId);
   const write = options.write ?? ((t) => process.stdout.write(t));

@@ -31,11 +31,7 @@ async function collectSources(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (
-        entry.name === "dist" ||
-        entry.name === "node_modules" ||
-        entry.name === ".git"
-      ) {
+      if (entry.name === "dist" || entry.name === "node_modules" || entry.name === ".git") {
         continue;
       }
       out.push(...(await collectSources(path)));
@@ -77,9 +73,7 @@ describe("console dry-run / preview audit", () => {
   });
 
   test("dry-run / preview affordances that mutate are dual-tested", async () => {
-    const storeTest = await Bun.file(
-      `${import.meta.dir}/store.test.ts`,
-    ).text();
+    const storeTest = await Bun.file(`${import.meta.dir}/store.test.ts`).text();
     expect(storeTest).toContain("preview dual test (withDryRun)");
     expect(storeTest).toContain("DryRunWriteIsolationError");
 

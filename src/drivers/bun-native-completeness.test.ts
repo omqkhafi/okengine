@@ -7,10 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createBunRedisClient } from "./redis.ts";
-import {
-  createBunSignalRedisClient,
-  parseXreadgroupReply,
-} from "./signal-redis.ts";
+import { createBunSignalRedisClient, parseXreadgroupReply } from "./signal-redis.ts";
 
 /** One row in the completeness report. */
 export interface BunNativeGapRow {
@@ -26,10 +23,7 @@ export interface BunNativeGapRow {
  * Kept as a pure function so the gate test and human report share one source.
  */
 export function bunNativeCompletenessReport(): readonly BunNativeGapRow[] {
-  const redisProto = Bun.RedisClient.prototype as unknown as Record<
-    string,
-    unknown
-  >;
+  const redisProto = Bun.RedisClient.prototype as unknown as Record<string, unknown>;
   const hasTypedScan = typeof redisProto.scan === "function";
   const hasTypedPublish = typeof redisProto.publish === "function";
   const hasTypedSubscribe = typeof redisProto.subscribe === "function";
@@ -57,8 +51,7 @@ export function bunNativeCompletenessReport(): readonly BunNativeGapRow[] {
     {
       surface: "redis signal",
       capability: "native Bun bind (publish/subscribe)",
-      status:
-        hasTypedPublish && hasTypedSubscribe ? "closed" : "bun_limitation",
+      status: hasTypedPublish && hasTypedSubscribe ? "closed" : "bun_limitation",
       note:
         hasTypedPublish && hasTypedSubscribe
           ? "createBunSignalRedisClient uses typed publish/subscribe"
@@ -107,9 +100,7 @@ describe("Bun native client completeness", () => {
     expect(rows.length).toBe(8);
 
     const closed = rows.filter((r) => r.status === "closed").map((r) => r.capability);
-    const limited = rows
-      .filter((r) => r.status === "bun_limitation")
-      .map((r) => r.capability);
+    const limited = rows.filter((r) => r.status === "bun_limitation").map((r) => r.capability);
 
     // Closed on Bun 1.3.14
     expect(closed).toContain("SCAN (typed)");
@@ -141,13 +132,13 @@ describe("Bun native client completeness", () => {
       [
         "oke:signal:order",
         [
-          ["1-0", ["payload", "{\"a\":1}", "signal", "order"]],
+          ["1-0", ["payload", '{"a":1}', "signal", "order"]],
           ["1-1", ["payload", "{}", "signal", "order"]],
         ],
       ],
     ]);
     expect(parsed).toEqual([
-      { id: "1-0", fields: { payload: "{\"a\":1}", signal: "order" } },
+      { id: "1-0", fields: { payload: '{"a":1}', signal: "order" } },
       { id: "1-1", fields: { payload: "{}", signal: "order" } },
     ]);
     expect(parseXreadgroupReply(null)).toEqual([]);

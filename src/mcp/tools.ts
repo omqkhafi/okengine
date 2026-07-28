@@ -7,11 +7,7 @@
 
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
-import {
-  authorizeToolCall,
-  MCP_TOOL_POLICIES,
-  type McpToolPolicy,
-} from "./authorization.ts";
+import { authorizeToolCall, MCP_TOOL_POLICIES, type McpToolPolicy } from "./authorization.ts";
 import {
   createConfirmationGate,
   MCP_CONFIRM_PHRASE,
@@ -89,14 +85,10 @@ export function createToolRuntime(
       const preflight = authorizeToolCall(name, args, requester.scopes, {
         confirmed: policy?.mutability !== "write",
       });
-      if (
-        !preflight.ok &&
-        preflight.reason !== "confirmation-required"
-      ) {
+      if (!preflight.ok && preflight.reason !== "confirmation-required") {
         return {
           ok: false,
-          code:
-            preflight.reason === "unknown-tool" ? "not-found" : "forbidden",
+          code: preflight.reason === "unknown-tool" ? "not-found" : "forbidden",
           message: preflight.detail ?? preflight.reason,
           data: asData(
             {
@@ -111,10 +103,8 @@ export function createToolRuntime(
 
       // Write path: consume a fresh per-call confirmation (no session cache).
       if (policy?.mutability === "write") {
-        const token =
-          typeof args.confirmToken === "string" ? args.confirmToken : "";
-        const phrase =
-          typeof args.confirmation === "string" ? args.confirmation : "";
+        const token = typeof args.confirmToken === "string" ? args.confirmToken : "";
+        const phrase = typeof args.confirmation === "string" ? args.confirmation : "";
         const reason = typeof args.reason === "string" ? args.reason : "";
         const boundArgs = stripConfirmFields(args);
         const consumed = confirm.consume({
@@ -145,10 +135,7 @@ export function createToolRuntime(
 
       switch (name) {
         case "oke.manifest.get":
-          return okData(
-            freezeData({ manifest: ctx.getManifest() }),
-            "manifest",
-          );
+          return okData(freezeData({ manifest: ctx.getManifest() }), "manifest");
         case "oke.schema.get":
           return schemaGet(ctx, args);
         case "oke.effects.get":
@@ -175,16 +162,11 @@ export function createToolRuntime(
   };
 }
 
-function okData<T>(
-  content: T,
-  provenance: Parameters<typeof asData>[1],
-): ToolCallResult {
+function okData<T>(content: T, provenance: Parameters<typeof asData>[1]): ToolCallResult {
   return { ok: true, data: asData(content, provenance) };
 }
 
-function stripConfirmFields(
-  args: Record<string, unknown>,
-): Record<string, unknown> {
+function stripConfirmFields(args: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(args)) {
     if (k === "confirmation" || k === "confirmToken" || k === "reason") {
@@ -195,10 +177,7 @@ function stripConfirmFields(
   return out;
 }
 
-function schemaGet(
-  ctx: McpContext,
-  args: Record<string, unknown>,
-): ToolCallResult {
+function schemaGet(ctx: McpContext, args: Record<string, unknown>): ToolCallResult {
   const flowId = String(args.flowId ?? "");
   const manifest = ctx.getManifest();
   const flow = manifest?.flows?.[flowId];
@@ -221,10 +200,7 @@ function schemaGet(
   );
 }
 
-function effectsGet(
-  ctx: McpContext,
-  args: Record<string, unknown>,
-): ToolCallResult {
+function effectsGet(ctx: McpContext, args: Record<string, unknown>): ToolCallResult {
   const flowId = String(args.flowId ?? "");
   const manifest = ctx.getManifest();
   const flow = manifest?.flows?.[flowId];
@@ -236,34 +212,22 @@ function effectsGet(
       data: asData({ flowId }, "error"),
     };
   }
-  return okData(
-    freezeData({ flowId, effects: flow.effects ?? {} }),
-    "effects",
-  );
+  return okData(freezeData({ flowId, effects: flow.effects ?? {} }), "effects");
 }
 
-async function tracesList(
-  ctx: McpContext,
-  args: Record<string, unknown>,
-): Promise<ToolCallResult> {
+async function tracesList(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
   const limit =
     typeof args.limit === "number" && Number.isFinite(args.limit)
       ? Math.min(200, Math.max(1, Math.floor(args.limit)))
       : 50;
-  const flowId =
-    typeof args.flowId === "string" && args.flowId.length > 0
-      ? args.flowId
-      : null;
+  const flowId = typeof args.flowId === "string" && args.flowId.length > 0 ? args.flowId : null;
   const all = await ctx.listRuns();
   const filtered = flowId ? all.filter((r) => r.flow === flowId) : all;
   const runs = filtered.slice(0, limit).map(projectRun);
   return okData(freezeData({ runs }), "trace");
 }
 
-async function tracesGet(
-  ctx: McpContext,
-  args: Record<string, unknown>,
-): Promise<ToolCallResult> {
+async function tracesGet(ctx: McpContext, args: Record<string, unknown>): Promise<ToolCallResult> {
   const runId = String(args.runId ?? "");
   const all = await ctx.listRuns();
   const run = all.find((r) => r.id === runId);

@@ -26,10 +26,7 @@ type BookingsApp = AppOf<{
 }>;
 
 /** Compile-time equality. */
-type Eq<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+type Eq<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Assert<T extends true> = T;
 
 describe("createClient — same-repo <App>", () => {
@@ -73,9 +70,7 @@ describe("createClient — same-repo <App>", () => {
     if (error?.code === "FlightFull") {
       // Runtime + type-level: seatsLeft is number, not unknown.
       expect(error.data.seatsLeft).toBe(2);
-      type _Narrow = Assert<
-        Eq<typeof error.data, { seatsLeft: number }>
-      >;
+      type _Narrow = Assert<Eq<typeof error.data, { seatsLeft: number }>>;
       const _keep: _Narrow = true;
       expect(_keep).toBe(true);
     } else {
@@ -135,11 +130,10 @@ describe("createClient — type helpers", () => {
     const ok: _Codes = true;
     expect(ok).toBe(true);
 
-    const sample: ClientResult<{ id: string }, { FlightFull: { seatsLeft: number } }> =
-      {
-        data: null,
-        error: { code: "FlightFull", data: { seatsLeft: 0 } },
-      };
+    const sample: ClientResult<{ id: string }, { FlightFull: { seatsLeft: number } }> = {
+      data: null,
+      error: { code: "FlightFull", data: { seatsLeft: 0 } },
+    };
     if (sample.error?.code === "FlightFull") {
       type _D = Assert<Eq<typeof sample.error.data, { seatsLeft: number }>>;
       const d: _D = true;

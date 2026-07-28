@@ -8,23 +8,23 @@
  * `meta.json` stays the single source of navigation truth.
  */
 
-'use client';
+"use client";
 
-import { ChevronDown, GitBranch, Search } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useSearchContext } from 'fumadocs-ui/contexts/search';
-import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import type * as PageTree from 'fumadocs-core/page-tree';
-import { useMemo, useState, type ReactNode } from 'react';
-import { GithubMark } from '@/components/chrome/icons';
-import { cn } from '@/lib/cn';
-import { OKE_VERSION } from '@/lib/elements';
-import { gitConfig } from '@/lib/shared';
+import { ChevronDown, GitBranch, Search } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
+import { ThemeSwitch } from "fumadocs-ui/layouts/shared/slots/theme-switch";
+import type * as PageTree from "fumadocs-core/page-tree";
+import { useMemo, useState, type ReactNode } from "react";
+import { GithubMark } from "@/components/chrome/icons";
+import { cn } from "@/lib/cn";
+import { OKE_VERSION } from "@/lib/elements";
+import { gitConfig } from "@/lib/shared";
 
 /** Folders are the accordion groups; everything else renders flat. */
 function isFolder(node: PageTree.Node): node is PageTree.Folder {
-  return node.type === 'folder';
+  return node.type === "folder";
 }
 
 /**
@@ -57,8 +57,8 @@ function isUrlActive(url: string, pathname: string): boolean {
 function containsPathname(node: PageTree.Folder, pathname: string): boolean {
   if (node.index && isUrlActive(node.index.url, pathname)) return true;
   return node.children.some((child) => {
-    if (child.type === 'page') return isUrlActive(child.url, pathname);
-    if (child.type === 'folder') return containsPathname(child, pathname);
+    if (child.type === "page") return isUrlActive(child.url, pathname);
+    if (child.type === "folder") return containsPathname(child, pathname);
     return false;
   });
 }
@@ -100,11 +100,11 @@ function TreeLink({
       data-active={active || undefined}
       onClick={onNavigate}
       className={cn(
-        'relative flex w-full items-center gap-2.5 py-1 pr-4 text-[14px] transition-colors duration-150',
-        depth === 0 ? 'pl-4' : 'pl-10 text-[13px]',
+        "relative flex w-full items-center gap-2.5 py-1 pr-4 text-[14px] transition-colors duration-150",
+        depth === 0 ? "pl-4" : "pl-10 text-[13px]",
         active
-          ? 'bg-fd-foreground/6 text-fd-foreground'
-          : 'text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground/90',
+          ? "bg-fd-foreground/6 text-fd-foreground"
+          : "text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground/90",
       )}
     >
       {icon ? (
@@ -154,10 +154,10 @@ function GroupBody({
         </TreeLink>
       ) : null}
       {node.children.map((child, index) => {
-        if (child.type === 'separator') {
+        if (child.type === "separator") {
           return <TreeSeparator key={`sep-${index}`} name={child.name} />;
         }
-        if (child.type === 'page') {
+        if (child.type === "page") {
           return (
             <TreeLink
               key={child.url}
@@ -176,7 +176,7 @@ function GroupBody({
           <div key={`nested-${index}`}>
             <TreeSeparator name={child.name} />
             {child.children.map((leaf) =>
-              leaf.type === 'page' ? (
+              leaf.type === "page" ? (
                 <TreeLink
                   key={leaf.url}
                   href={leaf.url}
@@ -215,9 +215,7 @@ export function DocsTreeNav({
     () =>
       tree.children
         .map((node, index) => ({ node, index }))
-        .filter((entry): entry is { node: PageTree.Folder; index: number } =>
-          isFolder(entry.node),
-        )
+        .filter((entry): entry is { node: PageTree.Folder; index: number } => isFolder(entry.node))
         .map((entry) => ({ key: folderKey(entry.node, entry.index), node: entry.node })),
     [tree],
   );
@@ -237,14 +235,14 @@ export function DocsTreeNav({
   return (
     <>
       {tree.children.map((node, index) => {
-        if (node.type === 'separator') {
+        if (node.type === "separator") {
           return <TreeSeparator key={`root-sep-${index}`} name={node.name} />;
         }
 
         // Root index (`/docs`) is the docs landing — the header tab already
         // reaches it, so listing it again in this pane is noise.
-        if (node.type === 'page') {
-          if (node.url === '/docs') return null;
+        if (node.type === "page") {
+          if (node.url === "/docs") return null;
           return (
             <TreeLink
               key={node.url}
@@ -268,10 +266,10 @@ export function DocsTreeNav({
               aria-expanded={open}
               onClick={() => setOverride({ pathname, key: open ? null : key })}
               className={cn(
-                'flex w-full items-center gap-2 border-b border-fd-foreground/6 px-4 py-2.5 text-left text-sm font-medium transition-colors',
+                "flex w-full items-center gap-2 border-b border-fd-foreground/6 px-4 py-2.5 text-left text-sm font-medium transition-colors",
                 open
-                  ? 'bg-fd-foreground/3 text-fd-foreground'
-                  : 'text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground',
+                  ? "bg-fd-foreground/3 text-fd-foreground"
+                  : "text-fd-muted-foreground hover:bg-fd-foreground/3 hover:text-fd-foreground",
               )}
             >
               {node.icon ? (
@@ -282,8 +280,8 @@ export function DocsTreeNav({
               <span className="grow truncate">{node.name}</span>
               <ChevronDown
                 className={cn(
-                  'size-4 shrink-0 text-fd-muted-foreground transition-transform duration-200',
-                  open && 'rotate-180',
+                  "size-4 shrink-0 text-fd-muted-foreground transition-transform duration-200",
+                  open && "rotate-180",
                 )}
                 aria-hidden
               />
@@ -350,7 +348,7 @@ export function DocsSidebar({ tree }: { tree: PageTree.Root }) {
         className="oke-sidebar-scroll flex-1 overflow-x-hidden overflow-y-auto pb-3"
         style={{
           maskImage:
-            'linear-gradient(to bottom, transparent, white 1rem, white calc(100% - 2rem), transparent 100%)',
+            "linear-gradient(to bottom, transparent, white 1rem, white calc(100% - 2rem), transparent 100%)",
         }}
       >
         <DocsTreeNav tree={tree} />

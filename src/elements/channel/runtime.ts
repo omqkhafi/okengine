@@ -5,11 +5,7 @@
  * error hierarchy via sently). Fallback chains record every attempt.
  */
 
-import {
-  FallbackTransport,
-  type FallbackAttempt,
-  type Transport,
-} from "sently";
+import { FallbackTransport, type FallbackAttempt, type Transport } from "sently";
 import { RetryTransport } from "sently/transports/retry";
 import type {
   ChannelAttempt,
@@ -20,14 +16,8 @@ import type {
 import type { ChannelMedium } from "../../manifest/types.ts";
 import type { ConsentStore } from "./consent.ts";
 import type { ChannelTemplateDecl } from "./declare.ts";
-import {
-  DEFAULT_MEDIUM_COSTS,
-  type MediumCosts,
-} from "./costs.ts";
-import {
-  resolveLocale,
-  type LocaleChainStep,
-} from "./locale.ts";
+import { DEFAULT_MEDIUM_COSTS, type MediumCosts } from "./costs.ts";
+import { resolveLocale, type LocaleChainStep } from "./locale.ts";
 import type { DeliveryOutcomeState } from "./outcomes.ts";
 import {
   createReceiptLedger,
@@ -36,20 +26,14 @@ import {
   type IngestOutcomeInput,
   type ReceiptLedger,
 } from "./receipts.ts";
-import {
-  createSuppressionStore,
-  type SuppressionStore,
-} from "./suppression.ts";
+import { createSuppressionStore, type SuppressionStore } from "./suppression.ts";
 
 /** Locale catalog: template → locale → rendered body. */
 export type TemplateCatalog = Readonly<
   Record<
     string,
     Readonly<
-      Record<
-        string,
-        { readonly subject?: string; readonly text?: string; readonly html?: string }
-      >
+      Record<string, { readonly subject?: string; readonly text?: string; readonly html?: string }>
     >
   >
 >;
@@ -107,10 +91,7 @@ export interface ChannelRuntime {
    * @param template - Template name
    * @param options - Recipient / data / locale / via
    */
-  send(
-    template: string,
-    options: ChannelSendOptions,
-  ): Promise<ChannelSendResult>;
+  send(template: string, options: ChannelSendOptions): Promise<ChannelSendResult>;
   /**
    * Ingest a post-send provider outcome (bounce / complaint / …).
    * Hard bounce auto-adds suppression. Console projects the ledger — never
@@ -126,18 +107,14 @@ export interface ChannelRuntime {
  *
  * @param options - Templates + drivers + catalog
  */
-export function createChannelRuntime(
-  options: CreateChannelRuntimeOptions = {},
-): ChannelRuntime {
+export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}): ChannelRuntime {
   const templates = new Map<string, ChannelTemplateDecl>();
   for (const t of options.templates ?? []) {
     templates.set(t.name, t);
   }
   const suppression =
     options.suppression ??
-    createSuppressionStore(
-      options.consent ? { consent: options.consent } : {},
-    );
+    createSuppressionStore(options.consent ? { consent: options.consent } : {});
   const receipts = options.receipts ?? createReceiptLedger();
   const costs = options.costs ?? { ...DEFAULT_MEDIUM_COSTS };
   const catalog = options.catalog ?? {};
@@ -151,8 +128,7 @@ export function createChannelRuntime(
     data: Readonly<Record<string, unknown>>,
   ): { subject?: string; text?: string; html?: string } {
     const byLocale = catalog[template];
-    const entry =
-      byLocale?.[locale] ?? byLocale?.[defaultLocale] ?? byLocale?.en;
+    const entry = byLocale?.[locale] ?? byLocale?.[defaultLocale] ?? byLocale?.en;
     if (!entry) {
       return {
         subject: template,
@@ -161,9 +137,7 @@ export function createChannelRuntime(
     }
     const interpolate = (s: string | undefined): string | undefined => {
       if (s === undefined) return undefined;
-      return s.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
-        String(data[key] ?? ""),
-      );
+      return s.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(data[key] ?? ""));
     };
     return {
       subject: interpolate(entry.subject),
@@ -172,10 +146,7 @@ export function createChannelRuntime(
     };
   }
 
-  function driversFor(
-    medium: ChannelMedium,
-    via?: readonly string[],
-  ): ChannelDriver[] {
+  function driversFor(medium: ChannelMedium, via?: readonly string[]): ChannelDriver[] {
     let list = drivers;
     if (via && via.length > 0) {
       list = via
@@ -184,13 +155,11 @@ export function createChannelRuntime(
     }
     return list.filter((d) => {
       if (medium === "email" || medium === "any") {
-        return !!d.transport || d.channel?.mediums.includes(medium) ||
-          d.channel?.mediums.includes("any");
+        return (
+          !!d.transport || d.channel?.mediums.includes(medium) || d.channel?.mediums.includes("any")
+        );
       }
-      return (
-        d.channel?.mediums.includes(medium) ||
-        d.channel?.mediums.includes("any")
-      );
+      return d.channel?.mediums.includes(medium) || d.channel?.mediums.includes("any");
     });
   }
 
@@ -202,9 +171,7 @@ export function createChannelRuntime(
     const transports: Transport[] = [];
     for (const d of chain) {
       if (!d.transport) continue;
-      const t = options.retry
-        ? new RetryTransport(d.transport)
-        : d.transport;
+      const t = options.retry ? new RetryTransport(d.transport) : d.transport;
       transports.push(t);
     }
     if (transports.length === 0) {
@@ -215,9 +182,7 @@ export function createChannelRuntime(
     const fallback = new FallbackTransport(transports, {
       onFallback(failedIndex, error) {
         const provider =
-          transports[failedIndex]?.provider ??
-          chain[failedIndex]?.id ??
-          `driver-${failedIndex}`;
+          transports[failedIndex]?.provider ?? chain[failedIndex]?.id ?? `driver-${failedIndex}`;
         recorded.push({ provider, error });
         attempts.push({
           driverId: provider,
@@ -317,9 +282,7 @@ export function createChannelRuntime(
     };
   }
 
-  function classifySendFailure(
-    attempts: readonly ChannelAttempt[],
-  ): DeliveryOutcomeState {
+  function classifySendFailure(attempts: readonly ChannelAttempt[]): DeliveryOutcomeState {
     const err = attempts
       .map((a) => a.error ?? "")
       .join(" ")
@@ -344,14 +307,9 @@ export function createChannelRuntime(
       const existing = receipts.byMessageId(input.messageId);
       if (input.state === "hard-bounce") {
         const subject = input.to ?? existing?.to;
-        const medium = (input.medium ??
-          existing?.medium ??
-          "email") as ChannelMedium;
+        const medium = (input.medium ?? existing?.medium ?? "email") as ChannelMedium;
         if (subject) {
-          suppression.addPriorBounce(
-            subject,
-            medium === "any" ? "email" : medium,
-          );
+          suppression.addPriorBounce(subject, medium === "any" ? "email" : medium);
         }
       }
 
@@ -384,15 +342,12 @@ export function createChannelRuntime(
         throw new Error(`channel: unknown template "${template}"`);
       }
       const medium = decl.medium;
-      const checkMedium: ChannelMedium =
-        medium === "any" ? "email" : medium;
+      const checkMedium: ChannelMedium = medium === "any" ? "email" : medium;
 
       const suppressed = suppression.isSuppressed(opts.to, checkMedium);
       if (suppressed.suppressed) {
         const status: DeliveryStatus =
-          suppressed.reason === "opted-out"
-            ? "suppressed/opted-out"
-            : "suppressed/prior-bounce";
+          suppressed.reason === "opted-out" ? "suppressed/opted-out" : "suppressed/prior-bounce";
         const resolved = resolveLocale({
           locale: opts.locale,
           profileLocale: opts.profileLocale,
@@ -409,10 +364,7 @@ export function createChannelRuntime(
           status,
           attempts: [],
           at: now(),
-          error:
-            suppressed.reason === "opted-out"
-              ? "opted out"
-              : "prior hard bounce",
+          error: suppressed.reason === "opted-out" ? "opted out" : "prior hard bounce",
         };
         receipts.record(receipt);
         return {
@@ -469,8 +421,7 @@ export function createChannelRuntime(
 
       let status: DeliveryStatus;
       if (result.ok) {
-        status =
-          attempts.filter((a) => !a.ok).length > 0 ? "fallback" : "sent";
+        status = attempts.filter((a) => !a.ok).length > 0 ? "fallback" : "sent";
       } else {
         status = classifySendFailure(attempts);
       }
@@ -490,7 +441,10 @@ export function createChannelRuntime(
         ...(result.ok
           ? {}
           : {
-              error: attempts.map((a) => a.error).filter(Boolean).join("; "),
+              error: attempts
+                .map((a) => a.error)
+                .filter(Boolean)
+                .join("; "),
             }),
       });
 

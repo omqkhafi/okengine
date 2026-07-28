@@ -50,11 +50,7 @@ export type {
   RoutesFromAdoptArgs,
 } from "./adopt-routes.ts";
 
-export {
-  createCapabilityToken,
-  effectsFieldOf,
-  type CapabilityToken,
-} from "./capability.ts";
+export { createCapabilityToken, effectsFieldOf, type CapabilityToken } from "./capability.ts";
 
 export {
   createEffectLedger,
@@ -181,12 +177,7 @@ export {
   type HookCostSummary,
 } from "./hook-timing.ts";
 
-export {
-  listBindings,
-  on,
-  resetBindings,
-  type Binding,
-} from "./on.ts";
+export { listBindings, on, resetBindings, type Binding } from "./on.ts";
 
 export {
   isPlugin,
@@ -205,6 +196,7 @@ export {
   type PluginOptions,
   type PluginRegistration,
   type TableContribution,
+  type PluginTableOptions,
 } from "./plugin.ts";
 
 export {
@@ -270,11 +262,6 @@ export {
   type JourneySlo,
 } from "./journey.ts";
 
-export {
-  unit,
-  consumeUnitPlugins,
-  resetUnitPlugins,
-  type UnitBag,
-} from "./unit.ts";
+export { unit, consumeUnitPlugins, resetUnitPlugins, type UnitBag } from "./unit.ts";
 
 export { rateLimit, type RateLimitPluginOptions } from "./rate-limit.ts";

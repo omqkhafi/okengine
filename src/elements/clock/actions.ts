@@ -50,10 +50,7 @@ export class ClockResourceNotFoundError extends Error {
  * @param store - Cron store
  * @param name - Cron name
  */
-export async function pauseCron(
-  store: CronStore,
-  name: string,
-): Promise<CronRow> {
+export async function pauseCron(store: CronStore, name: string): Promise<CronRow> {
   const row = await store.get(name);
   if (!row) throw new ClockResourceNotFoundError("cron", name);
   const next: CronRow = { ...row, status: "paused" };
@@ -74,19 +71,14 @@ export interface EditScheduleInput {
  * @param store - Cron store
  * @param input - Name + override cron and/or every
  */
-export async function editSchedule(
-  store: CronStore,
-  input: EditScheduleInput,
-): Promise<CronRow> {
+export async function editSchedule(store: CronStore, input: EditScheduleInput): Promise<CronRow> {
   const row = await store.get(input.name);
   if (!row) throw new ClockResourceNotFoundError("cron", input.name);
   if (!row.overridable) {
     throw new ScheduleNotOverridableError(input.name);
   }
-  const overrideCron =
-    input.cron !== undefined ? input.cron : row.overrideCron;
-  const overrideEvery =
-    input.every !== undefined ? input.every : row.overrideEvery;
+  const overrideCron = input.cron !== undefined ? input.cron : row.overrideCron;
+  const overrideEvery = input.every !== undefined ? input.every : row.overrideEvery;
   const next: CronRow = {
     ...row,
     overrideCron,
@@ -125,9 +117,7 @@ export interface WakeEarlyResult {
  *
  * @param options - Journal, run id, optional flow resolver
  */
-export async function wakeEarly(
-  options: WakeEarlyOptions,
-): Promise<WakeEarlyResult> {
+export async function wakeEarly(options: WakeEarlyOptions): Promise<WakeEarlyResult> {
   const now = options.now ?? (() => Date.now());
   const t = now();
   const run = await options.journal.get(options.runId);
@@ -136,9 +126,7 @@ export async function wakeEarly(
   }
 
   const entries = run.entries.map((e) =>
-    e.kind === "sleep" && e.wakeAt === run.wakeAt
-      ? { ...e, wakeAt: t }
-      : e,
+    e.kind === "sleep" && e.wakeAt === run.wakeAt ? { ...e, wakeAt: t } : e,
   );
   await options.journal.put({
     ...run,

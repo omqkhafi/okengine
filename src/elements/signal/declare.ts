@@ -53,18 +53,13 @@ export interface SignalDecl<T = unknown> {
  * @param name - Signal name
  * @param options - Delivery physics and retry / DLQ policy
  */
-export function signal<T = unknown>(
-  name: string,
-  options: SignalOptions,
-): SignalDecl<T> {
+export function signal<T = unknown>(name: string, options: SignalOptions): SignalDecl<T> {
   if (
     options.delivery !== "once" &&
     options.delivery !== "broadcast" &&
     options.delivery !== "live"
   ) {
-    throw new TypeError(
-      `signal("${name}"): delivery is mandatory (once | broadcast | live)`,
-    );
+    throw new TypeError(`signal("${name}"): delivery is mandatory (once | broadcast | live)`);
   }
   return {
     name,

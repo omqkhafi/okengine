@@ -62,12 +62,7 @@ export {
   type McpInitializeResult,
 } from "./protocol.ts";
 
-export {
-  createToolRuntime,
-  projectRun,
-  type McpContext,
-  type ToolCallResult,
-} from "./tools.ts";
+export { createToolRuntime, projectRun, type McpContext, type ToolCallResult } from "./tools.ts";
 
 export {
   createMcpServer,

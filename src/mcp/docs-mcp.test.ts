@@ -9,11 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { isDataEnvelope } from "./data.ts";
-import {
-  defaultDocsContentDir,
-  loadDocsIndex,
-  stripYamlFrontmatter,
-} from "./docs-index.ts";
+import { defaultDocsContentDir, loadDocsIndex, stripYamlFrontmatter } from "./docs-index.ts";
 import { createDocsMcpServer } from "./docs-server.ts";
 import { createMcpServer } from "./server.ts";
 import { createSessionStore } from "../auth/sessions.ts";
@@ -137,9 +133,7 @@ describe("docs MCP tools", () => {
     const content = envelope.content as { body: string; slug: string };
     expect(content.slug).toBe(slug);
 
-    const raw = await Bun.file(
-      join(CONTENT, "get-started", "introduction.mdx"),
-    ).text();
+    const raw = await Bun.file(join(CONTENT, "get-started", "introduction.mdx")).text();
     expect(content.body).toBe(stripYamlFrontmatter(raw));
   });
 
@@ -167,10 +161,7 @@ describe("docs MCP tools", () => {
     };
     expect(content.hits.length).toBeGreaterThan(0);
     expect(
-      content.hits.some(
-        (h) =>
-          h.slug.includes("introduction") || h.slug.includes("elements"),
-      ),
+      content.hits.some((h) => h.slug.includes("introduction") || h.slug.includes("elements")),
     ).toBe(true);
   });
 });

@@ -10,9 +10,7 @@ import type { ChannelDriver, ChannelOpenOptions } from "./channel-types.ts";
  *
  * @param options - API key
  */
-export function openResendChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openResendChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   if (!options.apiKey) {
     throw new Error("resend channel: apiKey is required");
   }

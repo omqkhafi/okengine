@@ -28,9 +28,7 @@ export interface RunsListRow {
   readonly error?: string | null;
   readonly effects?: RunRecord["effects"];
   readonly logs?: RunRecord["logs"];
-  readonly dimensions?: Readonly<
-    Record<string, string | number | boolean | null>
-  >;
+  readonly dimensions?: Readonly<Record<string, string | number | boolean | null>>;
 }
 
 /**
@@ -107,9 +105,7 @@ export function runToWideEvent(run: RunRecord): WideEvent {
     ...(run.replica ? { replica: run.replica } : {}),
     ...(run.replicaLagMs != null ? { replicaLagMs: run.replicaLagMs } : {}),
     ...(run.cost != null ? { cost: run.cost } : {}),
-    ...(run.promptVersion != null
-      ? { promptVersion: run.promptVersion }
-      : {}),
+    ...(run.promptVersion != null ? { promptVersion: run.promptVersion } : {}),
     ...(run.buildVersion ? { buildVersion: run.buildVersion } : {}),
     error: run.error ? { code: run.error } : null,
     effects: run.effects as WideEvent["effects"],

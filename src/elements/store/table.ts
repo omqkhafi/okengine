@@ -31,9 +31,7 @@ export interface TableHandle {
  */
 export function defineTable(
   name: string,
-  columns: Readonly<
-    Record<string, ColumnDef | ColumnClassification | true | undefined>
-  >,
+  columns: Readonly<Record<string, ColumnDef | ColumnClassification | true | undefined>>,
 ): TableHandle {
   const resolved: Record<string, ColumnDef> = {};
   for (const [key, value] of Object.entries(columns)) {
@@ -120,14 +118,38 @@ export function resolveColumns(table: unknown): ResolvedColumn[] {
   if (table && typeof table === "object") {
     const t = table as Record<string, unknown>;
     if ("columns" in t && t.columns && typeof t.columns === "object") {
-      return Object.entries(t.columns as Record<string, ColumnDef>).map(
-        ([key, col]) => ({
+      return Object.entries(
+        t.columns as Record<
+          string,
+          ColumnDef & {
+            sqlName?: string;
+            sqlType?: string;
+            primaryKey?: boolean;
+            defaultFn?: () => unknown;
+          }
+        >,
+      ).map(([key, col]) => {
+        const sqlName = col.sqlName ?? col.name;
+        const primary =
+          typeof col.primaryKey === "boolean"
+            ? col.primaryKey
+            : col.name === "id" || key === "id" || sqlName === "id";
+        const sqlType =
+          col.sqlType === "integer" || col.sqlType === "INTEGER"
+            ? ("INTEGER" as const)
+            : col.sqlType === "real" || col.sqlType === "REAL"
+              ? ("REAL" as const)
+              : col.sqlType === "blob" || col.sqlType === "BLOB"
+                ? ("BLOB" as const)
+                : ("TEXT" as const);
+        return {
           key,
-          sqlName: col.name,
-          primary: col.name === "id" || key === "id",
-          sqlType: "TEXT" as const,
-        }),
-      );
+          sqlName,
+          primary,
+          sqlType,
+          ...(typeof col.defaultFn === "function" ? { defaultFn: col.defaultFn } : {}),
+        };
+      });
     }
     if (isDrizzleTable(t)) {
       return drizzleColumns(t);
@@ -168,18 +190,14 @@ function drizzleColumns(t: Record<string, unknown>): ResolvedColumn[] {
       config?: { primaryKey?: boolean };
     };
     const sqlName = typeof col.name === "string" ? col.name : key;
-    const primary = Boolean(
-      col.primary || col.config?.primaryKey || sqlName === "id",
-    );
+    const primary = Boolean(col.primary || col.config?.primaryKey || sqlName === "id");
     const sqlType = drizzleSqlType(col.columnType, col.dataType);
     out.push({
       key,
       sqlName,
       primary,
       sqlType,
-      ...(typeof col.defaultFn === "function"
-        ? { defaultFn: col.defaultFn.bind(col) }
-        : {}),
+      ...(typeof col.defaultFn === "function" ? { defaultFn: col.defaultFn.bind(col) } : {}),
     });
   }
   return out;
@@ -257,9 +275,7 @@ export function mapRowToJs(
  *
  * @param table - Table handle
  */
-export function classificationsFromTable(
-  table: TableHandle,
-): Record<string, ColumnClassification> {
+export function classificationsFromTable(table: TableHandle): Record<string, ColumnClassification> {
   const out: Record<string, ColumnClassification> = {};
   for (const [key, col] of Object.entries(table.columns)) {
     if (col.classification) out[key] = col.classification;

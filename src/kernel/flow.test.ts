@@ -2,12 +2,7 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { oke } from "./app.ts";
 import { flow, isFlow, resetFlowSeq } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
-import {
-  every,
-  http,
-  internal,
-  table,
-} from "./triggers.ts";
+import { every, http, internal, table } from "./triggers.ts";
 
 beforeEach(() => {
   resetBindings();
@@ -55,11 +50,7 @@ describe("flow — one species", () => {
     expect(app.bindings[0]?.flow).toBe(shared);
     expect(app.bindings[1]?.flow).toBe(shared);
 
-    const httpResult = await app.execute(
-      shared,
-      { n: 3 },
-      shared.triggers[0]!,
-    );
+    const httpResult = await app.execute(shared, { n: 3 }, shared.triggers[0]!);
     const signalResults = await app.dispatchSignal("order-placed", { n: 4 });
 
     expect(httpResult.output).toEqual({ n: 6 });
@@ -126,29 +117,25 @@ describe("five trigger kinds", () => {
 
     const app = oke({ name: "five" });
 
-    const res = await app.fetch(
-      new Request("http://localhost/abc", { method: "GET" }),
-    );
+    const res = await app.fetch(new Request("http://localhost/abc", { method: "GET" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ data: { code: "abc" }, error: null });
 
     await app.dispatchEvery("1h");
     await app.dispatchSignal("link-clicked", { code: "sa" });
-    await app.dispatchCdc("orders", {
-      before: { status: "open" },
-      after: { status: "paid" },
-    }, "status");
+    await app.dispatchCdc(
+      "orders",
+      {
+        before: { status: "open" },
+        after: { status: "paid" },
+      },
+      "status",
+    );
 
     const internalResult = await app.call("t.internal");
     expect(internalResult).toEqual({ ok: true });
 
-    expect(seen).toEqual([
-      "http:abc",
-      "every",
-      "signal:sa",
-      "cdc:open->paid",
-      "internal",
-    ]);
+    expect(seen).toEqual(["http:abc", "every", "signal:sa", "cdc:open->paid", "internal"]);
     expect(httpFlow.triggers[0]?.kind).toBe("http");
   });
 });

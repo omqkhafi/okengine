@@ -3,10 +3,7 @@
  */
 
 import { resolve } from "node:path";
-import {
-  deriveModuleActions,
-  formatGatesList,
-} from "../elements/gate/permissions.ts";
+import { deriveModuleActions, formatGatesList } from "../elements/gate/permissions.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { wantsJson } from "./args.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";

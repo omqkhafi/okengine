@@ -32,8 +32,7 @@ export function formatWillNotFire(willNotFire: WillNotFire): WillNotFireLines {
     );
   }
   return {
-    headline:
-      "Direct edit is not a flow execution — the following will NOT happen:",
+    headline: "Direct edit is not a flow execution — the following will NOT happen:",
     lines,
     empty: lines.length === 0,
   };

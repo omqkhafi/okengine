@@ -6,8 +6,8 @@
  * deterministic and buildable with no network.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /** One `### <label>` block inside a release. */
 export interface ChangelogGroup {
@@ -34,7 +34,7 @@ const GROUP_HEADING = /^###\s+(.+?)\s*$/;
 const BULLET = /^-\s+(.*)$/;
 
 /** Repo-relative path to the canonical file. */
-export const CHANGELOG_SOURCE = 'docs/changelog.md';
+export const CHANGELOG_SOURCE = "docs/changelog.md";
 
 /**
  * Parse the canonical changelog into releases.
@@ -63,7 +63,7 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
     openBullet = null;
   };
 
-  for (const line of raw.replace(/\r\n/g, '\n').split('\n')) {
+  for (const line of raw.replace(/\r\n/g, "\n").split("\n")) {
     const heading = RELEASE_HEADING.exec(line);
     if (heading) {
       commit();
@@ -119,7 +119,7 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
  *   empty state
  */
 export function loadChangelog(): ReadonlyArray<ChangelogRelease> {
-  const raw = readFileSync(join(process.cwd(), '..', CHANGELOG_SOURCE), 'utf8');
+  const raw = readFileSync(join(process.cwd(), "..", CHANGELOG_SOURCE), "utf8");
   const releases = parseChangelog(raw);
   if (releases.length === 0) {
     throw new Error(`changelog: no releases parsed from ${CHANGELOG_SOURCE}`);
@@ -144,7 +144,7 @@ export function splitInlineCode(text: string): ReadonlyArray<InlineSegment> {
     .split(/(`[^`]+`)/g)
     .filter((part) => part.length > 0)
     .map((part) =>
-      part.startsWith('`') && part.endsWith('`') && part.length > 2
+      part.startsWith("`") && part.endsWith("`") && part.length > 2
         ? { code: true, text: part.slice(1, -1) }
         : { code: false, text: part },
     );

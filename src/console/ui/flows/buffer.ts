@@ -48,16 +48,12 @@ export interface RowBuffer<T> {
  *
  * @param initial - Initial visible rows
  */
-export function createRowBuffer<T>(
-  initial: readonly BufferedRow<T>[] = [],
-): RowBuffer<T> {
+export function createRowBuffer<T>(initial: readonly BufferedRow<T>[] = []): RowBuffer<T> {
   const visible: BufferedRow<T>[] = [...initial];
   const pending: BufferedRow<T>[] = [];
 
-  const findVisible = (id: string): number =>
-    visible.findIndex((r) => r.id === id);
-  const findPending = (id: string): number =>
-    pending.findIndex((r) => r.id === id);
+  const findVisible = (id: string): number => visible.findIndex((r) => r.id === id);
+  const findPending = (id: string): number => pending.findIndex((r) => r.id === id);
 
   return {
     get visible() {
@@ -108,10 +104,7 @@ export function createRowBuffer<T>(
  * @param haystack - Fields to search
  * @param query - Free-text query
  */
-export function matchesQuery(
-  haystack: readonly string[],
-  query: string | undefined,
-): boolean {
+export function matchesQuery(haystack: readonly string[], query: string | undefined): boolean {
   const q = query?.trim().toLowerCase();
   if (!q) return true;
   return haystack.some((h) => h.toLowerCase().includes(q));

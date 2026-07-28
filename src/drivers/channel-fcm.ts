@@ -15,9 +15,7 @@ import type {
  *
  * @param options - `token` (OAuth access token) + `from` (project id)
  */
-export function openFcmChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openFcmChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   const accessToken = options.token ?? options.apiKey;
   const projectId = options.from;
   const fetchFn = options.fetch ?? globalThis.fetch;
@@ -30,31 +28,25 @@ export function openFcmChannel(
       if (!accessToken || !projectId) {
         throw new Error("fcm: token and from (project id) are required");
       }
-      const res = await fetchFn(
-        `${base}/v1/projects/${projectId}/messages:send`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: {
-              token: message.to,
-              notification: {
-                title: message.subject ?? message.template ?? "notification",
-                body: message.text ?? "",
-              },
-              data: Object.fromEntries(
-                Object.entries(message.data ?? {}).map(([k, v]) => [
-                  k,
-                  String(v),
-                ]),
-              ),
-            },
-          }),
+      const res = await fetchFn(`${base}/v1/projects/${projectId}/messages:send`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          message: {
+            token: message.to,
+            notification: {
+              title: message.subject ?? message.template ?? "notification",
+              body: message.text ?? "",
+            },
+            data: Object.fromEntries(
+              Object.entries(message.data ?? {}).map(([k, v]) => [k, String(v)]),
+            ),
+          },
+        }),
+      });
       const body = (await res.json().catch(() => ({}))) as {
         name?: string;
         error?: { message?: string };
@@ -79,9 +71,7 @@ export function openFcmChannel(
         ok: true,
         messageId: id,
         driverId: "fcm",
-        attempts: [
-          { driverId: "fcm", ok: true, at: Date.now(), messageId: id },
-        ],
+        attempts: [{ driverId: "fcm", ok: true, at: Date.now(), messageId: id }],
       };
     },
   };

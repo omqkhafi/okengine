@@ -41,15 +41,7 @@ const CATEGORY_RANK: Record<DiffCategory, number> = {
   "no-impact": 0,
 };
 
-const EFFECT_KEYS = [
-  "reads",
-  "writes",
-  "emits",
-  "sends",
-  "asks",
-  "secrets",
-  "calls",
-] as const;
+const EFFECT_KEYS = ["reads", "writes", "emits", "sends", "asks", "secrets", "calls"] as const;
 
 /** Isolation strength: higher = stronger tenant separation. */
 const ISOLATION_RANK: Record<string, number> = {
@@ -61,10 +53,7 @@ const ISOLATION_RANK: Record<string, number> = {
 /**
  * Diff two manifests and classify every behavioural change.
  */
-export function diffManifest(
-  before: Manifest,
-  after: Manifest,
-): ManifestDiffResult {
+export function diffManifest(before: Manifest, after: Manifest): ManifestDiffResult {
   const changes: ManifestChange[] = [];
 
   if (before.app !== after.app) {
@@ -123,9 +112,7 @@ export function diffManifest(
 /**
  * Highest blast-radius category among changes, or `null` if none.
  */
-export function highestSeverity(
-  changes: readonly ManifestChange[],
-): DiffCategory | null {
+export function highestSeverity(changes: readonly ManifestChange[]): DiffCategory | null {
   let best: DiffCategory | null = null;
   for (const c of changes) {
     if (best === null || CATEGORY_RANK[c.category] > CATEGORY_RANK[best]) {
@@ -165,14 +152,7 @@ function diffRecord<T>(
     const path = `${base}/${escape(key)}`;
     if (!aKeys.has(key)) {
       out.push(
-        change(
-          path,
-          removedCategory,
-          "removed",
-          before![key],
-          undefined,
-          `removed ${path}`,
-        ),
+        change(path, removedCategory, "removed", before![key], undefined, `removed ${path}`),
       );
       continue;
     }
@@ -182,25 +162,11 @@ function diffRecord<T>(
   for (const key of sorted(aKeys)) {
     if (bKeys.has(key)) continue;
     const path = `${base}/${escape(key)}`;
-    out.push(
-      change(
-        path,
-        addedCategory,
-        "added",
-        undefined,
-        after![key],
-        `added ${path}`,
-      ),
-    );
+    out.push(change(path, addedCategory, "added", undefined, after![key], `added ${path}`));
   }
 }
 
-function diffFlow(
-  before: Flow,
-  after: Flow,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffFlow(before: Flow, after: Flow, path: string, out: ManifestChange[]): void {
   diffTrigger(before.trigger, after.trigger, `${path}/trigger`, out);
   diffGatesList(before.gates, after.gates, `${path}/gates`, out);
   diffContractSchema(before.in, after.in, `${path}/in`, "in", out);
@@ -228,11 +194,18 @@ function diffFlow(
     );
   }
 
-  if (before.durable !== after.durable && (before.durable !== undefined || after.durable !== undefined)) {
+  if (
+    before.durable !== after.durable &&
+    (before.durable !== undefined || after.durable !== undefined)
+  ) {
     out.push(
       change(
         `${path}/durable`,
-        after.durable === true ? "effect-widening" : before.durable === true ? "contract-breaking" : "no-impact",
+        after.durable === true
+          ? "effect-widening"
+          : before.durable === true
+            ? "contract-breaking"
+            : "no-impact",
         kindOf(before.durable, after.durable),
         before.durable,
         after.durable,
@@ -267,7 +240,10 @@ function diffFlow(
     );
   }
 
-  if (before.cacheKeys !== after.cacheKeys && (before.cacheKeys !== undefined || after.cacheKeys !== undefined)) {
+  if (
+    before.cacheKeys !== after.cacheKeys &&
+    (before.cacheKeys !== undefined || after.cacheKeys !== undefined)
+  ) {
     out.push(
       change(
         `${path}/cacheKeys`,
@@ -280,7 +256,10 @@ function diffFlow(
     );
   }
 
-  if (before.source !== after.source && (before.source !== undefined || after.source !== undefined)) {
+  if (
+    before.source !== after.source &&
+    (before.source !== undefined || after.source !== undefined)
+  ) {
     out.push(
       change(
         `${path}/source`,
@@ -421,9 +400,7 @@ function diffTrigger(
     out.push(change(path, "contract-breaking", "removed", before, after, "trigger removed"));
     return;
   }
-  out.push(
-    change(path, "contract-breaking", "changed", before, after, "trigger changed"),
-  );
+  out.push(change(path, "contract-breaking", "changed", before, after, "trigger changed"));
 }
 
 function diffGatesList(
@@ -436,9 +413,7 @@ function diffGatesList(
   const a = after ?? [];
   if (setEqual(b, a) && listEqual(b, a)) return;
   if (setEqual(b, a)) {
-    out.push(
-      change(path, "no-impact", "changed", b, a, "gates reordered"),
-    );
+    out.push(change(path, "no-impact", "changed", b, a, "gates reordered"));
     return;
   }
 
@@ -552,14 +527,23 @@ function diffContractSchema(
     );
     return;
   }
-  if (schemaBreaksClients(before as Record<string, unknown>, after as Record<string, unknown>, role)) {
+  if (
+    schemaBreaksClients(before as Record<string, unknown>, after as Record<string, unknown>, role)
+  ) {
     out.push(
       change(path, "contract-breaking", "changed", before, after, `${role} schema contract broke`),
     );
     return;
   }
   out.push(
-    change(path, "no-impact", "changed", before, after, `${role} schema changed without client break`),
+    change(
+      path,
+      "no-impact",
+      "changed",
+      before,
+      after,
+      `${role} schema changed without client break`,
+    ),
   );
 }
 
@@ -598,12 +582,7 @@ function diffErrors(
     );
   }
 
-  if (
-    before &&
-    after &&
-    !Array.isArray(before) &&
-    !Array.isArray(after)
-  ) {
+  if (before && after && !Array.isArray(before) && !Array.isArray(after)) {
     for (const name of intersection(bNames, aNames)) {
       if (!deepEqual(before[name], after[name])) {
         out.push(
@@ -619,9 +598,7 @@ function diffErrors(
       }
     }
   } else if (setEqual(bNames, aNames) && !deepEqual(before, after)) {
-    out.push(
-      change(path, "no-impact", "changed", before, after, "errors reordered"),
-    );
+    out.push(change(path, "no-impact", "changed", before, after, "errors reordered"));
   }
 }
 
@@ -636,16 +613,7 @@ function diffEffects(
     const a = after?.[key] ?? [];
     if (setEqual(b, a)) {
       if (!listEqual(b, a) && b.length > 0) {
-        out.push(
-          change(
-            `${path}/${key}`,
-            "no-impact",
-            "changed",
-            b,
-            a,
-            `${key} reordered`,
-          ),
-        );
+        out.push(change(`${path}/${key}`, "no-impact", "changed", b, a, `${key} reordered`));
       }
       continue;
     }
@@ -732,12 +700,7 @@ function diffSlo(
   }
 }
 
-function diffSignal(
-  before: Signal,
-  after: Signal,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffSignal(before: Signal, after: Signal, path: string, out: ManifestChange[]): void {
   if (before.delivery !== after.delivery) {
     out.push(
       change(
@@ -799,12 +762,7 @@ function diffSignal(
   }
 }
 
-function diffStore(
-  before: Store,
-  after: Store,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffStore(before: Store, after: Store, path: string, out: ManifestChange[]): void {
   if (before.facet !== after.facet) {
     out.push(
       change(
@@ -837,19 +795,12 @@ function diffStore(
   }
 }
 
-function diffTable(
-  before: Table,
-  after: Table,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffTable(before: Table, after: Table, path: string, out: ManifestChange[]): void {
   if (!deepEqual(before.columns, after.columns)) {
     out.push(
       change(
         `${path}/columns`,
-        classificationWeakened(before.columns, after.columns)
-          ? "permission-widening"
-          : "no-impact",
+        classificationWeakened(before.columns, after.columns) ? "permission-widening" : "no-impact",
         "changed",
         before.columns,
         after.columns,
@@ -873,15 +824,9 @@ function diffTable(
   }
 }
 
-function diffClock(
-  before: Clock,
-  after: Clock,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffClock(before: Clock, after: Clock, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
-  const scheduleChanged =
-    before.cron !== after.cron || before.every !== after.every;
+  const scheduleChanged = before.cron !== after.cron || before.every !== after.every;
   out.push(
     change(
       path,
@@ -894,20 +839,12 @@ function diffClock(
   );
 }
 
-function diffGateDef(
-  before: Gate,
-  after: Gate,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffGateDef(before: Gate, after: Gate, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
 
   const rolesRemoved = setDiff(before.roles, after.roles);
   const scopesRemoved = setDiff(before.scopes, after.scopes);
-  const maxWidened =
-    before.max !== undefined &&
-    after.max !== undefined &&
-    after.max > before.max;
+  const maxWidened = before.max !== undefined && after.max !== undefined && after.max > before.max;
 
   // Widened membership (e.g. roles: [staff] → [staff, member] or roles replaced by broader set)
   const rolesAdded = setDiff(after.roles, before.roles);
@@ -930,16 +867,7 @@ function diffGateDef(
   }
 
   if (rolesRemoved.length > 0 || scopesRemoved.length > 0) {
-    out.push(
-      change(
-        path,
-        "no-impact",
-        "changed",
-        before,
-        after,
-        "gate narrowed",
-      ),
-    );
+    out.push(change(path, "no-impact", "changed", before, after, "gate narrowed"));
     return;
   }
 
@@ -957,9 +885,7 @@ function diffGateDef(
     return;
   }
 
-  out.push(
-    change(path, "no-impact", "changed", before, after, "gate definition changed"),
-  );
+  out.push(change(path, "no-impact", "changed", before, after, "gate definition changed"));
 }
 
 function diffSecret(
@@ -982,17 +908,10 @@ function diffSecret(
     );
     return;
   }
-  out.push(
-    change(path, "no-impact", "changed", before, after, "secret contract metadata changed"),
-  );
+  out.push(change(path, "no-impact", "changed", before, after, "secret contract metadata changed"));
 }
 
-function diffChannel(
-  before: Channel,
-  after: Channel,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffChannel(before: Channel, after: Channel, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   if (before.medium !== after.medium && before.medium && after.medium) {
     out.push(
@@ -1038,18 +957,11 @@ function diffChannel(
     before.medium === after.medium &&
     !deepEqual(before, after)
   ) {
-    out.push(
-      change(path, "no-impact", "changed", before, after, "channel metadata changed"),
-    );
+    out.push(change(path, "no-impact", "changed", before, after, "channel metadata changed"));
   }
 }
 
-function diffPlugin(
-  before: Plugin,
-  after: Plugin,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffPlugin(before: Plugin, after: Plugin, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   const interceptsAdded = setDiff(after.intercepts, before.intercepts);
   const declaresAdded = setDiff(after.declares, before.declares);
@@ -1066,17 +978,10 @@ function diffPlugin(
     );
     return;
   }
-  out.push(
-    change(path, "no-impact", "changed", before, after, "plugin metadata changed"),
-  );
+  out.push(change(path, "no-impact", "changed", before, after, "plugin metadata changed"));
 }
 
-function diffJourney(
-  before: Journey,
-  after: Journey,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffJourney(before: Journey, after: Journey, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   diffSlo(before.slo, after.slo, `${path}/slo`, out);
   if (before.composes !== after.composes) {
@@ -1085,9 +990,7 @@ function diffJourney(
     out.push(
       change(
         `${path}/composes`,
-        b !== undefined && a !== undefined && a < b
-          ? "contract-breaking"
-          : "no-impact",
+        b !== undefined && a !== undefined && a < b ? "contract-breaking" : "no-impact",
         kindOf(before.composes, after.composes),
         before.composes,
         after.composes,
@@ -1099,9 +1002,7 @@ function diffJourney(
     out.push(
       change(
         `${path}/flows`,
-        setDiff(before.flows, after.flows).length > 0
-          ? "contract-breaking"
-          : "no-impact",
+        setDiff(before.flows, after.flows).length > 0 ? "contract-breaking" : "no-impact",
         "changed",
         before.flows,
         after.flows,
@@ -1111,26 +1012,23 @@ function diffJourney(
   }
 }
 
-function diffAi(
-  before: Ai | undefined,
-  after: Ai | undefined,
-  out: ManifestChange[],
-): void {
-  diffRecord(before?.models, after?.models, "/ai/models", (b, a, path, o) => {
-    if (!deepEqual(b, a)) {
-      o.push(change(path, "contract-breaking", "changed", b, a, "ai model changed"));
-    }
-  }, out);
+function diffAi(before: Ai | undefined, after: Ai | undefined, out: ManifestChange[]): void {
+  diffRecord(
+    before?.models,
+    after?.models,
+    "/ai/models",
+    (b, a, path, o) => {
+      if (!deepEqual(b, a)) {
+        o.push(change(path, "contract-breaking", "changed", b, a, "ai model changed"));
+      }
+    },
+    out,
+  );
   diffRecord(before?.prompts, after?.prompts, "/ai/prompts", diffPrompt, out);
   diffRecord(before?.agents, after?.agents, "/ai/agents", diffAgent, out);
 }
 
-function diffPrompt(
-  before: AiPrompt,
-  after: AiPrompt,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffPrompt(before: AiPrompt, after: AiPrompt, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   if (before.version !== after.version) {
     out.push(
@@ -1191,12 +1089,7 @@ function diffPrompt(
   }
 }
 
-function diffAgent(
-  before: AiAgent,
-  after: AiAgent,
-  path: string,
-  out: ManifestChange[],
-): void {
+function diffAgent(before: AiAgent, after: AiAgent, path: string, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   const toolsAdded = setDiff(after.tools, before.tools);
   const toolsRemoved = setDiff(before.tools, after.tools);
@@ -1238,7 +1131,11 @@ function diffAgent(
       ),
     );
   }
-  if (!deepEqual(before.budget, after.budget) && toolsAdded.length === 0 && toolsRemoved.length === 0) {
+  if (
+    !deepEqual(before.budget, after.budget) &&
+    toolsAdded.length === 0 &&
+    toolsRemoved.length === 0
+  ) {
     const bCost = before.budget?.maxCostPerRun ?? before.budget?.maxCostPerCall ?? 0;
     const aCost = after.budget?.maxCostPerRun ?? after.budget?.maxCostPerCall ?? 0;
     out.push(
@@ -1326,9 +1223,7 @@ function diffTenancy(
   out.push(
     change(
       "/tenancy/isolation",
-      b !== undefined && a !== undefined && a < b
-        ? "permission-widening"
-        : "no-impact",
+      b !== undefined && a !== undefined && a < b ? "permission-widening" : "no-impact",
       "changed",
       before?.isolation,
       after?.isolation,
@@ -1337,11 +1232,7 @@ function diffTenancy(
   );
 }
 
-function diffI18n(
-  before: I18n | undefined,
-  after: I18n | undefined,
-  out: ManifestChange[],
-): void {
+function diffI18n(before: I18n | undefined, after: I18n | undefined, out: ManifestChange[]): void {
   if (deepEqual(before, after)) return;
   if (before === undefined && after !== undefined) {
     out.push(change("/i18n", "no-impact", "added", before, after, "i18n added"));
@@ -1389,7 +1280,14 @@ function diffI18n(
   }
   if (!deepEqual(before?.dir, after?.dir) && setEqual(before?.locales, after?.locales)) {
     out.push(
-      change("/i18n/dir", "no-impact", "changed", before?.dir, after?.dir, "locale dir map changed"),
+      change(
+        "/i18n/dir",
+        "no-impact",
+        "changed",
+        before?.dir,
+        after?.dir,
+        "locale dir map changed",
+      ),
     );
   }
 }
@@ -1401,9 +1299,7 @@ function diffTopology(
 ): void {
   if (before === after) return;
   const category: DiffCategory =
-    before !== undefined && after !== undefined
-      ? "contract-breaking"
-      : "no-impact";
+    before !== undefined && after !== undefined ? "contract-breaking" : "no-impact";
   out.push(
     change(
       "/topology",
@@ -1422,9 +1318,7 @@ function diffImages(
   out: ManifestChange[],
 ): void {
   if (deepEqual(before, after)) return;
-  out.push(
-    change("/images", "no-impact", "changed", before, after, "images changed"),
-  );
+  out.push(change("/images", "no-impact", "changed", before, after, "images changed"));
 }
 
 function diffStringSet(
@@ -1453,14 +1347,7 @@ function diffStringSet(
   }
   for (const item of setDiff(after, before)) {
     out.push(
-      change(
-        `${path}/${escape(item)}`,
-        "no-impact",
-        "added",
-        undefined,
-        item,
-        `added ${item}`,
-      ),
+      change(`${path}/${escape(item)}`, "no-impact", "added", undefined, item, `added ${item}`),
     );
   }
 }
@@ -1523,10 +1410,7 @@ function schemaBreaksClients(
   return false;
 }
 
-function classificationWeakened(
-  before: unknown,
-  after: unknown,
-): boolean {
+function classificationWeakened(before: unknown, after: unknown): boolean {
   if (!before || typeof before !== "object") return false;
   if (!after || typeof after !== "object") return true;
   const b = before as Record<string, unknown>;
@@ -1559,9 +1443,7 @@ function isSensitive(value: unknown): boolean {
   return false;
 }
 
-function parseRateGate(
-  gate: string,
-): { strategy: string; max: number; per: string } | undefined {
+function parseRateGate(gate: string): { strategy: string; max: number; per: string } | undefined {
   // rate:sliding-window-counter:300/1m
   const m = /^rate:([^:]+):(\d+)\/(.+)$/.exec(gate);
   if (!m) return undefined;
@@ -1609,10 +1491,7 @@ function asUnknownArray(value: unknown): unknown[] | undefined {
   return Array.isArray(value) ? value : undefined;
 }
 
-function setEqual(
-  a: readonly string[] | undefined,
-  b: readonly string[] | undefined,
-): boolean {
+function setEqual(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
   const as = new Set(a ?? []);
   const bs = new Set(b ?? []);
   if (as.size !== bs.size) return false;
@@ -1620,27 +1499,18 @@ function setEqual(
   return true;
 }
 
-function listEqual(
-  a: readonly string[],
-  b: readonly string[],
-): boolean {
+function listEqual(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 }
 
-function setDiff(
-  a: readonly string[] | undefined,
-  b: readonly string[] | undefined,
-): string[] {
+function setDiff(a: readonly string[] | undefined, b: readonly string[] | undefined): string[] {
   const bs = new Set(b ?? []);
   return [...new Set(a ?? [])].filter((x) => !bs.has(x)).sort();
 }
 
-function intersection(
-  a: readonly string[],
-  b: readonly string[],
-): string[] {
+function intersection(a: readonly string[], b: readonly string[]): string[] {
   const bs = new Set(b);
   return a.filter((x) => bs.has(x));
 }

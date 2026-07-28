@@ -83,9 +83,7 @@ export function subjectKeysFromVault(vault: VaultRuntime): SubjectKeyVault {
 /**
  * In-memory subject-key vault (tests / when no Vault element is wired).
  */
-export function createMemorySubjectKeys(
-  seed?: Readonly<Record<string, string>>,
-): SubjectKeyVault {
+export function createMemorySubjectKeys(seed?: Readonly<Record<string, string>>): SubjectKeyVault {
   const map = new Map<string, string>(Object.entries(seed ?? {}));
   return {
     read(name) {
@@ -181,26 +179,16 @@ export async function revealArchived(
  * @param subjectId - Subject id
  * @returns Whether a key was deleted
  */
-export function eraseSubject(
-  keys: SubjectKeyVault,
-  subjectId: string,
-): boolean {
+export function eraseSubject(keys: SubjectKeyVault, subjectId: string): boolean {
   return keys.delete(subjectKeyName(subjectId));
 }
 
-async function encryptAesGcm(
-  plaintext: string,
-  keyBytes: Uint8Array,
-): Promise<string> {
+async function encryptAesGcm(plaintext: string, keyBytes: Uint8Array): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const keyBuf = toArrayBuffer(keyBytes);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBuf,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"],
-  );
+  const cryptoKey = await crypto.subtle.importKey("raw", keyBuf, { name: "AES-GCM" }, false, [
+    "encrypt",
+  ]);
   const cipher = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     cryptoKey,
@@ -212,21 +200,14 @@ async function encryptAesGcm(
   return Buffer.from(packed).toString("base64");
 }
 
-async function decryptAesGcm(
-  blob: string,
-  keyBytes: Uint8Array,
-): Promise<string> {
+async function decryptAesGcm(blob: string, keyBytes: Uint8Array): Promise<string> {
   const packed = Buffer.from(blob, "base64");
   const iv = toArrayBuffer(packed.subarray(0, 12));
   const data = toArrayBuffer(packed.subarray(12));
   const keyBuf = toArrayBuffer(keyBytes);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBuf,
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"],
-  );
+  const cryptoKey = await crypto.subtle.importKey("raw", keyBuf, { name: "AES-GCM" }, false, [
+    "decrypt",
+  ]);
   const plain = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: new Uint8Array(iv) },
     cryptoKey,

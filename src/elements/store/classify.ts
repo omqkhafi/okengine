@@ -4,11 +4,7 @@
  */
 
 import type { ColumnClassification } from "../../manifest/types.ts";
-import {
-  classificationKey,
-  type ClassificationMap,
-  type SqlRow,
-} from "../../drivers/types.ts";
+import { classificationKey, type ClassificationMap, type SqlRow } from "../../drivers/types.ts";
 
 /** Default mask token for PII columns when reveal is denied. */
 export const PII_MASK = "[redacted]";
@@ -21,9 +17,7 @@ export const PII_MASK = "[redacted]";
  *
  * @param classification - Tags to attach
  */
-export function classify(
-  classification: ColumnClassification,
-): ColumnClassification {
+export function classify(classification: ColumnClassification): ColumnClassification {
   return { ...classification };
 }
 
@@ -33,9 +27,7 @@ export function classify(
  * @param tables - Per-table column classifications
  */
 export function buildClassificationMap(
-  tables: Readonly<
-    Record<string, Readonly<Record<string, ColumnClassification>>>
-  >,
+  tables: Readonly<Record<string, Readonly<Record<string, ColumnClassification>>>>,
 ): ClassificationMap {
   const map = new Map<string, ColumnClassification>();
   for (const [table, cols] of Object.entries(tables)) {
@@ -90,10 +82,7 @@ export interface MaskRowsOptions {
  * @param rows - Raw driver rows
  * @param options - Classification + reveal policy
  */
-export function maskRows(
-  rows: readonly SqlRow[],
-  options: MaskRowsOptions,
-): SqlRow[] {
+export function maskRows(rows: readonly SqlRow[], options: MaskRowsOptions): SqlRow[] {
   if (options.revealPii || options.classifications.size === 0) {
     return rows.map((r) => ({ ...r }));
   }
@@ -101,13 +90,7 @@ export function maskRows(
   return rows.map((row) => {
     const out: SqlRow = {};
     for (const [column, value] of Object.entries(row)) {
-      out[column] = isPiiColumn(
-        options.classifications,
-        options.table,
-        column,
-      )
-        ? mask
-        : value;
+      out[column] = isPiiColumn(options.classifications, options.table, column) ? mask : value;
     }
     return out;
   });

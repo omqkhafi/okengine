@@ -36,9 +36,7 @@ export function parseAiSearch(search: Record<string, unknown>): AiSearch {
  *
  * @param search - Typed search
  */
-export function serializeAiSearch(
-  search: AiSearch,
-): Record<string, string | number> {
+export function serializeAiSearch(search: AiSearch): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   if (search.prompt) out.prompt = search.prompt;
   if (search.version !== undefined) out.version = search.version;
@@ -55,11 +53,7 @@ export function serializeAiSearch(
  * @param prompt - Prompt name
  * @param version - Version
  */
-export function openPromptVersion(
-  search: AiSearch,
-  prompt: string,
-  version: number,
-): AiSearch {
+export function openPromptVersion(search: AiSearch, prompt: string, version: number): AiSearch {
   return { ...search, prompt, version, agent: undefined, run: undefined };
 }
 
@@ -70,11 +64,7 @@ export function openPromptVersion(
  * @param agent - Agent name
  * @param run - Run id
  */
-export function openAgentRun(
-  search: AiSearch,
-  agent: string,
-  run: string,
-): AiSearch {
+export function openAgentRun(search: AiSearch, agent: string, run: string): AiSearch {
   return { ...search, agent, run };
 }
 

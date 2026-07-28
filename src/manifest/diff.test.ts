@@ -23,9 +23,7 @@ function hasCategory(
   pathIncludes?: string,
 ): boolean {
   return changes.some(
-    (c) =>
-      c.category === category &&
-      (pathIncludes === undefined || c.path.includes(pathIncludes)),
+    (c) => c.category === category && (pathIncludes === undefined || c.path.includes(pathIncludes)),
   );
 }
 
@@ -42,9 +40,7 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.flows!["reports.export"]!.errors = ["NotFound"];
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "contract-breaking", "Forbidden")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "contract-breaking", "Forbidden")).toBe(true);
     expect(result.severity).toBe("contract-breaking");
   });
 
@@ -76,10 +72,7 @@ describe("diffManifest — fixture pairs", () => {
   test("5 · gates reordered only is no-impact", async () => {
     const before = await loadBase();
     const after = clone(before);
-    after.flows!["orders.create"]!.gates = [
-      "rate:sliding-window-counter:300/1m",
-      "member",
-    ];
+    after.flows!["orders.create"]!.gates = ["rate:sliding-window-counter:300/1m", "member"];
     const result = diffManifest(before, after);
     expect(result.changes.length).toBeGreaterThan(0);
     expect(categoriesOf(result.changes)).toEqual(["no-impact"]);
@@ -106,11 +99,7 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.flows!["reports.export"]!.gates = [];
     const result = diffManifest(before, after);
-    expect(
-      result.changes.some((c) =>
-        c.summary.includes("flow became public"),
-      ),
-    ).toBe(true);
+    expect(result.changes.some((c) => c.summary.includes("flow became public"))).toBe(true);
     expect(result.severity).toBe("permission-widening");
   });
 
@@ -147,24 +136,17 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.signals!["order-placed"]!.delivery = "broadcast";
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "contract-breaking", "delivery")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "contract-breaking", "delivery")).toBe(true);
   });
 
   test("11 · rate limit expression widened is permission-widening", async () => {
     const before = await loadBase();
     const after = clone(before);
-    after.flows!["orders.create"]!.gates = [
-      "member",
-      "rate:sliding-window-counter:500/1m",
-    ];
+    after.flows!["orders.create"]!.gates = ["member", "rate:sliding-window-counter:500/1m"];
     const result = diffManifest(before, after);
     expect(
       result.changes.some(
-        (c) =>
-          c.category === "permission-widening" &&
-          c.summary.includes("rate limit widened"),
+        (c) => c.category === "permission-widening" && c.summary.includes("rate limit widened"),
       ),
     ).toBe(true);
   });
@@ -182,9 +164,7 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.tenancy = { isolation: "row" };
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "permission-widening", "tenancy")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "permission-widening", "tenancy")).toBe(true);
   });
 
   test("14 · effects array reorder only is no-impact", async () => {
@@ -220,9 +200,7 @@ describe("diffManifest — fixture pairs", () => {
       effects: { reads: [] },
     };
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "contract-breaking", "reports.export")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "contract-breaking", "reports.export")).toBe(true);
     expect(hasCategory(result.changes, "no-impact", "health.ping")).toBe(true);
   });
 
@@ -231,9 +209,7 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.plugins!.audit!.intercepts = ["afterHandle"];
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "permission-widening", "plugins")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "permission-widening", "plugins")).toBe(true);
   });
 
   test("17 · availability SLO lowered is contract-breaking", async () => {
@@ -244,9 +220,7 @@ describe("diffManifest — fixture pairs", () => {
       latency: { p99: "200ms" },
     };
     const result = diffManifest(before, after);
-    expect(
-      hasCategory(result.changes, "contract-breaking", "availability"),
-    ).toBe(true);
+    expect(hasCategory(result.changes, "contract-breaking", "availability")).toBe(true);
   });
 
   test("18 · PII classification removed is permission-widening", async () => {
@@ -254,9 +228,7 @@ describe("diffManifest — fixture pairs", () => {
     const after = clone(before);
     after.stores!.db!.tables!.orders!.classifications = {};
     const result = diffManifest(before, after);
-    expect(
-      hasCategory(result.changes, "permission-widening", "classifications"),
-    ).toBe(true);
+    expect(hasCategory(result.changes, "permission-widening", "classifications")).toBe(true);
   });
 });
 
@@ -333,9 +305,7 @@ describe("diffManifest — additional branches", () => {
     delete after.stores!.db!.tables;
     const result = diffManifest(before, after);
     expect(hasCategory(result.changes, "contract-breaking", "retries")).toBe(true);
-    expect(hasCategory(result.changes, "contract-breaking", "deadLetter")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "contract-breaking", "deadLetter")).toBe(true);
     expect(hasCategory(result.changes, "contract-breaking", "facet")).toBe(true);
   });
 
@@ -386,9 +356,7 @@ describe("diffManifest — additional branches", () => {
     delete after.i18n;
     delete after.drivers;
     const result = diffManifest(before, after);
-    expect(hasCategory(result.changes, "permission-widening", "tenancy")).toBe(
-      true,
-    );
+    expect(hasCategory(result.changes, "permission-widening", "tenancy")).toBe(true);
     expect(hasCategory(result.changes, "contract-breaking", "i18n")).toBe(true);
     expect(hasCategory(result.changes, "contract-breaking", "drivers")).toBe(true);
   });
@@ -518,13 +486,7 @@ describe("diff helpers — branch coverage", () => {
       ),
     ).toBe(true);
 
-    expect(
-      __test__.schemaBreaksClients(
-        { type: "string" },
-        { type: "number" },
-        "in",
-      ),
-    ).toBe(true);
+    expect(__test__.schemaBreaksClients({ type: "string" }, { type: "number" }, "in")).toBe(true);
 
     expect(
       __test__.schemaBreaksClients(
@@ -545,29 +507,13 @@ describe("diff helpers — branch coverage", () => {
 
   test("classificationWeakened detects pii/sensitive loss", () => {
     expect(
-      __test__.classificationWeakened(
-        { email: { pii: true } },
-        { email: { pii: false } },
-      ),
+      __test__.classificationWeakened({ email: { pii: true } }, { email: { pii: false } }),
     ).toBe(true);
-    expect(
-      __test__.classificationWeakened(
-        { token: { sensitive: true } },
-        {},
-      ),
-    ).toBe(true);
-    expect(
-      __test__.classificationWeakened(
-        { email: "pii" },
-        { email: ["pii"] },
-      ),
-    ).toBe(false);
-    expect(
-      __test__.classificationWeakened(
-        { email: ["sensitive"] },
-        { email: ["pii"] },
-      ),
-    ).toBe(true);
+    expect(__test__.classificationWeakened({ token: { sensitive: true } }, {})).toBe(true);
+    expect(__test__.classificationWeakened({ email: "pii" }, { email: ["pii"] })).toBe(false);
+    expect(__test__.classificationWeakened({ email: ["sensitive"] }, { email: ["pii"] })).toBe(
+      true,
+    );
     expect(__test__.classificationWeakened(null, {})).toBe(false);
     expect(__test__.classificationWeakened({ a: "pii" }, null)).toBe(true);
     expect(
@@ -773,9 +719,7 @@ describe("diffManifest — line coverage sweep", () => {
     const after = clone(before);
     after.flows!["orders.create"]!.gates = ["member", "rate:also-broken"];
     const result = diffManifest(before, after);
-    expect(
-      result.changes.some((c) => c.summary.includes("rate limit widened")),
-    ).toBe(false);
+    expect(result.changes.some((c) => c.summary.includes("rate limit widened"))).toBe(false);
   });
 
   test("slo added and removed; channel metadata; agent budget; drivers reorder; i18n add/dir", async () => {
@@ -846,21 +790,12 @@ describe("diffManifest — line coverage sweep", () => {
     ).toBe(false);
 
     expect(
-      __test__.classificationWeakened(
-        { a: "plain", b: 1, c: null },
-        { a: "plain", b: 1, c: null },
-      ),
+      __test__.classificationWeakened({ a: "plain", b: 1, c: null }, { a: "plain", b: 1, c: null }),
     ).toBe(false);
 
-    expect(__test__.latencyLoosened({ p99: "200ms" }, { p99: "100ms" })).toBe(
-      false,
-    );
+    expect(__test__.latencyLoosened({ p99: "200ms" }, { p99: "100ms" })).toBe(false);
     expect(__test__.latencyLoosened(undefined, { p99: "100ms" })).toBe(false);
-    expect(__test__.latencyLoosened({ p99: "200ms" }, { p50: "100ms" })).toBe(
-      false,
-    );
-    expect(__test__.latencyLoosened({ p99: "nope" }, { p99: "also" })).toBe(
-      false,
-    );
+    expect(__test__.latencyLoosened({ p99: "200ms" }, { p50: "100ms" })).toBe(false);
+    expect(__test__.latencyLoosened({ p99: "nope" }, { p99: "also" })).toBe(false);
   });
 });

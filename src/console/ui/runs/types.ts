@@ -78,9 +78,7 @@ export interface RunRecord {
   /** `fx.log` lines. */
   readonly logs: readonly RunLogLine[];
   /** All queryable dimensions. */
-  readonly dimensions: Readonly<
-    Record<string, string | number | boolean | null>
-  >;
+  readonly dimensions: Readonly<Record<string, string | number | boolean | null>>;
 }
 
 /** Comparison operators for dimension clauses. */

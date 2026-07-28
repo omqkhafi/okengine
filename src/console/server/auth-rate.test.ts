@@ -29,9 +29,7 @@ describe("auth-rate strategy", () => {
     for (let i = 0; i < AUTH_RATE_LIMIT; i++) {
       expect(touchLoginRateLimit(bag, "Ops@Example.com", t++)).toBe("ok");
     }
-    expect(touchLoginRateLimit(bag, "ops@example.com", t)).toBe(
-      "rate_limited",
-    );
+    expect(touchLoginRateLimit(bag, "ops@example.com", t)).toBe("rate_limited");
     expect(touchLoginRateLimit(bag, "other@example.com", t)).toBe("ok");
   });
 
@@ -59,20 +57,14 @@ describe("auth-rate strategy", () => {
     });
 
     const tMissing = performance.now();
-    expect(
-      await authenticateOperator(store, "missing@example.com", "password123"),
-    ).toBeNull();
+    expect(await authenticateOperator(store, "missing@example.com", "password123")).toBeNull();
     const missingMs = performance.now() - tMissing;
 
     const tBad = performance.now();
-    expect(
-      await authenticateOperator(store, "ops@example.com", "wrong-password"),
-    ).toBeNull();
+    expect(await authenticateOperator(store, "ops@example.com", "wrong-password")).toBeNull();
     const badMs = performance.now() - tBad;
 
-    expect(
-      await authenticateOperator(store, "ops@example.com", "password123"),
-    ).not.toBeNull();
+    expect(await authenticateOperator(store, "ops@example.com", "password123")).not.toBeNull();
 
     // Both paths pay an argon2 verify — neither should be near-instant.
     expect(missingMs).toBeGreaterThan(5);

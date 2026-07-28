@@ -8,10 +8,7 @@
  * adapters receive structured operator ids.
  */
 
-import {
-  logDevRequest,
-  shouldLogDevRequests,
-} from "../runtime/dev-request-log.ts";
+import { logDevRequest, shouldLogDevRequests } from "../runtime/dev-request-log.ts";
 import {
   checkRequestSecurity,
   forbiddenResponse,
@@ -30,11 +27,7 @@ import {
   type JsonRpcId,
   type McpInitializeResult,
 } from "./protocol.ts";
-import {
-  authenticateMcpRequest,
-  extractBearer,
-  newMcpTransportSessionId,
-} from "./session.ts";
+import { authenticateMcpRequest, extractBearer, newMcpTransportSessionId } from "./session.ts";
 import { createToolRuntime, type McpContext } from "./tools.ts";
 
 /** Options for {@link createMcpServer} / {@link serveMcp}. */
@@ -118,15 +111,9 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
 
     let requester;
     try {
-      requester = await authenticateMcpRequest(
-        options.sessions,
-        options.secret,
-        bearer,
-        now,
-      );
+      requester = await authenticateMcpRequest(options.sessions, options.secret, bearer, now);
     } catch (err) {
-      const message =
-        err instanceof SessionError ? err.message : "authentication failed";
+      const message = err instanceof SessionError ? err.message : "authentication failed";
       return respond(
         jsonRpcHttp(
           rpcError(
@@ -148,22 +135,12 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     try {
       body = await request.json();
     } catch {
-      return respond(
-        jsonRpcHttp(
-          rpcError(null, RpcErrorCode.parse, "invalid JSON body"),
-          400,
-        ),
-      );
+      return respond(jsonRpcHttp(rpcError(null, RpcErrorCode.parse, "invalid JSON body"), 400));
     }
 
     const parsed = parseJsonRpcRequest(body);
     if (!parsed.ok) {
-      return respond(
-        jsonRpcHttp(
-          rpcError(null, RpcErrorCode.invalidRequest, parsed.message),
-          400,
-        ),
-      );
+      return respond(jsonRpcHttp(rpcError(null, RpcErrorCode.invalidRequest, parsed.message), 400));
     }
 
     const { request: rpc } = parsed;
@@ -207,19 +184,10 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
       case "tools/call": {
         const call = parseToolsCallParams(rpc.params);
         if (!call.ok) {
-          return respond(
-            jsonRpcHttp(
-              rpcError(id, RpcErrorCode.invalidParams, call.message),
-              400,
-            ),
-          );
+          return respond(jsonRpcHttp(rpcError(id, RpcErrorCode.invalidParams, call.message), 400));
         }
         flowLabel = call.name;
-        const result = await tools.callTool(
-          requester,
-          call.name,
-          call.arguments,
-        );
+        const result = await tools.callTool(requester, call.name, call.arguments);
         if (!result.ok) {
           const code =
             result.code === "unauthorized"
@@ -256,11 +224,7 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
       default:
         return respond(
           jsonRpcHttp(
-            rpcError(
-              id,
-              RpcErrorCode.methodNotFound,
-              `method not found: ${rpc.method}`,
-            ),
+            rpcError(id, RpcErrorCode.methodNotFound, `method not found: ${rpc.method}`),
             404,
           ),
         );
@@ -285,9 +249,7 @@ export interface McpServerHandle extends ServerHandle {
  *
  * @param options - Server options
  */
-export async function serveMcp(
-  options: ServeMcpOptions,
-): Promise<McpServerHandle> {
+export async function serveMcp(options: ServeMcpOptions): Promise<McpServerHandle> {
   const hostname = options.hostname ?? "127.0.0.1";
   const port = options.port ?? MCP_PORT;
   const mcp = createMcpServer({ ...options, hostname });
@@ -311,10 +273,7 @@ export async function serveMcp(
   };
 }
 
-function jsonRpcHttp(
-  body: unknown,
-  status = 200,
-): Response {
+function jsonRpcHttp(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {

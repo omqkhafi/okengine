@@ -55,10 +55,7 @@ export function durationHistogram(
  * @param run - Run
  * @param range - Selected region
  */
-export function inDurationRange(
-  run: RunRecord,
-  range: DurationRange,
-): boolean {
+export function inDurationRange(run: RunRecord, range: DurationRange): boolean {
   return run.durationMs >= range.minMs && run.durationMs <= range.maxMs;
 }
 

@@ -15,6 +15,7 @@ import type {
   AiPrompt,
   Channel,
   Clock,
+  DeclaredColumn,
   Effects,
   Flow,
   Gate,
@@ -66,6 +67,11 @@ interface ProjectScope {
   bindings: Map<string, InferBinding>;
   signals: Record<string, Signal>;
   stores: Record<string, Store>;
+  /** Binding or table name → declared columns from `store.schema.table`. */
+  schemaTables: Map<
+    string,
+    { readonly name: string; readonly columns: Record<string, DeclaredColumn> }
+  >;
   clocks: Record<string, Clock>;
   gates: Record<string, Gate>;
   /** Local binding name → gate manifest id (policy name or rate expression). */
@@ -89,9 +95,7 @@ interface ProjectScope {
  *
  * @param options - Root directory and/or explicit files
  */
-export async function extractManifest(
-  options: ExtractManifestOptions = {},
-): Promise<Manifest> {
+export async function extractManifest(options: ExtractManifestOptions = {}): Promise<Manifest> {
   const files = options.files
     ? [...options.files]
     : await readSources(options.rootDir ?? ".", options.glob ?? "**/*.{ts,tsx}");
@@ -101,6 +105,7 @@ export async function extractManifest(
     bindings: new Map(),
     signals: {},
     stores: {},
+    schemaTables: new Map(),
     clocks: {},
     gates: {},
     gateIds: new Map(),
@@ -191,10 +196,7 @@ export async function extractFromSources(
   return extractManifest({ files, app });
 }
 
-async function readSources(
-  rootDir: string,
-  pattern: string,
-): Promise<SourceFile[]> {
+async function readSources(rootDir: string, pattern: string): Promise<SourceFile[]> {
   // Bun.Glob (global) — bare `import … from "bun"` is rejected by JSR.
   const glob = new Bun.Glob(pattern);
   const files: SourceFile[] = [];
@@ -273,13 +275,304 @@ function finalizeRefs(scope: ProjectScope): void {
       (id) => scope.flowExports.get(id) ?? scope.bindings.get(id)?.ref ?? id,
     );
   }
+
+  // Merge declared columns into store.tables (handles declare-after-sql order).
+  for (const store of Object.values(scope.stores)) {
+    if (!store.tables) continue;
+    for (const [name, table] of Object.entries(store.tables)) {
+      const declared = [...scope.schemaTables.values()].find((t) => t.name === name);
+      if (!declared) continue;
+      const existing = table.columns ?? {};
+      if (Object.keys(existing).length === 0) {
+        store.tables[name] = { ...table, columns: declared.columns };
+      }
+    }
+  }
+
+  // Orphan abstract tables (declared but not wired via store.sql schema):
+  // attach under the first sql store, or create a synthetic "app" sql store.
+  const attachedNames = new Set<string>();
+  for (const store of Object.values(scope.stores)) {
+    if (!store.tables) continue;
+    for (const name of Object.keys(store.tables)) attachedNames.add(name);
+  }
+  const orphanByName = new Map<string, { name: string; columns: Record<string, DeclaredColumn> }>();
+  for (const t of scope.schemaTables.values()) {
+    if (!attachedNames.has(t.name)) orphanByName.set(t.name, t);
+  }
+  if (orphanByName.size > 0) {
+    let target = Object.entries(scope.stores).find(([, s]) => s.facet === "sql")?.[1];
+    if (!target) {
+      scope.stores.app = scope.stores.app ?? { facet: "sql" };
+      target = scope.stores.app!;
+    }
+    target.tables = target.tables ?? {};
+    for (const t of orphanByName.values()) {
+      if (target.tables[t.name]) continue;
+      target.tables[t.name] = { columns: t.columns };
+    }
+  }
 }
 
-function visitDeclarationCall(
-  call: CallExpression,
-  program: AstNode,
+function collectSchemaTable(call: CallExpression, program: AstNode, scope: ProjectScope): void {
+  const tableName = stringArg(call.arguments[0]);
+  if (!tableName) return;
+  const colsNode = objectArg(call.arguments[1]);
+  const columns = colsNode ? parseDeclaredColumns(colsNode) : {};
+  const entry = { name: tableName, columns };
+  scope.schemaTables.set(tableName, entry);
+  const bindingName = enclosingConstName(call, program);
+  if (bindingName) scope.schemaTables.set(bindingName, entry);
+}
+
+function attachSchemaOption(
+  optsNode: AstNode | undefined,
+  store: Store,
   scope: ProjectScope,
 ): void {
+  const opts = objectArg(optsNode);
+  if (!opts) return;
+  const schemaNode = objectProp(opts, "schema");
+  if (!schemaNode) return;
+
+  // schema: { notes } or schema: { notes: store.schema.table(...) }
+  if (schemaNode.type === "ObjectExpression") {
+    store.tables = store.tables ?? {};
+    for (const prop of objectProperties(schemaNode)) {
+      const key = propKey(prop);
+      const value = (prop as AstNode & { value?: AstNode }).value;
+      if (!key || !value) continue;
+
+      if (value.type === "Identifier") {
+        const id = (value as Identifier).name;
+        const declared = scope.schemaTables.get(id) ?? scope.schemaTables.get(key);
+        if (declared) {
+          store.tables[declared.name] = { columns: declared.columns };
+        } else {
+          store.tables[key] = store.tables[key] ?? {};
+        }
+        continue;
+      }
+
+      if (value.type === "CallExpression") {
+        const inline = parseInlineSchemaTable(value as CallExpression);
+        if (inline) {
+          store.tables[inline.name] = { columns: inline.columns };
+          scope.schemaTables.set(inline.name, inline);
+        }
+      }
+    }
+    return;
+  }
+
+  // schema: notesModule (identifier — unknown shape; skip columns)
+  if (schemaNode.type === "Identifier") {
+    // Namespace import — table names unknown at extract time.
+  }
+}
+
+function parseInlineSchemaTable(
+  call: CallExpression,
+): { name: string; columns: Record<string, DeclaredColumn> } | undefined {
+  const callee = call.callee;
+  if (callee.type !== "MemberExpression") return undefined;
+  const member = callee as AstNode & { object: AstNode; property: AstNode };
+  if (identifierName(member.property) !== "table") return undefined;
+  if (member.object.type !== "MemberExpression") return undefined;
+  const inner = member.object as AstNode & { object: AstNode; property: AstNode };
+  if (identifierName(inner.object) !== "store" || identifierName(inner.property) !== "schema") {
+    return undefined;
+  }
+  const tableName = stringArg(call.arguments[0]);
+  if (!tableName) return undefined;
+  const colsNode = objectArg(call.arguments[1]);
+  return {
+    name: tableName,
+    columns: colsNode ? parseDeclaredColumns(colsNode) : {},
+  };
+}
+
+function parseDeclaredColumns(obj: AstNode): Record<string, DeclaredColumn> {
+  const out: Record<string, DeclaredColumn> = {};
+  for (const prop of objectProperties(obj)) {
+    const key = propKey(prop);
+    const value = (prop as AstNode & { value?: AstNode }).value;
+    if (!key || !value) continue;
+    const col = parseFieldChain(value, key);
+    if (col) out[key] = col;
+  }
+  return out;
+}
+
+/**
+ * Walk `field.text().notNull().pii()` (and similar) into a DeclaredColumn.
+ *
+ * @param node - AST node for the column value
+ * @param key - JS key (for default sqlName)
+ */
+function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined {
+  const chain: string[] = [];
+  let sqlType: "text" | "integer" | undefined;
+  let sqlName: string | undefined;
+  let defaultValue: string | number | boolean | null | undefined;
+  let hasDefault = false;
+  let cur: AstNode | undefined = node;
+
+  while (cur && cur.type === "CallExpression") {
+    const call = cur as CallExpression;
+    const callee = call.callee;
+    if (callee.type === "MemberExpression") {
+      const member = callee as AstNode & { object: AstNode; property: AstNode };
+      const method = identifierName(member.property);
+      if (method) {
+        chain.push(method);
+        if (method === "as") {
+          sqlName = stringArg(call.arguments[0]) ?? sqlName;
+        }
+        if (method === "default") {
+          const lit = call.arguments[0];
+          if (lit && lit.type === "Literal") {
+            const v = (lit as Literal).value;
+            if (
+              v === null ||
+              typeof v === "string" ||
+              typeof v === "number" ||
+              typeof v === "boolean"
+            ) {
+              defaultValue = v as string | number | boolean | null;
+              hasDefault = true;
+            }
+          }
+        }
+      }
+      cur = member.object;
+      continue;
+    }
+    if (callee.type === "Identifier" && (callee as Identifier).name === "field") {
+      // shouldn't happen — field.text() is MemberExpression
+      break;
+    }
+    break;
+  }
+
+  // Remaining should be field.text / field.integer
+  if (cur && cur.type === "MemberExpression") {
+    const member = cur as AstNode & { object: AstNode; property: AstNode };
+    if (identifierName(member.object) === "field") {
+      const t = identifierName(member.property);
+      if (t === "text" || t === "integer") sqlType = t;
+    }
+  }
+
+  // Also: field.text() ends as CallExpression with callee MemberExpression field.text
+  if (!sqlType && node.type === "CallExpression") {
+    // Re-walk to find field.text() / field.integer() as a call
+    let probe: AstNode | undefined = node;
+    while (probe && probe.type === "CallExpression") {
+      const call = probe as CallExpression;
+      const callee = call.callee;
+      if (callee.type === "MemberExpression") {
+        const member = callee as AstNode & { object: AstNode; property: AstNode };
+        if (
+          identifierName(member.object) === "field" &&
+          (identifierName(member.property) === "text" ||
+            identifierName(member.property) === "integer")
+        ) {
+          sqlType = identifierName(member.property) as "text" | "integer";
+          break;
+        }
+        probe = member.object;
+        continue;
+      }
+      break;
+    }
+  }
+
+  if (!sqlType) return undefined;
+
+  const methods = new Set(chain);
+  const col: DeclaredColumn = {
+    type: sqlType,
+    sqlName: sqlName ?? camelToSnakeKey(key),
+    nullable: !(methods.has("notNull") || methods.has("primaryKey")),
+    ...(methods.has("primaryKey") ? { primaryKey: true } : {}),
+    ...(methods.has("unique") ? { unique: true } : {}),
+    ...(hasDefault ? { default: defaultValue ?? null } : {}),
+    ...(methods.has("pii") ? { pii: true } : {}),
+    ...(methods.has("sensitive") ? { sensitive: true } : {}),
+  };
+  if (methods.has("retain")) {
+    // retain("7y") — find the call in the original chain by re-walk
+    let probe: AstNode | undefined = node;
+    while (probe && probe.type === "CallExpression") {
+      const call = probe as CallExpression;
+      const callee = call.callee;
+      if (callee.type === "MemberExpression") {
+        const member = callee as AstNode & { object: AstNode; property: AstNode };
+        if (identifierName(member.property) === "retain") {
+          const dur = stringArg(call.arguments[0]);
+          if (dur) col.retain = dur;
+          break;
+        }
+        probe = member.object;
+        continue;
+      }
+      break;
+    }
+  }
+  if (methods.has("references")) {
+    // .references(() => links.code) — record table.column when statically readable
+    let probe: AstNode | undefined = node;
+    while (probe && probe.type === "CallExpression") {
+      const call = probe as CallExpression;
+      const callee = call.callee;
+      if (callee.type === "MemberExpression") {
+        const member = callee as AstNode & { object: AstNode; property: AstNode };
+        if (identifierName(member.property) === "references") {
+          const ref = parseReferencesArg(call.arguments[0]);
+          if (ref) col.references = ref;
+          break;
+        }
+        probe = member.object;
+        continue;
+      }
+      break;
+    }
+  }
+  return col;
+}
+
+/**
+ * Parse `.references(() => table.column)` into a Manifest reference.
+ *
+ * @param arg - First argument to `.references(...)`
+ */
+function parseReferencesArg(
+  arg: AstNode | undefined,
+): { table?: string; column?: string } | undefined {
+  if (!arg) return undefined;
+  // ArrowFunctionExpression: () => links.code
+  if (arg.type === "ArrowFunctionExpression" || arg.type === "FunctionExpression") {
+    const fn = arg as AstNode & { body: AstNode };
+    const body = fn.body;
+    if (body.type === "MemberExpression") {
+      const member = body as AstNode & { object: AstNode; property: AstNode };
+      const table = identifierName(member.object);
+      const column = identifierName(member.property);
+      if (table || column) return { ...(table ? { table } : {}), ...(column ? { column } : {}) };
+    }
+  }
+  return {};
+}
+
+function camelToSnakeKey(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function visitDeclarationCall(call: CallExpression, program: AstNode, scope: ProjectScope): void {
   const callee = call.callee;
 
   // store.sql("name") / store.kv(...) / …
@@ -299,6 +592,9 @@ function visitDeclarationCall(
         const ref = `${facet}:${storeName}` as const;
         const bindingName = enclosingConstName(call, program);
         scope.stores[storeName] = scope.stores[storeName] ?? { facet };
+        if (facet === "sql") {
+          attachSchemaOption(call.arguments[1], scope.stores[storeName]!, scope);
+        }
         if (bindingName) {
           scope.bindings.set(bindingName, {
             kind: "store",
@@ -306,6 +602,14 @@ function visitDeclarationCall(
             facet,
           });
         }
+      }
+    }
+
+    // store.schema.table("notes", { … })
+    if (prop === "table" && member.object.type === "MemberExpression") {
+      const inner = member.object as AstNode & { object: AstNode; property: AstNode };
+      if (identifierName(inner.object) === "store" && identifierName(inner.property) === "schema") {
+        collectSchemaTable(call, program, scope);
       }
     }
 
@@ -326,8 +630,7 @@ function visitDeclarationCall(
 
     if (obj === "gate" && prop === "rate") {
       const opts = objectArg(call.arguments[0]);
-      const strategy = (stringProp(opts, "strategy") ??
-        "sliding-window-counter") as RateStrategy;
+      const strategy = (stringProp(opts, "strategy") ?? "sliding-window-counter") as RateStrategy;
       const max = numberProp(opts, "max");
       const per = stringProp(opts, "per");
       const keyBy = stringProp(opts, "keyBy");
@@ -362,9 +665,7 @@ function visitDeclarationCall(
         const medium = stringProp(opts, "medium");
         const locales = stringArrayProp(opts, "locales");
         scope.channels[templateName] = {
-          ...(medium
-            ? { medium: medium as Channel["medium"] }
-            : { medium: "email" }),
+          ...(medium ? { medium: medium as Channel["medium"] } : { medium: "email" }),
           ...(locales ? { locales } : {}),
         };
         const bindingName = enclosingConstName(call, program);
@@ -382,12 +683,8 @@ function visitDeclarationCall(
       const opts = objectArg(call.arguments[1]);
       if (modelName) {
         const model: AiModel = {
-          ...(stringProp(opts, "provider")
-            ? { provider: stringProp(opts, "provider") }
-            : {}),
-          ...(stringProp(opts, "tier")
-            ? { tier: stringProp(opts, "tier") }
-            : {}),
+          ...(stringProp(opts, "provider") ? { provider: stringProp(opts, "provider") } : {}),
+          ...(stringProp(opts, "tier") ? { tier: stringProp(opts, "tier") } : {}),
         };
         scope.ai.models = scope.ai.models ?? {};
         scope.ai.models[modelName] = model;
@@ -463,9 +760,7 @@ function visitDeclarationCall(
           ...(stringProp(opts, "description")
             ? { description: stringProp(opts, "description") }
             : {}),
-          ...(stringProp(opts, "rotate")
-            ? { rotate: stringProp(opts, "rotate") }
-            : {}),
+          ...(stringProp(opts, "rotate") ? { rotate: stringProp(opts, "rotate") } : {}),
         };
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
@@ -512,9 +807,7 @@ function visitDeclarationCall(
     const opts = objectArg(call.arguments[1]);
     if (name && opts) {
       scope.clocks[name] = {
-        ...(stringProp(opts, "every")
-          ? { every: stringProp(opts, "every") }
-          : {}),
+        ...(stringProp(opts, "every") ? { every: stringProp(opts, "every") } : {}),
         ...(stringProp(opts, "cron") ? { cron: stringProp(opts, "cron") } : {}),
         ...(boolProp(opts, "overridable") !== undefined
           ? { overridable: boolProp(opts, "overridable") }
@@ -547,9 +840,7 @@ function visitDeclarationCall(
               },
             }
           : {}),
-        ...(stringProp(opts, "composes")
-          ? { composes: stringProp(opts, "composes") }
-          : {}),
+        ...(stringProp(opts, "composes") ? { composes: stringProp(opts, "composes") } : {}),
         ...(flows && flows.length > 0 ? { flows } : {}),
       };
       scope.journeys[name] = journey;
@@ -570,9 +861,7 @@ function visitDeclarationCall(
         ...(stringProp(opts, "description")
           ? { description: stringProp(opts, "description") }
           : {}),
-        ...(stringProp(opts, "rotate")
-          ? { rotate: stringProp(opts, "rotate") }
-          : {}),
+        ...(stringProp(opts, "rotate") ? { rotate: stringProp(opts, "rotate") } : {}),
       };
       const bindingName = enclosingConstName(call, program);
       if (bindingName) {
@@ -601,20 +890,13 @@ function collectAgent(call: CallExpression, scope: ProjectScope): void {
   scope.ai.agents[agentName] = agent;
 }
 
-function collectConfig(
-  opts: AstNode | undefined,
-  scope: ProjectScope,
-): void {
+function collectConfig(opts: AstNode | undefined, scope: ProjectScope): void {
   if (!opts) return;
 
   const tenancy = objectProp(opts, "tenancy");
   if (tenancy) {
     const isolation = stringProp(tenancy, "isolation");
-    if (
-      isolation === "row" ||
-      isolation === "schema" ||
-      isolation === "database"
-    ) {
+    if (isolation === "row" || isolation === "schema" || isolation === "database") {
       scope.tenancy = { isolation };
     }
   }
@@ -622,21 +904,15 @@ function collectConfig(
   const i18n = objectProp(opts, "i18n");
   if (i18n) {
     scope.i18n = {
-      ...(stringArrayProp(i18n, "locales")
-        ? { locales: stringArrayProp(i18n, "locales") }
-        : {}),
-      ...(stringProp(i18n, "default")
-        ? { default: stringProp(i18n, "default") }
-        : {}),
+      ...(stringArrayProp(i18n, "locales") ? { locales: stringArrayProp(i18n, "locales") } : {}),
+      ...(stringProp(i18n, "default") ? { default: stringProp(i18n, "default") } : {}),
     };
     const dir = objectProp(i18n, "dir");
     if (dir && dir.type === "ObjectExpression") {
       const dirMap: Record<string, "ltr" | "rtl"> = {};
       for (const prop of objectProperties(dir)) {
         const key = propKey(prop);
-        const val = stringArg(
-          (prop as AstNode & { value?: AstNode }).value,
-        );
+        const val = stringArg((prop as AstNode & { value?: AstNode }).value);
         if (key && (val === "ltr" || val === "rtl")) dirMap[key] = val;
       }
       if (Object.keys(dirMap).length > 0) {
@@ -666,9 +942,7 @@ function collectConfig(
   if (drivers) {
     const prodArr = arrayProp(drivers, "prod");
     if (prodArr && prodArr.length > 0 && prodArr.every((el) => stringArg(el))) {
-      scope.drivers.prod = prodArr
-        .map((el) => stringArg(el)!)
-        .filter((x) => x.length > 0);
+      scope.drivers.prod = prodArr.map((el) => stringArg(el)!).filter((x) => x.length > 0);
     } else {
       const prod = new Set<string>();
       collectDriverProtocols(drivers, "prod", prod);
@@ -677,11 +951,7 @@ function collectConfig(
   }
 }
 
-function collectDriverProtocols(
-  node: AstNode,
-  env: string,
-  into: Set<string>,
-): void {
+function collectDriverProtocols(node: AstNode, env: string, into: Set<string>): void {
   if (node.type !== "ObjectExpression") return;
   for (const prop of objectProperties(node)) {
     const key = propKey(prop);
@@ -704,10 +974,7 @@ function collectDriverProtocols(
       // role: { dev, test, prod } or nested store: { sql: { prod } }
       const envVal = objectProp(value, env);
       if (envVal) {
-        if (
-          envVal.type === "Literal" &&
-          typeof (envVal as Literal).value === "string"
-        ) {
+        if (envVal.type === "Literal" && typeof (envVal as Literal).value === "string") {
           into.add((envVal as Literal).value as string);
         } else if (envVal.type === "ObjectExpression") {
           const driver = stringProp(envVal, "driver");
@@ -720,11 +987,7 @@ function collectDriverProtocols(
   }
 }
 
-function collectFlows(
-  file: SourceFile,
-  program: AstNode,
-  scope: ProjectScope,
-): void {
+function collectFlows(file: SourceFile, program: AstNode, scope: ProjectScope): void {
   walk(program, (node) => {
     if (node.type !== "CallExpression") return;
     const call = node as CallExpression;
@@ -780,7 +1043,10 @@ function isOnFlowArgument(flowCall: CallExpression, program: AstNode): boolean {
 }
 
 function unwrapFlowCall(node: AstNode): CallExpression | undefined {
-  if (node.type === "CallExpression" && identifierName((node as CallExpression).callee) === "flow") {
+  if (
+    node.type === "CallExpression" &&
+    identifierName((node as CallExpression).callee) === "flow"
+  ) {
     return node as CallExpression;
   }
   return undefined;
@@ -845,15 +1111,11 @@ function registerFlow(args: {
     }
   }
 
-  const trigger = args.triggerNode
-    ? parseTrigger(args.triggerNode, args.scope)
-    : undefined;
+  const trigger = args.triggerNode ? parseTrigger(args.triggerNode, args.scope) : undefined;
 
   const gates = trigger?.gates;
   const liveFromTrigger = trigger?.live;
-  const manifestTrigger = trigger
-    ? stripTriggerExtras(trigger.trigger)
-    : undefined;
+  const manifestTrigger = trigger ? stripTriggerExtras(trigger.trigger) : undefined;
 
   const flow: Flow = {};
 
@@ -882,10 +1144,7 @@ function registerFlow(args: {
   if (slo) flow.slo = slo;
 
   const stepsFromOpts = stringArrayProp(opts, "steps");
-  const steps =
-    stepsFromOpts && stepsFromOpts.length > 0
-      ? stepsFromOpts
-      : inferred.steps;
+  const steps = stepsFromOpts && stepsFromOpts.length > 0 ? stepsFromOpts : inferred.steps;
   if (steps.length > 0) flow.steps = steps;
 
   if (boolProp(opts, "nondeterministic") || inferred.nondeterministic) {
@@ -898,17 +1157,14 @@ function registerFlow(args: {
       ...(numberProp(cost, "estimatePerCall") !== undefined
         ? { estimatePerCall: numberProp(cost, "estimatePerCall") }
         : {}),
-      ...(numberProp(cost, "budget") !== undefined
-        ? { budget: numberProp(cost, "budget") }
-        : {}),
+      ...(numberProp(cost, "budget") !== undefined ? { budget: numberProp(cost, "budget") } : {}),
     };
   } else if (inferred.nondeterministic) {
     // Derive budget from the first ask prompt when present.
     const ask = effects?.asks?.[0];
     if (ask) {
       const promptName = ask.split("@")[0]!;
-      const promptBudget = args.scope.ai.prompts?.[promptName]?.budget
-        ?.maxCostPerCall;
+      const promptBudget = args.scope.ai.prompts?.[promptName]?.budget?.maxCostPerCall;
       if (promptBudget !== undefined) {
         flow.cost = {
           estimatePerCall: Number((promptBudget * 0.55).toFixed(3)),
@@ -935,8 +1191,7 @@ function registerFlow(args: {
   if (inferred.cacheIneligible) {
     flow.cache = false;
   } else {
-    const cache = (opts &&
-      objectProperties(opts).find((p) => propKey(p) === "cache")) as
+    const cache = (opts && objectProperties(opts).find((p) => propKey(p) === "cache")) as
       | AstNode
       | undefined;
     if (cache) {
@@ -1002,10 +1257,7 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
   return undefined;
 }
 
-function parseHttpTrigger(
-  call: CallExpression,
-  scope: ProjectScope,
-): ParsedTrigger | undefined {
+function parseHttpTrigger(call: CallExpression, scope: ProjectScope): ParsedTrigger | undefined {
   // Walk the chain: http.METHOD(path).gate(...).live()
   let current: AstNode = call;
   let method: string | undefined;
@@ -1059,15 +1311,7 @@ function parseHttpTrigger(
 
   if (!method || !path) return undefined;
 
-  const httpMethods = [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "HEAD",
-    "OPTIONS",
-  ] as const;
+  const httpMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
   if (!(httpMethods as readonly string[]).includes(method)) return undefined;
 
   return {
@@ -1082,9 +1326,7 @@ function parseHttpTrigger(
   };
 }
 
-function parseCdcTrigger(
-  call: CallExpression,
-): Trigger["cdc"] | undefined {
+function parseCdcTrigger(call: CallExpression): Trigger["cdc"] | undefined {
   // *.changed("col") or *.changed()
   const callee = call.callee;
   if (callee.type !== "MemberExpression") return undefined;
@@ -1098,25 +1340,17 @@ function parseCdcTrigger(
     const inner = obj as CallExpression;
     const innerCallee = inner.callee;
     if (identifierName(innerCallee) === "table") {
-      const tableName =
-        stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
+      const tableName = stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
       if (!tableName) return undefined;
-      return column
-        ? { table: tableName, column }
-        : { table: tableName };
+      return column ? { table: tableName, column } : { table: tableName };
     }
     if (
       innerCallee.type === "MemberExpression" &&
-      identifierName(
-        (innerCallee as AstNode & { property: AstNode }).property,
-      ) === "table"
+      identifierName((innerCallee as AstNode & { property: AstNode }).property) === "table"
     ) {
-      const tableName =
-        stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
+      const tableName = stringArg(inner.arguments[0]) ?? identifierName(inner.arguments[0]);
       if (!tableName) return undefined;
-      return column
-        ? { table: tableName, column }
-        : { table: tableName };
+      return column ? { table: tableName, column } : { table: tableName };
     }
   }
   return undefined;
@@ -1146,9 +1380,7 @@ function parseEffectsObject(node: AstNode | undefined): Effects | undefined {
   return effects;
 }
 
-function parseErrors(
-  node: AstNode | undefined,
-): Flow["errors"] | undefined {
+function parseErrors(node: AstNode | undefined): Flow["errors"] | undefined {
   if (!node) return undefined;
   if (node.type === "ObjectExpression") {
     const names: string[] = [];
@@ -1187,10 +1419,7 @@ function parseSlo(node: AstNode | undefined): Slo | undefined {
   };
 }
 
-function schemaProp(
-  obj: AstNode | undefined,
-  key: string,
-): string | undefined {
+function schemaProp(obj: AstNode | undefined, key: string): string | undefined {
   const node = objectProp(obj, key);
   if (!node) return undefined;
   // Identifier / member schemas → opaque placeholder matching the spec excerpt.
@@ -1205,10 +1434,7 @@ function schemaProp(
 
 // ── AST helpers ────────────────────────────────────────────────────────────
 
-function enclosingConstName(
-  call: CallExpression,
-  program: AstNode,
-): string | undefined {
+function enclosingConstName(call: CallExpression, program: AstNode): string | undefined {
   const targetStart = call.start;
   if (targetStart === undefined) return undefined;
   let found: string | undefined;
@@ -1239,10 +1465,7 @@ function objectArg(node: AstNode | undefined): AstNode | undefined {
   return undefined;
 }
 
-function objectProp(
-  obj: AstNode | undefined,
-  key: string,
-): AstNode | undefined {
+function objectProp(obj: AstNode | undefined, key: string): AstNode | undefined {
   if (!obj || obj.type !== "ObjectExpression") return undefined;
   for (const prop of objectProperties(obj)) {
     if (propKey(prop) === key) {
@@ -1253,9 +1476,9 @@ function objectProp(
 }
 
 function objectProperties(obj: AstNode): AstNode[] {
-  return (
-    (obj as AstNode & { properties?: AstNode[] }).properties ?? []
-  ).filter((p) => p.type === "Property" || p.type === "ObjectProperty");
+  return ((obj as AstNode & { properties?: AstNode[] }).properties ?? []).filter(
+    (p) => p.type === "Property" || p.type === "ObjectProperty",
+  );
 }
 
 function propKey(prop: AstNode): string | undefined {
@@ -1268,50 +1491,33 @@ function propKey(prop: AstNode): string | undefined {
   return undefined;
 }
 
-function stringProp(
-  obj: AstNode | undefined,
-  key: string,
-): string | undefined {
+function stringProp(obj: AstNode | undefined, key: string): string | undefined {
   return stringArg(objectProp(obj, key));
 }
 
-function numberProp(
-  obj: AstNode | undefined,
-  key: string,
-): number | undefined {
+function numberProp(obj: AstNode | undefined, key: string): number | undefined {
   const node = objectProp(obj, key);
   if (!node || node.type !== "Literal") return undefined;
   const v = (node as Literal).value;
   return typeof v === "number" ? v : undefined;
 }
 
-function boolProp(
-  obj: AstNode | undefined,
-  key: string,
-): boolean | undefined {
+function boolProp(obj: AstNode | undefined, key: string): boolean | undefined {
   const node = objectProp(obj, key);
   if (!node || node.type !== "Literal") return undefined;
   const v = (node as Literal).value;
   return typeof v === "boolean" ? v : undefined;
 }
 
-function stringArrayProp(
-  obj: AstNode | undefined,
-  key: string,
-): string[] | undefined {
+function stringArrayProp(obj: AstNode | undefined, key: string): string[] | undefined {
   const node = objectProp(obj, key);
   if (!node || node.type !== "ArrayExpression") return undefined;
   const els = (node as AstNode & { elements?: AstNode[] }).elements ?? [];
-  const out = els
-    .map((el) => stringArg(el))
-    .filter((x): x is string => typeof x === "string");
+  const out = els.map((el) => stringArg(el)).filter((x): x is string => typeof x === "string");
   return out;
 }
 
-function arrayProp(
-  obj: AstNode | undefined,
-  key: string,
-): AstNode[] | undefined {
+function arrayProp(obj: AstNode | undefined, key: string): AstNode[] | undefined {
   const node = objectProp(obj, key);
   if (!node || node.type !== "ArrayExpression") return undefined;
   return ((node as AstNode & { elements?: AstNode[] }).elements ?? []).filter(

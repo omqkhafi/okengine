@@ -15,13 +15,7 @@ import {
 } from "./http-parse.ts";
 
 /** Context property names sucrose tracks. */
-const CONTEXT_KEYS = [
-  "body",
-  "query",
-  "params",
-  "headers",
-  "cookie",
-] as const;
+const CONTEXT_KEYS = ["body", "query", "params", "headers", "cookie"] as const;
 
 type ContextKey = (typeof CONTEXT_KEYS)[number];
 
@@ -58,8 +52,7 @@ export function sucrose(options: SucroseOptions): ContextInference {
   }
 
   const method = (options.method ?? "GET").toUpperCase();
-  const bodyMethod =
-    method !== "GET" && method !== "HEAD" && method !== "DELETE";
+  const bodyMethod = method !== "GET" && method !== "HEAD" && method !== "DELETE";
 
   // OKE handlers receive assembled input as arg0 — body methods always
   // parse JSON. AoT still drops query/headers/cookie when unused.
@@ -121,13 +114,12 @@ export function analyseFunction(
   inferFromDestructure(parameter, inference);
 }
 
-function splitFunction(
-  source: string,
-): { parameter: string | undefined; body: string | undefined } {
+function splitFunction(source: string): {
+  parameter: string | undefined;
+  body: string | undefined;
+} {
   // async (a, b) => … | (a) => … | function (a, b) { … }
-  const arrow = source.match(
-    /^(?:async\s*)?(?:\(([^)]*)\)|([a-zA-Z_$][\w$]*))\s*=>\s*([\s\S]*)$/,
-  );
+  const arrow = source.match(/^(?:async\s*)?(?:\(([^)]*)\)|([a-zA-Z_$][\w$]*))\s*=>\s*([\s\S]*)$/);
   if (arrow) {
     return {
       parameter: (arrow[1] ?? arrow[2] ?? "").trim(),
@@ -177,11 +169,7 @@ function collectAliases(parameter: string, body: string): string[] {
   return aliases;
 }
 
-function inferFromAlias(
-  alias: string,
-  body: string,
-  inference: MutableInference,
-): void {
+function inferFromAlias(alias: string, body: string, inference: MutableInference): void {
   for (const key of CONTEXT_KEYS) {
     if (inference[key]) continue;
     const access = new RegExp(
@@ -193,10 +181,7 @@ function inferFromAlias(
   }
 }
 
-function inferFromDestructure(
-  parameter: string,
-  inference: MutableInference,
-): void {
+function inferFromDestructure(parameter: string, inference: MutableInference): void {
   if (!parameter.includes("{")) return;
   for (const key of CONTEXT_KEYS) {
     const re = new RegExp(`\\b${key}\\b`);
@@ -206,10 +191,7 @@ function inferFromDestructure(
   }
 }
 
-function isContextPassedToFunction(
-  aliases: readonly string[],
-  body: string,
-): boolean {
+function isContextPassedToFunction(aliases: readonly string[], body: string): boolean {
   for (const alias of aliases) {
     if (alias.length === 0) continue;
     // Word-boundary safe: `(…, alias, …)` or `(alias)` as a complete argument
@@ -218,9 +200,7 @@ function isContextPassedToFunction(
     );
     if (re.test(body)) return true;
     // shorthand: fn(alias)
-    const exact = new RegExp(
-      `\\(\\s*${escapeRegExp(alias)}\\s*\\)`,
-    );
+    const exact = new RegExp(`\\(\\s*${escapeRegExp(alias)}\\s*\\)`);
     if (exact.test(body)) return true;
   }
   return false;

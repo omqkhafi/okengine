@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   hostPortForInstance,
+  instancePortOffset,
   parseStackCredentials,
   stackAppSlug,
   stackInstanceId,
@@ -82,5 +83,37 @@ describe("deriveInfrastructure instanceId", () => {
     expect(base).toContain("oke-dev-abcdef");
     expect(result.stackEnv.DATABASE_URL).toMatch(/:15\d{3}\//);
     expect(result.stackEnv.REDIS_URL).toMatch(/:16\d{3}/);
+  });
+
+  test("offsets Mailpit UI and RustFS console so stacks do not share 8025/9001", () => {
+    const id = "abcd12";
+    const n = instancePortOffset(id);
+    const result = deriveInfrastructure({
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      },
+      app: `dev-${id}`,
+      instanceId: id,
+      includeApp: false,
+      credentials: {
+        "channel.email": {
+          user: "oke",
+          password: "stack-id-test-mail-password",
+          database: "oke",
+        },
+        "store.files": {
+          user: "oke",
+          password: "stack-id-test-files-password",
+          database: "oke",
+        },
+      },
+    });
+    const mailYml = result.files.find((f) => f.path === "compose.channel.email.yml")!.content;
+    const filesYml = result.files.find((f) => f.path === "compose.store.files.yml")!.content;
+    expect(mailYml).toContain(`${8025 + n}:8025`);
+    expect(mailYml).not.toContain("8025:8025");
+    expect(filesYml).toContain(`${9001 + n}:9001`);
+    expect(filesYml).not.toContain("9001:9001");
   });
 });

@@ -3,10 +3,7 @@
  * (console §9.11 · §14), never a reimplementation.
  */
 
-import {
-  explainOutliers,
-  type OutlierFinding,
-} from "../../../runs/outlier.ts";
+import { explainOutliers, type OutlierFinding } from "../../../runs/outlier.ts";
 import { runToWideEvent } from "./project.ts";
 import type { DurationRange, RunRecord } from "./types.ts";
 
@@ -24,8 +21,7 @@ export function explainDurationOutliers(
 ): OutlierFinding[] {
   const events = runs.map(runToWideEvent);
   return explainOutliers(events, {
-    select: (e) =>
-      e.durationMs >= range.minMs && e.durationMs <= range.maxMs,
+    select: (e) => e.durationMs >= range.minMs && e.durationMs <= range.maxMs,
     minLift: 0.15,
     ignore: ["duration_ms", "duration", "flow"],
   });

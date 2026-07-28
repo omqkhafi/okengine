@@ -18,9 +18,7 @@ export interface AccessBlastRadiusLines {
  *
  * @param blast - Queried radius
  */
-export function formatAccessBlastRadius(
-  blast: AccessBlastRadius,
-): AccessBlastRadiusLines {
+export function formatAccessBlastRadius(blast: AccessBlastRadius): AccessBlastRadiusLines {
   return {
     volume:
       blast.callVolume === 0

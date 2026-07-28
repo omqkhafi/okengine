@@ -81,14 +81,9 @@ export function operatorPrincipal(fields: {
  * @param principal - Acting principal
  * @param flowPlane - Target flow plane
  */
-export function assertPlaneAccess(
-  principal: Principal,
-  flowPlane: AuthPlane,
-): void {
+export function assertPlaneAccess(principal: Principal, flowPlane: AuthPlane): void {
   if (principal.plane === "user" && flowPlane === "operator") {
-    throw new CrossPlaneError(
-      "application principal cannot reach a console (operator) flow",
-    );
+    throw new CrossPlaneError("application principal cannot reach a console (operator) flow");
   }
 }
 

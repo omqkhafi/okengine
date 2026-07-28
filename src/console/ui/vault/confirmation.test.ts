@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  rotateConfirmation,
-  setConfirmation,
-  validateTypedConfirm,
-} from "./confirmation.ts";
+import { rotateConfirmation, setConfirmation, validateTypedConfirm } from "./confirmation.ts";
 
 describe("vault confirmation", () => {
   test("set requires typed confirm in production", () => {

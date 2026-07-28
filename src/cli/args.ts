@@ -41,10 +41,6 @@ export function flagValue(
  * @param long - Long flag
  * @param short - Optional short flag
  */
-export function hasFlag(
-  args: readonly string[],
-  long: string,
-  short?: string,
-): boolean {
+export function hasFlag(args: readonly string[], long: string, short?: string): boolean {
   return args.includes(long) || (short !== undefined && args.includes(short));
 }

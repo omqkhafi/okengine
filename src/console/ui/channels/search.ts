@@ -8,9 +8,7 @@ const ChannelsSearchSchema = z.object({
   q: z.string().optional(),
   template: z.string().optional(),
   locale: z.string().optional(),
-  view: z
-    .enum(["inbox", "outcomes", "receipts", "suppression", "preview"])
-    .optional(),
+  view: z.enum(["inbox", "outcomes", "receipts", "suppression", "preview"]).optional(),
 });
 
 /** Parsed Channels URL search. */
@@ -21,9 +19,7 @@ export type ChannelsSearch = z.infer<typeof ChannelsSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseChannelsSearch(
-  search: Record<string, unknown>,
-): ChannelsSearch {
+export function parseChannelsSearch(search: Record<string, unknown>): ChannelsSearch {
   const parsed = ChannelsSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -33,9 +29,7 @@ export function parseChannelsSearch(
  *
  * @param search - Search state
  */
-export function serializeChannelsSearch(
-  search: ChannelsSearch,
-): Record<string, string> {
+export function serializeChannelsSearch(search: ChannelsSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.template) out.template = search.template;
@@ -50,9 +44,6 @@ export function serializeChannelsSearch(
  * @param search - Current search
  * @param template - Template name
  */
-export function openTemplate(
-  search: ChannelsSearch,
-  template: string,
-): ChannelsSearch {
+export function openTemplate(search: ChannelsSearch, template: string): ChannelsSearch {
   return { ...search, template };
 }

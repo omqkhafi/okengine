@@ -4,11 +4,7 @@
  * Protocol-named; image/vendor choice lives in `images`.
  */
 
-import type {
-  VaultBag,
-  VaultDriver,
-  VaultOpenOptions,
-} from "./vault-types.ts";
+import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /**
  * OpenBao / Vault KV driver.

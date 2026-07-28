@@ -11,12 +11,7 @@ import {
   runSqlConformance,
 } from "./conformance.ts";
 import { fsDriver } from "./fs.ts";
-import {
-  memoryFilesDriver,
-  memoryIndexDriver,
-  memoryKvDriver,
-  memorySqlDriver,
-} from "./memory.ts";
+import { memoryFilesDriver, memoryIndexDriver, memoryKvDriver, memorySqlDriver } from "./memory.ts";
 import { pgvectorDriver } from "./pgvector.ts";
 import { createPostgresFakeClient, postgresDriver } from "./postgres.ts";
 import { createRedisFakeClient, redisDriver } from "./redis.ts";
@@ -41,10 +36,7 @@ describe("kv conformance", () => {
 describe("files conformance", () => {
   test("memory", () => runFilesConformance(memoryFilesDriver));
   test("fs", async () => {
-    const root = join(
-      process.env.TMPDIR ?? "/tmp",
-      `oke-fs-conf-${crypto.randomUUID()}`,
-    );
+    const root = join(process.env.TMPDIR ?? "/tmp", `oke-fs-conf-${crypto.randomUUID()}`);
     await runFilesConformance(fsDriver, { root, name: "conf" });
   });
   test("s3 (fake Bun.S3 client)", () =>

@@ -5,38 +5,38 @@
  * See site/NOTICE. Copy and links are okengine-original.
  */
 
-'use client';
+"use client";
 
-import { AnimatePresence, motion, MotionConfig, type Variants } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
-import Link from 'next/link';
-import { useEffect, useId, useState } from 'react';
-import { cn } from '@/lib/cn';
-import { ELEMENTS, EXPORTS, REAL_TODAY, TAGLINE } from '@/lib/elements';
-import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
+import { AnimatePresence, motion, MotionConfig, type Variants } from "framer-motion";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useId, useState } from "react";
+import { cn } from "@/lib/cn";
+import { ELEMENTS, EXPORTS, REAL_TODAY, TAGLINE } from "@/lib/elements";
+import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 /** Beat ids — each number in the headline is a real count from the framework. */
-type BeatId = 'law' | 'elements' | 'exports';
+type BeatId = "law" | "elements" | "exports";
 
 /** One species, four names — from introduction / unified-theory §4. */
 const TRIGGERS: ReadonlyArray<{ readonly code: string; readonly zoo: string }> = [
-  { code: 'http.post("/notes")', zoo: 'an API endpoint' },
-  { code: 'every("10m")', zoo: 'a cron job' },
-  { code: 'orderPlaced', zoo: 'a queue consumer' },
-  { code: 'db.table(users).changed("email")', zoo: 'a CDC trigger' },
+  { code: 'http.post("/notes")', zoo: "an API endpoint" },
+  { code: 'every("10m")', zoo: "a cron job" },
+  { code: "orderPlaced", zoo: "a queue consumer" },
+  { code: 'db.table(users).changed("email")', zoo: "a CDC trigger" },
 ];
 
 const BEATS: ReadonlyArray<{
   readonly id: BeatId;
   readonly label: string;
 }> = [
-  { id: 'law', label: 'One law.' },
-  { id: 'elements', label: 'Eight elements.' },
-  { id: 'exports', label: 'Ten exports.' },
+  { id: "law", label: "One law." },
+  { id: "elements", label: "Eight elements." },
+  { id: "exports", label: "Ten exports." },
 ];
 
 /** Same spring as the sticky topbar so hero motion feels like one system. */
-const EASE = { type: 'spring', stiffness: 420, damping: 38, mass: 0.9 } as const;
+const EASE = { type: "spring", stiffness: 420, damping: 38, mass: 0.9 } as const;
 
 const column: Variants = {
   hidden: {},
@@ -64,11 +64,11 @@ const settleStatic: Variants = {
 };
 
 const beatLine: Variants = {
-  hidden: { opacity: 0, y: 22, filter: 'blur(8px)' },
+  hidden: { opacity: 0, y: 22, filter: "blur(8px)" },
   show: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
+    filter: "blur(0px)",
     transition: EASE,
   },
 };
@@ -128,10 +128,10 @@ export function HeroTitle() {
   useEffect(() => {
     if (active === null) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActive(null);
+      if (event.key === "Escape") setActive(null);
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [active]);
 
   return (
@@ -139,13 +139,13 @@ export function HeroTitle() {
       <motion.div
         className="relative z-[2] -mx-5 flex h-full w-[calc(100%+2.5rem)] flex-col justify-center px-5 py-14 sm:-mx-8 sm:w-[calc(100%+4rem)] sm:px-8 sm:py-16"
         variants={column}
-        initial={reduced ? false : 'hidden'}
+        initial={reduced ? false : "hidden"}
         animate="show"
         onPointerDown={(event) => {
           if (active === null) return;
           if (!(event.target instanceof Element)) return;
           // Keep the selection when the press lands on a beat, panel, or CTA.
-          if (event.target.closest('[data-hero-interactive]')) return;
+          if (event.target.closest("[data-hero-interactive]")) return;
           setActive(null);
         }}
       >
@@ -187,12 +187,12 @@ export function HeroTitle() {
                     aria-expanded={selected}
                     onClick={() => setActive((prev) => (prev === beat.id ? null : beat.id))}
                     className={cn(
-                      'group relative text-left transition-colors duration-200',
+                      "group relative text-left transition-colors duration-200",
                       selected
-                        ? 'text-fd-foreground'
+                        ? "text-fd-foreground"
                         : active === null
-                          ? 'text-fd-foreground hover:text-fd-foreground/80'
-                          : 'text-fd-muted-foreground/45 hover:text-fd-muted-foreground',
+                          ? "text-fd-foreground hover:text-fd-foreground/80"
+                          : "text-fd-muted-foreground/45 hover:text-fd-muted-foreground",
                     )}
                   >
                     <span className="relative">
@@ -200,12 +200,12 @@ export function HeroTitle() {
                       <motion.span
                         aria-hidden
                         className={cn(
-                          'absolute inset-x-0 -bottom-0.5 h-px origin-left bg-fd-foreground/50',
-                          reduced && (selected ? 'scale-x-100' : 'scale-x-0'),
+                          "absolute inset-x-0 -bottom-0.5 h-px origin-left bg-fd-foreground/50",
+                          reduced && (selected ? "scale-x-100" : "scale-x-0"),
                         )}
                         initial={false}
                         animate={reduced ? undefined : { scaleX: selected ? 1 : 0 }}
-                        transition={{ duration: 0.28, ease: 'easeOut' }}
+                        transition={{ duration: 0.28, ease: "easeOut" }}
                       />
                     </span>
                   </button>
@@ -225,7 +225,7 @@ export function HeroTitle() {
                 initial={reduced ? false : { opacity: 0, y: 8 }}
                 animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                 exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                transition={{ duration: reduced ? 0 : 0.22, ease: 'easeOut' }}
+                transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
               >
                 <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
                   {TAGLINE}
@@ -244,7 +244,7 @@ export function HeroTitle() {
                 initial={reduced ? false : { opacity: 0, y: 10 }}
                 animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                 exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                transition={{ duration: reduced ? 0 : 0.22, ease: 'easeOut' }}
+                transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
               >
                 <BeatPanel id={active} />
               </motion.div>
@@ -312,12 +312,12 @@ export function HeroTitle() {
  * @param id - Which count is open
  */
 function BeatPanel({ id }: { readonly id: BeatId }) {
-  if (id === 'law') {
+  if (id === "law") {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
-          Every backend behavior is the same species — a{' '}
-          <span className="text-fd-foreground">flow</span> bound with{' '}
+          Every backend behavior is the same species — a{" "}
+          <span className="text-fd-foreground">flow</span> bound with{" "}
           <code className="font-mono text-fd-foreground">on()</code>. Only the trigger changes.
         </p>
         <ul className="flex flex-col gap-1.5 font-mono text-[11px] sm:text-xs">
@@ -332,11 +332,11 @@ function BeatPanel({ id }: { readonly id: BeatId }) {
     );
   }
 
-  if (id === 'elements') {
+  if (id === "elements") {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
-          Everything a backend needs reduces to eight typed elements. New infra is a{' '}
+          Everything a backend needs reduces to eight typed elements. New infra is a{" "}
           <span className="text-fd-foreground">driver</span> — never a ninth.
         </p>
         <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
@@ -363,17 +363,15 @@ function BeatPanel({ id }: { readonly id: BeatId }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground">
-        The entire public vocabulary. Client, Console, and infra{' '}
+        The entire public vocabulary. Client, Console, and infra{" "}
         <span className="text-fd-foreground">derive</span> from these ten — nothing else to learn.
       </p>
       <code className="block overflow-x-auto font-mono text-[11px] leading-relaxed text-fd-foreground sm:text-xs">
-        <span className="text-fd-muted-foreground">{'import { '}</span>
+        <span className="text-fd-muted-foreground">{"import { "}</span>
         {EXPORTS.map((item, i) => (
           <span key={item.name}>
             {item.name}
-            {i < EXPORTS.length - 1 ? (
-              <span className="text-fd-muted-foreground">, </span>
-            ) : null}
+            {i < EXPORTS.length - 1 ? <span className="text-fd-muted-foreground">, </span> : null}
           </span>
         ))}
         <span className="text-fd-muted-foreground">{' } from "okengine"'}</span>

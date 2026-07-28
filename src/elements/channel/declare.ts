@@ -104,10 +104,7 @@ export const channel: ChannelNamespace = {
    * @param name - Template id
    * @param options - Medium / locales / schema
    */
-  template(
-    name: string,
-    options: ChannelTemplateOptions = {},
-  ): ChannelTemplateDecl {
+  template(name: string, options: ChannelTemplateOptions = {}): ChannelTemplateDecl {
     if (!name) throw new TypeError("channel.template: name is required");
     return {
       kind: "template",

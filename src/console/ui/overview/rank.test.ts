@@ -5,10 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildCausalityGraph } from "../flows/graph.ts";
 import { composeOverview } from "./compose.ts";
-import {
-  OVERVIEW_DAY_ONE_INPUTS,
-  OVERVIEW_INPUTS_FIXTURE,
-} from "./fixture.ts";
+import { OVERVIEW_DAY_ONE_INPUTS, OVERVIEW_INPUTS_FIXTURE } from "./fixture.ts";
 import { compareFindings, rankedFindings } from "./rank.ts";
 
 describe("rankedFindings", () => {
@@ -35,9 +32,7 @@ describe("rankedFindings", () => {
     expect(access.length).toBeGreaterThan(0);
     expect(access.some((f) => f.detail.includes("unused 90d"))).toBe(true);
     expect(access.some((f) => f.detail.includes("never signed in"))).toBe(true);
-    expect(access.some((f) => f.detail.includes("expired invitation"))).toBe(
-      true,
-    );
+    expect(access.some((f) => f.detail.includes("expired invitation"))).toBe(true);
     expect(access.every((f) => f.href === "/access")).toBe(true);
   });
 
@@ -114,9 +109,7 @@ describe("composeOverview day-one", () => {
     expect(view.golden.sampleCount).toBeGreaterThan(0);
     expect(view.firstSloInvite).not.toBeNull();
     expect(view.firstSloInvite!.busiestFlow).toBe("bookings.create");
-    expect(view.verdict.tone === "warn" || view.verdict.tone === "critical").toBe(
-      true,
-    );
+    expect(view.verdict.tone === "warn" || view.verdict.tone === "critical").toBe(true);
     expect(view.verdict.line.length).toBeGreaterThan(0);
   });
 

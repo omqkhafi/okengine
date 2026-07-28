@@ -17,9 +17,7 @@ describe("runNowConfirmation", () => {
   });
 
   test("undo when not external", () => {
-    const expire = CLOCK_LIST_FIXTURE.crons.find(
-      (c) => c.name === "expire-holds",
-    )!;
+    const expire = CLOCK_LIST_FIXTURE.crons.find((c) => c.name === "expire-holds")!;
     const conf = runNowConfirmation(expire, { production: true });
     expect(conf.kind).toBe("undo");
   });

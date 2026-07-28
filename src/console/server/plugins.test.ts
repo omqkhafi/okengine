@@ -88,9 +88,7 @@ describe("projectPluginsList", () => {
 
     expect(byId.audit?.capabilityDiff[0]?.summary).toContain("widened");
     expect(byId.auth?.supplyChain.lifecycleScripts.state).toBe("not-applicable");
-    expect(byId["oke-slack"]?.supplyChain.releaseCooldown.state).not.toBe(
-      "not-applicable",
-    );
+    expect(byId["oke-slack"]?.supplyChain.releaseCooldown.state).not.toBe("not-applicable");
   });
 
   test("privacy on from runs.redact", async () => {
@@ -124,8 +122,6 @@ describe("capability diff filter", () => {
       },
     ]);
     expect(grouped.audit).toHaveLength(1);
-    expect(
-      filterCapabilityDiffForPlugin(grouped.audit!, "audit"),
-    ).toHaveLength(1);
+    expect(filterCapabilityDiffForPlugin(grouped.audit!, "audit")).toHaveLength(1);
   });
 });

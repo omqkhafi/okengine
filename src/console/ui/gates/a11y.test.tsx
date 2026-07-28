@@ -16,8 +16,7 @@ describe("Gates panel accessibility", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/gates" });
     Object.defineProperty(globalThis, "window", {
       value: window,
@@ -97,9 +96,7 @@ describe("Gates panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA (from principal)", async () => {
     await act(async () => {
-      root.render(
-        <GatesA11yView from="principal" openPrincipal="role:role_member" />,
-      );
+      root.render(<GatesA11yView from="principal" openPrincipal="role:role_member" />);
     });
 
     await new Promise((r) => setTimeout(r, 10));

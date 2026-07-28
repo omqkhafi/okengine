@@ -11,11 +11,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 /** Status of a durable run. */
-export type JournalRunStatus =
-  | "running"
-  | "sleeping"
-  | "completed"
-  | "failed";
+export type JournalRunStatus = "running" | "sleeping" | "completed" | "failed";
 
 /** A completed named step. */
 export interface JournalStepEntry {
@@ -44,10 +40,7 @@ export interface JournalEffectEntry {
 }
 
 /** One journaled event in call order. */
-export type JournalEntry =
-  | JournalStepEntry
-  | JournalSleepEntry
-  | JournalEffectEntry;
+export type JournalEntry = JournalStepEntry | JournalSleepEntry | JournalEffectEntry;
 
 /** Persisted durable run. */
 export interface JournalRun {
@@ -103,9 +96,7 @@ export interface JournalStore {
 }
 
 /** In-memory journal store. */
-export function createMemoryJournalStore(
-  seed?: readonly JournalRun[],
-): JournalStore {
+export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalStore {
   const runs = new Map<string, JournalRun>();
   for (const r of seed ?? []) {
     runs.set(r.id, cloneRun(r));
@@ -147,10 +138,7 @@ export function createFileJournalStore(path: string): JournalStore {
 
   async function flush(map: Map<string, JournalRun>): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
-    await Bun.write(
-      path,
-      JSON.stringify({ runs: [...map.values()] }, null, 2),
-    );
+    await Bun.write(path, JSON.stringify({ runs: [...map.values()] }, null, 2));
   }
 
   return {
@@ -204,11 +192,7 @@ export interface JournalSession {
    * @param duration - Duration string (`7d`, `2m`, …)
    * @param parseMs - Duration → milliseconds
    */
-  sleep(
-    label: string,
-    duration: string,
-    parseMs: (duration: string) => number,
-  ): Promise<void>;
+  sleep(label: string, duration: string, parseMs: (duration: string) => number): Promise<void>;
   /**
    * Journal an arbitrary fx effect (replay returns recorded value).
    *
@@ -216,11 +200,7 @@ export interface JournalSession {
    * @param resource - Resource ref
    * @param execute - Side-effecting body
    */
-  effect<T>(
-    effectKind: string,
-    resource: string,
-    execute: () => T | Promise<T>,
-  ): Promise<T>;
+  effect<T>(effectKind: string, resource: string, execute: () => T | Promise<T>): Promise<T>;
   /** Persist current run status / output. */
   commit(
     status: JournalRunStatus,
@@ -327,11 +307,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
       ): Promise<T> {
         for (let i = cursor; i < run.entries.length; i++) {
           const e = run.entries[i]!;
-          if (
-            e.kind === "effect" &&
-            e.effectKind === effectKind &&
-            e.resource === resource
-          ) {
+          if (e.kind === "effect" && e.effectKind === effectKind && e.resource === resource) {
             cursor = i + 1;
             return e.value as T;
           }

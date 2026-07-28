@@ -229,10 +229,7 @@ export interface SignalRedisClientLike {
   ): Promise<Array<{ id: string; fields: Record<string, string> }>>;
   xack(key: string, group: string, id: string): Promise<number>;
   publish(channel: string, message: string): Promise<number>;
-  subscribe(
-    channel: string,
-    listener: (message: string) => void,
-  ): Promise<() => void>;
+  subscribe(channel: string, listener: (message: string) => void): Promise<() => void>;
 }
 
 /** Minimal NATS / JetStream surface. */

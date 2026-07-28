@@ -56,9 +56,7 @@ export function promotionDecision(
   to: PromptVersionMetrics,
 ): PromotionDecision {
   if (from.prompt !== to.prompt) {
-    throw new Error(
-      `promotionDecision: prompt mismatch (${from.prompt} vs ${to.prompt})`,
-    );
+    throw new Error(`promotionDecision: prompt mismatch (${from.prompt} vs ${to.prompt})`);
   }
 
   const numbers: PromotionNumbers = {
@@ -70,8 +68,7 @@ export function promotionDecision(
     toOverBudgetRate: to.overBudgetRate,
     fromP95Cost: from.cost.p95,
     toP95Cost: to.cost.p95,
-    budgetMaxCostPerCall:
-      to.budgetMaxCostPerCall ?? from.budgetMaxCostPerCall,
+    budgetMaxCostPerCall: to.budgetMaxCostPerCall ?? from.budgetMaxCostPerCall,
   };
 
   const blockers: PromotionBlocker[] = [];
@@ -86,11 +83,7 @@ export function promotionDecision(
   const budget = numbers.budgetMaxCostPerCall;
   if (to.overBudgetRate > from.overBudgetRate + 1e-12) {
     blockers.push("budget");
-  } else if (
-    budget !== null &&
-    to.cost.p95 > budget &&
-    from.cost.p95 <= budget
-  ) {
+  } else if (budget !== null && to.cost.p95 > budget && from.cost.p95 <= budget) {
     blockers.push("budget");
   }
 
@@ -133,9 +126,7 @@ export function formatPromotionBlockers(
   }
   if (decision.blockers.includes("budget")) {
     const budget =
-      n.budgetMaxCostPerCall !== null
-        ? `budget $${n.budgetMaxCostPerCall.toFixed(4)}`
-        : "budget";
+      n.budgetMaxCostPerCall !== null ? `budget $${n.budgetMaxCostPerCall.toFixed(4)}` : "budget";
     lines.push(
       `over-budget ${(n.fromOverBudgetRate * 100).toFixed(1)}% → ${(n.toOverBudgetRate * 100).toFixed(1)}%` +
         ` · p95 $${n.fromP95Cost.toFixed(4)} → $${n.toP95Cost.toFixed(4)} (${budget})`,

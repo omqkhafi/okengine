@@ -59,14 +59,9 @@ export function StorePanel() {
   const tenancyDeclared = listQuery.data?.tenancyDeclared ?? false;
   const tenants = listQuery.data?.tenants ?? [];
   const stores = listQuery.data?.stores ?? [];
-  const groups = useMemo(
-    () => groupByFacet(stores, search.q ?? ""),
-    [stores, search.q],
-  );
+  const groups = useMemo(() => groupByFacet(stores, search.q ?? ""), [stores, search.q]);
   const open = stores.find((s) => s.ref === search.ref);
-  const child =
-    open?.children.find((c) => c.name === search.child) ??
-    open?.children[0];
+  const child = open?.children.find((c) => c.name === search.child) ?? open?.children[0];
   const view = search.view ?? "browse";
   const editConfirm = editConfirmation({ production: true });
   const delConfirm = deleteConfirmation({ production: true });
@@ -85,11 +80,7 @@ export function StorePanel() {
       view,
       probeVector,
     ],
-    enabled:
-      !!open &&
-      !!child &&
-      view === "browse" &&
-      (!tenancyDeclared || !!search.tenant),
+    enabled: !!open && !!child && view === "browse" && (!tenancyDeclared || !!search.tenant),
     queryFn: async () => {
       if (!open || !child) return null;
       const vector =
@@ -143,9 +134,7 @@ export function StorePanel() {
       });
       if (res.error) throw new Error(res.error.code);
       const data = res.data!;
-      setWillNotPreview(
-        formatWillNotFire(data.willNotFire).lines as string[],
-      );
+      setWillNotPreview(formatWillNotFire(data.willNotFire).lines as string[]);
       return data;
     },
   });
@@ -299,9 +288,7 @@ export function StorePanel() {
             aria-label="Filter stores"
             className="min-h-8 border border-[var(--oke-line)] bg-transparent px-2"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.target.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.target.value || undefined })}
           />
         </label>
       </header>
@@ -336,13 +323,9 @@ export function StorePanel() {
                       <span>{s.name}</span>
                       <span className="text-xs text-[var(--oke-muted)]">
                         {s.children.length} resource(s)
-                        {s.replicaLagMs != null
-                          ? ` · lag ${s.replicaLagMs}ms`
-                          : ""}
+                        {s.replicaLagMs != null ? ` · lag ${s.replicaLagMs}ms` : ""}
                         {s.migrationDrift?.drifted ? " · drift" : ""}
-                        {s.warnings.length > 0
-                          ? ` · ${s.warnings.length} warn`
-                          : ""}
+                        {s.warnings.length > 0 ? ` · ${s.warnings.length} warn` : ""}
                       </span>
                     </button>
                   </li>
@@ -359,13 +342,12 @@ export function StorePanel() {
         >
           {!open ? (
             <p className="text-sm text-[var(--oke-muted)]">
-              Select a store. Tenant selector appears only when tenancy is
-              declared on the Manifest.
+              Select a store. Tenant selector appears only when tenancy is declared on the Manifest.
             </p>
           ) : tenancyDeclared && !search.tenant ? (
             <p role="status" className="text-sm">
-              Select a tenant in the header before browsing — compliance
-              boundary, not a display filter.
+              Select a tenant in the header before browsing — compliance boundary, not a display
+              filter.
             </p>
           ) : (
             <StoreDetail
@@ -419,9 +401,7 @@ function StoreDetail(props: {
   readonly view: "browse" | "cache" | "sql" | "probe";
   readonly search: StoreSearch;
   readonly setSearch: (s: StoreSearch) => void;
-  readonly browse: Awaited<
-    ReturnType<typeof consoleCalls.storeQuery>
-  >["data"];
+  readonly browse: Awaited<ReturnType<typeof consoleCalls.storeQuery>>["data"];
   readonly browseLoading: boolean;
   readonly cache: ReturnType<typeof explainCache> | null;
   readonly willNot: ReturnType<typeof formatWillNotFire> | null;
@@ -503,8 +483,8 @@ function StoreDetail(props: {
           [
             ["browse", "Browse"],
             ["cache", "Cache"],
-            ...(open.facet === "sql" ? [["sql", "SQL"]] as const : []),
-            ...(open.facet === "index" ? [["probe", "Probe"]] as const : []),
+            ...(open.facet === "sql" ? ([["sql", "SQL"]] as const) : []),
+            ...(open.facet === "index" ? ([["probe", "Probe"]] as const) : []),
           ] as const
         ).map(([id, label]) => (
           <button
@@ -514,9 +494,7 @@ function StoreDetail(props: {
             aria-selected={view === id}
             className={clsx(
               "min-h-8 px-2 text-sm",
-              view === id
-                ? "text-[var(--oke-fg)] underline"
-                : "text-[var(--oke-muted)]",
+              view === id ? "text-[var(--oke-fg)] underline" : "text-[var(--oke-muted)]",
             )}
             onClick={() => setSearch({ ...search, view: id })}
           >
@@ -531,9 +509,7 @@ function StoreDetail(props: {
           aria-label="Store resource"
           className="min-h-8 max-w-xs border border-[var(--oke-line)] bg-transparent px-2"
           value={childName ?? ""}
-          onChange={(e) =>
-            setSearch(openChild(search, e.target.value))
-          }
+          onChange={(e) => setSearch(openChild(search, e.target.value))}
         >
           {open.children.map((c) => (
             <option key={c.name} value={c.name}>
@@ -547,21 +523,14 @@ function StoreDetail(props: {
         <p className="text-sm" role="status">
           Writers:{" "}
           {child.writers.map((f) => (
-            <Link
-              key={f}
-              to="/flows"
-              search={{ flow: f } as never}
-              className="mr-2 underline"
-            >
+            <Link key={f} to="/flows" search={{ flow: f } as never} className="mr-2 underline">
               {f}
             </Link>
           ))}
           {child.writers.length === 0 ? "none" : null}
           {" · "}
           Readers: {child.readers.join(", ") || "none"}
-          {child.piiColumns.length > 0
-            ? ` · PII columns: ${child.piiColumns.join(", ")}`
-            : ""}
+          {child.piiColumns.length > 0 ? ` · PII columns: ${child.piiColumns.join(", ")}` : ""}
         </p>
       ) : null}
 
@@ -592,8 +561,7 @@ function StoreDetail(props: {
             {cache.summary}
           </p>
           <p className="text-xs text-[var(--oke-muted)]">
-            Invalidating flows:{" "}
-            {cache.invalidatingFlows.join(", ") || "none"}
+            Invalidating flows: {cache.invalidatingFlows.join(", ") || "none"}
           </p>
           <Button type="button" onClick={onPurge}>
             Purge cache namespace
@@ -635,9 +603,7 @@ function StoreDetail(props: {
               />
             </label>
           ) : null}
-          {browseLoading ? (
-            <p className="text-sm text-[var(--oke-muted)]">Loading…</p>
-          ) : null}
+          {browseLoading ? <p className="text-sm text-[var(--oke-muted)]">Loading…</p> : null}
           {browse?.rows ? (
             <table className="w-full text-left text-sm">
               <thead>
@@ -663,9 +629,7 @@ function StoreDetail(props: {
                             type="button"
                             className="ml-2 underline"
                             style={{ minHeight: 32 }}
-                            onClick={() =>
-                              onReveal(String(row.id ?? ""), col)
-                            }
+                            onClick={() => onReveal(String(row.id ?? ""), col)}
                           >
                             Reveal
                           </button>
@@ -673,10 +637,7 @@ function StoreDetail(props: {
                       </td>
                     ))}
                     <td className="border-b px-2 py-1">
-                      <Button
-                        type="button"
-                        onClick={() => onDelete([String(row.id ?? "")])}
-                      >
+                      <Button type="button" onClick={() => onDelete([String(row.id ?? "")])}>
                         Delete
                       </Button>
                     </td>
@@ -691,9 +652,7 @@ function StoreDetail(props: {
                 <li key={k.key} className="flex min-h-8 items-center gap-2">
                   <span className="font-mono">{k.key}</span>
                   {k.value !== undefined ? (
-                    <span className="text-[var(--oke-muted)]">
-                      {JSON.stringify(k.value)}
-                    </span>
+                    <span className="text-[var(--oke-muted)]">{JSON.stringify(k.value)}</span>
                   ) : null}
                   {k.warnings?.map((w) => (
                     <span key={w.code} role="status" className="text-xs">
@@ -724,11 +683,13 @@ function StoreDetail(props: {
         </section>
       )}
 
-      <section aria-label="Direct edit" className="flex flex-col gap-2 border-t border-[var(--oke-line)] pt-4">
+      <section
+        aria-label="Direct edit"
+        className="flex flex-col gap-2 border-t border-[var(--oke-line)] pt-4"
+      >
         <h3 className="text-sm font-medium">Direct edit</h3>
         <p className="text-sm text-[var(--oke-muted)]">
-          Not a flow execution. Before saving, preview names what will not
-          fire.
+          Not a flow execution. Before saving, preview names what will not fire.
         </p>
         {willNot && !willNot.empty ? (
           <ul className="text-sm">

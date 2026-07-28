@@ -13,11 +13,7 @@ import {
 } from "../runtime/security.ts";
 import { DOCS_MCP_PORT, type ServerHandle } from "../runtime/types.ts";
 import { asData } from "./data.ts";
-import {
-  defaultDocsContentDir,
-  loadDocsIndex,
-  type DocsIndex,
-} from "./docs-index.ts";
+import { defaultDocsContentDir, loadDocsIndex, type DocsIndex } from "./docs-index.ts";
 import { createDocsToolRuntime } from "./docs-tools.ts";
 import {
   MCP_PROTOCOL_VERSION,
@@ -61,8 +57,7 @@ export async function createDocsMcpServer(
   options: CreateDocsMcpServerOptions = {},
 ): Promise<DocsMcpServer> {
   const index =
-    options.index ??
-    (await loadDocsIndex(options.contentDir ?? defaultDocsContentDir()));
+    options.index ?? (await loadDocsIndex(options.contentDir ?? defaultDocsContentDir()));
   const tools = createDocsToolRuntime(index);
   const hostname = options.hostname ?? "127.0.0.1";
   const allowed = resolveAllowedHosts(hostname, options.allowedHosts);
@@ -86,18 +81,12 @@ export async function createDocsMcpServer(
     try {
       body = await request.json();
     } catch {
-      return jsonRpcHttp(
-        rpcError(null, RpcErrorCode.parse, "invalid JSON body"),
-        400,
-      );
+      return jsonRpcHttp(rpcError(null, RpcErrorCode.parse, "invalid JSON body"), 400);
     }
 
     const parsed = parseJsonRpcRequest(body);
     if (!parsed.ok) {
-      return jsonRpcHttp(
-        rpcError(null, RpcErrorCode.invalidRequest, parsed.message),
-        400,
-      );
+      return jsonRpcHttp(rpcError(null, RpcErrorCode.invalidRequest, parsed.message), 400);
     }
 
     const { request: rpc } = parsed;
@@ -137,17 +126,12 @@ export async function createDocsMcpServer(
       case "tools/call": {
         const call = parseToolsCallParams(rpc.params);
         if (!call.ok) {
-          return jsonRpcHttp(
-            rpcError(id, RpcErrorCode.invalidParams, call.message),
-            400,
-          );
+          return jsonRpcHttp(rpcError(id, RpcErrorCode.invalidParams, call.message), 400);
         }
         const result = tools.callTool(call.name, call.arguments);
         if (!result.ok) {
           const code =
-            result.code === "not-found"
-              ? RpcErrorCode.methodNotFound
-              : RpcErrorCode.invalidParams;
+            result.code === "not-found" ? RpcErrorCode.methodNotFound : RpcErrorCode.invalidParams;
           return jsonRpcHttp(
             rpcError(id, code, result.message, result.data),
             result.code === "not-found" ? 404 : 400,
@@ -168,11 +152,7 @@ export async function createDocsMcpServer(
       }
       default:
         return jsonRpcHttp(
-          rpcError(
-            id,
-            RpcErrorCode.methodNotFound,
-            `method not found: ${rpc.method}`,
-          ),
+          rpcError(id, RpcErrorCode.methodNotFound, `method not found: ${rpc.method}`),
           404,
         );
     }

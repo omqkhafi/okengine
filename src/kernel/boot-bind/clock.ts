@@ -9,10 +9,7 @@ import {
   type ClockDecl,
   type ClockRuntime,
 } from "../../elements/clock.ts";
-import {
-  resolveDriverId,
-  type ConfigEnv,
-} from "../../config/index.ts";
+import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import type { BootOptions } from "../boot.ts";
 
 /** Result of binding a clock runtime. */
@@ -36,8 +33,7 @@ export async function bindClock(
   prebuilt?: ClockRuntime,
 ): Promise<BindClockResult> {
   const clockDriver =
-    resolveDriverId(options.config?.drivers?.clock, env) ??
-    (env === "test" ? "frozen" : "memory");
+    resolveDriverId(options.config?.drivers?.clock, env) ?? (env === "test" ? "frozen" : "memory");
   const clock =
     prebuilt ??
     (clockDriver === "frozen" || env === "test"

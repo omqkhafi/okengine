@@ -51,17 +51,10 @@ export function VaultA11yView(props: VaultA11yViewProps) {
                       style={{ minHeight: 32, width: "100%" }}
                     >
                       <span>{s.name}</span>
-                      {s.sensitive && s.fingerprint ? (
-                        <span> {s.fingerprint}</span>
-                      ) : null}
-                      {!s.sensitive && s.cleartext ? (
-                        <span> {s.cleartext}</span>
-                      ) : null}
+                      {s.sensitive && s.fingerprint ? <span> {s.fingerprint}</span> : null}
+                      {!s.sensitive && s.cleartext ? <span> {s.cleartext}</span> : null}
                       {s.blastRadius.count > 0 ? (
-                        <span role="status">
-                          {" "}
-                          blast {s.blastRadius.count}
-                        </span>
+                        <span role="status"> blast {s.blastRadius.count}</span>
                       ) : null}
                       {s.sharedFingerprintEnvs.length > 0 ? (
                         <span role="status"> shared fingerprint</span>
@@ -108,11 +101,7 @@ export function VaultA11yView(props: VaultA11yViewProps) {
                 {open.resolution.map((step) => (
                   <li key={step.source}>
                     {step.source}
-                    {step.won
-                      ? " — won"
-                      : step.present
-                        ? " — present (lost)"
-                        : " — absent"}
+                    {step.won ? " — won" : step.present ? " — present (lost)" : " — absent"}
                   </li>
                 ))}
               </ol>
@@ -122,8 +111,7 @@ export function VaultA11yView(props: VaultA11yViewProps) {
             <section aria-label="Readers">
               <h3>Readers</h3>
               <p>
-                Flows that declare fx.vault({open.name}):{" "}
-                {open.readers.join(", ") || "none"}
+                Flows that declare fx.vault({open.name}): {open.readers.join(", ") || "none"}
               </p>
             </section>
 

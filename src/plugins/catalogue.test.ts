@@ -29,20 +29,16 @@ describe("CORE catalogue", () => {
   });
 
   test("tenancy from config or Manifest", () => {
-    expect(isTenancyConfigured(null, { tenancy: { isolation: "row" } })).toBe(
+    expect(isTenancyConfigured(null, { tenancy: { isolation: "row" } })).toBe(true);
+    expect(isTenancyConfigured({ oke: "1.0", app: "x", tenancy: { isolation: "row" } }, null)).toBe(
       true,
     );
-    expect(
-      isTenancyConfigured({ oke: "1.0", app: "x", tenancy: { isolation: "row" } }, null),
-    ).toBe(true);
     expect(isTenancyConfigured(null, null)).toBe(false);
   });
 
   test("privacy from privacy block or runs.redact", () => {
     expect(isPrivacyConfigured({ privacy: {} })).toBe(true);
-    expect(isPrivacyConfigured({ runs: { redact: { email: "7y" } } })).toBe(
-      true,
-    );
+    expect(isPrivacyConfigured({ runs: { redact: { email: "7y" } } })).toBe(true);
     expect(isPrivacyConfigured({})).toBe(false);
   });
 });

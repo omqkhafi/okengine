@@ -7,20 +7,14 @@
  */
 
 import type { Effects, FlowPlane, Slo } from "../manifest/types.ts";
-import type {
-  InferSchemaOutput,
-  SchemaInput,
-} from "../validation/standard-schema.ts";
+import type { InferSchemaOutput, SchemaInput } from "../validation/standard-schema.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
 import type { PluginDef } from "./plugin.ts";
 import type { Trigger } from "./triggers.ts";
 
-export type {
-  SchemaInput,
-  StandardSchemaV1,
-} from "../validation/standard-schema.ts";
+export type { SchemaInput, StandardSchemaV1 } from "../validation/standard-schema.ts";
 
 /** Result of a Standard Schema validate call (re-export shape). */
 export type StandardSchemaResult<Output> =
@@ -42,11 +36,7 @@ export type FlowHandler<I = unknown, O = unknown> = (
 ) => O | FlowFailure | Promise<O | FlowFailure>;
 
 /** Options for {@link flow}. */
-export interface FlowOptions<
-  I = unknown,
-  O = unknown,
-  E extends FlowErrorMap = FlowErrorMap,
-> {
+export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = FlowErrorMap> {
   /** Optional stable name (used by `fx.call` and the Manifest). */
   readonly name?: string;
   /** Optional unit scope for unit-level hooks. */
@@ -192,13 +182,7 @@ export interface FlowDef<
    */
   plug<P extends PluginDef>(
     pluginDef: P,
-  ): FlowDef<
-    I,
-    O,
-    E,
-    D & (P extends PluginDef<infer PD> ? PD : Record<string, never>),
-    T
-  >;
+  ): FlowDef<I, O, E, D & (P extends PluginDef<infer PD> ? PD : Record<string, never>), T>;
 }
 
 /** Unique brand symbol for {@link FlowDef}. */
@@ -222,11 +206,7 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
   const pendingPlugins: PluginDef[] = [];
 
-  const def: FlowDef<
-    InferFlowIn<Opts>,
-    InferFlowOut<Opts>,
-    InferFlowErrors<Opts>
-  > = {
+  const def: FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> = {
     [flowBrand]: true,
     name,
     unit: options.unit,

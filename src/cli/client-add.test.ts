@@ -6,10 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  clientAdd,
-  emitAmbient,
-} from "./client-add.ts";
+import { clientAdd, emitAmbient } from "./client-add.ts";
 import type { ClientDescriptor } from "../client/types.ts";
 
 const fixture: ClientDescriptor = {
@@ -72,10 +69,7 @@ void seats;
     // Minimal stub so `import type { Register }` resolves.
     const stubDir = join(dir, "node_modules/okengine");
     await Bun.$`mkdir -p ${stubDir}`.quiet();
-    await Bun.write(
-      join(stubDir, "client.d.ts"),
-      `export interface Register {}\n`,
-    );
+    await Bun.write(join(stubDir, "client.d.ts"), `export interface Register {}\n`);
     await Bun.write(
       join(stubDir, "package.json"),
       JSON.stringify({
@@ -102,10 +96,11 @@ void seats;
       }),
     );
 
-    const proc = Bun.spawn(
-      ["bunx", "tsc", "--project", tsconfig],
-      { cwd: dir, stdout: "pipe", stderr: "pipe" },
-    );
+    const proc = Bun.spawn(["bunx", "tsc", "--project", tsconfig], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const [stdout, stderr, code] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
@@ -113,9 +108,7 @@ void seats;
     ]);
 
     if (code !== 0) {
-      throw new Error(
-        `tsc failed (${code})\n${stdout}\n${stderr}\n--- d.ts ---\n${result.source}`,
-      );
+      throw new Error(`tsc failed (${code})\n${stdout}\n${stderr}\n--- d.ts ---\n${result.source}`);
     }
   });
 

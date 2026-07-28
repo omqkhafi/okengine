@@ -3,13 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -36,7 +30,9 @@ import {
 import {
   sanitizeProjectName,
   shouldSkipTemplatePath,
+  transformConfigForSqlDriver,
   transformPackageJson,
+  transformSchemaForSqlDriver,
 } from "./transform.ts";
 
 describe("parseArgs", () => {
@@ -56,20 +52,25 @@ describe("parseArgs", () => {
   });
 
   test("accepts --from-example", () => {
-    expect(parseArgs(["x", "--from-example", "notes"]).fromExample).toBe(
-      "notes",
-    );
-    expect(parseArgs(["x", "--from-example=skyport"]).fromExample).toBe(
-      "skyport",
-    );
+    expect(parseArgs(["x", "--from-example", "notes"]).fromExample).toBe("notes");
+    expect(parseArgs(["x", "--from-example=skyport"]).fromExample).toBe("skyport");
   });
 
-  test("rejects unknown template / example / both", () => {
+  test("accepts --sql sqlite|postgres", () => {
+    expect(parseArgs(["x"]).sqlDriver).toBe("sqlite");
+    expect(parseArgs(["x"]).sqlDriverExplicit).toBe(false);
+    expect(parseArgs(["x", "--sql", "postgres"]).sqlDriver).toBe("postgres");
+    expect(parseArgs(["x", "--sql=sqlite"]).sqlDriver).toBe("sqlite");
+    expect(parseArgs(["x", "--sql", "postgres"]).sqlDriverExplicit).toBe(true);
+  });
+
+  test("rejects unknown template / example / sql / both", () => {
     expect(() => parseArgs(["x", "--template", "nope"])).toThrow(/template/);
     expect(() => parseArgs(["x", "--from-example", "nope"])).toThrow(/example/);
-    expect(() =>
-      parseArgs(["x", "--template", "hello", "--from-example", "notes"]),
-    ).toThrow(/either/);
+    expect(() => parseArgs(["x", "--sql", "mysql"])).toThrow(/sql/);
+    expect(() => parseArgs(["x", "--template", "hello", "--from-example", "notes"])).toThrow(
+      /either/,
+    );
   });
 });
 
@@ -86,13 +87,9 @@ describe("shouldPrompt", () => {
     expect(shouldPrompt(parseArgs([]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app"]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app", "--yes"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["my-app", "--template", "hello"]), true)).toBe(
-      false,
-    );
+    expect(shouldPrompt(parseArgs(["my-app", "--template", "hello"]), true)).toBe(false);
     expect(shouldPrompt(parseArgs(["--template", "hello"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["--from-example", "notes"]), true)).toBe(
-      false,
-    );
+    expect(shouldPrompt(parseArgs(["--from-example", "notes"]), true)).toBe(false);
     expect(shouldPrompt(parseArgs(["--help"]), true)).toBe(false);
   });
 });
@@ -108,17 +105,16 @@ describe("parseArgs flags", () => {
   });
 
   test("rejects --install with --no-install", () => {
-    expect(() => parseArgs(["x", "--install", "--no-install"])).toThrow(
-      /install/,
-    );
+    expect(() => parseArgs(["x", "--install", "--no-install"])).toThrow(/install/);
   });
 });
 
 describe("sourceFromArgs", () => {
   test("prefers example when set", () => {
-    expect(sourceFromArgs(parseArgs(["x", "--from-example", "linkly"]))).toEqual(
-      { kind: "example", id: "linkly" },
-    );
+    expect(sourceFromArgs(parseArgs(["x", "--from-example", "linkly"]))).toEqual({
+      kind: "example",
+      id: "linkly",
+    });
     expect(sourceFromArgs(parseArgs(["x"]))).toEqual({
       kind: "template",
       id: DEFAULT_TEMPLATE,
@@ -136,11 +132,10 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
         agentsMd: true,
       };
       const fromAnswers = scaffoldArgsFromAnswers(answers);
-      const fromFlags = scaffoldArgsFromCli(
-        parseArgs(["x", "--template", id]),
-      );
+      const fromFlags = scaffoldArgsFromCli(parseArgs(["x", "--template", id]));
       expect(fromAnswers).toEqual(fromFlags);
       expect(fromAnswers.source).toEqual({ kind: "template", id });
+      expect(fromAnswers.sqlDriver).toBe("sqlite");
     }
   });
 
@@ -154,12 +149,25 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
         agentsMd: true,
       };
       const fromAnswers = scaffoldArgsFromAnswers(answers);
-      const fromFlags = scaffoldArgsFromCli(
-        parseArgs(["x", "--from-example", id]),
-      );
+      const fromFlags = scaffoldArgsFromCli(parseArgs(["x", "--from-example", id]));
       expect(fromAnswers).toEqual(fromFlags);
       expect(fromAnswers.source).toEqual({ kind: "example", id });
+      expect(fromAnswers.sqlDriver).toBe("sqlite");
     }
+  });
+
+  test("interactive never opts into --sql postgres (flag-only)", () => {
+    const answers: InteractiveAnswers = {
+      name: "x",
+      choice: "standard",
+      installAndRun: false,
+      agentsMd: true,
+    };
+    expect(scaffoldArgsFromAnswers(answers).sqlDriver).toBe("sqlite");
+    expect(
+      scaffoldArgsFromCli(parseArgs(["x", "--template", "standard", "--sql", "postgres"]))
+        .sqlDriver,
+    ).toBe("postgres");
   });
 
   test("8 paths cover every template and every example", () => {
@@ -189,11 +197,51 @@ describe("transformPackageJson", () => {
   });
 });
 
+describe("transformSchemaForSqlDriver", () => {
+  const sqliteSchema = `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+export const pings = sqliteTable("pings", {});
+`;
+
+  test("postgres swaps dialect imports and table helper", () => {
+    const next = transformSchemaForSqlDriver(sqliteSchema, "postgres");
+    expect(next).toContain('from "drizzle-orm/pg-core"');
+    expect(next).toContain("pgTable(");
+    expect(next).not.toContain("sqliteTable");
+    expect(next).not.toContain("sqlite-core");
+  });
+
+  test("sqlite is idempotent on template sources", () => {
+    expect(transformSchemaForSqlDriver(sqliteSchema, "sqlite")).toBe(sqliteSchema);
+  });
+});
+
+describe("transformConfigForSqlDriver", () => {
+  const config = `export default defineConfig({
+  drivers: {
+    store: {
+      sql: {
+        local: "sqlite",
+        docker: "postgres",
+        test: "memory",
+        prod: "postgres",
+      },
+    },
+  },
+});
+`;
+
+  test("postgres pins local/docker/prod and leaves test memory", () => {
+    const next = transformConfigForSqlDriver(config, "postgres");
+    expect(next).toContain('local: "postgres"');
+    expect(next).toContain('docker: "postgres"');
+    expect(next).toContain('prod: "postgres"');
+    expect(next).toContain('test: "memory"');
+  });
+});
+
 describe("shouldSkipTemplatePath", () => {
   test("skips node_modules, locks, and monorepo docker test", () => {
-    expect(shouldSkipTemplatePath("node_modules/okengine/package.json")).toBe(
-      true,
-    );
+    expect(shouldSkipTemplatePath("node_modules/okengine/package.json")).toBe(true);
     expect(shouldSkipTemplatePath("bun.lock")).toBe(true);
     expect(shouldSkipTemplatePath("tests/docker.test.ts")).toBe(true);
     expect(shouldSkipTemplatePath("tests/support.test.ts")).toBe(false);
@@ -225,23 +273,23 @@ describe("scaffold structure", () => {
           name: `app-${id}`,
           source: { kind: "template", id },
         });
-        expect([...result.files].sort()).toEqual(
-          [...expected, "AGENTS.md"].sort(),
-        );
+        const extras = ["AGENTS.md"];
+        if (expected.includes(".env.example")) extras.push(".env.local");
+        expect([...result.files].sort()).toEqual([...expected, ...extras].sort());
         expect(result.files).toContain(".gitignore");
         expect(result.files).toContain("README.md");
-        expect(
-          readFileSync(join(result.targetDir, "AGENTS.md"), "utf8"),
-        ).toMatch(/one law|on\(Trigger\)/i);
+        expect(result.sqlDriver).toBe("sqlite");
+        expect(readFileSync(join(result.targetDir, "AGENTS.md"), "utf8")).toMatch(
+          /one law|on\(Trigger\)/i,
+        );
         const readme = readFileSync(join(result.targetDir, "README.md"), "utf8");
         expect(readme).toMatch(/oke dev/);
         expect(readme).toMatch(new RegExp(`^# ${id}`, "m"));
-        expect(
-          readFileSync(join(result.targetDir, ".gitignore"), "utf8"),
-        ).toMatch(/node_modules/);
-        const pkg = JSON.parse(
-          readFileSync(join(result.targetDir, "package.json"), "utf8"),
-        ) as { name: string; dependencies: { okengine: string } };
+        expect(readFileSync(join(result.targetDir, ".gitignore"), "utf8")).toMatch(/node_modules/);
+        const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
+          name: string;
+          dependencies: { okengine: string };
+        };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toBe("file:../..");
       } finally {
@@ -258,14 +306,9 @@ describe("scaffold structure", () => {
         name: "hello-app",
         source: { kind: "template", id: "hello" },
       });
-      const flowFiles = result.files.filter(
-        (f) => f.startsWith("src/flows/") && f.endsWith(".ts"),
-      );
+      const flowFiles = result.files.filter((f) => f.startsWith("src/flows/") && f.endsWith(".ts"));
       expect(flowFiles).toEqual(["src/flows/hello/index.ts"]);
-      const flowSrc = readFileSync(
-        join(result.targetDir, "src/flows/hello/index.ts"),
-        "utf8",
-      );
+      const flowSrc = readFileSync(join(result.targetDir, "src/flows/hello/index.ts"), "utf8");
       expect(flowSrc).toMatch(/export const hello/);
       expect(flowSrc).not.toMatch(/\bstore\b/);
       expect(result.files.some((f) => f.includes("core.ts"))).toBe(false);
@@ -323,10 +366,34 @@ describe("scaffold structure", () => {
         name: "from-notes",
         source: { kind: "example", id: "notes" },
       });
-      expect([...result.files].sort()).toEqual(
-        [...expected, "AGENTS.md"].sort(),
-      );
+      const extras = ["AGENTS.md"];
+      if (expected.includes(".env.example")) extras.push(".env.local");
+      expect([...result.files].sort()).toEqual([...expected, ...extras].sort());
       expect(result.files).toContain("src/flows/notes/index.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--sql postgres rewrites schema dialect and pins store.sql", () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-sql-pg-"));
+    try {
+      const result = scaffold({
+        targetDir: join(dir, "pg-app"),
+        name: "pg-app",
+        source: { kind: "template", id: "standard" },
+        sqlDriver: "postgres",
+      });
+      expect(result.sqlDriver).toBe("postgres");
+      const schema = readFileSync(join(result.targetDir, "src/schema.ts"), "utf8");
+      expect(schema).toContain('from "drizzle-orm/pg-core"');
+      expect(schema).toContain("pgTable(");
+      expect(schema).not.toContain("sqliteTable");
+      const config = readFileSync(join(result.targetDir, "oke.config.ts"), "utf8");
+      expect(config).toMatch(/sql:\s*\{[\s\S]*local:\s*"postgres"/);
+      expect(config).toMatch(/sql:\s*\{[\s\S]*docker:\s*"postgres"/);
+      expect(config).toMatch(/sql:\s*\{[\s\S]*prod:\s*"postgres"/);
+      expect(config).toMatch(/sql:\s*\{[\s\S]*test:\s*"memory"/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -376,10 +443,10 @@ describe("non-TTY CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "create-oke-flag-"));
     const target = join(root, "flag-app");
     try {
-      const code = await run(
-        [target, "--template", "hello", "--no-install"],
-        { stdinIsTTY: false, runPostScaffold: false },
-      );
+      const code = await run([target, "--template", "hello", "--no-install"], {
+        stdinIsTTY: false,
+        runPostScaffold: false,
+      });
       expect(code).toBe(0);
       expect(readdirSync(target).length).toBeGreaterThan(0);
       expect(existsSync(join(target, "AGENTS.md"))).toBe(true);
@@ -390,6 +457,7 @@ describe("non-TTY CLI", () => {
         label: "hello",
         okengineDependency: "x",
         files: [],
+        sqlDriver: "sqlite" as const,
       };
       expect(nextStepsText(result)).toContain("oke dev");
       expect(nextStepsText(result)).toContain("bun install");

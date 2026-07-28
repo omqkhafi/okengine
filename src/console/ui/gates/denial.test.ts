@@ -26,9 +26,7 @@ describe("formatDenial", () => {
 
 describe("formatEvaluationStep", () => {
   test("preserves registration order marks", () => {
-    const steps = SIMULATE_RATE_FIXTURE.evaluations.map((e, i) =>
-      formatEvaluationStep(e, i),
-    );
+    const steps = SIMULATE_RATE_FIXTURE.evaluations.map((e, i) => formatEvaluationStep(e, i));
     expect(steps[0]).toContain("pass");
     expect(steps[2]).toContain("deny");
     expect(steps[2]).toContain("retryAfterMs 12000");

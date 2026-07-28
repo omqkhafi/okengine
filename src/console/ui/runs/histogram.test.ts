@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { runsOutlierFixture } from "./fixture.ts";
-import {
-  durationHistogram,
-  inDurationRange,
-  normalizeRange,
-} from "./histogram.ts";
+import { durationHistogram, inDurationRange, normalizeRange } from "./histogram.ts";
 
 describe("duration histogram", () => {
   test("buckets cover the population", () => {
@@ -21,11 +17,6 @@ describe("duration histogram", () => {
 
   test("range helpers", () => {
     expect(normalizeRange(2000, 40)).toEqual({ minMs: 40, maxMs: 2000 });
-    expect(
-      inDurationRange(
-        { durationMs: 2000 } as never,
-        { minMs: 1000, maxMs: 3000 },
-      ),
-    ).toBe(true);
+    expect(inDurationRange({ durationMs: 2000 } as never, { minMs: 1000, maxMs: 3000 })).toBe(true);
   });
 });

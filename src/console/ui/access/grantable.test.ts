@@ -8,9 +8,7 @@ describe("grantable scopes (UI)", () => {
     const ops = ACCESS_LIST_FIXTURE.operatorPlane.grantableScopes;
     expect(user.every((s) => !s.startsWith("console:"))).toBe(true);
     expect(ops.every((s) => s.startsWith("console:"))).toBe(true);
-    expect(visibleGrantableScopes(user, ["member", "console:x"])).toEqual([
-      "member",
-    ]);
+    expect(visibleGrantableScopes(user, ["member", "console:x"])).toEqual(["member"]);
     expect(allGrantable(["member"], user)).toBe(true);
     expect(allGrantable(["console:store.sql:read"], user)).toBe(false);
   });

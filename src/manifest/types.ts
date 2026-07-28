@@ -178,15 +178,39 @@ export interface ColumnClassification {
   retain?: string;
 }
 
+/**
+ * Declared SQL column (abstract schema) — additive over {@link ColumnClassification}.
+ * Manifest `tables.*.columns` may be a bare classification or a full declaration.
+ */
+/** Foreign-key target recorded on a {@link DeclaredColumn}. */
+export interface DeclaredColumnReference {
+  /** Referenced table export / SQL name when known. */
+  table?: string;
+  /** Referenced column key when known. */
+  column?: string;
+}
+
+export interface DeclaredColumn extends ColumnClassification {
+  /** SQL type primitive (`text` · `integer` in v1). */
+  type?: "text" | "integer";
+  /** When false, column is NOT NULL. */
+  nullable?: boolean;
+  primaryKey?: boolean;
+  unique?: boolean;
+  /** Literal default when present. */
+  default?: string | number | boolean | null;
+  /** Database column name (snake_case by default). */
+  sqlName?: string;
+  /** Foreign key when `.references()` was declared. */
+  references?: DeclaredColumnReference;
+}
+
 /** Field classification value forms. */
-export type ClassificationValue =
-  | string
-  | string[]
-  | ColumnClassification;
+export type ClassificationValue = string | string[] | ColumnClassification;
 
 /** SQL table metadata. */
 export interface Table {
-  columns?: Record<string, ColumnClassification>;
+  columns?: Record<string, DeclaredColumn | ColumnClassification>;
   classifications?: Record<string, ClassificationValue>;
 }
 

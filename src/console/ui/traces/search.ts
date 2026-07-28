@@ -6,11 +6,7 @@
  */
 
 import { z } from "zod";
-import {
-  parseEffectFilter,
-  serializeEffectFilter,
-  type EffectFilter,
-} from "./filter.ts";
+import { parseEffectFilter, serializeEffectFilter, type EffectFilter } from "./filter.ts";
 
 /** Zod schema for Traces URL search params. */
 export const TracesSearchSchema = z.object({
@@ -47,9 +43,7 @@ export function parseTracesSearch(raw: unknown): TracesSearch {
  *
  * @param search - Typed search
  */
-export function serializeTracesSearch(
-  search: TracesSearch,
-): Record<string, string> {
+export function serializeTracesSearch(search: TracesSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.trace) out.trace = search.trace;
   if (search.span) out.span = search.span;
@@ -91,11 +85,7 @@ export function expandedFoldsOf(search: TracesSearch): Set<string> {
  * @param rootId - Root span id
  * @param spanId - Optional focus span
  */
-export function openTrace(
-  prev: TracesSearch,
-  rootId: string,
-  spanId?: string,
-): TracesSearch {
+export function openTrace(prev: TracesSearch, rootId: string, spanId?: string): TracesSearch {
   return {
     ...prev,
     trace: rootId,
@@ -137,10 +127,7 @@ export function toggleFold(prev: TracesSearch, foldId: string): TracesSearch {
  * @param prev - Current search
  * @param filter - Effect filter
  */
-export function setEffectFilter(
-  prev: TracesSearch,
-  filter: EffectFilter | null,
-): TracesSearch {
+export function setEffectFilter(prev: TracesSearch, filter: EffectFilter | null): TracesSearch {
   return {
     ...prev,
     effect: serializeEffectFilter(filter),

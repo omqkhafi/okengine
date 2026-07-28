@@ -5,12 +5,7 @@
  * — analysis by dimension, not free-text search.
  */
 
-import type {
-  DimensionQuery,
-  QueryClause,
-  QueryOp,
-  RunRecord,
-} from "./types.ts";
+import type { DimensionQuery, QueryClause, QueryOp, RunRecord } from "./types.ts";
 
 const OPS: readonly QueryOp[] = ["!=", ">=", "<=", "=", ">", "<"];
 
@@ -22,7 +17,10 @@ const OPS: readonly QueryOp[] = ["!=", ">=", "<=", "=", ">", "<"];
  */
 export function parseDimensionQuery(expr: string | undefined | null): DimensionQuery {
   if (!expr || !expr.trim()) return { clauses: [] };
-  const parts = expr.split(/\s+AND\s+/i).map((p) => p.trim()).filter(Boolean);
+  const parts = expr
+    .split(/\s+AND\s+/i)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const clauses: QueryClause[] = [];
   for (const part of parts) {
     const clause = parseClause(part);
@@ -46,10 +44,7 @@ export function serializeDimensionQuery(query: DimensionQuery): string {
  * @param query - Current query
  * @param clause - Clause to add
  */
-export function upsertClause(
-  query: DimensionQuery,
-  clause: QueryClause,
-): DimensionQuery {
+export function upsertClause(query: DimensionQuery, clause: QueryClause): DimensionQuery {
   const rest = query.clauses.filter((c) => c.dimension !== clause.dimension);
   return { clauses: [...rest, clause] };
 }
@@ -60,10 +55,7 @@ export function upsertClause(
  * @param query - Current query
  * @param dimension - Dimension name
  */
-export function removeClause(
-  query: DimensionQuery,
-  dimension: string,
-): DimensionQuery {
+export function removeClause(query: DimensionQuery, dimension: string): DimensionQuery {
   return {
     clauses: query.clauses.filter((c) => c.dimension !== dimension),
   };
@@ -75,10 +67,7 @@ export function removeClause(
  * @param run - Wide-event projection
  * @param query - Dimension query
  */
-export function matchesDimensionQuery(
-  run: RunRecord,
-  query: DimensionQuery,
-): boolean {
+export function matchesDimensionQuery(run: RunRecord, query: DimensionQuery): boolean {
   for (const clause of query.clauses) {
     if (!matchClause(run, clause)) return false;
   }
@@ -91,10 +80,7 @@ export function matchesDimensionQuery(
  * @param runs - All runs
  * @param query - Dimension query
  */
-export function filterRuns(
-  runs: readonly RunRecord[],
-  query: DimensionQuery,
-): RunRecord[] {
+export function filterRuns(runs: readonly RunRecord[], query: DimensionQuery): RunRecord[] {
   if (query.clauses.length === 0) return [...runs];
   return runs.filter((r) => matchesDimensionQuery(r, query));
 }
@@ -147,19 +133,13 @@ function parseClause(raw: string): QueryClause | null {
   return { dimension, op, value };
 }
 
-function parseValue(
-  dimension: string,
-  raw: string,
-): string | number | boolean | undefined {
+function parseValue(dimension: string, raw: string): string | number | boolean | undefined {
   if (dimension === "duration" || dimension === "duration_ms") {
     return parseDurationMs(raw);
   }
   if (raw === "true") return true;
   if (raw === "false") return false;
-  if (
-    (raw.startsWith('"') && raw.endsWith('"')) ||
-    (raw.startsWith("'") && raw.endsWith("'"))
-  ) {
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return raw.slice(1, -1);
   }
   if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
@@ -263,10 +243,7 @@ export function dimensionValue(
   }
 }
 
-function compareEq(
-  left: string | number | boolean,
-  right: string | number | boolean,
-): boolean {
+function compareEq(left: string | number | boolean, right: string | number | boolean): boolean {
   if (typeof left === "number" || typeof right === "number") {
     const ln = toNumber(left);
     const rn = toNumber(right);

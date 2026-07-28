@@ -4,16 +4,14 @@
  * Protocol-named: Neon, Supabase, RDS, Timescale all speak postgres.
  */
 
-import type {
-  SqlConnectOptions,
-  SqlConnection,
-  SqlDriver,
-  SqlRow,
-} from "./types.ts";
+import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRow } from "./types.ts";
 
 /** Minimal surface we use from Bun.SQL (and test fakes). */
 export interface PostgresClientLike {
-  unsafe(sql: string, values?: unknown[]): PromiseLike<SqlRow[] | { length: number; changes?: number } | SqlRow[]>;
+  unsafe(
+    sql: string,
+    values?: unknown[],
+  ): PromiseLike<SqlRow[] | { length: number; changes?: number } | SqlRow[]>;
   close?(options?: { timeout?: number }): Promise<void>;
 }
 
@@ -32,9 +30,7 @@ export function toPostgresParams(sql: string): string {
  *
  * @param options - URL / role / injected client
  */
-export async function connectPostgres(
-  options: SqlConnectOptions = {},
-): Promise<SqlConnection> {
+export async function connectPostgres(options: SqlConnectOptions = {}): Promise<SqlConnection> {
   const role = options.role ?? "primary";
   const client =
     (options.client as PostgresClientLike | undefined) ??
@@ -121,9 +117,7 @@ export function createPostgresFakeClient(): PostgresClientLike & {
       if (exists) {
         const rows = tables.get(parseIdent(exists[2]!)) ?? [];
         const preds = parseEqualityWhere(exists[3]!);
-        const hit = rows.some((r) =>
-          preds.every((p, i) => r[p] === values[i]),
-        );
+        const hit = rows.some((r) => preds.every((p, i) => r[p] === values[i]));
         return hit ? [{ [parseIdent(exists[1]!)]: 1 }] : [];
       }
 

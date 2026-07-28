@@ -18,9 +18,7 @@ export type DeliveryOutcomeState =
 export type DeliveryVerdict = "correct" | "retry" | "suppress" | "review";
 
 /** Verdict for each of the seven states. */
-export const VERDICT_BY_STATE: Readonly<
-  Record<DeliveryOutcomeState, DeliveryVerdict>
-> = {
+export const VERDICT_BY_STATE: Readonly<Record<DeliveryOutcomeState, DeliveryVerdict>> = {
   "suppressed/opted-out": "correct",
   "suppressed/prior-bounce": "correct",
   "blocked/invalid-address": "review",
@@ -34,9 +32,7 @@ export const VERDICT_BY_STATE: Readonly<
  * Consequence weight — higher is worse for sender reputation.
  * Complaints outrank many hard bounces.
  */
-export const CONSEQUENCE_WEIGHT: Readonly<
-  Record<DeliveryOutcomeState, number>
-> = {
+export const CONSEQUENCE_WEIGHT: Readonly<Record<DeliveryOutcomeState, number>> = {
   "suppressed/opted-out": 0,
   "suppressed/prior-bounce": 1,
   "blocked/invalid-address": 3,
@@ -70,9 +66,7 @@ export interface OutcomeRow {
  *
  * @param rows - Taxonomy rows with counts
  */
-export function rankByConsequence(
-  rows: readonly OutcomeRow[],
-): readonly OutcomeRow[] {
+export function rankByConsequence(rows: readonly OutcomeRow[]): readonly OutcomeRow[] {
   return [...rows].sort((a, b) => {
     if (b.weight !== a.weight) return b.weight - a.weight;
     return b.count - a.count;
@@ -101,9 +95,7 @@ export function buildOutcomeRows(
  *
  * @param status - Receipt status
  */
-export function isDeliveryOutcomeState(
-  status: string,
-): status is DeliveryOutcomeState {
+export function isDeliveryOutcomeState(status: string): status is DeliveryOutcomeState {
   return (DELIVERY_OUTCOME_STATES as readonly string[]).includes(status);
 }
 
@@ -120,7 +112,5 @@ export function formatAttemptChain(
   }[],
 ): string {
   if (attempts.length === 0) return "";
-  return attempts
-    .map((a) => `${a.driverId} ${a.ok ? "succeeded" : "failed"}`)
-    .join(" → ");
+  return attempts.map((a) => `${a.driverId} ${a.ok ? "succeeded" : "failed"}`).join(" → ");
 }

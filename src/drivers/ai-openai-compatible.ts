@@ -23,14 +23,10 @@ const DEFAULT_BASE = "https://api.openai.com/v1";
  *
  * @param options - API key / model / base URL / injectable fetch
  */
-export async function openOpenaiCompatible(
-  options: AiOpenOptions = {},
-): Promise<AiModelClient> {
+export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise<AiModelClient> {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "openai-compatible: apiKey is required (or OPENAI_API_KEY)",
-    );
+    throw new Error("openai-compatible: apiKey is required (or OPENAI_API_KEY)");
   }
   const model = options.model ?? "gpt-4o-mini";
   const baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
@@ -65,8 +61,7 @@ export async function openOpenaiCompatible(
       });
       const raw = (await res.json().catch(() => ({}))) as OpenAiChatResponse;
       if (!res.ok) {
-        const msg =
-          raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
+        const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
         throw new Error(`openai-compatible: ${msg}`);
       }
       const text = raw.choices?.[0]?.message?.content ?? "";
@@ -94,8 +89,7 @@ export async function openOpenaiCompatible(
       });
       const raw = (await res.json().catch(() => ({}))) as OpenAiEmbedResponse;
       if (!res.ok) {
-        const msg =
-          raw.error?.message ?? `openai-compatible embed HTTP ${res.status}`;
+        const msg = raw.error?.message ?? `openai-compatible embed HTTP ${res.status}`;
         throw new Error(`openai-compatible: ${msg}`);
       }
       const vectors = (raw.data ?? [])

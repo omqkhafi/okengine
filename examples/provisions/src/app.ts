@@ -16,11 +16,11 @@ import * as notifications from "./flows/notifications";
 
 export const app = oke({ name: "provisions" })
   .adopt({ orders, payments, notifications })
-  .plug(auth())                       // zero ceremony: uses your configured store
-  .plug(audit)                        // app-wide
+  .plug(auth()) // zero ceremony: uses your configured store
+  .plug(audit) // app-wide
   .hook("onError", (ctx, err, fx) => fx.log.error(err));
 
-app.unit("orders").plug(rateLimit({ max: 30 }));  // this unit only
+app.unit("orders").plug(rateLimit({ max: 30 })); // this unit only
 
 export type App = typeof app;
 

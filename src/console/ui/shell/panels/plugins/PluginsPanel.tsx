@@ -48,14 +48,8 @@ export function PluginsPanel() {
   });
 
   const list = listQuery.data;
-  const groups = useMemo(
-    () => groupPlugins(list?.plugins ?? [], search),
-    [list?.plugins, search],
-  );
-  const open =
-    list?.plugins.find((p) => p.id === search.plugin) ??
-    list?.plugins[0] ??
-    null;
+  const groups = useMemo(() => groupPlugins(list?.plugins ?? [], search), [list?.plugins, search]);
+  const open = list?.plugins.find((p) => p.id === search.plugin) ?? list?.plugins[0] ?? null;
   const command = open ? copyableCommand(open) : null;
 
   const copy = async () => {
@@ -70,8 +64,8 @@ export function PluginsPanel() {
       <header className="shrink-0 border-b border-[var(--oke-line)] px-4 py-3">
         <h1 className="text-lg text-[var(--oke-fg)]">Plugins</h1>
         <p className="mt-1 text-sm text-[var(--oke-muted)]">
-          Origin × state — CORE stays listed when off; local/community only when
-          plugged. Read-only; git review is the approval.
+          Origin × state — CORE stays listed when off; local/community only when plugged. Read-only;
+          git review is the approval.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-[var(--oke-muted)]">
@@ -79,9 +73,7 @@ export function PluginsPanel() {
             <Input
               aria-label="Filter plugins"
               value={search.q ?? ""}
-              onChange={(e) =>
-                setSearch({ ...search, q: e.target.value || undefined })
-              }
+              onChange={(e) => setSearch({ ...search, q: e.target.value || undefined })}
               className="min-h-8 w-56"
             />
           </label>
@@ -89,10 +81,7 @@ export function PluginsPanel() {
             value={search.origin}
             onChange={(origin) => setSearch({ ...search, origin })}
           />
-          <StateFilter
-            value={search.state}
-            onChange={(state) => setSearch({ ...search, state })}
-          />
+          <StateFilter value={search.state} onChange={(state) => setSearch({ ...search, state })} />
         </div>
       </header>
 
@@ -142,9 +131,7 @@ export function PluginsPanel() {
           className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
         >
           {!open ? (
-            <p className="text-sm text-[var(--oke-muted)]">
-              Select a plugin
-            </p>
+            <p className="text-sm text-[var(--oke-muted)]">Select a plugin</p>
           ) : (
             <PluginDetail
               plugin={open}
@@ -175,13 +162,9 @@ function PluginDetail(props: {
             ({p.origin} · {p.state})
           </span>
         </h2>
-        {p.summary ? (
-          <p className="mt-1 text-sm text-[var(--oke-muted)]">{p.summary}</p>
-        ) : null}
+        {p.summary ? <p className="mt-1 text-sm text-[var(--oke-muted)]">{p.summary}</p> : null}
         {p.version ? (
-          <p className="mt-1 text-xs text-[var(--oke-muted)]">
-            Version {p.version}
-          </p>
+          <p className="mt-1 text-xs text-[var(--oke-muted)]">Version {p.version}</p>
         ) : null}
       </div>
 
@@ -210,9 +193,7 @@ function PluginDetail(props: {
           <p className="mt-2 text-sm text-[var(--oke-muted)]">None</p>
         ) : (
           <table className="mt-2 w-full text-left text-sm">
-            <caption className="sr-only">
-              Hook stages and measured mean cost
-            </caption>
+            <caption className="sr-only">Hook stages and measured mean cost</caption>
             <thead>
               <tr className="text-xs text-[var(--oke-muted)]">
                 <th scope="col" className="py-1 pr-3 font-normal">
@@ -232,9 +213,7 @@ function PluginDetail(props: {
                   <th scope="row" className="py-1 pr-3 font-mono font-normal">
                     {i.stage}
                   </th>
-                  <td className="py-1 pr-3">
-                    {i.meanMs === null ? "—" : i.meanMs.toFixed(2)}
-                  </td>
+                  <td className="py-1 pr-3">{i.meanMs === null ? "—" : i.meanMs.toFixed(2)}</td>
                   <td className="py-1">{i.count}</td>
                 </tr>
               ))}
@@ -243,8 +222,8 @@ function PluginDetail(props: {
         )}
         {p.hookCost ? (
           <p className="mt-2 text-xs text-[var(--oke-muted)]" role="status">
-            p50 {p.hookCost.p50Ms.toFixed(2)} ms · p95{" "}
-            {p.hookCost.p95Ms.toFixed(2)} ms · n={p.hookCost.count}
+            p50 {p.hookCost.p50Ms.toFixed(2)} ms · p95 {p.hookCost.p95Ms.toFixed(2)} ms · n=
+            {p.hookCost.count}
           </p>
         ) : null}
       </section>
@@ -299,9 +278,7 @@ function PluginDetail(props: {
                 >
                   {c.summary}
                 </a>
-                <span className="ml-2 text-xs text-[var(--oke-muted)]">
-                  {c.category}
-                </span>
+                <span className="ml-2 text-xs text-[var(--oke-muted)]">{c.category}</span>
               </li>
             ))}
           </ul>
@@ -326,14 +303,12 @@ function PluginDetail(props: {
               ) : null}
             </div>
             <p className="text-xs text-[var(--oke-muted)]">
-              The Console never installs. Git review is the approval — run this
-              yourself.
+              The Console never installs. Git review is the approval — run this yourself.
             </p>
           </div>
         ) : (
           <p className="mt-2 text-sm text-[var(--oke-muted)]">
-            No install command — turn off by removing the code line, not from
-            this UI.
+            No install command — turn off by removing the code line, not from this UI.
           </p>
         )}
       </section>

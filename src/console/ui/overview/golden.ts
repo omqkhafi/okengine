@@ -19,21 +19,14 @@ export const SATURATION_LAG_MS = 200;
  * @param runs - Wide-event population
  * @param now - Clock
  */
-export function computeGoldenSignals(
-  runs: readonly RunRecord[],
-  now: number,
-): GoldenSignals {
+export function computeGoldenSignals(runs: readonly RunRecord[], now: number): GoldenSignals {
   const from = now - GOLDEN_WINDOW_MS;
-  const window = runs.filter(
-    (r) => r.startedAt >= from && r.startedAt <= now,
-  );
+  const window = runs.filter((r) => r.startedAt >= from && r.startedAt <= now);
   const n = window.length;
   const errors = window.filter((r) => !!r.error).length;
   const durations = window.map((r) => r.durationMs).sort((a, b) => a - b);
   const saturated = window.filter(
-    (r) =>
-      (r.replicaLagMs != null && r.replicaLagMs > SATURATION_LAG_MS) ||
-      r.cache === "miss",
+    (r) => (r.replicaLagMs != null && r.replicaLagMs > SATURATION_LAG_MS) || r.cache === "miss",
   ).length;
 
   return {
@@ -49,9 +42,6 @@ export function computeGoldenSignals(
 function percentile(sorted: readonly number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0]!;
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(p * sorted.length) - 1),
-  );
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
   return sorted[idx]!;
 }

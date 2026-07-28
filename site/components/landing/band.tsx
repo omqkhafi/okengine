@@ -5,8 +5,8 @@
  * Copyright (c) 2024 - present, Bereket Engida. See site/NOTICE.
  */
 
-import type { ReactNode } from 'react';
-import { cn } from '@/lib/cn';
+import type { ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * Small monospace section marker shown at the top-left of a band.
@@ -43,7 +43,7 @@ export function Band({
   return (
     <section className="border-b border-fd-border">
       {label ? <BandLabel>{label}</BandLabel> : null}
-      <div className={cn('px-5 py-10 sm:px-8 sm:py-14', className)}>{children}</div>
+      <div className={cn("px-5 py-10 sm:px-8 sm:py-14", className)}>{children}</div>
     </section>
   );
 }

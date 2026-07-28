@@ -44,15 +44,8 @@ export interface ConsentStore {
 export function createConsentStore(): ConsentStore {
   const rows: OptOut[] = [];
 
-  function matches(
-    subject: string,
-    medium: ChannelMedium,
-  ): boolean {
-    return rows.some(
-      (r) =>
-        r.subject === subject &&
-        (r.medium === "all" || r.medium === medium),
-    );
+  function matches(subject: string, medium: ChannelMedium): boolean {
+    return rows.some((r) => r.subject === subject && (r.medium === "all" || r.medium === medium));
   }
 
   return {
@@ -60,9 +53,7 @@ export function createConsentStore(): ConsentStore {
       return matches(subject, medium);
     },
     optOut(subject, medium) {
-      if (
-        !rows.some((r) => r.subject === subject && r.medium === medium)
-      ) {
+      if (!rows.some((r) => r.subject === subject && r.medium === medium)) {
         rows.push({ subject, medium, at: Date.now() });
       }
     },

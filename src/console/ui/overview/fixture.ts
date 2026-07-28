@@ -85,7 +85,7 @@ export const OVERVIEW_VAULT_FIXTURE = {
       resolution: [
         { source: "process.env" as const, present: false, won: false },
         { source: ".env.local" as const, present: true, won: true },
-        { source: ".env.stack" as const, present: false, won: false },
+        { source: ".env.docker" as const, present: false, won: false },
         { source: "driver" as const, present: false, won: false },
         { source: "dev-fallback" as const, present: false, won: false },
       ],
@@ -106,28 +106,26 @@ export const OVERVIEW_VAULT_FIXTURE = {
  * Runs that burn bookings.create in the short window
  * (error rate ≫ 0.1% tolerable for 99.9%).
  */
-export const OVERVIEW_BURN_RUNS: readonly RunRecord[] = Array.from(
-  { length: 100 },
-  (_, i) =>
-    rowToRun({
-      id: `burn-${i}`,
+export const OVERVIEW_BURN_RUNS: readonly RunRecord[] = Array.from({ length: 100 }, (_, i) =>
+  rowToRun({
+    id: `burn-${i}`,
+    flow: "bookings.create",
+    unit: "bookings",
+    trigger: "http",
+    plane: "user",
+    cache: "none",
+    cost: 0.05,
+    startedAt: OVERVIEW_NOW - 30 * 60_000 + i * 1_000,
+    endedAt: OVERVIEW_NOW - 30 * 60_000 + i * 1_000 + 40,
+    durationMs: 40,
+    error: i < 20 ? "Timeout" : null,
+    effects: [],
+    logs: [],
+    dimensions: {
       flow: "bookings.create",
-      unit: "bookings",
-      trigger: "http",
-      plane: "user",
-      cache: "none",
-      cost: 0.05,
-      startedAt: OVERVIEW_NOW - 30 * 60_000 + i * 1_000,
-      endedAt: OVERVIEW_NOW - 30 * 60_000 + i * 1_000 + 40,
-      durationMs: 40,
-      error: i < 20 ? "Timeout" : null,
-      effects: [],
-      logs: [],
-      dimensions: {
-        flow: "bookings.create",
-        error_code: i < 20 ? "Timeout" : null,
-      },
-    }),
+      error_code: i < 20 ? "Timeout" : null,
+    },
+  }),
 );
 
 /** Full Overview inputs — burning SLO + multi-panel findings. */
@@ -151,10 +149,7 @@ export const OVERVIEW_DAY_ONE_INPUTS: OverviewInputs = {
   manifest: {
     ...OVERVIEW_MANIFEST,
     flows: Object.fromEntries(
-      Object.entries(OVERVIEW_MANIFEST.flows ?? {}).map(([k, f]) => [
-        k,
-        { ...f, slo: undefined },
-      ]),
+      Object.entries(OVERVIEW_MANIFEST.flows ?? {}).map(([k, f]) => [k, { ...f, slo: undefined }]),
     ),
     journeys: undefined,
   },

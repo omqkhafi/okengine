@@ -4,20 +4,14 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import {
-  confirmationFor,
-  validateTypedConfirm,
-} from "../../../flows/confirmation.ts";
+import { confirmationFor, validateTypedConfirm } from "../../../flows/confirmation.ts";
 import { diffAgainstSchema, seedFromSchema } from "../../../flows/contract.ts";
 import type { FlowNode } from "../../../flows/graph.ts";
 import { emitSaveAsTest, saveAsTestPath } from "../../../flows/save-as-test.ts";
 import { TIER_LABEL } from "../../../flows/tiers.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Field, Input } from "../../components/ui.tsx";
-import {
-  ContractEditor,
-  validateBeforeSend,
-} from "./ContractEditor.tsx";
+import { ContractEditor, validateBeforeSend } from "./ContractEditor.tsx";
 
 /** Props for {@link FlowDrawer}. */
 export interface FlowDrawerProps {
@@ -38,9 +32,9 @@ export interface FlowDrawerProps {
 export function FlowDrawer(props: FlowDrawerProps) {
   const { flow, mode } = props;
   const [body, setBody] = useState<unknown>(() => seedFromSchema(flow.inSchema));
-  const [fieldErrors, setFieldErrors] = useState<
-    ReturnType<typeof validateBeforeSend>["errors"]
-  >([]);
+  const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof validateBeforeSend>["errors"]>(
+    [],
+  );
   const [asUserId, setAsUserId] = useState("");
   const [confirmTyped, setConfirmTyped] = useState("");
   const [reason, setReason] = useState("");
@@ -145,9 +139,7 @@ export function FlowDrawer(props: FlowDrawerProps) {
             {flow.action}
           </h2>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="border border-[var(--oke-line)] px-1.5 py-0.5">
-              {flow.plane}
-            </span>
+            <span className="border border-[var(--oke-line)] px-1.5 py-0.5">{flow.plane}</span>
             {flow.flags.durable ? <Flag>durable</Flag> : null}
             {flow.flags.live ? <Flag>live</Flag> : null}
             {flow.flags.external ? (
@@ -159,10 +151,7 @@ export function FlowDrawer(props: FlowDrawerProps) {
           </div>
           {mode === "workbench" ? (
             <p className="text-xs text-[var(--oke-muted)]">
-              Effects:{" "}
-              {flow.peakTier === "none"
-                ? "none"
-                : TIER_LABEL[flow.peakTier]}
+              Effects: {flow.peakTier === "none" ? "none" : TIER_LABEL[flow.peakTier]}
               {flow.external ? " · irreversible" : ""}
             </p>
           ) : null}
@@ -241,8 +230,8 @@ export function FlowDrawer(props: FlowDrawerProps) {
               className="flex flex-col gap-2 border border-[var(--oke-external)] p-3"
             >
               <p className="text-sm text-[var(--oke-external)]">
-                This flow has external effects in production. Type{" "}
-                <strong>{pattern.phrase}</strong> and record a reason.
+                This flow has external effects in production. Type <strong>{pattern.phrase}</strong>{" "}
+                and record a reason.
               </p>
               <Field label={`Type ${pattern.phrase}`}>
                 <Input
@@ -252,10 +241,7 @@ export function FlowDrawer(props: FlowDrawerProps) {
                 />
               </Field>
               <Field label="Reason">
-                <Input
-                  value={reason}
-                  onChange={(e) => setReason(e.currentTarget.value)}
-                />
+                <Input value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
               </Field>
             </section>
           ) : null}
@@ -278,11 +264,10 @@ export function FlowDrawer(props: FlowDrawerProps) {
                 <pre className="overflow-auto border border-[var(--oke-line)] p-3 font-mono text-xs">
                   {JSON.stringify(response, null, 2)}
                 </pre>
-                {schemaDiff &&
-                (schemaDiff.missing.length > 0 || schemaDiff.extra.length > 0) ? (
+                {schemaDiff && (schemaDiff.missing.length > 0 || schemaDiff.extra.length > 0) ? (
                   <p role="status" className="text-xs text-[var(--oke-danger)]">
-                    Schema drift — missing: {schemaDiff.missing.join(", ") || "—"} ·
-                    extra: {schemaDiff.extra.join(", ") || "—"}
+                    Schema drift — missing: {schemaDiff.missing.join(", ") || "—"} · extra:{" "}
+                    {schemaDiff.extra.join(", ") || "—"}
                   </p>
                 ) : null}
                 <Button

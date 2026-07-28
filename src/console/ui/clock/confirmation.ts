@@ -2,10 +2,7 @@
  * Run-now confirmation — external effects follow §10.5 (D).
  */
 
-import {
-  UNDO_WINDOW_MS,
-  type ConfirmationPattern,
-} from "../flows/confirmation.ts";
+import { UNDO_WINDOW_MS, type ConfirmationPattern } from "../flows/confirmation.ts";
 import type { ClockCronRecord } from "./types.ts";
 
 export { UNDO_WINDOW_MS, validateTypedConfirm } from "../flows/confirmation.ts";

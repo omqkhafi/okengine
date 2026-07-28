@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { signal } from "./declare.ts";
-import {
-  createMemorySignalConfigStore,
-  reconcileSignals,
-} from "./reconcile.ts";
+import { createMemorySignalConfigStore, reconcileSignals } from "./reconcile.ts";
 
 describe("reconcileSignals", () => {
   test("marks a removed signal orphaned without deleting it", async () => {

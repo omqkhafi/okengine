@@ -4,12 +4,7 @@
  */
 
 import { createClient } from "./create.ts";
-import {
-  isErrorCode,
-  isFail,
-  isOk,
-  isTransportError,
-} from "./errors.ts";
+import { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
 import { createTransport } from "./transport.ts";
 
 /**

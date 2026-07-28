@@ -3,12 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  computeSloBurns,
-  declaredSlos,
-  hasDeclaredSlos,
-  parseAvailability,
-} from "./slo.ts";
+import { computeSloBurns, declaredSlos, hasDeclaredSlos, parseAvailability } from "./slo.ts";
 import {
   OVERVIEW_BURN_RUNS,
   OVERVIEW_DAY_ONE_INPUTS,
@@ -30,9 +25,10 @@ describe("declaredSlos", () => {
     const slos = declaredSlos(OVERVIEW_MANIFEST);
     expect(slos.some((s) => s.id === "flow:bookings.create")).toBe(true);
     expect(slos.some((s) => s.id === "journey:book-a-flight")).toBe(true);
-    expect(
-      slos.find((s) => s.id === "flow:bookings.create")?.tolerableErrorRate,
-    ).toBeCloseTo(0.001, 10);
+    expect(slos.find((s) => s.id === "flow:bookings.create")?.tolerableErrorRate).toBeCloseTo(
+      0.001,
+      10,
+    );
   });
 
   test("day-one Manifest has no declared SLOs", () => {

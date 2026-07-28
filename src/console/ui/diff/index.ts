@@ -11,10 +11,7 @@ export type {
   DiffListResponse,
 } from "./types.ts";
 
-export {
-  DIFF_EMPTY_BASELINE_FIXTURE,
-  DIFF_LIST_FIXTURE,
-} from "./fixture.ts";
+export { DIFF_EMPTY_BASELINE_FIXTURE, DIFF_LIST_FIXTURE } from "./fixture.ts";
 
 export {
   filterCategory,
@@ -32,7 +29,4 @@ export {
   groupByCategory,
 } from "./group.ts";
 
-export {
-  whatChangedSummary,
-  type DiffDeploySummary,
-} from "./summary.ts";
+export { whatChangedSummary, type DiffDeploySummary } from "./summary.ts";

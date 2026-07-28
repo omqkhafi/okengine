@@ -11,10 +11,7 @@ import type { AnyFlowDef } from "../kernel/flow.ts";
 import type { Fx } from "../kernel/fx.ts";
 import type { Trigger } from "../kernel/triggers.ts";
 import type { FlowPlane } from "../manifest/types.ts";
-import {
-  cacheDimensionOf,
-  type RunTelemetry,
-} from "../kernel/run-telemetry.ts";
+import { cacheDimensionOf, type RunTelemetry } from "../kernel/run-telemetry.ts";
 import type { RunError, WideEvent } from "./types.ts";
 
 /** Inputs for {@link collectWideEvent}. */
@@ -57,18 +54,12 @@ export interface CollectWideEventInput {
  */
 export function collectWideEvent(input: CollectWideEventInput): WideEvent {
   const plane: FlowPlane = input.flow.plane ?? "user";
-  const principal =
-    plane === "operator"
-      ? input.fx.operator.id
-      : input.fx.auth.userId;
+  const principal = plane === "operator" ? input.fx.operator.id : input.fx.auth.userId;
   const tenant = input.fx.tenant.id;
-  const subjectId =
-    input.telemetry.subjectId ?? principal ?? tenant ?? null;
+  const subjectId = input.telemetry.subjectId ?? principal ?? tenant ?? null;
   const cache = cacheDimensionOf(input.telemetry);
   const gates =
-    input.telemetry.gates.length > 0
-      ? [...input.telemetry.gates]
-      : httpGates(input.trigger);
+    input.telemetry.gates.length > 0 ? [...input.telemetry.gates] : httpGates(input.trigger);
 
   const error = failureToRunError(input.failure);
   const durationMs = Math.max(0, input.endedAt - input.startedAt);
@@ -103,9 +94,7 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     subjectId,
     gates,
     cache,
-    ...(input.telemetry.replica !== undefined
-      ? { replica: input.telemetry.replica }
-      : {}),
+    ...(input.telemetry.replica !== undefined ? { replica: input.telemetry.replica } : {}),
     ...(input.telemetry.replicaLagMs !== undefined
       ? { replicaLagMs: input.telemetry.replicaLagMs }
       : {}),
@@ -113,9 +102,7 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     ...(input.telemetry.promptVersion !== undefined
       ? { promptVersion: input.telemetry.promptVersion }
       : {}),
-    ...(input.buildVersion !== undefined
-      ? { buildVersion: input.buildVersion }
-      : {}),
+    ...(input.buildVersion !== undefined ? { buildVersion: input.buildVersion } : {}),
     error,
     effects: [...input.ledger.entries],
     logs: [...input.telemetry.logs],
@@ -129,14 +116,10 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
 
 function httpGates(trigger: Trigger): string[] {
   if (trigger.kind !== "http") return [];
-  return trigger.gates.map((g) =>
-    typeof g === "string" ? g : g.name,
-  );
+  return trigger.gates.map((g) => (typeof g === "string" ? g : g.name));
 }
 
-function failureToRunError(
-  failure: FlowFailure | null | undefined,
-): RunError | null {
+function failureToRunError(failure: FlowFailure | null | undefined): RunError | null {
   if (!failure) return null;
   const code = failure.error?.code ?? "failure";
   const message = failure.error?.message;

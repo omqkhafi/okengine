@@ -5,6 +5,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   CODEMODS,
+  rewriteConfigEnvKeys,
+  rewriteFromStackMarkers,
   runCodemods,
   validateCodemodRegistry,
   type Codemod,
@@ -45,14 +47,31 @@ describe("codemod registry", () => {
         from: "0.0.0",
         to: "0.0.1",
         description: "rename demo",
-        apply: async () => [
-          { path: "src/x.ts", before: "old", after: "new" },
-        ],
+        apply: async () => [{ path: "src/x.ts", before: "old", after: "new" }],
       },
     ];
     const changes = await runCodemods("/tmp", registry);
-    expect(changes).toEqual([
-      { path: "src/x.ts", before: "old", after: "new" },
-    ]);
+    expect(changes).toEqual([{ path: "src/x.ts", before: "old", after: "new" }]);
+  });
+
+  test("rewriteConfigEnvKeys renames driver-map keys", () => {
+    const after = rewriteConfigEnvKeys(`sql: {
+  dev: "sqlite",
+  stack: "postgres",
+  prod: "postgres",
+}`);
+    expect(after).toContain('local: "sqlite"');
+    expect(after).toContain('docker: "postgres"');
+    expect(after).not.toMatch(/(^|[^\w.])dev\s*:/);
+    expect(after).not.toMatch(/(^|[^\w.])stack\s*:/);
+  });
+
+  test("rewriteFromStackMarkers renames vault helpers", () => {
+    const after = rewriteFromStackMarkers(
+      `dev: vault.fromStack("store.sql") // __oke_from_stack__`,
+    );
+    expect(after).toContain("fromDocker");
+    expect(after).toContain("__oke_from_docker__");
+    expect(after).not.toContain("fromStack");
   });
 });

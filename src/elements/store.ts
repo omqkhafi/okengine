@@ -22,6 +22,37 @@ export type {
 } from "./store/declare.ts";
 
 export {
+  field,
+  schema,
+  schemaTable,
+  schemaRelations,
+  isSchemaTableDecl,
+  isSchemaColumnDecl,
+  isSchemaRelationsDecl,
+  isFieldBuilder,
+  finalizeColumnMap,
+  tablesFromExports,
+  relationsFromExports,
+} from "./store/schema-decl.ts";
+export type {
+  FieldBuilder,
+  FieldSqlType,
+  DefaultFnKind,
+  SchemaColumnDecl,
+  SchemaColumnInput,
+  SchemaTableDecl,
+  SchemaTableWithColumns,
+  SchemaRelationsDecl,
+  SchemaRelationEntry,
+  SchemaRelationOne,
+  SchemaRelationMany,
+  RelationColumnRef,
+  ReferenceAction,
+  ReferenceActions,
+  ColumnReference,
+} from "./store/schema-decl.ts";
+
+export {
   classify,
   buildClassificationMap,
   maskRows,
@@ -39,33 +70,15 @@ export {
   isInvalidatedByWrite,
   parseTtlMs,
 } from "./store/cache.ts";
-export type {
-  CacheTier,
-  CacheEntry,
-  InvalidationEvent,
-  StoreCache,
-} from "./store/cache.ts";
+export type { CacheTier, CacheEntry, InvalidationEvent, StoreCache } from "./store/cache.ts";
 
-export {
-  isReadOnlyStoreFlow,
-  sqlRoleForEffects,
-  resolveSqlTarget,
-} from "./store/replica.ts";
+export { isReadOnlyStoreFlow, sqlRoleForEffects, resolveSqlTarget } from "./store/replica.ts";
 export type { SqlBindingConfig } from "./store/replica.ts";
 
-export {
-  defineTable,
-  resolveTableName,
-  classificationsFromTable,
-  id,
-  now,
-} from "./store/table.ts";
+export { defineTable, resolveTableName, classificationsFromTable, id, now } from "./store/table.ts";
 export type { ColumnDef, TableHandle } from "./store/table.ts";
 
-export {
-  createSqlStoreHandle,
-  resolvePkColumn,
-} from "./store/sql-session.ts";
+export { createSqlStoreHandle, resolvePkColumn } from "./store/sql-session.ts";
 export type {
   SqlStoreHandle,
   SelectBuilder,
@@ -76,10 +89,7 @@ export type {
   WhereMap,
 } from "./store/sql-session.ts";
 
-export {
-  createStoreRuntime,
-  putTier2,
-} from "./store/runtime.ts";
+export { createStoreRuntime, putTier2 } from "./store/runtime.ts";
 export type {
   StoreRuntime,
   StoreDriverBundle,
@@ -92,9 +102,5 @@ export type {
   IndexStoreFxHandle,
 } from "./store/runtime.ts";
 
-export {
-  fileKeyWarnings,
-  contentAddressedKey,
-  projectFileKeys,
-} from "./store/files-policy.ts";
+export { fileKeyWarnings, contentAddressedKey, projectFileKeys } from "./store/files-policy.ts";
 export type { FileKeyWarning } from "./store/files-policy.ts";

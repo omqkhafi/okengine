@@ -43,9 +43,7 @@ export function SignalsPanel() {
   const [typed, setTyped] = useState("");
   const [reason, setReason] = useState("");
   const [dryRunSummary, setDryRunSummary] = useState<string | null>(null);
-  const [monitor, setMonitor] = useState<LiveMonitorState>(() =>
-    createLiveMonitor(),
-  );
+  const [monitor, setMonitor] = useState<LiveMonitorState>(() => createLiveMonitor());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const setSearch = (next: SignalsSearch) => {
@@ -68,20 +66,13 @@ export function SignalsPanel() {
   });
 
   const signals = signalsQuery.data ?? [];
-  const groups = useMemo(
-    () => groupByPhysics(signals, search.q ?? ""),
-    [signals, search.q],
-  );
+  const groups = useMemo(() => groupByPhysics(signals, search.q ?? ""), [signals, search.q]);
   const open = signals.find((s) => s.name === search.signal);
   const line = open ? durableLine(open.consumersDurable) : null;
   const dlq = open?.deadLetters.find((d) => d.id === search.dlq);
   const fields = open ? fieldsFromSchema(open.schema) : [];
-  const replayConfirm = open
-    ? replayConfirmation(open, { production: true })
-    : null;
-  const discardConfirm = open
-    ? discardConfirmation(open, { production: true })
-    : null;
+  const replayConfirm = open ? replayConfirmation(open, { production: true }) : null;
+  const discardConfirm = open ? discardConfirmation(open, { production: true }) : null;
   const dryOffer = open ? dryRunOffer(open) : null;
 
   useEffect(() => {
@@ -99,8 +90,7 @@ export function SignalsPanel() {
     }
     setMonitor((m) => ({
       ...setPaused(m, false),
-      payloads:
-        m.payloads.length === 0 ? [...open.recentLive] : m.payloads,
+      payloads: m.payloads.length === 0 ? [...open.recentLive] : m.payloads,
     }));
   }, [open?.name, open?.recentLive, open?.delivery, search.paused]);
 
@@ -110,10 +100,7 @@ export function SignalsPanel() {
       if (dryOffer && !dryOffer.ok) {
         throw new Error(dryOffer.reason);
       }
-      const ids =
-        selectedIds.size > 0
-          ? [...selectedIds]
-          : open.deadLetters.map((d) => d.id);
+      const ids = selectedIds.size > 0 ? [...selectedIds] : open.deadLetters.map((d) => d.id);
       const res = await consoleCalls.signalsDryRunReplay({
         signal: open.name,
         messageIds: ids,
@@ -129,14 +116,10 @@ export function SignalsPanel() {
         data.wouldHaveFired?.length > 0
           ? ` · ${data.wouldHaveFired.length} external effect(s) stubbed`
           : "";
-      setDryRunSummary(
-        `${data.succeeded} would succeed, ${data.failed} would still fail${stubs}`,
-      );
+      setDryRunSummary(`${data.succeeded} would succeed, ${data.failed} would still fail${stubs}`);
     },
     onError: (err) => {
-      setDryRunSummary(
-        err instanceof Error ? err.message : "Dry-run refused",
-      );
+      setDryRunSummary(err instanceof Error ? err.message : "Dry-run refused");
     },
   });
 
@@ -158,9 +141,7 @@ export function SignalsPanel() {
             ? [dlq.id]
             : open.deadLetters.map((d) => d.id);
       const payloads =
-        dlq && fields
-          ? { [dlq.id]: formValuesToPayload(formValues, fields) }
-          : undefined;
+        dlq && fields ? { [dlq.id]: formValuesToPayload(formValues, fields) } : undefined;
       const res = await consoleCalls.signalsReplay({
         signal: open.name,
         messageIds: ids,
@@ -168,8 +149,7 @@ export function SignalsPanel() {
         ratePerSec: rate,
         dryRun: false,
         payloads,
-        confirmation:
-          replayConfirm.kind === "typed" ? typed : undefined,
+        confirmation: replayConfirm.kind === "typed" ? typed : undefined,
         reason: replayConfirm.kind === "typed" ? reason : undefined,
       });
       if (res.error) throw new Error(res.error.code);
@@ -202,8 +182,7 @@ export function SignalsPanel() {
       const res = await consoleCalls.signalsDiscard({
         signal: open.name,
         messageIds: ids,
-        confirmation:
-          discardConfirm.kind === "typed" ? typed : undefined,
+        confirmation: discardConfirm.kind === "typed" ? typed : undefined,
         reason: discardConfirm.kind === "typed" ? reason : undefined,
       });
       if (res.error) throw new Error(res.error.code);
@@ -220,15 +199,9 @@ export function SignalsPanel() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 flex-wrap items-end gap-4 border-b border-[var(--oke-line)] px-6 py-4">
         <div className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">
-            Signals
-          </p>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Delivery physics
-          </h1>
-          <p className="text-xs text-[var(--oke-muted)]">
-            One list — once · broadcast · live
-          </p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">Signals</p>
+          <h1 className="text-xl font-semibold tracking-tight">Delivery physics</h1>
+          <p className="text-xs text-[var(--oke-muted)]">One list — once · broadcast · live</p>
         </div>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-[var(--oke-muted)]">Filter</span>
@@ -236,9 +209,7 @@ export function SignalsPanel() {
             aria-label="Filter signals"
             className="min-h-8 border border-[var(--oke-line)] bg-transparent px-2 text-sm"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.target.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.target.value || undefined })}
           />
         </label>
       </header>
@@ -249,13 +220,9 @@ export function SignalsPanel() {
           className="min-h-0 overflow-auto border-r border-[var(--oke-line)]"
         >
           {signalsQuery.isLoading ? (
-            <p className="px-6 py-8 text-sm text-[var(--oke-muted)]">
-              Loading signals…
-            </p>
+            <p className="px-6 py-8 text-sm text-[var(--oke-muted)]">Loading signals…</p>
           ) : groups.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-[var(--oke-muted)]">
-              No signals declared.
-            </p>
+            <p className="px-6 py-8 text-sm text-[var(--oke-muted)]">No signals declared.</p>
           ) : (
             groups.map((group) => (
               <section
@@ -283,10 +250,7 @@ export function SignalsPanel() {
                         <span className="font-medium">
                           {s.name}
                           {s.orphaned ? (
-                            <span
-                              role="status"
-                              className="ml-2 text-xs text-[var(--oke-muted)]"
-                            >
+                            <span role="status" className="ml-2 text-xs text-[var(--oke-muted)]">
                               orphaned
                             </span>
                           ) : null}
@@ -294,8 +258,7 @@ export function SignalsPanel() {
                         <span className="text-xs text-[var(--oke-muted)]">
                           {s.delivery === "once" && (
                             <>
-                              pending {s.pending} · in-flight {s.inflight} ·
-                              DLQ {s.dead}
+                              pending {s.pending} · in-flight {s.inflight} · DLQ {s.dead}
                               {s.outboxLagMs != null && s.outboxLagMs > 0
                                 ? ` · outbox ${s.outboxLagMs}ms`
                                 : ""}
@@ -388,9 +351,7 @@ export function SignalsPanel() {
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-medium">Subscribers</h3>
                   <table className="w-full text-left text-sm">
-                    <caption className="sr-only">
-                      Per-subscriber lag and errors
-                    </caption>
+                    <caption className="sr-only">Per-subscriber lag and errors</caption>
                     <thead>
                       <tr className="text-[var(--oke-muted)]">
                         <th scope="col" className="py-1 font-normal">
@@ -421,10 +382,7 @@ export function SignalsPanel() {
                               onClick={() =>
                                 setSearch({
                                   ...search,
-                                  sub:
-                                    search.sub === sub.id
-                                      ? undefined
-                                      : sub.id,
+                                  sub: search.sub === sub.id ? undefined : sub.id,
                                 })
                               }
                             >
@@ -439,10 +397,7 @@ export function SignalsPanel() {
               ) : null}
 
               {open.delivery === "live" ? (
-                <section
-                  aria-label="Payload monitor"
-                  className="flex flex-col gap-2"
-                >
+                <section aria-label="Payload monitor" className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-sm font-medium">Payload monitor</h3>
                     <span className="text-xs text-[var(--oke-muted)]">
@@ -466,10 +421,9 @@ export function SignalsPanel() {
                       type="button"
                       variant="ghost"
                       onClick={() => {
-                        const blob = new Blob(
-                          [exportLivePayloads(monitor.payloads)],
-                          { type: "application/json" },
-                        );
+                        const blob = new Blob([exportLivePayloads(monitor.payloads)], {
+                          type: "application/json",
+                        });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement("a");
                         a.href = url;
@@ -498,10 +452,7 @@ export function SignalsPanel() {
                       });
                     }}
                   >
-                    {(monitor.payloads.length
-                      ? monitor.payloads
-                      : open.recentLive
-                    ).map((p, i) => (
+                    {(monitor.payloads.length ? monitor.payloads : open.recentLive).map((p, i) => (
                       <li key={i} className="border-b border-[var(--oke-line)]/50 py-1">
                         {JSON.stringify(p)}
                       </li>
@@ -569,18 +520,14 @@ export function SignalsPanel() {
 
               {open.dead > 0 ? (
                 <section aria-label="Dead letters" className="flex flex-col gap-3">
-                  <h3 className="text-sm font-medium">
-                    Dead letters ({open.dead})
-                  </h3>
+                  <h3 className="text-sm font-medium">Dead letters ({open.dead})</h3>
                   <p className="text-xs text-[var(--oke-muted)]">
-                    Bulk repair: dry run first, then replay at a controlled rate
-                    — never an unthrottled flood.
+                    Bulk repair: dry run first, then replay at a controlled rate — never an
+                    unthrottled flood.
                   </p>
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 text-sm">
-                      <span className="text-[var(--oke-muted)]">
-                        Rate (per second)
-                      </span>
+                      <span className="text-[var(--oke-muted)]">Rate (per second)</span>
                       <input
                         aria-label="Replay rate (per second)"
                         type="number"
@@ -600,9 +547,7 @@ export function SignalsPanel() {
                       type="button"
                       onClick={() => dryRun.mutate()}
                       disabled={dryRun.isPending || (dryOffer !== null && !dryOffer.ok)}
-                      title={
-                        dryOffer && !dryOffer.ok ? dryOffer.reason : undefined
-                      }
+                      title={dryOffer && !dryOffer.ok ? dryOffer.reason : undefined}
                     >
                       Dry run
                     </Button>
@@ -632,12 +577,11 @@ export function SignalsPanel() {
                       {dryRunSummary}
                     </p>
                   ) : null}
-                  {(replayConfirm?.kind === "typed" ||
-                    discardConfirm?.kind === "typed") && (
+                  {(replayConfirm?.kind === "typed" || discardConfirm?.kind === "typed") && (
                     <div className="flex flex-col gap-2 border border-[var(--oke-line)] p-3">
                       <p className="text-xs text-[var(--oke-muted)]">
-                        This action re-triggers external effects or permanently
-                        discards messages. Type the phrase and a reason.
+                        This action re-triggers external effects or permanently discards messages.
+                        Type the phrase and a reason.
                       </p>
                       <label className="flex flex-col gap-1 text-sm">
                         Confirmation
@@ -688,9 +632,7 @@ export function SignalsPanel() {
                             type="button"
                             aria-pressed={d.id === search.dlq}
                             className="min-h-8 flex-1 text-left text-sm"
-                            onClick={() =>
-                              setSearch(openDeadLetter(search, d.id))
-                            }
+                            onClick={() => setSearch(openDeadLetter(search, d.id))}
                           >
                             <span className="font-mono text-xs">{d.id}</span>
                             {last ? (
@@ -712,9 +654,7 @@ export function SignalsPanel() {
                   className="flex flex-col gap-3 border-t border-[var(--oke-line)] pt-4"
                 >
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">
-                      Dead letter {dlq.id}
-                    </h3>
+                    <h3 className="text-sm font-medium">Dead letter {dlq.id}</h3>
                     <Button
                       type="button"
                       variant="ghost"
@@ -775,9 +715,7 @@ export function SignalsPanel() {
                           aria-label="Payload JSON"
                           className="min-h-24 border border-[var(--oke-line)] bg-transparent px-2 font-mono text-xs"
                           value={formValues._raw ?? ""}
-                          onChange={(e) =>
-                            setFormValues({ _raw: e.target.value })
-                          }
+                          onChange={(e) => setFormValues({ _raw: e.target.value })}
                           rows={4}
                         />
                       </label>
@@ -790,8 +728,7 @@ export function SignalsPanel() {
                     <ol className="list-decimal space-y-1 pl-5 text-sm">
                       {dlq.failures.map((f) => (
                         <li key={`${f.attempt}-${f.code}-${f.at}`}>
-                          Attempt {f.attempt}: <strong>{f.code}</strong> —{" "}
-                          {f.message}
+                          Attempt {f.attempt}: <strong>{f.code}</strong> — {f.message}
                         </li>
                       ))}
                     </ol>

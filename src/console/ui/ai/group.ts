@@ -24,8 +24,7 @@ export function filterPrompts(
   if (!needle) return prompts;
   return prompts.filter(
     (p) =>
-      p.name.toLowerCase().includes(needle) ||
-      (p.model?.toLowerCase().includes(needle) ?? false),
+      p.name.toLowerCase().includes(needle) || (p.model?.toLowerCase().includes(needle) ?? false),
   );
 }
 
@@ -58,9 +57,7 @@ export function versionsForPrompt(
   versions: readonly PromptVersionMetrics[],
   prompt: string,
 ): readonly PromptVersionMetrics[] {
-  return versions
-    .filter((v) => v.prompt === prompt)
-    .sort((a, b) => a.version - b.version);
+  return versions.filter((v) => v.prompt === prompt).sort((a, b) => a.version - b.version);
 }
 
 /**
@@ -69,10 +66,7 @@ export function versionsForPrompt(
  * @param runs - All runs
  * @param agent - Agent name
  */
-export function runsForAgent(
-  runs: readonly AgentRunRow[],
-  agent: string,
-): readonly AgentRunRow[] {
+export function runsForAgent(runs: readonly AgentRunRow[], agent: string): readonly AgentRunRow[] {
   return runs.filter((r) => r.agent === agent);
 }
 
@@ -81,8 +75,6 @@ export function runsForAgent(
  *
  * @param rows - All allowPii projections
  */
-export function allowPiiStanding(
-  rows: readonly AllowPiiRow[],
-): readonly AllowPiiRow[] {
+export function allowPiiStanding(rows: readonly AllowPiiRow[]): readonly AllowPiiRow[] {
   return rows.filter((r) => r.allowPii);
 }

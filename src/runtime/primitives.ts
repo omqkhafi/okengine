@@ -44,8 +44,8 @@ export function createTimers(): RuntimeTimers {
 export function createEnv(): RuntimeEnv {
   return {
     get(key) {
-      const bunEnv = (globalThis as { Bun?: { env?: Record<string, string | undefined> } })
-        .Bun?.env;
+      const bunEnv = (globalThis as { Bun?: { env?: Record<string, string | undefined> } }).Bun
+        ?.env;
       if (bunEnv && key in bunEnv) return bunEnv[key];
       const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } })
         .process?.env;
@@ -70,8 +70,9 @@ export function createEnv(): RuntimeEnv {
 export function createFiles(): RuntimeFiles {
   return {
     async read(path) {
-      const bun = (globalThis as { Bun?: { file?(p: string): { arrayBuffer(): Promise<ArrayBuffer> } } })
-        .Bun;
+      const bun = (
+        globalThis as { Bun?: { file?(p: string): { arrayBuffer(): Promise<ArrayBuffer> } } }
+      ).Bun;
       if (bun?.file) {
         return new Uint8Array(await bun.file(path).arrayBuffer());
       }

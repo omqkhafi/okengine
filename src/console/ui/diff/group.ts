@@ -2,11 +2,7 @@
  * Group / filter Manifest Diff rows — render-only, no reclassification.
  */
 
-import type {
-  DiffCategory,
-  DiffCategoryGroup,
-  DiffChangeRecord,
-} from "./types.ts";
+import type { DiffCategory, DiffCategoryGroup, DiffChangeRecord } from "./types.ts";
 
 /** Display order — blast radius descending. */
 export const DIFF_CATEGORY_ORDER: readonly DiffCategory[] = [
@@ -84,9 +80,7 @@ export function groupByCategory(
  *
  * @param ciGate - Gate status from the projection
  */
-export function formatCiGate(
-  ciGate: DiffChangeRecord["ciGate"],
-): string | null {
+export function formatCiGate(ciGate: DiffChangeRecord["ciGate"]): string | null {
   if (ciGate === "blocked") {
     return "CI gate: blocked — undeclared break";
   }

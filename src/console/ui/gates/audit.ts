@@ -56,8 +56,6 @@ export function auditLines(audit: GateAuditRecord): readonly AuditLine[] {
  */
 export function formatViolation(violation: PlaneViolationRecord): string {
   const scopes = violation.applicationScopes.join(", ");
-  const who = violation.email
-    ? `${violation.name} <${violation.email}>`
-    : violation.name;
+  const who = violation.email ? `${violation.name} <${violation.email}>` : violation.name;
   return `${who} holds application scope(s): ${scopes}`;
 }

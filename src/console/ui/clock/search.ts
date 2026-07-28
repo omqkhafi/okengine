@@ -22,9 +22,7 @@ export type ClockSearch = z.infer<typeof ClockSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseClockSearch(
-  search: Record<string, unknown>,
-): ClockSearch {
+export function parseClockSearch(search: Record<string, unknown>): ClockSearch {
   const parsed = ClockSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -34,9 +32,7 @@ export function parseClockSearch(
  *
  * @param search - Search state
  */
-export function serializeClockSearch(
-  search: ClockSearch,
-): Record<string, string> {
+export function serializeClockSearch(search: ClockSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.cron) out.cron = search.cron;

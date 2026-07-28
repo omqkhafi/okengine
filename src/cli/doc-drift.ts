@@ -81,13 +81,12 @@ async function loadMermaid(): Promise<typeof import("mermaid").default> {
 }
 
 /** App section heading → example package directory name. */
-const APP_SECTIONS: ReadonlyArray<{ readonly re: RegExp; readonly app: string }> =
-  [
-    { re: /^# 1 · BASIC — Notes\b/m, app: "notes" },
-    { re: /^# 2 · INTERMEDIATE — Linkly\b/m, app: "linkly" },
-    { re: /^# 3 · ADVANCED — Provisions\b/m, app: "provisions" },
-    { re: /^# 4 · COMPLEX — Skyport\b/m, app: "skyport" },
-  ];
+const APP_SECTIONS: ReadonlyArray<{ readonly re: RegExp; readonly app: string }> = [
+  { re: /^# 1 · BASIC — Notes\b/m, app: "notes" },
+  { re: /^# 2 · INTERMEDIATE — Linkly\b/m, app: "linkly" },
+  { re: /^# 3 · ADVANCED — Provisions\b/m, app: "provisions" },
+  { re: /^# 4 · COMPLEX — Skyport\b/m, app: "skyport" },
+];
 
 /**
  * Normalize TypeScript source for containment comparison.
@@ -95,12 +94,9 @@ const APP_SECTIONS: ReadonlyArray<{ readonly re: RegExp; readonly app: string }>
  * @param text - Raw source
  */
 export function normalizeTs(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+$/g, ""))
-    .join("\n")
-    .trim();
+  // Collapse all whitespace so claimed fences match sources regardless of
+  // indent (e.g. oxfmt-formatted bodies inside `test(...)` callbacks).
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /** One claimed fence extracted from a markdown document. */
@@ -136,9 +132,7 @@ export function parseMermaidFences(markdown: string): MermaidFence[] {
       i++;
     }
     if (i >= lines.length || !lines[i]!.startsWith("```")) {
-      throw new Error(
-        `doc-drift: unclosed mermaid fence (line ${startLine})`,
-      );
+      throw new Error(`doc-drift: unclosed mermaid fence (line ${startLine})`);
     }
     fences.push({ body: bodyLines.join("\n").trim(), startLine });
   }
@@ -165,15 +159,11 @@ export async function checkMermaidSyntax(
     try {
       const result = await mermaid.parse(fence.body);
       if (!result) {
-        failures.push(
-          `mermaid: parse returned false (line ${fence.startLine})`,
-        );
+        failures.push(`mermaid: parse returned false (line ${fence.startLine})`);
       }
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
-      failures.push(
-        `mermaid: invalid syntax (line ${fence.startLine}): ${detail.split("\n")[0]}`,
-      );
+      failures.push(`mermaid: invalid syntax (line ${fence.startLine}): ${detail.split("\n")[0]}`);
     }
   }
 
@@ -280,10 +270,7 @@ export function parseClaimedFences(markdown: string): ClaimedFence[] {
  * @param targetPath - File or directory (`tests/`)
  * @param expected - Normalized fence body
  */
-async function containsFence(
-  targetPath: string,
-  expected: string,
-): Promise<boolean> {
+async function containsFence(targetPath: string, expected: string): Promise<boolean> {
   const direct = Bun.file(targetPath);
   if (await direct.exists()) {
     const st = await direct.stat();
@@ -293,9 +280,7 @@ async function containsFence(
   }
 
   // Directory claim (`### \`tests/\``) — any nested file may contain the fence.
-  const dirPath = targetPath.endsWith("/")
-    ? targetPath.slice(0, -1)
-    : targetPath;
+  const dirPath = targetPath.endsWith("/") ? targetPath.slice(0, -1) : targetPath;
   try {
     const glob = new Bun.Glob("**/*.{ts,tsx,js,jsx}");
     for await (const rel of glob.scan({ cwd: dirPath, onlyFiles: true })) {
@@ -354,9 +339,7 @@ export async function runDocDrift(
 
   for (const path of paths) {
     const abs = resolve(ROOT, path);
-    const label = abs.startsWith(ROOT + "/")
-      ? abs.slice(ROOT.length + 1)
-      : abs;
+    const label = abs.startsWith(ROOT + "/") ? abs.slice(ROOT.length + 1) : abs;
     const requireClaimed = !label.startsWith("site/");
     const markdown = await Bun.file(abs).text();
     const fences = parseClaimedFences(markdown);
@@ -371,14 +354,10 @@ export async function runDocDrift(
       total += fences.length;
       if (!result.ok) {
         ok = false;
-        messages.push(
-          `doc-drift: ${result.failures.length} failure(s) in ${label}`,
-        );
+        messages.push(`doc-drift: ${result.failures.length} failure(s) in ${label}`);
         for (const f of result.failures) messages.push(`  · ${f}`);
       } else {
-        messages.push(
-          `doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`,
-        );
+        messages.push(`doc-drift: ok — ${fences.length} claimed fence(s) in ${label}`);
       }
     }
 
@@ -388,21 +367,16 @@ export async function runDocDrift(
       const mermaidResult = await checkMermaidSyntax(mermaidFences);
       if (!mermaidResult.ok) {
         ok = false;
-        messages.push(
-          `doc-drift: ${mermaidResult.failures.length} mermaid failure(s) in ${label}`,
-        );
+        messages.push(`doc-drift: ${mermaidResult.failures.length} mermaid failure(s) in ${label}`);
         for (const f of mermaidResult.failures) messages.push(`  · ${f}`);
       } else {
-        messages.push(
-          `doc-drift: ok — ${mermaidFences.length} mermaid fence(s) in ${label}`,
-        );
+        messages.push(`doc-drift: ok — ${mermaidFences.length} mermaid fence(s) in ${label}`);
       }
     }
   }
 
   if (ok && checkedFiles > 1) {
-    const mermaidNote =
-      mermaidTotal > 0 ? ` · ${mermaidTotal} mermaid fence(s)` : "";
+    const mermaidNote = mermaidTotal > 0 ? ` · ${mermaidTotal} mermaid fence(s)` : "";
     messages.push(
       `doc-drift: ok — ${total} claimed fence(s) across ${checkedFiles} file(s)${mermaidNote}`,
     );
@@ -413,10 +387,7 @@ export async function runDocDrift(
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
-  const paths =
-    args.length > 0
-      ? args
-      : [...REQUIRED_DOCS, ...(await discoverSiteDocs(ROOT))];
+  const paths = args.length > 0 ? args : [...REQUIRED_DOCS, ...(await discoverSiteDocs(ROOT))];
   const { ok, messages } = await runDocDrift(paths);
   for (const m of messages) {
     if (ok) console.log(m);

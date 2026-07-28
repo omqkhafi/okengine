@@ -3,10 +3,7 @@
  */
 
 import { memoryVaultDriver } from "../../drivers/vault-memory.ts";
-import {
-  createVaultRuntime,
-  type VaultRuntime,
-} from "../../elements/vault.ts";
+import { createVaultRuntime, type VaultRuntime } from "../../elements/vault.ts";
 import type { ConfigEnv } from "../../config/index.ts";
 import type { BootOptions } from "../boot.ts";
 
@@ -16,10 +13,7 @@ import type { BootOptions } from "../boot.ts";
  * @param options - Boot options
  * @param env - Active environment
  */
-export async function bindVault(
-  options: BootOptions,
-  env: ConfigEnv,
-): Promise<VaultRuntime> {
+export async function bindVault(options: BootOptions, env: ConfigEnv): Promise<VaultRuntime> {
   const vaultSecrets = options.vault?.secrets ?? options.secrets ?? [];
   const vault = createVaultRuntime({
     secrets: vaultSecrets,

@@ -20,9 +20,7 @@ describe("clock search", () => {
       cron: "nightly",
       action: "run",
     });
-    expect(parseClockSearch({ cron: "nightly", action: "run" })).toEqual(
-      withAction,
-    );
+    expect(parseClockSearch({ cron: "nightly", action: "run" })).toEqual(withAction);
   });
 
   test("openWake clears cron", () => {

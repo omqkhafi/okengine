@@ -17,19 +17,12 @@ export interface PluginsSearch {
  *
  * @param search - Raw search
  */
-export function parsePluginsSearch(
-  search: Record<string, unknown>,
-): PluginsSearch {
-  const q = typeof search.q === "string" && search.q.length > 0
-    ? search.q
-    : undefined;
+export function parsePluginsSearch(search: Record<string, unknown>): PluginsSearch {
+  const q = typeof search.q === "string" && search.q.length > 0 ? search.q : undefined;
   const origin = isOrigin(search.origin) ? search.origin : undefined;
-  const state = search.state === "on" || search.state === "off"
-    ? search.state
-    : undefined;
-  const plugin = typeof search.plugin === "string" && search.plugin.length > 0
-    ? search.plugin
-    : undefined;
+  const state = search.state === "on" || search.state === "off" ? search.state : undefined;
+  const plugin =
+    typeof search.plugin === "string" && search.plugin.length > 0 ? search.plugin : undefined;
   return { q, origin, state, plugin };
 }
 
@@ -38,9 +31,7 @@ export function parsePluginsSearch(
  *
  * @param search - Typed search
  */
-export function serializePluginsSearch(
-  search: PluginsSearch,
-): Record<string, string> {
+export function serializePluginsSearch(search: PluginsSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.origin) out.origin = search.origin;
@@ -55,10 +46,7 @@ export function serializePluginsSearch(
  * @param search - Current search
  * @param pluginId - Plugin to open
  */
-export function openPlugin(
-  search: PluginsSearch,
-  pluginId: string,
-): PluginsSearch {
+export function openPlugin(search: PluginsSearch, pluginId: string): PluginsSearch {
   return { ...search, plugin: pluginId };
 }
 

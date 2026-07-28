@@ -16,9 +16,7 @@ export interface OnceSecretState {
  *
  * @param state - Dialog state
  */
-export function canDismissOnceSecret(
-  state: Pick<OnceSecretState, "acknowledged">,
-): boolean {
+export function canDismissOnceSecret(state: Pick<OnceSecretState, "acknowledged">): boolean {
   return state.acknowledged === true;
 }
 

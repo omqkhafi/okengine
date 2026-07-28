@@ -19,16 +19,9 @@ export type {
   RunsOpenOptions,
 } from "./types.ts";
 
-export {
-  createRunTelemetry,
-  cacheDimensionOf,
-  type RunTelemetry,
-} from "./telemetry.ts";
+export { createRunTelemetry, cacheDimensionOf, type RunTelemetry } from "./telemetry.ts";
 
-export {
-  collectWideEvent,
-  type CollectWideEventInput,
-} from "./collect.ts";
+export { collectWideEvent, type CollectWideEventInput } from "./collect.ts";
 
 export {
   explainOutliers,
@@ -73,11 +66,7 @@ export {
   type RunsRuntime,
 } from "./runtime.ts";
 
-export {
-  privacyErase,
-  type PrivacyEraseOptions,
-  type PrivacyEraseResult,
-} from "./privacy.ts";
+export { privacyErase, type PrivacyEraseOptions, type PrivacyEraseResult } from "./privacy.ts";
 
 export { createRunsPostgresFake } from "./drivers/postgres.ts";
 export { createRunsClickHouseFake } from "./drivers/clickhouse.ts";

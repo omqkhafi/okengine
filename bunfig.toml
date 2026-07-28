@@ -12,4 +12,5 @@ pathIgnorePatterns = [
   "templates/**",
   "packages/create-oke/templates/**",
   "packages/create-oke/examples/**",
+  "site/**",
 ]

@@ -31,11 +31,7 @@ import {
 import { statusForFailure } from "../../compiler/response.ts";
 import { gateDenialFailure } from "../../kernel/index.ts";
 import { diffManifest } from "../../manifest/diff.ts";
-import type {
-  Gate as ManifestGate,
-  Manifest,
-  ManifestChange,
-} from "../../manifest/types.ts";
+import type { Gate as ManifestGate, Manifest, ManifestChange } from "../../manifest/types.ts";
 
 /** Identity slice needed for Gates (avoids circular import with state). */
 export interface GatesIdentity {
@@ -154,10 +150,7 @@ export interface ProjectGatesOptions {
   /** operatorId → role ids. */
   readonly operatorRoles: ReadonlyMap<string, readonly string[]>;
   /** operatorId → { name, email }. */
-  readonly operators: ReadonlyMap<
-    string,
-    { readonly name: string; readonly email: string }
-  >;
+  readonly operators: ReadonlyMap<string, { readonly name: string; readonly email: string }>;
   /** roleId → member principal ids (users + operators). */
   readonly roleMembers: ReadonlyMap<string, readonly string[]>;
   /** Previous Manifest for deploy-diff widenings (optional). */
@@ -190,9 +183,7 @@ export function isApplicationScope(action: string): boolean {
  *
  * @param options - Manifest, roles, keys, identities, operators
  */
-export function projectGatesPanel(
-  options: ProjectGatesOptions,
-): GatesPanelProjection {
+export function projectGatesPanel(options: ProjectGatesOptions): GatesPanelProjection {
   const manifest = options.manifest;
   const moduleActions = manifest ? deriveModuleActions(manifest) : [];
   const flows = projectFlows(manifest);
@@ -205,10 +196,7 @@ export function projectGatesPanel(
     roles: options.roles,
     roleMembers: options.roleMembers,
   });
-  const widenings = projectWidenings(
-    options.previousManifest ?? null,
-    manifest,
-  );
+  const widenings = projectWidenings(options.previousManifest ?? null, manifest);
 
   return {
     moduleActions,
@@ -228,9 +216,7 @@ export function projectGatesPanel(
  *
  * @param options - Flow, principal, runtime
  */
-export async function simulateGates(
-  options: SimulateGatesOptions,
-): Promise<SimulateGatesResult> {
+export async function simulateGates(options: SimulateGatesOptions): Promise<SimulateGatesResult> {
   const flow = options.manifest?.flows?.[options.flowId];
   if (!flow) {
     return {
@@ -337,9 +323,7 @@ export async function powersForPrincipal(options: {
   const flows = projectFlows(options.manifest);
   let scopes: string[] = [];
   if (options.kind === "user") {
-    scopes = [
-      ...(options.identities.find((u) => u.id === options.id)?.scopes ?? []),
-    ];
+    scopes = [...(options.identities.find((u) => u.id === options.id)?.scopes ?? [])];
   } else if (options.kind === "role") {
     scopes = [...(options.roles.grants.get(options.id) ?? [])];
   } else {
@@ -352,10 +336,7 @@ export async function powersForPrincipal(options: {
 
   for (const flow of flows) {
     // User/key inquiry is application power; skip operator-plane flows.
-    if (
-      flow.plane === "operator" &&
-      (options.kind === "user" || options.kind === "key")
-    ) {
+    if (flow.plane === "operator" && (options.kind === "user" || options.kind === "key")) {
       continue;
     }
     const result = await simulateGates({
@@ -426,12 +407,7 @@ export function createDefaultGateAuthStores(): {
     description: "Console operators",
   });
   setRoleGrants(roles, "role_member", ["member", "booking:create"]);
-  setRoleGrants(roles, "role_staff", [
-    "member",
-    "booking:create",
-    "staff",
-    "reports:export",
-  ]);
+  setRoleGrants(roles, "role_staff", ["member", "booking:create", "staff", "reports:export"]);
   setRoleGrants(roles, "role_ops", [
     "console:store.sql:read",
     "console:store.sql:write",
@@ -508,9 +484,7 @@ function projectGateDefs(
       max: def.max,
       per: def.per,
       keyBy: def.keyBy,
-      overridable: Boolean(
-        (def as ManifestGate & { overridable?: boolean }).overridable,
-      ),
+      overridable: Boolean((def as ManifestGate & { overridable?: boolean }).overridable),
       attachedTo: attached.get(name) ?? [],
     });
   }
@@ -603,9 +577,7 @@ function projectPrincipals(options: ProjectGatesOptions): {
   // Operators: only those with clean console scopes appear… but Access owns
   // operator listing. Gates only surfaces the violation when they hold app scopes.
   for (const [operatorId, roleIds] of options.operatorRoles) {
-    const scopes = [
-      ...scopesForRoles(options.roles, roleIds, "operator"),
-    ].sort();
+    const scopes = [...scopesForRoles(options.roles, roleIds, "operator")].sort();
     const appScopes = scopes.filter(isApplicationScope);
     if (appScopes.length === 0) continue;
     const op = options.operators.get(operatorId);
@@ -653,9 +625,7 @@ function buildAudit(options: {
     .map((g) => g.name)
     .sort((a, b) => a.localeCompare(b));
 
-  const unguardedFlows = options.flows
-    .filter((f) => f.unguarded)
-    .map((f) => f.flowId);
+  const unguardedFlows = options.flows.filter((f) => f.unguarded).map((f) => f.flowId);
 
   return {
     unguardedFlows,
@@ -665,10 +635,7 @@ function buildAudit(options: {
   };
 }
 
-function projectWidenings(
-  before: Manifest | null,
-  after: Manifest | null,
-): ManifestChange[] {
+function projectWidenings(before: Manifest | null, after: Manifest | null): ManifestChange[] {
   if (!before || !after) return [];
   const diff = diffManifest(before, after);
   return diff.changes.filter((c) => c.category === "permission-widening");
@@ -831,9 +798,7 @@ function declFromManifestGate(name: string, def: ManifestGate): GateDecl {
       max: def.max ?? parsed.max,
       per: def.per ?? parsed.per,
       keyBy: def.keyBy,
-      overridable: Boolean(
-        (def as ManifestGate & { overridable?: boolean }).overridable,
-      ),
+      overridable: Boolean((def as ManifestGate & { overridable?: boolean }).overridable),
     };
   }
 

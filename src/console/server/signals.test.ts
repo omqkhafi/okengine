@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { signal } from "../../elements/signal/declare.ts";
-import {
-  createMemorySignalConfigStore,
-} from "../../elements/signal/reconcile.ts";
+import { createMemorySignalConfigStore } from "../../elements/signal/reconcile.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import { projectSignalsList } from "./signals.ts";

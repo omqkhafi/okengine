@@ -22,43 +22,19 @@
  */
 
 import type { ConfigEnv, OkeConfig } from "../config/index.ts";
-import type {
-  AiRuntime,
-  CreateAiRuntimeOptions,
-} from "../elements/ai.ts";
-import type {
-  ChannelRuntime,
-  CreateChannelRuntimeOptions,
-} from "../elements/channel.ts";
-import type {
-  ClockDecl,
-  ClockRuntime,
-} from "../elements/clock.ts";
-import type {
-  GateDecl,
-  GateRuntime,
-} from "../elements/gate.ts";
-import type {
-  SignalDecl,
-  SignalRuntime,
-} from "../elements/signal.ts";
-import type {
-  StoreDecl,
-  StoreRuntime,
-} from "../elements/store.ts";
+import type { AiRuntime, CreateAiRuntimeOptions } from "../elements/ai.ts";
+import type { ChannelRuntime, CreateChannelRuntimeOptions } from "../elements/channel.ts";
+import type { ClockDecl, ClockRuntime } from "../elements/clock.ts";
+import type { GateDecl, GateRuntime } from "../elements/gate.ts";
+import type { SignalDecl, SignalRuntime } from "../elements/signal.ts";
+import type { StoreDecl, StoreRuntime } from "../elements/store.ts";
 import type {
   CreateVaultRuntimeOptions,
   VaultRuntime,
   VaultSecretDecl,
 } from "../elements/vault.ts";
-import type {
-  CreateRunsRuntimeOptions,
-  RunsRuntime,
-} from "../runs/index.ts";
-import {
-  createCapabilityToken,
-  type CapabilityToken,
-} from "./capability.ts";
+import type { CreateRunsRuntimeOptions, RunsRuntime } from "../runs/index.ts";
+import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import type { AnyFlowDef } from "./flow.ts";
 import type { Binding } from "./on.ts";
 
@@ -77,16 +53,16 @@ export interface ElementRuntimes {
 /** Declarations + options consumed by {@link bootApplication}. */
 export interface BootOptions {
   /**
-   * Active environment (defaults to `dev`, or `stack` when
-   * {@link stack} / `OKE_STACK=1`).
+   * Active environment (defaults to `local`, or `docker` when
+   * {@link docker} / `OKE_DOCKER=1`).
    */
   readonly env?: ConfigEnv;
   /**
-   * Local-server mode (`oke dev -s` / `OKE_STACK=1`): force driver maps to the
-   * `stack` profile and prefer compose URLs (`.env.stack`).
-   * When unset, derived from `process.env.OKE_STACK`.
+   * Docker mode (`oke dev -d` / `OKE_DOCKER=1`): force driver maps to the
+   * `docker` profile and prefer compose URLs (`docker/.env.docker`).
+   * When unset, derived from `process.env.OKE_DOCKER`.
    */
-  readonly stack?: boolean;
+  readonly docker?: boolean;
   /** Optional `oke.config.ts` document. */
   readonly config?: OkeConfig;
   /** Pre-built runtimes (skip construction when present). */
@@ -127,10 +103,7 @@ export interface BootOptions {
    * @param signal - Signal name
    * @param payload - Payload
    */
-  readonly onSignal?: (
-    signal: string,
-    payload: unknown,
-  ) => void | Promise<void>;
+  readonly onSignal?: (signal: string, payload: unknown) => void | Promise<void>;
   /** Injectable clock for test / frozen harnesses. */
   readonly now?: () => number;
   /** Instance id for leader election. */
@@ -185,8 +158,7 @@ export interface ElementNeeds {
 export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   const pre = options.elements ?? {};
   let vault =
-    pre.vault !== undefined ||
-    (options.vault?.secrets ?? options.secrets ?? []).length > 0;
+    pre.vault !== undefined || (options.vault?.secrets ?? options.secrets ?? []).length > 0;
   let store = pre.store !== undefined || (options.stores?.length ?? 0) > 0;
   let signal = pre.signal !== undefined || (options.signals?.length ?? 0) > 0;
   let clock = pre.clock !== undefined || (options.clocks?.length ?? 0) > 0;
@@ -224,10 +196,7 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
 
   // AI agents share the gate runtime for tool checks.
   if (ai) gate = true;
-  if (
-    options.onSignal &&
-    (options.bindings ?? []).some((b) => b.trigger.kind === "signal")
-  ) {
+  if (options.onSignal && (options.bindings ?? []).some((b) => b.trigger.kind === "signal")) {
     signal = true;
   }
 
@@ -251,15 +220,12 @@ async function loadBind<T>(name: string): Promise<T> {
  *
  * @param options - Declarations, config, pre-built runtimes
  */
-export async function bootApplication(
-  input: BootOptions = {},
-): Promise<BootResult> {
-  const stack =
-    input.stack === true ||
-    (input.stack !== false && process.env.OKE_STACK === "1");
-  // `-s` always selects the `stack` driver profile — not a mix of test/dev +
+export async function bootApplication(input: BootOptions = {}): Promise<BootResult> {
+  const docker =
+    input.docker === true || (input.docker !== false && process.env.OKE_DOCKER === "1");
+  // `-d` always selects the `docker` driver profile — not a mix of test/local +
   // prod store overrides (templates often pin `env: "test"` for harnesses).
-  const env: ConfigEnv = stack ? "stack" : (input.env ?? "dev");
+  const env: ConfigEnv = docker ? "docker" : (input.env ?? "local");
   let config = input.config;
   if (config === undefined) {
     try {
@@ -269,7 +235,7 @@ export async function bootApplication(
       config = undefined;
     }
   }
-  const options: BootOptions = { ...input, config, env, stack };
+  const options: BootOptions = { ...input, config, env, docker };
   const pre = options.elements ?? {};
   const now = options.now ?? (() => Date.now());
   const needs = resolveElementNeeds(options);
@@ -278,9 +244,7 @@ export async function bootApplication(
   let vault = pre.vault;
   if (needs.vault) {
     if (!vault) {
-      const { bindVault } = await loadBind<
-        typeof import("./boot-bind/vault.ts")
-      >("vault");
+      const { bindVault } = await loadBind<typeof import("./boot-bind/vault.ts")>("vault");
       vault = await bindVault(options, env);
     } else if (!vault.booted) {
       await vault.boot();
@@ -347,11 +311,7 @@ export async function bootApplication(
       }),
     );
   }
-  if (
-    needs.runs &&
-    !pre.runs &&
-    !(options.runs && isRunsRuntime(options.runs))
-  ) {
+  if (needs.runs && !pre.runs && !(options.runs && isRunsRuntime(options.runs))) {
     binderLoads.push(
       loadBind<RunsBind>("runs").then((m) => {
         runsBind = m;
@@ -364,7 +324,7 @@ export async function bootApplication(
   let store = pre.store;
   if (needs.store) {
     if (!store) {
-      store = storeBind!.bindStore(options, env, now, stack);
+      store = storeBind!.bindStore(options, env, now, docker);
     } else {
       for (const decl of options.stores ?? []) {
         store.register?.(decl);
@@ -431,10 +391,7 @@ export async function bootApplication(
         runs = options.runs;
         if (!runs.store) await runs.open();
       } else {
-        const runsOpts =
-          options.runs && !isRunsRuntime(options.runs)
-            ? options.runs
-            : undefined;
+        const runsOpts = options.runs && !isRunsRuntime(options.runs) ? options.runs : undefined;
         runs = await runsBind!.bindRuns(runsOpts);
       }
     } else if (!runs.store) {
@@ -479,9 +436,7 @@ export async function bootApplication(
  *
  * @param flows - Adopted flows
  */
-export function mintCapabilities(
-  flows: readonly AnyFlowDef[],
-): Map<string, CapabilityToken> {
+export function mintCapabilities(flows: readonly AnyFlowDef[]): Map<string, CapabilityToken> {
   const map = new Map<string, CapabilityToken>();
   for (const f of flows) {
     map.set(f.name, createCapabilityToken(f.name, f.effects));
@@ -489,9 +444,7 @@ export function mintCapabilities(
   return map;
 }
 
-function isRunsRuntime(
-  value: RunsRuntime | CreateRunsRuntimeOptions,
-): value is RunsRuntime {
+function isRunsRuntime(value: RunsRuntime | CreateRunsRuntimeOptions): value is RunsRuntime {
   return (
     typeof value === "object" &&
     value !== null &&

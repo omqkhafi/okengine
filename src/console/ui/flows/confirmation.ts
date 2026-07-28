@@ -58,9 +58,7 @@ export interface TypedConfirmErrors {
  *
  * @param input - Operator input
  */
-export function validateTypedConfirm(
-  input: TypedConfirmInput,
-): TypedConfirmErrors | null {
+export function validateTypedConfirm(input: TypedConfirmInput): TypedConfirmErrors | null {
   const errors: {
     typed?: string;
     reason?: string;

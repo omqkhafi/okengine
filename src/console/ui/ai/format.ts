@@ -65,9 +65,7 @@ export function distributionSummary(
  *
  * @param buckets - Histogram
  */
-export function maxBucketCount(
-  buckets: readonly AiDistributionBucket[],
-): number {
+export function maxBucketCount(buckets: readonly AiDistributionBucket[]): number {
   return buckets.reduce((m, b) => Math.max(m, b.count), 0);
 }
 

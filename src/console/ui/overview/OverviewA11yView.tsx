@@ -4,14 +4,8 @@
  */
 
 import { composeOverview } from "./compose.ts";
-import {
-  OVERVIEW_DAY_ONE_INPUTS,
-  OVERVIEW_INPUTS_FIXTURE,
-} from "./fixture.ts";
-import {
-  formatBudgetDuration,
-  formatBurnRate,
-} from "./verdict.ts";
+import { OVERVIEW_DAY_ONE_INPUTS, OVERVIEW_INPUTS_FIXTURE } from "./fixture.ts";
+import { formatBudgetDuration, formatBurnRate } from "./verdict.ts";
 
 /** Props for {@link OverviewA11yView}. */
 export interface OverviewA11yViewProps {
@@ -25,9 +19,7 @@ export interface OverviewA11yViewProps {
  * @param props - Fixture selection
  */
 export function OverviewA11yView(props: OverviewA11yViewProps = {}) {
-  const view = composeOverview(
-    props.dayOne ? OVERVIEW_DAY_ONE_INPUTS : OVERVIEW_INPUTS_FIXTURE,
-  );
+  const view = composeOverview(props.dayOne ? OVERVIEW_DAY_ONE_INPUTS : OVERVIEW_INPUTS_FIXTURE);
 
   return (
     <div className="overview-a11y">
@@ -50,13 +42,8 @@ export function OverviewA11yView(props: OverviewA11yViewProps = {}) {
                   </span>
                   <span> {s.availability}</span>
                   <span> burn {formatBurnRate(s.burnRate)}</span>
-                  <span>
-                    {" "}
-                    exhausts {formatBudgetDuration(s.timeToExhaustionMs)}
-                  </span>
-                  {s.ceremonial ? (
-                    <span role="status"> CEREMONIAL</span>
-                  ) : null}
+                  <span> exhausts {formatBudgetDuration(s.timeToExhaustionMs)}</span>
+                  {s.ceremonial ? <span role="status"> CEREMONIAL</span> : null}
                 </li>
               ))}
             </ul>
@@ -77,10 +64,7 @@ export function OverviewA11yView(props: OverviewA11yViewProps = {}) {
                     ${c.spent.toFixed(2)} / ${c.declaredBudget.toFixed(2)}
                   </span>
                   <span> burn {formatBurnRate(c.burnRate)}</span>
-                  <span>
-                    {" "}
-                    exhausts {formatBudgetDuration(c.timeToExhaustionMs)}
-                  </span>
+                  <span> exhausts {formatBudgetDuration(c.timeToExhaustionMs)}</span>
                 </li>
               ))}
             </ul>
@@ -138,11 +122,9 @@ export function OverviewA11yView(props: OverviewA11yViewProps = {}) {
             <h2>Declare a first objective</h2>
             <p>
               Your busiest flow is{" "}
-              <a href={view.firstSloInvite.href}>
-                {view.firstSloInvite.busiestFlow}
-              </a>{" "}
-              ({view.firstSloInvite.runCount} runs). Add{" "}
-              <code>slo: {"{ availability: \"99.9%\" }"}</code> on that flow.
+              <a href={view.firstSloInvite.href}>{view.firstSloInvite.busiestFlow}</a> (
+              {view.firstSloInvite.runCount} runs). Add{" "}
+              <code>slo: {'{ availability: "99.9%" }'}</code> on that flow.
             </p>
           </section>
         ) : null}

@@ -151,10 +151,7 @@ export interface RuntimeCrypto {
    * @param password - Plaintext
    * @param algorithm - Hash algorithm (Bun default `argon2id`)
    */
-  hashPassword(
-    password: string,
-    algorithm?: PasswordAlgorithm,
-  ): Promise<string>;
+  hashPassword(password: string, algorithm?: PasswordAlgorithm): Promise<string>;
   /**
    * Verify a password against a hash from {@link RuntimeCrypto.hashPassword}.
    *

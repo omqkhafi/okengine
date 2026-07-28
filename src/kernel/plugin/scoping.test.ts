@@ -54,11 +54,7 @@ describe("plugin scoping — attachment point is the scope", () => {
     await app.fetch(new Request("http://localhost/orders"));
     await app.fetch(new Request("http://localhost/payments"));
 
-    expect(fired).toEqual([
-      "rate-limit",
-      "orders:handler",
-      "payments:handler",
-    ]);
+    expect(fired).toEqual(["rate-limit", "orders:handler", "payments:handler"]);
   });
 
   test("app-scoped plugin hook fires for every unit", async () => {
@@ -87,12 +83,9 @@ describe("plugin scoping — attachment point is the scope", () => {
       }),
     );
 
-    const audit = plugin("audit", { version: "1.0.0" }).hook(
-      "afterHandle",
-      () => {
-        fired.push("audit");
-      },
-    );
+    const audit = plugin("audit", { version: "1.0.0" }).hook("afterHandle", () => {
+      fired.push("audit");
+    });
 
     const app = oke({ name: "app-scope" }).plug(audit);
 

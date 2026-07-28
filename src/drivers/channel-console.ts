@@ -21,9 +21,7 @@ import { createChannelInbox } from "./channel-types.ts";
 function formatAddressInput(input: AddressInput): string {
   if (typeof input === "string") return input;
   if (Array.isArray(input)) {
-    return input
-      .map((t) => (typeof t === "string" ? t : t.address))
-      .join(",");
+    return input.map((t) => (typeof t === "string" ? t : t.address)).join(",");
   }
   return input.address;
 }
@@ -33,9 +31,7 @@ function formatAddressInput(input: AddressInput): string {
  *
  * @param options - Optional shared inbox
  */
-export function openConsoleChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openConsoleChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   const inbox = options.inbox ?? createChannelInbox();
 
   const channel: ChannelTransport = {
@@ -88,7 +84,10 @@ export function openConsoleChannel(
         template: mail.template,
         at: Date.now(),
       });
-      const recipients = to.split(",").map((s) => s.trim()).filter(Boolean);
+      const recipients = to
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       return {
         messageId: id,
         accepted: recipients,

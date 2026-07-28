@@ -3,12 +3,7 @@
  * live panel, fed by a Manifest fixture (no router / network).
  */
 
-import {
-  buildCausalityGraph,
-  centreFlows,
-  leftCauses,
-  rightEffects,
-} from "./graph.ts";
+import { buildCausalityGraph, centreFlows, leftCauses, rightEffects } from "./graph.ts";
 import type { Manifest } from "../../../manifest/types.ts";
 import { TIER_LABEL, TIER_ORDER } from "./tiers.ts";
 
@@ -26,8 +21,8 @@ export interface FlowsA11yViewProps {
 export function FlowsA11yView(props: FlowsA11yViewProps) {
   const graph = buildCausalityGraph(props.manifest);
   const selection = props.effect
-    ? ({ sel: "effect" as const, effect: props.effect })
-    : ({ sel: "none" as const });
+    ? { sel: "effect" as const, effect: props.effect }
+    : { sel: "none" as const };
   const causes = leftCauses(graph, selection);
   const flows = centreFlows(graph, selection);
   const effects = rightEffects(graph, selection);
@@ -86,9 +81,7 @@ export function FlowsA11yView(props: FlowsA11yViewProps) {
                     }}
                   >
                     {f.id}
-                    {f.external ? (
-                      <span aria-label="external effect"> ↗</span>
-                    ) : null}
+                    {f.external ? <span aria-label="external effect"> ↗</span> : null}
                   </button>
                 </li>
               ))}
@@ -112,14 +105,11 @@ export function FlowsA11yView(props: FlowsA11yViewProps) {
                             minHeight: 32,
                             minWidth: 24,
                             opacity: e.match ? 1 : 0.38,
-                            color:
-                              tier === "external" ? "#d97706" : undefined,
+                            color: tier === "external" ? "#d97706" : undefined,
                           }}
                         >
                           {e.ref}
-                          {tier === "external" ? (
-                            <span aria-hidden="true"> ↗</span>
-                          ) : null}
+                          {tier === "external" ? <span aria-hidden="true"> ↗</span> : null}
                         </button>
                       </li>
                     ))}
@@ -130,12 +120,7 @@ export function FlowsA11yView(props: FlowsA11yViewProps) {
           </section>
         </div>
       </main>
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="drawer-title"
-        hidden={!props.effect}
-      >
+      <aside role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden={!props.effect}>
         <h2 id="drawer-title">Flow workshop</h2>
         <label>
           As whom

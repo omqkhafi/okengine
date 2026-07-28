@@ -42,10 +42,7 @@ export function Button({
  *
  * @param props - Input props
  */
-export function Input({
-  className,
-  ...props
-}: ComponentProps<typeof BaseInput>) {
+export function Input({ className, ...props }: ComponentProps<typeof BaseInput>) {
   return (
     <BaseInput
       className={clsx(

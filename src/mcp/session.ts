@@ -21,10 +21,7 @@ import type { AuthPlane } from "../auth/planes.ts";
 export const MCP_AUDIENCE = "oke-mcp" as const;
 
 /** Other known audiences — rejected by MCP. */
-export const FOREIGN_AUDIENCES = [
-  "oke-console",
-  "oke-app",
-] as const;
+export const FOREIGN_AUDIENCES = ["oke-console", "oke-app"] as const;
 
 /** Verified MCP requester context for one request. */
 export interface McpRequester {
@@ -49,9 +46,7 @@ export interface MintMcpSessionOptions {
  *
  * @param options - Store, secret, principal
  */
-export async function mintMcpSession(
-  options: MintMcpSessionOptions,
-): Promise<IssuedSession> {
+export async function mintMcpSession(options: MintMcpSessionOptions): Promise<IssuedSession> {
   return issueSessionWithScopes(
     options.store,
     {
@@ -99,13 +94,8 @@ export async function authenticateMcpRequest(
 
   // Defence in depth: reject known foreign audiences even if verifyAccess
   // somehow ran without the audience option (should be unreachable).
-  if (
-    claims.aud !== undefined &&
-    (FOREIGN_AUDIENCES as readonly string[]).includes(claims.aud)
-  ) {
-    throw new SessionError(
-      `access token audience mismatch: expected ${MCP_AUDIENCE}`,
-    );
+  if (claims.aud !== undefined && (FOREIGN_AUDIENCES as readonly string[]).includes(claims.aud)) {
+    throw new SessionError(`access token audience mismatch: expected ${MCP_AUDIENCE}`);
   }
 
   return {

@@ -22,10 +22,7 @@ export interface ConsoleLiveData {
  */
 export interface ConsoleServerWebSocket<T = undefined> {
   readonly data: T;
-  send(
-    data: string | ArrayBuffer | Uint8Array,
-    compress?: boolean,
-  ): number;
+  send(data: string | ArrayBuffer | Uint8Array, compress?: boolean): number;
 }
 
 /**
@@ -52,16 +49,10 @@ export function subscribeLive(
  */
 export function createLiveWebsocket(state: ConsoleState): {
   readonly open: (ws: ConsoleServerWebSocket<ConsoleLiveData>) => void;
-  readonly message: (
-    ws: ConsoleServerWebSocket<ConsoleLiveData>,
-    message: string | Buffer,
-  ) => void;
+  readonly message: (ws: ConsoleServerWebSocket<ConsoleLiveData>, message: string | Buffer) => void;
   readonly close: (ws: ConsoleServerWebSocket<ConsoleLiveData>) => void;
 } {
-  const unsubs = new WeakMap<
-    ConsoleServerWebSocket<ConsoleLiveData>,
-    () => void
-  >();
+  const unsubs = new WeakMap<ConsoleServerWebSocket<ConsoleLiveData>, () => void>();
 
   return {
     open(ws) {

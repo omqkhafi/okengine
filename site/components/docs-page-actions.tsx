@@ -8,11 +8,7 @@
 
 import { cn } from "@/lib/cn";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "fumadocs-ui/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "fumadocs-ui/components/ui/popover";
 import { MarkdownCopyButton } from "fumadocs-ui/layouts/docs/page";
 import { Check, ChevronDown, Copy, ExternalLinkIcon, TextIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -50,10 +46,7 @@ export function cursorPromptHref(text: string): string {
 /**
  * Copy Markdown + honest Open menu for a docs page.
  */
-export function DocsPageActions({
-  markdownUrl,
-  githubUrl,
-}: DocsPageActionsProps): ReactNode {
+export function DocsPageActions({ markdownUrl, githubUrl }: DocsPageActionsProps): ReactNode {
   return (
     <div className="flex flex-row gap-2 items-center border-b pb-6">
       <MarkdownCopyButton markdownUrl={markdownUrl} />
@@ -62,10 +55,7 @@ export function DocsPageActions({
   );
 }
 
-function HonestViewOptions({
-  markdownUrl,
-  githubUrl,
-}: DocsPageActionsProps): ReactNode {
+function HonestViewOptions({ markdownUrl, githubUrl }: DocsPageActionsProps): ReactNode {
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const items = useMemo(() => {
@@ -99,9 +89,7 @@ function HonestViewOptions({
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col min-w-56">
-        {items.githubHref ? (
-          <MenuLink href={items.githubHref} title="Open in GitHub" />
-        ) : null}
+        {items.githubHref ? <MenuLink href={items.githubHref} title="Open in GitHub" /> : null}
         <MenuLink href={items.markdownHref} title="View as Markdown" icon={<TextIcon />} />
         <MenuLink href={items.cursorHref} title="Open in Cursor" />
         <button

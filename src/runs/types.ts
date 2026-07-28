@@ -26,10 +26,7 @@ export interface RunError {
  * Declared / observed dimensions available without manual instrumentation.
  * Extra keys are allowed for outlier analysis.
  */
-export type RunDimensions = Record<
-  string,
-  string | number | boolean | null | undefined
->;
+export type RunDimensions = Record<string, string | number | boolean | null | undefined>;
 
 /**
  * One wide event — the atomic observability record.

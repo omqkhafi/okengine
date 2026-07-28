@@ -9,14 +9,8 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import {
-  createOperatorStore,
-  type OperatorStore,
-} from "../../auth/operator.ts";
-import {
-  createSessionStore,
-  type SessionStore,
-} from "../../auth/sessions.ts";
+import { createOperatorStore, type OperatorStore } from "../../auth/operator.ts";
+import { createSessionStore, type SessionStore } from "../../auth/sessions.ts";
 import type {
   OperatorCredentialRow,
   OperatorRow,
@@ -72,10 +66,7 @@ export function consoleOkePaths(cwd: string): {
  * @param cwd - Project root
  * @param envSecret - Optional `OKE_CONSOLE_SECRET` override
  */
-export async function resolveConsoleSecret(
-  cwd: string,
-  envSecret?: string,
-): Promise<string> {
+export async function resolveConsoleSecret(cwd: string, envSecret?: string): Promise<string> {
   if (envSecret !== undefined && envSecret.length > 0) return envSecret;
   const paths = consoleOkePaths(cwd);
   const file = Bun.file(paths.secret);
@@ -85,9 +76,7 @@ export async function resolveConsoleSecret(
   }
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const secret = [...bytes]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const secret = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   await Bun.write(paths.secret, `${secret}\n`);
   return secret;
 }
@@ -350,9 +339,7 @@ export function loadOperatorStore(db: Database): OperatorStore {
   }
 
   const ssoRows = db
-    .query(
-      `SELECT operator_id, provider, subject FROM ${AUTH_TABLES.operatorSsoLinks}`,
-    )
+    .query(`SELECT operator_id, provider, subject FROM ${AUTH_TABLES.operatorSsoLinks}`)
     .all() as Array<{
     operator_id: string;
     provider: string;
@@ -371,9 +358,7 @@ export function loadOperatorStore(db: Database): OperatorStore {
   }
 
   const roleRows = db
-    .query(
-      `SELECT operator_id, role FROM ${AUTH_TABLES.operatorRoles}`,
-    )
+    .query(`SELECT operator_id, role FROM ${AUTH_TABLES.operatorRoles}`)
     .all() as Array<{ operator_id: string; role: string }>;
 
   for (const row of roleRows) {
@@ -392,11 +377,7 @@ export function loadOperatorStore(db: Database): OperatorStore {
  * @param store - In-memory store
  * @param operatorId - Operator id
  */
-export function persistOperator(
-  db: Database,
-  store: OperatorStore,
-  operatorId: string,
-): void {
+export function persistOperator(db: Database, store: OperatorStore, operatorId: string): void {
   const op = store.operators.get(operatorId);
   if (!op) {
     throw new Error(`oke console: unknown operator ${operatorId}`);
@@ -442,9 +423,9 @@ export function persistOperator(
     $enabled: cred.loginEnabled ? 1 : 0,
   });
 
-  db.query(
-    `DELETE FROM ${AUTH_TABLES.operatorSsoLinks} WHERE operator_id = $id`,
-  ).run({ $id: operatorId });
+  db.query(`DELETE FROM ${AUTH_TABLES.operatorSsoLinks} WHERE operator_id = $id`).run({
+    $id: operatorId,
+  });
   const insertSso = db.query(
     `INSERT INTO ${AUTH_TABLES.operatorSsoLinks} (operator_id, provider, subject)
      VALUES ($id, $provider, $subject)`,
@@ -457,9 +438,9 @@ export function persistOperator(
     });
   }
 
-  db.query(
-    `DELETE FROM ${AUTH_TABLES.operatorRoles} WHERE operator_id = $id`,
-  ).run({ $id: operatorId });
+  db.query(`DELETE FROM ${AUTH_TABLES.operatorRoles} WHERE operator_id = $id`).run({
+    $id: operatorId,
+  });
   const insertRole = db.query(
     `INSERT INTO ${AUTH_TABLES.operatorRoles} (operator_id, role)
      VALUES ($id, $role)`,

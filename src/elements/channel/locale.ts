@@ -30,13 +30,7 @@ export interface ResolveLocaleOptions {
  */
 export function isRtlLocale(locale: string): boolean {
   const base = locale.toLowerCase().split("-")[0] ?? locale;
-  return (
-    base === "ar" ||
-    base === "he" ||
-    base === "fa" ||
-    base === "ur" ||
-    base === "yi"
-  );
+  return base === "ar" || base === "he" || base === "fa" || base === "ur" || base === "yi";
 }
 
 /**
@@ -59,9 +53,7 @@ export function parseAcceptLanguage(header: string | undefined): string | undefi
  *
  * @param options - Resolution inputs
  */
-export function resolveLocale(
-  options: ResolveLocaleOptions = {},
-): LocaleResolution {
+export function resolveLocale(options: ResolveLocaleOptions = {}): LocaleResolution {
   const defaultLocale = options.defaultLocale ?? "en";
   const chain: LocaleChainStep[] = [];
 

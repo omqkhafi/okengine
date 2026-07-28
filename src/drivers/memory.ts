@@ -53,12 +53,8 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         const table = getTable(parseIdent(selectGeneric[2]!));
         const selectList = selectGeneric[1]!.trim();
         const whereClause = selectGeneric[3]?.trim();
-        const orderCol = selectGeneric[4]
-          ? parseIdent(selectGeneric[4])
-          : undefined;
-        const limit = selectGeneric[5]
-          ? Number(selectGeneric[5])
-          : undefined;
+        const orderCol = selectGeneric[4] ? parseIdent(selectGeneric[4]) : undefined;
+        const limit = selectGeneric[5] ? Number(selectGeneric[5]) : undefined;
         let rows = table.rows.map((r) => ({ ...r }));
         if (whereClause) {
           const preds = parseWherePredicates(whereClause);
@@ -74,9 +70,8 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         if (limit !== undefined) rows = rows.slice(0, limit);
         if (selectList === "*") return rows;
         const cols = selectList.split(",").map((part) => {
-          const as = /^\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+AS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*$/i.exec(
-            part,
-          );
+          const as =
+            /^\s*("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+AS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*$/i.exec(part);
           if (as) {
             return { sql: parseIdent(as[1]!), alias: parseIdent(as[2]!) };
           }
@@ -97,9 +92,7 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       if (exists) {
         const table = getTable(parseIdent(exists[2]!));
         const preds = parseEqualityWhere(exists[3]!);
-        const hit = table.rows.some((r) =>
-          preds.every((p, i) => r[p] === params[i]),
-        );
+        const hit = table.rows.some((r) => preds.every((p, i) => r[p] === params[i]));
         return hit ? [{ [parseIdent(exists[1]!)]: 1 }] : [];
       }
 
@@ -215,18 +208,14 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
           throw new Error(`memory sql: unsupported exec: ${sql}`);
         }
         const preds = parseEqualityWhere(updateIncAnd[4]!);
-        const row = table.rows.find((r) =>
-          preds.every((p, i) => r[p] === params[i]),
-        );
+        const row = table.rows.find((r) => preds.every((p, i) => r[p] === params[i]));
         if (!row) return { changes: 0 };
         row[setCol] = Number(row[setCol] ?? 0) + 1;
         return { changes: 1 };
       }
 
       const updateSet =
-        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+(.+?)\s+WHERE\s+(.+)\s*$/i.exec(
-          text,
-        );
+        /^UPDATE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+SET\s+(.+?)\s+WHERE\s+(.+)\s*$/i.exec(text);
       if (updateSet) {
         const table = getTable(parseIdent(updateSet[1]!));
         const setParts = updateSet[2]!.split(",").map((p) => p.trim());
@@ -237,9 +226,7 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         });
         const preds = parseWherePredicates(updateSet[3]!);
         const row = table.rows.find((r) =>
-          preds.every((p, i) =>
-            compareRow(r[p.column], params[setCols.length + i], p.op),
-          ),
+          preds.every((p, i) => compareRow(r[p.column], params[setCols.length + i], p.op)),
         );
         if (!row) return { changes: 0 };
         setCols.forEach((col, i) => {
@@ -275,23 +262,15 @@ interface WherePred {
 /** Parse `col = ? AND col2 < ?` into ordered predicates. */
 function parseWherePredicates(clause: string): WherePred[] {
   return clause.split(/\s+AND\s+/i).map((part) => {
-    const m =
-      /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(=|<=|>=|<>|!=|<|>)\s*\?$/.exec(
-        part.trim(),
-      );
+    const m = /^("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(=|<=|>=|<>|!=|<|>)\s*\?$/.exec(part.trim());
     if (!m) throw new Error(`memory sql: unsupported WHERE: ${clause}`);
     const opRaw = m[2]!;
-    const op: WherePred["op"] =
-      opRaw === "<>" ? "!=" : (opRaw as WherePred["op"]);
+    const op: WherePred["op"] = opRaw === "<>" ? "!=" : (opRaw as WherePred["op"]);
     return { column: m[1]!.replaceAll('"', "").trim(), op };
   });
 }
 
-function compareRow(
-  cell: unknown,
-  want: unknown,
-  op: WherePred["op"],
-): boolean {
+function compareRow(cell: unknown, want: unknown, op: WherePred["op"]): boolean {
   if (op === "=") return cell === want;
   if (op === "!=") return cell !== want;
   const a = Number(cell ?? 0);
@@ -382,8 +361,7 @@ export const memoryFilesDriver: FilesDriver = {
     return {
       driverId: "memory",
       async put(key, data) {
-        const bytes =
-          typeof data === "string" ? new TextEncoder().encode(data) : data;
+        const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
         objects.set(prefix + key, bytes);
       },
       async get(key) {
@@ -425,17 +403,12 @@ export const memoryIndexDriver: IndexDriver = {
   id: "memory",
   facet: "index",
   async open(options: IndexOpenOptions): Promise<IndexStore> {
-    const docs = new Map<
-      string,
-      { vector: number[]; meta?: Record<string, unknown> }
-    >();
+    const docs = new Map<string, { vector: number[]; meta?: Record<string, unknown> }>();
     return {
       driverId: "memory",
       async upsert(id, vector, meta) {
         if (vector.length !== options.dims) {
-          throw new Error(
-            `vector dims ${vector.length} !== index dims ${options.dims}`,
-          );
+          throw new Error(`vector dims ${vector.length} !== index dims ${options.dims}`);
         }
         docs.set(id, { vector: [...vector], meta });
       },

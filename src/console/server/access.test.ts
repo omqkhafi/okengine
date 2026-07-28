@@ -126,26 +126,14 @@ describe("projectAccessPanel", () => {
     expect(projection.userPlane.operators).toBeUndefined();
 
     // Cross-plane scopes absent from grantable lists.
-    expect(
-      projection.operatorPlane.grantableScopes.every((s) =>
-        s.startsWith("console:"),
-      ),
-    ).toBe(true);
-    expect(
-      projection.userPlane.grantableScopes.every(
-        (s) => !s.startsWith("console:"),
-      ),
-    ).toBe(true);
-
-    expect(projection.hygiene.unusedKeys.some((k) => k.id === "key_stale")).toBe(
+    expect(projection.operatorPlane.grantableScopes.every((s) => s.startsWith("console:"))).toBe(
       true,
     );
-    expect(
-      projection.hygiene.neverSignedInOperators.some((o) => o.id === "op_never"),
-    ).toBe(true);
-    expect(
-      projection.hygiene.expiredInvitations.some((i) => i.id === "inv1"),
-    ).toBe(true);
+    expect(projection.userPlane.grantableScopes.every((s) => !s.startsWith("console:"))).toBe(true);
+
+    expect(projection.hygiene.unusedKeys.some((k) => k.id === "key_stale")).toBe(true);
+    expect(projection.hygiene.neverSignedInOperators.some((o) => o.id === "op_never")).toBe(true);
+    expect(projection.hygiene.expiredInvitations.some((i) => i.id === "inv1")).toBe(true);
   });
 
   test("scope not held is not grantable (absence, not refusal)", () => {
@@ -163,12 +151,8 @@ describe("projectAccessPanel", () => {
       now: () => 0,
     });
     expect(projection.userPlane.grantableScopes).not.toContain("booking:create");
-    expect(projection.operatorPlane.grantableScopes).toContain(
-      "console:store.sql:read",
-    );
-    expect(projection.operatorPlane.grantableScopes).not.toContain(
-      "console:store.sql:write",
-    );
+    expect(projection.operatorPlane.grantableScopes).toContain("console:store.sql:read");
+    expect(projection.operatorPlane.grantableScopes).not.toContain("console:store.sql:write");
   });
 });
 
@@ -266,9 +250,7 @@ describe("keyBlastRadius", () => {
     expect(blast.lastUsedAt).toBe(200);
     expect(blast.sourceAddresses).toEqual(["198.51.100.7", "203.0.113.10"]);
     expect(blast.accessTtlMs).toBe(ttl);
-    expect(blast.residualAccessNote).toBe(
-      residualAccessNote(ttl),
-    );
+    expect(blast.residualAccessNote).toBe(residualAccessNote(ttl));
     expect(blast.residualAccessNote).toContain("7 minute");
   });
 });
@@ -331,22 +313,16 @@ describe("accessCreateKey / revoke", () => {
 
 describe("helpers", () => {
   test("expandAccessCeiling adds application scopes for console:*", () => {
-    const held = expandAccessCeiling(["console:*"], [
-      "console:store.sql:read",
-      "booking:create",
-    ]);
+    const held = expandAccessCeiling(["console:*"], ["console:store.sql:read", "booking:create"]);
     expect(held.has("console:store.sql:read")).toBe(true);
     expect(held.has("booking:create")).toBe(true);
   });
 
   test("isKeyUnused90d", () => {
     const now = () => 1_000_000 + KEY_UNUSED_MS;
-    expect(
-      isKeyUnused90d(
-        { createdAt: 1_000_000, lastUsedAt: null, revokedAt: null },
-        now,
-      ),
-    ).toBe(true);
+    expect(isKeyUnused90d({ createdAt: 1_000_000, lastUsedAt: null, revokedAt: null }, now)).toBe(
+      true,
+    );
     expect(
       isKeyUnused90d(
         {
@@ -360,11 +336,7 @@ describe("helpers", () => {
   });
 
   test("residualAccessNote uses config TTL, not a hardcoded 14", () => {
-    expect(residualAccessNote(60_000)).toBe(
-      "Existing access may continue up to 1 minute",
-    );
-    expect(residualAccessNote(90_000)).toBe(
-      "Existing access may continue up to 2 minutes",
-    );
+    expect(residualAccessNote(60_000)).toBe("Existing access may continue up to 1 minute");
+    expect(residualAccessNote(90_000)).toBe("Existing access may continue up to 2 minutes");
   });
 });

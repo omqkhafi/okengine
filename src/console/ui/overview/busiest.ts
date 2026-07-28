@@ -11,9 +11,7 @@ import type { FirstSloInvite } from "./types.ts";
  *
  * @param runs - Real Runs population
  */
-export function firstSloInvite(
-  runs: readonly RunRecord[],
-): FirstSloInvite | null {
+export function firstSloInvite(runs: readonly RunRecord[]): FirstSloInvite | null {
   if (runs.length === 0) return null;
   const groups = groupByDimension(runs, "flow");
   const top = groups[0];

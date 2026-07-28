@@ -13,9 +13,7 @@ import {
 
 describe("foldTimeline", () => {
   test("collapses multi-day idle into one labelled fold", () => {
-    const chain = TRACES_FIXTURE.filter(
-      (s) => s.id === "run-create-ok" || s.id === "run-fulfill",
-    );
+    const chain = TRACES_FIXTURE.filter((s) => s.id === "run-create-ok" || s.id === "run-fulfill");
     const folded = foldTimeline(intervalsFromSpans(chain));
     const folds = folded.segments.filter((s) => s.kind === "fold");
     expect(folds.length).toBe(1);
@@ -29,9 +27,7 @@ describe("foldTimeline", () => {
   });
 
   test("expanded fold restores proportional display weight", () => {
-    const chain = TRACES_FIXTURE.filter(
-      (s) => s.id === "run-create-ok" || s.id === "run-fulfill",
-    );
+    const chain = TRACES_FIXTURE.filter((s) => s.id === "run-create-ok" || s.id === "run-fulfill");
     const intervals = intervalsFromSpans(chain);
     const draft = foldTimeline(intervals);
     const foldId = draft.segments.find((s) => s.kind === "fold")?.id;
@@ -47,16 +43,12 @@ describe("foldTimeline", () => {
   });
 
   test("work stays proportional — display sum excludes collapsed dead time", () => {
-    const chain = TRACES_FIXTURE.filter(
-      (s) => s.id === "run-create-ok" || s.id === "run-fulfill",
-    );
+    const chain = TRACES_FIXTURE.filter((s) => s.id === "run-create-ok" || s.id === "run-fulfill");
     const folded = foldTimeline(intervalsFromSpans(chain));
     const workDisplay = folded.segments
       .filter((s) => s.kind === "work")
       .reduce((s, seg) => s + seg.displayMs, 0);
-    expect(folded.displayDurationMs).toBe(
-      workDisplay + COLLAPSED_FOLD_DISPLAY_MS,
-    );
+    expect(folded.displayDurationMs).toBe(workDisplay + COLLAPSED_FOLD_DISPLAY_MS);
     expect(folded.wallDurationMs).toBeGreaterThan(folded.displayDurationMs);
   });
 

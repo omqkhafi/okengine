@@ -18,8 +18,7 @@ describe("Flows panel accessibility", () => {
 
   beforeEach(() => {
     // React 19 act() environment flag for bun:test + happy-dom.
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/flows" });
     Object.defineProperty(globalThis, "window", {
       value: window,
@@ -72,12 +71,7 @@ describe("Flows panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA", async () => {
     await act(async () => {
-      root.render(
-        <FlowsA11yView
-          manifest={FLOWS_TEST_MANIFEST}
-          effect="sql:bookings"
-        />,
-      );
+      root.render(<FlowsA11yView manifest={FLOWS_TEST_MANIFEST} effect="sql:bookings" />);
     });
 
     // Allow layout / aria tree to settle.

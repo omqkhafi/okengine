@@ -27,15 +27,10 @@ import type {
  *
  * @param url - Optional Redis URL
  */
-export function createBunSignalRedisClient(
-  url?: string,
-): SignalRedisClientLike {
-  const redis =
-    url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
+export function createBunSignalRedisClient(url?: string): SignalRedisClientLike {
+  const redis = url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
   /** Subscribe blocks a connection — keep a dedicated client. */
-  let sub:
-    | InstanceType<typeof Bun.RedisClient>
-    | undefined;
+  let sub: InstanceType<typeof Bun.RedisClient> | undefined;
 
   function subClient(): InstanceType<typeof Bun.RedisClient> {
     if (!sub) {
@@ -127,16 +122,10 @@ export function parseXreadgroupReply(
  * In-memory redis-protocol fake for signal streams + pub/sub.
  */
 export function createSignalRedisFake(): SignalRedisClientLike & {
-  readonly streams: Map<
-    string,
-    Array<{ id: string; fields: Record<string, string> }>
-  >;
+  readonly streams: Map<string, Array<{ id: string; fields: Record<string, string> }>>;
   readonly published: Array<{ channel: string; message: string }>;
 } {
-  const streams = new Map<
-    string,
-    Array<{ id: string; fields: Record<string, string> }>
-  >();
+  const streams = new Map<string, Array<{ id: string; fields: Record<string, string> }>>();
   const groups = new Map<string, Set<string>>();
   const claimed = new Map<string, Set<string>>();
   const subs = new Map<string, Set<(message: string) => void>>();
@@ -210,9 +199,7 @@ export function createSignalRedisFake(): SignalRedisClientLike & {
  *
  * @param options - Declarations / redis client / durable outbox path
  */
-export async function openRedisSignal(
-  options: SignalOpenOptions,
-): Promise<SignalBus> {
+export async function openRedisSignal(options: SignalOpenOptions): Promise<SignalBus> {
   // Same DI shape as postgres/redis/s3: inject a client in tests; production
   // binds Bun.redis (Streams via send until Bun ships typed xadd).
   const redis = options.redis ?? createBunSignalRedisClient();
@@ -255,8 +242,7 @@ export async function openRedisSignal(
         rollback: () => tx.rollback(),
       };
     },
-    subscribe: (signal, subscriberId, handler) =>
-      outbox.subscribe(signal, subscriberId, handler),
+    subscribe: (signal, subscriberId, handler) => outbox.subscribe(signal, subscriberId, handler),
     live: (signal, handler) => outbox.live(signal, handler),
     drain: () => outbox.drain(),
     deadLetters: (s) => outbox.deadLetters(s),

@@ -5,11 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  DOCS_CONTENT_DIR,
-  readDocsSourceBody,
-  stripYamlFrontmatter,
-} from "./markdown-source";
+import { DOCS_CONTENT_DIR, readDocsSourceBody, stripYamlFrontmatter } from "./markdown-source";
 
 async function listMarkdownFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
@@ -18,10 +14,7 @@ async function listMarkdownFiles(dir: string): Promise<string[]> {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...(await listMarkdownFiles(abs)));
-    } else if (
-      entry.isFile() &&
-      (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))
-    ) {
+    } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))) {
       out.push(abs);
     }
   }

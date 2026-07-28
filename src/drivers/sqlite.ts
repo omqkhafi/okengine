@@ -3,26 +3,17 @@
  */
 
 import { Database, type SQLQueryBindings } from "bun:sqlite";
-import type {
-  SqlConnectOptions,
-  SqlConnection,
-  SqlDriver,
-  SqlRow,
-} from "./types.ts";
+import type { SqlConnectOptions, SqlConnection, SqlDriver, SqlRow } from "./types.ts";
 
 /**
  * Open a bun:sqlite connection implementing {@link SqlConnection}.
  *
  * @param options - URL (`:memory:` / path) or injected Database
  */
-export async function connectSqlite(
-  options: SqlConnectOptions = {},
-): Promise<SqlConnection> {
+export async function connectSqlite(options: SqlConnectOptions = {}): Promise<SqlConnection> {
   const role = options.role ?? "primary";
   const db =
-    options.client instanceof Database
-      ? options.client
-      : new Database(options.url ?? ":memory:");
+    options.client instanceof Database ? options.client : new Database(options.url ?? ":memory:");
 
   function asBindings(params: readonly unknown[]): SQLQueryBindings[] {
     return params as SQLQueryBindings[];

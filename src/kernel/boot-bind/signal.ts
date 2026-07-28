@@ -3,14 +3,8 @@
  */
 
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
-import {
-  createSignalRuntime,
-  type SignalRuntime,
-} from "../../elements/signal.ts";
-import {
-  resolveDriverId,
-  type ConfigEnv,
-} from "../../config/index.ts";
+import { createSignalRuntime, type SignalRuntime } from "../../elements/signal.ts";
+import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -25,8 +19,7 @@ export async function bindSignal(
   env: ConfigEnv,
   now: () => number,
 ): Promise<SignalRuntime> {
-  const signalId =
-    resolveDriverId(options.config?.drivers?.signal, env) ?? "memory";
+  const signalId = resolveDriverId(options.config?.drivers?.signal, env) ?? "memory";
   void signalId;
   const signal = createSignalRuntime({
     driver: memorySignalDriver,

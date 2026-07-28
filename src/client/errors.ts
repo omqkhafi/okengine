@@ -30,10 +30,7 @@ export function isTransportError(
 export function isErrorCode<
   Err extends { readonly code: string; readonly data: unknown },
   C extends Err["code"],
->(
-  error: Err | null | undefined,
-  code: C,
-): error is Extract<Err, { readonly code: C }> {
+>(error: Err | null | undefined, code: C): error is Extract<Err, { readonly code: C }> {
   return error != null && error.code === code;
 }
 

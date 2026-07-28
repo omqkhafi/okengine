@@ -23,8 +23,5 @@
     "erasableSyntaxOnly": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": [
-    "src/compiler/fixtures/**",
-    "src/console/ui/**"
-  ]
+  "exclude": ["src/compiler/fixtures/**", "src/console/ui/**"]
 }

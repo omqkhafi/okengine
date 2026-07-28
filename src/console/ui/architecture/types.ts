@@ -24,11 +24,7 @@ export const LAYER_LABEL: Readonly<Record<ElementLayer, string>> = {
 };
 
 /** Node kinds on the architecture diagram. */
-export type ArchitectureNodeKind =
-  | "unit"
-  | "flow"
-  | "resource"
-  | "external";
+export type ArchitectureNodeKind = "unit" | "flow" | "resource" | "external";
 
 /**
  * One node on the architecture diagram.
@@ -86,11 +82,7 @@ export interface ArchitectureEdge {
 }
 
 /** Computed pathology kinds (findings list, not decoration). */
-export type PathologyKind =
-  | "cycle"
-  | "god-node"
-  | "orphan-signal"
-  | "spof";
+export type PathologyKind = "cycle" | "god-node" | "orphan-signal" | "spof";
 
 /** One diagnostic finding from the graph-as-data. */
 export interface ArchitectureFinding {

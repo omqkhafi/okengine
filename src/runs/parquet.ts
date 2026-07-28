@@ -91,26 +91,16 @@ export function rowToWideEvent(row: Record<string, unknown>): WideEvent {
     subjectId: row.subject_id != null ? String(row.subject_id) : null,
     gates: parseJsonArray(row.gates) as string[],
     cache: (row.cache as WideEvent["cache"]) ?? "none",
-    ...(row.replica != null
-      ? { replica: row.replica as "primary" | "replica" }
-      : {}),
-    ...(row.replica_lag_ms != null
-      ? { replicaLagMs: Number(row.replica_lag_ms) }
-      : {}),
+    ...(row.replica != null ? { replica: row.replica as "primary" | "replica" } : {}),
+    ...(row.replica_lag_ms != null ? { replicaLagMs: Number(row.replica_lag_ms) } : {}),
     ...(row.cost != null ? { cost: Number(row.cost) } : {}),
-    ...(row.prompt_version != null
-      ? { promptVersion: Number(row.prompt_version) }
-      : {}),
-    ...(row.build_version != null
-      ? { buildVersion: String(row.build_version) }
-      : {}),
+    ...(row.prompt_version != null ? { promptVersion: Number(row.prompt_version) } : {}),
+    ...(row.build_version != null ? { buildVersion: String(row.build_version) } : {}),
     error:
       errorCode != null
         ? {
             code: String(errorCode),
-            ...(row.error_message != null
-              ? { message: String(row.error_message) }
-              : {}),
+            ...(row.error_message != null ? { message: String(row.error_message) } : {}),
           }
         : null,
     effects: parseJsonArray(row.effects) as WideEvent["effects"],
@@ -129,17 +119,11 @@ export function rowToWideEvent(row: Record<string, unknown>): WideEvent {
  * @param path - Absolute output path
  * @param rows - Flattened rows
  */
-export async function writeParquet(
-  path: string,
-  rows: readonly ParquetRow[],
-): Promise<void> {
+export async function writeParquet(path: string, rows: readonly ParquetRow[]): Promise<void> {
   if (rows.length === 0) return;
   await mkdir(dirname(path), { recursive: true });
   const jsonl = `${path}.jsonl`;
-  await writeFile(
-    jsonl,
-    rows.map((r) => JSON.stringify(r)).join("\n"),
-  );
+  await writeFile(jsonl, rows.map((r) => JSON.stringify(r)).join("\n"));
   const session = await openDuckDB();
   try {
     await session.conn.run(
@@ -156,9 +140,7 @@ export async function writeParquet(
  *
  * @param paths - Absolute Parquet paths
  */
-export async function readParquet(
-  paths: readonly string[],
-): Promise<ParquetRow[]> {
+export async function readParquet(paths: readonly string[]): Promise<ParquetRow[]> {
   if (paths.length === 0) return [];
   const session = await openDuckDB();
   try {

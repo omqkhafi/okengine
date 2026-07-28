@@ -34,9 +34,7 @@ export const SYSTEM_BOUNDARY: BoundaryRect = {
  *
  * @param nodes - Visible nodes
  */
-export function layoutNodes(
-  nodes: readonly ArchitectureNode[],
-): ReadonlyMap<string, NodePosition> {
+export function layoutNodes(nodes: readonly ArchitectureNode[]): ReadonlyMap<string, NodePosition> {
   const inside = nodes.filter((n) => n.insideBoundary);
   const outside = nodes.filter((n) => !n.insideBoundary);
   const map = new Map<string, NodePosition>();

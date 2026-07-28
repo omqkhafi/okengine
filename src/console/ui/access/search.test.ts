@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  openAccessEntity,
-  parseAccessSearch,
-  serializeAccessSearch,
-} from "./search.ts";
+import { openAccessEntity, parseAccessSearch, serializeAccessSearch } from "./search.ts";
 
 describe("access search", () => {
   test("round-trip plane + entity", () => {

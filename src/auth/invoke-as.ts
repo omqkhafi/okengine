@@ -36,9 +36,7 @@ export function invokeAs(options: InvokeAsOptions): UserPrincipal {
   assertAttenuated(options.operatorScopes, options.scopes, "invoke-as");
 
   if (options.impersonateRealUser && !options.development) {
-    throw new Error(
-      "invoke-as: impersonating a real user is development-only",
-    );
+    throw new Error("invoke-as: impersonating a real user is development-only");
   }
 
   return userPrincipal({

@@ -24,7 +24,7 @@
  * data to the claims the diagram makes about it.
  */
 
-import { ZOO_CONCERNS } from './elements';
+import { ZOO_CONCERNS } from "./elements";
 
 /**
  * Curated seams between the forty concerns, grouped by the concern that most
@@ -33,219 +33,219 @@ import { ZOO_CONCERNS } from './elements';
  */
 export const ZOO_SEAMS: ReadonlyArray<readonly [string, string]> = [
   // endpoint — the request path touches nearly everything on its way through.
-  ['endpoint', 'handler'],
-  ['endpoint', 'auth'],
-  ['endpoint', 'session'],
-  ['endpoint', 'rate limit'],
-  ['endpoint', 'feature flag'],
-  ['endpoint', 'timeout'],
-  ['endpoint', 'database'],
-  ['endpoint', 'cache'],
-  ['endpoint', 'file storage'],
-  ['endpoint', 'queue'],
-  ['endpoint', 'websocket'],
-  ['endpoint', 'SSE'],
-  ['endpoint', 'config'],
+  ["endpoint", "handler"],
+  ["endpoint", "auth"],
+  ["endpoint", "session"],
+  ["endpoint", "rate limit"],
+  ["endpoint", "feature flag"],
+  ["endpoint", "timeout"],
+  ["endpoint", "database"],
+  ["endpoint", "cache"],
+  ["endpoint", "file storage"],
+  ["endpoint", "queue"],
+  ["endpoint", "websocket"],
+  ["endpoint", "SSE"],
+  ["endpoint", "config"],
 
   // handler — the same logic, reachable four ways, each with its own signature.
-  ['handler', 'consumer'],
-  ['handler', 'webhook'],
-  ['handler', 'event bus'],
-  ['handler', 'ABAC'],
+  ["handler", "consumer"],
+  ["handler", "webhook"],
+  ["handler", "event bus"],
+  ["handler", "ABAC"],
 
   // consumer — delivery semantics leak into the code that receives them.
-  ['consumer', 'queue'],
-  ['consumer', 'pub/sub'],
-  ['consumer', 'event bus'],
-  ['consumer', 'job'],
-  ['consumer', 'database'],
-  ['consumer', 'timeout'],
-  ['consumer', 'delay'],
+  ["consumer", "queue"],
+  ["consumer", "pub/sub"],
+  ["consumer", "event bus"],
+  ["consumer", "job"],
+  ["consumer", "database"],
+  ["consumer", "timeout"],
+  ["consumer", "delay"],
 
   // job — a worker is a second runtime with the same appetite as the first.
-  ['job', 'workflow'],
-  ['job', 'cron'],
-  ['job', 'queue'],
-  ['job', 'database'],
-  ['job', 'cache'],
-  ['job', 'file storage'],
-  ['job', 'durable sleep'],
-  ['job', 'email'],
-  ['job', 'model calls'],
+  ["job", "workflow"],
+  ["job", "cron"],
+  ["job", "queue"],
+  ["job", "database"],
+  ["job", "cache"],
+  ["job", "file storage"],
+  ["job", "durable sleep"],
+  ["job", "email"],
+  ["job", "model calls"],
 
   // workflow — long-running state that has to survive a deploy.
-  ['workflow', 'queue'],
-  ['workflow', 'event bus'],
-  ['workflow', 'database'],
-  ['workflow', 'timeout'],
-  ['workflow', 'durable sleep'],
-  ['workflow', 'agents'],
+  ["workflow", "queue"],
+  ["workflow", "event bus"],
+  ["workflow", "database"],
+  ["workflow", "timeout"],
+  ["workflow", "durable sleep"],
+  ["workflow", "agents"],
 
   // webhook — somebody else's retry policy, arriving at your front door.
-  ['webhook', 'queue'],
-  ['webhook', 'event bus'],
-  ['webhook', 'secrets'],
-  ['webhook', 'rate limit'],
-  ['webhook', 'delay'],
-  ['webhook', 'WhatsApp'],
+  ["webhook", "queue"],
+  ["webhook", "event bus"],
+  ["webhook", "secrets"],
+  ["webhook", "rate limit"],
+  ["webhook", "delay"],
+  ["webhook", "WhatsApp"],
 
   // queue — ordering, de-duplication, and the outbox that keeps it honest.
-  ['queue', 'event bus'],
-  ['queue', 'database'],
-  ['queue', 'delay'],
-  ['queue', 'secrets'],
+  ["queue", "event bus"],
+  ["queue", "database"],
+  ["queue", "delay"],
+  ["queue", "secrets"],
 
   // pub/sub — fan-out, and the second copy of every payload schema.
-  ['pub/sub', 'stream'],
-  ['pub/sub', 'websocket'],
-  ['pub/sub', 'event bus'],
-  ['pub/sub', 'cache'],
+  ["pub/sub", "stream"],
+  ["pub/sub", "websocket"],
+  ["pub/sub", "event bus"],
+  ["pub/sub", "cache"],
 
   // stream — a replayable log everything downstream wants to tail.
-  ['stream', 'websocket'],
-  ['stream', 'SSE'],
-  ['stream', 'database'],
-  ['stream', 'search index'],
-  ['stream', 'embeddings'],
+  ["stream", "websocket"],
+  ["stream", "SSE"],
+  ["stream", "database"],
+  ["stream", "search index"],
+  ["stream", "embeddings"],
 
   // websocket — a long-lived connection still needs the short-lived answers.
-  ['websocket', 'auth'],
-  ['websocket', 'session'],
-  ['websocket', 'KV'],
-  ['websocket', 'timeout'],
-  ['websocket', 'rate limit'],
-  ['websocket', 'push'],
+  ["websocket", "auth"],
+  ["websocket", "session"],
+  ["websocket", "KV"],
+  ["websocket", "timeout"],
+  ["websocket", "rate limit"],
+  ["websocket", "push"],
 
   // SSE — an endpoint that never closes, and every proxy in between.
-  ['SSE', 'timeout'],
-  ['SSE', 'model calls'],
+  ["SSE", "timeout"],
+  ["SSE", "model calls"],
 
   // event bus — the routing table nobody owns.
   // (Every seam it has is listed above, under the producer that emits into it.)
 
   // database — every other concern eventually reads or writes it.
-  ['database', 'cache'],
-  ['database', 'search index'],
-  ['database', 'file storage'],
-  ['database', 'cron'],
-  ['database', 'auth'],
-  ['database', 'ABAC'],
-  ['database', 'secrets'],
-  ['database', 'email'],
-  ['database', 'embeddings'],
+  ["database", "cache"],
+  ["database", "search index"],
+  ["database", "file storage"],
+  ["database", "cron"],
+  ["database", "auth"],
+  ["database", "ABAC"],
+  ["database", "secrets"],
+  ["database", "email"],
+  ["database", "embeddings"],
 
   // cache — invalidation is the seam, and it is never local.
-  ['cache', 'KV'],
-  ['cache', 'TTL'],
-  ['cache', 'ABAC'],
-  ['cache', 'rate limit'],
-  ['cache', 'feature flag'],
-  ['cache', 'model calls'],
+  ["cache", "KV"],
+  ["cache", "TTL"],
+  ["cache", "ABAC"],
+  ["cache", "rate limit"],
+  ["cache", "feature flag"],
+  ["cache", "model calls"],
 
   // KV — the same Redis, four mental models deep.
-  ['KV', 'TTL'],
-  ['KV', 'session'],
-  ['KV', 'quota'],
-  ['KV', 'push'],
+  ["KV", "TTL"],
+  ["KV", "session"],
+  ["KV", "quota"],
+  ["KV", "push"],
 
   // file storage — bytes that outlive the row that points at them.
-  ['file storage', 'search index'],
-  ['file storage', 'TTL'],
-  ['file storage', 'ABAC'],
-  ['file storage', 'secrets'],
-  ['file storage', 'RAG'],
+  ["file storage", "search index"],
+  ["file storage", "TTL"],
+  ["file storage", "ABAC"],
+  ["file storage", "secrets"],
+  ["file storage", "RAG"],
 
   // search index — a second copy of the truth, always slightly behind.
-  ['search index', 'cron'],
-  ['search index', 'ABAC'],
-  ['search index', 'embeddings'],
-  ['search index', 'RAG'],
+  ["search index", "cron"],
+  ["search index", "ABAC"],
+  ["search index", "embeddings"],
+  ["search index", "RAG"],
 
   // cron — the schedule is upstream of the work it starts.
-  ['cron', 'TTL'],
-  ['cron', 'quota'],
-  ['cron', 'environment'],
-  ['cron', 'email'],
+  ["cron", "TTL"],
+  ["cron", "quota"],
+  ["cron", "environment"],
+  ["cron", "email"],
 
   // delay — backoff, and who is allowed to decide it.
-  ['delay', 'rate limit'],
+  ["delay", "rate limit"],
 
   // timeout — four budgets that have to nest, declared in four places.
-  ['timeout', 'model calls'],
+  ["timeout", "model calls"],
 
   // durable sleep — waiting is state, and state has an owner.
-  ['durable sleep', 'agents'],
+  ["durable sleep", "agents"],
 
   // TTL — expiry, spelled differently by every system that has it.
-  ['TTL', 'session'],
-  ['TTL', 'rate limit'],
-  ['TTL', 'push'],
+  ["TTL", "session"],
+  ["TTL", "rate limit"],
+  ["TTL", "push"],
 
   // auth — identity is an input to permission, and to the mail about it.
-  ['auth', 'session'],
-  ['auth', 'ABAC'],
-  ['auth', 'secrets'],
-  ['auth', 'email'],
-  ['auth', 'SMS'],
+  ["auth", "session"],
+  ["auth", "ABAC"],
+  ["auth", "secrets"],
+  ["auth", "email"],
+  ["auth", "SMS"],
 
   // session — one login, remembered in three places.
-  ['session', 'environment'],
+  ["session", "environment"],
 
   // ABAC — the policy you write twice: once in code, once in the query.
-  ['ABAC', 'feature flag'],
-  ['ABAC', 'agents'],
+  ["ABAC", "feature flag"],
+  ["ABAC", "agents"],
 
   // rate limit — every budget in the system, on a different clock.
-  ['rate limit', 'quota'],
-  ['rate limit', 'model calls'],
-  ['rate limit', 'SMS'],
+  ["rate limit", "quota"],
+  ["rate limit", "model calls"],
+  ["rate limit", "SMS"],
 
   // quota — the meter, the reset, and the mail when it runs out.
-  ['quota', 'feature flag'],
-  ['quota', 'email'],
-  ['quota', 'model calls'],
+  ["quota", "feature flag"],
+  ["quota", "email"],
+  ["quota", "model calls"],
 
   // feature flag — a second answer to "may this happen", on its own dashboard.
-  ['feature flag', 'config'],
-  ['feature flag', 'environment'],
-  ['feature flag', 'prompts'],
+  ["feature flag", "config"],
+  ["feature flag", "environment"],
+  ["feature flag", "prompts"],
 
   // secrets — every credential belongs to something.
-  ['secrets', 'config'],
-  ['secrets', 'environment'],
-  ['secrets', 'email'],
-  ['secrets', 'model calls'],
+  ["secrets", "config"],
+  ["secrets", "environment"],
+  ["secrets", "email"],
+  ["secrets", "model calls"],
 
   // config — the values that are not secret, in a file that is not the same file.
-  ['config', 'environment'],
-  ['config', 'prompts'],
+  ["config", "environment"],
+  ["config", "prompts"],
 
   // environment — the axis every one of the above has to be sliced along.
   // (Its seams are listed above, under the concern that varies per environment.)
 
   // email — the fallback chain starts here and ends somewhere else.
-  ['email', 'SMS'],
-  ['email', 'push'],
+  ["email", "SMS"],
+  ["email", "push"],
 
   // SMS — one phone number, two products, one consent record.
-  ['SMS', 'WhatsApp'],
+  ["SMS", "WhatsApp"],
 
   // push — the notification you must not send twice.
   // (Its seams are listed above, under websocket, KV, TTL, and email.)
 
   // model calls — non-determinism with a price per token.
-  ['model calls', 'prompts'],
-  ['model calls', 'agents'],
+  ["model calls", "prompts"],
+  ["model calls", "agents"],
 
   // prompts — versioned artifacts that behave like code and ship like config.
-  ['prompts', 'agents'],
-  ['prompts', 'RAG'],
+  ["prompts", "agents"],
+  ["prompts", "RAG"],
 
   // embeddings — a derived copy that has to be rebuilt when the model changes.
-  ['embeddings', 'RAG'],
+  ["embeddings", "RAG"],
 
   // agents — a workflow that decides its own next step.
-  ['agents', 'RAG'],
+  ["agents", "RAG"],
 ];
 
 /** One seam, resolved to ring positions with `a` before `b`. */
@@ -295,7 +295,8 @@ export const ZOO_SEAM_PAIRS: ReadonlyArray<ZooSeam> = ZOO_SEAMS.map(([from, to])
  * pass cost, and forty `aria-label`s on every frame, and a hundred-odd seams
  * scanned once per question is work the render loop does not need to repeat.
  */
-const AT: Map<number, { seams: ReadonlyArray<ZooSeam>; degrees: ReadonlyArray<number> }> = new Map();
+const AT: Map<number, { seams: ReadonlyArray<ZooSeam>; degrees: ReadonlyArray<number> }> =
+  new Map();
 
 function stateAt(visible: number) {
   const cached = AT.get(visible);

@@ -32,10 +32,7 @@ describe("console bundle budget", () => {
       console.log(
         "other (not initial, not panel-*):\n" +
           breakdown.other
-            .map(
-              (a) =>
-                `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`,
-            )
+            .map((a) => `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`)
             .join("\n"),
       );
     }

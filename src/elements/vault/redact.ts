@@ -11,17 +11,13 @@ export const SECRET_MASK = "[redacted:secret]";
  *
  * @param secrets - Cleartext values currently loaded
  */
-export function createSecretRedactor(
-  secrets: Iterable<string>,
-): {
+export function createSecretRedactor(secrets: Iterable<string>): {
   /** Redact a free-form string. */
   redactString(input: string): string;
   /** Deep-redact a JSON-like value. */
   redact(value: unknown): unknown;
 } {
-  const values = [...secrets]
-    .filter((v) => v.length > 0)
-    .sort((a, b) => b.length - a.length);
+  const values = [...secrets].filter((v) => v.length > 0).sort((a, b) => b.length - a.length);
 
   function redactString(input: string): string {
     let out = input;

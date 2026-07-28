@@ -38,10 +38,7 @@ describe("boot — vault gaps", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(VaultBootError);
       const boot = err as VaultBootError;
-      expect(boot.gaps.map((g) => g.name).sort()).toEqual([
-        "DATABASE_URL",
-        "STRIPE_KEY",
-      ]);
+      expect(boot.gaps.map((g) => g.name).sort()).toEqual(["DATABASE_URL", "STRIPE_KEY"]);
       expect(boot.message).toContain("STRIPE_KEY");
       expect(boot.message).toContain("DATABASE_URL");
     }
@@ -206,9 +203,7 @@ describe("boot — HTTP gate wiring lives behind boot", () => {
       }),
     );
     const app = oke({ name: "legacy" });
-    const res = await app.fetch(
-      new Request("http://localhost/ping", { method: "GET" }),
-    );
+    const res = await app.fetch(new Request("http://localhost/ping", { method: "GET" }));
     expect(res.status).toBe(200);
   });
 });
@@ -234,10 +229,10 @@ describe("boot — cron autostart via real timer loop", () => {
       }),
     );
 
-    // env: "dev" → startScheduler defaults ON. No createTestApp / advance.
+    // env: "local" → startScheduler defaults ON. No createTestApp / advance.
     const app = oke({
       name: "cron-autostart",
-      env: "dev",
+      env: "local",
       schedulerIntervalMs: 1000,
     });
     await app.boot();

@@ -12,9 +12,7 @@ import { measureColdStartMedianMs } from "../release/measure.ts";
 describe("cold start budget", () => {
   test(`Bun adapter ready in < ${COLD_START_BUDGET_MS} ms`, async () => {
     const median = await measureColdStartMedianMs();
-    console.log(
-      `cold-start median=${median.toFixed(2)} ms budget=${COLD_START_BUDGET_MS}`,
-    );
+    console.log(`cold-start median=${median.toFixed(2)} ms budget=${COLD_START_BUDGET_MS}`);
     expect(median).toBeLessThan(COLD_START_BUDGET_MS);
   });
 });

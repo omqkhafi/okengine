@@ -46,7 +46,4 @@ export {
 } from "./monitor.ts";
 export { SIGNALS_FIXTURE } from "./fixture.ts";
 export { dryRunOffer, type DryRunOffer } from "./dry-run.ts";
-export {
-  deadLetterFindings,
-  type DeadLetterFinding,
-} from "./findings.ts";
+export { deadLetterFindings, type DeadLetterFinding } from "./findings.ts";

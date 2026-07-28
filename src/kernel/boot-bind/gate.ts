@@ -3,10 +3,7 @@
  */
 
 import { memoryDrivers } from "../../drivers/memory.ts";
-import {
-  createGateRuntime,
-  type GateRuntime,
-} from "../../elements/gate.ts";
+import { createGateRuntime, type GateRuntime } from "../../elements/gate.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -15,10 +12,7 @@ import type { BootOptions } from "../boot.ts";
  * @param options - Boot options
  * @param now - Clock
  */
-export async function bindGate(
-  options: BootOptions,
-  now: () => number,
-): Promise<GateRuntime> {
+export async function bindGate(options: BootOptions, now: () => number): Promise<GateRuntime> {
   const kvNs = await memoryDrivers.kv.open({ name: "oke:gates" });
   return createGateRuntime({
     gates: options.gates ?? [],

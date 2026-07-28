@@ -12,15 +12,12 @@
 
 export {
   vault,
-  fromStack,
-  FROM_STACK_PREFIX,
-  isFromStack,
-  fromStackRole,
+  fromDocker,
+  FROM_DOCKER_PREFIX,
+  isFromDocker,
+  fromDockerRole,
 } from "./vault/declare.ts";
-export type {
-  VaultSecretDecl,
-  VaultSecretOptions,
-} from "./vault/declare.ts";
+export type { VaultSecretDecl, VaultSecretOptions } from "./vault/declare.ts";
 
 export {
   createVaultRuntime,
@@ -37,9 +34,8 @@ export type {
   VaultRuntime,
 } from "./vault/runtime.ts";
 
-export {
-  fingerprintSecret,
-  fingerprintSecretSync,
-} from "./vault/fingerprint.ts";
+export { COMPOSE_ENV_REL, resolveComposeEnvPath } from "./vault/chain.ts";
+
+export { fingerprintSecret, fingerprintSecretSync } from "./vault/fingerprint.ts";
 
 export { createSecretRedactor } from "./vault/redact.ts";

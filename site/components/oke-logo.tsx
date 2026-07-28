@@ -1,6 +1,6 @@
-import type { SVGProps } from 'react';
+import type { SVGProps } from "react";
 
-import { cn } from '@/lib/cn';
+import { cn } from "@/lib/cn";
 
 /**
  * OKE wordmark logo.
@@ -19,7 +19,7 @@ export function OkeLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
       fill="none"
       role="img"
       aria-label="OKE"
-      className={cn('text-[#0D0D0D] dark:text-white', className)}
+      className={cn("text-[#0D0D0D] dark:text-white", className)}
       {...props}
     >
       {/* E */}

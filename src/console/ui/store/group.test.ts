@@ -5,12 +5,7 @@ import { groupByFacet } from "./group.ts";
 describe("groupByFacet", () => {
   test("groups into sql / kv / files / index", () => {
     const groups = groupByFacet(STORE_FIXTURE);
-    expect(groups.map((g) => g.facet)).toEqual([
-      "sql",
-      "kv",
-      "files",
-      "index",
-    ]);
+    expect(groups.map((g) => g.facet)).toEqual(["sql", "kv", "files", "index"]);
   });
 
   test("filters by name", () => {

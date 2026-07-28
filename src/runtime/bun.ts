@@ -26,10 +26,7 @@ export interface BunRuntime extends Runtime {
    * @param filename - Path, `":memory:"`, or omit for memory
    * @param options - `bun:sqlite` open options
    */
-  sqlite(
-    filename?: string,
-    options?: ConstructorParameters<typeof Database>[1],
-  ): Database;
+  sqlite(filename?: string, options?: ConstructorParameters<typeof Database>[1]): Database;
 }
 
 /**
@@ -43,9 +40,7 @@ export function createBunRuntime(): BunRuntime {
     env: createEnv(),
     files: createFiles(),
     sqlite(filename = ":memory:", options) {
-      return options === undefined
-        ? new Database(filename)
-        : new Database(filename, options);
+      return options === undefined ? new Database(filename) : new Database(filename, options);
     },
     serve(app, options) {
       return listenBun(app, options);
@@ -67,9 +62,7 @@ export function isBunNativePath(path: string): boolean {
   return true;
 }
 
-type MethodHandlers = Partial<
-  Record<string, (req: Request) => Response | Promise<Response>>
->;
+type MethodHandlers = Partial<Record<string, (req: Request) => Response | Promise<Response>>>;
 
 /**
  * Build Bun.serve `routes` from app HTTP bindings.
@@ -99,11 +92,7 @@ export function buildBunRoutes(
 function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
   const port = options?.port ?? APP_PORT;
   const hostname = options?.hostname ?? "127.0.0.1";
-  const fetchHandler = secureFetch(
-    (req) => app.fetch(req),
-    options,
-    hostname,
-  );
+  const fetchHandler = secureFetch((req) => app.fetch(req), options, hostname);
   const routes = buildBunRoutes(app, fetchHandler);
 
   const server = Bun.serve({

@@ -19,9 +19,7 @@ export type VaultSearch = z.infer<typeof VaultSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseVaultSearch(
-  search: Record<string, unknown>,
-): VaultSearch {
+export function parseVaultSearch(search: Record<string, unknown>): VaultSearch {
   const parsed = VaultSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -31,9 +29,7 @@ export function parseVaultSearch(
  *
  * @param search - Search state
  */
-export function serializeVaultSearch(
-  search: VaultSearch,
-): Record<string, string> {
+export function serializeVaultSearch(search: VaultSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.name) out.name = search.name;

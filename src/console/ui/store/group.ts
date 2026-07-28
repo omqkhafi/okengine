@@ -19,10 +19,7 @@ const FACET_LABELS: Record<StoreFacet, string> = {
  * @param stores - Projected rows
  * @param q - Optional filter
  */
-export function groupByFacet(
-  stores: readonly StoreRecord[],
-  q = "",
-): readonly StoreFacetGroup[] {
+export function groupByFacet(stores: readonly StoreRecord[], q = ""): readonly StoreFacetGroup[] {
   const needle = q.trim().toLowerCase();
   const filtered = needle
     ? stores.filter(

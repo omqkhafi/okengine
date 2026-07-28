@@ -19,22 +19,18 @@ export function matchesEffectFilter(
   if (!filter) return true;
   switch (filter.kind) {
     case "wrote":
-      return span.effects.some(
-        (e) => e.kind === "write" && e.resource === filter.resource,
-      );
+      return span.effects.some((e) => e.kind === "write" && e.resource === filter.resource);
     case "asked":
       return span.effects.some((e) => e.kind === "ask");
     case "sent":
       return span.effects.some(
         (e) =>
-          e.kind === "send" &&
-          (filter.resource === undefined || e.resource === filter.resource),
+          e.kind === "send" && (filter.resource === undefined || e.resource === filter.resource),
       );
     case "secret":
       return span.effects.some(
         (e) =>
-          e.kind === "secret" &&
-          (filter.resource === undefined || e.resource === filter.resource),
+          e.kind === "secret" && (filter.resource === undefined || e.resource === filter.resource),
       );
     case "cost":
       return (span.cost ?? 0) > filter.min;
@@ -63,9 +59,7 @@ export function traceMatchesEffectFilter(
  *
  * @param raw - URL value
  */
-export function parseEffectFilter(
-  raw: string | undefined,
-): EffectFilter | null {
+export function parseEffectFilter(raw: string | undefined): EffectFilter | null {
   if (!raw?.trim()) return null;
   const value = raw.trim();
   if (value === "asked") return { kind: "asked" };
@@ -93,9 +87,7 @@ export function parseEffectFilter(
  *
  * @param filter - Filter
  */
-export function serializeEffectFilter(
-  filter: EffectFilter | null | undefined,
-): string | undefined {
+export function serializeEffectFilter(filter: EffectFilter | null | undefined): string | undefined {
   if (!filter) return undefined;
   switch (filter.kind) {
     case "wrote":

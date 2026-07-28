@@ -3,6 +3,7 @@
  * the handles `fx.store(...)` returns.
  */
 
+import type { DomainDdlMode } from "../../config/index.ts";
 import type { Effects, ResourceRef } from "../../manifest/types.ts";
 import type {
   ClassificationMap,
@@ -16,10 +17,7 @@ import type {
   SqlDriver,
   SqlRow,
 } from "../../drivers/types.ts";
-import {
-  buildClassificationMap,
-  type MaskRowsOptions,
-} from "./classify.ts";
+import { buildClassificationMap, type MaskRowsOptions } from "./classify.ts";
 import {
   createStoreCache,
   computedCacheKey,
@@ -29,10 +27,7 @@ import {
 } from "./cache.ts";
 import { resolveSqlTarget, type SqlBindingConfig } from "./replica.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
-import {
-  classificationsFromTable,
-  type TableHandle,
-} from "./table.ts";
+import { classificationsFromTable, type TableHandle } from "./table.ts";
 import type {
   FilesStoreDecl,
   IndexStoreDecl,
@@ -64,15 +59,18 @@ export interface CreateStoreRuntimeOptions {
   /** KV open options keyed by store name. */
   readonly kv?: Readonly<Record<string, { readonly url?: string; readonly client?: unknown }>>;
   /** Files open options keyed by store name. */
-  readonly files?: Readonly<
-    Record<string, { readonly root?: string; readonly client?: unknown }>
-  >;
+  readonly files?: Readonly<Record<string, { readonly root?: string; readonly client?: unknown }>>;
   /** Index open options keyed by store name. */
   readonly index?: Readonly<
     Record<string, { readonly dims?: number; readonly url?: string; readonly sql?: SqlConnection }>
   >;
   /** Clock for cache TTLs. */
   readonly now?: () => number;
+  /**
+   * Domain DDL policy for SQL handles. Default `ensure` (test-friendly).
+   * Boot sets `off` for docker/prod and local+autoPush.
+   */
+  readonly domainDdl?: DomainDdlMode;
 }
 
 /** Per-invocation context when opening a handle through the runtime. */
@@ -84,7 +82,11 @@ export interface StoreInvokeContext {
 }
 
 /** Unified handle returned for any facet. */
-export type StoreHandle = SqlStoreHandle | KvStoreFxHandle | FilesStoreFxHandle | IndexStoreFxHandle;
+export type StoreHandle =
+  | SqlStoreHandle
+  | KvStoreFxHandle
+  | FilesStoreFxHandle
+  | IndexStoreFxHandle;
 
 /** KV handle on `fx.store`. */
 export interface KvStoreFxHandle {
@@ -115,14 +117,11 @@ export interface FilesStoreFxHandle {
 export interface IndexStoreFxHandle {
   readonly ref: `index:${string}`;
   readonly driverId: "memory" | "pgvector";
-  upsert(
-    id: string,
+  upsert(id: string, vector: readonly number[], meta?: Record<string, unknown>): Promise<void>;
+  search(
     vector: readonly number[],
-    meta?: Record<string, unknown>,
-  ): Promise<void>;
-  search(vector: readonly number[], topK?: number): Promise<
-    Array<{ id: string; score: number; meta?: Record<string, unknown> }>
-  >;
+    topK?: number,
+  ): Promise<Array<{ id: string; score: number; meta?: Record<string, unknown> }>>;
   delete(id: string): Promise<boolean>;
 }
 
@@ -179,9 +178,7 @@ export interface StoreRuntime {
  *
  * @param options - Drivers and per-store bindings
  */
-export function createStoreRuntime(
-  options: CreateStoreRuntimeOptions,
-): StoreRuntime {
+export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRuntime {
   const now = options.now ?? (() => Date.now());
   const cache = createStoreCache(now);
   const declarations = new Map<string, StoreDecl>();
@@ -191,8 +188,10 @@ export function createStoreRuntime(
   const indexes = new Map<string, IndexStore>();
 
   function classificationsFor(decl: SqlStoreDecl): ClassificationMap {
-    const nested: Record<string, Record<string, import("../../manifest/types.ts").ColumnClassification>> =
-      { ...(decl.classify ?? {}) };
+    const nested: Record<
+      string,
+      Record<string, import("../../manifest/types.ts").ColumnClassification>
+    > = { ...(decl.classify ?? {}) };
     if (decl.schema) {
       for (const value of Object.values(decl.schema)) {
         if (value && typeof value === "object" && "columns" in value) {
@@ -207,10 +206,7 @@ export function createStoreRuntime(
     return buildClassificationMap(nested);
   }
 
-  async function openSql(
-    decl: SqlStoreDecl,
-    ctx: StoreInvokeContext,
-  ): Promise<SqlStoreHandle> {
+  async function openSql(decl: SqlStoreDecl, ctx: StoreInvokeContext): Promise<SqlStoreHandle> {
     const binding = options.sql?.[decl.name] ?? {
       name: decl.name,
       primary: { url: ":memory:" },
@@ -231,6 +227,7 @@ export function createStoreRuntime(
       classifications: classificationsFor(decl),
       revealPii: ctx.revealPii,
       routedRole: target.role,
+      domainDdl: options.domainDdl ?? "ensure",
     });
   }
 

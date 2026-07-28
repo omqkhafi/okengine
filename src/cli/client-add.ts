@@ -32,12 +32,9 @@ export interface ClientAddResult {
  *
  * @param options - URL / out / test overrides
  */
-export async function clientAdd(
-  options: ClientAddOptions,
-): Promise<ClientAddResult> {
+export async function clientAdd(options: ClientAddOptions): Promise<ClientAddResult> {
   const out = options.out ?? "oke-client.d.ts";
-  const descriptor =
-    options.descriptor ?? (await fetchDescriptor(options.url, options.fetch));
+  const descriptor = options.descriptor ?? (await fetchDescriptor(options.url, options.fetch));
   const source = emitAmbient(descriptor);
   await Bun.write(out, source);
   return { out, source };
@@ -102,12 +99,8 @@ export function emitAmbient(descriptor: ClientDescriptor): string {
                   `          in: ${c.in ?? "unknown"};`,
                   `          out: ${c.out ?? "unknown"};`,
                   errorBlock,
-                  c.method
-                    ? `          method: ${JSON.stringify(c.method)};`
-                    : undefined,
-                  c.path
-                    ? `          path: ${JSON.stringify(c.path)};`
-                    : undefined,
+                  c.method ? `          method: ${JSON.stringify(c.method)};` : undefined,
+                  c.path ? `          path: ${JSON.stringify(c.path)};` : undefined,
                   `        }`,
                 ]
                   .filter((line): line is string => line !== undefined)
@@ -147,9 +140,7 @@ async function fetchDescriptor(
   const base = url.replace(/\/+$/, "");
   const res = await fetchFn(`${base}/_oke/client.json`);
   if (!res.ok) {
-    throw new Error(
-      `Failed to fetch ${base}/_oke/client.json (${res.status})`,
-    );
+    throw new Error(`Failed to fetch ${base}/_oke/client.json (${res.status})`);
   }
   const json: unknown = await res.json();
   if (

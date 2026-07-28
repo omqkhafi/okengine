@@ -21,9 +21,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
  *
  * @param options - API key / model / base URL / injectable fetch
  */
-export async function openAnthropic(
-  options: AiOpenOptions = {},
-): Promise<AiModelClient> {
+export async function openAnthropic(options: AiOpenOptions = {}): Promise<AiModelClient> {
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("anthropic: apiKey is required (or ANTHROPIC_API_KEY)");
@@ -48,17 +46,14 @@ export async function openAnthropic(
         body: JSON.stringify({
           model: resolvedModel,
           max_tokens: opts.maxTokens ?? 1024,
-          ...(opts.temperature !== undefined
-            ? { temperature: opts.temperature }
-            : {}),
+          ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
           ...(system !== undefined ? { system } : {}),
           messages,
         }),
       });
       const raw = (await res.json().catch(() => ({}))) as AnthropicMessagesResponse;
       if (!res.ok) {
-        const msg =
-          raw.error?.message ?? `anthropic HTTP ${res.status}`;
+        const msg = raw.error?.message ?? `anthropic HTTP ${res.status}`;
         throw new Error(`anthropic: ${msg}`);
       }
       const text = textFromContent(raw.content);
@@ -92,9 +87,7 @@ interface AnthropicMessagesResponse {
   readonly error?: { readonly message?: string };
 }
 
-function splitSystem(
-  messages: AiCompleteOptions["messages"],
-): {
+function splitSystem(messages: AiCompleteOptions["messages"]): {
   system?: string;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
 } {
@@ -117,9 +110,7 @@ function splitSystem(
   };
 }
 
-function textFromContent(
-  content: AnthropicMessagesResponse["content"],
-): string {
+function textFromContent(content: AnthropicMessagesResponse["content"]): string {
   if (!content?.length) return "";
   return content
     .filter((b) => b.type === "text" && typeof b.text === "string")

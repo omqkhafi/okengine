@@ -28,25 +28,17 @@ describe("causality graph", () => {
       effect: "sql:bookings",
     });
     const related = centre.filter((f) => f.related);
-    expect(related.map((f) => f.id).sort()).toEqual([
-      "bookings.create",
-      "bookings.mine",
-    ]);
+    expect(related.map((f) => f.id).sort()).toEqual(["bookings.create", "bookings.mine"]);
 
     const causes = leftCauses(graph, {
       sel: "effect",
       effect: "sql:bookings",
     }).filter((c) => c.related);
-    expect(causes.map((c) => c.id).sort()).toEqual([
-      "http:GET:/bookings",
-      "http:POST:/bookings",
-    ]);
+    expect(causes.map((c) => c.id).sort()).toEqual(["http:GET:/bookings", "http:POST:/bookings"]);
   });
 
   test("internal flows show callers as causes", () => {
-    const nodes = causeIdsFor(undefined, "payments.chargeBooking", [
-      "ops.runCharge",
-    ]);
+    const nodes = causeIdsFor(undefined, "payments.chargeBooking", ["ops.runCharge"]);
     expect(nodes.map((n) => n.id)).toEqual(["caller:ops.runCharge"]);
     expect(nodes[0]?.kind).toBe("caller");
   });

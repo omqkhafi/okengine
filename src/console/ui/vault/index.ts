@@ -11,11 +11,7 @@ export type {
   VaultResolutionStep,
 } from "./types.ts";
 
-export {
-  VAULT_FIXTURE,
-  VAULT_LIST_FIXTURE,
-  FIXTURE_SECRET_VALUE,
-} from "./fixture.ts";
+export { VAULT_FIXTURE, VAULT_LIST_FIXTURE, FIXTURE_SECRET_VALUE } from "./fixture.ts";
 
 export {
   parseVaultSearch,
@@ -38,8 +34,4 @@ export { formatBlastRadius, formatDuration } from "./blast-radius.ts";
 
 export { dormantSecrets, DORMANT_MS } from "./dormant.ts";
 
-export {
-  exportSafeRow,
-  exportSafeList,
-  assertExportHasNoSecrets,
-} from "./export-safe.ts";
+export { exportSafeRow, exportSafeList, assertExportHasNoSecrets } from "./export-safe.ts";

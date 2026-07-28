@@ -9,27 +9,14 @@
           "path": "/bookings"
         }
       },
-      "gates": [
-        "member",
-        "booking:create",
-        "rate:sliding-window-counter:300/1m"
-      ],
+      "gates": ["member", "booking:create", "rate:sliding-window-counter:300/1m"],
       "in": "…",
       "out": "…",
-      "errors": [
-        "FlightFull"
-      ],
+      "errors": ["FlightFull"],
       "effects": {
-        "reads": [
-          "sql:bookings"
-        ],
-        "writes": [
-          "sql:bookings"
-        ],
-        "emits": [
-          "order-placed",
-          "seat-feed"
-        ],
+        "reads": ["sql:bookings"],
+        "writes": ["sql:bookings"],
+        "emits": ["order-placed", "seat-feed"],
         "secrets": []
       },
       "source": "src/flows/bookings/index.ts:18",
@@ -43,11 +30,9 @@
     },
     "bookings.getBooking": {
       "effects": {
-        "reads": [
-          "sql:bookings"
-        ]
+        "reads": ["sql:bookings"]
       },
-      "source": "src/flows/bookings/index.ts:46"
+      "source": "src/flows/bookings/index.ts:50"
     },
     "bookings.mine": {
       "trigger": {
@@ -56,13 +41,9 @@
           "path": "/bookings"
         }
       },
-      "gates": [
-        "member"
-      ],
+      "gates": ["member"],
       "effects": {
-        "reads": [
-          "sql:bookings"
-        ]
+        "reads": ["sql:bookings"]
       },
       "source": "src/flows/bookings/index.ts:38",
       "live": true,
@@ -70,27 +51,18 @@
     },
     "bookings.refundBooking": {
       "effects": {
-        "reads": [
-          "sql:bookings"
-        ],
-        "writes": [
-          "sql:bookings"
-        ]
+        "reads": ["sql:bookings"],
+        "writes": ["sql:bookings"]
       },
-      "source": "src/flows/bookings/index.ts:51"
+      "source": "src/flows/bookings/index.ts:55"
     },
     "payments.chargeBooking": {
       "effects": {
-        "secrets": [
-          "STRIPE_KEY"
-        ]
+        "secrets": ["STRIPE_KEY"]
       },
       "source": "src/flows/payments/index.ts:4",
       "durable": true,
-      "steps": [
-        "create-intent",
-        "confirm"
-      ]
+      "steps": ["create-intent", "confirm"]
     },
     "support.createTicket": {
       "trigger": {
@@ -99,16 +71,10 @@
           "path": "/tickets"
         }
       },
-      "gates": [
-        "member"
-      ],
+      "gates": ["member"],
       "effects": {
-        "writes": [
-          "sql:tickets"
-        ],
-        "asks": [
-          "ticket-triage@3"
-        ]
+        "writes": ["sql:tickets"],
+        "asks": ["ticket-triage@3"]
       },
       "source": "src/flows/support/index.ts:9",
       "nondeterministic": true,
@@ -137,9 +103,7 @@
   "gates": {
     "booking:create": {
       "kind": "policy",
-      "roles": [
-        "booking:create"
-      ]
+      "roles": ["booking:create"]
     },
     "fair": {
       "kind": "rate",
@@ -150,9 +114,7 @@
     },
     "member": {
       "kind": "policy",
-      "roles": [
-        "member"
-      ]
+      "roles": ["member"]
     }
   },
   "vault": {
@@ -164,10 +126,7 @@
   "channels": {
     "booking-confirmed": {
       "medium": "email",
-      "locales": [
-        "en",
-        "ar"
-      ]
+      "locales": ["en", "ar"]
     }
   },
   "ai": {
@@ -188,10 +147,7 @@
     },
     "agents": {
       "support": {
-        "tools": [
-          "bookings.getBooking",
-          "bookings.refundBooking"
-        ],
+        "tools": ["bookings.getBooking", "bookings.refundBooking"],
         "maxSteps": 6
       }
     }
@@ -202,31 +158,17 @@
         "availability": "99.5%"
       },
       "composes": "99.6%",
-      "flows": [
-        "bookings.create",
-        "payments.chargeBooking"
-      ]
+      "flows": ["bookings.create", "payments.chargeBooking"]
     }
   },
   "drivers": {
-    "prod": [
-      "postgres",
-      "redis",
-      "s3",
-      "smtp",
-      "sops",
-      "anthropic",
-      "pgvector"
-    ]
+    "prod": ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"]
   },
   "tenancy": {
     "isolation": "row"
   },
   "i18n": {
-    "locales": [
-      "en",
-      "ar"
-    ],
+    "locales": ["en", "ar"],
     "default": "ar",
     "dir": {
       "ar": "rtl"
@@ -238,4 +180,3 @@
     "store.kv": "valkey/valkey:8-alpine"
   }
 }
-

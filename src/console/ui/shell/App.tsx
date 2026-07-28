@@ -50,11 +50,7 @@ export function App() {
   });
 
   if (status.isLoading) {
-    return (
-      <main className="grid h-full place-items-center text-[var(--oke-muted)]">
-        Loading…
-      </main>
-    );
+    return <main className="grid h-full place-items-center text-[var(--oke-muted)]">Loading…</main>;
   }
 
   if (status.isError) {
@@ -73,11 +69,7 @@ export function App() {
   }
 
   if (status.data?.setupClosed && me.isLoading) {
-    return (
-      <main className="grid h-full place-items-center text-[var(--oke-muted)]">
-        Loading…
-      </main>
-    );
+    return <main className="grid h-full place-items-center text-[var(--oke-muted)]">Loading…</main>;
   }
 
   if (!status.data?.setupClosed || me.isError || !me.data) {

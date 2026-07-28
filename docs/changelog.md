@@ -7,6 +7,72 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## Unreleased
+
+### Changed
+
+- Docs now state the relational-query limit explicitly (investigated, not a
+  feature): Drizzle RQB `db.query.*.findMany({ with: … })` is **not**
+  supported through `fx` — `fx.store` is a single-table session, so effect
+  inference, cache keys, and PII masking stay exact. Compose separate
+  single-table `fx.store` reads (or `fx.call`); each table then appears in
+  Manifest `reads` / `writes`.
+- Driver-map env roles `dev` → `local`, `stack` → `docker`. Bare `oke dev`
+  prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults to `local`
+  with no prompt, no compose boot, and no save. Session flags:
+  `--local`/`-l`, `--docker`/`-d [roles]`. `oke mode [local|docker]` reads or
+  sets the saved default.
+- Compose credentials live in `docker/.env.docker` (`OKE_DOCKER=1`), beside
+  compose; generated dotenv is role-grouped with operator comments. Vault
+  soft-reads a legacy project-root `.env.docker` when present.
+  `vault.fromDocker` replaces `vault.fromStack`.
+- Soft-compat: legacy `dev`/`stack` keys in `oke.config.ts` warn and normalize.
+  Hard-removed: `--stack`/`-s`, `OKE_STACK`, `.env.stack`, `fromStack`
+  (`oke upgrade` rewrites leftovers).
+- Extra published ports (Mailpit UI `8025`, RustFS console `9001`) are offset
+  per stack `instanceId` so multiple `oke dev --docker` projects do not collide.
+
+### Added
+
+- Store foreign keys and relations: `field.*.references(() => table.col)` and
+  `store.schema.relations({ … }, (r) => …)` mirroring drizzle-orm@1.0.0-rc.4
+  `defineRelations` (`r.one.*` / `r.many.*` + `from` / `to`). Same emitter
+  pre-step writes FK chains + `defineRelations` into `schema.generated.ts`.
+  Linkly’s `daily`→`links` relationship is the first real usage. Many-to-many
+  is a junction table with two one/many relations — no separate API. Declared
+  relations do not change Manifest `reads` (`fx.store` remains single-table).
+- Abstract store schema: `store.schema.table` + `field.text` / `field.integer`
+  (modifiers + `.pii()` / `.sensitive()` / `.retain()`). ORM-agnostic declare
+  site; `oke db push|generate|migrate` emits dialect-specific Drizzle
+  (`src/schema.generated.ts`) as a pre-step from `src/schema.decl.ts` and/or
+  live plugged plugin tables — not a third schema CLI. Hand-written `schema.ts`
+  remains the escape hatch. Prompt 42 /
+  OKE1101 / docker-prod never-auto-DDL unchanged.
+- Plugin `.table(name, columns?, options?)` accepts `field.*` column maps;
+  contributions merge into the same emitter. **`oke db` loads the live app
+  entry** (`src/app.ts` / `db.entry`) and merges `app.plugins.tableContributions()`
+  at push/generate/migrate time (and on `oke dev` auto-push). **Known v1
+  limit:** plugins add whole tables only — no column injection into
+  app-owned tables.
+- Manifest `$defs/DeclaredColumn` (additive); compiler extracts
+  `store.schema.table` columns + PII into `stores.*.tables.*.columns`.
+- `oke db push|generate|migrate` — domain schema sync via drizzle-kit
+  (distinct from `oke schema generate` core/plugin stubs). Local `oke dev`
+  auto-runs `oke db push` when `schema.ts` changes (opt out: `--no-db-push`
+  or `db: { autoPush: false }`). Docker/prod never auto-apply DDL;
+  missing tables remapped to `OKE1101` with fix `oke db migrate`.
+- Templates/examples ship `drizzle.config.ts` (`out: ./drizzle`) plus
+  `drizzle-kit` as a devDependency.
+- `create-oke --sql postgres` (opt-in) rewrites `src/schema.ts` to the
+  matching Drizzle dialect and pins `oke.config.ts` `store.sql`
+  local/docker/prod. Default scaffold keeps dual-mode (`local: sqlite` ·
+  `docker`/`prod: postgres`); the interactive wizard no longer asks.
+- Mailpit and RustFS image recipes for local SMTP catcher / S3-compatible
+  object storage under `oke dev --docker`.
+- `CONTRIBUTING.md` and `docs/guides/writing-a-driver.md` (ClickHouse runs
+  worked example).
+- `.env.example` for every template and teaching example, with inline docs.
+
 ## v0.2.6 — 2026-07-26
 
 ### Fixed

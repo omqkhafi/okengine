@@ -20,14 +20,8 @@ import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { verifyClaimCode } from "./claim.ts";
-import {
-  maskWideEventForConsole,
-  piiFieldNamesFromManifest,
-} from "./runs-pii.ts";
-import {
-  ClockResourceNotFoundError,
-  ScheduleNotOverridableError,
-} from "./clock.ts";
+import { maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
+import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
@@ -73,26 +67,11 @@ const ManifestOut = z.object({
 });
 
 const EffectEntryOut = z.object({
-  kind: z.enum([
-    "read",
-    "write",
-    "emit",
-    "send",
-    "ask",
-    "secret",
-    "call",
-  ]),
+  kind: z.enum(["read", "write", "emit", "send", "ask", "secret", "call"]),
   resource: z.string(),
   timestamp: z.number(),
   duration: z.number(),
-  reversibility: z.enum([
-    "none",
-    "reversible",
-    "deferred",
-    "irreversible",
-    "capability",
-    "portal",
-  ]),
+  reversibility: z.enum(["none", "reversible", "deferred", "irreversible", "capability", "portal"]),
 });
 
 const LogLineOut = z.object({
@@ -130,10 +109,7 @@ const RunsListOut = z.object({
       /** `fx.log` lines — a field on the run, not a parallel stream. */
       logs: z.array(LogLineOut),
       /** All queryable dimensions for population analysis. */
-      dimensions: z.record(
-        z.string(),
-        z.union([z.string(), z.number(), z.boolean(), z.null()]),
-      ),
+      dimensions: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
     }),
   ),
 });
@@ -154,14 +130,7 @@ const SignalEndpointOut = z.object({
   flowId: z.string(),
   durable: z.boolean(),
   external: z.boolean(),
-  peakTier: z.enum([
-    "none",
-    "reads",
-    "writes",
-    "emits",
-    "external",
-    "capabilities",
-  ]),
+  peakTier: z.enum(["none", "reads", "writes", "emits", "external", "capabilities"]),
 });
 
 const DeadLetterOut = z.object({
@@ -240,9 +209,7 @@ const SignalsReplayOut = z.object({
     z.object({
       id: z.string(),
       ok: z.boolean(),
-      error: z
-        .object({ code: z.string(), message: z.string() })
-        .optional(),
+      error: z.object({ code: z.string(), message: z.string() }).optional(),
     }),
   ),
   wouldHaveFired: z.array(
@@ -319,14 +286,7 @@ const InvokeOut = z.object({
   asUserId: z.string(),
   trigger: z.enum(["http", "signal", "clock", "internal", "durable"]),
   response: z.unknown(),
-  peakTier: z.enum([
-    "none",
-    "reads",
-    "writes",
-    "emits",
-    "external",
-    "capabilities",
-  ]),
+  peakTier: z.enum(["none", "reads", "writes", "emits", "external", "capabilities"]),
   auditedAt: z.number(),
 });
 
@@ -540,9 +500,7 @@ const ClockListOut = z.object({
   now: z.number(),
   crons: z.array(ClockCronOut),
   waitingOn: z.array(WaitingOnOut),
-  waitingOnCounts: z.array(
-    z.object({ label: z.string(), count: z.number() }),
-  ),
+  waitingOnCounts: z.array(z.object({ label: z.string(), count: z.number() })),
   timeline: z.array(
     z.object({
       at: z.number(),
@@ -598,13 +556,7 @@ const ClockWakeEarlyOut = z.object({
 });
 
 const VaultResolutionStepOut = z.object({
-  source: z.enum([
-    "process.env",
-    ".env.local",
-    ".env.stack",
-    "driver",
-    "dev-fallback",
-  ]),
+  source: z.enum(["process.env", ".env.local", ".env.docker", "driver", "dev-fallback"]),
   present: z.boolean(),
   won: z.boolean(),
 });
@@ -625,15 +577,7 @@ const VaultRowOut = z.object({
   fingerprints: z.record(z.string(), z.string()),
   fingerprint: z.string().nullable(),
   cleartext: z.string().nullable(),
-  winner: z
-    .enum([
-      "process.env",
-      ".env.local",
-      ".env.stack",
-      "driver",
-      "dev-fallback",
-    ])
-    .nullable(),
+  winner: z.enum(["process.env", ".env.local", ".env.docker", "driver", "dev-fallback"]).nullable(),
   resolution: z.array(VaultResolutionStepOut),
   readers: z.array(z.string()),
   blastRadius: VaultBlastRadiusOut,
@@ -758,15 +702,7 @@ const AiListOut = z.object({
           status: z.enum(["ok", "denied"]),
           effects: z.array(
             z.object({
-              kind: z.enum([
-                "read",
-                "write",
-                "emit",
-                "send",
-                "ask",
-                "secret",
-                "call",
-              ]),
+              kind: z.enum(["read", "write", "emit", "send", "ask", "secret", "call"]),
               resource: z.string(),
             }),
           ),
@@ -868,12 +804,7 @@ const GatesListOut = z.object({
 
 const DiffChangeOut = z.object({
   path: z.string(),
-  category: z.enum([
-    "contract-breaking",
-    "permission-widening",
-    "effect-widening",
-    "no-impact",
-  ]),
+  category: z.enum(["contract-breaking", "permission-widening", "effect-widening", "no-impact"]),
   kind: z.enum(["added", "removed", "changed"]),
   summary: z.string(),
   before: z.unknown().optional(),
@@ -889,12 +820,7 @@ const DiffChangeOut = z.object({
 const DiffListOut = z.object({
   hasBaseline: z.boolean(),
   severity: z
-    .enum([
-      "contract-breaking",
-      "permission-widening",
-      "effect-widening",
-      "no-impact",
-    ])
+    .enum(["contract-breaking", "permission-widening", "effect-widening", "no-impact"])
     .nullable(),
   blockedCount: z.number(),
   acknowledgedCount: z.number(),
@@ -1087,9 +1013,7 @@ const AccessPlaneSection = z.object({
       lastUsedAt: z.number().nullable(),
       expiresAt: z.number().nullable(),
       revokedAt: z.number().nullable(),
-      rateLimit: z
-        .object({ max: z.number(), per: z.string() })
-        .nullable(),
+      rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
       ipAllowlist: z.array(z.string()),
       unused90d: z.boolean(),
     }),
@@ -1123,9 +1047,7 @@ const AccessListOut = z.object({
         lastUsedAt: z.number().nullable(),
         expiresAt: z.number().nullable(),
         revokedAt: z.number().nullable(),
-        rateLimit: z
-          .object({ max: z.number(), per: z.string() })
-          .nullable(),
+        rateLimit: z.object({ max: z.number(), per: z.string() }).nullable(),
         ipAllowlist: z.array(z.string()),
         unused90d: z.boolean(),
       }),
@@ -1197,10 +1119,7 @@ const AccessCreateKeyIn = z.object({
   name: z.string().min(1),
   scopes: z.array(z.string()),
   expiresAt: z.number().nullable().optional(),
-  rateLimit: z
-    .object({ max: z.number(), per: z.string() })
-    .nullable()
-    .optional(),
+  rateLimit: z.object({ max: z.number(), per: z.string() }).nullable().optional(),
   ipAllowlist: z.array(z.string()).optional(),
 });
 
@@ -1350,9 +1269,7 @@ const StoreQueryOut = z.object({
       z.object({
         key: z.string(),
         value: z.unknown().optional(),
-        warnings: z
-          .array(z.object({ code: z.string(), message: z.string() }))
-          .optional(),
+        warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
       }),
     )
     .optional(),
@@ -1652,10 +1569,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/access/keys"), accessCreateKeyFlow),
     bindHttp(http.post("/console/access/keys/revoke"), accessRevokeKeyFlow),
     bindHttp(http.post("/console/access/keys/rotate"), accessRotateKeyFlow),
-    bindHttp(
-      http.post("/console/access/roles/grants"),
-      accessSetRoleGrantsFlow,
-    ),
+    bindHttp(http.post("/console/access/roles/grants"), accessSetRoleGrantsFlow),
     bindHttp(http.get("/console/diff"), diffList),
     bindHttp(http.get("/console/plugins"), pluginsList),
     bindHttp(http.get("/console/clock"), clockList),
@@ -1788,19 +1702,12 @@ function createSessionLogin(state: ConsoleState) {
     out: SessionOut,
     errors: { AuthFailed, AuthRateLimited },
     do: async (input: z.infer<typeof LoginIn>, fx) => {
-      if (
-        touchLoginRateLimit(state.loginAttempts, input.email, state.now()) ===
-        "rate_limited"
-      ) {
+      if (touchLoginRateLimit(state.loginAttempts, input.email, state.now()) === "rate_limited") {
         return fail("AuthRateLimited", {
           reason: "too many login attempts; retry after 60s",
         });
       }
-      const op = await authenticateOperator(
-        state.operators,
-        input.email,
-        input.password,
-      );
+      const op = await authenticateOperator(state.operators, input.email, input.password);
       if (!op) return fail("AuthFailed", {});
       const issued = await issueOperatorSession(state, op.id);
       fx.log.info("console.session.login", { operatorId: op.id });
@@ -1887,10 +1794,7 @@ function createRunsList(state: ConsoleState) {
  * @param r - Stored wide event
  * @param piiFields - Classified field names from the Manifest
  */
-export function projectRun(
-  r: WideEvent,
-  piiFields: ReadonlySet<string> = new Set(),
-) {
+export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Set()) {
   const masked = maskWideEventForConsole(r, piiFields);
   const dimensions: Record<string, string | number | boolean | null> = {};
   for (const [k, v] of Object.entries(masked.dimensions)) {
@@ -2002,10 +1906,7 @@ function createSignalsDryRunReplay(state: ConsoleState) {
     in: SignalsReplayIn.omit({ dryRun: true }),
     out: SignalsReplayOut,
     errors: { AuthFailed, SignalNotFound, DryRunUnsafe },
-    do: async (
-      input: Omit<z.infer<typeof SignalsReplayIn>, "dryRun">,
-      fx,
-    ) => {
+    do: async (input: Omit<z.infer<typeof SignalsReplayIn>, "dryRun">, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return runSignalReplay(state, fx, { ...input, dryRun: true });
     },
@@ -2026,14 +1927,9 @@ function createSignalsDiscard(state: ConsoleState) {
       const row = rows.find((s) => s.name === input.signal);
       if (!row) return fail("SignalNotFound", { signal: input.signal });
 
-      const irreversible =
-        state.production &&
-        row.consumers.some((c) => c.external || !c.durable);
+      const irreversible = state.production && row.consumers.some((c) => c.external || !c.durable);
       if (irreversible) {
-        if (
-          input.confirmation !== "DISCARD" ||
-          (input.reason?.trim().length ?? 0) < 3
-        ) {
+        if (input.confirmation !== "DISCARD" || (input.reason?.trim().length ?? 0) < 3) {
           return fail("ConfirmRequired", {
             phrase: "DISCARD" as const,
             reason: "discarding dead letters requires typed confirmation",
@@ -2084,18 +1980,12 @@ async function runSignalReplay(
     }
   } else {
     const retriggersExternal =
-      state.production &&
-      row.consumers.some((c) => c.external) &&
-      row.consumersDurable !== true;
+      state.production && row.consumers.some((c) => c.external) && row.consumersDurable !== true;
     if (retriggersExternal) {
-      if (
-        input.confirmation !== "REPLAY" ||
-        (input.reason?.trim().length ?? 0) < 3
-      ) {
+      if (input.confirmation !== "REPLAY" || (input.reason?.trim().length ?? 0) < 3) {
         return fail("ConfirmRequired", {
           phrase: "REPLAY" as const,
-          reason:
-            "replay re-triggers an external effect; typed confirmation required",
+          reason: "replay re-triggers an external effect; typed confirmation required",
         });
       }
     }
@@ -2115,22 +2005,17 @@ async function runSignalReplay(
       reason: result.refused.reason,
     });
   }
-  fx.log.info(
-    input.dryRun
-      ? "console.signals.dryRunReplay"
-      : "console.signals.replay",
-    {
-      operatorId: fx.operator.id,
-      signal: input.signal,
-      attempted: result.attempted,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      dryRun: result.dryRun,
-      ratePerSec: input.ratePerSec,
-      reason: input.reason,
-      wouldHaveFired: result.wouldHaveFired.length,
-    },
-  );
+  fx.log.info(input.dryRun ? "console.signals.dryRunReplay" : "console.signals.replay", {
+    operatorId: fx.operator.id,
+    signal: input.signal,
+    attempted: result.attempted,
+    succeeded: result.succeeded,
+    failed: result.failed,
+    dryRun: result.dryRun,
+    ratePerSec: input.ratePerSec,
+    reason: input.reason,
+    wouldHaveFired: result.wouldHaveFired.length,
+  });
   return {
     ok: true as const,
     attempted: result.attempted,
@@ -2317,9 +2202,7 @@ function peakTierOf(
   return "none";
 }
 
-function triggerKindOf(
-  flow: ManifestFlow,
-): "http" | "signal" | "clock" | "internal" | "durable" {
+function triggerKindOf(flow: ManifestFlow): "http" | "signal" | "clock" | "internal" | "durable" {
   if (flow.durable) return "durable";
   if (flow.trigger?.http) return "http";
   if (flow.trigger?.signal) return "signal";
@@ -2338,9 +2221,7 @@ function stubResponse(flow: ManifestFlow, body: unknown): unknown {
   const out = flow.out;
   if (out && typeof out === "object" && !Array.isArray(out)) {
     const props = (out.properties ?? {}) as Record<string, unknown>;
-    const required = Array.isArray(out.required)
-      ? (out.required as string[])
-      : Object.keys(props);
+    const required = Array.isArray(out.required) ? (out.required as string[]) : Object.keys(props);
     const result: Record<string, unknown> = { echo: body };
     for (const key of required) {
       if (key === "id") result.id = `inv_${hashShort(body)}`;
@@ -2383,12 +2264,7 @@ async function issueOperatorSession(
   return issued;
 }
 
-function sessionPayload(
-  operatorId: string,
-  email: string,
-  name: string,
-  issued: IssuedSession,
-) {
+function sessionPayload(operatorId: string, email: string, name: string, issued: IssuedSession) {
   return {
     operatorId,
     email,
@@ -2413,8 +2289,7 @@ function requireTenantIfDeclared(
   if (tenant !== undefined && tenant.length > 0) return null;
   if (!state.production) return null;
   return fail("TenantRequired", {
-    reason:
-      "tenancy is declared — tenant selector is required (compliance boundary)",
+    reason: "tenancy is declared — tenant selector is required (compliance boundary)",
   });
 }
 
@@ -2476,9 +2351,7 @@ function createStoreReveal(state: ConsoleState) {
         revealPii: true,
         limit: 500,
       });
-      const row = (result.rows ?? []).find(
-        (r) => String(r.id ?? r.Id) === input.id,
-      );
+      const row = (result.rows ?? []).find((r) => String(r.id ?? r.Id) === input.id);
       if (!row) return fail("StoreNotFound", { ref: input.ref });
       fx.log.info("console.store.reveal", {
         operatorId: fx.operator.id,
@@ -2534,14 +2407,10 @@ function createStoreEdit(state: ConsoleState) {
       }
 
       if (state.production) {
-        if (
-          input.confirmation !== "EDIT" ||
-          (input.reason?.trim().length ?? 0) < 3
-        ) {
+        if (input.confirmation !== "EDIT" || (input.reason?.trim().length ?? 0) < 3) {
           return fail("ConfirmRequired", {
             phrase: "EDIT" as const,
-            reason:
-              "direct edit is not a flow execution — typed confirmation required",
+            reason: "direct edit is not a flow execution — typed confirmation required",
           });
         }
       }
@@ -2589,10 +2458,7 @@ function createStoreDelete(state: ConsoleState) {
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
       if (tenantFail) return tenantFail;
       if (state.production) {
-        if (
-          input.confirmation !== "DELETE" ||
-          (input.reason?.trim().length ?? 0) < 3
-        ) {
+        if (input.confirmation !== "DELETE" || (input.reason?.trim().length ?? 0) < 3) {
           return fail("ConfirmRequired", {
             phrase: "DELETE" as const,
             reason: "destructive store delete requires typed confirmation",
@@ -2632,10 +2498,7 @@ function createStorePurgeCache(state: ConsoleState) {
     do: async (input: z.infer<typeof StorePurgeIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (state.production) {
-        if (
-          input.confirmation !== "PURGE" ||
-          (input.reason?.trim().length ?? 0) < 3
-        ) {
+        if (input.confirmation !== "PURGE" || (input.reason?.trim().length ?? 0) < 3) {
           return fail("ConfirmRequired", {
             phrase: "PURGE" as const,
             reason: "cache purge requires typed confirmation",
@@ -2671,14 +2534,10 @@ function createStoreSql(state: ConsoleState) {
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
       if (tenantFail) return tenantFail;
       try {
-        const result = await state.runStoreSql(
-          input.ref as ResourceRef,
-          input.sql,
-          {
-            allowWrite: input.allowWrite === true,
-            tenant: input.tenant,
-          },
-        );
+        const result = await state.runStoreSql(input.ref as ResourceRef, input.sql, {
+          allowWrite: input.allowWrite === true,
+          tenant: input.tenant,
+        });
         fx.log.info("console.store.sql", {
           operatorId: fx.operator.id,
           ref: input.ref,
@@ -2823,11 +2682,7 @@ function createVaultRotate(state: ConsoleState) {
         return fail("VaultNotFound", { name: input.name });
       }
       // Rotate always requires typed confirm (console §6 · §9.8).
-      if (
-        input.confirmation !== "ROTATE" ||
-        !input.reason ||
-        input.reason.length < 3
-      ) {
+      if (input.confirmation !== "ROTATE" || !input.reason || input.reason.length < 3) {
         return fail("ConfirmRequired", {
           phrase: "ROTATE" as const,
           reason:
@@ -2866,10 +2721,7 @@ function createVaultRotate(state: ConsoleState) {
  * @param state - Console state
  * @param name - Contract name
  */
-async function vaultNameKnown(
-  state: ConsoleState,
-  name: string,
-): Promise<boolean> {
+async function vaultNameKnown(state: ConsoleState, name: string): Promise<boolean> {
   if (state.manifest?.vault?.[name]) return true;
   if (state.vaultRuntime?.contracts.has(name)) return true;
   if (state.vaultRuntime?.names().includes(name)) return true;
@@ -2971,9 +2823,7 @@ function createGatesList(state: ConsoleState) {
           name: p.name,
           plane: p.plane,
           scopes: [...p.scopes],
-          ...(p.memberCount !== undefined
-            ? { memberCount: p.memberCount }
-            : {}),
+          ...(p.memberCount !== undefined ? { memberCount: p.memberCount } : {}),
           ...(p.email !== undefined ? { email: p.email } : {}),
         })),
         violations: projection.violations.map((v) => ({
@@ -3069,9 +2919,7 @@ function createGatesSimulate(state: ConsoleState) {
           allowed: e.allowed,
           kind: e.kind,
           ...(e.remaining !== undefined ? { remaining: e.remaining } : {}),
-          ...(e.retryAfterMs !== undefined
-            ? { retryAfterMs: e.retryAfterMs }
-            : {}),
+          ...(e.retryAfterMs !== undefined ? { retryAfterMs: e.retryAfterMs } : {}),
           ...(e.reason !== undefined ? { reason: e.reason } : {}),
         })),
         deniedAt: result.deniedAt,
@@ -3226,14 +3074,10 @@ function createAccessRevokeKey(state: ConsoleState) {
     errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof AccessRevokeKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
-      if (
-        input.confirmation !== "REVOKE" ||
-        (input.reason?.trim().length ?? 0) < 3
-      ) {
+      if (input.confirmation !== "REVOKE" || (input.reason?.trim().length ?? 0) < 3) {
         return fail("ConfirmRequired", {
           phrase: "REVOKE" as const,
-          reason:
-            "Type REVOKE and provide a reason — revocation is irreversible",
+          reason: "Type REVOKE and provide a reason — revocation is irreversible",
         });
       }
       const blastRadius = await state.accessKeyBlast(input.keyId);
@@ -3262,14 +3106,10 @@ function createAccessRotateKey(state: ConsoleState) {
     errors: { AuthFailed, AccessKeyNotFound, ConfirmRequired },
     do: async (input: z.infer<typeof AccessRotateKeyIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
-      if (
-        input.confirmation !== "ROTATE" ||
-        (input.reason?.trim().length ?? 0) < 3
-      ) {
+      if (input.confirmation !== "ROTATE" || (input.reason?.trim().length ?? 0) < 3) {
         return fail("ConfirmRequired", {
           phrase: "ROTATE" as const,
-          reason:
-            "Type ROTATE and provide a reason — the old secret dies immediately",
+          reason: "Type ROTATE and provide a reason — the old secret dies immediately",
         });
       }
       const blastRadius = await state.accessKeyBlast(input.keyId);
@@ -3352,15 +3192,10 @@ function createClockRunNow(state: ConsoleState) {
         return fail("ClockNotFound", { kind: "cron" as const, id: input.name });
       }
       if (state.production && cron.external) {
-        if (
-          input.confirmation !== "RUN" ||
-          !input.reason ||
-          input.reason.length < 3
-        ) {
+        if (input.confirmation !== "RUN" || !input.reason || input.reason.length < 3) {
           return fail("ConfirmRequired", {
             phrase: "RUN" as const,
-            reason:
-              "Type RUN and provide a reason — this cron has an external effect",
+            reason: "Type RUN and provide a reason — this cron has an external effect",
           });
         }
       }
@@ -3584,14 +3419,10 @@ function createChannelSendTest(state: ConsoleState) {
     do: async (input: z.infer<typeof ChannelSendTestIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (state.production) {
-        if (
-          input.confirmation !== "SEND" ||
-          (input.reason?.trim().length ?? 0) < 3
-        ) {
+        if (input.confirmation !== "SEND" || (input.reason?.trim().length ?? 0) < 3) {
           return fail("ConfirmRequired", {
             phrase: "SEND" as const,
-            reason:
-              "send test is a real external send — typed confirmation required",
+            reason: "send test is a real external send — typed confirmation required",
           });
         }
       }

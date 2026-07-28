@@ -61,14 +61,12 @@ export function Shell({ children }: { readonly children?: ReactNode }) {
               to={item.to}
               className={clsx(
                 "inline-flex min-h-8 items-center px-2 text-sm",
-                pathname === item.to ||
-                  (item.to === "/manifest-diff" && pathname === "/diff")
+                pathname === item.to || (item.to === "/manifest-diff" && pathname === "/diff")
                   ? "text-[var(--oke-fg)]"
                   : "text-[var(--oke-muted)]",
               )}
               aria-current={
-                pathname === item.to ||
-                (item.to === "/manifest-diff" && pathname === "/diff")
+                pathname === item.to || (item.to === "/manifest-diff" && pathname === "/diff")
                   ? "page"
                   : undefined
               }

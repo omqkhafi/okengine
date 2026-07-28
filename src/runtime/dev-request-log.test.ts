@@ -3,10 +3,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  isSilentDevRequest,
-  shouldLogDevRequests,
-} from "./dev-request-log.ts";
+import { isSilentDevRequest, shouldLogDevRequests } from "./dev-request-log.ts";
 
 describe("dev-request-log", () => {
   const prev = process.env.OKE_DEV_REQUEST_LOG;

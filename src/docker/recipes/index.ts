@@ -3,13 +3,15 @@
  */
 
 import type { ImageRecipe } from "../types.ts";
+import { mailpit } from "./mailpit.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
+import { rustfs } from "./rustfs.ts";
 
 /** Default recipe catalogue. */
-export const builtinRecipes: readonly ImageRecipe[] = [postgres, redis];
+export const builtinRecipes: readonly ImageRecipe[] = [postgres, redis, mailpit, rustfs];
 
-export { postgres, redis };
+export { mailpit, postgres, redis, rustfs };
 
 /**
  * Resolve the recipe for an image reference.
@@ -17,10 +19,7 @@ export { postgres, redis };
  * @param image - Image pin
  * @param extra - Plugin / test recipes (tried first)
  */
-export function recipeFor(
-  image: string,
-  extra: readonly ImageRecipe[] = [],
-): ImageRecipe {
+export function recipeFor(image: string, extra: readonly ImageRecipe[] = []): ImageRecipe {
   for (const r of extra) {
     if (r.match(image)) return r;
   }

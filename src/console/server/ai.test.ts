@@ -7,11 +7,7 @@ import { ai, createAiRuntime, runPromptEvals } from "../../elements/ai.ts";
 import { createMockAiDriver } from "../../drivers/ai-mock.ts";
 import { createGateRuntime, gate } from "../../elements/gate.ts";
 import type { Manifest } from "../../manifest/types.ts";
-import {
-  effectsForFlowFromManifest,
-  projectAiPanel,
-  projectAllowPii,
-} from "./ai.ts";
+import { effectsForFlowFromManifest, projectAiPanel, projectAllowPii } from "./ai.ts";
 
 const manifest = {
   oke: "1.0",
@@ -54,9 +50,7 @@ const manifest = {
 describe("projectAiPanel", () => {
   test("surfaces allowPii standing table from Manifest", () => {
     const rows = projectAllowPii(manifest);
-    expect(rows.some((r) => r.flowId === "support.createTicket" && r.allowPii)).toBe(
-      true,
-    );
+    expect(rows.some((r) => r.flowId === "support.createTicket" && r.allowPii)).toBe(true);
   });
 
   test("effectsForFlowFromManifest matches trail vocabulary", () => {
@@ -147,9 +141,7 @@ describe("projectAiPanel", () => {
       aiRuntime: runtime,
       evalResults: [evals],
     });
-    expect(okProj.prompts[0]!.manifestDiffPath).toBe(
-      "/ai/prompts/ticket-triage/version",
-    );
+    expect(okProj.prompts[0]!.manifestDiffPath).toBe("/ai/prompts/ticket-triage/version");
     expect(okProj.versions[0]!.evalScore.samples.length).toBeGreaterThan(0);
     expect(okProj.agentRuns[0]!.trail[0]!.status).toBe("denied");
     expect(okProj.agentRuns[0]!.trail[0]!.denial?.gate).toBe("member");

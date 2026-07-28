@@ -37,7 +37,4 @@ export {
   type ConsoleServerHandle,
   type ServeConsoleOptions,
 } from "./server/serve.ts";
-export {
-  createConsoleState,
-  type ConsoleState,
-} from "./server/state.ts";
+export { createConsoleState, type ConsoleState } from "./server/state.ts";

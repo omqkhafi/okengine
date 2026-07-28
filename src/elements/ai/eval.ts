@@ -52,12 +52,8 @@ export interface RunPromptEvalsOptions {
  *
  * @param options - Cases + ask fn
  */
-export async function runPromptEvals(
-  options: RunPromptEvalsOptions,
-): Promise<EvalSuiteResult> {
-  const equals =
-    options.equals ??
-    ((a, b) => JSON.stringify(a) === JSON.stringify(b));
+export async function runPromptEvals(options: RunPromptEvalsOptions): Promise<EvalSuiteResult> {
+  const equals = options.equals ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
   const results: EvalCaseResult[] = [];
 
   for (let i = 0; i < options.cases.length; i++) {

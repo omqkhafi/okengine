@@ -17,10 +17,7 @@ export interface StartOptions {
    * @param entry - Absolute entry path
    * @param env - Process env overlay
    */
-  readonly runEntry?: (
-    entry: string,
-    env: Record<string, string>,
-  ) => Promise<void>;
+  readonly runEntry?: (entry: string, env: Record<string, string>) => Promise<void>;
 }
 
 /**
@@ -29,10 +26,7 @@ export interface StartOptions {
  * @param cwd - Project root
  * @param explicit - Optional `--entry`
  */
-export async function resolveStartEntry(
-  cwd: string,
-  explicit?: string,
-): Promise<string> {
+export async function resolveStartEntry(cwd: string, explicit?: string): Promise<string> {
   if (explicit) return resolve(cwd, explicit);
   const pkgPath = resolve(cwd, "package.json");
   if (await Bun.file(pkgPath).exists()) {
@@ -47,9 +41,7 @@ export async function resolveStartEntry(
     const path = resolve(cwd, candidate);
     if (await Bun.file(path).exists()) return path;
   }
-  throw new Error(
-    "oke start: no entry found — set package.json okengine.entry or pass --entry",
-  );
+  throw new Error("oke start: no entry found — set package.json okengine.entry or pass --entry");
 }
 
 /**
@@ -63,10 +55,7 @@ export async function runStart(options: StartOptions = {}): Promise<number> {
   try {
     const entry = await resolveStartEntry(cwd, options.entry);
     const port = String(options.port ?? Number(Bun.env.PORT ?? APP_PORT));
-    const env = { ...process.env, NODE_ENV: "production", PORT: port } as Record<
-      string,
-      string
-    >;
+    const env = { ...process.env, NODE_ENV: "production", PORT: port } as Record<string, string>;
     write(`oke start: ${entry} (port ${port})\n`);
     if (options.runEntry) {
       await options.runEntry(entry, env);

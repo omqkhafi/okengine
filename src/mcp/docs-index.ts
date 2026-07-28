@@ -112,9 +112,9 @@ function unquoteYaml(value: string): string {
     (trimmed.startsWith("'") && trimmed.endsWith("'"))
   ) {
     try {
-      return JSON.parse(trimmed.startsWith("'")
-        ? `"${trimmed.slice(1, -1).replace(/"/g, '\\"')}"`
-        : trimmed) as string;
+      return JSON.parse(
+        trimmed.startsWith("'") ? `"${trimmed.slice(1, -1).replace(/"/g, '\\"')}"` : trimmed,
+      ) as string;
     } catch {
       return trimmed.slice(1, -1);
     }
@@ -224,10 +224,7 @@ async function listDocsSourceFiles(dir: string): Promise<string[]> {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...(await listDocsSourceFiles(abs)));
-    } else if (
-      entry.isFile() &&
-      (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))
-    ) {
+    } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))) {
       out.push(abs);
     }
   }

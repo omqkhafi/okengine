@@ -5,12 +5,7 @@
  * run unchanged. Non-email media (sms / whatsapp / push) use {@link ChannelTransport}.
  */
 
-import type {
-  MailOptions,
-  SendResult,
-  Transport,
-  VerifyResult,
-} from "sently";
+import type { MailOptions, SendResult, Transport, VerifyResult } from "sently";
 
 export type {
   Address,
@@ -35,12 +30,7 @@ export type ChannelDriverId =
   | "webpush";
 
 /** Channel medium. */
-export type ChannelMediumId =
-  | "email"
-  | "sms"
-  | "whatsapp"
-  | "push"
-  | "any";
+export type ChannelMediumId = "email" | "sms" | "whatsapp" | "push" | "any";
 
 /** Unified outbound message (medium-agnostic). */
 export interface ChannelMessage {

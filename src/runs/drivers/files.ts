@@ -20,13 +20,7 @@ import {
   wideEventToRow,
   writeParquet,
 } from "../parquet.ts";
-import type {
-  RunsDriver,
-  RunsOpenOptions,
-  RunsRow,
-  RunsStore,
-  WideEvent,
-} from "../types.ts";
+import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
 
 /** Default hot window — 7 days. Older writes go to object storage when present. */
 const DEFAULT_HOT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -40,14 +34,11 @@ export const filesRunsDriver: RunsDriver = {
     const hotWindowMs = options.hotWindowMs ?? DEFAULT_HOT_WINDOW_MS;
     const clock = () => Date.now();
 
-    const localRoot =
-      options.localRoot ??
-      (await mkdtemp(join(tmpdir(), "oke-runs-")));
+    const localRoot = options.localRoot ?? (await mkdtemp(join(tmpdir(), "oke-runs-")));
     const ownsLocalRoot = options.localRoot === undefined && !options.localBucket;
 
     const local: FilesBucket =
-      options.localBucket ??
-      (await fsDriver.open({ name: "runs-local", root: localRoot }));
+      options.localBucket ?? (await fsDriver.open({ name: "runs-local", root: localRoot }));
 
     const remote = options.remote?.bucket;
     const remotePrefix = options.remote?.prefix ?? "";
@@ -112,16 +103,12 @@ export const filesRunsDriver: RunsDriver = {
 
     async function materialiseAllParquet(): Promise<string[]> {
       if (queryScratch) {
-        await rm(queryScratch, { recursive: true, force: true }).catch(
-          () => undefined,
-        );
+        await rm(queryScratch, { recursive: true, force: true }).catch(() => undefined);
       }
       queryScratch = await mkdtemp(join(tmpdir(), "oke-runs-q-"));
       const paths: string[] = [];
 
-      const localKeys = (await local.list("runs/")).filter((k) =>
-        k.endsWith(".parquet"),
-      );
+      const localKeys = (await local.list("runs/")).filter((k) => k.endsWith(".parquet"));
       for (const key of localKeys) {
         const data = await local.get(key);
         if (!data) continue;
@@ -131,16 +118,11 @@ export const filesRunsDriver: RunsDriver = {
       }
       if (remote) {
         const prefix = `${remotePrefix}runs/`;
-        const remoteKeys = (await remote.list(prefix)).filter((k) =>
-          k.endsWith(".parquet"),
-        );
+        const remoteKeys = (await remote.list(prefix)).filter((k) => k.endsWith(".parquet"));
         for (const key of remoteKeys) {
           const data = await remote.get(key);
           if (!data) continue;
-          const dest = join(
-            queryScratch,
-            `remote__${key.replaceAll("/", "__")}`,
-          );
+          const dest = join(queryScratch, `remote__${key.replaceAll("/", "__")}`);
           await writeFile(dest, data);
           paths.push(dest);
         }
@@ -184,16 +166,12 @@ export const filesRunsDriver: RunsDriver = {
         await flushBuffer();
         session.close();
         if (queryScratch) {
-          await rm(queryScratch, { recursive: true, force: true }).catch(
-            () => undefined,
-          );
+          await rm(queryScratch, { recursive: true, force: true }).catch(() => undefined);
         }
         await local.close();
         await remote?.close();
         if (ownsLocalRoot) {
-          await rm(localRoot, { recursive: true, force: true }).catch(
-            () => undefined,
-          );
+          await rm(localRoot, { recursive: true, force: true }).catch(() => undefined);
         }
       },
     };

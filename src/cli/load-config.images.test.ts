@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultImagesFromConfig,
   resolveImages,
-  stackDevDriverMismatches,
+  dockerDevDriverMismatches,
 } from "./load-config.ts";
 
 describe("defaultImagesFromConfig", () => {
@@ -75,14 +75,14 @@ describe("resolveImages", () => {
   });
 });
 
-describe("stackDevDriverMismatches", () => {
-  test("flags stack/prod sqlite/memory when containers are up", () => {
-    const mismatches = stackDevDriverMismatches(
+describe("dockerDevDriverMismatches", () => {
+  test("flags docker/prod sqlite/memory when containers are up", () => {
+    const mismatches = dockerDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", stack: "sqlite", prod: "sqlite" },
-            kv: { dev: "memory", stack: "memory", prod: "memory" },
+            sql: { local: "sqlite", docker: "sqlite", prod: "sqlite" },
+            kv: { local: "memory", docker: "memory", prod: "memory" },
           },
         },
       },
@@ -94,13 +94,13 @@ describe("stackDevDriverMismatches", () => {
     ]);
   });
 
-  test("silent when stack profile matches containers", () => {
-    const mismatches = stackDevDriverMismatches(
+  test("silent when docker profile matches containers", () => {
+    const mismatches = dockerDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", stack: "postgres", prod: "postgres" },
-            kv: { dev: "memory", stack: "redis", prod: "redis" },
+            sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
+            kv: { local: "memory", docker: "redis", prod: "redis" },
           },
         },
       },
@@ -109,13 +109,13 @@ describe("stackDevDriverMismatches", () => {
     expect(mismatches).toEqual([]);
   });
 
-  test("silent when only prod is set (stack falls back to prod)", () => {
-    const mismatches = stackDevDriverMismatches(
+  test("silent when only prod is set (docker falls back to prod)", () => {
+    const mismatches = dockerDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { dev: "sqlite", prod: "postgres" },
-            kv: { dev: "memory", prod: "redis" },
+            sql: { local: "sqlite", prod: "postgres" },
+            kv: { local: "memory", prod: "redis" },
           },
         },
       },

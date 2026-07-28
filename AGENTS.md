@@ -14,16 +14,16 @@ There are no separate species called endpoints, handlers, consumers, jobs, subsc
 
 ## The eight elements
 
-| Element | Essence |
-|---|---|
-| **Flow** | behavior |
-| **Signal** | data in motion |
-| **Store** | data at rest (`sql` · `kv` · `files` · `index`) |
-| **Clock** | time |
-| **Gate** | permission to act |
-| **Vault** | protected knowledge |
-| **Channel** | reaching humans |
-| **AI** | reaching machine intelligence |
+| Element     | Essence                                         |
+| ----------- | ----------------------------------------------- |
+| **Flow**    | behavior                                        |
+| **Signal**  | data in motion                                  |
+| **Store**   | data at rest (`sql` · `kv` · `files` · `index`) |
+| **Clock**   | time                                            |
+| **Gate**    | permission to act                               |
+| **Vault**   | protected knowledge                             |
+| **Channel** | reaching humans                                 |
+| **AI**      | reaching machine intelligence                   |
 
 An element earns its place only if it has irreducible physics. New infrastructure becomes a new **driver** for an existing element — never a ninth element.
 
@@ -53,28 +53,29 @@ A direct `node:` import (or any other side-channel I/O) in element or flow code 
 
 ## Ports
 
-| Port | Surface |
-|---|---|
-| **6530** | App |
+| Port     | Surface |
+| -------- | ------- |
+| **6530** | App     |
 | **6533** | Console |
-| **6535** | MCP |
+| **6535** | MCP     |
 
 Mnemonic: O·K·E = 6·5·3.
 
 ## Budgets
 
-| Budget | Limit |
-|---|---|
+| Budget                | Limit   |
+| --------------------- | ------- |
 | Kernel (edge profile) | < 15 kB |
-| Client runtime | < 3 kB |
-| Cold start on Bun | < 75 ms |
-| p99 routing overhead | < 1 ms |
+| Client runtime        | < 3 kB  |
+| Cold start on Bun     | < 75 ms |
+| p99 routing overhead  | < 1 ms  |
 
 A regression fails the build. Claims we cannot measure, we do not make.
 
 ## Package shape
 
 Published packages:
+
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
 - `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke`; clean starters are `templates/*`, teaching apps stay in `examples/*` (`--from-example`).
 
@@ -82,10 +83,10 @@ Engine: Bun `>=1.3`.
 
 ## Spec authority
 
-| Spec | Path |
-|---|---|
-| Unified theory | `docs/spec/unified-theory.md` |
+| Spec              | Path                             |
+| ----------------- | -------------------------------- |
+| Unified theory    | `docs/spec/unified-theory.md`    |
 | Four applications | `docs/spec/four-applications.md` |
-| Console | `docs/spec/console.md` |
+| Console           | `docs/spec/console.md`           |
 
 **If the spec is silent, stop and ask.**

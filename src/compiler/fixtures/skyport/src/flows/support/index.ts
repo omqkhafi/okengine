@@ -13,7 +13,10 @@ export const createTicket = on(
     do: async (input, fx) => {
       const t = await fx.ask(triage, input);
       const id = fx.id();
-      await fx.store(db).insert(tickets).values({ id, ...input, ...t });
+      await fx
+        .store(db)
+        .insert(tickets)
+        .values({ id, ...input, ...t });
       return { id, urgency: t.urgency };
     },
   }),

@@ -1,6 +1,6 @@
-import { DocsSidebar } from '@/components/chrome/docs-sidebar';
-import { source } from '@/lib/source';
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+import { DocsSidebar } from "@/components/chrome/docs-sidebar";
+import { source } from "@/lib/source";
+import { DocsLayout } from "fumadocs-ui/layouts/docs";
 
 /**
  * Docs shell. Fumadocs' own nav, sidebar, search toggle, and theme switch are
@@ -8,7 +8,7 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
  * the article column is inset by `.docs-layout` in `global.css` rather than by
  * Fumadocs' grid columns.
  */
-export default function Layout({ children }: LayoutProps<'/docs'>) {
+export default function Layout({ children }: LayoutProps<"/docs">) {
   const tree = source.getPageTree();
 
   return (
@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps<'/docs'>) {
         sidebar={{ enabled: false }}
         searchToggle={{ enabled: false }}
         themeSwitch={{ enabled: false }}
-        containerProps={{ className: 'docs-layout' }}
+        containerProps={{ className: "docs-layout" }}
       >
         {children}
       </DocsLayout>

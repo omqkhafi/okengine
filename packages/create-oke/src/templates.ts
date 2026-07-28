@@ -38,8 +38,7 @@ export type ExampleId = (typeof EXAMPLES)[number];
  * `--from-example` help and the interactive example select.
  */
 export const EXAMPLE_NEW_IDEAS: Readonly<Record<ExampleId, string>> = {
-  notes:
-    "`oke`, `on`, `flow`, `http`, `store.sql`, `fx`, typed errors, the typed client.",
+  notes: "`oke`, `on`, `flow`, `http`, `store.sql`, `fx`, typed errors, the typed client.",
   linkly:
     "`signal` and its three delivery physics · `clock` · `gate` · triggers beyond HTTP · transactional emit · cross-unit decoupling.",
   provisions:

@@ -31,8 +31,8 @@ export function PluginsA11yView(props: PluginsA11yViewProps) {
       <header>
         <h1>Plugins</h1>
         <p>
-          Origin × state — CORE stays listed when off; local/community only when
-          plugged. Read-only; git review is the approval.
+          Origin × state — CORE stays listed when off; local/community only when plugged. Read-only;
+          git review is the approval.
         </p>
         <label>
           Filter plugins
@@ -134,9 +134,7 @@ export function PluginsA11yView(props: PluginsA11yViewProps) {
                   {open.intercepts.map((i) => (
                     <tr key={i.stage}>
                       <th scope="row">{i.stage}</th>
-                      <td>
-                        {i.meanMs === null ? "—" : i.meanMs.toFixed(2)}
-                      </td>
+                      <td>{i.meanMs === null ? "—" : i.meanMs.toFixed(2)}</td>
                       <td>{i.count}</td>
                     </tr>
                   ))}
@@ -145,8 +143,8 @@ export function PluginsA11yView(props: PluginsA11yViewProps) {
             )}
             {open.hookCost ? (
               <p role="status">
-                p50 {open.hookCost.p50Ms.toFixed(2)} ms · p95{" "}
-                {open.hookCost.p95Ms.toFixed(2)} ms · n={open.hookCost.count}
+                p50 {open.hookCost.p50Ms.toFixed(2)} ms · p95 {open.hookCost.p95Ms.toFixed(2)} ms ·
+                n={open.hookCost.count}
               </p>
             ) : null}
           </section>
@@ -189,9 +187,7 @@ export function PluginsA11yView(props: PluginsA11yViewProps) {
               <ul>
                 {open.capabilityDiff.map((c) => (
                   <li key={c.path}>
-                    <a href={`/manifest-diff?path=${encodeURIComponent(c.path)}`}>
-                      {c.summary}
-                    </a>
+                    <a href={`/manifest-diff?path=${encodeURIComponent(c.path)}`}>{c.summary}</a>
                   </li>
                 ))}
               </ul>
@@ -208,16 +204,10 @@ export function PluginsA11yView(props: PluginsA11yViewProps) {
                 <button type="button" style={{ minHeight: 32 }}>
                   {copyCommandLabel(open)}
                 </button>
-                <p>
-                  The Console never installs. Git review is the approval — run
-                  this yourself.
-                </p>
+                <p>The Console never installs. Git review is the approval — run this yourself.</p>
               </>
             ) : (
-              <p>
-                No install command — toggle off by removing the code line, not
-                from this UI.
-              </p>
+              <p>No install command — toggle off by removing the code line, not from this UI.</p>
             )}
           </section>
         </section>

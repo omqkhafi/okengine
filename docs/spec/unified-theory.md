@@ -13,7 +13,7 @@
 
 Hono, Elysia, Encore, iii, NestJS, Nitro — and everything before them — share one hidden flaw: **they are collections of separate inventions bundled behind a single logo.** A router, plus a queue library, plus a cron library, plus a websocket layer, plus a tracing integration. The concepts don't derive from one another; they merely ship together.
 
-That is why frameworks bloat, why their documentation sprawls into dozens of unrelated pages, and why none of them survives a decade intact. Each new infrastructure fashion adds a *concept*, and concepts never get removed.
+That is why frameworks bloat, why their documentation sprawls into dozens of unrelated pages, and why none of them survives a decade intact. Each new infrastructure fashion adds a _concept_, and concepts never get removed.
 
 ## 2. The move
 
@@ -25,21 +25,19 @@ If the laws are right, the framework stays complete for a hundred years regardle
 
 > **OKE is the batteries-included TypeScript backend for the Bun era:** contract-first APIs with end-to-end type safety, declarative infrastructure primitives, an OpenTelemetry-native Console, secure-by-default auth and ABAC — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.
 
-*"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
-
-| | Hono | Elysia | Encore.ts | iii | **OKE** |
-|---|---|---|---|---|---|
-| Primary runtime | Multi (Web Std) | Bun-first | Node + Rust core | Rust engine, polyglot | **Bun-first, Web-Std portable** |
-| License | MIT | MIT | MPL-2.0 | ELv2 engine | **MIT** |
-| Typed client | hc RPC | Eden Treaty | generated | SDK | **contract-first + live queries** |
-| DB · queue · cron · storage | ❌ | ❌ | ✅ | ✅ | **✅ (7 elements)** |
-| Durable workflows | ❌ | ❌ | ❌ | partial | **✅ (a flag)** |
-| Local Console | ❌ | ❌ | ✅ | ✅ | **✅ (dev + prod)** |
-| Auto cache invalidation | ❌ | ❌ | ❌ | ❌ | **✅ (from effects)** |
-| Least-privilege by compiler | ❌ | ❌ | ❌ | ❌ | **✅** |
-| Human channels (email/SMS/WA) | ❌ | ❌ | ❌ | ❌ | **✅ (7th element)** |
-| AI in the application (models, prompts, agents) | ❌ | ❌ | ❌ | ❌ | **✅ (8th element)** |
-| Self-host, no lock-in | ✅ | ✅ | ✅ (Cloud optional) | ⚠️ | **✅ first-class** |
+|                                                 | Hono            | Elysia      | Encore.ts           | iii                   | **OKE**                           |
+| ----------------------------------------------- | --------------- | ----------- | ------------------- | --------------------- | --------------------------------- |
+| Primary runtime                                 | Multi (Web Std) | Bun-first   | Node + Rust core    | Rust engine, polyglot | **Bun-first, Web-Std portable**   |
+| License                                         | MIT             | MIT         | MPL-2.0             | ELv2 engine           | **MIT**                           |
+| Typed client                                    | hc RPC          | Eden Treaty | generated           | SDK                   | **contract-first + live queries** |
+| DB · queue · cron · storage                     | ❌              | ❌          | ✅                  | ✅                    | **✅ (7 elements)**               |
+| Durable workflows                               | ❌              | ❌          | ❌                  | partial               | **✅ (a flag)**                   |
+| Local Console                                   | ❌              | ❌          | ✅                  | ✅                    | **✅ (dev + prod)**               |
+| Auto cache invalidation                         | ❌              | ❌          | ❌                  | ❌                    | **✅ (from effects)**             |
+| Least-privilege by compiler                     | ❌              | ❌          | ❌                  | ❌                    | **✅**                            |
+| Human channels (email/SMS/WA)                   | ❌              | ❌          | ❌                  | ❌                    | **✅ (7th element)**              |
+| AI in the application (models, prompts, agents) | ❌              | ❌          | ❌                  | ❌                    | **✅ (8th element)**              |
+| Self-host, no lock-in                           | ✅              | ✅          | ✅ (Cloud optional) | ⚠️                    | **✅ first-class**                |
 
 ---
 
@@ -52,9 +50,9 @@ If the laws are right, the framework stays complete for a hundred years regardle
 There are no separate species called "endpoints", "handlers", "consumers", "jobs", "subscribers", or "workflows". There is one species — the **Flow** — and triggers are typed values:
 
 ```typescript
-on(http.post("/bookings"), createBooking);      // "an API endpoint"
-on(every("10m"), expireStale);                  // "a cron job"
-on(orderPlaced, sendReceipt);                   // "a queue consumer"
+on(http.post("/bookings"), createBooking); // "an API endpoint"
+on(every("10m"), expireStale); // "a cron job"
+on(orderPlaced, sendReceipt); // "a queue consumer"
 on(db.table(users).changed("email"), reverify); // "a CDC trigger"
 ```
 
@@ -66,16 +64,16 @@ One law → one mental model → one documentation page → one hook pipeline �
 
 Everything a backend has ever needed reduces to eight typed elements. An element earns its place **only if it has irreducible physics.** New infrastructure becomes a new driver for an existing element — never a ninth element.
 
-| Element | Replaces the zoo of | Essence |
-|---|---|---|
-| **Flow** | endpoint · handler · consumer · job · workflow · webhook | behavior |
-| **Signal** | queue · pub/sub · stream · websocket · SSE · event bus | data in motion |
-| **Store** | database · cache · KV · file storage · search index | data at rest (`sql` · `kv` · `files` · `index`) |
-| **Clock** | cron · delay · timeout · durable sleep · TTL | time |
-| **Gate** | auth · session · ABAC · rate limit · quota · feature flag | permission to act |
-| **Vault** | secrets · config · environment | protected knowledge |
-| **Channel** | email · SMS · WhatsApp · push | reaching humans |
-| **AI** | model calls · prompts · embeddings · agents · RAG | reaching machine intelligence |
+| Element     | Replaces the zoo of                                       | Essence                                         |
+| ----------- | --------------------------------------------------------- | ----------------------------------------------- |
+| **Flow**    | endpoint · handler · consumer · job · workflow · webhook  | behavior                                        |
+| **Signal**  | queue · pub/sub · stream · websocket · SSE · event bus    | data in motion                                  |
+| **Store**   | database · cache · KV · file storage · search index       | data at rest (`sql` · `kv` · `files` · `index`) |
+| **Clock**   | cron · delay · timeout · durable sleep · TTL              | time                                            |
+| **Gate**    | auth · session · ABAC · rate limit · quota · feature flag | permission to act                               |
+| **Vault**   | secrets · config · environment                            | protected knowledge                             |
+| **Channel** | email · SMS · WhatsApp · push                             | reaching humans                                 |
+| **AI**      | model calls · prompts · embeddings · agents · RAG         | reaching machine intelligence                   |
 
 ### Why queue, pub/sub, and stream collapse into one Signal
 
@@ -84,10 +82,11 @@ They were always the same object with different **delivery physics**. So deliver
 ```typescript
 export const orderPlaced = signal("order-placed", {
   schema: z.object({ orderId: z.string() }),
-  delivery: "once",        // "once"      → queue semantics: competing consumers, retries, DLQ
-                           // "broadcast" → pub/sub semantics: fan-out to every subscriber
-                           // "live"      → stream semantics: client-subscribable, replayable
-  retries: 5, deadLetter: true,
+  delivery: "once", // "once"      → queue semantics: competing consumers, retries, DLQ
+  // "broadcast" → pub/sub semantics: fan-out to every subscriber
+  // "live"      → stream semantics: client-subscribable, replayable
+  retries: 5,
+  deadLetter: true,
 });
 ```
 
@@ -101,21 +100,21 @@ Reaching a human has physics that machine messaging does not: localized template
 
 Apply the same test — does it have physics no existing element expresses?
 
-| What an AI-powered backend needs | Covered by an existing element? |
-|---|---|
-| streaming tokens to the client | ✅ `Signal` with `delivery: "live"` |
-| an agent loop with steps | ✅ `Flow` with `durable: true` |
-| vector search for RAG | ✅ `Store` facet `index` |
-| provider fallback chains | ✅ same pattern as `Channel` |
-| **non-determinism** (same input ≠ same output) | ❌ breaks caching, testing, and replay |
-| **cost as a first-class dimension** | ❌ no element has a concept of price per call |
-| **prompts as versioned, evaluated artifacts** | ❌ neither a template nor a schema |
-| **egress privacy boundaries** to third parties | ❌ Gates guard entry, not exit |
-| **testing a non-deterministic output** | ❌ entirely different test physics |
+| What an AI-powered backend needs               | Covered by an existing element?               |
+| ---------------------------------------------- | --------------------------------------------- |
+| streaming tokens to the client                 | ✅ `Signal` with `delivery: "live"`           |
+| an agent loop with steps                       | ✅ `Flow` with `durable: true`                |
+| vector search for RAG                          | ✅ `Store` facet `index`                      |
+| provider fallback chains                       | ✅ same pattern as `Channel`                  |
+| **non-determinism** (same input ≠ same output) | ❌ breaks caching, testing, and replay        |
+| **cost as a first-class dimension**            | ❌ no element has a concept of price per call |
+| **prompts as versioned, evaluated artifacts**  | ❌ neither a template nor a schema            |
+| **egress privacy boundaries** to third parties | ❌ Gates guard entry, not exit                |
+| **testing a non-deterministic output**         | ❌ entirely different test physics            |
 
 Five properties are irreducible, so AI earns the eighth slot.
 
-**On the tension with our own rule.** "New technology is a driver, not a concept" still holds — Anthropic → Bedrock → a 2030 provider are all drivers. But probabilistic inference is not new *infrastructure*; it is a new *category of interaction*. The symmetry is exact: **Channel reaches humans, AI reaches machine intelligence.** Neither can be expressed by Store or Signal.
+**On the tension with our own rule.** "New technology is a driver, not a concept" still holds — Anthropic → Bedrock → a 2030 provider are all drivers. But probabilistic inference is not new _infrastructure_; it is a new _category of interaction_. The symmetry is exact: **Channel reaches humans, AI reaches machine intelligence.** Neither can be expressed by Store or Signal.
 
 ## 6. Ten exports
 
@@ -135,12 +134,17 @@ Every Flow's **effects are part of its type**, inferred by the compiler from wha
 
 ```typescript
 const createBooking = flow({
-  in: CreateBooking, out: BookingId, errors: { FlightFull },
+  in: CreateBooking,
+  out: BookingId,
+  errors: { FlightFull },
   do: async (input, fx) => {
     const left = await fx.store(db).countAvailable(input.flightId);
     if (left < input.seats) return fx.fail("FlightFull", { seatsLeft: left });
     const id = fx.id();
-    await fx.store(db).insert(bookings).values({ id, ...input });
+    await fx
+      .store(db)
+      .insert(bookings)
+      .values({ id, ...input });
     await fx.emit(orderPlaced, { orderId: id });
     return { id };
   },
@@ -150,23 +154,25 @@ const createBooking = flow({
 
 Because effects are known statically, the following are **derived with zero extra code** — no framework has combined them before:
 
-| # | Capability | How it falls out |
-|---|---|---|
-| 1 | **Automatic cache invalidation** | The compiler knows which writes touch the same keys a read used. Invalidation is *computed*, never hand-written. |
-| 2 | **Live queries** | Mark a read `.live()`; clients re-render on exactly the writes that affect it. Realtime stops being a separate system. |
-| 3 | **Durability as a flag** | `durable: true` journals every effect call; `fx.clock.sleep("7d")` survives deploys. Workflows are ordinary Flows with one option. |
-| 4 | **Least privilege by construction** | Each Flow receives a capability token for only its declared effects. A compromised handler cannot touch what it never declared. |
-| 5 | **Provably true architecture diagrams** | Edges *are* the declared effects. "What breaks if I change this table?" becomes a compiler query. |
-| 6 | **Deterministic tests** | `fx` is the only door — swap it wholesale: memory drivers, frozen clock, recorded effects, golden effect-stream diffs. |
-| 7 | **Semantic tree-shaking** | The manifest lists exactly which elements and drivers are used; the build emits only those. |
-| 8 | **Transactional messaging** | `fx.emit()` enrolls in the same transaction as `fx.store()` writes — the dual-write bug is eliminated by default. |
-| 9 | **Automatic replica routing** | Read-only flows route to read replicas without annotations. |
-| 10 | **Time as a dimension** | Journaled effects enable `oke branch prod --at "yesterday"` and replay of a single flow against fixed code. |
-| 11 | **Compile-time AI data governance** | Fields tagged `pii` cannot reach a third-party model: the build **fails** unless the flow masks them or declares `allowPii` explicitly. |
-| 12 | **Provably bounded agents** | An agent's tools are your own flows, carrying their own gates and capabilities — so an agent physically cannot exceed what the code declares. Safety by structure, not by trusting the model. |
-| 13 | **Cost as a visible effect** | The compiler knows which paths call a model, enabling per-flow and per-tenant budgets, cost per endpoint in the Console, and a Manifest Diff that warns *before* deploy: "this release adds ~$0.02 per request." |
+| #   | Capability                              | How it falls out                                                                                                                                                                                                 |
+| --- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Automatic cache invalidation**        | The compiler knows which writes touch the same keys a read used. Invalidation is _computed_, never hand-written.                                                                                                 |
+| 2   | **Live queries**                        | Mark a read `.live()`; clients re-render on exactly the writes that affect it. Realtime stops being a separate system.                                                                                           |
+| 3   | **Durability as a flag**                | `durable: true` journals every effect call; `fx.clock.sleep("7d")` survives deploys. Workflows are ordinary Flows with one option.                                                                               |
+| 4   | **Least privilege by construction**     | Each Flow receives a capability token for only its declared effects. A compromised handler cannot touch what it never declared.                                                                                  |
+| 5   | **Provably true architecture diagrams** | Edges _are_ the declared effects. "What breaks if I change this table?" becomes a compiler query.                                                                                                                |
+| 6   | **Deterministic tests**                 | `fx` is the only door — swap it wholesale: memory drivers, frozen clock, recorded effects, golden effect-stream diffs.                                                                                           |
+| 7   | **Semantic tree-shaking**               | The manifest lists exactly which elements and drivers are used; the build emits only those.                                                                                                                      |
+| 8   | **Transactional messaging**             | `fx.emit()` enrolls in the same transaction as `fx.store()` writes — the dual-write bug is eliminated by default.                                                                                                |
+| 9   | **Automatic replica routing**           | Read-only flows route to read replicas without annotations.                                                                                                                                                      |
+| 10  | **Time as a dimension**                 | Journaled effects enable `oke branch prod --at "yesterday"` and replay of a single flow against fixed code.                                                                                                      |
+| 11  | **Compile-time AI data governance**     | Fields tagged `pii` cannot reach a third-party model: the build **fails** unless the flow masks them or declares `allowPii` explicitly.                                                                          |
+| 12  | **Provably bounded agents**             | An agent's tools are your own flows, carrying their own gates and capabilities — so an agent physically cannot exceed what the code declares. Safety by structure, not by trusting the model.                    |
+| 13  | **Cost as a visible effect**            | The compiler knows which paths call a model, enabling per-flow and per-tenant budgets, cost per endpoint in the Console, and a Manifest Diff that warns _before_ deploy: "this release adds ~$0.02 per request." |
 
 Any one of these would headline a framework launch. All ten follow from one decision: **effects live in the types.**
+
+**Store constraint:** `fx.store` is a single-table session — one table per call. Multi-table relational queries (Drizzle RQB `db.query.*.findMany({ with: … })`) are outside `fx.store`; effect inference, cache keys, and PII masking all assume a single table. Effects stay exact by composing single-table calls (`fx.store` reads, or `fx.call`), so every table touched appears explicitly in the Manifest.
 
 ## 8. The Manifest — the 100-year artifact
 
@@ -200,10 +206,10 @@ The Manifest schema is a small formal spec, versioned independently of the runti
 
 Two things get called "native." We mean the first, never the second:
 
-| ✅ Native = runtime clients (what we do) | ❌ Native = our own reimplementation (what we don't) |
-|---|---|
-| `Bun.sql` · `bun:sqlite` · `Bun.redis` · `Bun.S3` · `Bun.password` · `node:crypto` | writing our own cache server, broker, object store, or secrets manager |
-| zero npm client dependencies, maximum speed, one runtime API | duplicated effort, worse quality, a decade of other people's bugs to re-fix |
+| ✅ Native = runtime clients (what we do)                                           | ❌ Native = our own reimplementation (what we don't)                        |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Bun.sql` · `bun:sqlite` · `Bun.redis` · `Bun.S3` · `Bun.password` · `node:crypto` | writing our own cache server, broker, object store, or secrets manager      |
+| zero npm client dependencies, maximum speed, one runtime API                       | duplicated effort, worse quality, a decade of other people's bugs to re-fix |
 
 **We build only what genuinely does not exist:** the effect system, the Manifest and its derivations, the Console, the AoT compiler, the plugin engine, and the thin adapters connecting eight elements to real software.
 
@@ -213,17 +219,17 @@ Two things get called "native." We mean the first, never the second:
 
 Welding a vendor name into the architecture is a design bug. `kv: "dragonfly"` is wrong; `kv: "redis"` is right — it is a protocol, and Valkey, Dragonfly, KeyDB, and Upstash all speak it.
 
-| Element | Driver (protocol / standard) | Any of these work, unchanged |
-|---|---|---|
-| `store.sql` | `sqlite` · `postgres` | Postgres · Neon · Supabase · RDS · Timescale · pgvector |
-| `store.kv` | `memory` · `redis` | Redis · Valkey · Dragonfly · KeyDB · Upstash |
-| `store.files` | `fs` · `s3` | AWS S3 · R2 · MinIO · SeaweedFS · RustFS · Garage · Backblaze |
-| `signal` | `memory` · `postgres` · `redis` · `nats` · `kafka` | the matching servers, any vendor |
-| `clock` | `memory` · `postgres` | — |
-| `vault` | `env` · `sops` · `openbao` · `infisical` · managed | — |
-| `channel.*` | `smtp` · `resend` · `ses` · `unifonic` · `twilio` · `wa-cloud` · `fcm` | any SMTP server |
-| `store.index` | `pgvector` · `qdrant` · `meilisearch` · `typesense` | vector + full-text search for RAG |
-| `ai` | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` | `openai-compatible` covers vLLM, Groq, Together, LM Studio, and most self-hosted servers |
+| Element       | Driver (protocol / standard)                                                 | Any of these work, unchanged                                                             |
+| ------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `store.sql`   | `sqlite` · `postgres`                                                        | Postgres · Neon · Supabase · RDS · Timescale · pgvector                                  |
+| `store.kv`    | `memory` · `redis`                                                           | Redis · Valkey · Dragonfly · KeyDB · Upstash                                             |
+| `store.files` | `fs` · `s3`                                                                  | AWS S3 · R2 · MinIO · SeaweedFS · RustFS · Garage · Backblaze                            |
+| `signal`      | `memory` · `postgres` · `redis` · `nats` · `kafka`                           | the matching servers, any vendor                                                         |
+| `clock`       | `memory` · `postgres`                                                        | —                                                                                        |
+| `vault`       | `env` · `sops` · `openbao` · `infisical` · managed                           | —                                                                                        |
+| `channel.*`   | `smtp` · `resend` · `ses` · `unifonic` · `twilio` · `wa-cloud` · `fcm`       | any SMTP server                                                                          |
+| `store.index` | `pgvector` · `qdrant` · `meilisearch` · `typesense`                          | vector + full-text search for RAG                                                        |
+| `ai`          | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` | `openai-compatible` covers vLLM, Groq, Together, LM Studio, and most self-hosted servers |
 
 Vendor choice lives in `images`, keyed by **role**:
 
@@ -233,11 +239,11 @@ images: { "store.sql": "pgvector/pgvector:pg17", "store.kv": "valkey/valkey:8-al
 
 ## 11. Always latest — in three tiers
 
-| Tier | Rule | Why |
-|---|---|---|
-| **Our own toolchain** | latest always (TypeScript 7, Bun, oxc) | greenfield, no legacy; speed is part of the promise |
-| **What we require of users** | conservative floor + day-one support for new majors | a framework demanding bleeding edge loses adoption |
-| **Adopted infrastructure** | latest **stable**, pinned by digest | `latest` tags destroy reproducibility |
+| Tier                         | Rule                                                | Why                                                 |
+| ---------------------------- | --------------------------------------------------- | --------------------------------------------------- |
+| **Our own toolchain**        | latest always (TypeScript 7, Bun, oxc)              | greenfield, no legacy; speed is part of the promise |
+| **What we require of users** | conservative floor + day-one support for new majors | a framework demanding bleeding edge loses adoption  |
+| **Adopted infrastructure**   | latest **stable**, pinned by digest                 | `latest` tags destroy reproducibility               |
 
 **Toolchain decision with teeth:** TypeScript 7 went GA on 8 July 2026 (Go-native, 8–12× faster builds) but ships **without a stable programmatic API until 7.1**. Therefore the Manifest extractor **never uses the TypeScript compiler API** — it uses **oxc** (Rust parser). We gain independence from TypeScript's release cycle, higher speed, and zero exposure to that gap. `tsc` is used for type-checking only.
 
@@ -267,21 +273,23 @@ images: { "store.sql": "pgvector/pgvector:pg17", "store.kv": "valkey/valkey:8-al
 
 ## 13. Core design decisions
 
-| Layer | Decision |
-|---|---|
-| **Runtime** | Bun-first via `Bun.serve`; Web-Standards adapters for Node/Deno/Edge; target WinterTC Minimum Common Web API |
-| **Router** | compiled RegExp matching with a Trie fallback (Hono's SmartRouter idea), linear preset for cold-start edge |
-| **Validation** | Standard Schema — bring Zod 4, Valibot, ArkType, TypeBox |
-| **AoT compiler** | Sucrose-style static analysis generates a minimal per-route parse/validate handler; **`aot: false` dynamic fallback** for `eval`-restricted runtimes |
-| **Context** | per-request `fx` object with typed composition (`derive`/`decorate`); no decorator DI |
-| **Infrastructure** | driver model (Nitro/unstorage-style): dev = memory/sqlite/fs ⇄ prod = real software |
-| **Contracts** | schema in / schema out / typed errors → end-to-end types, OpenAPI, AsyncAPI, typed client |
-| **Auth** | built-in flagship (hybrid JWT + revocable refresh, ABAC, MFA); provider seam for better-auth, Clerk, Supabase, Auth0, Kinde |
-| **AI** | MCP server exposing catalog, schemas, effects, traces, and safe runtime actions |
+| Layer              | Decision                                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Runtime**        | Bun-first via `Bun.serve`; Web-Standards adapters for Node/Deno/Edge; target WinterTC Minimum Common Web API                                         |
+| **Router**         | compiled RegExp matching with a Trie fallback (Hono's SmartRouter idea), linear preset for cold-start edge                                           |
+| **Validation**     | Standard Schema — bring Zod 4, Valibot, ArkType, TypeBox                                                                                             |
+| **AoT compiler**   | Sucrose-style static analysis generates a minimal per-route parse/validate handler; **`aot: false` dynamic fallback** for `eval`-restricted runtimes |
+| **Context**        | per-request `fx` object with typed composition (`derive`/`decorate`); no decorator DI                                                                |
+| **Infrastructure** | driver model (Nitro/unstorage-style): dev = memory/sqlite/fs ⇄ prod = real software                                                                  |
+| **Contracts**      | schema in / schema out / typed errors → end-to-end types, OpenAPI, AsyncAPI, typed client                                                            |
+| **Auth**           | built-in flagship (hybrid JWT + revocable refresh, ABAC, MFA); provider seam for better-auth, Clerk, Supabase, Auth0, Kinde                          |
+| **AI**             | MCP server exposing catalog, schemas, effects, traces, and safe runtime actions                                                                      |
 
 ## 14. Plugins — the extensibility law
 
 A plugin is a function that receives the app, adds capabilities, and returns it **with accumulated types.** A plugin may contribute: flows, hooks, context decorations, elements, drivers, image recipes, DB schema, typed errors, client extensions, CLI commands, and Console panels.
+
+Plugins may declare additional tables (with columns) that are merged into the generated domain schema. At `oke db` time the CLI loads the live app entry (`src/app.ts` / `db.entry`), reads plugged plugins’ table contributions, and emits them alongside app `store.schema.table` decls into `schema.generated.ts`. Extending an existing app-owned table with plugin columns is not supported in v1 — contribute a separate table instead.
 
 > **Guarantee:** every built-in feature — auth, Console, docker derivation, channels — uses only the public plugin API. If the core team ever needs a private hook, the API is broken and gets fixed.
 
@@ -289,18 +297,18 @@ A plugin is a function that receives the app, adds capabilities, and returns it 
 
 Reads truth from the Manifest + OpenTelemetry. Runs in **development and production** (production behind authentication).
 
-| Panel | Answers |
-|---|---|
-| **Catalog** | what exists — every flow, trigger, gate, schema, effect |
-| **Architecture** | how it connects — a diagram that *is* the code |
-| **API Explorer** | typed request forms; impersonate any scope set |
-| **Traces** | one OTel trace across http → store → signal → durable steps |
-| **Store** | DB explorer, files browser, replica lag, computed cache keys |
-| **Signals** | queue depth, in-flight, DLQ contents, live-feed monitors |
-| **Clock** | upcoming crons, sleeping durable flows ("wakes in 6d 22h") |
-| **Gates** | permission matrix, rate-limit counters, MFA enforcement |
-| **Channels** | outbound messages, delivery receipts, bounces, opt-outs |
-| **Manifest Diff** | blast radius of a deploy: new effects, widened permissions |
+| Panel             | Answers                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| **Catalog**       | what exists — every flow, trigger, gate, schema, effect      |
+| **Architecture**  | how it connects — a diagram that _is_ the code               |
+| **API Explorer**  | typed request forms; impersonate any scope set               |
+| **Traces**        | one OTel trace across http → store → signal → durable steps  |
+| **Store**         | DB explorer, files browser, replica lag, computed cache keys |
+| **Signals**       | queue depth, in-flight, DLQ contents, live-feed monitors     |
+| **Clock**         | upcoming crons, sleeping durable flows ("wakes in 6d 22h")   |
+| **Gates**         | permission matrix, rate-limit counters, MFA enforcement      |
+| **Channels**      | outbound messages, delivery receipts, bounces, opt-outs      |
+| **Manifest Diff** | blast radius of a deploy: new effects, widened permissions   |
 
 **The constitutional rule:** the Console **reads truth and writes only through git.** Runtime actions (replay a DLQ message, trigger a cron, wake a durable flow) execute directly. Structural changes (add an index, raise retries) are emitted as **reviewable diffs into your working tree** — you approve, git records. Every element deep-links to the exact line in Cursor.
 
@@ -310,37 +318,37 @@ Reads truth from the Manifest + OpenTelemetry. Runs in **development and product
 
 ## 16. The default table
 
-| Area | Default | Alternatives | Rationale |
-|---|---|---|---|
-| Runtime | Bun | Node · Deno · Edge | speed, native clients |
-| Language | TypeScript 7, ESM only, strict | — | no CJS, no compromise |
-| Manifest parser | oxc | SWC | independent of the TS release cycle |
-| Validation | Standard Schema (Zod 4 in templates) | Valibot (edge) · ArkType · TypeBox | familiarity; AoT neutralizes runtime differences |
-| ORM | Drizzle (peer dependency) | adapters later | never bundled, always yours |
-| `store.sql` | dev `sqlite` · prod `postgres` | Neon · Supabase · RDS | `Bun.sql`, `bun:sqlite` |
-| `store.kv` | dev `memory` · prod `redis` | Valkey · Dragonfly · KeyDB | protocol, not vendor |
-| `store.files` | dev `fs` · prod `s3` | SeaweedFS · RustFS (beta) · MinIO · R2 | `Bun.S3` |
-| `signal` | dev `memory` · prod **`postgres`** | `redis` · `nats` · `kafka` (explicit) | transactional with your data |
-| `clock` | `postgres` | — | durability needs transactional storage |
-| `vault` | dev `.env.local` · prod `sops`/age | OpenBao · Infisical · managed | existing standard, no invented format |
-| `channel.email` | dev `console` · prod `smtp` | Resend · SES | no vendor lock-in |
-| `delivery` | **none — must be declared** | — | semantic decision, never guessed |
-| `store.index` | `pgvector` | Qdrant · Meilisearch · Typesense | RAG without another service |
-| `ai` | dev `mock` · prod **none — must be declared** | Anthropic · openai-compatible · Bedrock · Vertex · Ollama | model choice is never guessed; `mock` keeps dev deterministic |
-| AI + `pii` | **denied** | explicit `allowPii` | egress governance enforced at build time |
-| AI caching | off (semantic cache opt-in) | — | non-deterministic output must not be silently reused |
-| Auth | built-in, hybrid session, argon2id | better-auth · Clerk · Supabase · Auth0 · Kinde | works with zero config |
-| Topology | `monolith` | `services` | start simple |
-| Tenancy | off | row · schema · database | no complexity without need |
-| Cache | automatic for live/read flows only | flag · manual | no surprises |
-| Rate limit | `sliding-window-counter` | fixed-window · sliding-log · token-bucket · leaky-bucket | best accuracy/cost balance |
-| i18n | `en` (configurable) | any locale | global default, user overrides |
-| Errors | `{ data, error }` values | — | errors are values |
-| Telemetry | on; dev 100%, prod 10% + all errors | any ratio | observability without cost |
-| Migrations | manual in production | auto in dev | never touches your data |
-| Console | dev on · prod on **behind auth** | off | it is your eyes in production |
-| Ports | 6530 app · 6533 Console · 6535 MCP | configurable | O·K·E = 6·5·3 |
-| License | MIT | — | no BSL/SSPL |
+| Area            | Default                                       | Alternatives                                              | Rationale                                                     |
+| --------------- | --------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------- |
+| Runtime         | Bun                                           | Node · Deno · Edge                                        | speed, native clients                                         |
+| Language        | TypeScript 7, ESM only, strict                | —                                                         | no CJS, no compromise                                         |
+| Manifest parser | oxc                                           | SWC                                                       | independent of the TS release cycle                           |
+| Validation      | Standard Schema (Zod 4 in templates)          | Valibot (edge) · ArkType · TypeBox                        | familiarity; AoT neutralizes runtime differences              |
+| ORM             | Drizzle (peer dependency)                     | adapters later                                            | never bundled, always yours                                   |
+| `store.sql`     | dev `sqlite` · prod `postgres`                | Neon · Supabase · RDS                                     | `Bun.sql`, `bun:sqlite`                                       |
+| `store.kv`      | dev `memory` · prod `redis`                   | Valkey · Dragonfly · KeyDB                                | protocol, not vendor                                          |
+| `store.files`   | dev `fs` · prod `s3`                          | SeaweedFS · RustFS (beta) · MinIO · R2                    | `Bun.S3`                                                      |
+| `signal`        | dev `memory` · prod **`postgres`**            | `redis` · `nats` · `kafka` (explicit)                     | transactional with your data                                  |
+| `clock`         | `postgres`                                    | —                                                         | durability needs transactional storage                        |
+| `vault`         | dev `.env.local` · prod `sops`/age            | OpenBao · Infisical · managed                             | existing standard, no invented format                         |
+| `channel.email` | dev `console` · prod `smtp`                   | Resend · SES                                              | no vendor lock-in                                             |
+| `delivery`      | **none — must be declared**                   | —                                                         | semantic decision, never guessed                              |
+| `store.index`   | `pgvector`                                    | Qdrant · Meilisearch · Typesense                          | RAG without another service                                   |
+| `ai`            | dev `mock` · prod **none — must be declared** | Anthropic · openai-compatible · Bedrock · Vertex · Ollama | model choice is never guessed; `mock` keeps dev deterministic |
+| AI + `pii`      | **denied**                                    | explicit `allowPii`                                       | egress governance enforced at build time                      |
+| AI caching      | off (semantic cache opt-in)                   | —                                                         | non-deterministic output must not be silently reused          |
+| Auth            | built-in, hybrid session, argon2id            | better-auth · Clerk · Supabase · Auth0 · Kinde            | works with zero config                                        |
+| Topology        | `monolith`                                    | `services`                                                | start simple                                                  |
+| Tenancy         | off                                           | row · schema · database                                   | no complexity without need                                    |
+| Cache           | automatic for live/read flows only            | flag · manual                                             | no surprises                                                  |
+| Rate limit      | `sliding-window-counter`                      | fixed-window · sliding-log · token-bucket · leaky-bucket  | best accuracy/cost balance                                    |
+| i18n            | `en` (configurable)                           | any locale                                                | global default, user overrides                                |
+| Errors          | `{ data, error }` values                      | —                                                         | errors are values                                             |
+| Telemetry       | on; dev 100%, prod 10% + all errors           | any ratio                                                 | observability without cost                                    |
+| Migrations      | manual in production                          | auto in dev                                               | never touches your data                                       |
+| Console         | dev on · prod on **behind auth**              | off                                                       | it is your eyes in production                                 |
+| Ports           | 6530 app · 6533 Console · 6535 MCP            | configurable                                              | O·K·E = 6·5·3                                                 |
+| License         | MIT                                           | —                                                         | no BSL/SSPL                                                   |
 
 ## 17. Why `signal` defaults to Postgres
 
@@ -350,13 +358,13 @@ With Postgres, `fx.emit()` runs **inside the same transaction** as `fx.store()`,
 
 When you explicitly choose `redis` or `nats` for throughput, the driver keeps the outbox relay internally, so semantics do not regress. Upgrading is a pure performance decision.
 
-| | Postgres | Redis Streams | NATS JetStream |
-|---|---|---|---|
-| Throughput | ~1k–10k/s | 100k+/s | millions/s |
-| **Transactional with your data** | **yes** | no | no |
-| Extra service | no | yes | yes |
-| Fan-out / live | weak | excellent | excellent |
-| DLQ inspection | plain SQL | tooling | tooling |
+|                                  | Postgres  | Redis Streams | NATS JetStream |
+| -------------------------------- | --------- | ------------- | -------------- |
+| Throughput                       | ~1k–10k/s | 100k+/s       | millions/s     |
+| **Transactional with your data** | **yes**   | no            | no             |
+| Extra service                    | no        | yes           | yes            |
+| Fan-out / live                   | weak      | excellent     | excellent      |
+| DLQ inspection                   | plain SQL | tooling       | tooling        |
 
 ---
 
@@ -364,16 +372,16 @@ When you explicitly choose `redis` or `nats` for throughput, the driver keeps th
 
 ## 18. Three scaling axes (never conflated)
 
-| Axis | Question | Mechanism |
-|---|---|---|
-| **Split** (`topology`) | one deployable, or one per unit? | `monolith` = in-process calls · `services` = one container per unit, `fx.call` becomes network — code unchanged |
-| **Clone** (horizontal) | how many copies of the app? | run N instances: `once` signals deliver to exactly one, crons leader-elect, live queries fan out. `oke docker --prod` emits `deploy.replicas` |
-| **Data replicas** | how many copies of the data? | `replicas:` on the driver; read-only flows auto-route (derived from effects) |
+| Axis                   | Question                         | Mechanism                                                                                                                                     |
+| ---------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Split** (`topology`) | one deployable, or one per unit? | `monolith` = in-process calls · `services` = one container per unit, `fx.call` becomes network — code unchanged                               |
+| **Clone** (horizontal) | how many copies of the app?      | run N instances: `once` signals deliver to exactly one, crons leader-elect, live queries fan out. `oke docker --prod` emits `deploy.replicas` |
+| **Data replicas**      | how many copies of the data?     | `replicas:` on the driver; read-only flows auto-route (derived from effects)                                                                  |
 
 ## 19. Multi-tenancy as a dimension of `fx`
 
 ```typescript
-oke({ tenancy: { resolve: (ctx) => ctx.auth.orgId, isolation: "row" } })  // row | schema | database
+oke({ tenancy: { resolve: (ctx) => ctx.auth.orgId, isolation: "row" } }); // row | schema | database
 ```
 
 Because every store call passes through `fx`, tenant scoping applies automatically — no forgotten `WHERE org_id`. Rate limits, caches, secrets, and channel branding become per-tenant for free. **`oke doctor` fails the build** if any flow reads a tenant-scoped table without a tenant in context. Cross-tenant leaks become structurally hard.
@@ -404,20 +412,21 @@ Stable, permanent, searchable codes with a cause, a suggested fix, and a docs li
 ## 23. Adoption on-ramps
 
 ```typescript
-mount(honoApp)   //  existing app runs inside OKE, untouched
-mount(elysiaApp) //  new work uses flows; old routes keep serving; one deployable
-mount(expressApp)
+mount(honoApp); //  existing app runs inside OKE, untouched
+mount(elysiaApp); //  new work uses flows; old routes keep serving; one deployable
+mount(expressApp);
 ```
+
 Plus `oke import express|hono|elysia` codemods for the mechanical parts. Migration becomes incremental — the only kind that actually happens.
 
 ## 24. Budgets enforced in CI, published per release
 
-| Budget | Limit |
-|---|---|
-| Kernel (edge profile) | < 15 kB |
-| Client runtime | < 3 kB |
-| Cold start on Bun | < 75 ms in CI (GitHub Actions runners are less predictable than a dev machine); measured ~25–30 ms on real hardware |
-| p99 routing overhead | < 1 ms |
+| Budget                | Limit                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Kernel (edge profile) | < 15 kB                                                                                                             |
+| Client runtime        | < 3 kB                                                                                                              |
+| Cold start on Bun     | < 75 ms in CI (GitHub Actions runners are less predictable than a dev machine); measured ~25–30 ms on real hardware |
+| p99 routing overhead  | < 1 ms                                                                                                              |
 
 A regression fails OKE's own build. Claims we cannot measure, we do not make.
 
@@ -427,7 +436,7 @@ A regression fails OKE's own build. Claims we cannot measure, we do not make.
 
 OKE is the first backend an AI can fully read, safely operate, and provably not break.
 
-**Two directions, one design.** §25 covers AI *for the developer* (agents operating your system through MCP). The AI element (§5) covers AI *inside the application* (models, prompts, agents your users trigger). Both rest on the same foundation — declared effects and least-privilege capabilities — which is why an agent in either direction is bounded by construction rather than by policy.
+**Two directions, one design.** §25 covers AI _for the developer_ (agents operating your system through MCP). The AI element (§5) covers AI _inside the application_ (models, prompts, agents your users trigger). Both rest on the same foundation — declared effects and least-privilege capabilities — which is why an agent in either direction is bounded by construction rather than by policy.
 
 ---
 
@@ -435,11 +444,11 @@ OKE is the first backend an AI can fully read, safely operate, and provably not 
 
 ## 26. Roadmap
 
-| Phase | Contents |
-|---|---|
-| **MVP (0.1–0.4)** | Bun adapter · router · Standard Schema + AoT (with dynamic fallback) · `fx` and the effect system · `on`/`flow` · typed errors · typed client · OTel baseline · plugin engine · `create-oke` |
-| **v1 (0.5–1.0)** | all eight elements + drivers · Manifest + derivations · Console · auth + ABAC · schema generation · docker/compose derivation · durability · live queries · i18n · MCP · Node + Edge adapters |
-| **Ecosystem (1.x)** | more drivers and image recipes · `mount()` adapters and import codemods · tenancy · privacy tooling · `@oke/react` · community plugin registry |
+| Phase               | Contents                                                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MVP (0.1–0.4)**   | Bun adapter · router · Standard Schema + AoT (with dynamic fallback) · `fx` and the effect system · `on`/`flow` · typed errors · typed client · OTel baseline · plugin engine · `create-oke`  |
+| **v1 (0.5–1.0)**    | all eight elements + drivers · Manifest + derivations · Console · auth + ABAC · schema generation · docker/compose derivation · durability · live queries · i18n · MCP · Node + Edge adapters |
+| **Ecosystem (1.x)** | more drivers and image recipes · `mount()` adapters and import codemods · tenancy · privacy tooling · `@oke/react` · community plugin registry                                                |
 
 ## 27. Package structure (one published package)
 
@@ -463,27 +472,27 @@ okengine/                     # ONE npm package, subpath exports, "sideEffects":
 
 ## 28. Risks, honestly
 
-| Risk | Mitigation |
-|---|---|
-| `eval`-based AoT blocked on some edge runtimes | first-class `aot: false` dynamic mode; AoT is a Bun/Node optimization, not a requirement |
-| TypeScript inference depth at scale | budget inference performance work early; codegen fallback for very large apps |
-| Scope is enormous for a small team | driver model keeps each element small; adopt rather than build; sequence ruthlessly |
-| Raw throughput below Encore's Rust runtime | accepted — compete on DX, portability, license, batteries, and derived capabilities |
-| Ecosystem cold start | `mount()` interop so Hono/Elysia middleware remains usable from day one |
-| Auto cache invalidation edge cases | raw SQL requires explicit effect annotation, otherwise that flow opts out of auto-caching; correctness never silently breaks |
+| Risk                                           | Mitigation                                                                                                                   |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `eval`-based AoT blocked on some edge runtimes | first-class `aot: false` dynamic mode; AoT is a Bun/Node optimization, not a requirement                                     |
+| TypeScript inference depth at scale            | budget inference performance work early; codegen fallback for very large apps                                                |
+| Scope is enormous for a small team             | driver model keeps each element small; adopt rather than build; sequence ruthlessly                                          |
+| Raw throughput below Encore's Rust runtime     | accepted — compete on DX, portability, license, batteries, and derived capabilities                                          |
+| Ecosystem cold start                           | `mount()` interop so Hono/Elysia middleware remains usable from day one                                                      |
+| Auto cache invalidation edge cases             | raw SQL requires explicit effect annotation, otherwise that flow opts out of auto-caching; correctness never silently breaks |
 
 ---
 
 ## 29. Why this survives a hundred years
 
-1. **Laws, not features.** Eight elements cover the *categories* of backend need. The future changes drivers, never elements.
+1. **Laws, not features.** Eight elements cover the _categories_ of backend need. The future changes drivers, never elements.
 2. **The Manifest outlives runtimes.** A versioned, runtime-neutral description; the kernel compiles to WASM for hosts that do not exist yet.
 3. **Effects-in-types is a ratchet.** Every future capability derives from the same static knowledge instead of adding API surface.
-4. **One package, one law, ten exports** — small enough to be *finished*. Finished software can be maintained for a century; sprawling software cannot.
+4. **One package, one law, ten exports** — small enough to be _finished_. Finished software can be maintained for a century; sprawling software cannot.
 5. **Adopt, don't reinvent.** We inherit the longevity of Postgres, Redis, S3, SOPS, and OpenTelemetry instead of competing with it.
 6. **MIT, self-host first, drivers as the community surface.** No company's death can kill it.
 
 ---
 
 **One law · eight elements · ten exports · one package · one manifest.**
-*Adopt what exists. Build only what doesn't. Name things after standards.*
+_Adopt what exists. Build only what doesn't. Name things after standards._

@@ -33,8 +33,7 @@ body {
   font-family: var(--oke-font);
   background:
     radial-gradient(1200px 600px at 10% -10%, #1a2433 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #13201a 0%, transparent 50%),
-    var(--oke-bg);
+    radial-gradient(900px 500px at 100% 0%, #13201a 0%, transparent 50%), var(--oke-bg);
   color: var(--oke-fg);
   font-variant-numeric: tabular-nums;
 }

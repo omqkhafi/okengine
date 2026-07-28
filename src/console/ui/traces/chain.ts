@@ -94,9 +94,7 @@ export function buildCausalChain(
  */
 export function groupTraceRoots(spans: readonly TraceSpan[]): TraceRoot[] {
   const { byId, childrenOf } = indexSpans(spans);
-  const roots = spans.filter(
-    (s) => !s.parentId || !byId.has(s.parentId),
-  );
+  const roots = spans.filter((s) => !s.parentId || !byId.has(s.parentId));
   roots.sort((a, b) => b.startedAt - a.startedAt);
   return roots.map((root) => ({
     rootId: root.id,

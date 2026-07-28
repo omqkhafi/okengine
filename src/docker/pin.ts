@@ -61,15 +61,7 @@ export function formatImagesLock(lock: ImagesLock): string {
  */
 async function dockerDigest(image: string): Promise<string> {
   const proc = Bun.spawn(
-    [
-      "docker",
-      "buildx",
-      "imagetools",
-      "inspect",
-      "--format",
-      "{{.Manifest.Digest}}",
-      image,
-    ],
+    ["docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image],
     { stdout: "pipe", stderr: "pipe" },
   );
   const [stdout, stderr, code] = await Promise.all([

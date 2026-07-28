@@ -1,24 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  deepMatch,
-  extractFromSources,
-  extractManifest,
-} from "./extract.ts";
+import { deepMatch, extractFromSources, extractManifest } from "./extract.ts";
 import { emitManifest, manifestPathIn } from "./emit.ts";
 import { serializeManifest } from "../manifest/validate.ts";
 import type { Manifest } from "../manifest/types.ts";
 
 const skyportRoot = new URL("./fixtures/skyport/", import.meta.url).pathname;
 const goldenUrl = new URL("./fixtures/skyport.expected.json", import.meta.url);
-const excerptUrl = new URL(
-  "../manifest/fixtures/skyport.excerpt.json",
-  import.meta.url,
-);
+const excerptUrl = new URL("../manifest/fixtures/skyport.excerpt.json", import.meta.url);
 
-async function loadSkyportFiles(): Promise<
-  { path: string; source: string }[]
-> {
+async function loadSkyportFiles(): Promise<{ path: string; source: string }[]> {
   const glob = new Bun.Glob("**/*.{ts,tsx}");
   const files: { path: string; source: string }[] = [];
   for await (const path of glob.scan({ cwd: skyportRoot, onlyFiles: true })) {
@@ -71,33 +62,23 @@ describe("extractManifest — five trigger types", () => {
     expect(manifest.flows?.["triggers.http"]?.trigger).toEqual({
       http: { method: "POST", path: "/orders" },
     });
-    expect(manifest.flows?.["triggers.http"]?.effects?.writes).toEqual([
-      "sql:orders",
-    ]);
+    expect(manifest.flows?.["triggers.http"]?.effects?.writes).toEqual(["sql:orders"]);
 
     expect(manifest.flows?.["triggers.every"]?.trigger).toEqual({
       every: "10m",
     });
-    expect(manifest.flows?.["triggers.every"]?.effects?.writes).toEqual([
-      "sql:links",
-    ]);
+    expect(manifest.flows?.["triggers.every"]?.effects?.writes).toEqual(["sql:links"]);
 
     expect(manifest.flows?.["triggers.signal"]?.trigger).toEqual({
       signal: "link-clicked",
     });
-    expect(manifest.flows?.["triggers.signal"]?.effects?.writes).toContain(
-      "sql:links",
-    );
-    expect(manifest.flows?.["triggers.signal"]?.effects?.emits).toContain(
-      "link-clicked",
-    );
+    expect(manifest.flows?.["triggers.signal"]?.effects?.writes).toContain("sql:links");
+    expect(manifest.flows?.["triggers.signal"]?.effects?.emits).toContain("link-clicked");
 
     expect(manifest.flows?.["triggers.cdc"]?.trigger).toEqual({
       cdc: { table: "orders", column: "status" },
     });
-    expect(manifest.flows?.["triggers.cdc"]?.effects?.writes).toEqual([
-      "sql:orders",
-    ]);
+    expect(manifest.flows?.["triggers.cdc"]?.effects?.writes).toEqual(["sql:orders"]);
 
     // internal trigger → no trigger key (call-only), or empty trigger object
     const internal = manifest.flows?.["triggers.internal"];
@@ -119,9 +100,7 @@ describe("extractManifest — fx.raw", () => {
 
     expect(manifest.flows?.["raw.unannotated"]?.cache).toBe(false);
     expect(manifest.flows?.["raw.annotated"]?.cache).toBeUndefined();
-    expect(manifest.flows?.["raw.annotated"]?.effects?.reads).toEqual([
-      "sql:orders",
-    ]);
+    expect(manifest.flows?.["raw.annotated"]?.effects?.reads).toEqual(["sql:orders"]);
   });
 });
 
@@ -173,5 +152,92 @@ describe("serializeManifest stability", () => {
     const text = serializeManifest(manifest);
     const again = JSON.parse(text) as Manifest;
     expect(again).toEqual(manifest);
+  });
+});
+
+describe("extractManifest — relational with: is never expanded (path b)", () => {
+  test("findMany({ with: { daily: true } }) records no related-table effects", async () => {
+    const source = `
+import { on, flow, http, store } from "okengine";
+
+export const db = store.sql("db");
+export const links = { name: "links" };
+export const daily = { name: "daily" };
+
+export const listLinks = on(
+  http.get("/links"),
+  flow({
+    name: "rel.root",
+    do: async (_input, fx) => {
+      return fx.store(db).select().from(links);
+    },
+  }),
+);
+
+// Hypothetical RQB-shaped call. inferEffects never consults schema
+// relations, so the related table must NOT appear in effects.
+export const withDaily = on(
+  http.get("/links/with-daily"),
+  flow({
+    name: "rel.with",
+    do: async (_input, fx) => {
+      return fx.store(db).findMany({ with: { daily: true } });
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/rel.ts": source });
+
+    // Root-table read stays exact.
+    expect(manifest.flows?.["rel.root"]?.effects?.reads).toEqual(["sql:links"]);
+
+    // The with: argument is not walked — falls back to the store-level
+    // resource, never the relation target.
+    expect(manifest.flows?.["rel.with"]?.effects?.reads).toEqual(["sql:db"]);
+
+    const allEffects = Object.values(manifest.flows ?? {}).flatMap((f) => [
+      ...(f.effects?.reads ?? []),
+      ...(f.effects?.writes ?? []),
+    ]);
+    expect(allEffects).not.toContain("sql:daily");
+  });
+});
+
+describe("extractManifest — store.schema.table", () => {
+  test("extracts DeclaredColumn with PII into manifest stores", async () => {
+    const source = `
+import { store, field, id, now } from "okengine";
+
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey().defaultFn(id),
+  title: field.text().notNull(),
+  body: field.text().notNull().pii(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const db = store.sql("app", { schema: { notes } });
+`;
+    const manifest = await extractFromSources({
+      "src/schema.decl.ts": source,
+    });
+
+    expect(manifest.stores?.app?.facet).toBe("sql");
+    const cols = manifest.stores?.app?.tables?.notes?.columns;
+    expect(cols?.body).toMatchObject({
+      type: "text",
+      pii: true,
+      nullable: false,
+      sqlName: "body",
+    });
+    expect(cols?.createdAt).toMatchObject({
+      type: "integer",
+      sqlName: "created_at",
+      nullable: false,
+    });
+    expect(cols?.id).toMatchObject({
+      type: "text",
+      primaryKey: true,
+      sqlName: "id",
+    });
   });
 });

@@ -6,14 +6,7 @@
  */
 
 /** The seven load-bearing effect kinds (manifest `effects` keys, singular). */
-export type EffectKind =
-  | "read"
-  | "write"
-  | "emit"
-  | "send"
-  | "ask"
-  | "secret"
-  | "call";
+export type EffectKind = "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
 
 /**
  * Reversibility tier — console §9.1 ranking, applied to all seven kinds.
@@ -135,6 +128,6 @@ export async function recordEffect<T>(
 export const EFFECT_KIND_TIERS: ReadonlyArray<{
   kind: EffectKind;
   reversibility: ReversibilityTier;
-}> = (
-  Object.entries(TIER_BY_KIND) as Array<[EffectKind, ReversibilityTier]>
-).map(([kind, reversibility]) => ({ kind, reversibility }));
+}> = (Object.entries(TIER_BY_KIND) as Array<[EffectKind, ReversibilityTier]>).map(
+  ([kind, reversibility]) => ({ kind, reversibility }),
+);

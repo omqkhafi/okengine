@@ -70,7 +70,7 @@
  * switch as an inline style.
  */
 
-'use client';
+"use client";
 
 import {
   animate,
@@ -79,22 +79,15 @@ import {
   MotionConfig,
   useMotionValue,
   useTransform,
-} from 'framer-motion';
-import type { Transition } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react';
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
-import { OkeLogo } from '@/components/oke-logo';
-import { cn } from '@/lib/cn';
-import { ELEMENTS, ZOO_CONCERN_GROUPS, ZOO_CONCERNS } from '@/lib/elements';
-import { toneForElementName } from '@/lib/element-tones';
-import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
+} from "framer-motion";
+import type { Transition } from "framer-motion";
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
+import { memo, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { OkeLogo } from "@/components/oke-logo";
+import { cn } from "@/lib/cn";
+import { ELEMENTS, ZOO_CONCERN_GROUPS, ZOO_CONCERNS } from "@/lib/elements";
+import { toneForElementName } from "@/lib/element-tones";
+import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 import {
   TREE_CHANGE_COST,
   treeEdgeCount,
@@ -104,7 +97,7 @@ import {
   zooPassCost,
   zooSeamCount,
   zooSeamsOf,
-} from '@/lib/zoo-graph';
+} from "@/lib/zoo-graph";
 
 const VIEW = 420;
 const C = VIEW / 2;
@@ -146,15 +139,15 @@ const TRACE_MS = 650;
 const BEAT_LANES = 3;
 
 /** Anything that changes size arrives with weight. */
-const NODE: Transition = { type: 'spring', stiffness: 320, damping: 26, mass: 0.6 };
+const NODE: Transition = { type: "spring", stiffness: 320, damping: 26, mass: 0.6 };
 
 /** Edges grow rather than fade, so they need a long, decelerating ease. */
 const DRAW_MS = 500;
-const DRAW_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const DRAW_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const DRAW: Transition = { duration: DRAW_MS / 1000, ease: [0.22, 1, 0.36, 1] };
 
 /** Lighting, dimming, and crossfades. */
-const FADE: Transition = { duration: 0.28, ease: 'easeOut' };
+const FADE: Transition = { duration: 0.28, ease: "easeOut" };
 
 /** Reduced motion keeps every state, and takes none of the time. */
 const INSTANT: Transition = { duration: 0 };
@@ -173,7 +166,7 @@ const SPOKE_LEAD_S = 0.12;
  * is all a fill or stroke swap needs — and it leaves the colour in the theme's
  * hands rather than in an inline rgb.
  */
-const TINT: CSSProperties = { transition: 'fill 240ms ease, stroke 240ms ease' };
+const TINT: CSSProperties = { transition: "fill 240ms ease, stroke 240ms ease" };
 
 type Point = { readonly x: number; readonly y: number };
 
@@ -371,8 +364,8 @@ function changedConcern(tick: number, visible: number): number {
 
 /** `a, b and c`, for a caption that names the concerns it is counting. */
 function listOf(labels: ReadonlyArray<string>): string {
-  if (labels.length < 2) return labels[0] ?? '';
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  if (labels.length < 2) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
 /**
@@ -388,16 +381,16 @@ function wiredTo(index: number, visible: number): ReadonlyArray<string> {
   );
 }
 
-type TabId = 'zoo' | 'okengine';
+type TabId = "zoo" | "okengine";
 
 /** Which node the pointer or keyboard focus is on. */
 type Hover =
-  | { readonly kind: 'concern'; readonly index: number }
-  | { readonly kind: 'element'; readonly name: string };
+  | { readonly kind: "concern"; readonly index: number }
+  | { readonly kind: "element"; readonly name: string };
 
 /** Plural `s` when `count` is not one. */
 function s(count: number): string {
-  return count === 1 ? '' : 's';
+  return count === 1 ? "" : "s";
 }
 
 /** Live caption naming what the current step just added. */
@@ -406,7 +399,7 @@ function captionFor(tab: TabId, step: number): string {
   const visible = group.end;
   const arrived = listOf(groupLabels(step));
 
-  if (tab === 'zoo') {
+  if (tab === "zoo") {
     const total = zooSeamCount(visible);
     if (step === 0) {
       return `${arrived} — ${total} seam${s(total)} between them already.`;
@@ -427,7 +420,7 @@ function captionFor(tab: TabId, step: number): string {
       total > zoo
         ? `more than the ${zoo} the tangle costs so far`
         : total === zoo
-          ? 'the same as the tangle costs so far'
+          ? "the same as the tangle costs so far"
           : `already fewer than the ${zoo} the tangle costs so far`;
     return `${arrived} collapse onto ${group.element} — ${total} edges, ${against}.`;
   }
@@ -443,7 +436,7 @@ function captionFor(tab: TabId, step: number): string {
  * @param visible - Concerns present at the current step
  */
 function changeCost(tab: TabId, index: number, visible: number): number {
-  return tab === 'zoo' ? zooDegree(index, visible) : TREE_CHANGE_COST;
+  return tab === "zoo" ? zooDegree(index, visible) : TREE_CHANGE_COST;
 }
 
 /** One label/value line of the readout. */
@@ -451,7 +444,7 @@ type ReadoutRow = { readonly label: string; readonly value: string };
 
 /** What the readout column reports: the beat, the hovered node, or the step. */
 type Readout = {
-  readonly mode: 'live' | 'hover' | 'step';
+  readonly mode: "live" | "hover" | "step";
   readonly progress: string | null;
   readonly rows: ReadonlyArray<ReadoutRow>;
   readonly note: string;
@@ -474,48 +467,50 @@ function readoutFor(
   hover: Hover | null,
   beat: Beat | null,
 ): Readout {
-  if (hover?.kind === 'element') {
+  if (hover?.kind === "element") {
     const element = ELEMENT_NODES.find((node) => node.name === hover.name);
     const owned = (element?.concerns ?? []).filter((index) => index < visible);
     const labels = owned.map((index) => CONCERNS[index]!.text);
     return {
-      mode: 'hover',
+      mode: "hover",
       progress: null,
       rows: [
-        { label: 'element', value: hover.name },
-        { label: 'edges', value: `${owned.length + 1}` },
-        { label: 'subsumes', value: labels.join(' · ') },
+        { label: "element", value: hover.name },
+        { label: "edges", value: `${owned.length + 1}` },
+        { label: "subsumes", value: labels.join(" · ") },
       ],
-      note: `${hover.name} subsumes ${labels.join(' · ')} — ${owned.length} spoke${s(owned.length)} and one trunk to the law.`,
+      note: `${hover.name} subsumes ${labels.join(" · ")} — ${owned.length} spoke${s(owned.length)} and one trunk to the law.`,
     };
   }
 
-  if (hover?.kind === 'concern') {
+  if (hover?.kind === "concern") {
     const concern = CONCERNS[hover.index]!;
     const cost = changeCost(tab, hover.index, visible);
     // The busiest node owns fifteen seams, and fifteen labels would reflow the
     // column under the pointer, so the note names a few and counts the rest.
     const named = wiredTo(hover.index, visible);
     const seams =
-      named.length > 4 ? `${listOf(named.slice(0, 3))} and ${named.length - 3} more` : listOf(named);
+      named.length > 4
+        ? `${listOf(named.slice(0, 3))} and ${named.length - 3} more`
+        : listOf(named);
     return {
-      mode: 'hover',
+      mode: "hover",
       progress: null,
       rows: [
-        { label: 'node', value: concern.text },
-        { label: tab === 'zoo' ? 'seams' : 'edges', value: `${cost}` },
+        { label: "node", value: concern.text },
+        { label: tab === "zoo" ? "seams" : "edges", value: `${cost}` },
         {
-          label: tab === 'zoo' ? 'wired to' : 'element',
+          label: tab === "zoo" ? "wired to" : "element",
           value:
-            tab === 'zoo'
+            tab === "zoo"
               ? named.length > 3
-                ? `${named.slice(0, 3).join(' · ')} +${named.length - 3}`
-                : named.join(' · ')
+                ? `${named.slice(0, 3).join(" · ")} +${named.length - 3}`
+                : named.join(" · ")
               : concern.element,
         },
       ],
       note:
-        tab === 'zoo'
+        tab === "zoo"
           ? `${concern.text} is wired to ${seams} — ${cost} seam${s(cost)} to keep in sync.`
           : `${concern.text} → ${concern.element} — 2 edges: one spoke, and a trunk ${concern.element} already owns.`,
     };
@@ -526,39 +521,39 @@ function readoutFor(
     const cost = changeCost(tab, beat.concern, visible);
     // The worst one change can cost in this shape — always two on the hub side,
     // which is the whole point of the comparison.
-    const busiest = tab === 'zoo' ? zooBusiest(visible) : null;
+    const busiest = tab === "zoo" ? zooBusiest(visible) : null;
     return {
-      mode: 'live',
+      mode: "live",
       progress: `change ${beat.index + 1}`,
       rows: [
-        { label: 'changed', value: concern.text },
-        { label: 'edges re-checked', value: `${cost}` },
+        { label: "changed", value: concern.text },
+        { label: "edges re-checked", value: `${cost}` },
         {
-          label: 'busiest node',
+          label: "busiest node",
           value: busiest ? `${busiest.label} · ${busiest.seams}` : `any · ${TREE_CHANGE_COST}`,
         },
       ],
       note:
-        tab === 'zoo'
+        tab === "zoo"
           ? `Change ${concern.text} and all ${cost} of its seams have to be re-checked.`
           : `Change ${concern.text} and it is one spoke — ${concern.element} is already bound to the law.`,
     };
   }
 
   const group = groupAt(step);
-  const total = tab === 'zoo' ? zooSeamCount(visible) : treeEdgeCount(visible);
+  const total = tab === "zoo" ? zooSeamCount(visible) : treeEdgeCount(visible);
   return {
-    mode: 'step',
+    mode: "step",
     progress: `step ${step + 1} / ${LAST_STEP + 1}`,
     rows: [
-      { label: 'added', value: `${group.element} · ${group.end - group.start}` },
-      { label: tab === 'zoo' ? 'seams' : 'edges', value: `${total}` },
+      { label: "added", value: `${group.element} · ${group.end - group.start}` },
+      { label: tab === "zoo" ? "seams" : "edges", value: `${total}` },
       {
-        label: tab === 'zoo' ? 'if each changed once' : 'trunks',
-        value: tab === 'zoo' ? `${zooPassCost(visible)}` : `${step + 1}`,
+        label: tab === "zoo" ? "if each changed once" : "trunks",
+        value: tab === "zoo" ? `${zooPassCost(visible)}` : `${step + 1}`,
       },
     ],
-    note: 'Hover any node, or let the feed cost one change at a time.',
+    note: "Hover any node, or let the feed cost one change at a time.",
   };
 }
 
@@ -585,8 +580,8 @@ function dashedSeams(beat: Beat, visible: number): ReadonlyMap<string, number> {
 }
 
 const TABS: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
-  { id: 'zoo', label: 'the zoo' },
-  { id: 'okengine', label: 'okengine' },
+  { id: "zoo", label: "the zoo" },
+  { id: "okengine", label: "okengine" },
 ];
 
 const PROSE: Readonly<Record<TabId, ReadonlyArray<string>>> = {
@@ -601,7 +596,7 @@ const PROSE: Readonly<Record<TabId, ReadonlyArray<string>>> = {
 };
 
 /** Both shapes share the square cell, so a tab switch can crossfade in place. */
-const PANEL_SVG = 'absolute inset-0 size-full';
+const PANEL_SVG = "absolute inset-0 size-full";
 
 /** Advance of the mono face at the 11.5px label size, close enough to lay out a chip. */
 const LABEL_CHAR = 6.9;
@@ -642,7 +637,7 @@ function LabelChip({
   const width = label.length * LABEL_CHAR + CHIP_PAD_X * 2;
   const x = clamp(at.x, width / 2 + CHIP_MARGIN, VIEW - width / 2 - CHIP_MARGIN);
   const y = clamp(at.y, CHIP_H / 2 + CHIP_MARGIN, VIEW - CHIP_H / 2 - CHIP_MARGIN);
-  const ink = tone ?? 'var(--color-fd-foreground)';
+  const ink = tone ?? "var(--color-fd-foreground)";
   return (
     <motion.g
       key={label}
@@ -659,7 +654,7 @@ function LabelChip({
         height={CHIP_H}
         rx="4"
         fill="var(--color-fd-card)"
-        stroke={tone ?? 'var(--color-fd-border)'}
+        stroke={tone ?? "var(--color-fd-border)"}
         strokeWidth="1"
         style={reduced ? undefined : TINT}
       />
@@ -691,7 +686,7 @@ function SeamTrace({
   durationMs,
   strokeWidth,
   opacity,
-  stroke = 'var(--color-fd-foreground)',
+  stroke = "var(--color-fd-foreground)",
 }: {
   readonly d: string;
   readonly delayMs: number;
@@ -769,8 +764,8 @@ const SeamMesh = memo(function SeamMesh({
             x2={edge.length}
             y2="0"
             style={{
-              transformBox: 'view-box',
-              transformOrigin: '0 0',
+              transformBox: "view-box",
+              transformOrigin: "0 0",
               transform: `translate(${edge.ox}px, ${edge.oy}px) rotate(${edge.angle}deg) scaleX(${shown ? 1 : 0})`,
               transition: reduced ? undefined : `transform ${DRAW_MS}ms ${DRAW_EASE} ${fan}ms`,
             }}
@@ -827,12 +822,12 @@ type PanelProps = {
 
 /** The curated seams between the concerns present so far. */
 function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
-  const active = hover?.kind === 'concern' ? hover.index : null;
+  const active = hover?.kind === "concern" ? hover.index : null;
   const changed = beat?.concern ?? null;
   /** The one concern named on screen: what the pointer is on, else the change. */
   const named = active ?? changed;
   const litTone =
-    named === null ? 'var(--color-fd-foreground)' : toneForElementName(CONCERNS[named]!.element);
+    named === null ? "var(--color-fd-foreground)" : toneForElementName(CONCERNS[named]!.element);
   const litSeams = litSeamsFor(active, active === null ? changed : null, visible, reduced);
   const lanes = beat === null || active !== null ? null : dashedSeams(beat, visible);
   const node = reduced ? INSTANT : NODE;
@@ -844,7 +839,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       viewBox={`0 0 ${VIEW} ${VIEW}`}
       className={PANEL_SVG}
       role="img"
-      aria-label={`All ${TOTAL} infrastructure concerns the eight elements replace — ${ZOO_CONCERNS.map((c) => c.label).join(', ')} — wired to each other wherever they genuinely meet: credentials, invalidation, ordering, delivery. Not every pair, but ${zooSeamCount(TOTAL)} seams once all ${TOTAL} are present, and ${zooBusiest(TOTAL).label} alone owns ${zooBusiest(TOTAL).seams} of them.`}
+      aria-label={`All ${TOTAL} infrastructure concerns the eight elements replace — ${ZOO_CONCERNS.map((c) => c.label).join(", ")} — wired to each other wherever they genuinely meet: credentials, invalidation, ordering, delivery. Not every pair, but ${zooSeamCount(TOTAL)} seams once all ${TOTAL} are present, and ${zooBusiest(TOTAL).label} alone owns ${zooBusiest(TOTAL).seams} of them.`}
       initial={false}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -862,7 +857,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         aria-hidden="true"
         style={{
           opacity: active === null ? MESH_OPACITY : MESH_DIMMED,
-          transition: reduced ? undefined : 'opacity 280ms ease-out',
+          transition: reduced ? undefined : "opacity 280ms ease-out",
         }}
       >
         <SeamMesh visible={visible} reduced={reduced} />
@@ -880,7 +875,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             stroke={litTone}
             strokeWidth={strong ? 1.2 : 0.9}
             opacity={strong ? 0.85 : 0.42}
-            className={reduced ? undefined : 'oke-seam-lit'}
+            className={reduced ? undefined : "oke-seam-lit"}
             style={reduced ? undefined : { animationDelay: `${delayMs}ms` }}
           />
         ))}
@@ -919,23 +914,23 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             tabIndex={shown ? 0 : -1}
             aria-label={
               shown
-                ? `${concern.text} — ${zooDegree(i, visible)} seams: ${wiredTo(i, visible).join(', ')}`
+                ? `${concern.text} — ${zooDegree(i, visible)} seams: ${wiredTo(i, visible).join(", ")}`
                 : `${concern.text} — not yet added`
             }
-            onMouseEnter={() => onHover({ kind: 'concern', index: i })}
+            onMouseEnter={() => onHover({ kind: "concern", index: i })}
             onMouseLeave={() => onHover(null)}
-            onFocus={() => onHover({ kind: 'concern', index: i })}
+            onFocus={() => onHover({ kind: "concern", index: i })}
             onBlur={() => onHover(null)}
             initial={false}
             animate={{ opacity: shown ? (dimmed ? 0.45 : 1) : 0 }}
             transition={fade}
-            pointerEvents={shown ? 'auto' : 'none'}
-            style={{ cursor: shown ? 'pointer' : 'default', outline: 'none' }}
+            pointerEvents={shown ? "auto" : "none"}
+            style={{ cursor: shown ? "pointer" : "default", outline: "none" }}
           >
             <motion.circle
               cx={concern.node.x}
               cy={concern.node.y}
-              fill={lit ? tone : 'var(--color-fd-foreground)'}
+              fill={lit ? tone : "var(--color-fd-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: halo, opacity: isActive ? 0.14 : 0.09 }}
@@ -945,7 +940,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               cx={concern.node.x}
               cy={concern.node.y}
               fill="var(--color-fd-card)"
-              stroke={lit ? tone : 'var(--color-fd-muted-foreground)'}
+              stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: ring, strokeWidth: isActive ? 1.4 : 1 }}
@@ -954,7 +949,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             <motion.circle
               cx={concern.node.x}
               cy={concern.node.y}
-              fill={lit ? tone : 'var(--color-fd-foreground)'}
+              fill={lit ? tone : "var(--color-fd-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: dot }}
@@ -981,16 +976,12 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
 /** The same concerns collapsed onto elements, each bound once to the law. */
 function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
   const activeElement =
-    hover === null
-      ? null
-      : hover.kind === 'element'
-        ? hover.name
-        : CONCERNS[hover.index]!.element;
+    hover === null ? null : hover.kind === "element" ? hover.name : CONCERNS[hover.index]!.element;
 
   /** Concerns lit by the current hover: one, or every concern of an element. */
   const isActiveConcern = (index: number): boolean => {
     if (hover === null) return false;
-    if (hover.kind === 'concern') return hover.index === index;
+    if (hover.kind === "concern") return hover.index === index;
     return CONCERNS[index]!.element === hover.name;
   };
 
@@ -1003,8 +994,8 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
    * carry.
    */
   const hoveredElement =
-    hover?.kind === 'element' ? ELEMENT_NODES.find((n) => n.name === hover.name) : undefined;
-  const namedConcern = hover?.kind === 'concern' ? hover.index : hover === null ? changed : null;
+    hover?.kind === "element" ? ELEMENT_NODES.find((n) => n.name === hover.name) : undefined;
+  const namedConcern = hover?.kind === "concern" ? hover.index : hover === null ? changed : null;
   const named: { readonly label: string; readonly at: Point } | null = hoveredElement
     ? { label: hoveredElement.name, at: hoveredElement.labelPoint }
     : namedConcern === null
@@ -1021,7 +1012,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       viewBox={`0 0 ${VIEW} ${VIEW}`}
       className={PANEL_SVG}
       role="img"
-      aria-label={`The same ${TOTAL} concerns — ${ZOO_CONCERNS.map((c) => c.label).join(', ')} — collapsed onto eight elements — ${ELEMENTS.map((e) => e.name).join(', ')} — each concern attached to its element and each element bound once to the law, on(Trigger) gives Effects. ${treeEdgeCount(TOTAL)} edges instead of ${zooSeamCount(TOTAL)} seams, and one change is always ${TREE_CHANGE_COST} of them.`}
+      aria-label={`The same ${TOTAL} concerns — ${ZOO_CONCERNS.map((c) => c.label).join(", ")} — collapsed onto eight elements — ${ELEMENTS.map((e) => e.name).join(", ")} — each concern attached to its element and each element bound once to the law, on(Trigger) gives Effects. ${treeEdgeCount(TOTAL)} edges instead of ${zooSeamCount(TOTAL)} seams, and one change is always ${TREE_CHANGE_COST} of them.`}
       initial={false}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -1072,7 +1063,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
                 strokeWidth: touched ? 1.5 : lit ? 1.3 : 1,
               }}
               transition={{ x2: draw, y2: draw, opacity: fade, strokeWidth: fade }}
-              stroke={lit ? tone : 'var(--color-fd-muted-foreground)'}
+              stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
             />
           );
@@ -1105,7 +1096,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
                 opacity: fade,
                 strokeWidth: fade,
               }}
-              stroke={lit ? tone : 'var(--color-fd-muted-foreground)'}
+              stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
             />
           );
@@ -1139,21 +1130,21 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           <motion.g
             key={element.name}
             tabIndex={shown ? 0 : -1}
-            aria-label={`${element.name} — ${shown ? `subsumes ${owned.map((index) => CONCERNS[index]!.text).join(', ')}` : 'not yet added'}`}
-            onMouseEnter={() => onHover({ kind: 'element', name: element.name })}
+            aria-label={`${element.name} — ${shown ? `subsumes ${owned.map((index) => CONCERNS[index]!.text).join(", ")}` : "not yet added"}`}
+            onMouseEnter={() => onHover({ kind: "element", name: element.name })}
             onMouseLeave={() => onHover(null)}
-            onFocus={() => onHover({ kind: 'element', name: element.name })}
+            onFocus={() => onHover({ kind: "element", name: element.name })}
             onBlur={() => onHover(null)}
             initial={false}
             animate={{ opacity: shown ? (activeElement !== null && !touched ? 0.4 : 1) : 0 }}
             transition={fade}
-            pointerEvents={shown ? 'auto' : 'none'}
-            style={{ cursor: shown ? 'pointer' : 'default', outline: 'none' }}
+            pointerEvents={shown ? "auto" : "none"}
+            style={{ cursor: shown ? "pointer" : "default", outline: "none" }}
           >
             <motion.circle
               cx={element.node.x}
               cy={element.node.y}
-              fill={inked ? tone : 'var(--color-fd-foreground)'}
+              fill={inked ? tone : "var(--color-fd-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: halo, opacity: touched ? 0.14 : 0.09 }}
@@ -1165,9 +1156,9 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               fill={
                 inked
                   ? `color-mix(in oklch, ${tone} 18%, var(--color-fd-secondary))`
-                  : 'var(--color-fd-secondary)'
+                  : "var(--color-fd-secondary)"
               }
-              stroke={inked ? tone : 'var(--color-fd-border)'}
+              stroke={inked ? tone : "var(--color-fd-border)"}
               style={tint}
               initial={false}
               animate={{ r: ring, strokeWidth: touched ? 1.4 : 1 }}
@@ -1179,7 +1170,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               textAnchor="middle"
               fontSize="11.5"
               fontFamily="var(--font-mono, ui-monospace, monospace)"
-              fill={inked ? tone : 'var(--color-fd-foreground)'}
+              fill={inked ? tone : "var(--color-fd-foreground)"}
               style={tint}
               initial={false}
               animate={{ opacity: shown ? 1 : 0 }}
@@ -1196,7 +1187,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       <g aria-hidden="true">
         <motion.circle
           // Remounted per beat so the arriving change lands as one pulse.
-          key={beat === null ? 'hub' : `hub-${beat.index}`}
+          key={beat === null ? "hub" : `hub-${beat.index}`}
           cx={C}
           cy={C}
           fill="var(--color-fd-background)"
@@ -1211,7 +1202,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           transition={
             beat === null || reduced
               ? INSTANT
-              : { duration: 0.85, delay: BEAT_MS / 2 / 1000, ease: 'easeOut' }
+              : { duration: 0.85, delay: BEAT_MS / 2 / 1000, ease: "easeOut" }
           }
         />
         <OkeLogo
@@ -1238,20 +1229,20 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             key={concern.text}
             tabIndex={shown ? 0 : -1}
             aria-label={`${concern.text} — subsumed by ${concern.element}`}
-            onMouseEnter={() => onHover({ kind: 'concern', index: i })}
+            onMouseEnter={() => onHover({ kind: "concern", index: i })}
             onMouseLeave={() => onHover(null)}
-            onFocus={() => onHover({ kind: 'concern', index: i })}
+            onFocus={() => onHover({ kind: "concern", index: i })}
             onBlur={() => onHover(null)}
             initial={false}
             animate={{ opacity: shown ? (dimmed ? 0.45 : 1) : 0 }}
             transition={fade}
-            pointerEvents={shown ? 'auto' : 'none'}
-            style={{ cursor: shown ? 'pointer' : 'default', outline: 'none' }}
+            pointerEvents={shown ? "auto" : "none"}
+            style={{ cursor: shown ? "pointer" : "default", outline: "none" }}
           >
             <motion.circle
               cx={concern.node.x}
               cy={concern.node.y}
-              fill={lit ? tone : 'var(--color-fd-foreground)'}
+              fill={lit ? tone : "var(--color-fd-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: halo, opacity: isActive ? 0.14 : 0.09 }}
@@ -1260,7 +1251,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             <motion.circle
               cx={concern.node.x}
               cy={concern.node.y}
-              fill={lit ? tone : 'var(--color-fd-muted-foreground)'}
+              fill={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
               initial={false}
               animate={{ r: dot }}
@@ -1294,7 +1285,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
  * elements: one counter grows quadratically, the other linearly.
  */
 export function CollapseDiagram() {
-  const [tab, setTab] = useState<TabId>('zoo');
+  const [tab, setTab] = useState<TabId>("zoo");
   /** Open on the finished graph; Play / step controls still walk the pass. */
   const [step, setStep] = useState(LAST_STEP);
   const [playing, setPlaying] = useState(false);
@@ -1338,8 +1329,8 @@ export function CollapseDiagram() {
   }, []);
 
   const visible = visibleCount(shownStep);
-  const edges = tab === 'zoo' ? zooSeamCount(visible) : treeEdgeCount(visible);
-  const Panel = tab === 'zoo' ? ZooPanel : HubPanel;
+  const edges = tab === "zoo" ? zooSeamCount(visible) : treeEdgeCount(visible);
+  const Panel = tab === "zoo" ? ZooPanel : HubPanel;
   const beat: Beat | null = feeding
     ? { index: tick, concern: changedConcern(tick, visible) }
     : null;
@@ -1355,10 +1346,7 @@ export function CollapseDiagram() {
       <div className="w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-fd-border px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="size-2 rounded-full bg-fd-primary ring-2 ring-fd-border"
-            />
+            <span aria-hidden className="size-2 rounded-full bg-fd-primary ring-2 ring-fd-border" />
             <div className="relative h-4 w-20">
               <AnimatePresence initial={false}>
                 <motion.span
@@ -1368,7 +1356,7 @@ export function CollapseDiagram() {
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   className="absolute inset-0 font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase"
                 >
-                  {tab === 'zoo' ? 'the zoo' : 'okengine'}
+                  {tab === "zoo" ? "the zoo" : "okengine"}
                 </motion.span>
               </AnimatePresence>
             </div>
@@ -1389,10 +1377,10 @@ export function CollapseDiagram() {
                   setHover(null);
                 }}
                 className={cn(
-                  'rounded px-2.5 py-1 font-mono text-[11px] transition-colors',
+                  "rounded px-2.5 py-1 font-mono text-[11px] transition-colors",
                   item.id === tab
-                    ? 'bg-fd-primary text-fd-primary-foreground'
-                    : 'text-fd-muted-foreground hover:text-fd-foreground',
+                    ? "bg-fd-primary text-fd-primary-foreground"
+                    : "text-fd-muted-foreground hover:text-fd-foreground",
                 )}
               >
                 {item.label}
@@ -1430,7 +1418,7 @@ export function CollapseDiagram() {
               </div>
               <div>
                 <dt className="font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
-                  {tab === 'zoo' ? 'seams' : 'edges'}
+                  {tab === "zoo" ? "seams" : "edges"}
                 </dt>
                 <dd className="mt-1 font-mono text-3xl leading-none font-medium text-fd-foreground">
                   <EdgeCount value={edges} reduced={reduced} />
@@ -1451,10 +1439,10 @@ export function CollapseDiagram() {
                   <span
                     aria-hidden
                     className={cn(
-                      'size-1.5 rounded-full',
-                      readout.mode === 'live'
-                        ? 'animate-pulse bg-fd-primary'
-                        : 'bg-fd-muted-foreground/40',
+                      "size-1.5 rounded-full",
+                      readout.mode === "live"
+                        ? "animate-pulse bg-fd-primary"
+                        : "bg-fd-muted-foreground/40",
                     )}
                   />
                   {readout.mode}
@@ -1510,7 +1498,7 @@ export function CollapseDiagram() {
               <ChevronLeft className="size-4" aria-hidden />
             </ControlButton>
             <ControlButton
-              label={running ? 'Pause' : atEnd ? 'Replay' : 'Play'}
+              label={running ? "Pause" : atEnd ? "Replay" : "Play"}
               onClick={() => {
                 if (running) {
                   setPlaying(false);

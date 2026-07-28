@@ -45,9 +45,7 @@ export interface ConsoleAppHandle {
  *
  * @param options - Secret, cwd, Manifest seed
  */
-export function createConsoleApp(
-  options: CreateConsoleAppOptions = {},
-): ConsoleAppHandle {
+export function createConsoleApp(options: CreateConsoleAppOptions = {}): ConsoleAppHandle {
   const state = createConsoleState(options);
   // Spec §2.5 — claim prints only while setup is open (no operators yet).
   if (!options.silentClaim && !state.setupClosed) {
@@ -132,9 +130,7 @@ export function createConsoleApp(
  *
  * @param handle - Console app handle
  */
-export async function bootConsoleApp(
-  handle: ConsoleAppHandle,
-): Promise<OkeApp> {
+export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> {
   await handle.app.boot({ env: "test" });
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
@@ -154,14 +150,7 @@ export async function bootConsoleApp(
  */
 export async function ensureConsolePanelRuntimes(
   state: ConsoleState,
-  panel:
-    | "signals"
-    | "store"
-    | "vault"
-    | "gates"
-    | "clock"
-    | "ai"
-    | "channels",
+  panel: "signals" | "store" | "vault" | "gates" | "clock" | "ai" | "channels",
 ): Promise<void> {
   switch (panel) {
     case "signals":
@@ -196,10 +185,7 @@ export async function ensureConsolePanelRuntimes(
  */
 export function bindManifestChannelRuntime(state: ConsoleState): void {
   if (state.channelRuntime) return;
-  if (
-    !state.manifest?.channels ||
-    Object.keys(state.manifest.channels).length === 0
-  ) {
+  if (!state.manifest?.channels || Object.keys(state.manifest.channels).length === 0) {
     return;
   }
   const bound = createManifestChannelRuntime(state.manifest, {
@@ -216,16 +202,11 @@ export function bindManifestChannelRuntime(state: ConsoleState): void {
  *
  * @param state - Console state
  */
-export async function bindManifestClockRuntime(
-  state: ConsoleState,
-): Promise<void> {
+export async function bindManifestClockRuntime(state: ConsoleState): Promise<void> {
   if (state.clockRuntime) return;
   const hasClocks =
-    (state.manifest?.clocks &&
-      Object.keys(state.manifest.clocks).length > 0) ||
-    Object.values(state.manifest?.flows ?? {}).some(
-      (f) => f.trigger?.cron || f.trigger?.every,
-    );
+    (state.manifest?.clocks && Object.keys(state.manifest.clocks).length > 0) ||
+    Object.values(state.manifest?.flows ?? {}).some((f) => f.trigger?.cron || f.trigger?.every);
   if (!hasClocks) return;
   state.clockRuntime = createManifestClockRuntime(state.manifest, {
     now: state.now,
@@ -246,22 +227,17 @@ export function bindManifestAiRuntime(state: ConsoleState): void {
       Object.keys(state.manifest.ai.agents ?? {}).length > 0 ||
       Object.keys(state.manifest.ai.models ?? {}).length > 0);
   if (!hasAi) return;
-  bindAiRuntime(
-    state,
-    createManifestAiRuntime(state.manifest, { now: state.now }),
-  );
+  bindAiRuntime(state, createManifestAiRuntime(state.manifest, { now: state.now }));
 }
 
 /**
  * Open a VaultRuntime from the Manifest when no host runtime is attached.
- * Uses the standard resolution chain (process.env → .env.local → .env.stack
+ * Uses the standard resolution chain (process.env → .env.local → .env.docker
  * → driver) — Console never parses dotenv itself.
  *
  * @param state - Console state
  */
-export async function bindManifestVaultRuntime(
-  state: ConsoleState,
-): Promise<void> {
+export async function bindManifestVaultRuntime(state: ConsoleState): Promise<void> {
   if (state.vaultRuntime) return;
   if (!state.manifest?.vault || Object.keys(state.manifest.vault).length === 0) {
     return;
@@ -269,7 +245,7 @@ export async function bindManifestVaultRuntime(
   try {
     state.vaultRuntime = await createManifestVaultRuntime(state.manifest, {
       cwd: state.cwd,
-      env: state.production ? "prod" : "dev",
+      env: state.production ? "prod" : "local",
       allowDevFallbacks: !state.production,
       now: state.now,
     });
@@ -285,17 +261,12 @@ export async function bindManifestVaultRuntime(
  *
  * @param state - Console state
  */
-export async function bindManifestStoreRuntime(
-  state: ConsoleState,
-): Promise<void> {
+export async function bindManifestStoreRuntime(state: ConsoleState): Promise<void> {
   if (state.storeRuntime) return;
   if (!state.manifest?.stores || Object.keys(state.manifest.stores).length === 0) {
     return;
   }
-  state.storeRuntime = await createManifestStoreRuntime(
-    state.manifest,
-    state.now,
-  );
+  state.storeRuntime = await createManifestStoreRuntime(state.manifest, state.now);
 }
 
 /**
@@ -304,9 +275,7 @@ export async function bindManifestStoreRuntime(
  *
  * @param state - Console state
  */
-export async function bindManifestSignalBus(
-  state: ConsoleState,
-): Promise<void> {
+export async function bindManifestSignalBus(state: ConsoleState): Promise<void> {
   if (state.signalBus) return;
   const declared = Object.entries(state.manifest?.signals ?? {});
   if (declared.length === 0) return;

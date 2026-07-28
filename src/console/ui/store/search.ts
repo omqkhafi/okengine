@@ -22,9 +22,7 @@ export type StoreSearch = z.infer<typeof StoreSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseStoreSearch(
-  search: Record<string, unknown>,
-): StoreSearch {
+export function parseStoreSearch(search: Record<string, unknown>): StoreSearch {
   const parsed = StoreSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -34,9 +32,7 @@ export function parseStoreSearch(
  *
  * @param search - Search state
  */
-export function serializeStoreSearch(
-  search: StoreSearch,
-): Record<string, string> {
+export function serializeStoreSearch(search: StoreSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.ref) out.ref = search.ref;

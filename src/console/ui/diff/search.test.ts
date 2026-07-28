@@ -3,11 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  openDiffPath,
-  parseDiffSearch,
-  serializeDiffSearch,
-} from "./search.ts";
+import { openDiffPath, parseDiffSearch, serializeDiffSearch } from "./search.ts";
 
 describe("Diff search", () => {
   test("round-trips path + category", () => {

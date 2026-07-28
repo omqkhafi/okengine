@@ -38,11 +38,7 @@ export function upsertRole(store: RoleStore, role: RoleRow): void {
  * @param roleId - Role id
  * @param actions - Module:Action pairs
  */
-export function setRoleGrants(
-  store: RoleStore,
-  roleId: string,
-  actions: readonly string[],
-): void {
+export function setRoleGrants(store: RoleStore, roleId: string, actions: readonly string[]): void {
   if (!store.roles.has(roleId)) {
     throw new Error(`unknown role: ${roleId}`);
   }

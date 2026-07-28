@@ -2,7 +2,7 @@
 title: "CLI Reference"
 description: "oke and create-oke — everyday commands and flags."
 icon: "Terminal"
-source: "README.md"
+source: "docs/cli.md"
 ---
 
 ### Commands
@@ -11,15 +11,21 @@ source: "README.md"
 bun add okengine                 # ONE package
 
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
-                                 #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  infra compose under docker/ (no app container; host Bun)
-oke dev -s store.sql,signal      #     partial: only these roles get real backends
+                                 #   → client types + domain schema push on save (local)
+oke dev --local                  # -l  session-only local (in-memory; never writes .oke/mode)
+oke dev --no-db-push             #     opt out of auto oke db push on schema change
+oke dev --docker                 # -d  infra compose under docker/ (no app container; host Bun)
+oke dev -d store.sql,signal      #     partial: only these roles get real backends
+oke mode local|docker            # get/set default oke dev mode (saved in .oke/mode)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke stack                        # preview resolved images/tags/ports — writes nothing
 
-oke schema generate              # core + plugin tables → schema/oke.ts   (--check in CI)
+oke schema generate              # core + plugin stubs → schema/oke.ts   (--check in CI)
+oke db push                      # domain schema.ts → live local DB (dev; drizzle-kit)
+oke db generate                  # versioned SQL under drizzle/ (review)
+oke db migrate                   # apply migrations (explicit; never auto in prod)
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
@@ -29,54 +35,24 @@ oke images pin                   # tags → digests in oke.images.lock
 
 oke build --target edge          # < 15 kB kernel profile
 oke eval                         # run prompt eval sets; fails CI on regression
-oke ai cost --since 7d           # cost per flow, per tenant, per prompt version
 oke branch prod --at "yesterday" # fork journaled state into a sandbox
 oke privacy erase --subject <id> # crypto-shredding: deletes the key, not the terabytes
 oke upgrade                      # run codemods for a breaking change, print the diff
 ```
 
-
-### CLI
-
-Everyday:
+### Additional commands
 
 ```bash
-bun add okengine                 # ONE package
-
-oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
-                                 #   → also auto-syncs client types on every save
-oke dev --stack                  # -s  infra only under docker/ (Postgres/Redis/…); app stays on host Bun
-oke dev -s store.sql,store.kv    #     partial: only these roles get real backends
-
-oke start                        # runs exactly what production runs (this is the Docker CMD)
-oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
-oke doctor --diff                # -d  CI gate: undeclared Manifest contract breaks
+oke doctor --diff                # CI gate: undeclared Manifest contract breaks
 oke doctor --json                # -j  JSON on stdout; hints on stderr (agents / MCP)
-oke stack                        # preview resolved images/tags/ports — writes nothing
 oke stack --json                 # -j
-```
-
-Schema, vault, client, Docker, build, eval, branch, privacy, upgrade:
-
-```bash
-oke schema generate              # core + plugin tables → schema/oke.ts   (--check|-c in CI)
-oke vault set STRIPE_KEY         # also: list · import .env · key rotate
-oke client add <url>             # types for a separate frontend repo
-
-oke docker                       # artefacts under docker/ (Dockerfile + compose.<role>.yml · …)
-oke docker --prod                # -p  healthchecks, volumes, limits, secret refs, deploy.replicas
 oke images list                  # recipe · image · tag · digest · size (--json|-j)
-oke images pin                   # tags → digests in oke.images.lock
-
-oke build --target edge          # -t  < 15 kB kernel profile
-oke eval                         # run prompt eval sets; fails CI on regression
-oke branch prod --at "yesterday" # -a  fork journaled state into a sandbox
-oke privacy erase --subject <id> # -s  crypto-shredding: deletes the key, not the terabytes
-oke upgrade                      # dry-run codemods + diff; --apply|-a to write
 oke gates list                   # Module:Action catalogue (--json|-j)
 ```
 
-Shell completion (generated from the command registry — not a hand-maintained script):
+### Shell completion
+
+Generated from the command registry — not a hand-maintained script:
 
 ```bash
 eval "$(oke completion bash)"
@@ -84,34 +60,38 @@ eval "$(oke completion zsh)"
 oke completion fish | source
 ```
 
+### Short flags
+
 Long form is canonical in docs; short form is convenience only. Shared letters follow git’s pattern (different meanings on different subcommands — e.g. `-c` is `--check` on `schema generate`, `--config` on `stack` / `docker` / `images`).
 
-| Long | Short | Where |
-|------|-------|--------|
-| `--stack` | `-s` | `dev` |
-| `--prod` | `-p` | `docker` |
-| `--port` | `-p` | `start` |
-| `--check` | `-c` | `schema generate` |
-| `--config` | `-c` | `stack`, `docker`, `images` |
-| `--apply` | `-a` | `upgrade` |
-| `--at` | `-a` | `branch` |
-| `--after` | `-a` | `doctor --diff` |
-| `--target` | `-t` | `build` |
-| `--diff` | `-d` | `doctor` |
-| `--json` | `-j` | `doctor`, `stack`, `images list`, `gates list` |
-| `--manifest` | `-m` | most Manifest readers |
-| `--entry` | `-e` | `dev`, `start`, `build` |
-| `--out` / `--outdir` | `-o` | writers |
-| `--subject` | `-s` | `privacy erase` |
-| `--before` | `-b` | `doctor --diff` |
-| `--base` | `-B` | `doctor --diff` |
+| Long                 | Short | Where                                          |
+| -------------------- | ----- | ---------------------------------------------- |
+| `--local`            | `-l`  | `dev`                                          |
+| `--docker`           | `-d`  | `dev`                                          |
+| `--no-db-push`       |       | `dev`                                          |
+| `--prod`             | `-p`  | `docker`                                       |
+| `--port`             | `-p`  | `start`                                        |
+| `--check`            | `-c`  | `schema generate`                              |
+| `--config`           | `-c`  | `stack`, `docker`, `images`, `db *` (drizzle)  |
+| `--apply`            | `-a`  | `upgrade`                                      |
+| `--at`               | `-a`  | `branch`                                       |
+| `--after`            | `-a`  | `doctor --diff`                                |
+| `--target`           | `-t`  | `build`                                        |
+| `--diff`             |       | `doctor`                                       |
+| `--json`             | `-j`  | `doctor`, `stack`, `images list`, `gates list` |
+| `--manifest`         | `-m`  | most Manifest readers                          |
+| `--entry`            | `-e`  | `dev`, `start`, `build`                        |
+| `--out` / `--outdir` | `-o`  | writers                                        |
+| `--subject`          | `-s`  | `privacy erase`                                |
+| `--before`           | `-b`  | `doctor --diff`                                |
+| `--base`             | `-B`  | `doctor --diff`                                |
 
-| Exit | Meaning |
-|------|---------|
-| **0** | success |
-| **1** | usage / validation |
+### Exit codes
+
+| Exit  | Meaning                               |
+| ----- | ------------------------------------- |
+| **0** | success                               |
+| **1** | usage / validation                    |
 | **2** | runtime / environment / check failure |
 
 `oke help` prints the same flag and exit-code tables.
-
----

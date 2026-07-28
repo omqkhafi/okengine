@@ -52,9 +52,7 @@ export interface SignalRuntime {
  *
  * @param options - Driver and bindings
  */
-export function createSignalRuntime(
-  options: CreateSignalRuntimeOptions,
-): SignalRuntime {
+export function createSignalRuntime(options: CreateSignalRuntimeOptions): SignalRuntime {
   const declarations = new Map<string, SignalDecl>();
   let bus: SignalBus | null = null;
 

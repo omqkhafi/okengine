@@ -26,8 +26,7 @@ export async function runBuild(options: BuildOptions = {}): Promise<number> {
   const target = options.target ?? "bun";
   const entry = options.entry ?? "src/app.ts";
   const outdir = options.outdir ?? "dist";
-  const bunTarget =
-    target === "edge" ? "browser" : target === "node" ? "node" : "bun";
+  const bunTarget = target === "edge" ? "browser" : target === "node" ? "node" : "bun";
 
   const bundle =
     options.bundle ??

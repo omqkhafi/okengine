@@ -48,19 +48,7 @@ export interface OverviewInputs {
  * @param inputs - Aggregated panel data
  */
 export function composeOverview(inputs: OverviewInputs): OverviewView {
-  const {
-    manifest,
-    runs,
-    gates,
-    signals,
-    clock,
-    vault,
-    channels,
-    ai,
-    diff,
-    access,
-    now,
-  } = inputs;
+  const { manifest, runs, gates, signals, clock, vault, channels, ai, diff, access, now } = inputs;
 
   const graph =
     inputs.architectureGraph !== undefined

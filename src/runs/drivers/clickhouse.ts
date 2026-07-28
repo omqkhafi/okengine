@@ -5,13 +5,7 @@
  * the ClickHouse HTTP interface.
  */
 
-import type {
-  RunsDriver,
-  RunsOpenOptions,
-  RunsRow,
-  RunsStore,
-  WideEvent,
-} from "../types.ts";
+import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
 
 /** Minimal ClickHouse HTTP-like client. */
 export interface RunsClickHouseClient {
@@ -72,8 +66,7 @@ export const clickhouseRunsDriver: RunsDriver = {
   id: "clickhouse",
   async open(options: RunsOpenOptions = {}): Promise<RunsStore> {
     const client =
-      (options.client as RunsClickHouseClient | undefined) ??
-      createRunsClickHouseFake();
+      (options.client as RunsClickHouseClient | undefined) ?? createRunsClickHouseFake();
     const table = options.name ?? "oke_runs";
 
     return {

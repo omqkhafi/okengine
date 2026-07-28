@@ -5,15 +5,8 @@
  */
 
 export type * from "./types.ts";
-export {
-  diffManifest,
-  highestSeverity,
-} from "./diff.ts";
-export {
-  flowNameFromPath,
-  isDeclaredBreak,
-  undeclaredContractBreaks,
-} from "./undeclared.ts";
+export { diffManifest, highestSeverity } from "./diff.ts";
+export { flowNameFromPath, isDeclaredBreak, undeclaredContractBreaks } from "./undeclared.ts";
 export {
   assertLosslessRoundTrip,
   loadManifestSchema,

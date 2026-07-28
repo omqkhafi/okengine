@@ -229,10 +229,7 @@ const sessionAudiences = new Map<string, string>();
  * @param sessionId - Session id
  * @param scopes - Scopes
  */
-export function bindSessionScopes(
-  sessionId: string,
-  scopes: Iterable<string>,
-): void {
+export function bindSessionScopes(sessionId: string, scopes: Iterable<string>): void {
   sessionScopes.set(sessionId, [...scopes]);
 }
 
@@ -242,10 +239,7 @@ export function bindSessionScopes(
  * @param sessionId - Session id
  * @param audience - Audience claim
  */
-export function bindSessionAudience(
-  sessionId: string,
-  audience: string,
-): void {
+export function bindSessionAudience(sessionId: string, audience: string): void {
   sessionAudiences.set(sessionId, audience);
 }
 
@@ -292,9 +286,7 @@ export async function verifyAccess(
   nowOrOptions: (() => number) | VerifyAccessOptions = () => Date.now(),
 ): Promise<AccessClaims> {
   const options: VerifyAccessOptions =
-    typeof nowOrOptions === "function"
-      ? { now: nowOrOptions }
-      : nowOrOptions;
+    typeof nowOrOptions === "function" ? { now: nowOrOptions } : nowOrOptions;
   const now = options.now ?? (() => Date.now());
   const claims = await verifyAccessSignature(secret, token);
   if (claims.exp <= now()) {
@@ -302,9 +294,7 @@ export async function verifyAccess(
   }
   if (options.audience !== undefined) {
     if (claims.aud !== options.audience) {
-      throw new SessionError(
-        `access token audience mismatch: expected ${options.audience}`,
-      );
+      throw new SessionError(`access token audience mismatch: expected ${options.audience}`);
     }
   }
   const session = store.sessions.get(claims.sid);
@@ -325,11 +315,7 @@ export async function verifyAccess(
  * @param familyId - Family id
  * @param at - Timestamp
  */
-export function revokeFamily(
-  store: SessionStore,
-  familyId: string,
-  at: number = Date.now(),
-): void {
+export function revokeFamily(store: SessionStore, familyId: string, at: number = Date.now()): void {
   for (const session of store.sessions.values()) {
     if (session.familyId === familyId) session.revokedAt = at;
   }
@@ -348,23 +334,15 @@ export class SessionError extends Error {
 }
 
 async function hashToken(raw: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(raw),
-  );
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function cryptoRandomId(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-async function signAccess(
-  secret: string,
-  claims: AccessClaims,
-): Promise<string> {
+async function signAccess(secret: string, claims: AccessClaims): Promise<string> {
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const payload = b64url(JSON.stringify(claims));
   const data = `${header}.${payload}`;
@@ -372,10 +350,7 @@ async function signAccess(
   return `${data}.${sig}`;
 }
 
-async function verifyAccessSignature(
-  secret: string,
-  token: string,
-): Promise<AccessClaims> {
+async function verifyAccessSignature(secret: string, token: string): Promise<AccessClaims> {
   const parts = token.split(".");
   if (parts.length !== 3) throw new SessionError("malformed access token");
   const [header, payload, sig] = parts as [string, string, string];
@@ -393,11 +368,7 @@ async function hmac(secret: string, data: string): Promise<string> {
     false,
     ["sign"],
   );
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(data),
-  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   return b64urlBytes(new Uint8Array(sig));
 }
 

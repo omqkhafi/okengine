@@ -9,10 +9,7 @@ import type { Manifest } from "../manifest/types.ts";
 import { parseManifest } from "../manifest/validate.ts";
 import { runDoctorDiff } from "./doctor-diff.ts";
 
-const baseUrl = new URL(
-  "../manifest/fixtures/base.manifest.json",
-  import.meta.url,
-);
+const baseUrl = new URL("../manifest/fixtures/base.manifest.json", import.meta.url);
 
 async function loadBase(): Promise<Manifest> {
   return parseManifest(await Bun.file(baseUrl).text());
@@ -88,4 +85,3 @@ describe("oke doctor --diff", () => {
     }
   });
 });
-

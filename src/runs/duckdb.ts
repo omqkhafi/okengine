@@ -2,10 +2,7 @@
  * Thin DuckDB adapter — adopted via `@duckdb/node-api`, not reinvented.
  */
 
-import {
-  DuckDBInstance,
-  type DuckDBConnection,
-} from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 
 import type { RunsRow } from "./types.ts";
 
@@ -47,10 +44,7 @@ export async function openDuckDB(): Promise<DuckSession> {
  * @param conn - DuckDB connection
  * @param sql - SQL text
  */
-export async function duckQuery(
-  conn: DuckDBConnection,
-  sql: string,
-): Promise<RunsRow[]> {
+export async function duckQuery(conn: DuckDBConnection, sql: string): Promise<RunsRow[]> {
   const reader = await conn.runAndReadAll(sql);
   const rows = reader.getRowObjectsJson() as RunsRow[];
   return rows.map(normalizeRow);

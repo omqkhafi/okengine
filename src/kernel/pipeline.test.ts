@@ -9,10 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import {
-  createSessionStore,
-  issueSessionWithScopes,
-} from "../auth/sessions.ts";
+import { createSessionStore, issueSessionWithScopes } from "../auth/sessions.ts";
 import { createClockRuntime } from "../elements/clock.ts";
 import { gate } from "../elements/gate.ts";
 import { createRunsRuntime, memoryRunsDriver } from "../runs/index.ts";
@@ -20,16 +17,11 @@ import { oke } from "./app.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
 import { http } from "./triggers.ts";
-import {
-  gateDenialFailure,
-  recordGateEvaluations,
-} from "./pipeline.ts";
+import { gateDenialFailure, recordGateEvaluations } from "./pipeline.ts";
 import { createRunTelemetry } from "./run-telemetry.ts";
 
 const member = gate.policy("member", ({ auth }) => !!auth.verified);
-const canOrder = gate.policy("order:create", ({ auth }) =>
-  auth.scopes.has("order:create"),
-);
+const canOrder = gate.policy("order:create", ({ auth }) => auth.scopes.has("order:create"));
 
 describe("gateDenialFailure", () => {
   test("anonymous → Unauthorized; authed → Forbidden; rate → RateLimited", () => {
@@ -217,18 +209,17 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "auth-forge",
       gates: [member],
-      env: "dev",
+      env: "local",
       auth: { secret: "hmac-secret-for-tests", sessions },
       startScheduler: false,
     });
-    await app.boot({ env: "dev", gates: [member], startScheduler: false });
+    await app.boot({ env: "local", gates: [member], startScheduler: false });
 
     const res = await app.fetch(
       new Request("http://localhost/secure", {
         method: "GET",
         headers: {
-          authorization:
-            "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWNrZXIifQ.forgedsignature",
+          authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWNrZXIifQ.forgedsignature",
         },
       }),
     );
@@ -272,13 +263,13 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "auth-expired",
       gates: [member],
-      env: "dev",
+      env: "local",
       auth: { secret, sessions, now: () => nowMs },
       elements: { clock: clockRt },
       startScheduler: false,
     });
     await app.boot({
-      env: "dev",
+      env: "local",
       gates: [member],
       startScheduler: false,
       elements: { clock: clockRt },
@@ -324,10 +315,10 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "no-inject",
       gates: [member],
-      env: "dev",
+      env: "local",
       startScheduler: false,
     });
-    await app.boot({ env: "dev", gates: [member], startScheduler: false });
+    await app.boot({ env: "local", gates: [member], startScheduler: false });
 
     const result = await app.execute(
       app.flow("orders.inject")!,

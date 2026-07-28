@@ -33,12 +33,7 @@ export interface LeaseStore {
    * @param now - Current epoch-ms
    * @param leaseMs - Lease TTL
    */
-  acquireLease?(
-    name: string,
-    instanceId: string,
-    now: number,
-    leaseMs: number,
-  ): Promise<boolean>;
+  acquireLease?(name: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
 }
 
 /** Options for {@link tryAcquireLease}. */
@@ -63,9 +58,7 @@ export interface AcquireLeaseOptions {
  *
  * @param options - Name, instance, clock, store
  */
-export async function tryAcquireLease(
-  options: AcquireLeaseOptions,
-): Promise<boolean> {
+export async function tryAcquireLease(options: AcquireLeaseOptions): Promise<boolean> {
   if (options.store.acquireLease) {
     return options.store.acquireLease(
       options.name,

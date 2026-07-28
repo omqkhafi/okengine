@@ -49,12 +49,9 @@ describe("hook timing", () => {
 
   test("registry tags hooks at plug time", async () => {
     const registry = createPluginRegistry();
-    const p = plugin("metered", { version: "1.0.0" }).hook(
-      "onRequest",
-      async () => {
-        await Bun.sleep(1);
-      },
-    );
+    const p = plugin("metered", { version: "1.0.0" }).hook("onRequest", async () => {
+      await Bun.sleep(1);
+    });
     applyPlugin(registry, p, appPluginScope);
     const hooks = registry.hooksAt("app", undefined, "x");
     const ctx: InvocationContext = {

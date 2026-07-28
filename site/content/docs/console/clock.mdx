@@ -8,13 +8,16 @@ source: "docs/spec/console.md"
 Answers: **upcoming crons, sleeping durable flows, journal**
 
 <Callout title="Governing rule">
-Looks like time — a forward timeline for schedules and pending wakes, not a flat grid.
+  Looks like time — a forward timeline for schedules and pending wakes, not a flat grid.
 </Callout>
 
 ## What this panel shows
 
 <Cards>
-  <Card title="Schedules" description="Recurring crons with drift, overdue, catch-up, lease holder." />
+  <Card
+    title="Schedules"
+    description="Recurring crons with drift, overdue, catch-up, lease holder."
+  />
   <Card title="Pending wakes" description="Every sleeping durable flow and when it wakes." />
   <Card title="DST warnings" description="Only when the schedule falls in an ambiguous window." />
   <Card title="Actions" description="Run now, wake early, pause, edit when overridable." />

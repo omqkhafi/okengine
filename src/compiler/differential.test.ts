@@ -49,11 +49,7 @@ function generateContracts(count: number, seed = 42): GeneratedContract[] {
         method: "POST",
         path,
         schema,
-        handler: ((input: {
-          flightId: string;
-          seats: number;
-          cabin?: string;
-        }) => ({
+        handler: ((input: { flightId: string; seats: number; cabin?: string }) => ({
           ok: true,
           flightId: input.flightId,
           seats: input.seats,
@@ -140,10 +136,7 @@ function generateContracts(count: number, seed = 42): GeneratedContract[] {
         method: "POST",
         path,
         schema,
-        handler: ((input: {
-          tags: string[];
-          meta: { source: string; n: number };
-        }) => ({
+        handler: ((input: { tags: string[]; meta: { source: string; n: number } }) => ({
           count: input.tags.length,
           source: input.meta.source,
           n: input.meta.n,
@@ -188,8 +181,7 @@ async function runSample(
     request: Request,
     params: Readonly<Record<string, string>>,
   ) => Promise<
-    | { ok: true; input: unknown }
-    | { ok: false; failure: import("../kernel/errors.ts").FlowFailure }
+    { ok: true; input: unknown } | { ok: false; failure: import("../kernel/errors.ts").FlowFailure }
   >,
   handler: (...args: never[]) => unknown,
   sample: GeneratedContract["samples"][number],

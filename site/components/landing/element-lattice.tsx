@@ -19,19 +19,25 @@
  * transform/layout animates it would otherwise refuse.
  */
 
-'use client';
+"use client";
 
-import { AnimatePresence, motion, MotionConfig, useMotionTemplate, useMotionValue } from 'framer-motion';
-import type { Transition, Variants } from 'framer-motion';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { cn } from '@/lib/cn';
-import { ELEMENTS } from '@/lib/elements';
-import { elementTone } from '@/lib/element-tones';
-import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
+import {
+  AnimatePresence,
+  motion,
+  MotionConfig,
+  useMotionTemplate,
+  useMotionValue,
+} from "framer-motion";
+import type { Transition, Variants } from "framer-motion";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
+import { ELEMENTS } from "@/lib/elements";
+import { elementTone } from "@/lib/element-tones";
+import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 /** One spring for every lattice transition, so the panel moves as one object. */
-const SPRING: Transition = { type: 'spring', stiffness: 380, damping: 34, mass: 0.8 };
+const SPRING: Transition = { type: "spring", stiffness: 380, damping: 34, mass: 0.8 };
 
 /** Idle walk period — one element per beat, eight beats per pass. */
 const BEAT_MS = 2400;
@@ -109,7 +115,7 @@ export function ElementLattice() {
         />
 
         <motion.div
-          initial={reduced ? false : 'hidden'}
+          initial={reduced ? false : "hidden"}
           animate="shown"
           variants={PANEL}
           onPointerMove={(event) => {
@@ -146,27 +152,30 @@ export function ElementLattice() {
             <div className="relative h-4 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.p
-                  key={focused?.name ?? 'law'}
+                  key={focused?.name ?? "law"}
                   initial={reduced ? false : { opacity: 0, y: 5 }}
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
-                  transition={{ duration: reduced ? 0 : 0.22, ease: 'easeOut' }}
+                  transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
                   className="absolute inset-0 truncate text-right text-[11px] text-fd-muted-foreground"
                 >
                   {focused ? (
                     <>
-                      <span className="text-fd-foreground">{focused.name}</span> replaces{' '}
+                      <span className="text-fd-foreground">{focused.name}</span> replaces{" "}
                       {focused.replaces}
                     </>
                   ) : (
-                    'irreducible physics only'
+                    "irreducible physics only"
                   )}
                 </motion.p>
               </AnimatePresence>
             </div>
           </motion.div>
 
-          <motion.ul variants={GRID} className="grid grid-cols-2 gap-px bg-fd-border sm:grid-cols-4">
+          <motion.ul
+            variants={GRID}
+            className="grid grid-cols-2 gap-px bg-fd-border sm:grid-cols-4"
+          >
             {ELEMENTS.map((element, i) => {
               const Icon = element.icon;
               const tone = elementTone(element.preview);
@@ -178,12 +187,12 @@ export function ElementLattice() {
                   {/* One shared highlight for the whole grid: it glides, it never blinks. */}
                   {isActive ? (
                     reduced ? (
-                      <span aria-hidden className={cn('absolute inset-0', tone.wash)} />
+                      <span aria-hidden className={cn("absolute inset-0", tone.wash)} />
                     ) : (
                       <motion.span
                         layoutId="oke-lattice-cell"
                         aria-hidden
-                        className={cn('absolute inset-0', tone.wash)}
+                        className={cn("absolute inset-0", tone.wash)}
                       />
                     )
                   ) : null}
@@ -191,10 +200,10 @@ export function ElementLattice() {
                   {/* The beat's own, fainter wash — no layout, so the two never fight. */}
                   <motion.span
                     aria-hidden
-                    className={cn('absolute inset-0', tone.lit)}
+                    className={cn("absolute inset-0", tone.lit)}
                     initial={false}
                     animate={{ opacity: isLit ? 1 : 0 }}
-                    transition={{ duration: reduced ? 0 : 0.5, ease: 'easeOut' }}
+                    transition={{ duration: reduced ? 0 : 0.5, ease: "easeOut" }}
                   />
 
                   <Link
@@ -212,17 +221,17 @@ export function ElementLattice() {
                        */}
                       <span
                         className={cn(
-                          'font-mono text-[10px] transition-colors',
-                          highlighted ? tone.mark : 'text-fd-muted-foreground/70',
+                          "font-mono text-[10px] transition-colors",
+                          highlighted ? tone.mark : "text-fd-muted-foreground/70",
                         )}
                       >
-                        {String(i + 1).padStart(2, '0')}
+                        {String(i + 1).padStart(2, "0")}
                       </span>
                       <motion.span
                         aria-hidden
                         className={cn(
-                          'transition-colors',
-                          highlighted ? tone.mark : 'text-fd-muted-foreground/70',
+                          "transition-colors",
+                          highlighted ? tone.mark : "text-fd-muted-foreground/70",
                         )}
                         animate={reduced ? undefined : { scale: isActive ? 1.15 : 1 }}
                       >
@@ -232,8 +241,8 @@ export function ElementLattice() {
 
                     <motion.span
                       className={cn(
-                        'mt-7 block font-mono text-2xl leading-none font-medium tracking-tight transition-colors',
-                        highlighted ? tone.mark : 'text-fd-foreground',
+                        "mt-7 block font-mono text-2xl leading-none font-medium tracking-tight transition-colors",
+                        highlighted ? tone.mark : "text-fd-foreground",
                       )}
                       animate={reduced ? undefined : { y: isActive ? -2 : 0 }}
                     >
@@ -250,13 +259,13 @@ export function ElementLattice() {
                     <motion.span
                       aria-hidden
                       className={cn(
-                        'absolute inset-x-0 bottom-0 h-px origin-left',
+                        "absolute inset-x-0 bottom-0 h-px origin-left",
                         tone.hairline,
-                        reduced && (isActive ? 'scale-x-100' : 'scale-x-0'),
+                        reduced && (isActive ? "scale-x-100" : "scale-x-0"),
                       )}
                       initial={false}
                       animate={reduced ? undefined : { scaleX: isActive ? 1 : 0 }}
-                      transition={{ duration: 0.28, ease: 'easeOut' }}
+                      transition={{ duration: 0.28, ease: "easeOut" }}
                     />
                   </Link>
                 </motion.li>
@@ -276,11 +285,11 @@ export function ElementLattice() {
                 className="pointer-events-none absolute -top-px left-0 h-px w-1/4"
                 style={{
                   background:
-                    'linear-gradient(90deg, transparent, var(--color-fd-foreground), transparent)',
+                    "linear-gradient(90deg, transparent, var(--color-fd-foreground), transparent)",
                 }}
-                initial={{ x: '-100%', opacity: 0 }}
-                animate={{ x: '400%', opacity: [0, 0.5, 0] }}
-                transition={{ duration: 1.5, ease: 'easeInOut' }}
+                initial={{ x: "-100%", opacity: 0 }}
+                animate={{ x: "400%", opacity: [0, 0.5, 0] }}
+                transition={{ duration: 1.5, ease: "easeInOut" }}
               />
             )}
 
@@ -291,11 +300,11 @@ export function ElementLattice() {
             <div className="relative h-4 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.div
-                  key={focused?.name ?? 'idle'}
+                  key={focused?.name ?? "idle"}
                   initial={reduced ? false : { opacity: 0, y: 5 }}
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
-                  transition={{ duration: reduced ? 0 : 0.22, ease: 'easeOut' }}
+                  transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
                   className="absolute inset-0 flex items-baseline justify-between gap-x-4"
                 >
                   {focused ? (

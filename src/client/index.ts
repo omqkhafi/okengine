@@ -7,12 +7,7 @@
 
 export { createClient, flattenRoutes } from "./create.ts";
 export type { AppWithRoutes } from "./create.ts";
-export {
-  isErrorCode,
-  isFail,
-  isOk,
-  isTransportError,
-} from "./errors.ts";
+export { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
 export { createTransport } from "./transport.ts";
 export type { Transport } from "./transport.ts";
 export type {

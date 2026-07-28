@@ -7,17 +7,8 @@ import { clickhouseRunsDriver } from "./drivers/clickhouse.ts";
 import { filesRunsDriver } from "./drivers/files.ts";
 import { memoryRunsDriver } from "./drivers/memory.ts";
 import { postgresRunsDriver } from "./drivers/postgres.ts";
-import {
-  explainOutliers,
-  type ExplainOutliersOptions,
-  type OutlierFinding,
-} from "./outlier.ts";
-import {
-  archiveFields,
-  eraseSubject,
-  revealArchived,
-  type SubjectKeyVault,
-} from "./shred.ts";
+import { explainOutliers, type ExplainOutliersOptions, type OutlierFinding } from "./outlier.ts";
+import { archiveFields, eraseSubject, revealArchived, type SubjectKeyVault } from "./shred.ts";
 import type {
   RunsDriver,
   RunsDriverId,
@@ -114,9 +105,7 @@ const DRIVER_BY_ID: Record<RunsDriverId, RunsDriver> = {
  *
  * @param driver - Id or driver
  */
-export function resolveRunsDriver(
-  driver?: RunsDriverId | RunsDriver,
-): RunsDriver {
+export function resolveRunsDriver(driver?: RunsDriverId | RunsDriver): RunsDriver {
   if (!driver) return filesRunsDriver;
   if (typeof driver === "string") {
     const d = DRIVER_BY_ID[driver];
@@ -131,9 +120,7 @@ export function resolveRunsDriver(
  *
  * @param options - Driver + locality + subject keys
  */
-export function createRunsRuntime(
-  options: CreateRunsRuntimeOptions = {},
-): RunsRuntime {
+export function createRunsRuntime(options: CreateRunsRuntimeOptions = {}): RunsRuntime {
   const driver = resolveRunsDriver(options.driver);
   let store: RunsStore | undefined;
   const subjectKeys = options.subjectKeys;
@@ -156,21 +143,14 @@ export function createRunsRuntime(
       const s = await ensureStore();
       let archived = input.archived;
       const subjectId =
-        input.telemetry.subjectId ??
-        input.fx.auth.userId ??
-        input.fx.tenant.id ??
-        null;
+        input.telemetry.subjectId ?? input.fx.auth.userId ?? input.fx.tenant.id ?? null;
       if (
         archiveCleartext &&
         subjectId &&
         subjectKeys &&
         Object.keys(archiveCleartext).length > 0
       ) {
-        archived = await archiveFields(
-          subjectKeys,
-          subjectId,
-          archiveCleartext,
-        );
+        archived = await archiveFields(subjectKeys, subjectId, archiveCleartext);
       }
       const event = collectWideEvent({
         ...input,
@@ -221,9 +201,4 @@ export function createRunsRuntime(
   };
 }
 
-export {
-  filesRunsDriver,
-  memoryRunsDriver,
-  postgresRunsDriver,
-  clickhouseRunsDriver,
-};
+export { filesRunsDriver, memoryRunsDriver, postgresRunsDriver, clickhouseRunsDriver };

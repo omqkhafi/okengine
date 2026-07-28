@@ -47,9 +47,7 @@ function b64urlEncode(bytes: Uint8Array): string {
  *
  * @param privateKeyB64 - Base64url private key
  */
-async function importVapidPrivateKey(
-  privateKeyB64: string,
-): Promise<CryptoKey> {
+async function importVapidPrivateKey(privateKeyB64: string): Promise<CryptoKey> {
   const raw = b64urlDecode(privateKeyB64);
   // Prefer PKCS8; fall back to raw JWK construction for 32-byte seeds.
   if (raw.length > 32) {
@@ -64,11 +62,10 @@ async function importVapidPrivateKey(
   // Build a minimal JWK from d (and a synthetic public x/y via derive is hard);
   // tests inject fetch and only need Authorization header shape — use ECDSA
   // with a generated key when raw seed is provided without full PKCS8.
-  const pair = await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  );
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ]);
   return pair.privateKey;
 }
 
@@ -89,17 +86,11 @@ async function buildVapidJwt(
   );
   const exp = Math.floor(Date.now() / 1000) + 12 * 60 * 60;
   const payload = b64urlEncode(
-    new TextEncoder().encode(
-      JSON.stringify({ aud: audience, exp, sub: subject }),
-    ),
+    new TextEncoder().encode(JSON.stringify({ aud: audience, exp, sub: subject })),
   );
   const data = new TextEncoder().encode(`${header}.${payload}`);
   const sig = new Uint8Array(
-    await crypto.subtle.sign(
-      { name: "ECDSA", hash: "SHA-256" },
-      privateKey,
-      data,
-    ),
+    await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, data),
   );
   // Convert DER → raw r||s if needed; Web Crypto in Bun returns raw P-1363.
   return `${header}.${payload}.${b64urlEncode(sig)}`;
@@ -127,29 +118,19 @@ async function encryptPushBody(
     true,
     [],
   );
-  const local = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveBits"],
-  );
+  const local = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
   const shared = new Uint8Array(
-    await crypto.subtle.deriveBits(
-      { name: "ECDH", public: userPublic },
-      local.privateKey,
-      256,
-    ),
+    await crypto.subtle.deriveBits({ name: "ECDH", public: userPublic }, local.privateKey, 256),
   );
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const authSecret = b64urlDecode(auth);
 
   // HKDF-SHA-256 as in RFC 8291
-  const ikmKey = await crypto.subtle.importKey(
-    "raw",
-    asBufferSource(shared),
-    "HKDF",
-    false,
-    ["deriveBits"],
-  );
+  const ikmKey = await crypto.subtle.importKey("raw", asBufferSource(shared), "HKDF", false, [
+    "deriveBits",
+  ]);
   const prk = new Uint8Array(
     await crypto.subtle.deriveBits(
       {
@@ -163,9 +144,7 @@ async function encryptPushBody(
     ),
   );
   // Simplified content encryption key / nonce derivation for aes128gcm
-  const prkKey = await crypto.subtle.importKey("raw", prk, "HKDF", false, [
-    "deriveBits",
-  ]);
+  const prkKey = await crypto.subtle.importKey("raw", prk, "HKDF", false, ["deriveBits"]);
   const cek = new Uint8Array(
     await crypto.subtle.deriveBits(
       {
@@ -190,13 +169,7 @@ async function encryptPushBody(
       96,
     ),
   );
-  const aes = await crypto.subtle.importKey(
-    "raw",
-    cek,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"],
-  );
+  const aes = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
   // Add RFC 8188 padding delimiter (0x02) then encrypt
   const padded = new Uint8Array(plaintext.length + 1);
   padded.set(plaintext, 0);
@@ -204,17 +177,13 @@ async function encryptPushBody(
   const ciphertext = new Uint8Array(
     await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, aes, padded),
   );
-  const localPublic = new Uint8Array(
-    await crypto.subtle.exportKey("raw", local.publicKey),
-  );
+  const localPublic = new Uint8Array(await crypto.subtle.exportKey("raw", local.publicKey));
 
   // Body = salt (16) || rs (4) || idlen (1) || keyid || ciphertext
   const rs = new Uint8Array(4);
   new DataView(rs.buffer).setUint32(0, 4096);
   const idlen = new Uint8Array([localPublic.length]);
-  const body = new Uint8Array(
-    16 + 4 + 1 + localPublic.length + ciphertext.length,
-  );
+  const body = new Uint8Array(16 + 4 + 1 + localPublic.length + ciphertext.length);
   body.set(salt, 0);
   body.set(rs, 16);
   body.set(idlen, 20);
@@ -228,9 +197,7 @@ async function encryptPushBody(
  *
  * @param options - VAPID keys + subject
  */
-export function openWebPushChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openWebPushChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   const vapidPublic = options.vapidPublicKey;
   const vapidPrivate = options.vapidPrivateKey;
   const subject = options.vapidSubject ?? "mailto:ops@oke.local";
@@ -263,11 +230,7 @@ export function openWebPushChannel(
       };
 
       if (sub?.keys?.p256dh && sub.keys.auth) {
-        const enc = await encryptPushBody(
-          plaintext,
-          sub.keys.p256dh,
-          sub.keys.auth,
-        );
+        const enc = await encryptPushBody(plaintext, sub.keys.p256dh, sub.keys.auth);
         body = enc.body;
         headers["Content-Encoding"] = "aes128gcm";
         headers["Content-Type"] = "application/octet-stream";
@@ -300,9 +263,7 @@ export function openWebPushChannel(
         ok: true,
         messageId: id,
         driverId: "webpush",
-        attempts: [
-          { driverId: "webpush", ok: true, at: Date.now(), messageId: id },
-        ],
+        attempts: [{ driverId: "webpush", ok: true, at: Date.now(), messageId: id }],
       };
     },
   };

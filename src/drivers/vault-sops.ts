@@ -7,11 +7,7 @@
  * `age-encryption` is an optional peer — loaded only when this driver runs.
  */
 
-import type {
-  VaultBag,
-  VaultDriver,
-  VaultOpenOptions,
-} from "./vault-types.ts";
+import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /** Minimal Typage surface used by this driver. */
 type AgeModule = typeof import("age-encryption");
@@ -23,9 +19,7 @@ async function loadAge(): Promise<AgeModule> {
   try {
     return await import("age-encryption");
   } catch {
-    throw new Error(
-      "sops vault: install optional peer `age-encryption` (bun add age-encryption)",
-    );
+    throw new Error("sops vault: install optional peer `age-encryption` (bun add age-encryption)");
   }
 }
 
@@ -49,9 +43,8 @@ const ENC_RE =
  */
 function b64(input: string): Uint8Array {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = normalized.length % 4 === 0
-    ? normalized
-    : normalized + "=".repeat(4 - (normalized.length % 4));
+  const pad =
+    normalized.length % 4 === 0 ? normalized : normalized + "=".repeat(4 - (normalized.length % 4));
   const bin = atob(pad);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -84,10 +77,7 @@ function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
  * @param enc - `ENC[AES256_GCM,…]` string
  * @param dataKey - 32-byte SOPS data key
  */
-async function decryptValue(
-  enc: string,
-  dataKey: Uint8Array,
-): Promise<string> {
+async function decryptValue(enc: string, dataKey: Uint8Array): Promise<string> {
   const m = ENC_RE.exec(enc);
   const dataB64 = m?.groups?.data;
   const ivB64 = m?.groups?.iv;
@@ -108,11 +98,7 @@ async function decryptValue(
   const cipher = new Uint8Array(data.length + tag.length);
   cipher.set(data, 0);
   cipher.set(tag, data.length);
-  const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    asBufferSource(cipher),
-  );
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, asBufferSource(cipher));
   return new TextDecoder().decode(plain);
 }
 
@@ -122,10 +108,7 @@ async function decryptValue(
  * @param identity - `AGE-SECRET-KEY-…`
  * @param encBlock - Armored age ciphertext from `sops.age[].enc`
  */
-async function decryptDataKey(
-  identity: string,
-  encBlock: string,
-): Promise<Uint8Array> {
+async function decryptDataKey(identity: string, encBlock: string): Promise<Uint8Array> {
   const age = await loadAge();
   const d = new age.Decrypter();
   d.addIdentity(identity.trim());
@@ -163,10 +146,7 @@ function parseSopsJson(text: string): {
  * @param plaintext - Cleartext
  * @param dataKey - 32-byte key
  */
-export async function sopsEncryptValue(
-  plaintext: string,
-  dataKey: Uint8Array,
-): Promise<string> {
+export async function sopsEncryptValue(plaintext: string, dataKey: Uint8Array): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.importKey(
     "raw",
@@ -176,11 +156,7 @@ export async function sopsEncryptValue(
     ["encrypt"],
   );
   const cipher = new Uint8Array(
-    await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      key,
-      new TextEncoder().encode(plaintext),
-    ),
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext)),
   );
   const tag = cipher.slice(cipher.length - 16);
   const data = cipher.slice(0, cipher.length - 16);
@@ -205,8 +181,7 @@ export async function buildSopsFixture(
   const e = new age.Encrypter();
   e.addRecipient(recipient);
   const encKey = await e.encrypt(key);
-  const encBytes =
-    typeof encKey === "string" ? new TextEncoder().encode(encKey) : encKey;
+  const encBytes = typeof encKey === "string" ? new TextEncoder().encode(encKey) : encKey;
   const encArmored = age.armor.encode(encBytes);
   const out: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(secrets)) {

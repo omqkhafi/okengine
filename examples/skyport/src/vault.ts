@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const dbUrl = vault.secret("DATABASE_URL", {
   schema: z.string().url(),
-  dev: vault.fromStack("store.sql"),
+  dev: vault.fromDocker("store.sql"),
 });
 
 export const dbReplica1 = vault.secret("DATABASE_REPLICA_1", {

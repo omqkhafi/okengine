@@ -3,12 +3,7 @@
  */
 
 import { EXIT_OK, EXIT_USAGE } from "./exit.ts";
-import {
-  OKE_COMMANDS,
-  commandNames,
-  type CliCommand,
-  type CliFlag,
-} from "./registry.ts";
+import { OKE_COMMANDS, commandNames, type CliCommand, type CliFlag } from "./registry.ts";
 
 /** Supported completion shells. */
 export const COMPLETION_SHELLS = ["bash", "zsh", "fish"] as const;
@@ -63,9 +58,7 @@ Install:
 
   const shell = args[0];
   if (!shell || !isCompletionShell(shell)) {
-    console.error(
-      "oke completion: require bash, zsh, or fish — e.g. oke completion zsh",
-    );
+    console.error("oke completion: require bash, zsh, or fish — e.g. oke completion zsh");
     return EXIT_USAGE;
   }
 
@@ -223,9 +216,7 @@ function fishScript(commands: readonly CliCommand[]): string {
       `complete -c oke -f -n "not __fish_seen_subcommand_from ${names}" -a "${cmd.name}" -d ${fishQuote(cmd.summary)}`,
     );
   }
-  rebuilt.push(
-    `complete -c oke -f -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"`,
-  );
+  rebuilt.push(`complete -c oke -f -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"`);
   for (const cmd of commands) {
     const subs = cmd.subcommands ?? [];
     if (subs.length === 0) {
@@ -248,11 +239,7 @@ function fishScript(commands: readonly CliCommand[]): string {
   return `${rebuilt.join("\n")}\n`;
 }
 
-function fishFlagLine(
-  command: string,
-  sub: string | undefined,
-  flag: CliFlag,
-): string {
+function fishFlagLine(command: string, sub: string | undefined, flag: CliFlag): string {
   const seen = sub
     ? `__fish_seen_subcommand_from ${command}; and __fish_seen_subcommand_from ${sub}`
     : `__fish_seen_subcommand_from ${command}`;

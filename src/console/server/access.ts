@@ -180,9 +180,7 @@ export interface ProjectAccessOptions {
  *
  * @param options - Auth stores + actor ceiling
  */
-export function projectAccessPanel(
-  options: ProjectAccessOptions,
-): AccessPanelProjection {
+export function projectAccessPanel(options: ProjectAccessOptions): AccessPanelProjection {
   const now = options.now ?? (() => Date.now());
   const accessTtlMs = options.accessTtlMs ?? ACCESS_TTL_MS;
   const catalog = options.manifest
@@ -269,9 +267,7 @@ export function effectivePermissions(options: {
         .sort((a, b) => a.localeCompare(b))
         .map((scope) => ({
           scope,
-          sources: [
-            { kind: "direct" as const, id: key.id, name: key.name },
-          ],
+          sources: [{ kind: "direct" as const, id: key.id, name: key.name }],
         })),
     };
   }
@@ -288,9 +284,7 @@ export function effectivePermissions(options: {
       plane: role.plane,
       scopes: scopes.map((scope) => ({
         scope,
-        sources: [
-          { kind: "role" as const, id: role.id, name: role.name },
-        ],
+        sources: [{ kind: "role" as const, id: role.id, name: role.name }],
       })),
     };
   }
@@ -318,9 +312,7 @@ export function effectivePermissions(options: {
     if (covered.has(scope)) continue;
     scopes.push({
       scope,
-      sources: [
-        { kind: "direct" as const, id: identity.id, name: identity.name },
-      ],
+      sources: [{ kind: "direct" as const, id: identity.id, name: identity.name }],
     });
   }
   scopes.sort((a, b) => a.scope.localeCompare(b.scope));
@@ -412,9 +404,7 @@ export async function accessCreateKey(
   for (const scope of input.scopes) {
     if (!allowed.has(scope)) {
       assertAttenuated(held, [scope], "api key");
-      throw new AccessGrantError(
-        `scope ${scope} is not grantable on the ${input.plane} plane`,
-      );
+      throw new AccessGrantError(`scope ${scope} is not grantable on the ${input.plane} plane`);
     }
   }
   const created = await createApiKey(store, {
@@ -461,9 +451,7 @@ export function accessSetRoleGrants(options: {
   );
   for (const scope of options.scopes) {
     if (!allowed.has(scope)) {
-      throw new AccessGrantError(
-        `scope ${scope} is not grantable on the ${role.plane} plane`,
-      );
+      throw new AccessGrantError(`scope ${scope} is not grantable on the ${role.plane} plane`);
     }
   }
   setRoleGrants(options.roles, options.roleId, options.scopes);
@@ -565,15 +553,13 @@ export function expandAccessCeiling(
   return out;
 }
 
-function projectOperators(
-  options: ProjectAccessOptions,
-): AccessOperatorRow[] {
+function projectOperators(options: ProjectAccessOptions): AccessOperatorRow[] {
   const rows: AccessOperatorRow[] = [];
   for (const op of options.operators.operators.values()) {
     const roleIds = options.operators.roles.get(op.id) ?? [];
-    const scopes = [
-      ...scopesForRoles(options.roles, roleIds, "operator"),
-    ].sort((a, b) => a.localeCompare(b));
+    const scopes = [...scopesForRoles(options.roles, roleIds, "operator")].sort((a, b) =>
+      a.localeCompare(b),
+    );
     rows.push({
       id: op.id,
       email: op.email,
@@ -592,12 +578,10 @@ function projectUsers(options: ProjectAccessOptions): AccessUserRow[] {
   return options.identities
     .map((identity) => {
       const roleIds = roleIdsForMember(options.roleMembers, identity.id);
-      const fromRoles = [
-        ...scopesForRoles(options.roles, roleIds, "user"),
-      ];
-      const scopes = [
-        ...new Set([...fromRoles, ...identity.scopes]),
-      ].sort((a, b) => a.localeCompare(b));
+      const fromRoles = [...scopesForRoles(options.roles, roleIds, "user")];
+      const scopes = [...new Set([...fromRoles, ...identity.scopes])].sort((a, b) =>
+        a.localeCompare(b),
+      );
       return {
         id: identity.id,
         email: identity.email,
@@ -618,19 +602,14 @@ function projectRoles(options: ProjectAccessOptions): AccessRoleRow[] {
       name: role.name,
       plane: role.plane,
       description: role.description,
-      scopes: [...(options.roles.grants.get(role.id) ?? [])].sort((a, b) =>
-        a.localeCompare(b),
-      ),
+      scopes: [...(options.roles.grants.get(role.id) ?? [])].sort((a, b) => a.localeCompare(b)),
       memberCount: options.roleMembers.get(role.id)?.length ?? 0,
     });
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function projectKeys(
-  options: ProjectAccessOptions,
-  now: () => number,
-): AccessKeyRow[] {
+function projectKeys(options: ProjectAccessOptions, now: () => number): AccessKeyRow[] {
   const rows: AccessKeyRow[] = [];
   for (const key of options.apiKeys.keys.values()) {
     rows.push(toKeyRow(key, now));
@@ -638,10 +617,7 @@ function projectKeys(
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function projectInvites(
-  options: ProjectAccessOptions,
-  now: () => number,
-): AccessInviteRow[] {
+function projectInvites(options: ProjectAccessOptions, now: () => number): AccessInviteRow[] {
   const rows: AccessInviteRow[] = [];
   for (const invite of options.invites.invites.values()) {
     rows.push({
@@ -714,10 +690,7 @@ function provenanceForRoles(
   roleIds: readonly string[],
   plane: "user" | "operator",
 ): AccessScopeProvenance[] {
-  const byScope = new Map<
-    string,
-    { kind: "role"; id: string; name: string }[]
-  >();
+  const byScope = new Map<string, { kind: "role"; id: string; name: string }[]>();
   for (const roleId of roleIds) {
     const role = roles.roles.get(roleId);
     if (!role || role.plane !== plane) continue;
@@ -762,10 +735,7 @@ function sourceAddressOf(run: WideEvent): string | null {
   return null;
 }
 
-function collectCatalogFromStores(
-  roles: RoleStore,
-  apiKeys: ApiKeyStore,
-): string[] {
+function collectCatalogFromStores(roles: RoleStore, apiKeys: ApiKeyStore): string[] {
   const set = new Set<string>();
   for (const grants of roles.grants.values()) {
     for (const g of grants) set.add(g);

@@ -83,8 +83,9 @@ export async function serveConsole(
       : {}),
   });
 
+  // Console serve `"dev"` is the auth/session flavor — ConfigEnv uses `local`.
   const env = options.env ?? "dev";
-  await handle.app.boot({ env });
+  await handle.app.boot({ env: env === "dev" ? "local" : env });
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
     if (!runs) return [];
@@ -94,8 +95,7 @@ export async function serveConsole(
   await bindManifestStoreRuntime(handle.state);
   await bindManifestVaultRuntime(handle.state);
 
-  const staticDir =
-    options.staticDir ?? new URL("../ui/dist/", import.meta.url).pathname;
+  const staticDir = options.staticDir ?? new URL("../ui/dist/", import.meta.url).pathname;
 
   const live = createLiveWebsocket(handle.state);
   const allowed = resolveAllowedHosts(hostname, options.allowedHosts);
@@ -112,9 +112,7 @@ export async function serveConsole(
     const authed = withCookieAuth(request);
 
     if (url.pathname.startsWith("/console/")) {
-      const response = await runWithDevSurface("Console", () =>
-        handle.app.fetch(authed),
-      );
+      const response = await runWithDevSurface("Console", () => handle.app.fetch(authed));
       const withCookies = await attachSessionCookies(authed, response);
       return withConsoleSecurityHeaders(withCookies);
     }
@@ -172,9 +170,7 @@ export async function serveConsole(
   const boundPort = server.port ?? port;
   const boundHost = server.hostname ?? hostname;
   const hostForUrl =
-    boundHost.includes(":") && !boundHost.startsWith("[")
-      ? `[${boundHost}]`
-      : boundHost;
+    boundHost.includes(":") && !boundHost.startsWith("[") ? `[${boundHost}]` : boundHost;
   const url = new URL(`http://${hostForUrl}:${boundPort}/`);
 
   return {
@@ -238,9 +234,7 @@ export function withCookieAuth(request: Request): Request {
     return request;
   }
   const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(
-    new RegExp(`(?:^|;\\s*)${CONSOLE_COOKIES.access}=([^;]+)`),
-  );
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${CONSOLE_COOKIES.access}=([^;]+)`));
   if (!match?.[1]) return request;
   const token = decodeURIComponent(match[1]);
   const headers = new Headers(request.headers);
@@ -261,8 +255,7 @@ export async function attachSessionCookies(
   if (response.status >= 400) return response;
   const url = new URL(request.url);
   const isSessionIssue =
-    url.pathname === "/console/setup/claim" ||
-    url.pathname === "/console/session/login";
+    url.pathname === "/console/setup/claim" || url.pathname === "/console/session/login";
   const isLogout = url.pathname === "/console/session/logout";
   if (!isSessionIssue && !isLogout) return response;
 
@@ -277,10 +270,7 @@ export async function attachSessionCookies(
 
   const headers = new Headers(response.headers);
   if (isLogout) {
-    headers.append(
-      "Set-Cookie",
-      consoleSessionCookie(CONSOLE_COOKIES.access, "", { clear: true }),
-    );
+    headers.append("Set-Cookie", consoleSessionCookie(CONSOLE_COOKIES.access, "", { clear: true }));
     headers.append(
       "Set-Cookie",
       consoleSessionCookie(CONSOLE_COOKIES.refresh, "", { clear: true }),
@@ -305,10 +295,7 @@ export async function attachSessionCookies(
   });
 }
 
-async function serveStatic(
-  staticDir: string,
-  pathname: string,
-): Promise<Response | null> {
+async function serveStatic(staticDir: string, pathname: string): Promise<Response | null> {
   if (pathname.includes("..")) return null;
   const path = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
   const file = Bun.file(`${staticDir}${path}`);
@@ -317,9 +304,7 @@ async function serveStatic(
 }
 
 function pluginFrameResponse(pathname: string): Response {
-  const id = pathname
-    .slice("/plugin-frame/".length)
-    .replace(/[^a-z0-9_-]/gi, "");
+  const id = pathname.slice("/plugin-frame/".length).replace(/[^a-z0-9_-]/gi, "");
   const html = `<!doctype html>
 <html lang="en">
 <head>

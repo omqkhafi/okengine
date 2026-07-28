@@ -10,15 +10,9 @@ export { signal } from "./signal/declare.ts";
 export type { SignalDecl, SignalOptions } from "./signal/declare.ts";
 
 export { createSignalRuntime } from "./signal/runtime.ts";
-export type {
-  CreateSignalRuntimeOptions,
-  SignalRuntime,
-} from "./signal/runtime.ts";
+export type { CreateSignalRuntimeOptions, SignalRuntime } from "./signal/runtime.ts";
 
-export {
-  reconcileSignals,
-  createMemorySignalConfigStore,
-} from "./signal/reconcile.ts";
+export { reconcileSignals, createMemorySignalConfigStore } from "./signal/reconcile.ts";
 export type {
   SignalConfigRow,
   SignalConfigStatus,

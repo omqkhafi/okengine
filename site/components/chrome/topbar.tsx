@@ -10,31 +10,31 @@
  * between those widths instead of snapping.
  */
 
-'use client';
+"use client";
 
-import { animate, AnimatePresence, motion, MotionConfig, useMotionValue } from 'framer-motion';
-import { Menu, Search, X } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useSearchContext } from 'fumadocs-ui/contexts/search';
-import { ThemeSwitch } from 'fumadocs-ui/layouts/shared/slots/theme-switch';
-import type * as PageTree from 'fumadocs-core/page-tree';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DocsTreeNav } from '@/components/chrome/docs-sidebar';
-import { ExternalArrow, GithubMark } from '@/components/chrome/icons';
-import { OkeLogo } from '@/components/oke-logo';
-import { cn } from '@/lib/cn';
-import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from '@/lib/nav';
-import { gitConfig } from '@/lib/shared';
-import { useClientReducedMotion } from '@/lib/use-client-reduced-motion';
+import { animate, AnimatePresence, motion, MotionConfig, useMotionValue } from "framer-motion";
+import { Menu, Search, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
+import { ThemeSwitch } from "fumadocs-ui/layouts/shared/slots/theme-switch";
+import type * as PageTree from "fumadocs-core/page-tree";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { DocsTreeNav } from "@/components/chrome/docs-sidebar";
+import { ExternalArrow, GithubMark } from "@/components/chrome/icons";
+import { OkeLogo } from "@/components/oke-logo";
+import { cn } from "@/lib/cn";
+import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from "@/lib/nav";
+import { gitConfig } from "@/lib/shared";
+import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
 
 const REPO_URL = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
 /** One easing for every header transition, so the parts move as one object. */
-const EASE = { type: 'spring', stiffness: 420, damping: 38, mass: 0.9 } as const;
+const EASE = { type: "spring", stiffness: 420, damping: 38, mass: 0.9 } as const;
 
 /** Measuring must beat paint, but a layout effect has nothing to do server-side. */
-const useMeasureEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
  * Tracks the brand cell's target width in pixels.
@@ -106,7 +106,7 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
     <MotionConfig reducedMotion="never" transition={EASE}>
       <header className="sticky top-0 z-[99] bg-fd-background">
         <div
-          className={cn('relative flex h-(--landing-topbar-height) items-stretch border-b', rule)}
+          className={cn("relative flex h-(--landing-topbar-height) items-stretch border-b", rule)}
         >
           {/* Measures the route's real CSS width; never painted. */}
           <div
@@ -119,7 +119,7 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
           {/* Brand cell — ends where the first rule of the surface below begins. */}
           <motion.div
             style={{ width }}
-            className={cn('relative hidden shrink-0 items-stretch border-e lg:flex', rule)}
+            className={cn("relative hidden shrink-0 items-stretch border-e lg:flex", rule)}
           >
             <Link
               href="/"
@@ -145,7 +145,7 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
             <ThemeSwitch className="border-fd-border" mode="light-dark" />
             <button
               type="button"
-              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
               onClick={() => setOpenedAt(menuOpen ? null : pathname)}
               className="inline-flex size-8 items-center justify-center text-fd-muted-foreground transition-colors hover:text-fd-foreground"
@@ -167,17 +167,17 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
                   key={tab.id}
                   href={tab.href}
                   className={cn(
-                    'group/tab relative flex flex-1 items-center justify-center border-e px-2 transition-colors duration-150 xl:px-4',
+                    "group/tab relative flex flex-1 items-center justify-center border-e px-2 transition-colors duration-150 xl:px-4",
                     rule,
-                    active ? undefined : 'hover:bg-fd-foreground/[0.03]',
+                    active ? undefined : "hover:bg-fd-foreground/[0.03]",
                   )}
                 >
                   <span
                     className={cn(
-                      'font-mono text-xs tracking-wider whitespace-nowrap uppercase transition-colors duration-150',
+                      "font-mono text-xs tracking-wider whitespace-nowrap uppercase transition-colors duration-150",
                       active
-                        ? 'text-fd-foreground'
-                        : 'text-fd-muted-foreground group-hover/tab:text-fd-foreground/75',
+                        ? "text-fd-foreground"
+                        : "text-fd-muted-foreground group-hover/tab:text-fd-foreground/75",
                     )}
                   >
                     {tab.label}
@@ -231,10 +231,10 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
                     href={tab.href}
                     onClick={closeMenu}
                     className={cn(
-                      'border-b border-fd-border px-4 py-3 font-mono text-xs tracking-wider uppercase transition-colors',
+                      "border-b border-fd-border px-4 py-3 font-mono text-xs tracking-wider uppercase transition-colors",
                       isNavTabActive(tab, pathname)
-                        ? 'bg-fd-foreground/5 text-fd-foreground'
-                        : 'text-fd-muted-foreground hover:text-fd-foreground',
+                        ? "bg-fd-foreground/5 text-fd-foreground"
+                        : "text-fd-muted-foreground hover:text-fd-foreground",
                     )}
                   >
                     {tab.label}

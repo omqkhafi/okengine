@@ -96,19 +96,14 @@ describe("createTestApp — four-applications surface", () => {
     const u = await t.auth.loginAs({ scopes: ["order:create"] });
     expect(u.verified).toBe(true);
 
-    const { data, error } = await t.api.orders!.create!(
-      { sku: "COFFEE", qty: 2 },
-      { as: u },
-    );
+    const { data, error } = await t.api.orders!.create!({ sku: "COFFEE", qty: 2 }, { as: u });
     expect(error).toBeNull();
     expect(data).toMatchObject({ id: expect.any(String) });
 
     await t.signals.drain();
     const sent = t.channels.sent();
     expect(sent.length).toBeGreaterThanOrEqual(1);
-    expect(
-      sent.some((s) => "template" in s && s.template === "order-confirmed"),
-    ).toBe(true);
+    expect(sent.some((s) => "template" in s && s.template === "order-confirmed")).toBe(true);
 
     await t.clock.advance("2m");
     expect(await t.cron.run("expire-stale")).toBe(true);
@@ -116,9 +111,7 @@ describe("createTestApp — four-applications surface", () => {
     const events = await t.runs();
     expect(events.some((e) => e.flow === "orders.create")).toBe(true);
     const createRun = events.find((e) => e.flow === "orders.create")!;
-    expect(t.effects.of(createRun.id).some((e) => e.kind === "emit")).toBe(
-      true,
-    );
+    expect(t.effects.of(createRun.id).some((e) => e.kind === "emit")).toBe(true);
 
     await t.close();
   });
@@ -142,10 +135,7 @@ describe("createTestApp — vault gaps still fail boot", () => {
 
     try {
       await createTestApp(app, {
-        secrets: [
-          vault("A", { description: "alpha" }),
-          vault("B", { description: "beta" }),
-        ],
+        secrets: [vault("A", { description: "alpha" }), vault("B", { description: "beta" })],
         boot: {
           env: "prod",
           vault: { allowDevFallbacks: false, chain: [] },

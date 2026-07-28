@@ -44,9 +44,7 @@ export interface ClockDecl {
  */
 export function clock(name: string, options: ClockOptions = {}): ClockDecl {
   if (!options.cron && !options.every) {
-    throw new TypeError(
-      `clock("${name}"): require cron or every`,
-    );
+    throw new TypeError(`clock("${name}"): require cron or every`);
   }
   return {
     name,

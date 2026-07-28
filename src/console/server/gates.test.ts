@@ -3,18 +3,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  createApiKeyStore,
-  createRoleStore,
-  setRoleGrants,
-  upsertRole,
-} from "../../auth/index.ts";
+import { createApiKeyStore, createRoleStore, setRoleGrants, upsertRole } from "../../auth/index.ts";
 import { memoryKvDriver } from "../../drivers/memory.ts";
-import {
-  createGateRuntime,
-  gate,
-  type GateRuntime,
-} from "../../elements/gate.ts";
+import { createGateRuntime, gate, type GateRuntime } from "../../elements/gate.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import {
   createDefaultGateAuthStores,
@@ -65,9 +56,7 @@ async function liveRuntime(): Promise<{
 }> {
   const kv = await memoryKvDriver.open({ name: "gates-test-live" });
   const member = gate.policy("member", ({ auth }) => Boolean(auth.verified));
-  const canBook = gate.policy("booking:create", ({ auth }) =>
-    auth.scopes.has("booking:create"),
-  );
+  const canBook = gate.policy("booking:create", ({ auth }) => auth.scopes.has("booking:create"));
   const staff = gate.policy("staff", ({ auth }) => auth.scopes.has("staff"));
   const fair = gate.rate({
     strategy: "sliding-window-counter",
@@ -100,10 +89,7 @@ describe("projectGatesPanel", () => {
   test("two inquiry surfaces + continuous audit + plane violations", () => {
     const auth = createDefaultGateAuthStores();
     // Poison an operator role with an application scope.
-    setRoleGrants(auth.roles, "role_ops", [
-      "console:store.sql:read",
-      "booking:create",
-    ]);
+    setRoleGrants(auth.roles, "role_ops", ["console:store.sql:read", "booking:create"]);
 
     const projection = projectGatesPanel({
       manifest: MANIFEST,
@@ -119,9 +105,7 @@ describe("projectGatesPanel", () => {
         },
       ],
       operatorRoles: new Map([["op_1", ["role_ops"]]]),
-      operators: new Map([
-        ["op_1", { name: "Ops", email: "ops@example.com" }],
-      ]),
+      operators: new Map([["op_1", { name: "Ops", email: "ops@example.com" }]]),
       roleMembers: auth.roleMembers,
     });
 
@@ -136,16 +120,10 @@ describe("projectGatesPanel", () => {
     expect(projection.audit.emptyRoles).toContain("role_staff");
 
     // Operator with application scope is a violation, never a principal row.
-    expect(
-      projection.violations.some((v) =>
-        v.applicationScopes.includes("booking:create"),
-      ),
-    ).toBe(true);
-    expect(
-      projection.principals.some(
-        (p) => p.kind === "role" && p.id === "role_ops",
-      ),
-    ).toBe(false);
+    expect(projection.violations.some((v) => v.applicationScopes.includes("booking:create"))).toBe(
+      true,
+    );
+    expect(projection.principals.some((p) => p.kind === "role" && p.id === "role_ops")).toBe(false);
 
     // Clean user principals remain rows.
     expect(projection.principals.some((p) => p.kind === "user")).toBe(true);
@@ -201,10 +179,7 @@ describe("simulateGates — evaluate only", () => {
       expect(denied.allowed).toBe(false);
       // member passes (verified); first denial is booking:create — chain stops.
       expect(denied.deniedAt).toBe("booking:create");
-      expect(denied.evaluations.map((e) => e.name)).toEqual([
-        "member",
-        "booking:create",
-      ]);
+      expect(denied.evaluations.map((e) => e.name)).toEqual(["member", "booking:create"]);
       expect(denied.denial?.code).toBe("Forbidden");
       expect(denied.denial?.status).toBe(403);
       expect(denied.denial?.data).toMatchObject({ gate: "booking:create" });
@@ -235,18 +210,9 @@ describe("simulateGates — evaluate only", () => {
       meta: { userId: "user_demo" },
     };
     try {
-      await runtime.check(
-        ["member", "booking:create", "rate:sliding-window-counter:2/1m"],
-        ctx,
-      );
-      await runtime.check(
-        ["member", "booking:create", "rate:sliding-window-counter:2/1m"],
-        ctx,
-      );
-      const liveDenied = await runtime.check(
-        ["rate:sliding-window-counter:2/1m"],
-        ctx,
-      );
+      await runtime.check(["member", "booking:create", "rate:sliding-window-counter:2/1m"], ctx);
+      await runtime.check(["member", "booking:create", "rate:sliding-window-counter:2/1m"], ctx);
+      const liveDenied = await runtime.check(["rate:sliding-window-counter:2/1m"], ctx);
       expect(liveDenied[0]?.allowed).toBe(false);
 
       // Simulate clones decls onto ephemeral KV — does not consume live budget.
@@ -319,9 +285,7 @@ describe("simulateGates — evaluate only", () => {
       operator: ctx.operator,
     });
     expect(mapped.error.code).toBe("RateLimited");
-    expect(
-      (mapped.error.data as { retryAfterMs: number }).retryAfterMs,
-    ).toBeGreaterThan(0);
+    expect((mapped.error.data as { retryAfterMs: number }).retryAfterMs).toBeGreaterThan(0);
     await kv.close();
   });
 

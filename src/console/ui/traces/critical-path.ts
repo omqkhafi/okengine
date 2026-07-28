@@ -13,14 +13,10 @@ import type { TraceSpan } from "./types.ts";
  *
  * @param spans - Connected spans (one trace)
  */
-export function criticalPathSpanIds(
-  spans: readonly TraceSpan[],
-): ReadonlySet<string> {
+export function criticalPathSpanIds(spans: readonly TraceSpan[]): ReadonlySet<string> {
   if (spans.length === 0) return new Set();
   const { byId, childrenOf } = indexSpans(spans);
-  const roots = spans.filter(
-    (s) => !s.parentId || !byId.has(s.parentId),
-  );
+  const roots = spans.filter((s) => !s.parentId || !byId.has(s.parentId));
   let best: string[] = [];
   let bestCost = -1;
 

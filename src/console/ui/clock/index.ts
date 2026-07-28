@@ -27,19 +27,11 @@ export {
 
 export { forwardTimeline, formatTimelineWhen } from "./timeline.ts";
 
-export {
-  aggregateByLabel,
-  waitingOnBanner,
-  formatWakeIn,
-  filterWaitingOn,
-} from "./waiting-on.ts";
+export { aggregateByLabel, waitingOnBanner, formatWakeIn, filterWaitingOn } from "./waiting-on.ts";
 
 export { formatHealth, filterCrons, type HealthLines } from "./health.ts";
 
-export {
-  overdueCronFindings,
-  type OverdueCronFinding,
-} from "./findings.ts";
+export { overdueCronFindings, type OverdueCronFinding } from "./findings.ts";
 
 export {
   runNowConfirmation,

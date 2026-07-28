@@ -22,9 +22,7 @@ export interface EmitManifestOptions {
  * @param options - Path and document
  * @returns Absolute path written
  */
-export async function emitManifest(
-  options: EmitManifestOptions,
-): Promise<string> {
+export async function emitManifest(options: EmitManifestOptions): Promise<string> {
   const text = serializeManifest(options.manifest);
   await Bun.write(options.path, text);
   return options.path;

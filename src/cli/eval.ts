@@ -3,11 +3,7 @@
  */
 
 import { resolve } from "node:path";
-import {
-  parseEvalJsonl,
-  runPromptEvals,
-  type EvalCase,
-} from "../elements/ai/eval.ts";
+import { parseEvalJsonl, runPromptEvals, type EvalCase } from "../elements/ai/eval.ts";
 import type { Manifest } from "../manifest/types.ts";
 
 /** Options for {@link runOkeEval}. */
@@ -35,9 +31,7 @@ export interface OkeEvalOptions {
  * @param options - Manifest + ask wiring
  * @returns Exit code (1 on any failure)
  */
-export async function runOkeEval(
-  options: OkeEvalOptions = {},
-): Promise<number> {
+export async function runOkeEval(options: OkeEvalOptions = {}): Promise<number> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   let manifest = options.manifest;
   if (!manifest) {
@@ -57,9 +51,7 @@ export async function runOkeEval(
     return 0;
   }
 
-  const load =
-    options.loadEvals ??
-    (async (p: string) => Bun.file(resolve(p)).text());
+  const load = options.loadEvals ?? (async (p: string) => Bun.file(resolve(p)).text());
 
   let failed = 0;
   for (const name of names) {
@@ -69,9 +61,7 @@ export async function runOkeEval(
       continue;
     }
     if (!options.ask) {
-      console.error(
-        `oke eval: ask() not wired — provide a runtime binding for prompt "${name}"`,
-      );
+      console.error(`oke eval: ask() not wired — provide a runtime binding for prompt "${name}"`);
       return 1;
     }
     let cases: EvalCase[];

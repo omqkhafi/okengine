@@ -78,11 +78,7 @@ export function ContractEditor(props: ContractEditorProps) {
           )}
         </div>
       ) : (
-        <JsonPane
-          value={props.value}
-          onChange={props.onChange}
-          schema={props.schema}
-        />
+        <JsonPane value={props.value} onChange={props.onChange} schema={props.schema} />
       )}
     </section>
   );
@@ -94,10 +90,7 @@ export function ContractEditor(props: ContractEditorProps) {
  * @param schema - Input schema
  * @param value - Request body
  */
-export function validateBeforeSend(
-  schema: Record<string, unknown> | null,
-  value: unknown,
-) {
+export function validateBeforeSend(schema: Record<string, unknown> | null, value: unknown) {
   return validateContract(schema, value);
 }
 
@@ -117,16 +110,9 @@ function FormFieldControl({
   if (field.type === "object" && field.children) {
     return (
       <fieldset className="flex flex-col gap-2 border border-[var(--oke-line)] p-3">
-        <legend className="px-1 text-xs text-[var(--oke-muted)]">
-          {field.name}
-        </legend>
+        <legend className="px-1 text-xs text-[var(--oke-muted)]">{field.name}</legend>
         {field.children.map((child) => (
-          <FormFieldControl
-            key={child.path}
-            field={child}
-            value={value}
-            onChange={onChange}
-          />
+          <FormFieldControl key={child.path} field={child} value={value} onChange={onChange} />
         ))}
       </fieldset>
     );
@@ -158,16 +144,13 @@ function FormFieldControl({
           type="checkbox"
           className="h-6 w-6"
           checked={Boolean(current)}
-          onChange={(e) =>
-            onChange(setAtPath(value, field.path, e.target.checked))
-          }
+          onChange={(e) => onChange(setAtPath(value, field.path, e.target.checked))}
         />
       </Field>
     );
   }
 
-  const inputType =
-    field.type === "integer" || field.type === "number" ? "number" : "text";
+  const inputType = field.type === "integer" || field.type === "number" ? "number" : "text";
 
   return (
     <Field label={field.name} error={error}>

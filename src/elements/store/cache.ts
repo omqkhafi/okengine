@@ -38,10 +38,7 @@ export interface InvalidationEvent {
  * @param resource - Store resource ref
  * @param dims - Optional dimension suffixes (e.g. `userId`)
  */
-export function computedCacheKey(
-  resource: ResourceRef,
-  dims?: readonly string[],
-): string {
+export function computedCacheKey(resource: ResourceRef, dims?: readonly string[]): string {
   if (!dims || dims.length === 0) return `computed:${resource}`;
   return `computed:${resource}/${dims.join("/")}`;
 }
@@ -57,9 +54,7 @@ export function tier1KeysForReads(
   dimsByResource?: Readonly<Record<string, readonly string[]>>,
 ): string[] {
   const reads = effects.reads ?? [];
-  return reads.map((resource) =>
-    computedCacheKey(resource, dimsByResource?.[resource]),
-  );
+  return reads.map((resource) => computedCacheKey(resource, dimsByResource?.[resource]));
 }
 
 /**
@@ -79,10 +74,7 @@ export function resourcesTouchedByWrites(effects: Effects): ResourceRef[] {
  * @param key - Tier-1 cache key (`computed:…`)
  * @param writeEffects - Effects of the writing flow
  */
-export function isInvalidatedByWrite(
-  key: string,
-  writeEffects: Effects,
-): boolean {
+export function isInvalidatedByWrite(key: string, writeEffects: Effects): boolean {
   if (!key.startsWith("computed:")) return false;
   const body = key.slice("computed:".length);
   const resource = body.split("/")[0] ?? "";

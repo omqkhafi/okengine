@@ -11,11 +11,7 @@ import {
 } from "../config/index.ts";
 
 /** How the process is running (local laptop → production). */
-export type DevRuntimeProfile =
-  | "local"
-  | "local-server"
-  | "test"
-  | "production";
+export type DevRuntimeProfile = "local" | "docker" | "test" | "production";
 
 /** Data plane: still on a laptop vs real production. */
 export type DevRuntimeEnv = "local" | "production";
@@ -61,16 +57,16 @@ export function formatHeroSystemLine(
 /**
  * Profile for an `oke dev` session.
  *
- * @param options - Stack / NODE_ENV hints
+ * @param options - Docker / NODE_ENV hints
  */
 export function resolveDevProfile(options: {
-  readonly stack: boolean;
+  readonly docker: boolean;
   /** Explicit role — do not infer from ambient `NODE_ENV` (tests set `test`). */
   readonly nodeEnv?: string;
 }): DevRuntimeProfile {
   if (options.nodeEnv === "test") return "test";
   if (options.nodeEnv === "production") return "production";
-  return options.stack ? "local-server" : "local";
+  return options.docker ? "docker" : "local";
 }
 
 /**
@@ -78,9 +74,7 @@ export function resolveDevProfile(options: {
  *
  * @param profile - Runtime profile
  */
-export function resolveDevRuntimeEnv(
-  profile: DevRuntimeProfile,
-): DevRuntimeEnv {
+export function resolveDevRuntimeEnv(profile: DevRuntimeProfile): DevRuntimeEnv {
   return profile === "production" ? "production" : "local";
 }
 
@@ -89,7 +83,7 @@ export function resolveDevRuntimeEnv(
  *
  * @param map - Env driver map
  * @param env - Config env key
- * @param prefer - Override (stack sql/kv)
+ * @param prefer - Override (docker sql/kv)
  */
 function driverOr(
   map: Parameters<typeof resolveDriverId>[0],
@@ -106,10 +100,7 @@ function driverOr(
  * @param channel - Channel driver maps
  * @param env - Config env
  */
-function channelDetail(
-  channel: DriversConfig["channel"],
-  env: ConfigEnv,
-): string {
+function channelDetail(channel: DriversConfig["channel"], env: ConfigEnv): string {
   if (!channel) return "—";
   const parts: string[] = [];
   for (const medium of ["email", "sms", "whatsapp", "push"] as const) {
@@ -120,11 +111,11 @@ function channelDetail(
 }
 
 /**
- * Summarize store facets for the active (or stack-overridden) drivers.
+ * Summarize store facets for the active (or docker-overridden) drivers.
  *
  * @param store - Store driver maps
  * @param env - Config env for non-overridden facets
- * @param overrides - Stack sql/kv ids
+ * @param overrides - Docker sql/kv ids
  */
 function storeDetail(
   store: DriversConfig["store"],
@@ -145,26 +136,25 @@ function storeDetail(
 }
 
 /**
- * Resolve eight-element rows from `oke.config` + stack overrides.
+ * Resolve eight-element rows from `oke.config` + docker overrides.
  *
  * @param config - Loaded config (or null)
- * @param options - Stack driver overrides; config env for maps
+ * @param options - Docker driver overrides; config env for maps
  */
 export function resolveHeroElements(
   config: OkeConfig | null | undefined,
   options: {
-    /** Use prod store ids from stack (`oke dev -s`). */
-    readonly stack: boolean;
+    /** Use docker store ids from stack (`oke dev -d`). */
+    readonly docker: boolean;
     readonly sqlDriver?: string;
     readonly kvDriver?: string;
-    /** Which driver map column to read (default `dev`). */
+    /** Which driver map column to read (default `local`). */
     readonly configEnv?: ConfigEnv;
   },
 ): readonly HeroElementRow[] {
   const drivers = config?.drivers;
-  // `-s` reads the `stack` profile for every element (not a store-only override).
-  const configEnv: ConfigEnv =
-    options.configEnv ?? (options.stack ? "stack" : "dev");
+  // `-d` reads the `docker` profile for every element (not a store-only override).
+  const configEnv: ConfigEnv = options.configEnv ?? (options.docker ? "docker" : "local");
 
   const byName: Record<string, string> = {
     flow: "●",
@@ -189,18 +179,18 @@ export function resolveHeroElements(
 /**
  * Build the full hero snapshot for banner / soft reload.
  *
- * @param options - Config, stack, versions
+ * @param options - Config, docker, versions
  */
 export function buildDevHeroSnapshot(options: {
   readonly config?: OkeConfig | null;
-  readonly stack: boolean;
+  readonly docker: boolean;
   readonly sqlDriver?: string;
   readonly kvDriver?: string;
   readonly version?: string;
   readonly nodeEnv?: string;
 }): DevHeroSnapshot {
   const profile = resolveDevProfile({
-    stack: options.stack,
+    docker: options.docker,
     nodeEnv: options.nodeEnv,
   });
   return {
@@ -208,7 +198,7 @@ export function buildDevHeroSnapshot(options: {
     runtimeEnv: resolveDevRuntimeEnv(profile),
     system: formatHeroSystemLine(),
     elements: resolveHeroElements(options.config, {
-      stack: options.stack,
+      docker: options.docker,
       sqlDriver: options.sqlDriver,
       kvDriver: options.kvDriver,
     }),

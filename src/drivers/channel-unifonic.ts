@@ -15,9 +15,7 @@ import type {
  *
  * @param options - `apiKey` + optional `from` (sender id)
  */
-export function openUnifonicChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openUnifonicChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   const apiKey = options.apiKey;
   const from = options.from ?? "OKE";
   const fetchFn = options.fetch ?? globalThis.fetch;
@@ -62,9 +60,7 @@ export function openUnifonicChannel(
         ok: true,
         messageId: id,
         driverId: "unifonic",
-        attempts: [
-          { driverId: "unifonic", ok: true, at: Date.now(), messageId: id },
-        ],
+        attempts: [{ driverId: "unifonic", ok: true, at: Date.now(), messageId: id }],
       };
     },
   };

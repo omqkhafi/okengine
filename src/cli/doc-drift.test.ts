@@ -12,8 +12,9 @@ import {
 } from "./doc-drift.ts";
 
 describe("doc-drift", () => {
-  test("normalizeTs trims trailing whitespace", () => {
-    expect(normalizeTs("a  \n  b\t\n")).toBe("a\n  b");
+  test("normalizeTs collapses whitespace (indent-insensitive)", () => {
+    expect(normalizeTs("a  \n  b\t\n")).toBe("a b");
+    expect(normalizeTs("  const t = 1;\n  const u = 2;")).toBe("const t = 1; const u = 2;");
   });
 
   test("parseClaimedFences picks headed typescript only", () => {

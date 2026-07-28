@@ -18,8 +18,7 @@ export function groupByKind(
   const filtered = q
     ? secrets.filter(
         (s) =>
-          s.name.toLowerCase().includes(q) ||
-          (s.description?.toLowerCase().includes(q) ?? false),
+          s.name.toLowerCase().includes(q) || (s.description?.toLowerCase().includes(q) ?? false),
       )
     : secrets;
 

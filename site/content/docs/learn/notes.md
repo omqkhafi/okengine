@@ -35,8 +35,8 @@ export default defineConfig({
   drivers: {
     store: {
       sql: {
-        dev: "sqlite",
-        stack: "postgres",
+        local: "sqlite",
+        docker: "postgres",
         test: "memory",
         prod: "postgres",
       },
@@ -54,9 +54,9 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { id, now } from "okengine/store";
 
 export const notes = sqliteTable("notes", {
-  id:        text("id").primaryKey().$defaultFn(id),
-  title:     text("title").notNull(),
-  body:      text("body").notNull(),
+  id: text("id").primaryKey().$defaultFn(id),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
   createdAt: integer("created_at").notNull().$defaultFn(now),
 });
 ```
@@ -84,43 +84,57 @@ import { db } from "../../core";
 import { notes } from "../../schema";
 
 // Contracts derived from the schema — one source of truth, refined where the API is stricter
-const NewNote  = createInsertSchema(notes, { title: (s) => s.min(1).max(120) })
-                   .omit({ id: true, createdAt: true });
-const Note     = createSelectSchema(notes);
-const NoteId   = z.object({ id: z.string() });
+const NewNote = createInsertSchema(notes, { title: (s) => s.min(1).max(120) }).omit({
+  id: true,
+  createdAt: true,
+});
+const Note = createSelectSchema(notes);
+const NoteId = z.object({ id: z.string() });
 const NotFound = z.object({});
 
-export const create = on(http.post("/notes"), flow({
-  in: NewNote,
-  out: NoteId,
-  do: async (input, fx) => {
-    const [note] = await fx.store(db).insert(notes).values(input).returning();
-    return { id: note.id };
-  },
-}));
+export const create = on(
+  http.post("/notes"),
+  flow({
+    in: NewNote,
+    out: NoteId,
+    do: async (input, fx) => {
+      const [note] = await fx.store(db).insert(notes).values(input).returning();
+      return { id: note.id };
+    },
+  }),
+);
 // effects → writes[sql:notes]
 
-export const list = on(http.get("/notes"), flow({
-  out: Note.array(),
-  do: (_, fx) => fx.store(db).select().from(notes),
-}));
+export const list = on(
+  http.get("/notes"),
+  flow({
+    out: Note.array(),
+    do: (_, fx) => fx.store(db).select().from(notes),
+  }),
+);
 // effects → reads[sql:notes]
 
-export const get = on(http.get("/notes/:id"), flow({
-  in: NoteId,
-  out: Note,
-  errors: { NotFound },
-  do: async ({ id }, fx) => (await fx.store(db).findById(notes, id)) ?? fx.fail("NotFound", {}),
-}));
+export const get = on(
+  http.get("/notes/:id"),
+  flow({
+    in: NoteId,
+    out: Note,
+    errors: { NotFound },
+    do: async ({ id }, fx) => (await fx.store(db).findById(notes, id)) ?? fx.fail("NotFound", {}),
+  }),
+);
 
-export const remove = on(http.delete("/notes/:id"), flow({
-  in: NoteId,
-  errors: { NotFound },
-  do: async ({ id }, fx) => {
-    const deleted = await fx.store(db).delete(notes, id);
-    if (!deleted) return fx.fail("NotFound", {});
-  },
-}));
+export const remove = on(
+  http.delete("/notes/:id"),
+  flow({
+    in: NoteId,
+    errors: { NotFound },
+    do: async ({ id }, fx) => {
+      const deleted = await fx.store(db).delete(notes, id);
+      if (!deleted) return fx.fail("NotFound", {});
+    },
+  }),
+);
 ```
 
 **Four things to notice.**
@@ -141,7 +155,7 @@ import * as notes from "./flows/notes";
 
 export const app = oke({ name: "notes" }).adopt({ notes });
 
-export type App = typeof app;   // ← the client needs nothing else
+export type App = typeof app; // ← the client needs nothing else
 ```
 
 `on()` still registers each flow with the router and the Manifest — `.adopt()` exists so the type of `app` accumulates every contract in `notes`, which is what lets the client below need no hand-written types and no separate codegen step. The namespace key (`notes`) becomes the client's namespace; each export becomes a method.
@@ -159,7 +173,7 @@ const api = createClient<App>("http://localhost:6530", { $routes: app.$routes })
 const { data, error } = await api.notes.get({ id: "n_1" });
 
 if (error?.code === "NotFound") show("gone");
-else console.log(data.title);          // ← typed, no codegen ✅
+else console.log(data.title); // ← typed, no codegen ✅
 // GET /notes/n_1 — the method and path are derived from the flow's own trigger,
 // not from a separate RPC convention.
 ```
@@ -172,7 +186,7 @@ import { createTestApp } from "okengine/test";
 import { app } from "../src/app";
 
 test("create then read", async () => {
-  const t = await createTestApp(app);            // memory driver, automatic
+  const t = await createTestApp(app); // memory driver, automatic
   const { data } = await t.api.notes.create({ title: "First", body: "Hello" });
   const { data: note } = await t.api.notes.get({ id: data!.id });
   expect(note!.title).toBe("First");
@@ -195,7 +209,8 @@ Four exports (`oke`, `on`, `flow`, `store`), two elements, a typed client, autom
 
 #### What is missing
 
-Everything here is synchronous. A real application needs work that happens *later* — after the response, on a schedule, or in reaction to something. That is the next app.
+Everything here is synchronous. A real application needs work that happens _later_ — after the response, on a schedule, or in reaction to something. That is the next app.
 
 ---
+
 ---

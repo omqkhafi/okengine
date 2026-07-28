@@ -34,10 +34,7 @@ export interface DoctorDiffOptions {
    * @param cwd - Repo root
    * @param baseBranch - Preferred base
    */
-  readonly resolveMergeBase?: (
-    cwd: string,
-    baseBranch?: string,
-  ) => Promise<string | null>;
+  readonly resolveMergeBase?: (cwd: string, baseBranch?: string) => Promise<string | null>;
   /**
    * Read a file at a git revision (tests).
    *
@@ -45,11 +42,7 @@ export interface DoctorDiffOptions {
    * @param rev - Commit-ish
    * @param path - Path relative to repo root
    */
-  readonly readAtRevision?: (
-    cwd: string,
-    rev: string,
-    path: string,
-  ) => Promise<string | null>;
+  readonly readAtRevision?: (cwd: string, rev: string, path: string) => Promise<string | null>;
   /** Manifest relative path when using git (default: auto-detect). */
   readonly manifestPath?: string;
   readonly write?: (text: string) => void;
@@ -67,9 +60,7 @@ export interface DoctorDiffResult {
  *
  * @param options - Paths / injections / git helpers
  */
-export async function runDoctorDiff(
-  options: DoctorDiffOptions = {},
-): Promise<DoctorDiffResult> {
+export async function runDoctorDiff(options: DoctorDiffOptions = {}): Promise<DoctorDiffResult> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
 
@@ -86,15 +77,11 @@ export async function runDoctorDiff(
     return { code: EXIT_OK, undeclared, allChanges: all };
   }
 
-  write(
-    `oke doctor --diff: ${undeclared.length} undeclared contract-breaking change(s)\n`,
-  );
+  write(`oke doctor --diff: ${undeclared.length} undeclared contract-breaking change(s)\n`);
   for (const c of undeclared) {
     write(`  [contract-breaking] ${c.path}: ${c.summary}\n`);
   }
-  write(
-    "Acknowledge intentional breaks with `breaking: true` on the owning flow.\n",
-  );
+  write("Acknowledge intentional breaks with `breaking: true` on the owning flow.\n");
   return { code: EXIT_RUNTIME, undeclared, allChanges: all };
 }
 
@@ -125,20 +112,16 @@ async function resolveManifests(
     );
   }
 
-  const rel =
-    options.manifestPath ??
-    (await detectManifestRel(cwd));
+  const rel = options.manifestPath ?? (await detectManifestRel(cwd));
   if (!rel) {
     throw new Error(
       "oke doctor --diff: no oke.manifest.json or manifest.oke.json in cwd — pass --before/--after",
     );
   }
 
-  const after =
-    options.after ?? (await loadManifest(resolve(cwd, rel)));
+  const after = options.after ?? (await loadManifest(resolve(cwd, rel)));
 
-  const resolveBase =
-    options.resolveMergeBase ?? gitMergeBase;
+  const resolveBase = options.resolveMergeBase ?? gitMergeBase;
   const readAt = options.readAtRevision ?? gitShow;
   const mergeBase = await resolveBase(cwd, options.baseBranch);
   if (!mergeBase) {
@@ -177,23 +160,18 @@ async function detectManifestRel(cwd: string): Promise<string | null> {
  * @param cwd - Repo root
  * @param baseBranch - Preferred base
  */
-export async function gitMergeBase(
-  cwd: string,
-  baseBranch?: string,
-): Promise<string | null> {
+export async function gitMergeBase(cwd: string, baseBranch?: string): Promise<string | null> {
   const candidates = baseBranch
     ? [baseBranch, ...BASE_BRANCH_CANDIDATES.filter((b) => b !== baseBranch)]
     : [...BASE_BRANCH_CANDIDATES];
 
   for (const base of candidates) {
-    const proc = Bun.spawn(
-      ["git", "merge-base", "HEAD", base],
-      { cwd, stdout: "pipe", stderr: "pipe" },
-    );
-    const [stdout, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      proc.exited,
-    ]);
+    const proc = Bun.spawn(["git", "merge-base", "HEAD", base], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     if (exitCode === 0) {
       const rev = stdout.trim();
       if (rev.length > 0) return rev;
@@ -209,20 +187,13 @@ export async function gitMergeBase(
  * @param rev - Commit-ish
  * @param path - Path relative to repo root
  */
-export async function gitShow(
-  cwd: string,
-  rev: string,
-  path: string,
-): Promise<string | null> {
+export async function gitShow(cwd: string, rev: string, path: string): Promise<string | null> {
   const proc = Bun.spawn(["git", "show", `${rev}:${path}`], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    proc.exited,
-  ]);
+  const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
   if (exitCode !== 0) return null;
   return stdout;
 }

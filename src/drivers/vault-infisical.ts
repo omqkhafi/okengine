@@ -2,11 +2,7 @@
  * `infisical` vault driver — Infisical REST secrets API (protocol-shaped).
  */
 
-import type {
-  VaultBag,
-  VaultDriver,
-  VaultOpenOptions,
-} from "./vault-types.ts";
+import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /**
  * Infisical secrets driver.

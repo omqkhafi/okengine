@@ -10,10 +10,7 @@
  * MCP inherits operator-plane capability and never exceeds it.
  */
 
-import {
-  attenuateScopes,
-  type AttenuationResult,
-} from "../auth/attenuation.ts";
+import { attenuateScopes, type AttenuationResult } from "../auth/attenuation.ts";
 
 /** Tool mutability class. */
 export type McpMutability = "read" | "write";
@@ -51,12 +48,7 @@ export type AuthzDecision =
   | { readonly ok: true }
   | {
       readonly ok: false;
-      readonly reason:
-        | "unknown-tool"
-        | "plane"
-        | "scope"
-        | "param"
-        | "confirmation-required";
+      readonly reason: "unknown-tool" | "plane" | "scope" | "param" | "confirmation-required";
       readonly detail?: string;
       readonly excess?: readonly string[];
     };
@@ -145,8 +137,7 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
     name: "oke.action.invoke",
     scopes: ["mcp:action:invoke", "console:flows:invoke"],
     mutability: "write",
-    description:
-      "Invoke a flow (sensitive). Requires fresh human confirmation per call.",
+    description: "Invoke a flow (sensitive). Requires fresh human confirmation per call.",
     inputSchema: {
       type: "object",
       properties: {
@@ -168,8 +159,7 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
     name: "oke.action.confirm",
     scopes: ["mcp:action:invoke", "console:flows:invoke"],
     mutability: "read",
-    description:
-      "Request a single-use confirmation token for a write tool (no caching).",
+    description: "Request a single-use confirmation token for a write tool (no caching).",
     inputSchema: {
       type: "object",
       properties: {
@@ -195,8 +185,7 @@ export const MCP_TOOL_POLICIES: readonly McpToolPolicy[] = [
     name: "oke.action.structural_propose",
     scopes: ["mcp:action:structural", "console:structural:propose"],
     mutability: "write",
-    description:
-      "Propose a structural diff (reviewable; not applied). Requires confirmation.",
+    description: "Propose a structural diff (reviewable; not applied). Requires confirmation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -229,9 +218,7 @@ export const MCP_POLICY_BY_NAME: ReadonlyMap<string, McpToolPolicy> = new Map(
  *
  * @param scopes - Raw scopes from the access token
  */
-export function expandOperatorScopes(
-  scopes: Iterable<string>,
-): ReadonlySet<string> {
+export function expandOperatorScopes(scopes: Iterable<string>): ReadonlySet<string> {
   const out = new Set<string>();
   let star = false;
   for (const s of scopes) {
@@ -266,10 +253,7 @@ export function authorizeToolCall(
   }
 
   const held = expandOperatorScopes(operatorScopes);
-  const attenuation: AttenuationResult = attenuateScopes(
-    held,
-    policy.scopes,
-  );
+  const attenuation: AttenuationResult = attenuateScopes(held, policy.scopes);
   // Tool scopes are alternatives across surfaces (`mcp:…` OR `console:…`).
   // Accept when the operator holds at least one scope from the policy list.
   const holdsAny = policy.scopes.some((s) => held.has(s));
@@ -302,10 +286,7 @@ export function authorizeToolCall(
  * @param policy - Tool policy
  * @param args - Arguments
  */
-export function checkParams(
-  policy: McpToolPolicy,
-  args: Record<string, unknown>,
-): AuthzDecision {
+export function checkParams(policy: McpToolPolicy, args: Record<string, unknown>): AuthzDecision {
   if (!policy.params) return { ok: true };
   for (const rule of policy.params) {
     const value = args[rule.name];

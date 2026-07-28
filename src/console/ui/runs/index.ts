@@ -5,19 +5,9 @@
  * without mounting the full SPA.
  */
 
-export {
-  explainDurationOutliers,
-  type OutlierFinding,
-} from "./explain.ts";
-export {
-  RUNS_CHAIN_FIXTURE,
-  RUNS_FIXTURE_T0,
-  runsOutlierFixture,
-} from "./fixture.ts";
-export {
-  discoverDimensions,
-  groupByDimension,
-} from "./group.ts";
+export { explainDurationOutliers, type OutlierFinding } from "./explain.ts";
+export { RUNS_CHAIN_FIXTURE, RUNS_FIXTURE_T0, runsOutlierFixture } from "./fixture.ts";
+export { discoverDimensions, groupByDimension } from "./group.ts";
 export {
   DEFAULT_BUCKET_COUNT,
   durationHistogram,
@@ -25,11 +15,7 @@ export {
   inDurationRange,
   normalizeRange,
 } from "./histogram.ts";
-export {
-  rowToRun,
-  runToWideEvent,
-  type RunsListRow,
-} from "./project.ts";
+export { rowToRun, runToWideEvent, type RunsListRow } from "./project.ts";
 export {
   BUILDER_DIMENSIONS,
   dimensionValue,

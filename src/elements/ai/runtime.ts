@@ -6,19 +6,11 @@
  * Agent denials are recorded on the denial ledger — not errors.
  */
 
-import type {
-  AiDriver,
-  AiModelClient,
-} from "../../drivers/ai-types.ts";
+import type { AiDriver, AiModelClient } from "../../drivers/ai-types.ts";
 import type { IndexStore } from "../../drivers/types.ts";
 import type { GatePolicyContext } from "../gate/declare.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
-import type {
-  AiAgentDecl,
-  AiEmbedDecl,
-  AiModelDecl,
-  AiPromptDecl,
-} from "./declare.ts";
+import type { AiAgentDecl, AiEmbedDecl, AiModelDecl, AiPromptDecl } from "./declare.ts";
 import {
   AiSchemaValidationError,
   coerceModelObject,
@@ -37,14 +29,7 @@ export interface AgentDenial {
 
 /** Effect on a tool flow — same vocabulary as Flows / Traces. */
 export interface AgentToolEffect {
-  readonly kind:
-    | "read"
-    | "write"
-    | "emit"
-    | "send"
-    | "ask"
-    | "secret"
-    | "call";
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
   readonly resource: string;
 }
 
@@ -122,10 +107,7 @@ export interface CreateAiRuntimeOptions {
    * @param name - Flow name
    * @param input - Tool input
    */
-  readonly callFlow?: (
-    name: string,
-    input: unknown,
-  ) => Promise<unknown>;
+  readonly callFlow?: (name: string, input: unknown) => Promise<unknown>;
   /**
    * Resolve gates required for a tool flow.
    *
@@ -186,11 +168,7 @@ export interface AiRuntime {
    * @param input - Prompt input
    * @param opts - via / allowPii
    */
-  ask(
-    prompt: string,
-    input?: unknown,
-    opts?: AiAskOptions,
-  ): Promise<Record<string, unknown>>;
+  ask(prompt: string, input?: unknown, opts?: AiAskOptions): Promise<Record<string, unknown>>;
   /**
    * Run a bounded agent; tool calls that fail gates are denied + recorded.
    *
@@ -215,11 +193,7 @@ export interface AiRuntime {
    * @param id - Document id
    * @param text - Text to embed
    */
-  embed(
-    embed: string,
-    id: string,
-    text: string,
-  ): Promise<void>;
+  embed(embed: string, id: string, text: string): Promise<void>;
 }
 
 /**
@@ -227,9 +201,7 @@ export interface AiRuntime {
  *
  * @param options - Declarations + clients + gates
  */
-export function createAiRuntime(
-  options: CreateAiRuntimeOptions = {},
-): AiRuntime {
+export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime {
   const prompts = new Map<string, AiPromptDecl>();
   for (const p of options.prompts ?? []) prompts.set(p.name, p);
   const agents = new Map<string, AiAgentDecl>();
@@ -239,9 +211,7 @@ export function createAiRuntime(
   const models = new Map<string, AiModelDecl>();
   for (const m of options.models ?? []) models.set(m.name, m);
 
-  const clients = new Map<string, AiModelClient>(
-    Object.entries(options.clients ?? {}),
-  );
+  const clients = new Map<string, AiModelClient>(Object.entries(options.clients ?? {}));
   const denials: AgentDenial[] = [];
   const agentRuns: AgentRunRecord[] = [];
   const journal: AiJournalEntry[] = [];
@@ -297,9 +267,7 @@ export function createAiRuntime(
         }
       }
 
-      const via =
-        opts?.via ??
-        (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
+      const via = opts?.via ?? (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
       const attempts: AiFallbackAttempt[] = [];
       let lastError: string | undefined;
       let lastSchema: AiSchemaMismatch | undefined;
@@ -314,10 +282,7 @@ export function createAiRuntime(
             messages: [
               {
                 role: "user",
-                content:
-                  typeof input === "string"
-                    ? input
-                    : JSON.stringify(input ?? {}),
+                content: typeof input === "string" ? input : JSON.stringify(input ?? {}),
               },
             ],
             responseFormat: decl.out,
@@ -325,8 +290,7 @@ export function createAiRuntime(
           const attemptCost = result.usage?.cost ?? 0;
           totalCost += attemptCost;
           const latencyMs = Math.max(0, now() - attemptStart);
-          const raw =
-            result.raw !== undefined ? result.raw : result.text;
+          const raw = result.raw !== undefined ? result.raw : result.text;
 
           try {
             const output = decl.out
@@ -409,9 +373,7 @@ export function createAiRuntime(
           at: now(),
         });
       }
-      throw new Error(
-        `ai: all models failed for prompt "${prompt}": ${lastError}`,
-      );
+      throw new Error(`ai: all models failed for prompt "${prompt}": ${lastError}`);
     },
 
     async runAgent(agent, runOpts) {

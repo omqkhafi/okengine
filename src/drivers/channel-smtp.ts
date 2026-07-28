@@ -10,18 +10,14 @@ import type { ChannelDriver, ChannelOpenOptions } from "./channel-types.ts";
  *
  * @param options - Host / port / auth
  */
-export function openSmtpChannel(
-  options: ChannelOpenOptions = {},
-): ChannelDriver {
+export function openSmtpChannel(options: ChannelOpenOptions = {}): ChannelDriver {
   if (!options.host) {
     throw new Error("smtp channel: host is required");
   }
   const transport = new SMTPTransport({
     host: options.host,
     port: options.port ?? 587,
-    ...(options.user && options.pass
-      ? { auth: { user: options.user, pass: options.pass } }
-      : {}),
+    ...(options.user && options.pass ? { auth: { user: options.user, pass: options.pass } } : {}),
   });
   return { id: "smtp", transport };
 }

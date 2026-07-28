@@ -11,9 +11,7 @@ import type { EffectKind } from "./effects.ts";
 import { OKE_ERRORS, throwOke } from "./errors.ts";
 
 /** Maps effect kind → the undeclared-access registry key. */
-const UNDECLARED_KEY: Readonly<
-  Record<EffectKind, keyof typeof OKE_ERRORS>
-> = {
+const UNDECLARED_KEY: Readonly<Record<EffectKind, keyof typeof OKE_ERRORS>> = {
   read: "UNDECLARED_READ",
   write: "UNDECLARED_WRITE",
   emit: "UNDECLARED_EMIT",
@@ -24,9 +22,7 @@ const UNDECLARED_KEY: Readonly<
 };
 
 /** Maps effect kind → the corresponding `Effects` field. */
-const EFFECTS_FIELD: Readonly<
-  Record<EffectKind, keyof Effects>
-> = {
+const EFFECTS_FIELD: Readonly<Record<EffectKind, keyof Effects>> = {
   read: "reads",
   write: "writes",
   emit: "emits",
@@ -72,10 +68,7 @@ export interface CapabilityToken {
  * @param flow - Flow id (used in error messages)
  * @param declared - Declared effect surface, or `undefined` for open
  */
-export function createCapabilityToken(
-  flow: string,
-  declared?: Effects,
-): CapabilityToken {
+export function createCapabilityToken(flow: string, declared?: Effects): CapabilityToken {
   const open = declared === undefined;
   const effects = declared ?? {};
   const sets: Record<EffectKind, ReadonlySet<string>> = {

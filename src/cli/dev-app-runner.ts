@@ -19,11 +19,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { APP_PORT, type FetchApp } from "../runtime/types.ts";
-import {
-  clearTerminalScreen,
-  formatAppReadyLine,
-  formatDevHero,
-} from "../term.ts";
+import { clearTerminalScreen, formatAppReadyLine, formatDevHero } from "../term.ts";
 import { decodeHeroSnapshot } from "./hero-meta.ts";
 
 /** Stable Bun.serve id so `--hot` reuses the socket across soft reloads. */
@@ -62,9 +58,7 @@ if (
   typeof mod.app.boot !== "function" ||
   typeof mod.app.fetch !== "function"
 ) {
-  console.error(
-    `oke dev: ${absoluteEntry} must export app with boot() and fetch()`,
-  );
+  console.error(`oke dev: ${absoluteEntry} must export app with boot() and fetch()`);
   process.exit(1);
 }
 

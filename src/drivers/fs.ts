@@ -4,20 +4,14 @@
 
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  FilesBucket,
-  FilesDriver,
-  FilesOpenOptions,
-} from "./types.ts";
+import type { FilesBucket, FilesDriver, FilesOpenOptions } from "./types.ts";
 
 /**
  * Open a files bucket rooted on the local filesystem.
  *
  * @param options - Bucket name and root directory
  */
-export async function openFsBucket(
-  options: FilesOpenOptions,
-): Promise<FilesBucket> {
+export async function openFsBucket(options: FilesOpenOptions): Promise<FilesBucket> {
   const root = options.root ?? join(tmpdirSafe(), `oke-files-${options.name}`);
   await mkdir(root, { recursive: true });
 

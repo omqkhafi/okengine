@@ -6,11 +6,7 @@
  */
 
 import { formatClaimNote } from "../../term.ts";
-import {
-  AUTH_RATE_LIMIT,
-  AUTH_RATE_WINDOW_MS,
-  touchRateLimit,
-} from "./auth-rate.ts";
+import { AUTH_RATE_LIMIT, AUTH_RATE_WINDOW_MS, touchRateLimit } from "./auth-rate.ts";
 
 /** Claim-code lifetime (30 minutes). */
 export const CLAIM_TTL_MS = 30 * 60 * 1000;
@@ -43,9 +39,7 @@ export interface ClaimCodeState {
 export function mintClaimCode(now: () => number = Date.now): ClaimCodeState {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  const code = [...bytes]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const code = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
   const mintedAt = now();
   return {
     code,

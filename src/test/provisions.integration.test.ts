@@ -22,9 +22,7 @@ describe("Provisions integration", () => {
     resetFlowSeq();
 
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
-    const canOrder = gate.policy("order:create", ({ auth }) =>
-      auth.scopes.has("order:create"),
-    );
+    const canOrder = gate.policy("order:create", ({ auth }) => auth.scopes.has("order:create"));
     const stripeKey = vault("STRIPE_KEY", {
       description: "Payments gateway key",
       dev: "sk_test_local",
@@ -133,10 +131,7 @@ describe("Provisions integration", () => {
     expect(denied.error?.code).toBe("Unauthorized");
 
     const u = await t.auth.loginAs({ scopes: ["order:create"] });
-    const { data, error } = await t.api.orders!.create!(
-      { sku: "COFFEE", qty: 2 },
-      { as: u },
-    );
+    const { data, error } = await t.api.orders!.create!({ sku: "COFFEE", qty: 2 }, { as: u });
     expect(error).toBeNull();
     expect(data).toMatchObject({ id: expect.any(String) });
 
@@ -159,10 +154,7 @@ describe("Provisions integration", () => {
     // First orders.create is the anonymous deny (stops at member); the
     // authenticated success evaluates the full chain.
     const createRun = events.find(
-      (e) =>
-        e.flow === "orders.create" &&
-        e.gates.includes("order:create") &&
-        e.error == null,
+      (e) => e.flow === "orders.create" && e.gates.includes("order:create") && e.error == null,
     );
     expect(createRun).toBeDefined();
     expect(createRun!.gates).toEqual(["member", "order:create"]);

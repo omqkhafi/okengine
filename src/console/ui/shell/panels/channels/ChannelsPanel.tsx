@@ -61,18 +61,15 @@ export function ChannelsPanel() {
     () => filterTemplates(list?.templates ?? [], search.q ?? ""),
     [list?.templates, search.q],
   );
-  const open = templates.find((t) => t.name === search.template) ??
+  const open =
+    templates.find((t) => t.name === search.template) ??
     list?.templates.find((t) => t.name === search.template);
   const outcomes = sortByConsequence(list?.outcomes ?? []);
   const production = list?.production ?? true;
   const sendConfirm = sendTestConfirmation({ production });
 
   const previewQuery = useQuery({
-    queryKey: [
-      "console.channel.preview",
-      open?.name,
-      previewLocale || search.locale,
-    ],
+    queryKey: ["console.channel.preview", open?.name, previewLocale || search.locale],
     enabled: !!open,
     queryFn: async () => {
       if (!open) return null;
@@ -122,8 +119,7 @@ export function ChannelsPanel() {
         template: open.name,
         to: testTo,
         locale: previewLocale || open.locales[0],
-        confirmation:
-          sendConfirm.kind === "typed" ? sendConfirm.phrase : undefined,
+        confirmation: sendConfirm.kind === "typed" ? sendConfirm.phrase : undefined,
         reason: sendConfirm.kind === "typed" ? reason : undefined,
       });
       if (res.error) throw new Error(res.error.code);
@@ -169,9 +165,7 @@ export function ChannelsPanel() {
           aria-label="Templates"
           className="w-64 shrink-0 overflow-y-auto border-r border-[var(--oke-line)] p-3"
         >
-          <h2 className="mb-2 text-xs tracking-wide text-[var(--oke-muted)]">
-            Templates
-          </h2>
+          <h2 className="mb-2 text-xs tracking-wide text-[var(--oke-muted)]">Templates</h2>
           {listQuery.isLoading ? (
             <p className="text-sm text-[var(--oke-muted)]">Loading…</p>
           ) : (
@@ -187,9 +181,7 @@ export function ChannelsPanel() {
                         ? "bg-[var(--oke-line)] text-[var(--oke-fg)]"
                         : "text-[var(--oke-muted)]",
                     )}
-                    onClick={() =>
-                      setSearch(openTemplate(search, t.name))
-                    }
+                    onClick={() => setSearch(openTemplate(search, t.name))}
                   >
                     <span>{t.name}</span>
                     <span className="font-mono text-xs">{t.medium}</span>
@@ -200,33 +192,23 @@ export function ChannelsPanel() {
           )}
         </section>
 
-        <main
-          id="channels-main"
-          className="min-w-0 flex-1 overflow-y-auto p-4"
-        >
+        <main id="channels-main" className="min-w-0 flex-1 overflow-y-auto p-4">
           {list?.face === "inbox" ? (
             <section aria-label="Inbox" className="mb-8">
               <h2 className="text-base text-[var(--oke-fg)]">Inbox</h2>
               <ul className="mt-3 space-y-2">
                 {(list.inbox ?? []).map((e) => (
-                  <li
-                    key={e.id}
-                    className="border-b border-[var(--oke-line)] pb-2 text-sm"
-                  >
+                  <li key={e.id} className="border-b border-[var(--oke-line)] pb-2 text-sm">
                     <div className="flex gap-2 text-[var(--oke-muted)]">
                       <span>{e.medium}</span>
                       <span>{e.toMasked}</span>
                       {e.template ? <span>{e.template}</span> : null}
                     </div>
-                    <p className="mt-1 text-[var(--oke-fg)]">
-                      {e.subject ?? e.text ?? "(empty)"}
-                    </p>
+                    <p className="mt-1 text-[var(--oke-fg)]">{e.subject ?? e.text ?? "(empty)"}</p>
                   </li>
                 ))}
                 {(list.inbox ?? []).length === 0 ? (
-                  <li className="text-sm text-[var(--oke-muted)]">
-                    No messages yet
-                  </li>
+                  <li className="text-sm text-[var(--oke-muted)]">No messages yet</li>
                 ) : null}
               </ul>
             </section>
@@ -235,9 +217,7 @@ export function ChannelsPanel() {
           <section aria-label="Did not arrive" className="mb-8">
             <h2 className="text-base text-[var(--oke-fg)]">Did not arrive</h2>
             <table className="mt-3 w-full text-left text-sm">
-              <caption className="sr-only">
-                Seven-state taxonomy with verdicts
-              </caption>
+              <caption className="sr-only">Seven-state taxonomy with verdicts</caption>
               <thead>
                 <tr className="text-[var(--oke-muted)]">
                   <th scope="col" className="py-1 font-normal">
@@ -282,28 +262,21 @@ export function ChannelsPanel() {
             <section aria-label="Template detail" className="mb-8">
               <h2 className="text-base text-[var(--oke-fg)]">{open.name}</h2>
               <p className="mt-1 text-sm text-[var(--oke-muted)]">
-                From {open.from ?? "unset"} · Locales{" "}
-                {open.locales.join(", ") || "none"}
+                From {open.from ?? "unset"} · Locales {open.locales.join(", ") || "none"}
               </p>
 
               {open.from ? (
                 <section aria-label="Email authentication" className="mt-4">
-                  <h3 className="text-sm text-[var(--oke-fg)]">
-                    SPF / DKIM / DMARC
-                  </h3>
+                  <h3 className="text-sm text-[var(--oke-fg)]">SPF / DKIM / DMARC</h3>
                   {authQuery.data ? (
                     <ul className="mt-2 space-y-1 text-sm text-[var(--oke-muted)]">
                       <li>SPF: {authQuery.data.spf}</li>
                       <li>DKIM: {authQuery.data.dkim}</li>
                       <li>DMARC: {authQuery.data.dmarc}</li>
-                      <li className="font-mono text-xs">
-                        {authQuery.data.domain}
-                      </li>
+                      <li className="font-mono text-xs">{authQuery.data.domain}</li>
                     </ul>
                   ) : (
-                    <p className="mt-2 text-sm text-[var(--oke-muted)]">
-                      Checking…
-                    </p>
+                    <p className="mt-2 text-sm text-[var(--oke-muted)]">Checking…</p>
                   )}
                 </section>
               ) : null}
@@ -318,10 +291,7 @@ export function ChannelsPanel() {
                     value={previewLocale || open.locales[0] || "en"}
                     onChange={(e) => setPreviewLocale(e.target.value)}
                   >
-                    {(open.locales.length > 0
-                      ? open.locales
-                      : ["en"]
-                    ).map((l) => (
+                    {(open.locales.length > 0 ? open.locales : ["en"]).map((l) => (
                       <option key={l} value={l}>
                         {l}
                       </option>
@@ -331,8 +301,7 @@ export function ChannelsPanel() {
                 {previewQuery.data ? (
                   <>
                     <p className="mt-2 text-xs text-[var(--oke-muted)]">
-                      Locale chain:{" "}
-                      {formatLocaleChainDisplay(previewQuery.data.localeChain)}
+                      Locale chain: {formatLocaleChainDisplay(previewQuery.data.localeChain)}
                     </p>
                     <div
                       className="mt-2 max-w-prose border border-[var(--oke-line)] p-3 text-sm text-[var(--oke-fg)]"
@@ -340,9 +309,7 @@ export function ChannelsPanel() {
                       lang={previewQuery.data.locale}
                     >
                       {previewQuery.data.subject ? (
-                        <p className="mb-2 font-medium">
-                          {previewQuery.data.subject}
-                        </p>
+                        <p className="mb-2 font-medium">{previewQuery.data.subject}</p>
                       ) : null}
                       <p>{previewQuery.data.text ?? previewQuery.data.html}</p>
                     </div>
@@ -417,9 +384,7 @@ export function ChannelsPanel() {
                   {s.subjectMasked} · {s.reason} · {s.medium}
                 </li>
               ))}
-              {(list?.suppression ?? []).length === 0 ? (
-                <li>Empty</li>
-              ) : null}
+              {(list?.suppression ?? []).length === 0 ? <li>Empty</li> : null}
             </ul>
           </section>
 
@@ -442,9 +407,7 @@ export function ChannelsPanel() {
                   ) : null}
                 </li>
               ))}
-              {(list?.receipts ?? []).length === 0 ? (
-                <li>No receipts yet</li>
-              ) : null}
+              {(list?.receipts ?? []).length === 0 ? <li>No receipts yet</li> : null}
             </ul>
           </section>
         </main>

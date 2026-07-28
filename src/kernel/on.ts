@@ -6,12 +6,7 @@
  * The return type carries the bound trigger so `typeof app` can derive REST.
  */
 
-import {
-  isFlow,
-  type AnyFlowDef,
-  type FlowDef,
-  type FlowErrorMap,
-} from "./flow.ts";
+import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import {
   normalizeTrigger,
   type BoundTriggerOf,

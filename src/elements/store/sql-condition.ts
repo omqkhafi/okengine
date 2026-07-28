@@ -55,19 +55,17 @@ export function compileWhere(where: unknown): CompiledWhere {
   }
 
   if (typeof where === "object" && !Array.isArray(where)) {
-    const predicates: CompiledPredicate[] = Object.entries(
-      where as WhereMap,
-    ).map(([column, value]) => ({
-      column,
-      op: "=" as const,
-      value,
-    }));
+    const predicates: CompiledPredicate[] = Object.entries(where as WhereMap).map(
+      ([column, value]) => ({
+        column,
+        op: "=" as const,
+        value,
+      }),
+    );
     return predicatesToWhere(predicates);
   }
 
-  throw new TypeError(
-    "sql where: expected equality map or Drizzle SQL condition",
-  );
+  throw new TypeError("sql where: expected equality map or Drizzle SQL condition");
 }
 
 /**
@@ -75,15 +73,11 @@ export function compileWhere(where: unknown): CompiledWhere {
  *
  * @param predicates - Ordered predicates
  */
-function predicatesToWhere(
-  predicates: readonly CompiledPredicate[],
-): CompiledWhere {
+function predicatesToWhere(predicates: readonly CompiledPredicate[]): CompiledWhere {
   if (predicates.length === 0) {
     return { clause: "", params: [], predicates: [] };
   }
-  const clause = predicates
-    .map((p) => `${quoteIdent(p.column)} ${p.op} ?`)
-    .join(" AND ");
+  const clause = predicates.map((p) => `${quoteIdent(p.column)} ${p.op} ?`).join(" AND ");
   return {
     clause,
     params: predicates.map((p) => p.value),
@@ -138,11 +132,7 @@ function asColumn(chunk: unknown): string | undefined {
 function asOperator(chunk: unknown): CompiledPredicate["op"] | undefined {
   if (!chunk || typeof chunk !== "object") return undefined;
   const value = (chunk as { value?: unknown }).value;
-  const text = Array.isArray(value)
-    ? value.join("")
-    : typeof value === "string"
-      ? value
-      : "";
+  const text = Array.isArray(value) ? value.join("") : typeof value === "string" ? value : "";
   const trimmed = text.trim();
   switch (trimmed) {
     case "=":

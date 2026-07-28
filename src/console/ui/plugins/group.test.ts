@@ -16,9 +16,7 @@ describe("groupPlugins", () => {
     expect(ids).toContain("rate-limit");
     expect(ids).toContain("tenancy");
     expect(ids).toContain("privacy");
-    expect(core!.items.some((p) => p.id === "rate-limit" && p.state === "off")).toBe(
-      true,
-    );
+    expect(core!.items.some((p) => p.id === "rate-limit" && p.state === "off")).toBe(true);
 
     const local = groups.find((g) => g.id === "local");
     expect(local?.items.map((p) => p.id)).toEqual(["audit"]);

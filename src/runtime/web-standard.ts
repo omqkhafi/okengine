@@ -13,12 +13,7 @@
  * Host / Origin validation is identical to the Bun adapter (console §10.1).
  */
 
-import {
-  createEnv,
-  createFiles,
-  createTimers,
-  createWebCrypto,
-} from "./primitives.ts";
+import { createEnv, createFiles, createTimers, createWebCrypto } from "./primitives.ts";
 import { secureFetch } from "./security.ts";
 import {
   APP_PORT,
@@ -50,17 +45,10 @@ export function createWebStandardRuntime(): Runtime {
  * @param app - Application
  * @param options - Port/hostname metadata + `allowedHosts`
  */
-function createFetchHandle(
-  app: FetchApp,
-  options?: ServeOptions,
-): ServerHandle {
+function createFetchHandle(app: FetchApp, options?: ServeOptions): ServerHandle {
   const port = options?.port ?? APP_PORT;
   const hostname = options?.hostname ?? "127.0.0.1";
-  const fetchHandler = secureFetch(
-    (req) => app.fetch(req),
-    options,
-    hostname,
-  );
+  const fetchHandler = secureFetch((req) => app.fetch(req), options, hostname);
   const url = new URL(
     `http://${hostname.includes(":") && !hostname.startsWith("[") ? `[${hostname}]` : hostname}:${port}/`,
   );

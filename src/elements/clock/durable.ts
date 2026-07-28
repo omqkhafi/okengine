@@ -7,11 +7,7 @@
  */
 
 import type { AnyFlowDef } from "../../kernel/flow.ts";
-import {
-  createFxContext,
-  type CreateFxOptions,
-  type Fx,
-} from "../../kernel/fx.ts";
+import { createFxContext, type CreateFxOptions, type Fx } from "../../kernel/fx.ts";
 import {
   createJournal,
   isJournalSuspend,
@@ -51,10 +47,7 @@ export interface RunDurableOptions {
   /** Injectable clock. */
   readonly now?: () => number;
   /** Extra fx options (secrets, store runtime, …). */
-  readonly fx?: Omit<
-    CreateFxOptions,
-    "flow" | "effects" | "capability" | "now" | "journal"
-  >;
+  readonly fx?: Omit<CreateFxOptions, "flow" | "effects" | "capability" | "now" | "journal">;
 }
 
 /**
@@ -73,13 +66,8 @@ export async function runDurable<O = unknown>(
 
   if (options.runId) {
     const existing = await options.journalStore.get(options.runId);
-    if (
-      existing?.wakeAt !== undefined &&
-      now() < existing.wakeAt
-    ) {
-      const sleepEntry = [...existing.entries]
-        .reverse()
-        .find((e) => e.kind === "sleep");
+    if (existing?.wakeAt !== undefined && now() < existing.wakeAt) {
+      const sleepEntry = [...existing.entries].reverse().find((e) => e.kind === "sleep");
       return {
         status: "sleeping",
         runId: existing.id,

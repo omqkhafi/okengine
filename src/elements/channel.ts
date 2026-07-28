@@ -19,9 +19,7 @@ export type {
   ChannelTemplateOptions,
 } from "./channel/declare.ts";
 
-export {
-  createChannelRuntime,
-} from "./channel/runtime.ts";
+export { createChannelRuntime } from "./channel/runtime.ts";
 export type {
   ChannelRuntime,
   ChannelSendOptions,
@@ -29,11 +27,7 @@ export type {
   TemplateCatalog,
 } from "./channel/runtime.ts";
 
-export {
-  createConsentStore,
-  type ConsentStore,
-  type OptOut,
-} from "./channel/consent.ts";
+export { createConsentStore, type ConsentStore, type OptOut } from "./channel/consent.ts";
 
 export {
   createSuppressionStore,
@@ -81,12 +75,7 @@ export {
   type MediumCosts,
 } from "./channel/costs.ts";
 
-export {
-  CHANNEL_PII_MASK,
-  maskEmail,
-  maskPhone,
-  maskRecipient,
-} from "./channel/mask.ts";
+export { CHANNEL_PII_MASK, maskEmail, maskPhone, maskRecipient } from "./channel/mask.ts";
 
 export {
   domainFromFrom,

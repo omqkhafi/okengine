@@ -5,6 +5,7 @@
  */
 
 import type { ColumnClassification, ResourceRef, StoreFacet } from "../../manifest/types.ts";
+import { schema } from "./schema-decl.ts";
 import { resolveTableName, type TableHandle } from "./table.ts";
 
 /** CDC trigger shape (mirrors kernel `CdcTrigger` without importing it). */
@@ -47,9 +48,7 @@ export interface SqlStoreOptions {
    * Explicit classifications: `table → column → tags`.
    * Merged with schema-derived tags; wins on conflict for the same column.
    */
-  readonly classify?: Readonly<
-    Record<string, Readonly<Record<string, ColumnClassification>>>
-  >;
+  readonly classify?: Readonly<Record<string, Readonly<Record<string, ColumnClassification>>>>;
 }
 
 /** SQL store declaration. */
@@ -106,11 +105,7 @@ export interface IndexStoreDecl extends StoreDeclBase {
 }
 
 /** Any store declaration. */
-export type StoreDecl =
-  | SqlStoreDecl
-  | KvStoreDecl
-  | FilesStoreDecl
-  | IndexStoreDecl;
+export type StoreDecl = SqlStoreDecl | KvStoreDecl | FilesStoreDecl | IndexStoreDecl;
 
 /**
  * Declare a SQL store.
@@ -161,10 +156,7 @@ export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
  * @param name - Bucket name
  * @param options - Options
  */
-export function files(
-  name: string,
-  options: FilesStoreOptions = {},
-): FilesStoreDecl {
+export function files(name: string, options: FilesStoreOptions = {}): FilesStoreDecl {
   return {
     facet: "files",
     name,
@@ -179,10 +171,7 @@ export function files(
  * @param name - Index name
  * @param options - Dimensions
  */
-export function index(
-  name: string,
-  options: IndexStoreOptions = {},
-): IndexStoreDecl {
+export function index(name: string, options: IndexStoreOptions = {}): IndexStoreDecl {
   return {
     facet: "index",
     name,
@@ -191,10 +180,12 @@ export function index(
   };
 }
 
-/** Public `store` element — four facets. */
+/** Public `store` element — four facets + abstract schema declare. */
 export const store = {
   sql,
   kv,
   files,
   index,
+  /** ORM-agnostic table declarations (`store.schema.table`). */
+  schema,
 } as const;

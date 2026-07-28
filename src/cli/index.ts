@@ -7,6 +7,7 @@ import { branchCli } from "./branch.ts";
 import { buildCli } from "./build.ts";
 import { clientAddCli } from "./client-add.ts";
 import { completionCli } from "./completion.ts";
+import { dbCli } from "./db.ts";
 import { devCli } from "./dev.ts";
 import { doctorCli } from "./doctor.ts";
 import { dockerCli } from "./docker.ts";
@@ -14,6 +15,7 @@ import { evalCli } from "./eval.ts";
 import { EXIT_CODE_HELP, EXIT_OK, EXIT_USAGE } from "./exit.ts";
 import { gatesListCli } from "./gates-list.ts";
 import { imagesCli } from "./images.ts";
+import { modeCli } from "./mode.ts";
 import { privacyEraseCli } from "./privacy-erase.ts";
 import { formatOkeHelp } from "./registry.ts";
 import { schemaCli } from "./schema.ts";
@@ -27,6 +29,10 @@ const [cmd, sub, ...rest] = argv;
 
 if (cmd === "dev") {
   process.exit(await devCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "mode") {
+  process.exit(await modeCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "start") {
@@ -43,6 +49,10 @@ if (cmd === "stack") {
 
 if (cmd === "schema") {
   process.exit(await schemaCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "db") {
+  process.exit(await dbCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "client" && sub === "add") {
@@ -91,8 +101,7 @@ if (cmd === "completion") {
 
 if (cmd === undefined || cmd === "--help" || cmd === "-h" || cmd === "help") {
   // Bare `oke` — commands only. Exit-code table only on explicit --help.
-  const help =
-    cmd === undefined ? formatOkeHelp() : `${formatOkeHelp()}${EXIT_CODE_HELP}`;
+  const help = cmd === undefined ? formatOkeHelp() : `${formatOkeHelp()}${EXIT_CODE_HELP}`;
   console.log(help);
   process.exit(cmd ? EXIT_OK : EXIT_USAGE);
 }

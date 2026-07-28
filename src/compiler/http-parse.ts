@@ -53,10 +53,7 @@ export function emptyInference(): MutableInference {
  * @param into - Accumulator
  * @param next - Flags to merge
  */
-export function mergeInference(
-  into: MutableInference,
-  next: ContextInference,
-): MutableInference {
+export function mergeInference(into: MutableInference, next: ContextInference): MutableInference {
   into.body = into.body || next.body;
   into.query = into.query || next.query;
   into.params = into.params || next.params;
@@ -160,11 +157,7 @@ export function assembleInput(parts: InputParts): unknown {
   }
 
   if (parts.body !== undefined) {
-    if (
-      typeof parts.body === "object" &&
-      parts.body !== null &&
-      !Array.isArray(parts.body)
-    ) {
+    if (typeof parts.body === "object" && parts.body !== null && !Array.isArray(parts.body)) {
       Object.assign(out, parts.body as Record<string, unknown>);
     } else {
       out.body = parts.body;

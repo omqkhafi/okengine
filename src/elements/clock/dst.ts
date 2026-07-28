@@ -134,11 +134,7 @@ function classifyLocalInstant(
   for (let offsetMin = -14 * 60; offsetMin <= 14 * 60; offsetMin += 15) {
     const utc = base + hour * 3_600_000 + minute * 60_000 - offsetMin * 60_000;
     const local = formatInZone(utc, timezone);
-    if (
-      local.date === dateStr &&
-      local.hour === hour &&
-      local.minute === minute
-    ) {
+    if (local.date === dateStr && local.hour === hour && local.minute === minute) {
       if (!matches.includes(utc)) matches.push(utc);
     }
   }

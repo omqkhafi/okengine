@@ -115,10 +115,7 @@ interface ConsoleClient {
       email: string;
       name: string;
     }>;
-    sessionLogin: (input: {
-      email: string;
-      password: string;
-    }) => CallResult<{
+    sessionLogin: (input: { email: string; password: string }) => CallResult<{
       accessToken: string;
       refreshToken: string;
       operatorId: string;
@@ -158,14 +155,7 @@ interface ConsoleClient {
         error: string | null;
         sampled: "full" | "error" | "sample" | "boost";
         effects: Array<{
-          kind:
-            | "read"
-            | "write"
-            | "emit"
-            | "send"
-            | "ask"
-            | "secret"
-            | "call";
+          kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
           resource: string;
           timestamp: number;
           duration: number;
@@ -215,10 +205,7 @@ interface ConsoleClient {
       peakTier: string;
       auditedAt: number;
     }>;
-    tracesReplay: (input: {
-      rootId: string;
-      dryRun: boolean;
-    }) => CallResult<{
+    tracesReplay: (input: { rootId: string; dryRun: boolean }) => CallResult<{
       ok: true;
       rootId: string;
       dryRun: boolean;
@@ -478,20 +465,9 @@ interface ConsoleClient {
         fingerprints: Record<string, string>;
         fingerprint: string | null;
         cleartext: string | null;
-        winner:
-          | "process.env"
-          | ".env.local"
-          | ".env.stack"
-          | "driver"
-          | "dev-fallback"
-          | null;
+        winner: "process.env" | ".env.local" | ".env.docker" | "driver" | "dev-fallback" | null;
         resolution: Array<{
-          source:
-            | "process.env"
-            | ".env.local"
-            | ".env.stack"
-            | "driver"
-            | "dev-fallback";
+          source: "process.env" | ".env.local" | ".env.docker" | "driver" | "dev-fallback";
           present: boolean;
           won: boolean;
         }>;
@@ -616,14 +592,7 @@ interface ConsoleClient {
           tool: string;
           status: "ok" | "denied";
           effects: Array<{
-            kind:
-              | "read"
-              | "write"
-              | "emit"
-              | "send"
-              | "ask"
-              | "secret"
-              | "call";
+            kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
             resource: string;
           }>;
           denial: {
@@ -697,11 +666,7 @@ interface ConsoleClient {
         meta?: string;
       }>;
     }>;
-    clockRunNow: (input: {
-      name: string;
-      confirmation?: string;
-      reason?: string;
-    }) => CallResult<{
+    clockRunNow: (input: { name: string; confirmation?: string; reason?: string }) => CallResult<{
       ok: true;
       name: string;
       ran: boolean;
@@ -713,11 +678,7 @@ interface ConsoleClient {
       status: string;
       at: number;
     }>;
-    clockEditSchedule: (input: {
-      name: string;
-      cron?: string;
-      every?: string;
-    }) => CallResult<{
+    clockEditSchedule: (input: { name: string; cron?: string; every?: string }) => CallResult<{
       ok: true;
       name: string;
       effectiveCron?: string;
@@ -912,10 +873,7 @@ interface ConsoleClient {
       } | null;
       allowed: boolean;
     }>;
-    gatesPowers: (input: {
-      kind: "role" | "key" | "user";
-      id: string;
-    }) => CallResult<{
+    gatesPowers: (input: { kind: "role" | "key" | "user"; id: string }) => CallResult<{
       scopes: string[];
       allowedFlowIds: string[];
       deniedFlowIds: string[];
@@ -1006,11 +964,7 @@ interface ConsoleClient {
       acknowledgedCount: number;
       changes: Array<{
         path: string;
-        category:
-          | "contract-breaking"
-          | "permission-widening"
-          | "effect-widening"
-          | "no-impact";
+        category: "contract-breaking" | "permission-widening" | "effect-widening" | "no-impact";
         kind: "added" | "removed" | "changed";
         summary: string;
         before?: unknown;
@@ -1089,14 +1043,10 @@ interface ConsoleClient {
 
 /** Typed Console API (REST from `/_oke/client.json` at runtime). */
 export const consoleApi = createClient(
-  typeof globalThis.location !== "undefined"
-    ? globalThis.location.origin
-    : "http://127.0.0.1:6533",
+  typeof globalThis.location !== "undefined" ? globalThis.location.origin : "http://127.0.0.1:6533",
   {
     headers: () =>
-      (accessToken
-        ? { Authorization: `Bearer ${accessToken}` }
-        : {}) as Record<string, string>,
+      (accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) as Record<string, string>,
     routes: {
       "console.setupStatus": { method: "GET", path: "/console/setup/status" },
       "console.setupClaim": { method: "POST", path: "/console/setup/claim" },
@@ -1237,12 +1187,7 @@ export const consoleCalls = {
    *
    * @param body - Claim payload
    */
-  async setupClaim(body: {
-    claimCode: string;
-    email: string;
-    name: string;
-    password: string;
-  }) {
+  async setupClaim(body: { claimCode: string; email: string; name: string; password: string }) {
     return consoleApi.console.setupClaim(body);
   },
   /**
@@ -1432,11 +1377,7 @@ export const consoleCalls = {
    *
    * @param body - Purge payload
    */
-  async storePurgeCache(body: {
-    resource: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async storePurgeCache(body: { resource: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.storePurgeCache(body);
   },
   /**
@@ -1444,12 +1385,7 @@ export const consoleCalls = {
    *
    * @param body - SQL payload
    */
-  async storeSql(body: {
-    ref: string;
-    sql: string;
-    tenant?: string;
-    allowWrite?: boolean;
-  }) {
+  async storeSql(body: { ref: string; sql: string; tenant?: string; allowWrite?: boolean }) {
     return consoleApi.console.storeSql(body);
   },
   /**
@@ -1478,12 +1414,7 @@ export const consoleCalls = {
    *
    * @param body - Set payload
    */
-  async vaultSet(body: {
-    name: string;
-    value: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async vaultSet(body: { name: string; value: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.vaultSet(body);
   },
   /**
@@ -1491,12 +1422,7 @@ export const consoleCalls = {
    *
    * @param body - Rotate payload
    */
-  async vaultRotate(body: {
-    name: string;
-    value: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async vaultRotate(body: { name: string; value: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.vaultRotate(body);
   },
   /**
@@ -1516,11 +1442,7 @@ export const consoleCalls = {
    *
    * @param body - Run-now payload
    */
-  async clockRunNow(body: {
-    name: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async clockRunNow(body: { name: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.clockRunNow(body);
   },
   /**
@@ -1536,11 +1458,7 @@ export const consoleCalls = {
    *
    * @param body - Edit payload
    */
-  async clockEditSchedule(body: {
-    name: string;
-    cron?: string;
-    every?: string;
-  }) {
+  async clockEditSchedule(body: { name: string; cron?: string; every?: string }) {
     return consoleApi.console.clockEditSchedule(body);
   },
   /**
@@ -1639,10 +1557,7 @@ export const consoleCalls = {
    *
    * @param body - Principal
    */
-  async accessEffective(body: {
-    kind: "operator" | "user" | "role" | "key";
-    id: string;
-  }) {
+  async accessEffective(body: { kind: "operator" | "user" | "role" | "key"; id: string }) {
     return consoleApi.console.accessEffective(body);
   },
   /**
@@ -1673,11 +1588,7 @@ export const consoleCalls = {
    *
    * @param body - Key id + confirmation
    */
-  async accessRevokeKey(body: {
-    keyId: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async accessRevokeKey(body: { keyId: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.accessRevokeKey(body);
   },
   /**
@@ -1685,11 +1596,7 @@ export const consoleCalls = {
    *
    * @param body - Key id + confirmation
    */
-  async accessRotateKey(body: {
-    keyId: string;
-    confirmation?: string;
-    reason?: string;
-  }) {
+  async accessRotateKey(body: { keyId: string; confirmation?: string; reason?: string }) {
     return consoleApi.console.accessRotateKey(body);
   },
   /**

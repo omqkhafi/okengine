@@ -52,9 +52,7 @@ export function encodeSuccess(output: unknown): Response {
   if (output === undefined) {
     return new Response(null, { status: 204 });
   }
-  return Response.json(
-    { data: output, error: null } satisfies SuccessEnvelope,
-  );
+  return Response.json({ data: output, error: null } satisfies SuccessEnvelope);
 }
 
 /**
@@ -63,10 +61,9 @@ export function encodeSuccess(output: unknown): Response {
  * @param failure - Flow-boundary failure
  */
 export function encodeFailure(failure: FlowFailure): Response {
-  return Response.json(
-    { data: null, error: failure.error } satisfies FailureEnvelope,
-    { status: statusForFailure(failure) },
-  );
+  return Response.json({ data: null, error: failure.error } satisfies FailureEnvelope, {
+    status: statusForFailure(failure),
+  });
 }
 
 /**

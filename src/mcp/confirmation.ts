@@ -53,9 +53,7 @@ export interface ConfirmationGateOptions {
  * Create a confirmation gate with **no session-level cache**.
  * Tokens are single-use and bound to tool + args + principal.
  */
-export function createConfirmationGate(
-  options: ConfirmationGateOptions = {},
-): {
+export function createConfirmationGate(options: ConfirmationGateOptions = {}): {
   readonly request: (input: {
     readonly tool: string;
     readonly args: unknown;
@@ -159,15 +157,10 @@ function canonicalJson(value: unknown): string {
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort();
-  return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`)
-    .join(",")}}`;
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(",")}}`;
 }
 
-function prune(
-  pending: Map<string, PendingConfirmation>,
-  t: number,
-): void {
+function prune(pending: Map<string, PendingConfirmation>, t: number): void {
   for (const [token, entry] of pending) {
     if (entry.expiresAt <= t) pending.delete(token);
   }

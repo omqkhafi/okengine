@@ -93,9 +93,7 @@ export async function runDockerDerive(
     write(
       `compose merge order (cwd ${composeDir}/):\n${result.composeFiles.map((f) => `  -f ${f}`).join("\n")}\n`,
     );
-    write(
-      `(${composeDir}/compose.override.yml is layer 4 — user-owned, never written by oke)\n`,
-    );
+    write(`(${composeDir}/compose.override.yml is layer 4 — user-owned, never written by oke)\n`);
     return { code: 0, result };
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));

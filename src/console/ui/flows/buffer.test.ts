@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createRowBuffer, matchesQuery } from "./buffer.ts";
-import {
-  confirmationFor,
-  createUndoStack,
-  validateTypedConfirm,
-} from "./confirmation.ts";
+import { confirmationFor, createUndoStack, validateTypedConfirm } from "./confirmation.ts";
 
 describe("row buffer", () => {
   test("new rows buffer behind a pill and never push existing ones", () => {
@@ -43,12 +39,8 @@ describe("dim never hide", () => {
 describe("confirmation pattern", () => {
   test("reversible actions get undo; irreversible get typed confirm", () => {
     expect(confirmationFor("writes").kind).toBe("undo");
-    expect(confirmationFor("external", { production: true }).kind).toBe(
-      "typed",
-    );
-    expect(confirmationFor("external", { production: false }).kind).toBe(
-      "undo",
-    );
+    expect(confirmationFor("external", { production: true }).kind).toBe("typed");
+    expect(confirmationFor("external", { production: false }).kind).toBe("undo");
   });
 
   test("typed confirm requires phrase and reason", () => {

@@ -25,9 +25,7 @@ export function formatBlastRadius(blast: VaultBlastRadius): BlastRadiusLine {
     };
   }
   const remaining =
-    blast.longestOutstandingMs != null
-      ? formatDuration(blast.longestOutstandingMs)
-      : null;
+    blast.longestOutstandingMs != null ? formatDuration(blast.longestOutstandingMs) : null;
   return {
     summary: `${blast.count} in-flight durable run(s) will wake holding a new key`,
     detail: remaining

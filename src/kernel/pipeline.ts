@@ -74,18 +74,14 @@ export type GateDenialCode = "Unauthorized" | "Forbidden" | "RateLimited";
  * @param evaluation - First denying evaluation
  * @param ctx - Policy context at denial time
  */
-export function gateDenialFailure(
-  evaluation: GateEvaluation,
-  ctx: GatePolicyContext,
-): FlowFailure {
+export function gateDenialFailure(evaluation: GateEvaluation, ctx: GatePolicyContext): FlowFailure {
   if (evaluation.kind === "rate" || evaluation.reason === "rate limited") {
     return fail("RateLimited", {
       retryAfterMs: evaluation.retryAfterMs ?? 0,
     });
   }
 
-  const authenticated =
-    ctx.auth.userId !== null && ctx.auth.userId !== undefined;
+  const authenticated = ctx.auth.userId !== null && ctx.auth.userId !== undefined;
   if (!authenticated) {
     return fail("Unauthorized", {});
   }
@@ -102,9 +98,7 @@ export function gateDenialFailure(
  */
 export function gateNamesOf(trigger: Trigger): string[] {
   if (trigger.kind !== "http") return [];
-  return (trigger as HttpTrigger).gates.map((g) =>
-    typeof g === "string" ? g : g.name,
-  );
+  return (trigger as HttpTrigger).gates.map((g) => (typeof g === "string" ? g : g.name));
 }
 
 /**
@@ -129,10 +123,7 @@ export function recordGateEvaluations(
  * @param bag - Mutable principal bag
  * @param resolved - Identity
  */
-export function applyPrincipal(
-  bag: PrincipalBag,
-  resolved: ResolvedPrincipal | undefined,
-): void {
+export function applyPrincipal(bag: PrincipalBag, resolved: ResolvedPrincipal | undefined): void {
   if (!resolved) return;
   if (resolved.plane === "operator" || resolved.operatorId !== undefined) {
     bag.operator.id = resolved.operatorId ?? null;
@@ -217,10 +208,7 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
  * @param fx - Fx door
  * @param ctx - Invocation context (for IP / meta)
  */
-export function policyContextOf(
-  fx: Fx,
-  ctx: InvocationContext,
-): GatePolicyContext {
+export function policyContextOf(fx: Fx, ctx: InvocationContext): GatePolicyContext {
   const auth = fx.auth as FxAuth;
   const operator = fx.operator as FxOperator;
   const ip =

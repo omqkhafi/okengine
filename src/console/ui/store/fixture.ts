@@ -112,8 +112,7 @@ export const STORE_FIXTURE: readonly StoreRecord[] = [
     warnings: [
       {
         code: "non_ascii_key",
-        message:
-          "Non-ASCII object key — signed URL encoding may break on S3-compatible stores.",
+        message: "Non-ASCII object key — signed URL encoding may break on S3-compatible stores.",
         key: "фото/id.jpg",
       },
     ],

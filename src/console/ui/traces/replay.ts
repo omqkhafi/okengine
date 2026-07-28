@@ -21,9 +21,7 @@ export type ReplayDecision =
  *
  * @param spans - Connected spans
  */
-export function replayDecision(
-  spans: readonly TraceSpan[],
-): ReplayDecision {
+export function replayDecision(spans: readonly TraceSpan[]): ReplayDecision {
   if (traceHasExternal(spans)) {
     return {
       mode: "dry-run",

@@ -32,10 +32,7 @@ import {
   type CreateAppAuthBindingOptions,
 } from "./auth-resolve.ts";
 import { runDurable } from "../elements/clock/durable.ts";
-import {
-  isFlow,
-  type AnyFlowDef,
-} from "./flow.ts";
+import { isFlow, type AnyFlowDef } from "./flow.ts";
 import {
   createFxContext,
   resolveName,
@@ -80,16 +77,8 @@ import {
   type AccumulateDecorations,
 } from "./plug.ts";
 import type { PluginCapabilities, PluginDef } from "./plugin.ts";
-import {
-  createPluginRegistry,
-  type PluginRegistry,
-} from "./registry.ts";
-import {
-  createRouter,
-  type Router,
-  type RouterPreset,
-  type SmartRouter,
-} from "./router.ts";
+import { createPluginRegistry, type PluginRegistry } from "./registry.ts";
+import { createRouter, type Router, type RouterPreset, type SmartRouter } from "./router.ts";
 import type {
   CdcTrigger,
   EveryTrigger,
@@ -129,13 +118,13 @@ export interface OkeOptions {
    * subject key.
    */
   readonly archiveInputFields?: readonly string[];
-  /** Active environment for {@link OkeApp.boot} (defaults to `dev`). */
+  /** Active environment for {@link OkeApp.boot} (defaults to `local`). */
   readonly env?: BootOptions["env"];
   /**
-   * Local-server mode (`oke dev -s` / `OKE_STACK=1`) — force the `stack`
+   * Docker mode (`oke dev -d` / `OKE_DOCKER=1`) — force the `docker`
    * driver profile at boot.
    */
-  readonly stack?: BootOptions["stack"];
+  readonly docker?: BootOptions["docker"];
   /** Optional `oke.config.ts` document consumed at boot. */
   readonly config?: BootOptions["config"];
   /** Pre-built element runtimes (skip construction at boot when present). */
@@ -209,9 +198,7 @@ export interface UnitHooks<D extends Record<string, unknown> = {}> {
    *
    * @param pluginDef - Plugin from {@link plugin}
    */
-  plug<P extends PluginDef>(
-    pluginDef: P,
-  ): UnitHooks<AccumulateDecorations<D, P>>;
+  plug<P extends PluginDef>(pluginDef: P): UnitHooks<AccumulateDecorations<D, P>>;
 }
 
 /**
@@ -220,10 +207,7 @@ export interface UnitHooks<D extends Record<string, unknown> = {}> {
  * @typeParam D - Accumulated decoration types from app `.plug()`
  * @typeParam R - Accumulated client route map from `.adopt({ unit })`
  */
-export interface OkeApp<
-  D extends Record<string, unknown> = {},
-  R extends AppRouteMap = {},
-> {
+export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRouteMap = {}> {
   /** App name. */
   readonly name: string;
   /** Whether AoT compilation is enabled. */
@@ -269,9 +253,7 @@ export interface OkeApp<
    *
    * @param pluginDef - Plugin from {@link plugin}
    */
-  plug<P extends PluginDef>(
-    pluginDef: P,
-  ): OkeApp<AccumulateDecorations<D, P>, R>;
+  plug<P extends PluginDef>(pluginDef: P): OkeApp<AccumulateDecorations<D, P>, R>;
   /**
    * Captured plugin capabilities for the Manifest.
    */
@@ -357,10 +339,7 @@ export interface OkeApp<
    * @param signal - Signal name or handle
    * @param payload - Payload
    */
-  dispatchSignal(
-    signal: NamedRef,
-    payload?: unknown,
-  ): Promise<ExecuteResult[]>;
+  dispatchSignal(signal: NamedRef, payload?: unknown): Promise<ExecuteResult[]>;
   /**
    * Invoke all flows bound to an `every` interval.
    *
@@ -374,11 +353,7 @@ export interface OkeApp<
    * @param payload - before/after
    * @param column - Optional column filter
    */
-  dispatchCdc(
-    tableName: string,
-    payload: CdcPayload,
-    column?: string,
-  ): Promise<ExecuteResult[]>;
+  dispatchCdc(tableName: string, payload: CdcPayload, column?: string): Promise<ExecuteResult[]>;
   /**
    * Call a flow by name/handle (same path as `fx.call`).
    *
@@ -408,10 +383,7 @@ export interface OkeApp<
  */
 export function oke(options: OkeOptions): OkeApp {
   const aot = options.aot !== false;
-  const adopted: Binding[] = [
-    ...listBindings(),
-    ...(options.bindings ?? []),
-  ];
+  const adopted: Binding[] = [...listBindings(), ...(options.bindings ?? [])];
   /** Retained for test harness / boot merges. */
   const $options = options;
 
@@ -459,7 +431,7 @@ export function oke(options: OkeOptions): OkeApp {
   // --- boot (vault → store → signal → clock → channel → AI → runs → caps) ---
   let bootResult: BootResult | undefined;
   let bootPromise: Promise<BootResult> | undefined;
-  let bootEnv: BootOptions["env"] = options.env ?? "dev";
+  let bootEnv: BootOptions["env"] = options.env ?? "local";
   let authBinding: AppAuthBinding | undefined =
     options.auth !== undefined
       ? createAppAuthBinding({
@@ -490,10 +462,10 @@ export function oke(options: OkeOptions): OkeApp {
 
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
     const { bootApplication } = await import("./boot.ts");
-    bootEnv = overrides?.env ?? options.env ?? "dev";
+    bootEnv = overrides?.env ?? options.env ?? "local";
     const merged: BootOptions = {
       env: bootEnv,
-      stack: overrides?.stack ?? options.stack,
+      docker: overrides?.docker ?? options.docker,
       config: overrides?.config ?? options.config,
       elements: overrides?.elements ?? options.elements,
       secrets: overrides?.secrets ?? options.secrets,
@@ -508,8 +480,7 @@ export function oke(options: OkeOptions): OkeApp {
       now: overrides?.now ?? options.fx?.now,
       instanceId: overrides?.instanceId,
       startScheduler: overrides?.startScheduler ?? options.startScheduler,
-      schedulerIntervalMs:
-        overrides?.schedulerIntervalMs ?? options.schedulerIntervalMs,
+      schedulerIntervalMs: overrides?.schedulerIntervalMs ?? options.schedulerIntervalMs,
       bindings: adopted,
       flows: [...flowsByName.values()],
       onCronFire: overrides?.onCronFire ?? handleCronFire,
@@ -542,9 +513,7 @@ export function oke(options: OkeOptions): OkeApp {
     return bootPromise;
   }
 
-  function isRunsRuntimeLike(
-    value: OkeOptions["runs"],
-  ): value is RunsRuntime {
+  function isRunsRuntimeLike(value: OkeOptions["runs"]): value is RunsRuntime {
     return (
       typeof value === "object" &&
       value !== null &&
@@ -570,20 +539,11 @@ export function oke(options: OkeOptions): OkeApp {
 
     const booted = await ensureBoot();
 
-    const unitBag =
-      flowDef.unit !== undefined ? unitHooks.get(flowDef.unit) : undefined;
+    const unitBag = flowDef.unit !== undefined ? unitHooks.get(flowDef.unit) : undefined;
     // app (hooks + plugs) → unit (hooks + plugs) → flow (hooks + plugs)
     const composedHooks = mergeHooks(
-      mergeHooks(
-        appHooks,
-        pluginRegistry.hooksAt("app", flowDef.unit, flowDef.name),
-        undefined,
-      ),
-      mergeHooks(
-        unitBag,
-        pluginRegistry.hooksAt("unit", flowDef.unit, flowDef.name),
-        undefined,
-      ),
+      mergeHooks(appHooks, pluginRegistry.hooksAt("app", flowDef.unit, flowDef.name), undefined),
+      mergeHooks(unitBag, pluginRegistry.hooksAt("unit", flowDef.unit, flowDef.name), undefined),
       mergeHooks(
         flowDef.hooks as HookMap,
         pluginRegistry.hooksAt("flow", flowDef.unit, flowDef.name),
@@ -591,10 +551,7 @@ export function oke(options: OkeOptions): OkeApp {
       ),
     );
 
-    const decorations = pluginRegistry.decorationsFor(
-      flowDef.unit,
-      flowDef.name,
-    );
+    const decorations = pluginRegistry.decorationsFor(flowDef.unit, flowDef.name);
 
     const ctx: InvocationContext = {
       trigger,
@@ -631,10 +588,7 @@ export function oke(options: OkeOptions): OkeApp {
       // a real HTTP request in production mode.
       const testMode = bootEnv === "test";
       if (testMode) {
-        applyPrincipal(
-          principals,
-          extras?.auth as ResolvedPrincipal | undefined,
-        );
+        applyPrincipal(principals, extras?.auth as ResolvedPrincipal | undefined);
         applyPrincipal(principals, extras?.principal);
         if (extras?.operator) principals.operator.id = extras.operator.id;
       }
@@ -645,9 +599,7 @@ export function oke(options: OkeOptions): OkeApp {
         principals,
         telemetry,
         allowTestPrincipals: testMode,
-        verifyBearer: binding
-          ? (token) => verifyBearerToken(binding, token)
-          : undefined,
+        verifyBearer: binding ? (token) => verifyBearerToken(binding, token) : undefined,
       });
 
       // Element hooks run first in the app-level onAuth/beforeHandle chain —
@@ -675,9 +627,7 @@ export function oke(options: OkeOptions): OkeApp {
       effects: flowDef.effects,
       runTelemetry: telemetry,
       now,
-      ...(principals
-        ? { auth: principals.auth as FxAuth, operator: principals.operator }
-        : {}),
+      ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
       ...(capability ? { capability } : {}),
       ...(booted
         ? {
@@ -750,13 +700,9 @@ export function oke(options: OkeOptions): OkeApp {
     }
 
     const runsRuntime =
-      booted?.runs ??
-      (isRunsRuntimeLike(options.runs) ? options.runs : undefined);
+      booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined);
     if (runsRuntime) {
-      const archiveCleartext = archiveFromInput(
-        ctx.input,
-        options.archiveInputFields,
-      );
+      const archiveCleartext = archiveFromInput(ctx.input, options.archiveInputFields);
       await runsRuntime.record(
         {
           flow: flowDef,
@@ -936,8 +882,7 @@ export function oke(options: OkeOptions): OkeApp {
         if (parts.length >= 2) {
           const [unit, ...flowParts] = parts;
           const flowName = flowParts.join("/");
-          const target =
-            flowsByName.get(`${unit}.${flowName}`) ?? flowsByName.get(flowName);
+          const target = flowsByName.get(`${unit}.${flowName}`) ?? flowsByName.get(flowName);
           if (!target) {
             return respond(new Response("Not Found", { status: 404 }));
           }
@@ -986,12 +931,11 @@ export function oke(options: OkeOptions): OkeApp {
         input = undefined;
       }
 
-      const result = await execute(
-        binding.flow,
-        input,
-        binding.trigger,
-        { request, params, validated },
-      );
+      const result = await execute(binding.flow, input, binding.trigger, {
+        request,
+        params,
+        validated,
+      });
 
       return respond(encodeExecuteResult(result));
     },
@@ -1000,9 +944,7 @@ export function oke(options: OkeOptions): OkeApp {
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind === "signal" && b.trigger.name === name) {
-          results.push(
-            await execute(b.flow, payload, b.trigger as SignalAsTrigger),
-          );
+          results.push(await execute(b.flow, payload, b.trigger as SignalAsTrigger));
         }
       }
       return results;
@@ -1011,9 +953,7 @@ export function oke(options: OkeOptions): OkeApp {
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind === "every" && b.trigger.interval === interval) {
-          results.push(
-            await execute(b.flow, undefined, b.trigger as EveryTrigger),
-          );
+          results.push(await execute(b.flow, undefined, b.trigger as EveryTrigger));
         }
       }
       return results;

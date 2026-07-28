@@ -24,9 +24,7 @@ export type AccessSearch = z.infer<typeof AccessSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseAccessSearch(
-  search: Record<string, unknown>,
-): AccessSearch {
+export function parseAccessSearch(search: Record<string, unknown>): AccessSearch {
   const parsed = AccessSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -36,9 +34,7 @@ export function parseAccessSearch(
  *
  * @param search - Search state
  */
-export function serializeAccessSearch(
-  search: AccessSearch,
-): Record<string, string> {
+export function serializeAccessSearch(search: AccessSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.plane) out.plane = search.plane;

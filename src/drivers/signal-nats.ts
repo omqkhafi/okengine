@@ -31,12 +31,10 @@ export function createSignalNatsFake(): SignalNatsClientLike & {
   return {
     published,
     async publish(subject, data) {
-      const text =
-        typeof data === "string" ? data : new TextDecoder().decode(data);
+      const text = typeof data === "string" ? data : new TextDecoder().decode(data);
       published.push({ subject, data: text });
       const list = subs.get(subject) ?? [];
-      const bytes =
-        typeof data === "string" ? new TextEncoder().encode(data) : data;
+      const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
 
       const queued = list.filter((s) => s.queue);
       const plain = list.filter((s) => !s.queue);
@@ -70,9 +68,7 @@ export function createSignalNatsFake(): SignalNatsClientLike & {
  *
  * @param options - Declarations / nats client / durable outbox path
  */
-export async function openNatsSignal(
-  options: SignalOpenOptions,
-): Promise<SignalBus> {
+export async function openNatsSignal(options: SignalOpenOptions): Promise<SignalBus> {
   const nats = options.nats ?? createSignalNatsFake();
   const outbox = await createSignalEngine("nats", options);
 
@@ -111,8 +107,7 @@ export async function openNatsSignal(
         rollback: () => tx.rollback(),
       };
     },
-    subscribe: (signal, subscriberId, handler) =>
-      outbox.subscribe(signal, subscriberId, handler),
+    subscribe: (signal, subscriberId, handler) => outbox.subscribe(signal, subscriberId, handler),
     live: (signal, handler) => outbox.live(signal, handler),
     drain: () => outbox.drain(),
     deadLetters: (s) => outbox.deadLetters(s),

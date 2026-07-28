@@ -2,11 +2,7 @@
  * In-memory vault driver — tests and deterministic harnesses.
  */
 
-import type {
-  VaultBag,
-  VaultDriver,
-  VaultOpenOptions,
-} from "./vault-types.ts";
+import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /**
  * Create a memory vault driver seeded from `options.secrets`.

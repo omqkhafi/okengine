@@ -12,8 +12,6 @@ import type { GateAuditRecord } from "./types.ts";
  *
  * @param audit - Gates audit record
  */
-export function unguardedFlowFindings(
-  audit: GateAuditRecord,
-): readonly AuditLine[] {
+export function unguardedFlowFindings(audit: GateAuditRecord): readonly AuditLine[] {
   return auditLines(audit).filter((line) => line.code === "unguarded");
 }

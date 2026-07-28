@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* Register component sources explicitly: automatic detection skips any path a
  * .gitignore rule matches, so a stray pattern can silently drop whole
@@ -6,9 +6,9 @@
 @source '../components';
 @source '../lib';
 
-@import 'fumadocs-ui/css/generated/glass.css';
-@import 'fumadocs-ui/css/black.css';
-@import 'fumadocs-ui/css/preset.css';
+@import "fumadocs-ui/css/generated/glass.css";
+@import "fumadocs-ui/css/black.css";
+@import "fumadocs-ui/css/preset.css";
 
 /*
  * The whole shell aligns on two numbers. The topbar height is what anything
@@ -164,7 +164,7 @@ html > body[data-scroll-locked] {
 }
 
 /* Sidebar icon alignment (lucide size-4) */
-#nd-sidebar [data-active='true'] {
+#nd-sidebar [data-active="true"] {
   font-weight: 500;
 }
 
@@ -173,4 +173,3 @@ html > body[data-scroll-locked] {
   scrollbar-width: thin;
   scrollbar-color: var(--color-fd-border) transparent;
 }
-

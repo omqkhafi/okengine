@@ -153,9 +153,7 @@ describe("console kernel", () => {
       expect(names).toContain("console.action.ping");
       const pingRun = runs.find((r) => r.flow === "console.action.ping");
       expect(pingRun?.plane).toBe("operator");
-      expect(pingRun?.logs.some((l) => l.message.includes("console.action.ping"))).toBe(
-        true,
-      );
+      expect(pingRun?.logs.some((l) => l.message.includes("console.action.ping"))).toBe(true);
     } finally {
       await handle.app.stop();
     }

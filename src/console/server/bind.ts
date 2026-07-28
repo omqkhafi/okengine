@@ -4,11 +4,7 @@
 
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import type { Binding } from "../../kernel/on.ts";
-import {
-  normalizeTrigger,
-  type HttpTrigger,
-  type Trigger,
-} from "../../kernel/triggers.ts";
+import { normalizeTrigger, type HttpTrigger, type Trigger } from "../../kernel/triggers.ts";
 
 /**
  * Bind an HTTP trigger to a flow without registering on the global `on` list.

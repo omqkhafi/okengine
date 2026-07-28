@@ -13,10 +13,7 @@ export type DeliverySuccessStatus = "sent" | "fallback";
 export type DeliveryLegacyStatus = "failed" | "opted-out";
 
 /** Full receipt status — success paths + seven-state taxonomy. */
-export type DeliveryStatus =
-  | DeliverySuccessStatus
-  | DeliveryLegacyStatus
-  | DeliveryOutcomeState;
+export type DeliveryStatus = DeliverySuccessStatus | DeliveryLegacyStatus | DeliveryOutcomeState;
 
 /** Delivery receipt. */
 export interface DeliveryReceipt {
@@ -103,9 +100,7 @@ export function createReceiptLedger(): ReceiptLedger {
       return undefined;
     },
     updateStatus(messageId, patch) {
-      const idx = rows.findIndex(
-        (r) => r.messageId === messageId || r.id === messageId,
-      );
+      const idx = rows.findIndex((r) => r.messageId === messageId || r.id === messageId);
       if (idx < 0) return undefined;
       const prev = rows[idx]!;
       const next: DeliveryReceipt = {

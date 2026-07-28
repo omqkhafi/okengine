@@ -9,17 +9,8 @@
 
 import { describe, expect, test } from "bun:test";
 import type { MailOptions, SendResult, Transport } from "sently";
-import {
-  createChannelInbox,
-  openConsoleChannel,
-  type ChannelDriver,
-} from "../drivers/index.ts";
-import {
-  channel,
-  createChannelRuntime,
-  createConsentStore,
-  FallbackTransport,
-} from "./channel.ts";
+import { createChannelInbox, openConsoleChannel, type ChannelDriver } from "../drivers/index.ts";
+import { channel, createChannelRuntime, createConsentStore, FallbackTransport } from "./channel.ts";
 
 /** Create a sently-compatible transport that always fails. */
 function failingTransport(provider: string): Transport {
@@ -56,10 +47,7 @@ function addressToString(input: MailOptions["to"]): string {
   return input.address;
 }
 
-function driverFromTransport(
-  id: ChannelDriver["id"],
-  transport: Transport,
-): ChannelDriver {
+function driverFromTransport(id: ChannelDriver["id"], transport: Transport): ChannelDriver {
   return { id, transport };
 }
 
@@ -113,9 +101,7 @@ describe("fallback chain records both attempts", () => {
 
     expect(result.ok).toBe(true);
     expect(result.attempts.length).toBeGreaterThanOrEqual(2);
-    expect(result.attempts.some((a) => a.driverId === "smtp" && !a.ok)).toBe(
-      true,
-    );
+    expect(result.attempts.some((a) => a.driverId === "smtp" && !a.ok)).toBe(true);
     expect(result.attempts.some((a) => a.ok)).toBe(true);
 
     const receipts = runtime.receipts.forTemplate("booking-confirmed");
@@ -125,10 +111,7 @@ describe("fallback chain records both attempts", () => {
   });
 
   test("sently FallbackTransport is the same interface", async () => {
-    const fb = new FallbackTransport([
-      failingTransport("a"),
-      okTransport("b"),
-    ]);
+    const fb = new FallbackTransport([failingTransport("a"), okTransport("b")]);
     const r = await fb.send({
       from: "a@b.c",
       to: "d@e.f",
@@ -168,9 +151,7 @@ describe("consent and i18n", () => {
     });
     const blocked = await runtime.send("news", { to: "bounce@example.com" });
     expect(blocked.ok).toBe(false);
-    expect(runtime.receipts.all().at(-1)!.status).toBe(
-      "suppressed/prior-bounce",
-    );
+    expect(runtime.receipts.all().at(-1)!.status).toBe("suppressed/prior-bounce");
   });
 
   test("locale chain is recorded on the receipt", async () => {
@@ -192,9 +173,7 @@ describe("consent and i18n", () => {
   test("locale selects catalog body", async () => {
     const inbox = createChannelInbox();
     const runtime = createChannelRuntime({
-      templates: [
-        channel.template("hello", { medium: "email", locales: ["en", "ar"] }),
-      ],
+      templates: [channel.template("hello", { medium: "email", locales: ["en", "ar"] })],
       drivers: [openConsoleChannel({ inbox })],
       catalog: {
         hello: {
@@ -213,9 +192,7 @@ describe("console driver", () => {
   test("dev inbox captures every medium", async () => {
     const inbox = createChannelInbox();
     const runtime = createChannelRuntime({
-      templates: [
-        channel.template("sms-otp", { medium: "sms" }),
-      ],
+      templates: [channel.template("sms-otp", { medium: "sms" })],
       drivers: [openConsoleChannel({ inbox })],
       catalog: {
         "sms-otp": { en: { text: "code {{code}}" } },

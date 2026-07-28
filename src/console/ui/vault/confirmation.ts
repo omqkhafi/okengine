@@ -4,10 +4,7 @@
  * There is no preview affordance for Vault — set and rotate are real writes.
  */
 
-import {
-  type ConfirmationPattern,
-  validateTypedConfirm,
-} from "../flows/confirmation.ts";
+import { type ConfirmationPattern, validateTypedConfirm } from "../flows/confirmation.ts";
 
 export { validateTypedConfirm };
 export type { ConfirmationPattern };

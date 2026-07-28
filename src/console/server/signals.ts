@@ -13,10 +13,7 @@ import type {
   SignalReplayResult,
   SignalStats,
 } from "../../drivers/signal-types.ts";
-import type {
-  SignalConfigRow,
-  SignalConfigStore,
-} from "../../elements/signal/reconcile.ts";
+import type { SignalConfigRow, SignalConfigStore } from "../../elements/signal/reconcile.ts";
 import { reconcileSignals } from "../../elements/signal/reconcile.ts";
 import { signal as declareSignal } from "../../elements/signal/declare.ts";
 
@@ -84,15 +81,14 @@ export interface ProjectSignalsOptions {
 export async function projectSignalsList(
   options: ProjectSignalsOptions,
 ): Promise<readonly ConsoleSignalRow[]> {
-  const declared = Object.entries(options.manifest?.signals ?? {}).map(
-    ([name, s]) =>
-      declareSignal(name, {
-        delivery: s.delivery,
-        retries: s.retries,
-        deadLetter: s.deadLetter,
-        schema: s.schema,
-        optional: s.optional,
-      }),
+  const declared = Object.entries(options.manifest?.signals ?? {}).map(([name, s]) =>
+    declareSignal(name, {
+      delivery: s.delivery,
+      retries: s.retries,
+      deadLetter: s.deadLetter,
+      schema: s.schema,
+      optional: s.optional,
+    }),
   );
   const reconciled = await reconcileSignals(declared, options.config);
   const statsByName = new Map<string, SignalStats>();
@@ -109,10 +105,7 @@ export async function projectSignalsList(
     const stats = statsByName.get(cfg.name);
     const producers = producersOf(cfg.name, flows);
     const consumers = consumersOf(cfg.name, flows);
-    const consumersDurable =
-      consumers.length === 0
-        ? null
-        : consumers.every((c) => c.durable);
+    const consumersDurable = consumers.length === 0 ? null : consumers.every((c) => c.durable);
 
     // Attach causal run ids onto dead letters when a matching emit exists.
     const deadLetters = (stats?.deadLetters ?? []).map((dl) =>
@@ -165,13 +158,10 @@ export async function projectSignalsList(
       schema: stats.schema,
       subscribers: [...stats.subscribers],
       recentLive: [...stats.recentLive],
-      deadLetters: stats.deadLetters.map((dl) =>
-        withCause(dl, name, options.runs),
-      ),
+      deadLetters: stats.deadLetters.map((dl) => withCause(dl, name, options.runs)),
       producers,
       consumers,
-      consumersDurable:
-        consumers.length === 0 ? null : consumers.every((c) => c.durable),
+      consumersDurable: consumers.length === 0 ? null : consumers.every((c) => c.durable),
     });
   }
 
@@ -208,10 +198,7 @@ export async function discardViaBus(
   return bus.discard(options);
 }
 
-function producersOf(
-  signalName: string,
-  flows: NonNullable<Manifest["flows"]>,
-): SignalEndpoint[] {
+function producersOf(signalName: string, flows: NonNullable<Manifest["flows"]>): SignalEndpoint[] {
   const out: SignalEndpoint[] = [];
   for (const [flowId, flow] of Object.entries(flows)) {
     if (flow.effects?.emits?.includes(signalName)) {
@@ -221,10 +208,7 @@ function producersOf(
   return out;
 }
 
-function consumersOf(
-  signalName: string,
-  flows: NonNullable<Manifest["flows"]>,
-): SignalEndpoint[] {
+function consumersOf(signalName: string, flows: NonNullable<Manifest["flows"]>): SignalEndpoint[] {
   const out: SignalEndpoint[] = [];
   for (const [flowId, flow] of Object.entries(flows)) {
     if (flow.trigger?.signal === signalName) {
@@ -234,10 +218,7 @@ function consumersOf(
   return out;
 }
 
-function endpoint(
-  flowId: string,
-  flow: NonNullable<Manifest["flows"]>[string],
-): SignalEndpoint {
+function endpoint(flowId: string, flow: NonNullable<Manifest["flows"]>[string]): SignalEndpoint {
   return {
     flowId,
     durable: flow.durable === true,
@@ -246,9 +227,7 @@ function endpoint(
   };
 }
 
-function peakTierOf(
-  flow: NonNullable<Manifest["flows"]>[string],
-): SignalEndpoint["peakTier"] {
+function peakTierOf(flow: NonNullable<Manifest["flows"]>[string]): SignalEndpoint["peakTier"] {
   const e = flow.effects;
   if (!e) return "none";
   if ((e.sends?.length ?? 0) > 0 || (e.asks?.length ?? 0) > 0) return "external";
@@ -266,9 +245,7 @@ function withCause(
 ): DeadLetter & { readonly causeRunId?: string; readonly causeFlow?: string } {
   if (!runs || runs.length === 0) return dl;
   const match = runs.find((r) =>
-    r.effects.some(
-      (e) => e.kind === "emit" && e.resource === signalName,
-    ),
+    r.effects.some((e) => e.kind === "emit" && e.resource === signalName),
   );
   if (!match) return dl;
   return {

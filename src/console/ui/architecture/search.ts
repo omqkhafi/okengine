@@ -23,7 +23,8 @@ export const ArchitectureSearchSchema = z.object({
   /** Focus node id (`unit:bookings`, `flow:bookings.create`, `sql:bookings`). */
   focus: z.string().optional(),
   /** Neighbourhood depth when focused. */
-  depth: z.union([z.literal(1), z.literal(2), z.literal("1"), z.literal("2")])
+  depth: z
+    .union([z.literal(1), z.literal(2), z.literal("1"), z.literal("2")])
     .transform((v) => (Number(v) === 2 ? 2 : 1) as FocusDepth)
     .default(1),
   /** Data (Store) layer. */
@@ -51,9 +52,7 @@ export type ArchitectureSearch = {
  *
  * @param search - Raw router search
  */
-export function parseArchitectureSearch(
-  search: Record<string, unknown>,
-): ArchitectureSearch {
+export function parseArchitectureSearch(search: Record<string, unknown>): ArchitectureSearch {
   const parsed = ArchitectureSearchSchema.safeParse(search);
   if (!parsed.success) {
     return { depth: 1 };
@@ -66,9 +65,7 @@ export function parseArchitectureSearch(
  *
  * @param search - Search state
  */
-export function serializeArchitectureSearch(
-  search: ArchitectureSearch,
-): Record<string, string> {
+export function serializeArchitectureSearch(search: ArchitectureSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.focus) out.focus = search.focus;
   if (search.depth === 2) out.depth = "2";
@@ -99,10 +96,7 @@ export function layersOf(search: ArchitectureSearch): LayerFlags {
  * @param search - Current search
  * @param focus - Node id
  */
-export function focusNode(
-  search: ArchitectureSearch,
-  focus: string,
-): ArchitectureSearch {
+export function focusNode(search: ArchitectureSearch, focus: string): ArchitectureSearch {
   return { ...search, focus };
 }
 
@@ -122,10 +116,7 @@ export function clearFocus(search: ArchitectureSearch): ArchitectureSearch {
  * @param search - Current search
  * @param depth - 1 or 2
  */
-export function setDepth(
-  search: ArchitectureSearch,
-  depth: FocusDepth,
-): ArchitectureSearch {
+export function setDepth(search: ArchitectureSearch, depth: FocusDepth): ArchitectureSearch {
   return { ...search, depth };
 }
 

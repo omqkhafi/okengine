@@ -16,8 +16,7 @@ describe("Store panel accessibility", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/store" });
     Object.defineProperty(globalThis, "window", {
       value: window,
@@ -70,9 +69,7 @@ describe("Store panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA", async () => {
     await act(async () => {
-      root.render(
-        <StoreA11yView openRef="sql:db" openChild="bookings" />,
-      );
+      root.render(<StoreA11yView openRef="sql:db" openChild="bookings" />);
     });
 
     await new Promise((r) => setTimeout(r, 10));

@@ -24,10 +24,7 @@ export {
   VERDICT_LABEL,
 } from "./taxonomy.ts";
 
-export {
-  spamComplaintFindings,
-  type SpamComplaintFinding,
-} from "./findings.ts";
+export { spamComplaintFindings, type SpamComplaintFinding } from "./findings.ts";
 
 export { formatFallbackLine } from "./fallback.ts";
 
@@ -51,7 +48,4 @@ export {
 
 export { filterTemplates } from "./group.ts";
 
-export {
-  CHANNELS_INBOX_FIXTURE,
-  CHANNELS_LIST_FIXTURE,
-} from "./fixture.ts";
+export { CHANNELS_INBOX_FIXTURE, CHANNELS_LIST_FIXTURE } from "./fixture.ts";

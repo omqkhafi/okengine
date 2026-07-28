@@ -1,19 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createCapabilityToken } from "./capability.ts";
 import { createEffectLedger, reversibilityOf } from "./effects.ts";
-import {
-  fail,
-  formatOkeMessage,
-  lookupOkeError,
-  OKE_ERRORS,
-  OkeError,
-} from "./errors.ts";
-import {
-  createFx,
-  createFxContext,
-  type Fx,
-  type FxStubStoreHandle,
-} from "./fx.ts";
+import { fail, formatOkeMessage, lookupOkeError, OKE_ERRORS, OkeError } from "./errors.ts";
+import { createFx, createFxContext, type Fx, type FxStubStoreHandle } from "./fx.ts";
 
 /** Narrow stub handle for tests that exercise the in-memory store. */
 function stub(fx: Fx, ref: string): FxStubStoreHandle {
@@ -37,16 +26,10 @@ describe("fx — capability enforcement", () => {
     expect(err).toBeInstanceOf(OkeError);
     const oke = err as OkeError;
     expect(oke.code).toBe(1001);
-    expect(oke.causeText).toBe(
-      'Flow "bookings.create" reads "sql:users" without declaring it.',
-    );
-    expect(oke.fix).toBe(
-      'Add "sql:users" to this flow\'s effects.reads.',
-    );
+    expect(oke.causeText).toBe('Flow "bookings.create" reads "sql:users" without declaring it.');
+    expect(oke.fix).toBe('Add "sql:users" to this flow\'s effects.reads.');
     expect(oke.docsUrl).toBe("https://okengine.vercel.app/e/1001");
-    expect(oke.message).toBe(
-      formatOkeMessage(1001, oke.causeText, oke.fix, oke.docsUrl),
-    );
+    expect(oke.message).toBe(formatOkeMessage(1001, oke.causeText, oke.fix, oke.docsUrl));
   });
 
   test("declared store read succeeds", async () => {
@@ -79,21 +62,13 @@ describe("fx — effect ledger", () => {
     await fx.emit("order-placed", { orderId: "o1" });
 
     expect(ledger.entries).toHaveLength(3);
-    expect(ledger.entries.map((e) => e.kind)).toEqual([
-      "read",
-      "write",
-      "emit",
-    ]);
+    expect(ledger.entries.map((e) => e.kind)).toEqual(["read", "write", "emit"]);
     expect(ledger.entries.map((e) => e.resource)).toEqual([
       "sql:bookings",
       "sql:bookings",
       "order-placed",
     ]);
-    expect(ledger.entries.map((e) => e.reversibility)).toEqual([
-      "none",
-      "reversible",
-      "deferred",
-    ]);
+    expect(ledger.entries.map((e) => e.reversibility)).toEqual(["none", "reversible", "deferred"]);
   });
 
   test("all seven kinds receive the correct reversibility tier via fx", async () => {
@@ -123,15 +98,7 @@ describe("fx — effect ledger", () => {
 
     expect(ledger.entries).toHaveLength(7);
     const kinds = ledger.entries.map((e) => e.kind);
-    expect(kinds).toEqual([
-      "read",
-      "write",
-      "emit",
-      "send",
-      "ask",
-      "secret",
-      "call",
-    ]);
+    expect(kinds).toEqual(["read", "write", "emit", "send", "ask", "secret", "call"]);
     for (const entry of ledger.entries) {
       expect(entry.reversibility).toBe(reversibilityOf(entry.kind));
     }
@@ -224,9 +191,13 @@ describe("errors — registry", () => {
 
   test("fx.fail returns a value, not an exception", () => {
     const fx = createFx({ flow: "x", effects: {} });
-    const result = fx.fail("FlightFull", { seatsLeft: 0 }, {
-      message: "full",
-    });
+    const result = fx.fail(
+      "FlightFull",
+      { seatsLeft: 0 },
+      {
+        message: "full",
+      },
+    );
     expect(result).toEqual({
       data: null,
       error: { code: "FlightFull", data: { seatsLeft: 0 }, message: "full" },

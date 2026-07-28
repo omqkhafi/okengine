@@ -54,9 +54,7 @@ export interface ImagesPinOptions {
  *
  * @param options - Config / images
  */
-export async function runImagesList(
-  options: ImagesListOptions = {},
-): Promise<number> {
+export async function runImagesList(options: ImagesListOptions = {}): Promise<number> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const writeErr = options.writeErr ?? ((t) => process.stderr.write(t));
   const json = options.json ?? false;
@@ -113,8 +111,7 @@ export function buildImagesListRows(
     } catch {
       // Unknown image — still list the row; recipe stays "-".
     }
-    const digest =
-      lock?.images[role]?.digest ?? digestFromRef ?? "-";
+    const digest = lock?.images[role]?.digest ?? digestFromRef ?? "-";
     return {
       role,
       recipe,
@@ -150,9 +147,7 @@ export function formatImagesList(rows: readonly ImagesListRow[]): string {
  *
  * @param options - Config / resolver
  */
-export async function runImagesPin(
-  options: ImagesPinOptions = {},
-): Promise<number> {
+export async function runImagesPin(options: ImagesPinOptions = {}): Promise<number> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
   let images = options.images;

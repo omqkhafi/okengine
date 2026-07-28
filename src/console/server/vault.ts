@@ -17,6 +17,7 @@ import {
   type VaultRuntime,
   type VaultSecretDecl,
 } from "../../elements/vault.ts";
+import { resolveComposeEnvPath } from "../../elements/vault/chain.ts";
 import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 
@@ -24,9 +25,7 @@ import type { Manifest } from "../../manifest/types.ts";
 export type VaultEnvLabel = ConfigEnv | "staging" | (string & {});
 
 /** Fingerprints keyed by environment — never values. */
-export type VaultFingerprintsByEnv = Readonly<
-  Partial<Record<VaultEnvLabel, string>>
->;
+export type VaultFingerprintsByEnv = Readonly<Partial<Record<VaultEnvLabel, string>>>;
 
 /** Rotation blast radius from the durable journal (queried, not estimated). */
 export interface ConsoleVaultBlastRadius {
@@ -84,9 +83,7 @@ export interface ProjectVaultOptions {
    * Optional peer-environment fingerprints (e.g. staging from a remote
    * probe). Never values — fingerprints only.
    */
-  readonly peerFingerprints?: Readonly<
-    Record<string, VaultFingerprintsByEnv>
-  >;
+  readonly peerFingerprints?: Readonly<Record<string, VaultFingerprintsByEnv>>;
   /** Durable journal — blast radius is queried, not estimated. */
   readonly journal?: JournalStore | null;
   readonly now?: () => number;
@@ -97,13 +94,11 @@ export interface ProjectVaultOptions {
  *
  * @param options - Manifest, runtime, journal
  */
-export async function projectVaultList(
-  options: ProjectVaultOptions,
-): Promise<{
+export async function projectVaultList(options: ProjectVaultOptions): Promise<{
   readonly secrets: readonly ConsoleVaultRow[];
   readonly env: VaultEnvLabel;
 }> {
-  const env = options.env ?? "dev";
+  const env = options.env ?? "local";
   const now = options.now ?? (() => Date.now());
   const names = collectNames(options.manifest, options.runtime);
   const journalRuns = options.journal
@@ -115,11 +110,7 @@ export async function projectVaultList(
     const contract = contractOf(name, options.manifest, options.runtime);
     const sensitive = contract.sensitive;
     const readers = readersOf(options.manifest, name);
-    const blastRadius = blastRadiusOf(
-      journalRuns,
-      readers,
-      now(),
-    );
+    const blastRadius = blastRadiusOf(journalRuns, readers, now());
     const winner = options.runtime?.resolution(name) ?? null;
     const resolution = options.runtime?.resolutionChain(name) ?? [];
     const lastReadAt = options.runtime?.lastReadAt(name) ?? null;
@@ -141,17 +132,13 @@ export async function projectVaultList(
       cleartext = options.runtime?.cleartext(name) ?? null;
     }
 
-    const sharedFingerprintEnvs = sensitive
-      ? sharedEnvs(fingerprints, env, fingerprint)
-      : [];
+    const sharedFingerprintEnvs = sensitive ? sharedEnvs(fingerprints, env, fingerprint) : [];
 
     secrets.push({
       name,
       kind: contract.kind,
       sensitive,
-      ...(contract.description !== undefined
-        ? { description: contract.description }
-        : {}),
+      ...(contract.description !== undefined ? { description: contract.description } : {}),
       ...(contract.rotate !== undefined ? { rotate: contract.rotate } : {}),
       fingerprints,
       fingerprint,
@@ -187,9 +174,7 @@ export function setVaultValue(
   runtime.put(input.name, input.value);
   return {
     name: input.name,
-    fingerprint: runtime.isSensitive(input.name)
-      ? (runtime.fingerprint(input.name) ?? null)
-      : null,
+    fingerprint: runtime.isSensitive(input.name) ? (runtime.fingerprint(input.name) ?? null) : null,
   };
 }
 
@@ -209,7 +194,7 @@ export function rotateVaultValue(
 /**
  * Build a VaultRuntime from Manifest contracts when no host runtime is attached.
  *
- * Uses the standard resolution chain: process.env → .env.local → .env.stack
+ * Uses the standard resolution chain: process.env → .env.local → .env.docker
  * → memory driver → (optional) dev fallback. Does not parse dotenv in the UI.
  *
  * @param manifest - Manifest snapshot
@@ -248,10 +233,10 @@ export async function createManifestVaultRuntime(
   });
 
   const seed = options.seed ?? {};
+  const composeEnv = resolveComposeEnvPath(cwd);
   const runtime = createVaultRuntime({
     secrets,
-    allowDevFallbacks:
-      options.allowDevFallbacks ?? (options.env ?? "dev") !== "prod",
+    allowDevFallbacks: options.allowDevFallbacks ?? (options.env ?? "local") !== "prod",
     now: options.now,
     chain: [
       { driver: envVaultDriver, source: "process.env" },
@@ -262,8 +247,8 @@ export async function createManifestVaultRuntime(
       },
       {
         driver: envVaultDriver,
-        source: ".env.stack",
-        options: { path: resolve(cwd, ".env.stack") },
+        source: composeEnv.source,
+        options: { path: composeEnv.path },
       },
       {
         driver: memoryVaultDriver,
@@ -290,10 +275,7 @@ export function blastRadiusOf(
 ): ConsoleVaultBlastRadius {
   const readers = new Set(readerFlowIds);
   const affected = runs.filter(
-    (r) =>
-      r.status === "sleeping" &&
-      r.wakeAt != null &&
-      readers.has(r.flow),
+    (r) => r.status === "sleeping" && r.wakeAt != null && readers.has(r.flow),
   );
   if (affected.length === 0) {
     return {
@@ -323,10 +305,7 @@ export function blastRadiusOf(
  * @param manifest - Manifest
  * @param name - Secret name
  */
-export function readersOf(
-  manifest: Manifest | null,
-  name: string,
-): readonly string[] {
+export function readersOf(manifest: Manifest | null, name: string): readonly string[] {
   if (!manifest?.flows) return [];
   const out: string[] = [];
   for (const [flowId, flow] of Object.entries(manifest.flows)) {
@@ -339,10 +318,7 @@ export function readersOf(
  * @param manifest - Manifest
  * @param runtime - Runtime
  */
-function collectNames(
-  manifest: Manifest | null,
-  runtime: VaultRuntime | null,
-): readonly string[] {
+function collectNames(manifest: Manifest | null, runtime: VaultRuntime | null): readonly string[] {
   const set = new Set<string>();
   for (const name of Object.keys(manifest?.vault ?? {})) set.add(name);
   if (runtime) {
@@ -372,12 +348,8 @@ function contractOf(
     return {
       kind: fromRuntime.kind,
       sensitive: fromRuntime.sensitive,
-      ...(fromRuntime.description !== undefined
-        ? { description: fromRuntime.description }
-        : {}),
-      ...(fromRuntime.rotate !== undefined
-        ? { rotate: fromRuntime.rotate }
-        : {}),
+      ...(fromRuntime.description !== undefined ? { description: fromRuntime.description } : {}),
+      ...(fromRuntime.rotate !== undefined ? { rotate: fromRuntime.rotate } : {}),
     };
   }
   const fromManifest = manifest?.vault?.[name];
@@ -385,12 +357,8 @@ function contractOf(
   return {
     kind: sensitive ? "secret" : "config",
     sensitive,
-    ...(fromManifest?.description !== undefined
-      ? { description: fromManifest.description }
-      : {}),
-    ...(fromManifest?.rotate !== undefined
-      ? { rotate: fromManifest.rotate }
-      : {}),
+    ...(fromManifest?.description !== undefined ? { description: fromManifest.description } : {}),
+    ...(fromManifest?.rotate !== undefined ? { rotate: fromManifest.rotate } : {}),
   };
 }
 
@@ -414,17 +382,12 @@ function sharedEnvs(
 }
 
 /** Assert a Console row never embeds a secret value (tests / export safety). */
-export function assertNoSecretLeak(
-  row: ConsoleVaultRow,
-  knownSecrets: readonly string[],
-): void {
+export function assertNoSecretLeak(row: ConsoleVaultRow, knownSecrets: readonly string[]): void {
   const blob = JSON.stringify(row);
   for (const secret of knownSecrets) {
     if (secret.length === 0) continue;
     if (blob.includes(secret)) {
-      throw new Error(
-        `vault console leak: secret value appears in row for ${row.name}`,
-      );
+      throw new Error(`vault console leak: secret value appears in row for ${row.name}`);
     }
   }
 }

@@ -14,11 +14,7 @@ export {
   type SucroseOptions,
 } from "./aot.ts";
 
-export {
-  compileDynamic,
-  compileRoute,
-  FULL_INFERENCE,
-} from "./dynamic.ts";
+export { compileDynamic, compileRoute, FULL_INFERENCE } from "./dynamic.ts";
 
 export {
   assembleInput,

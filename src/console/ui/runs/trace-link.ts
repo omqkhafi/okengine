@@ -10,10 +10,7 @@ import type { RunRecord } from "./types.ts";
  * @param runs - Population (must include ancestors)
  * @param runId - Starting run id
  */
-export function rootIdOf(
-  runs: readonly RunRecord[],
-  runId: string,
-): string {
+export function rootIdOf(runs: readonly RunRecord[], runId: string): string {
   const byId = new Map(runs.map((r) => [r.id, r]));
   let cursor = byId.get(runId);
   if (!cursor) return runId;
@@ -32,10 +29,7 @@ export function rootIdOf(
  * @param runs - Population
  * @param rootId - Trace root id
  */
-export function spanCountInTrace(
-  runs: readonly RunRecord[],
-  rootId: string,
-): number {
+export function spanCountInTrace(runs: readonly RunRecord[], rootId: string): number {
   const byId = new Map(runs.map((r) => [r.id, r]));
   if (!byId.has(rootId)) return 0;
   const childrenOf = new Map<string, string[]>();
@@ -65,10 +59,7 @@ export function spanCountInTrace(
  * @param runs - Population
  * @param runId - Selected run
  */
-export function shouldOfferTracesLink(
-  runs: readonly RunRecord[],
-  runId: string,
-): boolean {
+export function shouldOfferTracesLink(runs: readonly RunRecord[], runId: string): boolean {
   const root = rootIdOf(runs, runId);
   return spanCountInTrace(runs, root) > 1;
 }
@@ -79,10 +70,7 @@ export function shouldOfferTracesLink(
  * @param runs - Population
  * @param runId - Selected run (becomes focus span)
  */
-export function tracesHrefForRun(
-  runs: readonly RunRecord[],
-  runId: string,
-): string {
+export function tracesHrefForRun(runs: readonly RunRecord[], runId: string): string {
   const root = rootIdOf(runs, runId);
   const params = new URLSearchParams({ trace: root, span: runId });
   return `/traces?${params.toString()}`;

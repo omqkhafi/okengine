@@ -5,11 +5,7 @@
  * each change with real Runs traffic, a weekly bill, and the CI gate status.
  */
 
-import {
-  costOf,
-  DEFAULT_MEDIUM_COSTS,
-  type MediumCosts,
-} from "../../elements/channel/costs.ts";
+import { costOf, DEFAULT_MEDIUM_COSTS, type MediumCosts } from "../../elements/channel/costs.ts";
 import { diffManifest, highestSeverity } from "../../manifest/diff.ts";
 import type {
   Channel,
@@ -19,10 +15,7 @@ import type {
   Manifest,
   ManifestChange,
 } from "../../manifest/types.ts";
-import {
-  flowNameFromPath,
-  isDeclaredBreak,
-} from "../../manifest/undeclared.ts";
+import { flowNameFromPath, isDeclaredBreak } from "../../manifest/undeclared.ts";
 import type { WideEvent } from "../../runs/types.ts";
 
 /** One week in milliseconds. */
@@ -89,9 +82,7 @@ export interface ProjectManifestDiffOptions {
  *
  * @param options - Baseline, candidate, Runs, clock
  */
-export function projectManifestDiff(
-  options: ProjectManifestDiffOptions,
-): ConsoleDiffProjection {
+export function projectManifestDiff(options: ProjectManifestDiffOptions): ConsoleDiffProjection {
   const before = options.before;
   const after = options.after;
   if (!before || !after) {
@@ -201,9 +192,7 @@ export function formatBlastLine(options: {
   if (added.length === 0) return null;
 
   const past =
-    beforeSends.length === 0
-      ? "sent nothing"
-      : `sent via ${describeMedia(beforeSends, channels)}`;
+    beforeSends.length === 0 ? "sent nothing" : `sent via ${describeMedia(beforeSends, channels)}`;
   const future = `will now ${verbForMedia(describeMedia(added, channels))} every caller`;
   return `this flow ran ${formatRunCount(runCount)} times last week, it ${past}, and it ${future}`;
 }
@@ -253,17 +242,13 @@ function enrichChange(
   },
 ): ConsoleDiffChange {
   const flowName = flowNameFromPath(change.path);
-  const runCountLastWeek =
-    flowName !== null ? (ctx.runCounts.get(flowName) ?? 0) : 0;
-  const beforeFlow =
-    flowName !== null ? ctx.before.flows?.[flowName] : undefined;
+  const runCountLastWeek = flowName !== null ? (ctx.runCounts.get(flowName) ?? 0) : 0;
+  const beforeFlow = flowName !== null ? ctx.before.flows?.[flowName] : undefined;
   const afterFlow = flowName !== null ? ctx.after.flows?.[flowName] : undefined;
 
   let ciGate: DiffCiGate | null = null;
   if (change.category === "contract-breaking") {
-    ciGate = isDeclaredBreak(change, ctx.before, ctx.after)
-      ? "acknowledged"
-      : "blocked";
+    ciGate = isDeclaredBreak(change, ctx.before, ctx.after) ? "acknowledged" : "blocked";
   }
 
   // Traffic × cost copy belongs on effect / send / cost paths — not every
@@ -306,8 +291,7 @@ function enrichChange(
     runCountLastWeek,
     blastLine,
     weeklyDeltaUsd,
-    weeklyBillLine:
-      weeklyDeltaUsd !== null ? formatWeeklyBill(weeklyDeltaUsd) : null,
+    weeklyBillLine: weeklyDeltaUsd !== null ? formatWeeklyBill(weeklyDeltaUsd) : null,
     ciGate,
   };
 }
@@ -324,10 +308,7 @@ function compareDiffChanges(a: ConsoleDiffChange, b: ConsoleDiffChange): number 
   return a.path.localeCompare(b.path);
 }
 
-function mediumOf(
-  template: string,
-  channels: Record<string, Channel> | undefined,
-): string {
+function mediumOf(template: string, channels: Record<string, Channel> | undefined): string {
   return channels?.[template]?.medium ?? "email";
 }
 
@@ -335,9 +316,7 @@ function describeMedia(
   templates: readonly string[],
   channels: Record<string, Channel> | undefined,
 ): string {
-  const media = [
-    ...new Set(templates.map((t) => mediumOf(t, channels))),
-  ];
+  const media = [...new Set(templates.map((t) => mediumOf(t, channels)))];
   if (media.length === 0) return "nothing";
   if (media.length === 1) return media[0]!;
   return media.join("/");

@@ -10,13 +10,16 @@ Clock is the element for **time**.
 Cron, delay, timeout, durable sleep, and TTL — time as an element, not a bolted-on scheduler library.
 
 <Callout title="Governing rule">
-Clock defaults to `postgres` — durability needs transactional storage.
+  Clock defaults to `postgres` — durability needs transactional storage.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card title="Clock" description="Essence: time. Replaces: cron · delay · timeout · durable sleep · TTL." />
+  <Card
+    title="Clock"
+    description="Essence: time. Replaces: cron · delay · timeout · durable sleep · TTL."
+  />
 </Cards>
 
 ## Drivers available
@@ -42,52 +45,75 @@ import { NewLink, LinkCode, Link, NotFound, Taken } from "./shapes";
 import { links } from "../../schema";
 
 // ① HTTP — "an endpoint"
-export const shorten = on(http.post("/links").gate(member, fair), flow({
-  in: NewLink, out: LinkCode, errors: { Taken },
-  do: async ({ url, code }, fx) => {
-    if (await fx.store(db).exists(links, { code })) return fx.fail("Taken", {});
-    const id = fx.id();
-    await fx.store(db).insert(links).values(
-      { id, code, url, userId: fx.auth.userId, clicks: 0, createdAt: Date.now() });
-    return { code };
-  },
-}));
+export const shorten = on(
+  http.post("/links").gate(member, fair),
+  flow({
+    in: NewLink,
+    out: LinkCode,
+    errors: { Taken },
+    do: async ({ url, code }, fx) => {
+      if (await fx.store(db).exists(links, { code })) return fx.fail("Taken", {});
+      const id = fx.id();
+      await fx
+        .store(db)
+        .insert(links)
+        .values({ id, code, url, userId: fx.auth.userId, clicks: 0, createdAt: Date.now() });
+      return { code };
+    },
+  }),
+);
 
 // ② HTTP — the hot path
-export const redirect = on(http.get("/:code").gate(fair), flow({
-  in: LinkCode, out: Link, errors: { NotFound },
-  do: async ({ code }, fx) => {
-    const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
-    if (!link) return fx.fail("NotFound", {});
+export const redirect = on(
+  http.get("/:code").gate(fair),
+  flow({
+    in: LinkCode,
+    out: Link,
+    errors: { NotFound },
+    do: async ({ code }, fx) => {
+      const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
+      if (!link) return fx.fail("NotFound", {});
 
-    await fx.emit(linkClicked, { code, at: Date.now() });   // same transaction as any write
-    return link;
-  },
-}));
+      await fx.emit(linkClicked, { code, at: Date.now() }); // same transaction as any write
+      return link;
+    },
+  }),
+);
 
 // ③ SIGNAL — "a queue consumer", and the same species as ① and ②
-on(linkClicked, flow({
-  do: async ({ code }, fx) => {
-    const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
-    const clicks = await fx.store(db).increment(links, link.id, "clicks");
-    await fx.emit(linkStats, { code, clicks });             // live: pushed to subscribers
-  },
-}));
+on(
+  linkClicked,
+  flow({
+    do: async ({ code }, fx) => {
+      const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
+      const clicks = await fx.store(db).increment(links, link.id, "clicks");
+      await fx.emit(linkStats, { code, clicks }); // live: pushed to subscribers
+    },
+  }),
+);
 
 // ④ CLOCK — "a cron job", and still the same species
-on(every("1h"), flow({
-  do: (_, fx) => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;   // 30 days
-    return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
-  },
-}));
+on(
+  every("1h"),
+  flow({
+    do: (_, fx) => {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+      return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
+    },
+  }),
+);
 
 // ⑤ A plain flow with no trigger — callable, not "private"
 export const stats = flow({
-  in: LinkCode, out: z.object({ clicks: z.number() }),
+  in: LinkCode,
+  out: z.object({ clicks: z.number() }),
   do: async ({ code }, fx) => {
-    const [link] = await fx.store(db).select({ clicks: links.clicks })
-      .from(links).where(eq(links.code, code)).limit(1);
+    const [link] = await fx
+      .store(db)
+      .select({ clicks: links.clicks })
+      .from(links)
+      .where(eq(links.code, code))
+      .limit(1);
     return link ?? { clicks: 0 };
   },
 });
@@ -97,6 +123,14 @@ export const stats = flow({
 
 <Cards>
   <Card title="Gate" description="Continue to Gate." href="/docs/elements/gate" />
-  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
-  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Introduction"
+    description="Eight elements overview."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

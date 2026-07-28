@@ -6,9 +6,7 @@
  */
 
 /** Whether ANSI color should be applied. */
-export function termColorEnabled(
-  stream: { readonly isTTY?: boolean } = process.stdout,
-): boolean {
+export function termColorEnabled(stream: { readonly isTTY?: boolean } = process.stdout): boolean {
   if (process.env["NO_COLOR"] !== undefined) return false;
   if (process.env["FORCE_COLOR"] === "0") return false;
   if (process.env["FORCE_COLOR"]) return true;
@@ -70,7 +68,7 @@ export type DevHeroElement = {
 
 /** Shared options for the `oke dev` hero / banner. */
 export type DevHeroMeta = {
-  /** `local` · `local-server` · `test` · `production` */
+  /** `local` · `docker` · `test` · `production` */
   readonly profile?: string;
   /** Data plane: `local` · `production` */
   readonly runtimeEnv?: string;
@@ -88,20 +86,20 @@ export type DevHeroMeta = {
  *
  * @param color - Color on/off
  */
-export function formatOkeWordmark(
-  color: boolean = termColorEnabled(),
-): string {
+export function formatOkeWordmark(color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
   const ink = `${s.green}${s.bold}`;
   const r = s.reset;
-  return [
-    `${ink}   ██████╗ ██╗  ██╗███████╗${r}`,
-    `${ink}  ██╔═══██╗██║ ██╔╝██╔════╝${r}`,
-    `${ink}  ██║   ██║█████╔╝ █████╗  ${r}`,
-    `${ink}  ██║   ██║██╔═██╗ ██╔══╝  ${r}`,
-    `${ink}  ╚██████╔╝██║  ██╗███████╗${r}`,
-    `${ink}   ╚═════╝ ╚═╝  ╚═╝╚══════╝${r}`,
-  ].join("\n") + "\n";
+  return (
+    [
+      `${ink}   ██████╗ ██╗  ██╗███████╗${r}`,
+      `${ink}  ██╔═══██╗██║ ██╔╝██╔════╝${r}`,
+      `${ink}  ██║   ██║█████╔╝ █████╗  ${r}`,
+      `${ink}  ██║   ██║██╔═██╗ ██╔══╝  ${r}`,
+      `${ink}  ╚██████╔╝██║  ██╗███████╗${r}`,
+      `${ink}   ╚═════╝ ╚═╝  ╚═╝╚══════╝${r}`,
+    ].join("\n") + "\n"
+  );
 }
 
 /**
@@ -109,39 +107,27 @@ export function formatOkeWordmark(
  *
  * @param options - Snapshot fields from {@link import("./cli/hero-meta.ts").buildDevHeroSnapshot}
  */
-export function formatDevHeroDetails(
-  options: DevHeroMeta = {},
-): string {
+export function formatDevHeroDetails(options: DevHeroMeta = {}): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
   const label = (name: string) => `${s.dim}${name.padEnd(9)}${s.reset}`;
   const lines: string[] = [];
   if (options.profile) {
-    lines.push(
-      `${bar}  ${label("profile")} ${s.cyan}${options.profile}${s.reset}`,
-    );
+    lines.push(`${bar}  ${label("profile")} ${s.cyan}${options.profile}${s.reset}`);
   }
   if (options.runtimeEnv) {
-    lines.push(
-      `${bar}  ${label("env")} ${s.cyan}${options.runtimeEnv}${s.reset}`,
-    );
+    lines.push(`${bar}  ${label("env")} ${s.cyan}${options.runtimeEnv}${s.reset}`);
   }
   if (options.system) {
-    lines.push(
-      `${bar}  ${label("system")} ${s.dim}${options.system}${s.reset}`,
-    );
+    lines.push(`${bar}  ${label("system")} ${s.dim}${options.system}${s.reset}`);
   }
   const elements = options.elements ?? [];
   if (elements.length > 0) {
     lines.push(`${bar}  ${s.dim}elements${s.reset}`);
     for (const row of elements) {
       const idle = row.detail === "—";
-      const detail = idle
-        ? `${s.dim}—${s.reset}`
-        : `${s.cyan}${row.detail}${s.reset}`;
-      lines.push(
-        `${bar}  ${s.dim}${row.element.padEnd(9)}${s.reset} ${detail}`,
-      );
+      const detail = idle ? `${s.dim}—${s.reset}` : `${s.cyan}${row.detail}${s.reset}`;
+      lines.push(`${bar}  ${s.dim}${row.element.padEnd(9)}${s.reset} ${detail}`);
     }
   }
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
@@ -164,9 +150,7 @@ export function formatDevBanner(options: DevHeroMeta = {}): string {
     `${s.green}◇${s.reset}  Starting`,
   ];
   if (options.watching !== false) {
-    lines.push(
-      `${bar}  ${s.dim}watching — client types regenerate on save${s.reset}`,
-    );
+    lines.push(`${bar}  ${s.dim}watching — client types regenerate on save${s.reset}`);
   }
   lines.push(formatDevHeroDetails(options).trimEnd());
   lines.push(bar);
@@ -196,10 +180,7 @@ export function formatServiceLine(
  * @param url - App base URL
  * @param color - Color on/off
  */
-export function formatAppReadyLine(
-  url: string,
-  color: boolean = termColorEnabled(),
-): string {
+export function formatAppReadyLine(url: string, color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
   return `${s.green}●${s.reset}  ${s.dim}App${s.reset}      ${s.cyan}${url}${s.reset}\n`;
 }
@@ -245,9 +226,7 @@ export function formatDevHero(
  *
  * @param color - Color on/off
  */
-export function formatDevLogSeparator(
-  color: boolean = termColorEnabled(),
-): string {
+export function formatDevLogSeparator(color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
   return (
     `${s.dim}│${s.reset}\n` +
@@ -263,10 +242,7 @@ export function formatDevLogSeparator(
  * @param message - Status text
  * @param color - Color on/off
  */
-export function formatStatusLine(
-  message: string,
-  color: boolean = termColorEnabled(),
-): string {
+export function formatStatusLine(message: string, color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
   return `${s.dim}│${s.reset}  ${s.dim}${message}${s.reset}\n`;
 }
@@ -314,35 +290,24 @@ export function formatDevLogTime(at: Date = new Date()): string {
  *
  * @param options - Surface, method, path, flow, timing, status
  */
-export function formatRequestLine(
-  options: {
-    readonly surface: DevLogSurface;
-    readonly method: string;
-    readonly path: string;
-    readonly flow?: string;
-    readonly status: number;
-    readonly ms: number;
-    /** Instant for date/time columns (default now). */
-    readonly at?: Date;
-    readonly color?: boolean;
-  },
-): string {
+export function formatRequestLine(options: {
+  readonly surface: DevLogSurface;
+  readonly method: string;
+  readonly path: string;
+  readonly flow?: string;
+  readonly status: number;
+  readonly ms: number;
+  /** Instant for date/time columns (default now). */
+  readonly at?: Date;
+  readonly color?: boolean;
+}): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const at = options.at ?? new Date();
   const date = formatDevLogDate(at);
   const time = formatDevLogTime(at);
   const surfaceColor =
-    options.surface === "App"
-      ? s.green
-      : options.surface === "Console"
-        ? s.magenta
-        : s.cyan;
-  const statusColor =
-    options.status >= 500
-      ? s.red
-      : options.status >= 400
-        ? s.yellow
-        : s.green;
+    options.surface === "App" ? s.green : options.surface === "Console" ? s.magenta : s.cyan;
+  const statusColor = options.status >= 500 ? s.red : options.status >= 400 ? s.yellow : s.green;
   const methodRaw = options.method.toUpperCase();
   const methodColor =
     methodRaw === "GET"
@@ -355,9 +320,7 @@ export function formatRequestLine(
             ? s.red
             : s.cyan;
   const method = methodRaw.padEnd(4);
-  const path = options.path.length > 28
-    ? `${options.path.slice(0, 27)}…`
-    : options.path.padEnd(28);
+  const path = options.path.length > 28 ? `${options.path.slice(0, 27)}…` : options.path.padEnd(28);
   const flow = (options.flow ?? "—").padEnd(22);
   const ms = `${options.ms}ms`.padStart(6);
   return (
@@ -378,34 +341,25 @@ export function formatRequestLine(
  *
  * @param options - Project name, services, driver labels
  */
-export function formatStackSummary(
-  options: {
-    readonly project: string;
-    readonly services: readonly StackSummaryService[];
-    /** Drivers the host app will use (e.g. `postgres`, `redis`). */
-    readonly appDrivers?: readonly string[];
-    readonly color?: boolean;
-  },
-): string {
+export function formatStackSummary(options: {
+  readonly project: string;
+  readonly services: readonly StackSummaryService[];
+  /** Drivers the host app will use (e.g. `postgres`, `redis`). */
+  readonly appDrivers?: readonly string[];
+  readonly color?: boolean;
+}): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
   const pad = (label: string) => label.padEnd(8);
   const lines: string[] = [
-    `${s.green}◇${s.reset}  ${s.bold}Stack${s.reset}     ${s.cyan}${options.project}${s.reset}`,
+    `${s.green}◇${s.reset}  ${s.bold}Docker${s.reset}     ${s.cyan}${options.project}${s.reset}`,
   ];
   for (const svc of options.services) {
-    lines.push(
-      `${bar}  ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}:${svc.hostPort}${s.reset}`,
-    );
+    lines.push(`${bar}  ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}:${svc.hostPort}${s.reset}`);
   }
   const drivers = options.appDrivers ?? [];
-  const appDetail =
-    drivers.length > 0
-      ? `host Bun · ${drivers.join(" + ")}`
-      : "host Bun";
-  lines.push(
-    `${bar}  ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`,
-  );
+  const appDetail = drivers.length > 0 ? `host Bun · ${drivers.join(" + ")}` : "host Bun";
+  lines.push(`${bar}  ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`);
   lines.push(bar);
   return `${lines.join("\n")}\n`;
 }
@@ -416,10 +370,7 @@ export function formatStackSummary(
  * @param code - Hex claim code
  * @param color - Color on/off
  */
-export function formatClaimNote(
-  code: string,
-  color: boolean = termColorEnabled(),
-): string {
+export function formatClaimNote(code: string, color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
   const bar = `${s.dim}│${s.reset}`;
   const title = "Claim code";

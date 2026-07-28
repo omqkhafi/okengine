@@ -41,22 +41,46 @@ describe("auth plugin", () => {
   test("registers oke_ tables on both planes", () => {
     const tables: string[] = [];
     auth({ secret: "test" }).register({
-      hook() { return this; },
-      decorate() { return this; },
-      element() { return this; },
-      needs() { return this; },
-      errors() { return this; },
-      consolePanel() { return this; },
-      cli() { return this; },
-      driver() { return this; },
-      image() { return this; },
+      hook() {
+        return this;
+      },
+      decorate() {
+        return this;
+      },
+      element() {
+        return this;
+      },
+      needs() {
+        return this;
+      },
+      errors() {
+        return this;
+      },
+      consolePanel() {
+        return this;
+      },
+      cli() {
+        return this;
+      },
+      driver() {
+        return this;
+      },
+      image() {
+        return this;
+      },
       table(name) {
         tables.push(name);
         return this;
       },
-      flow() { return this; },
-      client() { return this; },
-      config() { return this; },
+      flow() {
+        return this;
+      },
+      client() {
+        return this;
+      },
+      config() {
+        return this;
+      },
     });
     expect(tables).toContain("oke_operators");
     expect(tables).toContain("oke_operator_credentials");
@@ -141,13 +165,15 @@ describe("cross-plane compile error", () => {
     expect(diags.some((d) => d.message.includes("fx.auth"))).toBe(true);
     expect(diags.some((d) => d.message.includes("cross-plane call"))).toBe(true);
 
-    expect(() => assertCrossPlane(manifest, [
-      {
-        path: "x.ts",
-        flow: "console.store.query",
-        source: `plane: "operator"; fx.auth.userId`,
-      },
-    ])).toThrow(CrossPlaneError);
+    expect(() =>
+      assertCrossPlane(manifest, [
+        {
+          path: "x.ts",
+          flow: "console.store.query",
+          source: `plane: "operator"; fx.auth.userId`,
+        },
+      ]),
+    ).toThrow(CrossPlaneError);
 
     const user = userPrincipal({ userId: "u1", scopes: ["bookings:create"] });
     expect(() => assertPlaneAccess(user, "operator")).toThrow(CrossPlaneError);
@@ -172,14 +198,14 @@ describe("hybrid sessions", () => {
     expect(rotated.accessToken).not.toBe(issued.accessToken);
 
     // Reuse of the old refresh token revokes the family.
-    await expect(
-      rotateRefresh(store, crypto, issued.refreshToken),
-    ).rejects.toMatchObject({ name: "SessionError" });
+    await expect(rotateRefresh(store, crypto, issued.refreshToken)).rejects.toMatchObject({
+      name: "SessionError",
+    });
 
     // Family revoked — the rotated refresh is also dead.
-    await expect(
-      rotateRefresh(store, crypto, rotated.refreshToken),
-    ).rejects.toBeInstanceOf(SessionError);
+    await expect(rotateRefresh(store, crypto, rotated.refreshToken)).rejects.toBeInstanceOf(
+      SessionError,
+    );
   });
 });
 
@@ -193,9 +219,7 @@ describe("operator plane", () => {
     });
 
     expect(store.credentials.has(op.id)).toBe(true);
-    expect(() => removeOperatorCredential(store, op.id)).toThrow(
-      /cannot be removed/,
-    );
+    expect(() => removeOperatorCredential(store, op.id)).toThrow(/cannot be removed/);
     expect(store.credentials.has(op.id)).toBe(true);
 
     linkOperatorSso(store, op.id, "oidc", "sub-123");
@@ -266,8 +290,6 @@ describe("roles are data", () => {
   });
 
   test("assertAttenuated helper", () => {
-    expect(() =>
-      assertAttenuated(new Set(["a"]), ["a", "b"], "api key"),
-    ).toThrow(/missing: b/);
+    expect(() => assertAttenuated(new Set(["a"]), ["a", "b"], "api key")).toThrow(/missing: b/);
   });
 });

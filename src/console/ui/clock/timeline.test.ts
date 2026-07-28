@@ -25,9 +25,7 @@ describe("forwardTimeline", () => {
       ],
       now,
     );
-    expect(events.every((e) => e.at >= now && e.at < now + 86_400_000)).toBe(
-      true,
-    );
+    expect(events.every((e) => e.at >= now && e.at < now + 86_400_000)).toBe(true);
     expect(events.find((e) => e.name === "too-far")).toBeUndefined();
     expect(events.find((e) => e.name === "past")).toBeUndefined();
     for (let i = 1; i < events.length; i++) {

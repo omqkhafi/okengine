@@ -1,67 +1,67 @@
-import type { LoaderPlugin } from 'fumadocs-core/source';
-import { createElement, type ReactNode } from 'react';
-import { icons, type LucideIcon } from 'lucide-react';
+import type { LoaderPlugin } from "fumadocs-core/source";
+import { createElement, type ReactNode } from "react";
+import { icons, type LucideIcon } from "lucide-react";
 
 /**
  * Lucide icon names keyed by docs URL path (better-auth sidebar-content pattern).
  */
 const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
-  '/docs': 'BookOpen',
-  '/docs/get-started': 'Rocket',
-  '/docs/get-started/introduction': 'BookOpen',
-  '/docs/get-started/comparison': 'Scale',
-  '/docs/get-started/installation': 'Download',
-  '/docs/get-started/basic-usage': 'SquareTerminal',
-  '/docs/learn': 'GraduationCap',
-  '/docs/learn/notes': 'StickyNote',
-  '/docs/learn/linkly': 'Link2',
-  '/docs/learn/provisions': 'Package',
-  '/docs/learn/skyport': 'Plane',
-  '/docs/elements': 'Boxes',
-  '/docs/elements/flow': 'Workflow',
-  '/docs/elements/signal': 'Radio',
-  '/docs/elements/store': 'Database',
-  '/docs/elements/clock': 'Clock',
-  '/docs/elements/gate': 'ShieldCheck',
-  '/docs/elements/vault': 'KeyRound',
-  '/docs/elements/channel': 'Mail',
-  '/docs/elements/ai': 'Bot',
-  '/docs/console': 'LayoutDashboard',
-  '/docs/console/overview': 'Activity',
-  '/docs/console/flows': 'GitBranch',
-  '/docs/console/signals': 'Radio',
-  '/docs/console/store': 'Database',
-  '/docs/console/clock': 'Clock',
-  '/docs/console/gates': 'Shield',
-  '/docs/console/vault': 'KeyRound',
-  '/docs/console/channels': 'Mailbox',
-  '/docs/console/ai': 'Sparkles',
-  '/docs/console/architecture': 'Network',
-  '/docs/console/traces': 'Route',
-  '/docs/console/runs': 'Play',
-  '/docs/console/manifest-diff': 'Diff',
-  '/docs/console/access': 'Users',
-  '/docs/console/plugins': 'Puzzle',
-  '/docs/console/privacy': 'EyeOff',
-  '/docs/console/tenancy': 'Building2',
-  '/docs/plugins': 'Puzzle',
-  '/docs/cli': 'Terminal',
-  '/docs/security': 'Shield',
-  '/docs/ai': 'Bot',
-  '/docs/ai/resources': 'Brain',
+  "/docs": "BookOpen",
+  "/docs/get-started": "Rocket",
+  "/docs/get-started/introduction": "BookOpen",
+  "/docs/get-started/comparison": "Scale",
+  "/docs/get-started/installation": "Download",
+  "/docs/get-started/basic-usage": "SquareTerminal",
+  "/docs/learn": "GraduationCap",
+  "/docs/learn/notes": "StickyNote",
+  "/docs/learn/linkly": "Link2",
+  "/docs/learn/provisions": "Package",
+  "/docs/learn/skyport": "Plane",
+  "/docs/elements": "Boxes",
+  "/docs/elements/flow": "Workflow",
+  "/docs/elements/signal": "Radio",
+  "/docs/elements/store": "Database",
+  "/docs/elements/clock": "Clock",
+  "/docs/elements/gate": "ShieldCheck",
+  "/docs/elements/vault": "KeyRound",
+  "/docs/elements/channel": "Mail",
+  "/docs/elements/ai": "Bot",
+  "/docs/console": "LayoutDashboard",
+  "/docs/console/overview": "Activity",
+  "/docs/console/flows": "GitBranch",
+  "/docs/console/signals": "Radio",
+  "/docs/console/store": "Database",
+  "/docs/console/clock": "Clock",
+  "/docs/console/gates": "Shield",
+  "/docs/console/vault": "KeyRound",
+  "/docs/console/channels": "Mailbox",
+  "/docs/console/ai": "Sparkles",
+  "/docs/console/architecture": "Network",
+  "/docs/console/traces": "Route",
+  "/docs/console/runs": "Play",
+  "/docs/console/manifest-diff": "Diff",
+  "/docs/console/access": "Users",
+  "/docs/console/plugins": "Puzzle",
+  "/docs/console/privacy": "EyeOff",
+  "/docs/console/tenancy": "Building2",
+  "/docs/plugins": "Puzzle",
+  "/docs/cli": "Terminal",
+  "/docs/security": "Shield",
+  "/docs/ai": "Bot",
+  "/docs/ai/resources": "Brain",
 };
 
 /** Folder display name → docs path for icon lookup. */
 const FOLDER_PATHS: Readonly<Record<string, string>> = {
-  Documentation: '/docs',
-  'Get Started': '/docs/get-started',
-  Learn: '/docs/learn',
-  Elements: '/docs/elements',
-  Console: '/docs/console',
-  Plugins: '/docs/plugins',
-  'CLI Reference': '/docs/cli',
-  Security: '/docs/security',
-  'AI Resources': '/docs/ai',
+  Documentation: "/docs",
+  "Get Started": "/docs/get-started",
+  Learn: "/docs/learn",
+  Elements: "/docs/elements",
+  Console: "/docs/console",
+  Plugins: "/docs/plugins",
+  "CLI Reference": "/docs/cli",
+  Security: "/docs/security",
+  "AI Resources": "/docs/ai",
 };
 
 /**
@@ -75,7 +75,7 @@ function iconForPath(path: string | undefined): ReactNode {
   if (!name) return undefined;
   const Icon = icons[name] as LucideIcon | undefined;
   if (!Icon) return undefined;
-  return createElement(Icon, { className: 'size-4' });
+  return createElement(Icon, { className: "size-4" });
 }
 
 /**
@@ -85,7 +85,7 @@ function iconForPath(path: string | undefined): ReactNode {
  */
 export function sidebarIconsPlugin(): LoaderPlugin {
   return {
-    name: 'oke:sidebar-icons',
+    name: "oke:sidebar-icons",
     transformPageTree: {
       file(node) {
         if (node.url) {
@@ -95,7 +95,7 @@ export function sidebarIconsPlugin(): LoaderPlugin {
         return node;
       },
       folder(node) {
-        const name = typeof node.name === 'string' ? node.name : undefined;
+        const name = typeof node.name === "string" ? node.name : undefined;
         const path = name ? FOLDER_PATHS[name] : undefined;
         const icon = iconForPath(path);
         if (icon) node.icon = icon;

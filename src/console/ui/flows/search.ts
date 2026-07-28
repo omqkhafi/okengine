@@ -8,20 +8,10 @@
 import { z } from "zod";
 
 /** What the operator has selected as the traversal focus. */
-export type FlowsSelectionKind =
-  | "none"
-  | "cause"
-  | "flow"
-  | "effect";
+export type FlowsSelectionKind = "none" | "cause" | "flow" | "effect";
 
 /** Cause kinds shown in the left column. */
-export type CauseKind =
-  | "http"
-  | "signal"
-  | "cron"
-  | "every"
-  | "cdc"
-  | "caller";
+export type CauseKind = "http" | "signal" | "cron" | "every" | "cdc" | "caller";
 
 /** Effect resource kinds (right column). */
 export type EffectKindKey =
@@ -48,16 +38,12 @@ export type FlowGrouping = "unit" | "alpha";
 export type CauseGrouping = "kind" | "alpha";
 
 /** Attention-banner filter chips. */
-export type AttentionFilter =
-  | "erroring"
-  | "cron-overdue"
-  | "dead-letter"
-  | null;
+export type AttentionFilter = "erroring" | "cron-overdue" | "dead-letter" | null;
 
 /** Coerce URL search booleans (`true` / `false` strings). */
-const searchBool = z.union([z.boolean(), z.literal("true"), z.literal("false")]).transform(
-  (v) => v === true || v === "true",
-);
+const searchBool = z
+  .union([z.boolean(), z.literal("true"), z.literal("false")])
+  .transform((v) => v === true || v === "true");
 
 /** Zod schema for Flows URL search params. */
 export const FlowsSearchSchema = z.object({
@@ -120,9 +106,7 @@ export function parseFlowsSearch(raw: unknown): FlowsSearch {
  *
  * @param search - Typed search
  */
-export function serializeFlowsSearch(
-  search: FlowsSearch,
-): Record<string, string | boolean> {
+export function serializeFlowsSearch(search: FlowsSearch): Record<string, string | boolean> {
   const out: Record<string, string | boolean> = {};
   if (search.sel !== "none") out.sel = search.sel;
   if (search.cause) out.cause = search.cause;
@@ -208,8 +192,7 @@ export function selectFlow(prev: FlowsSearch, flowId: string): FlowsSearch {
 export function selectEffect(prev: FlowsSearch, effectRef: string): FlowsSearch {
   const path = parsePath(prev.path);
   const last = path[path.length - 1];
-  const nextPath =
-    last === effectRef ? path : [...path, effectRef].slice(-12);
+  const nextPath = last === effectRef ? path : [...path, effectRef].slice(-12);
   return {
     ...prev,
     sel: "effect",

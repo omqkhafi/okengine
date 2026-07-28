@@ -99,12 +99,9 @@ export interface ClockRuntime {
  *
  * @param options - Instance id, store, clock
  */
-export function createClockRuntime(
-  options: CreateClockRuntimeOptions = {},
-): ClockRuntime {
+export function createClockRuntime(options: CreateClockRuntimeOptions = {}): ClockRuntime {
   const timeTravel = options.timeTravel;
-  const now = (): number =>
-    timeTravel ? timeTravel.now() : (options.now ?? (() => Date.now()))();
+  const now = (): number => (timeTravel ? timeTravel.now() : (options.now ?? (() => Date.now()))());
   const store = options.store ?? createMemoryCronStore();
   const instanceId = options.instanceId ?? crypto.randomUUID();
   const leaseMs = options.leaseMs ?? 30_000;

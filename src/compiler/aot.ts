@@ -7,10 +7,7 @@
  */
 
 import type { FlowFailure } from "../kernel/errors.ts";
-import {
-  validate,
-  type SchemaInput,
-} from "../validation/standard-schema.ts";
+import { validate, type SchemaInput } from "../validation/standard-schema.ts";
 import {
   assembleInput,
   extractParts,

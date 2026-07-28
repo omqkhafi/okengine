@@ -4,15 +4,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { memoryVaultDriver } from "../../drivers/index.ts";
-import {
-  createVaultRuntime,
-  fingerprintSecretSync,
-  vault,
-} from "../../elements/vault.ts";
-import {
-  createMemoryJournalStore,
-  type JournalRun,
-} from "../../kernel/journal.ts";
+import { createVaultRuntime, fingerprintSecretSync, vault } from "../../elements/vault.ts";
+import { createMemoryJournalStore, type JournalRun } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import {
   assertNoSecretLeak,
@@ -82,13 +75,13 @@ describe("projectVaultList", () => {
     const { secrets, env } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "dev",
+      env: "local",
       peerFingerprints: {
         STRIPE_KEY: { staging: fingerprintSecretSync(SECRET) },
       },
     });
 
-    expect(env).toBe("dev");
+    expect(env).toBe("local");
     const stripe = secrets.find((s) => s.name === "STRIPE_KEY");
     const pub = secrets.find((s) => s.name === "PUBLIC_APP_URL");
     expect(stripe?.sensitive).toBe(true);
@@ -131,16 +124,12 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: null,
       runtime: rt,
-      env: "dev",
+      env: "local",
     });
     const row = secrets.find((s) => s.name === "KEY");
     expect(row?.winner).toBe(".env.local");
-    expect(row?.resolution.find((s) => s.source === ".env.local")?.won).toBe(
-      true,
-    );
-    expect(row?.resolution.find((s) => s.source === "driver")?.present).toBe(
-      true,
-    );
+    expect(row?.resolution.find((s) => s.source === ".env.local")?.won).toBe(true);
+    expect(row?.resolution.find((s) => s.source === "driver")?.present).toBe(true);
     expect(row?.resolution.find((s) => s.source === "driver")?.won).toBe(false);
   });
 
@@ -152,11 +141,9 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "dev",
+      env: "local",
     });
-    expect(secrets.find((s) => s.name === "STRIPE_KEY")?.lastReadAt).toBe(
-      1_700_000_000_000,
-    );
+    expect(secrets.find((s) => s.name === "STRIPE_KEY")?.lastReadAt).toBe(1_700_000_000_000);
   });
 
   test("blast radius queries journal — count + longest wake", async () => {
@@ -215,12 +202,10 @@ describe("projectVaultList", () => {
       manifest: manifest(),
       runtime: rt,
       journal,
-      env: "dev",
+      env: "local",
       now: () => now,
     });
-    expect(secrets.find((s) => s.name === "STRIPE_KEY")?.blastRadius.count).toBe(
-      2,
-    );
+    expect(secrets.find((s) => s.name === "STRIPE_KEY")?.blastRadius.count).toBe(2);
   });
 });
 
@@ -234,9 +219,7 @@ describe("set / rotate", () => {
     });
     expect(result.name).toBe("STRIPE_KEY");
     expect(result.fingerprint).not.toBe(before);
-    expect(result.fingerprint).toBe(
-      fingerprintSecretSync("sk_rotated_value_xyz"),
-    );
+    expect(result.fingerprint).toBe(fingerprintSecretSync("sk_rotated_value_xyz"));
     expect(JSON.stringify(result)).not.toContain("sk_rotated_value_xyz");
   });
 

@@ -3,10 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  cursorPromptForMarkdown,
-  cursorPromptHref,
-} from "./docs-page-actions";
+import { cursorPromptForMarkdown, cursorPromptHref } from "./docs-page-actions";
 
 describe("honest docs page actions", () => {
   test("cursor deeplink uses the documented prompt URL scheme", () => {

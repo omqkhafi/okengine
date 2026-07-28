@@ -3,7 +3,7 @@
  * Original okengine section (unified-theory §6).
  */
 
-import { EXPORTS } from '@/lib/elements';
+import { EXPORTS } from "@/lib/elements";
 
 /**
  * Grid of the ten exported names and what each one is for.
@@ -16,7 +16,7 @@ export function Vocabulary() {
           <div className="flex items-baseline justify-between gap-2">
             <code className="font-mono text-sm font-medium text-fd-foreground">{item.name}</code>
             <span className="font-mono text-[10px] text-fd-muted-foreground/60">
-              {String(i + 1).padStart(2, '0')}
+              {String(i + 1).padStart(2, "0")}
             </span>
           </div>
           <p className="text-[11px] leading-snug text-fd-muted-foreground">{item.role}</p>

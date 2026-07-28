@@ -6,11 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  OKE_ERRORS,
-  OkeError,
-  type OkeErrorDefinition,
-} from "./errors.ts";
+import { OKE_ERRORS, OkeError, type OkeErrorDefinition } from "./errors.ts";
 
 describe("OKE error-code registry", () => {
   test("every code is unique", () => {
@@ -30,9 +26,7 @@ describe("OKE error-code registry", () => {
   test("OkeError docsUrl matches docs origin /e/{code}", () => {
     for (const def of Object.values(OKE_ERRORS) as OkeErrorDefinition[]) {
       const err = new OkeError(def);
-      expect(err.docsUrl).toBe(
-        `https://okengine.vercel.app/e/${def.code}`,
-      );
+      expect(err.docsUrl).toBe(`https://okengine.vercel.app/e/${def.code}`);
       expect(err.message).toContain(err.docsUrl);
       expect(err.message).toContain(`OKE${def.code}`);
       expect(err.message).toContain("→");

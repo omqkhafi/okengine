@@ -81,9 +81,7 @@ export function ChannelsA11yView(props: ChannelsA11yViewProps) {
               {outcomes.map((row) => (
                 <tr
                   key={row.state}
-                  data-emphasized={
-                    isConsequenceEmphasized(row) ? "true" : undefined
-                  }
+                  data-emphasized={isConsequenceEmphasized(row) ? "true" : undefined}
                 >
                   <th scope="row">{STATE_LABEL[row.state]}</th>
                   <td>{row.count}</td>
@@ -103,8 +101,7 @@ export function ChannelsA11yView(props: ChannelsA11yViewProps) {
           <section aria-label="Template detail" aria-live="polite">
             <h2>{open.name}</h2>
             <p>
-              From {open.from ?? "unset"} · Locales{" "}
-              {open.locales.join(", ") || "none"}
+              From {open.from ?? "unset"} · Locales {open.locales.join(", ") || "none"}
             </p>
             <section aria-label="Email authentication">
               <h3>SPF / DKIM / DMARC</h3>
@@ -118,11 +115,7 @@ export function ChannelsA11yView(props: ChannelsA11yViewProps) {
               <h3>Preview</h3>
               <p>
                 Locale chain:{" "}
-                {formatLocaleChainDisplay([
-                  "profile:ar",
-                  "accept-language:ar",
-                  "default:en",
-                ])}
+                {formatLocaleChainDisplay(["profile:ar", "accept-language:ar", "default:en"])}
               </p>
               <div dir={dir} lang={previewLocale}>
                 <p>رمز 1234</p>
@@ -130,9 +123,7 @@ export function ChannelsA11yView(props: ChannelsA11yViewProps) {
             </section>
             <section aria-label="Send test">
               <h3>Send test</h3>
-              <p role="status">
-                Real send to a designated recipient — not a dry run
-              </p>
+              <p role="status">Real send to a designated recipient — not a dry run</p>
               <label>
                 Recipient
                 <input aria-label="Test recipient" defaultValue="" />

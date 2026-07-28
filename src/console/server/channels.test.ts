@@ -73,9 +73,7 @@ describe("projectChannelsList", () => {
     expect(list.inbox[0]!.toMasked).toContain("***");
     expect(list.outcomes[0]!.state).toBe("delivered-then-complained");
     expect(list.outcomes[0]!.verdict).toBe("review");
-    expect(list.suppression.some((s) => s.reason === "prior-bounce")).toBe(
-      true,
-    );
+    expect(list.suppression.some((s) => s.reason === "prior-bounce")).toBe(true);
   });
 
   test("fallback summary is a weekly bill line", () => {
@@ -169,9 +167,7 @@ describe("console.channel.sendTest", () => {
       expect(okBody.error).toBeNull();
       expect(okBody.data.ok).toBe(true);
       expect(okBody.data.messageId.length).toBeGreaterThan(0);
-      expect(handle.state.channelInbox?.entries.length ?? 0).toBeGreaterThan(
-        before,
-      );
+      expect(handle.state.channelInbox?.entries.length ?? 0).toBeGreaterThan(before);
     } finally {
       await handle.app.stop();
     }

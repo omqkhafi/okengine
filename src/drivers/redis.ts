@@ -5,24 +5,15 @@
  */
 
 import { LuaKvStore } from "./kv-lua.ts";
-import type {
-  KvClientLike,
-  KvDriver,
-  KvNamespace,
-  KvOpenOptions,
-} from "./types.ts";
+import type { KvClientLike, KvDriver, KvNamespace, KvOpenOptions } from "./types.ts";
 
 /**
  * Open a KV namespace over the redis protocol.
  *
  * @param options - Name / URL / injected client
  */
-export async function openRedisKv(
-  options: KvOpenOptions,
-): Promise<KvNamespace> {
-  const client: KvClientLike =
-    options.client ??
-    createBunRedisClient(options.url);
+export async function openRedisKv(options: KvOpenOptions): Promise<KvNamespace> {
+  const client: KvClientLike = options.client ?? createBunRedisClient(options.url);
 
   const prefix = `oke:kv:${options.name}:`;
 
@@ -39,8 +30,7 @@ export async function openRedisKv(
     },
     async set(key, value, ttl) {
       const payload = JSON.stringify(value);
-      const ex =
-        ttl !== undefined ? Math.max(1, Math.ceil(ttlToSeconds(ttl))) : undefined;
+      const ex = ttl !== undefined ? Math.max(1, Math.ceil(ttlToSeconds(ttl))) : undefined;
       if (ex !== undefined) {
         await client.set(prefix + key, payload, { ex });
       } else {
@@ -70,11 +60,7 @@ export async function openRedisKv(
         return (await client.eval(script, prefixed.length, ...keysAndArgs)) as T;
       }
       if (client.send) {
-        return (await client.send("EVAL", [
-          script,
-          String(prefixed.length),
-          ...keysAndArgs,
-        ])) as T;
+        return (await client.send("EVAL", [script, String(prefixed.length), ...keysAndArgs])) as T;
       }
       throw new Error("redis kv.eval: client lacks eval/send");
     },
@@ -90,10 +76,7 @@ export async function openRedisKv(
  * @param client - Redis-like client
  * @param match - MATCH pattern
  */
-async function scanAll(
-  client: KvClientLike,
-  match: string,
-): Promise<string[]> {
+async function scanAll(client: KvClientLike, match: string): Promise<string[]> {
   if (client.scan) {
     const out: string[] = [];
     let cursor = "0";
@@ -111,13 +94,10 @@ async function scanAll(
     const out: string[] = [];
     let cursor = "0";
     do {
-      const reply = (await client.send("SCAN", [
-        cursor,
-        "MATCH",
-        match,
-        "COUNT",
-        "100",
-      ])) as [string, string[]];
+      const reply = (await client.send("SCAN", [cursor, "MATCH", match, "COUNT", "100"])) as [
+        string,
+        string[],
+      ];
       const next = String(reply[0]);
       const batch = reply[1] ?? [];
       out.push(...batch);
@@ -125,9 +105,7 @@ async function scanAll(
     } while (cursor !== "0");
     return out;
   }
-  throw new Error(
-    "redis kv.list: client lacks SCAN — key browse refused rather than KEYS *",
-  );
+  throw new Error("redis kv.list: client lacks SCAN — key browse refused rather than KEYS *");
 }
 
 function ttlToSeconds(ttl: string): number {
@@ -159,8 +137,7 @@ function ttlToSeconds(ttl: string): number {
  * @param url - Optional Redis URL
  */
 export function createBunRedisClient(url?: string): KvClientLike {
-  const redis =
-    url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
+  const redis = url !== undefined ? new Bun.RedisClient(url) : Bun.redis;
 
   return {
     get: (key) => redis.get(key),
@@ -224,8 +201,7 @@ export function createRedisFakeClient(nowMs?: () => number): KvClientLike & {
     },
     async scan(cursor, opts) {
       const match = opts?.match ?? "*";
-      const prefix =
-        match.endsWith("*") ? match.slice(0, -1) : match;
+      const prefix = match.endsWith("*") ? match.slice(0, -1) : match;
       const all = [...data.keys()].filter((k) =>
         match.endsWith("*") ? k.startsWith(prefix) : k === match,
       );

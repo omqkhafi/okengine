@@ -3,16 +3,9 @@
  * (console §9.14).
  */
 
-import {
-  ONCE_SECRET_ACK_LABEL,
-  ONCE_SECRET_WARNING,
-} from "./acknowledgement.ts";
+import { ONCE_SECRET_ACK_LABEL, ONCE_SECRET_WARNING } from "./acknowledgement.ts";
 import { formatAccessBlastRadius } from "./blast-radius.ts";
-import {
-  ACCESS_BLAST_FIXTURE,
-  ACCESS_EFFECTIVE_FIXTURE,
-  ACCESS_LIST_FIXTURE,
-} from "./fixture.ts";
+import { ACCESS_BLAST_FIXTURE, ACCESS_EFFECTIVE_FIXTURE, ACCESS_LIST_FIXTURE } from "./fixture.ts";
 import { hygieneLines } from "./hygiene.ts";
 import { formatProvenance } from "./provenance.ts";
 
@@ -34,9 +27,7 @@ export interface AccessA11yViewProps {
 export function AccessA11yView(props: AccessA11yViewProps) {
   const plane = props.plane ?? "user";
   const section =
-    plane === "operator"
-      ? ACCESS_LIST_FIXTURE.operatorPlane
-      : ACCESS_LIST_FIXTURE.userPlane;
+    plane === "operator" ? ACCESS_LIST_FIXTURE.operatorPlane : ACCESS_LIST_FIXTURE.userPlane;
   const openKeyId = props.openKeyId ?? "key_demo";
   const openKey = section.keys.find((k) => k.id === openKeyId);
   const blast = formatAccessBlastRadius(ACCESS_BLAST_FIXTURE);
@@ -86,9 +77,7 @@ export function AccessA11yView(props: AccessA11yViewProps) {
                   <li key={op.id}>
                     <button type="button" style={{ minHeight: 32, width: "100%" }}>
                       {op.name} ({op.email})
-                      {op.neverSignedIn ? (
-                        <span role="status"> never signed in</span>
-                      ) : null}
+                      {op.neverSignedIn ? <span role="status"> never signed in</span> : null}
                     </button>
                   </li>
                 ))}
@@ -135,9 +124,7 @@ export function AccessA11yView(props: AccessA11yViewProps) {
                     style={{ minHeight: 32, width: "100%" }}
                   >
                     {k.name}
-                    {k.unused90d ? (
-                      <span role="status"> unused 90d+</span>
-                    ) : null}
+                    {k.unused90d ? <span role="status"> unused 90d+</span> : null}
                   </button>
                 </li>
               ))}
@@ -146,9 +133,7 @@ export function AccessA11yView(props: AccessA11yViewProps) {
 
           <section aria-label="Grantable scopes">
             <h3>Grantable scopes</h3>
-            <p>
-              Only scopes you hold appear — impossibility taught by absence
-            </p>
+            <p>Only scopes you hold appear — impossibility taught by absence</p>
             <ul>
               {section.grantableScopes.map((s) => (
                 <li key={s}>

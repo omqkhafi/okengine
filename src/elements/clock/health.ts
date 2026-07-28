@@ -7,10 +7,7 @@
 
 import { parseDurationMs } from "./duration.ts";
 import { effectiveSchedule, type CronRow } from "./reconcile.ts";
-import {
-  countMissedOccurrences,
-  previousOccurrence,
-} from "./schedule.ts";
+import { countMissedOccurrences, previousOccurrence } from "./schedule.ts";
 
 /** Catch-up policy matching ClockRuntime physics. */
 export type CatchUpPolicy = "one";
@@ -39,9 +36,7 @@ export interface CronHealth {
  */
 export function cronHealth(row: CronRow, now: number): CronHealth {
   const overdue = isOverdue(row, now);
-  const missedRuns = overdue
-    ? countMissedFromRow(row, now)
-    : 0;
+  const missedRuns = overdue ? countMissedFromRow(row, now) : 0;
   const driftMs = computeDrift(row, now);
 
   return {

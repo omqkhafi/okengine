@@ -61,10 +61,7 @@ export function ArchitecturePanel() {
     refetchInterval: 10_000,
   });
 
-  const graph = useMemo(
-    () => buildCausalityGraph(manifestQuery.data),
-    [manifestQuery.data],
-  );
+  const graph = useMemo(() => buildCausalityGraph(manifestQuery.data), [manifestQuery.data]);
 
   const layerFlags = layersOf(search);
   const view = useMemo(
@@ -93,23 +90,15 @@ export function ArchitecturePanel() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 flex-wrap items-end gap-4 border-b border-[var(--oke-line)] px-6 py-4">
         <div className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">
-            Architecture
-          </p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">Architecture</p>
           <h1 className="text-xl font-semibold tracking-tight">System shape</h1>
           <p className="text-sm text-[var(--oke-muted)]">
             Clustered by unit · typed layers · traffic from Runs
           </p>
         </div>
-        <p
-          className="ml-auto font-mono text-sm"
-          role="status"
-          aria-live="polite"
-        >
+        <p className="ml-auto font-mono text-sm" role="status" aria-live="polite">
           <span className="text-[var(--oke-muted)]">Boundary crossings</span>{" "}
-          <span className="text-lg font-semibold tabular-nums">
-            {view.boundaryCrossingCount}
-          </span>
+          <span className="text-lg font-semibold tabular-nums">{view.boundaryCrossingCount}</span>
         </p>
       </header>
 
@@ -129,11 +118,7 @@ export function ArchitecturePanel() {
                   <input
                     type="checkbox"
                     checked={layerFlags[layer]}
-                    onChange={(e) =>
-                      setSearch(
-                        setLayerSearch(search, layer, e.target.checked),
-                      )
-                    }
+                    onChange={(e) => setSearch(setLayerSearch(search, layer, e.target.checked))}
                     aria-label={`${LAYER_LABEL[layer]} layer`}
                   />
                   {LAYER_LABEL[layer]}
@@ -161,33 +146,18 @@ export function ArchitecturePanel() {
                     </label>
                   ))}
                 </fieldset>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setSearch(clearFocus(search))}
-                >
+                <Button type="button" variant="ghost" onClick={() => setSearch(clearFocus(search))}>
                   Clear focus
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-[var(--oke-muted)]">
-                Select a unit to focus at depth 1–2
-              </p>
+              <p className="text-sm text-[var(--oke-muted)]">Select a unit to focus at depth 1–2</p>
             )}
           </div>
 
-          <section
-            aria-label="System diagram"
-            className="min-h-0 flex-1 overflow-auto px-4 py-4"
-          >
-            <div
-              aria-hidden="true"
-              className="mb-4 overflow-x-auto"
-            >
-              <svg
-                className="h-auto w-full max-w-5xl text-[var(--oke-fg)]"
-                viewBox="0 0 640 380"
-              >
+          <section aria-label="System diagram" className="min-h-0 flex-1 overflow-auto px-4 py-4">
+            <div aria-hidden="true" className="mb-4 overflow-x-auto">
+              <svg className="h-auto w-full max-w-5xl text-[var(--oke-fg)]" viewBox="0 0 640 380">
                 <rect
                   x={SYSTEM_BOUNDARY.x}
                   y={SYSTEM_BOUNDARY.y}
@@ -221,9 +191,7 @@ export function ArchitecturePanel() {
                       x2={to.x}
                       y2={to.y}
                       stroke={
-                        edge.layer === "external"
-                          ? "var(--oke-external)"
-                          : "var(--oke-muted)"
+                        edge.layer === "external" ? "var(--oke-external)" : "var(--oke-muted)"
                       }
                       strokeWidth={edge.thickness}
                       strokeDasharray={edge.dashed ? "6 4" : undefined}
@@ -249,11 +217,7 @@ export function ArchitecturePanel() {
                               ? "var(--oke-bg)"
                               : "color-mix(in oklab, var(--oke-external) 25%, var(--oke-bg))"
                         }
-                        stroke={
-                          node.insideBoundary
-                            ? "var(--oke-fg)"
-                            : "var(--oke-external)"
-                        }
+                        stroke={node.insideBoundary ? "var(--oke-fg)" : "var(--oke-external)"}
                         strokeWidth={node.focused ? 2.5 : 1.25}
                       />
                       <text
@@ -291,14 +255,10 @@ export function ArchitecturePanel() {
                   >
                     <span>{n.label}</span>
                     {n.kind === "unit" && n.flowCount !== undefined ? (
-                      <span className="font-mono text-xs">
-                        {n.flowCount}
-                      </span>
+                      <span className="font-mono text-xs">{n.flowCount}</span>
                     ) : null}
                     {!n.insideBoundary ? (
-                      <span className="text-xs text-[var(--oke-external)]">
-                        external
-                      </span>
+                      <span className="text-xs text-[var(--oke-external)]">external</span>
                     ) : null}
                   </button>
                 </li>
@@ -308,9 +268,7 @@ export function ArchitecturePanel() {
               {view.edges.map((e) => (
                 <li key={e.id}>
                   {e.from} → {e.to}
-                  {e.dashed
-                    ? " (declared, never traversed)"
-                    : ` · ${e.traversals} traversals`}
+                  {e.dashed ? " (declared, never traversed)" : ` · ${e.traversals} traversals`}
                   {` · ${e.layer}`}
                 </li>
               ))}
@@ -329,9 +287,7 @@ export function ArchitecturePanel() {
             </p>
           </div>
           {view.findings.length === 0 ? (
-            <p className="px-5 pb-4 text-sm text-[var(--oke-muted)]">
-              No pathologies detected.
-            </p>
+            <p className="px-5 pb-4 text-sm text-[var(--oke-muted)]">No pathologies detected.</p>
           ) : (
             <ul className="divide-y divide-[var(--oke-line)] border-t border-[var(--oke-line)]">
               {view.findings.map((f, i) => (
@@ -348,16 +304,12 @@ export function ArchitecturePanel() {
                     />
                     {f.title}
                   </p>
-                  <p className="mt-1 text-sm text-[var(--oke-muted)]">
-                    {f.detail}
-                  </p>
+                  <p className="mt-1 text-sm text-[var(--oke-muted)]">{f.detail}</p>
                   {f.nodeIds[0] ? (
                     <button
                       type="button"
                       className="mt-2 min-h-8 text-sm text-[var(--oke-accent)] underline-offset-2 hover:underline"
-                      onClick={() =>
-                        setSearch(focusNode(search, f.nodeIds[0]!))
-                      }
+                      onClick={() => setSearch(focusNode(search, f.nodeIds[0]!))}
                     >
                       Focus
                     </button>

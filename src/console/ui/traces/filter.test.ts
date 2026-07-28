@@ -68,11 +68,7 @@ describe("effect filter", () => {
   });
 
   test("trace-level match when any connected span matches", () => {
-    const chain = TRACES_FIXTURE.filter(
-      (s) => s.id === "run-create-ok" || s.id === "run-fulfill",
-    );
-    expect(
-      traceMatchesEffectFilter(chain, { kind: "sent" }),
-    ).toBe(true);
+    const chain = TRACES_FIXTURE.filter((s) => s.id === "run-create-ok" || s.id === "run-fulfill");
+    expect(traceMatchesEffectFilter(chain, { kind: "sent" })).toBe(true);
   });
 });

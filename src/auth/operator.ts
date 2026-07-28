@@ -8,11 +8,7 @@
  */
 
 import { createBunCrypto } from "../runtime/primitives.ts";
-import type {
-  OperatorCredentialRow,
-  OperatorRow,
-  OperatorSsoLinkRow,
-} from "./tables.ts";
+import type { OperatorCredentialRow, OperatorRow, OperatorSsoLinkRow } from "./tables.ts";
 
 /** Operator-plane store. */
 export interface OperatorStore {
@@ -82,15 +78,10 @@ export async function createOperator(
  * @param store - Operator store
  * @param operatorId - Operator id
  */
-export function removeOperatorCredential(
-  store: OperatorStore,
-  operatorId: string,
-): never {
+export function removeOperatorCredential(store: OperatorStore, operatorId: string): never {
   void store;
   void operatorId;
-  throw new OperatorError(
-    "operator local credential cannot be removed; SSO is additive only",
-  );
+  throw new OperatorError("operator local credential cannot be removed; SSO is additive only");
 }
 
 /**
@@ -111,9 +102,7 @@ export function linkOperatorSso(
     throw new OperatorError(`unknown operator: ${operatorId}`);
   }
   if (!store.credentials.has(operatorId)) {
-    throw new OperatorError(
-      "operator is missing local credential — invariant violated",
-    );
+    throw new OperatorError("operator is missing local credential — invariant violated");
   }
   const link: OperatorSsoLinkRow = { operatorId, provider, subject };
   const list = store.ssoLinks.get(operatorId) ?? [];
@@ -128,14 +117,9 @@ export function linkOperatorSso(
  */
 let dummyPasswordHash: string | null = null;
 
-async function dummyHash(
-  crypto: ReturnType<typeof createBunCrypto>,
-): Promise<string> {
+async function dummyHash(crypto: ReturnType<typeof createBunCrypto>): Promise<string> {
   if (dummyPasswordHash === null) {
-    dummyPasswordHash = await crypto.hashPassword(
-      "oke-operator-timing-dummy",
-      "argon2id",
-    );
+    dummyPasswordHash = await crypto.hashPassword("oke-operator-timing-dummy", "argon2id");
   }
   return dummyPasswordHash;
 }
@@ -157,10 +141,8 @@ export async function authenticateOperator(
 ): Promise<OperatorRow | null> {
   const crypto = createBunCrypto();
   const op = [...store.operators.values()].find((o) => o.email === email);
-  const cred =
-    op && op.status === "active" ? store.credentials.get(op.id) : undefined;
-  const hash =
-    cred && cred.loginEnabled ? cred.passwordHash : await dummyHash(crypto);
+  const cred = op && op.status === "active" ? store.credentials.get(op.id) : undefined;
+  const hash = cred && cred.loginEnabled ? cred.passwordHash : await dummyHash(crypto);
   const ok = await crypto.verifyPassword(password, hash);
   if (!ok || !op || !cred || !cred.loginEnabled || op.status !== "active") {
     return null;

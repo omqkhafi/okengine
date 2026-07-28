@@ -5,12 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import {
-  hasDocsPane,
-  headerGeometry,
-  isNavTabActive,
-  NAV_TABS,
-} from "./nav.ts";
+import { hasDocsPane, headerGeometry, isNavTabActive, NAV_TABS } from "./nav.ts";
 
 const APP = join(import.meta.dir, "..", "app");
 

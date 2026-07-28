@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-26T01:08:53.710Z",
-  "version": "0.2.6",
+  "measuredAt": "2026-07-28T20:23:27.410Z",
+  "version": "0.2.7",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 9000,
+      "value": 9105,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 88313,
+      "value": 88312,
       "limit": 307200,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 29.511,
+      "value": 25.347,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 43944,
-      "limit": 44823,
+      "value": 45592,
+      "limit": 46504,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 4951,
-      "limit": 5207,
+      "value": 4961,
+      "limit": 5217,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -105,8 +105,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 8721,
-      "limit": 8977,
+      "value": 8818,
+      "limit": 9074,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -115,8 +115,8 @@
     {
       "id": "export:./config",
       "label": "config",
-      "value": 612,
-      "limit": 868,
+      "value": 936,
+      "limit": 1192,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 67075,
-      "limit": 68417,
+      "value": 67858,
+      "limit": 69216,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 5800,
-      "limit": 6056,
+      "value": 7882,
+      "limit": 8138,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -195,8 +195,8 @@
     {
       "id": "export:./vault",
       "label": "vault",
-      "value": 2358,
-      "limit": 2614,
+      "value": 2477,
+      "limit": 2733,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

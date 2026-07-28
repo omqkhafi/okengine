@@ -39,8 +39,7 @@ export const mockAiDriver: AiDriver = {
         if (payload === undefined) {
           payload = canned["*"] ?? { ok: true, echo: last };
         }
-        const text =
-          typeof payload === "string" ? payload : JSON.stringify(payload);
+        const text = typeof payload === "string" ? payload : JSON.stringify(payload);
         return {
           text,
           raw: payload,
@@ -70,9 +69,7 @@ export const mockAiDriver: AiDriver = {
  *
  * @param responses - Key → JSON payload
  */
-export function createMockAiDriver(
-  responses: Readonly<Record<string, unknown>>,
-): AiDriver {
+export function createMockAiDriver(responses: Readonly<Record<string, unknown>>): AiDriver {
   return {
     id: "mock",
     open(options = {}) {

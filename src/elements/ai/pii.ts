@@ -55,9 +55,7 @@ export class AiPiiBuildError extends Error {
  *
  * @param tags - Classification value
  */
-function isPiiTags(
-  tags: ColumnClassification | string | readonly string[] | undefined,
-): boolean {
+function isPiiTags(tags: ColumnClassification | string | readonly string[] | undefined): boolean {
   if (!tags) return false;
   if (typeof tags === "string") return tags === "pii";
   if (Array.isArray(tags)) return tags.includes("pii");

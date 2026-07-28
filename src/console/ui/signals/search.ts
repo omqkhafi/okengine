@@ -16,9 +16,7 @@ export const SignalsSearchSchema = z.object({
   paused: z
     .union([z.boolean(), z.literal("true"), z.literal("false")])
     .optional()
-    .transform((v) =>
-      v === undefined ? undefined : v === true || v === "true",
-    ),
+    .transform((v) => (v === undefined ? undefined : v === true || v === "true")),
   /** Bulk repair rate (messages/sec). */
   rate: z.coerce.number().min(1).max(1_000).optional(),
   /** Broadcast subscriber target for replay. */
@@ -33,9 +31,7 @@ export type SignalsSearch = z.infer<typeof SignalsSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseSignalsSearch(
-  search: Record<string, unknown>,
-): SignalsSearch {
+export function parseSignalsSearch(search: Record<string, unknown>): SignalsSearch {
   const parsed = SignalsSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -45,9 +41,7 @@ export function parseSignalsSearch(
  *
  * @param search - Current state
  */
-export function serializeSignalsSearch(
-  search: SignalsSearch,
-): Record<string, unknown> {
+export function serializeSignalsSearch(search: SignalsSearch): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (search.q) out.q = search.q;
   if (search.signal) out.signal = search.signal;
@@ -84,10 +78,7 @@ export function closeSignal(search: SignalsSearch): SignalsSearch {
  * @param search - Current
  * @param id - Message id
  */
-export function openDeadLetter(
-  search: SignalsSearch,
-  id: string,
-): SignalsSearch {
+export function openDeadLetter(search: SignalsSearch, id: string): SignalsSearch {
   return { ...search, dlq: id };
 }
 

@@ -56,9 +56,7 @@ export function createApiKeyStore(): ApiKeyStore {
 export async function hashApiKeySecret(secret: string): Promise<string> {
   const bytes = new TextEncoder().encode(secret);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
@@ -156,8 +154,7 @@ export async function rotateApiKey(
 ): Promise<CreatedApiKey | null> {
   const row = store.keys.get(id);
   if (!row || row.revokedAt !== null) return null;
-  const secret =
-    options.secret ?? `oke_${id.replace(/-/g, "")}_${randomSecret()}`;
+  const secret = options.secret ?? `oke_${id.replace(/-/g, "")}_${randomSecret()}`;
   row.hash = await hashApiKeySecret(secret);
   return { row, secret };
 }

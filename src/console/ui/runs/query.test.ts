@@ -15,9 +15,7 @@ import {
 
 describe("dimension query", () => {
   test("parses flow = X AND cache = miss AND duration > 1s", () => {
-    const q = parseDimensionQuery(
-      "flow = bookings.create AND cache = miss AND duration > 1s",
-    );
+    const q = parseDimensionQuery("flow = bookings.create AND cache = miss AND duration > 1s");
     expect(q.clauses).toEqual([
       { dimension: "flow", op: "=", value: "bookings.create" },
       { dimension: "cache", op: "=", value: "miss" },

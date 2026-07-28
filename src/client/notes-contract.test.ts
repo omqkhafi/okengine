@@ -20,10 +20,7 @@ beforeEach(() => {
 });
 
 /** Compile-time equality. */
-type Eq<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+type Eq<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Assert<T extends true> = T;
 
 const NoteId = z.object({ id: z.string() });
@@ -54,9 +51,7 @@ const get = on(
     out: Note,
     errors: { NotFound },
     do: ({ id }, fx) =>
-      id === "missing"
-        ? fx.fail("NotFound", {})
-        : { id, title: "First", body: "Hello" },
+      id === "missing" ? fx.fail("NotFound", {}) : { id, title: "First", body: "Hello" },
   }),
 );
 
@@ -121,9 +116,7 @@ describe("Notes — typeof app carries contracts", () => {
     {
       const { data, error } = await api.notes.get({ id: "n_1" });
       if (error?.code === "NotFound") {
-        type _Empty = Assert<
-          Eq<typeof error.data, Record<string, never>>
-        >;
+        type _Empty = Assert<Eq<typeof error.data, Record<string, never>>>;
         const keep: _Empty = true;
         expect(keep).toBe(true);
         throw new Error("unexpected NotFound");
@@ -244,9 +237,7 @@ describe("Notes — typeof app carries contracts", () => {
     type PartialClient = Client<typeof createOnly>;
 
     type FullHasGet = "get" extends keyof FullClient["notes"] ? true : false;
-    type PartialHasGet = "get" extends keyof PartialClient["notes"]
-      ? true
-      : false;
+    type PartialHasGet = "get" extends keyof PartialClient["notes"] ? true : false;
 
     type _Full = Assert<Eq<FullHasGet, true>>;
     type _Part = Assert<Eq<PartialHasGet, false>>;

@@ -39,10 +39,7 @@ export function fieldsFromSchema(schema: unknown): readonly SchemaField[] {
       ? d.enum.filter((v): v is string => typeof v === "string")
       : undefined;
     const type =
-      d.type === "string" ||
-      d.type === "number" ||
-      d.type === "boolean" ||
-      d.type === "integer"
+      d.type === "string" || d.type === "number" || d.type === "boolean" || d.type === "integer"
         ? d.type
         : "unknown";
     return {

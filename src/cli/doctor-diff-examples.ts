@@ -47,9 +47,7 @@ export async function runDoctorDiffExamples(): Promise<number> {
   }
 
   if (failed > 0) {
-    console.log(
-      "Acknowledge intentional breaks with `breaking: true` on the owning flow.",
-    );
+    console.log("Acknowledge intentional breaks with `breaking: true` on the owning flow.");
   }
   return failed > 0 ? 1 : 0;
 }

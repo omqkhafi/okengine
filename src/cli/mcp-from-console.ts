@@ -4,10 +4,7 @@
  * Used by `oke dev` so port 6535 is not a separate mock context.
  */
 
-import {
-  createFileDiff,
-  emitStructuralDiff,
-} from "../console/server/structural.ts";
+import { createFileDiff, emitStructuralDiff } from "../console/server/structural.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import type { McpContext } from "../mcp/tools.ts";

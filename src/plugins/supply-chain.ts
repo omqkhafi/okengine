@@ -248,9 +248,7 @@ export function projectSupplyChainSync(
   };
 }
 
-function projectLifecycle(
-  pkg: PackageJsonProbe | null,
-): LifecycleScriptsSignal {
+function projectLifecycle(pkg: PackageJsonProbe | null): LifecycleScriptsSignal {
   if (!pkg) {
     return {
       state: "unknown",
@@ -335,9 +333,7 @@ function projectNodeScan(
   };
 }
 
-async function projectProvenance(
-  options: ProjectSupplyChainOptions,
-): Promise<NpmProvenanceSignal> {
+async function projectProvenance(options: ProjectSupplyChainOptions): Promise<NpmProvenanceSignal> {
   if (options.provenance === "attested") {
     return { state: "pass", detail: "npm provenance attestation present" };
   }
@@ -385,10 +381,7 @@ function projectBootConflicts(
   };
 }
 
-async function readPackageJson(
-  cwd: string,
-  packageName: string,
-): Promise<PackageJsonProbe | null> {
+async function readPackageJson(cwd: string, packageName: string): Promise<PackageJsonProbe | null> {
   const path = resolve(cwd, "node_modules", ...packageName.split("/"), "package.json");
   try {
     const file = Bun.file(path);
@@ -422,9 +415,7 @@ async function fetchPublishedAt(
   }
 }
 
-async function fetchNpmProvenance(
-  packageName: string,
-): Promise<NpmProvenanceSignal> {
+async function fetchNpmProvenance(packageName: string): Promise<NpmProvenanceSignal> {
   try {
     const res = await fetch(`https://registry.npmjs.org/${packageName}`, {
       headers: { Accept: "application/json" },
@@ -437,10 +428,7 @@ async function fetchNpmProvenance(
     }
     const body = (await res.json()) as {
       "dist-tags"?: { latest?: string };
-      versions?: Record<
-        string,
-        { dist?: { attestations?: unknown; signatures?: unknown } }
-      >;
+      versions?: Record<string, { dist?: { attestations?: unknown; signatures?: unknown } }>;
     };
     const latest = body["dist-tags"]?.latest;
     const dist = latest ? body.versions?.[latest]?.dist : undefined;

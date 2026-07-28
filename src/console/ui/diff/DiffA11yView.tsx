@@ -27,8 +27,8 @@ export function DiffA11yView(props: DiffA11yViewProps) {
       <header>
         <h1>Manifest Diff</h1>
         <p>
-          Blast radius of a deploy — contract, permission, effect, and no-impact
-          changes. Read-only compare of current Manifest vs baseline.
+          Blast radius of a deploy — contract, permission, effect, and no-impact changes. Read-only
+          compare of current Manifest vs baseline.
         </p>
         <label>
           Filter changes
@@ -40,17 +40,14 @@ export function DiffA11yView(props: DiffA11yViewProps) {
         <h2>CI gate</h2>
         <p>
           {data.blockedCount} undeclared break
-          {data.blockedCount === 1 ? "" : "s"} blocked ·{" "}
-          {data.acknowledgedCount} acknowledged with breaking: true
+          {data.blockedCount === 1 ? "" : "s"} blocked · {data.acknowledgedCount} acknowledged with
+          breaking: true
         </p>
       </section>
 
       <main id="diff-main">
         {groups.map((group) => (
-          <section
-            key={group.category}
-            aria-label={group.label}
-          >
+          <section key={group.category} aria-label={group.label}>
             <h2>{group.label}</h2>
             <ul>
               {group.items.map((item) => {
@@ -58,19 +55,13 @@ export function DiffA11yView(props: DiffA11yViewProps) {
                 const selected = item.path === focusPath;
                 return (
                   <li key={item.path}>
-                    <article
-                      aria-current={selected ? "true" : undefined}
-                    >
+                    <article aria-current={selected ? "true" : undefined}>
                       <h3>
                         <code>{item.path}</code>
                       </h3>
                       <p>{item.summary}</p>
-                      {item.blastLine ? (
-                        <p role="status">{item.blastLine}</p>
-                      ) : null}
-                      {item.weeklyBillLine ? (
-                        <p>Weekly bill: {item.weeklyBillLine}</p>
-                      ) : null}
+                      {item.blastLine ? <p role="status">{item.blastLine}</p> : null}
+                      {item.weeklyBillLine ? <p>Weekly bill: {item.weeklyBillLine}</p> : null}
                       {gate ? <p role="status">{gate}</p> : null}
                     </article>
                   </li>

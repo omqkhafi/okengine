@@ -2,11 +2,7 @@
  * Fixture Access projection for unit tests and the axe gate.
  */
 
-import type {
-  AccessBlastRadius,
-  AccessEffectiveResponse,
-  AccessListResponse,
-} from "./types.ts";
+import type { AccessBlastRadius, AccessEffectiveResponse, AccessListResponse } from "./types.ts";
 
 /** Full list response fixture — planes separate. */
 export const ACCESS_LIST_FIXTURE: AccessListResponse = {

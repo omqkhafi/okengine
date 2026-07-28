@@ -33,10 +33,7 @@ export function appendLivePayload(
  * @param state - Current
  * @param paused - Desired
  */
-export function setPaused(
-  state: LiveMonitorState,
-  paused: boolean,
-): LiveMonitorState {
+export function setPaused(state: LiveMonitorState, paused: boolean): LiveMonitorState {
   return {
     ...state,
     paused,
@@ -68,9 +65,7 @@ export function exportLivePayloads(payloads: readonly unknown[]): string {
  *
  * @param seed - Optional initial payloads
  */
-export function createLiveMonitor(
-  seed: readonly unknown[] = [],
-): LiveMonitorState {
+export function createLiveMonitor(seed: readonly unknown[] = []): LiveMonitorState {
   return {
     paused: false,
     autoPausedByScroll: false,

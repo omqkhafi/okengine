@@ -15,15 +15,11 @@ export interface ProvenanceLine {
  *
  * @param effective - Server response
  */
-export function formatProvenance(
-  effective: AccessEffectiveResponse,
-): ProvenanceLine[] {
+export function formatProvenance(effective: AccessEffectiveResponse): ProvenanceLine[] {
   return effective.scopes.map((row) => ({
     scope: row.scope,
     sources: row.sources
-      .map((s) =>
-        s.kind === "direct" ? `direct (${s.name})` : `role ${s.name}`,
-      )
+      .map((s) => (s.kind === "direct" ? `direct (${s.name})` : `role ${s.name}`))
       .join(", "),
   }));
 }

@@ -1,20 +1,9 @@
 import { db } from "./core";
 import { member, fair } from "./gates";
-import {
-  dbUrl,
-  dbReplica1,
-  anthropicKey,
-  stripeKey,
-} from "./vault";
+import { dbUrl, dbReplica1, anthropicKey, stripeKey } from "./vault";
 import { bookingConfirmed } from "./channels";
 import { orderPlaced, seatFeed } from "./flows/bookings/signals";
-import {
-  smart,
-  fast,
-  triage,
-  embed,
-  support as supportAgentDecl,
-} from "./ai";
+import { smart, fast, triage, embed, support as supportAgentDecl } from "./ai";
 import { canBook } from "./flows/bookings";
 import "./journeys";
 import "./ai";

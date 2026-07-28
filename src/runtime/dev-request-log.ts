@@ -103,10 +103,7 @@ export async function timedDevFetch(
   handle: (request: Request) => Response | Promise<Response>,
   options: {
     readonly surface?: DevLogSurface;
-    readonly resolveFlow?: (
-      request: Request,
-      response: Response,
-    ) => string | undefined;
+    readonly resolveFlow?: (request: Request, response: Response) => string | undefined;
     /** Skip logging for this path/method. */
     readonly silent?: (request: Request) => boolean;
   } = {},

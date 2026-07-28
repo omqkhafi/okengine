@@ -8,19 +8,19 @@
  * API, so the static export is deterministic.
  */
 
-import type { Metadata } from 'next';
-import { ExternalArrow } from '@/components/chrome/icons';
+import type { Metadata } from "next";
+import { ExternalArrow } from "@/components/chrome/icons";
 import {
   CHANGELOG_SOURCE,
   loadChangelog,
   splitInlineCode,
   type ChangelogRelease,
-} from '@/lib/changelog';
-import { githubBlobUrl } from '@/lib/shared';
+} from "@/lib/changelog";
+import { githubBlobUrl } from "@/lib/shared";
 
 export const metadata: Metadata = {
-  title: 'Changelog',
-  description: 'Every published okengine release, newest first.',
+  title: "Changelog",
+  description: "Every published okengine release, newest first.",
 };
 
 /** Render a bullet with its `code` runs. */
@@ -103,7 +103,7 @@ export default function ChangelogPage() {
             Every release, newest first
           </h1>
           <p className="mt-4 max-w-[260px] text-sm leading-relaxed text-fd-muted-foreground">
-            Written down before it is announced. The page is generated from{' '}
+            Written down before it is announced. The page is generated from{" "}
             <code className="font-mono text-fd-foreground">{CHANGELOG_SOURCE}</code> in the repo.
           </p>
 

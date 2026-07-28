@@ -4,10 +4,7 @@
  * Reuses {@link assertAllowPiiForAsk} — does not reimplement matching.
  */
 
-import {
-  AiPiiBuildError,
-  assertAllowPiiForAsk,
-} from "../elements/ai/pii.ts";
+import { AiPiiBuildError, assertAllowPiiForAsk } from "../elements/ai/pii.ts";
 import type {
   AiPrompt,
   ClassificationValue,
@@ -23,9 +20,7 @@ import type { DoctorFinding } from "./doctor.ts";
  *
  * @param manifest - Extracted Manifest
  */
-export function checkManifestPiiAsks(
-  manifest: Manifest,
-): readonly DoctorFinding[] {
+export function checkManifestPiiAsks(manifest: Manifest): readonly DoctorFinding[] {
   const findings: DoctorFinding[] = [];
   const classifications = collectClassifications(manifest);
   const flows = manifest.flows ?? {};

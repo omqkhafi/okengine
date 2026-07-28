@@ -3,7 +3,7 @@
  * (README / `docs/spec/console.md`); the mnemonic is O·K·E = 6·5·3.
  */
 
-import { PORTS } from '@/lib/elements';
+import { PORTS } from "@/lib/elements";
 
 /**
  * Port cards for the surfaces `oke dev` brings up together.

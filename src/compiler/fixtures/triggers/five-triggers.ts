@@ -51,8 +51,7 @@ on(
   table("orders").changed("status"),
   flow({
     name: "triggers.cdc",
-    do: ({ before, after }, fx) =>
-      fx.store(db).insert(orders).values({ before, after }),
+    do: ({ before, after }, fx) => fx.store(db).insert(orders).values({ before, after }),
   }),
 );
 

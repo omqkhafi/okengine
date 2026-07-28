@@ -15,8 +15,7 @@ beforeEach(() => {
 });
 
 /** Compile-time assert: `Actual` extends `Expected`. */
-type ExpectExtends<Actual, Expected> =
-  Actual extends Expected ? true : false;
+type ExpectExtends<Actual, Expected> = Actual extends Expected ? true : false;
 
 describe("plugin decorate — types and runtime", () => {
   test("decoration is visible in downstream handlers", async () => {
@@ -45,14 +44,12 @@ describe("plugin decorate — types and runtime", () => {
   });
 
   test("types accumulate through .plug()", () => {
-    const withAudit = plugin("audit", { version: "1.0.0" }).decorate(
-      "audit",
-      { enabled: true as const },
-    );
-    const withBilling = plugin("billing", { version: "1.0.0" }).decorate(
-      "billing",
-      { currency: "SAR" as const },
-    );
+    const withAudit = plugin("audit", { version: "1.0.0" }).decorate("audit", {
+      enabled: true as const,
+    });
+    const withBilling = plugin("billing", { version: "1.0.0" }).decorate("billing", {
+      currency: "SAR" as const,
+    });
 
     const app = oke({ name: "types" }).plug(withAudit).plug(withBilling);
 
@@ -98,9 +95,7 @@ describe("plugin decorate — types and runtime", () => {
     );
 
     const app = oke({ name: "deco-scope" });
-    app.unit("orders").plug(
-      plugin("flag", { version: "1.0.0" }).decorate("flag", "orders-only"),
-    );
+    app.unit("orders").plug(plugin("flag", { version: "1.0.0" }).decorate("flag", "orders-only"));
 
     await app.fetch(new Request("http://localhost/orders"));
     await app.fetch(new Request("http://localhost/payments"));

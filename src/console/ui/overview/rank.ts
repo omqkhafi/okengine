@@ -115,10 +115,7 @@ function mapOverdue(crons: readonly ClockCronRecord[]): OverviewFinding[] {
   }));
 }
 
-function mapDormant(
-  secrets: readonly VaultRecord[],
-  now: number,
-): OverviewFinding[] {
+function mapDormant(secrets: readonly VaultRecord[], now: number): OverviewFinding[] {
   const dormant = dormantSecrets(secrets, now);
   if (dormant.length === 0) return [];
   return [
@@ -175,9 +172,7 @@ function mapPlugins(changes: readonly DiffChangeRecord[]): OverviewFinding[] {
   }));
 }
 
-function mapAiBudget(
-  versions: readonly PromptVersionMetrics[],
-): OverviewFinding[] {
+function mapAiBudget(versions: readonly PromptVersionMetrics[]): OverviewFinding[] {
   return overBudgetFindings(versions).map((f) => ({
     id: `ai:budget:${f.prompt}@${f.version}`,
     source: "ai" as const,

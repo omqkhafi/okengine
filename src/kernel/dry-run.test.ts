@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChannelRuntime } from "../elements/channel/runtime.ts";
-import {
-  isDryRun,
-  withDryRun,
-} from "./dry-run.ts";
+import { isDryRun, withDryRun } from "./dry-run.ts";
 import { createFx, type FxStubStoreHandle } from "./fx.ts";
 
 describe("fx dry-run stubbing", () => {

@@ -38,9 +38,7 @@ export function maskEmail(email: string): string {
   const name = parts[0] ?? domain;
   const tld = parts.length > 1 ? parts.slice(1).join(".") : "";
   const domainMask =
-    name.length <= 1
-      ? "*"
-      : `${name[0]!}${"*".repeat(Math.min(3, name.length - 1))}`;
+    name.length <= 1 ? "*" : `${name[0]!}${"*".repeat(Math.min(3, name.length - 1))}`;
   return tld ? `${localMask}@${domainMask}.${tld}` : `${localMask}@${domainMask}`;
 }
 

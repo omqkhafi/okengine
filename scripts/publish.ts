@@ -118,11 +118,7 @@ function readJsrJson(dir: string): JsrJson | null {
  * @param jsr - Manifest content
  */
 function writeJsrJson(dir: string, jsr: JsrJson): void {
-  writeFileSync(
-    join(dir, "jsr.json"),
-    `${JSON.stringify(jsr, null, 2)}\n`,
-    "utf-8",
-  );
+  writeFileSync(join(dir, "jsr.json"), `${JSON.stringify(jsr, null, 2)}\n`, "utf-8");
 }
 
 /**
@@ -180,10 +176,7 @@ function assertLockstepVersions(): string {
  * @param cmd - argv
  * @param opts - cwd / verbosity
  */
-function run(
-  cmd: string[],
-  opts: { cwd: string; verbose?: boolean },
-): Promise<boolean> {
+function run(cmd: string[], opts: { cwd: string; verbose?: boolean }): Promise<boolean> {
   const { cwd, verbose = true } = opts;
   if (verbose) {
     console.error(`[publish] (${relative(REPO_ROOT, cwd) || "."}) ${cmd.join(" ")}`);
@@ -274,8 +267,7 @@ async function publishOne(
   // okengine ships prebuilt Console SPA; create-oke templates need a prepack sync.
   const needsConsoleBuild = pkg.npmName === "okengine";
   const needsTemplateSync =
-    pkg.npmName === "create-oke" &&
-    existsSync(join(pkg.dir, "src/sync-templates.ts"));
+    pkg.npmName === "create-oke" && existsSync(join(pkg.dir, "src/sync-templates.ts"));
 
   if (flags.dryRun) {
     if (needsConsoleBuild) {
@@ -313,10 +305,9 @@ async function publishOne(
   if (doNpm) {
     // --ignore-scripts: prepack work already ran above; also blocks a
     // recursive lifecycle if package.json ever regains a `publish` script.
-    const ok = await run(
-      ["npm", "publish", "--access", "public", "--ignore-scripts"],
-      { cwd: pkg.dir },
-    );
+    const ok = await run(["npm", "publish", "--access", "public", "--ignore-scripts"], {
+      cwd: pkg.dir,
+    });
     if (!ok) {
       console.error(`[publish] npm publish failed for ${pkg.npmName}.`);
       process.exit(2);

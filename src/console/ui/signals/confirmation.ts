@@ -5,10 +5,7 @@
  * - Replay that re-triggers an external effect → typed confirmation + reason.
  */
 
-import {
-  UNDO_WINDOW_MS,
-  type ConfirmationPattern,
-} from "../flows/confirmation.ts";
+import { UNDO_WINDOW_MS, type ConfirmationPattern } from "../flows/confirmation.ts";
 import type { SignalRecord } from "./types.ts";
 
 export { UNDO_WINDOW_MS, validateTypedConfirm } from "../flows/confirmation.ts";
@@ -50,8 +47,7 @@ export function discardConfirmation(
 ): ConfirmationPattern {
   const irreversible =
     options.production &&
-    (signal.consumers.some((c) => c.external || !c.durable) ||
-      signal.dead > 0);
+    (signal.consumers.some((c) => c.external || !c.durable) || signal.dead > 0);
   if (irreversible) {
     return {
       kind: "typed",

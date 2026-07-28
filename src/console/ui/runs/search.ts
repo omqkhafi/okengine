@@ -5,10 +5,7 @@
  */
 
 import { z } from "zod";
-import {
-  parseDimensionQuery,
-  serializeDimensionQuery,
-} from "./query.ts";
+import { parseDimensionQuery, serializeDimensionQuery } from "./query.ts";
 import type { DimensionQuery, DurationRange } from "./types.ts";
 
 /** Zod schema for Runs URL search params. */
@@ -44,9 +41,7 @@ export function parseRunsSearch(raw: unknown): RunsSearch {
  *
  * @param search - Typed search
  */
-export function serializeRunsSearch(
-  search: RunsSearch,
-): Record<string, string | number> {
+export function serializeRunsSearch(search: RunsSearch): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   if (search.where) out.where = search.where;
   if (search.group) out.group = search.group;
@@ -84,10 +79,7 @@ export function durationRangeOf(search: RunsSearch): DurationRange | null {
  * @param prev - Current search
  * @param query - Dimension query
  */
-export function setWhere(
-  prev: RunsSearch,
-  query: DimensionQuery,
-): RunsSearch {
+export function setWhere(prev: RunsSearch, query: DimensionQuery): RunsSearch {
   const where = serializeDimensionQuery(query);
   return { ...prev, where: where || undefined };
 }
@@ -98,10 +90,7 @@ export function setWhere(
  * @param prev - Current search
  * @param dimension - Dimension or null to clear
  */
-export function setGroup(
-  prev: RunsSearch,
-  dimension: string | null,
-): RunsSearch {
+export function setGroup(prev: RunsSearch, dimension: string | null): RunsSearch {
   return { ...prev, group: dimension ?? undefined };
 }
 
@@ -130,10 +119,7 @@ export function closeRun(prev: RunsSearch): RunsSearch {
  * @param prev - Current search
  * @param range - Selected range
  */
-export function setDurationRange(
-  prev: RunsSearch,
-  range: DurationRange | null,
-): RunsSearch {
+export function setDurationRange(prev: RunsSearch, range: DurationRange | null): RunsSearch {
   if (!range) {
     return { ...prev, durMin: undefined, durMax: undefined };
   }

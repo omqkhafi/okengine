@@ -32,9 +32,7 @@ export interface SchemaGenerateOptions {
  *
  * @param options - Manifest / check flag
  */
-export async function runSchemaGenerate(
-  options: SchemaGenerateOptions = {},
-): Promise<number> {
+export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Promise<number> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
   let manifest = options.manifest;
@@ -92,10 +90,7 @@ export async function runSchemaGenerate(
  * @param cwd - Project root
  * @param manifest - Optional manifest
  */
-export async function schemaFingerprint(
-  cwd: string,
-  manifest?: Manifest,
-): Promise<string> {
+export async function schemaFingerprint(cwd: string, manifest?: Manifest): Promise<string> {
   const tables = new Set<string>([
     "oke_roles",
     "oke_role_grants",
@@ -123,9 +118,7 @@ export async function schemaFingerprint(
  *
  * @param cwd - Project root
  */
-export async function readSchemaFingerprint(
-  cwd: string,
-): Promise<string | null> {
+export async function readSchemaFingerprint(cwd: string): Promise<string | null> {
   const fpFile = Bun.file(resolve(cwd, SCHEMA_FINGERPRINT_FILE));
   if (await fpFile.exists()) {
     return (await fpFile.text()).trim();

@@ -5,16 +5,14 @@
  *
  * Uses the real CLI `startApp` (boot → serve). No injection.
  * Opt-in via `CREATE_OKE_INTEGRATION=1` (same as scaffold.integration.test.ts).
+ * Enabled on GitHub Actions via the `test` job / `bun run ci:integration`.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  runDev,
-  type DevSession,
-} from "../../../src/cli/dev.ts";
+import { runDev, type DevSession } from "../../../src/cli/dev.ts";
 import { scaffold } from "../src/scaffold.ts";
 
 const ENABLED = process.env["CREATE_OKE_INTEGRATION"] === "1";
@@ -69,6 +67,7 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
       }
 
       const result = await runDev({
+        stdinIsTTY: false,
         cwd: targetDir,
         secret: SECRET,
         silentClaim: true,
@@ -115,9 +114,7 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
       session = undefined;
 
       // All surfaces gone — same assertion Prompt 24 uses for MCP.
-      await expect(
-        fetch(`${mcpBase}/health`, { headers: { host: mcpHost } }),
-      ).rejects.toThrow();
+      await expect(fetch(`${mcpBase}/health`, { headers: { host: mcpHost } })).rejects.toThrow();
       await expect(fetch(new URL("/hello", appUrl))).rejects.toThrow();
     },
     TIMEOUT_MS,

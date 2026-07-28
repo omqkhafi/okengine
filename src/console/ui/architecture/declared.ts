@@ -5,11 +5,7 @@
  */
 
 import type { CausalityGraph, FlowNode } from "../flows/graph.ts";
-import {
-  isBoundaryExternal,
-  layerOfCause,
-  layerOfEffectRef,
-} from "./layers.ts";
+import { isBoundaryExternal, layerOfCause, layerOfEffectRef } from "./layers.ts";
 import type { ElementLayer } from "./types.ts";
 
 /** One fine-grained declared relationship before aggregation / focus. */

@@ -8,9 +8,7 @@ import { replayDecision } from "./replay.ts";
 
 describe("replayDecision", () => {
   test("offers dry-run when the trace has an external effect", () => {
-    const chain = TRACES_FIXTURE.filter(
-      (s) => s.id === "run-create-ok" || s.id === "run-fulfill",
-    );
+    const chain = TRACES_FIXTURE.filter((s) => s.id === "run-create-ok" || s.id === "run-fulfill");
     const decision = replayDecision(chain);
     expect(decision.mode).toBe("dry-run");
     if (decision.mode !== "dry-run") return;

@@ -10,26 +10,34 @@ Channel is the element for **reaching humans**.
 Email, SMS, WhatsApp, and push have physics Signal cannot express: consent, locale, receipts, and fallback chains.
 
 <Callout title="Governing rule">
-Reaching a human has physics Signal cannot express: consent, locale, receipts, and fallback chains.
+  Reaching a human has physics Signal cannot express: consent, locale, receipts, and fallback
+  chains.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card title="Channel" description="Essence: reaching humans. Replaces: email · SMS · WhatsApp · push." />
+  <Card
+    title="Channel"
+    description="Essence: reaching humans. Replaces: email · SMS · WhatsApp · push."
+  />
 </Cards>
 
 ## Drivers available
 
 <Cards>
   <Card title="channel.email" description="Dev `console` inbox · prod `smtp`." />
-  <Card title="SMS · WhatsApp · push" description="Human mediums with consent and fallback chains." />
+  <Card
+    title="SMS · WhatsApp · push"
+    description="Human mediums with consent and fallback chains."
+  />
 </Cards>
 
 ## Why this is an element
 
 <Callout title="Why">
-Channel is an element because human reach has irreducible physics — consent, locale, receipts — that machine messaging does not.
+  Channel is an element because human reach has irreducible physics — consent, locale, receipts —
+  that machine messaging does not.
 </Callout>
 
 <Cards>
@@ -49,14 +57,15 @@ import { channel } from "okengine";
 import { z } from "zod";
 
 export const mail = channel.email({ from: "Provisions <no-reply@provisions.sa>" });
-export const sms  = channel.sms({ sender: "PROVISIONS" });
-export const wa   = channel.whatsapp();
+export const sms = channel.sms({ sender: "PROVISIONS" });
+export const wa = channel.whatsapp();
 
 export const orderConfirmed = mail.template("order-confirmed", {
   schema: z.object({ name: z.string(), orderId: z.string(), total: z.number() }),
 });
 
-export const otpCode = channel.template("otp-code", {   // medium-agnostic
+export const otpCode = channel.template("otp-code", {
+  // medium-agnostic
   schema: z.object({ code: z.string() }),
 });
 ```
@@ -65,6 +74,14 @@ export const otpCode = channel.template("otp-code", {   // medium-agnostic
 
 <Cards>
   <Card title="AI" description="Continue to AI." href="/docs/elements/ai" />
-  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
-  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Introduction"
+    description="Eight elements overview."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

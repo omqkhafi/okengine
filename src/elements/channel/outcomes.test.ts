@@ -3,11 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  buildOutcomeRows,
-  formatAttemptChain,
-  VERDICT_BY_STATE,
-} from "./outcomes.ts";
+import { buildOutcomeRows, formatAttemptChain, VERDICT_BY_STATE } from "./outcomes.ts";
 
 describe("delivery outcome taxonomy", () => {
   test("every state carries a verdict", () => {

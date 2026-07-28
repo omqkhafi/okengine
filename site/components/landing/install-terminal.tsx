@@ -4,12 +4,12 @@
  * table is the same one the docs publish (O·K·E = 6·5·3).
  */
 
-'use client';
+"use client";
 
-import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
-import { PORTS } from '@/lib/elements';
-import { cn } from '@/lib/cn';
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
+import { PORTS } from "@/lib/elements";
+import { cn } from "@/lib/cn";
 
 type TerminalTab = {
   readonly id: string;
@@ -20,27 +20,27 @@ type TerminalTab = {
 
 const TABS: ReadonlyArray<TerminalTab> = [
   {
-    id: 'scaffold',
-    label: 'Scaffold',
-    commands: ['bunx create-oke@latest my-app --from-example notes'],
+    id: "scaffold",
+    label: "Scaffold",
+    commands: ["bunx create-oke@latest my-app --from-example notes"],
     output: [
-      { label: 'template', value: 'notes — flows, store, contracts, tests' },
-      { label: 'next', value: 'cd my-app && oke dev' },
+      { label: "template", value: "notes — flows, store, contracts, tests" },
+      { label: "next", value: "cd my-app && oke dev" },
     ],
   },
   {
-    id: 'install',
-    label: 'Install',
-    commands: ['bun add okengine'],
+    id: "install",
+    label: "Install",
+    commands: ["bun add okengine"],
     output: [
-      { label: 'exports', value: 'on flow signal store clock gate vault channel ai plugin' },
-      { label: 'cli', value: 'oke' },
+      { label: "exports", value: "on flow signal store clock gate vault channel ai plugin" },
+      { label: "cli", value: "oke" },
     ],
   },
   {
-    id: 'run',
-    label: 'Run',
-    commands: ['oke dev'],
+    id: "run",
+    label: "Run",
+    commands: ["oke dev"],
     output: PORTS.map((p) => ({
       label: p.surface.toLowerCase(),
       value: `http://localhost:${p.port}`,
@@ -59,7 +59,7 @@ export function InstallTerminal() {
 
   async function copyCommands() {
     try {
-      await navigator.clipboard.writeText(active.commands.join('\n'));
+      await navigator.clipboard.writeText(active.commands.join("\n"));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -79,10 +79,10 @@ export function InstallTerminal() {
               aria-selected={tab.id === active.id}
               onClick={() => setActiveId(tab.id)}
               className={cn(
-                'relative px-3 py-2.5 text-xs font-medium transition-colors',
+                "relative px-3 py-2.5 text-xs font-medium transition-colors",
                 tab.id === active.id
-                  ? 'text-fd-foreground'
-                  : 'text-fd-muted-foreground hover:text-fd-foreground',
+                  ? "text-fd-foreground"
+                  : "text-fd-muted-foreground hover:text-fd-foreground",
               )}
             >
               {tab.label}
@@ -95,7 +95,7 @@ export function InstallTerminal() {
         <button
           type="button"
           onClick={copyCommands}
-          aria-label={copied ? 'Copied' : 'Copy command'}
+          aria-label={copied ? "Copied" : "Copy command"}
           className="me-2 inline-flex size-7 items-center justify-center rounded-md text-fd-muted-foreground transition-colors hover:bg-fd-secondary/60 hover:text-fd-foreground"
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}

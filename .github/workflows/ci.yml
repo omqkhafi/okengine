@@ -7,7 +7,7 @@
 #   `okengine` and `create-oke` package settings. No NPM_TOKEN secret.
 #   Trusted publisher: workflow `.github/workflows/ci.yml`, job `publish-npm`.
 #
-# On push of a version tag (v*): run the full `bun run ci` gate, then publish
+# On push of a version tag (v*): run parallel check jobs, then publish
 # both packages to npm and JSR as separate jobs (GitHub Environment
 # `production` approval gate).
 
@@ -19,23 +19,93 @@ on:
       - "v*"
 
 jobs:
-  ci:
-    name: install · typecheck · test · budgets · gates
+  lint:
+    name: lint · fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Lint and format
+        run: bun run lint && bun run fmt:check
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Test
+        run: CREATE_OKE_INTEGRATION=1 bun run test
+
+  budgets:
+    name: budgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Budgets
+        run: bun run budgets -- --dry-run
+
+  gate:
+    name: gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Install
         run: bun install --frozen-lockfile
+      - name: Gate
+        run: bun run gate
 
-      - name: CI gate
-        run: bun run ci
+  site:
+    name: site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Site build
+        run: bun run site:build
+
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, budgets, gate, site]
+    steps:
+      - name: All checks passed
+        run: echo ok
 
   publish-npm:
     name: Publish npm

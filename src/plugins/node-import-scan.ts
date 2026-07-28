@@ -49,9 +49,7 @@ export function scanNodeImportsBypassingFx(
       out.push({
         source: file.path,
         specifier,
-        line: typeof node.start === "number"
-          ? lineAt(file.source, node.start)
-          : null,
+        line: typeof node.start === "number" ? lineAt(file.source, node.start) : null,
       });
     });
   }
@@ -77,8 +75,7 @@ function importSpecifier(node: AstNode): string | null {
     };
     const callee = call.callee;
     const isRequire =
-      callee?.type === "Identifier" &&
-      (callee as { name?: string }).name === "require";
+      callee?.type === "Identifier" && (callee as { name?: string }).name === "require";
     if (!isRequire) return null;
     const arg0 = call.arguments?.[0];
     if (arg0 && (arg0.type === "Literal" || arg0.type === "StringLiteral")) {

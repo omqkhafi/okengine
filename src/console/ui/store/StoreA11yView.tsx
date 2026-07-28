@@ -23,8 +23,7 @@ export interface StoreA11yViewProps {
  * @param props - Open store / child
  */
 export function StoreA11yView(props: StoreA11yViewProps) {
-  const tenancy =
-    props.tenancyDeclared ?? STORE_LIST_FIXTURE.tenancyDeclared;
+  const tenancy = props.tenancyDeclared ?? STORE_LIST_FIXTURE.tenancyDeclared;
   const groups = groupByFacet(STORE_LIST_FIXTURE.stores);
   const openRef = props.openRef ?? "sql:db";
   const open = STORE_LIST_FIXTURE.stores.find((s) => s.ref === openRef);
@@ -74,14 +73,9 @@ export function StoreA11yView(props: StoreA11yViewProps) {
                       {s.replicaLagMs != null && s.replicaLagMs > 0 ? (
                         <span role="status"> lag {s.replicaLagMs}ms</span>
                       ) : null}
-                      {s.migrationDrift?.drifted ? (
-                        <span role="status"> drift</span>
-                      ) : null}
+                      {s.migrationDrift?.drifted ? <span role="status"> drift</span> : null}
                       {s.warnings.length > 0 ? (
-                        <span role="status">
-                          {" "}
-                          {s.warnings.length} warning(s)
-                        </span>
+                        <span role="status"> {s.warnings.length} warning(s)</span>
                       ) : null}
                     </button>
                   </li>

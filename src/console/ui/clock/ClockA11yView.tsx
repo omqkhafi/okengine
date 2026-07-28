@@ -28,10 +28,7 @@ export function ClockA11yView(props: ClockA11yViewProps) {
   const openWakeId = props.openWake ?? "run_sleep_1";
   const openWake = data.waitingOn.find((w) => w.runId === openWakeId);
   const health = openCron ? formatHealth(openCron.health) : null;
-  const banner = waitingOnBanner(
-    data.waitingOn.length,
-    data.waitingOnCounts,
-  );
+  const banner = waitingOnBanner(data.waitingOn.length, data.waitingOnCounts);
 
   return (
     <div className="clock-a11y">
@@ -78,11 +75,8 @@ export function ClockA11yView(props: ClockA11yViewProps) {
                   <span>
                     {" "}
                     runs{" "}
-                    {
-                      data.waitingOnCounts.find(
-                        (c) => c.label === (w.label || "(unlabelled)"),
-                      )?.count ?? 1
-                    }
+                    {data.waitingOnCounts.find((c) => c.label === (w.label || "(unlabelled)"))
+                      ?.count ?? 1}
                   </span>
                 </button>
               </li>
@@ -103,15 +97,9 @@ export function ClockA11yView(props: ClockA11yViewProps) {
                     style={{ minHeight: 32, width: "100%" }}
                   >
                     <span>{c.name}</span>
-                    {c.health.overdue ? (
-                      <span role="status"> overdue</span>
-                    ) : null}
-                    {c.dstAmbiguity ? (
-                      <span role="status"> DST {c.dstAmbiguity.kind}</span>
-                    ) : null}
-                    {c.external ? (
-                      <span aria-label="external effect"> ↗</span>
-                    ) : null}
+                    {c.health.overdue ? <span role="status"> overdue</span> : null}
+                    {c.dstAmbiguity ? <span role="status"> DST {c.dstAmbiguity.kind}</span> : null}
+                    {c.external ? <span aria-label="external effect"> ↗</span> : null}
                   </button>
                   <p role="status">
                     {h.drift} · {h.overdue} · {h.missedWithPolicy} · {h.lease}
@@ -126,8 +114,7 @@ export function ClockA11yView(props: ClockA11yViewProps) {
           <section aria-label="Cron detail" aria-live="polite">
             <h2>{openCron.name}</h2>
             <p role="status">
-              {openCron.effectiveCron ?? openCron.effectiveEvery} ·{" "}
-              {openCron.timezone}
+              {openCron.effectiveCron ?? openCron.effectiveEvery} · {openCron.timezone}
             </p>
             <dl>
               <div>
@@ -147,15 +134,11 @@ export function ClockA11yView(props: ClockA11yViewProps) {
                 <dd>{health.lease}</dd>
               </div>
             </dl>
-            {openCron.dstAmbiguity ? (
-              <p role="alert">{openCron.dstAmbiguity.reason}</p>
-            ) : null}
+            {openCron.dstAmbiguity ? <p role="alert">{openCron.dstAmbiguity.reason}</p> : null}
             <div>
               <button type="button">Run now</button>
               <button type="button">Pause</button>
-              {openCron.overridable ? (
-                <button type="button">Edit schedule</button>
-              ) : null}
+              {openCron.overridable ? <button type="button">Edit schedule</button> : null}
             </div>
             {openCron.external ? (
               <label>

@@ -53,11 +53,8 @@ export function VaultPanel() {
   });
 
   const secrets = listQuery.data?.secrets ?? [];
-  const env = listQuery.data?.env ?? "dev";
-  const groups = useMemo(
-    () => groupByKind(secrets, search.q ?? ""),
-    [secrets, search.q],
-  );
+  const env = listQuery.data?.env ?? "local";
+  const groups = useMemo(() => groupByKind(secrets, search.q ?? ""), [secrets, search.q]);
   const open = secrets.find((s) => s.name === search.name);
   const blast = open ? formatBlastRadius(open.blastRadius) : null;
   const setConfirm = setConfirmation({ production: true });
@@ -144,9 +141,7 @@ export function VaultPanel() {
           <Input
             aria-label="Filter vault"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.currentTarget.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.currentTarget.value || undefined })}
           />
         </label>
         <Button
@@ -198,9 +193,7 @@ export function VaultPanel() {
                     >
                       <span className="font-mono">{s.name}</span>
                       <span className="truncate text-xs">
-                        {s.sensitive
-                          ? (s.fingerprint ?? "unset")
-                          : (s.cleartext ?? "unset")}
+                        {s.sensitive ? (s.fingerprint ?? "unset") : (s.cleartext ?? "unset")}
                       </span>
                       {s.blastRadius.count > 0 ? (
                         <span role="status" className="text-xs text-[var(--oke-danger)]">
@@ -227,24 +220,17 @@ export function VaultPanel() {
         >
           {!open ? (
             <p className="text-sm text-[var(--oke-muted)]">
-              Select a contract to inspect fingerprints, resolution, and
-              readers.
+              Select a contract to inspect fingerprints, resolution, and readers.
             </p>
           ) : (
             <div className="flex max-w-2xl flex-col gap-6">
               <div>
-                <h2 className="font-mono text-lg text-[var(--oke-fg)]">
-                  {open.name}
-                </h2>
+                <h2 className="font-mono text-lg text-[var(--oke-fg)]">{open.name}</h2>
                 {open.description ? (
-                  <p className="text-sm text-[var(--oke-muted)]">
-                    {open.description}
-                  </p>
+                  <p className="text-sm text-[var(--oke-muted)]">{open.description}</p>
                 ) : null}
                 {open.rotate ? (
-                  <p className="text-sm text-[var(--oke-muted)]">
-                    Rotate hint: {open.rotate}
-                  </p>
+                  <p className="text-sm text-[var(--oke-muted)]">Rotate hint: {open.rotate}</p>
                 ) : null}
               </div>
 
@@ -254,10 +240,12 @@ export function VaultPanel() {
                   <ul className="space-y-1 font-mono text-sm">
                     {Object.entries(open.fingerprints).map(([e, fp]) => (
                       <li key={e}>
-                        <span className="text-[var(--oke-muted)]">{e}:</span>{" "}
-                        {fp}
+                        <span className="text-[var(--oke-muted)]">{e}:</span> {fp}
                         {open.sharedFingerprintEnvs.includes(e) ? (
-                          <span role="status" className="ml-2 text-[var(--oke-warn,var(--oke-muted))]">
+                          <span
+                            role="status"
+                            className="ml-2 text-[var(--oke-warn,var(--oke-muted))]"
+                          >
                             (matches {env} — warning, may be deliberate)
                           </span>
                         ) : null}
@@ -280,32 +268,22 @@ export function VaultPanel() {
                   {open.resolution.map((step) => (
                     <li
                       key={step.source}
-                      className={
-                        step.won
-                          ? "text-[var(--oke-fg)]"
-                          : "text-[var(--oke-muted)]"
-                      }
+                      className={step.won ? "text-[var(--oke-fg)]" : "text-[var(--oke-muted)]"}
                     >
                       <span className="font-mono">{step.source}</span>
-                      {step.won
-                        ? " — won"
-                        : step.present
-                          ? " — present (lost)"
-                          : " — absent"}
+                      {step.won ? " — won" : step.present ? " — present (lost)" : " — absent"}
                     </li>
                   ))}
                 </ol>
                 <p className="mt-2 text-sm" role="status">
-                  Winner:{" "}
-                  <span className="font-mono">{open.winner ?? "none"}</span>
+                  Winner: <span className="font-mono">{open.winner ?? "none"}</span>
                 </p>
               </section>
 
               <section aria-label="Readers">
                 <h3 className="mb-2 text-sm font-medium">Readers</h3>
                 <p className="text-sm text-[var(--oke-muted)]">
-                  Flows that declare{" "}
-                  <code className="font-mono">fx.vault({open.name})</code>
+                  Flows that declare <code className="font-mono">fx.vault({open.name})</code>
                 </p>
                 <ul className="mt-1 list-disc pl-5 font-mono text-sm">
                   {open.readers.length === 0 ? (
@@ -317,21 +295,14 @@ export function VaultPanel() {
               </section>
 
               <section aria-label="Rotation blast radius">
-                <h3 className="mb-2 text-sm font-medium">
-                  Rotation blast radius
-                </h3>
+                <h3 className="mb-2 text-sm font-medium">Rotation blast radius</h3>
                 {blast ? (
                   <>
-                    <p
-                      className="text-sm"
-                      role={blast.warn ? "alert" : "status"}
-                    >
+                    <p className="text-sm" role={blast.warn ? "alert" : "status"}>
                       {blast.summary}
                     </p>
                     {blast.detail ? (
-                      <p className="text-sm text-[var(--oke-muted)]">
-                        {blast.detail}
-                      </p>
+                      <p className="text-sm text-[var(--oke-muted)]">{blast.detail}</p>
                     ) : null}
                     {open.blastRadius.runIds.length > 0 ? (
                       <p className="mt-1 font-mono text-xs text-[var(--oke-muted)]">
@@ -354,8 +325,7 @@ export function VaultPanel() {
               <section aria-label="Set or rotate" className="space-y-3">
                 <h3 className="text-sm font-medium">Set / rotate</h3>
                 <p className="text-sm text-[var(--oke-muted)]">
-                  Write-only. Values are never revealed after submit. No
-                  preview.
+                  Write-only. Values are never revealed after submit. No preview.
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -422,8 +392,7 @@ export function VaultPanel() {
                       type="button"
                       variant={action === "rotate" ? "danger" : "primary"}
                       disabled={
-                        !value ||
-                        (action === "set" ? setMut.isPending : rotateMut.isPending)
+                        !value || (action === "set" ? setMut.isPending : rotateMut.isPending)
                       }
                       onClick={() => {
                         if (action === "set") setMut.mutate();

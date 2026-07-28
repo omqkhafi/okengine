@@ -8,14 +8,7 @@
 import type { ColumnClassification, StoreFacet } from "../manifest/types.ts";
 
 /** Protocol ids for store drivers in scope. */
-export type StoreDriverId =
-  | "sqlite"
-  | "postgres"
-  | "memory"
-  | "redis"
-  | "fs"
-  | "s3"
-  | "pgvector";
+export type StoreDriverId = "sqlite" | "postgres" | "memory" | "redis" | "fs" | "s3" | "pgvector";
 
 /** Facets a driver may serve. */
 export type DriverFacet = StoreFacet;
@@ -112,11 +105,7 @@ export interface KvNamespace {
    * @param keys - KEYS table entries (unprefixed)
    * @param args - ARGV table entries
    */
-  eval<T = unknown>(
-    script: string,
-    keys: readonly string[],
-    args?: readonly string[],
-  ): Promise<T>;
+  eval<T = unknown>(script: string, keys: readonly string[], args?: readonly string[]): Promise<T>;
   /**
    * List keys in this namespace, optionally by prefix (Console Store browser).
    *
@@ -151,11 +140,7 @@ export interface KvClientLike {
    * @param numkeys - KEYS count
    * @param keysAndArgs - KEYS then ARGV
    */
-  eval?(
-    script: string,
-    numkeys: number,
-    ...keysAndArgs: string[]
-  ): Promise<unknown>;
+  eval?(script: string, numkeys: number, ...keysAndArgs: string[]): Promise<unknown>;
   /**
    * Raw command send (Bun.RedisClient). Used when `eval` is absent.
    *
@@ -271,11 +256,7 @@ export interface IndexStore {
    * @param vector - Embedding
    * @param meta - Optional metadata
    */
-  upsert(
-    id: string,
-    vector: readonly number[],
-    meta?: Record<string, unknown>,
-  ): Promise<void>;
+  upsert(id: string, vector: readonly number[], meta?: Record<string, unknown>): Promise<void>;
   /**
    * Similarity search (cosine).
    *

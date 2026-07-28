@@ -34,9 +34,7 @@ export function tierOfKind(kind: EffectKind): UiEffectTier {
  *
  * @param effects - Span effects
  */
-export function peakSpanTier(
-  effects: readonly TraceEffect[],
-): SpanTier {
+export function peakSpanTier(effects: readonly TraceEffect[]): SpanTier {
   let peak: SpanTier = "none";
   for (const e of effects) {
     const t = tierOfKind(e.kind);

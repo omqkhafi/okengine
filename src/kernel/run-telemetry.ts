@@ -61,9 +61,7 @@ export function createRunTelemetry(): RunTelemetry {
  *
  * @param t - Telemetry
  */
-export function cacheDimensionOf(
-  t: RunTelemetry,
-): "hit" | "miss" | "none" {
+export function cacheDimensionOf(t: RunTelemetry): "hit" | "miss" | "none" {
   if (t.cacheHits > 0 && t.cacheMisses === 0) return "hit";
   if (t.cacheMisses > 0) return "miss";
   return "none";

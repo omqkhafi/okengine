@@ -6,6 +6,9 @@
  * registry is the checklist.
  */
 
+import { readdir } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+
 /** One file rewrite produced by a codemod. */
 export interface CodemodChange {
   /** Path relative to the project root. */
@@ -35,10 +38,120 @@ export interface Codemod {
 }
 
 /**
- * Built-in transforms. Empty until the next intentional breaking release —
- * the infrastructure is the gate; entries are added with the break.
+ * Rewrite driver-map keys `dev:` → `local:` and `stack:` → `docker:`.
+ *
+ * Vault `dev:` fallbacks are intentionally excluded — callers pass only
+ * `oke.config.*` paths into this rewriter.
+ *
+ * @param source - File contents
  */
-export const CODEMODS: readonly Codemod[] = [];
+export function rewriteConfigEnvKeys(source: string): string {
+  return source
+    .replace(/(^|[^\w.])dev(\s*:)/gm, "$1local$2")
+    .replace(/(^|[^\w.])stack(\s*:)/gm, "$1docker$2");
+}
+
+/**
+ * Rewrite removed vault stack markers to docker equivalents.
+ *
+ * @param source - File contents
+ */
+export function rewriteFromStackMarkers(source: string): string {
+  return source
+    .replace(/\bfromStack\b/g, "fromDocker")
+    .replace(/\bFROM_STACK_PREFIX\b/g, "FROM_DOCKER_PREFIX")
+    .replace(/\bisFromStack\b/g, "isFromDocker")
+    .replace(/\bfromStackRole\b/g, "fromDockerRole")
+    .replace(/__oke_from_stack__/g, "__oke_from_docker__");
+}
+
+/**
+ * Collect `oke.config.*` files under a project root.
+ *
+ * @param cwd - Project root
+ */
+async function collectConfigCandidates(cwd: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const name of ["oke.config.ts", "oke.config.mts", "oke.config.js"]) {
+    const path = resolve(cwd, name);
+    if (await Bun.file(path).exists()) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * Collect TypeScript sources that may reference `fromStack`.
+ *
+ * @param cwd - Project root
+ */
+async function collectVaultCandidates(cwd: string): Promise<string[]> {
+  const out: string[] = [];
+  const roots = ["src", "app"];
+  for (const root of roots) {
+    const dir = resolve(cwd, root);
+    try {
+      await walkTs(dir, out);
+    } catch {
+      // missing dir
+    }
+  }
+  return out;
+}
+
+/**
+ * @param dir - Directory
+ * @param out - Accumulator of absolute paths
+ */
+async function walkTs(dir: string, out: string[]): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      await walkTs(path, out);
+    } else if (entry.isFile() && /\.(ts|mts|tsx)$/.test(entry.name)) {
+      out.push(path);
+    }
+  }
+}
+
+/**
+ * Built-in transforms.
+ */
+export const CODEMODS: readonly Codemod[] = [
+  {
+    id: "0.2.7-config-env-local-docker",
+    from: "0.2.6",
+    to: "0.2.7",
+    description: "Rename driver-map keys dev→local, stack→docker; fromStack→fromDocker",
+    async apply(cwd) {
+      const changes: CodemodChange[] = [];
+      for (const path of await collectConfigCandidates(cwd)) {
+        const before = await Bun.file(path).text();
+        const after = rewriteConfigEnvKeys(before);
+        if (after !== before) {
+          changes.push({
+            path: relative(cwd, path) || path,
+            before,
+            after,
+          });
+        }
+      }
+      for (const path of await collectVaultCandidates(cwd)) {
+        const before = await Bun.file(path).text();
+        const after = rewriteFromStackMarkers(before);
+        if (after !== before) {
+          changes.push({
+            path: relative(cwd, path) || path,
+            before,
+            after,
+          });
+        }
+      }
+      return changes;
+    },
+  },
+];
 
 /**
  * Validate the registry (unique ids, non-empty metadata, apply present).

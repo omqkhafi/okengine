@@ -38,9 +38,7 @@ describe("runs 1M-row query benchmark", () => {
         ) TO '${duckPath(parquetPath)}' (FORMAT PARQUET, COMPRESSION ZSTD)
       `);
       const genMs = performance.now() - t0;
-      console.log(
-        `runs-bench generate rows=${ROW_COUNT} parquet_ms=${genMs.toFixed(1)}`,
-      );
+      console.log(`runs-bench generate rows=${ROW_COUNT} parquet_ms=${genMs.toFixed(1)}`);
       expect(await Bun.file(parquetPath).exists()).toBe(true);
     } finally {
       session.close();

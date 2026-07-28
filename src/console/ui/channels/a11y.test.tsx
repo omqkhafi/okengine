@@ -16,8 +16,7 @@ describe("Channels panel accessibility", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/channels" });
     Object.defineProperty(globalThis, "window", {
       value: window,

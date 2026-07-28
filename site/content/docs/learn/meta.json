@@ -1,10 +1,5 @@
 {
   "title": "Learn",
   "icon": "GraduationCap",
-  "pages": [
-    "notes",
-    "linkly",
-    "provisions",
-    "skyport"
-  ]
+  "pages": ["notes", "linkly", "provisions", "skyport"]
 }

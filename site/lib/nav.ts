@@ -18,9 +18,9 @@ export interface NavTab {
 
 /** The three tabs, in strip order. */
 export const NAV_TABS: ReadonlyArray<NavTab> = [
-  { id: 'readme', label: 'readme', href: '/' },
-  { id: 'docs', label: 'docs', href: '/docs', nested: true },
-  { id: 'changelog', label: 'changelog', href: '/changelog', nested: true },
+  { id: "readme", label: "readme", href: "/" },
+  { id: "docs", label: "docs", href: "/docs", nested: true },
+  { id: "changelog", label: "changelog", href: "/changelog", nested: true },
 ];
 
 /**
@@ -40,7 +40,7 @@ export function isNavTabActive(tab: NavTab, pathname: string): boolean {
  * @param pathname - Current pathname
  */
 export function hasDocsPane(pathname: string): boolean {
-  return pathname === '/docs' || pathname.startsWith('/docs/');
+  return pathname === "/docs" || pathname.startsWith("/docs/");
 }
 
 /** Where the header's brand cell ends on a given surface. */
@@ -65,14 +65,14 @@ export function headerGeometry(pathname: string): HeaderGeometry {
   // Docs: the token shared with the sidebar and the article inset.
   if (hasDocsPane(pathname)) {
     return {
-      paneWidth: 'var(--landing-left-pane-width)',
-      rule: 'border-fd-foreground/5',
+      paneWidth: "var(--landing-left-pane-width)",
+      rule: "border-fd-foreground/5",
     };
   }
   // Changelog: the release rail's 30/70 split.
-  if (pathname === '/changelog') {
-    return { paneWidth: '30%', rule: 'border-fd-border' };
+  if (pathname === "/changelog") {
+    return { paneWidth: "30%", rule: "border-fd-border" };
   }
   // Home: the hero's 44/56 column split.
-  return { paneWidth: '44%', rule: 'border-fd-border' };
+  return { paneWidth: "44%", rule: "border-fd-border" };
 }

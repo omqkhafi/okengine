@@ -7,7 +7,7 @@ icon: Scale
 
 > **OKE is the batteries-included TypeScript backend for the Bun era:** contract-first APIs with end-to-end type safety, declarative infrastructure primitives, an OpenTelemetry-native Console, secure-by-default auth and ABAC — pure TypeScript, Web-Standards portable, MIT-licensed, self-hostable with zero cloud lock-in.
 
-*"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."*
+_"Encore's batteries and dashboard, Elysia's speed and DX, Hono's portability — without the Rust lock-in, the cloud gravity, or the source-available license."_
 
 ## When to pick OKE
 
@@ -23,19 +23,19 @@ Prefer a thinner router (Hono / Elysia alone) if you only need HTTP and will ass
 
 ## Matrix
 
-| | Hono | Elysia | Encore.ts | iii | **OKE** |
-|---|---|---|---|---|---|
-| Primary runtime | Multi (Web Std) | Bun-first | Node + Rust core | Rust engine, polyglot | **Bun-first, Web-Std portable** |
-| License | MIT | MIT | MPL-2.0 | ELv2 engine | **MIT** |
-| Typed client | hc RPC | Eden Treaty | generated | SDK | **contract-first + live queries** |
-| DB · queue · cron · storage | ❌ | ❌ | ✅ | ✅ | **✅ (7 elements)** |
-| Durable workflows | ❌ | ❌ | ❌ | partial | **✅ (a flag)** |
-| Local Console | ❌ | ❌ | ✅ | ✅ | **✅ (dev + prod)** |
-| Auto cache invalidation | ❌ | ❌ | ❌ | ❌ | **✅ (from effects)** |
-| Least-privilege by compiler | ❌ | ❌ | ❌ | ❌ | **✅** |
-| Human channels (email/SMS/WA) | ❌ | ❌ | ❌ | ❌ | **✅ (7th element)** |
-| AI in the application (models, prompts, agents) | ❌ | ❌ | ❌ | ❌ | **✅ (8th element)** |
-| Self-host, no lock-in | ✅ | ✅ | ✅ (Cloud optional) | ⚠️ | **✅ first-class** |
+|                                                 | Hono            | Elysia      | Encore.ts           | iii                   | **OKE**                           |
+| ----------------------------------------------- | --------------- | ----------- | ------------------- | --------------------- | --------------------------------- |
+| Primary runtime                                 | Multi (Web Std) | Bun-first   | Node + Rust core    | Rust engine, polyglot | **Bun-first, Web-Std portable**   |
+| License                                         | MIT             | MIT         | MPL-2.0             | ELv2 engine           | **MIT**                           |
+| Typed client                                    | hc RPC          | Eden Treaty | generated           | SDK                   | **contract-first + live queries** |
+| DB · queue · cron · storage                     | ❌              | ❌          | ✅                  | ✅                    | **✅ (7 elements)**               |
+| Durable workflows                               | ❌              | ❌          | ❌                  | partial               | **✅ (a flag)**                   |
+| Local Console                                   | ❌              | ❌          | ✅                  | ✅                    | **✅ (dev + prod)**               |
+| Auto cache invalidation                         | ❌              | ❌          | ❌                  | ❌                    | **✅ (from effects)**             |
+| Least-privilege by compiler                     | ❌              | ❌          | ❌                  | ❌                    | **✅**                            |
+| Human channels (email/SMS/WA)                   | ❌              | ❌          | ❌                  | ❌                    | **✅ (7th element)**              |
+| AI in the application (models, prompts, agents) | ❌              | ❌          | ❌                  | ❌                    | **✅ (8th element)**              |
+| Self-host, no lock-in                           | ✅              | ✅          | ✅ (Cloud optional) | ⚠️                    | **✅ first-class**                |
 
 ## vs Collections of libraries
 
@@ -52,6 +52,14 @@ OKE is MIT, self-hostable, and names drivers after **protocols** — not vendors
 Effects are inferred from what a Flow touches through `fx`. Cache invalidation, live queries, least privilege, deterministic tests, and Manifest Diff fall out of that one decision — without hand-written annotations for each capability.
 
 <Cards>
-  <Card title="Installation" description="Install and scaffold in minutes." href="/docs/get-started/installation" />
-  <Card title="Introduction" description="The one law, eight elements, ten exports." href="/docs/get-started/introduction" />
+  <Card
+    title="Installation"
+    description="Install and scaffold in minutes."
+    href="/docs/get-started/installation"
+  />
+  <Card
+    title="Introduction"
+    description="The one law, eight elements, ten exports."
+    href="/docs/get-started/introduction"
+  />
 </Cards>

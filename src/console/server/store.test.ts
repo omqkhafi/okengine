@@ -5,10 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { defineTable } from "../../elements/store.ts";
 import { classify } from "../../elements/store/classify.ts";
-import {
-  DryRunWriteIsolationError,
-  withDryRun,
-} from "../../kernel/dry-run.ts";
+import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import {
   createManifestStoreRuntime,
@@ -79,21 +76,24 @@ describe("tenancyDeclared", () => {
 describe("projectStoresList", () => {
   test("groups facets and surfaces will-not-fire from effects", async () => {
     const runtime = await createManifestStoreRuntime(MANIFEST);
-    const { stores, tenancyDeclared: tenancy, tenants } =
-      await projectStoresList({
-        manifest: MANIFEST,
-        runtime,
-        declaredFingerprint: "decl",
-        appliedFingerprint: "decl",
-        runs: [
-          {
-            flow: "bookings.mine",
-            replicaLagMs: 120,
-            tenant: "t1",
-            effects: [{ kind: "read", resource: "sql:bookings" } as never],
-          },
-        ],
-      });
+    const {
+      stores,
+      tenancyDeclared: tenancy,
+      tenants,
+    } = await projectStoresList({
+      manifest: MANIFEST,
+      runtime,
+      declaredFingerprint: "decl",
+      appliedFingerprint: "decl",
+      runs: [
+        {
+          flow: "bookings.mine",
+          replicaLagMs: 120,
+          tenant: "t1",
+          effects: [{ kind: "read", resource: "sql:bookings" } as never],
+        },
+      ],
+    });
 
     expect(tenancy).toBe(true);
     expect(tenants).toContain("t1");
@@ -226,8 +226,6 @@ describe("preview dual test (withDryRun)", () => {
       const { recordWouldHaveFired } = await import("../../kernel/dry-run.ts");
       recordWouldHaveFired("send", "booking-confirmed");
     });
-    expect(wouldHaveFired).toEqual([
-      { kind: "send", resource: "booking-confirmed" },
-    ]);
+    expect(wouldHaveFired).toEqual([{ kind: "send", resource: "booking-confirmed" }]);
   });
 });

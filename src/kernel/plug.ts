@@ -14,10 +14,7 @@
 
 import type { AnyFlowDef } from "./flow.ts";
 import { isPlugin, type DecorationsOf, type PluginDef } from "./plugin.ts";
-import {
-  type PluginRegistry,
-  type PluginScope,
-} from "./registry.ts";
+import { type PluginRegistry, type PluginScope } from "./registry.ts";
 
 /**
  * Apply a plugin to a registry at the given scope.
@@ -43,10 +40,8 @@ export function applyPlugin(
  * @typeParam Base - Existing decorations
  * @typeParam P - Plugin being plugged
  */
-export type AccumulateDecorations<
-  Base extends Record<string, unknown>,
-  P,
-> = Base & DecorationsOf<P>;
+export type AccumulateDecorations<Base extends Record<string, unknown>, P> = Base &
+  DecorationsOf<P>;
 
 /** Something that can receive `.plug()` with type accumulation. */
 export interface Pluggable<D extends Record<string, unknown> = {}> {
@@ -55,9 +50,7 @@ export interface Pluggable<D extends Record<string, unknown> = {}> {
    *
    * @param pluginDef - Plugin from {@link plugin}
    */
-  plug<P extends PluginDef>(
-    pluginDef: P,
-  ): Pluggable<AccumulateDecorations<D, P>>;
+  plug<P extends PluginDef>(pluginDef: P): Pluggable<AccumulateDecorations<D, P>>;
 }
 
 /**

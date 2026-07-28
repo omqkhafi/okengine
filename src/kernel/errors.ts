@@ -99,50 +99,43 @@ export const OKE_ERRORS = {
   /** Flow reads a store resource not listed in `effects.reads`. */
   UNDECLARED_READ: {
     code: 1001,
-    cause:
-      'Flow "{flow}" reads "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" reads "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.reads.',
   },
   /** Flow writes a store resource not listed in `effects.writes`. */
   UNDECLARED_WRITE: {
     code: 1002,
-    cause:
-      'Flow "{flow}" writes "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" writes "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.writes.',
   },
   /** Flow emits a signal not listed in `effects.emits`. */
   UNDECLARED_EMIT: {
     code: 1003,
-    cause:
-      'Flow "{flow}" emits "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" emits "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.emits.',
   },
   /** Flow sends a channel template not listed in `effects.sends`. */
   UNDECLARED_SEND: {
     code: 1004,
-    cause:
-      'Flow "{flow}" sends "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" sends "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.sends.',
   },
   /** Flow asks a prompt not listed in `effects.asks`. */
   UNDECLARED_ASK: {
     code: 1005,
-    cause:
-      'Flow "{flow}" asks "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" asks "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.asks.',
   },
   /** Flow reads a secret not listed in `effects.secrets`. */
   UNDECLARED_SECRET: {
     code: 1006,
-    cause:
-      'Flow "{flow}" reads secret "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" reads secret "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.secrets.',
   },
   /** Flow calls another flow not listed in `effects.calls`. */
   UNDECLARED_CALL: {
     code: 1007,
-    cause:
-      'Flow "{flow}" calls "{resource}" without declaring it.',
+    cause: 'Flow "{flow}" calls "{resource}" without declaring it.',
     fix: 'Add "{resource}" to this flow\'s effects.calls.',
   },
   /**
@@ -151,9 +144,17 @@ export const OKE_ERRORS = {
    */
   ORPHAN_EMIT: {
     code: 1042,
-    cause:
-      'Flow "{flow}" emits signal "{resource}" with no subscriber.',
-    fix: 'Add `on({resource}, …)` or mark the signal `{ optional: true }`.',
+    cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
+    fix: "Add `on({resource}, …)` or mark the signal `{ optional: true }`.",
+  },
+  /**
+   * Domain table/column missing under docker/prod (migrations not applied).
+   * Store/DDL band starts at 1100.
+   */
+  DOMAIN_SCHEMA_MISSING: {
+    code: 1101,
+    cause: "domain table not found — migrations have not been applied.",
+    fix: "run `oke db migrate` against this environment.",
   },
 } as const satisfies Record<string, OkeErrorDefinition>;
 
@@ -164,10 +165,7 @@ export const OKE_ERRORS = {
  * @param params - Interpolation params
  * @returns Never
  */
-export function throwOke(
-  key: keyof typeof OKE_ERRORS,
-  params: OkeErrorParams = {},
-): never {
+export function throwOke(key: keyof typeof OKE_ERRORS, params: OkeErrorParams = {}): never {
   throw new OkeError(OKE_ERRORS[key], params);
 }
 
@@ -176,9 +174,7 @@ export function throwOke(
  *
  * @param code - Permanent numeric code
  */
-export function lookupOkeError(
-  code: OkeErrorCode,
-): OkeErrorDefinition | undefined {
+export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefined {
   for (const def of Object.values(OKE_ERRORS)) {
     if (def.code === code) return def;
   }
@@ -192,14 +188,9 @@ export function lookupOkeError(
  * @param data - Error payload
  * @param opts - Optional message override
  */
-export function fail<E>(
-  code: string,
-  data: E,
-  opts?: FailOptions,
-): FlowFailure<E> {
-  const error: FlowErrorValue<E> = opts?.message !== undefined
-    ? { code, data, message: opts.message }
-    : { code, data };
+export function fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E> {
+  const error: FlowErrorValue<E> =
+    opts?.message !== undefined ? { code, data, message: opts.message } : { code, data };
   return { data: null, error };
 }
 

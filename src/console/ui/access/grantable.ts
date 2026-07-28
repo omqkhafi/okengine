@@ -16,9 +16,7 @@ export function visibleGrantableScopes(
 ): string[] {
   if (!candidates) return [...grantable].sort((a, b) => a.localeCompare(b));
   const allowed = new Set(grantable);
-  return candidates
-    .filter((s) => allowed.has(s))
-    .sort((a, b) => a.localeCompare(b));
+  return candidates.filter((s) => allowed.has(s)).sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -27,10 +25,7 @@ export function visibleGrantableScopes(
  * @param requested - Requested scopes
  * @param grantable - Grantable scopes
  */
-export function allGrantable(
-  requested: readonly string[],
-  grantable: readonly string[],
-): boolean {
+export function allGrantable(requested: readonly string[], grantable: readonly string[]): boolean {
   const allowed = new Set(grantable);
   return requested.every((s) => allowed.has(s));
 }

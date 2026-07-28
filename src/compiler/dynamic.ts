@@ -37,10 +37,7 @@ export function compileDynamic(options: CompileRouteOptions): CompiledRoute {
  * @param options - Route metadata
  * @param aot - When `false`, force the dynamic path
  */
-export function compileRoute(
-  options: CompileRouteOptions,
-  aot: boolean = true,
-): CompiledRoute {
+export function compileRoute(options: CompileRouteOptions, aot: boolean = true): CompiledRoute {
   if (!aot) return compileDynamic(options);
   return compileAot(options);
 }

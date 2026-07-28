@@ -73,10 +73,7 @@ export async function verifyEmailAuth(
   };
 }
 
-async function safeLookup(
-  lookup: DnsTxtLookup,
-  name: string,
-): Promise<readonly string[]> {
+async function safeLookup(lookup: DnsTxtLookup, name: string): Promise<readonly string[]> {
   try {
     return await lookup(name);
   } catch {

@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  createPostgresFakeClient,
-  postgresDriver,
-  sqliteDriver,
-} from "../drivers/index.ts";
+import { createPostgresFakeClient, postgresDriver, sqliteDriver } from "../drivers/index.ts";
 import type { Effects } from "../manifest/types.ts";
 import {
   classify,
@@ -72,9 +68,7 @@ describe("store facets", () => {
   });
 
   test("id and now helpers", () => {
-    expect(id()).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    );
+    expect(id()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(now()).toBeGreaterThan(0);
   });
 });
@@ -119,13 +113,11 @@ describe("same flow against sqlite and postgres", () => {
 describe("replica routing from effects", () => {
   test("read-only flows are detected from the effect set", () => {
     expect(isReadOnlyStoreFlow({ reads: ["sql:notes"] })).toBe(true);
-    expect(
-      isReadOnlyStoreFlow({ reads: ["sql:notes"], writes: ["sql:notes"] }),
-    ).toBe(false);
+    expect(isReadOnlyStoreFlow({ reads: ["sql:notes"], writes: ["sql:notes"] })).toBe(false);
     expect(sqlRoleForEffects({ reads: ["sql:notes"] }, true)).toBe("replica");
-    expect(
-      sqlRoleForEffects({ reads: ["sql:notes"], writes: ["sql:notes"] }, true),
-    ).toBe("primary");
+    expect(sqlRoleForEffects({ reads: ["sql:notes"], writes: ["sql:notes"] }, true)).toBe(
+      "primary",
+    );
   });
 
   test("read-only flow provably hits a replica", async () => {
@@ -135,10 +127,11 @@ describe("replica routing from effects", () => {
     await replicaClient.unsafe(
       `CREATE TABLE IF NOT EXISTS "notes" ("id" TEXT PRIMARY KEY, "title" TEXT, "email" TEXT)`,
     );
-    await replicaClient.unsafe(
-      `INSERT INTO "notes" ("id", "title", "email") VALUES ($1, $2, $3)`,
-      ["n1", "from-replica", "x@y.z"],
-    );
+    await replicaClient.unsafe(`INSERT INTO "notes" ("id", "title", "email") VALUES ($1, $2, $3)`, [
+      "n1",
+      "from-replica",
+      "x@y.z",
+    ]);
 
     const decl = store.sql("notes", {
       classify: { notes: { email: classify({ pii: true }) } },
@@ -213,12 +206,8 @@ describe("tier-1 cache invalidation from effects", () => {
       expiresAt: null,
     });
 
-    expect(isInvalidatedByWrite(keys[0]!, { writes: ["sql:notes"] })).toBe(
-      true,
-    );
-    expect(isInvalidatedByWrite(keys[0]!, { writes: ["sql:orders"] })).toBe(
-      false,
-    );
+    expect(isInvalidatedByWrite(keys[0]!, { writes: ["sql:notes"] })).toBe(true);
+    expect(isInvalidatedByWrite(keys[0]!, { writes: ["sql:orders"] })).toBe(false);
 
     const event = cache.invalidateFromEffects({ writes: ["sql:notes"] });
     expect(event.keys).toEqual([computedCacheKey("sql:notes")]);
@@ -268,10 +257,7 @@ describe("exists and increment helpers", () => {
         }),
       );
       await handle.ensureTable(counters);
-      await handle
-        .insert(counters)
-        .values({ id: "c1", clicks: 0 })
-        .execute();
+      await handle.insert(counters).values({ id: "c1", clicks: 0 }).execute();
 
       expect(await handle.exists(counters, { id: "c1" }), label).toBe(true);
       expect(await handle.exists(counters, { id: "gone" }), label).toBe(false);
@@ -301,16 +287,11 @@ describe("exists and increment helpers", () => {
         }),
       );
       await handle.ensureTable(counters);
-      await handle
-        .insert(counters)
-        .values({ id: "c1", clicks: 0 })
-        .execute();
+      await handle.insert(counters).values({ id: "c1", clicks: 0 }).execute();
 
       const n = 100;
       const results = await Promise.all(
-        Array.from({ length: n }, () =>
-          handle.increment(counters, "c1", "clicks"),
-        ),
+        Array.from({ length: n }, () => handle.increment(counters, "c1", "clicks")),
       );
       expect(new Set(results).size, label).toBe(n);
       expect(Math.max(...results), label).toBe(n);
@@ -337,10 +318,7 @@ describe("PII masking at the driver boundary", () => {
       }),
     );
     await handle.ensureTable(notes);
-    await handle
-      .insert(notes)
-      .values({ id: "1", title: "t", email: "pii@x.com" })
-      .execute();
+    await handle.insert(notes).values({ id: "1", title: "t", email: "pii@x.com" }).execute();
 
     const rows = await handle.raw(`SELECT * FROM notes`);
     expect(rows[0]?.title).toBe("t");

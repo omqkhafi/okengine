@@ -33,8 +33,5 @@ export function overdueCronFindings(
       ...(c.nextRunAt !== undefined ? { nextRunAt: c.nextRunAt } : {}),
       flowIds: c.flowIds,
     }))
-    .sort(
-      (a, b) =>
-        b.missedRuns - a.missedRuns || a.name.localeCompare(b.name),
-    );
+    .sort((a, b) => b.missedRuns - a.missedRuns || a.name.localeCompare(b.name));
 }

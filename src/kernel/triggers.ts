@@ -8,14 +8,7 @@
 import type { NamedRef } from "./fx.ts";
 
 /** HTTP methods accepted by {@link http}. */
-export type HttpMethod =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE"
-  | "OPTIONS"
-  | "HEAD";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
 
 /** Gate reference attached via `.gate(...)`. */
 export type GateRef = NamedRef;
@@ -27,10 +20,7 @@ export type GateRef = NamedRef;
  * @typeParam M - HTTP method literal
  * @typeParam P - Path template literal (`/notes/:id`)
  */
-export interface HttpTrigger<
-  M extends HttpMethod = HttpMethod,
-  P extends string = string,
-> {
+export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string = string> {
   readonly kind: "http";
   readonly method: M;
   readonly path: P;
@@ -83,12 +73,7 @@ export interface InternalTrigger {
 }
 
 /** Discriminated union of all trigger kinds. */
-export type Trigger =
-  | HttpTrigger
-  | EveryTrigger
-  | SignalAsTrigger
-  | CdcTrigger
-  | InternalTrigger;
+export type Trigger = HttpTrigger | EveryTrigger | SignalAsTrigger | CdcTrigger | InternalTrigger;
 
 /** Trigger kind string. */
 export type TriggerKind = Trigger["kind"];
@@ -225,9 +210,7 @@ export interface SignalSource {
  *
  * @param signal - Signal name or `{ name }` handle
  */
-export function asSignalTrigger(
-  signal: string | SignalSource,
-): SignalAsTrigger {
+export function asSignalTrigger(signal: string | SignalSource): SignalAsTrigger {
   if (typeof signal === "string") {
     return { kind: "signal", name: signal };
   }

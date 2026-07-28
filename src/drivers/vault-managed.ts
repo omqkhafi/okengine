@@ -4,11 +4,7 @@
  * Values arrive as an injected map (or env); OKE never invents a vendor client.
  */
 
-import type {
-  VaultBag,
-  VaultDriver,
-  VaultOpenOptions,
-} from "./vault-types.ts";
+import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /**
  * Managed / platform vault driver.

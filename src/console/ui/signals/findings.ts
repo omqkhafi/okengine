@@ -19,9 +19,7 @@ export interface DeadLetterFinding {
  *
  * @param signals - Signals panel rows
  */
-export function deadLetterFindings(
-  signals: readonly SignalRecord[],
-): readonly DeadLetterFinding[] {
+export function deadLetterFindings(signals: readonly SignalRecord[]): readonly DeadLetterFinding[] {
   return signals
     .filter((s) => s.dead > 0)
     .map((s) => ({

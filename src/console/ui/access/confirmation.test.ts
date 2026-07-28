@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  revokeConfirmation,
-  rotateConfirmation,
-  validateTypedConfirm,
-} from "./confirmation.ts";
+import { revokeConfirmation, rotateConfirmation, validateTypedConfirm } from "./confirmation.ts";
 
 describe("access confirmation", () => {
   test("revoke and rotate always require typed confirm (D)", () => {

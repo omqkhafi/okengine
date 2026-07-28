@@ -10,27 +10,14 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
-import type {
-  StoreDecl,
-  StoreHandle,
-  StoreRuntime,
-  SqlStoreHandle,
-} from "../elements/store.ts";
+import type { StoreDecl, StoreHandle, StoreRuntime, SqlStoreHandle } from "../elements/store.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
 import type { VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
-import {
-  createCapabilityToken,
-  type CapabilityToken,
-} from "./capability.ts";
-import {
-  createEffectLedger,
-  recordEffect,
-  reversibilityOf,
-  type EffectLedger,
-} from "./effects.ts";
+import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
+import { createEffectLedger, recordEffect, reversibilityOf, type EffectLedger } from "./effects.ts";
 import {
   DryRunWriteIsolationError,
   isDryRun,
@@ -202,17 +189,15 @@ export interface FxSearchOptions {
  * Implementations must be plain objects so tests can replace `fx` wholesale.
  */
 export interface Fx {
-/**
- * Open a store handle for `ref` (capability checked on each op).
- *
- * When a {@link CreateFxOptions.storeRuntime} is bound and `ref` is a
- * registered store declaration, returns the driver-backed handle.
- *
- * @param ref - Store resource ref, named handle, or store declaration
- */
-  store(
-    ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl,
-  ): FxStoreHandle;
+  /**
+   * Open a store handle for `ref` (capability checked on each op).
+   *
+   * When a {@link CreateFxOptions.storeRuntime} is bound and `ref` is a
+   * registered store declaration, returns the driver-backed handle.
+   *
+   * @param ref - Store resource ref, named handle, or store declaration
+   */
+  store(ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl): FxStoreHandle;
   /**
    * Emit a signal (records `emit`).
    *
@@ -251,11 +236,7 @@ export interface Fx {
    * @param input - Prompt input
    * @param opts - Model routing opts
    */
-  ask(
-    prompt: NamedRef,
-    input?: unknown,
-    opts?: FxAskOptions,
-  ): Promise<Record<string, unknown>>;
+  ask(prompt: NamedRef, input?: unknown, opts?: FxAskOptions): Promise<Record<string, unknown>>;
   /**
    * Similarity search over an index/embed (records `read` on the embed ref).
    *
@@ -263,21 +244,14 @@ export interface Fx {
    * @param query - Query text or vector
    * @param opts - Search options
    */
-  search(
-    embed: NamedRef,
-    query: unknown,
-    opts?: FxSearchOptions,
-  ): Promise<unknown[]>;
+  search(embed: NamedRef, query: unknown, opts?: FxSearchOptions): Promise<unknown[]>;
   /**
    * Run a bounded AI agent (records `ask`).
    *
    * @param agent - Agent name or handle
    * @param input - Agent input (`{ message }` or string)
    */
-  run(
-    agent: NamedRef,
-    input?: unknown,
-  ): Promise<unknown>;
+  run(agent: NamedRef, input?: unknown): Promise<unknown>;
   /**
    * Stream model tokens (records `ask`). Returns an async iterable of chunks.
    *
@@ -326,10 +300,7 @@ export interface Fx {
  * Dispatch target for {@link Fx.call}. Wired by the app so untriggered
  * flows execute through the same pipeline as triggered ones.
  */
-export type FxCallHandler = (
-  name: string,
-  input: unknown,
-) => Promise<unknown>;
+export type FxCallHandler = (name: string, input: unknown) => Promise<unknown>;
 
 /** Options for {@link createFx}. */
 export interface CreateFxOptions {
@@ -352,9 +323,7 @@ export interface CreateFxOptions {
   /** Secret name → value map for `fx.vault`. */
   readonly secrets?: Readonly<Record<string, string>>;
   /** Seed data for in-memory stores: ref → key → value. */
-  readonly storeData?: Readonly<
-    Record<string, Readonly<Record<string, unknown>>>
-  >;
+  readonly storeData?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** Optional log sink (defaults to no-op). */
   readonly onLog?: (
     level: "debug" | "info" | "warn" | "error",
@@ -435,9 +404,7 @@ export function createFx(options: CreateFxOptions): Fx {
  */
 export function createFxContext(options: CreateFxOptions): FxContext {
   const ledger = options.ledger ?? createEffectLedger();
-  const capability =
-    options.capability ??
-    createCapabilityToken(options.flow, options.effects);
+  const capability = options.capability ?? createCapabilityToken(options.flow, options.effects);
   const now = options.now ?? (() => Date.now());
   const secrets = options.secrets ?? {};
   const onLog = options.onLog;
@@ -499,15 +466,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       select(): Promise<unknown[]> {
         return gated("read", ref, () => {
           const values = [...table().values()];
-          return isDryRun()
-            ? values.map((v) => structuredClone(v))
-            : values;
+          return isDryRun() ? values.map((v) => structuredClone(v)) : values;
         });
       },
       insert(row: Record<string, unknown>): Promise<{ id: string }> {
         return gated("write", ref, () => {
-          const id =
-            typeof row.id === "string" ? row.id : crypto.randomUUID();
+          const id = typeof row.id === "string" ? row.id : crypto.randomUUID();
           table().set(id, { ...row, id });
           return { id };
         });
@@ -532,10 +496,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
    * @param decl - Store declaration
    * @param open - Opens (and caches) the runtime handle
    */
-  function gatedSqlHandle(
-    decl: StoreDecl,
-    open: () => Promise<SqlStoreHandle>,
-  ): SqlStoreHandle {
+  function gatedSqlHandle(decl: StoreDecl, open: () => Promise<SqlStoreHandle>): SqlStoreHandle {
     const ref = decl.ref as `sql:${string}`;
     let cached: SqlStoreHandle | undefined;
     const ensure = async (): Promise<SqlStoreHandle> => {
@@ -684,9 +645,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     } as SqlStoreHandle;
   }
 
-  function storeHandle(
-    ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl,
-  ): FxStoreHandle {
+  function storeHandle(ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl): FxStoreHandle {
     const runtime = options.storeRuntime;
     if (runtime && typeof ref === "object" && ref !== null && "facet" in ref) {
       const decl = ref;
@@ -714,8 +673,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         get(_t, prop) {
           if (prop === "ref") return baseRef;
           if (prop === "then") return undefined;
-          const isRead =
-            prop === "get" || prop === "search" || prop === "list";
+          const isRead = prop === "get" || prop === "search" || prop === "list";
           return (...args: unknown[]) =>
             gated(isRead ? "read" : "write", baseRef, async () => {
               if (!isRead && isDryRun()) {
@@ -724,18 +682,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
                 );
               }
               const h = await open();
-              const fn = (h as unknown as Record<string | symbol, unknown>)[
-                prop
-              ];
+              const fn = (h as unknown as Record<string | symbol, unknown>)[prop];
               if (typeof fn !== "function") return undefined;
               return (fn as (...a: unknown[]) => unknown).apply(h, args);
             });
         },
       });
     }
-    return stubStoreHandle(
-      resolveStoreRef(ref as NamedRef | { readonly ref: ResourceRef }),
-    );
+    return stubStoreHandle(resolveStoreRef(ref as NamedRef | { readonly ref: ResourceRef }));
   }
 
   const clock: FxClock = {
@@ -768,11 +722,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       if (aiDisablesCache) return;
       cacheStore.set(key, value);
     },
-    async getOrSet<T>(
-      key: string,
-      _ttl: string,
-      produce: () => T | Promise<T>,
-    ): Promise<T> {
+    async getOrSet<T>(key: string, _ttl: string, produce: () => T | Promise<T>): Promise<T> {
       if (aiDisablesCache) return await produce();
       if (cacheStore.has(key)) {
         if (telemetry) telemetry.cacheHits += 1;
@@ -792,9 +742,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     const vault = options.vaultRuntime;
     if (!vault) return { message, data };
     const safeMessage = vault.redactString(message);
-    const safeData = data
-      ? (vault.redact(data) as Record<string, unknown>)
-      : undefined;
+    const safeData = data ? (vault.redact(data) as Record<string, unknown>) : undefined;
     return { message: safeMessage, data: safeData };
   }
 

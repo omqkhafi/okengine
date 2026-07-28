@@ -4,24 +4,15 @@
  * Protocol-named: AWS S3 · R2 · MinIO · SeaweedFS · Garage · Backblaze.
  */
 
-import type {
-  FilesBucket,
-  FilesDriver,
-  FilesOpenOptions,
-  S3ClientLike,
-} from "./types.ts";
+import type { FilesBucket, FilesDriver, FilesOpenOptions, S3ClientLike } from "./types.ts";
 
 /**
  * Open a files bucket over the S3 protocol.
  *
  * @param options - Bucket name / injected client
  */
-export async function openS3Bucket(
-  options: FilesOpenOptions,
-): Promise<FilesBucket> {
-  const client: S3ClientLike =
-    options.client ??
-    createBunS3Client(options.root ?? options.name);
+export async function openS3Bucket(options: FilesOpenOptions): Promise<FilesBucket> {
+  const client: S3ClientLike = options.client ?? createBunS3Client(options.root ?? options.name);
 
   const prefix = "";
 
@@ -89,8 +80,7 @@ export function createS3FakeClient(): S3ClientLike & {
     file(key: string) {
       return {
         async write(data) {
-          const bytes =
-            typeof data === "string" ? new TextEncoder().encode(data) : data;
+          const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
           objects.set(key, bytes);
           return bytes.byteLength;
         },
@@ -113,9 +103,7 @@ export function createS3FakeClient(): S3ClientLike & {
     async list(options) {
       const prefix = options?.prefix ?? "";
       return {
-        contents: [...objects.keys()]
-          .filter((k) => k.startsWith(prefix))
-          .map((key) => ({ key })),
+        contents: [...objects.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })),
       };
     },
   };

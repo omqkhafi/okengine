@@ -14,8 +14,7 @@ import {
 } from "./contract.ts";
 import { FLOWS_TEST_MANIFEST } from "./fixture.ts";
 
-const schema = FLOWS_TEST_MANIFEST.flows!["bookings.create"]!
-  .in as Record<string, unknown>;
+const schema = FLOWS_TEST_MANIFEST.flows!["bookings.create"]!.in as Record<string, unknown>;
 
 describe("contract editor", () => {
   test("validates locally before sending", () => {
@@ -72,8 +71,7 @@ describe("contract editor", () => {
   });
 
   test("response schema diff surfaces missing / extra fields", () => {
-    const out = FLOWS_TEST_MANIFEST.flows!["bookings.create"]!
-      .out as Record<string, unknown>;
+    const out = FLOWS_TEST_MANIFEST.flows!["bookings.create"]!.out as Record<string, unknown>;
     expect(diffAgainstSchema(out, { id: "b1" })).toEqual({
       missing: [],
       extra: [],
@@ -82,8 +80,6 @@ describe("contract editor", () => {
       missing: ["id"],
       extra: [],
     });
-    expect(diffAgainstSchema(out, { id: "b1", surprise: true }).extra).toContain(
-      "surprise",
-    );
+    expect(diffAgainstSchema(out, { id: "b1", surprise: true }).extra).toContain("surprise");
   });
 });

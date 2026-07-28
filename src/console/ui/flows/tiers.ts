@@ -13,12 +13,7 @@ import {
 } from "../../../kernel/effects.ts";
 
 /** UI column tiers, ranked by reversibility (console §9.1 right column). */
-export type UiEffectTier =
-  | "reads"
-  | "writes"
-  | "emits"
-  | "external"
-  | "capabilities";
+export type UiEffectTier = "reads" | "writes" | "emits" | "external" | "capabilities";
 
 /** One resource/effect row in the right column. */
 export interface TieredEffect {
@@ -94,9 +89,7 @@ export function tierEffects(
  *
  * @param effects - Flow effects
  */
-export function peakEffectTier(
-  effects: Effects | undefined,
-): UiEffectTier | "none" {
+export function peakEffectTier(effects: Effects | undefined): UiEffectTier | "none" {
   if (!effects) return "none";
   if ((effects.sends?.length ?? 0) > 0 || (effects.asks?.length ?? 0) > 0) {
     return "external";

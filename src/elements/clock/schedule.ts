@@ -15,11 +15,7 @@ import { effectiveSchedule, type CronRow } from "./reconcile.ts";
  * @param from - Inclusive start epoch-ms
  * @param until - Exclusive end epoch-ms
  */
-export function nextOccurrences(
-  row: CronRow,
-  from: number,
-  until: number,
-): readonly number[] {
+export function nextOccurrences(row: CronRow, from: number, until: number): readonly number[] {
   if (row.status !== "active" && row.status !== "paused") return [];
   if (until <= from) return [];
 
@@ -75,11 +71,7 @@ export function previousOccurrence(row: CronRow, at: number): number | null {
  * @param from - Exclusive lower bound (usually lastRunAt)
  * @param until - Inclusive upper bound (usually now)
  */
-export function countMissedOccurrences(
-  row: CronRow,
-  from: number,
-  until: number,
-): number {
+export function countMissedOccurrences(row: CronRow, from: number, until: number): number {
   if (until <= from) return 0;
   const sched = effectiveSchedule(row);
   if (sched.every) {
@@ -129,11 +121,7 @@ function nextCronOccurrences(
 ): readonly number[] {
   const parsed = parseSimpleDaily(cron);
   if (!parsed) {
-    if (
-      row.nextRunAt !== undefined &&
-      row.nextRunAt >= from &&
-      row.nextRunAt < until
-    ) {
+    if (row.nextRunAt !== undefined && row.nextRunAt >= from && row.nextRunAt < until) {
       return [row.nextRunAt];
     }
     return [];
@@ -202,11 +190,7 @@ function civilFiresOnDay(
   for (let offsetMin = -14 * 60; offsetMin <= 14 * 60; offsetMin += 15) {
     const utc = base + parsed.hour * 3_600_000 + parsed.minute * 60_000 - offsetMin * 60_000;
     const local = zonedParts(utc, timezone);
-    if (
-      local.date === dateStr &&
-      local.hour === parsed.hour &&
-      local.minute === parsed.minute
-    ) {
+    if (local.date === dateStr && local.hour === parsed.hour && local.minute === parsed.minute) {
       if (parsed.dow !== undefined) {
         const localDow = zonedDow(utc, timezone);
         if (localDow !== parsed.dow) continue;

@@ -48,9 +48,7 @@ export async function findFreePort(
     if (occupied.has(port)) continue;
     if (!(await probe(port))) return port;
   }
-  throw new Error(
-    `oke: no free port near ${preferred} after ${MAX_PORT_ATTEMPTS} attempts`,
-  );
+  throw new Error(`oke: no free port near ${preferred} after ${MAX_PORT_ATTEMPTS} attempts`);
 }
 
 /**

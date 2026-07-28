@@ -34,7 +34,13 @@ describe("publish workflow", () => {
         };
       };
       jobs?: {
-        ci?: unknown;
+        lint?: unknown;
+        typecheck?: unknown;
+        test?: unknown;
+        budgets?: unknown;
+        gate?: unknown;
+        site?: unknown;
+        ci?: { needs?: string | string[] };
         "publish-npm"?: PublishJob;
         "publish-jsr"?: PublishJob;
       };
@@ -44,9 +50,17 @@ describe("publish workflow", () => {
     const tagList = Array.isArray(tags) ? tags : tags ? [tags] : [];
     expect(tagList).toContain("v*");
 
-    expect(parsed.jobs?.ci).toBeTruthy();
+    for (const key of ["lint", "typecheck", "test", "budgets", "gate", "site", "ci"] as const) {
+      expect(parsed.jobs?.[key]).toBeTruthy();
+    }
     expect(parsed.jobs?.["publish-npm"]).toBeTruthy();
     expect(parsed.jobs?.["publish-jsr"]).toBeTruthy();
+
+    const ciNeeds = parsed.jobs?.ci?.needs;
+    const ciNeedList = Array.isArray(ciNeeds) ? ciNeeds : ciNeeds ? [ciNeeds] : [];
+    for (const need of ["lint", "typecheck", "test", "budgets", "gate", "site"]) {
+      expect(ciNeedList).toContain(need);
+    }
 
     for (const key of ["publish-npm", "publish-jsr"] as const) {
       const job = parsed.jobs?.[key];
@@ -57,7 +71,13 @@ describe("publish workflow", () => {
     }
 
     // Step commands (string search — Bun.YAML keeps step `run` as strings)
-    expect(yml).toContain("bun run ci");
+    expect(yml).toContain("bun run lint");
+    expect(yml).toContain("bun run fmt:check");
+    expect(yml).toContain("bun run typecheck");
+    expect(yml).toContain("CREATE_OKE_INTEGRATION=1 bun run test");
+    expect(yml).toContain("bun run budgets -- --dry-run");
+    expect(yml).toContain("bun run gate");
+    expect(yml).toContain("bun run site:build");
     expect(yml).toContain("bun install --frozen-lockfile");
     expect(yml).toContain("npm install -g npm@latest");
     expect(yml).toContain("--jsr-only");
@@ -76,12 +96,10 @@ describe("publish workflow", () => {
 
   test("both packages share the same version (lockstep)", () => {
     const versions = PACKAGES.map((p) => {
-      const pkg = JSON.parse(
-        readFileSync(join(p.dir, "package.json"), "utf-8"),
-      ) as { version: string };
-      const jsr = JSON.parse(
-        readFileSync(join(p.dir, "jsr.json"), "utf-8"),
-      ) as { version: string };
+      const pkg = JSON.parse(readFileSync(join(p.dir, "package.json"), "utf-8")) as {
+        version: string;
+      };
+      const jsr = JSON.parse(readFileSync(join(p.dir, "jsr.json"), "utf-8")) as { version: string };
       return { name: p.name, pkg: pkg.version, jsr: jsr.version };
     });
     const v = versions[0]!.pkg;
@@ -92,10 +110,11 @@ describe("publish workflow", () => {
   });
 
   test("bump-version --dry-run touches both package.json files identically", async () => {
-    const proc = Bun.spawn(
-      ["bun", "run", "scripts/bump-version.ts", "patch", "--dry-run"],
-      { cwd: ROOT, stdout: "pipe", stderr: "pipe" },
-    );
+    const proc = Bun.spawn(["bun", "run", "scripts/bump-version.ts", "patch", "--dry-run"], {
+      cwd: ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const stderr = await new Response(proc.stderr).text();
     const code = await proc.exited;
     expect(code).toBe(0);
@@ -167,44 +186,35 @@ describe("npm pack includes Console SPA", () => {
 
 describe("jsr publish --dry-run", () => {
   for (const pkg of PACKAGES) {
-    test(
-      `${pkg.name}: bunx jsr publish --dry-run`,
-      async () => {
-        // Ensure templates exist for create-oke include list (prepack).
-        if (pkg.name === "create-oke") {
-          const sync = Bun.spawn(["bun", "./src/sync-templates.ts"], {
-            cwd: pkg.dir,
-            stdout: "pipe",
-            stderr: "pipe",
-          });
-          const syncCode = await sync.exited;
-          expect(syncCode).toBe(0);
-        }
+    test(`${pkg.name}: bunx jsr publish --dry-run`, async () => {
+      // Ensure templates exist for create-oke include list (prepack).
+      if (pkg.name === "create-oke") {
+        const sync = Bun.spawn(["bun", "./src/sync-templates.ts"], {
+          cwd: pkg.dir,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const syncCode = await sync.exited;
+        expect(syncCode).toBe(0);
+      }
 
-        const proc = Bun.spawn(
-          ["bunx", "jsr", "publish", "--dry-run", "--allow-dirty"],
-          {
-            cwd: pkg.dir,
-            stdout: "pipe",
-            stderr: "pipe",
-          },
-        );
-        const [stdout, stderr, code] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-          proc.exited,
-        ]);
-        const out = `${stdout}\n${stderr}`;
-        if (code !== 0) {
-          console.error(out);
-        }
-        expect(code).toBe(0);
-        // JSR prints a success line on dry-run; accept either phrasing.
-        expect(
-          /dry run|would publish|checking|success|Simulating/i.test(out),
-        ).toBe(true);
-      },
-      120_000,
-    );
+      const proc = Bun.spawn(["bunx", "jsr", "publish", "--dry-run", "--allow-dirty"], {
+        cwd: pkg.dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      const out = `${stdout}\n${stderr}`;
+      if (code !== 0) {
+        console.error(out);
+      }
+      expect(code).toBe(0);
+      // JSR prints a success line on dry-run; accept either phrasing.
+      expect(/dry run|would publish|checking|success|Simulating/i.test(out)).toBe(true);
+    }, 120_000);
   }
 });

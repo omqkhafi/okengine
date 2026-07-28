@@ -16,10 +16,7 @@ describe("dormantSecrets", () => {
       lastReadAt: null,
       readers: [],
     };
-    const dormant = dormantSecrets(
-      [...VAULT_FIXTURE, neverRead],
-      now,
-    );
+    const dormant = dormantSecrets([...VAULT_FIXTURE, neverRead], now);
     expect(dormant.some((s) => s.name === "LEGACY_WEBHOOK_SECRET")).toBe(true);
     expect(dormant.some((s) => s.kind === "config")).toBe(false);
   });

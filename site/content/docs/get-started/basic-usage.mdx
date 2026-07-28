@@ -38,55 +38,69 @@ import { db } from "../../core";
 import { notes } from "../../schema";
 
 // Contracts derived from the schema — one source of truth, refined where the API is stricter
-const NewNote  = createInsertSchema(notes, { title: (s) => s.min(1).max(120) })
-                   .omit({ id: true, createdAt: true });
-const Note     = createSelectSchema(notes);
-const NoteId   = z.object({ id: z.string() });
+const NewNote = createInsertSchema(notes, { title: (s) => s.min(1).max(120) }).omit({
+  id: true,
+  createdAt: true,
+});
+const Note = createSelectSchema(notes);
+const NoteId = z.object({ id: z.string() });
 const NotFound = z.object({});
 
-export const create = on(http.post("/notes"), flow({
-  in: NewNote,
-  out: NoteId,
-  do: async (input, fx) => {
-    const [note] = await fx.store(db).insert(notes).values(input).returning();
-    return { id: note.id };
-  },
-}));
+export const create = on(
+  http.post("/notes"),
+  flow({
+    in: NewNote,
+    out: NoteId,
+    do: async (input, fx) => {
+      const [note] = await fx.store(db).insert(notes).values(input).returning();
+      return { id: note.id };
+    },
+  }),
+);
 // effects → writes[sql:notes]
 
-export const list = on(http.get("/notes"), flow({
-  out: Note.array(),
-  do: (_, fx) => fx.store(db).select().from(notes),
-}));
+export const list = on(
+  http.get("/notes"),
+  flow({
+    out: Note.array(),
+    do: (_, fx) => fx.store(db).select().from(notes),
+  }),
+);
 // effects → reads[sql:notes]
 
-export const get = on(http.get("/notes/:id"), flow({
-  in: NoteId,
-  out: Note,
-  errors: { NotFound },
-  do: async ({ id }, fx) => (await fx.store(db).findById(notes, id)) ?? fx.fail("NotFound", {}),
-}));
+export const get = on(
+  http.get("/notes/:id"),
+  flow({
+    in: NoteId,
+    out: Note,
+    errors: { NotFound },
+    do: async ({ id }, fx) => (await fx.store(db).findById(notes, id)) ?? fx.fail("NotFound", {}),
+  }),
+);
 
-export const remove = on(http.delete("/notes/:id"), flow({
-  in: NoteId,
-  errors: { NotFound },
-  do: async ({ id }, fx) => {
-    const deleted = await fx.store(db).delete(notes, id);
-    if (!deleted) return fx.fail("NotFound", {});
-  },
-}));
+export const remove = on(
+  http.delete("/notes/:id"),
+  flow({
+    in: NoteId,
+    errors: { NotFound },
+    do: async ({ id }, fx) => {
+      const deleted = await fx.store(db).delete(notes, id);
+      if (!deleted) return fx.fail("NotFound", {});
+    },
+  }),
+);
 ```
 
 <Callout title="Two rules to remember">
-- `fx` is the only door to the outside world.
-- Errors are values (`fx.fail`), not thrown exceptions.
+  - `fx` is the only door to the outside world. - Errors are values (`fx.fail`), not thrown
+  exceptions.
 </Callout>
 
 What to notice in `create`:
 
 - `in` / `out` are Zod schemas — the typed client and OpenAPI come from the same contracts
 - `fx.store(db)` is a Store effect — the comment under the flow shows what the compiler infers
-- No separate “repository layer” ceremony; the flow *is* the behavior
+- No separate “repository layer” ceremony; the flow _is_ the behavior
 
 ## Wire the app
 
@@ -100,7 +114,7 @@ import * as notes from "./flows/notes";
 
 export const app = oke({ name: "notes" }).adopt({ notes });
 
-export type App = typeof app;   // ← the client needs nothing else
+export type App = typeof app; // ← the client needs nothing else
 ```
 
 ## Typed client
@@ -118,7 +132,7 @@ const api = createClient<App>("http://localhost:6530", { $routes: app.$routes })
 const { data, error } = await api.notes.get({ id: "n_1" });
 
 if (error?.code === "NotFound") show("gone");
-else console.log(data.title);          // ← typed, no codegen ✅
+else console.log(data.title); // ← typed, no codegen ✅
 ```
 
 `data` and `error` are narrowed from your flow contracts. `NotFound` is the same code you returned with `fx.fail`.
@@ -135,7 +149,7 @@ import { createTestApp } from "okengine/test";
 import { app } from "../src/app";
 
 test("create then read", async () => {
-  const t = await createTestApp(app);            // memory driver, automatic
+  const t = await createTestApp(app); // memory driver, automatic
   const { data } = await t.api.notes.create({ title: "First", body: "Hello" });
   const { data: note } = await t.api.notes.get({ id: data!.id });
   expect(note!.title).toBe("First");
@@ -158,7 +172,19 @@ After this page you should be able to:
 ## What's next
 
 <Cards>
-  <Card title="Notes" description="Full Basic walkthrough — contracts, errors, client." href="/docs/learn/notes" />
-  <Card title="Elements" description="One page per element, starting with Flow." href="/docs/elements/flow" />
-  <Card title="Console" description="Seventeen panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Notes"
+    description="Full Basic walkthrough — contracts, errors, client."
+    href="/docs/learn/notes"
+  />
+  <Card
+    title="Elements"
+    description="One page per element, starting with Flow."
+    href="/docs/elements/flow"
+  />
+  <Card
+    title="Console"
+    description="Seventeen panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

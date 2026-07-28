@@ -4,10 +4,7 @@
  * Send test is a real external send — typed confirm in production, never stubbed.
  */
 
-import {
-  UNDO_WINDOW_MS,
-  type ConfirmationPattern,
-} from "../flows/confirmation.ts";
+import { UNDO_WINDOW_MS, type ConfirmationPattern } from "../flows/confirmation.ts";
 
 export { UNDO_WINDOW_MS, validateTypedConfirm } from "../flows/confirmation.ts";
 export type { ConfirmationPattern } from "../flows/confirmation.ts";

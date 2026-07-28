@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  canDismissOnceSecret,
-  ONCE_SECRET_ACK_LABEL,
-} from "./acknowledgement.ts";
+import { canDismissOnceSecret, ONCE_SECRET_ACK_LABEL } from "./acknowledgement.ts";
 
 describe("once-secret acknowledgement", () => {
   test("dismiss requires explicit acknowledgement — not a soft done", () => {

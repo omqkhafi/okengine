@@ -12,6 +12,9 @@ export {
   id,
   now,
   defineTable,
+  field,
+  schemaTable,
+  schemaRelations,
   createStoreRuntime,
   createStoreCache,
   computedCacheKey,
@@ -32,6 +35,9 @@ export type {
   SqlStoreHandle,
   TableHandle,
   ColumnDef,
+  SchemaTableDecl,
+  SchemaColumnDecl,
+  SchemaRelationsDecl,
 } from "./store.ts";
 
 export { signal, createSignalRuntime } from "./signal.ts";
@@ -52,13 +58,7 @@ export {
   detectDstAmbiguity,
   parseDurationMs,
 } from "./clock.ts";
-export type {
-  ClockDecl,
-  ClockOptions,
-  ClockRuntime,
-  TimeTravel,
-  DurableResult,
-} from "./clock.ts";
+export type { ClockDecl, ClockOptions, ClockRuntime, TimeTravel, DurableResult } from "./clock.ts";
 
 export {
   gate,
@@ -86,6 +86,8 @@ export {
   fingerprintSecretSync,
   createSecretRedactor,
   resolveLayerSource,
+  COMPOSE_ENV_REL,
+  resolveComposeEnvPath,
 } from "./vault.ts";
 export type {
   VaultSecretDecl,

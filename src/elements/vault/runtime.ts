@@ -3,7 +3,7 @@
  */
 
 import type { VaultBag, VaultDriver } from "../../drivers/vault-types.ts";
-import { fromStackRole, isFromStack } from "./declare.ts";
+import { fromDockerRole, isFromDocker } from "./declare.ts";
 import type { VaultSecretDecl } from "./declare.ts";
 import { fingerprintSecretSync } from "./fingerprint.ts";
 import { createSecretRedactor, SECRET_MASK } from "./redact.ts";
@@ -25,13 +25,8 @@ export class VaultBootError extends Error {
    * @param gaps - Missing secrets
    */
   constructor(gaps: readonly VaultGap[]) {
-    const lines = gaps.map(
-      (g) =>
-        `  - ${g.name}${g.description ? `: ${g.description}` : ""}`,
-    );
-    super(
-      `vault boot failed — ${gaps.length} missing secret(s):\n${lines.join("\n")}`,
-    );
+    const lines = gaps.map((g) => `  - ${g.name}${g.description ? `: ${g.description}` : ""}`);
+    super(`vault boot failed — ${gaps.length} missing secret(s):\n${lines.join("\n")}`);
     this.name = "VaultBootError";
     this.gaps = gaps;
   }
@@ -39,12 +34,12 @@ export class VaultBootError extends Error {
 
 /**
  * Named layer in the resolution chain (console §9.8).
- * Spec order: process.env → .env.local → .env.stack → driver → dev-fallback.
+ * Spec order: process.env → .env.local → .env.docker → driver → dev-fallback.
  */
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.stack"
+  | ".env.docker"
   | "driver"
   | "dev-fallback";
 
@@ -173,9 +168,7 @@ export interface VaultRuntime {
  *
  * @param options - Contracts + resolution chain
  */
-export function createVaultRuntime(
-  options: CreateVaultRuntimeOptions = {},
-): VaultRuntime {
+export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): VaultRuntime {
   const contracts = new Map<string, VaultSecretDecl>();
   for (const s of options.secrets ?? []) {
     contracts.set(s.name, s);
@@ -236,9 +229,7 @@ export function createVaultRuntime(
       if (value === undefined || value.length === 0) {
         gaps.push({
           name: c.name,
-          ...(c.description !== undefined
-            ? { description: c.description }
-            : {}),
+          ...(c.description !== undefined ? { description: c.description } : {}),
         });
       }
     }
@@ -384,17 +375,15 @@ export function createVaultRuntime(
  *
  * @param layer - Chain layer
  */
-export function resolveLayerSource(
-  layer: VaultChainLayer,
-): VaultResolutionSource {
+export function resolveLayerSource(layer: VaultChainLayer): VaultResolutionSource {
   if (layer.source) return layer.source;
   const path = layer.options?.path;
   if (typeof path === "string") {
     if (path.endsWith(".env.local") || path.includes("/.env.local")) {
       return ".env.local";
     }
-    if (path.endsWith(".env.stack") || path.includes("/.env.stack")) {
-      return ".env.stack";
+    if (path.endsWith(".env.docker") || path.includes("/.env.docker")) {
+      return ".env.docker";
     }
   }
   if (layer.driver.id === "env" && path === undefined) {
@@ -404,25 +393,25 @@ export function resolveLayerSource(
 }
 
 /**
- * Resolve a `dev` fallback, expanding {@link import("./declare.ts").fromStack}
- * markers via stack env (`OKE_<ROLE>_URL`) without teaching the kernel
+ * Resolve a `dev` fallback, expanding {@link import("./declare.ts").fromDocker}
+ * markers via docker env (`OKE_<ROLE>_URL`) without teaching the kernel
  * image-specific env-var names.
  *
  * @param dev - Declared fallback
  */
 function resolveDevFallback(dev: string): string | undefined {
-  if (!isFromStack(dev)) return dev;
-  const role = fromStackRole(dev);
+  if (!isFromDocker(dev)) return dev;
+  const role = fromDockerRole(dev);
   const key = `OKE_${role.replaceAll(".", "_").toUpperCase()}_URL`;
   const fromEnv =
     (typeof Bun !== "undefined" ? Bun.env[key] : undefined) ??
     process.env[key] ??
     (role === "store.sql"
-      ? (typeof Bun !== "undefined" ? Bun.env.DATABASE_URL : undefined) ??
-        process.env.DATABASE_URL
+      ? ((typeof Bun !== "undefined" ? Bun.env.DATABASE_URL : undefined) ??
+        process.env.DATABASE_URL)
       : undefined);
   if (fromEnv && fromEnv.length > 0) return fromEnv;
-  // Dev/test without `oke dev --stack`: still satisfy url-shaped contracts.
+  // Local/test without `oke dev --docker`: still satisfy url-shaped contracts.
   if (role === "store.sql") return "postgres://localhost/oke";
   return undefined;
 }
@@ -431,10 +420,7 @@ function resolveDevFallback(dev: string): string | undefined {
  * @param contracts - Declared contracts
  * @param name - Contract name
  */
-function isSensitiveName(
-  contracts: ReadonlyMap<string, VaultSecretDecl>,
-  name: string,
-): boolean {
+function isSensitiveName(contracts: ReadonlyMap<string, VaultSecretDecl>, name: string): boolean {
   const c = contracts.get(name);
   if (!c) return true;
   return c.sensitive;

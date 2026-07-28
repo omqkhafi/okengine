@@ -8,9 +8,7 @@
 import type { SignalRecord } from "./types.ts";
 
 /** Whether the panel may offer dry-run for this signal. */
-export type DryRunOffer =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: string };
+export type DryRunOffer = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 /**
  * Decide whether dry-run is offered — same refusal spirit as Traces.

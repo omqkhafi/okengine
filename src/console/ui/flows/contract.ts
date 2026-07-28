@@ -11,11 +11,10 @@ import addFormatsModule from "ajv-formats";
 import type { ErrorObject, ValidateFunction } from "ajv";
 
 // Ajv CJS/ESM interop under Bun.
-const Ajv = (AjvModule as unknown as { default?: typeof AjvModule }).default ??
-  AjvModule;
+const Ajv = (AjvModule as unknown as { default?: typeof AjvModule }).default ?? AjvModule;
 const addFormats =
-  (addFormatsModule as unknown as { default?: typeof addFormatsModule })
-    .default ?? addFormatsModule;
+  (addFormatsModule as unknown as { default?: typeof addFormatsModule }).default ??
+  addFormatsModule;
 
 /** Field-level validation error. */
 export interface FieldError {
@@ -69,9 +68,7 @@ const validators = new WeakMap<object, ValidateFunction>();
  *
  * @param schema - JSON Schema object
  */
-export function compileValidator(
-  schema: Record<string, unknown>,
-): ValidateFunction {
+export function compileValidator(schema: Record<string, unknown>): ValidateFunction {
   let v = validators.get(schema);
   if (!v) {
     v = ajv.compile(schema);
@@ -143,9 +140,7 @@ export function valueToJsonText(value: unknown): string {
  *
  * @param schema - JSON Schema object
  */
-export function seedFromSchema(
-  schema: Record<string, unknown> | null | undefined,
-): unknown {
+export function seedFromSchema(schema: Record<string, unknown> | null | undefined): unknown {
   if (!schema) return {};
   return seedNode(schema);
 }
@@ -156,13 +151,8 @@ function seedNode(schema: Record<string, unknown>): unknown {
   }
   const type = schema.type;
   if (type === "object" || (!type && schema.properties)) {
-    const props = (schema.properties ?? {}) as Record<
-      string,
-      Record<string, unknown>
-    >;
-    const required = new Set(
-      Array.isArray(schema.required) ? (schema.required as string[]) : [],
-    );
+    const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+    const required = new Set(Array.isArray(schema.required) ? (schema.required as string[]) : []);
     const out: Record<string, unknown> = {};
     for (const [key, prop] of Object.entries(props)) {
       if (required.has(key) || Object.keys(props).length <= 4) {
@@ -205,21 +195,14 @@ export function fieldsFromSchema(
   if (!schema) return [];
   const type = schema.type;
   if (type === "object" || schema.properties) {
-    const props = (schema.properties ?? {}) as Record<
-      string,
-      Record<string, unknown>
-    >;
-    const required = new Set(
-      Array.isArray(schema.required) ? (schema.required as string[]) : [],
-    );
+    const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+    const required = new Set(Array.isArray(schema.required) ? (schema.required as string[]) : []);
     return Object.entries(props).map(([name, prop]) => {
       const path = `${basePath}/${name}`;
       return fieldFromProp(name, path, prop, required.has(name));
     });
   }
-  return [
-    fieldFromProp("value", basePath || "/", schema, true),
-  ];
+  return [fieldFromProp("value", basePath || "/", schema, true)];
 }
 
 function fieldFromProp(
@@ -262,10 +245,7 @@ function fieldFromProp(
     };
   }
   const t =
-    type === "integer" ||
-    type === "number" ||
-    type === "boolean" ||
-    type === "string"
+    type === "integer" || type === "number" || type === "boolean" || type === "string"
       ? type
       : "unknown";
   return {
@@ -286,11 +266,7 @@ function fieldFromProp(
  * @param path - Path
  * @param value - New value
  */
-export function setAtPath(
-  root: unknown,
-  path: string,
-  value: unknown,
-): unknown {
+export function setAtPath(root: unknown, path: string, value: unknown): unknown {
   if (path === "" || path === "/") return value;
   const parts = path.split("/").filter(Boolean);
   const clone = structuredClone(root ?? {}) as Record<string, unknown>;

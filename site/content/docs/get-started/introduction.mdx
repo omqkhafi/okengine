@@ -14,9 +14,9 @@ OKE is a Bun-first TypeScript backend. You do not learn a pile of unrelated tool
 There are no separate species called endpoints, handlers, consumers, jobs, subscribers, or workflows. There is one species — the **Flow** — and triggers are typed values:
 
 ```ts title="flows"
-on(http.post("/bookings"), createBooking);      // "an API endpoint"
-on(every("10m"), expireStale);                  // "a cron job"
-on(orderPlaced, sendReceipt);                   // "a queue consumer"
+on(http.post("/bookings"), createBooking); // "an API endpoint"
+on(every("10m"), expireStale); // "a cron job"
+on(orderPlaced, sendReceipt); // "a queue consumer"
 on(db.table(users).changed("email"), reverify); // "a CDC trigger"
 ```
 
@@ -26,6 +26,7 @@ Same shape every time: a trigger, a flow body, and effects inferred from what th
 One law → one mental model → one documentation path → one trace shape → one thing for an AI agent to learn.
 
 **Learning OKE is learning one sentence.**
+
 </Callout>
 
 ## What you get
@@ -34,7 +35,7 @@ You write TypeScript. At build time OKE extracts a **Manifest** — a machine-re
 
 - Typed client (no separate codegen step to maintain)
 - OpenAPI / docs surfaces
-- Architecture diagram that *is* the effect graph
+- Architecture diagram that _is_ the effect graph
 - Console panels, traces, and explorers
 - MCP surface for agents (`:6535`)
 - Least-privilege capability matrix and cache invalidation keys
@@ -47,18 +48,18 @@ The entire public vocabulary fits in one import:
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
-| Export | Role |
-|---|---|
-| `on` | Bind a trigger to a flow |
-| `flow` | Define behavior + contracts |
-| `signal` | Data in motion (queue / pub-sub / live) |
-| `store` | Data at rest (`sql` · `kv` · `files` · `index`) |
-| `clock` | Time (cron, delay, sleep, TTL) |
-| `gate` | Permission to act (auth, ABAC, limits) |
-| `vault` | Secrets and config |
-| `channel` | Reach humans (email, SMS, …) |
-| `ai` | Reach models / agents |
-| `plugin` | Extend the runtime without a ninth element |
+| Export    | Role                                            |
+| --------- | ----------------------------------------------- |
+| `on`      | Bind a trigger to a flow                        |
+| `flow`    | Define behavior + contracts                     |
+| `signal`  | Data in motion (queue / pub-sub / live)         |
+| `store`   | Data at rest (`sql` · `kv` · `files` · `index`) |
+| `clock`   | Time (cron, delay, sleep, TTL)                  |
+| `gate`    | Permission to act (auth, ABAC, limits)          |
+| `vault`   | Secrets and config                              |
+| `channel` | Reach humans (email, SMS, …)                    |
+| `ai`      | Reach models / agents                           |
+| `plugin`  | Extend the runtime without a ninth element      |
 
 Everything else in the docs is derived from these ten names.
 
@@ -71,16 +72,16 @@ Everything a backend has ever needed reduces to eight typed elements. An element
 <details>
 <summary>What each element replaces</summary>
 
-| Element | Replaces the zoo of |
-|---|---|
-| **Flow** | endpoint · handler · consumer · job · workflow · webhook |
-| **Signal** | queue · pub/sub · stream · websocket · SSE · event bus |
-| **Store** | database · cache · KV · file storage · search index |
-| **Clock** | cron · delay · timeout · durable sleep · TTL |
-| **Gate** | auth · session · ABAC · rate limit · quota · feature flag |
-| **Vault** | secrets · config · environment |
-| **Channel** | email · SMS · WhatsApp · push |
-| **AI** | model calls · prompts · embeddings · agents · RAG |
+| Element     | Replaces the zoo of                                       |
+| ----------- | --------------------------------------------------------- |
+| **Flow**    | endpoint · handler · consumer · job · workflow · webhook  |
+| **Signal**  | queue · pub/sub · stream · websocket · SSE · event bus    |
+| **Store**   | database · cache · KV · file storage · search index       |
+| **Clock**   | cron · delay · timeout · durable sleep · TTL              |
+| **Gate**    | auth · session · ABAC · rate limit · quota · feature flag |
+| **Vault**   | secrets · config · environment                            |
+| **Channel** | email · SMS · WhatsApp · push                             |
+| **AI**      | model calls · prompts · embeddings · agents · RAG         |
 
 </details>
 
@@ -100,9 +101,21 @@ Read in this order if you are new:
 4. [Notes](/docs/learn/notes) — full teaching path
 
 <Cards>
-  <Card title="Comparison" description="Positioning matrix against Hono, Elysia, Encore.ts, and iii." href="/docs/get-started/comparison" />
-  <Card title="Installation" description="Install okengine and scaffold with create-oke." href="/docs/get-started/installation" />
-  <Card title="Basic Usage" description="Flows, typed client, and tests from the Notes example." href="/docs/get-started/basic-usage" />
+  <Card
+    title="Comparison"
+    description="Positioning matrix against Hono, Elysia, Encore.ts, and iii."
+    href="/docs/get-started/comparison"
+  />
+  <Card
+    title="Installation"
+    description="Install okengine and scaffold with create-oke."
+    href="/docs/get-started/installation"
+  />
+  <Card
+    title="Basic Usage"
+    description="Flows, typed client, and tests from the Notes example."
+    href="/docs/get-started/basic-usage"
+  />
 </Cards>
 
 ## AI resources

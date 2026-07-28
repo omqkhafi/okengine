@@ -19,15 +19,10 @@ export interface HealthLines {
  */
 export function formatHealth(health: CronHealth): HealthLines {
   return {
-    drift:
-      health.driftMs == null
-        ? "drift unknown"
-        : `drift ${formatSignedMs(health.driftMs)}`,
+    drift: health.driftMs == null ? "drift unknown" : `drift ${formatSignedMs(health.driftMs)}`,
     overdue: health.overdue ? "overdue" : "on time",
     missedWithPolicy: `${health.missedRuns} missed · catch-up ${health.catchUp}`,
-    lease: health.leaderInstanceId
-      ? `lease ${health.leaderInstanceId}`
-      : "no lease",
+    lease: health.leaderInstanceId ? `lease ${health.leaderInstanceId}` : "no lease",
   };
 }
 

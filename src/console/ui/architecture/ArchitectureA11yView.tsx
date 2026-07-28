@@ -4,10 +4,7 @@
  */
 
 import { buildCausalityGraph } from "../flows/graph.ts";
-import {
-  ARCHITECTURE_RUNS_FIXTURE,
-  ARCHITECTURE_TEST_MANIFEST,
-} from "./fixture.ts";
+import { ARCHITECTURE_RUNS_FIXTURE, ARCHITECTURE_TEST_MANIFEST } from "./fixture.ts";
 import { LAYER_LABEL, ELEMENT_LAYERS } from "./types.ts";
 import { buildArchitectureView } from "./view.ts";
 import { layersOf, type ArchitectureSearch } from "./search.ts";
@@ -44,9 +41,7 @@ export function ArchitectureA11yView(props: ArchitectureA11yViewProps) {
       <header>
         <h1>Architecture</h1>
         <p>What shape — clustered by unit, typed layers, live traffic</p>
-        <p role="status">
-          Boundary crossings: {view.boundaryCrossingCount}
-        </p>
+        <p role="status">Boundary crossings: {view.boundaryCrossingCount}</p>
       </header>
 
       <main id="architecture-main">
@@ -74,22 +69,12 @@ export function ArchitectureA11yView(props: ArchitectureA11yViewProps) {
             <fieldset>
               <legend>Focus depth</legend>
               <label>
-                <input
-                  type="radio"
-                  name="depth"
-                  checked={view.depth === 1}
-                  onChange={() => {}}
-                />{" "}
-                1 hop
+                <input type="radio" name="depth" checked={view.depth === 1} onChange={() => {}} /> 1
+                hop
               </label>
               <label>
-                <input
-                  type="radio"
-                  name="depth"
-                  checked={view.depth === 2}
-                  onChange={() => {}}
-                />{" "}
-                2 hops
+                <input type="radio" name="depth" checked={view.depth === 2} onChange={() => {}} /> 2
+                hops
               </label>
             </fieldset>
           </div>
@@ -116,15 +101,9 @@ export function ArchitectureA11yView(props: ArchitectureA11yViewProps) {
           <ul aria-label="Nodes">
             {view.nodes.map((n) => (
               <li key={n.id}>
-                <button
-                  type="button"
-                  aria-pressed={n.focused === true}
-                  style={{ minHeight: 32 }}
-                >
+                <button type="button" aria-pressed={n.focused === true} style={{ minHeight: 32 }}>
                   {n.label}
-                  {n.kind === "unit" && n.flowCount !== undefined
-                    ? ` (${n.flowCount} flows)`
-                    : ""}
+                  {n.kind === "unit" && n.flowCount !== undefined ? ` (${n.flowCount} flows)` : ""}
                   {!n.insideBoundary ? " — outside boundary" : ""}
                 </button>
               </li>

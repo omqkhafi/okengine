@@ -52,8 +52,7 @@ export function whatChangedSummary(diff: DiffListResponse): DiffDeploySummary {
     };
   }
 
-  const severityLabel =
-    diff.severity != null ? DIFF_CATEGORY_LABELS[diff.severity] : "changes";
+  const severityLabel = diff.severity != null ? DIFF_CATEGORY_LABELS[diff.severity] : "changes";
   const top = diff.changes[0]!;
   const gateNote =
     diff.blockedCount > 0

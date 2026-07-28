@@ -25,10 +25,7 @@ export interface FullTraceBoost {
  * @param boosts - Active boosts
  * @param now - Clock
  */
-export function samplingLabel(
-  boosts: readonly FullTraceBoost[],
-  now: number = Date.now(),
-): string {
+export function samplingLabel(boosts: readonly FullTraceBoost[], now: number = Date.now()): string {
   const live = boosts.filter((b) => b.until > now);
   if (live.length === 0) return DEFAULT_SAMPLING_LABEL;
   const flows = live.map((b) => b.flow).join(", ");

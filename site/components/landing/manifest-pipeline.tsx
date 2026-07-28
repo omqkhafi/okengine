@@ -7,15 +7,15 @@
  * stack on a phone instead of scrolling sideways.
  */
 
-import { ArrowDown } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ArrowDown } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   DERIVED_SURFACE_GROUPS,
   DERIVED_SURFACES,
   MANIFEST_FLOW_KEYS,
   MANIFEST_INPUTS,
   MANIFEST_TOP_LEVEL_KEYS,
-} from '@/lib/elements';
+} from "@/lib/elements";
 
 /**
  * Stage header strip: index, title, and the artifact the stage deals in.

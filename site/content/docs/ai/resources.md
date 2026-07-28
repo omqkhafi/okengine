@@ -10,19 +10,17 @@ source: "docs/spec/unified-theory.md"
 
 OKE is the first backend an AI can fully read, safely operate, and provably not break.
 
-**Two directions, one design.** §25 covers AI *for the developer* (agents operating your system through MCP). The AI element (§5) covers AI *inside the application* (models, prompts, agents your users trigger). Both rest on the same foundation — declared effects and least-privilege capabilities — which is why an agent in either direction is bounded by construction rather than by policy.
+**Two directions, one design.** §25 covers AI _for the developer_ (agents operating your system through MCP). The AI element (§5) covers AI _inside the application_ (models, prompts, agents your users trigger). Both rest on the same foundation — declared effects and least-privilege capabilities — which is why an agent in either direction is bounded by construction rather than by policy.
 
 ---
 
 ## Part VIII — Execution
-
 
 ## Agent contract (AGENTS.md)
 
 ## OKE — Agent Contract
 
 This file is loaded by every later session. It prevents drift. Specs live in `docs/spec/`. **If the spec is silent, stop and ask.**
-
 
 ## Machine-readable docs
 

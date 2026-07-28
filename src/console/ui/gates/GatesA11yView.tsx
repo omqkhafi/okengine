@@ -4,10 +4,7 @@
 
 import { auditLines, formatViolation } from "./audit.ts";
 import { formatDenial, formatEvaluationStep } from "./denial.ts";
-import {
-  GATES_LIST_FIXTURE,
-  SIMULATE_RATE_FIXTURE,
-} from "./fixture.ts";
+import { GATES_LIST_FIXTURE, SIMULATE_RATE_FIXTURE } from "./fixture.ts";
 import { groupFlows, groupPrincipals } from "./group.ts";
 
 /** Props for {@link GatesA11yView}. */
@@ -32,9 +29,7 @@ export function GatesA11yView(props: GatesA11yViewProps) {
       ? groupPrincipals(GATES_LIST_FIXTURE.principals)
       : groupFlows(GATES_LIST_FIXTURE.flows);
   const openFlowId = props.openFlow ?? "bookings.create";
-  const openFlow = GATES_LIST_FIXTURE.flows.find(
-    (f) => f.flowId === openFlowId,
-  );
+  const openFlow = GATES_LIST_FIXTURE.flows.find((f) => f.flowId === openFlowId);
   const openPrincipalId = props.openPrincipal ?? "role:role_member";
   const openPrincipal = GATES_LIST_FIXTURE.principals.find(
     (p) => `${p.kind}:${p.id}` === openPrincipalId,
@@ -96,17 +91,13 @@ export function GatesA11yView(props: GatesA11yViewProps) {
                     <button
                       type="button"
                       aria-pressed={
-                        from === "flow"
-                          ? item.id === openFlowId
-                          : item.id === openPrincipalId
+                        from === "flow" ? item.id === openFlowId : item.id === openPrincipalId
                       }
                       style={{ minHeight: 32, width: "100%" }}
                     >
                       <span>{item.label}</span>
                       {item.meta ? <span> {item.meta}</span> : null}
-                      {item.flag ? (
-                        <span role="status"> {item.flag}</span>
-                      ) : null}
+                      {item.flag ? <span role="status"> {item.flag}</span> : null}
                     </button>
                   </li>
                 ))}

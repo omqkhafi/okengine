@@ -24,11 +24,7 @@ export function spamComplaintFindings(
   outcomes: readonly OutcomeRow[],
 ): readonly SpamComplaintFinding[] {
   return outcomes
-    .filter(
-      (r) =>
-        r.state === "delivered-then-complained" &&
-        isConsequenceEmphasized(r),
-    )
+    .filter((r) => r.state === "delivered-then-complained" && isConsequenceEmphasized(r))
     .map((r) => ({
       state: "delivered-then-complained" as const,
       count: r.count,

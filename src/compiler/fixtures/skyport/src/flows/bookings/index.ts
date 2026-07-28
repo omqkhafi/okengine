@@ -10,8 +10,8 @@ const BookingOut = { name: "BookingOut" };
 const FlightFull = { name: "FlightFull" };
 
 // Padding so `flow(` lands on line 18 (spec excerpt source path).
-
-
+void 0;
+void 0;
 
 export const create = on(
   http.post("/bookings").gate(member, canBook, fair),
@@ -39,7 +39,11 @@ export const mine = on(
     name: "bookings.mine",
     live: true,
     do: (_, fx) =>
-      fx.store(db).select().from(bookings).where(eq(bookings.userId as never, fx.auth.userId)),
+      fx
+        .store(db)
+        .select()
+        .from(bookings)
+        .where(eq(bookings.userId as never, fx.auth.userId)),
   }),
 );
 

@@ -18,9 +18,7 @@ import type {
  *
  * @param options - Name / dims / SQL connection
  */
-export async function openPgvectorIndex(
-  options: IndexOpenOptions,
-): Promise<IndexStore> {
+export async function openPgvectorIndex(options: IndexOpenOptions): Promise<IndexStore> {
   if (options.sql) {
     return openPgvectorSql(options.name, options.dims, options.sql);
   }
@@ -45,10 +43,11 @@ async function openPgvectorSql(
         throw new Error(`vector dims ${vector.length} !== index dims ${dims}`);
       }
       await sql.exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
-      await sql.exec(
-        `INSERT INTO "${table}" (id, embedding, meta) VALUES (?, ?, ?)`,
-        [id, JSON.stringify(vector), meta ? JSON.stringify(meta) : null],
-      );
+      await sql.exec(`INSERT INTO "${table}" (id, embedding, meta) VALUES (?, ?, ?)`, [
+        id,
+        JSON.stringify(vector),
+        meta ? JSON.stringify(meta) : null,
+      ]);
     },
     async search(vector, topK = 10): Promise<IndexHit[]> {
       const rows = await sql.query(`SELECT id, embedding, meta FROM "${table}"`);
@@ -78,10 +77,7 @@ async function openPgvectorSql(
 }
 
 function openPgvectorMemory(dims: number): IndexStore {
-  const docs = new Map<
-    string,
-    { vector: number[]; meta?: Record<string, unknown> }
-  >();
+  const docs = new Map<string, { vector: number[]; meta?: Record<string, unknown> }>();
   return {
     driverId: "pgvector",
     async upsert(id, vector, meta) {

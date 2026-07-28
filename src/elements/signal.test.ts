@@ -205,9 +205,7 @@ for (const { label, driver, setup } of drivers) {
         attempt: 1,
       });
       expect(dlq[0]!.failures[0]!.message).toContain("boom-");
-      expect(dlq[0]!.failures.map((f) => f.attempt)).toEqual(
-        dlq[0]!.failures.map((_, i) => i + 1),
-      );
+      expect(dlq[0]!.failures.map((f) => f.attempt)).toEqual(dlq[0]!.failures.map((_, i) => i + 1));
     });
   });
 }
@@ -303,12 +301,7 @@ describe("chaos — kill process mid-transaction", () => {
     const durablePath = join(dir, "bus.json");
     try {
       const child = Bun.spawn({
-        cmd: [
-          "bun",
-          join(import.meta.dir, "signal/chaos-child.ts"),
-          durablePath,
-          "mid-txn",
-        ],
+        cmd: ["bun", join(import.meta.dir, "signal/chaos-child.ts"), durablePath, "mid-txn"],
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -406,12 +399,7 @@ describe("chaos — kill process mid-transaction", () => {
     const durablePath = join(dir, "bus.json");
     try {
       const child = Bun.spawn({
-        cmd: [
-          "bun",
-          join(import.meta.dir, "signal/chaos-child.ts"),
-          durablePath,
-          "commit",
-        ],
+        cmd: ["bun", join(import.meta.dir, "signal/chaos-child.ts"), durablePath, "commit"],
         stdout: "pipe",
         stderr: "pipe",
       });

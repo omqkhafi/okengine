@@ -4,11 +4,7 @@
  * The roles × permissions matrix is refused as an entry point.
  */
 
-import type {
-  FlowGatesRecord,
-  GatesListGroup,
-  PrincipalRecord,
-} from "./types.ts";
+import type { FlowGatesRecord, GatesListGroup, PrincipalRecord } from "./types.ts";
 
 /**
  * Group principals by kind for the from-principal inquiry.
@@ -71,8 +67,7 @@ export function groupFlows(
   const filtered = q
     ? flows.filter(
         (f) =>
-          f.flowId.toLowerCase().includes(q) ||
-          f.gates.some((g) => g.toLowerCase().includes(q)),
+          f.flowId.toLowerCase().includes(q) || f.gates.some((g) => g.toLowerCase().includes(q)),
       )
     : flows;
 
@@ -91,10 +86,7 @@ export function groupFlows(
         .map((f) => ({
           id: f.flowId,
           label: f.flowId,
-          meta:
-            f.gates.length === 0
-              ? "ungated"
-              : f.gates.join(" → "),
+          meta: f.gates.length === 0 ? "ungated" : f.gates.join(" → "),
           flag: f.unguarded ? "unguarded" : undefined,
         })),
     }))

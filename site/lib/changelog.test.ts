@@ -5,11 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import {
-  CHANGELOG_SOURCE,
-  parseChangelog,
-  splitInlineCode,
-} from "./changelog.ts";
+import { CHANGELOG_SOURCE, parseChangelog, splitInlineCode } from "./changelog.ts";
 
 const ROOT = join(import.meta.dir, "..", "..");
 
@@ -55,9 +51,7 @@ describe("parseChangelog", () => {
       ].join("\n"),
     );
 
-    expect(releases[0]!.groups[0]!.items).toEqual([
-      "A bullet that wraps across two lines.",
-    ]);
+    expect(releases[0]!.groups[0]!.items).toEqual(["A bullet that wraps across two lines."]);
   });
 
   test("keeps prose before the first group as the release summary", () => {
@@ -79,18 +73,14 @@ describe("parseChangelog", () => {
 
   test("ignores the file preamble, so header prose is not a release", () => {
     const releases = parseChangelog(
-      ["# Changelog", "", "Some intro prose.", "", "- a stray bullet", ""].join(
-        "\n",
-      ),
+      ["# Changelog", "", "Some intro prose.", "", "- a stray bullet", ""].join("\n"),
     );
     expect(releases).toEqual([]);
   });
 
   test("rejects a bullet that precedes any group heading", () => {
     expect(() =>
-      parseChangelog(
-        ["## v1.0.0 — 2026-01-01", "", "- orphan bullet", ""].join("\n"),
-      ),
+      parseChangelog(["## v1.0.0 — 2026-01-01", "", "- orphan bullet", ""].join("\n")),
     ).toThrow(/bullet outside a group/);
   });
 });
@@ -105,9 +95,7 @@ describe("splitInlineCode", () => {
   });
 
   test("passes plain text through as a single segment", () => {
-    expect(splitInlineCode("no code here")).toEqual([
-      { code: false, text: "no code here" },
-    ]);
+    expect(splitInlineCode("no code here")).toEqual([{ code: false, text: "no code here" }]);
   });
 });
 
@@ -132,10 +120,7 @@ describe("docs/changelog.md", () => {
     expect([...dates].sort().reverse()).toEqual(dates);
 
     for (const release of releases) {
-      const bullets = release.groups.reduce(
-        (total, group) => total + group.items.length,
-        0,
-      );
+      const bullets = release.groups.reduce((total, group) => total + group.items.length, 0);
       expect(bullets).toBeGreaterThan(0);
     }
   });

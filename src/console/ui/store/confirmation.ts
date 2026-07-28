@@ -4,10 +4,7 @@
  * Direct edit / delete / purge are irreversible in production — typed confirm.
  */
 
-import {
-  UNDO_WINDOW_MS,
-  type ConfirmationPattern,
-} from "../flows/confirmation.ts";
+import { UNDO_WINDOW_MS, type ConfirmationPattern } from "../flows/confirmation.ts";
 
 export { UNDO_WINDOW_MS, validateTypedConfirm } from "../flows/confirmation.ts";
 export type { ConfirmationPattern } from "../flows/confirmation.ts";

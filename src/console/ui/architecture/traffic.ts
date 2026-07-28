@@ -14,17 +14,12 @@ import type { RunRecord } from "../runs/types.ts";
  * @param kind - Effect kind from the run ledger
  * @param resource - Raw resource string on the run
  */
-export function normalizeTrafficRef(
-  kind: EffectKind,
-  resource: string,
-): string {
+export function normalizeTrafficRef(kind: EffectKind, resource: string): string {
   switch (kind) {
     case "emit":
       return resource.startsWith("signal:") ? resource : `signal:${resource}`;
     case "send":
-      return resource.startsWith("channel:")
-        ? resource
-        : `channel:${resource}`;
+      return resource.startsWith("channel:") ? resource : `channel:${resource}`;
     case "ask":
       return resource.startsWith("ai:") ? resource : `ai:${resource}`;
     case "secret":
@@ -51,9 +46,7 @@ export function trafficEdgeKey(flowId: string, ref: string): string {
  *
  * @param runs - Wide-event population
  */
-export function observeTraffic(
-  runs: readonly RunRecord[],
-): ReadonlyMap<string, number> {
+export function observeTraffic(runs: readonly RunRecord[]): ReadonlyMap<string, number> {
   const counts = new Map<string, number>();
   for (const run of runs) {
     for (const effect of run.effects) {
@@ -91,10 +84,7 @@ export function traversalsOf(
  * @param traversals - Observed count
  * @param maxTraversals - Max among visible edges (for relative scale)
  */
-export function thicknessOf(
-  traversals: number,
-  maxTraversals: number,
-): number {
+export function thicknessOf(traversals: number, maxTraversals: number): number {
   if (traversals <= 0) return 1;
   if (maxTraversals <= 1) return 2;
   const ratio = traversals / maxTraversals;

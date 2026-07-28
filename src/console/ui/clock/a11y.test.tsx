@@ -16,8 +16,7 @@ describe("Clock panel accessibility", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/clock" });
     Object.defineProperty(globalThis, "window", {
       value: window,
@@ -70,9 +69,7 @@ describe("Clock panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA", async () => {
     await act(async () => {
-      root.render(
-        <ClockA11yView openCron="nightly" openWake="run_sleep_1" />,
-      );
+      root.render(<ClockA11yView openCron="nightly" openWake="run_sleep_1" />);
     });
 
     await new Promise((r) => setTimeout(r, 10));

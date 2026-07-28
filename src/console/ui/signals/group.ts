@@ -2,17 +2,9 @@
  * Group signals by delivery physics — one list, not three tabs (console §9.4).
  */
 
-import type {
-  SignalDelivery,
-  SignalPhysicsGroup,
-  SignalRecord,
-} from "./types.ts";
+import type { SignalDelivery, SignalPhysicsGroup, SignalRecord } from "./types.ts";
 
-const PHYSICS_ORDER: readonly SignalDelivery[] = [
-  "once",
-  "broadcast",
-  "live",
-];
+const PHYSICS_ORDER: readonly SignalDelivery[] = ["once", "broadcast", "live"];
 
 const LABELS: Record<SignalDelivery, string> = {
   once: "Once — competing consumers",

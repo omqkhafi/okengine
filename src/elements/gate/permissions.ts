@@ -81,10 +81,7 @@ function effectToAction(ref: string, op: "read" | "write"): string {
   return `store.${facet}:${op}`;
 }
 
-function collectEffects(
-  manifest: Manifest,
-  kind: "reads" | "writes",
-): string[] {
+function collectEffects(manifest: Manifest, kind: "reads" | "writes"): string[] {
   const out: string[] = [];
   for (const flow of Object.values(manifest.flows ?? {})) {
     const list = flow.effects?.[kind];

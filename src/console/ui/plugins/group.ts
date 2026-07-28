@@ -3,12 +3,7 @@
  */
 
 import type { PluginsSearch } from "./search.ts";
-import type {
-  PluginOrigin,
-  PluginRecord,
-  PluginState,
-  PluginsListGroup,
-} from "./types.ts";
+import type { PluginOrigin, PluginRecord, PluginState, PluginsListGroup } from "./types.ts";
 
 const ORIGIN_LABEL: Record<PluginOrigin, string> = {
   core: "Core",

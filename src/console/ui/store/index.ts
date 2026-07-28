@@ -33,8 +33,4 @@ export {
 export { formatWillNotFire, type WillNotFireLines } from "./will-not-fire.ts";
 export { previewOffer, type PreviewOffer } from "./dry-run.ts";
 export { explainCache, type CacheExplanation } from "./cache-view.ts";
-export {
-  STORE_FIXTURE,
-  STORE_LIST_FIXTURE,
-  STORE_LIST_NO_TENANCY,
-} from "./fixture.ts";
+export { STORE_FIXTURE, STORE_LIST_FIXTURE, STORE_LIST_NO_TENANCY } from "./fixture.ts";

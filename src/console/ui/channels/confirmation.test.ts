@@ -3,10 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  sendTestConfirmation,
-  validateTypedConfirm,
-} from "./confirmation.ts";
+import { sendTestConfirmation, validateTypedConfirm } from "./confirmation.ts";
 
 describe("sendTestConfirmation", () => {
   test("production requires typed SEND + reason", () => {

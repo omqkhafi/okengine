@@ -93,9 +93,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  *
  * @param options - Manifest, runtime, journal
  */
-export async function projectClocksList(
-  options: ProjectClocksOptions,
-): Promise<ConsoleClockList> {
+export async function projectClocksList(options: ProjectClocksOptions): Promise<ConsoleClockList> {
   const now = (options.now ?? (() => Date.now()))();
   const until = now + DAY_MS;
 
@@ -131,10 +129,7 @@ export async function projectClocksList(
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const waitingOn = projectWaitingOn(
-    options.journal ? await options.journal.list() : [],
-    now,
-  );
+  const waitingOn = projectWaitingOn(options.journal ? await options.journal.list() : [], now);
   const waitingOnCounts = aggregateWaitingOn(waitingOn);
 
   const timeline: ConsoleTimelineEvent[] = [];
@@ -231,10 +226,7 @@ export async function runCronNow(
  * @param runtime - Clock runtime
  * @param name - Cron name
  */
-export async function pauseCronNow(
-  runtime: ClockRuntime,
-  name: string,
-): Promise<CronRow> {
+export async function pauseCronNow(runtime: ClockRuntime, name: string): Promise<CronRow> {
   return pauseCron(runtime.store, name);
 }
 
@@ -274,10 +266,7 @@ export async function wakeEarlyNow(
   });
 }
 
-export {
-  ClockResourceNotFoundError,
-  ScheduleNotOverridableError,
-};
+export { ClockResourceNotFoundError, ScheduleNotOverridableError };
 
 /**
  * Bind a ClockRuntime from Manifest clocks (memory store).
@@ -356,10 +345,7 @@ function rowsFromManifest(manifest: Manifest | null): CronRow[] {
  * @param row - Cron row
  * @param manifest - Manifest
  */
-export function flowIdsForCronRow(
-  row: CronRow,
-  manifest: Manifest | null,
-): readonly string[] {
+export function flowIdsForCronRow(row: CronRow, manifest: Manifest | null): readonly string[] {
   if (!manifest?.flows) return [];
   const out = new Set<string>();
   for (const [flowId, flow] of Object.entries(manifest.flows)) {
@@ -370,10 +356,8 @@ export function flowIdsForCronRow(
       flowId === row.name ||
       flowId.endsWith(`.${row.name}`) ||
       cronNameForFlow(flowId, every, cron) === row.name ||
-      (cron &&
-        (cron === row.effectiveCron || cron === row.declaredCron)) ||
-      (every &&
-        (every === row.effectiveEvery || every === row.declaredEvery))
+      (cron && (cron === row.effectiveCron || cron === row.declaredCron)) ||
+      (every && (every === row.effectiveEvery || every === row.declaredEvery))
     ) {
       out.add(flowId);
     }
@@ -381,9 +365,7 @@ export function flowIdsForCronRow(
   return [...out].sort();
 }
 
-function isExternal(
-  flow: NonNullable<Manifest["flows"]>[string] | undefined,
-): boolean {
+function isExternal(flow: NonNullable<Manifest["flows"]>[string] | undefined): boolean {
   if (!flow?.effects) return false;
   const e = flow.effects;
   return (e.sends?.length ?? 0) > 0 || (e.asks?.length ?? 0) > 0;

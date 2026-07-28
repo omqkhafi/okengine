@@ -8,11 +8,7 @@ import { takeRate } from "./strategies.ts";
 
 /** KV surface required for rate gates. */
 export interface GateKv {
-  eval<T = unknown>(
-    script: string,
-    keys: readonly string[],
-    args?: readonly string[],
-  ): Promise<T>;
+  eval<T = unknown>(script: string, keys: readonly string[], args?: readonly string[]): Promise<T>;
 }
 
 /** Options for {@link createGateRuntime}. */
@@ -45,20 +41,14 @@ export interface GateRuntime {
    * @param names - Gate names / rate ids
    * @param ctx - Policy context
    */
-  check(
-    names: readonly string[],
-    ctx: GatePolicyContext,
-  ): Promise<GateEvaluation[]>;
+  check(names: readonly string[], ctx: GatePolicyContext): Promise<GateEvaluation[]>;
   /**
    * Whether every gate in the chain allows.
    *
    * @param names - Gate names
    * @param ctx - Policy context
    */
-  allow(
-    names: readonly string[],
-    ctx: GatePolicyContext,
-  ): Promise<boolean>;
+  allow(names: readonly string[], ctx: GatePolicyContext): Promise<boolean>;
 }
 
 /**
@@ -66,19 +56,14 @@ export interface GateRuntime {
  *
  * @param options - Declarations + kv
  */
-export function createGateRuntime(
-  options: CreateGateRuntimeOptions = {},
-): GateRuntime {
+export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateRuntime {
   const map = new Map<string, GateDecl>();
   for (const g of options.gates ?? []) {
     map.set(g.name, g);
   }
   const now = options.now ?? (() => Date.now());
 
-  async function evaluateOne(
-    name: string,
-    ctx: GatePolicyContext,
-  ): Promise<GateEvaluation> {
+  async function evaluateOne(name: string, ctx: GatePolicyContext): Promise<GateEvaluation> {
     const decl = map.get(name);
     if (!decl) {
       return {
@@ -100,10 +85,7 @@ export function createGateRuntime(
     return evaluateRate(decl, ctx);
   }
 
-  async function evaluateRate(
-    decl: RateGateDecl,
-    ctx: GatePolicyContext,
-  ): Promise<GateEvaluation> {
+  async function evaluateRate(decl: RateGateDecl, ctx: GatePolicyContext): Promise<GateEvaluation> {
     if (!options.kv) {
       return {
         name: decl.name,
@@ -157,10 +139,7 @@ export function createGateRuntime(
   };
 }
 
-function resolveSubject(
-  keyBy: string | undefined,
-  ctx: GatePolicyContext,
-): string {
+function resolveSubject(keyBy: string | undefined, ctx: GatePolicyContext): string {
   switch (keyBy) {
     case "user":
       return ctx.auth.userId ?? ctx.meta?.userId ?? "anon";

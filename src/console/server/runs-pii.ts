@@ -39,9 +39,7 @@ export function piiFieldNamesFromManifest(
         "pii" in tags &&
         (tags as { pii?: boolean }).pii
       ) {
-        const col = key.includes(".")
-          ? key.slice(key.lastIndexOf(".") + 1)
-          : key;
+        const col = key.includes(".") ? key.slice(key.lastIndexOf(".") + 1) : key;
         names.add(col);
       }
     }
@@ -88,10 +86,7 @@ export function maskWideEventForConsole(
     if (line.data === undefined) return line;
     return {
       ...line,
-      data: maskPiiRecord(
-        line.data as Record<string, unknown>,
-        piiFields,
-      ),
+      data: maskPiiRecord(line.data as Record<string, unknown>, piiFields),
     };
   });
   return { ...event, dimensions, logs };

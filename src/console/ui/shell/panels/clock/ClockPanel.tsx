@@ -61,25 +61,14 @@ export function ClockPanel() {
   const data = listQuery.data;
   const now = data?.now ?? Date.now();
   const q = search.q ?? "";
-  const crons = useMemo(
-    () => filterCrons(data?.crons ?? [], q),
-    [data?.crons, q],
-  );
-  const waitingOn = useMemo(
-    () => filterWaitingOn(data?.waitingOn ?? [], q),
-    [data?.waitingOn, q],
-  );
-  const timeline = useMemo(
-    () => forwardTimeline(data?.timeline ?? [], now),
-    [data?.timeline, now],
-  );
+  const crons = useMemo(() => filterCrons(data?.crons ?? [], q), [data?.crons, q]);
+  const waitingOn = useMemo(() => filterWaitingOn(data?.waitingOn ?? [], q), [data?.waitingOn, q]);
+  const timeline = useMemo(() => forwardTimeline(data?.timeline ?? [], now), [data?.timeline, now]);
   const counts = data?.waitingOnCounts ?? [];
   const banner = waitingOnBanner(waitingOn.length, counts);
   const openCronRow = crons.find((c) => c.name === search.cron);
   const openWakeRow = waitingOn.find((w) => w.runId === search.wake);
-  const runConfirm = openCronRow
-    ? runNowConfirmation(openCronRow, { production: true })
-    : null;
+  const runConfirm = openCronRow ? runNowConfirmation(openCronRow, { production: true }) : null;
   const health = openCronRow ? formatHealth(openCronRow.health) : null;
 
   useEffect(() => {
@@ -92,8 +81,7 @@ export function ClockPanel() {
     }
   }, [openCronRow?.name, search.action, openWakeRow?.runId]);
 
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ["console.clock.list"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["console.clock.list"] });
 
   const runNowMut = useMutation({
     mutationFn: async () => {
@@ -179,18 +167,14 @@ export function ClockPanel() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-[var(--oke-line)] px-4 py-3">
         <h1 className="text-lg font-medium">Clock</h1>
-        <p className="text-sm text-[var(--oke-muted)]">
-          Forward timeline, waiting-on, cron health
-        </p>
+        <p className="text-sm text-[var(--oke-muted)]">Forward timeline, waiting-on, cron health</p>
         <label className="mt-2 block max-w-sm text-sm">
           <span className="sr-only">Filter clock</span>
           <Input
             aria-label="Filter clock"
             placeholder="Filter…"
             value={q}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.currentTarget.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.currentTarget.value || undefined })}
           />
         </label>
       </header>
@@ -234,9 +218,7 @@ export function ClockPanel() {
           </p>
           <ul className="space-y-1">
             {waitingOn.map((w) => {
-              const count =
-                counts.find((c) => c.label === (w.label || "(unlabelled)"))
-                  ?.count ?? 1;
+              const count = counts.find((c) => c.label === (w.label || "(unlabelled)"))?.count ?? 1;
               return (
                 <li key={w.runId}>
                   <button
@@ -263,10 +245,7 @@ export function ClockPanel() {
           </ul>
         </section>
 
-        <section
-          aria-label="Cron schedules"
-          className="min-h-0 overflow-y-auto p-4"
-        >
+        <section aria-label="Cron schedules" className="min-h-0 overflow-y-auto p-4">
           <h2 className="mb-2 text-sm font-medium">Schedules</h2>
           <ul className="mb-4 space-y-1">
             {crons.map((c) => {
@@ -286,17 +265,13 @@ export function ClockPanel() {
                   >
                     <span className="flex items-center gap-1">
                       {c.name}
-                      {c.external ? (
-                        <span aria-label="external effect">↗</span>
-                      ) : null}
+                      {c.external ? <span aria-label="external effect">↗</span> : null}
                       {c.health.overdue ? (
                         <span role="status" className="text-[var(--oke-danger)]">
                           overdue
                         </span>
                       ) : null}
-                      {c.dstAmbiguity ? (
-                        <span role="status">DST {c.dstAmbiguity.kind}</span>
-                      ) : null}
+                      {c.dstAmbiguity ? <span role="status">DST {c.dstAmbiguity.kind}</span> : null}
                     </span>
                     <span className="text-[var(--oke-muted)]">
                       {h.drift} · {h.missedWithPolicy} · {h.lease}
@@ -308,14 +283,15 @@ export function ClockPanel() {
           </ul>
 
           {openCronRow && health ? (
-            <section aria-label="Cron detail" aria-live="polite" className="space-y-3 border-t border-[var(--oke-line)] pt-3">
+            <section
+              aria-label="Cron detail"
+              aria-live="polite"
+              className="space-y-3 border-t border-[var(--oke-line)] pt-3"
+            >
               <h3 className="text-base font-medium">{openCronRow.name}</h3>
               <p className="text-sm text-[var(--oke-muted)]">
-                {openCronRow.effectiveCron ?? openCronRow.effectiveEvery} ·{" "}
-                {openCronRow.timezone}
-                {openCronRow.status !== "active"
-                  ? ` · ${openCronRow.status}`
-                  : ""}
+                {openCronRow.effectiveCron ?? openCronRow.effectiveEvery} · {openCronRow.timezone}
+                {openCronRow.status !== "active" ? ` · ${openCronRow.status}` : ""}
               </p>
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 <div>
@@ -383,8 +359,7 @@ export function ClockPanel() {
               {search.action === "run" && runConfirm?.kind === "typed" ? (
                 <div className="space-y-2">
                   <p className="text-sm">
-                    This cron has an external effect. Type{" "}
-                    <strong>RUN</strong> and a reason.
+                    This cron has an external effect. Type <strong>RUN</strong> and a reason.
                   </p>
                   <label className="block text-sm">
                     Type RUN to confirm
@@ -449,19 +424,12 @@ export function ClockPanel() {
               aria-live="polite"
               className="mt-4 space-y-2 border-t border-[var(--oke-line)] pt-3"
             >
-              <h3 className="text-base font-medium">
-                {openWakeRow.label || openWakeRow.flow}
-              </h3>
+              <h3 className="text-base font-medium">{openWakeRow.label || openWakeRow.flow}</h3>
               <p className="text-sm text-[var(--oke-muted)]">
-                {openWakeRow.flow} · wake in{" "}
-                {formatWakeIn(openWakeRow.wakeInMs)}
+                {openWakeRow.flow} · wake in {formatWakeIn(openWakeRow.wakeInMs)}
                 {openWakeRow.step ? ` · step ${openWakeRow.step}` : ""}
               </p>
-              <Button
-                type="button"
-                disabled={wakeMut.isPending}
-                onClick={() => wakeMut.mutate()}
-              >
+              <Button type="button" disabled={wakeMut.isPending} onClick={() => wakeMut.mutate()}>
                 Wake early
               </Button>
             </section>

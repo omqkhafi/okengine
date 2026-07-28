@@ -27,18 +27,10 @@ export function TracesA11yView(props: TracesA11yViewProps) {
   const roots = groupTraceRoots(TRACES_FIXTURE);
   const openRootId = props.openRootId ?? "run-create-ok";
   const open = roots.find((r) => r.rootId === openRootId);
-  const focusId = open
-    ? initialFocusSpanId(open.spans)
-    : undefined;
-  const chain = focusId
-    ? buildCausalChain(TRACES_FIXTURE, focusId)
-    : null;
-  const critical = chain
-    ? criticalPathSpanIds(chain.connected)
-    : new Set<string>();
-  const folded = chain
-    ? foldTimeline(intervalsFromSpans(chain.connected), {}, critical)
-    : null;
+  const focusId = open ? initialFocusSpanId(open.spans) : undefined;
+  const chain = focusId ? buildCausalChain(TRACES_FIXTURE, focusId) : null;
+  const critical = chain ? criticalPathSpanIds(chain.connected) : new Set<string>();
+  const folded = chain ? foldTimeline(intervalsFromSpans(chain.connected), {}, critical) : null;
   const decision = chain ? replayDecision(chain.connected) : null;
 
   return (
@@ -83,10 +75,7 @@ export function TracesA11yView(props: TracesA11yViewProps) {
                         {err}
                       </span>
                     ) : null}
-                    <span aria-hidden="true">
-                      {" "}
-                      [{bars.length} bars]
-                    </span>
+                    <span aria-hidden="true"> [{bars.length} bars]</span>
                   </button>
                 </li>
               );
@@ -135,10 +124,7 @@ export function TracesA11yView(props: TracesA11yViewProps) {
               {folded.segments.map((seg) => {
                 if (seg.kind === "fold") {
                   return (
-                    <li
-                      key={seg.id}
-                      style={{ flex: `${seg.displayMs} 0 0` }}
-                    >
+                    <li key={seg.id} style={{ flex: `${seg.displayMs} 0 0` }}>
                       <button
                         type="button"
                         aria-expanded={seg.expanded}
@@ -151,10 +137,8 @@ export function TracesA11yView(props: TracesA11yViewProps) {
                 }
                 const dim = !seg.critical;
                 const external =
-                  peakSpanTier(
-                    chain.connected.find((s) => s.id === seg.spanId)
-                      ?.effects ?? [],
-                  ) === "external";
+                  peakSpanTier(chain.connected.find((s) => s.id === seg.spanId)?.effects ?? []) ===
+                  "external";
                 return (
                   <li
                     key={seg.id}
@@ -162,8 +146,7 @@ export function TracesA11yView(props: TracesA11yViewProps) {
                       minHeight: 32,
                       flex: `${seg.displayMs} 0 0`,
                       opacity: dim ? 0.38 : 1,
-                      background:
-                        seg.tier === "external" ? "#d97706" : "#3d9a6a",
+                      background: seg.tier === "external" ? "#d97706" : "#3d9a6a",
                       outline: seg.failed ? "2px solid #c44b4b" : undefined,
                     }}
                   >
@@ -180,9 +163,7 @@ export function TracesA11yView(props: TracesA11yViewProps) {
             <button
               type="button"
               style={{ minHeight: 32, minWidth: 24 }}
-              title={
-                decision?.mode === "dry-run" ? decision.reason : undefined
-              }
+              title={decision?.mode === "dry-run" ? decision.reason : undefined}
             >
               {decision?.mode === "dry-run" ? "Dry-run replay" : "Replay"}
             </button>

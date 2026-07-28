@@ -24,9 +24,7 @@ describe("export gzip budgets", () => {
   });
 
   test("exportRegressionLimitBytes uses max(floor, 2% of previous)", () => {
-    expect(exportRegressionLimitBytes(1000)).toBe(
-      1000 + EXPORT_REGRESSION_TOLERANCE_FLOOR_BYTES,
-    );
+    expect(exportRegressionLimitBytes(1000)).toBe(1000 + EXPORT_REGRESSION_TOLERANCE_FLOOR_BYTES);
     const large = 100_000;
     expect(exportRegressionLimitBytes(large)).toBe(
       large + Math.ceil(large * EXPORT_REGRESSION_TOLERANCE_RATIO),

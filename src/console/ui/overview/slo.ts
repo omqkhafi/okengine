@@ -99,9 +99,7 @@ export function computeSloBurns(options: {
   readonly now: number;
 }): readonly SloBurn[] {
   const objectives = declaredSlos(options.manifest);
-  return objectives.map((obj) =>
-    burnForObjective(obj, options.runs, options.now),
-  );
+  return objectives.map((obj) => burnForObjective(obj, options.runs, options.now));
 }
 
 /**
@@ -113,11 +111,7 @@ export function hasDeclaredSlos(manifest: Manifest | null): boolean {
   return declaredSlos(manifest).length > 0;
 }
 
-function burnForObjective(
-  obj: DeclaredSlo,
-  runs: readonly RunRecord[],
-  now: number,
-): SloBurn {
+function burnForObjective(obj: DeclaredSlo, runs: readonly RunRecord[], now: number): SloBurn {
   const short = windowStats(runs, obj.flowIds, now - BURN_SHORT_WINDOW_MS, now);
   const long = windowStats(runs, obj.flowIds, now - BURN_LONG_WINDOW_MS, now);
   const currentErrorRate = short.errorRate;
@@ -130,8 +124,7 @@ function burnForObjective(
 
   const budget = long.total * obj.tolerableErrorRate;
   const remaining = Math.max(0, budget - long.errors);
-  const remainingBudgetFraction =
-    budget <= 0 ? (long.errors > 0 ? 0 : 1) : remaining / budget;
+  const remainingBudgetFraction = budget <= 0 ? (long.errors > 0 ? 0 : 1) : remaining / budget;
 
   const excessRate = currentErrorRate - obj.tolerableErrorRate;
   let timeToExhaustionMs: number | null = null;
@@ -143,14 +136,8 @@ function burnForObjective(
     }
   }
 
-  const lastBurnAt = lastBurnTimestamp(
-    runs,
-    obj.flowIds,
-    obj.tolerableErrorRate,
-    now,
-  );
-  const ceremonial =
-    lastBurnAt == null || now - lastBurnAt >= CEREMONIAL_LOOKBACK_MS;
+  const lastBurnAt = lastBurnTimestamp(runs, obj.flowIds, obj.tolerableErrorRate, now);
+  const ceremonial = lastBurnAt == null || now - lastBurnAt >= CEREMONIAL_LOOKBACK_MS;
 
   return {
     id: obj.id,
@@ -203,11 +190,7 @@ function lastBurnTimestamp(
   if (tolerable <= 0) return null;
   const start = now - CEREMONIAL_LOOKBACK_MS;
   let last: number | null = null;
-  for (
-    let bucketStart = start;
-    bucketStart < now;
-    bucketStart += BURN_HISTORY_BUCKET_MS
-  ) {
+  for (let bucketStart = start; bucketStart < now; bucketStart += BURN_HISTORY_BUCKET_MS) {
     const bucketEnd = Math.min(now, bucketStart + BURN_HISTORY_BUCKET_MS);
     const stats = windowStats(runs, flowIds, bucketStart, bucketEnd);
     if (stats.total === 0) continue;

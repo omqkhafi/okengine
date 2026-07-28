@@ -6,10 +6,7 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRouter } from "../kernel/router.ts";
-import {
-  type BudgetGroup,
-  resolveExportBudgetTargets,
-} from "./exports.ts";
+import { type BudgetGroup, resolveExportBudgetTargets } from "./exports.ts";
 import {
   CLIENT_BUDGET_BYTES,
   COLD_START_BUDGET_MS,
@@ -93,9 +90,7 @@ async function gzipBuildOutputs(
   label: string,
 ): Promise<number> {
   if (!result.success) {
-    throw new Error(
-      `${label} build failed:\n${result.logs.map(String).join("\n")}`,
-    );
+    throw new Error(`${label} build failed:\n${result.logs.map(String).join("\n")}`);
   }
   let total = 0;
   for (const artifact of result.outputs) {
@@ -147,9 +142,7 @@ export async function measureKernelEdgeGzipBytes(): Promise<number> {
     external: [...BUILD_EXTERNALS],
   });
   if (!result.success) {
-    throw new Error(
-      `kernel edge build failed:\n${result.logs.map(String).join("\n")}`,
-    );
+    throw new Error(`kernel edge build failed:\n${result.logs.map(String).join("\n")}`);
   }
   const artifact = result.outputs[0];
   if (!artifact) throw new Error("kernel edge build produced no output");
@@ -169,9 +162,7 @@ export async function measureClientGzipBytes(): Promise<number> {
     format: "esm",
   });
   if (!result.success) {
-    throw new Error(
-      `client build failed:\n${result.logs.map(String).join("\n")}`,
-    );
+    throw new Error(`client build failed:\n${result.logs.map(String).join("\n")}`);
   }
   const artifact = result.outputs[0];
   if (!artifact) throw new Error("client build produced no output");
@@ -196,11 +187,7 @@ export async function measureExportGzipBytes(entry: string): Promise<number> {
       `export function __okeExportBudgetAnchor(){return mod;}\n`,
   );
   try {
-    return await measureEntryGzipBytes(
-      anchor,
-      `export ${entry}`,
-      EXPORT_BUILD_EXTERNALS,
-    );
+    return await measureEntryGzipBytes(anchor, `export ${entry}`, EXPORT_BUILD_EXTERNALS);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -418,12 +405,11 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
   // Cold start alone first — parallel gzip work contends for CPU on CI and
   // falsely inflates the wall-clock probe.
   const coldStartMedianMs = await measureColdStartMedianMs();
-  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes] =
-    await Promise.all([
-      measureKernelEdgeGzipBytes(),
-      measureClientGzipBytes(),
-      measureConsoleInitialGzipBytes(),
-    ]);
+  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes] = await Promise.all([
+    measureKernelEdgeGzipBytes(),
+    measureClientGzipBytes(),
+    measureConsoleInitialGzipBytes(),
+  ]);
   const routingP99Ms = measureRoutingP99Ms();
 
   const budgets: BudgetSample[] = [
@@ -482,15 +468,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
     })),
   );
   for (const { target, bytes } of exportSizes) {
-    budgets.push(
-      regressionSample(
-        target.id,
-        target.label,
-        target.group,
-        bytes,
-        previous,
-      ),
-    );
+    budgets.push(regressionSample(target.id, target.label, target.group, bytes, previous));
   }
 
   return {
@@ -506,9 +484,7 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
  * @param snapshot - Measured budgets
  */
 export function formatBudgetsReport(snapshot: BudgetsSnapshot): string {
-  const lines = [
-    `okengine budgets v${snapshot.version} @ ${snapshot.measuredAt}`,
-  ];
+  const lines = [`okengine budgets v${snapshot.version} @ ${snapshot.measuredAt}`];
   const order: readonly BudgetGroup[] = ["core", "exports", "drivers"];
   for (const group of order) {
     const rows = snapshot.budgets.filter((b) => b.group === group);
@@ -579,8 +555,7 @@ function sample(
   gate: BudgetGate,
   group: BudgetGroup,
 ): BudgetSample {
-  const rounded =
-    unit === "bytes" ? Math.round(value) : Math.round(value * 1000) / 1000;
+  const rounded = unit === "bytes" ? Math.round(value) : Math.round(value * 1000) / 1000;
   return {
     id,
     label,
@@ -652,8 +627,7 @@ function formatValue(value: number, unit: BudgetSample["unit"]): string {
  */
 function initialAssetHrefs(html: string): string[] {
   const hrefs: string[] = [];
-  const re =
-    /(?:src|href)=["'](\/?assets\/[^"']+\.(?:js|css))["']/g;
+  const re = /(?:src|href)=["'](\/?assets\/[^"']+\.(?:js|css))["']/g;
   for (const match of html.matchAll(re)) {
     const href = match[1];
     if (href) hrefs.push(href.replace(/^\//, ""));
@@ -671,9 +645,7 @@ async function gzipFile(path: string): Promise<number> {
  *
  * @param dir - Vite outDir
  */
-export async function consoleBundleBreakdown(
-  dir: string,
-): Promise<ConsoleBundleBreakdown> {
+export async function consoleBundleBreakdown(dir: string): Promise<ConsoleBundleBreakdown> {
   const assetsDir = join(dir, "assets");
   const indexPath = join(dir, "index.html");
   const indexFile = Bun.file(indexPath);

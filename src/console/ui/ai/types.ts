@@ -88,14 +88,7 @@ export interface FallbackChainRow {
 
 /** Agent tool effect — Flows/Traces vocabulary. */
 export interface AgentToolEffect {
-  readonly kind:
-    | "read"
-    | "write"
-    | "emit"
-    | "send"
-    | "ask"
-    | "secret"
-    | "call";
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
   readonly resource: string;
 }
 

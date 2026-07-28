@@ -24,9 +24,7 @@ export type GatesSearch = z.infer<typeof GatesSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseGatesSearch(
-  search: Record<string, unknown>,
-): GatesSearch {
+export function parseGatesSearch(search: Record<string, unknown>): GatesSearch {
   const parsed = GatesSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -36,9 +34,7 @@ export function parseGatesSearch(
  *
  * @param search - Search state
  */
-export function serializeGatesSearch(
-  search: GatesSearch,
-): Record<string, string> {
+export function serializeGatesSearch(search: GatesSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.from) out.from = search.from;
@@ -54,10 +50,7 @@ export function serializeGatesSearch(
  * @param kind - Principal kind
  * @param id - Principal id
  */
-export function encodePrincipal(
-  kind: "role" | "key" | "user",
-  id: string,
-): string {
+export function encodePrincipal(kind: "role" | "key" | "user", id: string): string {
   return `${kind}:${id}`;
 }
 

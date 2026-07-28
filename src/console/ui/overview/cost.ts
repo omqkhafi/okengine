@@ -32,18 +32,18 @@ export function computeCostBudgets(options: {
     const budget = flow.cost?.budget;
     if (budget == null || budget <= 0) continue;
     const spent = sumCost(
-      runs.filter(
-        (r) => r.flow === name && r.startedAt >= from && r.startedAt <= now,
-      ),
+      runs.filter((r) => r.flow === name && r.startedAt >= from && r.startedAt <= now),
     );
-    out.push(budgetRow({
-      id: `flow:${name}`,
-      name,
-      kind: "flow",
-      declaredBudget: budget,
-      spent,
-      windowMs: COST_WINDOW_MS,
-    }));
+    out.push(
+      budgetRow({
+        id: `flow:${name}`,
+        name,
+        kind: "flow",
+        declaredBudget: budget,
+        spent,
+        windowMs: COST_WINDOW_MS,
+      }),
+    );
   }
 
   if (ai) {
@@ -51,9 +51,7 @@ export function computeCostBudgets(options: {
       const cap = prompt.budgetMaxCostPerCall;
       if (cap == null || cap <= 0) continue;
       const version =
-        ai.versions.find(
-          (v) => v.prompt === prompt.name && v.version === prompt.version,
-        ) ??
+        ai.versions.find((v) => v.prompt === prompt.name && v.version === prompt.version) ??
         ai.versions
           .filter((v) => v.prompt === prompt.name)
           .sort((a, b) => b.version - a.version)[0];
@@ -61,14 +59,16 @@ export function computeCostBudgets(options: {
       // Per-call budget × samples in window ≈ declared period budget.
       const declaredBudget = cap * version.sampleCount;
       const spent = version.cost.mean * version.sampleCount;
-      out.push(budgetRow({
-        id: `ai-prompt:${prompt.name}@${version.version}`,
-        name: `${prompt.name}@${version.version}`,
-        kind: "ai-prompt",
-        declaredBudget,
-        spent,
-        windowMs: COST_WINDOW_MS,
-      }));
+      out.push(
+        budgetRow({
+          id: `ai-prompt:${prompt.name}@${version.version}`,
+          name: `${prompt.name}@${version.version}`,
+          kind: "ai-prompt",
+          declaredBudget,
+          spent,
+          windowMs: COST_WINDOW_MS,
+        }),
+      );
     }
 
     for (const agent of ai.agents) {
@@ -78,21 +78,20 @@ export function computeCostBudgets(options: {
       if (agentRuns.length === 0) continue;
       const declaredBudget = cap * agentRuns.length;
       const spent = agentRuns.reduce((a, r) => a + r.cost, 0);
-      out.push(budgetRow({
-        id: `ai-agent:${agent.name}`,
-        name: agent.name,
-        kind: "ai-agent",
-        declaredBudget,
-        spent,
-        windowMs: COST_WINDOW_MS,
-      }));
+      out.push(
+        budgetRow({
+          id: `ai-agent:${agent.name}`,
+          name: agent.name,
+          kind: "ai-agent",
+          declaredBudget,
+          spent,
+          windowMs: COST_WINDOW_MS,
+        }),
+      );
     }
   }
 
-  return out.sort(
-    (a, b) =>
-      b.burnRate - a.burnRate || a.name.localeCompare(b.name),
-  );
+  return out.sort((a, b) => b.burnRate - a.burnRate || a.name.localeCompare(b.name));
 }
 
 function budgetRow(input: {
@@ -105,10 +104,7 @@ function budgetRow(input: {
 }): CostBudget {
   const { declaredBudget, spent, windowMs } = input;
   const burnRate = declaredBudget <= 0 ? 0 : spent / declaredBudget;
-  const remainingFraction = Math.max(
-    0,
-    1 - (declaredBudget <= 0 ? 0 : spent / declaredBudget),
-  );
+  const remainingFraction = Math.max(0, 1 - (declaredBudget <= 0 ? 0 : spent / declaredBudget));
   let timeToExhaustionMs: number | null = null;
   if (spent > 0 && burnRate > 0 && remainingFraction > 0) {
     // At current spend pace, remaining budget lasts:

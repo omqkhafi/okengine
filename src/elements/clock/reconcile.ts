@@ -68,12 +68,7 @@ export interface CronStore {
    * @param now - Current epoch-ms
    * @param leaseMs - Lease TTL
    */
-  acquireLease(
-    name: string,
-    instanceId: string,
-    now: number,
-    leaseMs: number,
-  ): Promise<boolean>;
+  acquireLease(name: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
 }
 
 /** Result of one reconciliation pass. */
@@ -107,13 +102,9 @@ export async function reconcileClocks(
   for (const decl of declared) {
     const prev = await store.get(decl.name);
     const overrideCron =
-      decl.overridable && prev?.overrideCron !== undefined
-        ? prev.overrideCron
-        : undefined;
+      decl.overridable && prev?.overrideCron !== undefined ? prev.overrideCron : undefined;
     const overrideEvery =
-      decl.overridable && prev?.overrideEvery !== undefined
-        ? prev.overrideEvery
-        : undefined;
+      decl.overridable && prev?.overrideEvery !== undefined ? prev.overrideEvery : undefined;
 
     const row: CronRow = {
       name: decl.name,
@@ -179,9 +170,7 @@ export function effectiveSchedule(row: CronRow): {
  *
  * @param seed - Optional initial rows
  */
-export function createMemoryCronStore(
-  seed?: readonly CronRow[],
-): CronStore {
+export function createMemoryCronStore(seed?: readonly CronRow[]): CronStore {
   const rows = new Map<string, CronRow>();
   for (const r of seed ?? []) {
     rows.set(r.name, structuredClone(r));

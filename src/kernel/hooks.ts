@@ -40,9 +40,7 @@ export const BEFORE_HANDLER_STAGES: readonly HookStage[] = [
 ] as const;
 
 /** Stages that run after a successful handler (before onResponse). */
-export const AFTER_HANDLER_STAGES: readonly HookStage[] = [
-  "afterHandle",
-] as const;
+export const AFTER_HANDLER_STAGES: readonly HookStage[] = ["afterHandle"] as const;
 
 /** All user-registrable stages in pipeline order. */
 export const HOOK_STAGES: readonly HookStage[] = [
@@ -97,11 +95,7 @@ export type HookFn = (
   ctx: InvocationContext,
   fxOrErr: Fx | unknown,
   fx?: Fx,
-) =>
-  | void
-  | Response
-  | FlowFailure
-  | Promise<void | Response | FlowFailure>;
+) => void | Response | FlowFailure | Promise<void | Response | FlowFailure>;
 
 /** Hook bag keyed by stage. */
 export type HookMap = Partial<Record<HookStage, HookFn[]>>;
@@ -247,10 +241,7 @@ async function runStage(
     const started = pluginId !== undefined ? performance.now() : 0;
     try {
       // Spec apps use `.hook("onError", (ctx, err, fx) => …)`.
-      returned =
-        stage === "onError"
-          ? await fn(ctx, ctx.error, fx)
-          : await fn(ctx, fx);
+      returned = stage === "onError" ? await fn(ctx, ctx.error, fx) : await fn(ctx, fx);
     } catch (err) {
       if (pluginId !== undefined) {
         recordHookCost(pluginId, stage, performance.now() - started);

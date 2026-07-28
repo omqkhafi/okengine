@@ -68,17 +68,12 @@ export type ErrorDataOf<E extends FlowErrorMap> = {
  *
  * @typeParam F - Flow definition
  */
-export type RouteFromFlow<F> = F extends FlowDef<
-  infer I,
-  infer O,
-  infer E,
-  any,
-  infer T
->
-  ? [T] extends [HttpTrigger<infer M, infer P>]
-    ? AppFlowRoute<I, O, ErrorDataOf<E>, M, P>
-    : AppFlowRoute<I, O, ErrorDataOf<E>>
-  : never;
+export type RouteFromFlow<F> =
+  F extends FlowDef<infer I, infer O, infer E, any, infer T>
+    ? [T] extends [HttpTrigger<infer M, infer P>]
+      ? AppFlowRoute<I, O, ErrorDataOf<E>, M, P>
+      : AppFlowRoute<I, O, ErrorDataOf<E>>
+    : never;
 
 /**
  * Map a flow namespace (`{ create, get, … }`) to a unit route table.
@@ -115,12 +110,11 @@ export type RoutesFromAdoptArg<A> = A extends AnyFlowDef
  *
  * @typeParam Args - Adopt argument tuple
  */
-export type RoutesFromAdoptArgs<Args extends readonly unknown[]> =
-  Args extends readonly []
-    ? {}
-    : Args extends readonly [infer H, ...infer T]
-      ? RoutesFromAdoptArg<H> & RoutesFromAdoptArgs<T>
-      : {};
+export type RoutesFromAdoptArgs<Args extends readonly unknown[]> = Args extends readonly []
+  ? {}
+  : Args extends readonly [infer H, ...infer T]
+    ? RoutesFromAdoptArg<H> & RoutesFromAdoptArgs<T>
+    : {};
 
 /** Runtime leaf: method/path when the flow has an HTTP trigger. */
 export interface RuntimeFlowRoute {
@@ -141,8 +135,7 @@ export type RuntimeRouteMap = {
  * @param flowDef - Flow definition
  */
 export function runtimeRouteFromFlow(flowDef: AnyFlowDef): RuntimeFlowRoute {
-  const trigger: Trigger | undefined =
-    flowDef.$trigger ?? flowDef.triggers[0];
+  const trigger: Trigger | undefined = flowDef.$trigger ?? flowDef.triggers[0];
   if (trigger?.kind === "http") {
     return { method: trigger.method, path: trigger.path };
   }
@@ -156,10 +149,7 @@ export function runtimeRouteFromFlow(flowDef: AnyFlowDef): RuntimeFlowRoute {
  * @param into - Mutable route map to extend
  * @returns Flows discovered (for `fx.call` registration)
  */
-export function accumulateAdoptArgs(
-  args: readonly unknown[],
-  into: RuntimeRouteMap,
-): AnyFlowDef[] {
+export function accumulateAdoptArgs(args: readonly unknown[], into: RuntimeRouteMap): AnyFlowDef[] {
   const found: AnyFlowDef[] = [];
 
   for (const arg of args) {
@@ -169,9 +159,7 @@ export function accumulateAdoptArgs(
     }
     if (typeof arg !== "object" || arg === null) continue;
 
-    for (const [unit, value] of Object.entries(
-      arg as Record<string, unknown>,
-    )) {
+    for (const [unit, value] of Object.entries(arg as Record<string, unknown>)) {
       if (isFlow(value)) {
         // Flat `{ create: flow }` without a unit wrapper — skip client map
         found.push(value);
@@ -180,9 +168,7 @@ export function accumulateAdoptArgs(
       if (typeof value !== "object" || value === null) continue;
 
       const unitBag = into[unit] ?? (into[unit] = {});
-      for (const [flowName, flowDef] of Object.entries(
-        value as Record<string, unknown>,
-      )) {
+      for (const [flowName, flowDef] of Object.entries(value as Record<string, unknown>)) {
         if (!isFlow(flowDef)) continue;
         found.push(flowDef);
         unitBag[flowName] = runtimeRouteFromFlow(flowDef);

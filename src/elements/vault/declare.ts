@@ -41,10 +41,7 @@ export interface VaultSecretDecl {
  * @param name - Secret name
  * @param options - Description / rotate / schema / dev fallback
  */
-function declareSecret(
-  name: string,
-  options: VaultSecretOptions = {},
-): VaultSecretDecl {
+function declareSecret(name: string, options: VaultSecretOptions = {}): VaultSecretDecl {
   if (!name) {
     throw new TypeError("vault.secret: name is required");
   }
@@ -52,9 +49,7 @@ function declareSecret(
     kind: "secret",
     name,
     sensitive: options.sensitive ?? true,
-    ...(options.description !== undefined
-      ? { description: options.description }
-      : {}),
+    ...(options.description !== undefined ? { description: options.description } : {}),
     ...(options.rotate !== undefined ? { rotate: options.rotate } : {}),
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
     ...(options.dev !== undefined ? { dev: options.dev } : {}),
@@ -67,10 +62,7 @@ function declareSecret(
  * @param name - Config name
  * @param options - Description / schema / dev fallback
  */
-function declareConfig(
-  name: string,
-  options: VaultSecretOptions = {},
-): VaultSecretDecl {
+function declareConfig(name: string, options: VaultSecretOptions = {}): VaultSecretDecl {
   if (!name) {
     throw new TypeError("vault.config: name is required");
   }
@@ -78,9 +70,7 @@ function declareConfig(
     kind: "config",
     name,
     sensitive: options.sensitive ?? false,
-    ...(options.description !== undefined
-      ? { description: options.description }
-      : {}),
+    ...(options.description !== undefined ? { description: options.description } : {}),
     ...(options.rotate !== undefined ? { rotate: options.rotate } : {}),
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
     ...(options.dev !== undefined ? { dev: options.dev } : {}),
@@ -88,41 +78,41 @@ function declareConfig(
 }
 
 /**
- * Marker prefix for {@link vault.fromStack} dev fallbacks.
- * Resolved from `.env.stack` by `oke dev --stack` / vault boot.
+ * Marker prefix for {@link vault.fromDocker} local fallbacks.
+ * Resolved from `docker/.env.docker` by `oke dev --docker` / vault boot.
  */
-export const FROM_STACK_PREFIX = "__oke_from_stack__:";
+export const FROM_DOCKER_PREFIX = "__oke_from_docker__:";
 
 /**
- * Dev fallback that reads the URL built by the image recipe for `role`.
+ * Local fallback that reads the URL built by the image recipe for `role`.
  * The kernel never sees the underlying env-var names — only the URL.
  *
  * @param role - Image role (`store.sql`, …)
  */
-export function fromStack(role: string): string {
-  if (!role) throw new TypeError("vault.fromStack: role is required");
-  return `${FROM_STACK_PREFIX}${role}`;
+export function fromDocker(role: string): string {
+  if (!role) throw new TypeError("vault.fromDocker: role is required");
+  return `${FROM_DOCKER_PREFIX}${role}`;
 }
 
 /**
- * Whether a dev fallback is a {@link fromStack} marker.
+ * Whether a local fallback is a {@link fromDocker} marker.
  *
  * @param value - Candidate
  */
-export function isFromStack(value: string): boolean {
-  return value.startsWith(FROM_STACK_PREFIX);
+export function isFromDocker(value: string): boolean {
+  return value.startsWith(FROM_DOCKER_PREFIX);
 }
 
 /**
- * Role encoded in a {@link fromStack} marker.
+ * Role encoded in a {@link fromDocker} marker.
  *
- * @param value - Marker from {@link fromStack}
+ * @param value - Marker from {@link fromDocker}
  */
-export function fromStackRole(value: string): string {
-  if (!isFromStack(value)) {
-    throw new TypeError(`vault: not a fromStack marker: ${value}`);
+export function fromDockerRole(value: string): string {
+  if (!isFromDocker(value)) {
+    throw new TypeError(`vault: not a fromDocker marker: ${value}`);
   }
-  return value.slice(FROM_STACK_PREFIX.length);
+  return value.slice(FROM_DOCKER_PREFIX.length);
 }
 
 /**
@@ -135,9 +125,9 @@ export const vault: {
   (name: string, options?: VaultSecretOptions): VaultSecretDecl;
   secret(name: string, options?: VaultSecretOptions): VaultSecretDecl;
   config(name: string, options?: VaultSecretOptions): VaultSecretDecl;
-  fromStack(role: string): string;
+  fromDocker(role: string): string;
 } = Object.assign(declareSecret, {
   secret: declareSecret,
   config: declareConfig,
-  fromStack,
+  fromDocker,
 });

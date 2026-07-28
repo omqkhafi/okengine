@@ -1,0 +1,16 @@
+{
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "site/.next/**",
+    "site/out/**",
+    "site/.source/**",
+    "templates/**",
+    "packages/create-oke/templates/**",
+    "packages/create-oke/examples/**",
+    "bun.lock",
+    "**/bun.lock",
+    "budgets.json",
+    "**/*.svg"
+  ]
+}

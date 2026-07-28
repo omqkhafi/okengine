@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  contentAddressedKey,
-  fileKeyWarnings,
-  projectFileKeys,
-} from "./files-policy.ts";
+import { contentAddressedKey, fileKeyWarnings, projectFileKeys } from "./files-policy.ts";
 
 describe("files-policy", () => {
   test("flags non-ASCII keys for signed-URL risk", () => {

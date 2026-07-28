@@ -10,19 +10,11 @@ describe("plugin conflict detection", () => {
   test("table-name collision fails the boot with both plugin names", () => {
     const registry = createPluginRegistry();
 
-    registry.plug(
-      plugin("audit", { version: "1.0.0" }).table("events"),
-      { kind: "app" },
-    );
+    registry.plug(plugin("audit", { version: "1.0.0" }).table("events"), { kind: "app" });
 
     expect(() =>
-      registry.plug(
-        plugin("billing", { version: "1.0.0" }).table("events"),
-        { kind: "app" },
-      ),
-    ).toThrow(
-      'Plugin conflict: table "events" claimed by "audit" and "billing"',
-    );
+      registry.plug(plugin("billing", { version: "1.0.0" }).table("events"), { kind: "app" }),
+    ).toThrow('Plugin conflict: table "events" claimed by "audit" and "billing"');
   });
 
   test("panel-id collision names both sides", () => {
@@ -79,28 +71,24 @@ describe("plugin conflict detection", () => {
       config: { max: 30 },
     }).hook("onRequest", () => {});
 
-    expect(
-      registry.plug(p, { kind: "unit", name: "orders" }),
-    ).toBeDefined();
-    expect(
-      registry.plug(p, { kind: "unit", name: "payments" }),
-    ).toBeDefined();
+    expect(registry.plug(p, { kind: "unit", name: "orders" })).toBeDefined();
+    expect(registry.plug(p, { kind: "unit", name: "payments" })).toBeDefined();
     expect(registry.installed).toHaveLength(2);
   });
 
   test("same plugin twice with conflicting config is a boot error", () => {
     const registry = createPluginRegistry();
 
-    registry.plug(
-      plugin("rate-limit", { version: "1.0.0", config: { max: 30 } }),
-      { kind: "unit", name: "orders" },
-    );
+    registry.plug(plugin("rate-limit", { version: "1.0.0", config: { max: 30 } }), {
+      kind: "unit",
+      name: "orders",
+    });
 
     expect(() =>
-      registry.plug(
-        plugin("rate-limit", { version: "1.0.0", config: { max: 60 } }),
-        { kind: "unit", name: "payments" },
-      ),
+      registry.plug(plugin("rate-limit", { version: "1.0.0", config: { max: 60 } }), {
+        kind: "unit",
+        name: "payments",
+      }),
     ).toThrow(/conflicting config/);
   });
 });

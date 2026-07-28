@@ -43,27 +43,23 @@ describe("vault declaration", () => {
     expect(cfg.kind).toBe("config");
     expect(cfg.sensitive).toBe(false);
 
-    const fromStack = vault.fromStack("store.sql");
-    expect(fromStack).toStartWith("__oke_from_stack__:");
-    const c = vault.secret("DATABASE_URL", { dev: fromStack });
-    expect(c.dev).toBe(fromStack);
+    const fromDocker = vault.fromDocker("store.sql");
+    expect(fromDocker).toStartWith("__oke_from_docker__:");
+    const c = vault.secret("DATABASE_URL", { dev: fromDocker });
+    expect(c.dev).toBe(fromDocker);
   });
 
-  test("fromStack resolves via OKE_<ROLE>_URL without env-var names in the kernel", async () => {
+  test("fromDocker resolves via OKE_<ROLE>_URL without env-var names in the kernel", async () => {
     const prev = process.env.OKE_STORE_SQL_URL;
     process.env.OKE_STORE_SQL_URL = "postgres://oke:x@127.0.0.1:5432/oke";
     try {
       const runtime = createVaultRuntime({
-        secrets: [
-          vault.secret("DATABASE_URL", { dev: vault.fromStack("store.sql") }),
-        ],
+        secrets: [vault.secret("DATABASE_URL", { dev: vault.fromDocker("store.sql") })],
         chain: [],
         allowDevFallbacks: true,
       });
       await runtime.boot();
-      expect(runtime.read("DATABASE_URL")).toBe(
-        "postgres://oke:x@127.0.0.1:5432/oke",
-      );
+      expect(runtime.read("DATABASE_URL")).toBe("postgres://oke:x@127.0.0.1:5432/oke");
     } finally {
       if (prev === undefined) delete process.env.OKE_STORE_SQL_URL;
       else process.env.OKE_STORE_SQL_URL = prev;
@@ -94,10 +90,7 @@ describe("boot lists every missing secret", () => {
       expect(err).toBeInstanceOf(VaultBootError);
       const boot = err as VaultBootError;
       expect(boot.gaps).toHaveLength(2);
-      expect(boot.gaps.map((g) => g.name).sort()).toEqual([
-        "DATABASE_URL",
-        "STRIPE_KEY",
-      ]);
+      expect(boot.gaps.map((g) => g.name).sort()).toEqual(["DATABASE_URL", "STRIPE_KEY"]);
       expect(boot.message).toContain("STRIPE_KEY");
       expect(boot.message).toContain("Payments gateway key");
       expect(boot.message).toContain("DATABASE_URL");
@@ -181,10 +174,7 @@ describe("resolution chain", () => {
 
   test("config cleartext is exposed; secrets are not", async () => {
     const runtime = createVaultRuntime({
-      secrets: [
-        vault.secret("STRIPE_KEY"),
-        vault.config("PUBLIC_URL"),
-      ],
+      secrets: [vault.secret("STRIPE_KEY"), vault.config("PUBLIC_URL")],
       chain: [
         {
           driver: memoryVaultDriver,
@@ -210,14 +200,11 @@ describe("redaction + fingerprints", () => {
     const secret = "sk_live_super_secret_value_do_not_leak";
     const runtime = createVaultRuntime({
       secrets: [vault("STRIPE_KEY")],
-      chain: [
-        { driver: memoryVaultDriver, options: { secrets: { STRIPE_KEY: secret } } },
-      ],
+      chain: [{ driver: memoryVaultDriver, options: { secrets: { STRIPE_KEY: secret } } }],
     });
     await runtime.boot();
 
-    const lines: Array<{ message: string; data?: Record<string, unknown> }> =
-      [];
+    const lines: Array<{ message: string; data?: Record<string, unknown> }> = [];
     const { fx } = createFxContextWithVault(runtime, lines);
 
     const value = fx.vault("STRIPE_KEY");
@@ -256,10 +243,7 @@ describe("sops / age (Typage)", () => {
   test("decrypts SOPS JSON in-process with age-encryption", async () => {
     const identity = await age.generateIdentity();
     const recipient = await age.identityToRecipient(identity);
-    const { json } = await buildSopsFixture(
-      { STRIPE_KEY: "sk_sops_decrypted" },
-      recipient,
-    );
+    const { json } = await buildSopsFixture({ STRIPE_KEY: "sk_sops_decrypted" }, recipient);
 
     const runtime = createVaultRuntime({
       secrets: [vault("STRIPE_KEY")],

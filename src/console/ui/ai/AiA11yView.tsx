@@ -43,8 +43,7 @@ export function AiA11yView(props: AiA11yViewProps) {
   const prompts = filterPrompts(data.prompts, undefined);
   const agents = filterAgents(data.agents, undefined);
   const versions = versionsForPrompt(data.versions, promptName);
-  const selected =
-    versions.find((v) => v.version === version) ?? versions[versions.length - 1];
+  const selected = versions.find((v) => v.version === version) ?? versions[versions.length - 1];
   const baseline = versions.find((v) => v.version === 2) ?? versions[0];
   const decision =
     baseline && selected && baseline.version !== selected.version
@@ -78,9 +77,7 @@ export function AiA11yView(props: AiA11yViewProps) {
                   {p.name}
                   {p.version !== undefined ? ` @${p.version}` : ""}
                 </button>
-                <a href={manifestDiffHref(p.manifestDiffPath)}>
-                  Manifest Diff
-                </a>
+                <a href={manifestDiffHref(p.manifestDiffPath)}>Manifest Diff</a>
               </li>
             ))}
           </ul>
@@ -180,11 +177,7 @@ export function AiA11yView(props: AiA11yViewProps) {
           <ul>
             {agents.map((a) => (
               <li key={a.name}>
-                <button
-                  type="button"
-                  aria-pressed={a.name === agentName}
-                  style={{ minHeight: 32 }}
-                >
+                <button type="button" aria-pressed={a.name === agentName} style={{ minHeight: 32 }}>
                   {a.name}
                 </button>
               </li>
@@ -194,14 +187,11 @@ export function AiA11yView(props: AiA11yViewProps) {
 
         {run ? (
           <section aria-label="Agent run trail">
-            <h2>
-              Agent run {run.id}
-            </h2>
+            <h2>Agent run {run.id}</h2>
             <ol>
               {run.trail.map((step, i) => (
                 <li key={`${step.tool}-${i}`}>
-                  <span>{trailStatusLabel(step.status)}</span>{" "}
-                  <span>{step.tool}</span>
+                  <span>{trailStatusLabel(step.status)}</span> <span>{step.tool}</span>
                   {step.status === "denied" && step.denial ? (
                     <p role="status">
                       DENIED by gate {step.denial.gate}: {step.denial.reason}
@@ -225,8 +215,7 @@ export function AiA11yView(props: AiA11yViewProps) {
           <ul>
             {data.fallbackChains.map((chain, i) => (
               <li key={i}>
-                {chain.prompt}:{" "}
-                {chain.attempts.map((a) => a.model).join(" → ")}
+                {chain.prompt}: {chain.attempts.map((a) => a.model).join(" → ")}
                 {chain.costConsequence !== null
                   ? ` · cost consequence ${formatCost(chain.costConsequence)}`
                   : ""}

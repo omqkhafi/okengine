@@ -6,7 +6,7 @@
 
 /** One CLI flag (long form is canonical; short is convenience only). */
 export interface CliFlag {
-  /** Canonical long form including leading dashes (e.g. `--stack`). */
+  /** Canonical long form including leading dashes (e.g. `--docker`). */
   readonly long: string;
   /** Optional short form including leading dash (e.g. `-s`). */
   readonly short?: string;
@@ -97,15 +97,30 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     leaf: true,
     flags: [
       {
-        long: "--stack",
-        short: "-s",
+        long: "--local",
+        short: "-l",
+        summary: "Session-only local mode (in-memory; no compose)",
+      },
+      {
+        long: "--docker",
+        short: "-d",
         takesValue: true,
         valueName: "roles",
-        summary: "Boot generated compose (optional role list)",
+        summary: "Session-only docker compose (optional role list)",
+      },
+      {
+        long: "--no-db-push",
+        summary: "Disable auto `oke db push` on schema change (local)",
       },
       ENTRY,
       HELP,
     ],
+  },
+  {
+    name: "mode",
+    summary: "get/set default oke dev mode (local|docker)",
+    leaf: true,
+    flags: [HELP],
   },
   {
     name: "start",
@@ -125,7 +140,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "doctor",
-    summary: "secrets · ports · schema drift",
+    summary: "secrets · ports · stub/domain schema drift",
     leaf: true,
     flags: [
       MANIFEST,
@@ -180,6 +195,54 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
           },
           MANIFEST,
           OUT,
+          HELP,
+        ],
+      },
+    ],
+  },
+  {
+    name: "db",
+    summary: "domain schema — push · generate · migrate",
+    subcommands: [
+      {
+        name: "push",
+        summary: "Sync schema.ts to the live local DB (dev)",
+        flags: [
+          {
+            long: "--config",
+            short: "-c",
+            takesValue: true,
+            valueName: "path",
+            summary: "drizzle.config.ts path",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "generate",
+        summary: "Write versioned SQL under drizzle/",
+        flags: [
+          {
+            long: "--config",
+            short: "-c",
+            takesValue: true,
+            valueName: "path",
+            summary: "drizzle.config.ts path",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "migrate",
+        summary: "Apply generated migrations (explicit)",
+        flags: [
+          {
+            long: "--config",
+            short: "-c",
+            takesValue: true,
+            valueName: "path",
+            summary: "drizzle.config.ts path",
+          },
           HELP,
         ],
       },
@@ -358,18 +421,12 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
  * @returns Help text (no trailing exit-code block)
  */
 export function formatOkeHelp(): string {
-  const lines = [
-    "oke — okengine CLI",
-    "",
-    "Commands:",
-  ];
+  const lines = ["oke — okengine CLI", "", "Commands:"];
   for (const cmd of OKE_COMMANDS) {
     const usage = formatCommandUsage(cmd);
     lines.push(`  ${pad(usage, 34)} ${cmd.summary}`);
     if (cmd.name === "doctor") {
-      lines.push(
-        `  ${pad("oke doctor --diff|-d", 34)} CI gate: undeclared contract breaks`,
-      );
+      lines.push(`  ${pad("oke doctor --diff|-d", 34)} CI gate: undeclared contract breaks`);
     }
   }
   lines.push("");
@@ -379,9 +436,7 @@ export function formatOkeHelp(): string {
 /**
  * Collect every top-level command name (for completion / tests).
  */
-export function commandNames(
-  commands: readonly CliCommand[] = OKE_COMMANDS,
-): readonly string[] {
+export function commandNames(commands: readonly CliCommand[] = OKE_COMMANDS): readonly string[] {
   return commands.map((c) => c.name);
 }
 
@@ -391,10 +446,7 @@ export function commandNames(
  * @param command - Top-level command
  * @param sub - Optional subcommand name
  */
-export function flagTokensFor(
-  command: CliCommand,
-  sub?: string,
-): readonly string[] {
+export function flagTokensFor(command: CliCommand, sub?: string): readonly string[] {
   const flags = sub
     ? (command.subcommands?.find((s) => s.name === sub)?.flags ?? [])
     : (command.flags ?? []);
@@ -420,9 +472,7 @@ function formatCommandUsage(cmd: CliCommand): string {
   if (cmd.subcommands && cmd.subcommands.length > 1) {
     const subs = cmd.subcommands.map((s) => s.name).join("|");
     // Prefer shared JSON flag hint when every list-like sub supports it.
-    const jsonHint = cmd.subcommands.some((s) =>
-      s.flags?.some((f) => f.long === "--json"),
-    )
+    const jsonHint = cmd.subcommands.some((s) => s.flags?.some((f) => f.long === "--json"))
       ? " [--json|-j]"
       : "";
     return `oke ${cmd.name} ${subs}${jsonHint}`;
@@ -439,8 +489,8 @@ function formatCommandUsage(cmd: CliCommand): string {
 function formatFlagHint(f: CliFlag): string {
   const name = f.short ? `${f.long}|${f.short}` : f.long;
   if (f.takesValue) {
-    // Optional value (e.g. --stack [roles]) when valueName is roles-like.
-    if (f.long === "--stack") return `[${name} [${f.valueName}]]`;
+    // Optional value (e.g. --docker [roles]) when valueName is roles-like.
+    if (f.long === "--docker") return `[${name} [${f.valueName}]]`;
     return `[${name} ${f.valueName}]`;
   }
   return `[${name}]`;

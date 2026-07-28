@@ -8,16 +8,22 @@ source: "docs/spec/console.md"
 Answers: **blast radius of a deploy: new effects, widened permissions**
 
 <Callout title="Governing rule">
-Compares meaning rather than lines — behaviour change, sorted by blast radius.
+  Compares meaning rather than lines — behaviour change, sorted by blast radius.
 </Callout>
 
 ## What this panel shows
 
 <Cards>
   <Card title="Contract breaking" description="Existing clients will fail." />
-  <Card title="Permission widening" description="Attack surface grew — gate removed or scope widened." />
+  <Card
+    title="Permission widening"
+    description="Attack surface grew — gate removed or scope widened."
+  />
   <Card title="Effect widening" description="New write, external effect, or secret read." />
-  <Card title="CI gate" description="Blocks undeclared breaks; intended breaks need `breaking: true`." />
+  <Card
+    title="CI gate"
+    description="Blocks undeclared breaks; intended breaks need `breaking: true`."
+  />
 </Cards>
 
 ## Catalog

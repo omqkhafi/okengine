@@ -94,10 +94,7 @@ export function setDryRunMessageId(messageId: string): void {
  * @param kind - Irreversible kind
  * @param resource - Template / prompt name
  */
-export function recordWouldHaveFired(
-  kind: "send" | "ask",
-  resource: string,
-): void {
+export function recordWouldHaveFired(kind: "send" | "ask", resource: string): void {
   const ctx = storage.getStore();
   if (!ctx) return;
   ctx.wouldHaveFired.push({
@@ -115,19 +112,14 @@ export function recordWouldHaveFired(
  * @param ref - Store resource ref (`sql:inventory`, …)
  * @param table - Live in-memory table Map
  */
-export function touchDryRunStore(
-  ref: string,
-  table: Map<string, unknown>,
-): void {
+export function touchDryRunStore(ref: string, table: Map<string, unknown>): void {
   const ctx = storage.getStore();
   if (!ctx) return;
   if (ctx.storeSnapshots.has(ref)) return;
   ctx.storeRefs.set(ref, table);
   ctx.storeSnapshots.set(
     ref,
-    new Map(
-      [...table.entries()].map(([k, v]) => [k, structuredClone(v)]),
-    ),
+    new Map([...table.entries()].map(([k, v]) => [k, structuredClone(v)])),
   );
 }
 

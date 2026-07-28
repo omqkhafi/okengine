@@ -104,10 +104,7 @@
   "$defs": {
     "JsonSchema": {
       "description": "A JSON Schema document, or an opaque string ref produced by extraction.",
-      "oneOf": [
-        { "type": "string", "minLength": 1 },
-        { "type": "object" }
-      ]
+      "oneOf": [{ "type": "string", "minLength": 1 }, { "type": "object" }]
     },
     "ResourceRef": {
       "description": "Store resource: facet:name (sql:table, kv:namespace, files:bucket, index:name).",
@@ -289,10 +286,7 @@
         "durable": { "type": "boolean" },
         "live": { "type": "boolean" },
         "cache": {
-          "oneOf": [
-            { "type": "boolean" },
-            { "type": "string", "minLength": 1 }
-          ]
+          "oneOf": [{ "type": "boolean" }, { "type": "string", "minLength": 1 }]
         },
         "cacheKeys": {
           "description": "Computed invalidation key expression (derived or declared).",
@@ -342,6 +336,38 @@
         "retain": { "type": "string", "minLength": 1 }
       }
     },
+    "DeclaredColumn": {
+      "description": "Abstract schema column (DDL shape + optional classification). Bare ColumnClassification remains valid.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["text", "integer"] },
+        "nullable": { "type": "boolean" },
+        "primaryKey": { "type": "boolean" },
+        "unique": { "type": "boolean" },
+        "default": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "null" }
+          ]
+        },
+        "sqlName": { "type": "string", "minLength": 1 },
+        "pii": { "type": "boolean" },
+        "sensitive": { "type": "boolean" },
+        "retain": { "type": "string", "minLength": 1 },
+        "references": {
+          "description": "Foreign key target from field.*.references().",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "table": { "type": "string", "minLength": 1 },
+            "column": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
     "Table": {
       "type": "object",
       "additionalProperties": false,
@@ -349,7 +375,12 @@
         "columns": {
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },
-          "additionalProperties": { "$ref": "#/$defs/ColumnClassification" }
+          "additionalProperties": {
+            "oneOf": [
+              { "$ref": "#/$defs/DeclaredColumn" },
+              { "$ref": "#/$defs/ColumnClassification" }
+            ]
+          }
         },
         "classifications": {
           "description": "Field → classification tags (pii, sensitive, retain duration).",

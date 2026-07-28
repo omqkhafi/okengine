@@ -10,12 +10,7 @@
 import type { ServeOptions } from "./types.ts";
 
 /** Loopback names always accepted alongside the listen hostname. */
-const LOOPBACK_HOSTS: readonly string[] = [
-  "localhost",
-  "127.0.0.1",
-  "::1",
-  "[::1]",
-];
+const LOOPBACK_HOSTS: readonly string[] = ["localhost", "127.0.0.1", "::1", "[::1]"];
 
 /**
  * Build the effective allow-list: loopback + listen hostname + user extras.
@@ -76,10 +71,7 @@ export function normalizeHost(raw: string): string {
  * @param host - Normalized host
  * @param allowed - Allow-list
  */
-export function isHostAllowed(
-  host: string,
-  allowed: ReadonlySet<string>,
-): boolean {
+export function isHostAllowed(host: string, allowed: ReadonlySet<string>): boolean {
   if (host.length === 0) return false;
   if (allowed.has(host)) return true;
   // Bracketed IPv6 sibling
@@ -138,9 +130,7 @@ export function checkRequestSecurity(
 /** 403 body for a failed Host / Origin check. */
 export function forbiddenResponse(reason: "host" | "origin"): Response {
   const message =
-    reason === "host"
-      ? "Forbidden: unexpected Host header"
-      : "Forbidden: unexpected Origin header";
+    reason === "host" ? "Forbidden: unexpected Host header" : "Forbidden: unexpected Origin header";
   return new Response(message, {
     status: 403,
     headers: { "content-type": "text/plain; charset=utf-8" },

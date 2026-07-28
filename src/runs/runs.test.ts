@@ -184,9 +184,7 @@ describe("locality — local + object storage", () => {
     expect(localKeys.some((k) => k.endsWith(".parquet"))).toBe(true);
     expect(remoteKeys.some((k) => k.endsWith(".parquet"))).toBe(true);
 
-    const rows = await runs.query(
-      "SELECT id, dim_locality AS locality FROM runs ORDER BY id",
-    );
+    const rows = await runs.query("SELECT id, dim_locality AS locality FROM runs ORDER BY id");
     expect(rows.length).toBe(2);
     const ids = rows.map((r) => String(r.id)).sort();
     expect(ids).toEqual(["archived", "recent"]);
@@ -242,9 +240,7 @@ describe("crypto-shredding erasure", () => {
 
     // Snapshot partition bytes before erase
     const bucket = await fsDriver.open({ name: "snap", root: root });
-    const keysBefore = (await bucket.list("runs/")).filter((k) =>
-      k.endsWith(".parquet"),
-    );
+    const keysBefore = (await bucket.list("runs/")).filter((k) => k.endsWith(".parquet"));
     expect(keysBefore.length).toBeGreaterThan(0);
     const bytesBefore = await bucket.get(keysBefore[0]!);
     expect(bytesBefore).toBeTruthy();
@@ -262,9 +258,7 @@ describe("crypto-shredding erasure", () => {
     expect(bytesAfter).toEqual(bytesBefore);
 
     // Query still returns the row (operational dims intact)
-    const rows = await runs.query(
-      "SELECT id, subject_id FROM runs WHERE id = 'run_erase'",
-    );
+    const rows = await runs.query("SELECT id, subject_id FROM runs WHERE id = 'run_erase'");
     expect(rows.length).toBe(1);
     expect(rows[0]!.subject_id).toBe(subjectId);
 

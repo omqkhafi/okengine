@@ -30,9 +30,7 @@ export const VERDICT_LABEL: Readonly<Record<DeliveryVerdict, string>> = {
  *
  * @param rows - Outcome rows
  */
-export function sortByConsequence(
-  rows: readonly OutcomeRow[],
-): readonly OutcomeRow[] {
+export function sortByConsequence(rows: readonly OutcomeRow[]): readonly OutcomeRow[] {
   return [...rows].sort((a, b) => {
     if (b.weight !== a.weight) return b.weight - a.weight;
     return b.count - a.count;

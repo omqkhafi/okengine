@@ -5,10 +5,7 @@
  * Revoke and rotate follow D (irreversible → typed confirm + reason).
  */
 
-import {
-  type ConfirmationPattern,
-  validateTypedConfirm,
-} from "../flows/confirmation.ts";
+import { type ConfirmationPattern, validateTypedConfirm } from "../flows/confirmation.ts";
 
 export { validateTypedConfirm };
 export type { ConfirmationPattern };

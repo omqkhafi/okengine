@@ -219,9 +219,7 @@ function errorNamesOf(flow: Flow): string[] {
  *
  * @param manifest - Manifest (or null → empty graph)
  */
-export function buildCausalityGraph(
-  manifest: Manifest | null | undefined,
-): CausalityGraph {
+export function buildCausalityGraph(manifest: Manifest | null | undefined): CausalityGraph {
   const flowsMap = manifest?.flows ?? {};
   const flowIds = Object.keys(flowsMap).sort();
 
@@ -247,10 +245,7 @@ export function buildCausalityGraph(
   }
 
   const causeMerge = new Map<string, CauseNode>();
-  const effectMerge = new Map<
-    string,
-    { tier: UiEffectTier; flowIds: string[]; fanOut: number }
-  >();
+  const effectMerge = new Map<string, { tier: UiEffectTier; flowIds: string[]; fanOut: number }>();
   const flowNodes: FlowNode[] = [];
 
   for (const id of flowIds) {
@@ -376,9 +371,7 @@ export function buildCausalityGraph(
     }
   }
 
-  const causes = [...causeMerge.values()].sort((a, b) =>
-    a.label.localeCompare(b.label),
-  );
+  const causes = [...causeMerge.values()].sort((a, b) => a.label.localeCompare(b.label));
   const effects: EffectNode[] = [...effectMerge.entries()]
     .map(([ref, v]) => ({
       ref,
@@ -525,11 +518,8 @@ export function rightEffects(
 
   return graph.effects.map((e) => {
     const related = relatedIds === null ? true : relatedIds.has(e.ref);
-    const textMatch =
-      !selection.q ||
-      e.ref.toLowerCase().includes(selection.q.toLowerCase());
-    const ubiquityOk =
-      !options.hideUbiquitous || e.touchCount < threshold || relatedIds !== null;
+    const textMatch = !selection.q || e.ref.toLowerCase().includes(selection.q.toLowerCase());
+    const ubiquityOk = !options.hideUbiquitous || e.touchCount < threshold || relatedIds !== null;
     return {
       ...e,
       match: related && textMatch && ubiquityOk,

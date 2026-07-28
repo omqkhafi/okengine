@@ -15,11 +15,7 @@ export type {
   AccessUserRecord,
 } from "./types.ts";
 
-export {
-  ACCESS_BLAST_FIXTURE,
-  ACCESS_EFFECTIVE_FIXTURE,
-  ACCESS_LIST_FIXTURE,
-} from "./fixture.ts";
+export { ACCESS_BLAST_FIXTURE, ACCESS_EFFECTIVE_FIXTURE, ACCESS_LIST_FIXTURE } from "./fixture.ts";
 
 export {
   parseAccessSearch,
@@ -42,10 +38,7 @@ export {
   type OnceSecretState,
 } from "./acknowledgement.ts";
 
-export {
-  formatAccessBlastRadius,
-  type AccessBlastRadiusLines,
-} from "./blast-radius.ts";
+export { formatAccessBlastRadius, type AccessBlastRadiusLines } from "./blast-radius.ts";
 
 export { visibleGrantableScopes, allGrantable } from "./grantable.ts";
 

@@ -20,10 +20,7 @@ export interface AttenuationResult {
  * @param held - Raw scopes from the principal / session
  * @param catalog - Manifest-derived Module:Action pairs
  */
-export function expandHeldScopes(
-  held: Iterable<string>,
-  catalog: readonly string[],
-): Set<string> {
+export function expandHeldScopes(held: Iterable<string>, catalog: readonly string[]): Set<string> {
   const out = new Set<string>();
   let star = false;
   for (const s of held) {
@@ -48,8 +45,7 @@ export function attenuateScopes(
   creatorScopes: ReadonlySet<string> | Iterable<string>,
   requestedScopes: Iterable<string>,
 ): AttenuationResult {
-  const creator =
-    creatorScopes instanceof Set ? creatorScopes : new Set(creatorScopes);
+  const creator = creatorScopes instanceof Set ? creatorScopes : new Set(creatorScopes);
   const excess: string[] = [];
   for (const scope of requestedScopes) {
     if (!creator.has(scope)) excess.push(scope);

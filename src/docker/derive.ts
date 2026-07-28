@@ -17,7 +17,7 @@ import { DEFAULT_DOCKER_DIR } from "./types.ts";
 /**
  * Derive infrastructure files from normalised image pins.
  *
- * Credentials land only in the returned `stackEnv` (for `.env.stack`);
+ * Credentials land only in the returned `stackEnv` (for `.env.docker`);
  * generated YAML never contains cleartext secrets. Layer 4
  * (`compose.override.yml`) is listed in `composeFiles` but never written.
  *
@@ -37,10 +37,7 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   };
 
   const specs = buildSpecs(normalised);
-  const { files: composeFilesContent, composeFiles } = emitComposeLayers(
-    specs,
-    normalised,
-  );
+  const { files: composeFilesContent, composeFiles } = emitComposeLayers(specs, normalised);
   const dockerfile: GeneratedFile = {
     path: "Dockerfile",
     content: emitDockerfile({ appPort: normalised.appPort }),
@@ -57,18 +54,14 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     }
   }
 
-  const stackEnv = buildStackEnv(
-    specs,
-    normalised.recipes ?? [],
-    normalised.host ?? "127.0.0.1",
-  );
+  const stackEnv = buildStackEnv(specs, normalised.recipes ?? [], normalised.host ?? "127.0.0.1");
 
   return { specs, files, stackEnv, composeFiles };
 }
 
 /**
  * Write derived files to disk. Never writes `compose.override.yml` or
- * credential values into YAML. Optionally writes `.env.stack`.
+ * credential values into YAML. Optionally writes `docker/.env.docker`.
  *
  * @param result - Derive result
  * @param outDir - Destination for Dockerfile / compose (usually `docker/`)
@@ -79,11 +72,6 @@ export async function writeDerivedFiles(
   outDir: string,
   options: {
     readonly writeStackEnv?: boolean;
-    /**
-     * Directory for `.env.stack` (project root). Defaults to `outDir`.
-     * Prefer the project cwd when compose lives under `docker/`.
-     */
-    readonly stackEnvDir?: string;
   } = {},
 ): Promise<readonly string[]> {
   const written: string[] = [];
@@ -95,9 +83,7 @@ export async function writeDerivedFiles(
     written.push(path);
   }
   if (options.writeStackEnv) {
-    const envRoot = (options.stackEnvDir ?? outDir).replace(/\/$/, "");
-    mkdirSync(envRoot, { recursive: true });
-    const envPath = `${envRoot}/.env.stack`;
+    const envPath = `${root}/.env.docker`;
     await Bun.write(envPath, formatStackEnv(result.stackEnv));
     written.push(envPath);
   }

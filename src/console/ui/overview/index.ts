@@ -14,10 +14,7 @@ export type {
   WhatChanged,
 } from "./types.ts";
 
-export {
-  composeOverview,
-  type OverviewInputs,
-} from "./compose.ts";
+export { composeOverview, type OverviewInputs } from "./compose.ts";
 
 export {
   declaredSlos,
@@ -35,11 +32,7 @@ export { computeGoldenSignals, GOLDEN_WINDOW_MS } from "./golden.ts";
 
 export { firstSloInvite } from "./busiest.ts";
 
-export {
-  rankedFindings,
-  compareFindings,
-  type FindingInputs,
-} from "./rank.ts";
+export { rankedFindings, compareFindings, type FindingInputs } from "./rank.ts";
 
 export {
   composeVerdict,

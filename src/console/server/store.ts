@@ -4,10 +4,7 @@
  * The UI must not reimplement cache invalidation, PII masking, or effects graph.
  */
 
-import {
-  readSchemaFingerprint,
-  schemaFingerprint,
-} from "../../cli/schema.ts";
+import { readSchemaFingerprint, schemaFingerprint } from "../../cli/schema.ts";
 import {
   memoryFilesDriver,
   memoryIndexDriver,
@@ -29,16 +26,8 @@ import {
   type SqlStoreHandle,
   type StoreRuntime,
 } from "../../elements/store.ts";
-import {
-  DryRunWriteIsolationError,
-  withDryRun,
-} from "../../kernel/dry-run.ts";
-import type {
-  Effects,
-  Manifest,
-  ResourceRef,
-  StoreFacet,
-} from "../../manifest/types.ts";
+import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
+import type { Effects, Manifest, ResourceRef, StoreFacet } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 
 /** Whether multi-tenancy is declared on the Manifest (off by default). */
@@ -114,9 +103,7 @@ export interface ProjectStoresOptions {
  *
  * @param options - Manifest, runtime, runs
  */
-export async function projectStoresList(
-  options: ProjectStoresOptions,
-): Promise<{
+export async function projectStoresList(options: ProjectStoresOptions): Promise<{
   readonly stores: readonly ConsoleStoreRow[];
   readonly tenancyDeclared: boolean;
   readonly tenants: readonly string[];
@@ -146,8 +133,7 @@ export async function projectStoresList(
     const facet = store.facet;
     const ref = `${facet}:${name}` as ResourceRef;
     const children = childrenOf(manifest!, name, facet, store);
-    const replicaLagMs =
-      facet === "sql" ? latestReplicaLag(options.runs ?? [], children) : null;
+    const replicaLagMs = facet === "sql" ? latestReplicaLag(options.runs ?? [], children) : null;
 
     let warnings: ConsoleStoreRow["warnings"] = [];
     if (facet === "files" && options.runtime) {
@@ -194,10 +180,7 @@ function childrenOf(
     names.push(...Object.keys(store.tables ?? {}));
     // Also surface table suffixes from effects when Manifest tables are sparse.
     for (const flow of Object.values(manifest.flows ?? {})) {
-      for (const ref of [
-        ...(flow.effects?.reads ?? []),
-        ...(flow.effects?.writes ?? []),
-      ]) {
+      for (const ref of [...(flow.effects?.reads ?? []), ...(flow.effects?.writes ?? [])]) {
         if (ref.startsWith("sql:")) {
           const table = ref.slice(4);
           if (!names.includes(table)) names.push(table);
@@ -240,11 +223,7 @@ function childrenOf(
   });
 }
 
-function flowsTouching(
-  manifest: Manifest,
-  ref: ResourceRef,
-  kind: "reads" | "writes",
-): string[] {
+function flowsTouching(manifest: Manifest, ref: ResourceRef, kind: "reads" | "writes"): string[] {
   const out: string[] = [];
   for (const [flowId, flow] of Object.entries(manifest.flows ?? {})) {
     if ((flow.effects?.[kind] ?? []).includes(ref)) out.push(flowId);
@@ -277,10 +256,7 @@ export function willNotFireFor(
   };
 }
 
-function piiColumnsFor(
-  store: NonNullable<Manifest["stores"]>[string],
-  table: string,
-): string[] {
+function piiColumnsFor(store: NonNullable<Manifest["stores"]>[string], table: string): string[] {
   const cols: string[] = [];
   const tableMeta = store.tables?.[table];
   for (const [col, tags] of Object.entries(tableMeta?.columns ?? {})) {
@@ -309,18 +285,14 @@ function latestReplicaLag(
   let lag: number | null = null;
   for (const run of runs) {
     if (run.replicaLagMs == null) continue;
-    const touches = (run.effects ?? []).some(
-      (e) => refs.has(e.resource as ResourceRef),
-    );
+    const touches = (run.effects ?? []).some((e) => refs.has(e.resource as ResourceRef));
     if (!touches) continue;
     if (lag === null || run.replicaLagMs > lag) lag = run.replicaLagMs;
   }
   return lag;
 }
 
-function collectTenants(
-  runs: ReadonlyArray<{ readonly tenant?: string | null }>,
-): string[] {
+function collectTenants(runs: ReadonlyArray<{ readonly tenant?: string | null }>): string[] {
   const set = new Set<string>();
   for (const r of runs) {
     if (r.tenant) set.add(r.tenant);
@@ -497,13 +469,9 @@ export async function editStore(
   },
 ): Promise<StoreEditResult> {
   const effectRef = (
-    input.child && input.ref.startsWith("sql:")
-      ? `sql:${input.child}`
-      : input.ref
+    input.child && input.ref.startsWith("sql:") ? `sql:${input.child}` : input.ref
   ) as ResourceRef;
-  const writers = manifest
-    ? flowsTouching(manifest, effectRef, "writes")
-    : [];
+  const writers = manifest ? flowsTouching(manifest, effectRef, "writes") : [];
   const willNotFire = willNotFireFor(manifest ?? { oke: "1.0", app: "" }, writers);
 
   if (options.dryRun) {
@@ -547,7 +515,12 @@ export async function editStore(
 
 /** Snapshot of a direct-edit target for dry-run rollback. */
 type EditSnapshot =
-  | { readonly kind: "kv"; readonly ref: ResourceRef; readonly key: string; readonly value: unknown }
+  | {
+      readonly kind: "kv";
+      readonly ref: ResourceRef;
+      readonly key: string;
+      readonly value: unknown;
+    }
   | {
       readonly kind: "sql";
       readonly ref: ResourceRef;
@@ -578,10 +551,9 @@ async function snapshotEditTarget(
       effects: { reads: [input.ref] },
     })) as SqlStoreHandle;
     try {
-      const rows = await sql.raw(
-        `SELECT * FROM "${input.child}" WHERE "id" = ? LIMIT 1`,
-        [input.id],
-      );
+      const rows = await sql.raw(`SELECT * FROM "${input.child}" WHERE "id" = ? LIMIT 1`, [
+        input.id,
+      ]);
       return {
         kind: "sql",
         ref: input.ref,
@@ -602,10 +574,7 @@ async function snapshotEditTarget(
   return { kind: "none" };
 }
 
-async function restoreEditTarget(
-  runtime: StoreRuntime,
-  snapshot: EditSnapshot,
-): Promise<void> {
+async function restoreEditTarget(runtime: StoreRuntime, snapshot: EditSnapshot): Promise<void> {
   if (snapshot.kind === "kv") {
     const kv = (await runtime.openRef(snapshot.ref, {
       effects: { writes: [snapshot.ref] },
@@ -623,10 +592,7 @@ async function restoreEditTarget(
     })) as SqlStoreHandle;
     if (snapshot.row === null) {
       try {
-        await sql.raw(
-          `DELETE FROM "${snapshot.child}" WHERE "id" = ?`,
-          [snapshot.id],
-        );
+        await sql.raw(`DELETE FROM "${snapshot.child}" WHERE "id" = ?`, [snapshot.id]);
       } catch {
         /* table may not exist */
       }
@@ -635,10 +601,10 @@ async function restoreEditTarget(
     const cols = Object.keys(snapshot.row);
     const assignments = cols.map((c) => `"${c}" = ?`).join(", ");
     try {
-      await sql.raw(
-        `UPDATE "${snapshot.child}" SET ${assignments} WHERE "id" = ?`,
-        [...cols.map((c) => snapshot.row![c]), snapshot.id],
-      );
+      await sql.raw(`UPDATE "${snapshot.child}" SET ${assignments} WHERE "id" = ?`, [
+        ...cols.map((c) => snapshot.row![c]),
+        snapshot.id,
+      ]);
     } catch {
       /* best-effort restore */
     }
@@ -673,10 +639,7 @@ async function applyEdit(
     if (sets.length === 0) return;
     const assignments = sets.map((c) => `"${c}" = ?`).join(", ");
     const params = [...sets.map((c) => input.patch[c]), id];
-    await sql.raw(
-      `UPDATE "${table}" SET ${assignments} WHERE "id" = ?`,
-      params,
-    );
+    await sql.raw(`UPDATE "${table}" SET ${assignments} WHERE "id" = ?`, params);
     return;
   }
 
@@ -786,14 +749,9 @@ export async function runStoreSql(
   readonly routedRole: "primary" | "replica";
 }> {
   const trimmed = sqlText.trim();
-  const isWrite =
-    /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE)\b/i.test(
-      trimmed,
-    );
+  const isWrite = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE)\b/i.test(trimmed);
   if (isWrite && !options.allowWrite) {
-    throw new Error(
-      "SQL console is read-only by default — write requires console:store.sql:write",
-    );
+    throw new Error("SQL console is read-only by default — write requires console:store.sql:write");
   }
   const handle = (await runtime.openRef(ref, {
     effects: isWrite ? { writes: [ref] } : { reads: [ref] },
@@ -814,10 +772,7 @@ export async function runStoreSql(
  * @param key - Cache key
  * @param writeRef - Written resource
  */
-export function cacheKeyInvalidatedBy(
-  key: string,
-  writeRef: ResourceRef,
-): boolean {
+export function cacheKeyInvalidatedBy(key: string, writeRef: ResourceRef): boolean {
   return isInvalidatedByWrite(key, { writes: [writeRef] });
 }
 

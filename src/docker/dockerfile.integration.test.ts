@@ -96,10 +96,10 @@ console.log("listening", server.port);
       await Bun.write(join(dir, "Dockerfile"), df);
 
       const tag = `oke-docker-fixture:${Date.now()}`;
-      const build = Bun.spawn(
-        ["docker", "build", "-t", tag, dir],
-        { stdout: "pipe", stderr: "pipe" },
-      );
+      const build = Bun.spawn(["docker", "build", "-t", tag, dir], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const [buildOut, buildErr, buildCode] = await Promise.all([
         new Response(build.stdout).text(),
         new Response(build.stderr).text(),
@@ -111,19 +111,10 @@ console.log("listening", server.port);
       }
 
       const name = `oke-fixture-run-${Date.now()}`;
-      const run = Bun.spawn(
-        [
-          "docker",
-          "run",
-          "-d",
-          "--name",
-          name,
-          "-p",
-          "0:6530",
-          tag,
-        ],
-        { stdout: "pipe", stderr: "pipe" },
-      );
+      const run = Bun.spawn(["docker", "run", "-d", "--name", name, "-p", "0:6530", tag], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const [runOut, runErr, runCode] = await Promise.all([
         new Response(run.stdout).text(),
         new Response(run.stderr).text(),
@@ -133,10 +124,10 @@ console.log("listening", server.port);
       if (runCode !== 0) console.error(runOut, runErr);
 
       // Resolve published port
-      const portProc = Bun.spawn(
-        ["docker", "port", name, "6530"],
-        { stdout: "pipe", stderr: "pipe" },
-      );
+      const portProc = Bun.spawn(["docker", "port", name, "6530"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const portOut = await new Response(portProc.stdout).text();
       await portProc.exited;
       const m = portOut.match(/:(\d+)/);

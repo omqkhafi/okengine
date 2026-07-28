@@ -13,10 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { flow } from "../kernel/flow.ts";
-import {
-  createFileJournalStore,
-  createMemoryJournalStore,
-} from "../kernel/journal.ts";
+import { createFileJournalStore, createMemoryJournalStore } from "../kernel/journal.ts";
 import {
   clock,
   createClockRuntime,
@@ -340,9 +337,7 @@ describe("DST ambiguity", () => {
     expect(detectDstAmbiguity("0 2 * * *", "UTC")).toBeNull();
 
     // Noon is outside the transition window for US zones.
-    expect(
-      detectDstAmbiguity("0 12 * * *", "America/New_York", Date.UTC(2026, 0, 1)),
-    ).toBeNull();
+    expect(detectDstAmbiguity("0 12 * * *", "America/New_York", Date.UTC(2026, 0, 1))).toBeNull();
   });
 
   test("reconcile attaches dstAmbiguity on the store row", async () => {

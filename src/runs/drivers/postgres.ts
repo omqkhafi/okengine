@@ -4,13 +4,7 @@
  * Protocol-named. Uses an injected client in tests; production binds Bun.sql.
  */
 
-import type {
-  RunsDriver,
-  RunsOpenOptions,
-  RunsRow,
-  RunsStore,
-  WideEvent,
-} from "../types.ts";
+import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
 
 /** Minimal SQL surface used by the postgres runs driver. */
 export interface RunsPostgresClient {
@@ -71,21 +65,17 @@ export function createRunsPostgresFake(): RunsPostgresClient & {
 export const postgresRunsDriver: RunsDriver = {
   id: "postgres",
   async open(options: RunsOpenOptions = {}): Promise<RunsStore> {
-    const client =
-      (options.client as RunsPostgresClient | undefined) ??
-      createRunsPostgresFake();
+    const client = (options.client as RunsPostgresClient | undefined) ?? createRunsPostgresFake();
     const table = options.name ?? "oke_runs";
-    await client.exec(
-      `CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, payload JSONB)`,
-    );
+    await client.exec(`CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, payload JSONB)`);
 
     return {
       driverId: "postgres",
       async append(event: WideEvent): Promise<void> {
-        await client.exec(
-          `INSERT INTO ${table} (id, payload) VALUES ($1, $2::jsonb)`,
-          [event.id, JSON.stringify(event)],
-        );
+        await client.exec(`INSERT INTO ${table} (id, payload) VALUES ($1, $2::jsonb)`, [
+          event.id,
+          JSON.stringify(event),
+        ]);
       },
       async flush(): Promise<void> {
         /* row-level writes are immediate */
@@ -97,9 +87,7 @@ export const postgresRunsDriver: RunsDriver = {
         const result = await client.query(`SELECT payload FROM ${table}`);
         return result.map((r) => {
           const p = r.payload ?? r;
-          return typeof p === "string"
-            ? (JSON.parse(p) as WideEvent)
-            : (p as WideEvent);
+          return typeof p === "string" ? (JSON.parse(p) as WideEvent) : (p as WideEvent);
         });
       },
       async close(): Promise<void> {

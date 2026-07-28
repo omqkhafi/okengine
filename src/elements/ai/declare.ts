@@ -145,13 +145,9 @@ export const ai: AiNamespace = {
           kind: "prompt",
           name: promptName,
           model: name,
-          ...(promptOpts.version !== undefined
-            ? { version: promptOpts.version }
-            : {}),
+          ...(promptOpts.version !== undefined ? { version: promptOpts.version } : {}),
           ...(promptOpts.evals !== undefined ? { evals: promptOpts.evals } : {}),
-          ...(promptOpts.budget !== undefined
-            ? { budget: promptOpts.budget }
-            : {}),
+          ...(promptOpts.budget !== undefined ? { budget: promptOpts.budget } : {}),
           ...(promptOpts.in !== undefined ? { in: promptOpts.in } : {}),
           ...(promptOpts.out !== undefined ? { out: promptOpts.out } : {}),
         };
@@ -167,14 +163,8 @@ export const ai: AiNamespace = {
    * @param options - Model + destination index
    */
   embed(name: string, options: AiEmbedOptions = {}): AiEmbedDecl {
-    const model =
-      typeof options.model === "string"
-        ? options.model
-        : options.model?.name;
-    const into =
-      typeof options.into === "string"
-        ? options.into
-        : options.into?.name;
+    const model = typeof options.model === "string" ? options.model : options.model?.name;
+    const into = typeof options.into === "string" ? options.into : options.into?.name;
     return {
       kind: "embed",
       name,

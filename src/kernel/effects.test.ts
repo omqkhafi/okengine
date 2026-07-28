@@ -46,11 +46,7 @@ describe("effects — ledger", () => {
     });
 
     expect(ledger.entries).toHaveLength(3);
-    expect(ledger.entries.map((e) => e.kind)).toEqual([
-      "read",
-      "write",
-      "emit",
-    ]);
+    expect(ledger.entries.map((e) => e.kind)).toEqual(["read", "write", "emit"]);
     expect(ledger.entries[0]).toMatchObject({
       kind: "read",
       resource: "sql:bookings",

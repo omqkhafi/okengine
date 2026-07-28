@@ -76,10 +76,7 @@ export function GatesPanel() {
 
   const selectedPrincipal = decodePrincipal(search.principal);
   const openPrincipalRow = selectedPrincipal
-    ? principals.find(
-        (p) =>
-          p.kind === selectedPrincipal.kind && p.id === selectedPrincipal.id,
-      )
+    ? principals.find((p) => p.kind === selectedPrincipal.kind && p.id === selectedPrincipal.id)
     : undefined;
   const openFlowRow = flows.find((f) => f.flowId === search.flow);
 
@@ -132,11 +129,7 @@ export function GatesPanel() {
             What can this principal do · what guards this flow
           </p>
         </div>
-        <div
-          role="group"
-          aria-label="Inquiry direction"
-          className="flex gap-1"
-        >
+        <div role="group" aria-label="Inquiry direction" className="flex gap-1">
           <Button
             type="button"
             variant={from === "principal" ? "primary" : "ghost"}
@@ -171,9 +164,7 @@ export function GatesPanel() {
           <Input
             aria-label="Filter gates"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.currentTarget.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.currentTarget.value || undefined })}
           />
         </label>
       </header>
@@ -199,9 +190,7 @@ export function GatesPanel() {
           className="border-b border-[var(--oke-line)] bg-[var(--oke-danger)]/10 px-4 py-2"
           role="alert"
         >
-          <h2 className="text-sm font-medium text-[var(--oke-danger)]">
-            Two-plane violations
-          </h2>
+          <h2 className="text-sm font-medium text-[var(--oke-danger)]">Two-plane violations</h2>
           <ul className="mt-1 text-sm text-[var(--oke-fg)]">
             {violations.map((v) => (
               <li key={v.operatorId}>{formatViolation(v)}</li>
@@ -215,9 +204,7 @@ export function GatesPanel() {
           aria-label={from === "principal" ? "Principal list" : "Flow list"}
           className="w-80 shrink-0 overflow-y-auto border-r border-[var(--oke-line)]"
         >
-          <h2 className="sr-only">
-            {from === "principal" ? "Principals" : "Flows"}
-          </h2>
+          <h2 className="sr-only">{from === "principal" ? "Principals" : "Flows"}</h2>
           {listQuery.isLoading ? (
             <p className="p-4 text-sm text-[var(--oke-muted)]">Loading…</p>
           ) : null}
@@ -229,9 +216,7 @@ export function GatesPanel() {
               <ul>
                 {group.items.map((item) => {
                   const pressed =
-                    from === "flow"
-                      ? item.id === search.flow
-                      : item.id === search.principal;
+                    from === "flow" ? item.id === search.flow : item.id === search.principal;
                   return (
                     <li key={item.id}>
                       <button
@@ -251,25 +236,14 @@ export function GatesPanel() {
                           } else {
                             const decoded = decodePrincipal(item.id);
                             if (!decoded) return;
-                            setSearch(
-                              openPrincipal(
-                                search,
-                                decoded.kind,
-                                decoded.id,
-                              ),
-                            );
+                            setSearch(openPrincipal(search, decoded.kind, decoded.id));
                           }
                         }}
                       >
                         <span className="font-mono">{item.label}</span>
-                        {item.meta ? (
-                          <span className="truncate text-xs">{item.meta}</span>
-                        ) : null}
+                        {item.meta ? <span className="truncate text-xs">{item.meta}</span> : null}
                         {item.flag ? (
-                          <span
-                            role="status"
-                            className="text-xs text-[var(--oke-danger)]"
-                          >
+                          <span role="status" className="text-xs text-[var(--oke-danger)]">
                             {item.flag}
                           </span>
                         ) : null}
@@ -295,17 +269,13 @@ export function GatesPanel() {
             <div className="flex max-w-2xl flex-col gap-6">
               {from === "flow" && openFlowRow ? (
                 <div>
-                  <h2 className="font-mono text-lg text-[var(--oke-fg)]">
-                    {openFlowRow.flowId}
-                  </h2>
+                  <h2 className="font-mono text-lg text-[var(--oke-fg)]">{openFlowRow.flowId}</h2>
                   <p className="text-sm text-[var(--oke-muted)]">
                     What guards this — registration order
                   </p>
                   {openFlowRow.gates.length === 0 ? (
                     <p className="mt-2 text-sm" role="status">
-                      {openFlowRow.unguarded
-                        ? "Unguarded — public on the user plane"
-                        : "No gates"}
+                      {openFlowRow.unguarded ? "Unguarded — public on the user plane" : "No gates"}
                     </p>
                   ) : (
                     <ol
@@ -329,15 +299,10 @@ export function GatesPanel() {
                   </h2>
                   <p className="text-sm text-[var(--oke-muted)]">
                     {openPrincipalRow.kind} · {openPrincipalRow.plane} plane
-                    {openPrincipalRow.email
-                      ? ` · ${openPrincipalRow.email}`
-                      : ""}
+                    {openPrincipalRow.email ? ` · ${openPrincipalRow.email}` : ""}
                   </p>
                   <h3 className="mt-4 text-sm font-medium">Scopes</h3>
-                  <ul
-                    aria-label="Scopes"
-                    className="mt-1 flex flex-wrap gap-2 text-sm"
-                  >
+                  <ul aria-label="Scopes" className="mt-1 flex flex-wrap gap-2 text-sm">
                     {openPrincipalRow.scopes.map((s) => (
                       <li key={s}>
                         <code className="font-mono">{s}</code>
@@ -355,13 +320,10 @@ export function GatesPanel() {
                   {powers ? (
                     <div className="mt-3 text-sm">
                       <p role="status">
-                        {powers.allowedFlowIds.length} flows allowed ·{" "}
-                        {powers.deniedFlowIds.length} denied
+                        {powers.allowedFlowIds.length} flows allowed · {powers.deniedFlowIds.length}{" "}
+                        denied
                       </p>
-                      <ul
-                        aria-label="Allowed flows"
-                        className="mt-2 list-disc pl-5"
-                      >
+                      <ul aria-label="Allowed flows" className="mt-2 list-disc pl-5">
                         {powers.allowedFlowIds.map((id) => (
                           <li key={id}>
                             <code className="font-mono">{id}</code>
@@ -373,21 +335,14 @@ export function GatesPanel() {
                 </div>
               ) : null}
 
-              <section
-                aria-label="Simulator"
-                className="border-t border-[var(--oke-line)] pt-4"
-              >
-                <h3 className="text-sm font-medium text-[var(--oke-fg)]">
-                  Simulator
-                </h3>
+              <section aria-label="Simulator" className="border-t border-[var(--oke-line)] pt-4">
+                <h3 className="text-sm font-medium text-[var(--oke-fg)]">Simulator</h3>
                 <p className="text-sm text-[var(--oke-muted)]">
                   Evaluates the real gate chain only — never runs the handler
                 </p>
                 <label className="mt-3 flex max-w-md flex-col gap-1 text-sm">
                   <span className="text-[var(--oke-muted)]">
-                    {from === "flow"
-                      ? "Simulate as principal"
-                      : "Simulate against flow"}
+                    {from === "flow" ? "Simulate as principal" : "Simulate against flow"}
                   </span>
                   <select
                     aria-label="Companion selection"
@@ -405,10 +360,7 @@ export function GatesPanel() {
                     <option value="">Select…</option>
                     {from === "flow"
                       ? principals.map((p) => (
-                          <option
-                            key={`${p.kind}:${p.id}`}
-                            value={`${p.kind}:${p.id}`}
-                          >
+                          <option key={`${p.kind}:${p.id}`} value={`${p.kind}:${p.id}`}>
                             {p.kind}: {p.name}
                           </option>
                         ))
@@ -431,9 +383,7 @@ export function GatesPanel() {
                 </Button>
                 {simulate.isError ? (
                   <p role="alert" className="mt-2 text-sm text-[var(--oke-danger)]">
-                    {simulate.error instanceof Error
-                      ? simulate.error.message
-                      : "Simulate failed"}
+                    {simulate.error instanceof Error ? simulate.error.message : "Simulate failed"}
                   </p>
                 ) : null}
                 {simResult ? (
@@ -443,9 +393,7 @@ export function GatesPanel() {
                       className="list-decimal space-y-1 pl-5 text-sm"
                     >
                       {simResult.evaluations.map((e, i) => (
-                        <li key={`${e.name}-${i}`}>
-                          {formatEvaluationStep(e, i)}
-                        </li>
+                        <li key={`${e.name}-${i}`}>{formatEvaluationStep(e, i)}</li>
                       ))}
                     </ol>
                     <p
@@ -453,9 +401,7 @@ export function GatesPanel() {
                       className="mt-3 text-sm"
                       data-denial={simResult.denial?.code ?? "allowed"}
                     >
-                      {simResult.denial
-                        ? formatDenial(simResult.denial)
-                        : "Allowed — chain passed"}
+                      {simResult.denial ? formatDenial(simResult.denial) : "Allowed — chain passed"}
                     </p>
                   </div>
                 ) : null}
@@ -463,9 +409,7 @@ export function GatesPanel() {
 
               {widenings.length > 0 ? (
                 <section aria-label="Permission widenings">
-                  <h3 className="text-sm font-medium text-[var(--oke-danger)]">
-                    Deploy widenings
-                  </h3>
+                  <h3 className="text-sm font-medium text-[var(--oke-danger)]">Deploy widenings</h3>
                   <ul className="mt-2 list-disc pl-5 text-sm">
                     {widenings.map((w) => (
                       <li key={`${w.path}:${w.summary}`}>{w.summary}</li>

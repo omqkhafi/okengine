@@ -41,11 +41,7 @@ export type {
   CreateAiRuntimeOptions,
 } from "./ai/runtime.ts";
 
-export {
-  assertAllowPiiForAsk,
-  AiPiiBuildError,
-  type PiiAskCheckInput,
-} from "./ai/pii.ts";
+export { assertAllowPiiForAsk, AiPiiBuildError, type PiiAskCheckInput } from "./ai/pii.ts";
 
 export {
   runPromptEvals,

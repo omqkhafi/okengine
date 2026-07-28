@@ -2,10 +2,7 @@
  * `oke upgrade` — run codemods for a breaking change, print the diff.
  */
 
-import {
-  runCodemods,
-  type CodemodChange,
-} from "../upgrade/codemods.ts";
+import { runCodemods, type CodemodChange } from "../upgrade/codemods.ts";
 
 /** One file rewrite produced by a codemod. */
 export type UpgradeChange = CodemodChange;

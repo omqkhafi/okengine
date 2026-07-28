@@ -30,11 +30,7 @@ describe("sucrose — context inference", () => {
 
   test("detects context.body / query / headers access", () => {
     const inference = sucrose({
-      handler: ((ctx: {
-        body: unknown;
-        query: unknown;
-        headers: unknown;
-      }) => ({
+      handler: ((ctx: { body: unknown; query: unknown; headers: unknown }) => ({
         body: ctx.body,
         q: ctx.query,
         h: ctx.headers,
@@ -191,10 +187,7 @@ describe("AoT throughput ≥ 1.5× dynamic", () => {
       seats: z.number().int().min(1).max(9),
       note: z.string().max(200).optional(),
     });
-    const handler = ((input: {
-      flightId: string;
-      seats: number;
-    }) => input) as never;
+    const handler = ((input: { flightId: string; seats: number }) => input) as never;
 
     const aot = compileAot({
       method: "POST",

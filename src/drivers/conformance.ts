@@ -8,13 +8,7 @@
 import { expect } from "bun:test";
 import { createSqlStoreHandle } from "../elements/store/sql-session.ts";
 import { defineTable } from "../elements/store/table.ts";
-import type {
-  FilesDriver,
-  IndexDriver,
-  KvDriver,
-  SqlDriver,
-  SqlConnectOptions,
-} from "./types.ts";
+import type { FilesDriver, IndexDriver, KvDriver, SqlDriver, SqlConnectOptions } from "./types.ts";
 
 /** SQL conformance against one driver. */
 export async function runSqlConformance(
@@ -37,9 +31,7 @@ export async function runSqlConformance(
     expect(all).toHaveLength(1);
     expect(all[0]?.title).toBe("hello");
 
-    const one = await primary.query(`SELECT * FROM "notes" WHERE "id" = ?`, [
-      "n1",
-    ]);
+    const one = await primary.query(`SELECT * FROM "notes" WHERE "id" = ?`, ["n1"]);
     expect(one[0]?.email).toBe("a@b.c");
 
     const del = await primary.exec(`DELETE FROM "notes" WHERE "id" = ?`, ["n1"]);
@@ -51,10 +43,10 @@ export async function runSqlConformance(
     await primary.exec(
       `CREATE TABLE IF NOT EXISTS "counters" ("id" TEXT PRIMARY KEY, "clicks" INTEGER)`,
     );
-    await primary.query(
-      `INSERT INTO "counters" ("id", "clicks") VALUES (?, ?) RETURNING *`,
-      ["c1", 0],
-    );
+    await primary.query(`INSERT INTO "counters" ("id", "clicks") VALUES (?, ?) RETURNING *`, [
+      "c1",
+      0,
+    ]);
 
     const handle = createSqlStoreHandle(`sql:conformance`, {
       connection: primary,
@@ -71,14 +63,9 @@ export async function runSqlConformance(
 
     const concurrent = 100;
     await Promise.all(
-      Array.from({ length: concurrent }, () =>
-        handle.increment(counters, "c1", "clicks"),
-      ),
+      Array.from({ length: concurrent }, () => handle.increment(counters, "c1", "clicks")),
     );
-    const finalRows = await primary.query(
-      `SELECT * FROM "counters" WHERE "id" = ?`,
-      ["c1"],
-    );
+    const finalRows = await primary.query(`SELECT * FROM "counters" WHERE "id" = ?`, ["c1"]);
     expect(Number(finalRows[0]?.clicks)).toBe(1 + concurrent);
   } finally {
     await primary.close();

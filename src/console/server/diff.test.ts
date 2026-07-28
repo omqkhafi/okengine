@@ -17,11 +17,7 @@ import {
 
 const NOW = 1_700_000_000_000;
 
-function run(
-  flow: string,
-  startedAt: number,
-  id = `${flow}-${startedAt}`,
-): WideEvent {
+function run(flow: string, startedAt: number, id = `${flow}-${startedAt}`): WideEvent {
   return {
     id,
     flow,
@@ -170,19 +166,11 @@ describe("projectManifestDiff", () => {
     });
 
     expect(projection.hasBaseline).toBe(true);
-    expect(
-      projection.changes.some((c) => c.category === "effect-widening"),
-    ).toBe(true);
-    expect(
-      projection.changes.some((c) => c.category === "permission-widening"),
-    ).toBe(true);
-    expect(
-      projection.changes.some((c) => c.category === "contract-breaking"),
-    ).toBe(true);
+    expect(projection.changes.some((c) => c.category === "effect-widening")).toBe(true);
+    expect(projection.changes.some((c) => c.category === "permission-widening")).toBe(true);
+    expect(projection.changes.some((c) => c.category === "contract-breaking")).toBe(true);
 
-    const send = projection.changes.find(
-      (c) => c.path.includes("sends") || c.blastLine !== null,
-    );
+    const send = projection.changes.find((c) => c.path.includes("sends") || c.blastLine !== null);
     expect(send?.runCountLastWeek).toBe(100);
     expect(send?.blastLine).toContain("ran 100 times last week");
     expect(send?.blastLine).toContain("sent nothing");

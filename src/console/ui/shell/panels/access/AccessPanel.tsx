@@ -43,9 +43,7 @@ export function AccessPanel() {
   const [reason, setReason] = useState("");
   const [onceSecret, setOnceSecret] = useState<OnceSecretState | null>(null);
   const [blast, setBlast] = useState<AccessBlastRadius | null>(null);
-  const [effective, setEffective] = useState<AccessEffectiveResponse | null>(
-    null,
-  );
+  const [effective, setEffective] = useState<AccessEffectiveResponse | null>(null);
 
   const setSearch = (next: AccessSearch) => {
     void navigate({
@@ -65,31 +63,22 @@ export function AccessPanel() {
   });
 
   const data = listQuery.data;
-  const section =
-    plane === "operator" ? data?.operatorPlane : data?.userPlane;
+  const section = plane === "operator" ? data?.operatorPlane : data?.userPlane;
   const grantable = section?.grantableScopes ?? [];
   const hygiene = data?.hygiene;
-  const lines = useMemo(
-    () => (hygiene ? hygieneLines(hygiene) : []),
-    [hygiene],
-  );
+  const lines = useMemo(() => (hygiene ? hygieneLines(hygiene) : []), [hygiene]);
 
   const openKey: AccessKeyRecord | undefined = section?.keys.find(
     (k) => search.kind === "key" && k.id === search.id,
   );
-  const openRole = section?.roles.find(
-    (r) => search.kind === "role" && r.id === search.id,
-  );
+  const openRole = section?.roles.find((r) => search.kind === "role" && r.id === search.id);
   const openOperator = section?.operators?.find(
     (o) => search.kind === "operator" && o.id === search.id,
   );
-  const openUser = section?.users?.find(
-    (u) => search.kind === "user" && u.id === search.id,
-  );
+  const openUser = section?.users?.find((u) => search.kind === "user" && u.id === search.id);
 
   const q = (search.q ?? "").toLowerCase();
-  const filterText = (text: string) =>
-    q.length === 0 || text.toLowerCase().includes(q);
+  const filterText = (text: string) => q.length === 0 || text.toLowerCase().includes(q);
 
   const createKey = useMutation({
     mutationFn: async () => {
@@ -195,10 +184,7 @@ export function AccessPanel() {
 
   const loadEffective = useMutation({
     mutationFn: async () => {
-      const kind =
-        search.kind === "invite" || !search.kind || !search.id
-          ? null
-          : search.kind;
+      const kind = search.kind === "invite" || !search.kind || !search.id ? null : search.kind;
       if (!kind || !search.id) throw new Error("Select a principal");
       const res = await consoleCalls.accessEffective({
         kind,
@@ -282,9 +268,7 @@ export function AccessPanel() {
           <Input
             aria-label="Filter access"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.currentTarget.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.currentTarget.value || undefined })}
           />
         </label>
       </header>
@@ -322,9 +306,7 @@ export function AccessPanel() {
                     key={op.id}
                     selected={search.kind === "operator" && search.id === op.id}
                     onClick={() =>
-                      setSearch(
-                        openAccessEntity(search, "operator", "operator", op.id),
-                      )
+                      setSearch(openAccessEntity(search, "operator", "operator", op.id))
                     }
                   >
                     {op.name}
@@ -344,9 +326,7 @@ export function AccessPanel() {
                   <EntityButton
                     key={u.id}
                     selected={search.kind === "user" && search.id === u.id}
-                    onClick={() =>
-                      setSearch(openAccessEntity(search, "user", "user", u.id))
-                    }
+                    onClick={() => setSearch(openAccessEntity(search, "user", "user", u.id))}
                   >
                     {u.name}
                   </EntityButton>
@@ -385,9 +365,7 @@ export function AccessPanel() {
                   }}
                 >
                   {k.name}
-                  {k.unused90d ? (
-                    <span className="text-[var(--oke-muted)]"> · 90d+</span>
-                  ) : null}
+                  {k.unused90d ? <span className="text-[var(--oke-muted)]"> · 90d+</span> : null}
                   {k.revokedAt != null ? (
                     <span className="text-[var(--oke-danger)]"> · revoked</span>
                   ) : null}
@@ -403,11 +381,7 @@ export function AccessPanel() {
                   <EntityButton
                     key={i.id}
                     selected={search.kind === "invite" && search.id === i.id}
-                    onClick={() =>
-                      setSearch(
-                        openAccessEntity(search, "operator", "invite", i.id),
-                      )
-                    }
+                    onClick={() => setSearch(openAccessEntity(search, "operator", "invite", i.id))}
                   >
                     {i.email}
                     {i.expired ? (
@@ -443,8 +417,8 @@ export function AccessPanel() {
             <div className="space-y-4">
               <h2 className="text-lg font-medium">Create API key</h2>
               <p className="text-sm text-[var(--oke-muted)]">
-                Only scopes you hold on the {plane} plane are shown —
-                impossibility taught by absence. No preview.
+                Only scopes you hold on the {plane} plane are shown — impossibility taught by
+                absence. No preview.
               </p>
               <label className="flex flex-col gap-1 text-sm">
                 <span>Name</span>
@@ -454,11 +428,7 @@ export function AccessPanel() {
                   onChange={(e) => setKeyName(e.currentTarget.value)}
                 />
               </label>
-              <ScopePicker
-                grantable={grantable}
-                selected={selectedScopes}
-                onToggle={toggleScope}
-              />
+              <ScopePicker grantable={grantable} selected={selectedScopes} onToggle={toggleScope} />
               <Button
                 type="button"
                 disabled={createKey.isPending || !keyName.trim()}
@@ -476,9 +446,7 @@ export function AccessPanel() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-medium">{openKey.name}</h2>
-                <p className="font-mono text-sm text-[var(--oke-muted)]">
-                  {openKey.id}
-                </p>
+                <p className="font-mono text-sm text-[var(--oke-muted)]">{openKey.id}</p>
                 <ul className="mt-2 font-mono text-sm">
                   {openKey.scopes.map((s) => (
                     <li key={s}>{s}</li>
@@ -490,18 +458,11 @@ export function AccessPanel() {
                 <h3 className="text-sm font-medium">Revocation blast radius</h3>
                 {blastLines ? (
                   <>
-                    <p
-                      className="text-sm"
-                      role={blastLines.warn ? "alert" : "status"}
-                    >
+                    <p className="text-sm" role={blastLines.warn ? "alert" : "status"}>
                       {blastLines.volume}
                     </p>
-                    <p className="text-sm text-[var(--oke-muted)]">
-                      {blastLines.lastUsed}
-                    </p>
-                    <p className="text-sm text-[var(--oke-muted)]">
-                      {blastLines.sources}
-                    </p>
+                    <p className="text-sm text-[var(--oke-muted)]">{blastLines.lastUsed}</p>
+                    <p className="text-sm text-[var(--oke-muted)]">{blastLines.sources}</p>
                     <p className="text-sm" role="status">
                       {blastLines.residual}
                     </p>
@@ -554,18 +515,13 @@ export function AccessPanel() {
                   </div>
                   {revokeKey.error || rotateKey.error ? (
                     <p role="alert" className="text-sm text-[var(--oke-danger)]">
-                      {(
-                        (revokeKey.error ?? rotateKey.error) as Error
-                      ).message}
+                      {((revokeKey.error ?? rotateKey.error) as Error).message}
                     </p>
                   ) : null}
                 </section>
               ) : (
                 <p role="status" className="text-sm text-[var(--oke-danger)]">
-                  Revoked{" "}
-                  {openKey.revokedAt
-                    ? new Date(openKey.revokedAt).toISOString()
-                    : ""}
+                  Revoked {openKey.revokedAt ? new Date(openKey.revokedAt).toISOString() : ""}
                 </p>
               )}
 
@@ -583,14 +539,8 @@ export function AccessPanel() {
           ) : openRole ? (
             <div className="space-y-4">
               <h2 className="text-lg font-medium">{openRole.name}</h2>
-              <p className="text-sm text-[var(--oke-muted)]">
-                {openRole.description}
-              </p>
-              <ScopePicker
-                grantable={grantable}
-                selected={selectedScopes}
-                onToggle={toggleScope}
-              />
+              <p className="text-sm text-[var(--oke-muted)]">{openRole.description}</p>
+              <ScopePicker grantable={grantable} selected={selectedScopes} onToggle={toggleScope} />
               <Button
                 type="button"
                 disabled={grantRole.isPending}
@@ -611,9 +561,7 @@ export function AccessPanel() {
             </div>
           ) : openOperator || openUser ? (
             <div className="space-y-4">
-              <h2 className="text-lg font-medium">
-                {openOperator?.name ?? openUser?.name}
-              </h2>
+              <h2 className="text-lg font-medium">{openOperator?.name ?? openUser?.name}</h2>
               <p className="text-sm text-[var(--oke-muted)]">
                 {openOperator?.email ?? openUser?.email}
               </p>
@@ -631,12 +579,14 @@ export function AccessPanel() {
             <EffectiveTable provenance={provenance} />
           ) : (
             <p className="text-sm text-[var(--oke-muted)]">
-              Choose an identity, role, or key. Planes stay separate; scopes you
-              cannot grant do not appear.
+              Choose an identity, role, or key. Planes stay separate; scopes you cannot grant do not
+              appear.
             </p>
           )}
 
-          {search.view === "effective" && provenance.length > 0 && (openKey || openRole || openOperator || openUser) ? (
+          {search.view === "effective" &&
+          provenance.length > 0 &&
+          (openKey || openRole || openOperator || openUser) ? (
             <div className="mt-6">
               <EffectiveTable provenance={provenance} />
             </div>
@@ -690,18 +640,10 @@ export function AccessPanel() {
   );
 }
 
-function PlaneGroup({
-  label,
-  children,
-}: {
-  readonly label: string;
-  readonly children: ReactNode;
-}) {
+function PlaneGroup({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <section aria-label={label} className="border-t border-[var(--oke-line)]">
-      <h3 className="px-4 py-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">
-        {label}
-      </h3>
+      <h3 className="px-4 py-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">{label}</h3>
       <ul className="pb-2">{children}</ul>
     </section>
   );
@@ -724,9 +666,7 @@ function EntityButton({
         onClick={onClick}
         className={clsx(
           "flex min-h-8 w-full items-center px-4 text-left text-sm",
-          selected
-            ? "bg-[var(--oke-accent)]/15 text-[var(--oke-fg)]"
-            : "text-[var(--oke-fg)]",
+          selected ? "bg-[var(--oke-accent)]/15 text-[var(--oke-fg)]" : "text-[var(--oke-fg)]",
         )}
       >
         {children}
@@ -747,9 +687,7 @@ function ScopePicker({
   return (
     <section aria-label="Grantable scopes" className="space-y-2">
       <h3 className="text-sm font-medium">Grantable scopes</h3>
-      <p className="text-sm text-[var(--oke-muted)]">
-        Only scopes you hold appear
-      </p>
+      <p className="text-sm text-[var(--oke-muted)]">Only scopes you hold appear</p>
       {grantable.length === 0 ? (
         <p role="status" className="text-sm text-[var(--oke-muted)]">
           No grantable scopes on this plane
@@ -786,9 +724,7 @@ function EffectiveTable({
         Every permission with provenance — inverse of the Gates simulator
       </p>
       <table className="w-full text-left text-sm">
-        <caption className="sr-only">
-          Effective permissions with provenance
-        </caption>
+        <caption className="sr-only">Effective permissions with provenance</caption>
         <thead>
           <tr className="border-b border-[var(--oke-line)]">
             <th scope="col" className="py-2 pr-4 font-medium">

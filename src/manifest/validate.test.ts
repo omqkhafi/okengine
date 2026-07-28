@@ -28,9 +28,7 @@ describe("validateManifest", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.manifest.app).toBe("skyport");
-      expect(result.manifest.flows?.["bookings.create"]?.errors).toEqual([
-        "FlightFull",
-      ]);
+      expect(result.manifest.flows?.["bookings.create"]?.errors).toEqual(["FlightFull"]);
       expect(result.manifest.tenancy?.isolation).toBe("row");
     }
   });
@@ -53,9 +51,7 @@ describe("validateManifest", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.issues.length).toBeGreaterThan(0);
-      expect(result.issues.some((i) => i.path === "/oke" || i.path === "/")).toBe(
-        true,
-      );
+      expect(result.issues.some((i) => i.path === "/oke" || i.path === "/")).toBe(true);
     }
   });
 

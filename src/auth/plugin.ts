@@ -23,15 +23,12 @@ export interface AuthPluginOptions {
  * @param options - Session crypto options
  */
 export function auth(options: AuthPluginOptions = {}): PluginDef {
-  let builder = plugin("auth", { version: "0.0.1", config: options }).hook(
-    "onAuth",
-    (_ctx) => {
-      /* principals resolved by session / API key middleware at runtime */
-    },
-  );
+  let builder = plugin("auth", { version: "0.0.1", config: options }).hook("onAuth", (_ctx) => {
+    /* principals resolved by session / API key middleware at runtime */
+  });
 
   for (const name of Object.values(AUTH_TABLES)) {
-    builder = builder.table(name, {
+    builder = builder.table(name, undefined, {
       plane: name.includes("operator")
         ? "operator"
         : name.includes("identit") || name === AUTH_TABLES.credentials

@@ -15,10 +15,7 @@ export type { ClockDecl, ClockOptions } from "./clock/declare.ts";
 
 export { parseDurationMs } from "./clock/duration.ts";
 
-export {
-  detectDstAmbiguity,
-  type DstAmbiguity,
-} from "./clock/dst.ts";
+export { detectDstAmbiguity, type DstAmbiguity } from "./clock/dst.ts";
 
 export {
   tryAcquireLease,
@@ -38,10 +35,7 @@ export {
   type ReconcileResult,
 } from "./clock/reconcile.ts";
 
-export {
-  createTimeTravel,
-  type TimeTravel,
-} from "./clock/time-travel.ts";
+export { createTimeTravel, type TimeTravel } from "./clock/time-travel.ts";
 
 export {
   createClockRuntime,
@@ -51,23 +45,11 @@ export {
   type CronHandler,
 } from "./clock/runtime.ts";
 
-export {
-  runDurable,
-  type DurableResult,
-  type RunDurableOptions,
-} from "./clock/durable.ts";
+export { runDurable, type DurableResult, type RunDurableOptions } from "./clock/durable.ts";
 
-export {
-  cronHealth,
-  type CatchUpPolicy,
-  type CronHealth,
-} from "./clock/health.ts";
+export { cronHealth, type CatchUpPolicy, type CronHealth } from "./clock/health.ts";
 
-export {
-  nextOccurrences,
-  previousOccurrence,
-  countMissedOccurrences,
-} from "./clock/schedule.ts";
+export { nextOccurrences, previousOccurrence, countMissedOccurrences } from "./clock/schedule.ts";
 
 export {
   pauseCron,

@@ -10,13 +10,17 @@ Gate is the element for **permission to act**.
 Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run.
 
 <Callout title="Governing rule">
-Permission sits at the trigger. Auth is built-in (hybrid session, argon2id) with zero-config defaults.
+  Permission sits at the trigger. Auth is built-in (hybrid session, argon2id) with zero-config
+  defaults.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card title="Gate" description="Essence: permission to act. Replaces: auth · session · ABAC · rate limit · quota · feature flag." />
+  <Card
+    title="Gate"
+    description="Essence: permission to act. Replaces: auth · session · ABAC · rate limit · quota · feature flag."
+  />
 </Cards>
 
 ## Drivers available
@@ -39,8 +43,10 @@ import { gate } from "okengine";
 export const member = gate.policy("member", ({ auth }) => !!auth?.verified);
 
 export const fair = gate.rate({
-  strategy: "sliding-window-counter",   // near-exact, two keys, no boundary bursts
-  max: 60, per: "1m", keyBy: "ip",
+  strategy: "sliding-window-counter", // near-exact, two keys, no boundary bursts
+  max: 60,
+  per: "1m",
+  keyBy: "ip",
 });
 ```
 
@@ -48,6 +54,14 @@ export const fair = gate.rate({
 
 <Cards>
   <Card title="Vault" description="Continue to Vault." href="/docs/elements/vault" />
-  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
-  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Introduction"
+    description="Eight elements overview."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

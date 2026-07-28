@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  discardConfirmation,
-  replayConfirmation,
-  validateTypedConfirm,
-} from "./confirmation.ts";
+import { discardConfirmation, replayConfirmation, validateTypedConfirm } from "./confirmation.ts";
 import { SIGNALS_FIXTURE } from "./fixture.ts";
 
 describe("signal confirmation", () => {

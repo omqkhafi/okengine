@@ -8,11 +8,30 @@
  *    (absolute `file:<okengine-root>` in the monorepo; registry version otherwise)
  * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
+ * 4. Optional `--sql` / wizard choice → Drizzle dialect + `store.sql` pins
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { packageRoot } from "./templates.ts";
+
+/** SQL store drivers selectable at scaffold time. */
+export const SQL_DRIVERS = ["sqlite", "postgres"] as const;
+
+/** A known store.sql driver id for create-oke. */
+export type SqlDriverId = (typeof SQL_DRIVERS)[number];
+
+/** Default when `--sql` / wizard choice is omitted (matches template sources). */
+export const DEFAULT_SQL_DRIVER: SqlDriverId = "sqlite";
+
+/**
+ * Whether `value` is a known {@link SqlDriverId}.
+ *
+ * @param value - Candidate string
+ */
+export function isSqlDriverId(value: string): value is SqlDriverId {
+  return (SQL_DRIVERS as readonly string[]).includes(value);
+}
 
 /** Shape of an example / scaffolded `package.json`. */
 export type ScaffoldPackageJson = {
@@ -33,9 +52,7 @@ export type ScaffoldPackageJson = {
  *
  * @param localOkengineRoot - Absolute path when available
  */
-export function resolveOkengineDependency(
-  localOkengineRoot: string | null,
-): string {
+export function resolveOkengineDependency(localOkengineRoot: string | null): string {
   if (localOkengineRoot) return `file:${localOkengineRoot}`;
   const pkgPath = join(packageRoot(), "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version: string };
@@ -95,6 +112,43 @@ export function shouldSkipTemplatePath(relativePath: string): boolean {
 }
 
 /**
+ * Rewrite a Drizzle schema file to the dialect for `driver`.
+ *
+ * Templates ship as `sqliteTable` / `drizzle-orm/sqlite-core`. Choosing
+ * `postgres` swaps to `pgTable` / `pg-core` (and the reverse is idempotent).
+ *
+ * @param source - Schema TypeScript source
+ * @param driver - Target store.sql driver
+ */
+export function transformSchemaForSqlDriver(source: string, driver: SqlDriverId): string {
+  if (driver === "postgres") {
+    return source
+      .replaceAll("drizzle-orm/sqlite-core", "drizzle-orm/pg-core")
+      .replaceAll("sqliteTable", "pgTable");
+  }
+  return source
+    .replaceAll("drizzle-orm/pg-core", "drizzle-orm/sqlite-core")
+    .replaceAll("pgTable", "sqliteTable");
+}
+
+/**
+ * Pin `store.sql` `local` / `docker` / `prod` in `oke.config.ts` to `driver`.
+ *
+ * Leaves `test: "memory"` (and every other facet) untouched.
+ *
+ * @param source - Config TypeScript source
+ * @param driver - Target store.sql driver
+ */
+export function transformConfigForSqlDriver(source: string, driver: SqlDriverId): string {
+  return source.replace(/sql:\s*\{[\s\S]*?\n\s*\}/, (block) =>
+    block
+      .replace(/local:\s*"(?:sqlite|postgres)"/, `local: "${driver}"`)
+      .replace(/docker:\s*"(?:sqlite|postgres)"/, `docker: "${driver}"`)
+      .replace(/prod:\s*"(?:sqlite|postgres)"/, `prod: "${driver}"`),
+  );
+}
+
+/**
  * Sanitize a directory / package name for npm.
  *
  * @param raw - User-provided name
@@ -106,13 +160,9 @@ export function sanitizeProjectName(raw: string): string {
   }
   // Allow scoped names; otherwise lowercase npm-safe slug.
   if (trimmed.startsWith("@")) {
-    const m = /^(@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*)$/.exec(
-      trimmed,
-    );
+    const m = /^(@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*)$/.exec(trimmed);
     if (!m) {
-      throw new Error(
-        `create-oke: invalid scoped package name "${trimmed}"`,
-      );
+      throw new Error(`create-oke: invalid scoped package name "${trimmed}"`);
     }
     return trimmed;
   }

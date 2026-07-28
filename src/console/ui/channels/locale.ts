@@ -7,9 +7,7 @@
  *
  * @param chain - Resolution steps
  */
-export function formatLocaleChainDisplay(
-  chain: readonly string[],
-): string {
+export function formatLocaleChainDisplay(chain: readonly string[]): string {
   if (chain.length === 0) return "default";
   return chain.join(" → ");
 }
@@ -21,11 +19,7 @@ export function formatLocaleChainDisplay(
  */
 export function dirForLocale(locale: string): "ltr" | "rtl" {
   const base = locale.toLowerCase().split("-")[0] ?? locale;
-  return base === "ar" ||
-    base === "he" ||
-    base === "fa" ||
-    base === "ur" ||
-    base === "yi"
+  return base === "ar" || base === "he" || base === "fa" || base === "ur" || base === "yi"
     ? "rtl"
     : "ltr";
 }

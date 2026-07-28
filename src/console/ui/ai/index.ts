@@ -54,13 +54,6 @@ export {
   trailStatusLabel,
 } from "./format.ts";
 
-export {
-  AI_LIST_FIXTURE,
-  VERSION_V2,
-  VERSION_V3,
-} from "./fixture.ts";
+export { AI_LIST_FIXTURE, VERSION_V2, VERSION_V3 } from "./fixture.ts";
 
-export {
-  overBudgetFindings,
-  type OverBudgetFinding,
-} from "./findings.ts";
+export { overBudgetFindings, type OverBudgetFinding } from "./findings.ts";

@@ -56,11 +56,14 @@ export {
   id,
   now,
   defineTable,
+  field,
   createStoreRuntime,
   type StoreDecl,
   type StoreRuntime,
   type SqlStoreHandle,
   type TableHandle,
+  type SchemaTableDecl,
+  type SchemaColumnDecl,
 } from "./elements/store.ts";
 
 export {
@@ -98,8 +101,8 @@ export {
 
 export {
   vault,
-  fromStack,
-  FROM_STACK_PREFIX,
+  fromDocker,
+  FROM_DOCKER_PREFIX,
   createVaultRuntime,
   VaultBootError,
   SECRET_MASK,

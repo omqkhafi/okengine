@@ -5,11 +5,7 @@
  */
 
 import type { ChannelMedium } from "../../manifest/types.ts";
-import {
-  createConsentStore,
-  type ConsentStore,
-  type OptOut,
-} from "./consent.ts";
+import { createConsentStore, type ConsentStore, type OptOut } from "./consent.ts";
 
 /** Why an address is suppressed. */
 export type SuppressionReason = "opted-out" | "prior-bounce";
@@ -35,9 +31,11 @@ export interface SuppressionStore {
   isSuppressed(
     subject: string,
     medium: ChannelMedium,
-  ): { readonly suppressed: true; readonly reason: SuppressionReason } | {
-    readonly suppressed: false;
-  };
+  ):
+    | { readonly suppressed: true; readonly reason: SuppressionReason }
+    | {
+        readonly suppressed: false;
+      };
   /**
    * Record an opt-out.
    *
@@ -76,9 +74,7 @@ export function createSuppressionStore(
 
   function bounceMatches(subject: string, medium: ChannelMedium): boolean {
     return bounces.some(
-      (r) =>
-        r.subject === subject &&
-        (r.medium === "all" || r.medium === medium),
+      (r) => r.subject === subject && (r.medium === "all" || r.medium === medium),
     );
   }
 
@@ -97,9 +93,7 @@ export function createSuppressionStore(
       consent.optOut(subject, medium);
     },
     addPriorBounce(subject, medium) {
-      if (
-        !bounces.some((r) => r.subject === subject && r.medium === medium)
-      ) {
+      if (!bounces.some((r) => r.subject === subject && r.medium === medium)) {
         bounces.push({ subject, medium, at: Date.now() });
       }
     },

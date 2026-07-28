@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { CLOCK_LIST_FIXTURE } from "./fixture.ts";
-import {
-  aggregateByLabel,
-  formatWakeIn,
-  waitingOnBanner,
-} from "./waiting-on.ts";
+import { aggregateByLabel, formatWakeIn, waitingOnBanner } from "./waiting-on.ts";
 
 describe("waiting-on", () => {
   test("aggregates by label", () => {

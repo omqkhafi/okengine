@@ -6,13 +6,7 @@
  */
 
 /** Protocol ids for vault drivers. */
-export type VaultDriverId =
-  | "sops"
-  | "env"
-  | "openbao"
-  | "infisical"
-  | "managed"
-  | "memory";
+export type VaultDriverId = "sops" | "env" | "openbao" | "infisical" | "managed" | "memory";
 
 /** Options when opening a vault backend. */
 export interface VaultOpenOptions {

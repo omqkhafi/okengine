@@ -158,17 +158,12 @@ export function OverviewPanel() {
     accessQuery.data,
   ]);
 
-  const loading =
-    manifestQuery.isLoading ||
-    runsQuery.isLoading ||
-    gatesQuery.isLoading;
+  const loading = manifestQuery.isLoading || runsQuery.isLoading || gatesQuery.isLoading;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <header className="shrink-0 border-b border-[var(--oke-line)] px-6 py-5">
-        <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">
-          Overview
-        </p>
+        <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">Overview</p>
         <h1 className="mt-1 text-xl font-semibold tracking-tight text-[var(--oke-fg)]">
           Is the system healthy right now?
         </h1>
@@ -191,8 +186,8 @@ export function OverviewPanel() {
         {!loading && !manifestQuery.data ? (
           <p className="text-sm text-[var(--oke-muted)]">
             No Manifest yet — save a Flow under{" "}
-            <code className="font-mono text-[var(--oke-fg)]">src/</code> and
-            the Console will refresh.
+            <code className="font-mono text-[var(--oke-fg)]">src/</code> and the Console will
+            refresh.
           </p>
         ) : null}
 
@@ -228,9 +223,7 @@ export function OverviewPanel() {
         />
 
         <section aria-label="What changed" className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-[var(--oke-fg)]">
-            What changed
-          </h2>
+          <h2 className="text-sm font-medium text-[var(--oke-fg)]">What changed</h2>
           <p className="text-sm text-[var(--oke-muted)]">
             <a
               href={view.whatChanged.href}
@@ -250,9 +243,7 @@ export function OverviewPanel() {
             aria-label="Declare first SLO"
             className="flex flex-col gap-2 border border-[var(--oke-line)] px-4 py-3"
           >
-            <h2 className="text-sm font-medium text-[var(--oke-fg)]">
-              Declare a first objective
-            </h2>
+            <h2 className="text-sm font-medium text-[var(--oke-fg)]">Declare a first objective</h2>
             <p className="text-sm text-[var(--oke-muted)]">
               Your busiest flow is{" "}
               <a
@@ -261,8 +252,7 @@ export function OverviewPanel() {
               >
                 {view.firstSloInvite.busiestFlow}
               </a>{" "}
-              ({view.firstSloInvite.runCount.toLocaleString("en-US")} runs).
-              Add{" "}
+              ({view.firstSloInvite.runCount.toLocaleString("en-US")} runs). Add{" "}
               <code className="font-mono text-[13px] text-[var(--oke-fg)]">
                 {'slo: { availability: "99.9%" }'}
               </code>{" "}
@@ -291,13 +281,9 @@ function BudgetStrip(props: {
 }) {
   return (
     <section aria-label={props.ariaLabel} className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-[var(--oke-fg)]">
-        {props.label}
-      </h2>
+      <h2 className="text-sm font-medium text-[var(--oke-fg)]">{props.label}</h2>
       {props.items.length === 0 ? (
-        <p className="text-sm text-[var(--oke-muted)]">
-          {props.empty ?? "None."}
-        </p>
+        <p className="text-sm text-[var(--oke-muted)]">{props.empty ?? "None."}</p>
       ) : (
         <ul className="divide-y divide-[var(--oke-line)] border-y border-[var(--oke-line)]">
           {props.items.map((item) => (
@@ -306,23 +292,16 @@ function BudgetStrip(props: {
               className="flex min-h-10 flex-wrap items-center justify-between gap-3 py-2 text-sm"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="font-mono text-[13px] text-[var(--oke-fg)]">
-                  {item.title}
-                </span>
+                <span className="font-mono text-[13px] text-[var(--oke-fg)]">{item.title}</span>
                 <span className="text-[var(--oke-muted)]">{item.meta}</span>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-[var(--oke-muted)]">
                 <span>
-                  burn{" "}
-                  <span className="text-[var(--oke-fg)]">
-                    {formatBurnRate(item.burn)}
-                  </span>
+                  burn <span className="text-[var(--oke-fg)]">{formatBurnRate(item.burn)}</span>
                 </span>
                 <span>
                   exhausts{" "}
-                  <span className="text-[var(--oke-fg)]">
-                    {formatBudgetDuration(item.exhaust)}
-                  </span>
+                  <span className="text-[var(--oke-fg)]">{formatBudgetDuration(item.exhaust)}</span>
                 </span>
                 <span
                   aria-hidden
@@ -358,9 +337,7 @@ function FindingsList({ view }: { readonly view: OverviewView }) {
     <section aria-label="Findings" aria-live="polite" className="flex flex-col gap-3">
       <h2 className="text-sm font-medium text-[var(--oke-fg)]">Findings</h2>
       {view.findings.length === 0 ? (
-        <p className="text-sm text-[var(--oke-muted)]">
-          No findings from other panels.
-        </p>
+        <p className="text-sm text-[var(--oke-muted)]">No findings from other panels.</p>
       ) : (
         <ol className="divide-y divide-[var(--oke-line)] border-y border-[var(--oke-line)]">
           {view.findings.map((f, i) => (
@@ -369,15 +346,10 @@ function FindingsList({ view }: { readonly view: OverviewView }) {
                 href={f.href}
                 className="flex min-h-8 items-start gap-3 hover:text-[var(--oke-fg)]"
               >
-                <span className="w-5 shrink-0 text-[var(--oke-muted)]">
-                  {i + 1}.
-                </span>
+                <span className="w-5 shrink-0 text-[var(--oke-muted)]">{i + 1}.</span>
                 <span>
                   <span className="text-[var(--oke-fg)]">{f.title}</span>
-                  <span className="text-[var(--oke-muted)]">
-                    {" "}
-                    · {f.detail}
-                  </span>
+                  <span className="text-[var(--oke-muted)]"> · {f.detail}</span>
                   <span className="ml-2 text-xs uppercase tracking-wider text-[var(--oke-muted)]">
                     {f.source}
                   </span>
@@ -394,38 +366,28 @@ function FindingsList({ view }: { readonly view: OverviewView }) {
 function GoldenStrip({ view }: { readonly view: OverviewView }) {
   return (
     <section aria-label="Golden signals" className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-[var(--oke-fg)]">
-        Golden signals
-      </h2>
+      <h2 className="text-sm font-medium text-[var(--oke-fg)]">Golden signals</h2>
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
-          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">
-            Latency p99
-          </dt>
+          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">Latency p99</dt>
           <dd className="mt-1 text-sm text-[var(--oke-fg)]">
             {Math.round(view.golden.latencyP99Ms)} ms
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">
-            Traffic
-          </dt>
+          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">Traffic</dt>
           <dd className="mt-1 text-sm text-[var(--oke-fg)]">
             {view.golden.trafficPerMin.toFixed(1)} / min
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">
-            Errors
-          </dt>
+          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">Errors</dt>
           <dd className="mt-1 text-sm text-[var(--oke-fg)]">
             {(view.golden.errorRate * 100).toFixed(2)}%
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">
-            Saturation
-          </dt>
+          <dt className="text-xs uppercase tracking-wider text-[var(--oke-muted)]">Saturation</dt>
           <dd className="mt-1 text-sm text-[var(--oke-fg)]">
             {(view.golden.saturation * 100).toFixed(1)}%
           </dd>

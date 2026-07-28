@@ -9,18 +9,13 @@ import { join } from "node:path";
 import { createOperator } from "../../auth/operator.ts";
 import { issueSession, verifyAccess } from "../../auth/sessions.ts";
 import { bootConsoleApp, createConsoleApp } from "./app.ts";
-import {
-  openConsolePersistence,
-  resolveConsoleSecret,
-} from "./operator-db.ts";
+import { openConsolePersistence, resolveConsoleSecret } from "./operator-db.ts";
 
 describe("console operator persistence", () => {
   const dirs: string[] = [];
 
   afterEach(async () => {
-    await Promise.all(
-      dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })),
-    );
+    await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
   });
 
   test("secret is stable across resolveConsoleSecret calls", async () => {
@@ -48,9 +43,7 @@ describe("console operator persistence", () => {
 
     const second = await openConsolePersistence(cwd);
     expect(second.operators.operators.size).toBe(1);
-    expect(second.operators.operators.get(op.id)?.email).toBe(
-      "ops@example.com",
-    );
+    expect(second.operators.operators.get(op.id)?.email).toBe("ops@example.com");
     expect(second.operators.credentials.has(op.id)).toBe(true);
 
     const printed: string[] = [];
@@ -97,11 +90,7 @@ describe("console operator persistence", () => {
 
     const second = await openConsolePersistence(cwd);
     expect(second.sessions.sessions.size).toBe(1);
-    const claims = await verifyAccess(
-      second.sessions,
-      second.secret,
-      issued.accessToken,
-    );
+    const claims = await verifyAccess(second.sessions, second.secret, issued.accessToken);
     expect(claims.sub).toBe(op.id);
     second.close();
   });

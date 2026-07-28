@@ -6,20 +6,9 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import {
-  duckLiteral,
-  duckQuery,
-  openDuckDB,
-  type DuckSession,
-} from "../duckdb.ts";
+import { duckLiteral, duckQuery, openDuckDB, type DuckSession } from "../duckdb.ts";
 import { wideEventToRow, type ParquetRow } from "../parquet.ts";
-import type {
-  RunsDriver,
-  RunsOpenOptions,
-  RunsRow,
-  RunsStore,
-  WideEvent,
-} from "../types.ts";
+import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
 
 /**
  * Memory runs driver (DuckDB `:memory:`).
@@ -65,9 +54,7 @@ export async function materialiseRunsTable(
 ): Promise<void> {
   await conn.run(`DROP TABLE IF EXISTS runs`);
   if (events.length === 0) {
-    await conn.run(
-      `CREATE TABLE runs AS SELECT * FROM (SELECT 1 AS id WHERE FALSE)`,
-    );
+    await conn.run(`CREATE TABLE runs AS SELECT * FROM (SELECT 1 AS id WHERE FALSE)`);
     return;
   }
   // JSONL path avoids VALUES type-inference issues for mixed columns.
@@ -76,13 +63,9 @@ export async function materialiseRunsTable(
   // For small test sets, VALUES is fine and keeps the driver dependency-light.
   const colList = cols.map((c) => `"${c.replaceAll('"', '""')}"`).join(", ");
   const values = rows
-    .map(
-      (r) => `(${cols.map((c) => duckLiteral(r[c] ?? null)).join(", ")})`,
-    )
+    .map((r) => `(${cols.map((c) => duckLiteral(r[c] ?? null)).join(", ")})`)
     .join(",\n");
-  await conn.run(
-    `CREATE TABLE runs AS SELECT * FROM (VALUES ${values}) AS t(${colList})`,
-  );
+  await conn.run(`CREATE TABLE runs AS SELECT * FROM (VALUES ${values}) AS t(${colList})`);
 }
 
 function unionKeys(rows: readonly ParquetRow[]): string[] {

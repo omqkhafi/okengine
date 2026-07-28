@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Transclude canonical `docs/spec/*.md` (and README / create-oke / AGENTS.md)
+ * Transclude canonical `docs/spec/*.md` (and `docs/cli.md` / AGENTS.md)
  * into Fumadocs pages. The site organizes and renders; it does not invent facts.
  *
  * Usage: bun scripts/sync-content.ts
@@ -47,19 +47,13 @@ async function readRoot(rel: string): Promise<string> {
  * @param start - Inclusive start heading
  * @param end - Exclusive end heading, or null for EOF
  */
-function extractBetween(
-  md: string,
-  start: string | RegExp,
-  end: string | RegExp | null,
-): string {
+function extractBetween(md: string, start: string | RegExp, end: string | RegExp | null): string {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const hit =
-      typeof start === "string"
-        ? line === start || line.startsWith(start)
-        : start.test(line);
+      typeof start === "string" ? line === start || line.startsWith(start) : start.test(line);
     if (hit) {
       startIdx = i;
       break;
@@ -72,10 +66,7 @@ function extractBetween(
   if (end) {
     for (let i = startIdx + 1; i < lines.length; i++) {
       const line = lines[i]!;
-      const hit =
-        typeof end === "string"
-          ? line === end || line.startsWith(end)
-          : end.test(line);
+      const hit = typeof end === "string" ? line === end || line.startsWith(end) : end.test(line);
       if (hit) {
         endIdx = i;
         break;
@@ -122,10 +113,7 @@ function absolutizeClaimedPaths(md: string, app: string): string {
  * @param rel - Relative path under the app (e.g. `src/core.ts`)
  */
 function readFenceAfterPath(four: string, rel: string): string {
-  const heading = new RegExp(
-    `^### \`${rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``,
-    "m",
-  );
+  const heading = new RegExp(`^### \`${rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``, "m");
   const hm = heading.exec(four);
   if (!hm || hm.index === undefined) {
     throw new Error(`sync-content: claimed path missing: ${rel}`);
@@ -146,14 +134,7 @@ function readFenceAfterPath(four: string, rel: string): string {
  * @param body - Source body
  */
 function claimedBlock(app: string, rel: string, body: string): string {
-  return [
-    `### \`examples/${app}/${rel}\``,
-    "",
-    "```typescript",
-    body,
-    "```",
-    "",
-  ].join("\n");
+  return [`### \`examples/${app}/${rel}\``, "", "```typescript", body, "```", ""].join("\n");
 }
 
 /**
@@ -162,9 +143,7 @@ function claimedBlock(app: string, rel: string, body: string): string {
  * @param page - Page descriptor
  */
 function serialize(page: Page): string {
-  const desc = page.description
-    ? `description: ${JSON.stringify(page.description)}\n`
-    : "";
+  const desc = page.description ? `description: ${JSON.stringify(page.description)}\n` : "";
   const icon = page.icon ? `icon: ${JSON.stringify(page.icon)}\n` : "";
   return `---
 title: ${JSON.stringify(page.title)}
@@ -180,10 +159,7 @@ ${page.body.trim()}\n`;
  * @param dir - Absolute directory
  * @param meta - Meta payload
  */
-async function writeMeta(
-  dir: string,
-  meta: Record<string, unknown>,
-): Promise<void> {
+async function writeMeta(dir: string, meta: Record<string, unknown>): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
 }
@@ -205,14 +181,8 @@ async function writePage(page: Page): Promise<void> {
  * @param theory - Spec text
  * @param title - Element name
  */
-function elementRowParts(
-  theory: string,
-  title: string,
-): { replaces: string; essence: string } {
-  const re = new RegExp(
-    `^\\| \\*\\*${title}\\*\\* \\|([^|]+)\\|([^|]+)\\|`,
-    "m",
-  );
+function elementRowParts(theory: string, title: string): { replaces: string; essence: string } {
+  const re = new RegExp(`^\\|\\s+\\*\\*${title}\\*\\*\\s+\\|([^|]+)\\|([^|]+)\\|`, "m");
   const m = re.exec(theory);
   if (!m) throw new Error(`sync-content: element row missing: ${title}`);
   return { replaces: m[1]!.trim(), essence: m[2]!.trim() };
@@ -229,7 +199,7 @@ function catalogCells(
   title: string,
 ): { n: string; answers: string; dev: string; prod: string } {
   const re = new RegExp(
-    `^\\| (\\d+) \\| \\*\\*${title}\\*\\*([^|]*)\\|([^|]+)\\|([^|]+)\\|([^|]+)\\|`,
+    `^\\|\\s+(\\d+)\\s+\\|\\s+\\*\\*${title}\\*\\*([^|]*)\\|([^|]+)\\|([^|]+)\\|([^|]+)\\|`,
     "m",
   );
   const row = re.exec(consoleSpec);
@@ -251,9 +221,7 @@ function catalogCells(
  * @param body - Inner markdown (single short sentence preferred)
  */
 function calloutBlock(title: string, body: string): string {
-  return [`<Callout title="${title}">`, body.trim(), `</Callout>`, ""].join(
-    "\n",
-  );
+  return [`<Callout title="${title}">`, body.trim(), `</Callout>`, ""].join("\n");
 }
 
 /**
@@ -286,7 +254,7 @@ async function main(): Promise<void> {
   const theory = await readRoot("docs/spec/unified-theory.md");
   const four = await readRoot("docs/spec/four-applications.md");
   const consoleSpec = await readRoot("docs/spec/console.md");
-  const readme = await readRoot("README.md");
+  const cliDoc = await readRoot("docs/cli.md");
   const agents = await readRoot("AGENTS.md");
 
   // Preserve hand-authored Get Started MDX (better-auth how-to style).
@@ -372,6 +340,8 @@ async function main(): Promise<void> {
     rule: string;
     icon: string;
     drivers: ReadonlyArray<CardSpec>;
+    /** Extra markdown after the drivers cards (e.g. Store `oke db` loop). */
+    afterDrivers?: string;
     whyCallout?: string;
     whyCards?: ReadonlyArray<CardSpec>;
     next?: { href: string; label: string };
@@ -480,9 +450,72 @@ async function main(): Promise<void> {
           description: "Default `pgvector` — RAG without another service.",
         },
       ],
+      afterDrivers: [
+        "## Domain schema — declare → generate",
+        "",
+        "Recommended path: declare tables with `store.schema.table` + `field.*` (ORM-agnostic), then let `oke db` emit dialect-specific Drizzle before sync.",
+        "",
+        "```typescript",
+        'import { store, field, id, now } from "okengine";',
+        "",
+        'export const notes = store.schema.table("notes", {',
+        "  id: field.text().primaryKey().defaultFn(id),",
+        "  title: field.text().notNull(),",
+        "  body: field.text().notNull().pii(),",
+        "  createdAt: field.integer().notNull().defaultFn(now),",
+        "});",
+        "",
+        'export const db = store.sql("notes", { schema: { notes } });',
+        "```",
+        "",
+        "Put declarations in `src/schema.decl.ts` (or set `db.declare` in `oke.config.ts`). `oke db push|generate|migrate` emits `src/schema.generated.ts` (`sqliteTable` or `pgTable` from `drivers.store.sql`) and then runs drizzle-kit as today. Point `drizzle.config.ts` `schema` at the generated file.",
+        "",
+        "**Escape hatch:** hand-written Drizzle `src/schema.ts` remains supported. If there is nothing to emit (no declare module and no plugged plugin tables), emit is skipped and Prompt 42 / OKE1101 / docker-prod never-auto-DDL are unchanged.",
+        "",
+        "v1 field primitives: `field.text` · `field.integer`, plus `.primaryKey()` · `.notNull()` · `.unique()` · `.default(v)` · `.defaultFn(fn)` · `.pii()` · `.sensitive()` · `.retain(duration)` · `.as(sqlName)` · `.references()`.",
+        "",
+        "### Foreign keys and relations",
+        "",
+        "<Cards>",
+        '  <Card title=".references()" description="Dialect-agnostic FK on a field — emitted as Drizzle `.references(() => table.col)` for sqlite and postgres." />',
+        '  <Card title="store.schema.relations" description="Mirrors drizzle-orm `defineRelations` (`r.one.*` / `r.many.*` + `from` / `to`) — emitted into the same generated file." />',
+        '  <Card title="Per dialect" description="Same pre-step: `sqliteTable` / `pgTable` with FK chains, then `defineRelations(...)` when relations are declared." />',
+        "</Cards>",
+        "",
+        "| API | Shape |",
+        "| --- | --- |",
+        "| `field.*.references` | `(ref, actions?) => FieldBuilder` — lazy `() => links.code`; optional `{ onDelete, onUpdate }` |",
+        "| `store.schema.relations` | `(tables, (r) => config) => SchemaRelationsDecl` — same shape as `defineRelations` |",
+        "",
+        '<Callout title="Many-to-many">',
+        "A junction table with two foreign keys plus two `one` / `many` relations composes many-to-many. There is no separate many-to-many API and no `.through()` — the junction is an ordinary table.",
+        "</Callout>",
+        "",
+        '<Callout title="No relational with: through fx">',
+        "Relational `with:` — Drizzle RQB `db.query.*.findMany({ with: … })` — is **not supported** through `fx`. `fx.store` is a single-table session: effect inference, cache keys, and PII masking each assume one table per call, and declared relations (`store.schema.relations`, emitted as `defineRelations`) are schema metadata for drizzle-kit, not an `fx` handle. Compose with separate single-table `fx.store` reads (or `fx.call`) so each table appears explicitly in Manifest `reads` / `writes`.",
+        "</Callout>",
+        "",
+        "### Plugin tables (known v1 limit)",
+        "",
+        "Plugins may declare **additional whole tables** (with `field.*` columns) that merge into the generated domain schema. At emit time `oke db` loads the live app entry (`src/app.ts`, or `db.entry` / `package.json` `okengine.entry`) and merges `app.plugins.tableContributions()` alongside app decls — the same file drizzle-kit then syncs. Extending an existing app-owned table with plugin columns is **not** supported in v1 — contribute a separate table instead (e.g. `two_factor_credentials` keyed by `userId`, not ALTER-style columns on `users`).",
+        "",
+        "## Domain schema sync (`oke db`)",
+        "",
+        "Domain schema is synced with **drizzle-kit** — not a hand-rolled migrator. Abstract decls (above) emit into that same loop; there is no third schema CLI.",
+        "",
+        "| Command | When |",
+        "| --- | --- |",
+        "| `oke db push` | Dev — apply schema to the live local DB (no migration files) |",
+        "| `oke db generate` | Write versioned SQL under `drizzle/` for review |",
+        "| `oke db migrate` | Explicitly apply those files (human or CI — never boot-time) |",
+        "",
+        "`oke dev` (local) auto-runs `oke db push` when `schema.ts` / `schema.decl.ts` / `app.ts` changes. Opt out with `--no-db-push` or `db: { autoPush: false }` in `oke.config.ts`. Docker/prod never auto-push; a missing table surfaces as **OKE1101** → run `oke db migrate`.",
+        "",
+        "This is **not** `oke schema generate`, which only emits core/plugin stub handles into `schema/oke.ts`.",
+      ].join("\n"),
       next: { href: "/docs/elements/clock", label: "Clock" },
-      fenceApp: "notes",
-      fenceRel: "src/core.ts",
+      fenceApp: "linkly",
+      fenceRel: "src/schema.decl.ts",
     },
     {
       slug: "clock",
@@ -651,6 +684,7 @@ async function main(): Promise<void> {
       "## Drivers available",
       "",
       cardsBlock([...el.drivers]),
+      el.afterDrivers ?? "",
       el.whyCallout
         ? [
             "## Why this is an element",
@@ -663,11 +697,7 @@ async function main(): Promise<void> {
       "",
       `Claimed fence from **${el.fenceApp}** — same source the doc-drift gate checks:`,
       "",
-      claimedBlock(
-        el.fenceApp,
-        el.fenceRel,
-        readFenceAfterPath(four, el.fenceRel),
-      ),
+      claimedBlock(el.fenceApp, el.fenceRel, readFenceAfterPath(four, el.fenceRel)),
       el.next
         ? [
             "## Next",
@@ -721,19 +751,23 @@ async function main(): Promise<void> {
       shows: [
         {
           title: "Declared SLOs",
-          description: "Objectives enter the Manifest; lowering a target is a reviewable code change.",
+          description:
+            "Objectives enter the Manifest; lowering a target is a reviewable code change.",
         },
         {
           title: "Burn rate",
-          description: "Error rate over tolerable rate — pages and investigates with clear thresholds.",
+          description:
+            "Error rate over tolerable rate — pages and investigates with clear thresholds.",
         },
         {
           title: "Journeys",
-          description: "Causal paths, not service lists — impossible compositions rejected at compile.",
+          description:
+            "Causal paths, not service lists — impossible compositions rejected at compile.",
         },
         {
           title: "Ranked findings",
-          description: "Union of panel findings: user harm first, then irreversibility, then trend.",
+          description:
+            "Union of panel findings: user harm first, then irreversibility, then trend.",
         },
       ],
     },
@@ -1171,34 +1205,23 @@ async function main(): Promise<void> {
     icon: "Puzzle",
     source: "docs/spec/unified-theory.md",
     body: demoteHeadings(
-      extractBetween(
-        theory,
-        "## 14. Plugins — the extensibility law",
-        "## 15. The Console",
-      ),
+      extractBetween(theory, "## 14. Plugins — the extensibility law", "## 15. The Console"),
     ),
   });
 
-  const cliFromFour = demoteHeadings(
-    extractBetween(four, "## Commands", "## The Console at"),
+  const cliFromFour = demoteHeadings(extractBetween(four, "## Commands", "## The Console at"));
+  // docs/cli.md is H1-titled; strip that title and demote the rest under four-apps Commands.
+  const cliFromDocs = demoteHeadings(
+    cliDoc.replace(/^# CLI\n+/, "").replace(/^Everyday[\s\S]*?(?=## )/, ""),
   );
-  const cliReadmeFull = (() => {
-    const marker = "\n## CLI\n";
-    const start = readme.indexOf(marker);
-    if (start < 0) return "";
-    const rest = readme.slice(start + 1);
-    const next = rest.search(/\n## [A-Z]/);
-    const section = next < 0 ? rest : rest.slice(0, next);
-    return demoteHeadings(`${section.trim()}\n`);
-  })();
 
   pages.push({
     path: "cli.md",
     title: "CLI Reference",
     description: "oke and create-oke — everyday commands and flags.",
     icon: "Terminal",
-    source: "README.md",
-    body: [cliFromFour, "", cliReadmeFull].join("\n"),
+    source: "docs/cli.md",
+    body: [cliFromFour, "", cliFromDocs].join("\n"),
   });
 
   pages.push({
@@ -1208,11 +1231,7 @@ async function main(): Promise<void> {
     icon: "Shield",
     source: "docs/spec/console.md",
     body: demoteHeadings(
-      extractBetween(
-        consoleSpec,
-        "## 10. Security posture",
-        "## 11. Cross-cutting behaviour",
-      ),
+      extractBetween(consoleSpec, "## 10. Security posture", "## 11. Cross-cutting behaviour"),
     ),
   });
 
@@ -1346,16 +1365,7 @@ async function main(): Promise<void> {
   await writeMeta(join(OUT, "elements"), {
     title: "Elements",
     icon: "Boxes",
-    pages: [
-      "flow",
-      "signal",
-      "store",
-      "clock",
-      "gate",
-      "vault",
-      "channel",
-      "ai",
-    ],
+    pages: ["flow", "signal", "store", "clock", "gate", "vault", "channel", "ai"],
   });
 
   await writeMeta(join(OUT, "console"), {

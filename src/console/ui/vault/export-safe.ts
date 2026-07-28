@@ -53,10 +53,7 @@ export function exportSafeList(rows: readonly VaultRecord[]): string {
  * @param payload - Serialized text
  * @param knownSecrets - Cleartext secrets that must not appear
  */
-export function assertExportHasNoSecrets(
-  payload: string,
-  knownSecrets: readonly string[],
-): void {
+export function assertExportHasNoSecrets(payload: string, knownSecrets: readonly string[]): void {
   for (const secret of knownSecrets) {
     if (secret.length > 0 && payload.includes(secret)) {
       throw new Error("vault export leaked a secret value");

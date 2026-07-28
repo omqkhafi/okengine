@@ -144,9 +144,7 @@ export function intervalsFromSpans(spans: readonly TraceSpan[]): WorkInterval[] 
           endMs: e.timestamp + Math.max(1, e.duration),
           tier: tierOfKind(e.kind),
           spanId: span.id,
-          failed:
-            span.errorCode != null &&
-            e === span.effects[span.effects.length - 1],
+          failed: span.errorCode != null && e === span.effects[span.effects.length - 1],
         });
       }
     } else {

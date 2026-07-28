@@ -69,14 +69,10 @@ export function explainOutliers(
   for (const dim of dimNames) {
     const outlierCounts = valueCounts(outliers, dim);
     const baselineCounts = valueCounts(baseline, dim);
-    const values = new Set([
-      ...outlierCounts.keys(),
-      ...baselineCounts.keys(),
-    ]);
+    const values = new Set([...outlierCounts.keys(), ...baselineCounts.keys()]);
     for (const value of values) {
       const outlierShare = (outlierCounts.get(value) ?? 0) / outliers.length;
-      const baselineShare =
-        (baselineCounts.get(value) ?? 0) / baseline.length;
+      const baselineShare = (baselineCounts.get(value) ?? 0) / baseline.length;
       const lift = outlierShare - baselineShare;
       if (lift < minLift) continue;
       findings.push({
@@ -154,10 +150,7 @@ export function seedOutlierDataset(opts?: {
   return events;
 }
 
-function valueCounts(
-  events: readonly WideEvent[],
-  dim: string,
-): Map<string, number> {
+function valueCounts(events: readonly WideEvent[], dim: string): Map<string, number> {
   const m = new Map<string, number>();
   for (const e of events) {
     const raw = e.dimensions[dim];

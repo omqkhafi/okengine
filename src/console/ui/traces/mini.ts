@@ -55,9 +55,7 @@ export function miniWaterfall(spans: readonly TraceSpan[]): MiniBar[] {
  *
  * @param spans - Connected spans
  */
-export function rootErrorCode(
-  spans: readonly TraceSpan[],
-): string | null {
+export function rootErrorCode(spans: readonly TraceSpan[]): string | null {
   for (const s of spans) {
     if (s.errorCode) return s.errorCode;
   }

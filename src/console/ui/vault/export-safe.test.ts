@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  assertExportHasNoSecrets,
-  exportSafeList,
-  exportSafeRow,
-} from "./export-safe.ts";
+import { assertExportHasNoSecrets, exportSafeList, exportSafeRow } from "./export-safe.ts";
 import { FIXTURE_SECRET_VALUE, VAULT_FIXTURE } from "./fixture.ts";
 
 describe("exportSafe", () => {

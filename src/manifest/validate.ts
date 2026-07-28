@@ -2,10 +2,7 @@
  * Runtime validation of Manifest documents against `spec/manifest.v1.schema.json`.
  */
 
-import Ajv2020, {
-  type AnySchema,
-  type ErrorObject,
-} from "ajv/dist/2020.js";
+import Ajv2020, { type AnySchema, type ErrorObject } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import type { Manifest } from "./types.ts";
 
@@ -22,10 +19,7 @@ export type ManifestValidationResult =
   | { ok: true; manifest: Manifest }
   | { ok: false; issues: ManifestValidationIssue[] };
 
-const SCHEMA_URL = new URL(
-  "../../spec/manifest.v1.schema.json",
-  import.meta.url,
-);
+const SCHEMA_URL = new URL("../../spec/manifest.v1.schema.json", import.meta.url);
 
 let validator: ReturnType<Ajv2020["compile"]> | undefined;
 let schemaDocument: unknown;
@@ -74,9 +68,7 @@ function issueFromError(error: ErrorObject): ManifestValidationIssue {
  *
  * Pure with respect to the input — does not mutate `input`.
  */
-export async function validateManifest(
-  input: unknown,
-): Promise<ManifestValidationResult> {
+export async function validateManifest(input: unknown): Promise<ManifestValidationResult> {
   const schema = await loadManifestSchema();
   const validate = getValidator(schema);
   const ok = validate(input);
@@ -146,9 +138,7 @@ export class ManifestValidationError extends Error {
    * @param cause - optional parse cause
    */
   constructor(issues: ManifestValidationIssue[], cause?: unknown) {
-    const summary = issues
-      .map((i) => `${i.path}: ${i.message}`)
-      .join("; ");
+    const summary = issues.map((i) => `${i.path}: ${i.message}`).join("; ");
     super(`Invalid Manifest: ${summary}`, cause !== undefined ? { cause } : undefined);
     this.name = "ManifestValidationError";
     this.issues = issues;

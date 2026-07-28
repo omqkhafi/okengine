@@ -1,24 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import {
-  fieldsFromSchema,
-  formValuesToPayload,
-  payloadToFormValues,
-} from "./schema-form.ts";
+import { fieldsFromSchema, formValuesToPayload, payloadToFormValues } from "./schema-form.ts";
 import { SIGNALS_FIXTURE } from "./fixture.ts";
 
 describe("schema-form", () => {
   test("builds editable fields from declared schema", () => {
     const order = SIGNALS_FIXTURE.find((s) => s.name === "order-placed")!;
     const fields = fieldsFromSchema(order.schema);
-    expect(fields.map((f) => f.key)).toEqual([
-      "orderId",
-      "amount",
-      "currency",
-    ]);
-    expect(fields.find((f) => f.key === "currency")?.enumValues).toEqual([
-      "USD",
-      "EUR",
-    ]);
+    expect(fields.map((f) => f.key)).toEqual(["orderId", "amount", "currency"]);
+    expect(fields.find((f) => f.key === "currency")?.enumValues).toEqual(["USD", "EUR"]);
   });
 
   test("round-trips payload through form values", () => {

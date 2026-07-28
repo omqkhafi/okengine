@@ -47,9 +47,7 @@ describe("undeclaredContractBreaks", () => {
     after.flows!["reports.export"]!.breaking = true;
 
     const undeclared = undeclaredContractBreaks(before, after);
-    expect(
-      undeclared.filter((c) => c.path.includes("reports.export")),
-    ).toHaveLength(0);
+    expect(undeclared.filter((c) => c.path.includes("reports.export"))).toHaveLength(0);
   });
 
   test("does not let one flow's breaking: true cover another flow", async () => {
@@ -60,12 +58,8 @@ describe("undeclaredContractBreaks", () => {
 
     const undeclared = undeclaredContractBreaks(before, after);
     expect(undeclared.length).toBeGreaterThan(0);
-    expect(undeclared.some((c) => c.path.includes("reports.export"))).toBe(
-      true,
-    );
-    expect(
-      undeclared.every((c) => !c.path.includes("orders.create")),
-    ).toBe(true);
+    expect(undeclared.some((c) => c.path.includes("reports.export"))).toBe(true);
+    expect(undeclared.every((c) => !c.path.includes("orders.create"))).toBe(true);
   });
 
   test("flow removal is allowed when baseline had breaking: true", async () => {
@@ -75,8 +69,6 @@ describe("undeclaredContractBreaks", () => {
     delete after.flows!["orders.create"];
 
     const undeclared = undeclaredContractBreaks(before, after);
-    expect(
-      undeclared.filter((c) => c.path.includes("orders.create")),
-    ).toHaveLength(0);
+    expect(undeclared.filter((c) => c.path.includes("orders.create"))).toHaveLength(0);
   });
 });

@@ -192,13 +192,11 @@ export const PLUGINS_LIST_FIXTURE: PluginsListResponse = {
           state: "not-applicable",
           publishedAt: null,
           holdUntil: null,
-          detail:
-            "Release cooldown applies to community registry packages only (local)",
+          detail: "Release cooldown applies to community registry packages only (local)",
         },
         npmProvenance: {
           state: "not-applicable",
-          detail:
-            "npm provenance applies to community registry packages only (local)",
+          detail: "npm provenance applies to community registry packages only (local)",
         },
       },
       capabilityDiff: [

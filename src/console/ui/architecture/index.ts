@@ -14,23 +14,11 @@ export type {
   PathologyKind,
 } from "./types.ts";
 
-export {
-  DEFAULT_LAYERS,
-  ELEMENT_LAYERS,
-  LAYER_LABEL,
-} from "./types.ts";
+export { DEFAULT_LAYERS, ELEMENT_LAYERS, LAYER_LABEL } from "./types.ts";
 
-export {
-  isBoundaryExternal,
-  labelOfRef,
-  layerOfCause,
-  layerOfEffectRef,
-} from "./layers.ts";
+export { isBoundaryExternal, labelOfRef, layerOfCause, layerOfEffectRef } from "./layers.ts";
 
-export {
-  boundaryCrossingCount,
-  boundaryCrossingRefs,
-} from "./boundary.ts";
+export { boundaryCrossingCount, boundaryCrossingRefs } from "./boundary.ts";
 
 export {
   normalizeTrafficRef,
@@ -40,11 +28,7 @@ export {
   traversalsOf,
 } from "./traffic.ts";
 
-export {
-  declaredEdgesOf,
-  ownerUnitOf,
-  unitOfFlowId,
-} from "./declared.ts";
+export { declaredEdgesOf, ownerUnitOf, unitOfFlowId } from "./declared.ts";
 
 export {
   computePathologies,
@@ -54,11 +38,7 @@ export {
   findSinglePointsOfFailure,
 } from "./pathologies.ts";
 
-export {
-  buildArchitectureView,
-  setLayer,
-  type ArchitectureViewOptions,
-} from "./view.ts";
+export { buildArchitectureView, setLayer, type ArchitectureViewOptions } from "./view.ts";
 
 export {
   clearFocus,
@@ -71,14 +51,6 @@ export {
   type ArchitectureSearch,
 } from "./search.ts";
 
-export {
-  ARCHITECTURE_RUNS_FIXTURE,
-  ARCHITECTURE_TEST_MANIFEST,
-} from "./fixture.ts";
+export { ARCHITECTURE_RUNS_FIXTURE, ARCHITECTURE_TEST_MANIFEST } from "./fixture.ts";
 
-export {
-  layoutNodes,
-  SYSTEM_BOUNDARY,
-  type BoundaryRect,
-  type NodePosition,
-} from "./layout.ts";
+export { layoutNodes, SYSTEM_BOUNDARY, type BoundaryRect, type NodePosition } from "./layout.ts";

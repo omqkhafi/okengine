@@ -48,8 +48,10 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 
 export declare namespace StandardSchemaV1 {
   /** Standard Schema properties. */
-  export interface Props<Input = unknown, Output = Input>
-    extends StandardTypedV1.Props<Input, Output> {
+  export interface Props<Input = unknown, Output = Input> extends StandardTypedV1.Props<
+    Input,
+    Output
+  > {
     readonly validate: (
       value: unknown,
       options?: Options | undefined,
@@ -87,12 +89,10 @@ export declare namespace StandardSchemaV1 {
   }
 
   /** Infer input. */
-  export type InferInput<Schema extends StandardTypedV1> =
-    StandardTypedV1.InferInput<Schema>;
+  export type InferInput<Schema extends StandardTypedV1> = StandardTypedV1.InferInput<Schema>;
 
   /** Infer output. */
-  export type InferOutput<Schema extends StandardTypedV1> =
-    StandardTypedV1.InferOutput<Schema>;
+  export type InferOutput<Schema extends StandardTypedV1> = StandardTypedV1.InferOutput<Schema>;
 }
 
 /** Accept a Standard Schema or any other schema-shaped value. */
@@ -122,14 +122,9 @@ export type ValidateResult<T> =
  *
  * @param value - Unknown value
  */
-export function isStandardSchema(
-  value: unknown,
-): value is StandardSchemaV1 {
+export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   // ArkType schemas are callable functions that still carry `~standard`.
-  if (
-    (typeof value !== "object" && typeof value !== "function") ||
-    value === null
-  ) {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null) {
     return false;
   }
   const standard = (value as StandardSchemaV1)["~standard"];
@@ -144,36 +139,23 @@ export function isStandardSchema(
 /**
  * Infer output type of a schema input (unknown when not a Standard Schema).
  */
-export type InferSchemaOutput<S> = S extends StandardSchemaV1<
-  infer _I,
-  infer O
->
-  ? O
-  : unknown;
+export type InferSchemaOutput<S> = S extends StandardSchemaV1<infer _I, infer O> ? O : unknown;
 
 /**
  * Infer input type of a schema input.
  */
-export type InferSchemaInput<S> = S extends StandardSchemaV1<infer I, infer _O>
-  ? I
-  : unknown;
+export type InferSchemaInput<S> = S extends StandardSchemaV1<infer I, infer _O> ? I : unknown;
 
 /**
  * Normalize a Standard Schema issue path to JSON-stable keys.
  *
  * @param path - Spec path array
  */
-export function normalizeIssuePath(
-  path: StandardSchemaV1.Issue["path"],
-): Array<string | number> {
+export function normalizeIssuePath(path: StandardSchemaV1.Issue["path"]): Array<string | number> {
   if (!path) return [];
   const out: Array<string | number> = [];
   for (const segment of path) {
-    if (
-      typeof segment === "object" &&
-      segment !== null &&
-      "key" in segment
-    ) {
+    if (typeof segment === "object" && segment !== null && "key" in segment) {
       const key = (segment as StandardSchemaV1.PathSegment).key;
       if (typeof key === "string" || typeof key === "number") out.push(key);
       else out.push(String(key));
@@ -290,9 +272,7 @@ export function fromTypeBox<T = unknown>(
       validate(value) {
         if (valueApi.Check(schema, value)) {
           const parsed =
-            valueApi.Parse !== undefined
-              ? valueApi.Parse<T>(schema, value)
-              : (value as T);
+            valueApi.Parse !== undefined ? valueApi.Parse<T>(schema, value) : (value as T);
           return { value: parsed };
         }
         const issues: StandardSchemaV1.Issue[] = [];

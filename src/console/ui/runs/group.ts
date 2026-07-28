@@ -11,17 +11,11 @@ import type { GroupAggregate, RunRecord } from "./types.ts";
  * @param runs - Filtered population
  * @param dimension - Dimension to group by
  */
-export function groupByDimension(
-  runs: readonly RunRecord[],
-  dimension: string,
-): GroupAggregate[] {
+export function groupByDimension(runs: readonly RunRecord[], dimension: string): GroupAggregate[] {
   const buckets = new Map<string, RunRecord[]>();
   for (const run of runs) {
     const raw = dimensionValue(run, dimension);
-    const key =
-      raw === undefined || raw === null || raw === ""
-        ? "(empty)"
-        : String(raw);
+    const key = raw === undefined || raw === null || raw === "" ? "(empty)" : String(raw);
     const list = buckets.get(key) ?? [];
     list.push(run);
     buckets.set(key, list);
@@ -77,9 +71,6 @@ export function discoverDimensions(runs: readonly RunRecord[]): string[] {
 function percentile(sorted: readonly number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0]!;
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(p * sorted.length) - 1),
-  );
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
   return sorted[idx]!;
 }

@@ -23,12 +23,8 @@ describe("skyport oke docker", () => {
       expect(code).toBe(0);
       expect(result).toBeDefined();
       expect(await Bun.file(join(outDir, "Dockerfile")).exists()).toBe(true);
-      expect(
-        await Bun.file(join(outDir, "compose.store.sql.yml")).exists(),
-      ).toBe(true);
-      expect(
-        await Bun.file(join(outDir, "compose.store.kv.yml")).exists(),
-      ).toBe(true);
+      expect(await Bun.file(join(outDir, "compose.store.sql.yml")).exists()).toBe(true);
+      expect(await Bun.file(join(outDir, "compose.store.kv.yml")).exists()).toBe(true);
       expect(logs.join("")).toContain("oke docker: wrote");
     } finally {
       await rm(outDir, { recursive: true, force: true });

@@ -3,11 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  buildCausalChain,
-  groupTraceRoots,
-  initialFocusSpanId,
-} from "./chain.ts";
+import { buildCausalChain, groupTraceRoots, initialFocusSpanId } from "./chain.ts";
 import { TRACES_FIXTURE } from "./fixture.ts";
 
 describe("buildCausalChain", () => {
@@ -17,10 +13,7 @@ describe("buildCausalChain", () => {
     expect(chain?.parents.map((p) => p.id)).toEqual(["run-create-ok"]);
     expect(chain?.current.id).toBe("run-fulfill");
     expect(chain?.children).toEqual([]);
-    expect(chain?.connected.map((s) => s.id)).toEqual([
-      "run-create-ok",
-      "run-fulfill",
-    ]);
+    expect(chain?.connected.map((s) => s.id)).toEqual(["run-create-ok", "run-fulfill"]);
   });
 
   test("parents above, children below from root", () => {
@@ -37,25 +30,18 @@ describe("groupTraceRoots", () => {
     expect(roots.map((r) => r.rootId)).toContain("run-create-fail");
     expect(roots.map((r) => r.rootId)).toContain("run-ask");
     const ok = roots.find((r) => r.rootId === "run-create-ok");
-    expect(ok?.spans.map((s) => s.id)).toEqual([
-      "run-create-ok",
-      "run-fulfill",
-    ]);
+    expect(ok?.spans.map((s) => s.id)).toEqual(["run-create-ok", "run-fulfill"]);
   });
 });
 
 describe("initialFocusSpanId", () => {
   test("opens on the failing span", () => {
-    const failRoot = groupTraceRoots(TRACES_FIXTURE).find(
-      (r) => r.rootId === "run-create-fail",
-    );
+    const failRoot = groupTraceRoots(TRACES_FIXTURE).find((r) => r.rootId === "run-create-fail");
     expect(initialFocusSpanId(failRoot!.spans)).toBe("run-create-fail");
   });
 
   test("honours preferred id when present", () => {
-    const ok = groupTraceRoots(TRACES_FIXTURE).find(
-      (r) => r.rootId === "run-create-ok",
-    );
+    const ok = groupTraceRoots(TRACES_FIXTURE).find((r) => r.rootId === "run-create-ok");
     expect(initialFocusSpanId(ok!.spans, "run-fulfill")).toBe("run-fulfill");
   });
 });

@@ -24,9 +24,7 @@ export interface RunPrivacyEraseOptions {
  *
  * @param options - Subject + vault
  */
-export function runPrivacyErase(
-  options: RunPrivacyEraseOptions,
-): PrivacyEraseResult {
+export function runPrivacyErase(options: RunPrivacyEraseOptions): PrivacyEraseResult {
   const keys = options.subjectKeys ?? createMemorySubjectKeys();
   return privacyErase({
     subjectId: options.subjectId,

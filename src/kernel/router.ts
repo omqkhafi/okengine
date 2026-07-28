@@ -50,9 +50,7 @@ export interface Router<T> {
 /** True when the pattern cannot be expressed by the RegExp strategy. */
 export function isUnsupportedByRegExp(path: string): boolean {
   // optional params, wildcards, custom regex segments, greedy rests
-  return /\/:/.test(path) === false
-    ? /[*?{}()]/.test(path)
-    : /[*?{}]|\/:[^/]+\?/.test(path);
+  return /\/:/.test(path) === false ? /[*?{}()]/.test(path) : /[*?{}]|\/:[^/]+\?/.test(path);
 }
 
 function escapeRegex(segment: string): string {
@@ -85,17 +83,13 @@ function emptyTable<T>(): MethodTable<T> {
 
 /** First segment key used for dynamic bucketing (`""` if param/empty). */
 function bucketKey(path: string): string {
-  const parts = path.startsWith("/")
-    ? path.split("/").slice(1)
-    : path.split("/");
+  const parts = path.startsWith("/") ? path.split("/").slice(1) : path.split("/");
   const first = parts[0] ?? "";
   if (first.startsWith(":") || first === "*" || first === "") return "";
   return first;
 }
 
-function compileDynamic<T>(
-  routes: readonly { path: string; value: T }[],
-): CompiledDynamic<T> {
+function compileDynamic<T>(routes: readonly { path: string; value: T }[]): CompiledDynamic<T> {
   const alts: CompiledDynamic<T>["alts"][number][] = [];
   const parts: string[] = [];
   let group = 1;
@@ -121,18 +115,12 @@ function compileDynamic<T>(
     group += 1 + keys.length;
   }
 
-  const regex =
-    parts.length === 0
-      ? /(?!)/
-      : new RegExp(`^(?:${parts.join("|")})$`);
+  const regex = parts.length === 0 ? /(?!)/ : new RegExp(`^(?:${parts.join("|")})$`);
 
   return { regex, alts };
 }
 
-function matchCompiled<T>(
-  dyn: CompiledDynamic<T>,
-  path: string,
-): RouteMatch<T> | undefined {
+function matchCompiled<T>(dyn: CompiledDynamic<T>, path: string): RouteMatch<T> | undefined {
   const m = dyn.regex.exec(path);
   if (!m) return undefined;
 
@@ -272,9 +260,7 @@ export class TrieRouter<T> implements Router<T> {
       root = newTrieNode();
       this.#roots.set(method, root);
     }
-    const parts = path.startsWith("/")
-      ? path.split("/").slice(1)
-      : path.split("/");
+    const parts = path.startsWith("/") ? path.split("/").slice(1) : path.split("/");
 
     let node = root;
     for (const seg of parts) {
@@ -306,9 +292,7 @@ export class TrieRouter<T> implements Router<T> {
   match(method: string, path: string): RouteMatch<T> | undefined {
     const root = this.#roots.get(method);
     if (!root) return undefined;
-    const parts = path.startsWith("/")
-      ? path.split("/").slice(1)
-      : path.split("/");
+    const parts = path.startsWith("/") ? path.split("/").slice(1) : path.split("/");
     // trailing slash: empty last segment
     if (parts.length > 0 && parts[parts.length - 1] === "") {
       parts.pop();
@@ -369,9 +353,7 @@ export class LinearRouter<T> implements Router<T> {
    * @param value - Route value
    */
   add(method: string, path: string, value: T): void {
-    const parts = path.startsWith("/")
-      ? path.split("/").slice(1)
-      : path.split("/");
+    const parts = path.startsWith("/") ? path.split("/").slice(1) : path.split("/");
     this.#routes.push({ method, path, value, parts });
   }
 
@@ -380,9 +362,7 @@ export class LinearRouter<T> implements Router<T> {
    * @param path - Pathname
    */
   match(method: string, path: string): RouteMatch<T> | undefined {
-    const pathParts = path.startsWith("/")
-      ? path.split("/").slice(1)
-      : path.split("/");
+    const pathParts = path.startsWith("/") ? path.split("/").slice(1) : path.split("/");
     if (pathParts.length > 0 && pathParts[pathParts.length - 1] === "") {
       pathParts.pop();
     }

@@ -26,11 +26,7 @@ import type {
   SignalReplayOptions,
   SignalReplayResult,
 } from "../../drivers/signal-types.ts";
-import type {
-  AgentToolEffect,
-  AiRuntime,
-  EvalSuiteResult,
-} from "../../elements/ai.ts";
+import type { AgentToolEffect, AiRuntime, EvalSuiteResult } from "../../elements/ai.ts";
 import {
   createMemorySignalConfigStore,
   type SignalConfigStore,
@@ -38,10 +34,7 @@ import {
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import type { ConsoleAiProjection } from "./ai.ts";
-import {
-  createLoginAttemptBag,
-  type LoginAttemptBag,
-} from "./auth-rate.ts";
+import { createLoginAttemptBag, type LoginAttemptBag } from "./auth-rate.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
 import type { ConsoleSignalRow } from "./signals.ts";
 import type {
@@ -68,19 +61,12 @@ import {
 import type { ConsoleVaultRow, VaultWriteInput } from "./vault.ts";
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
 import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
-import type {
-  ConsoleChannelPreview,
-  ConsoleChannelsList,
-  EmailAuthResult,
-} from "./channels.ts";
+import type { ConsoleChannelPreview, ConsoleChannelsList, EmailAuthResult } from "./channels.ts";
 import type { OkeConfig } from "../../config/index.ts";
 import type { PluginRegistry } from "../../kernel/registry.ts";
 import type { ConsolePluginsList } from "./plugins.ts";
 import type { ConsoleDiffProjection } from "./diff.ts";
-import {
-  loadConsolePanel,
-  type ConsolePanelId,
-} from "./panel-load.ts";
+import { loadConsolePanel, type ConsolePanelId } from "./panel-load.ts";
 
 /** User-plane identity row for the Flows invoke-as picker. */
 export interface ConsoleIdentity {
@@ -192,9 +178,7 @@ export interface ConsoleState {
   /** Replay / dry-run via the real bus. */
   replaySignals: (options: SignalReplayOptions) => Promise<SignalReplayResult>;
   /** Discard dead letters via the real bus. */
-  discardSignals: (
-    options: SignalDiscardOptions,
-  ) => Promise<{ readonly discarded: number }>;
+  discardSignals: (options: SignalDiscardOptions) => Promise<{ readonly discarded: number }>;
   /**
    * Live store runtime. Bound after boot from Manifest (memory default)
    * or host injection.
@@ -214,13 +198,9 @@ export interface ConsoleState {
     options?: { readonly dryRun?: boolean },
   ) => Promise<StoreEditResult>;
   /** Delete rows/keys. */
-  deleteStore: (
-    input: StoreDeleteInput,
-  ) => Promise<{ readonly deleted: number }>;
+  deleteStore: (input: StoreDeleteInput) => Promise<{ readonly deleted: number }>;
   /** Purge cache keys for a resource. */
-  purgeStoreCache: (
-    resource: ResourceRef,
-  ) => Promise<{ readonly keys: readonly string[] }>;
+  purgeStoreCache: (resource: ResourceRef) => Promise<{ readonly keys: readonly string[] }>;
   /** Raw SQL console. */
   runStoreSql: (
     ref: ResourceRef,
@@ -247,9 +227,11 @@ export interface ConsoleState {
   /** Pause a cron. */
   pauseCron: (name: string) => Promise<{ readonly name: string; readonly status: string }>;
   /** Edit overridable schedule. */
-  editSchedule: (
-    input: EditScheduleInput,
-  ) => Promise<{ readonly name: string; readonly effectiveCron?: string; readonly effectiveEvery?: string }>;
+  editSchedule: (input: EditScheduleInput) => Promise<{
+    readonly name: string;
+    readonly effectiveCron?: string;
+    readonly effectiveEvery?: string;
+  }>;
   /** Wake a sleeping durable run early and resume. */
   wakeEarly: (runId: string) => Promise<{
     readonly runId: string;
@@ -423,20 +405,15 @@ export interface CreateConsoleStateOptions {
  *
  * @param options - Secret, clock, cwd
  */
-export function createConsoleState(
-  options: CreateConsoleStateOptions = {},
-): ConsoleState {
+export function createConsoleState(options: CreateConsoleStateOptions = {}): ConsoleState {
   const secret =
-    options.secret ??
-    process.env.OKE_CONSOLE_SECRET ??
-    `oke-console-dev-${crypto.randomUUID()}`;
+    options.secret ?? process.env.OKE_CONSOLE_SECRET ?? `oke-console-dev-${crypto.randomUUID()}`;
   const now = options.now ?? (() => Date.now());
   const operators = options.operators ?? createOperatorStore();
   const claim = mintClaimCode(now);
   const sessions = options.sessions ?? createSessionStore();
   const liveSubscribers = new Set<(msg: ConsoleLiveMessage) => void>();
-  const persistOperator =
-    options.persistOperator ?? ((_operatorId: string) => {});
+  const persistOperator = options.persistOperator ?? ((_operatorId: string) => {});
   const persistSessions = options.persistSessions ?? (() => {});
 
   const signalConfig = createMemorySignalConfigStore();
@@ -445,9 +422,7 @@ export function createConsoleState(
   const constructed = new Set<ConsolePanelId>();
   let accessSeeded = false;
 
-  const markPanel = async <T>(
-    id: ConsolePanelId,
-  ): Promise<T> => {
+  const markPanel = async <T>(id: ConsolePanelId): Promise<T> => {
     constructed.add(id);
     return loadConsolePanel<T>(id);
   };
@@ -901,10 +876,7 @@ export async function consoleEffectsForFlow(
  * @param state - Console state
  * @param message - Payload
  */
-export function publishLive(
-  state: ConsoleState,
-  message: ConsoleLiveMessage,
-): void {
+export function publishLive(state: ConsoleState, message: ConsoleLiveMessage): void {
   for (const sub of state.liveSubscribers) {
     try {
       sub(message);
@@ -937,10 +909,7 @@ export function setManifest(state: ConsoleState, manifest: Manifest): void {
  * @param state - Console state
  * @param runtime - Gate runtime
  */
-export function bindGateRuntime(
-  state: ConsoleState,
-  runtime: GateRuntime,
-): void {
+export function bindGateRuntime(state: ConsoleState, runtime: GateRuntime): void {
   state.gateRuntime = runtime;
 }
 
@@ -949,21 +918,14 @@ export function bindGateRuntime(
  *
  * @param state - Console state
  */
-export async function bindManifestGateRuntime(
-  state: ConsoleState,
-): Promise<void> {
+export async function bindManifestGateRuntime(state: ConsoleState): Promise<void> {
   if (state.gateRuntime) return;
   if (!state.manifest?.gates && !state.manifest?.flows) return;
   const hasGates =
     Object.keys(state.manifest.gates ?? {}).length > 0 ||
-    Object.values(state.manifest.flows ?? {}).some(
-      (f) => (f.gates?.length ?? 0) > 0,
-    );
+    Object.values(state.manifest.flows ?? {}).some((f) => (f.gates?.length ?? 0) > 0);
   if (!hasGates) return;
-  const { runtime } = await createManifestGateRuntime(
-    state.manifest,
-    state.now,
-  );
+  const { runtime } = await createManifestGateRuntime(state.manifest, state.now);
   state.gateRuntime = runtime;
 }
 

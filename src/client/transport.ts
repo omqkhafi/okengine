@@ -24,12 +24,8 @@ export interface Transport {
  * @param base - Absolute origin (no trailing slash)
  * @param opts - Client options
  */
-export function createTransport(
-  base: string,
-  opts: ClientOptions = {},
-): Transport {
-  const fetchFn: ClientFetch =
-    opts.fetch ?? globalThis.fetch.bind(globalThis);
+export function createTransport(base: string, opts: ClientOptions = {}): Transport {
+  const fetchFn: ClientFetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
   const retries = opts.retry?.retries ?? 0;
   const delay0 = opts.retry?.delay ?? 50;
   const backoff = opts.retry?.backoff ?? 2;
@@ -94,10 +90,7 @@ async function once(
     : rpcRequest(base, key, input);
 
   const headers = new Headers();
-  const extra =
-    typeof opts.headers === "function"
-      ? await opts.headers()
-      : opts.headers;
+  const extra = typeof opts.headers === "function" ? await opts.headers() : opts.headers;
   if (Array.isArray(extra)) {
     for (const [k, v] of extra) headers.set(k, v);
   } else if (extra) {
@@ -114,9 +107,7 @@ async function once(
 
   const ctrl = opts.timeout !== undefined ? new AbortController() : undefined;
   const timer =
-    ctrl && opts.timeout !== undefined
-      ? setTimeout(() => ctrl.abort(), opts.timeout)
-      : undefined;
+    ctrl && opts.timeout !== undefined ? setTimeout(() => ctrl.abort(), opts.timeout) : undefined;
 
   try {
     const res = await fetchFn(url, {
@@ -140,8 +131,7 @@ function rpcRequest(
   input: unknown,
 ): { url: string; method: string; body: string | undefined } {
   const url = `${base}/_oke/${key}`;
-  const body =
-    input === undefined ? undefined : JSON.stringify(input ?? {});
+  const body = input === undefined ? undefined : JSON.stringify(input ?? {});
   return { url, method: "POST", body };
 }
 
@@ -152,9 +142,7 @@ function restRequest(
   input: unknown,
 ): { url: string; method: string; body: string | undefined } {
   const params =
-    input !== null && typeof input === "object"
-      ? (input as Record<string, unknown>)
-      : {};
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
   let pathOut = path;
   const query: string[] = [];
   const rest: Record<string, unknown> = {};
@@ -173,15 +161,11 @@ function restRequest(
   if (upper === "GET" || upper === "HEAD") {
     for (const [k, v] of Object.entries(rest)) {
       if (v !== undefined) {
-        query.push(
-          `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-        );
+        query.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
       }
     }
   } else if (Object.keys(rest).length > 0 || path === pathOut) {
-    body = JSON.stringify(
-      Object.keys(rest).length > 0 ? rest : (input ?? {}),
-    );
+    body = JSON.stringify(Object.keys(rest).length > 0 ? rest : (input ?? {}));
   }
 
   const qs = query.length ? `?${query.join("&")}` : "";
@@ -221,12 +205,7 @@ async function decode(res: Response): Promise<ClientResult> {
     };
   }
 
-  if (
-    json !== null &&
-    typeof json === "object" &&
-    "data" in json &&
-    "error" in json
-  ) {
+  if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
     return json as ClientResult;
   }
 

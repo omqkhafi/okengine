@@ -17,9 +17,7 @@ export interface DurableLine {
  *
  * @param consumersDurable - From Manifest (`flow.durable` on every consumer)
  */
-export function durableLine(
-  consumersDurable: boolean | null,
-): DurableLine {
+export function durableLine(consumersDurable: boolean | null): DurableLine {
   if (consumersDurable === true) {
     return {
       durable: true,

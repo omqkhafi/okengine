@@ -23,8 +23,8 @@ describe("groupFlows", () => {
     const groups = groupFlows(GATES_LIST_FIXTURE.flows);
     const user = groups.find((g) => g.id === "user");
     expect(user?.items.some((i) => i.flag === "unguarded")).toBe(true);
-    expect(
-      user?.items.find((i) => i.id === "bookings.create")?.meta,
-    ).toContain("member → booking:create");
+    expect(user?.items.find((i) => i.id === "bookings.create")?.meta).toContain(
+      "member → booking:create",
+    );
   });
 });

@@ -1,14 +1,5 @@
 {
   "title": "Elements",
   "icon": "Boxes",
-  "pages": [
-    "flow",
-    "signal",
-    "store",
-    "clock",
-    "gate",
-    "vault",
-    "channel",
-    "ai"
-  ]
+  "pages": ["flow", "signal", "store", "clock", "gate", "vault", "channel", "ai"]
 }

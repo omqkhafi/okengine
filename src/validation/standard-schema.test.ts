@@ -31,9 +31,7 @@ describe("Standard Schema — four libraries", () => {
       expect(bad.failure.data).toBeNull();
       expect(bad.failure.error.code).toBe(VALIDATION_ERROR_CODE);
       expect(bad.failure.error.data.issues.length).toBeGreaterThan(0);
-      expect(bad.failure.error.data.issues[0]?.message.length).toBeGreaterThan(
-        0,
-      );
+      expect(bad.failure.error.data.issues[0]?.message.length).toBeGreaterThan(0);
     }
   });
 
@@ -82,8 +80,7 @@ describe("Standard Schema — four libraries", () => {
     expect(bad.ok).toBe(false);
     if (!bad.ok) {
       expect(bad.failure.error.code).toBe(VALIDATION_ERROR_CODE);
-      expect(bad.failure.error.data.issues.some((i) => i.path.includes("seats")))
-        .toBe(true);
+      expect(bad.failure.error.data.issues.some((i) => i.path.includes("seats"))).toBe(true);
     }
   });
 

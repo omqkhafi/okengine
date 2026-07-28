@@ -74,10 +74,11 @@ export function toYaml(value: unknown, indent = 0): string {
           const body = toYaml(item, indent + 1);
           const lines = body.split("\n");
           const first = lines[0] ?? "";
-          const rest = lines.slice(1).map((l) => `${pad}  ${l}`).join("\n");
-          return rest
-            ? `${pad}- ${first}\n${rest}`
-            : `${pad}- ${first}`;
+          const rest = lines
+            .slice(1)
+            .map((l) => `${pad}  ${l}`)
+            .join("\n");
+          return rest ? `${pad}- ${first}\n${rest}` : `${pad}- ${first}`;
         }
         return `${pad}- ${toYaml(item, 0)}`;
       })

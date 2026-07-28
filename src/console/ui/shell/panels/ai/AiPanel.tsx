@@ -69,34 +69,23 @@ export function AiPanel() {
   );
   const promptName = search.prompt ?? prompts[0]?.name;
   const versions = useMemo(
-    () =>
-      promptName
-        ? versionsForPrompt(data?.versions ?? [], promptName)
-        : [],
+    () => (promptName ? versionsForPrompt(data?.versions ?? [], promptName) : []),
     [data?.versions, promptName],
   );
   const selectedVersion =
-    versions.find((v) => v.version === search.version) ??
-    versions[versions.length - 1];
-  const baseline =
-    versions.length >= 2
-      ? versions[versions.length - 2]
-      : versions[0];
+    versions.find((v) => v.version === search.version) ?? versions[versions.length - 1];
+  const baseline = versions.length >= 2 ? versions[versions.length - 2] : versions[0];
   const decision =
-    baseline &&
-    selectedVersion &&
-    baseline.version !== selectedVersion.version
+    baseline && selectedVersion && baseline.version !== selectedVersion.version
       ? promotionDecision(baseline, selectedVersion)
       : null;
 
   const agentName = search.agent ?? agents[0]?.name;
   const agentRuns = useMemo(
-    () =>
-      agentName ? runsForAgent(data?.agentRuns ?? [], agentName) : [],
+    () => (agentName ? runsForAgent(data?.agentRuns ?? [], agentName) : []),
     [data?.agentRuns, agentName],
   );
-  const openRun =
-    agentRuns.find((r) => r.id === search.run) ?? agentRuns[0];
+  const openRun = agentRuns.find((r) => r.id === search.run) ?? agentRuns[0];
   const pii = allowPiiStanding(data?.allowPii ?? []);
   const cataloguePrompt = prompts.find((p) => p.name === promptName);
 
@@ -105,8 +94,8 @@ export function AiPanel() {
       <header className="shrink-0 border-b border-[var(--oke-line)] px-4 py-3">
         <h1 className="text-base font-medium text-[var(--oke-fg)]">AI</h1>
         <p className="text-sm text-[var(--oke-muted)]">
-          Distributions per prompt version — cost, latency, eval score.
-          Schema-invalid is its own class.
+          Distributions per prompt version — cost, latency, eval score. Schema-invalid is its own
+          class.
         </p>
         <label className="mt-2 flex max-w-sm flex-col gap-1 text-sm">
           <span className="text-[var(--oke-muted)]">Filter</span>
@@ -140,21 +129,11 @@ export function AiPanel() {
                         ? "bg-[var(--oke-line)] text-[var(--oke-fg)]"
                         : "text-[var(--oke-muted)]",
                     )}
-                    onClick={() =>
-                      setSearch(
-                        openPromptVersion(
-                          search,
-                          p.name,
-                          p.version ?? 0,
-                        ),
-                      )
-                    }
+                    onClick={() => setSearch(openPromptVersion(search, p.name, p.version ?? 0))}
                   >
                     {p.name}
                     {p.version !== undefined ? (
-                      <span className="ml-1 font-mono text-xs">
-                        @{p.version}
-                      </span>
+                      <span className="ml-1 font-mono text-xs">@{p.version}</span>
                     ) : null}
                   </button>
                 </li>
@@ -162,9 +141,7 @@ export function AiPanel() {
             </ul>
           </section>
           <section aria-label="Agents" className="p-3">
-            <h2 className="mb-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">
-              Agents
-            </h2>
+            <h2 className="mb-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">Agents</h2>
             <ul className="space-y-1">
               {agents.map((a) => (
                 <li key={a.name}>
@@ -194,12 +171,8 @@ export function AiPanel() {
         </aside>
 
         <main id="ai-main" className="min-h-0 overflow-y-auto p-4">
-          {listQuery.isLoading ? (
-            <p className="text-[var(--oke-muted)]">Loading…</p>
-          ) : null}
-          {listQuery.isError ? (
-            <p role="alert">Failed to load AI projection</p>
-          ) : null}
+          {listQuery.isLoading ? <p className="text-[var(--oke-muted)]">Loading…</p> : null}
+          {listQuery.isError ? <p role="alert">Failed to load AI projection</p> : null}
 
           {selectedVersion ? (
             <VersionDistributions
@@ -209,23 +182,17 @@ export function AiPanel() {
                 setSearch(openPromptVersion(search, selectedVersion.prompt, v))
               }
               catalogueHref={
-                cataloguePrompt
-                  ? manifestDiffHref(cataloguePrompt.manifestDiffPath)
-                  : null
+                cataloguePrompt ? manifestDiffHref(cataloguePrompt.manifestDiffPath) : null
               }
               decision={decision}
             />
           ) : (
-            <p className="text-[var(--oke-muted)]">
-              No prompt versions with samples yet.
-            </p>
+            <p className="text-[var(--oke-muted)]">No prompt versions with samples yet.</p>
           )}
 
           {openRun ? (
             <section aria-label="Agent run trail" className="mt-8">
-              <h2 className="mb-2 text-sm font-medium">
-                Agent run · {openRun.agent}
-              </h2>
+              <h2 className="mb-2 text-sm font-medium">Agent run · {openRun.agent}</h2>
               <div className="mb-2 flex flex-wrap gap-2">
                 {agentRuns.map((r) => (
                   <button
@@ -234,13 +201,9 @@ export function AiPanel() {
                     aria-pressed={r.id === openRun.id}
                     className={clsx(
                       "min-h-8 px-2 text-xs font-mono",
-                      r.id === openRun.id
-                        ? "bg-[var(--oke-line)]"
-                        : "text-[var(--oke-muted)]",
+                      r.id === openRun.id ? "bg-[var(--oke-line)]" : "text-[var(--oke-muted)]",
                     )}
-                    onClick={() =>
-                      setSearch(openAgentRun(search, r.agent, r.id))
-                    }
+                    onClick={() => setSearch(openAgentRun(search, r.agent, r.id))}
                   >
                     {r.id}
                   </button>
@@ -265,22 +228,17 @@ export function AiPanel() {
                     {step.status === "denied" && step.denial ? (
                       <p role="status" className="mt-1 text-[var(--oke-muted)]">
                         DENIED by gate{" "}
-                        <span className="font-mono text-[var(--oke-fg)]">
-                          {step.denial.gate}
-                        </span>
-                        : {step.denial.reason}
+                        <span className="font-mono text-[var(--oke-fg)]">{step.denial.gate}</span>:{" "}
+                        {step.denial.reason}
                       </p>
                     ) : null}
                     <ul className="mt-1 space-y-0.5 text-xs text-[var(--oke-muted)]">
                       {step.effects.map((e) => (
                         <li key={`${e.kind}:${e.resource}`}>
-                          <span className="font-mono">{e.kind}</span>{" "}
-                          {e.resource}
+                          <span className="font-mono">{e.kind}</span> {e.resource}
                         </li>
                       ))}
-                      {step.effects.length === 0 ? (
-                        <li>no declared effects</li>
-                      ) : null}
+                      {step.effects.length === 0 ? <li>no declared effects</li> : null}
                     </ul>
                   </li>
                 ))}
@@ -291,9 +249,7 @@ export function AiPanel() {
           <section aria-label="Fallback chains" className="mt-8">
             <h2 className="mb-2 text-sm font-medium">Fallback chains</h2>
             {(data?.fallbackChains.length ?? 0) === 0 ? (
-              <p className="text-sm text-[var(--oke-muted)]">
-                No multi-model chains recorded.
-              </p>
+              <p className="text-sm text-[var(--oke-muted)]">No multi-model chains recorded.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {(data?.fallbackChains ?? []).map((chain, i) => (
@@ -311,16 +267,12 @@ export function AiPanel() {
                           {j > 0 ? " → " : ""}
                           <span
                             className={
-                              a.ok
-                                ? "text-[var(--oke-fg)]"
-                                : "text-[var(--oke-muted)] line-through"
+                              a.ok ? "text-[var(--oke-fg)]" : "text-[var(--oke-muted)] line-through"
                             }
                           >
                             {a.model}
                           </span>
-                          {a.cost !== undefined
-                            ? ` (${formatCost(a.cost)})`
-                            : ""}
+                          {a.cost !== undefined ? ` (${formatCost(a.cost)})` : ""}
                         </span>
                       ))}
                     </div>
@@ -341,12 +293,9 @@ export function AiPanel() {
           aria-label="allowPii security review"
           className="min-h-0 overflow-y-auto border-t border-[var(--oke-line)] p-4 lg:border-l lg:border-t-0"
         >
-          <h2 className="mb-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">
-            allowPii
-          </h2>
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-[var(--oke-muted)]">allowPii</h2>
           <p className="mb-3 text-xs text-[var(--oke-muted)]">
-            Standing security review — flows that acknowledge PII egress to a
-            model.
+            Standing security review — flows that acknowledge PII egress to a model.
           </p>
           {pii.length === 0 ? (
             <p className="text-sm text-[var(--oke-muted)]">None declared.</p>
@@ -368,9 +317,7 @@ export function AiPanel() {
               <tbody>
                 {pii.map((row) => (
                   <tr key={row.flowId} className="align-top">
-                    <td className="py-1 pr-2 font-mono text-[var(--oke-fg)]">
-                      {row.flowId}
-                    </td>
+                    <td className="py-1 pr-2 font-mono text-[var(--oke-fg)]">{row.flowId}</td>
                     <td className="py-1 font-mono text-[var(--oke-muted)]">
                       {row.asks.join(", ") || "—"}
                     </td>
@@ -397,14 +344,10 @@ function VersionDistributions(props: {
     <section aria-label="Version distributions" aria-live="polite">
       <div className="mb-3 flex flex-wrap items-baseline gap-3">
         <h2 className="text-sm font-medium">
-          {m.prompt}{" "}
-          <span className="font-mono text-[var(--oke-muted)]">@{m.version}</span>
+          {m.prompt} <span className="font-mono text-[var(--oke-muted)]">@{m.version}</span>
         </h2>
         {props.catalogueHref ? (
-          <a
-            href={props.catalogueHref}
-            className="text-xs text-[var(--oke-muted)] underline"
-          >
+          <a href={props.catalogueHref} className="text-xs text-[var(--oke-muted)] underline">
             Manifest Diff — version bump is a deploy
           </a>
         ) : null}
@@ -418,9 +361,7 @@ function VersionDistributions(props: {
             aria-pressed={v.version === m.version}
             className={clsx(
               "min-h-8 px-2 font-mono text-xs",
-              v.version === m.version
-                ? "bg-[var(--oke-line)]"
-                : "text-[var(--oke-muted)]",
+              v.version === m.version ? "bg-[var(--oke-line)]" : "text-[var(--oke-muted)]",
             )}
             onClick={() => props.onSelectVersion(v.version)}
           >
@@ -431,13 +372,7 @@ function VersionDistributions(props: {
 
       <DistributionBlock
         label="Cost"
-        summary={distributionSummary(
-          "Cost",
-          m.cost.mean,
-          m.cost.p50,
-          m.cost.p95,
-          formatCost,
-        )}
+        summary={distributionSummary("Cost", m.cost.mean, m.cost.p50, m.cost.p95, formatCost)}
         buckets={m.cost.buckets}
         formatTick={formatCost}
       />
@@ -509,8 +444,7 @@ function VersionDistributions(props: {
           aria-label="Promotion gate"
         >
           <p className="text-sm font-medium">
-            Promotion v{props.decision.from.version} → v
-            {props.decision.to.version} blocked
+            Promotion v{props.decision.from.version} → v{props.decision.to.version} blocked
           </p>
           <ul className="mt-1 list-disc pl-5 text-sm text-[var(--oke-muted)]">
             {formatPromotionBlockers(props.decision).map((line) => (
@@ -520,8 +454,7 @@ function VersionDistributions(props: {
         </div>
       ) : props.decision?.allowed ? (
         <p className="mt-4 text-sm text-[var(--oke-muted)]" role="status">
-          Promotion v{props.decision.from.version} → v
-          {props.decision.to.version} allowed
+          Promotion v{props.decision.from.version} → v{props.decision.to.version} allowed
           {props.decision.evalImproved ? " (eval improved)" : ""}.
         </p>
       ) : null}
@@ -542,11 +475,7 @@ function DistributionBlock(props: {
         {props.label} distribution
       </h3>
       <p className="mb-2 text-sm">{props.summary}</p>
-      <div
-        role="img"
-        aria-label={props.summary}
-        className="flex h-16 items-end gap-px"
-      >
+      <div role="img" aria-label={props.summary} className="flex h-16 items-end gap-px">
         {props.buckets.map((b, i) => (
           <div
             key={i}

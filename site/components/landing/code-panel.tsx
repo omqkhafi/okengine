@@ -5,8 +5,8 @@
  * homepage and the same snippet in the handbook read identically.
  */
 
-import { highlight } from 'fumadocs-core/highlight';
-import type { ReactNode } from 'react';
+import { highlight } from "fumadocs-core/highlight";
+import type { ReactNode } from "react";
 
 /**
  * Static code panel.
@@ -19,7 +19,7 @@ import type { ReactNode } from 'react';
 export async function CodePanel({
   code,
   title,
-  lang = 'ts',
+  lang = "ts",
   footer,
 }: {
   code: string;
@@ -29,7 +29,7 @@ export async function CodePanel({
 }) {
   const rendered = await highlight(code, {
     lang,
-    themes: { light: 'github-light', dark: 'github-dark' },
+    themes: { light: "github-light", dark: "github-dark" },
     defaultColor: false,
   });
 

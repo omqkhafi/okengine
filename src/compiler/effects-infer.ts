@@ -105,15 +105,7 @@ const READ_METHODS = new Set([
   "find",
 ]);
 
-const WRITE_METHODS = new Set([
-  "insert",
-  "set",
-  "delete",
-  "increment",
-  "update",
-  "upsert",
-  "log",
-]);
+const WRITE_METHODS = new Set(["insert", "set", "delete", "increment", "update", "upsert", "log"]);
 
 /** Methods whose first argument is a table / collection identifier. */
 const TABLE_ARG_METHODS = new Set([
@@ -204,19 +196,13 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
       // the sibling call that carries the table arg records the real resource.
       const leaf = resolved.methods[resolved.methods.length - 1]!;
       const hasTable = tableFromStoreChain(call) !== undefined;
-      if (
-        !hasTable &&
-        (leaf === "select" || leaf === "insert" || leaf === "update")
-      ) {
+      if (!hasTable && (leaf === "select" || leaf === "insert" || leaf === "update")) {
         continue;
       }
       // Intermediate chain links that only forward (where/values/returning)
       // still carry read/write from earlier methods — record once we have a table
       // or a terminal key-based op.
-      if (
-        !hasTable &&
-        (leaf === "where" || leaf === "values" || leaf === "returning")
-      ) {
+      if (!hasTable && (leaf === "where" || leaf === "values" || leaf === "returning")) {
         continue;
       }
       if (op === "read" || op === "both") reads.add(resolved.resource);
@@ -306,10 +292,7 @@ export function fxMemberChain(call: CallExpression): FxChain | null {
     const prop = (member.property as Identifier).name;
     methods.unshift(prop);
 
-    if (
-      member.object.type === "Identifier" &&
-      (member.object as Identifier).name === "fx"
-    ) {
+    if (member.object.type === "Identifier" && (member.object as Identifier).name === "fx") {
       rootCall = current;
       rootMethod = prop;
       break;
@@ -377,9 +360,7 @@ export function storeResourceFromCall(
   const literal = stringArg(storeArg);
   if (literal) {
     return {
-      resource: (literal.includes(":")
-        ? literal
-        : `${facet}:${literal}`) as ResourceRef,
+      resource: (literal.includes(":") ? literal : `${facet}:${literal}`) as ResourceRef,
       methods: chain.methods,
     };
   }
@@ -418,9 +399,7 @@ function tableFromStoreChain(call: CallExpression): string | undefined {
   return undefined;
 }
 
-function classifyStoreMethods(
-  methods: string[],
-): "read" | "write" | "both" | "none" {
+function classifyStoreMethods(methods: string[]): "read" | "write" | "both" | "none" {
   const ops = methods.slice(1);
   let read = false;
   let write = false;
@@ -490,9 +469,7 @@ export function stringArg(node: AstNode | undefined): string | undefined {
     const quasis = (node as AstNode & { quasis?: AstNode[] }).quasis;
     const exprs = (node as AstNode & { expressions?: AstNode[] }).expressions;
     if (quasis?.length === 1 && (exprs?.length ?? 0) === 0) {
-      const cooked = (
-        quasis[0] as AstNode & { value?: { cooked?: string } }
-      ).value?.cooked;
+      const cooked = (quasis[0] as AstNode & { value?: { cooked?: string } }).value?.cooked;
       if (typeof cooked === "string") return cooked;
     }
   }
@@ -530,10 +507,7 @@ function containsAuthUserId(root: AstNode): boolean {
     };
     if (auth.property.type !== "Identifier") return;
     if ((auth.property as Identifier).name !== "auth") return;
-    if (
-      auth.object.type === "Identifier" &&
-      (auth.object as Identifier).name === "fx"
-    ) {
+    if (auth.object.type === "Identifier" && (auth.object as Identifier).name === "fx") {
       found = true;
     }
   });

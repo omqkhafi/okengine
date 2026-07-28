@@ -31,8 +31,6 @@ describe("store confirmation", () => {
         phrase: "EDIT",
       }),
     ).toBeNull();
-    expect(
-      validateTypedConfirm({ typed: "x", reason: "ab", phrase: "EDIT" }),
-    ).not.toBeNull();
+    expect(validateTypedConfirm({ typed: "x", reason: "ab", phrase: "EDIT" })).not.toBeNull();
   });
 });

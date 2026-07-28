@@ -14,13 +14,12 @@ describe("oke doctor", () => {
       ports: [],
       currentSchemaFingerprint: null,
       expectedSchemaFingerprint: undefined,
+      skipDbDrift: true,
       write: () => {},
     });
     expect(code).toBe(2);
     expect(findings.some((f) => f.code === "missing_secret")).toBe(true);
-    expect(
-      findings.find((f) => f.message.includes("STRIPE_KEY")),
-    ).toBeDefined();
+    expect(findings.find((f) => f.message.includes("STRIPE_KEY"))).toBeDefined();
   });
 
   test("catches a port conflict", async () => {
@@ -30,6 +29,7 @@ describe("oke doctor", () => {
       isPortInUse: async (p) => p === 6530,
       currentSchemaFingerprint: "abc",
       expectedSchemaFingerprint: "abc",
+      skipDbDrift: true,
       write: () => {},
     });
     expect(code).toBe(2);
@@ -37,17 +37,36 @@ describe("oke doctor", () => {
     expect(findings[0]!.message).toContain("6530");
   });
 
-  test("catches schema drift", async () => {
+  test("catches core stub schema drift", async () => {
     const { code, findings } = await runDoctor({
       secrets: [],
       ports: [],
       isPortInUse: async () => false,
       expectedSchemaFingerprint: "aaa",
       currentSchemaFingerprint: "bbb",
+      skipDbDrift: true,
       write: () => {},
     });
     expect(code).toBe(2);
     expect(findings.some((f) => f.code === "schema_drift")).toBe(true);
+    expect(findings.find((f) => f.code === "schema_drift")?.message).toContain(
+      "oke schema generate",
+    );
+  });
+
+  test("catches domain db_drift from drizzle-kit probe", async () => {
+    const { code, findings } = await runDoctor({
+      secrets: [],
+      ports: [],
+      isPortInUse: async () => false,
+      currentSchemaFingerprint: null,
+      skipDbDrift: false,
+      detectDbDrift: async () => ({ drifted: true, detail: "pending migrations" }),
+      write: () => {},
+    });
+    expect(code).toBe(2);
+    expect(findings.some((f) => f.code === "db_drift")).toBe(true);
+    expect(findings.find((f) => f.code === "db_drift")?.message).toContain("pending");
   });
 
   test("ok when secrets present, ports free, schema matches", async () => {
@@ -58,6 +77,7 @@ describe("oke doctor", () => {
       isPortInUse: async () => false,
       expectedSchemaFingerprint: "same",
       currentSchemaFingerprint: "same",
+      skipDbDrift: true,
       write: () => {},
     });
     expect(code).toBe(0);
@@ -99,6 +119,7 @@ describe("oke doctor", () => {
       secrets: [],
       ports: [],
       currentSchemaFingerprint: null,
+      skipDbDrift: true,
       write: () => {},
     });
 
@@ -142,6 +163,7 @@ describe("oke doctor", () => {
       ports: [],
       expectedSchemaFingerprint: "same",
       currentSchemaFingerprint: "same",
+      skipDbDrift: true,
       write: () => {},
     });
     expect(code).toBe(0);

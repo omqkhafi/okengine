@@ -135,9 +135,7 @@ export interface ProjectChannelsOptions {
  *
  * @param options - Manifest, runtime, inbox, env
  */
-export function projectChannelsList(
-  options: ProjectChannelsOptions,
-): ConsoleChannelsList {
+export function projectChannelsList(options: ProjectChannelsOptions): ConsoleChannelsList {
   const face: ChannelsFace = options.production ? "deliverability" : "inbox";
   const templates = projectTemplates(options.manifest);
   const receipts = options.runtime?.receipts.all() ?? [];
@@ -184,10 +182,7 @@ export function projectChannelsList(
     fallback,
     inbox: projectInbox(options.inbox?.entries ?? [], reveal),
     receipts: projectReceipts(receipts, reveal),
-    suppression: projectSuppression(
-      options.runtime?.suppression.list() ?? [],
-      reveal,
-    ),
+    suppression: projectSuppression(options.runtime?.suppression.list() ?? [], reveal),
   };
 }
 
@@ -215,9 +210,7 @@ export function formatFallbackSummary(delta: {
  *
  * @param manifest - Manifest snapshot
  */
-export function projectTemplates(
-  manifest: Manifest | null,
-): readonly ConsoleChannelTemplate[] {
+export function projectTemplates(manifest: Manifest | null): readonly ConsoleChannelTemplate[] {
   return Object.entries(manifest?.channels ?? {})
     .map(([name, c]) => ({
       name,
@@ -254,18 +247,12 @@ export function previewChannelTemplate(options: {
   });
   const catalog = options.catalog ?? {};
   const byLocale = catalog[options.template];
-  const entry =
-    byLocale?.[resolved.locale] ??
-    byLocale?.[defaultLocale] ??
-    byLocale?.en;
-  const data = options.data ?? sampleDataFromSchema(
-    options.manifest?.channels?.[options.template]?.schema,
-  );
+  const entry = byLocale?.[resolved.locale] ?? byLocale?.[defaultLocale] ?? byLocale?.en;
+  const data =
+    options.data ?? sampleDataFromSchema(options.manifest?.channels?.[options.template]?.schema);
   const interpolate = (s: string | undefined): string | null => {
     if (s === undefined) return null;
-    return s.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
-      String(data[key] ?? `{{${key}}}`),
-    );
+    return s.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(data[key] ?? `{{${key}}}`));
   };
   return {
     template: options.template,
@@ -348,9 +335,7 @@ export async function sendChannelTest(
     locale: input.locale,
     data: input.data,
   });
-  const receipt =
-    runtime.receipts.byMessageId(result.messageId) ??
-    runtime.receipts.all().at(-1);
+  const receipt = runtime.receipts.byMessageId(result.messageId) ?? runtime.receipts.all().at(-1);
   return {
     ok: result.ok,
     messageId: result.messageId,
@@ -451,19 +436,9 @@ function sampleDataFromSchema(schema: unknown): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   for (const [key, def] of Object.entries(props)) {
     const t = (def as { type?: string }).type;
-    data[key] =
-      t === "number" || t === "integer"
-        ? 1
-        : t === "boolean"
-          ? true
-          : `{{${key}}}`;
+    data[key] = t === "number" || t === "integer" ? 1 : t === "boolean" ? true : `{{${key}}}`;
   }
   return data;
 }
 
-export type {
-  DeliveryOutcomeState,
-  DeliveryVerdict,
-  EmailAuthResult,
-  OutcomeRow,
-};
+export type { DeliveryOutcomeState, DeliveryVerdict, EmailAuthResult, OutcomeRow };

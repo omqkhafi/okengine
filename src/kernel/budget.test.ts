@@ -10,9 +10,7 @@ import { measureKernelEdgeGzipBytes } from "../release/measure.ts";
 describe("kernel edge bundle budget", () => {
   test(`edge profile < ${KERNEL_EDGE_BUDGET_BYTES} bytes gzipped`, async () => {
     const size = await measureKernelEdgeGzipBytes();
-    console.log(
-      `kernel edge gzip=${size} budget=${KERNEL_EDGE_BUDGET_BYTES}`,
-    );
+    console.log(`kernel edge gzip=${size} budget=${KERNEL_EDGE_BUDGET_BYTES}`);
     expect(size).toBeGreaterThan(0);
     expect(size).toBeLessThan(KERNEL_EDGE_BUDGET_BYTES);
   });

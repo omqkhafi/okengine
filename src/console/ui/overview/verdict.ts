@@ -2,12 +2,7 @@
  * One-line plain-language Overview verdict (console §9.16).
  */
 
-import type {
-  CostBudget,
-  OverviewFinding,
-  OverviewVerdict,
-  SloBurn,
-} from "./types.ts";
+import type { CostBudget, OverviewFinding, OverviewVerdict, SloBurn } from "./types.ts";
 
 /**
  * Build the top verdict from SLO burn, cost budgets, and ranked findings.
@@ -27,8 +22,7 @@ export function composeVerdict(options: {
     .sort(
       (a, b) =>
         b.burnRate - a.burnRate ||
-        (a.timeToExhaustionMs ?? Infinity) -
-          (b.timeToExhaustionMs ?? Infinity),
+        (a.timeToExhaustionMs ?? Infinity) - (b.timeToExhaustionMs ?? Infinity),
     );
 
   if (burning.length > 0) {
@@ -49,8 +43,7 @@ export function composeVerdict(options: {
     .sort(
       (a, b) =>
         b.burnRate - a.burnRate ||
-        (a.timeToExhaustionMs ?? Infinity) -
-          (b.timeToExhaustionMs ?? Infinity),
+        (a.timeToExhaustionMs ?? Infinity) - (b.timeToExhaustionMs ?? Infinity),
     );
   if (costBurning.length > 0) {
     const top = costBurning[0]!;

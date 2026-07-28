@@ -5,13 +5,12 @@
  * Same flow code runs against sqlite, postgres, and memory.
  */
 
+import type { DomainDdlMode } from "../../config/index.ts";
 import type { ClassificationMap, SqlConnection, SqlRow } from "../../drivers/types.ts";
+import { throwOke } from "../../kernel/errors.ts";
 import { maskRows, tableFromSql } from "./classify.ts";
-import {
-  compileWhere,
-  resolveSelectColumns,
-  type WhereMap,
-} from "./sql-condition.ts";
+import { isMissingDomainRelationError } from "./missing-relation.ts";
+import { compileWhere, resolveSelectColumns, type WhereMap } from "./sql-condition.ts";
 import {
   mapRowToJs,
   prepareInsertRow,
@@ -32,6 +31,12 @@ export interface SqlSessionOptions {
   readonly revealPii?: boolean;
   /** Which connection was chosen — exposed for replica proofs. */
   readonly routedRole: "primary" | "replica";
+  /**
+   * Domain DDL policy. `ensure` runs `CREATE TABLE IF NOT EXISTS` on first
+   * touch; `off` means migrations / `oke db push` own the schema (docker/prod
+   * and local+autoPush). Default `ensure` for backward-compatible tests.
+   */
+  readonly domainDdl?: DomainDdlMode;
 }
 
 /**
@@ -172,10 +177,7 @@ export interface SqlStoreHandle {
    * @param table - Table
    * @param idOrWhere - Primary key string, or column equality map
    */
-  exists(
-    table: TableHandle | unknown,
-    idOrWhere: string | WhereMap,
-  ): Promise<boolean>;
+  exists(table: TableHandle | unknown, idOrWhere: string | WhereMap): Promise<boolean>;
   /**
    * Atomically add `by` to `column` on the PK row.
    *
@@ -184,12 +186,7 @@ export interface SqlStoreHandle {
    * @param column - Numeric column to bump
    * @param by - Delta (default `1`)
    */
-  increment(
-    table: TableHandle | unknown,
-    id: string,
-    column: string,
-    by?: number,
-  ): Promise<number>;
+  increment(table: TableHandle | unknown, id: string, column: string, by?: number): Promise<number>;
   /**
    * Raw SQL — PII masking still applied at the boundary.
    *
@@ -216,38 +213,55 @@ export function createSqlStoreHandle(
   options: SqlSessionOptions,
 ): SqlStoreHandle {
   const { connection, classifications, revealPii } = options;
+  const domainDdl: DomainDdlMode = options.domainDdl ?? "ensure";
 
   function mask(rows: SqlRow[], table?: string): SqlRow[] {
     return maskRows(rows, { classifications, table, revealPii });
   }
 
+  /**
+   * Run a connection op; remap missing-relation driver errors to OKE1101
+   * when domain auto-DDL is off.
+   */
+  async function withSchemaGuard<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (domainDdl === "off" && isMissingDomainRelationError(err)) {
+        throwOke("DOMAIN_SCHEMA_MISSING");
+      }
+      throw err;
+    }
+  }
+
+  function query(sql: string, params: readonly unknown[] = []): Promise<SqlRow[]> {
+    return withSchemaGuard(() => connection.query(sql, params));
+  }
+
+  function exec(sql: string, params: readonly unknown[] = []): Promise<{ changes: number }> {
+    return withSchemaGuard(() => connection.exec(sql, params));
+  }
+
   async function ensureFromMeta(table: TableHandle | unknown): Promise<void> {
+    if (domainDdl !== "ensure") return;
     const cols = resolveColumns(table);
     if (cols.length === 0) return;
     const name = resolveTableName(table);
     const pk = cols.find((c) => c.primary)?.sqlName;
     const colSql = cols
       .map((c) => {
-        const typ =
-          pk && c.sqlName === pk
-            ? `${c.sqlType} PRIMARY KEY`
-            : c.sqlType;
+        const typ = pk && c.sqlName === pk ? `${c.sqlType} PRIMARY KEY` : c.sqlType;
         return `${quoteIdent(c.sqlName)} ${typ}`;
       })
       .join(", ");
-    await connection.exec(
-      `CREATE TABLE IF NOT EXISTS ${quoteIdent(name)} (${colSql})`,
-    );
+    await exec(`CREATE TABLE IF NOT EXISTS ${quoteIdent(name)} (${colSql})`);
   }
 
   function toJs(table: TableHandle | unknown, rows: SqlRow[]): SqlRow[] {
     return rows.map((r) => mapRowToJs(table, r) as SqlRow);
   }
 
-  function normalizeWhereMap(
-    table: TableHandle | unknown,
-    where: WhereMap,
-  ): WhereMap {
+  function normalizeWhereMap(table: TableHandle | unknown, where: WhereMap): WhereMap {
     const cols = resolveColumns(table);
     if (cols.length === 0) return where;
     const out: Record<string, unknown> = {};
@@ -305,7 +319,7 @@ export function createSqlStoreHandle(
       sql += ` LIMIT ${Math.max(0, Math.floor(limit))}`;
     }
 
-    const rows = await connection.query(sql, params);
+    const rows = await query(sql, params);
     if (projection === null) {
       return toJs(table, mask(rows, name));
     }
@@ -322,10 +336,7 @@ export function createSqlStoreHandle(
     );
   }
 
-  function selectFrom(
-    table: TableHandle | unknown,
-    columns?: unknown,
-  ): SelectFromBuilder {
+  function selectFrom(table: TableHandle | unknown, columns?: unknown): SelectFromBuilder {
     const projection = resolveSelectColumns(columns);
     const all = runSelect(table, projection, undefined);
     return {
@@ -371,7 +382,7 @@ export function createSqlStoreHandle(
             const colList = cols.map(quoteIdent).join(", ");
             const params = cols.map((c) => prepared[c]);
             const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders})`;
-            await connection.exec(sql, params);
+            await exec(sql, params);
           };
           return {
             async returning() {
@@ -382,7 +393,7 @@ export function createSqlStoreHandle(
               const colList = cols.map(quoteIdent).join(", ");
               const params = cols.map((c) => prepared[c]);
               const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders}) RETURNING *`;
-              const rows = await connection.query(sql, params);
+              const rows = await query(sql, params);
               return toJs(table, mask(rows, name));
             },
             execute: runExecute,
@@ -404,18 +415,13 @@ export function createSqlStoreHandle(
               const prepared = prepareInsertRow(table, row);
               const setEntries = Object.entries(prepared);
               if (setEntries.length === 0) return 0;
-              const setSql = setEntries
-                .map(([col]) => `${quoteIdent(col)} = ?`)
-                .join(", ");
+              const setSql = setEntries.map(([col]) => `${quoteIdent(col)} = ?`).join(", ");
               const compiled = compileTableWhere(table, where);
               if (!compiled.clause) {
                 throw new Error("update().set().where(): condition required");
               }
-              const params = [
-                ...setEntries.map(([, v]) => v),
-                ...compiled.params,
-              ];
-              const result = await connection.exec(
+              const params = [...setEntries.map(([, v]) => v), ...compiled.params];
+              const result = await exec(
                 `UPDATE ${quoteIdent(name)} SET ${setSql} WHERE ${compiled.clause}`,
                 params,
               );
@@ -430,27 +436,22 @@ export function createSqlStoreHandle(
       await ensureFromMeta(table);
       const name = resolveTableName(table);
       const pk = resolvePkColumn(table);
-      const rows = await connection.query(
-        `SELECT * FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`,
-        [idValue],
-      );
+      const rows = await query(`SELECT * FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`, [
+        idValue,
+      ]);
       const masked = toJs(table, mask(rows, name));
       return masked[0] ?? null;
     },
 
-    delete: ((
-      table: TableHandle | unknown,
-      idValue?: string,
-    ): DeleteBuilder | Promise<boolean> => {
+    delete: ((table: TableHandle | unknown, idValue?: string): DeleteBuilder | Promise<boolean> => {
       if (idValue !== undefined) {
         return (async () => {
           await ensureFromMeta(table);
           const name = resolveTableName(table);
           const pk = resolvePkColumn(table);
-          const result = await connection.exec(
-            `DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`,
-            [idValue],
-          );
+          const result = await exec(`DELETE FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`, [
+            idValue,
+          ]);
           return result.changes > 0;
         })();
       }
@@ -462,7 +463,7 @@ export function createSqlStoreHandle(
           if (!compiled.clause) {
             throw new Error("delete().where(): condition required");
           }
-          const result = await connection.exec(
+          const result = await exec(
             `DELETE FROM ${quoteIdent(name)} WHERE ${compiled.clause}`,
             compiled.params,
           );
@@ -483,7 +484,7 @@ export function createSqlStoreHandle(
       if (!compiled.clause) {
         throw new Error("exists() requires at least one where predicate");
       }
-      const rows = await connection.query(
+      const rows = await query(
         `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${compiled.clause} LIMIT 1`,
         compiled.params,
       );
@@ -498,22 +499,20 @@ export function createSqlStoreHandle(
       const colMeta = cols.find((c) => c.key === column || c.sqlName === column);
       const sqlCol = colMeta?.sqlName ?? column;
       const col = quoteIdent(sqlCol);
-      const rows = await connection.query(
+      const rows = await query(
         `UPDATE ${quoteIdent(name)} SET ${col} = ${col} + ? WHERE ${quoteIdent(pk)} = ? RETURNING ${col}`,
         [by, idValue],
       );
       const row = rows[0];
       if (!row) {
-        throw new Error(
-          `increment(): no row with ${pk} ${JSON.stringify(idValue)} in ${name}`,
-        );
+        throw new Error(`increment(): no row with ${pk} ${JSON.stringify(idValue)} in ${name}`);
       }
       return asNumber(row[sqlCol], sqlCol);
     },
 
     async raw(sql, params = []) {
       const table = tableFromSql(sql);
-      const rows = await connection.query(sql, params);
+      const rows = await query(sql, params);
       return mask(rows, table);
     },
 
@@ -534,9 +533,7 @@ export function createSqlStoreHandle(
           return `${quoteIdent(c.name)} ${typ}`;
         })
         .join(", ");
-      await connection.exec(
-        `CREATE TABLE IF NOT EXISTS ${quoteIdent(table.name)} (${colSql})`,
-      );
+      await exec(`CREATE TABLE IF NOT EXISTS ${quoteIdent(table.name)} (${colSql})`);
     },
   };
 

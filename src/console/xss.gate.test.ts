@@ -111,8 +111,6 @@ describe("console XSS gate", () => {
   test("gate fails a PR that introduces raw HTML", () => {
     const bad = `export function Evil() { return <div dangerouslySetInnerHTML={{ __html: x }} />; }`;
     expect(findXssViolations(bad).length).toBeGreaterThan(0);
-    expect(findXssViolations(`el.innerHTML = payload`)).toContain(
-      String(/\.innerHTML\s*=/),
-    );
+    expect(findXssViolations(`el.innerHTML = payload`)).toContain(String(/\.innerHTML\s*=/));
   });
 });

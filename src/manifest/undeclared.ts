@@ -22,8 +22,7 @@ export function undeclaredContractBreaks(
 ): readonly ManifestChange[] {
   const { changes } = diffManifest(before, after);
   return changes.filter(
-    (c) =>
-      c.category === "contract-breaking" && !isDeclaredBreak(c, before, after),
+    (c) => c.category === "contract-breaking" && !isDeclaredBreak(c, before, after),
   );
 }
 

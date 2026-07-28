@@ -14,9 +14,7 @@ import type { ArchitectureFinding } from "./types.ts";
  *
  * @param graph - Flows causality graph
  */
-export function computePathologies(
-  graph: CausalityGraph,
-): ArchitectureFinding[] {
+export function computePathologies(graph: CausalityGraph): ArchitectureFinding[] {
   const findings: ArchitectureFinding[] = [];
   findings.push(...findCycles(graph));
   findings.push(...findGodNodes(graph));
@@ -106,15 +104,16 @@ export function findGodNodes(graph: CausalityGraph): ArchitectureFinding[] {
   if (graph.effects.length === 0) return [];
   const ranked = [...graph.effects]
     .filter((e) => e.touchCount > 0)
-    .sort(
-      (a, b) => b.touchCount - a.touchCount || a.ref.localeCompare(b.ref),
-    );
+    .sort((a, b) => b.touchCount - a.touchCount || a.ref.localeCompare(b.ref));
   const top = ranked[0];
   if (!top || top.touchCount < 2) return [];
 
   // Only flag when clearly dominant (strictly more than the runner-up, or sole)
   const second = ranked[1]?.touchCount ?? 0;
-  if (top.touchCount === second && ranked.filter((e) => e.touchCount === top.touchCount).length > 1) {
+  if (
+    top.touchCount === second &&
+    ranked.filter((e) => e.touchCount === top.touchCount).length > 1
+  ) {
     // Tie for first — report all tied gods
     return ranked
       .filter((e) => e.touchCount === top.touchCount)
@@ -143,9 +142,7 @@ export function findGodNodes(graph: CausalityGraph): ArchitectureFinding[] {
  *
  * @param graph - Causality graph
  */
-export function findOrphanSignals(
-  graph: CausalityGraph,
-): ArchitectureFinding[] {
+export function findOrphanSignals(graph: CausalityGraph): ArchitectureFinding[] {
   const findings: ArchitectureFinding[] = [];
   const signalNames = new Set<string>();
 
@@ -162,12 +159,8 @@ export function findOrphanSignals(
 
   for (const name of [...signalNames].sort()) {
     const ref = `signal:${name}`;
-    const emitters = graph.flows.filter((f) =>
-      (f.raw.effects?.emits ?? []).includes(name),
-    );
-    const consumers = graph.flows.filter(
-      (f) => f.raw.trigger?.signal === name,
-    );
+    const emitters = graph.flows.filter((f) => (f.raw.effects?.emits ?? []).includes(name));
+    const consumers = graph.flows.filter((f) => f.raw.trigger?.signal === name);
 
     if (emitters.length === 0 && consumers.length === 0) {
       findings.push({
@@ -208,9 +201,7 @@ export function findOrphanSignals(
  *
  * @param graph - Causality graph
  */
-export function findSinglePointsOfFailure(
-  graph: CausalityGraph,
-): ArchitectureFinding[] {
+export function findSinglePointsOfFailure(graph: CausalityGraph): ArchitectureFinding[] {
   const findings: ArchitectureFinding[] = [];
 
   for (const effect of graph.effects) {

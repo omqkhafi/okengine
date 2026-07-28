@@ -104,9 +104,7 @@ export function isTenancyConfigured(
  *
  * @param config - Config probe
  */
-export function isPrivacyConfigured(
-  config: PluginConfigProbe | null | undefined,
-): boolean {
+export function isPrivacyConfigured(config: PluginConfigProbe | null | undefined): boolean {
   if (config?.privacy != null) return true;
   if (config?.runs?.redact != null) return true;
   return false;

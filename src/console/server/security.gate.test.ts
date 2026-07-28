@@ -17,18 +17,12 @@ import type { WideEvent } from "../../runs/types.ts";
 import type { ConsoleAppHandle } from "./app.ts";
 import { AUTH_RATE_LIMIT } from "./auth-rate.ts";
 import { projectRun } from "./flows.ts";
-import {
-  maskWideEventForConsole,
-  piiFieldNamesFromManifest,
-} from "./runs-pii.ts";
+import { maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
 import { startConsoleApp } from "./serve.ts";
 
 /** Deduplicate console.* flows from the live binding registry. */
 function consoleFlows(handle: ConsoleAppHandle) {
-  const byName = new Map<
-    string,
-    { readonly name: string; readonly plane: string | undefined }
-  >();
+  const byName = new Map<string, { readonly name: string; readonly plane: string | undefined }>();
   for (const binding of handle.app.bindings) {
     const name = binding.flow.name;
     if (!name.startsWith("console.")) continue;
@@ -106,19 +100,14 @@ describe("console security gates (whole surface)", () => {
     const failures: string[] = [];
     for (const binding of handle.app.bindings) {
       if (!binding.flow.name.startsWith("console.")) continue;
-      const result = await handle.app.execute(
-        binding.flow,
-        {},
-        binding.trigger,
-        {
-          validated: true,
-          principal: {
-            plane: "user",
-            userId: "user-plane-1",
-            scopes: ["bookings:create"],
-          },
+      const result = await handle.app.execute(binding.flow, {}, binding.trigger, {
+        validated: true,
+        principal: {
+          plane: "user",
+          userId: "user-plane-1",
+          scopes: ["bookings:create"],
         },
-      );
+      });
       const code = result.failure?.error?.code;
       if (code !== "Forbidden") {
         failures.push(`${binding.flow.name} → ${code ?? "no-failure"}`);
@@ -197,29 +186,20 @@ describe("console security gates (whole surface)", () => {
 
   test("7. every registered console.* flow leaves a Runs entry when executed", async () => {
     const flows = consoleFlows(handle);
-    const before = new Set(
-      (await handle.state.listRuns()).map((r: WideEvent) => r.flow),
-    );
+    const before = new Set((await handle.state.listRuns()).map((r: WideEvent) => r.flow));
 
     for (const flowMeta of flows) {
       if (before.has(flowMeta.name)) continue;
-      const binding = handle.app.bindings.find(
-        (b: Binding) => b.flow.name === flowMeta.name,
-      );
+      const binding = handle.app.bindings.find((b: Binding) => b.flow.name === flowMeta.name);
       expect(binding).toBeDefined();
       try {
-        await handle.app.execute(
-          binding!.flow,
-          {},
-          binding!.trigger,
-          {
-            validated: true,
-            principal: {
-              plane: "operator",
-              operatorId,
-            },
+        await handle.app.execute(binding!.flow, {}, binding!.trigger, {
+          validated: true,
+          principal: {
+            plane: "operator",
+            operatorId,
           },
-        );
+        });
       } catch {
         // Handler throws still record a wide event (pipeline catches).
       }
@@ -227,9 +207,7 @@ describe("console security gates (whole surface)", () => {
 
     const after = await handle.state.listRuns();
     const names = new Set(after.map((r: WideEvent) => r.flow));
-    const missing = flows
-      .map((f) => f.name)
-      .filter((name) => !names.has(name));
+    const missing = flows.map((f) => f.name).filter((name) => !names.has(name));
     expect(missing).toEqual([]);
   });
 

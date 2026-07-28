@@ -22,15 +22,8 @@ import {
   type ChannelInbox,
   type ChannelInboxEntry,
 } from "../drivers/index.ts";
-import {
-  createAiRuntime,
-  type AiPromptDecl,
-  type AiRuntime,
-} from "../elements/ai.ts";
-import {
-  createChannelRuntime,
-  type DeliveryReceipt,
-} from "../elements/channel.ts";
+import { createAiRuntime, type AiPromptDecl, type AiRuntime } from "../elements/ai.ts";
+import { createChannelRuntime, type DeliveryReceipt } from "../elements/channel.ts";
 import { createTestClockRuntime } from "../elements/clock.ts";
 import type { GateDecl } from "../elements/gate.ts";
 import type { SignalDecl } from "../elements/signal.ts";
@@ -199,16 +192,13 @@ export async function createTestApp<App extends OkeApp>(
     defaultLocale: "ar",
     ...(appOpts.channel ?? {}),
     ...(options.boot?.channel ?? {}),
-    drivers: options.boot?.channel?.drivers ?? [
-      openConsoleChannel({ inbox }),
-    ],
+    drivers: options.boot?.channel?.drivers ?? [openConsoleChannel({ inbox })],
     now: () => clock.now(),
   });
   const ai = createAiRuntime({
     ...(appOpts.ai ?? {}),
     ...(options.boot?.ai ?? {}),
-    defaultDriver:
-      options.boot?.ai?.defaultDriver ?? createMockAiDriver(mockResponses),
+    defaultDriver: options.boot?.ai?.defaultDriver ?? createMockAiDriver(mockResponses),
     now: () => clock.now(),
   });
 
@@ -353,9 +343,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
     opts?: TestCallOptions,
   ): Promise<{ data: unknown; error: FlowFailure["error"] | null }> => {
     const flowDef =
-      app.flow(`${unit}.${flowName}`) ??
-      app.flow(flowName) ??
-      findFlowByUnit(app, unit, flowName);
+      app.flow(`${unit}.${flowName}`) ?? app.flow(flowName) ?? findFlowByUnit(app, unit, flowName);
     if (!flowDef) {
       return {
         data: null,
@@ -369,9 +357,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
     const principal = toPrincipal(opts?.as);
     const httpTrigger = flowDef.triggers.find((t) => t.kind === "http");
     const trigger: Trigger =
-      httpTrigger ??
-      flowDef.triggers[0] ??
-      ({ kind: "internal" } satisfies InternalTrigger);
+      httpTrigger ?? flowDef.triggers[0] ?? ({ kind: "internal" } satisfies InternalTrigger);
 
     const result = await app.execute(flowDef, input, trigger, {
       principal,
@@ -400,8 +386,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
             if (typeof flowName !== "string" || flowName === "then") {
               return undefined;
             }
-            return (input?: unknown, opts?: TestCallOptions) =>
-              call(unit, flowName, input, opts);
+            return (input?: unknown, opts?: TestCallOptions) => call(unit, flowName, input, opts);
           },
         },
       );
@@ -409,11 +394,7 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
   });
 }
 
-function findFlowByUnit(
-  app: OkeApp,
-  unit: string,
-  flowName: string,
-): ReturnType<OkeApp["flow"]> {
+function findFlowByUnit(app: OkeApp, unit: string, flowName: string): ReturnType<OkeApp["flow"]> {
   // Prefer $routes unit.flow → full flow name from bindings.
   const routes = app.$routes as Record<
     string,
@@ -439,7 +420,10 @@ function findFlowByUnit(
     }
   }
   for (const b of app.bindings) {
-    if (b.flow.unit === unit && (b.flow.name === flowName || b.flow.name.endsWith(`.${flowName}`))) {
+    if (
+      b.flow.unit === unit &&
+      (b.flow.name === flowName || b.flow.name.endsWith(`.${flowName}`))
+    ) {
       return b.flow;
     }
     // Auto-named flows: match export-style via name suffix after adopt.
@@ -515,9 +499,7 @@ function matchRestHeuristic(
   return undefined;
 }
 
-function toPrincipal(
-  as: TestUser | ResolvedPrincipal | undefined,
-): ResolvedPrincipal | undefined {
+function toPrincipal(as: TestUser | ResolvedPrincipal | undefined): ResolvedPrincipal | undefined {
   if (!as) return undefined;
   if ("scopes" in as && as.scopes instanceof Set && "id" in as) {
     const u = as as TestUser;

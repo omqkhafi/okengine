@@ -63,9 +63,7 @@ export class AiSchemaValidationError extends Error {
  *
  * @param schema - Declared `out`
  */
-export function isObjectSchema(
-  schema: unknown,
-): schema is {
+export function isObjectSchema(schema: unknown): schema is {
   readonly properties?: Record<string, unknown>;
   readonly required?: readonly string[];
   readonly type?: string;
@@ -114,15 +112,10 @@ export function matchOutSchema(
   if (!isObjectSchema(schema)) return null;
 
   const props = (schema.properties ?? {}) as Record<string, unknown>;
-  const required = Array.isArray(schema.required)
-    ? [...schema.required]
-    : Object.keys(props);
+  const required = Array.isArray(schema.required) ? [...schema.required] : Object.keys(props);
   const keys = new Set(Object.keys(value));
   const missing = required.filter((k) => !keys.has(k));
-  const extra =
-    Object.keys(props).length > 0
-      ? [...keys].filter((k) => !(k in props))
-      : [];
+  const extra = Object.keys(props).length > 0 ? [...keys].filter((k) => !(k in props)) : [];
   const typeMismatches: string[] = [];
   for (const [key, propSchema] of Object.entries(props)) {
     if (!(key in value)) continue;
@@ -140,11 +133,7 @@ export function matchOutSchema(
     }
   }
 
-  if (
-    missing.length === 0 &&
-    extra.length === 0 &&
-    typeMismatches.length === 0
-  ) {
+  if (missing.length === 0 && extra.length === 0 && typeMismatches.length === 0) {
     return null;
   }
   return { missing, extra, typeMismatches };

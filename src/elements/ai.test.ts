@@ -9,11 +9,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  createMockAiDriver,
-  memoryIndexDriver,
-  mockAiDriver,
-} from "../drivers/index.ts";
+import { createMockAiDriver, memoryIndexDriver, mockAiDriver } from "../drivers/index.ts";
 import { createFx } from "../kernel/fx.ts";
 import {
   ai,
@@ -43,10 +39,7 @@ describe("ai declaration", () => {
       maxSteps: 6,
       model: smart,
     });
-    expect(agent.tools).toEqual([
-      "bookings.getBooking",
-      "bookings.refundBooking",
-    ]);
+    expect(agent.tools).toEqual(["bookings.getBooking", "bookings.refundBooking"]);
 
     const embed = ai.embed("docs", {
       model: smart,
@@ -70,8 +63,7 @@ describe("agent gate denial is recorded", () => {
     const runtime = createAiRuntime({
       agents: [refund],
       gates,
-      gatesForFlow: (name) =>
-        name === "bookings.refundBooking" ? ["member"] : [],
+      gatesForFlow: (name) => (name === "bookings.refundBooking" ? ["member"] : []),
       callFlow: async (name) => {
         called.push(name);
         return { ok: true };
@@ -95,9 +87,7 @@ describe("agent gate denial is recorded", () => {
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
     const gates = createGateRuntime({ gates: [member] });
     const runtime = createAiRuntime({
-      agents: [
-        ai.agent("support", { tools: ["bookings.getBooking"], maxSteps: 1 }),
-      ],
+      agents: [ai.agent("support", { tools: ["bookings.getBooking"], maxSteps: 1 })],
       gates,
       gatesForFlow: () => ["member"],
       callFlow: async () => ({ booking: "B1" }),
@@ -270,10 +260,7 @@ describe("embeddings into store.index", () => {
       indexes: { kb: index },
     });
     await runtime.embed("docs", "doc-1", "hello world");
-    const hits = await index.search(
-      (await client.embed!({ input: "hello world" })).vectors[0]!,
-      1,
-    );
+    const hits = await index.search((await client.embed!({ input: "hello world" })).vectors[0]!, 1);
     expect(hits[0]?.id).toBe("doc-1");
   });
 });
@@ -300,9 +287,13 @@ describe("model fallback chain", () => {
       clients: { smart: failing, fast: ok },
     });
 
-    const out = await runtime.ask("ticket-triage", { subject: "x" }, {
-      via: ["smart", "fast"],
-    });
+    const out = await runtime.ask(
+      "ticket-triage",
+      { subject: "x" },
+      {
+        via: ["smart", "fast"],
+      },
+    );
     expect(out.urgency).toBe("low");
     const entry = runtime.journal[0]!;
     expect(entry.attempts).toHaveLength(2);
@@ -343,9 +334,7 @@ describe("schema-validation is its own class", () => {
     }
     expect(thrown).toBeInstanceOf(AiSchemaValidationError);
     expect((thrown as AiSchemaValidationError).code).toBe("AiSchemaInvalid");
-    expect((thrown as AiSchemaValidationError).mismatch.missing).toContain(
-      "team",
-    );
+    expect((thrown as AiSchemaValidationError).mismatch.missing).toContain("team");
     expect(runtime.journal[0]!.outcome).toBe("schema_invalid");
     expect(runtime.journal[0]!.outcome).not.toBe("provider_error");
   });

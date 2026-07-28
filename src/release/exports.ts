@@ -77,9 +77,7 @@ export function isMeasurableDriverFile(name: string): boolean {
  *
  * @param driversDir - Absolute drivers directory
  */
-export async function listDriverModules(
-  driversDir = DRIVERS_DIR,
-): Promise<readonly string[]> {
+export async function listDriverModules(driversDir = DRIVERS_DIR): Promise<readonly string[]> {
   const entries = await readdir(driversDir);
   return entries.filter(isMeasurableDriverFile).sort((a, b) => a.localeCompare(b));
 }
@@ -96,8 +94,7 @@ export async function resolveExportBudgetTargets(options?: {
 }): Promise<readonly ExportBudgetTarget[]> {
   const root = options?.root ?? ROOT;
   const pkg =
-    options?.pkg ??
-    ((await Bun.file(join(root, "package.json")).json()) as PackageExports);
+    options?.pkg ?? ((await Bun.file(join(root, "package.json")).json()) as PackageExports);
   const exportsMap = pkg.exports ?? {};
   const driversDir = options?.driversDir ?? join(root, "src/drivers");
 
@@ -106,9 +103,7 @@ export async function resolveExportBudgetTargets(options?: {
   for (const [subpath, entryRel] of Object.entries(exportsMap)) {
     if (subpath.endsWith("/*")) {
       if (subpath !== "./drivers/*") {
-        throw new Error(
-          `unsupported export glob ${subpath}: only ./drivers/* is expanded`,
-        );
+        throw new Error(`unsupported export glob ${subpath}: only ./drivers/* is expanded`);
       }
       const modules = await listDriverModules(driversDir);
       for (const file of modules) {

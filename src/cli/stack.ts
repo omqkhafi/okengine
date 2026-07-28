@@ -22,19 +22,14 @@ export interface StackCliOptions {
  *
  * @param options - Config / images
  */
-export async function runStackPreview(
-  options: StackCliOptions = {},
-): Promise<number> {
+export async function runStackPreview(options: StackCliOptions = {}): Promise<number> {
   const write = options.write ?? ((t) => process.stdout.write(t));
   const writeErr = options.writeErr ?? ((t) => process.stderr.write(t));
   const json = options.json ?? false;
   let images = options.images;
   if (!images) {
     try {
-      const loaded = await loadOkeConfig(
-        options.cwd ?? process.cwd(),
-        options.configPath,
-      );
+      const loaded = await loadOkeConfig(options.cwd ?? process.cwd(), options.configPath);
       images = resolveImages(loaded.config);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

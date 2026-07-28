@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { DIFF_LIST_FIXTURE } from "./fixture.ts";
-import {
-  filterChanges,
-  formatCiGate,
-  groupByCategory,
-} from "./group.ts";
+import { filterChanges, formatCiGate, groupByCategory } from "./group.ts";
 
 describe("groupByCategory", () => {
   test("keeps the four blast-radius sections in order", () => {
@@ -22,9 +18,7 @@ describe("groupByCategory", () => {
   });
 
   test("does not invent categories — only renders projection output", () => {
-    const only = DIFF_LIST_FIXTURE.changes.filter(
-      (c) => c.category === "effect-widening",
-    );
+    const only = DIFF_LIST_FIXTURE.changes.filter((c) => c.category === "effect-widening");
     const groups = groupByCategory(only);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.category).toBe("effect-widening");
@@ -40,11 +34,7 @@ describe("filterChanges", () => {
   });
 
   test("category facet narrows without changing category labels", () => {
-    const hits = filterChanges(
-      DIFF_LIST_FIXTURE.changes,
-      "",
-      "contract-breaking",
-    );
+    const hits = filterChanges(DIFF_LIST_FIXTURE.changes, "", "contract-breaking");
     expect(hits.every((c) => c.category === "contract-breaking")).toBe(true);
   });
 });

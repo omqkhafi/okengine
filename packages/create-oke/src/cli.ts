@@ -36,6 +36,7 @@ import {
   type ExampleId,
   type TemplateId,
 } from "./templates.ts";
+import { DEFAULT_SQL_DRIVER, SQL_DRIVERS, isSqlDriverId, type SqlDriverId } from "./transform.ts";
 
 /** Parsed CLI arguments. */
 export type CliArgs = {
@@ -44,6 +45,10 @@ export type CliArgs = {
   readonly fromExample: ExampleId | undefined;
   /** True when `--template` / `-t` was present on the argv. */
   readonly templateExplicit: boolean;
+  /** Store SQL driver (`sqlite` default). */
+  readonly sqlDriver: SqlDriverId;
+  /** True when `--sql` was present on the argv. */
+  readonly sqlDriverExplicit: boolean;
   readonly help: boolean;
   /** Skip all prompts; use defaults. */
   readonly yes: boolean;
@@ -87,6 +92,7 @@ export type ScaffoldCallArgs = {
   readonly targetDir: string;
   readonly source: ScaffoldSource;
   readonly agentsMd: boolean;
+  readonly sqlDriver: SqlDriverId;
 };
 
 /**
@@ -99,6 +105,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let template: TemplateId = DEFAULT_TEMPLATE;
   let fromExample: ExampleId | undefined;
   let templateExplicit = false;
+  let sqlDriver: SqlDriverId = DEFAULT_SQL_DRIVER;
+  let sqlDriverExplicit = false;
   let help = false;
   let yes = false;
   let install: boolean | undefined;
@@ -131,12 +139,28 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       agentsMd = true;
       continue;
     }
+    if (a === "--sql") {
+      const next = argv[++i];
+      if (!next || !isSqlDriverId(next)) {
+        throw new Error(`create-oke: --sql must be one of ${SQL_DRIVERS.join("|")}`);
+      }
+      sqlDriver = next;
+      sqlDriverExplicit = true;
+      continue;
+    }
+    if (a.startsWith("--sql=")) {
+      const value = a.slice("--sql=".length);
+      if (!isSqlDriverId(value)) {
+        throw new Error(`create-oke: --sql must be one of ${SQL_DRIVERS.join("|")}`);
+      }
+      sqlDriver = value;
+      sqlDriverExplicit = true;
+      continue;
+    }
     if (a === "--template" || a === "-t") {
       const next = argv[++i];
       if (!next || !isTemplateId(next)) {
-        throw new Error(
-          `create-oke: --template must be one of ${TEMPLATES.join("|")}`,
-        );
+        throw new Error(`create-oke: --template must be one of ${TEMPLATES.join("|")}`);
       }
       template = next;
       templateExplicit = true;
@@ -145,9 +169,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     if (a.startsWith("--template=")) {
       const value = a.slice("--template=".length);
       if (!isTemplateId(value)) {
-        throw new Error(
-          `create-oke: --template must be one of ${TEMPLATES.join("|")}`,
-        );
+        throw new Error(`create-oke: --template must be one of ${TEMPLATES.join("|")}`);
       }
       template = value;
       templateExplicit = true;
@@ -156,9 +178,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     if (a === "--from-example") {
       const next = argv[++i];
       if (!next || !isExampleId(next)) {
-        throw new Error(
-          `create-oke: --from-example must be one of ${EXAMPLES.join("|")}`,
-        );
+        throw new Error(`create-oke: --from-example must be one of ${EXAMPLES.join("|")}`);
       }
       fromExample = next;
       continue;
@@ -166,9 +186,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     if (a.startsWith("--from-example=")) {
       const value = a.slice("--from-example=".length);
       if (!isExampleId(value)) {
-        throw new Error(
-          `create-oke: --from-example must be one of ${EXAMPLES.join("|")}`,
-        );
+        throw new Error(`create-oke: --from-example must be one of ${EXAMPLES.join("|")}`);
       }
       fromExample = value;
       continue;
@@ -184,9 +202,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   }
 
   if (templateExplicit && fromExample !== undefined) {
-    throw new Error(
-      "create-oke: use either --template or --from-example, not both",
-    );
+    throw new Error("create-oke: use either --template or --from-example, not both");
   }
 
   if (argv.includes("--install") && argv.includes("--no-install")) {
@@ -202,6 +218,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     template,
     fromExample,
     templateExplicit,
+    sqlDriver,
+    sqlDriverExplicit,
     help,
     yes,
     install,
@@ -248,9 +266,9 @@ export function helpText(): string {
     (id) =>
       `  ${id.padEnd(12)}${TEMPLATE_PURPOSES[id]}${id === DEFAULT_TEMPLATE ? "  (default)" : ""}`,
   ).join("\n");
-  const exampleLines = EXAMPLES.map(
-    (id) => `  ${id.padEnd(12)}${EXAMPLE_NEW_IDEAS[id]}`,
-  ).join("\n");
+  const exampleLines = EXAMPLES.map((id) => `  ${id.padEnd(12)}${EXAMPLE_NEW_IDEAS[id]}`).join(
+    "\n",
+  );
 
   return `create-oke — scaffold an okengine app
 
@@ -263,6 +281,10 @@ Usage:
 Options:
   -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
   --from-example <id>   Teaching example (non-interactive)
+  --sql <id>            Opt-in Store SQL dialect: ${SQL_DRIVERS.join("|")}
+                        Default keeps local sqlite · docker/prod postgres.
+                        --sql postgres rewrites src/schema.ts to pgTable and
+                        pins store.sql local/docker/prod to postgres.
   -y, --yes             No prompts; defaults + bun install (no oke dev)
   --install             Run bun install after scaffold
   --no-install          Skip bun install
@@ -292,10 +314,7 @@ No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
  * @param args - Parsed args
  * @param stdinIsTTY - `process.stdin.isTTY`
  */
-export function shouldPrompt(
-  args: CliArgs,
-  stdinIsTTY: boolean | undefined,
-): boolean {
+export function shouldPrompt(args: CliArgs, stdinIsTTY: boolean | undefined): boolean {
   if (!stdinIsTTY) return false;
   if (args.help) return false;
   if (args.yes) return false;
@@ -332,6 +351,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     targetDir: args.targetDir,
     source: sourceFromArgs(args),
     agentsMd: args.agentsMd,
+    sqlDriver: args.sqlDriver,
   };
 }
 
@@ -343,17 +363,18 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
  *
  * @param answers - Collected interactive answers
  */
-export function scaffoldArgsFromAnswers(
-  answers: InteractiveAnswers,
-): ScaffoldCallArgs {
+export function scaffoldArgsFromAnswers(answers: InteractiveAnswers): ScaffoldCallArgs {
   const targetDir = resolve(answers.name.trim());
   const name = basename(targetDir);
+  // Interactive always keeps the dual-mode default (local sqlite ·
+  // docker/prod postgres). Opt into postgres-everywhere with `--sql postgres`.
   if (answers.choice === FROM_EXAMPLE_CHOICE) {
     return {
       name,
       targetDir,
       source: { kind: "example", id: answers.example },
       agentsMd: answers.agentsMd,
+      sqlDriver: DEFAULT_SQL_DRIVER,
     };
   }
   return {
@@ -361,6 +382,7 @@ export function scaffoldArgsFromAnswers(
     targetDir,
     source: { kind: "template", id: answers.choice },
     agentsMd: answers.agentsMd,
+    sqlDriver: DEFAULT_SQL_DRIVER,
   };
 }
 
@@ -371,9 +393,10 @@ export function scaffoldArgsFromAnswers(
  *
  * @param partial - Name already known (pre-filled in the prompt)
  */
-export type AskInteractiveFn = (
-  partial: { readonly name?: string; readonly agentsMd?: boolean },
-) => Promise<InteractiveAnswers | null>;
+export type AskInteractiveFn = (partial: {
+  readonly name?: string;
+  readonly agentsMd?: boolean;
+}) => Promise<InteractiveAnswers | null>;
 
 /**
  * Collect interactive answers via `@clack/prompts`.
@@ -442,6 +465,8 @@ export async function askInteractiveAnswers(
     };
   }
 
+  const templateId = templateValue as TemplateId;
+
   const installAndRunValue = await confirm({
     message: "Install dependencies and start oke dev?",
     initialValue: true,
@@ -450,7 +475,7 @@ export async function askInteractiveAnswers(
 
   return {
     name,
-    choice: templateValue as TemplateId,
+    choice: templateId,
     installAndRun: Boolean(installAndRunValue),
     agentsMd,
   };
@@ -503,9 +528,7 @@ export async function run(
 
   if (args.name === undefined) {
     console.log(helpText());
-    console.error(
-      "create-oke: missing <name>. Pass a name, or run in a TTY for the wizard.",
-    );
+    console.error("create-oke: missing <name>. Pass a name, or run in a TTY for the wizard.");
     console.error("  Example: bunx create-oke@latest my-app --yes");
     return 1;
   }
@@ -513,7 +536,7 @@ export async function run(
   if (args.yes) {
     const source = sourceFromArgs(args);
     console.log(
-      `Using defaults: ${source.kind}=${source.id} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
+      `Using defaults: ${source.kind}=${source.id} sql=${args.sqlDriver} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
     );
   }
 
@@ -573,6 +596,7 @@ async function runScaffold(
     targetDir,
     source,
     agentsMd,
+    sqlDriver,
     interactive,
     install,
     startDev,
@@ -605,6 +629,7 @@ async function runScaffold(
       name,
       source,
       writeAgentsMd: agentsMd,
+      sqlDriver,
     });
     if (spun) spun.stop("Scaffolded.");
 

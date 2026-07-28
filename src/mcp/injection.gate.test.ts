@@ -68,11 +68,7 @@ describe("MCP injection gate", () => {
       principalId: "op-inj",
       scopes: ["console:*"],
     });
-    const requester = await authenticateMcpRequest(
-      store,
-      SECRET,
-      issued.accessToken,
-    );
+    const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
 
     const listed = await runtime.callTool(requester, "oke.traces.list", {
       limit: 10,
@@ -89,9 +85,7 @@ describe("MCP injection gate", () => {
     };
     const run = content.runs[0];
     expect(run).toBeDefined();
-    expect(run?.dimensions).toEqual(
-      expect.objectContaining({ bookingName: poison }),
-    );
+    expect(run?.dimensions).toEqual(expect.objectContaining({ bookingName: poison }));
     // Poisoned text is present as data — not stripped (agents must see it
     // as content) and not reclassified as an instruction envelope.
     const serialized = JSON.stringify(listed.data);
@@ -113,11 +107,7 @@ describe("MCP injection gate", () => {
         principalId: "op-inj",
         scopes: ["mcp:traces:read"],
       });
-      const requester = await authenticateMcpRequest(
-        store,
-        SECRET,
-        issued.accessToken,
-      );
+      const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
       const got = await runtime.callTool(requester, "oke.traces.get", {
         runId: "run_inj_1",
       });
@@ -152,11 +142,7 @@ describe("MCP injection gate", () => {
       principalId: "op-inj",
       scopes: ["console:*"],
     });
-    const requester = await authenticateMcpRequest(
-      store,
-      SECRET,
-      issued.accessToken,
-    );
+    const requester = await authenticateMcpRequest(store, SECRET, issued.accessToken);
 
     await runtime.callTool(requester, "oke.traces.get", { runId: "run_inj_1" });
 

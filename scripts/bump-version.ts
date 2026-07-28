@@ -41,9 +41,7 @@ function parseFlags(): {
   });
   const kindRaw = positionals[0];
   const kind =
-    kindRaw === "patch" || kindRaw === "minor" || kindRaw === "major"
-      ? kindRaw
-      : undefined;
+    kindRaw === "patch" || kindRaw === "minor" || kindRaw === "major" ? kindRaw : undefined;
   return {
     kind,
     set: values.set,
@@ -139,11 +137,7 @@ function assertLockstep(): string {
  * @param dryRun - When true, only report paths
  * @returns Paths that would be / were updated
  */
-function applyVersion(
-  dir: string,
-  version: string,
-  dryRun: boolean,
-): string[] {
+function applyVersion(dir: string, version: string, dryRun: boolean): string[] {
   const updated: string[] = [];
   const pkgPath = join(dir, "package.json");
   const pkg = readJson(pkgPath);
@@ -180,9 +174,7 @@ async function main(): Promise<void> {
     ? (parseSemver(flags.set), flags.set.replace(/^v/, ""))
     : bump(current, flags.kind!);
 
-  const files = PACKAGE_DIRS.flatMap((dir) =>
-    applyVersion(dir, next, flags.dryRun),
-  );
+  const files = PACKAGE_DIRS.flatMap((dir) => applyVersion(dir, next, flags.dryRun));
 
   const prefix = flags.dryRun ? "Would bump" : "Bumped";
   console.error(`[bump] ${prefix}: ${current} → ${next}`);

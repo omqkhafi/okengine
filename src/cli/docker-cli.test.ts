@@ -1,5 +1,5 @@
 /**
- * `oke docker` / `oke stack` / `oke images pin` / `oke schema` / `oke dev --stack`.
+ * `oke docker` / `oke stack` / `oke images pin` / `oke schema` / `oke dev --docker`.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -39,12 +39,10 @@ describe("oke docker CLI", () => {
     expect(code).toBe(0);
     expect(result).toBeDefined();
     expect(await Bun.file(join(dir, "docker/Dockerfile")).exists()).toBe(true);
-    expect(
-      await Bun.file(join(dir, "docker/compose.store.sql.yml")).exists(),
-    ).toBe(true);
+    expect(await Bun.file(join(dir, "docker/compose.store.sql.yml")).exists()).toBe(true);
     const yml = await Bun.file(join(dir, "docker/compose.store.sql.yml")).text();
     expect(yml).not.toContain("test-password-not-in-yaml");
-    expect(yml).toContain("../.env.stack");
+    expect(yml).toContain(".env.docker");
     expect(logs.join("")).toContain("docker/compose.override.yml");
   });
 });
@@ -149,13 +147,14 @@ describe("oke schema generate", () => {
   });
 });
 
-describe("oke dev --stack", () => {
-  test("plans stack with postgres and writes nothing on dryRun", async () => {
+describe("oke dev --docker", () => {
+  test("plans docker with postgres and writes nothing on dryRun", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-cli-dev-dry-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
     const { code, plan } = await runDev({
+      stdinIsTTY: false,
       cwd: dir,
-      stack: ["store.sql"],
+      docker: ["store.sql"],
       images,
       credentials,
       dryRun: true,

@@ -25,9 +25,7 @@ describe("AI group helpers", () => {
 
   test("allowPiiStanding keeps only acknowledgements", () => {
     expect(allowPiiStanding(AI_LIST_FIXTURE.allowPii)).toHaveLength(1);
-    expect(allowPiiStanding(AI_LIST_FIXTURE.allowPii)[0]!.flowId).toBe(
-      "support.createTicket",
-    );
+    expect(allowPiiStanding(AI_LIST_FIXTURE.allowPii)[0]!.flowId).toBe("support.createTicket");
   });
 
   test("runsForAgent + filterAgents", () => {

@@ -1,61 +1,84 @@
 /**
- * `defineConfig` fills missing `stack` pins from `prod`.
+ * `defineConfig` fills missing `docker` pins from `prod` and normalizes legacy keys.
  */
 
 import { describe, expect, test } from "bun:test";
-import { defineConfig, fillStackFromProd } from "./index.ts";
+import { defineConfig, fillDockerFromProd, normalizeEnvDriverMap } from "./index.ts";
 
-describe("fillStackFromProd / defineConfig", () => {
-  test("copies prod onto stack when stack is omitted", () => {
-    const filled = fillStackFromProd({
-      dev: "sqlite",
+describe("fillDockerFromProd / defineConfig", () => {
+  test("copies prod onto docker when docker is omitted", () => {
+    const filled = fillDockerFromProd({
+      local: "sqlite",
       prod: "postgres",
     });
-    expect(filled?.stack).toBe("postgres");
-    expect(filled?.dev).toBe("sqlite");
+    expect(filled?.docker).toBe("postgres");
+    expect(filled?.local).toBe("sqlite");
   });
 
-  test("does not overwrite an explicit stack pin", () => {
+  test("does not overwrite an explicit docker pin", () => {
     expect(
-      fillStackFromProd({
-        dev: "sqlite",
-        stack: "memory",
+      fillDockerFromProd({
+        local: "sqlite",
+        docker: "memory",
         prod: "postgres",
-      })?.stack,
+      })?.docker,
     ).toBe("memory");
   });
 
-  test("vault sops → stack dotenv", () => {
-    expect(
-      fillStackFromProd({ dev: "dotenv", prod: "sops" }, { vault: true })
-        ?.stack,
-    ).toBe("dotenv");
+  test("vault sops → docker dotenv", () => {
+    expect(fillDockerFromProd({ local: "dotenv", prod: "sops" }, { vault: true })?.docker).toBe(
+      "dotenv",
+    );
   });
 
   test("defineConfig fills every element from prod", () => {
     const cfg = defineConfig({
       drivers: {
         store: {
-          sql: { dev: "sqlite", prod: "postgres" },
-          kv: { dev: "memory", prod: "redis" },
-          files: { dev: "fs", prod: "s3" },
+          sql: { local: "sqlite", prod: "postgres" },
+          kv: { local: "memory", prod: "redis" },
+          files: { local: "fs", prod: "s3" },
         },
-        signal: { dev: "memory", prod: "postgres" },
-        clock: { dev: "memory", prod: "postgres" },
-        vault: { dev: "dotenv", prod: "sops" },
+        signal: { local: "memory", prod: "postgres" },
+        clock: { local: "memory", prod: "postgres" },
+        vault: { local: "dotenv", prod: "sops" },
         channel: {
-          email: { dev: "console", prod: "smtp" },
+          email: { local: "console", prod: "smtp" },
         },
-        ai: { dev: "mock", prod: "anthropic" },
+        ai: { local: "mock", prod: "anthropic" },
       },
     });
-    expect(cfg.drivers?.store?.sql?.stack).toBe("postgres");
-    expect(cfg.drivers?.store?.kv?.stack).toBe("redis");
-    expect(cfg.drivers?.store?.files?.stack).toBe("s3");
-    expect(cfg.drivers?.signal?.stack).toBe("postgres");
-    expect(cfg.drivers?.clock?.stack).toBe("postgres");
-    expect(cfg.drivers?.vault?.stack).toBe("dotenv");
-    expect(cfg.drivers?.channel?.email?.stack).toBe("smtp");
-    expect(cfg.drivers?.ai?.stack).toBe("anthropic");
+    expect(cfg.drivers?.store?.sql?.docker).toBe("postgres");
+    expect(cfg.drivers?.store?.kv?.docker).toBe("redis");
+    expect(cfg.drivers?.store?.files?.docker).toBe("s3");
+    expect(cfg.drivers?.signal?.docker).toBe("postgres");
+    expect(cfg.drivers?.clock?.docker).toBe("postgres");
+    expect(cfg.drivers?.vault?.docker).toBe("dotenv");
+    expect(cfg.drivers?.channel?.email?.docker).toBe("smtp");
+    expect(cfg.drivers?.ai?.docker).toBe("anthropic");
+  });
+
+  test("normalizeEnvDriverMap maps legacy keys", () => {
+    const normalized = normalizeEnvDriverMap({
+      dev: "sqlite",
+      stack: "postgres",
+      prod: "postgres",
+    });
+    expect(normalized?.local).toBe("sqlite");
+    expect(normalized?.docker).toBe("postgres");
+    expect((normalized as { dev?: string } | undefined)?.dev).toBeUndefined();
+    expect((normalized as { stack?: string } | undefined)?.stack).toBeUndefined();
+  });
+
+  test("defineConfig accepts legacy driver-map keys", () => {
+    const cfg = defineConfig({
+      drivers: {
+        store: {
+          sql: { dev: "sqlite", stack: "postgres", prod: "postgres" } as never,
+        },
+      },
+    });
+    expect(cfg.drivers?.store?.sql?.local).toBe("sqlite");
+    expect(cfg.drivers?.store?.sql?.docker).toBe("postgres");
   });
 });

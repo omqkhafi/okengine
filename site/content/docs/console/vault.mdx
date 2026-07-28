@@ -8,16 +8,25 @@ source: "docs/spec/console.md"
 Answers: **secret contracts, who can read each, rotation due**
 
 <Callout title="Governing rule">
-Secrets are write-only — the panel can set and rotate; it can never reveal.
+  Secrets are write-only — the panel can set and rotate; it can never reveal.
 </Callout>
 
 ## What this panel shows
 
 <Cards>
-  <Card title="Fingerprints" description="Salted hash per environment — rotation and drift without exposure." />
-  <Card title="Resolution chain" description="Which source won: env, files, vault driver, or fallback." />
+  <Card
+    title="Fingerprints"
+    description="Salted hash per environment — rotation and drift without exposure."
+  />
+  <Card
+    title="Resolution chain"
+    description="Which source won: env, files, vault driver, or fallback."
+  />
   <Card title="Who can read" description="Derived from effects that declare `fx.vault`." />
-  <Card title="Rotation blast radius" description="In-flight durable runs that wake with a new key." />
+  <Card
+    title="Rotation blast radius"
+    description="In-flight durable runs that wake with a new key."
+  />
 </Cards>
 
 ## Catalog

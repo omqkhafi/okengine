@@ -16,8 +16,7 @@ describe("Access panel accessibility", () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-      true;
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     window = new Window({ url: "http://console.test/access" });
     Object.defineProperty(globalThis, "window", {
       value: window,
@@ -70,13 +69,7 @@ describe("Access panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA (user plane + once secret)", async () => {
     await act(async () => {
-      root.render(
-        <AccessA11yView
-          plane="user"
-          openKeyId="key_demo"
-          showOnceSecret
-        />,
-      );
+      root.render(<AccessA11yView plane="user" openKeyId="key_demo" showOnceSecret />);
     });
 
     await new Promise((r) => setTimeout(r, 10));
@@ -103,9 +96,7 @@ describe("Access panel accessibility", () => {
 
   test("axe reports zero violations at WCAG 2.2 AA (operator plane)", async () => {
     await act(async () => {
-      root.render(
-        <AccessA11yView plane="operator" openKeyId="key_ops" />,
-      );
+      root.render(<AccessA11yView plane="operator" openKeyId="key_ops" />);
     });
 
     await new Promise((r) => setTimeout(r, 10));

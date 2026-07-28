@@ -132,10 +132,7 @@ export function resetHookCosts(): void {
   filled = 0;
 }
 
-function summarize(
-  pluginId: string,
-  mine: readonly HookCostSample[],
-): HookCostSummary {
+function summarize(pluginId: string, mine: readonly HookCostSample[]): HookCostSummary {
   if (mine.length === 0) {
     return {
       pluginId,
@@ -149,18 +146,15 @@ function summarize(
   }
   const durations = mine.map((s) => s.durationMs).sort((a, b) => a - b);
   const sum = durations.reduce((a, b) => a + b, 0);
-  const byStageAcc: Partial<
-    Record<HookStage, { count: number; total: number }>
-  > = {};
+  const byStageAcc: Partial<Record<HookStage, { count: number; total: number }>> = {};
   for (const s of mine) {
     const cur = byStageAcc[s.stage] ?? { count: 0, total: 0 };
     cur.count++;
     cur.total += s.durationMs;
     byStageAcc[s.stage] = cur;
   }
-  const byStage: Partial<
-    Record<HookStage, { readonly count: number; readonly meanMs: number }>
-  > = {};
+  const byStage: Partial<Record<HookStage, { readonly count: number; readonly meanMs: number }>> =
+    {};
   for (const [stage, acc] of Object.entries(byStageAcc) as Array<
     [HookStage, { count: number; total: number }]
   >) {
@@ -182,9 +176,6 @@ function summarize(
 
 function percentile(sorted: readonly number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(p * sorted.length) - 1),
-  );
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
   return sorted[idx]!;
 }

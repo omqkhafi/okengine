@@ -42,10 +42,7 @@ export interface FallbackWeeklyCostDelta {
  * @param medium - Channel medium
  * @param costs - Unit cost table
  */
-export function costOf(
-  medium: string,
-  costs: MediumCosts = DEFAULT_MEDIUM_COSTS,
-): number {
+export function costOf(medium: string, costs: MediumCosts = DEFAULT_MEDIUM_COSTS): number {
   return costs[medium as ChannelMedium] ?? costs.any ?? 0.005;
 }
 
@@ -69,9 +66,7 @@ export function fallbackWeeklyCostDelta(
 ): FallbackWeeklyCostDelta {
   const costs = options.costs ?? DEFAULT_MEDIUM_COSTS;
   const end = options.weekEndMs ?? options.now ?? Date.now();
-  const inWeek = receipts.filter(
-    (r) => r.at >= options.weekStartMs && r.at <= end,
-  );
+  const inWeek = receipts.filter((r) => r.at >= options.weekStartMs && r.at <= end);
   const fallbacks = inWeek.filter((r) => r.status === "fallback");
 
   let weeklyDeltaUsd = 0;
@@ -80,8 +75,7 @@ export function fallbackWeeklyCostDelta(
 
   for (const r of fallbacks) {
     const first = r.attempts[0];
-    const winner =
-      [...r.attempts].reverse().find((a) => a.ok) ?? r.attempts.at(-1);
+    const winner = [...r.attempts].reverse().find((a) => a.ok) ?? r.attempts.at(-1);
     if (!first || !winner) continue;
     const primary = mediumFromDriver(first.driverId, r.medium);
     const fb = mediumFromDriver(winner.driverId, r.medium);
@@ -118,12 +112,7 @@ function mediumFromDriver(driverId: string, receiptMedium: string): string {
   if (id.includes("push") || id.includes("fcm") || id.includes("webpush")) {
     return "push";
   }
-  if (
-    id.includes("smtp") ||
-    id.includes("resend") ||
-    id.includes("ses") ||
-    id.includes("email")
-  ) {
+  if (id.includes("smtp") || id.includes("resend") || id.includes("ses") || id.includes("email")) {
     return "email";
   }
   return receiptMedium === "any" ? "email" : receiptMedium;

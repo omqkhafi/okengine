@@ -24,11 +24,7 @@ import {
   serializeFlowsSearch,
   type FlowsSearch,
 } from "../../../flows/search.ts";
-import {
-  TIER_LABEL,
-  TIER_ORDER,
-  type UiEffectTier,
-} from "../../../flows/tiers.ts";
+import { TIER_LABEL, TIER_ORDER, type UiEffectTier } from "../../../flows/tiers.ts";
 import type { Manifest } from "../../../../../manifest/types.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Input, NewRowsPill } from "../../components/ui.tsx";
@@ -58,10 +54,7 @@ export function FlowsPanel() {
     },
   });
 
-  const graph = useMemo(
-    () => buildCausalityGraph(manifestQuery.data),
-    [manifestQuery.data],
-  );
+  const graph = useMemo(() => buildCausalityGraph(manifestQuery.data), [manifestQuery.data]);
 
   const causes = useMemo(
     () =>
@@ -102,9 +95,7 @@ export function FlowsPanel() {
     [graph, search],
   );
 
-  const openFlow = search.open
-    ? graph.flowById.get(search.open)
-    : undefined;
+  const openFlow = search.open ? graph.flowById.get(search.open) : undefined;
 
   const path = parsePath(search.path);
   const [pendingNew] = useState(0);
@@ -140,18 +131,14 @@ export function FlowsPanel() {
     <div className="relative flex h-[calc(100vh-3rem)] flex-col">
       <header className="flex flex-wrap items-center gap-3 border-b border-[var(--oke-line)] px-4 py-2">
         <h1 className="text-sm font-semibold tracking-wide">Flows</h1>
-        <p className="text-xs text-[var(--oke-muted)]">
-          Causes ← Flows → Effects
-        </p>
+        <p className="text-xs text-[var(--oke-muted)]">Causes ← Flows → Effects</p>
         <label className="ml-auto flex min-w-[12rem] flex-1 items-center gap-2 text-xs text-[var(--oke-muted)] md:max-w-xs">
           <span className="sr-only">Filter</span>
           <Input
             type="search"
             placeholder="Filter (dims, never hides)"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.currentTarget.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.currentTarget.value || undefined })}
           />
         </label>
         <Button
@@ -161,8 +148,7 @@ export function FlowsPanel() {
           onClick={() =>
             setSearch({
               ...search,
-              density:
-                search.density === "compact" ? "comfortable" : "compact",
+              density: search.density === "compact" ? "comfortable" : "compact",
             })
           }
         >
@@ -172,9 +158,7 @@ export function FlowsPanel() {
           type="button"
           variant="ghost"
           aria-pressed={search.transitive}
-          onClick={() =>
-            setSearch({ ...search, transitive: !search.transitive })
-          }
+          onClick={() => setSearch({ ...search, transitive: !search.transitive })}
         >
           {search.transitive ? "Transitive" : "Direct"}
         </Button>
@@ -469,14 +453,10 @@ function EffectRow({
           </span>
         ) : null}
         {effect.touchCount > 1 ? (
-          <span className="ml-auto text-[11px] text-[var(--oke-muted)]">
-            {effect.touchCount}
-          </span>
+          <span className="ml-auto text-[11px] text-[var(--oke-muted)]">{effect.touchCount}</span>
         ) : null}
         {effect.fanOut > 0 ? (
-          <span className="text-[11px] text-[var(--oke-muted)]">
-            ×{effect.fanOut}
-          </span>
+          <span className="text-[11px] text-[var(--oke-muted)]">×{effect.fanOut}</span>
         ) : null}
       </button>
     </Dim>

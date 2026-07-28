@@ -5,16 +5,9 @@
 import { describe, expect, test } from "bun:test";
 import { buildCausalityGraph } from "../flows/graph.ts";
 import { boundaryCrossingCount } from "./boundary.ts";
-import {
-  ARCHITECTURE_RUNS_FIXTURE,
-  ARCHITECTURE_TEST_MANIFEST,
-} from "./fixture.ts";
+import { ARCHITECTURE_RUNS_FIXTURE, ARCHITECTURE_TEST_MANIFEST } from "./fixture.ts";
 import { computePathologies } from "./pathologies.ts";
-import {
-  layersOf,
-  parseArchitectureSearch,
-  serializeArchitectureSearch,
-} from "./search.ts";
+import { layersOf, parseArchitectureSearch, serializeArchitectureSearch } from "./search.ts";
 import { observeTraffic, thicknessOf } from "./traffic.ts";
 import { buildArchitectureView } from "./view.ts";
 
@@ -92,13 +85,10 @@ describe("architecture view", () => {
     expect(count).toBe(1); // channel:booking-confirmed
     const view = buildArchitectureView(graph);
     expect(view.boundaryCrossingCount).toBe(count);
-    expect(
-      view.nodes.some((n) => n.id === "channel:booking-confirmed"),
-    ).toBe(true);
-    expect(
-      view.nodes.find((n) => n.id === "channel:booking-confirmed")
-        ?.insideBoundary,
-    ).toBe(false);
+    expect(view.nodes.some((n) => n.id === "channel:booking-confirmed")).toBe(true);
+    expect(view.nodes.find((n) => n.id === "channel:booking-confirmed")?.insideBoundary).toBe(
+      false,
+    );
   });
 
   test("edge thickness follows Runs traffic; zero traversals are dashed", () => {
@@ -122,9 +112,7 @@ describe("architecture view", () => {
     expect(kinds.has("god-node")).toBe(true);
     expect(kinds.has("orphan-signal")).toBe(true);
     expect(kinds.has("spof")).toBe(true);
-    expect(
-      findings.some((f) => f.detail.includes("legacy-unused")),
-    ).toBe(true);
+    expect(findings.some((f) => f.detail.includes("legacy-unused"))).toBe(true);
   });
 });
 

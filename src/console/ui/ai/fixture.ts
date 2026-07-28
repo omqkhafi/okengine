@@ -4,14 +4,9 @@
 
 import type { AiListResponse, PromptVersionMetrics } from "./types.ts";
 
-function dist(
-  samples: readonly number[],
-): PromptVersionMetrics["cost"] {
+function dist(samples: readonly number[]): PromptVersionMetrics["cost"] {
   const sorted = [...samples].sort((a, b) => a - b);
-  const mean =
-    sorted.length === 0
-      ? 0
-      : sorted.reduce((a, b) => a + b, 0) / sorted.length;
+  const mean = sorted.length === 0 ? 0 : sorted.reduce((a, b) => a + b, 0) / sorted.length;
   const p50 = sorted[Math.floor(sorted.length * 0.5)] ?? 0;
   const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? p50;
   const min = sorted[0] ?? 0;

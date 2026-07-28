@@ -5,26 +5,26 @@
  * the hero visual is the okengine element lattice.
  */
 
-import Link from 'next/link';
-import { Features } from '@/components/docs/features';
-import { Band, BandHeading } from '@/components/landing/band';
-import { CodePanel } from '@/components/landing/code-panel';
-import { CollapseDiagram } from '@/components/landing/collapse-diagram';
-import { ElementLattice } from '@/components/landing/element-lattice';
-import { HeroTitle } from '@/components/landing/hero-title';
-import { InstallTerminal } from '@/components/landing/install-terminal';
-import { ManifestPipeline } from '@/components/landing/manifest-pipeline';
-import { Surfaces } from '@/components/landing/surfaces';
-import { Vocabulary } from '@/components/landing/vocabulary';
-import { POSITIONING } from '@/lib/elements';
-import { loadNotesCreateSnippet } from '@/lib/notes-create';
+import Link from "next/link";
+import { Features } from "@/components/docs/features";
+import { Band, BandHeading } from "@/components/landing/band";
+import { CodePanel } from "@/components/landing/code-panel";
+import { CollapseDiagram } from "@/components/landing/collapse-diagram";
+import { ElementLattice } from "@/components/landing/element-lattice";
+import { HeroTitle } from "@/components/landing/hero-title";
+import { InstallTerminal } from "@/components/landing/install-terminal";
+import { ManifestPipeline } from "@/components/landing/manifest-pipeline";
+import { Surfaces } from "@/components/landing/surfaces";
+import { Vocabulary } from "@/components/landing/vocabulary";
+import { POSITIONING } from "@/lib/elements";
+import { loadNotesCreateSnippet } from "@/lib/notes-create";
 
 /** Triggers from `docs/get-started/introduction.mdx` — one species, four names. */
 const TRIGGERS: ReadonlyArray<{ readonly trigger: string; readonly zoo: string }> = [
-  { trigger: 'http.post("/bookings")', zoo: 'an API endpoint' },
-  { trigger: 'every("10m")', zoo: 'a cron job' },
-  { trigger: 'orderPlaced', zoo: 'a queue consumer' },
-  { trigger: 'db.table(users).changed("email")', zoo: 'a CDC trigger' },
+  { trigger: 'http.post("/bookings")', zoo: "an API endpoint" },
+  { trigger: 'every("10m")', zoo: "a cron job" },
+  { trigger: "orderPlaced", zoo: "a queue consumer" },
+  { trigger: 'db.table(users).changed("email")', zoo: "a CDC trigger" },
 ];
 
 const START_HERE: ReadonlyArray<{
@@ -33,19 +33,19 @@ const START_HERE: ReadonlyArray<{
   readonly body: string;
 }> = [
   {
-    href: '/docs/get-started/introduction',
-    title: 'Introduction',
-    body: 'One law, ten exports, eight elements.',
+    href: "/docs/get-started/introduction",
+    title: "Introduction",
+    body: "One law, ten exports, eight elements.",
   },
   {
-    href: '/docs/get-started/installation',
-    title: 'Installation',
-    body: 'Scaffold with create-oke and open the Console.',
+    href: "/docs/get-started/installation",
+    title: "Installation",
+    body: "Scaffold with create-oke and open the Console.",
   },
   {
-    href: '/docs/get-started/basic-usage',
-    title: 'Basic usage',
-    body: 'Flows, typed client, and bun:test.',
+    href: "/docs/get-started/basic-usage",
+    title: "Basic usage",
+    body: "Flows, typed client, and bun:test.",
   },
 ];
 
@@ -73,9 +73,9 @@ export default function HomePage() {
               {POSITIONING}
             </p>
             <p className="text-sm leading-relaxed text-pretty text-fd-muted-foreground sm:text-base">
-              All world access goes through <code className="text-fd-foreground">fx</code>. That
-              one rule is why effects, cache keys, capability matrices, and traces are inferred
-              instead of annotated by hand.
+              All world access goes through <code className="text-fd-foreground">fx</code>. That one
+              rule is why effects, cache keys, capability matrices, and traces are inferred instead
+              of annotated by hand.
             </p>
           </div>
           <InstallTerminal />
@@ -106,9 +106,7 @@ export default function HomePage() {
                   key={item.trigger}
                   className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5"
                 >
-                  <dt className="font-mono text-xs text-fd-foreground">
-                    on({item.trigger})
-                  </dt>
+                  <dt className="font-mono text-xs text-fd-foreground">on({item.trigger})</dt>
                   <dd className="text-xs text-fd-muted-foreground">{item.zoo}</dd>
                 </div>
               ))}
@@ -141,7 +139,7 @@ export default function HomePage() {
           </BandHeading>
           <div className="overflow-x-auto rounded-xl border border-fd-border bg-fd-card px-4 py-3">
             <code className="font-mono text-xs whitespace-nowrap text-fd-foreground sm:text-[13px]">
-              import {'{'} on, flow, signal, store, clock, gate, vault, channel, ai, plugin {'}'}{' '}
+              import {"{"} on, flow, signal, store, clock, gate, vault, channel, ai, plugin {"}"}{" "}
               from &quot;okengine&quot;;
             </code>
           </div>
@@ -168,8 +166,8 @@ export default function HomePage() {
           </BandHeading>
           <Surfaces />
           <p className="text-sm text-fd-muted-foreground">
-            The Console is Manifest-derived — flows, contracts, effects, traces, and an
-            architecture diagram are already there.{' '}
+            The Console is Manifest-derived — flows, contracts, effects, traces, and an architecture
+            diagram are already there.{" "}
             <Link
               href="/docs/console/overview"
               className="text-fd-foreground underline decoration-fd-border underline-offset-4 transition-colors hover:decoration-fd-foreground"
@@ -184,8 +182,8 @@ export default function HomePage() {
       <Band label="start here">
         <div className="flex flex-col gap-8">
           <BandHeading title="Learning OKE is learning one sentence">
-            One law → one mental model → one documentation path → one trace shape → one thing for
-            an AI agent to learn.
+            One law → one mental model → one documentation path → one trace shape → one thing for an
+            AI agent to learn.
           </BandHeading>
           <ul className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border sm:grid-cols-3">
             {START_HERE.map((item) => (

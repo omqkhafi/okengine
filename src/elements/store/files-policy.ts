@@ -28,8 +28,7 @@ export function fileKeyWarnings(key: string): readonly FileKeyWarning[] {
   if (/[^\x00-\x7F]/.test(key)) {
     warnings.push({
       code: "non_ascii_key",
-      message:
-        "Non-ASCII object key — signed URL encoding may break on S3-compatible stores.",
+      message: "Non-ASCII object key — signed URL encoding may break on S3-compatible stores.",
       key,
     });
   }
@@ -41,17 +40,10 @@ export function fileKeyWarnings(key: string): readonly FileKeyWarning[] {
  *
  * @param data - Object bytes or UTF-8 string
  */
-export async function contentAddressedKey(
-  data: Uint8Array | string,
-): Promise<string> {
-  const bytes =
-    typeof data === "string"
-      ? new TextEncoder().encode(data)
-      : new Uint8Array(data);
+export async function contentAddressedKey(data: Uint8Array | string): Promise<string> {
+  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**

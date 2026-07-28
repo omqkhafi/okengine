@@ -7,14 +7,7 @@
  * monorepo-only docker.test.ts).
  */
 
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { EXAMPLES, packageRoot, TEMPLATES } from "./templates.ts";
 import { shouldSkipTemplatePath } from "./transform.ts";
@@ -26,9 +19,7 @@ const outTemplates = join(pkg, "templates");
 const outExamples = join(pkg, "examples");
 
 if (!existsSync(templatesRoot)) {
-  console.error(
-    `create-oke prepack: templates/ not found at ${templatesRoot}`,
-  );
+  console.error(`create-oke prepack: templates/ not found at ${templatesRoot}`);
   process.exit(1);
 }
 if (!existsSync(examplesRoot)) {

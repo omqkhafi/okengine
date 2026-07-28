@@ -13,20 +13,12 @@ describe("findFreePort", () => {
 
   test("increments until free", async () => {
     const busy = new Set([6530, 6531]);
-    const port = await findFreePort(
-      6530,
-      new Set(),
-      async (p) => busy.has(p),
-    );
+    const port = await findFreePort(6530, new Set(), async (p) => busy.has(p));
     expect(port).toBe(6532);
   });
 
   test("skips occupied set even when probe says free", async () => {
-    const port = await findFreePort(
-      6530,
-      new Set([6530, 6531]),
-      async () => false,
-    );
+    const port = await findFreePort(6530, new Set([6530, 6531]), async () => false);
     expect(port).toBe(6532);
   });
 
@@ -39,9 +31,8 @@ describe("resolveDevPorts", () => {
   test("keeps app · console · mcp distinct when preferred collide", async () => {
     // Everything busy except 6531, 6534, 6536 — force increments.
     const busy = new Set([6530, 6533, 6535]);
-    const ports = await resolveDevPorts(
-      { app: 6530, console: 6533, mcp: 6535 },
-      async (p) => busy.has(p),
+    const ports = await resolveDevPorts({ app: 6530, console: 6533, mcp: 6535 }, async (p) =>
+      busy.has(p),
     );
     expect(ports.app).toBe(6531);
     expect(ports.console).toBe(6534);

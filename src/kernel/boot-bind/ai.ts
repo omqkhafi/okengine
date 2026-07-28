@@ -3,10 +3,7 @@
  */
 
 import { mockAiDriver } from "../../drivers/ai-mock.ts";
-import {
-  createAiRuntime,
-  type AiRuntime,
-} from "../../elements/ai.ts";
+import { createAiRuntime, type AiRuntime } from "../../elements/ai.ts";
 import type { GateRuntime } from "../../elements/gate.ts";
 import type { BootOptions } from "../boot.ts";
 

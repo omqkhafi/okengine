@@ -12,12 +12,7 @@ const DiffSearchSchema = z.object({
   path: z.string().optional(),
   /** Optional category facet. */
   category: z
-    .enum([
-      "contract-breaking",
-      "permission-widening",
-      "effect-widening",
-      "no-impact",
-    ])
+    .enum(["contract-breaking", "permission-widening", "effect-widening", "no-impact"])
     .optional(),
 });
 
@@ -29,9 +24,7 @@ export type DiffSearch = z.infer<typeof DiffSearchSchema>;
  *
  * @param search - Raw router search
  */
-export function parseDiffSearch(
-  search: Record<string, unknown>,
-): DiffSearch {
+export function parseDiffSearch(search: Record<string, unknown>): DiffSearch {
   const parsed = DiffSearchSchema.safeParse(search);
   return parsed.success ? parsed.data : {};
 }
@@ -41,9 +34,7 @@ export function parseDiffSearch(
  *
  * @param search - Search state
  */
-export function serializeDiffSearch(
-  search: DiffSearch,
-): Record<string, string> {
+export function serializeDiffSearch(search: DiffSearch): Record<string, string> {
   const out: Record<string, string> = {};
   if (search.q) out.q = search.q;
   if (search.path) out.path = search.path;
@@ -67,9 +58,6 @@ export function openDiffPath(search: DiffSearch, path: string): DiffSearch {
  * @param search - Current search
  * @param category - Category or clear
  */
-export function filterCategory(
-  search: DiffSearch,
-  category: DiffCategory | undefined,
-): DiffSearch {
+export function filterCategory(search: DiffSearch, category: DiffCategory | undefined): DiffSearch {
   return { ...search, category };
 }

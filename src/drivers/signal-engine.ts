@@ -10,11 +10,7 @@ import { dirname } from "node:path";
 
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
-import {
-  DryRunWriteIsolationError,
-  setDryRunMessageId,
-  withDryRun,
-} from "../kernel/dry-run.ts";
+import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
 import type {
   DeadLetter,
   LiveHandler,
@@ -112,10 +108,7 @@ export async function createSignalEngine(
     while (list.length > 50) list.shift();
   }
 
-  function failureFromError(
-    err: unknown,
-    attempt: number,
-  ): SignalFailureReason {
+  function failureFromError(err: unknown, attempt: number): SignalFailureReason {
     const code =
       err &&
       typeof err === "object" &&
@@ -196,11 +189,7 @@ export async function createSignalEngine(
     return decl;
   }
 
-  function stageEmit(
-    stagedMessages: MutMessage[],
-    name: string,
-    payload: unknown,
-  ): void {
+  function stageEmit(stagedMessages: MutMessage[], name: string, payload: unknown): void {
     const decl = requireDecl(name);
     const t = now();
     stagedMessages.push({
@@ -271,10 +260,7 @@ export async function createSignalEngine(
     };
   }
 
-  async function live(
-    signal: string,
-    handler: LiveHandler,
-  ): Promise<SignalUnsubscribe> {
+  async function live(signal: string, handler: LiveHandler): Promise<SignalUnsubscribe> {
     const decl = requireDecl(signal);
     if (decl.delivery !== "live") {
       throw new Error(`signal "${signal}" is not delivery: "live"`);
@@ -313,10 +299,7 @@ export async function createSignalEngine(
   /**
    * Claim the next `once` message with SKIP LOCKED semantics.
    */
-  function claimOnce(
-    signal: string,
-    consumerId: string,
-  ): MutMessage | null {
+  function claimOnce(signal: string, consumerId: string): MutMessage | null {
     const t = now();
     for (const m of messages) {
       if (m.signal !== signal || m.delivery !== "once") continue;
@@ -391,10 +374,7 @@ export async function createSignalEngine(
           subscriberErrors.set(key, (subscriberErrors.get(key) ?? 0) + 1);
         }
       }
-      if (
-        subs.length > 0 &&
-        subs.every((s) => m.deliveredTo.has(s.subscriberId))
-      ) {
+      if (subs.length > 0 && subs.every((s) => m.deliveredTo.has(s.subscriberId))) {
         m.status = "delivered";
       }
     }
@@ -498,21 +478,14 @@ export async function createSignalEngine(
     return out;
   }
 
-  async function replay(
-    options: SignalReplayOptions,
-  ): Promise<SignalReplayResult> {
+  async function replay(options: SignalReplayOptions): Promise<SignalReplayResult> {
     requireDecl(options.signal);
     const rate = Math.max(1, options.ratePerSec);
     const intervalMs = Math.floor(1_000 / rate);
     const ids =
-      options.messageIds && options.messageIds.length > 0
-        ? new Set(options.messageIds)
-        : null;
+      options.messageIds && options.messageIds.length > 0 ? new Set(options.messageIds) : null;
     const targets = messages.filter(
-      (m) =>
-        m.signal === options.signal &&
-        m.status === "dead" &&
-        (ids === null || ids.has(m.id)),
+      (m) => m.signal === options.signal && m.status === "dead" && (ids === null || ids.has(m.id)),
     );
     const results: SignalReplayResult["results"][number][] = [];
     const wouldHaveFired: SignalReplayResult["wouldHaveFired"][number][] = [];
@@ -525,11 +498,7 @@ export async function createSignalEngine(
       }
       const m = targets[i]!;
       // Never mutate stored payload during dry-run — override is view-only.
-      if (
-        !options.dryRun &&
-        options.payloads &&
-        options.payloads[m.id] !== undefined
-      ) {
+      if (!options.dryRun && options.payloads && options.payloads[m.id] !== undefined) {
         m.payload = options.payloads[m.id];
       }
 
@@ -630,18 +599,12 @@ export async function createSignalEngine(
     };
   }
 
-  async function discard(
-    options: SignalDiscardOptions,
-  ): Promise<{ readonly discarded: number }> {
+  async function discard(options: SignalDiscardOptions): Promise<{ readonly discarded: number }> {
     const ids = new Set(options.messageIds);
     let discarded = 0;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i]!;
-      if (
-        m.signal === options.signal &&
-        m.status === "dead" &&
-        ids.has(m.id)
-      ) {
+      if (m.signal === options.signal && m.status === "dead" && ids.has(m.id)) {
         messages.splice(i, 1);
         discarded += 1;
       }

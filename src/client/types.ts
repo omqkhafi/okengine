@@ -88,9 +88,7 @@ export type RoutesOf<App> = App extends { readonly $routes: infer R }
       ? R
       : {
           [U in keyof R]: {
-            [F in keyof R[U]]: R[U][F] extends FlowContract
-              ? R[U][F]
-              : FlowContract;
+            [F in keyof R[U]]: R[U][F] extends FlowContract ? R[U][F] : FlowContract;
           };
         }
   : App extends ClientRouteMap
@@ -102,9 +100,7 @@ export type RoutesOf<App> = App extends { readonly $routes: infer R }
  *
  * @typeParam E - Error code → data map
  */
-export type ClientError<
-  E extends Record<string, unknown> = Record<string, unknown>,
-> = {
+export type ClientError<E extends Record<string, unknown> = Record<string, unknown>> = {
   [K in keyof E & string]: {
     readonly code: K;
     readonly data: E[K];
@@ -138,10 +134,7 @@ export type ClientResult<
   | { readonly data: null; readonly error: ClientError<E> | TransportError };
 
 /** Minimal fetch signature (avoids DOM `HeadersInit` / `preconnect` coupling). */
-export type ClientFetch = (
-  input: string | URL | Request,
-  init?: RequestInit,
-) => Promise<Response>;
+export type ClientFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /** Header bag accepted by the client. */
 export type ClientHeaders = Record<string, string> | [string, string][];
@@ -153,9 +146,7 @@ export interface ClientOptions {
   /** Override `globalThis.fetch`. */
   readonly fetch?: ClientFetch;
   /** Static headers, or a getter invoked per request. */
-  readonly headers?:
-    | ClientHeaders
-    | (() => ClientHeaders | Promise<ClientHeaders>);
+  readonly headers?: ClientHeaders | (() => ClientHeaders | Promise<ClientHeaders>);
   /** Abort the request after this many milliseconds. */
   readonly timeout?: number;
   /** Retry transient failures (network / 5xx). */
@@ -173,11 +164,7 @@ export interface ClientOptions {
    */
   readonly auth?: {
     /** Current access token (Bearer), or null. */
-    readonly getToken: () =>
-      | string
-      | null
-      | undefined
-      | Promise<string | null | undefined>;
+    readonly getToken: () => string | null | undefined | Promise<string | null | undefined>;
     /** Obtain a new access token after 401. */
     readonly refresh: () => Promise<string | null | undefined>;
   };
@@ -186,9 +173,7 @@ export interface ClientOptions {
    * When absent, the client uses `POST /_oke/{unit}/{flow}` unless
    * {@link ClientOptions.$routes} supplies HTTP method/path from adopt.
    */
-  readonly routes?: Readonly<
-    Record<string, { readonly method: string; readonly path: string }>
-  >;
+  readonly routes?: Readonly<Record<string, { readonly method: string; readonly path: string }>>;
   /**
    * Runtime route map from `app.$routes` (typed adopt). HTTP triggers become
    * REST; flows without method/path fall back to RPC.
@@ -203,11 +188,7 @@ export interface ClientOptions {
  * @typeParam O - Output
  * @typeParam E - Errors
  */
-export type ClientCall<
-  I,
-  O,
-  E extends Record<string, unknown>,
-> = [I] extends [void]
+export type ClientCall<I, O, E extends Record<string, unknown>> = [I] extends [void]
   ? () => Promise<ClientResult<O, E>>
   : Partial<I> extends I
     ? (input?: I) => Promise<ClientResult<O, E>>
@@ -223,9 +204,7 @@ type ContractIn<C> = "in" extends keyof C
   : void;
 
 /** Pull output from a contract shape. */
-type ContractOut<C> = "out" extends keyof C
-  ? NonNullable<C["out"]>
-  : unknown;
+type ContractOut<C> = "out" extends keyof C ? NonNullable<C["out"]> : unknown;
 
 /** Pull error map from a contract shape. */
 type ContractErrors<C> = "errors" extends keyof C

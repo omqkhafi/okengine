@@ -63,51 +63,32 @@ export function RunsPanel() {
 
   const allRuns = runsQuery.data ?? [];
   const query = dimensionQueryOf(search);
-  const filtered = useMemo(
-    () => filterRuns(allRuns, query),
-    [allRuns, query],
-  );
+  const filtered = useMemo(() => filterRuns(allRuns, query), [allRuns, query]);
   const range = durationRangeOf(search);
-  const buckets = useMemo(
-    () => durationHistogram(filtered),
-    [filtered],
-  );
+  const buckets = useMemo(() => durationHistogram(filtered), [filtered]);
   const maxBucket = Math.max(1, ...buckets.map((b) => b.count));
   const groups = useMemo(
-    () =>
-      search.group ? groupByDimension(filtered, search.group) : [],
+    () => (search.group ? groupByDimension(filtered, search.group) : []),
     [filtered, search.group],
   );
   const findings = useMemo(
     () => (range ? explainDurationOutliers(filtered, range) : []),
     [filtered, range],
   );
-  const dimensions = useMemo(
-    () => discoverDimensions(allRuns),
-    [allRuns],
-  );
+  const dimensions = useMemo(() => discoverDimensions(allRuns), [allRuns]);
   const open = allRuns.find((r) => r.id === search.run);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 flex-wrap items-end gap-4 border-b border-[var(--oke-line)] px-6 py-4">
         <div className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">
-            Runs
-          </p>
-          <h1 className="text-xl font-semibold tracking-tight">
-            Population analysis
-          </h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">Runs</p>
+          <h1 className="text-xl font-semibold tracking-tight">Population analysis</h1>
           <p className="text-xs text-[var(--oke-muted)]">
-            {filtered.length} of {allRuns.length} runs · wide events, not log
-            lines
+            {filtered.length} of {allRuns.length} runs · wide events, not log lines
           </p>
         </div>
-        <QueryBuilder
-          search={search}
-          dimensions={dimensions}
-          onChange={setSearch}
-        />
+        <QueryBuilder search={search} dimensions={dimensions} onChange={setSearch} />
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-[var(--oke-muted)]">Group by</span>
           <select
@@ -132,18 +113,14 @@ export function RunsPanel() {
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <div className="min-h-0 overflow-auto border-r border-[var(--oke-line)] px-6 py-6">
           <section aria-label="Duration distribution" className="mb-8">
-            <h2 className="mb-2 text-sm font-medium">
-              Duration distribution
-            </h2>
+            <h2 className="mb-2 text-sm font-medium">Duration distribution</h2>
             <p className="mb-3 text-xs text-[var(--oke-muted)]">
               Range-select a region to explain outliers against the rest.
             </p>
             {runsQuery.isLoading ? (
               <p className="text-sm text-[var(--oke-muted)]">Loading runs…</p>
             ) : buckets.length === 0 ? (
-              <p className="text-sm text-[var(--oke-muted)]">
-                No runs match the current query.
-              </p>
+              <p className="text-sm text-[var(--oke-muted)]">No runs match the current query.</p>
             ) : (
               <DurationChart
                 buckets={buckets}
@@ -155,8 +132,7 @@ export function RunsPanel() {
             {range ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <p className="text-xs text-[var(--oke-muted)]">
-                  Selected {formatDurationMs(range.minMs)} –{" "}
-                  {formatDurationMs(range.maxMs)}
+                  Selected {formatDurationMs(range.minMs)} – {formatDurationMs(range.maxMs)}
                 </p>
                 <Button
                   type="button"
@@ -171,9 +147,7 @@ export function RunsPanel() {
 
           {range ? (
             <section aria-label="Outlier explanation" className="mb-8">
-              <h2 className="mb-2 text-sm font-medium">
-                Outlier explanation
-              </h2>
+              <h2 className="mb-2 text-sm font-medium">Outlier explanation</h2>
               {findings.length === 0 ? (
                 <p className="text-sm text-[var(--oke-muted)]">
                   No dimension separates this region strongly enough.
@@ -181,9 +155,7 @@ export function RunsPanel() {
               ) : (
                 <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
                   {findings.map((f) => (
-                    <li key={`${f.dimension}:${f.value}`}>
-                      {f.explanation}
-                    </li>
+                    <li key={`${f.dimension}:${f.value}`}>{f.explanation}</li>
                   ))}
                 </ol>
               )}
@@ -192,9 +164,7 @@ export function RunsPanel() {
 
           {search.group ? (
             <section aria-label="Group aggregates" className="mb-8">
-              <h2 className="mb-2 text-sm font-medium">
-                Group by {search.group}
-              </h2>
+              <h2 className="mb-2 text-sm font-medium">Group by {search.group}</h2>
               <table className="w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-[var(--oke-line)] text-[var(--oke-muted)]">
@@ -223,18 +193,10 @@ export function RunsPanel() {
                     <tr key={g.key}>
                       <td className="py-2 pr-3 font-mono text-xs">{g.key}</td>
                       <td className="py-2 pr-3">{g.count}</td>
-                      <td className="py-2 pr-3">
-                        {formatDurationMs(g.avgDurationMs)}
-                      </td>
-                      <td className="py-2 pr-3">
-                        {formatDurationMs(g.p50DurationMs)}
-                      </td>
-                      <td className="py-2 pr-3">
-                        {formatDurationMs(g.p99DurationMs)}
-                      </td>
-                      <td className="py-2">
-                        {g.sumCost > 0 ? `$${g.sumCost.toFixed(3)}` : "—"}
-                      </td>
+                      <td className="py-2 pr-3">{formatDurationMs(g.avgDurationMs)}</td>
+                      <td className="py-2 pr-3">{formatDurationMs(g.p50DurationMs)}</td>
+                      <td className="py-2 pr-3">{formatDurationMs(g.p99DurationMs)}</td>
+                      <td className="py-2">{g.sumCost > 0 ? `$${g.sumCost.toFixed(3)}` : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -269,10 +231,7 @@ export function RunsPanel() {
                         <span className="flex items-center gap-3 font-mono text-xs text-[var(--oke-muted)]">
                           <span>{run.cache}</span>
                           {run.error ? (
-                            <span
-                              role="status"
-                              className="text-[var(--oke-danger)]"
-                            >
+                            <span role="status" className="text-[var(--oke-danger)]">
                               {run.error}
                             </span>
                           ) : (
@@ -298,11 +257,7 @@ export function RunsPanel() {
               Select a run to see its flat dimension record.
             </p>
           ) : (
-            <RunDetail
-              run={open}
-              allRuns={allRuns}
-              onClose={() => setSearch(closeRun(search))}
-            />
+            <RunDetail run={open} allRuns={allRuns} onClose={() => setSearch(closeRun(search))} />
           )}
         </section>
       </div>
@@ -320,9 +275,7 @@ function QueryBuilder({
   readonly onChange: (next: RunsSearch) => void;
 }) {
   const query = dimensionQueryOf(search);
-  const dimOptions = [
-    ...new Set([...BUILDER_DIMENSIONS, ...dimensions]),
-  ].sort();
+  const dimOptions = [...new Set([...BUILDER_DIMENSIONS, ...dimensions])].sort();
   const [dim, setDim] = useState<string>("cache");
   const [op, setOp] = useState<QueryOp>("=");
   const [value, setValue] = useState("miss");
@@ -378,9 +331,7 @@ function QueryBuilder({
           type="button"
           variant="ghost"
           onClick={() => {
-            const parsed = parseDimensionQuery(
-              `${dim} ${op} ${value}`,
-            );
+            const parsed = parseDimensionQuery(`${dim} ${op} ${value}`);
             const clause = parsed.clauses[0];
             if (!clause) return;
             const next = setWhere(search, upsertClause(query, clause));
@@ -393,20 +344,14 @@ function QueryBuilder({
       </div>
 
       {query.clauses.length > 0 ? (
-        <ul
-          aria-label="Active query clauses"
-          className="flex flex-wrap gap-2"
-        >
+        <ul aria-label="Active query clauses" className="flex flex-wrap gap-2">
           {query.clauses.map((c) => (
             <li key={c.dimension}>
               <button
                 type="button"
                 className="min-h-8 border border-[var(--oke-line)] px-2 font-mono text-xs"
                 onClick={() => {
-                  const next = setWhere(
-                    search,
-                    removeClause(query, c.dimension),
-                  );
+                  const next = setWhere(search, removeClause(query, c.dimension));
                   setExprDraft(next.where ?? "");
                   onChange(next);
                 }}
@@ -419,9 +364,7 @@ function QueryBuilder({
       ) : null}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-[var(--oke-muted)]">
-          Dimension query expression
-        </span>
+        <span className="text-[var(--oke-muted)]">Dimension query expression</span>
         <input
           aria-label="Dimension query expression"
           className="min-h-8 border border-[var(--oke-line)] bg-transparent px-2 font-mono text-sm"
@@ -465,10 +408,7 @@ function DurationChart({
       onMouseLeave={() => setAnchor(null)}
     >
       {buckets.map((b, i) => {
-        const selected =
-          range !== null &&
-          b.minMs <= range.maxMs &&
-          b.maxMs >= range.minMs;
+        const selected = range !== null && b.minMs <= range.maxMs && b.maxMs >= range.minMs;
         const height = Math.max(4, (b.count / maxBucket) * 100);
         return (
           <button
@@ -533,9 +473,7 @@ function RunDetail({
       label: "replica",
       value:
         run.replica != null
-          ? `${run.replica}${
-              run.replicaLagMs != null ? ` · lag ${run.replicaLagMs}ms` : ""
-            }`
+          ? `${run.replica}${run.replicaLagMs != null ? ` · lag ${run.replicaLagMs}ms` : ""}`
           : "—",
     },
     {
@@ -587,9 +525,7 @@ function RunDetail({
             <dd
               className={clsx(
                 "font-mono text-xs",
-                f.label === "error" && run.error
-                  ? "text-[var(--oke-danger)]"
-                  : "",
+                f.label === "error" && run.error ? "text-[var(--oke-danger)]" : "",
               )}
             >
               {f.value}
@@ -610,8 +546,7 @@ function RunDetail({
                 className="flex min-h-8 items-center justify-between gap-3 py-1"
               >
                 <span>
-                  {e.kind}{" "}
-                  <span className="font-mono text-xs">{e.resource}</span>
+                  {e.kind} <span className="font-mono text-xs">{e.resource}</span>
                 </span>
                 <span className="font-mono text-xs text-[var(--oke-muted)]">
                   {e.duration}ms · {e.reversibility}
@@ -623,17 +558,14 @@ function RunDetail({
       </div>
 
       <details className="group">
-        <summary className="cursor-pointer text-sm font-medium">
-          fx.log ({run.logs.length})
-        </summary>
+        <summary className="cursor-pointer text-sm font-medium">fx.log ({run.logs.length})</summary>
         {run.logs.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--oke-muted)]">No log lines</p>
         ) : (
           <ul className="mt-2 divide-y divide-[var(--oke-line)] font-mono text-xs">
             {run.logs.map((line, i) => (
               <li key={i} className="py-2">
-                <span className="text-[var(--oke-muted)]">[{line.level}]</span>{" "}
-                {line.message}
+                <span className="text-[var(--oke-muted)]">[{line.level}]</span> {line.message}
                 {line.data ? (
                   <pre className="mt-1 whitespace-pre-wrap text-[var(--oke-muted)]">
                     {JSON.stringify(line.data, null, 2)}

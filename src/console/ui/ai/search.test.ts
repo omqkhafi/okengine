@@ -3,12 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  manifestDiffHref,
-  openPromptVersion,
-  parseAiSearch,
-  serializeAiSearch,
-} from "./search.ts";
+import { manifestDiffHref, openPromptVersion, parseAiSearch, serializeAiSearch } from "./search.ts";
 
 describe("AI search", () => {
   test("round-trips prompt + version", () => {
@@ -28,11 +23,7 @@ describe("AI search", () => {
   });
 
   test("openPromptVersion clears agent selection", () => {
-    const next = openPromptVersion(
-      { agent: "support", run: "r1" },
-      "ticket-triage",
-      3,
-    );
+    const next = openPromptVersion({ agent: "support", run: "r1" }, "ticket-triage", 3);
     expect(next.agent).toBeUndefined();
     expect(next.prompt).toBe("ticket-triage");
     expect(next.version).toBe(3);

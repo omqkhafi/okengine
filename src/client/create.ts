@@ -13,12 +13,7 @@
  */
 
 import { createTransport, type Transport } from "./transport.ts";
-import type {
-  Client,
-  ClientOptions,
-  ClientRouteMap,
-  ResolveApp,
-} from "./types.ts";
+import type { Client, ClientOptions, ClientRouteMap, ResolveApp } from "./types.ts";
 
 /** App-shaped value that carries a runtime `$routes` table from typed adopt. */
 export interface AppWithRoutes {
@@ -98,8 +93,7 @@ export function flattenRoutes(
   $routes: ClientRouteMap | undefined,
 ): ClientOptions["routes"] | undefined {
   if (!$routes) return undefined;
-  const out: Record<string, { readonly method: string; readonly path: string }> =
-    {};
+  const out: Record<string, { readonly method: string; readonly path: string }> = {};
   for (const [unit, flows] of Object.entries($routes)) {
     if (!flows || typeof flows !== "object") continue;
     for (const [flow, contract] of Object.entries(flows)) {

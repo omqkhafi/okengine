@@ -18,11 +18,7 @@ export type {
   WideningRecord,
 } from "./types.ts";
 
-export {
-  GATES_LIST_FIXTURE,
-  SIMULATE_ALLOW_FIXTURE,
-  SIMULATE_RATE_FIXTURE,
-} from "./fixture.ts";
+export { GATES_LIST_FIXTURE, SIMULATE_ALLOW_FIXTURE, SIMULATE_RATE_FIXTURE } from "./fixture.ts";
 
 export {
   parseGatesSearch,
@@ -36,11 +32,7 @@ export {
 
 export { groupPrincipals, groupFlows } from "./group.ts";
 
-export {
-  auditLines,
-  formatViolation,
-  type AuditLine,
-} from "./audit.ts";
+export { auditLines, formatViolation, type AuditLine } from "./audit.ts";
 
 export { unguardedFlowFindings } from "./findings.ts";
 

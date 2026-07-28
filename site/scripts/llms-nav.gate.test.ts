@@ -23,10 +23,7 @@ interface MetaJson {
  * @param dir - Absolute directory containing meta.json
  * @param prefix - Slug segments so far
  */
-async function collectNavSlugs(
-  dir: string,
-  prefix: readonly string[] = [],
-): Promise<string[]> {
+async function collectNavSlugs(dir: string, prefix: readonly string[] = []): Promise<string[]> {
   const metaPath = join(dir, "meta.json");
   const metaFile = Bun.file(metaPath);
   if (!(await metaFile.exists())) {
@@ -49,10 +46,7 @@ async function collectNavSlugs(
 
     const mdPath = join(dir, `${entry}.md`);
     const mdxPath = join(dir, `${entry}.mdx`);
-    if (
-      (await Bun.file(mdPath).exists()) ||
-      (await Bun.file(mdxPath).exists())
-    ) {
+    if ((await Bun.file(mdPath).exists()) || (await Bun.file(mdxPath).exists())) {
       const slug =
         entry === "index" && prefix.length === 0
           ? ""
@@ -74,10 +68,7 @@ async function collectNavSlugs(
 async function collectDiskSlugs(dir: string): Promise<string[]> {
   const out: string[] = [];
 
-  async function walk(
-    current: string,
-    prefix: readonly string[],
-  ): Promise<void> {
+  async function walk(current: string, prefix: readonly string[]): Promise<void> {
     const entries = await readdir(current, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name === "meta.json") continue;
@@ -172,9 +163,7 @@ describe("llms.txt ↔ nav structure", () => {
     }
 
     // Route must keep generating from the live source (not a hand file).
-    const route = await Bun.file(
-      join(import.meta.dir, "..", "app", "llms.txt", "route.ts"),
-    ).text();
+    const route = await Bun.file(join(import.meta.dir, "..", "app", "llms.txt", "route.ts")).text();
     expect(route).toContain("llms(source).index()");
   });
 });

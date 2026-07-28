@@ -62,18 +62,13 @@ export function parseJsonRpcRequest(
   }
   const o = body as Record<string, unknown>;
   if (o.jsonrpc !== "2.0") {
-    return { ok: false, message: "jsonrpc must be \"2.0\"" };
+    return { ok: false, message: 'jsonrpc must be "2.0"' };
   }
   if (typeof o.method !== "string" || o.method.length === 0) {
     return { ok: false, message: "method must be a non-empty string" };
   }
   const id = o.id;
-  if (
-    id !== null &&
-    id !== undefined &&
-    typeof id !== "string" &&
-    typeof id !== "number"
-  ) {
+  if (id !== null && id !== undefined && typeof id !== "string" && typeof id !== "number") {
     return { ok: false, message: "id must be string, number, or null" };
   }
   return {
@@ -142,9 +137,7 @@ export const MCP_PROTOCOL_VERSION = "2024-11-05";
  *
  * @param params - Unknown params
  */
-export function parseToolsCallParams(
-  params: unknown,
-):
+export function parseToolsCallParams(params: unknown):
   | {
       readonly ok: true;
       readonly name: string;

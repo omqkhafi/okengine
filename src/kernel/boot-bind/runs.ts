@@ -14,9 +14,7 @@ import {
  *
  * @param options - Create options (when not already a runtime)
  */
-export async function bindRuns(
-  options?: CreateRunsRuntimeOptions,
-): Promise<RunsRuntime> {
+export async function bindRuns(options?: CreateRunsRuntimeOptions): Promise<RunsRuntime> {
   const runs = createRunsRuntime({
     driver: options?.driver ?? memoryRunsDriver,
     ...(options ?? {}),

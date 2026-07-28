@@ -20,6 +20,7 @@ export interface DoctorFinding {
     | "missing_secret"
     | "port_conflict"
     | "schema_drift"
+    | "db_drift"
     | "tenancy"
     | "driver"
     | "pii_ask";
@@ -44,6 +45,16 @@ export interface DoctorOptions {
   readonly expectedSchemaFingerprint?: string;
   /** Current schema fingerprint (tests). */
   readonly currentSchemaFingerprint?: string | null;
+  /**
+   * Inject domain DB drift probe (tests). When unset, runs drizzle-kit
+   * push explain when `drizzle.config.ts` exists.
+   */
+  readonly detectDbDrift?: () => Promise<{
+    readonly drifted: boolean;
+    readonly detail?: string;
+  }>;
+  /** Skip live DB drift probe (default false). */
+  readonly skipDbDrift?: boolean;
   readonly write?: (text: string) => void;
   /** Write hints / progress (defaults to stderr). */
   readonly writeErr?: (text: string) => void;
@@ -79,9 +90,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   }
 
   const env = options.env ?? ((k) => Bun.env[k] ?? process.env[k]);
-  const secretNames =
-    options.secrets ??
-    (manifest?.vault ? Object.keys(manifest.vault) : []);
+  const secretNames = options.secrets ?? (manifest?.vault ? Object.keys(manifest.vault) : []);
 
   for (const name of secretNames) {
     const value = env(name);
@@ -90,9 +99,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
       findings.push({
         code: "missing_secret",
         severity: "error",
-        message: description
-          ? `missing secret ${name}: ${description}`
-          : `missing secret ${name}`,
+        message: description ? `missing secret ${name}: ${description}` : `missing secret ${name}`,
       });
     }
   }
@@ -120,21 +127,39 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
     options.currentSchemaFingerprint !== undefined
   ) {
     const expected =
-      options.expectedSchemaFingerprint ??
-      (await schemaFingerprint(cwd).catch(() => null));
+      options.expectedSchemaFingerprint ?? (await schemaFingerprint(cwd).catch(() => null));
     if (expected !== null && current !== null && expected !== current) {
       findings.push({
         code: "schema_drift",
         severity: "error",
         message:
-          "schema drift detected — run `oke schema generate` (or --check in CI)",
+          "core stub schema drift — run `oke schema generate` (schema/oke.ts; not domain migrations)",
       });
     } else if (expected !== null && current === null) {
       findings.push({
         code: "schema_drift",
         severity: "error",
-        message: "schema/oke.ts missing — run `oke schema generate`",
+        message: "schema/oke.ts missing — run `oke schema generate` (core/plugin stubs)",
       });
+    }
+  }
+
+  // Domain schema ↔ live DB — drizzle-kit is the single source of truth.
+  if (!options.skipDbDrift) {
+    const drizzleConfig = Bun.file(resolve(cwd, "drizzle.config.ts"));
+    if (options.detectDbDrift || (await drizzleConfig.exists())) {
+      const { detectDbDrift } = await import("./db.ts");
+      const probe = options.detectDbDrift ?? (() => detectDbDrift({ cwd }));
+      const drift = await probe();
+      if (drift.drifted) {
+        findings.push({
+          code: "db_drift",
+          severity: "error",
+          message:
+            drift.detail ??
+            "domain schema differs from the database — run `oke db generate` then `oke db migrate` (or `oke db push` in local)",
+        });
+      }
     }
   }
 
@@ -205,4 +230,3 @@ Verify secrets, ports, schema drift, and PII→model egress before serving.
   const { code } = await runDoctor({ manifestPath, json });
   return code;
 }
-

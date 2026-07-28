@@ -30,10 +30,7 @@ import { consoleCalls } from "../../client.ts";
 export function DiffPanel() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const rawSearch = useRouterState({ select: (s) => s.location.search });
-  const search = useMemo(
-    () => parseDiffSearch(rawSearch as Record<string, unknown>),
-    [rawSearch],
-  );
+  const search = useMemo(() => parseDiffSearch(rawSearch as Record<string, unknown>), [rawSearch]);
   const navigate = useNavigate();
 
   const setSearch = (next: DiffSearch) => {
@@ -56,12 +53,7 @@ export function DiffPanel() {
 
   const data = listQuery.data;
   const filtered = useMemo(
-    () =>
-      filterChanges(
-        data?.changes ?? [],
-        search.q ?? "",
-        search.category,
-      ),
+    () => filterChanges(data?.changes ?? [], search.q ?? "", search.category),
     [data?.changes, search.q, search.category],
   );
   const groups = useMemo(() => groupByCategory(filtered), [filtered]);
@@ -70,12 +62,10 @@ export function DiffPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-[var(--oke-line)] px-4 py-3">
-        <h1 className="text-base font-medium text-[var(--oke-fg)]">
-          Manifest Diff
-        </h1>
+        <h1 className="text-base font-medium text-[var(--oke-fg)]">Manifest Diff</h1>
         <p className="text-sm text-[var(--oke-muted)]">
-          Blast radius of a deploy — contract, permission, effect, and no-impact.
-          Read-only compare of current Manifest vs baseline.
+          Blast radius of a deploy — contract, permission, effect, and no-impact. Read-only compare
+          of current Manifest vs baseline.
         </p>
         <label className="mt-2 flex max-w-sm flex-col gap-1 text-sm">
           <span className="text-[var(--oke-muted)]">Filter</span>
@@ -83,16 +73,10 @@ export function DiffPanel() {
             aria-label="Filter changes"
             className="min-h-8 border border-[var(--oke-line)] bg-transparent px-2"
             value={search.q ?? ""}
-            onChange={(e) =>
-              setSearch({ ...search, q: e.target.value || undefined })
-            }
+            onChange={(e) => setSearch({ ...search, q: e.target.value || undefined })}
           />
         </label>
-        <div
-          role="group"
-          aria-label="Blast-radius category"
-          className="mt-2 flex flex-wrap gap-1"
-        >
+        <div role="group" aria-label="Blast-radius category" className="mt-2 flex flex-wrap gap-1">
           <CategoryChip
             label="All"
             pressed={search.category === undefined}
@@ -124,9 +108,7 @@ export function DiffPanel() {
           <p className="text-[var(--oke-fg)]">
             <span
               className={
-                (data.blockedCount ?? 0) > 0
-                  ? "text-[var(--oke-fg)]"
-                  : "text-[var(--oke-muted)]"
+                (data.blockedCount ?? 0) > 0 ? "text-[var(--oke-fg)]" : "text-[var(--oke-muted)]"
               }
             >
               {data.blockedCount} undeclared break
@@ -142,17 +124,13 @@ export function DiffPanel() {
       ) : null}
 
       <main id="diff-main" className="min-h-0 flex-1 overflow-y-auto p-4">
-        {listQuery.isLoading ? (
-          <p className="text-[var(--oke-muted)]">Loading…</p>
-        ) : null}
-        {listQuery.isError ? (
-          <p role="alert">Failed to load Manifest Diff</p>
-        ) : null}
+        {listQuery.isLoading ? <p className="text-[var(--oke-muted)]">Loading…</p> : null}
+        {listQuery.isError ? <p role="alert">Failed to load Manifest Diff</p> : null}
 
         {data && !data.hasBaseline ? (
           <p className="text-[var(--oke-muted)]" role="status">
-            No baseline Manifest to compare. Deploy once, or feed a previous
-            Manifest, to see blast radius.
+            No baseline Manifest to compare. Deploy once, or feed a previous Manifest, to see blast
+            radius.
           </p>
         ) : null}
 
@@ -163,16 +141,10 @@ export function DiffPanel() {
         ) : null}
 
         {groups.map((group) => (
-          <section
-            key={group.category}
-            aria-label={group.label}
-            className="mb-8"
-          >
+          <section key={group.category} aria-label={group.label} className="mb-8">
             <h2 className="mb-3 text-xs uppercase tracking-wide text-[var(--oke-muted)]">
               {group.label}
-              <span className="ml-2 font-mono normal-case">
-                ({group.items.length})
-              </span>
+              <span className="ml-2 font-mono normal-case">({group.items.length})</span>
             </h2>
             <ul className="space-y-3">
               {group.items.map((item) => {
@@ -194,31 +166,20 @@ export function DiffPanel() {
                         onClick={() =>
                           setSearch({
                             ...search,
-                            path:
-                              search.path === item.path
-                                ? undefined
-                                : item.path,
+                            path: search.path === item.path ? undefined : item.path,
                           })
                         }
                       >
-                        <h3 className="font-mono text-sm text-[var(--oke-fg)]">
-                          {item.path}
-                        </h3>
-                        <p className="mt-1 text-sm text-[var(--oke-muted)]">
-                          {item.summary}
-                        </p>
+                        <h3 className="font-mono text-sm text-[var(--oke-fg)]">{item.path}</h3>
+                        <p className="mt-1 text-sm text-[var(--oke-muted)]">{item.summary}</p>
                       </button>
                       {item.blastLine ? (
-                        <p
-                          role="status"
-                          className="mt-2 text-sm text-[var(--oke-fg)]"
-                        >
+                        <p role="status" className="mt-2 text-sm text-[var(--oke-fg)]">
                           {item.blastLine}
                         </p>
                       ) : item.runCountLastWeek > 0 && item.flowName ? (
                         <p className="mt-2 text-sm text-[var(--oke-muted)]">
-                          Ran {item.runCountLastWeek.toLocaleString("en-US")}{" "}
-                          times last week
+                          Ran {item.runCountLastWeek.toLocaleString("en-US")} times last week
                         </p>
                       ) : null}
                       {item.weeklyBillLine ? (
@@ -263,9 +224,7 @@ function CategoryChip(props: {
       aria-pressed={props.pressed}
       className={clsx(
         "min-h-8 px-2 text-xs",
-        props.pressed
-          ? "bg-[var(--oke-line)] text-[var(--oke-fg)]"
-          : "text-[var(--oke-muted)]",
+        props.pressed ? "bg-[var(--oke-line)] text-[var(--oke-fg)]" : "text-[var(--oke-muted)]",
       )}
       onClick={props.onClick}
     >

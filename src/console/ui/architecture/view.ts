@@ -10,18 +10,10 @@
 import type { CausalityGraph } from "../flows/graph.ts";
 import type { RunRecord } from "../runs/types.ts";
 import { boundaryCrossingCount, boundaryCrossingRefs } from "./boundary.ts";
-import {
-  declaredEdgesOf,
-  type DeclaredEdge,
-  unitOfFlowId,
-} from "./declared.ts";
+import { declaredEdgesOf, type DeclaredEdge, unitOfFlowId } from "./declared.ts";
 import { isBoundaryExternal, labelOfRef } from "./layers.ts";
 import { computePathologies } from "./pathologies.ts";
-import {
-  observeTraffic,
-  thicknessOf,
-  traversalsOf,
-} from "./traffic.ts";
+import { observeTraffic, thicknessOf, traversalsOf } from "./traffic.ts";
 import type {
   ArchitectureEdge,
   ArchitectureNode,
@@ -147,9 +139,7 @@ function buildClusteredView(input: {
     if (fromId === toId) continue;
 
     const key = `${fromId}\0${toId}\0${edge.layer}`;
-    const trav = edge.ref
-      ? traversalsOf(traffic, edge.flowId, edge.ref)
-      : 0;
+    const trav = edge.ref ? traversalsOf(traffic, edge.flowId, edge.ref) : 0;
     const existing = agg.get(key);
     if (existing) {
       existing.traversals += trav;
@@ -186,8 +176,7 @@ function buildFocusedView(input: {
   readonly findings: ArchitectureView["findings"];
   readonly crossings: number;
 }): ArchitectureView {
-  const { graph, declared, traffic, focus, depth, layers, findings, crossings } =
-    input;
+  const { graph, declared, traffic, focus, depth, layers, findings, crossings } = input;
 
   const neighbourhood = neighbourhoodIds(graph, declared, focus, depth);
   const nodes: ArchitectureNode[] = [];
@@ -247,11 +236,7 @@ function buildFocusedView(input: {
       id,
       kind: isBoundaryExternal(id) ? "external" : "resource",
       label: labelOfRef(id),
-      layer: isBoundaryExternal(id)
-        ? "external"
-        : id.startsWith("signal:")
-          ? "messaging"
-          : "data",
+      layer: isBoundaryExternal(id) ? "external" : id.startsWith("signal:") ? "messaging" : "data",
       insideBoundary: !isBoundaryExternal(id),
       focused: id === focus,
       depth: hop,
@@ -283,9 +268,7 @@ function buildFocusedView(input: {
     if (!visible.has(from) || !visible.has(to)) continue;
 
     const key = `${from}\0${to}\0${edge.layer}`;
-    const trav = edge.ref
-      ? traversalsOf(traffic, edge.flowId, edge.ref)
-      : 0;
+    const trav = edge.ref ? traversalsOf(traffic, edge.flowId, edge.ref) : 0;
     const existing = edgeAgg.get(key);
     if (existing) {
       existing.traversals += trav;
@@ -311,10 +294,7 @@ function buildFocusedView(input: {
   };
 }
 
-function materializeFocusNode(
-  graph: CausalityGraph,
-  focus: string,
-): ArchitectureNode[] {
+function materializeFocusNode(graph: CausalityGraph, focus: string): ArchitectureNode[] {
   if (focus.startsWith("unit:")) {
     const unit = focus.slice("unit:".length);
     return [
@@ -455,10 +435,7 @@ function distanceFromFocus(
   return maxDepth;
 }
 
-function layerVisible(
-  layer: ElementLayer | "call",
-  layers: LayerFlags,
-): boolean {
+function layerVisible(layer: ElementLayer | "call", layers: LayerFlags): boolean {
   if (layer === "call") return true;
   return layers[layer];
 }
@@ -507,10 +484,6 @@ function dedupeNodes(nodes: readonly ArchitectureNode[]): ArchitectureNode[] {
  * @param layer - Layer to flip
  * @param on - Desired state
  */
-export function setLayer(
-  layers: LayerFlags,
-  layer: ElementLayer,
-  on: boolean,
-): LayerFlags {
+export function setLayer(layers: LayerFlags, layer: ElementLayer, on: boolean): LayerFlags {
   return { ...layers, [layer]: on };
 }

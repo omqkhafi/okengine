@@ -168,19 +168,17 @@ export function createManifestAiRuntime(
     }),
   );
   const modelByName = new Map(models.map((m) => [m.name, m]));
-  const prompts = Object.entries(manifest?.ai?.prompts ?? {}).map(
-    ([name, p]) => {
-      const modelName = p.model ?? models[0]?.name ?? "mock";
-      const handle = modelByName.get(modelName) ?? ai.model(modelName);
-      return handle.prompt(name, {
-        ...(p.version !== undefined ? { version: p.version } : {}),
-        ...(p.evals !== undefined ? { evals: p.evals } : {}),
-        ...(p.budget !== undefined ? { budget: p.budget } : {}),
-        ...(p.in !== undefined ? { in: p.in } : {}),
-        ...(p.out !== undefined ? { out: p.out } : {}),
-      });
-    },
-  );
+  const prompts = Object.entries(manifest?.ai?.prompts ?? {}).map(([name, p]) => {
+    const modelName = p.model ?? models[0]?.name ?? "mock";
+    const handle = modelByName.get(modelName) ?? ai.model(modelName);
+    return handle.prompt(name, {
+      ...(p.version !== undefined ? { version: p.version } : {}),
+      ...(p.evals !== undefined ? { evals: p.evals } : {}),
+      ...(p.budget !== undefined ? { budget: p.budget } : {}),
+      ...(p.in !== undefined ? { in: p.in } : {}),
+      ...(p.out !== undefined ? { out: p.out } : {}),
+    });
+  });
   const agents = Object.entries(manifest?.ai?.agents ?? {}).map(([name, a]) =>
     ai.agent(name, {
       tools: a.tools ?? [],
@@ -200,8 +198,7 @@ export function createManifestAiRuntime(
     prompts,
     agents,
     defaultDriver: mockAiDriver,
-    effectsForFlow: (flowName) =>
-      effectsForFlowFromManifest(manifest, flowName),
+    effectsForFlow: (flowName) => effectsForFlowFromManifest(manifest, flowName),
     now: options.now,
   });
 }
@@ -355,8 +352,7 @@ export function projectAllowPii(manifest: Manifest | null): readonly AllowPiiRow
   if (!manifest?.flows) return [];
   const rows: AllowPiiRow[] = [];
   for (const [flowId, flow] of Object.entries(manifest.flows)) {
-    const allow =
-      flow.allowPii === true || flow.pii === "allow";
+    const allow = flow.allowPii === true || flow.pii === "allow";
     const asks = flow.effects?.asks ?? [];
     if (!allow && asks.length === 0) continue;
     if (!allow && flow.pii === undefined) continue;
@@ -377,9 +373,7 @@ export function projectAllowPii(manifest: Manifest | null): readonly AllowPiiRow
     });
 }
 
-function projectFallbackChains(
-  journal: readonly AiJournalEntry[],
-): readonly FallbackChainRow[] {
+function projectFallbackChains(journal: readonly AiJournalEntry[]): readonly FallbackChainRow[] {
   const rows: FallbackChainRow[] = [];
   for (const entry of journal) {
     if (entry.attempts.length < 2) continue;
@@ -411,9 +405,7 @@ function projectFallbackChains(
   return rows.sort((a, b) => b.at - a.at);
 }
 
-function projectAgentRuns(
-  runs: readonly AgentRunRecord[],
-): readonly AgentRunRow[] {
+function projectAgentRuns(runs: readonly AgentRunRecord[]): readonly AgentRunRow[] {
   return [...runs]
     .sort((a, b) => b.at - a.at)
     .map((r) => ({
@@ -439,10 +431,7 @@ function buildVersionMetrics(input: {
   readonly journal: readonly AiJournalEntry[];
   readonly runs: readonly WideEvent[];
   readonly evalResults: readonly EvalSuiteResult[];
-  readonly promptMeta: Map<
-    string,
-    { version?: number; budget?: number | null; model?: string }
-  >;
+  readonly promptMeta: Map<string, { version?: number; budget?: number | null; model?: string }>;
   readonly bucketCount: number;
 }): readonly PromptVersionMetrics[] {
   type Acc = {
@@ -480,10 +469,7 @@ function buildVersionMetrics(input: {
   };
 
   for (const entry of input.journal) {
-    const version =
-      entry.version ??
-      input.promptMeta.get(entry.prompt)?.version ??
-      0;
+    const version = entry.version ?? input.promptMeta.get(entry.prompt)?.version ?? 0;
     const acc = ensure(entry.prompt, version);
     acc.costs.push(entry.cost);
     acc.latencies.push(entry.latencyMs);
@@ -528,9 +514,7 @@ function buildVersionMetrics(input: {
   const out: PromptVersionMetrics[] = [];
   for (const acc of map.values()) {
     const totalOutcomes =
-      acc.outcomes.ok +
-      acc.outcomes.provider_error +
-      acc.outcomes.schema_invalid;
+      acc.outcomes.ok + acc.outcomes.provider_error + acc.outcomes.schema_invalid;
     out.push({
       prompt: acc.prompt,
       version: acc.version,
@@ -538,13 +522,10 @@ function buildVersionMetrics(input: {
       cost: metricBlock(acc.costs, input.bucketCount),
       latencyMs: metricBlock(acc.latencies, input.bucketCount),
       evalScore: metricBlock(acc.evals, input.bucketCount),
-      schemaInvalidRate:
-        totalOutcomes === 0 ? 0 : acc.outcomes.schema_invalid / totalOutcomes,
-      providerErrorRate:
-        totalOutcomes === 0 ? 0 : acc.outcomes.provider_error / totalOutcomes,
+      schemaInvalidRate: totalOutcomes === 0 ? 0 : acc.outcomes.schema_invalid / totalOutcomes,
+      providerErrorRate: totalOutcomes === 0 ? 0 : acc.outcomes.provider_error / totalOutcomes,
       okRate: totalOutcomes === 0 ? 0 : acc.outcomes.ok / totalOutcomes,
-      overBudgetRate:
-        acc.costs.length === 0 ? 0 : acc.overBudget / acc.costs.length,
+      overBudgetRate: acc.costs.length === 0 ? 0 : acc.overBudget / acc.costs.length,
       budgetMaxCostPerCall: acc.budget,
       outcomeCounts: acc.outcomes,
     });
@@ -590,10 +571,7 @@ export function mean(values: readonly number[]): number {
 export function percentile(sorted: readonly number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0]!;
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.ceil(p * sorted.length) - 1),
-  );
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
   return sorted[idx]!;
 }
 
@@ -617,8 +595,7 @@ export function histogram(
   const buckets: AiDistributionBucket[] = [];
   for (let i = 0; i < bucketCount; i++) {
     const lo = min + i * width;
-    const hi =
-      i === bucketCount - 1 ? max + Number.EPSILON : min + (i + 1) * width;
+    const hi = i === bucketCount - 1 ? max + Number.EPSILON : min + (i + 1) * width;
     buckets.push({ min: lo, max: hi, count: 0 });
   }
   for (const v of sorted) {

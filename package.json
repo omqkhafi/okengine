@@ -1,39 +1,72 @@
 {
   "name": "okengine",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
-  "type": "module",
-  "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/omqkhafi/okengine.git"
+  },
+  "bin": {
+    "oke": "src/cli/index.ts"
   },
   "workspaces": [
     "packages/*",
     "examples/*",
     "site"
   ],
+  "files": [
+    "src",
+    "spec",
+    "AGENTS.md",
+    "docs/spec"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./test": "./src/test/index.ts",
+    "./config": "./src/config/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./console": "./src/console/index.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./store": "./src/elements/store.ts",
+    "./signal": "./src/elements/signal.ts",
+    "./clock": "./src/elements/clock.ts",
+    "./gate": "./src/elements/gate.ts",
+    "./vault": "./src/elements/vault.ts",
+    "./channel": "./src/elements/channel.ts",
+    "./ai": "./src/elements/ai.ts",
+    "./runs": "./src/runs/index.ts",
+    "./drivers": "./src/drivers/index.ts",
+    "./drivers/*": "./src/drivers/*"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && bun run --cwd packages/create-oke typecheck",
+    "lint": "oxlint --type-aware --quiet",
+    "lint:fix": "oxlint --type-aware --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "test": "bun test --pass-with-no-tests",
     "test:coverage": "bun test --coverage --pass-with-no-tests",
     "test:console:smoke": "bunx playwright test tests/console/smoke.spec.ts",
-    "test:integration": "bun test examples/notes examples/linkly examples/provisions examples/skyport examples/skyport/tests/docker.test.ts && bun run --cwd packages/create-oke typecheck && bun test packages/create-oke/src && CREATE_OKE_INTEGRATION=1 bun test --timeout 180000 packages/create-oke/tests/scaffold.integration.test.ts packages/create-oke/tests/dev.integration.test.ts",
     "build": "bunx vite build --config src/console/ui/vite.config.ts",
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
-    "gate": "bun src/cli/doctor-diff-examples.ts && bun test src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts scripts/publish.gate.test.ts && bun src/cli/doc-drift.ts",
+    "gate": "bun src/cli/doctor-diff-examples.ts && bun src/cli/doc-drift.ts",
     "site:sync": "bun run --cwd site sync",
     "site:dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
-    "ci": "bun run bench && bun run typecheck && bun run test && bun run budgets && bun run gate && bun run site:build && bun run test:integration",
+    "ci": "bun run typecheck && bun run lint && bun run fmt:check && bun run test && bun run budgets -- --dry-run && bun run gate && bun run site:build",
+    "ci:integration": "CREATE_OKE_INTEGRATION=1 bun run ci",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run scripts/publish.ts",
     "g": "gflows"
   },
   "dependencies": {
+    "@clack/prompts": "^1.7.0",
     "@duckdb/node-api": "^1.5.5-r.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
@@ -41,7 +74,6 @@
     "sently": "^0.8.0"
   },
   "devDependencies": {
-    "age-encryption": "^0.3.0",
     "@base-ui/react": "^1.6.0",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-json": "^6.0.2",
@@ -58,6 +90,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "age-encryption": "^0.3.0",
     "arktype": "^2.2.3",
     "axe-core": "^4.12.1",
     "clsx": "^2.1.1",
@@ -68,6 +101,9 @@
     "gflows": "^1.2.1",
     "happy-dom": "^20.11.1",
     "mermaid": "^11.16.0",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "playwright": "^1.62.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -103,33 +139,5 @@
   },
   "engines": {
     "bun": ">=1.3"
-  },
-  "bin": {
-    "oke": "src/cli/index.ts"
-  },
-  "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client/index.ts",
-    "./test": "./src/test/index.ts",
-    "./config": "./src/config/index.ts",
-    "./auth": "./src/auth/index.ts",
-    "./console": "./src/console/index.ts",
-    "./mcp": "./src/mcp/index.ts",
-    "./store": "./src/elements/store.ts",
-    "./signal": "./src/elements/signal.ts",
-    "./clock": "./src/elements/clock.ts",
-    "./gate": "./src/elements/gate.ts",
-    "./vault": "./src/elements/vault.ts",
-    "./channel": "./src/elements/channel.ts",
-    "./ai": "./src/elements/ai.ts",
-    "./runs": "./src/runs/index.ts",
-    "./drivers": "./src/drivers/index.ts",
-    "./drivers/*": "./src/drivers/*"
-  },
-  "files": [
-    "src",
-    "spec",
-    "AGENTS.md",
-    "docs/spec"
-  ]
+  }
 }

@@ -4,10 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { VERSION_V2, VERSION_V3 } from "./fixture.ts";
-import {
-  formatPromotionBlockers,
-  promotionDecision,
-} from "./promotion.ts";
+import { formatPromotionBlockers, promotionDecision } from "./promotion.ts";
 import type { PromptVersionMetrics } from "./types.ts";
 
 function withRates(
@@ -29,9 +26,7 @@ describe("promotionDecision", () => {
     expect(decision.numbers.fromSchemaInvalidRate).toBe(0.02);
     const lines = formatPromotionBlockers(decision);
     expect(lines.some((l) => l.includes("schema-invalid"))).toBe(true);
-    expect(lines.some((l) => l.includes("improved — still blocked"))).toBe(
-      true,
-    );
+    expect(lines.some((l) => l.includes("improved — still blocked"))).toBe(true);
   });
 
   test("allows when schema and budget do not regress", () => {

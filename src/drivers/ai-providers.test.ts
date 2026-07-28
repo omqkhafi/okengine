@@ -4,10 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { anthropicAiDriver, openAnthropic } from "./ai-anthropic.ts";
-import {
-  openaiCompatibleAiDriver,
-  openOpenaiCompatible,
-} from "./ai-openai-compatible.ts";
+import { openaiCompatibleAiDriver, openOpenaiCompatible } from "./ai-openai-compatible.ts";
 import { mockAiDriver } from "./ai-mock.ts";
 
 describe("anthropic driver", () => {
@@ -56,9 +53,7 @@ describe("anthropic driver", () => {
       messages: Array<{ role: string }>;
     };
     expect(body.system).toBe("be brief");
-    expect(body.messages).toEqual([
-      { role: "user", content: "hi" } as { role: string },
-    ]);
+    expect(body.messages).toEqual([{ role: "user", content: "hi" } as { role: string }]);
   });
 
   test("HTTP error surfaces provider message", async () => {
@@ -73,18 +68,16 @@ describe("anthropic driver", () => {
       apiKey: "sk-test",
       fetch: fetchFn,
     });
-    await expect(
-      client.complete({ messages: [{ role: "user", content: "x" }] }),
-    ).rejects.toThrow("rate limited");
+    await expect(client.complete({ messages: [{ role: "user", content: "x" }] })).rejects.toThrow(
+      "rate limited",
+    );
   });
 
   test("live Anthropic ask when ANTHROPIC_API_KEY is set", async () => {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) {
       // Clearly-marked skip — never fail CI for lack of credentials.
-      console.log(
-        "skip: live anthropic ask (ANTHROPIC_API_KEY not set)",
-      );
+      console.log("skip: live anthropic ask (ANTHROPIC_API_KEY not set)");
       return;
     }
     const client = await anthropicAiDriver.open({

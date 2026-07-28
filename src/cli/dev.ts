@@ -1,6 +1,6 @@
 /**
  * `oke dev` — watch · hot reload · Console :6533 · MCP :6535 · client types on save.
- * `oke dev --stack` boots infra compose and binds prod store drivers (Postgres/Redis).
+ * Mode: `local` (in-memory) or `docker` (compose infra + host Bun).
  */
 
 import { watch } from "node:fs";
@@ -13,7 +13,6 @@ import type { ConsoleState } from "../console/server/state.ts";
 import {
   DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
-  formatStackEnv,
   loadExistingStackCredentials,
   stackAppSlug,
   stackInstanceId,
@@ -22,11 +21,7 @@ import {
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
-import {
-  APP_PORT,
-  CONSOLE_PORT,
-  MCP_PORT,
-} from "../runtime/types.ts";
+import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
 import {
   formatDevBanner,
   formatDevLogSeparator,
@@ -36,15 +31,16 @@ import {
 } from "../term.ts";
 import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
+import { askDevMode, type AskDevModeFn } from "./ask-dev-mode.ts";
 import {
-  buildDevHeroSnapshot,
-  encodeHeroSnapshot,
-} from "./hero-meta.ts";
-import {
-  loadManifest,
-  loadOkeConfig,
-  resolveImages,
-} from "./load-config.ts";
+  createDebouncedRunner,
+  isDomainSchemaWatchPath,
+  resolveDevAutoPush,
+} from "./db-auto-push.ts";
+import { resolveDrizzleConfigPath, runPush } from "./db.ts";
+import { readDevMode, shouldAskDevMode, writeDevMode, type DevMode } from "./dev-mode.ts";
+import { buildDevHeroSnapshot, encodeHeroSnapshot } from "./hero-meta.ts";
+import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
 
@@ -114,7 +110,30 @@ export interface DevSession {
 export interface DevOptions {
   readonly cwd?: string;
   readonly entry?: string;
-  readonly stack?: boolean | readonly string[];
+  /**
+   * Session-only mode override. `true` / role list → docker; `false` → local.
+   * When unset, resolve from `.oke/mode` / TTY ask / non-TTY default `local`.
+   */
+  readonly docker?: boolean | readonly string[];
+  /** Force local for this session only (never writes `.oke/mode`). */
+  readonly local?: boolean;
+  /**
+   * Opt out of auto `oke db push` on schema change for this session.
+   * Also set via `--no-db-push`.
+   */
+  readonly noDbPush?: boolean;
+  /**
+   * Injectable domain-schema push (tests). Default: {@link runPush}.
+   *
+   * @param cwd - Project root
+   */
+  readonly dbPush?: (cwd: string) => Promise<number>;
+  /**
+   * Called when a schema watch path triggers auto-push (tests).
+   *
+   * @param filename - Relative path from the watcher
+   */
+  readonly onDbAutoPush?: (filename: string) => void;
   readonly images?: Readonly<Record<string, string>>;
   readonly credentials?: DeriveOptions["credentials"];
   readonly write?: (text: string) => void;
@@ -138,15 +157,12 @@ export interface DevOptions {
   readonly consolePort?: number;
   readonly mcpPort?: number;
   /**
-   * Boot compose stack (injectable).
+   * Boot compose (injectable).
    *
    * @param composeFiles - `-f` list excluding override if missing
-   * @param cwd - Project root
+   * @param cwd - Compose directory (`docker/`)
    */
-  readonly composeUp?: (
-    composeFiles: readonly string[],
-    cwd: string,
-  ) => Promise<void>;
+  readonly composeUp?: (composeFiles: readonly string[], cwd: string) => Promise<void>;
   /**
    * Regenerate client types (injectable).
    *
@@ -166,10 +182,15 @@ export interface DevOptions {
    * (import → `app.boot()` → `createBunRuntime().serve`) so Bun soft-reloads
    * app code while preserving the listen socket.
    */
-  readonly startApp?: (
-    entry: string,
-    env: Record<string, string>,
-  ) => Promise<DevAppHandle>;
+  readonly startApp?: (entry: string, env: Record<string, string>) => Promise<DevAppHandle>;
+  /**
+   * Injectable mode prompt (tests). Default: {@link askDevMode}.
+   */
+  readonly ask?: AskDevModeFn;
+  /**
+   * Override stdin TTY detection (tests). Default: `process.stdin.isTTY`.
+   */
+  readonly stdinIsTTY?: boolean;
 }
 
 /** Result of a dry-run / prepared / live-but-detached dev session. */
@@ -236,20 +257,55 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     return { code: 1 };
   }
 
+  const explicitLocal = options.local === true;
+  const explicitDocker = options.docker === true || Array.isArray(options.docker);
+  if (explicitLocal && explicitDocker) {
+    console.error("oke dev: use either --local or --docker, not both");
+    return { code: 1 };
+  }
+
+  const savedMode = await readDevMode(cwd);
+  const explicit = explicitLocal || explicitDocker;
+  let mode: DevMode;
+  if (explicitLocal) {
+    mode = "local";
+  } else if (explicitDocker) {
+    mode = "docker";
+  } else if (savedMode !== null) {
+    mode = savedMode;
+  } else if (
+    shouldAskDevMode({
+      saved: savedMode,
+      explicit,
+      stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+    })
+  ) {
+    const ask = options.ask ?? askDevMode;
+    const chosen = await ask();
+    if (chosen === null) {
+      console.error("oke dev: cancelled");
+      return { code: 1 };
+    }
+    mode = chosen;
+    await writeDevMode(cwd, mode);
+  } else {
+    // Non-TTY + unset: deterministic local — zero ask, zero docker, no save.
+    mode = "local";
+  }
+
   let stackRoles: string[] | null = null;
   let composeFiles: string[] | null = null;
   let stackEnv: Record<string, string> | null = null;
   let stackSqlDriver = "postgres";
   let stackKvDriver = "redis";
-  let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null =
-    null;
+  let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null = null;
   try {
     loadedConfig = (await loadOkeConfig(cwd)).config;
   } catch {
     loadedConfig = null;
   }
 
-  if (options.stack) {
+  if (mode === "docker") {
     let images = options.images;
     if (!images) {
       if (!loadedConfig) {
@@ -271,28 +327,23 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         loadedConfig = null;
       }
     }
-    if (Array.isArray(options.stack)) {
-      const allow = new Set(options.stack);
-      images = Object.fromEntries(
-        Object.entries(images).filter(([role]) => allow.has(role)),
-      );
+    if (Array.isArray(options.docker)) {
+      const allow = new Set(options.docker);
+      images = Object.fromEntries(Object.entries(images).filter(([role]) => allow.has(role)));
       stackRoles = [...allow];
     } else {
       stackRoles = Object.keys(images);
     }
 
-    stackSqlDriver =
-      resolveDriverId(loadedConfig?.drivers?.store?.sql, "prod") ?? "postgres";
-    stackKvDriver =
-      resolveDriverId(loadedConfig?.drivers?.store?.kv, "prod") ?? "redis";
+    stackSqlDriver = resolveDriverId(loadedConfig?.drivers?.store?.sql, "prod") ?? "postgres";
+    stackKvDriver = resolveDriverId(loadedConfig?.drivers?.store?.kv, "prod") ?? "redis";
 
     const composeDir = DEFAULT_DOCKER_DIR;
     const dockerOut = resolve(cwd, composeDir);
     const instanceId = stackInstanceId(cwd);
     const appSlug = stackAppSlug(cwd);
     const reusedCreds =
-      options.credentials ??
-      (await loadExistingStackCredentials(cwd, stackRoles));
+      options.credentials ?? (await loadExistingStackCredentials(cwd, stackRoles));
     const derived = deriveInfrastructure({
       images,
       app: appSlug,
@@ -304,38 +355,40 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       host: "127.0.0.1",
     });
     // Layer 4 is user-owned — include only if the file already exists.
-    const existingOverride = await Bun.file(
-      resolve(dockerOut, "compose.override.yml"),
-    ).exists();
+    const existingOverride = await Bun.file(resolve(dockerOut, "compose.override.yml")).exists();
     composeFiles = derived.composeFiles.filter(
       (f) => f !== "compose.override.yml" || existingOverride,
     );
     stackEnv = { ...derived.stackEnv };
 
     if (!options.dryRun) {
-      await writeDerivedFiles(derived, dockerOut, {
-        writeStackEnv: true,
-        stackEnvDir: cwd,
-      });
-      // Ensure .env.stack is at project root for the host Bun app / vault.
-      await Bun.write(resolve(cwd, ".env.stack"), formatStackEnv(stackEnv));
-      const up =
-        options.composeUp ??
-        (async (files, dir) => {
-          const args = ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"];
-          const proc = Bun.spawn(["docker", ...args], {
-            cwd: dir,
-            stdout: "inherit",
-            stderr: "inherit",
-            env: { ...process.env, ...stackEnv! },
-          });
-          const code = await proc.exited;
-          if (code !== 0) {
-            throw new Error(`oke dev --stack: docker compose exited ${code}`);
-          }
+      try {
+        await writeDerivedFiles(derived, dockerOut, {
+          writeStackEnv: true,
         });
-      // Compose files live under docker/; cwd for compose is that directory.
-      await up(composeFiles, dockerOut);
+        const up =
+          options.composeUp ??
+          (async (files, dir) => {
+            const args = ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"];
+            const proc = Bun.spawn(["docker", ...args], {
+              cwd: dir,
+              stdout: "inherit",
+              stderr: "inherit",
+              env: { ...process.env, ...stackEnv! },
+            });
+            const code = await proc.exited;
+            if (code !== 0) {
+              throw new Error(`oke dev --docker: docker compose exited ${code}`);
+            }
+          });
+        // Compose files live under docker/; cwd for compose is that directory.
+        await up(composeFiles, dockerOut);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(msg);
+        console.error("oke dev: docker mode failed — fix compose, or run `oke mode local`");
+        return { code: 1 };
+      }
       const roleLabel = (role: string): string => {
         if (role === "store.sql") return "postgres";
         if (role === "store.kv") return "redis";
@@ -370,9 +423,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   let okeVersion = "0.0.0";
   try {
-    const pkg = (await Bun.file(
-      resolve(import.meta.dir, "../../package.json"),
-    ).json()) as { version?: string };
+    const pkg = (await Bun.file(resolve(import.meta.dir, "../../package.json")).json()) as {
+      version?: string;
+    };
     if (typeof pkg.version === "string") okeVersion = pkg.version;
   } catch {
     // shipped binary may not sit next to package.json
@@ -380,9 +433,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   const heroSnapshot = buildDevHeroSnapshot({
     config: loadedConfig,
-    stack: Boolean(options.stack),
-    sqlDriver: options.stack ? stackSqlDriver : undefined,
-    kvDriver: options.stack ? stackKvDriver : undefined,
+    docker: mode === "docker",
+    sqlDriver: mode === "docker" ? stackSqlDriver : undefined,
+    kvDriver: mode === "docker" ? stackKvDriver : undefined,
     version: okeVersion,
     nodeEnv: "development",
   });
@@ -399,6 +452,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   if (options.dryRun) return { code: 0, plan };
 
+  const autoPushEnabled = resolveDevAutoPush({
+    noDbPush: options.noDbPush,
+    docker: Boolean(stackEnv),
+    configAutoPush: loadedConfig?.db?.autoPush,
+  });
+
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     NODE_ENV: "development",
@@ -408,10 +467,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     OKE_DEV_HERO_CONSOLE: `http://127.0.0.1:${consolePort}`,
     OKE_DEV_HERO_MCP: `http://127.0.0.1:${mcpPort}`,
     OKE_DEV_HERO_META: encodeHeroSnapshot(heroSnapshot),
+    // Propagate opt-out so the app disables ensureFromMeta when auto-push owns DDL.
+    ...(autoPushEnabled ? { OKE_DB_AUTO_PUSH: "1" } : { OKE_DB_AUTO_PUSH: "0" }),
     ...(stackEnv ?? {}),
     ...(stackEnv
       ? {
-          OKE_STACK: "1",
+          OKE_DOCKER: "1",
           OKE_SQL_DRIVER: stackSqlDriver,
           OKE_KV_DRIVER: stackKvDriver,
         }
@@ -419,18 +480,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   };
   process.env.OKE_DEV_REQUEST_LOG = "1";
 
-  const startApp =
-    options.startApp ??
-    ((entryPath, appEnv) => startAppHot(cwd, entryPath, appEnv));
+  const startApp = options.startApp ?? ((entryPath, appEnv) => startAppHot(cwd, entryPath, appEnv));
 
   const seedManifest =
-    options.manifest !== undefined
-      ? options.manifest
-      : await tryLoadProjectManifest(cwd);
+    options.manifest !== undefined ? options.manifest : await tryLoadProjectManifest(cwd);
 
-  async function refreshManifestInto(
-    state: ConsoleState | null,
-  ): Promise<void> {
+  async function refreshManifestInto(state: ConsoleState | null): Promise<void> {
     if (!state) return;
     try {
       const { extractManifest } = await import("../compiler/extract.ts");
@@ -445,9 +500,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
-      const { serveConsole: serveConsoleKernel } = await import(
-        "../console/server/serve.ts"
-      );
+      const { serveConsole: serveConsoleKernel } = await import("../console/server/serve.ts");
       const server = await serveConsoleKernel({
         port,
         hostname: "127.0.0.1",
@@ -455,16 +508,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         env: "dev",
         silentClaim: options.silentClaim ?? false,
         ...(options.secret !== undefined ? { secret: options.secret } : {}),
-        ...(seedManifest !== undefined && seedManifest !== null
-          ? { manifest: seedManifest }
-          : {}),
+        ...(seedManifest !== undefined && seedManifest !== null ? { manifest: seedManifest } : {}),
       });
-      write(
-        formatServiceLine(
-          "Console",
-          `http://127.0.0.1:${server.port}`,
-        ),
-      );
+      write(formatServiceLine("Console", `http://127.0.0.1:${server.port}`));
       return {
         console: server.console,
         port: server.port,
@@ -538,27 +584,53 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const boundMcpPort = mcpServer?.port ?? mcpPort;
   const mcpUrl = mcpServer?.url ?? null;
 
-  const appUrl =
-    app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
+  const appUrl = app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
   await regen(appUrl);
+
+  const dbPush =
+    options.dbPush ??
+    (async (projectCwd: string) => {
+      const configPath = await resolveDrizzleConfigPath(projectCwd);
+      return runPush(configPath, (t) => write(t));
+    });
+
+  let lastSchemaFilename = "";
+  const autoPushRunner = createDebouncedRunner(async () => {
+    if (!autoPushEnabled) return;
+    options.onDbAutoPush?.(lastSchemaFilename);
+    write(formatStatusLine("oke db push (schema change)"));
+    try {
+      await dbPush(cwd);
+    } catch {
+      // Mid-edit / kit unavailable — next save retries.
+    }
+  });
+
+  // Initial sync so local DB matches schema.ts without a prior manual push.
+  if (autoPushEnabled) {
+    lastSchemaFilename = "src/schema.ts";
+    autoPushRunner.trigger();
+  }
+
   write(formatDevLogSeparator());
 
-  const watcher = watch(
-    resolve(cwd, "src"),
-    { recursive: true },
-    () => {
-      void regen(appUrl);
-      // Only live-extract when the host did not pin a Manifest (tests).
-      if (options.manifest === undefined) {
-        void refreshManifestInto(consoleState);
-      }
-    },
-  );
+  const watcher = watch(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
+    void regen(appUrl);
+    // Only live-extract when the host did not pin a Manifest (tests).
+    if (options.manifest === undefined) {
+      void refreshManifestInto(consoleState);
+    }
+    if (autoPushEnabled && isDomainSchemaWatchPath(filename?.toString())) {
+      lastSchemaFilename = filename?.toString() ?? "schema.ts";
+      autoPushRunner.trigger();
+    }
+  });
 
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    autoPushRunner.cancel();
     watcher.close();
     app.stop();
     consoleServer.stop();
@@ -619,9 +691,7 @@ function isSparseManifest(manifest: Manifest): boolean {
  *
  * @param cwd - Project root
  */
-async function tryLoadProjectManifest(
-  cwd: string,
-): Promise<Manifest | null | undefined> {
+async function tryLoadProjectManifest(cwd: string): Promise<Manifest | null | undefined> {
   let extracted: Manifest | undefined;
   try {
     const { extractManifest } = await import("../compiler/extract.ts");
@@ -658,10 +728,7 @@ async function startAppHot(
 ): Promise<DevAppHandle> {
   const absoluteEntry = resolve(cwd, entryPath);
   const runner = resolve(import.meta.dir, "dev-app-runner.ts");
-  const readyPath = join(
-    tmpdir(),
-    `oke-dev-ready-${crypto.randomUUID()}.txt`,
-  );
+  const readyPath = join(tmpdir(), `oke-dev-ready-${crypto.randomUUID()}.txt`);
   const hostname = "127.0.0.1";
   const env: Record<string, string> = {
     ...appEnv,
@@ -696,11 +763,7 @@ async function startAppHot(
   };
 
   try {
-    const boundPort = await waitForAppReady(
-      readyPath,
-      proc,
-      APP_READY_TIMEOUT_MS,
-    );
+    const boundPort = await waitForAppReady(readyPath, proc, APP_READY_TIMEOUT_MS);
     // Child prints the App ready line (again on each soft reload).
     const url = new URL(`http://${hostname}:${boundPort}/`);
     return { stop, port: boundPort, url };
@@ -726,9 +789,7 @@ async function waitForAppReady(
   while (Date.now() - started < timeoutMs) {
     const exitCode = proc.exitCode;
     if (exitCode !== null) {
-      throw new Error(
-        `oke dev: app process exited before ready (code ${exitCode})`,
-      );
+      throw new Error(`oke dev: app process exited before ready (code ${exitCode})`);
     }
     if (await Bun.file(readyPath).exists()) {
       const text = (await Bun.file(readyPath).text()).trim();
@@ -740,44 +801,57 @@ async function waitForAppReady(
     }
     await Bun.sleep(25);
   }
-  throw new Error(
-    `oke dev: app did not become ready within ${timeoutMs}ms`,
-  );
+  throw new Error(`oke dev: app did not become ready within ${timeoutMs}ms`);
 }
 
 /**
- * CLI entry for `oke dev [--stack|-s [roles]]`.
+ * CLI entry for `oke dev [--local|-l] [--docker|-d [roles]]`.
  *
  * @param args - Args after `dev`
  */
 export async function devCli(args: readonly string[]): Promise<number> {
-  let stack: boolean | string[] | undefined;
+  let docker: boolean | string[] | undefined;
+  let local = false;
+  let noDbPush = false;
   let entry: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--stack" || a === "-s") {
+    if (a === "--local" || a === "-l") {
+      local = true;
+    } else if (a === "--docker" || a === "-d") {
       const next = args[i + 1];
       if (next && !next.startsWith("-") && /^[\w.,]+$/.test(next)) {
-        stack = next.split(",").map((s) => s.trim()).filter(Boolean);
+        docker = next
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
         i++;
       } else {
-        stack = true;
+        docker = true;
       }
+    } else if (a === "--no-db-push") {
+      noDbPush = true;
     } else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke dev [--stack|-s [roles]] [--entry|-e src/app.ts]
+      console.log(`oke dev [--local|-l] [--docker|-d [roles]] [--no-db-push] [--entry|-e src/app.ts]
 
 Watch · hot reload · Console :6533 · app :6530 · MCP :6535
 Regenerates client types on every save.
---stack boots infra under docker/ and runs the app on host Bun with prod
-store drivers (Postgres/Redis) so local mimics the server.
-Partial roles: -s store.sql,store.kv.
+Local mode auto-runs \`oke db push\` when schema.ts changes (opt out: --no-db-push).
+
+Bare \`oke dev\` uses .oke/mode (one-time prompt on a TTY; non-TTY → local).
+--local / --docker override for this session only (never write .oke/mode).
+--docker boots infra under docker/ and runs the app on host Bun with prod
+store drivers (Postgres/Redis). Partial roles: -d store.sql,store.kv.
+Change the saved default with \`oke mode local|docker\`.
 `);
       return 0;
     }
   }
   const { code } = await runDev({
-    stack: stack === undefined ? undefined : stack,
+    ...(local ? { local: true } : {}),
+    ...(docker === undefined ? {} : { docker }),
+    ...(noDbPush ? { noDbPush: true } : {}),
     entry,
   });
   return code;

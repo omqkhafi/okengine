@@ -26,11 +26,9 @@ describe("hooks — order and composition", () => {
 
   test("mergeHooks is app → unit → flow, registration order within", () => {
     const order: string[] = [];
-    const mark =
-      (label: string) =>
-      () => {
-        order.push(label);
-      };
+    const mark = (label: string) => () => {
+      order.push(label);
+    };
 
     const merged = mergeHooks(
       { onRequest: [mark("app1"), mark("app2")] },
@@ -66,11 +64,13 @@ describe("hooks — order and composition", () => {
         order.push("handler");
         return { ok: true };
       },
-    }).hook("beforeHandle", () => {
-      order.push("flow:beforeHandle");
-    }).hook("afterHandle", () => {
-      order.push("flow:afterHandle");
-    });
+    })
+      .hook("beforeHandle", () => {
+        order.push("flow:beforeHandle");
+      })
+      .hook("afterHandle", () => {
+        order.push("flow:afterHandle");
+      });
 
     on(http.get("/ordered"), f);
 

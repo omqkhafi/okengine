@@ -36,9 +36,7 @@ export interface CreateAppAuthBindingOptions {
  *
  * @param options - Secret + optional session store / clock
  */
-export function createAppAuthBinding(
-  options: CreateAppAuthBindingOptions,
-): AppAuthBinding {
+export function createAppAuthBinding(options: CreateAppAuthBindingOptions): AppAuthBinding {
   return {
     secret: options.secret,
     sessions: options.sessions ?? createSessionStore(),
@@ -57,12 +55,7 @@ export async function verifyBearerToken(
   auth: AppAuthBinding,
   token: string,
 ): Promise<ResolvedPrincipal> {
-  const claims = await verifyAccess(
-    auth.sessions,
-    auth.secret,
-    token,
-    auth.now,
-  );
+  const claims = await verifyAccess(auth.sessions, auth.secret, token, auth.now);
   return claimsToPrincipal(claims);
 }
 

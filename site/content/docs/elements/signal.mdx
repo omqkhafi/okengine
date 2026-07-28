@@ -10,13 +10,17 @@ Signal is the element for **data in motion**.
 Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default.
 
 <Callout title="Governing rule">
-`delivery` is mandatory with no default. Delivery physics is a semantic decision; guessing it produces silent, expensive bugs.
+  `delivery` is mandatory with no default. Delivery physics is a semantic decision; guessing it
+  produces silent, expensive bugs.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card title="Signal" description="Essence: data in motion. Replaces: queue · pub/sub · stream · websocket · SSE · event bus." />
+  <Card
+    title="Signal"
+    description="Essence: data in motion. Replaces: queue · pub/sub · stream · websocket · SSE · event bus."
+  />
 </Cards>
 
 ## Drivers available
@@ -31,7 +35,8 @@ Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` 
 ## Why this is an element
 
 <Callout title="Why">
-Queue, pub/sub, and stream were always the same object with different delivery physics — so delivery is an option, not three ecosystems.
+  Queue, pub/sub, and stream were always the same object with different delivery physics — so
+  delivery is an option, not three ecosystems.
 </Callout>
 
 <Cards>
@@ -52,13 +57,14 @@ import { z } from "zod";
 
 export const linkClicked = signal("link-clicked", {
   schema: z.object({ code: z.string(), at: z.number(), referrer: z.string().optional() }),
-  delivery: "once",                       // queue physics: one consumer, retries, DLQ
-  retries: 3, deadLetter: true,
+  delivery: "once", // queue physics: one consumer, retries, DLQ
+  retries: 3,
+  deadLetter: true,
 });
 
 export const linkStats = signal("link-stats", {
   schema: z.object({ code: z.string(), clicks: z.number() }),
-  delivery: "live",                       // stream physics: clients subscribe
+  delivery: "live", // stream physics: clients subscribe
 });
 ```
 
@@ -66,6 +72,14 @@ export const linkStats = signal("link-stats", {
 
 <Cards>
   <Card title="Store" description="Continue to Store." href="/docs/elements/store" />
-  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
-  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Introduction"
+    description="Eight elements overview."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

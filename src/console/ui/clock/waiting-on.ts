@@ -9,9 +9,7 @@ import type { WaitingOnCount, WaitingOnRecord } from "./types.ts";
  *
  * @param rows - Waiting-on rows
  */
-export function aggregateByLabel(
-  rows: readonly WaitingOnRecord[],
-): readonly WaitingOnCount[] {
+export function aggregateByLabel(rows: readonly WaitingOnRecord[]): readonly WaitingOnCount[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
     const label = r.label || "(unlabelled)";
@@ -28,10 +26,7 @@ export function aggregateByLabel(
  * @param total - Total sleeping
  * @param counts - Per-label counts
  */
-export function waitingOnBanner(
-  total: number,
-  counts: readonly WaitingOnCount[],
-): string {
+export function waitingOnBanner(total: number, counts: readonly WaitingOnCount[]): string {
   if (total === 0) return "Nothing waiting";
   const parts = counts
     .slice(0, 4)

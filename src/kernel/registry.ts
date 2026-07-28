@@ -26,6 +26,7 @@ import type {
   PluginDef,
   PluginElement,
   PluginRegistration,
+  PluginTableOptions,
   TableContribution,
 } from "./plugin.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
@@ -56,10 +57,10 @@ interface NameClaim {
  *
  * @param identity - Plugin name + version for the capability record
  */
-export function createRecordingApi(identity: {
-  readonly name: string;
-  readonly version: string;
-}): { readonly api: PluginApi; snapshot(): PluginRegistration } {
+export function createRecordingApi(identity: { readonly name: string; readonly version: string }): {
+  readonly api: PluginApi;
+  snapshot(): PluginRegistration;
+} {
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
   const decorations: Record<string, unknown> = {};
   const elements: PluginElement[] = [];
@@ -133,8 +134,8 @@ export function createRecordingApi(identity: {
       pushDeclare(`image:${role}`);
       return api;
     },
-    table(name, schema) {
-      tables.push({ name, schema });
+    table(name, columns, options) {
+      tables.push(normalizeTableContribution(name, columns, options));
       pushDeclare(`table:${name}`);
       return api;
     },
@@ -229,21 +230,19 @@ export interface PluginRegistry {
    * @param unit - Flow's unit name (for `unit` kind)
    * @param flowName - Flow name (for `flow` kind)
    */
-  hooksAt(
-    scopeKind: PluginScope["kind"],
-    unit: string | undefined,
-    flowName: string,
-  ): HookMap;
+  hooksAt(scopeKind: PluginScope["kind"], unit: string | undefined, flowName: string): HookMap;
   /**
    * Merged decorations visible to a flow at the given unit.
    *
    * @param unit - Flow's unit name, if any
    * @param flowName - Flow name
    */
-  decorationsFor(
-    unit: string | undefined,
-    flowName: string,
-  ): Record<string, unknown>;
+  decorationsFor(unit: string | undefined, flowName: string): Record<string, unknown>;
+  /**
+   * Unique table contributions from installed plugins (first install per
+   * plugin name). Used by `oke db` emit to merge plugin `field.*` tables.
+   */
+  tableContributions(): readonly TableContribution[];
 }
 
 /**
@@ -276,10 +275,7 @@ export function createPluginRegistry(): PluginRegistry {
     }
   }
 
-  function assertNoConflicts(
-    pluginName: string,
-    registration: PluginRegistration,
-  ): void {
+  function assertNoConflicts(pluginName: string, registration: PluginRegistration): void {
     for (const t of registration.tables) {
       claim(tableClaims, "table", t.name, pluginName);
     }
@@ -301,12 +297,7 @@ export function createPluginRegistry(): PluginRegistry {
       const scopeKey = nameScopeKey(pluginDef.name, scope);
       const priorHere = byNameScope.get(scopeKey);
       if (priorHere) {
-        if (
-          samePluginConfig(
-            priorHere.plugin.configSnapshot,
-            pluginDef.configSnapshot,
-          )
-        ) {
+        if (samePluginConfig(priorHere.plugin.configSnapshot, pluginDef.configSnapshot)) {
           return undefined; // identity dedup — no-op
         }
         throw new Error(
@@ -318,10 +309,7 @@ export function createPluginRegistry(): PluginRegistry {
       const priorAnywhere = byName.get(pluginDef.name);
       if (
         priorAnywhere &&
-        !samePluginConfig(
-          priorAnywhere.plugin.configSnapshot,
-          pluginDef.configSnapshot,
-        )
+        !samePluginConfig(priorAnywhere.plugin.configSnapshot, pluginDef.configSnapshot)
       ) {
         throw new Error(
           `Plugin "${pluginDef.name}" registered twice with conflicting config ` +
@@ -392,7 +380,70 @@ export function createPluginRegistry(): PluginRegistry {
       }
       return out;
     },
+    tableContributions() {
+      const seenPlugins = new Set<string>();
+      const out: TableContribution[] = [];
+      for (const entry of installed) {
+        if (seenPlugins.has(entry.plugin.name)) continue;
+        seenPlugins.add(entry.plugin.name);
+        out.push(...entry.registration.tables);
+      }
+      return out;
+    },
   };
 
   return registry;
+}
+
+/**
+ * Normalize plugin `.table()` args — supports columns + options, and legacy
+ * `{ plane }` as the second argument.
+ *
+ * @param name - Table name
+ * @param columnsOrOptions - Column map or legacy options
+ * @param options - Explicit options (preferred)
+ */
+function normalizeTableContribution(
+  name: string,
+  columnsOrOptions?: Readonly<Record<string, unknown>>,
+  options?: PluginTableOptions,
+): TableContribution {
+  if (options !== undefined) {
+    const columns =
+      columnsOrOptions && Object.keys(columnsOrOptions).length > 0 ? columnsOrOptions : undefined;
+    return {
+      name,
+      ...(columns ? { columns } : {}),
+      options,
+      schema: options,
+    };
+  }
+
+  if (columnsOrOptions && isPlaneOnlyOptions(columnsOrOptions)) {
+    const planeOptions: PluginTableOptions = {
+      plane: columnsOrOptions.plane as string,
+    };
+    return {
+      name,
+      options: planeOptions,
+      schema: columnsOrOptions,
+    };
+  }
+
+  if (columnsOrOptions && Object.keys(columnsOrOptions).length > 0) {
+    return {
+      name,
+      columns: columnsOrOptions,
+      schema: columnsOrOptions,
+    };
+  }
+
+  return { name };
+}
+
+function isPlaneOnlyOptions(
+  value: Readonly<Record<string, unknown>>,
+): value is { readonly plane: string } {
+  const keys = Object.keys(value);
+  return keys.length === 1 && keys[0] === "plane" && typeof value.plane === "string";
 }

@@ -26,10 +26,7 @@ export function isReadOnlyStoreFlow(effects: Effects): boolean {
  * @param effects - Flow effects
  * @param hasReplicas - Whether replicas are configured
  */
-export function sqlRoleForEffects(
-  effects: Effects,
-  hasReplicas: boolean,
-): SqlRole {
+export function sqlRoleForEffects(effects: Effects, hasReplicas: boolean): SqlRole {
   if (hasReplicas && isReadOnlyStoreFlow(effects)) return "replica";
   return "primary";
 }

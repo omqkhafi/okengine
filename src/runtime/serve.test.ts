@@ -107,13 +107,10 @@ describe("Bun.serve — real HTTP", () => {
     expect(await direct.text()).toContain("Host");
 
     // On the wire — the DNS-rebinding shape (CVE-2025-66414 class).
-    const wire = await rawHttp(handle.port, [
-      "GET /ping HTTP/1.1",
-      "Host: attacker.com",
-      "Connection: close",
-      "",
-      "",
-    ].join("\r\n"));
+    const wire = await rawHttp(
+      handle.port,
+      ["GET /ping HTTP/1.1", "Host: attacker.com", "Connection: close", "", ""].join("\r\n"),
+    );
     expect(wire).toContain("403");
     expect(wire).toContain("Host");
   });

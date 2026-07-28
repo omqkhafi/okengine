@@ -91,8 +91,28 @@ export interface ImageRecipeContribution {
 export interface TableContribution {
   /** Table name — conflict namespace shared across plugins. */
   readonly name: string;
-  /** Opaque schema descriptor. */
+  /**
+   * Abstract column map from `field.*` builders (merged into domain schema emit).
+   * Omit when the plugin only claims a name (DDL stays hand-written).
+   */
+  readonly columns?: Readonly<Record<string, unknown>>;
+  /**
+   * Non-column metadata (e.g. data plane). Prefer this over stuffing `plane`
+   * into the column map.
+   */
+  readonly options?: {
+    readonly plane?: "operator" | "user" | "shared" | string;
+  };
+  /**
+   * Opaque schema descriptor (legacy). Prefer {@link columns} + {@link options}.
+   * Still set for plane-only contributions so older readers keep working.
+   */
   readonly schema?: unknown;
+}
+
+/** Options for {@link PluginApi.table} / {@link PluginDef.table}. */
+export interface PluginTableOptions {
+  readonly plane?: "operator" | "user" | "shared" | string;
 }
 
 /** Driver contribution. */
@@ -152,10 +172,7 @@ export interface PluginApi {
    * @param name - Command name
    * @param handler - Command handler
    */
-  cli(
-    name: string,
-    handler: CliContribution["handler"],
-  ): PluginApi;
+  cli(name: string, handler: CliContribution["handler"]): PluginApi;
   /**
    * Contribute a driver.
    *
@@ -173,10 +190,19 @@ export interface PluginApi {
   /**
    * Contribute a DB table / schema fragment.
    *
+   * Plugins may declare **whole tables** (with optional `field.*` columns)
+   * merged into the generated domain schema. Extending an existing app-owned
+   * table with plugin columns is not supported — contribute a separate table.
+   *
    * @param name - Table name
-   * @param schema - Opaque schema
+   * @param columns - Abstract column map, or legacy `{ plane }` options
+   * @param options - Plane / metadata (preferred over embedding `plane` in columns)
    */
-  table(name: string, schema?: unknown): PluginApi;
+  table(
+    name: string,
+    columns?: Readonly<Record<string, unknown>>,
+    options?: PluginTableOptions,
+  ): PluginApi;
   /**
    * Contribute a flow.
    *
@@ -265,10 +291,7 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
    * @param key - Decoration key
    * @param value - Value
    */
-  decorate<K extends string, V>(
-    key: K,
-    value: V,
-  ): PluginDef<D & { [P in K]: V }>;
+  decorate<K extends string, V>(key: K, value: V): PluginDef<D & { [P in K]: V }>;
   /**
    * Queue an element contribution.
    *
@@ -317,10 +340,17 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
   /**
    * Queue a table / schema contribution.
    *
+   * Whole tables only — no column injection into app-owned tables (v1).
+   *
    * @param name - Table name
-   * @param schema - Schema
+   * @param columns - Abstract column map, or legacy `{ plane }` options
+   * @param options - Plane / metadata
    */
-  table(name: string, schema?: unknown): PluginDef<D>;
+  table(
+    name: string,
+    columns?: Readonly<Record<string, unknown>>,
+    options?: PluginTableOptions,
+  ): PluginDef<D>;
   /**
    * Queue a flow contribution.
    *
@@ -343,8 +373,7 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
 }
 
 /** Extract accumulated decoration types from a {@link PluginDef}. */
-export type DecorationsOf<P> =
-  P extends PluginDef<infer D> ? D : Record<string, never>;
+export type DecorationsOf<P> = P extends PluginDef<infer D> ? D : Record<string, never>;
 
 /**
  * Define a plugin. Fluent methods queue a registration plan; the registry
@@ -353,10 +382,7 @@ export type DecorationsOf<P> =
  * @param name - Stable plugin id
  * @param options - Version and optional config snapshot
  */
-export function plugin(
-  name: string,
-  options: PluginOptions,
-): PluginDef {
+export function plugin(name: string, options: PluginOptions): PluginDef {
   const steps: Array<(api: PluginApi) => void> = [];
 
   const def: PluginDef = {
@@ -390,9 +416,7 @@ export function plugin(
           api.element(el);
         } else if (typeof el.facet === "string" && typeof el.name === "string") {
           api.element({
-            kind: el.facet.startsWith("store.")
-              ? el.facet
-              : `store.${el.facet}`,
+            kind: el.facet.startsWith("store.") ? el.facet : `store.${el.facet}`,
             name: el.name,
           });
         } else {
@@ -437,9 +461,9 @@ export function plugin(
       });
       return def;
     },
-    table(tableName, schema) {
+    table(tableName, columns, options) {
       steps.push((api) => {
-        api.table(tableName, schema);
+        api.table(tableName, columns, options);
       });
       return def;
     },

@@ -6,10 +6,7 @@
 import { durableLine } from "./durable.ts";
 import { SIGNALS_FIXTURE } from "./fixture.ts";
 import { groupByPhysics } from "./group.ts";
-import {
-  fieldsFromSchema,
-  payloadToFormValues,
-} from "./schema-form.ts";
+import { fieldsFromSchema, payloadToFormValues } from "./schema-form.ts";
 
 /** Props for {@link SignalsA11yView}. */
 export interface SignalsA11yViewProps {
@@ -49,10 +46,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
         <section aria-label="Signal list">
           <h2>Signals</h2>
           {groups.map((group) => (
-            <section
-              key={group.delivery}
-              aria-label={group.label}
-            >
+            <section key={group.delivery} aria-label={group.label}>
               <h3>{group.label}</h3>
               <ul>
                 {group.signals.map((s) => (
@@ -63,12 +57,8 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
                       style={{ minHeight: 32, width: "100%" }}
                     >
                       <span>{s.name}</span>
-                      {s.orphaned ? (
-                        <span role="status"> orphaned</span>
-                      ) : null}
-                      {s.dead > 0 ? (
-                        <span role="status"> DLQ {s.dead}</span>
-                      ) : null}
+                      {s.orphaned ? <span role="status"> orphaned</span> : null}
+                      {s.dead > 0 ? <span role="status"> DLQ {s.dead}</span> : null}
                       {s.outboxLagMs !== null && s.outboxLagMs > 0 ? (
                         <span> outbox {s.outboxLagMs}ms</span>
                       ) : null}
@@ -168,9 +158,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
             {open.dead > 0 ? (
               <section aria-label="Dead letters">
                 <h3>Dead letters</h3>
-                <p>
-                  Bulk repair: dry run first, then replay at a controlled rate.
-                </p>
+                <p>Bulk repair: dry run first, then replay at a controlled rate.</p>
                 <label>
                   Replay rate (per second)
                   <input
@@ -190,11 +178,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
                 <ul>
                   {open.deadLetters.map((d) => (
                     <li key={d.id}>
-                      <button
-                        type="button"
-                        aria-pressed={d.id === dlqId}
-                        style={{ minHeight: 32 }}
-                      >
+                      <button type="button" aria-pressed={d.id === dlqId} style={{ minHeight: 32 }}>
                         {d.id} · {d.failures[d.failures.length - 1]?.code}
                       </button>
                     </li>
@@ -213,10 +197,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
                       <label key={f.key}>
                         {f.key}
                         {f.enumValues ? (
-                          <select
-                            aria-label={f.key}
-                            defaultValue={formValues[f.key] ?? ""}
-                          >
+                          <select aria-label={f.key} defaultValue={formValues[f.key] ?? ""}>
                             {f.enumValues.map((v) => (
                               <option key={v} value={v}>
                                 {v}
@@ -224,10 +205,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
                             ))}
                           </select>
                         ) : (
-                          <input
-                            aria-label={f.key}
-                            defaultValue={formValues[f.key] ?? ""}
-                          />
+                          <input aria-label={f.key} defaultValue={formValues[f.key] ?? ""} />
                         )}
                       </label>
                     ))
@@ -253,9 +231,7 @@ export function SignalsA11yView(props: SignalsA11yViewProps) {
                 {dlq.causeRunId ? (
                   <p>
                     Causal chain:{" "}
-                    <a
-                      href={`/traces?trace=${encodeURIComponent(dlq.causeRunId)}`}
-                    >
+                    <a href={`/traces?trace=${encodeURIComponent(dlq.causeRunId)}`}>
                       {dlq.causeFlow ?? dlq.causeRunId}
                     </a>
                   </p>

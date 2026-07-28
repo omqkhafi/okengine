@@ -16,12 +16,8 @@ describe("trace cross-link", () => {
   test("multi-span chain offers Traces link", () => {
     expect(rootIdOf(RUNS_CHAIN_FIXTURE, "run-fulfill")).toBe("run-create-ok");
     expect(spanCountInTrace(RUNS_CHAIN_FIXTURE, "run-create-ok")).toBe(2);
-    expect(shouldOfferTracesLink(RUNS_CHAIN_FIXTURE, "run-fulfill")).toBe(
-      true,
-    );
-    expect(shouldOfferTracesLink(RUNS_CHAIN_FIXTURE, "run-create-fail")).toBe(
-      false,
-    );
+    expect(shouldOfferTracesLink(RUNS_CHAIN_FIXTURE, "run-fulfill")).toBe(true);
+    expect(shouldOfferTracesLink(RUNS_CHAIN_FIXTURE, "run-create-fail")).toBe(false);
     expect(tracesHrefForRun(RUNS_CHAIN_FIXTURE, "run-fulfill")).toBe(
       "/traces?trace=run-create-ok&span=run-fulfill",
     );

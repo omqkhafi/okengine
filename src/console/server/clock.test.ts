@@ -116,13 +116,9 @@ describe("projectClocksList", () => {
 
     expect(list.waitingOn.length).toBe(2);
     expect(list.waitingOn[0]?.label).toBe("verify-window");
-    expect(list.waitingOnCounts.some((c) => c.label === "trial-period")).toBe(
-      true,
-    );
+    expect(list.waitingOnCounts.some((c) => c.label === "trial-period")).toBe(true);
     expect(list.timeline.some((e) => e.kind === "wake")).toBe(true);
-    expect(list.timeline.every((e) => e.at >= now && e.at < now + 86_400_000)).toBe(
-      true,
-    );
+    expect(list.timeline.every((e) => e.at >= now && e.at < now + 86_400_000)).toBe(true);
   });
 
   test("DST ambiguity surfaces only when attached on the row", async () => {
