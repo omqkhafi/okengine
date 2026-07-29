@@ -15,6 +15,12 @@ export default defineConfig({
         test: "memory",
         prod: "redis",
       },
+      files: {
+        local: "fs",
+        docker: "s3",
+        test: "memory",
+        prod: "s3",
+      },
     },
     signal: {
       local: "memory",
@@ -46,6 +52,8 @@ export default defineConfig({
   images: {
     "store.sql": "postgres:18-alpine",
     "store.kv": "redis:8-alpine",
+    "store.files": "rustfs/rustfs:1.0.0-beta.11",
+    "channel.email": "axllent/mailpit:v1.22.3",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });
