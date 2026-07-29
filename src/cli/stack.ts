@@ -2,7 +2,7 @@
  * `oke stack` — preview resolved images/tags/ports (writes nothing).
  */
 
-import { formatStackPreview, resolveStack } from "../docker/index.ts";
+import { formatStackPreview, resolveStack, stackInstanceId } from "../docker/index.ts";
 import { wantsJson } from "./args.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
 import { loadOkeConfig, resolveImages } from "./load-config.ts";
@@ -26,10 +26,11 @@ export async function runStackPreview(options: StackCliOptions = {}): Promise<nu
   const write = options.write ?? ((t) => process.stdout.write(t));
   const writeErr = options.writeErr ?? ((t) => process.stderr.write(t));
   const json = options.json ?? false;
+  const cwd = options.cwd ?? process.cwd();
   let images = options.images;
   if (!images) {
     try {
-      const loaded = await loadOkeConfig(options.cwd ?? process.cwd(), options.configPath);
+      const loaded = await loadOkeConfig(cwd, options.configPath);
       images = resolveImages(loaded.config);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -41,7 +42,8 @@ export async function runStackPreview(options: StackCliOptions = {}): Promise<nu
       return EXIT_RUNTIME;
     }
   }
-  const rows = resolveStack({ images });
+  // Match `oke dev --docker` host ports (stable per-project offsets).
+  const rows = resolveStack({ images, instanceId: stackInstanceId(cwd) });
   if (json) {
     write(`${JSON.stringify({ ok: true, rows }, null, 2)}\n`);
     if (rows.length === 0) {
@@ -67,7 +69,8 @@ export async function stackCli(args: readonly string[]): Promise<number> {
     else if (a === "--help" || a === "-h") {
       console.log(`oke stack [--config|-c oke.config.ts] [--json|-j]
 
-Preview resolved images, recipes, and ports. Writes nothing.
+Preview resolved images, recipes, and ports (same per-project host ports as
+oke dev --docker). Writes nothing.
 --json  Machine-parseable JSON on stdout; hints on stderr.
 `);
       return EXIT_OK;

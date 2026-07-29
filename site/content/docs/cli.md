@@ -40,6 +40,10 @@ oke privacy erase --subject <id> # crypto-shredding: deletes the key, not the te
 oke upgrade                      # run codemods for a breaking change, print the diff
 ```
 
+In development, app, Console, and MCP prefer the canonical ports and move upward when
+occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
+each built-in service, preventing one service's offset port from overlapping another's.
+
 ### Additional commands
 
 ```bash

@@ -54,7 +54,13 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     }
   }
 
-  const stackEnv = buildStackEnv(specs, normalised.recipes ?? [], normalised.host ?? "127.0.0.1");
+  const stackEnv = buildStackEnv(
+    specs,
+    normalised.recipes ?? [],
+    normalised.host ?? "127.0.0.1",
+    normalised.controls,
+    normalised.instanceId,
+  );
 
   return { specs, files, stackEnv, composeFiles };
 }

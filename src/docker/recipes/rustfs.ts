@@ -2,7 +2,6 @@
  * RustFS image recipe — S3-compatible object store (Apache 2.0 MinIO alternative).
  */
 
-import { credEnv } from "../helpers.ts";
 import type { ImageRecipe } from "../types.ts";
 
 /** S3-protocol object storage (RustFS). Console on 9001. */
@@ -12,8 +11,8 @@ export const rustfs: ImageRecipe = {
   match: (i) => /rustfs/i.test(i),
   apply: (s) => ({
     environment: {
-      RUSTFS_ACCESS_KEY: credEnv(s, "USER"),
-      RUSTFS_SECRET_KEY: credEnv(s, "PASSWORD"),
+      RUSTFS_ACCESS_KEY: "${S3_ACCESS_KEY_ID}",
+      RUSTFS_SECRET_KEY: "${S3_SECRET_ACCESS_KEY}",
       RUSTFS_CONSOLE_ENABLE: "true",
       RUSTFS_ADDRESS: ":9000",
     },

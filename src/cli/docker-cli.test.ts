@@ -63,6 +63,26 @@ describe("oke stack", () => {
     expect(out).toContain("postgres");
     expect(await Bun.file(join(dir, "compose.yml")).exists()).toBe(false);
   });
+
+  test("uses per-project host ports (not raw recipe defaults)", async () => {
+    const { stackInstanceId, hostPortForInstance } = await import("../docker/index.ts");
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-stack-ports-"));
+    let out = "";
+    const code = await runStackPreview({
+      cwd: dir,
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+      },
+      write: (t) => {
+        out += t;
+      },
+    });
+    expect(code).toBe(0);
+    const id = stackInstanceId(dir);
+    const smtp = hostPortForInstance("channel.email", 1025, id);
+    expect(out).toContain(`${smtp}:1025`);
+    expect(out).not.toContain("1025:1025");
+  });
 });
 
 describe("oke images pin", () => {

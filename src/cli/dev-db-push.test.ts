@@ -6,13 +6,37 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runDev, type DevSession } from "./dev.ts";
+import { runDev, type DevSession, type DevWatchFn } from "./dev.ts";
 
 const sessions: DevSession[] = [];
 
 afterEach(() => {
   for (const s of sessions.splice(0)) s.stop();
 });
+
+async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) {
+    await Bun.sleep(20);
+  }
+}
+
+function controlledWatcher(): {
+  watchFs: DevWatchFn;
+  change(filename: string): void;
+} {
+  let listener: Parameters<DevWatchFn>[2] | undefined;
+  return {
+    watchFs: (_path, _options, next) => {
+      listener = next;
+      return { close() {} };
+    },
+    change(filename) {
+      if (!listener) throw new Error("watcher not started");
+      listener("change", filename);
+    },
+  };
+}
 
 async function scaffoldProject(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "oke-dev-db-"));
@@ -51,6 +75,7 @@ describe("oke dev db auto-push", () => {
   test("schema change triggers dbPush when auto-push is on", async () => {
     const cwd = await scaffoldProject();
     const pushes: string[] = [];
+    const watcher = controlledWatcher();
     let resolveReady!: () => void;
     const ready = new Promise<void>((r) => {
       resolveReady = r;
@@ -88,6 +113,7 @@ describe("oke dev db auto-push", () => {
       onDbAutoPush: () => {
         resolveReady();
       },
+      watchFs: watcher.watchFs,
       onReady: async (session) => {
         sessions.push(session);
       },
@@ -108,13 +134,15 @@ export const entries = sqliteTable("entries", {
 });
 `,
     );
-    await Bun.sleep(500);
+    watcher.change("schema.ts");
+    await waitFor(() => pushes.length > before);
     expect(pushes.length).toBeGreaterThan(before);
   });
 
   test("--no-db-push / noDbPush never calls dbPush", async () => {
     const cwd = await scaffoldProject();
     const pushes: string[] = [];
+    const watcher = controlledWatcher();
 
     const result = await runDev({
       cwd,
@@ -145,6 +173,7 @@ export const entries = sqliteTable("entries", {
         pushes.push("push");
         return 0;
       },
+      watchFs: watcher.watchFs,
       onReady: async (session) => {
         sessions.push(session);
       },
@@ -157,6 +186,7 @@ export const entries = sqliteTable("entries", {
 export const entries = sqliteTable("entries", { id: text("id").primaryKey(), x: text("x") });
 `,
     );
+    watcher.change("schema.ts");
     await Bun.sleep(500);
     expect(pushes).toHaveLength(0);
   });

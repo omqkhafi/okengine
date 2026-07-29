@@ -27,9 +27,9 @@ bunx create-oke@latest my-app --yes
 ```
 
 `--sql sqlite|postgres` is opt-in. The default keeps the dual-mode Store
-config (`local: sqlite` · `docker`/`prod: postgres`) and a `sqliteTable`
-schema. Pass `--sql postgres` to rewrite `src/schema.ts` to `pgTable` /
-`drizzle-orm/pg-core` and pin `oke.config.ts` `store.sql` local/docker/prod to
+config (`local: sqlite` · `docker`/`prod: postgres`) and abstract
+`src/schema.decl.ts` (dialect emitted from the active driver). Pass
+`--sql postgres` to pin `oke.config.ts` `store.sql` local/docker/prod to
 `postgres`. The interactive wizard does not ask and keeps the same dual-mode
 default.
 

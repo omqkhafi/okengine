@@ -197,6 +197,78 @@ describe("deriveInfrastructure", () => {
     expect(formatStackEnv(result.stackEnv)).toContain("OKE_STORE_SQL_PASSWORD=");
   });
 
+  test("emits protocol-specific env keys plus optional control notes", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:18-alpine",
+        "store.kv": "redis:8-alpine",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+        "channel.email": "axllent/mailpit:v1.22.3",
+      },
+      credentials: {
+        ...fixedCreds,
+        "store.files": {
+          user: "files-key",
+          password: "files-secret",
+          database: "oke",
+        },
+        "channel.email": {
+          user: "unused",
+          password: "unused-secret",
+          database: "oke",
+        },
+      },
+    });
+    expect(result.stackEnv.S3_ACCESS_KEY_ID).toBe("files-key");
+    expect(result.stackEnv.S3_SECRET_ACCESS_KEY).toBe("files-secret");
+    expect(result.stackEnv.S3_BUCKET).toBe("oke");
+    expect(result.stackEnv.S3_URL).toContain("http://files-key:");
+    expect(result.stackEnv.S3_ENDPOINT).toBe("http://127.0.0.1:9000");
+    expect(result.stackEnv.S3_CONSOLE_URL).toBe("http://127.0.0.1:9001");
+    expect(result.stackEnv.SMTP_URL).toBe("smtp://127.0.0.1:1025");
+    expect(result.stackEnv.SMTP_HOST).toBe("127.0.0.1");
+    expect(result.stackEnv.SMTP_PORT).toBe("1025");
+    expect(result.stackEnv.MAILPIT_UI_URL).toBe("http://127.0.0.1:8025");
+    expect(result.stackEnv.OKE_STORE_KV_PASSWORD).toBe(fixedCreds["store.kv"].password);
+    expect(result.stackEnv.OKE_STORE_KV_USER).toBeUndefined();
+    expect(result.stackEnv.OKE_STORE_KV_DB).toBeUndefined();
+    expect(result.stackEnv.OKE_CHANNEL_EMAIL_PASSWORD).toBeUndefined();
+
+    const text = formatStackEnv(result.stackEnv);
+    expect(text).toContain("# OKE_STORE_KV_MAXMEMORY=256mb");
+    expect(text).toContain("# S3_SESSION_TOKEN=");
+    expect(text).toContain("# SMTP_USER=");
+    expect(text).toContain("# POSTGRES_INITDB_ARGS=--data-checksums");
+  });
+
+  test("instance-offset UI aliases land in stack env", () => {
+    const id = "a3f791";
+    const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
+    const result = deriveInfrastructure({
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      },
+      instanceId: id,
+      credentials: {
+        "channel.email": {
+          user: "oke",
+          password: "unused-mail-password",
+          database: "oke",
+        },
+        "store.files": {
+          user: "files-key",
+          password: "files-secret",
+          database: "oke",
+        },
+      },
+    });
+    expect(result.stackEnv.SMTP_PORT).toBe(String(20_000 + n));
+    expect(result.stackEnv.MAILPIT_UI_URL).toBe(`http://127.0.0.1:${21_000 + n}`);
+    expect(result.stackEnv.S3_ENDPOINT).toBe(`http://127.0.0.1:${18_000 + n}`);
+    expect(result.stackEnv.S3_CONSOLE_URL).toBe(`http://127.0.0.1:${19_000 + n}`);
+  });
+
   test("resolveStack previews without writing", () => {
     const rows = resolveStack({
       images: { "store.sql": "postgres:16" },
@@ -205,5 +277,36 @@ describe("deriveInfrastructure", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.recipe).toBe("postgres");
     expect(rows[0]!.hostPort).toBe(5432);
+    expect(rows[0]!.extraPorts).toEqual([]);
+  });
+
+  test("resolveStack includes instance-offset Mailpit UI / RustFS console", () => {
+    const id = "a3f791";
+    const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
+    const rows = resolveStack({
+      images: {
+        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      },
+      instanceId: id,
+      credentials: {
+        "channel.email": {
+          user: "oke",
+          password: "stack-preview-mail-password",
+          database: "oke",
+        },
+        "store.files": {
+          user: "oke",
+          password: "stack-preview-files-password",
+          database: "oke",
+        },
+      },
+    });
+    const mail = rows.find((r) => r.role === "channel.email")!;
+    const files = rows.find((r) => r.role === "store.files")!;
+    expect(mail.hostPort).toBe(20_000 + n);
+    expect(mail.extraPorts).toEqual([{ hostPort: 21_000 + n, containerPort: 8025 }]);
+    expect(files.hostPort).toBe(18_000 + n);
+    expect(files.extraPorts).toEqual([{ hostPort: 19_000 + n, containerPort: 9001 }]);
   });
 });

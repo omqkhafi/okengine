@@ -11,7 +11,11 @@ export const redis: ImageRecipe = {
   port: 6379,
   match: (i) => /redis|valkey|dragonfly|keydb/i.test(i),
   apply: (s) => ({
-    command: ["redis-server", "--requirepass", credEnv(s, "PASSWORD")],
+    command: [
+      "sh",
+      "-c",
+      'exec redis-server --requirepass "$$OKE_STORE_KV_PASSWORD" --maxmemory "$${OKE_STORE_KV_MAXMEMORY:-0}" --maxmemory-policy "$${OKE_STORE_KV_MAXMEMORY_POLICY:-noeviction}"',
+    ],
     healthcheck: {
       test: ["CMD", "redis-cli", "-a", credEnv(s, "PASSWORD"), "ping"],
       interval: "5s",

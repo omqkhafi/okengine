@@ -128,6 +128,8 @@ export interface DeriveOptions {
   readonly host?: string;
   /** Extra image recipes (plugins). */
   readonly recipes?: readonly ImageRecipe[];
+  /** Preserved optional controls from an existing `.env.docker`. */
+  readonly controls?: Readonly<Record<string, string>>;
   /**
    * Local stack instance id (6-hex). When set, host ports are offset so two
    * `oke dev -s` projects do not share one Postgres on `:5432`.

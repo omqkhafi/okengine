@@ -46,7 +46,16 @@ export async function openS3Bucket(options: FilesOpenOptions): Promise<FilesBuck
 }
 
 function createBunS3Client(bucket: string): S3ClientLike {
-  const s3 = new Bun.S3Client({ bucket });
+  const s3 = new Bun.S3Client({
+    bucket,
+    ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
+    ...(process.env.S3_ACCESS_KEY_ID ? { accessKeyId: process.env.S3_ACCESS_KEY_ID } : {}),
+    ...(process.env.S3_SECRET_ACCESS_KEY
+      ? { secretAccessKey: process.env.S3_SECRET_ACCESS_KEY }
+      : {}),
+    ...(process.env.S3_REGION ? { region: process.env.S3_REGION } : {}),
+    ...(process.env.S3_SESSION_TOKEN ? { sessionToken: process.env.S3_SESSION_TOKEN } : {}),
+  });
   return {
     file(key: string) {
       const f = s3.file(key);

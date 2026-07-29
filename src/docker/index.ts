@@ -37,12 +37,22 @@ export { emitDockerfile } from "./dockerfile.ts";
 export { credEnv, envPrefix, serviceNameFor } from "./helpers.ts";
 export { generateCredentials } from "./credentials.ts";
 export { builtinRecipes, mailpit, postgres, recipeFor, redis, rustfs } from "./recipes/index.ts";
-export { formatStackPreview, resolveStack, type StackRow } from "./stack.ts";
 export {
+  formatStackPreview,
+  resolveExtraPorts,
+  resolveStack,
+  type StackExtraPort,
+  type StackRow,
+} from "./stack.ts";
+export {
+  extraHostPortForInstance,
   hostPortForInstance,
   instancePortOffset,
+  loadExistingStackControls,
   loadExistingStackCredentials,
+  parseStackControls,
   parseStackCredentials,
+  STACK_CONTROL_KEYS,
   stackAppSlug,
   stackInstanceId,
 } from "./stack-id.ts";

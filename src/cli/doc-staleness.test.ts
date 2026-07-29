@@ -48,20 +48,20 @@ function assertZeroGitGrep(pattern: string, ignorePrefixes: readonly string[] = 
 
 describe("legacy stack-mode removal gate", () => {
   test("tracked tree has zero legacy docker-mode flag outside changelog", () => {
-    assertZeroGitGrep(FORBIDDEN_STACK_FLAG, ["docs/changelog.md:"]);
+    assertZeroGitGrep(FORBIDDEN_STACK_FLAG, ["changelog.md:"]);
   });
 
   test("tracked tree has zero legacy compose env filename outside changelog", () => {
-    assertZeroGitGrep(FORBIDDEN_ENV_STACK, ["docs/changelog.md:"]);
+    assertZeroGitGrep(FORBIDDEN_ENV_STACK, ["changelog.md:"]);
   });
 
   test("tracked tree has zero legacy OKE env outside changelog", () => {
-    assertZeroGitGrep(FORBIDDEN_LEGACY_ENV, ["docs/changelog.md:"]);
+    assertZeroGitGrep(FORBIDDEN_LEGACY_ENV, ["changelog.md:"]);
   });
 
   test("tracked tree has zero legacy vault helper outside changelog + upgrade", () => {
     assertZeroGitGrep(FORBIDDEN_FROM_STACK, [
-      "docs/changelog.md:",
+      "changelog.md:",
       "src/upgrade/codemods.ts:",
       "src/upgrade/codemods.test.ts:",
     ]);

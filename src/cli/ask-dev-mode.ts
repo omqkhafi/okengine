@@ -24,7 +24,7 @@ export async function askDevMode(): Promise<DevMode | null> {
       {
         value: "local",
         label: "local",
-        hint: "in-memory, instant, no Docker needed",
+        hint: "sqlite file, instant, no Docker needed",
       },
       {
         value: "docker",

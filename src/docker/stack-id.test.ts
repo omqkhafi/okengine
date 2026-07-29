@@ -4,8 +4,10 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  extraHostPortForInstance,
   hostPortForInstance,
   instancePortOffset,
+  parseStackControls,
   parseStackCredentials,
   stackAppSlug,
   stackInstanceId,
@@ -29,14 +31,23 @@ describe("stackInstanceId", () => {
 });
 
 describe("hostPortForInstance", () => {
-  test("offsets sql and kv into separate ranges", () => {
+  test("assigns built-in roles disjoint per-project ranges", () => {
     const id = "abcd12";
+    const n = instancePortOffset(id);
     const sql = hostPortForInstance("store.sql", 5432, id);
     const kv = hostPortForInstance("store.kv", 6379, id);
-    expect(sql).toBeGreaterThanOrEqual(15_000);
-    expect(sql).toBeLessThan(16_000);
-    expect(kv).toBeGreaterThanOrEqual(16_000);
-    expect(kv).toBeLessThan(17_000);
+    const files = hostPortForInstance("store.files", 9000, id);
+    const filesConsole = extraHostPortForInstance("store.files", 9001, id);
+    const email = hostPortForInstance("channel.email", 1025, id);
+    const emailUi = extraHostPortForInstance("channel.email", 8025, id);
+    expect([sql, kv, files, filesConsole, email, emailUi]).toEqual([
+      15_000 + n,
+      16_000 + n,
+      18_000 + n,
+      19_000 + n,
+      20_000 + n,
+      21_000 + n,
+    ]);
   });
 });
 
@@ -53,6 +64,26 @@ OKE_STORE_KV_DB=oke
     const creds = parseStackCredentials(text, ["store.sql", "store.kv"]);
     expect(creds["store.sql"]?.password).toBe("s3cret");
     expect(creds["store.kv"]?.password).toBe("kvpass");
+  });
+
+  test("reads service-specific S3 credentials and optional controls", () => {
+    const text = `
+S3_ACCESS_KEY_ID=files-key
+S3_SECRET_ACCESS_KEY=files-secret
+S3_REGION=eu-central-1
+OKE_STORE_KV_MAXMEMORY=512mb
+# SMTP_USER=commented-out
+`;
+    const creds = parseStackCredentials(text, ["store.files"]);
+    expect(creds["store.files"]).toEqual({
+      user: "files-key",
+      password: "files-secret",
+      database: "oke",
+    });
+    expect(parseStackControls(text)).toEqual({
+      OKE_STORE_KV_MAXMEMORY: "512mb",
+      S3_REGION: "eu-central-1",
+    });
   });
 });
 
@@ -86,7 +117,8 @@ describe("deriveInfrastructure instanceId", () => {
   });
 
   test("offsets Mailpit UI and RustFS console so stacks do not share 8025/9001", () => {
-    const id = "abcd12";
+    // Regression: offset 975 previously mapped Mailpit's 8025 UI onto RustFS's 9000 API.
+    const id = "a3f791";
     const n = instancePortOffset(id);
     const result = deriveInfrastructure({
       images: {
@@ -111,9 +143,12 @@ describe("deriveInfrastructure instanceId", () => {
     });
     const mailYml = result.files.find((f) => f.path === "compose.channel.email.yml")!.content;
     const filesYml = result.files.find((f) => f.path === "compose.store.files.yml")!.content;
-    expect(mailYml).toContain(`${8025 + n}:8025`);
+    expect(mailYml).toContain(`${20_000 + n}:1025`);
+    expect(mailYml).toContain(`${21_000 + n}:8025`);
     expect(mailYml).not.toContain("8025:8025");
-    expect(filesYml).toContain(`${9001 + n}:9001`);
+    expect(filesYml).toContain(`${18_000 + n}:9000`);
+    expect(filesYml).toContain(`${19_000 + n}:9001`);
     expect(filesYml).not.toContain("9001:9001");
+    expect(mailYml).not.toContain("9000:8025");
   });
 });

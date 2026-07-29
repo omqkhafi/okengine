@@ -77,6 +77,17 @@ oke dev --docker   # or: oke dev -d
 
 That uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when omitted). Compose files and credentials land under `docker/` (`.env.docker` beside compose). Host ports — including Mailpit UI / RustFS console extras — are unique per project so multiple apps can run at once. Bare `oke dev` prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults to `local`.
 
+The generated env follows each protocol instead of forcing one generic credential shape:
+
+- Postgres: `DATABASE_URL` plus `OKE_STORE_SQL_*`
+- Redis: `REDIS_URL` plus `OKE_STORE_KV_PASSWORD`
+- S3-compatible files: `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_URL`, `S3_REGION`, and `S3_CONSOLE_URL`
+- SMTP email: `SMTP_URL`, `SMTP_HOST`, `SMTP_PORT`, and `MAILPIT_UI_URL` with optional `SMTP_USER` / `SMTP_PASSWORD`
+
+Each section also includes commented controls (for example Redis memory policy,
+Postgres init options, Bun S3 session tokens, and Mailpit limits). Uncommented
+supported controls are preserved when `oke dev --docker` regenerates the file.
+
 ### Verify the install
 
 Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked.

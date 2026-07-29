@@ -18,7 +18,7 @@ import type {
 } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { generateCredentials } from "./credentials.ts";
-import { hostPortForInstance, instancePortOffset } from "./stack-id.ts";
+import { extraHostPortForInstance, hostPortForInstance, STACK_CONTROL_KEYS } from "./stack-id.ts";
 import { APP_PORT } from "../runtime/types.ts";
 
 /** Canonical layer-4 filename — never written by derivation. */
@@ -110,13 +110,17 @@ export function emitComposeLayers(
   files.push({ path: "compose.yml", content: `${toYaml(base)}\n` });
 
   // Layer 2 — per-role
-  const extraHostOffset = options.instanceId ? instancePortOffset(options.instanceId) : 0;
   for (const spec of specs) {
     const recipe = recipeFor(spec.image, recipes);
     const applied = recipe.apply(spec);
     const ports = [
       `${spec.hostPort}:${spec.port}`,
-      ...(applied.extraPorts ?? []).map((p) => `${p.host + extraHostOffset}:${p.container}`),
+      ...(applied.extraPorts ?? []).map((p) => {
+        const hostPort = options.instanceId
+          ? extraHostPortForInstance(spec.role, p.host, options.instanceId)
+          : p.host;
+        return `${hostPort}:${p.container}`;
+      }),
     ];
     const service: Record<string, unknown> = {
       image: spec.image,
@@ -194,13 +198,12 @@ export function buildStackEnv(
   specs: readonly ServiceSpec[],
   recipes: readonly ImageRecipe[] = [],
   host = "127.0.0.1",
+  controls: Readonly<Record<string, string>> = {},
+  instanceId?: string,
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const spec of specs) {
     const prefix = envPrefix(spec.role);
-    env[`${prefix}_USER`] = spec.credentials.user;
-    env[`${prefix}_PASSWORD`] = spec.credentials.password;
-    env[`${prefix}_DB`] = spec.credentials.database;
     const recipe = recipeFor(spec.image, recipes);
     const url = recipe.url(spec, {
       host,
@@ -209,10 +212,49 @@ export function buildStackEnv(
       password: spec.credentials.password,
       database: spec.credentials.database,
     });
-    env[`${prefix}_URL`] = url;
-    // Friendly alias for the common sql role
-    if (spec.role === "store.sql") env.DATABASE_URL = url;
-    if (spec.role === "store.kv") env.REDIS_URL = url;
+    const applied = recipe.apply(spec);
+    const uiExtra = applied.extraPorts?.[0];
+    const uiHost =
+      uiExtra === undefined
+        ? undefined
+        : instanceId
+          ? extraHostPortForInstance(spec.role, uiExtra.host, instanceId)
+          : uiExtra.host;
+    if (spec.role === "store.sql") {
+      env[`${prefix}_USER`] = spec.credentials.user;
+      env[`${prefix}_PASSWORD`] = spec.credentials.password;
+      env[`${prefix}_DB`] = spec.credentials.database;
+      env[`${prefix}_URL`] = url;
+      env.DATABASE_URL = url;
+    } else if (spec.role === "store.kv") {
+      env[`${prefix}_PASSWORD`] = spec.credentials.password;
+      env[`${prefix}_URL`] = url;
+      env.REDIS_URL = url;
+    } else if (spec.role === "store.files") {
+      env[`${prefix}_URL`] = url;
+      env.S3_ACCESS_KEY_ID = spec.credentials.user;
+      env.S3_SECRET_ACCESS_KEY = spec.credentials.password;
+      env.S3_BUCKET = spec.credentials.database;
+      env.S3_URL = url;
+      env.S3_ENDPOINT = new URL(url).origin;
+      env.S3_REGION = "us-east-1";
+      if (uiHost !== undefined) env.S3_CONSOLE_URL = `http://${host}:${uiHost}`;
+    } else if (spec.role === "channel.email") {
+      env[`${prefix}_URL`] = url;
+      env.SMTP_URL = url;
+      env.SMTP_HOST = host;
+      env.SMTP_PORT = String(spec.hostPort);
+      if (uiHost !== undefined) env.MAILPIT_UI_URL = `http://${host}:${uiHost}`;
+    } else {
+      env[`${prefix}_USER`] = spec.credentials.user;
+      env[`${prefix}_PASSWORD`] = spec.credentials.password;
+      env[`${prefix}_DB`] = spec.credentials.database;
+      env[`${prefix}_URL`] = url;
+    }
+  }
+  for (const key of STACK_CONTROL_KEYS) {
+    const value = controls[key];
+    if (value !== undefined) env[key] = value;
   }
   return env;
 }
@@ -229,8 +271,43 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
 
 /** Friendly aliases emitted beside their role block. */
 const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  "store.sql": ["DATABASE_URL"],
-  "store.kv": ["REDIS_URL"],
+  "store.sql": ["DATABASE_URL", "PGDATA", "POSTGRES_INITDB_ARGS"],
+  "store.kv": ["REDIS_URL", "OKE_STORE_KV_MAXMEMORY", "OKE_STORE_KV_MAXMEMORY_POLICY"],
+  "store.files": [
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+    "S3_BUCKET",
+    "S3_URL",
+    "S3_ENDPOINT",
+    "S3_CONSOLE_URL",
+    "S3_REGION",
+    "S3_SESSION_TOKEN",
+  ],
+  "channel.email": [
+    "SMTP_URL",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "MAILPIT_UI_URL",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "MP_MAX_MESSAGES",
+    "MP_SMTP_AUTH_ACCEPT_ANY",
+    "MP_SMTP_AUTH_ALLOW_INSECURE",
+  ],
+};
+
+/** Optional controls documented in `.env.docker` and preserved on regeneration. */
+const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
+  "store.sql": ["PGDATA=/var/lib/postgresql/data/pgdata", "POSTGRES_INITDB_ARGS=--data-checksums"],
+  "store.kv": ["OKE_STORE_KV_MAXMEMORY=256mb", "OKE_STORE_KV_MAXMEMORY_POLICY=allkeys-lru"],
+  "store.files": ["S3_SESSION_TOKEN="],
+  "channel.email": [
+    "SMTP_USER=",
+    "SMTP_PASSWORD=",
+    "MP_MAX_MESSAGES=500",
+    "MP_SMTP_AUTH_ACCEPT_ANY=1",
+    "MP_SMTP_AUTH_ALLOW_INSECURE=1",
+  ],
 };
 
 /**
@@ -240,8 +317,14 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
  */
 function roleFromEnvKey(key: string): string | undefined {
   const m = /^OKE_(.+)_(USER|PASSWORD|DB|URL)$/.exec(key);
-  if (!m) return undefined;
-  return m[1]!.toLowerCase().replaceAll("_", ".");
+  if (m) return m[1]!.toLowerCase().replaceAll("_", ".");
+  if (key.startsWith("S3_")) return "store.files";
+  if (key.startsWith("SMTP_") || key.startsWith("MP_") || key === "MAILPIT_UI_URL") {
+    return "channel.email";
+  }
+  if (key === "PGDATA" || key === "POSTGRES_INITDB_ARGS") return "store.sql";
+  if (key.startsWith("OKE_STORE_KV_MAXMEMORY")) return "store.kv";
+  return undefined;
 }
 
 /**
@@ -272,8 +355,7 @@ export function formatStackEnv(env: Readonly<Record<string, string>>): string {
     const prefix = envPrefix(role);
     const title = ROLE_SECTION_TITLE[role] ?? role;
     lines.push(`# ── ${title} ${"─".repeat(Math.max(4, 56 - title.length))}`);
-    for (const field of ["USER", "PASSWORD", "DB", "URL"] as const) {
-      const key = `${prefix}_${field}`;
+    for (const key of [`${prefix}_USER`, `${prefix}_PASSWORD`, `${prefix}_DB`, `${prefix}_URL`]) {
       const value = env[key];
       if (value === undefined) continue;
       lines.push(`${key}=${escapeEnv(value)}`);
@@ -284,6 +366,14 @@ export function formatStackEnv(env: Readonly<Record<string, string>>): string {
       if (value === undefined) continue;
       lines.push(`${alias}=${escapeEnv(value)}`);
       used.add(alias);
+    }
+    const controls = ROLE_CONTROL_EXAMPLES[role] ?? [];
+    const inactive = controls.filter(
+      (example) => env[example.slice(0, example.indexOf("="))] === undefined,
+    );
+    if (inactive.length > 0) {
+      lines.push("# Optional controls (uncomment to override; preserved on regeneration):");
+      for (const example of inactive) lines.push(`# ${example}`);
     }
     lines.push("");
   }

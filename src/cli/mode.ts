@@ -1,8 +1,11 @@
 /**
  * `oke mode [local|docker]` — read or set the saved `oke dev` preference.
+ * Setting a mode also syncs domain schema for that env (emit + push).
  */
 
 import { parseDevMode, readDevMode, writeDevMode, type DevMode } from "./dev-mode.ts";
+import { sqlDialectForEnv, syncDevSchema } from "./dev-schema-sync.ts";
+import { loadOkeConfig } from "./load-config.ts";
 
 /**
  * CLI entry for `oke mode`.
@@ -16,8 +19,11 @@ export async function modeCli(args: readonly string[]): Promise<number> {
       console.log(`oke mode [local|docker]
 
 Get or set the default infrastructure mode for \`oke dev\`
-(saved in .oke/mode). Session flags \`oke dev --local\` /
-\`oke dev --docker\` never change this preference.
+(saved in .oke/mode). Setting a mode syncs domain schema for that env:
+emits schema.generated.ts for the active dialect, then runs \`oke db push\`.
+Data planes stay isolated — switching modes never copies rows.
+Session flags \`oke dev --local\` / \`oke dev --docker\` never change this
+preference.
 `);
       return 0;
     }
@@ -40,6 +46,20 @@ Get or set the default infrastructure mode for \`oke dev\`
     return 1;
   }
   await writeDevMode(cwd, next satisfies DevMode);
-  console.log(`oke mode: saved ${next}`);
-  return 0;
+
+  try {
+    const result = await syncDevSchema(cwd, next);
+    console.log(`oke mode: saved ${next} · dialect ${result.dialect}`);
+    return result.code;
+  } catch (err) {
+    const loaded = await loadOkeConfig(cwd).catch(() => null);
+    const dialect = loaded?.config
+      ? sqlDialectForEnv(loaded.config, next).dialect
+      : next === "docker"
+        ? "postgresql"
+        : "sqlite";
+    console.error(`oke mode: saved ${next} · dialect ${dialect}`);
+    console.error(err instanceof Error ? err.message : String(err));
+    return 1;
+  }
 }

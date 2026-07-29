@@ -41,9 +41,8 @@ export type ScaffoldOptions = {
   /** Write root `AGENTS.md` (default true). */
   readonly writeAgentsMd?: boolean;
   /**
-   * Store SQL driver — rewrites `src/schema.ts` dialect and pins
-   * `oke.config.ts` `store.sql` local/docker/prod when `postgres`.
-   * Default `sqlite`.
+   * Store SQL driver — pins `oke.config.ts` `store.sql` local/docker/prod
+   * when `postgres`. Default `sqlite` keeps the dual-mode config.
    */
   readonly sqlDriver?: SqlDriverId;
 };
@@ -129,22 +128,17 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
 }
 
 /**
- * Rewrite schema dialect + (for postgres) `store.sql` pins.
+ * For postgres, pin `store.sql` local/docker/prod in `oke.config.ts`.
  *
- * `sqlite` keeps the template dual-mode config (`local: sqlite` ·
- * `docker`/`prod: postgres`) — only the Drizzle dialect is ensured.
- * `postgres` writes `pgTable` and pins local/docker/prod to postgres.
+ * The default template ships abstract `src/schema.decl.ts` — dialect is
+ * emitted from the active `store.sql` driver, so there is no hand-written
+ * `sqliteTable`/`pgTable` source to rewrite. `sqlite` keeps the template
+ * dual-mode config (`local: sqlite` · `docker`/`prod: postgres`) untouched.
  *
  * @param targetDir - Scaffolded project root
  * @param sqlDriver - Chosen store.sql driver
  */
 function applySqlDriverTransforms(targetDir: string, sqlDriver: SqlDriverId): void {
-  const schemaPath = join(targetDir, "src/schema.ts");
-  if (existsSync(schemaPath)) {
-    const next = transformSchemaForSqlDriver(readFileSync(schemaPath, "utf8"), sqlDriver);
-    writeFileSync(schemaPath, next, "utf8");
-  }
-
   if (sqlDriver !== "postgres") return;
 
   const configPath = join(targetDir, "oke.config.ts");

@@ -276,7 +276,7 @@ describe("scaffold structure", () => {
         "src/flows/main/shapes.ts",
         "src/flows/main/signals.ts",
         "src/core.ts",
-        "src/schema.ts",
+        "src/schema.decl.ts",
         "src/app.ts",
       ]) {
         expect(result.files).toContain(path);
@@ -291,7 +291,7 @@ describe("scaffold structure", () => {
     }
   });
 
-  test("--sql postgres rewrites schema dialect and pins store.sql", () => {
+  test("--sql postgres pins store.sql (abstract schema stays dialect-agnostic)", () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-sql-pg-"));
     try {
       const result = scaffold({
@@ -301,10 +301,14 @@ describe("scaffold structure", () => {
         sqlDriver: "postgres",
       });
       expect(result.sqlDriver).toBe("postgres");
-      const schema = readFileSync(join(result.targetDir, "src/schema.ts"), "utf8");
-      expect(schema).toContain('from "drizzle-orm/pg-core"');
-      expect(schema).toContain("pgTable(");
-      expect(schema).not.toContain("sqliteTable");
+      // Abstract decl is dialect-agnostic — emit picks pgTable at sync time.
+      const decl = readFileSync(join(result.targetDir, "src/schema.decl.ts"), "utf8");
+      expect(decl).toContain("store.schema.table(");
+      expect(decl).not.toContain("sqliteTable");
+      expect(decl).not.toContain("pgTable");
+      const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
+      expect(drizzle).toContain("OKE_DRIZZLE_DIALECT");
+      expect(drizzle).toContain("schema.generated.ts");
       const config = readFileSync(join(result.targetDir, "oke.config.ts"), "utf8");
       expect(config).toMatch(/sql:\s*\{[\s\S]*local:\s*"postgres"/);
       expect(config).toMatch(/sql:\s*\{[\s\S]*docker:\s*"postgres"/);

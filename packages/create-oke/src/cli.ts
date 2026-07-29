@@ -225,8 +225,7 @@ Options:
   -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
   --sql <id>            Opt-in Store SQL dialect: ${SQL_DRIVERS.join("|")}
                         Default keeps local sqlite · docker/prod postgres.
-                        --sql postgres rewrites src/schema.ts to pgTable and
-                        pins store.sql local/docker/prod to postgres.
+                        --sql postgres pins store.sql local/docker/prod to postgres.
   -y, --yes             No prompts; defaults + bun install (no oke dev)
   --install             Run bun install after scaffold
   --no-install          Skip bun install

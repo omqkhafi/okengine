@@ -15,8 +15,56 @@ import {
 import { loadPluginTablesFromAppEntry } from "../elements/store/load-plugin-tables.ts";
 import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../config/index.ts";
 import type { TableContribution } from "../kernel/plugin.ts";
+import { resolveDrizzleKitEnv } from "./drizzle-env.ts";
+import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import { loadOkeConfig } from "./load-config.ts";
+
+/**
+ * Apply a drizzle-kit env overlay to `process.env` for the in-process SDK,
+ * returning a restore function. drizzle-kit's `push`/`generate` read
+ * `process.env` directly (the project `drizzle.config.ts` also reads it), so
+ * CLI-resolved dialect + connection env must be present in this process.
+ *
+ * @param overlay - Env keys to set
+ */
+export function applyDrizzleEnvOverlay(overlay: Record<string, string>): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(overlay)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+}
+
+/**
+ * Resolve env + apply the drizzle-kit overlay for the in-process SDK.
+ * Restores the env afterward via a `finally`.
+ *
+ * @param cwd - Project root
+ * @param config - Loaded oke config
+ * @param env - Active env
+ * @param fn - Work to run under the overlay
+ */
+export async function withDrizzleKitEnv<T>(
+  cwd: string,
+  config: OkeConfig | null | undefined,
+  env: ConfigEnv,
+  fn: (dialect: string) => Promise<T>,
+): Promise<T> {
+  const { dialect, overlay } = await resolveDrizzleKitEnv(cwd, config, env);
+  const restore = applyDrizzleEnvOverlay(overlay);
+  try {
+    return await fn(dialect);
+  } finally {
+    restore();
+  }
+}
 
 /** Subcommands under `oke db`. */
 export type DbSubcommand = "push" | "generate" | "migrate";
@@ -34,7 +82,11 @@ export interface DbOptions {
     config: string;
   }) => Promise<DbKitResult & { readonly migration_path?: string }>;
   /** Injectable migrate (tests). */
-  readonly migrateFn?: (opts: { config: string; cwd: string }) => Promise<number>;
+  readonly migrateFn?: (opts: {
+    config: string;
+    cwd: string;
+    env: Record<string, string>;
+  }) => Promise<number>;
   /**
    * Dry-run push via drizzle-kit `explain` — used by doctor drift checks.
    */
@@ -90,8 +142,9 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
   const write = options.write ?? ((t) => process.stdout.write(t));
   const cwd = options.cwd ?? process.cwd();
   const loaded = await loadOkeConfig(cwd).catch(() => null);
+  const env = options.env ?? (await resolveDevSqlEnv(cwd));
   if (!options.skipEmit) {
-    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, options.env ?? "local", {
+    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, env, {
       pluginTables: options.pluginTables,
       entry: options.entry,
     });
@@ -100,15 +153,16 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
     config: options.config,
     loadedConfig: loaded?.config,
   });
+  const resolved = { ...options, skipEmit: true, env };
 
   if (sub === "push") {
-    return runPush(configPath, write, { ...options, skipEmit: true });
+    return runPush(configPath, write, resolved);
   }
   if (sub === "generate") {
-    return runGenerate(configPath, write, { ...options, skipEmit: true });
+    return runGenerate(configPath, write, resolved);
   }
   if (sub === "migrate") {
-    return runMigrate(configPath, cwd, write, { ...options, skipEmit: true });
+    return runMigrate(configPath, cwd, write, resolved);
   }
   write(`oke db: unknown subcommand\n`);
   return EXIT_USAGE;
@@ -165,9 +219,10 @@ export async function runPush(
   options: DbOptions = {},
 ): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
+  const loaded = await loadOkeConfig(cwd).catch(() => null);
+  const env = options.env ?? (await resolveDevSqlEnv(cwd));
   if (!options.skipEmit) {
-    const loaded = await loadOkeConfig(cwd).catch(() => null);
-    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, options.env ?? "local", {
+    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, env, {
       pluginTables: options.pluginTables,
       entry: options.entry,
     });
@@ -185,7 +240,9 @@ export async function runPush(
 
   let result: DbKitResult;
   try {
-    result = await pushFn({ config: configPath });
+    result = await withDrizzleKitEnv(cwd, loaded?.config, env, () =>
+      pushFn({ config: configPath }),
+    );
   } catch (err) {
     write(`oke db push: ${err instanceof Error ? err.message : String(err)}\n`);
     write("         → install drizzle-kit and ensure drizzle.config.ts exists\n");
@@ -208,9 +265,10 @@ export async function runGenerate(
   options: DbOptions = {},
 ): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
+  const loaded = await loadOkeConfig(cwd).catch(() => null);
+  const env = options.env ?? (await resolveDevSqlEnv(cwd));
   if (!options.skipEmit) {
-    const loaded = await loadOkeConfig(cwd).catch(() => null);
-    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, options.env ?? "local", {
+    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, env, {
       pluginTables: options.pluginTables,
       entry: options.entry,
     });
@@ -227,7 +285,9 @@ export async function runGenerate(
 
   let result: DbKitResult & { readonly migration_path?: string };
   try {
-    result = await generateFn({ config: configPath });
+    result = await withDrizzleKitEnv(cwd, loaded?.config, env, () =>
+      generateFn({ config: configPath }),
+    );
   } catch (err) {
     write(`oke db generate: ${err instanceof Error ? err.message : String(err)}\n`);
     write("         → install drizzle-kit and ensure drizzle.config.ts exists\n");
@@ -255,9 +315,10 @@ export async function runMigrate(
   write: (text: string) => void = (t) => process.stdout.write(t),
   options: DbOptions = {},
 ): Promise<number> {
+  const loaded = await loadOkeConfig(cwd).catch(() => null);
+  const env = options.env ?? (await resolveDevSqlEnv(cwd));
   if (!options.skipEmit) {
-    const loaded = await loadOkeConfig(cwd).catch(() => null);
-    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, options.env ?? "local", {
+    await emitAbstractSchemaPrestep(cwd, loaded?.config, write, env, {
       pluginTables: options.pluginTables,
       entry: options.entry,
     });
@@ -265,18 +326,23 @@ export async function runMigrate(
 
   const migrateFn =
     options.migrateFn ??
-    (async (opts: { config: string; cwd: string }) => {
+    (async (opts: { config: string; cwd: string; env: Record<string, string> }) => {
       const proc = Bun.spawn(["bunx", "drizzle-kit", "migrate", "--config", opts.config], {
         cwd: opts.cwd,
         stdout: "inherit",
         stderr: "inherit",
-        env: process.env as Record<string, string>,
+        env: opts.env,
       });
       return await proc.exited;
     });
 
+  const { overlay } = await resolveDrizzleKitEnv(cwd, loaded?.config, env);
   try {
-    const code = await migrateFn({ config: configPath, cwd });
+    const code = await migrateFn({
+      config: configPath,
+      cwd,
+      env: { ...(process.env as Record<string, string>), ...overlay },
+    });
     if (code === 0) {
       write("oke db migrate: applied\n");
       return EXIT_OK;
@@ -299,6 +365,8 @@ export async function detectDbDrift(options: DbOptions = {}): Promise<{
   readonly detail?: string;
 }> {
   const cwd = options.cwd ?? process.cwd();
+  const loaded = await loadOkeConfig(cwd).catch(() => null);
+  const env = options.env ?? (await resolveDevSqlEnv(cwd));
   const configPath = await resolveDrizzleConfigPath(cwd, { config: options.config });
   const pushFn =
     options.pushFn ??
@@ -308,7 +376,9 @@ export async function detectDbDrift(options: DbOptions = {}): Promise<{
     });
 
   try {
-    const result = await pushFn({ config: configPath });
+    const result = await withDrizzleKitEnv(cwd, loaded?.config, env, () =>
+      pushFn({ config: configPath }),
+    );
     if (result.status === "no_changes") return { drifted: false };
     if (result.status === "ok" || result.status === "missing_hints") {
       return { drifted: true, detail: `drizzle-kit push explain: ${result.status}` };

@@ -13,7 +13,9 @@ import type { ConsoleState } from "../console/server/state.ts";
 import {
   DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
+  loadExistingStackControls,
   loadExistingStackCredentials,
+  resolveExtraPorts,
   stackAppSlug,
   stackInstanceId,
   writeDerivedFiles,
@@ -106,6 +108,13 @@ export interface DevSession {
   readonly consoleState: ConsoleState | null;
 }
 
+/** Minimal filesystem watcher contract, injectable for deterministic tests. */
+export type DevWatchFn = (
+  path: string,
+  options: { readonly recursive: true },
+  listener: (event: "rename" | "change", filename: string | null) => void,
+) => { close(): void };
+
 /** Options for {@link runDev}. */
 export interface DevOptions {
   readonly cwd?: string;
@@ -134,6 +143,8 @@ export interface DevOptions {
    * @param filename - Relative path from the watcher
    */
   readonly onDbAutoPush?: (filename: string) => void;
+  /** Watch project source changes (injectable for tests). */
+  readonly watchFs?: DevWatchFn;
   readonly images?: Readonly<Record<string, string>>;
   readonly credentials?: DeriveOptions["credentials"];
   readonly write?: (text: string) => void;
@@ -344,6 +355,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const appSlug = stackAppSlug(cwd);
     const reusedCreds =
       options.credentials ?? (await loadExistingStackCredentials(cwd, stackRoles));
+    const controls = await loadExistingStackControls(cwd);
     const derived = deriveInfrastructure({
       images,
       app: appSlug,
@@ -352,6 +364,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       composeDir,
       instanceId,
       ...(reusedCreds ? { credentials: reusedCreds } : {}),
+      ...(controls ? { controls } : {}),
       host: "127.0.0.1",
     });
     // Layer 4 is user-owned — include only if the file already exists.
@@ -392,7 +405,14 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       const roleLabel = (role: string): string => {
         if (role === "store.sql") return "postgres";
         if (role === "store.kv") return "redis";
+        if (role === "store.files") return "files";
+        if (role === "channel.email") return "mail";
         return role;
+      };
+      const extraLabel = (role: string, containerPort: number): string => {
+        if (role === "channel.email" && containerPort === 8025) return "mail-ui";
+        if (role === "store.files" && containerPort === 9001) return "files-ui";
+        return `${roleLabel(role)}+${containerPort}`;
       };
       const appDrivers = [
         ...(stackRoles.includes("store.sql") ? [stackSqlDriver] : []),
@@ -401,10 +421,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       write(
         formatStackSummary({
           project: `oke-${appSlug}`,
-          services: derived.specs.map((spec) => ({
-            label: roleLabel(spec.role),
-            hostPort: spec.hostPort,
-          })),
+          services: derived.specs.flatMap((spec) => [
+            { label: roleLabel(spec.role), hostPort: spec.hostPort },
+            ...resolveExtraPorts(spec, { images, instanceId }).map((p) => ({
+              label: extraLabel(spec.role, p.containerPort),
+              hostPort: p.hostPort,
+            })),
+          ]),
           appDrivers,
         }),
       );
@@ -451,6 +474,28 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   );
 
   if (options.dryRun) return { code: 0, plan };
+
+  // One-shot schema sync for the session profile (both local and docker):
+  // emits schema.generated.ts for the active dialect, then pushes via
+  // drizzle-kit. Data planes stay isolated — session flags never rewrite
+  // `.oke/mode`. Watch auto-push below remains local-only.
+  if (!options.noDbPush) {
+    const { syncDevSchema } = await import("./dev-schema-sync.ts");
+    try {
+      const result = await syncDevSchema(cwd, mode, { write });
+      write(
+        formatStatusLine(
+          `oke db push (${mode} · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
+        ),
+      );
+    } catch (err) {
+      write(
+        formatStatusLine(
+          `oke db push (${mode}) skipped — ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+  }
 
   const autoPushEnabled = resolveDevAutoPush({
     noDbPush: options.noDbPush,
@@ -591,7 +636,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     options.dbPush ??
     (async (projectCwd: string) => {
       const configPath = await resolveDrizzleConfigPath(projectCwd);
-      return runPush(configPath, (t) => write(t));
+      return runPush(configPath, (t) => write(t), { cwd: projectCwd, env: mode });
     });
 
   let lastSchemaFilename = "";
@@ -614,7 +659,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
 
   write(formatDevLogSeparator());
 
-  const watcher = watch(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
+  const watchFs: DevWatchFn =
+    options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
+  const watcher = watchFs(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
     void regen(appUrl);
     // Only live-extract when the host did not pin a Manifest (tests).
     if (options.manifest === undefined) {

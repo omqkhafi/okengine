@@ -3,11 +3,13 @@
  */
 
 import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { fsDriver } from "../../drivers/fs.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
 import { postgresDriver } from "../../drivers/postgres.ts";
 import { redisDriver } from "../../drivers/redis.ts";
+import { s3Driver } from "../../drivers/s3.ts";
 import { sqliteDriver } from "../../drivers/sqlite.ts";
-import type { KvDriver, SqlDriver } from "../../drivers/types.ts";
+import type { FilesDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
 import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runtime
@@ -31,11 +33,14 @@ export function bindStore(
 ): StoreRuntime {
   const sqlId = resolveSqlDriverId(options, env, docker);
   const kvId = resolveKvDriverId(options, env, docker);
+  const filesId = resolveFilesDriverId(options, env, docker);
   const sqlUrl = sqlUrlFor(sqlId, docker);
   const kvUrl = kvUrlFor(kvId, docker);
+  const filesRoot = filesRootFor(filesId);
 
   const sqlBindings: Record<string, { name: string; primary: { url: string } }> = {};
   const kvBindings: Record<string, { url?: string }> = {};
+  const filesBindings: Record<string, { root?: string }> = {};
 
   for (const decl of options.stores ?? []) {
     if (isSqlDecl(decl)) {
@@ -45,6 +50,8 @@ export function bindStore(
       };
     } else if (isKvDecl(decl)) {
       kvBindings[decl.name] = kvUrl !== undefined ? { url: kvUrl } : {};
+    } else if (isFilesDecl(decl)) {
+      filesBindings[decl.name] = filesRoot !== undefined ? { root: filesRoot } : {};
     }
   }
 
@@ -55,11 +62,12 @@ export function bindStore(
     drivers: {
       sql: sqlDriverFor(sqlId),
       kv: kvDriverFor(kvId),
-      files: memoryDrivers.files,
+      files: filesDriverFor(filesId),
       index: memoryDrivers.index,
     },
     sql: sqlBindings,
     kv: kvBindings,
+    files: filesBindings,
     now,
     domainDdl,
   });
@@ -107,6 +115,23 @@ export function resolveKvDriverId(options: BootOptions, env: ConfigEnv, docker: 
   return docker ? "redis" : "memory";
 }
 
+/**
+ * @param options - Boot options
+ * @param env - Active env
+ * @param docker - Docker mode
+ */
+export function resolveFilesDriverId(
+  options: BootOptions,
+  env: ConfigEnv,
+  docker: boolean,
+): string {
+  const fromEnv = process.env.OKE_FILES_DRIVER?.trim();
+  if (docker && fromEnv) return fromEnv;
+  const resolved = resolveDriverId(options.config?.drivers?.store?.files, env);
+  if (resolved) return resolved;
+  return docker ? "s3" : "memory";
+}
+
 function sqlDriverFor(id: string): SqlDriver {
   switch (id) {
     case "postgres":
@@ -128,6 +153,19 @@ function kvDriverFor(id: string): KvDriver {
       return memoryDrivers.kv;
     default:
       throw new Error(`oke boot: unknown kv driver "${id}"`);
+  }
+}
+
+function filesDriverFor(id: string): FilesDriver {
+  switch (id) {
+    case "s3":
+      return s3Driver;
+    case "fs":
+      return fsDriver;
+    case "memory":
+      return memoryDrivers.files;
+    default:
+      throw new Error(`oke boot: unknown files driver "${id}"`);
   }
 }
 
@@ -162,10 +200,19 @@ function kvUrlFor(kvId: string, docker: boolean): string | undefined {
   return url;
 }
 
+function filesRootFor(filesId: string): string | undefined {
+  if (filesId !== "s3") return undefined;
+  return process.env.S3_BUCKET ?? process.env.OKE_STORE_FILES_DB ?? undefined;
+}
+
 function isSqlDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "sql" }> {
   return decl.facet === "sql";
 }
 
 function isKvDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "kv" }> {
   return decl.facet === "kv";
+}
+
+function isFilesDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "files" }> {
+  return decl.facet === "files";
 }

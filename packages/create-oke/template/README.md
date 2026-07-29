@@ -11,7 +11,7 @@ oke dev          # app :6530 · Console :6533 · MCP :6535
 # or: oke mode docker && oke dev   # postgres · redis · Mailpit · RustFS · sops
 ```
 
-Local `oke dev` auto-runs `oke db push` when `schema.ts` changes (opt out:
+Local `oke dev` auto-runs `oke db push` when `schema.decl.ts` changes (opt out:
 `--no-db-push`). Docker/prod never auto-apply DDL — use `oke db migrate`.
 
 | Port    | Try                       |
@@ -29,7 +29,7 @@ standard/
 ├── oke.config.ts              # local: sqlite · docker/prod: postgres
 ├── src/
 │   ├── app.ts                 # adopt({ main }); wires stores + side modules
-│   ├── core.ts / schema.ts    # Store (replace the placeholder table)
+│   ├── core.ts / schema.decl.ts  # Store (replace the placeholder table)
 │   ├── gates.ts               # Gate stubs
 │   ├── vault.ts               # Vault stubs
 │   ├── channels.ts            # Channel stubs
@@ -45,7 +45,8 @@ standard/
 - **Unit:** `main`
 - **Flows to replace:** `root`, `health` — delete or rename once your domain exists
 
-Fill `schema.ts` (or `schema.decl.ts` + `oke db`), then add real flows under
+Fill `schema.decl.ts` (abstract tables → `oke db` emits `schema.generated.ts`
+for the active dialect), then add real flows under
 `src/flows/<unit>/`.
 
 ## Docker mode (`oke dev --docker`)
@@ -53,10 +54,13 @@ Fill `schema.ts` (or `schema.decl.ts` + `oke db`), then add real flows under
 Closest to production protocols: Postgres, Redis, SMTP (Mailpit), S3 (RustFS),
 vault `sops`/age. Compose credentials land in `docker/.env.docker`.
 
-| Surface        | URL                                              |
-| -------------- | ------------------------------------------------ |
-| Mailpit UI     | [http://127.0.0.1:8025](http://127.0.0.1:8025)   |
-| RustFS console | [http://127.0.0.1:9001](http://127.0.0.1:9001)   |
+Host ports are unique per project so multiple apps can run at once. Use
+`oke stack` or the `oke dev` Docker summary for the Mailpit UI and RustFS
+console URLs — do not assume `:8025` / `:9001`.
+
+`docker/.env.docker` uses protocol-native keys (`DATABASE_URL`, `REDIS_URL`,
+`S3_*`, `SMTP_*`, `MAILPIT_UI_URL`) and includes commented optional controls.
+Supported controls you uncomment are preserved when the generated stack refreshes.
 
 ## Agent contract
 

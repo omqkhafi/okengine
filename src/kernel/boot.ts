@@ -374,7 +374,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // 5. Channel
   let channel = pre.channel;
   if (needs.channel && !channel) {
-    channel = channelBind!.bindChannel(options, now);
+    channel = channelBind!.bindChannel(options, env, now, docker);
   }
 
   // 6. AI
