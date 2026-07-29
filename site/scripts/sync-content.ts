@@ -127,6 +127,34 @@ function readFenceAfterPath(four: string, rel: string): string {
 }
 
 /**
+ * Replace the fenced TypeScript body immediately after a claimed path.
+ *
+ * Learn pages normally inherit claims verbatim from four-applications.md.
+ * Notes deliberately teaches a wider test excerpt than the canonical spec,
+ * so sync replaces that one body with an excerpt read from the live example.
+ *
+ * @param md - Markdown containing the claimed path
+ * @param rel - Claimed path heading
+ * @param body - Exact live-source excerpt
+ */
+function replaceFenceAfterPath(md: string, rel: string, body: string): string {
+  const heading = new RegExp(`^### \`${rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``, "m");
+  const hm = heading.exec(md);
+  if (!hm || hm.index === undefined) {
+    throw new Error(`sync-content: claimed path missing: ${rel}`);
+  }
+  const afterHeading = hm.index + hm[0].length;
+  const tail = md.slice(afterHeading);
+  const fence = /```(?:typescript|ts)?\n[\s\S]*?```/.exec(tail);
+  if (!fence || fence.index === undefined) {
+    throw new Error(`sync-content: fence missing after ${rel}`);
+  }
+  const fenceStart = afterHeading + fence.index;
+  const fenceEnd = fenceStart + fence[0].length;
+  return `${md.slice(0, fenceStart)}\`\`\`typescript\n${body.trim()}\n\`\`\`${md.slice(fenceEnd)}`;
+}
+
+/**
  * Claimed teaching fence block (doc-drift visible heading).
  *
  * @param app - Teaching app
@@ -253,9 +281,15 @@ function escapeAttr(s: string): string {
 async function main(): Promise<void> {
   const theory = await readRoot("docs/spec/unified-theory.md");
   const four = await readRoot("docs/spec/four-applications.md");
+  const notesTests = await readRoot("examples/notes/tests/notes.test.ts");
   const consoleSpec = await readRoot("docs/spec/console.md");
   const cliDoc = await readRoot("docs/cli.md");
   const agents = await readRoot("AGENTS.md");
+  const learnNotesTests = extractBetween(
+    notesTests,
+    'import { afterEach, expect, test } from "bun:test";',
+    'test("search: English and Arabic substring',
+  );
 
   // Preserve hand-authored Get Started MDX (better-auth how-to style).
   await mkdir(OUT, { recursive: true });
@@ -314,7 +348,11 @@ async function main(): Promise<void> {
   ] as const;
 
   for (const app of learnApps) {
-    const raw = extractBetween(four, app.start, app.end);
+    const canonical = extractBetween(four, app.start, app.end);
+    const raw =
+      app.slug === "notes"
+        ? replaceFenceAfterPath(canonical, "tests/notes.test.ts", learnNotesTests)
+        : canonical;
     const body = demoteHeadings(absolutizeClaimedPaths(raw, app.app));
     pages.push({
       path: `learn/${app.slug}.md`,
