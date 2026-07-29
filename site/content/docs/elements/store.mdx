@@ -60,6 +60,57 @@ export const remove = mounted.remove;
 
 The list URL is the whole query — `?cursor=` / `?offset=` / `?limit=` paginate (keyset when `cursor` columns are set, else offset), `?search=` runs a substring match over `search` columns, `?col=op.value` filters (PostgREST ops `eq ne gt gte lt lte like ilike in is`), `?order=col.asc,other.desc` orders, and `?select=id,title` projects. Values are UTF-8 — English, Arabic, any language round-trips. `list` answers the Stripe envelope `{ data, meta: { nextCursor, hasNextPage }, error: null }`; `create` answers 201; `remove` 204; `get` / `update` / `remove` return a typed `NotFound`.
 
+## Examples
+
+Three realistic list configurations. One is a teaching-app claimed fence; the other two are typechecked against the real API and labeled as such.
+
+### An admin table
+
+```typescript
+list: { mode: "offset", count: "exact", limit: 20 },
+```
+
+_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`) — not run in a teaching app._
+
+**Consequence:** with `count: "exact"` (the offset default), list runs `COUNT(*)` via `store.count` (`src/elements/store/resource.ts`) to fill `meta.total`. On a huge table that count is the cost — set `count: "none"` to skip `meta.total` and return only `meta.offset`.
+
+### An infinite feed
+
+Claimed fence from **notes** — same source the doc-drift gate checks:
+
+### `examples/notes/src/flows/notes/index.ts`
+
+```typescript
+const notesR = store.resource(db, notesTable, {
+  in: NewNote,
+  out: Note,
+  update: NewNote.partial(),
+  list: {
+    cursor: [notesTable.createdAt, notesTable.id],
+    direction: "desc",
+    limit: 20,
+    maxLimit: 100,
+    search: [notesTable.title],
+    filter: "all",
+    order: "all",
+  },
+  unit: "notes",
+  breaking: true,
+});
+```
+
+**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set (`src/elements/store/resource.ts`) — it stays stable under concurrent inserts, while offset pages shift when rows are inserted ahead of the window. That is why cursor is the default; Notes' test asserts pages "never overlap or skip rows" (`examples/notes/tests/notes.test.ts`).
+
+### A public, restricted endpoint
+
+```typescript
+list: { mode: "offset", filter: "none", limit: 20 },
+```
+
+_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`) — not run in a teaching app._
+
+**Consequence:** a request that filters on a forbidden column — e.g. `?secret=eq.x` — fails with **422** and a `ValidationError` whose message is exactly `unknown list param "secret"` (`badInput` in `src/elements/store/resource.ts` when `filter === "none"`).
+
 ## Domain schema — declare → generate
 
 Recommended path: declare tables with `store.schema.table` + `field.*` (ORM-agnostic), then let `oke db` emit dialect-specific Drizzle before sync.
@@ -131,6 +182,12 @@ Domain schema is synced with **drizzle-kit** — not a hand-rolled migrator. Abs
 `oke dev` (local) auto-runs `oke db push` when `schema.ts` / `schema.decl.ts` / `app.ts` changes. Opt out with `--no-db-push` or `db: { autoPush: false }` in `oke.config.ts`. Docker/prod never auto-push; a missing table surfaces as **OKE1101** → run `oke db migrate`.
 
 This is **not** `oke schema generate`, which only emits core/plugin stub handles into `schema/oke.ts`.
+
+## Learn more
+
+- [Domain schema — declare → generate](/docs/elements/store#domain-schema--declare--generate) — declare tables, then `oke db` emits Drizzle
+- [Console · Store](/docs/console/store) — browse sql/kv/files/index; cache keys; PII masking
+- [CLI Reference](/docs/cli) — `oke db push` / `generate` / `migrate`
 
 ## Example from the teaching apps
 

@@ -213,6 +213,69 @@ const latest = await fx.store(db).select().from(notes).limit(20); // no .where()
 Every Flow returns either data matching `out` — `{ data, error: null }` — or a typed failure via `fx.fail(code, data)` — `{ data: null, error: { code, data, message } }`.
 </Callout>
 
+## Examples
+
+Three realistic scenarios, taken from the teaching apps. Each names what it is and what follows from its behavior — not just its syntax.
+
+### A typical endpoint
+
+Notes' `create` — mounted as part of `store.resource` (`export const create = mounted.create` in `examples/notes/src/flows/notes/index.ts`). The shape is the same `http` trigger shown above; no second snippet is repeated here.
+
+**Consequence:** `create` answers **201** through `fx.json.create(row)` in `src/elements/store/resource.ts`. A typed failure stays an envelope (`{ data: null, error: … }`) — it never crashes the process.
+
+### A background job
+
+Claimed fence from **linkly** — same source the doc-drift gate checks:
+
+### `examples/linkly/src/flows/links/index.ts`
+
+```typescript
+on(
+  every("1h"),
+  flow({
+    do: (_, fx) => {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+      return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
+    },
+  }),
+);
+```
+
+**Consequence:** if this flow throws, **only that run fails**. `runPipeline` catches a handler throw into `ctx.error` and does not rethrow (`src/kernel/hooks.ts`); the cron interval keeps firing. The app process does not exit.
+
+### A durable, multi-step flow
+
+Claimed fence from **provisions** — same source the doc-drift gate checks:
+
+### `examples/provisions/src/flows/payments/index.ts`
+
+```typescript
+export const chargeOrder = flow({
+  durable: true, // every fx call below is journaled
+  in: OrderRef,
+  out: z.boolean(),
+  do: async ({ orderId }, fx) => {
+    const intent = await fx.step("create-intent", () =>
+      // never re-runs on replay
+      stripe(fx.vault(stripeKey)).create(orderId),
+    );
+
+    await fx.clock.sleep("verify-window", "2m"); // survives restart and deploy
+
+    return fx.step("confirm", () => stripe(fx.vault(stripeKey)).confirm(intent));
+  },
+});
+```
+
+**Consequence:** kill the process between the two `fx.step` calls and the run **resumes at `confirm`** — completed steps replay from the journal and never re-run. Proven by `src/elements/clock.test.ts` (`killed mid-execution resumes at the failed step, not the beginning`): after resume, `calls` is `["create-intent", "confirm"]` — `create-intent` ran once. The card is not charged twice.
+
+## Learn more
+
+- [Signal](/docs/elements/signal) — delivery physics (`once` · `broadcast` · `live`)
+- [Clock](/docs/elements/clock) — cron, delay, durable sleep
+- [Console · Flows](/docs/console/flows) — the Manifest-derived panel
+- [Runs](/docs/console/runs) — how a flow execution is observed
+
 ## See it running
 
 These snippets are written for this page. The same patterns run end-to-end in the teaching apps — full CRUD with contracts, cursor pagination, and typed errors:

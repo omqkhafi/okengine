@@ -4,10 +4,11 @@
  * Copyright (c) 2024 - present, Bereket Engida. See site/NOTICE.
  *
  * The bar is one row, `--landing-topbar-height` tall, split into a brand cell and
- * an equal-width tab strip. It is sticky rather than fixed, and mounted once in
- * the root layout: the brand cell's width is a share of the surface below it and
- * therefore changes per route, so the bar has to survive navigation to animate
- * between those widths instead of snapping.
+ * an equal-width tab strip. It is fixed to the viewport (not sticky), and mounted
+ * once in the root layout: the brand cell's width is a share of the surface below
+ * it and therefore changes per route, so the bar has to survive navigation to
+ * animate between those widths instead of snapping. A matching-height spacer
+ * keeps page content from sliding under the bar.
  */
 
 "use client";
@@ -81,7 +82,7 @@ function usePaneWidth(paneWidth: string, reduced: boolean) {
 }
 
 /**
- * Sticky site header. Mount once, in the root layout.
+ * Fixed site header. Mount once, in the root layout.
  *
  * @param tree - Docs page tree, for the mobile overlay's docs navigation
  */
@@ -104,7 +105,7 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
 
   return (
     <MotionConfig reducedMotion="never" transition={EASE}>
-      <header className="sticky top-0 z-[99] bg-fd-background">
+      <header className="fixed inset-x-0 top-0 z-[99] bg-fd-background">
         <div
           className={cn("relative flex h-(--landing-topbar-height) items-stretch border-b", rule)}
         >
@@ -261,6 +262,8 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
           ) : null}
         </AnimatePresence>
       </header>
+      {/* Reserves the bar's height in document flow — fixed removes it from layout. */}
+      <div aria-hidden className="h-(--landing-topbar-height) shrink-0" />
     </MotionConfig>
   );
 }
