@@ -58,6 +58,8 @@ describe("SqlStoreHandle — no relational query surface (path b)", () => {
         "exists",
         "increment",
         "raw",
+        "count",
+        "page",
         "ensureTable",
       ].sort(),
     );
@@ -103,7 +105,11 @@ describe("SqlStoreHandle — orderBy / limit select chain", () => {
     await handle.insert(posts).values({ id: "p0", title: "four", createdAt: 200 });
 
     const order = [desc(posts.createdAt), desc(posts.id)] as const;
-    const page1 = await handle.select().from(posts).orderBy(...order).limit(2);
+    const page1 = await handle
+      .select()
+      .from(posts)
+      .orderBy(...order)
+      .limit(2);
     expect(page1.map((r) => r.id)).toEqual(["p2", "p3"]);
 
     // (createdAt, id) < (200, "p3") — the second page of a keyset cursor.

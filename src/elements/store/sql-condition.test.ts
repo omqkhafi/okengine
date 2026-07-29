@@ -11,6 +11,8 @@ import {
   desc,
   eq,
   ilike,
+  inArray,
+  isNotNull,
   isNull,
   like,
   lt,
@@ -84,9 +86,30 @@ describe("compileWhere", () => {
     expect(c.params).toEqual(["n1", "t"]);
   });
 
+  test("inArray expands one placeholder per value", () => {
+    const c = compileWhere(inArray(notes.id, ["a", "b", "c"]));
+    expect(c.clause).toBe(`"id" in (?, ?, ?)`);
+    expect(c.params).toEqual(["a", "b", "c"]);
+    expect(c.predicates.map((p) => p.op)).toEqual(["in"]);
+  });
+
+  test("isNull / isNotNull bind no value", () => {
+    const nil = compileWhere(isNull(notes.title));
+    expect(nil.clause).toBe(`"title" is null`);
+    expect(nil.params).toEqual([]);
+    const notNil = compileWhere(and(eq(notes.id, "n1"), isNotNull(notes.title)));
+    expect(notNil.clause).toBe(`("id" = ?) AND ("title" is not null)`);
+    expect(notNil.params).toEqual(["n1"]);
+  });
+
+  test("boolean equality binds the boolean", () => {
+    const c = compileWhere(eq(notes.id, true as never));
+    expect(c.clause).toBe(`"id" = ?`);
+    expect(c.params).toEqual([true]);
+  });
+
   test("unsupported operators fail loudly instead of dropping predicates", () => {
     expect(() => compileWhere(between(notes.createdAt, 1, 2))).toThrow(/unsupported operator/);
-    expect(() => compileWhere(isNull(notes.title))).toThrow(/unsupported operator/);
     expect(() => compileWhere(not(eq(notes.id, "n1")))).toThrow(/unsupported fragment/);
     expect(() => compileWhere(sql`title = 1`)).toThrow(/unsupported fragment/);
   });

@@ -100,6 +100,59 @@ function createHttpTrigger<M extends HttpMethod, P extends string>(
   return trigger;
 }
 
+/** Flow shape accepted by {@link http.resource} (duck-typed — any FlowDef). */
+export type ResourceFlow = { readonly name: string };
+
+/** The five CRUD ops {@link http.resource} mounts. */
+export interface ResourceFlowBag {
+  readonly list: unknown;
+  readonly create: unknown;
+  readonly get: unknown;
+  readonly update: unknown;
+  readonly remove: unknown;
+}
+
+/**
+ * A mounted resource — the single argument to the `on(http.resource(…))`
+ * overload. Branded so `on` can tell it apart from a plain trigger.
+ */
+export interface ResourceMount {
+  readonly [resourceMountBrand]: true;
+  readonly mounts: ReadonlyArray<{ readonly trigger: HttpTrigger; readonly flow: unknown }>;
+}
+/** Brand for {@link ResourceMount}. */
+export const resourceMountBrand: unique symbol = Symbol.for("oke.resource.mount");
+
+/**
+ * Mount a CRUD resource at `path`: `list`/`create` on the base, `get` /
+ * `update` / `remove` on `/:id`. Bind via `on(http.resource(…))`.
+ *
+ * @param path - Base path (`/notes`)
+ * @param ops - The five FlowDefs (usually `resource.all()`)
+ */
+function httpResource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount {
+  const id = `${path}/:id`;
+  return {
+    [resourceMountBrand]: true,
+    mounts: [
+      { trigger: http.get(path), flow: ops.list },
+      { trigger: http.post(path), flow: ops.create },
+      { trigger: http.get(id), flow: ops.get },
+      { trigger: http.patch(id), flow: ops.update },
+      { trigger: http.delete(id), flow: ops.remove },
+    ],
+  };
+}
+
+/** True when `value` is a {@link ResourceMount}. */
+export function isResourceMount(value: unknown): value is ResourceMount {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as ResourceMount)[resourceMountBrand] === true
+  );
+}
+
 /**
  * Shape of the {@link http} trigger namespace. Each method keeps `P` as a
  * generic type parameter so callers (and the client) retain literal path
@@ -134,6 +187,11 @@ export interface HttpTriggerNamespace {
    * @param path - Route path
    */
   head<P extends string>(path: P): HttpTrigger<"HEAD", P>;
+  /**
+   * Mount a CRUD resource (list/create on `path`, get/update/remove on
+   * `path/:id`) for the `on(http.resource(…))` overload.
+   */
+  resource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount;
 }
 
 /**
@@ -182,6 +240,7 @@ export const http: HttpTriggerNamespace = {
   head<P extends string>(path: P): HttpTrigger<"HEAD", P> {
     return createHttpTrigger("HEAD", path);
   },
+  resource: httpResource,
 };
 
 /**

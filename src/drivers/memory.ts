@@ -45,8 +45,23 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
     async query(sql, params = []) {
       const text = sql.trim();
 
+      const countStar =
+        /^SELECT\s+COUNT\(\*\)\s+AS\s+"?[a-zA-Z_][a-zA-Z0-9_]*"?\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?\s*$/i.exec(
+          text,
+        );
+      if (countStar) {
+        const table = getTable(parseIdent(countStar[1]!));
+        const whereClause = countStar[2]?.trim();
+        let rows = table.rows;
+        if (whereClause) {
+          const ast = parseWhere(whereClause);
+          rows = rows.filter((r) => evalWhere(ast, r, params, { i: 0 }));
+        }
+        return [{ count: rows.length }];
+      }
+
       const selectGeneric =
-        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?\s*$/i.exec(
+        /^SELECT\s+(.+?)\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?\s*$/i.exec(
           text,
         );
       if (selectGeneric && !/^\s*1\s+AS\s+/i.test(selectGeneric[1]!)) {
@@ -55,6 +70,7 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         const whereClause = selectGeneric[3]?.trim();
         const orderClause = selectGeneric[4]?.trim();
         const limit = selectGeneric[5] ? Number(selectGeneric[5]) : undefined;
+        const offset = selectGeneric[6] ? Number(selectGeneric[6]) : undefined;
         let rows = table.rows.map((r) => ({ ...r }));
         if (whereClause) {
           const ast = parseWhere(whereClause);
@@ -64,6 +80,7 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
           const terms = parseOrderTerms(orderClause);
           rows = [...rows].sort((a, b) => compareByTerms(a, b, terms));
         }
+        if (offset !== undefined) rows = rows.slice(offset);
         if (limit !== undefined) rows = rows.slice(0, limit);
         if (selectList === "*") return rows;
         const cols = selectList.split(",").map((part) => {
@@ -239,11 +256,22 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
 }
 
 /** One comparison operator for the memory SQL driver. */
-type WhereOp = "=" | "<" | ">" | "<=" | ">=" | "!=" | "like" | "ilike";
+type WhereOp =
+  | "="
+  | "<"
+  | ">"
+  | "<="
+  | ">="
+  | "!="
+  | "like"
+  | "ilike"
+  | "in"
+  | "is null"
+  | "is not null";
 
 /** WHERE condition AST node — leaf comparison or AND/OR group. */
 type WhereNode =
-  | { readonly kind: "cmp"; readonly column: string; readonly op: WhereOp }
+  | { readonly kind: "cmp"; readonly column: string; readonly op: WhereOp; readonly arity: number }
   | { readonly kind: "and"; readonly children: readonly WhereNode[] }
   | { readonly kind: "or"; readonly children: readonly WhereNode[] };
 
@@ -287,11 +315,36 @@ function parseWhere(clause: string): WhereNode {
     }
     const colTok = tokens[pos++];
     const opTok = tokens[pos++];
+    if (colTok === undefined || opTok === undefined) throw unsupported();
+    if (opTok.toLowerCase() === "is") {
+      const second = tokens[pos++]?.toLowerCase();
+      const nullOp =
+        second === "null"
+          ? "is null"
+          : second === "not" && tokens[pos++]?.toLowerCase() === "null"
+            ? "is not null"
+            : undefined;
+      if (nullOp === undefined) throw unsupported();
+      return { kind: "cmp", column: colTok.replaceAll('"', "").trim(), op: nullOp, arity: 0 };
+    }
+    if (opTok.toLowerCase() === "in") {
+      if (peek() !== "(") throw unsupported();
+      pos++;
+      let arity = 0;
+      while (peek() === "?") {
+        arity++;
+        pos++;
+        if (peek() === ",") pos++;
+      }
+      if (arity === 0 || peek() !== ")") throw unsupported();
+      pos++;
+      return { kind: "cmp", column: colTok.replaceAll('"', "").trim(), op: "in", arity };
+    }
     const paramTok = tokens[pos++];
-    if (colTok === undefined || opTok === undefined || paramTok !== "?") throw unsupported();
+    if (paramTok !== "?") throw unsupported();
     const op = asWhereOp(opTok);
     if (op === undefined) throw unsupported();
-    return { kind: "cmp", column: colTok.replaceAll('"', "").trim(), op };
+    return { kind: "cmp", column: colTok.replaceAll('"', "").trim(), op, arity: 1 };
   };
 
   const node = parseLevel("OR", () => parseLevel("AND", parseFactor));
@@ -308,7 +361,7 @@ function tokenizeWhere(clause: string): string[] {
       i++;
       continue;
     }
-    if (ch === "(" || ch === ")" || ch === "?") {
+    if (ch === "(" || ch === ")" || ch === "?" || ch === ",") {
       out.push(ch);
       i++;
       continue;
@@ -378,6 +431,17 @@ function evalWhere(
   }
   if (node.kind === "or") {
     return node.children.some((c) => evalWhere(c, row, params, state));
+  }
+  if (node.op === "is null") {
+    return row[node.column] === null || row[node.column] === undefined;
+  }
+  if (node.op === "is not null") {
+    return row[node.column] !== null && row[node.column] !== undefined;
+  }
+  if (node.op === "in") {
+    const wants = params.slice(state.i, state.i + node.arity);
+    state.i += node.arity;
+    return wants.some((w) => compareRow(row[node.column], w, "="));
   }
   const want = params[state.i++];
   return compareRow(row[node.column], want, node.op);

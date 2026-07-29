@@ -5,6 +5,7 @@
  */
 
 import type { ColumnClassification, ResourceRef, StoreFacet } from "../../manifest/types.ts";
+import { resource } from "./resource.ts";
 import { schema } from "./schema-decl.ts";
 import { resolveTableName, type TableHandle } from "./table.ts";
 
@@ -180,7 +181,7 @@ export function index(name: string, options: IndexStoreOptions = {}): IndexStore
   };
 }
 
-/** Public `store` element — four facets + abstract schema declare. */
+/** Public `store` element — four facets + abstract schema declare + resource. */
 export const store = {
   sql,
   kv,
@@ -188,4 +189,6 @@ export const store = {
   index,
   /** ORM-agnostic table declarations (`store.schema.table`). */
   schema,
+  /** CRUD + list factory (`store.resource(db, table, opts)`). */
+  resource,
 } as const;

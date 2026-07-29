@@ -31,6 +31,35 @@ SQL, KV, files, and search index are facets of one Store surface. Drivers are na
   <Card title="store.index" description="Default `pgvector` — RAG without another service." />
 </Cards>
 
+## store.resource — declarative CRUD + list
+
+`store.resource(db, table, opts)` expands one declaration into the five ordinary `flow({…})`s of a CRUD resource — list, create, get, update, remove — each still the one species, composed through `fx.store(db)`. Mount all five verbs at once with `on(http.resource(path, resource.all()))`; the return value is the ops bag for `adopt`.
+
+```typescript
+const notesR = store.resource(db, notesTable, {
+  in: NewNote,
+  out: Note,
+  update: NewNote.partial(),
+  list: {
+    cursor: [notesTable.createdAt, notesTable.id], // keyset columns
+    direction: "desc",
+    search: [notesTable.title], // ?search= / ?q=
+    filter: "all", // ?col=op.value — ColumnScope: "all" | Column[] | "none"
+    order: "all", // ?order=col.desc
+  },
+  unit: "notes",
+});
+
+const mounted = on(http.resource("/notes", notesR.all()));
+export const list = mounted.list;
+export const create = mounted.create;
+export const get = mounted.get;
+export const update = mounted.update;
+export const remove = mounted.remove;
+```
+
+The list URL is the whole query — `?cursor=` / `?offset=` / `?limit=` paginate (keyset when `cursor` columns are set, else offset), `?search=` runs a substring match over `search` columns, `?col=op.value` filters (PostgREST ops `eq ne gt gte lt lte like ilike in is`), `?order=col.asc,other.desc` orders, and `?select=id,title` projects. Values are UTF-8 — English, Arabic, any language round-trips. `list` answers the Stripe envelope `{ data, meta: { nextCursor, hasNextPage }, error: null }`; `create` answers 201; `remove` 204; `get` / `update` / `remove` return a typed `NotFound`.
+
 ## Domain schema — declare → generate
 
 Recommended path: declare tables with `store.schema.table` + `field.*` (ORM-agnostic), then let `oke db` emit dialect-specific Drizzle before sync.

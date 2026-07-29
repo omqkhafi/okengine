@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.2.8 · measured 2026-07-28T21:36:59.125Z_
+_okengine v0.2.9 · measured 2026-07-29T02:30:52.639Z_
 
 Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `age-encryption`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,37 +10,37 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 
 |                       | Measured  | Limit     |
 | --------------------- | --------- | --------- |
-| Kernel (edge profile) | 8.89 kB   | 15.00 kB  |
+| Kernel (edge profile) | 9.47 kB   | 15.00 kB  |
 | Client runtime        | 1.67 kB   | 3.00 kB   |
 | Console initial load  | 86.24 kB  | 300.00 kB |
-| Cold start on Bun     | 24.623 ms | 75.000 ms |
+| Cold start on Bun     | 23.938 ms | 75.000 ms |
 | p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
 |          | Measured | Ceiling  |
 | -------- | -------- | -------- |
-| okengine | 44.52 kB | 45.41 kB |
+| okengine | 49.49 kB | 50.48 kB |
 | ai       | 3.35 kB  | 3.60 kB  |
 | auth     | 4.84 kB  | 5.09 kB  |
 | channel  | 4.57 kB  | 4.82 kB  |
 | client   | 1.80 kB  | 2.05 kB  |
-| clock    | 8.61 kB  | 8.86 kB  |
+| clock    | 8.86 kB  | 9.11 kB  |
 | config   | 936 B    | 1.16 kB  |
-| console  | 66.27 kB | 67.59 kB |
+| console  | 68.94 kB | 70.32 kB |
 | gate     | 3.80 kB  | 4.05 kB  |
 | mcp      | 9.26 kB  | 9.51 kB  |
 | runs     | 6.15 kB  | 6.40 kB  |
 | signal   | 861 B    | 1.09 kB  |
-| store    | 7.70 kB  | 7.95 kB  |
-| test     | 9.09 kB  | 9.34 kB  |
+| store    | 12.31 kB | 12.56 kB |
+| test     | 9.15 kB  | 9.40 kB  |
 | vault    | 2.42 kB  | 2.67 kB  |
 
 ## Drivers
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 19.60 kB | 19.99 kB |
+| drivers              | 20.61 kB | 21.02 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 663 B    | 919 B    |
 | ai-openai-compatible | 936 B    | 1.16 kB  |
@@ -53,7 +53,7 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 | channel-webpush      | 1.66 kB  | 1.91 kB  |
 | fs                   | 701 B    | 957 B    |
 | kv-lua               | 1.01 kB  | 1.26 kB  |
-| memory               | 3.09 kB  | 3.34 kB  |
+| memory               | 4.12 kB  | 4.37 kB  |
 | pgvector             | 1001 B   | 1.23 kB  |
 | postgres             | 1.38 kB  | 1.63 kB  |
 | redis                | 2.00 kB  | 2.25 kB  |

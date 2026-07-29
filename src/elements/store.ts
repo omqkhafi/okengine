@@ -78,6 +78,19 @@ export type { SqlBindingConfig } from "./store/replica.ts";
 export { defineTable, resolveTableName, classificationsFromTable, id, now } from "./store/table.ts";
 export type { ColumnDef, TableHandle } from "./store/table.ts";
 
+export { resource } from "./store/resource.ts";
+export type {
+  ColumnScope,
+  ListCountMode,
+  ListPageMode,
+  ResourceColumns,
+  ResourceDef,
+  ResourceFlowDefs,
+  ResourceListOptions,
+  ResourceOptions,
+  ResolvedListConfig,
+} from "./store/resource.ts";
+
 export { createSqlStoreHandle, resolvePkColumn } from "./store/sql-session.ts";
 export type {
   SqlStoreHandle,
@@ -88,6 +101,7 @@ export type {
   InsertBuilder,
   InsertValuesBuilder,
   SqlSessionOptions,
+  SqlPageOptions,
   WhereMap,
 } from "./store/sql-session.ts";
 

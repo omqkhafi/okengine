@@ -11,7 +11,18 @@ export type WhereMap = Readonly<Record<string, unknown>>;
 /** One compiled predicate (`col op ?`). */
 export interface CompiledPredicate {
   readonly column: string;
-  readonly op: "=" | "<" | ">" | "<=" | ">=" | "!=" | "like" | "ilike";
+  readonly op:
+    | "="
+    | "<"
+    | ">"
+    | "<="
+    | ">="
+    | "!="
+    | "like"
+    | "ilike"
+    | "in"
+    | "is null"
+    | "is not null";
   readonly value: unknown;
 }
 
@@ -50,12 +61,33 @@ export function isDrizzleSql(value: unknown): boolean {
   );
 }
 
+/** Marker for {@link andWhere} — avoids importing `drizzle-orm` here. */
+export interface AndCondition {
+  readonly [andConditionBrand]: true;
+  readonly conditions: readonly unknown[];
+}
+const andConditionBrand: unique symbol = Symbol("oke.and");
+
+/**
+ * Join conditions with `AND` without importing `drizzle-orm`.
+ * `undefined` entries are dropped; a single remaining condition compiles
+ * bare.
+ *
+ * @param conditions - Equality maps or Drizzle SQL
+ */
+export function andWhere(...conditions: readonly unknown[]): unknown {
+  const kept = conditions.filter((c) => c !== undefined && c !== null);
+  if (kept.length === 1) return kept[0];
+  return { [andConditionBrand]: true, conditions: kept } satisfies AndCondition;
+}
+
 /**
  * Compile a where input into SQL.
  *
  * Accepts:
  * - plain {@link WhereMap} equality maps
  * - Drizzle `SQL` from `eq` / `and` / `or` / `lt` / `like` / …
+ * - {@link AndCondition} from {@link andWhere}
  *
  * Nested `and(...)` / `or(...)` compile to parenthesized groups — `or` is
  * never flattened into `AND`. Unsupported operators throw rather than
@@ -73,6 +105,17 @@ export function compileWhere(where: unknown): CompiledWhere {
     return { clause: node.clause, params: node.params, predicates: node.predicates };
   }
 
+  if (isAndCondition(where)) {
+    const children = where.conditions.map(compileWhere).filter((c) => c.clause !== "");
+    if (children.length === 0) return { clause: "", params: [], predicates: [] };
+    if (children.length === 1) return children[0]!;
+    return {
+      clause: children.map((c) => `(${c.clause})`).join(" AND "),
+      params: children.flatMap((c) => c.params),
+      predicates: children.flatMap((c) => c.predicates),
+    };
+  }
+
   if (typeof where === "object" && !Array.isArray(where)) {
     const predicates: CompiledPredicate[] = Object.entries(where as WhereMap).map(
       ([column, value]) => ({
@@ -85,6 +128,14 @@ export function compileWhere(where: unknown): CompiledWhere {
   }
 
   throw new TypeError("sql where: expected equality map or Drizzle SQL condition");
+}
+
+function isAndCondition(value: unknown): value is AndCondition {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as AndCondition)[andConditionBrand] === true
+  );
 }
 
 /**
@@ -198,7 +249,8 @@ function compileSqlNode(node: unknown): CompiledNode {
 /**
  * Compile a leaf node (`col op ?`) from chunks with no nested `SQL`.
  * Structural paren chunks are ignored; every other chunk must be part of the
- * comparison or it throws.
+ * comparison or it throws. `is null` / `is not null` bind no value; `in`
+ * binds one placeholder per array element.
  *
  * @param chunks - Drizzle query chunks
  */
@@ -209,16 +261,25 @@ function compileLeaf(chunks: readonly unknown[]): CompiledNode {
   let state: "start" | "column" | "op" | "done" = "start";
 
   for (const chunk of chunks) {
+    if (Array.isArray(chunk)) {
+      if (state !== "op" || op !== "in") {
+        throw new TypeError("sql where: unsupported condition shape");
+      }
+      const values = chunk.map(asInArrayValue);
+      value = values;
+      state = "done";
+      continue;
+    }
     const text = chunkText(chunk);
     if (text !== undefined) {
-      const token = text.trim();
+      const token = text.trim().replace(/\)+$/, "");
       if (token === "" || token === "(" || token === ")") continue;
       if (state === "column") {
         op = asOperator(token);
         if (op === undefined) {
           throw new TypeError(`sql where: unsupported operator ${JSON.stringify(token)}`);
         }
-        state = "op";
+        state = op === "is null" || op === "is not null" ? "done" : "op";
         continue;
       }
       throw new TypeError(`sql where: unsupported fragment ${JSON.stringify(text)}`);
@@ -249,6 +310,18 @@ function compileLeaf(chunks: readonly unknown[]): CompiledNode {
     throw new TypeError("sql where: incomplete condition");
   }
   const predicate: CompiledPredicate = { column, op, value };
+  if (op === "is null" || op === "is not null") {
+    return { clause: `${quoteIdent(column)} ${op}`, params: [], predicates: [predicate] };
+  }
+  if (op === "in") {
+    const values = value as readonly unknown[];
+    const placeholders = values.map(() => "?").join(", ");
+    return {
+      clause: `${quoteIdent(column)} in (${placeholders})`,
+      params: [...values],
+      predicates: [predicate],
+    };
+  }
   return {
     clause: `${quoteIdent(column)} ${op} ?`,
     params: [value],
@@ -292,9 +365,24 @@ function asOperator(token: string): CompiledPredicate["op"] | undefined {
       return "like";
     case "ilike":
       return "ilike";
+    case "in":
+      return "in";
+    case "is null":
+      return "is null";
+    case "is not null":
+      return "is not null";
     default:
       return undefined;
   }
+}
+
+/** Unwrap one element of a Drizzle `inArray` value array. */
+function asInArrayValue(item: unknown): unknown {
+  const param = asParamValue(item);
+  if (!param.found) {
+    throw new TypeError("sql where: unsupported in-list value");
+  }
+  return param.value;
 }
 
 /**

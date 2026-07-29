@@ -10,107 +10,222 @@ Flow is the element for **behavior**.
 Endpoints, jobs, consumers, and workflows are one species. You bind a typed trigger with `on`, declare contracts, and implement `do` through `fx`.
 
 <Callout title="Governing rule">
-  Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of
-  endpoints, jobs, and consumers.
+Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of endpoints, jobs, and consumers.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card
-    title="Flow"
-    description="Essence: behavior. Replaces: endpoint · handler · consumer · job · workflow · webhook."
-  />
+  <Card title="Flow" description="Essence: behavior. Replaces: endpoint · handler · consumer · job · workflow · webhook." />
 </Cards>
 
-## Drivers available
+## Anatomy of a Flow
 
-<Cards>
-  <Card title="http" description="Request triggers — the API endpoint case." />
-  <Card title="every / clock" description="Cron and schedule triggers." />
-  <Card title="signal" description="Consume emits — the queue-consumer case." />
-  <Card title="store change" description="CDC-style table change triggers." />
-</Cards>
-
-## Example from the teaching apps
-
-Claimed fence from **notes** — same source the doc-drift gate checks:
-
-### `examples/notes/src/flows/notes/index.ts`
+Every Flow — whatever starts it — is the same four declarations plus a `do`. Learn this shape once; only the first line changes across the five trigger types below.
 
 ```typescript
-import { on, flow, http } from "okengine";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
-import { db } from "../../core";
-import { notes } from "../../schema";
-
-// Contracts derived from the schema — one source of truth, refined where the API is stricter
-const NewNote = createInsertSchema(notes, { title: (s) => s.min(1).max(120) }).omit({
-  id: true,
-  createdAt: true,
-});
-const Note = createSelectSchema(notes);
-const NoteId = z.object({ id: z.string() });
-const NotFound = z.object({});
-
-export const create = on(
-  http.post("/notes"),
+export const createOrder = on(
+  http.post("/orders"), // ① trigger — what starts the flow
   flow({
-    in: NewNote,
-    out: NoteId,
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }), // ② in — validated input
+    out: z.object({ id: z.string() }), // ③ out — typed output
+    errors: { OutOfStock: z.object({ left: z.number() }) }, // ④ typed failures, returned not thrown
     do: async (input, fx) => {
-      const [note] = await fx.store(db).insert(notes).values(input).returning();
-      return { id: note.id };
-    },
-  }),
-);
-// effects → writes[sql:notes]
-
-export const list = on(
-  http.get("/notes"),
-  flow({
-    out: Note.array(),
-    do: (_, fx) => fx.store(db).select().from(notes),
-  }),
-);
-// effects → reads[sql:notes]
-
-export const get = on(
-  http.get("/notes/:id"),
-  flow({
-    in: NoteId,
-    out: Note,
-    errors: { NotFound },
-    do: async ({ id }, fx) => (await fx.store(db).findById(notes, id)) ?? fx.fail("NotFound", {}),
-  }),
-);
-
-export const remove = on(
-  http.delete("/notes/:id"),
-  flow({
-    in: NoteId,
-    errors: { NotFound },
-    do: async ({ id }, fx) => {
-      const deleted = await fx.store(db).delete(notes, id);
-      if (!deleted) return fx.fail("NotFound", {});
+      // ⑤ do — the work; every read, write, emit, and call goes through fx
+      const [product] = await fx
+        .store(db)
+        .select()
+        .from(products)
+        .where(eq(products.sku, input.sku))
+        .limit(1);
+      if (!product || product.stock < input.qty) {
+        return fx.fail("OutOfStock", { left: product?.stock ?? 0 });
+      }
+      const id = fx.id();
+      await fx
+        .store(db)
+        .insert(orders)
+        .values({ id, ...input, status: "pending", createdAt: Date.now() });
+      return { id };
     },
   }),
 );
 ```
 
+## The five triggers
+
+One law, five ways to start it. Only part ① differs — the `flow({ … })` underneath never changes species. Each type below gets its own section and its own example, written for this page.
+
+| Trigger | Starts when | Replaces |
+| --- | --- | --- |
+| `http` | a request arrives | endpoint · handler |
+| `signal` | another flow emits | queue consumer |
+| `every` (clock) | time passes | cron job |
+| store change | a row changes | CDC pipeline |
+| — none | another flow calls `fx.call` | "private" helper |
+
+### 1 · http — a request arrives
+
+Bind a method and a path. Path params and body validate against `in`; gates evaluate before `do` runs; the return value must match `out`.
+
+```typescript
+export const findOrder = on(
+  http.get("/orders/:id").gate(member), // gates sit at the trigger
+  flow({
+    in: z.object({ id: z.string() }),
+    out: z.object({ id: z.string(), status: z.string() }),
+    errors: { NotFound: z.object({}) },
+    do: async ({ id }, fx) => (await fx.store(db).findById(orders, id)) ?? fx.fail("NotFound", {}),
+  }),
+);
+```
+
+CRUD is five bindings of that one shape — method and path carry the convention:
+
+| Operation | Trigger |
+| --- | --- |
+| create | `http.post("/orders")` |
+| list | `http.get("/orders")` |
+| get | `http.get("/orders/:id")` |
+| update | `http.patch("/orders/:id")` |
+| remove | `http.delete("/orders/:id")` |
+
+A complete working set — create, list with cursor pagination and search, get, update, remove — runs in [Learn · Notes](/docs/learn/notes).
+
+### 2 · signal — another flow emits
+
+Declare the signal once — delivery physics is part of the declaration, never guessed:
+
+```typescript
+export const orderPlaced = signal("order-placed", {
+  schema: z.object({ orderId: z.string() }),
+  delivery: "once", // queue physics: one consumer, retries, DLQ
+});
+```
+
+The producer emits through `fx`, transactionally with its writes. The consumer is another Flow — the same species; there is no `subscribe()` and no listener registration:
+
+```typescript
+await fx.emit(orderPlaced, { orderId: id }); // inside the producing flow
+
+on(
+  orderPlaced, // the signal value itself is the trigger
+  flow({
+    do: async ({ orderId }, fx) =>
+      await fx.send(receipt, { to: orderId, data: { orderId } }),
+  }),
+);
+```
+
+### 3 · clock — time passes
+
+`every("1h")` is a trigger value, not a registration with a scheduler library.
+
+```typescript
+on(
+  every("1h"),
+  flow({
+    do: (_, fx) => {
+      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+      return fx.store(db).delete(sessions).where(lt(sessions.createdAt, cutoff));
+    },
+  }),
+);
+```
+
+### 4 · store change — a row changes
+
+CDC is built in. The trigger names a table (and optionally a column); the flow receives `{ before, after }`:
+
+```typescript
+on(
+  db.table(orders).changed("status"),
+  flow({
+    do: ({ before, after }, fx) => fx.log.info("status", { from: before.status, to: after.status }),
+  }),
+);
+```
+
+### 5 · no trigger — nothing starts it
+
+Drop `on()` and it is still a real Flow — contracts, effects, and a Manifest entry. Nothing in the world starts it; another flow calls it through `fx.call`:
+
+```typescript
+export const getOrder = flow({ // no on() — not wired to any trigger
+  in: z.object({ id: z.string() }),
+  out: z.object({ id: z.string(), status: z.string() }),
+  do: async ({ id }, fx) => {
+    const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id)).limit(1);
+    return order;
+  },
+});
+
+// …called from any other flow:
+const o = await fx.call(getOrder, { id: orderId });
+```
+
+### How the five harmonize
+
+Wiring is just values flowing between flows. `createOrder` ends with `await fx.emit(orderPlaced, …)` — and that emission is what starts the consumer. The connection is declared in code, not configured in a dashboard:
+
+```typescript
+on(http.post("/orders"), createOrder); // ① a request arrives
+on(orderPlaced, sendReceipt); // ② its emit starts the consumer
+on(every("1h"), sweepExpired); // ③ time passes
+on(db.table(orders).changed("status"), reverify); // ④ a row changes
+// ⑤ getOrder — nothing starts it; every flow above can fx.call it
+```
+
+<Callout title="Registry isolation — tested, not a caveat">
+Multiple `oke()` apps in one process are isolated by default: `registry: "consume"` drains the global registry at construction, so a later app cannot inherit this app's routes. `"keep"` and `"ignore"` are explicit embedding opt-outs. Tested in `src/kernel/registry-isolation.test.ts`.
+</Callout>
+
+## Query surface through `fx.store(db)`
+
+`fx.store(db)` is a single-table session. Four capabilities, each shown in use:
+
+**`.orderBy()` — stable ordering.** Keyset pages order by `(createdAt, id)` so pagination never drifts:
+
+```typescript
+const rows = await fx.store(db).select().from(notes).orderBy(desc(notes.createdAt), desc(notes.id));
+```
+
+**`.limit()` — top-N, with or without `.where()`.** A chained `where → orderBy → limit` issues exactly one SELECT:
+
+```typescript
+const latest = await fx.store(db).select().from(notes).limit(20); // no .where() needed
+```
+
+**`and` / `or` — real parenthesized logic.** Mixed AND/OR at one level is rejected — group explicitly:
+
+```typescript
+.where(or(lt(notes.createdAt, c), and(eq(notes.createdAt, c), lt(notes.id, id))))
+// one parenthesized OR — the keyset-cursor predicate
+```
+
+**`like` / `ilike` — search.** Notes uses `like` for the `q` title search; `ilike` is the case-insensitive variant:
+
+```typescript
+.where(like(notes.title, `%${input.q}%`))
+```
+
+<Callout title="Response envelope">
+Every Flow returns either data matching `out` — `{ data, error: null }` — or a typed failure via `fx.fail(code, data)` — `{ data: null, error: { code, data, message } }`.
+</Callout>
+
+## See it running
+
+These snippets are written for this page. The same patterns run end-to-end in the teaching apps — full CRUD with contracts, cursor pagination, and typed errors:
+
+<Cards>
+  <Card title="Learn · Notes" description="Full CRUD flows — create, list (cursor + search), get, update, remove." href="/docs/learn/notes" />
+  <Card title="Learn · Linkly" description="One file, four triggers — endpoint, consumer, cron, and callable." href="/docs/learn/linkly" />
+</Cards>
+
 ## Next
 
 <Cards>
   <Card title="Signal" description="Continue to Signal." href="/docs/elements/signal" />
-  <Card
-    title="Introduction"
-    description="Eight elements overview."
-    href="/docs/get-started/introduction"
-  />
-  <Card
-    title="Console"
-    description="Panels derived from the Manifest."
-    href="/docs/console/overview"
-  />
+  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
+  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
 </Cards>

@@ -8,8 +8,11 @@
 
 import { isFlow, type AnyFlowDef, type FlowDef, type FlowErrorMap } from "./flow.ts";
 import {
+  isResourceMount,
   normalizeTrigger,
   type BoundTriggerOf,
+  type ResourceFlowBag,
+  type ResourceMount,
   type SignalSource,
   type Trigger,
 } from "./triggers.ts";
@@ -39,17 +42,55 @@ export function on<
 >(
   trigger: T,
   flowDef: FlowDef<I, O, E, D, Trigger | undefined>,
-): FlowDef<I, O, E, D, BoundTriggerOf<T>> {
+): FlowDef<I, O, E, D, BoundTriggerOf<T>>;
+/**
+ * Mount a CRUD resource (`http.resource(path, ops)`): registers the five
+ * verb bindings and returns the ops bag (unit keys `list` · `create` ·
+ * `get` · `update` · `remove`) for `.adopt({ notes })`.
+ *
+ * @param mount - Branded {@link ResourceMount}
+ */
+export function on(mount: ResourceMount): ResourceFlowBag;
+export function on(
+  triggerOrMount: Trigger | SignalSource | ResourceMount,
+  flowDef?: FlowDef<any, any, any, any, Trigger | undefined>,
+): unknown {
+  if (isResourceMount(triggerOrMount)) {
+    if (flowDef !== undefined) {
+      throw new TypeError("on(http.resource(...)) takes no second argument");
+    }
+    const byIdVerb: Partial<Record<string, "get" | "update" | "remove">> = {
+      GET: "get",
+      PATCH: "update",
+      DELETE: "remove",
+    };
+    const baseVerb: Partial<Record<string, "list" | "create">> = {
+      GET: "list",
+      POST: "create",
+    };
+    const ops: Record<string, unknown> = {};
+    for (const { trigger, flow } of triggerOrMount.mounts) {
+      const key = trigger.path.endsWith("/:id")
+        ? byIdVerb[trigger.method]
+        : baseVerb[trigger.method];
+      if (key === undefined || !isFlow(flow)) {
+        throw new TypeError("on(http.resource(...)) expects the five CRUD FlowDefs");
+      }
+      on(trigger, flow as FlowDef<any, any, any, any, Trigger | undefined>);
+      ops[key] = flow;
+    }
+    return ops as unknown as ResourceFlowBag;
+  }
   if (!isFlow(flowDef)) {
     throw new TypeError("on() expected a flow() definition as the second argument");
   }
-  const normalized = normalizeTrigger(trigger);
+  const normalized = normalizeTrigger(triggerOrMount as Trigger | SignalSource);
   const list = flowDef.triggers as Trigger[];
   list.push(normalized);
   // Stamp runtime carrier for the first bound trigger (type follows BoundTriggerOf).
   (flowDef as { $trigger: Trigger }).$trigger = normalized;
   bindings.push({ trigger: normalized, flow: flowDef as AnyFlowDef });
-  return flowDef as unknown as FlowDef<I, O, E, D, BoundTriggerOf<T>>;
+  return flowDef;
 }
 
 /**

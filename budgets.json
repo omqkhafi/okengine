@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-28T21:36:59.125Z",
-  "version": "0.2.8",
+  "measuredAt": "2026-07-29T02:30:52.639Z",
+  "version": "0.2.9",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 9105,
+      "value": 9699,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 24.623,
+      "value": 23.938,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 45592,
-      "limit": 46504,
+      "value": 50678,
+      "limit": 51692,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -105,8 +105,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 8818,
-      "limit": 9074,
+      "value": 9070,
+      "limit": 9326,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 67858,
-      "limit": 69216,
+      "value": 70599,
+      "limit": 72011,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 7882,
-      "limit": 8138,
+      "value": 12609,
+      "limit": 12865,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -185,8 +185,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 9310,
-      "limit": 9566,
+      "value": 9371,
+      "limit": 9627,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +205,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 20070,
-      "limit": 20472,
+      "value": 21100,
+      "limit": 21522,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -335,8 +335,8 @@
     {
       "id": "export:./drivers/memory",
       "label": "memory",
-      "value": 3168,
-      "limit": 3424,
+      "value": 4222,
+      "limit": 4478,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

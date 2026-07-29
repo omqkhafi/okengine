@@ -241,3 +241,43 @@ export const db = store.sql("app", { schema: { notes } });
     });
   });
 });
+
+describe("extractManifest — on(http.resource(...))", () => {
+  test("expands the mount into five CRUD bindings with store effects", async () => {
+    const source = `
+import { on, http, store } from "okengine";
+
+export const db = store.sql("notes", { schema: {} });
+
+const notesR = store.resource(db, {}, { unit: "notes", breaking: true });
+
+const mounted = on(http.resource("/notes", notesR.all()));
+
+export const list = mounted.list;
+export const create = mounted.create;
+export const get = mounted.get;
+export const update = mounted.update;
+export const remove = mounted.remove;
+`;
+    const manifest = await extractFromSources({ "src/flows/notes.ts": source });
+
+    expect(manifest.flows?.list?.trigger).toEqual({
+      http: { method: "GET", path: "/notes" },
+    });
+    expect(manifest.flows?.create?.trigger).toEqual({
+      http: { method: "POST", path: "/notes" },
+    });
+    expect(manifest.flows?.get?.trigger).toEqual({
+      http: { method: "GET", path: "/notes/:id" },
+    });
+    expect(manifest.flows?.update?.trigger).toEqual({
+      http: { method: "PATCH", path: "/notes/:id" },
+    });
+    expect(manifest.flows?.remove?.trigger).toEqual({
+      http: { method: "DELETE", path: "/notes/:id" },
+    });
+    expect(manifest.flows?.list?.effects?.reads).toEqual(["sql:notes"]);
+    expect(manifest.flows?.create?.effects?.writes).toEqual(["sql:notes"]);
+    expect(manifest.flows?.list?.breaking).toBe(true);
+  });
+});

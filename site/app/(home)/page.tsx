@@ -116,7 +116,7 @@ export default function HomePage() {
           <CodePanel
             code={createSnippet}
             title="examples/notes/src/flows/notes/index.ts"
-            footer="Effects are inferred from what the body touches through fx — here, writes[sql:notes]."
+            footer="store.resource expands into five ordinary Flows — effects still inferred from fx."
           />
         </div>
       </Band>

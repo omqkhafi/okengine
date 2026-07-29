@@ -88,6 +88,11 @@ interface ProjectScope {
   flows: Record<string, Flow>;
   /** Export name → flow id (for agent tools). */
   flowExports: Map<string, string>;
+  /** Local binding name → store.resource declaration (for on(http.resource)). */
+  resources: Map<
+    string,
+    { storeName: string; storeRef: string; unit?: string; breaking?: boolean }
+  >;
 }
 
 /**
@@ -116,6 +121,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     drivers: {},
     flows: {},
     flowExports: new Map(),
+    resources: new Map(),
   };
 
   const parsed = files.map((file) => {
@@ -603,6 +609,27 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
           });
         }
       }
+
+      // store.resource(db, table, { … }) — remember for on(http.resource(…))
+      if (prop === "resource") {
+        const bindingName = enclosingConstName(call, program);
+        const dbName = identifierName(call.arguments[0]);
+        const storeBinding = dbName ? scope.bindings.get(dbName) : undefined;
+        const ref =
+          storeBinding?.kind === "store" ? storeBinding.ref : (`sql:${dbName ?? "store"}` as const);
+        const storeName = ref.split(":")[1] ?? dbName ?? "store";
+        const unit = stringProp(objectArg(call.arguments[2]) ?? ({} as never), "unit");
+        const opts = objectArg(call.arguments[2]);
+        const breaking = opts ? boolProp(opts, "breaking") === true : false;
+        if (bindingName) {
+          scope.resources.set(bindingName, {
+            storeName,
+            storeRef: ref,
+            unit,
+            ...(breaking ? { breaking: true } : {}),
+          });
+        }
+      }
     }
 
     // store.schema.table("notes", { … })
@@ -996,7 +1023,14 @@ function collectFlows(file: SourceFile, program: AstNode, scope: ProjectScope): 
     if (callee === "on") {
       const triggerNode = call.arguments[0];
       const flowNode = call.arguments[1];
-      if (!triggerNode || !flowNode) return;
+      if (!triggerNode) return;
+
+      // on(http.resource(path, bag)) — expand the mount into five bindings.
+      if (!flowNode) {
+        registerResourceMount(call, triggerNode, file, program, scope);
+        return;
+      }
+
       const flowCall = unwrapFlowCall(flowNode);
       if (!flowCall) return;
       const exportName = enclosingConstName(call, program);
@@ -1139,6 +1173,7 @@ function registerFlow(args: {
 
   if (boolProp(opts, "durable")) flow.durable = true;
   if (boolProp(opts, "live") || liveFromTrigger) flow.live = true;
+  if (boolProp(opts, "breaking")) flow.breaking = true;
 
   const slo = parseSlo(objectProp(opts, "slo"));
   if (slo) flow.slo = slo;
@@ -1211,6 +1246,93 @@ function registerFlow(args: {
   }
 
   args.scope.flows[name] = flow;
+}
+
+/**
+ * Expand `on(http.resource(path, bag))` into the five CRUD flows.
+ *
+ * The flows are synthesized at runtime by `store.resource(…)`; statically we
+ * register list/create/get/update/remove with their HTTP triggers and the
+ * resource's store effects so the Manifest stays complete.
+ *
+ * @param onCall - The outer `on(…)` call
+ * @param triggerNode - `http.resource(…)` expression
+ * @param file - Source file
+ * @param program - Program root (for export-name lookup)
+ * @param scope - Project scope
+ */
+function registerResourceMount(
+  onCall: CallExpression,
+  triggerNode: AstNode,
+  file: SourceFile,
+  program: AstNode,
+  scope: ProjectScope,
+): void {
+  if (triggerNode.type !== "CallExpression") return;
+  const httpCall = triggerNode as CallExpression;
+  const callee = httpCall.callee;
+  if (callee.type !== "MemberExpression") return;
+  const member = callee as AstNode & { object: AstNode; property: AstNode };
+  if (identifierName(member.object) !== "http") return;
+  if (identifierName(member.property) !== "resource") return;
+
+  const path = stringArg(httpCall.arguments[0]);
+  if (!path) return;
+
+  // bag: `notesR.all()` → resolve `notesR` to its store.resource declaration.
+  const bagNode = httpCall.arguments[1];
+  let baseName: string | undefined;
+  if (bagNode?.type === "CallExpression") {
+    const bagCallee = (bagNode as CallExpression).callee;
+    if (bagCallee.type === "MemberExpression") {
+      baseName = identifierName((bagCallee as AstNode & { object: AstNode }).object);
+    }
+  } else if (bagNode?.type === "Identifier") {
+    baseName = identifierName(bagNode);
+  }
+  const resource = baseName ? scope.resources.get(baseName) : undefined;
+
+  const unit = resource?.unit;
+  const storeRef = resource?.storeRef as Effects["reads"] extends readonly (infer R)[] | undefined
+    ? R
+    : never;
+  const effects: Effects | undefined = storeRef
+    ? { reads: [storeRef], writes: [storeRef] }
+    : undefined;
+  const idPath = `${path}/:id`;
+  const line = lineAt(file.source, onCall.start ?? 0);
+
+  const verbs = [
+    { op: "list", method: "GET", p: path, eff: storeRef ? { reads: [storeRef] } : undefined },
+    { op: "create", method: "POST", p: path, eff: storeRef ? { writes: [storeRef] } : undefined },
+    { op: "get", method: "GET", p: idPath, eff: storeRef ? { reads: [storeRef] } : undefined },
+    { op: "update", method: "PATCH", p: idPath, eff: effects },
+    {
+      op: "remove",
+      method: "DELETE",
+      p: idPath,
+      eff: storeRef ? { writes: [storeRef] } : undefined,
+    },
+  ] as const;
+
+  for (const v of verbs) {
+    // Short op names match `export const list = mounted.list` so Manifest Diff
+    // keeps flow identity across a handwritten → store.resource migration.
+    const name = v.op;
+    const flow: Flow = {
+      trigger: { http: { method: v.method as never, path: v.p } },
+      ...(v.eff ? { effects: v.eff as Effects } : {}),
+      ...(resource?.breaking ? { breaking: true } : {}),
+      source: `${file.path}:${line}`,
+    };
+    scope.flows[name] = flow;
+    scope.bindings.set(name, { kind: "flow", ref: name });
+  }
+
+  const exportName = enclosingConstName(onCall, program);
+  if (exportName) {
+    scope.bindings.set(exportName, { kind: "flow", ref: unit ?? baseName ?? exportName });
+  }
 }
 
 interface ParsedTrigger {

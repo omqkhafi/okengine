@@ -122,6 +122,8 @@ export interface TransportError {
 
 /**
  * Client call result — errors are values, never thrown for flow failures.
+ * Success may carry an optional top-level `meta` (Stripe-style envelope,
+ * e.g. paginated lists).
  *
  * @typeParam O - Success data
  * @typeParam E - Declared error map
@@ -130,7 +132,11 @@ export type ClientResult<
   O = unknown,
   E extends Record<string, unknown> = Record<string, unknown>,
 > =
-  | { readonly data: O; readonly error: null }
+  | {
+      readonly data: O;
+      readonly error: null;
+      readonly meta?: Record<string, unknown>;
+    }
   | { readonly data: null; readonly error: ClientError<E> | TransportError };
 
 /** Minimal fetch signature (avoids DOM `HeadersInit` / `preconnect` coupling). */

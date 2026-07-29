@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { createCapabilityToken } from "./capability.ts";
 import { createEffectLedger, reversibilityOf } from "./effects.ts";
 import { fail, formatOkeMessage, lookupOkeError, OKE_ERRORS, OkeError } from "./errors.ts";
-import { createFx, createFxContext, type Fx, type FxStubStoreHandle } from "./fx.ts";
+import {
+  createFx,
+  createFxContext,
+  jsonResultBrand,
+  type Fx,
+  type FxStubStoreHandle,
+} from "./fx.ts";
 
 /** Narrow stub handle for tests that exercise the in-memory store. */
 function stub(fx: Fx, ref: string): FxStubStoreHandle {
@@ -158,6 +164,20 @@ describe("fx — wholesale swap", () => {
       operator: { id: null },
       tenant: { id: "t1" },
       fail,
+      json: {
+        ok(value, opts) {
+          return { [jsonResultBrand]: true, status: 200, value, meta: opts?.meta };
+        },
+        create(value) {
+          return { [jsonResultBrand]: true, status: 201, value };
+        },
+        empty() {
+          return { [jsonResultBrand]: true, status: 204 };
+        },
+        with(data, meta) {
+          return { [jsonResultBrand]: true, status: 200, value: data, meta };
+        },
+      },
       async step(_name, fn) {
         return fn();
       },

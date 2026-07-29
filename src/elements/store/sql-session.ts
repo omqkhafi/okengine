@@ -11,6 +11,7 @@ import { throwOke } from "../../kernel/errors.ts";
 import { maskRows, tableFromSql } from "./classify.ts";
 import { isMissingDomainRelationError } from "./missing-relation.ts";
 import {
+  andWhere,
   compileOrderBy,
   compileWhere,
   resolveSelectColumns,
@@ -46,7 +47,8 @@ export interface SqlSessionOptions {
 }
 
 /**
- * Continuations after `.orderBy(...)` — awaitable, optional `.limit`.
+ * Continuations after `.orderBy(...)` — awaitable, optional `.limit` /
+ * `.offset`.
  */
 export interface SelectOrderBuilder extends PromiseLike<SqlRow[]> {
   /**
@@ -55,11 +57,17 @@ export interface SelectOrderBuilder extends PromiseLike<SqlRow[]> {
    * @param n - Max rows
    */
   limit(n: number): Promise<SqlRow[]>;
+  /**
+   * Skip the first `n` rows (`LIMIT … OFFSET …`).
+   *
+   * @param n - Rows to skip
+   */
+  offset(n: number): Promise<SqlRow[]>;
 }
 
 /**
  * Continuations after `.where(...)` on a select — awaitable, optional
- * `.orderBy(...)` / `.limit(...)`.
+ * `.orderBy(...)` / `.limit(...)` / `.offset(...)`.
  */
 export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
   /**
@@ -74,11 +82,18 @@ export interface SelectWhereBuilder extends PromiseLike<SqlRow[]> {
    * @param n - Max rows
    */
   limit(n: number): Promise<SqlRow[]>;
+  /**
+   * Skip the first `n` rows.
+   *
+   * @param n - Rows to skip
+   */
+  offset(n: number): Promise<SqlRow[]>;
 }
 
 /**
  * Result of `.from(table)` — awaitable (all rows) or chain
- * `.where(...)` / `.orderBy(...)` / `.limit(...)` in any order.
+ * `.where(...)` / `.orderBy(...)` / `.limit(...)` / `.offset(...)` in any
+ * order.
  */
 export interface SelectFromBuilder extends PromiseLike<SqlRow[]> {
   /**
@@ -100,6 +115,12 @@ export interface SelectFromBuilder extends PromiseLike<SqlRow[]> {
    * @param n - Max rows
    */
   limit(n: number): Promise<SqlRow[]>;
+  /**
+   * Skip the first `n` rows.
+   *
+   * @param n - Rows to skip
+   */
+  offset(n: number): Promise<SqlRow[]>;
 }
 
 /** Fluent select builder. */
@@ -233,11 +254,44 @@ export interface SqlStoreHandle {
    */
   raw(sql: string, params?: readonly unknown[]): Promise<SqlRow[]>;
   /**
+   * Count rows (`COUNT(*)`), optionally filtered.
+   *
+   * @param table - Table
+   * @param where - Optional condition
+   */
+  count(table: TableHandle | unknown, where?: unknown): Promise<number>;
+  /**
+   * One page of rows — offset or keyset mode, composed through the same
+   * fluent select path (Drizzle conditions in, `compileWhere` out).
+   *
+   * @param table - Table
+   * @param options - Page options
+   */
+  page(table: TableHandle | unknown, options: SqlPageOptions): Promise<SqlRow[]>;
+  /**
    * Ensure a simple table exists (test / bootstrap helper).
    *
    * @param table - Table handle
    */
   ensureTable(table: TableHandle): Promise<void>;
+}
+
+/** Options for {@link SqlStoreHandle.page}. */
+export interface SqlPageOptions {
+  /** Filter condition (equality map or Drizzle SQL). */
+  readonly where?: unknown;
+  /** Drizzle `asc()` / `desc()` terms (or bare columns). */
+  readonly orderBy?: readonly unknown[];
+  /** Max rows to return. */
+  readonly limit?: number;
+  /** Offset mode — skip rows (uses `OFFSET`). */
+  readonly offset?: number;
+  /**
+   * Keyset mode — a Drizzle SQL condition describing "rows strictly after
+   * the cursor" (composed by the caller / `store.resource`); ANDed onto
+   * `where`. Cannot combine with `offset`.
+   */
+  readonly after?: unknown;
 }
 
 /**
@@ -330,6 +384,7 @@ export function createSqlStoreHandle(
     readonly where?: unknown;
     readonly orders?: readonly unknown[];
     readonly limit?: number;
+    readonly offset?: number;
   }
 
   async function runSelect(
@@ -366,6 +421,9 @@ export function createSqlStoreHandle(
     if (plan.limit !== undefined) {
       sql += ` LIMIT ${Math.max(0, Math.floor(plan.limit))}`;
     }
+    if (plan.offset !== undefined) {
+      sql += ` OFFSET ${Math.max(0, Math.floor(plan.offset))}`;
+    }
 
     const rows = await query(sql, params);
     if (projection === null) {
@@ -387,12 +445,15 @@ export function createSqlStoreHandle(
   function selectFrom(table: TableHandle | unknown, columns?: unknown): SelectFromBuilder {
     const projection = resolveSelectColumns(columns);
 
-    // Builders are lazy: the query runs on the first await / `.limit(n)`,
-    // so a chained `where → orderBy → limit` issues exactly one SELECT.
+    // Builders are lazy: the query runs on the first await / `.limit(n)` /
+    // `.offset(n)`, so a chained `where → orderBy → limit` issues one SELECT.
     function tail(plan: SelectPlan): SelectOrderBuilder {
       return {
         limit(n) {
           return runSelect(table, projection, { ...plan, limit: n });
+        },
+        offset(n) {
+          return runSelect(table, projection, { ...plan, offset: n });
         },
         then(onfulfilled, onrejected) {
           return runSelect(table, projection, plan).then(onfulfilled, onrejected);
@@ -575,6 +636,40 @@ export function createSqlStoreHandle(
       const table = tableFromSql(sql);
       const rows = await query(sql, params);
       return mask(rows, table);
+    },
+
+    async count(table, where) {
+      await ensureFromMeta(table);
+      const name = resolveTableName(table);
+      let sql = `SELECT COUNT(*) AS "count" FROM ${quoteIdent(name)}`;
+      const params: unknown[] = [];
+      if (where !== undefined) {
+        const compiled = compileTableWhere(table, where);
+        if (compiled.clause) {
+          sql += ` WHERE ${compiled.clause}`;
+          params.push(...compiled.params);
+        }
+      }
+      const rows = await query(sql, params);
+      return asNumber(rows[0]?.count ?? rows[0]?.COUNT ?? 0, "count");
+    },
+
+    async page(table, options) {
+      if (options.offset !== undefined && options.after !== undefined) {
+        throw new Error("page(): offset and after (keyset) cannot combine");
+      }
+      const where =
+        options.after === undefined
+          ? options.where
+          : options.where === undefined
+            ? options.after
+            : andWhere(options.where, options.after);
+      return runSelect(table, null, {
+        where,
+        orders: options.orderBy,
+        limit: options.limit,
+        offset: options.offset,
+      });
     },
 
     async ensureTable(table) {

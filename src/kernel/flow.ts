@@ -62,6 +62,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
    * Cross-plane invocation is a compile error.
    */
   readonly plane?: FlowPlane;
+  /**
+   * Acknowledge intentional Manifest contract breaks for this flow
+   * (`oke doctor --diff` / CI gate).
+   */
+  readonly breaking?: boolean;
   /** The behavior. */
   readonly do: FlowHandler<I, O>;
 }
@@ -150,6 +155,8 @@ export interface FlowDef<
   readonly slo: Slo | undefined;
   /** Plane (user vs operator). */
   readonly plane: FlowPlane | undefined;
+  /** Intentional contract-break acknowledgement for Manifest Diff. */
+  readonly breaking: boolean;
   /** Handler body. */
   readonly do: FlowHandler<I, O>;
   /** Triggers bound via {@link on} (zero or more). */
@@ -219,6 +226,7 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
     cache: options.cache,
     slo: options.slo,
     plane: options.plane,
+    breaking: options.breaking ?? false,
     do: options.do as FlowHandler<InferFlowIn<Opts>, InferFlowOut<Opts>>,
     triggers,
     $trigger: undefined,

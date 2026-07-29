@@ -190,6 +190,40 @@ export interface FxSearchOptions {
   readonly topK?: number;
 }
 
+/** Brand for {@link JsonResult} (kept internal — flows never construct it). */
+export const jsonResultBrand: unique symbol = Symbol.for("oke.json");
+
+/** Carrier from {@link FxJson} — status + body read by the response encoder. */
+export interface JsonResult<T = unknown> {
+  readonly [jsonResultBrand]: true;
+  readonly status: number;
+  readonly value?: T;
+  readonly meta?: Record<string, unknown>;
+}
+
+/** True when `value` is an {@link FxJson} carrier. */
+export function isJsonResult(value: unknown): value is JsonResult {
+  return (
+    typeof value === "object" && value !== null && (value as JsonResult)[jsonResultBrand] === true
+  );
+}
+
+/**
+ * JSON response helpers. `fx.json.create` answers 201; `fx.json.ok` can carry
+ * a top-level `meta` (Stripe-style `{ data, meta?, error }`);
+ * `fx.json.empty` answers 204.
+ */
+export interface FxJson {
+  /** 200 — body `{ data: value, meta?, error: null }`. */
+  ok<T>(value: T, opts?: { readonly meta?: Record<string, unknown> }): JsonResult<T>;
+  /** 201 — body `{ data: value, error: null }`. */
+  create<T>(value: T): JsonResult<T>;
+  /** 204 — no body. */
+  empty(): JsonResult<never>;
+  /** 200 — body `{ data, meta, error: null }` (paginated lists). */
+  with<T>(data: T, meta: Record<string, unknown>): JsonResult<T>;
+}
+
 /**
  * The `fx` context object — v1 surface.
  *
@@ -294,6 +328,8 @@ export interface Fx {
    * @param opts - Optional message
    */
   fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E>;
+  /** JSON response helpers (status + Stripe-style envelope). */
+  readonly json: FxJson;
   /**
    * Named durable step — never re-runs on journal replay.
    *
@@ -534,6 +570,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               where?: unknown;
               orders?: readonly unknown[];
               limit?: number;
+              offset?: number;
             }): Promise<SqlRow[]> =>
               gated("read", ref, async () => {
                 const h = await ensure();
@@ -541,6 +578,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
                 const filtered = plan.where === undefined ? from : from.where(plan.where);
                 const ordered =
                   plan.orders === undefined ? filtered : filtered.orderBy(...plan.orders);
+                if (plan.offset !== undefined) return ordered.offset(plan.offset);
                 return plan.limit === undefined ? ordered : ordered.limit(plan.limit);
               });
 
@@ -550,6 +588,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             }): SelectOrderBuilder => ({
               limit(n) {
                 return run({ ...plan, limit: n });
+              },
+              offset(n) {
+                return run({ ...plan, offset: n });
               },
               then(onfulfilled, onrejected) {
                 return run(plan).then(onfulfilled, onrejected);
@@ -566,6 +607,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               orderBy: (...orders: readonly unknown[]) => tail({ orders }),
               limit(n: number) {
                 return run({ limit: n });
+              },
+              offset(n: number) {
+                return run({ offset: n });
               },
               then(onfulfilled, onrejected) {
                 return run({}).then(onfulfilled, onrejected);
@@ -655,6 +699,18 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return gated("read", ref, async () => {
           const h = await ensure();
           return h.raw(sql, params);
+        });
+      },
+      count(table, where) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.count(table, where);
+        });
+      },
+      page(table, pageOptions) {
+        return gated("read", ref, async () => {
+          const h = await ensure();
+          return h.page(table, pageOptions);
         });
       },
       ensureTable(table) {
@@ -954,6 +1010,25 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     operator,
     tenant,
     fail,
+    json: {
+      ok<T>(value: T, opts?: { readonly meta?: Record<string, unknown> }): JsonResult<T> {
+        return {
+          [jsonResultBrand]: true,
+          status: 200,
+          value,
+          ...(opts?.meta !== undefined ? { meta: opts.meta } : {}),
+        } as JsonResult<T>;
+      },
+      create<T>(value: T): JsonResult<T> {
+        return { [jsonResultBrand]: true, status: 201, value } as JsonResult<T>;
+      },
+      empty(): JsonResult<never> {
+        return { [jsonResultBrand]: true, status: 204 } as JsonResult<never>;
+      },
+      with<T>(data: T, meta: Record<string, unknown>): JsonResult<T> {
+        return { [jsonResultBrand]: true, status: 200, value: data, meta } as JsonResult<T>;
+      },
+    },
     async step<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
       if (journal) {
         return journal.step(name, fn);

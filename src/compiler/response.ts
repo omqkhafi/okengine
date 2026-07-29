@@ -5,6 +5,7 @@
  */
 
 import type { FlowFailure } from "../kernel/errors.ts";
+import { isJsonResult } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 
@@ -12,6 +13,7 @@ import { VALIDATION_ERROR_CODE } from "../validation/standard-schema.ts";
 export interface SuccessEnvelope {
   readonly data: unknown;
   readonly error: null;
+  readonly meta?: Record<string, unknown>;
 }
 
 /** Failure envelope. */
@@ -45,10 +47,20 @@ export function statusForFailure(failure: FlowFailure): number {
 
 /**
  * Encode a successful output as JSON `{ data, error: null }`.
+ * An `fx.json` carrier overrides status (`create` → 201) and attaches
+ * top-level `meta` (Stripe-style envelope).
  *
  * @param output - Handler output (`undefined` → 204)
  */
 export function encodeSuccess(output: unknown): Response {
+  if (isJsonResult(output)) {
+    if (output.status === 204) {
+      return new Response(null, { status: 204 });
+    }
+    const body: SuccessEnvelope = { data: output.value, error: null };
+    const envelope = output.meta === undefined ? body : { ...body, meta: output.meta };
+    return Response.json(envelope, { status: output.status });
+  }
   if (output === undefined) {
     return new Response(null, { status: 204 });
   }

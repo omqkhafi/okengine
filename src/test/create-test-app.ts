@@ -32,6 +32,7 @@ import type { OkeApp } from "../kernel/app.ts";
 import type { BootOptions } from "../kernel/boot.ts";
 import type { EffectEntry } from "../kernel/effects.ts";
 import { fail, type FlowFailure } from "../kernel/errors.ts";
+import { isJsonResult } from "../kernel/fx.ts";
 import { isFlowFailure } from "../kernel/hooks.ts";
 import type { ResolvedPrincipal } from "../kernel/pipeline.ts";
 import type { InternalTrigger, Trigger } from "../kernel/triggers.ts";
@@ -151,7 +152,7 @@ export interface TestApp<App extends OkeApp = OkeApp> {
 export type TestApiCall = (
   input?: unknown,
   opts?: TestCallOptions,
-) => Promise<{ data: unknown; error: FlowFailure["error"] | null }>;
+) => Promise<{ data: unknown; error: FlowFailure["error"] | null; meta?: Record<string, unknown> }>;
 
 /** Loose API proxy — units/flows resolve at runtime from the booted app. */
 export type TestApi = Record<string, Record<string, TestApiCall>>;
@@ -341,7 +342,11 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
     flowName: string,
     input: unknown,
     opts?: TestCallOptions,
-  ): Promise<{ data: unknown; error: FlowFailure["error"] | null }> => {
+  ): Promise<{
+    data: unknown;
+    error: FlowFailure["error"] | null;
+    meta?: Record<string, unknown>;
+  }> => {
     const flowDef =
       app.flow(`${unit}.${flowName}`) ?? app.flow(flowName) ?? findFlowByUnit(app, unit, flowName);
     if (!flowDef) {
@@ -372,6 +377,13 @@ function createTestApi(app: OkeApp, now: () => number): TestApi {
     }
     if (result.output !== undefined && isFlowFailure(result.output)) {
       return { data: null, error: result.output.error };
+    }
+    if (isJsonResult(result.output)) {
+      return {
+        data: result.output.value,
+        error: null,
+        meta: result.output.meta,
+      };
     }
     return { data: result.output ?? null, error: null };
   };

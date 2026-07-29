@@ -9,6 +9,51 @@ an `### Added` / `### Changed` / `### Fixed` group.
 
 ## Unreleased
 
+## v0.2.9 — 2026-07-29
+
+### Added
+
+- `store.resource(db, table, opts)` — declarative CRUD factory nested on
+  `store`. Expands into five ordinary `flow({…})`s (`list` / `create` / `get` /
+  `update` / `remove`) plus `all()`. Sugar over `fx.store(db)`, never new
+  physics; the ten exports stay unchanged.
+- `http.resource(path, ops)` + `on(mount)` overload — mounts all five verbs
+  (list/create on `path`, get/update/remove on `path/:id`) and returns the ops
+  bag for `adopt`. Manifest extract expands the multi-bind statically.
+- Complete list URL (PostgREST-shaped, UTF-8 values — English, Arabic, …):
+  `?cursor=` / `?offset=` / `?limit=` · `?search=` (`?q=` alias) ·
+  `?col=op.value` (`eq ne gt gte lt lte like ilike in is`) · `?or=(…)` /
+  `?and=(…)` · `?order=col.desc` · `?select=id,title`. Every surface is
+  whitelisted by a ColumnScope (`"all" | Column[] | "none"`).
+- `fx.json.ok` / `create` / `empty` / `with` — Stripe-style `{ data, meta,
+  error }` envelope; `create` → 201, `empty` → 204, list pages attach
+  top-level `meta` (`nextCursor`, `hasNextPage`, …). `ClientResult` and the
+  in-process test client expose `meta`.
+- `fx.store(db).page` / `.count`, fluent `.offset()`, and condition-compiler
+  support for `inArray` / `isNull` / `isNotNull` (memory driver matched).
+- `OkeOptions.registry?: "consume" | "keep" | "ignore"` (default `consume`) —
+  isolates the process-wide `on()` bindings registry so a later `oke()` cannot
+  inherit another app’s routes. Console uses `ignore`. Proven by
+  `registry-isolation.test.ts`.
+- `flow({ breaking: true })` / `store.resource({ breaking: true })` —
+  acknowledge intentional Manifest contract breaks for `oke doctor --diff`.
+
+### Changed
+
+- Notes teaching app rewritten onto `store.resource` + `on(http.resource(…))`
+  with cursor pages, multilingual search, filter/order/select, and 201/204
+  status tests. Spec, Learn · Notes, Store element docs, README, and homepage
+  snippet regenerated.
+- Export gzip baselines refreshed for the intentional `store.resource` /
+  memory-driver growth (`okengine`, `store`, `console`, `drivers`, `memory`).
+
+### Fixed
+
+- Latent `or(...)` silently flattening into AND in the SQL condition compiler
+  (parenthesized OR groups; unsupported ops throw).
+- Partial `update().set()` no longer re-applies `$defaultFn` to untouched
+  columns via `prepareInsertRow`.
+
 ## v0.2.8 — 2026-07-29
 
 ### Added
