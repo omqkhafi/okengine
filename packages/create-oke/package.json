@@ -13,8 +13,7 @@
   },
   "files": [
     "src",
-    "templates",
-    "examples"
+    "template"
   ],
   "type": "module",
   "sideEffects": false,
@@ -22,7 +21,6 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "prepack": "bun ./src/sync-templates.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:integration": "CREATE_OKE_INTEGRATION=1 bun test tests/scaffold.integration.test.ts tests/dev.integration.test.ts"

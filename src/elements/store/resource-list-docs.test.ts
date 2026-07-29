@@ -49,7 +49,7 @@ describe("resource-list-docs fixtures — documented behaviors stay real", () =>
     await t.close();
   });
 
-  test("offset + count: \"exact\" answers meta.total; \"none\" drops it", async () => {
+  test('offset + count: "exact" answers meta.total; "none" drops it', async () => {
     resetBindings();
     resetFlowSeq();
 

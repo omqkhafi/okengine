@@ -29,29 +29,17 @@ bun add okengine
 
 ### Scaffold with create-oke
 
-Pick a template by how much surface you want on day one:
+Create the standard recommended project layout:
 
 ```bash title="Terminal"
-bunx create-oke@latest my-app --template hello
-bunx create-oke@latest my-app --template minimal
-bunx create-oke@latest my-app --template full
+bunx create-oke@latest my-app
+bunx create-oke@latest my-app --template standard
 bunx create-oke@latest my-app --sql postgres
-bunx create-oke@latest my-notes --from-example notes
 ```
 
-| Template / flag                                     | Purpose                                                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `hello`                                             | Fastest “it works” — one flow, no Store                                                                          |
-| `minimal`                                           | Smallest shape you'd ship — Store + 1–2 flows                                                                    |
-| `standard`                                          | Full recommended layout, empty scaffolding (default)                                                             |
-| `full`                                              | Every element wired, no business logic                                                                           |
-| `--sql postgres`                                    | Opt-in: `pgTable` schema + pin local/docker/prod to postgres (default keeps local sqlite · docker/prod postgres) |
-| `--from-example notes\|linkly\|provisions\|skyport` | Teaching apps with business logic + comments                                                                     |
-
-<Callout type="info" title="New to OKE?">
-  Start with <code>--from-example notes</code>. The [Basic Usage](/docs/get-started/basic-usage)
-  page walks the same files step by step.
-</Callout>
+The standard template is the only starter. `--sql postgres` opts into a
+`pgTable` schema and pins local, Docker, and production to Postgres; the default
+keeps local SQLite with Docker and production on Postgres.
 
 ### Run the app
 
@@ -97,7 +85,8 @@ Hit the app (path depends on the template) or open `http://localhost:6533`. If t
 
 ## Next steps
 
-Continue to [Basic Usage](/docs/get-started/basic-usage) for your first flows, typed client, and tests — or jump into [Notes](/docs/learn/notes) for the full progressive path.
+Continue to [Basic Usage](/docs/get-started/basic-usage) for your first Flow,
+typed client, and test.
 
 <Cards>
   <Card
@@ -106,5 +95,4 @@ Continue to [Basic Usage](/docs/get-started/basic-usage) for your first flows, t
     href="/docs/get-started/basic-usage"
   />
   <Card title="CLI Reference" description="oke and create-oke commands." href="/docs/cli" />
-  <Card title="Notes" description="Teaching app walkthrough." href="/docs/learn/notes" />
 </Cards>

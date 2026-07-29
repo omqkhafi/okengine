@@ -1,150 +1,101 @@
 ---
 title: Basic Usage
-description: Your first flows, typed client, and tests — using the Notes example.
-source: docs/spec/four-applications.md
+description: Scaffold the standard starter, write a Flow, and inspect it in the Console.
+source: packages/create-oke/template
 icon: SquareTerminal
 ---
 
-This page is a short tour of the shapes you will use every day. All snippets are from the **Notes** teaching app — the same source the README and doc-drift gate check.
-
-## Scaffold Notes
+## Scaffold an app
 
 ```bash title="Terminal"
-bunx create-oke@latest my-notes --from-example notes
-cd my-notes
+bunx create-oke@latest my-app
+cd my-app
 oke dev
 ```
 
-App on `:6530`, Console on `:6533`. Keep both open while you read.
+The app runs on `:6530`, the Console on `:6533`, and MCP on `:6535`.
 
-## Mental model (30 seconds)
+## Mental model
 
-1. **Trigger** — how work starts (`http.post`, `every("10m")`, a signal, …)
-2. **Contracts** — `in` / `out` / `errors` schemas
-3. **`do`** — the body; it talks to the world only through **`fx`**
-4. **Effects** — inferred (reads, writes, emits, …) — you do not annotate them by hand
+Every backend behavior has one shape:
 
-## Flows
-
-A flow is a trigger, contracts, and a `do`:
-
-### `examples/notes/src/flows/notes/index.ts`
-
-```typescript
-import { on, http, store } from "okengine";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { db } from "../../core";
-import { notes as notesTable } from "../../schema";
-
-// Contracts derived from the schema — one source of truth.
-const NewNote = createInsertSchema(notesTable, { title: (s) => s.min(1).max(120) }).omit({
-  id: true,
-  createdAt: true,
-});
-const Note = createSelectSchema(notesTable);
-
-// One declarative resource: list (cursor + search + filters + order +
-// select), create (201), get / update / remove with typed NotFound.
-const notesR = store.resource(db, notesTable, {
-  in: NewNote,
-  out: Note,
-  update: NewNote.partial(),
-  list: {
-    cursor: [notesTable.createdAt, notesTable.id],
-    direction: "desc",
-    limit: 20,
-    maxLimit: 100,
-    search: [notesTable.title],
-    filter: "all",
-    order: "all",
-  },
-  unit: "notes",
-  breaking: true,
-});
-
-// Mount all five verbs: list/create on /notes, get/update/remove on /notes/:id.
-// `on(http.resource(...))` returns the ops bag; spread it into named exports
-// so `adopt({ notes })` registers each flow under the unit.
-const mounted = on(http.resource("/notes", notesR.all()));
-
-export const list = mounted.list;
-export const create = mounted.create;
-export const get = mounted.get;
-export const update = mounted.update;
-export const remove = mounted.remove;
+```text
+on(Trigger) → Effects
 ```
 
-<Callout title="Two rules to remember">
-  - `fx` is the only door to the outside world. - Errors are values (`fx.fail`), not thrown
-  exceptions.
+1. **Trigger** — how work starts (`http.post`, `every("10m")`, a signal, …)
+2. **Contracts** — `in`, `out`, and typed `errors`
+3. **`do`** — the body; world access goes only through `fx`
+4. **Effects** — inferred from the `fx` calls
+
+## Your first Flow
+
+The standard starter includes a health Flow:
+
+```typescript
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
+export const health = on(
+  http.get("/health"),
+  flow({
+    out: z.object({ ok: z.literal(true) }),
+    do: () => ({ ok: true as const }),
+  }),
+);
+```
+
+Open `src/flows/main/index.ts`, change the route or output, and save. The app and
+Console update together from the same Manifest.
+
+<Callout title="The invariant">
+  All reads, writes, emits, sends, and external calls belong behind `fx`. This is what makes effects
+  inspectable and tests deterministic.
 </Callout>
-
-What to notice in `create`:
-
-- `in` / `out` are Zod schemas — the typed client and OpenAPI come from the same contracts
-- `fx.store(db)` is a Store effect — the comment under the flow shows what the compiler infers
-- No separate “repository layer” ceremony; the flow _is_ the behavior
 
 ## Wire the app
 
-Adopt flow modules into an `oke` app. The namespace key becomes the client namespace; each export becomes a method.
-
-### `examples/notes/src/app.ts`
+The starter adopts the module in `src/app.ts`:
 
 ```typescript
 import { oke } from "okengine";
-import * as notes from "./flows/notes";
+import * as main from "./flows/main";
 
-export const app = oke({ name: "notes" }).adopt({ notes });
-
-export type App = typeof app; // ← the client needs nothing else
+export const app = oke({ name: "my-app" }).adopt({ main });
+export type App = typeof app;
 ```
+
+The namespace becomes the typed-client namespace and each exported Flow becomes
+a method.
 
 ## Typed client
 
-No separate codegen project to keep in sync — import the app type (and optionally `$routes`):
-
-```ts title="client"
+```typescript
 import { createClient } from "okengine/client";
 import type { App } from "../src/app";
-import { app } from "../src/app";
 
-const api = createClient<App>("http://localhost:6530", { $routes: app.$routes });
-// equivalently: const api = createClient(app, "http://localhost:6530");
-
-const { data, error } = await api.notes.get({ id: "n_1" });
-
-if (error?.code === "NotFound") show("gone");
-else console.log(data.title); // ← typed, no codegen ✅
+const api = createClient<App>("http://localhost:6530");
+const { data, error } = await api.main.health({});
 ```
 
-`data` and `error` are narrowed from your flow contracts. `NotFound` is the same code you returned with `fx.fail`.
+`data` and `error` are inferred from the Flow contracts; no separate client
+schema or code-generation project is required.
 
-## Tests
+## Test
 
-Swap the world for memory drivers with `createTestApp` — same client API as production:
-
-### `examples/notes/tests/notes.test.ts`
+Use `createTestApp` to boot the same app with test drivers:
 
 ```typescript
-import { afterEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { createTestApp } from "okengine/test";
 import { app } from "../src/app";
 
-// `app.boot` is idempotent, so each test re-boots fresh memory drivers only
-// after the previous boot is stopped.
-afterEach(async () => {
-  await app.stop();
-});
-
-test("create returns 201 body then read", async () => {
-  const t = await createTestApp(app); // memory driver, automatic
-  const { data, error } = await t.api.notes.create({ title: "First", body: "Hello" });
+test("health", async () => {
+  const t = await createTestApp(app);
+  const { data, error } = await t.api.main.health({});
   expect(error).toBeNull();
-  expect(data!.title).toBe("First");
-
-  const { data: note } = await t.api.notes.get({ id: data!.id });
-  expect(note!.title).toBe("First");
+  expect(data).toEqual({ ok: true });
+  await app.stop();
 });
 ```
 
@@ -152,31 +103,22 @@ test("create returns 201 body then read", async () => {
 bun test
 ```
 
-## Checklist
-
-After this page you should be able to:
-
-- [ ] Explain `on(Trigger) → Effects` in one sentence
-- [ ] Write a flow with `in` / `out` / `do` and use `fx.store`
-- [ ] Call that flow from `createClient`
-- [ ] Cover it with `createTestApp` + `bun test`
-
-## What's next
+## Next
 
 <Cards>
   <Card
-    title="Notes"
-    description="Full Basic walkthrough — contracts, errors, client."
-    href="/docs/learn/notes"
-  />
-  <Card
-    title="Elements"
-    description="One page per element, starting with Flow."
+    title="Flow"
+    description="Triggers, contracts, effects, and composition."
     href="/docs/elements/flow"
   />
   <Card
+    title="Store"
+    description="SQL, KV, files, index, and declarative resources."
+    href="/docs/elements/store"
+  />
+  <Card
     title="Console"
-    description="Seventeen panels derived from the Manifest."
+    description="Manifest-derived flows, effects, traces, and architecture."
     href="/docs/console/overview"
   />
 </Cards>

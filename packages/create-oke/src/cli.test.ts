@@ -7,7 +7,6 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  FROM_EXAMPLE_CHOICE,
   formatCdPath,
   nextStepsText,
   parseArgs,
@@ -19,14 +18,7 @@ import {
   type InteractiveAnswers,
 } from "./cli.ts";
 import { listTemplateFiles, scaffold } from "./scaffold.ts";
-import {
-  DEFAULT_TEMPLATE,
-  EXAMPLES,
-  TEMPLATES,
-  packageRoot,
-  resolveExampleDir,
-  resolveTemplateDir,
-} from "./templates.ts";
+import { DEFAULT_TEMPLATE, TEMPLATES, packageRoot, resolveTemplateDir } from "./templates.ts";
 import {
   sanitizeProjectName,
   shouldSkipTemplatePath,
@@ -41,19 +33,13 @@ describe("parseArgs", () => {
     expect(a.name).toBe("my-app");
     expect(a.template).toBe("standard");
     expect(a.templateExplicit).toBe(false);
-    expect(a.fromExample).toBeUndefined();
   });
 
   test("accepts --template and -t", () => {
-    expect(parseArgs(["x", "--template", "hello"]).template).toBe("hello");
-    expect(parseArgs(["x", "-t", "full"]).template).toBe("full");
-    expect(parseArgs(["x", "--template=minimal"]).template).toBe("minimal");
-    expect(parseArgs(["x", "--template", "hello"]).templateExplicit).toBe(true);
-  });
-
-  test("accepts --from-example", () => {
-    expect(parseArgs(["x", "--from-example", "notes"]).fromExample).toBe("notes");
-    expect(parseArgs(["x", "--from-example=skyport"]).fromExample).toBe("skyport");
+    expect(parseArgs(["x", "--template", "standard"]).template).toBe("standard");
+    expect(parseArgs(["x", "-t", "standard"]).template).toBe("standard");
+    expect(parseArgs(["x", "--template=standard"]).template).toBe("standard");
+    expect(parseArgs(["x", "--template", "standard"]).templateExplicit).toBe(true);
   });
 
   test("accepts --sql sqlite|postgres", () => {
@@ -64,13 +50,10 @@ describe("parseArgs", () => {
     expect(parseArgs(["x", "--sql", "postgres"]).sqlDriverExplicit).toBe(true);
   });
 
-  test("rejects unknown template / example / sql / both", () => {
+  test("rejects unknown template, option, and sql", () => {
     expect(() => parseArgs(["x", "--template", "nope"])).toThrow(/template/);
-    expect(() => parseArgs(["x", "--from-example", "nope"])).toThrow(/example/);
+    expect(() => parseArgs(["x", "--unknown"])).toThrow(/unknown option/);
     expect(() => parseArgs(["x", "--sql", "mysql"])).toThrow(/sql/);
-    expect(() => parseArgs(["x", "--template", "hello", "--from-example", "notes"])).toThrow(
-      /either/,
-    );
   });
 });
 
@@ -87,9 +70,8 @@ describe("shouldPrompt", () => {
     expect(shouldPrompt(parseArgs([]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app"]), false)).toBe(false);
     expect(shouldPrompt(parseArgs(["my-app", "--yes"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["my-app", "--template", "hello"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["--template", "hello"]), true)).toBe(false);
-    expect(shouldPrompt(parseArgs(["--from-example", "notes"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["my-app", "--template", "standard"]), true)).toBe(false);
+    expect(shouldPrompt(parseArgs(["--template", "standard"]), true)).toBe(false);
     expect(shouldPrompt(parseArgs(["--help"]), true)).toBe(false);
   });
 });
@@ -110,11 +92,7 @@ describe("parseArgs flags", () => {
 });
 
 describe("sourceFromArgs", () => {
-  test("prefers example when set", () => {
-    expect(sourceFromArgs(parseArgs(["x", "--from-example", "linkly"]))).toEqual({
-      kind: "example",
-      id: "linkly",
-    });
+  test("uses the standard template", () => {
     expect(sourceFromArgs(parseArgs(["x"]))).toEqual({
       kind: "template",
       id: DEFAULT_TEMPLATE,
@@ -139,23 +117,6 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
     }
   });
 
-  test("each --from-example path matches interactive from-example choice", () => {
-    for (const id of EXAMPLES) {
-      const answers: InteractiveAnswers = {
-        name: "x",
-        choice: FROM_EXAMPLE_CHOICE,
-        example: id,
-        installAndRun: false,
-        agentsMd: true,
-      };
-      const fromAnswers = scaffoldArgsFromAnswers(answers);
-      const fromFlags = scaffoldArgsFromCli(parseArgs(["x", "--from-example", id]));
-      expect(fromAnswers).toEqual(fromFlags);
-      expect(fromAnswers.source).toEqual({ kind: "example", id });
-      expect(fromAnswers.sqlDriver).toBe("sqlite");
-    }
-  });
-
   test("interactive never opts into --sql postgres (flag-only)", () => {
     const answers: InteractiveAnswers = {
       name: "x",
@@ -170,8 +131,8 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
     ).toBe("postgres");
   });
 
-  test("8 paths cover every template and every example", () => {
-    expect(TEMPLATES.length + EXAMPLES.length).toBe(8);
+  test("only standard is available", () => {
+    expect(TEMPLATES).toEqual(["standard"]);
   });
 });
 
@@ -179,7 +140,7 @@ describe("transformPackageJson", () => {
   test("rewrites name and okengine file:../.. to installable ref", () => {
     const next = transformPackageJson(
       {
-        name: "@oke/template-hello",
+        name: "@oke/template-standard",
         private: true,
         dependencies: {
           okengine: "file:../..",
@@ -298,32 +259,6 @@ describe("scaffold structure", () => {
     }
   });
 
-  test("hello has exactly one flow and no Store", () => {
-    const dir = mkdtempSync(join(tmpdir(), "create-oke-hello-assert-"));
-    try {
-      const result = scaffold({
-        targetDir: join(dir, "hello"),
-        name: "hello-app",
-        source: { kind: "template", id: "hello" },
-      });
-      const flowFiles = result.files.filter((f) => f.startsWith("src/flows/") && f.endsWith(".ts"));
-      expect(flowFiles).toEqual(["src/flows/hello/index.ts"]);
-      const flowSrc = readFileSync(join(result.targetDir, "src/flows/hello/index.ts"), "utf8");
-      expect(flowSrc).toMatch(/export const hello/);
-      expect(flowSrc).not.toMatch(/\bstore\b/);
-      expect(result.files.some((f) => f.includes("core.ts"))).toBe(false);
-      expect(result.files.some((f) => f.includes("schema.ts"))).toBe(false);
-      const all = result.files
-        .filter((f) => f.endsWith(".ts"))
-        .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
-        .join("\n");
-      expect(all).not.toMatch(/store\.sql/);
-      expect(all).not.toMatch(/\bbookings\b|\borders\b|\blinks\b|\bnotes\b/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   test("standard has full four-applications layout and no business domain", () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-standard-assert-"));
     try {
@@ -351,25 +286,6 @@ describe("scaffold structure", () => {
         .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
         .join("\n");
       expect(all).not.toMatch(/\bbookings\b|\borders\b|\blinks\b|\bstripe\b/i);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("--from-example notes matches today's example tree", () => {
-    const dir = mkdtempSync(join(tmpdir(), "create-oke-from-example-"));
-    try {
-      const exampleDir = resolveExampleDir("notes");
-      const expected = listTemplateFiles(exampleDir);
-      const result = scaffold({
-        targetDir: join(dir, "notes"),
-        name: "from-notes",
-        source: { kind: "example", id: "notes" },
-      });
-      const extras = ["AGENTS.md"];
-      if (expected.includes(".env.example")) extras.push(".env.local");
-      expect([...result.files].sort()).toEqual([...expected, ...extras].sort());
-      expect(result.files).toContain("src/flows/notes/index.ts");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -403,9 +319,9 @@ describe("scaffold structure", () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-no-agents-"));
     try {
       const result = scaffold({
-        targetDir: join(dir, "hello"),
+        targetDir: join(dir, "standard"),
         name: "no-agents",
-        source: { kind: "template", id: "hello" },
+        source: { kind: "template", id: "standard" },
         writeAgentsMd: false,
       });
       expect(result.files).not.toContain("AGENTS.md");
@@ -443,7 +359,7 @@ describe("non-TTY CLI", () => {
     const root = mkdtempSync(join(tmpdir(), "create-oke-flag-"));
     const target = join(root, "flag-app");
     try {
-      const code = await run([target, "--template", "hello", "--no-install"], {
+      const code = await run([target, "--template", "standard", "--no-install"], {
         stdinIsTTY: false,
         runPostScaffold: false,
       });
@@ -453,8 +369,8 @@ describe("non-TTY CLI", () => {
       const result = {
         targetDir: target,
         name: "flag-app",
-        source: { kind: "template" as const, id: "hello" as const },
-        label: "hello",
+        source: { kind: "template" as const, id: "standard" as const },
+        label: "standard",
         okengineDependency: "x",
         files: [],
         sqlDriver: "sqlite" as const,
@@ -464,14 +380,6 @@ describe("non-TTY CLI", () => {
       expect(nextStepsText(result)).toContain("okengine.vercel.app");
     } finally {
       rmSync(root, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("examples catalogue", () => {
-  test("all four teaching examples resolve", () => {
-    for (const id of EXAMPLES) {
-      expect(resolveExampleDir(id)).toBeTruthy();
     }
   });
 });

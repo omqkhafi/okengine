@@ -22,7 +22,14 @@
     "./drivers": "./src/drivers/index.ts"
   },
   "publish": {
-    "include": ["src", "spec", "AGENTS.md", "docs/spec", "README.md", "package.json", "jsr.json"],
+    "include": [
+      "src",
+      "manifest.v1.schema.json",
+      "AGENTS.md",
+      "README.md",
+      "package.json",
+      "jsr.json"
+    ],
     "exclude": [
       "src/console/ui/shell",
       "src/console/ui/access",

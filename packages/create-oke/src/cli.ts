@@ -1,25 +1,14 @@
 /**
- * `create-oke` CLI — clean templates by default; teaching examples opt-in.
+ * `create-oke` CLI — one standard starter.
  *
  * ```bash
- * bunx create-oke@latest <name> [--template hello|minimal|standard|full]
- * bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+ * bunx create-oke@latest <name> [--template standard]
  * bunx create-oke@latest <name> --yes
  * bunx create-oke@latest   # interactive when stdin is a TTY
  * ```
  */
 
-import {
-  cancel,
-  confirm,
-  intro,
-  isCancel,
-  note,
-  outro,
-  select,
-  spinner,
-  text,
-} from "@clack/prompts";
+import { cancel, confirm, intro, isCancel, note, outro, spinner, text } from "@clack/prompts";
 import { basename, relative, resolve } from "node:path";
 import { existsSync, rmSync } from "node:fs";
 import { agentsMdContent } from "./agents-md.ts";
@@ -27,13 +16,9 @@ import { docsUrl } from "./docs-origin.ts";
 import { scaffold, type ScaffoldResult, type ScaffoldSource } from "./scaffold.ts";
 import {
   DEFAULT_TEMPLATE,
-  EXAMPLE_NEW_IDEAS,
-  EXAMPLES,
   TEMPLATE_PURPOSES,
   TEMPLATES,
-  isExampleId,
   isTemplateId,
-  type ExampleId,
   type TemplateId,
 } from "./templates.ts";
 import { DEFAULT_SQL_DRIVER, SQL_DRIVERS, isSqlDriverId, type SqlDriverId } from "./transform.ts";
@@ -42,7 +27,6 @@ import { DEFAULT_SQL_DRIVER, SQL_DRIVERS, isSqlDriverId, type SqlDriverId } from
 export type CliArgs = {
   readonly name: string | undefined;
   readonly template: TemplateId;
-  readonly fromExample: ExampleId | undefined;
   /** True when `--template` / `-t` was present on the argv. */
   readonly templateExplicit: boolean;
   /** Store SQL driver (`sqlite` default). */
@@ -62,27 +46,13 @@ export type CliArgs = {
   readonly targetDir: string | undefined;
 };
 
-/**
- * Sentinel choice for "Start from a worked example" in interactive answers.
- * Distinct from clack's internal select value (`__example__`).
- */
-export const FROM_EXAMPLE_CHOICE = "from-example" as const;
-
 /** Answers collected by the interactive ask step (no clack types). */
-export type InteractiveAnswers =
-  | {
-      readonly name: string;
-      readonly choice: TemplateId;
-      readonly installAndRun: boolean;
-      readonly agentsMd: boolean;
-    }
-  | {
-      readonly name: string;
-      readonly choice: typeof FROM_EXAMPLE_CHOICE;
-      readonly example: ExampleId;
-      readonly installAndRun: boolean;
-      readonly agentsMd: boolean;
-    };
+export type InteractiveAnswers = {
+  readonly name: string;
+  readonly choice: TemplateId;
+  readonly installAndRun: boolean;
+  readonly agentsMd: boolean;
+};
 
 /**
  * Canonical scaffold invocation — shared by interactive and flag-driven paths.
@@ -103,7 +73,6 @@ export type ScaffoldCallArgs = {
 export function parseArgs(argv: readonly string[]): CliArgs {
   let name: string | undefined;
   let template: TemplateId = DEFAULT_TEMPLATE;
-  let fromExample: ExampleId | undefined;
   let templateExplicit = false;
   let sqlDriver: SqlDriverId = DEFAULT_SQL_DRIVER;
   let sqlDriverExplicit = false;
@@ -175,22 +144,6 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       templateExplicit = true;
       continue;
     }
-    if (a === "--from-example") {
-      const next = argv[++i];
-      if (!next || !isExampleId(next)) {
-        throw new Error(`create-oke: --from-example must be one of ${EXAMPLES.join("|")}`);
-      }
-      fromExample = next;
-      continue;
-    }
-    if (a.startsWith("--from-example=")) {
-      const value = a.slice("--from-example=".length);
-      if (!isExampleId(value)) {
-        throw new Error(`create-oke: --from-example must be one of ${EXAMPLES.join("|")}`);
-      }
-      fromExample = value;
-      continue;
-    }
     if (a.startsWith("-")) {
       throw new Error(`create-oke: unknown option ${a}`);
     }
@@ -199,10 +152,6 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       continue;
     }
     throw new Error(`create-oke: unexpected argument ${a}`);
-  }
-
-  if (templateExplicit && fromExample !== undefined) {
-    throw new Error("create-oke: use either --template or --from-example, not both");
   }
 
   if (argv.includes("--install") && argv.includes("--no-install")) {
@@ -216,7 +165,6 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   return {
     name,
     template,
-    fromExample,
     templateExplicit,
     sqlDriver,
     sqlDriverExplicit,
@@ -266,21 +214,15 @@ export function helpText(): string {
     (id) =>
       `  ${id.padEnd(12)}${TEMPLATE_PURPOSES[id]}${id === DEFAULT_TEMPLATE ? "  (default)" : ""}`,
   ).join("\n");
-  const exampleLines = EXAMPLES.map((id) => `  ${id.padEnd(12)}${EXAMPLE_NEW_IDEAS[id]}`).join(
-    "\n",
-  );
-
   return `create-oke — scaffold an okengine app
 
 Usage:
-  bunx create-oke@latest <name> [--template hello|minimal|standard|full]
-  bunx create-oke@latest <name> --from-example notes|linkly|provisions|skyport
+  bunx create-oke@latest <name> [--template standard]
   bunx create-oke@latest <name> --yes
   bunx create-oke@latest          # interactive (TTY only)
 
 Options:
   -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
-  --from-example <id>   Teaching example (non-interactive)
   --sql <id>            Opt-in Store SQL dialect: ${SQL_DRIVERS.join("|")}
                         Default keeps local sqlite · docker/prod postgres.
                         --sql postgres rewrites src/schema.ts to pgTable and
@@ -292,16 +234,11 @@ Options:
   --no-agents-md        Skip AGENTS.md
   -h, --help            Show this help
 
-Templates (clean starters from templates/):
+Template:
 ${templateLines}
 
---from-example (copies a teaching example, including its business logic and
-comments — most new projects want --template instead):
-${exampleLines}
-
 No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
-(confirm name, template, install). Non-TTY / --yes / --template /
---from-example stay fully scriptable.
+(confirm name and install). Non-TTY / --yes / --template stay fully scriptable.
 `;
 }
 
@@ -309,7 +246,7 @@ No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
  * Whether the CLI should open the interactive Clack flow.
  *
  * TTY humans get the wizard even when a name is pre-filled. Config flags
- * (`--template`, `--from-example`) or `--yes` skip prompts for CI/agents.
+ * `--template` or `--yes` skips prompts for CI/agents.
  *
  * @param args - Parsed args
  * @param stdinIsTTY - `process.stdin.isTTY`
@@ -319,7 +256,6 @@ export function shouldPrompt(args: CliArgs, stdinIsTTY: boolean | undefined): bo
   if (args.help) return false;
   if (args.yes) return false;
   if (args.templateExplicit) return false;
-  if (args.fromExample !== undefined) return false;
   return true;
 }
 
@@ -329,9 +265,6 @@ export function shouldPrompt(args: CliArgs, stdinIsTTY: boolean | undefined): bo
  * @param args - Parsed args
  */
 export function sourceFromArgs(args: CliArgs): ScaffoldSource {
-  if (args.fromExample !== undefined) {
-    return { kind: "example", id: args.fromExample };
-  }
   return { kind: "template", id: args.template };
 }
 
@@ -359,7 +292,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
  * Pure map from interactive answers → scaffold call args.
  *
  * Independent of clack — unit-tested against {@link scaffoldArgsFromCli}
- * for every template and every `--from-example` choice.
+ * for the standard template.
  *
  * @param answers - Collected interactive answers
  */
@@ -368,15 +301,6 @@ export function scaffoldArgsFromAnswers(answers: InteractiveAnswers): ScaffoldCa
   const name = basename(targetDir);
   // Interactive always keeps the dual-mode default (local sqlite ·
   // docker/prod postgres). Opt into postgres-everywhere with `--sql postgres`.
-  if (answers.choice === FROM_EXAMPLE_CHOICE) {
-    return {
-      name,
-      targetDir,
-      source: { kind: "example", id: answers.example },
-      agentsMd: answers.agentsMd,
-      sqlDriver: DEFAULT_SQL_DRIVER,
-    };
-  }
   return {
     name,
     targetDir,
@@ -419,53 +343,7 @@ export async function askInteractiveAnswers(
   if (isCancel(nameValue)) return null;
   const name = String(nameValue).trim();
 
-  const templateValue = await select({
-    message: "Template",
-    options: [
-      ...TEMPLATES.map((id) => ({
-        value: id as string,
-        label: id,
-        hint: TEMPLATE_PURPOSES[id],
-      })),
-      {
-        value: "__example__",
-        label: "Start from a worked example",
-        hint: "Teaching apps with business logic — most projects want a template",
-      },
-    ],
-    initialValue: DEFAULT_TEMPLATE,
-  });
-  if (isCancel(templateValue)) return null;
-
   const agentsMd = partial.agentsMd ?? true;
-
-  if (templateValue === "__example__") {
-    const exampleValue = await select({
-      message: "Example",
-      options: EXAMPLES.map((id) => ({
-        value: id,
-        label: id,
-        hint: EXAMPLE_NEW_IDEAS[id],
-      })),
-    });
-    if (isCancel(exampleValue)) return null;
-
-    const installAndRunValue = await confirm({
-      message: "Install dependencies and start oke dev?",
-      initialValue: true,
-    });
-    if (isCancel(installAndRunValue)) return null;
-
-    return {
-      name,
-      choice: FROM_EXAMPLE_CHOICE,
-      example: exampleValue as ExampleId,
-      installAndRun: Boolean(installAndRunValue),
-      agentsMd,
-    };
-  }
-
-  const templateId = templateValue as TemplateId;
 
   const installAndRunValue = await confirm({
     message: "Install dependencies and start oke dev?",
@@ -475,7 +353,7 @@ export async function askInteractiveAnswers(
 
   return {
     name,
-    choice: templateId,
+    choice: DEFAULT_TEMPLATE,
     installAndRun: Boolean(installAndRunValue),
     agentsMd,
   };

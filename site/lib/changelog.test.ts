@@ -1,6 +1,6 @@
 /**
  * Changelog parser + source integrity. The `/changelog` page has no fallback:
- * if `docs/changelog.md` drifts from the format, the build must fail here first.
+ * if `changelog.md` drifts from the format, the build must fail here first.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -99,7 +99,7 @@ describe("splitInlineCode", () => {
   });
 });
 
-describe("docs/changelog.md", () => {
+describe("changelog.md", () => {
   test("parses, and the newest release matches the published version", async () => {
     const raw = await Bun.file(join(ROOT, CHANGELOG_SOURCE)).text();
     const releases = parseChangelog(raw);

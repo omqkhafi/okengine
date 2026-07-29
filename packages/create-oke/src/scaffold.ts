@@ -13,13 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import {
-  resolveExampleDir,
-  resolveLocalOkengineRoot,
-  resolveTemplateDir,
-  type ExampleId,
-  type TemplateId,
-} from "./templates.ts";
+import { resolveLocalOkengineRoot, resolveTemplateDir, type TemplateId } from "./templates.ts";
 import { agentsMdContent } from "./agents-md.ts";
 import {
   DEFAULT_SQL_DRIVER,
@@ -33,10 +27,8 @@ import {
   type SqlDriverId,
 } from "./transform.ts";
 
-/** Where the scaffold copies from. */
-export type ScaffoldSource =
-  | { readonly kind: "template"; readonly id: TemplateId }
-  | { readonly kind: "example"; readonly id: ExampleId };
+/** The bundled starter copied by the scaffold. */
+export type ScaffoldSource = { readonly kind: "template"; readonly id: TemplateId };
 
 /** Options for {@link scaffold}. */
 export type ScaffoldOptions = {
@@ -44,7 +36,7 @@ export type ScaffoldOptions = {
   readonly targetDir: string;
   /** npm package / folder name. */
   readonly name: string;
-  /** Template or teaching-example source. */
+  /** Starter template source. */
   readonly source: ScaffoldSource;
   /** Write root `AGENTS.md` (default true). */
   readonly writeAgentsMd?: boolean;
@@ -71,17 +63,14 @@ export type ScaffoldResult = {
 };
 
 /**
- * Scaffold a new okengine project from a clean template or teaching example.
+ * Scaffold a new okengine project from the standard template.
  *
  * @param options - Name, source, destination
  */
 export function scaffold(options: ScaffoldOptions): ScaffoldResult {
   const name = sanitizeProjectName(options.name);
   const targetDir = resolve(options.targetDir);
-  const sourceDir =
-    options.source.kind === "template"
-      ? resolveTemplateDir(options.source.id)
-      : resolveExampleDir(options.source.id);
+  const sourceDir = resolveTemplateDir(options.source.id);
   const label = options.source.id;
   const sqlDriver = options.sqlDriver ?? DEFAULT_SQL_DRIVER;
 

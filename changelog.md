@@ -26,7 +26,7 @@ an `### Added` / `### Changed` / `### Fixed` group.
   `?and=(…)` · `?order=col.desc` · `?select=id,title`. Every surface is
   whitelisted by a ColumnScope (`"all" | Column[] | "none"`).
 - `fx.json.ok` / `create` / `empty` / `with` — Stripe-style `{ data, meta,
-  error }` envelope; `create` → 201, `empty` → 204, list pages attach
+error }` envelope; `create` → 201, `empty` → 204, list pages attach
   top-level `meta` (`nextCursor`, `hasNextPage`, …). `ClientResult` and the
   in-process test client expose `meta`.
 - `fx.store(db).page` / `.count`, fluent `.offset()`, and condition-compiler

@@ -1,7 +1,7 @@
 /**
  * Gate: `/llms.txt` (Fumadocs `llms(source).index()`) lists every real nav
  * page and introduces no orphan links. Nav is the meta.json tree written by
- * sync-content.
+ * handbook navigation.
  */
 
 import { describe, expect, test } from "bun:test";

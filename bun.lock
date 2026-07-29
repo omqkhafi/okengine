@@ -67,58 +67,9 @@
         "zod",
       ],
     },
-    "examples/linkly": {
-      "name": "@oke/example-linkly",
-      "version": "0.0.1",
-      "dependencies": {
-        "drizzle-orm": "^1.0.0-rc.4",
-        "okengine": "file:../..",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "drizzle-kit": "^1.0.0-rc.4",
-      },
-    },
-    "examples/notes": {
-      "name": "@oke/example-notes",
-      "version": "0.0.1",
-      "dependencies": {
-        "drizzle-orm": "^1.0.0-rc.4",
-        "drizzle-zod": "^0.8.3",
-        "okengine": "file:../..",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "drizzle-kit": "^1.0.0-rc.4",
-      },
-    },
-    "examples/provisions": {
-      "name": "@oke/example-provisions",
-      "version": "0.0.1",
-      "dependencies": {
-        "drizzle-orm": "^1.0.0-rc.4",
-        "okengine": "file:../..",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "drizzle-kit": "^1.0.0-rc.4",
-      },
-    },
-    "examples/skyport": {
-      "name": "@oke/example-skyport",
-      "version": "0.0.1",
-      "dependencies": {
-        "drizzle-orm": "^1.0.0-rc.4",
-        "okengine": "file:../..",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "drizzle-kit": "^1.0.0-rc.4",
-      },
-    },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.2.8",
+      "version": "0.2.9",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -427,14 +378,6 @@
     "@noble/hashes": ["@noble/hashes@2.2.0", "", {}, "sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg=="],
 
     "@noble/post-quantum": ["@noble/post-quantum@0.5.4", "", { "dependencies": { "@noble/curves": "~2.0.0", "@noble/hashes": "~2.0.0" } }, "sha512-leww0zzIirrvwaYMPI9fj6aRIlA/c6Y0/lifQQ1YOOyHEr0MNH3yYpjXeiVG+tWdPps4XxGclFWX2INPO3Yo5w=="],
-
-    "@oke/example-linkly": ["@oke/example-linkly@workspace:examples/linkly"],
-
-    "@oke/example-notes": ["@oke/example-notes@workspace:examples/notes"],
-
-    "@oke/example-provisions": ["@oke/example-provisions@workspace:examples/provisions"],
-
-    "@oke/example-skyport": ["@oke/example-skyport@workspace:examples/skyport"],
 
     "@orama/orama": ["@orama/orama@3.1.18", "", {}, "sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA=="],
 
@@ -1409,8 +1352,6 @@
     "npm-run-path": ["npm-run-path@4.0.1", "", { "dependencies": { "path-key": "^3.0.0" } }, "sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw=="],
 
     "npm-to-yarn": ["npm-to-yarn@3.1.0", "", {}, "sha512-9gNsO/JB3LeWOZXBX09cKMsCPwVcu1ExIf+GUuTN9G+0zZvLIK0nU9+lE9jue3MSKAxPdrh0rO072mWNvciqeQ=="],
-
-    "okengine": ["okengine@root:", {}],
 
     "on-headers": ["on-headers@1.1.0", "", {}, "sha512-737ZY3yNnXy37FHkQxPzt4UZ2UWPWiCZWLvFZ4fu5cueciegX0zGPnrlY6bwRg4FdQOe9YU8MkmJwGhoMybl8A=="],
 

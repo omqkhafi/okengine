@@ -51,10 +51,10 @@ Mnemonic: **O·K·E = 6·5·3**.
 Every backend behavior is a Flow: `on(Trigger) → Effects`. World access goes through `fx`.
 
 Store apps sync schema with `oke db push|generate|migrate` (local `oke dev`
-auto-pushes). Prefer `store.schema.table` + `field.*` (see Linkly) or keep a
+auto-pushes). Prefer `store.schema.table` + `field.*` or keep a
 hand-written Drizzle `schema.ts`.
 
-### `examples/notes/src/flows/notes/index.ts`
+### Resource Flow
 
 ```typescript
 import { on, http, store } from "okengine";
@@ -100,23 +100,21 @@ export const update = mounted.update;
 export const remove = mounted.remove;
 ```
 
-Full walkthrough: [Basic usage](https://okengine.vercel.app/docs/get-started/basic-usage) · teaching apps: [Learn](https://okengine.vercel.app/docs/learn/notes).
+Full walkthrough: [Basic usage](https://okengine.vercel.app/docs/get-started/basic-usage).
 
 ## Documentation
 
-Everything beyond this page lives on the site and in-repo specs:
+Everything beyond this page lives in the site handbook:
 
-| Resource          | Link                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| Docs site         | [okengine.vercel.app](https://okengine.vercel.app)                                         |
-| Handbook          | [/docs](https://okengine.vercel.app/docs)                                                  |
-| Changelog         | [/changelog](https://okengine.vercel.app/changelog)                                        |
-| Agents index      | [/llms.txt](https://okengine.vercel.app/llms.txt)                                          |
-| Unified theory    | [`docs/spec/unified-theory.md`](docs/spec/unified-theory.md)                               |
-| Four applications | [`docs/spec/four-applications.md`](docs/spec/four-applications.md)                         |
-| Console           | [`docs/spec/console.md`](docs/spec/console.md)                                             |
-| CLI reference     | [`docs/cli.md`](docs/cli.md) · [handbook](https://okengine.vercel.app/docs/cli)            |
-| Budgets           | [`BUDGETS.md`](BUDGETS.md)                                                                 |
-| Contributing      | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [writing a driver](docs/guides/writing-a-driver.md) |
+| Resource      | Link                                                 |
+| ------------- | ---------------------------------------------------- |
+| Docs site     | [okengine.vercel.app](https://okengine.vercel.app)   |
+| Handbook      | [/docs](https://okengine.vercel.app/docs)            |
+| Changelog     | [/changelog](https://okengine.vercel.app/changelog)  |
+| Agents index  | [/llms.txt](https://okengine.vercel.app/llms.txt)    |
+| CLI reference | [/docs/cli](https://okengine.vercel.app/docs/cli)    |
+| Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json) |
+| Budgets       | [`BUDGETS.md`](BUDGETS.md)                           |
+| Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                 |
 
 Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine). MIT.

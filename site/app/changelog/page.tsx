@@ -4,7 +4,7 @@
  * under the MIT License. Copyright (c) 2024 - present, Bereket Engida.
  * See site/NOTICE.
  *
- * Content comes from the committed `docs/changelog.md`, not the GitHub releases
+ * Content comes from the committed root `changelog.md`, not the GitHub releases
  * API, so the static export is deterministic.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Changelog source — parses the canonical `docs/changelog.md` at build time.
+ * Changelog source — parses the canonical root `changelog.md` at build time.
  *
  * The site renders release history; it does not invent it. Reading a committed
  * file rather than calling the GitHub releases API keeps the static export
@@ -34,7 +34,7 @@ const GROUP_HEADING = /^###\s+(.+?)\s*$/;
 const BULLET = /^-\s+(.*)$/;
 
 /** Repo-relative path to the canonical file. */
-export const CHANGELOG_SOURCE = "docs/changelog.md";
+export const CHANGELOG_SOURCE = "changelog.md";
 
 /**
  * Parse the canonical changelog into releases.
@@ -42,7 +42,7 @@ export const CHANGELOG_SOURCE = "docs/changelog.md";
  * Continuation lines of a bullet (indented under it) are folded into that
  * bullet, so the markdown can wrap at 80 columns without splitting entries.
  *
- * @param raw - Full `docs/changelog.md` text
+ * @param raw - Full `changelog.md` text
  * @throws If a bullet or prose line appears before any release heading
  */
 export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {

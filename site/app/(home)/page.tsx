@@ -17,7 +17,7 @@ import { ManifestPipeline } from "@/components/landing/manifest-pipeline";
 import { Surfaces } from "@/components/landing/surfaces";
 import { Vocabulary } from "@/components/landing/vocabulary";
 import { POSITIONING } from "@/lib/elements";
-import { loadNotesCreateSnippet } from "@/lib/notes-create";
+import { loadStarterFlowSnippet } from "@/lib/starter-flow";
 
 /** Triggers from `docs/get-started/introduction.mdx` — one species, four names. */
 const TRIGGERS: ReadonlyArray<{ readonly trigger: string; readonly zoo: string }> = [
@@ -50,7 +50,7 @@ const START_HERE: ReadonlyArray<{
 ];
 
 export default function HomePage() {
-  const createSnippet = loadNotesCreateSnippet();
+  const starterSnippet = loadStarterFlowSnippet();
 
   return (
     <div id="hero" className="relative text-fd-foreground">
@@ -114,9 +114,9 @@ export default function HomePage() {
           </div>
 
           <CodePanel
-            code={createSnippet}
-            title="examples/notes/src/flows/notes/index.ts"
-            footer="store.resource expands into five ordinary Flows — effects still inferred from fx."
+            code={starterSnippet}
+            title="src/flows/main/index.ts"
+            footer="The standard starter is ordinary application code — no hidden runtime species."
           />
         </div>
       </Band>

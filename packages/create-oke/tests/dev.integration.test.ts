@@ -1,5 +1,5 @@
 /**
- * Gate: a create-oke-scaffolded `hello` project boots under default `oke dev`
+ * Gate: a create-oke-scaffolded standard project boots under default `oke dev`
  * (Prompt 24 harness: `keepAlive: false`, ephemeral `port: 0`, clean stop)
  * and serves one real flow request — then shuts down with no lingering port.
  *
@@ -45,14 +45,14 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
   }, 30_000);
 
   test(
-    "scaffolded hello · bun install · oke dev · flow request · clean stop",
+    "scaffolded standard · bun install · oke dev · flow request · clean stop",
     async () => {
       root = mkdtempSync(join(tmpdir(), "create-oke-dev-"));
-      const targetDir = join(root, "hello-app");
+      const targetDir = join(root, "standard-app");
       scaffold({
         targetDir,
-        name: "hello-app",
-        source: { kind: "template", id: "hello" },
+        name: "standard-app",
+        source: { kind: "template", id: "standard" },
       });
 
       const install = Bun.spawn(["bun", "install"], {
@@ -100,22 +100,22 @@ describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
       expect(health.status).toBe(200);
       expect(await health.json()).toEqual({ ok: true, surface: "mcp" });
 
-      // One real request to a scaffolded flow (hello.hello).
-      const helloRes = await fetch(new URL("/hello", appUrl));
-      expect(helloRes.status).toBe(200);
-      const helloBody = (await helloRes.json()) as {
-        data: { message: string } | null;
+      // One real request to the starter's health Flow.
+      const appHealth = await fetch(new URL("/health", appUrl));
+      expect(appHealth.status).toBe(200);
+      const healthBody = (await appHealth.json()) as {
+        data: { ok: boolean } | null;
         error: unknown;
       };
-      expect(helloBody.error).toBeNull();
-      expect(helloBody.data?.message).toBe("ok");
+      expect(healthBody.error).toBeNull();
+      expect(healthBody.data?.ok).toBe(true);
 
       session.stop();
       session = undefined;
 
       // All surfaces gone — same assertion Prompt 24 uses for MCP.
       await expect(fetch(`${mcpBase}/health`, { headers: { host: mcpHost } })).rejects.toThrow();
-      await expect(fetch(new URL("/hello", appUrl))).rejects.toThrow();
+      await expect(fetch(new URL("/health", appUrl))).rejects.toThrow();
     },
     TIMEOUT_MS,
   );

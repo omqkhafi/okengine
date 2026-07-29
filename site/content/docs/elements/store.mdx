@@ -62,7 +62,7 @@ The list URL is the whole query — `?cursor=` / `?offset=` / `?limit=` paginate
 
 ## Examples
 
-Three realistic list configurations. One is a teaching-app claimed fence; the other two are typechecked against the real API and labeled as such.
+Three realistic list configurations using the public resource API.
 
 ### An admin table
 
@@ -70,15 +70,13 @@ Three realistic list configurations. One is a teaching-app claimed fence; the ot
 list: { mode: "offset", count: "exact", limit: 20 },
 ```
 
-_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`) — not run in a teaching app._
+_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`)._
 
 **Consequence:** with `count: "exact"` (the offset default), list runs `COUNT(*)` via `store.count` (`src/elements/store/resource.ts`) to fill `meta.total`. On a huge table that count is the cost — set `count: "none"` to skip `meta.total` and return only `meta.offset`.
 
 ### An infinite feed
 
-Claimed fence from **notes** — same source the doc-drift gate checks:
-
-### `examples/notes/src/flows/notes/index.ts`
+### An infinite feed resource
 
 ```typescript
 const notesR = store.resource(db, notesTable, {
@@ -99,7 +97,7 @@ const notesR = store.resource(db, notesTable, {
 });
 ```
 
-**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set (`src/elements/store/resource.ts`) — it stays stable under concurrent inserts, while offset pages shift when rows are inserted ahead of the window. That is why cursor is the default; Notes' test asserts pages "never overlap or skip rows" (`examples/notes/tests/notes.test.ts`).
+**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set (`src/elements/store/resource.ts`) — it stays stable under concurrent inserts, while offset pages shift when rows are inserted ahead of the window.
 
 ### A public, restricted endpoint
 
@@ -107,7 +105,7 @@ const notesR = store.resource(db, notesTable, {
 list: { mode: "offset", filter: "none", limit: 20 },
 ```
 
-_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`) — not run in a teaching app._
+_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`)._
 
 **Consequence:** a request that filters on a forbidden column — e.g. `?secret=eq.x` — fails with **422** and a `ValidationError` whose message is exactly `unknown list param "secret"` (`badInput` in `src/elements/store/resource.ts` when `filter === "none"`).
 
@@ -189,11 +187,7 @@ This is **not** `oke schema generate`, which only emits core/plugin stub handles
 - [Console · Store](/docs/console/store) — browse sql/kv/files/index; cache keys; PII masking
 - [CLI Reference](/docs/cli) — `oke db push` / `generate` / `migrate`
 
-## Example from the teaching apps
-
-Claimed fence from **linkly** — same source the doc-drift gate checks:
-
-### `examples/linkly/src/schema.decl.ts`
+## Schema declaration example
 
 ```typescript
 import { store, field } from "okengine";

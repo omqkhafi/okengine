@@ -124,23 +124,15 @@ describe("publish workflow", () => {
     const match = stderr.match(/→\s+(\d+\.\d+\.\d+)/);
     expect(match?.[1]).toBeTruthy();
     // Starters are never part of the lockstep bump.
-    expect(stderr).not.toMatch(/templates\//);
-    expect(stderr).not.toMatch(/examples\//);
+    expect(stderr).not.toMatch(/template\/package\.json/);
   });
 
-  test("templates and examples stay at seed version 0.0.1", async () => {
-    const { readdirSync } = await import("node:fs");
-    for (const kind of ["templates", "examples"] as const) {
-      const root = join(ROOT, kind);
-      for (const id of readdirSync(root)) {
-        const pkgPath = join(root, id, "package.json");
-        if (!existsSync(pkgPath)) continue;
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
-          version?: string;
-        };
-        expect(pkg.version, `${kind}/${id}`).toBe("0.0.1");
-      }
-    }
+  test("the standard starter stays at seed version 0.0.1", () => {
+    const pkgPath = join(ROOT, "packages/create-oke/template/package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+      version?: string;
+    };
+    expect(pkg.version).toBe("0.0.1");
   });
 
   test("package.json has no publish lifecycle script (npm re-entry footgun)", () => {
@@ -187,17 +179,6 @@ describe("npm pack includes Console SPA", () => {
 describe("jsr publish --dry-run", () => {
   for (const pkg of PACKAGES) {
     test(`${pkg.name}: bunx jsr publish --dry-run`, async () => {
-      // Ensure templates exist for create-oke include list (prepack).
-      if (pkg.name === "create-oke") {
-        const sync = Bun.spawn(["bun", "./src/sync-templates.ts"], {
-          cwd: pkg.dir,
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        const syncCode = await sync.exited;
-        expect(syncCode).toBe(0);
-      }
-
       const proc = Bun.spawn(["bunx", "jsr", "publish", "--dry-run", "--allow-dirty"], {
         cwd: pkg.dir,
         stdout: "pipe",

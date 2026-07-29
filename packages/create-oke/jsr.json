@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "publish": {
-    "include": ["src", "templates", "examples", "README.md", "package.json", "jsr.json"],
+    "include": ["src", "template", "README.md", "package.json", "jsr.json"],
     "exclude": ["**/*.test.ts", "**/tests/**"]
   }
 }

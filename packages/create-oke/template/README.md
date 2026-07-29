@@ -46,8 +46,7 @@ standard/
 - **Flows to replace:** `root`, `health` — delete or rename once your domain exists
 
 Fill `schema.ts` (or `schema.decl.ts` + `oke db`), then add real flows under
-`src/flows/<unit>/`. Prefer this layout for new products; use `hello` / `minimal`
-only when you want less surface.
+`src/flows/<unit>/`.
 
 ## Docker mode (`oke dev --docker`)
 

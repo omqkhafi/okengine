@@ -12,14 +12,13 @@
   },
   "workspaces": [
     "packages/*",
-    "examples/*",
     "site"
   ],
   "files": [
     "src",
-    "spec",
+    "manifest.v1.schema.json",
     "AGENTS.md",
-    "docs/spec"
+    "README.md"
   ],
   "type": "module",
   "sideEffects": false,
@@ -44,8 +43,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit && bun run --cwd packages/create-oke typecheck",
-    "lint": "oxlint --type-aware --quiet",
-    "lint:fix": "oxlint --type-aware --fix",
+    "lint": "oxlint --quiet",
+    "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "bun test --pass-with-no-tests",
@@ -55,12 +54,10 @@
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
-    "gate": "bun src/cli/doctor-diff-examples.ts && bun src/cli/doc-drift.ts",
-    "site:sync": "bun run --cwd site sync",
     "site:dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
-    "ci": "bun run typecheck && bun run lint && bun run fmt:check && bun run test && bun run budgets -- --dry-run && bun run gate && bun run site:build",
-    "ci:integration": "CREATE_OKE_INTEGRATION=1 bun run ci",
+    "ci:workflow": "bun scripts/ci.ts --workflow",
+    "ci": "bun scripts/ci.ts",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run scripts/publish.ts",
     "g": "gflows"

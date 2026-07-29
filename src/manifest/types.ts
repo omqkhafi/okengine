@@ -1,5 +1,5 @@
 /**
- * TypeScript surface matching `spec/manifest.v1.schema.json`.
+ * TypeScript surface matching `manifest.v1.schema.json`.
  *
  * Kept hand-aligned with the schema (the public, runtime-neutral contract).
  * Within major version `1.x`, only additive schema changes are allowed.

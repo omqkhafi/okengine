@@ -3,10 +3,7 @@
   "version": "0.0.8",
   "private": true,
   "scripts": {
-    "sync": "bun scripts/sync-content.ts && bun run --cwd .. fmt -- site/content/docs '!site/content/docs/elements/flow.mdx' '!site/content/docs/learn/notes.md' '!site/content/docs/get-started/basic-usage.mdx'",
-    "predev": "bun run sync",
     "dev": "next dev",
-    "prebuild": "bun run sync",
     "build": "next build",
     "start": "serve out",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",

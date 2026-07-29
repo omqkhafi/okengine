@@ -10,13 +10,17 @@ Flow is the element for **behavior**.
 Endpoints, jobs, consumers, and workflows are one species. You bind a typed trigger with `on`, declare contracts, and implement `do` through `fx`.
 
 <Callout title="Governing rule">
-Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of endpoints, jobs, and consumers.
+  Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of
+  endpoints, jobs, and consumers.
 </Callout>
 
 ## At a glance
 
 <Cards>
-  <Card title="Flow" description="Essence: behavior. Replaces: endpoint · handler · consumer · job · workflow · webhook." />
+  <Card
+    title="Flow"
+    description="Essence: behavior. Replaces: endpoint · handler · consumer · job · workflow · webhook."
+  />
 </Cards>
 
 ## Anatomy of a Flow
@@ -56,13 +60,13 @@ export const createOrder = on(
 
 One law, five ways to start it. Only part ① differs — the `flow({ … })` underneath never changes species. Each type below gets its own section and its own example, written for this page.
 
-| Trigger | Starts when | Replaces |
-| --- | --- | --- |
-| `http` | a request arrives | endpoint · handler |
-| `signal` | another flow emits | queue consumer |
-| `every` (clock) | time passes | cron job |
-| store change | a row changes | CDC pipeline |
-| — none | another flow calls `fx.call` | "private" helper |
+| Trigger         | Starts when                  | Replaces           |
+| --------------- | ---------------------------- | ------------------ |
+| `http`          | a request arrives            | endpoint · handler |
+| `signal`        | another flow emits           | queue consumer     |
+| `every` (clock) | time passes                  | cron job           |
+| store change    | a row changes                | CDC pipeline       |
+| — none          | another flow calls `fx.call` | "private" helper   |
 
 ### 1 · http — a request arrives
 
@@ -82,15 +86,15 @@ export const findOrder = on(
 
 CRUD is five bindings of that one shape — method and path carry the convention:
 
-| Operation | Trigger |
-| --- | --- |
-| create | `http.post("/orders")` |
-| list | `http.get("/orders")` |
-| get | `http.get("/orders/:id")` |
-| update | `http.patch("/orders/:id")` |
-| remove | `http.delete("/orders/:id")` |
+| Operation | Trigger                      |
+| --------- | ---------------------------- |
+| create    | `http.post("/orders")`       |
+| list      | `http.get("/orders")`        |
+| get       | `http.get("/orders/:id")`    |
+| update    | `http.patch("/orders/:id")`  |
+| remove    | `http.delete("/orders/:id")` |
 
-A complete working set — create, list with cursor pagination and search, get, update, remove — runs in [Learn · Notes](/docs/learn/notes).
+Use `store.resource` when the five conventional CRUD Flows share one table and contract.
 
 ### 2 · signal — another flow emits
 
@@ -111,8 +115,7 @@ await fx.emit(orderPlaced, { orderId: id }); // inside the producing flow
 on(
   orderPlaced, // the signal value itself is the trigger
   flow({
-    do: async ({ orderId }, fx) =>
-      await fx.send(receipt, { to: orderId, data: { orderId } }),
+    do: async ({ orderId }, fx) => await fx.send(receipt, { to: orderId, data: { orderId } }),
   }),
 );
 ```
@@ -151,7 +154,8 @@ on(
 Drop `on()` and it is still a real Flow — contracts, effects, and a Manifest entry. Nothing in the world starts it; another flow calls it through `fx.call`:
 
 ```typescript
-export const getOrder = flow({ // no on() — not wired to any trigger
+export const getOrder = flow({
+  // no on() — not wired to any trigger
   in: z.object({ id: z.string() }),
   out: z.object({ id: z.string(), status: z.string() }),
   do: async ({ id }, fx) => {
@@ -177,7 +181,9 @@ on(db.table(orders).changed("status"), reverify); // ④ a row changes
 ```
 
 <Callout title="Registry isolation — tested, not a caveat">
-Multiple `oke()` apps in one process are isolated by default: `registry: "consume"` drains the global registry at construction, so a later app cannot inherit this app's routes. `"keep"` and `"ignore"` are explicit embedding opt-outs. Tested in `src/kernel/registry-isolation.test.ts`.
+  Multiple `oke()` apps in one process are isolated by default: `registry: "consume"` drains the
+  global registry at construction, so a later app cannot inherit this app's routes. `"keep"` and
+  `"ignore"` are explicit embedding opt-outs. Tested in `src/kernel/registry-isolation.test.ts`.
 </Callout>
 
 ## Query surface through `fx.store(db)`
@@ -215,19 +221,17 @@ Every Flow returns either data matching `out` — `{ data, error: null }` — or
 
 ## Examples
 
-Three realistic scenarios, taken from the teaching apps. Each names what it is and what follows from its behavior — not just its syntax.
+Three realistic scenarios. Each names what follows from its behavior — not just its syntax.
 
 ### A typical endpoint
 
-Notes' `create` — mounted as part of `store.resource` (`export const create = mounted.create` in `examples/notes/src/flows/notes/index.ts`). The shape is the same `http` trigger shown above; no second snippet is repeated here.
+`create` can be mounted as part of `store.resource`. The shape is the same `http` trigger shown above; no second snippet is repeated here.
 
 **Consequence:** `create` answers **201** through `fx.json.create(row)` in `src/elements/store/resource.ts`. A typed failure stays an envelope (`{ data: null, error: … }`) — it never crashes the process.
 
 ### A background job
 
-Claimed fence from **linkly** — same source the doc-drift gate checks:
-
-### `examples/linkly/src/flows/links/index.ts`
+### Scheduled cleanup
 
 ```typescript
 on(
@@ -245,9 +249,7 @@ on(
 
 ### A durable, multi-step flow
 
-Claimed fence from **provisions** — same source the doc-drift gate checks:
-
-### `examples/provisions/src/flows/payments/index.ts`
+### Durable payment
 
 ```typescript
 export const chargeOrder = flow({
@@ -278,17 +280,33 @@ export const chargeOrder = flow({
 
 ## See it running
 
-These snippets are written for this page. The same patterns run end-to-end in the teaching apps — full CRUD with contracts, cursor pagination, and typed errors:
+Continue with the standard starter or the next element:
 
 <Cards>
-  <Card title="Learn · Notes" description="Full CRUD flows — create, list (cursor + search), get, update, remove." href="/docs/learn/notes" />
-  <Card title="Learn · Linkly" description="One file, four triggers — endpoint, consumer, cron, and callable." href="/docs/learn/linkly" />
+  <Card
+    title="Basic Usage"
+    description="Scaffold the starter, edit a Flow, use the typed client, and test it."
+    href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Signal"
+    description="Delivery physics for once, broadcast, and live data."
+    href="/docs/elements/signal"
+  />
 </Cards>
 
 ## Next
 
 <Cards>
   <Card title="Signal" description="Continue to Signal." href="/docs/elements/signal" />
-  <Card title="Introduction" description="Eight elements overview." href="/docs/get-started/introduction" />
-  <Card title="Console" description="Panels derived from the Manifest." href="/docs/console/overview" />
+  <Card
+    title="Introduction"
+    description="Eight elements overview."
+    href="/docs/get-started/introduction"
+  />
+  <Card
+    title="Console"
+    description="Panels derived from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

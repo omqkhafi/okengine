@@ -1,5 +1,5 @@
 /**
- * Rewrites applied when copying a `templates/<id>` or `examples/<id>` tree
+ * Rewrites applied when copying the bundled starter
  * into a new project.
  *
  * Exactly:

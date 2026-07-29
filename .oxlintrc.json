@@ -4,19 +4,10 @@
     "typeAware": true
   },
   "ignorePatterns": [
-    "templates/**",
-    "packages/create-oke/templates/**",
-    "packages/create-oke/examples/**",
+    "packages/create-oke/template/**",
     "**/dist/**",
-    "**/node_modules/**",
-    "site/.next/**",
-    "site/out/**",
-    "site/.source/**",
     "site/next-env.d.ts",
-    "src/compiler/fixtures/**",
-    "src/console/ui/dist/**",
-    "budgets.json",
-    "bun.lock"
+    "src/compiler/fixtures/**"
   ],
   "overrides": [
     {

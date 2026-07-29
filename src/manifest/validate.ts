@@ -1,5 +1,5 @@
 /**
- * Runtime validation of Manifest documents against `spec/manifest.v1.schema.json`.
+ * Runtime validation of Manifest documents against `manifest.v1.schema.json`.
  */
 
 import Ajv2020, { type AnySchema, type ErrorObject } from "ajv/dist/2020.js";
@@ -19,7 +19,7 @@ export type ManifestValidationResult =
   | { ok: true; manifest: Manifest }
   | { ok: false; issues: ManifestValidationIssue[] };
 
-const SCHEMA_URL = new URL("../../spec/manifest.v1.schema.json", import.meta.url);
+const SCHEMA_URL = new URL("../../manifest.v1.schema.json", import.meta.url);
 
 let validator: ReturnType<Ajv2020["compile"]> | undefined;
 let schemaDocument: unknown;

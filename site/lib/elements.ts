@@ -210,7 +210,7 @@ export const ZOO_CONCERN_GROUPS: ReadonlyArray<ZooConcernGroup> = ELEMENTS.reduc
 
 /**
  * What your code declares that the compiler can read — the inputs to Manifest
- * extraction. Names match the real `fx` surface used in `examples/`.
+ * extraction. Names match the real `fx` surface.
  */
 export const MANIFEST_INPUTS: ReadonlyArray<{
   readonly syntax: string;

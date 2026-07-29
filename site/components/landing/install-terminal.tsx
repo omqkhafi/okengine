@@ -22,9 +22,9 @@ const TABS: ReadonlyArray<TerminalTab> = [
   {
     id: "scaffold",
     label: "Scaffold",
-    commands: ["bunx create-oke@latest my-app --from-example notes"],
+    commands: ["bunx create-oke@latest my-app"],
     output: [
-      { label: "template", value: "notes — flows, store, contracts, tests" },
+      { label: "template", value: "standard — recommended project layout" },
       { label: "next", value: "cd my-app && oke dev" },
     ],
   },

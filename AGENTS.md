@@ -1,6 +1,6 @@
 # OKE — Agent Contract
 
-This file is loaded by every later session. It prevents drift. Specs live in `docs/spec/`. **If the spec is silent, stop and ask.**
+This file is loaded by every later session. It prevents drift. Product documentation lives in `site/content/docs/`. **If the documentation is silent, stop and ask.**
 
 ## The one law
 
@@ -77,16 +77,17 @@ A regression fails the build. Claims we cannot measure, we do not make.
 Published packages:
 
 - `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
-- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke`; clean starters are `templates/*`, teaching apps stay in `examples/*` (`--from-example`).
+- `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships one standard starter from `packages/create-oke/template`.
 
 Engine: Bun `>=1.3`.
 
-## Spec authority
+## Documentation authority
 
-| Spec              | Path                             |
-| ----------------- | -------------------------------- |
-| Unified theory    | `docs/spec/unified-theory.md`    |
-| Four applications | `docs/spec/four-applications.md` |
-| Console           | `docs/spec/console.md`           |
+| Surface  | Path                          |
+| -------- | ----------------------------- |
+| Theory   | `site/content/docs/elements/` |
+| Console  | `site/content/docs/console/`  |
+| CLI      | `site/content/docs/cli.md`    |
+| Manifest | `manifest.v1.schema.json`     |
 
-**If the spec is silent, stop and ask.**
+**If the documentation is silent, stop and ask.**

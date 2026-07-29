@@ -264,17 +264,12 @@ async function publishOne(
   const version = syncVersion(pkg.dir);
   console.error(`[publish] ${pkg.npmName}@${version} (${label})`);
 
-  // okengine ships prebuilt Console SPA; create-oke templates need a prepack sync.
+  // okengine ships a prebuilt Console SPA.
   const needsConsoleBuild = pkg.npmName === "okengine";
-  const needsTemplateSync =
-    pkg.npmName === "create-oke" && existsSync(join(pkg.dir, "src/sync-templates.ts"));
 
   if (flags.dryRun) {
     if (needsConsoleBuild) {
       console.error(`  would: bun run build  (cwd=${label})`);
-    }
-    if (needsTemplateSync) {
-      console.error(`  would: bun ./src/sync-templates.ts  (cwd=${label})`);
     }
     if (!flags.jsrOnly) console.error(`  would: npm publish  (cwd=${label})`);
     if (!flags.npmOnly) {
@@ -291,20 +286,12 @@ async function publishOne(
     }
   }
 
-  if (needsTemplateSync) {
-    const ok = await run(["bun", "./src/sync-templates.ts"], { cwd: pkg.dir });
-    if (!ok) {
-      console.error(`[publish] create-oke template sync failed.`);
-      process.exit(2);
-    }
-  }
-
   const doNpm = !flags.jsrOnly;
   const doJsr = !flags.npmOnly;
 
   if (doNpm) {
-    // --ignore-scripts: prepack work already ran above; also blocks a
-    // recursive lifecycle if package.json ever regains a `publish` script.
+    // --ignore-scripts blocks a recursive lifecycle if package.json ever
+    // regains a `publish` script.
     const ok = await run(["npm", "publish", "--access", "public", "--ignore-scripts"], {
       cwd: pkg.dir,
     });
