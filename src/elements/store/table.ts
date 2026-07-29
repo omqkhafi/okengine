@@ -276,10 +276,15 @@ export function prepareUpdateRow(
 }
 
 /**
- * Map a SQL-keyed row back to JS keys when Drizzle/TableHandle metadata exists.
+ * Map a SQL-keyed driver row to declared JS field names only.
+ *
+ * When Drizzle/TableHandle metadata exists, the result contains exactly the
+ * table's declared keys (`createdAt`) — never the raw SQL names
+ * (`created_at`) alongside or instead of them. Without metadata, the row is
+ * returned as-is (opaque / raw SQL).
  *
  * @param table - Table-like value
- * @param row - Driver row
+ * @param row - Driver row (SQL column names, or already JS-keyed)
  */
 export function mapRowToJs(
   table: unknown,
@@ -287,9 +292,10 @@ export function mapRowToJs(
 ): Record<string, unknown> {
   const cols = resolveColumns(table);
   if (cols.length === 0) return { ...row };
-  const out: Record<string, unknown> = { ...row };
+  const out: Record<string, unknown> = {};
   for (const col of cols) {
-    if (col.sqlName in row) out[col.key] = row[col.sqlName];
+    if (col.key in row) out[col.key] = row[col.key];
+    else if (col.sqlName in row) out[col.key] = row[col.sqlName];
   }
   return out;
 }

@@ -153,9 +153,14 @@ test("live HTTP: 201/204 statuses, meta envelope, list URL grammar", async () =>
     }),
   );
   expect(created.status).toBe(201);
-  const createdBody = await created.json();
+  const createdText = await created.text();
+  // Declared JS keys only — never the raw SQL column name alongside createdAt.
+  expect(createdText).not.toContain("created_at");
+  const createdBody = JSON.parse(createdText);
   expect(createdBody.error).toBeNull();
   expect(createdBody.data.title).toBe("third");
+  expect(Object.keys(createdBody.data).sort()).toEqual(["body", "createdAt", "id", "title"]);
+  expect("created_at" in createdBody.data).toBe(false);
 
   // NotFound → 400 today (shared-kernel 404 is a documented proposal only).
   const missing = await app.fetch(
@@ -178,11 +183,35 @@ test("live HTTP: 201/204 statuses, meta envelope, list URL grammar", async () =>
   // throwaway gone, only first + second remain: page1 takes one, rest the other.
   const list = await app.fetch(new Request("http://localhost/notes?limit=1"));
   expect(list.status).toBe(200);
-  const body = await list.json();
+  const listText = await list.text();
+  expect(listText).not.toContain("created_at");
+  const body = JSON.parse(listText);
   expect(body.error).toBeNull();
   expect(body.data).toHaveLength(1);
+  expect(Object.keys(body.data[0]).sort()).toEqual(["body", "createdAt", "id", "title"]);
+  expect("created_at" in body.data[0]).toBe(false);
   expect(body.meta.hasNextPage).toBe(true);
   expect(typeof body.meta.nextCursor).toBe("string");
+
+  // get + update also emit only declared keys.
+  const noteId = body.data[0].id as string;
+  const got = await app.fetch(new Request(`http://localhost/notes/${noteId}`));
+  const gotText = await got.text();
+  expect(gotText).not.toContain("created_at");
+  const gotBody = JSON.parse(gotText);
+  expect(Object.keys(gotBody.data).sort()).toEqual(["body", "createdAt", "id", "title"]);
+
+  const patched = await app.fetch(
+    new Request(`http://localhost/notes/${noteId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: body.data[0].title }),
+    }),
+  );
+  const patchedText = await patched.text();
+  expect(patchedText).not.toContain("created_at");
+  const patchedBody = JSON.parse(patchedText);
+  expect(Object.keys(patchedBody.data).sort()).toEqual(["body", "createdAt", "id", "title"]);
 
   // The opaque cursor round-trips through the query string.
   const rest = await app.fetch(

@@ -426,8 +426,12 @@ export function createSqlStoreHandle(
     }
 
     const rows = await query(sql, params);
+    // Map to declared JS keys first, then mask — classifications are keyed by
+    // TS field names (`email`), so masking before remapping would miss a
+    // `.pii()` column whose SQL name differs (`email_addr`) and leak cleartext
+    // under the final client-facing key.
     if (projection === null) {
-      return toJs(table, mask(rows, name));
+      return mask(toJs(table, rows), name);
     }
     // Projected aliases are already the returned keys.
     return mask(
@@ -516,7 +520,7 @@ export function createSqlStoreHandle(
               const params = cols.map((c) => prepared[c]);
               const sql = `INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders}) RETURNING *`;
               const rows = await query(sql, params);
-              return toJs(table, mask(rows, name));
+              return mask(toJs(table, rows), name);
             },
             execute: runExecute,
             then(onfulfilled, onrejected) {
@@ -561,7 +565,7 @@ export function createSqlStoreHandle(
       const rows = await query(`SELECT * FROM ${quoteIdent(name)} WHERE ${quoteIdent(pk)} = ?`, [
         idValue,
       ]);
-      const masked = toJs(table, mask(rows, name));
+      const masked = mask(toJs(table, rows), name);
       return masked[0] ?? null;
     },
 
