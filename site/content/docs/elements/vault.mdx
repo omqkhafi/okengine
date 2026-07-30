@@ -91,7 +91,7 @@ That's the whole loop: declare → set → read. Everything below is what OKE gu
 
 | Option        | Type                  | Meaning                                                                  |
 | ------------- | --------------------- | ------------------------------------------------------------------------ |
-| `description` | string                | Shown in boot-gap listings and the Console                               |
+| `description` | string                | Human title in boot-gap listings and the Console (falls back to the key) |
 | `rotate`      | string                | Rotation hint (`"90d"`) — drives the rotation-due signal in the Console  |
 | `schema`      | zod / Standard Schema | Validated at boot; a bad value fails boot like a missing one             |
 | `dev`         | string                | Local-only fallback when no source provides a value (never used in prod) |

@@ -28,6 +28,7 @@ import {
 /** One cron row in `console.clock.list`. */
 export interface ConsoleClockRow {
   readonly name: string;
+  readonly description?: string;
   readonly status: CronRow["status"];
   readonly timezone: string;
   readonly overridable: boolean;
@@ -110,8 +111,10 @@ export async function projectClocksList(options: ProjectClocksOptions): Promise<
     .map((row) => {
       const flowIds = flowIdsForCronRow(row, options.manifest);
       const external = flowIds.some((id) => isExternal(flows[id]));
+      const description = options.manifest?.clocks?.[row.name]?.description;
       return {
         name: row.name,
+        ...(description !== undefined ? { description } : {}),
         status: row.status,
         timezone: row.timezone,
         overridable: row.overridable,

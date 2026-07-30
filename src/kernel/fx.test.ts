@@ -181,6 +181,18 @@ describe("fx — wholesale swap", () => {
       async step(_name, fn) {
         return fn();
       },
+      get signal() {
+        return new AbortController().signal;
+      },
+      all(thunks) {
+        return Promise.all(thunks.map((t) => t())) as never;
+      },
+      race(thunks) {
+        return Promise.race(thunks.map((t) => t()));
+      },
+      retry(fn) {
+        return Promise.resolve().then(fn);
+      },
     };
 
     // Any code that accepts `Fx` can run against a total replacement.

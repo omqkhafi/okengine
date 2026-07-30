@@ -30,6 +30,8 @@ export interface ChangelogRelease {
 
 /** `## v0.1.7 — 2026-07-25` — em dash or hyphen, either accepted. */
 const RELEASE_HEADING = /^##\s+v(\d+\.\d+\.\d+[^\s]*)\s+[—-]\s+(\d{4}-\d{2}-\d{2})\s*$/;
+/** Upcoming work — skipped by the site parser; `bun run bump` promotes it. */
+const UNRELEASED_HEADING = /^##\s+Unreleased\s*$/;
 const GROUP_HEADING = /^###\s+(.+?)\s*$/;
 const BULLET = /^-\s+(.*)$/;
 
@@ -41,6 +43,8 @@ export const CHANGELOG_SOURCE = "changelog.md";
  *
  * Continuation lines of a bullet (indented under it) are folded into that
  * bullet, so the markdown can wrap at 80 columns without splitting entries.
+ * A leading `## Unreleased` section is ignored here — it is staging for the
+ * next bump, not a published release.
  *
  * @param raw - Full `changelog.md` text
  * @throws If a bullet or prose line appears before any release heading
@@ -56,6 +60,8 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
   } | null = null;
   /** Set while a bullet is open, so wrapped lines append to it. */
   let openBullet: { items: string[] } | null = null;
+  /** True while skipping the upcoming-work section. */
+  let skippingUnreleased = false;
 
   const commit = (): void => {
     if (release) releases.push(release);
@@ -64,8 +70,15 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
   };
 
   for (const line of raw.replace(/\r\n/g, "\n").split("\n")) {
+    if (UNRELEASED_HEADING.test(line)) {
+      commit();
+      skippingUnreleased = true;
+      continue;
+    }
+
     const heading = RELEASE_HEADING.exec(line);
     if (heading) {
+      skippingUnreleased = false;
       commit();
       release = {
         version: heading[1]!,
@@ -77,7 +90,7 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
       continue;
     }
 
-    if (!release) continue;
+    if (skippingUnreleased || !release) continue;
 
     const group = GROUP_HEADING.exec(line);
     if (group) {

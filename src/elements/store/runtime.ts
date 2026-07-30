@@ -14,7 +14,9 @@ import type {
   KvDriver,
   KvNamespace,
   SqlConnection,
+  SqlConnectOptions,
   SqlDriver,
+  SqlRole,
   SqlRow,
 } from "../../drivers/types.ts";
 import { buildClassificationMap, type MaskRowsOptions } from "./classify.ts";
@@ -116,7 +118,7 @@ export interface FilesStoreFxHandle {
 /** Index handle on `fx.store`. */
 export interface IndexStoreFxHandle {
   readonly ref: `index:${string}`;
-  readonly driverId: "memory" | "pgvector";
+  readonly driverId: "memory" | "pgvector" | "libsql";
   upsert(id: string, vector: readonly number[], meta?: Record<string, unknown>): Promise<void>;
   search(
     vector: readonly number[],
@@ -186,6 +188,19 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
   const kvNs = new Map<string, KvNamespace>();
   const fileBuckets = new Map<string, FilesBucket>();
   const indexes = new Map<string, IndexStore>();
+  const clientIds = new WeakMap<object, number>();
+  let nextClientId = 0;
+
+  /** Injected test clients with the same URL still get distinct cache entries. */
+  function clientTag(client: unknown): string {
+    if ((typeof client !== "object" && typeof client !== "function") || client === null) return "";
+    let id = clientIds.get(client as object);
+    if (id === undefined) {
+      id = ++nextClientId;
+      clientIds.set(client as object, id);
+    }
+    return `#c${id}`;
+  }
 
   function classificationsFor(decl: SqlStoreDecl): ClassificationMap {
     const nested: Record<
@@ -215,13 +230,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     const driver = options.drivers.sql;
     if (!driver) throw new Error("No sql driver configured");
 
-    const cacheKey = `${decl.name}:${target.role}:${JSON.stringify(target.options.url ?? "")}`;
-    let conn = sqlConns.get(cacheKey);
-    if (!conn) {
-      conn = await driver.connect(target.options);
-      sqlConns.set(cacheKey, conn);
-    }
-
+    const conn = await sharedSqlConn(driver, target.role, target.options);
     return createSqlStoreHandle(`sql:${decl.name}`, {
       connection: conn,
       classifications: classificationsFor(decl),
@@ -229,6 +238,51 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       routedRole: target.role,
       domainDdl: options.domainDdl ?? "ensure",
     });
+  }
+
+  /**
+   * One connection per driver+role+URL (+ injected client) — `store.sql` and a
+   * SQL-backed `store.index` share the same already-open connection, never a
+   * second one.
+   */
+  async function sharedSqlConn(
+    driver: SqlDriver,
+    role: SqlRole,
+    connectOptions: SqlConnectOptions,
+  ): Promise<SqlConnection> {
+    const cacheKey = `${driver.id}:${role}:${connectOptions.url ?? ""}${clientTag(connectOptions.client)}`;
+    let conn = sqlConns.get(cacheKey);
+    if (!conn) {
+      conn = await driver.connect({ ...connectOptions, role });
+      sqlConns.set(cacheKey, conn);
+    }
+    return conn;
+  }
+
+  /** Index drivers backed by a SQL engine borrow the sql facet's connection. */
+  async function sqlConnForIndex(
+    driver: IndexDriver,
+    url: string | undefined,
+  ): Promise<SqlConnection> {
+    const sqlDriver = options.drivers.sql;
+    if (!sqlDriver) {
+      throw new Error(
+        `oke store: index driver "${driver.id}" needs a configured sql driver to share its connection`,
+      );
+    }
+    const compatible =
+      driver.id === "pgvector"
+        ? sqlDriver.id === "postgres" || sqlDriver.id === "pglite"
+        : sqlDriver.id === "libsql";
+    if (!compatible) {
+      throw new Error(
+        `oke store: index driver "${driver.id}" cannot share sql driver "${sqlDriver.id}" — ` +
+          (driver.id === "pgvector"
+            ? `pgvector needs store.sql on "postgres" or "pglite"`
+            : `libsql index needs store.sql on "libsql"`),
+      );
+    }
+    return sharedSqlConn(sqlDriver, "primary", { url });
   }
 
   async function openKv(decl: KvStoreDecl): Promise<KvStoreFxHandle> {
@@ -284,11 +338,15 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     let idx = indexes.get(decl.name);
     if (!idx) {
       const binding = options.index?.[decl.name] ?? {};
+      let sql = binding.sql;
+      if (!sql && driver.id !== "memory") {
+        sql = await sqlConnForIndex(driver, binding.url);
+      }
       idx = await driver.open({
         name: decl.name,
         dims: binding.dims ?? decl.dims ?? 3,
         url: binding.url,
-        sql: binding.sql,
+        sql,
       });
       indexes.set(decl.name, idx);
     }

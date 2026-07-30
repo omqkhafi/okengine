@@ -8,7 +8,13 @@
 
 import { allHookCostSummaries, type HookCostSummary } from "../../kernel/hook-timing.ts";
 import type { PluginRegistry } from "../../kernel/registry.ts";
-import type { Manifest, ManifestChange, Plugin, PluginOrigin } from "../../manifest/types.ts";
+import type {
+  Manifest,
+  ManifestChange,
+  Plugin,
+  PluginOrigin,
+  PluginTable,
+} from "../../manifest/types.ts";
 import { CORE_PLUGINS, isCorePluginOn, type PluginConfigProbe } from "../../plugins/catalogue.ts";
 import type { PackageJsonProbe, SupplyChainSignals } from "../../plugins/supply-chain.ts";
 import type { ScanSourceFile } from "../../plugins/node-import-scan.ts";
@@ -46,6 +52,8 @@ export interface ConsolePluginRow {
   readonly summary: string | null;
   readonly scopes: readonly PluginScopeView[];
   readonly declares: readonly string[];
+  /** Optional metadata for `table:*` declares. */
+  readonly tables: Readonly<Record<string, PluginTable>>;
   readonly intercepts: readonly PluginInterceptView[];
   readonly hookCost: {
     readonly count: number;
@@ -133,6 +141,7 @@ export async function projectPluginsList(
         version: meta?.version ?? manifestPlugin?.version ?? null,
         summary: spec.summary,
         declares: meta?.declares ?? manifestPlugin?.declares ?? [],
+        tables: meta?.tables ?? manifestPlugin?.tables ?? {},
         interceptStages: meta?.intercepts ?? manifestPlugin?.intercepts ?? [],
         scopes: meta?.scopes ?? [],
         costs,
@@ -155,6 +164,7 @@ export async function projectPluginsList(
         version: meta.version,
         summary: null,
         declares: meta.declares,
+        tables: meta.tables,
         interceptStages: meta.intercepts,
         scopes: meta.scopes,
         costs,
@@ -184,6 +194,7 @@ interface PluggedMeta {
   readonly version: string | null;
   readonly declares: readonly string[];
   readonly intercepts: readonly string[];
+  readonly tables: Readonly<Record<string, PluginTable>>;
   readonly scopes: readonly PluginScopeView[];
   readonly origin?: PluginOrigin;
 }
@@ -199,6 +210,7 @@ function collectPlugged(
         version: p.version ?? null,
         declares: p.declares ?? [],
         intercepts: p.intercepts ?? [],
+        tables: p.tables ?? {},
         scopes: [],
         origin: p.origin,
       });
@@ -214,10 +226,15 @@ function collectPlugged(
           ? { kind: "app" }
           : { kind: entry.scope.kind, name: entry.scope.name };
       const scopes = [...(prev?.scopes ?? []), scope];
+      const tables = {
+        ...(prev?.tables ?? {}),
+        ...(caps.tables ?? {}),
+      };
       out.set(id, {
         version: caps.version ?? prev?.version ?? null,
         declares: caps.declares.length ? [...caps.declares] : (prev?.declares ?? []),
         intercepts: caps.intercepts.length ? [...caps.intercepts] : (prev?.intercepts ?? []),
+        tables,
         scopes,
         origin: prev?.origin,
       });
@@ -243,6 +260,7 @@ async function buildRow(input: {
   readonly version: string | null;
   readonly summary: string | null;
   readonly declares: readonly string[];
+  readonly tables: Readonly<Record<string, PluginTable>>;
   readonly interceptStages: readonly string[];
   readonly scopes: readonly PluginScopeView[];
   readonly costs: Readonly<Record<string, HookCostSummary>>;
@@ -286,6 +304,7 @@ async function buildRow(input: {
     summary: input.summary,
     scopes: input.scopes,
     declares: [...input.declares],
+    tables: { ...input.tables },
     intercepts,
     hookCost: cost
       ? {

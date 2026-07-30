@@ -21,6 +21,7 @@ import {
 } from "../../../plugins/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Input } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Plugins panel — read-only catalogue + supply-chain surface.
@@ -176,10 +177,23 @@ function PluginDetail(props: {
         {p.declares.length === 0 ? (
           <p className="mt-2 text-sm text-[var(--oke-muted)]">None</p>
         ) : (
-          <ul className="mt-2 list-inside list-disc font-mono text-sm">
-            {p.declares.map((d) => (
-              <li key={d}>{d}</li>
-            ))}
+          <ul className="mt-2 list-inside list-disc text-sm">
+            {p.declares.map((d) => {
+              const tableName = d.startsWith("table:") ? d.slice("table:".length) : null;
+              const description = tableName ? p.tables[tableName]?.description : undefined;
+              return (
+                <li key={d}>
+                  {tableName && description ? (
+                    <>
+                      <span>{displayLabel(tableName, description)}</span>
+                      <code className="ml-2 font-mono text-[var(--oke-muted)]">{d}</code>
+                    </>
+                  ) : (
+                    <code className="font-mono">{d}</code>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

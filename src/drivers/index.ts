@@ -77,6 +77,10 @@ export { s3Driver, openS3Bucket, createS3FakeClient } from "./s3.ts";
 
 export { pgvectorDriver, openPgvectorIndex } from "./pgvector.ts";
 
+export { libsqlDriver, connectLibsql, libsqlIndexDriver, openLibsqlIndex } from "./libsql.ts";
+
+export { pgliteDriver, connectPglite } from "./pglite.ts";
+
 export { memorySignalDriver, openMemorySignal } from "./signal-memory.ts";
 
 export {

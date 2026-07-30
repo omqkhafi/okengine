@@ -6,6 +6,7 @@
  * step never re-runs (four-applications · Provisions).
  */
 
+import { fxRetry } from "../../kernel/concurrency.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { createFxContext, type CreateFxOptions, type Fx } from "../../kernel/fx.ts";
 import {
@@ -95,7 +96,12 @@ export async function runDurable<O = unknown>(
   });
 
   try {
-    const output = await options.flow.do(options.input as never, fx);
+    const run = () => {
+      // Same journal session across attempts — rewind so completed steps replay.
+      session.rewind();
+      return options.flow.do(options.input as never, fx);
+    };
+    const output = await (options.flow.retry ? fxRetry(run, options.flow.retry) : run());
     await session.commit("completed", { output });
     return {
       status: "completed",

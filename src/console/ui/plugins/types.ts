@@ -86,6 +86,9 @@ export interface PluginRecord {
   readonly summary: string | null;
   readonly scopes: readonly PluginScopeRecord[];
   readonly declares: readonly string[];
+  readonly tables: Readonly<
+    Record<string, { readonly plane?: string; readonly description?: string }>
+  >;
   readonly intercepts: readonly PluginInterceptRecord[];
   readonly hookCost: {
     readonly count: number;

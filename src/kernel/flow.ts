@@ -8,6 +8,7 @@
 
 import type { Effects, FlowPlane, Slo } from "../manifest/types.ts";
 import type { InferSchemaOutput, SchemaInput } from "../validation/standard-schema.ts";
+import type { FxRetryOptions } from "./concurrency.ts";
 import type { FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
@@ -51,6 +52,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
   readonly effects?: Effects;
   /** Journal every effect call. */
   readonly durable?: boolean;
+  /**
+   * Retry the whole `do` body on thrown errors (same journal session when
+   * durable). Prefer {@link Fx.retry} inside {@link Fx.step} for fine control.
+   */
+  readonly retry?: FxRetryOptions;
   /** Live-query / push result. */
   readonly live?: boolean;
   /** Cache TTL (`true` = default policy, or a duration string). */
@@ -147,6 +153,8 @@ export interface FlowDef<
   readonly effects: Effects | undefined;
   /** Durability flag. */
   readonly durable: boolean;
+  /** Whole-body retry policy (runtime). */
+  readonly retry: FxRetryOptions | undefined;
   /** Live flag. */
   readonly live: boolean;
   /** Cache option. */
@@ -222,6 +230,7 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
     errors: (options.errors ?? undefined) as InferFlowErrors<Opts> | undefined,
     effects: options.effects,
     durable: options.durable ?? false,
+    retry: options.retry,
     live: options.live ?? false,
     cache: options.cache,
     slo: options.slo,

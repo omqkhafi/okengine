@@ -24,6 +24,7 @@ import {
 } from "../../../store/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Store panel. Tenant lives in the header when tenancy is declared.
@@ -320,7 +321,10 @@ export function StorePanel() {
                       )}
                       onClick={() => setSearch(openStore(search, s.ref))}
                     >
-                      <span>{s.name}</span>
+                      <span>{displayLabel(s.name, s.description)}</span>
+                      {s.description ? (
+                        <span className="font-mono text-xs text-[var(--oke-muted)]">{s.name}</span>
+                      ) : null}
                       <span className="text-xs text-[var(--oke-muted)]">
                         {s.children.length} resource(s)
                         {s.replicaLagMs != null ? ` · lag ${s.replicaLagMs}ms` : ""}
@@ -469,8 +473,11 @@ function StoreDetail(props: {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-base font-medium">{open.name}</h2>
-        <span className="text-sm text-[var(--oke-muted)]">{open.ref}</span>
+        <h2 className="text-base font-medium">{displayLabel(open.name, open.description)}</h2>
+        <span className="text-sm text-[var(--oke-muted)]">
+          {open.description ? `${open.name} · ` : ""}
+          {open.ref}
+        </span>
         {open.contentAddressed ? (
           <span role="status" className="text-xs text-[var(--oke-muted)]">
             content-addressed keys
@@ -610,7 +617,7 @@ function StoreDetail(props: {
                 <tr>
                   {Object.keys(browse.rows[0] ?? { id: 1 }).map((col) => (
                     <th key={col} scope="col" className="border-b px-2 py-1">
-                      {col}
+                      {displayLabel(col, child?.columnDescriptions[col])}
                     </th>
                   ))}
                   <th scope="col" className="border-b px-2 py-1">

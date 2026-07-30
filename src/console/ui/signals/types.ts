@@ -39,6 +39,7 @@ export interface SignalEndpoint {
 /** One signal in the operator list. */
 export interface SignalRecord {
   readonly name: string;
+  readonly description?: string;
   readonly delivery: SignalDelivery;
   readonly retries: number;
   readonly deadLetterEnabled: boolean;

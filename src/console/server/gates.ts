@@ -48,6 +48,7 @@ export type GatePrincipalKind = "role" | "key" | "user";
 /** One Module:Action / flow / gate surface row. */
 export interface ConsoleGateDefRow {
   readonly name: string;
+  readonly description?: string;
   readonly kind: "policy" | "rate";
   readonly scopes: readonly string[];
   readonly roles: readonly string[];
@@ -477,6 +478,7 @@ function projectGateDefs(
       def.kind === "rate" || name.startsWith("rate:") ? "rate" : "policy";
     rows.push({
       name,
+      ...(def.description !== undefined ? { description: def.description } : {}),
       kind,
       scopes: [...(def.scopes ?? [])],
       roles: [...(def.roles ?? [])],

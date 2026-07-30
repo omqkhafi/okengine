@@ -240,6 +240,69 @@ export const db = store.sql("app", { schema: { notes } });
       sqlName: "id",
     });
   });
+
+  test("extracts optional description fields additively", async () => {
+    const source = `
+import { store, field, signal, channel, clock, gate, vault } from "okengine";
+
+export const notes = store.schema.table("notes", {
+  title: field.text().notNull().describe("Note title"),
+});
+
+export const db = store.sql("app", {
+  description: "Primary app database",
+  schema: { notes },
+});
+
+export const embeddings = store.index("embeddings", {
+  description: "Document embeddings",
+  dims: 3,
+});
+
+export const sessions = store.kv("sessions", { description: "Session cache" });
+
+export const orderPlaced = signal("order-placed", {
+  delivery: "once",
+  description: "Order placed event",
+});
+
+export const bookingConfirmed = channel.template("booking-confirmed", {
+  medium: "email",
+  description: "Booking confirmation email",
+});
+
+export const expireHolds = clock("expire-holds", {
+  every: "10m",
+  description: "Expire unpaid holds",
+});
+
+export const member = gate.policy("member", {
+  description: "Verified members only",
+  check: ({ auth }) => !!auth?.verified,
+});
+
+export const stripeKey = vault.secret("STRIPE_KEY", {
+  description: "Payments gateway key",
+});
+`;
+    const manifest = await extractFromSources({
+      "src/described.ts": source,
+    });
+
+    expect(manifest.stores?.app?.description).toBe("Primary app database");
+    expect(manifest.stores?.app?.tables?.notes?.columns?.title).toMatchObject({
+      description: "Note title",
+    });
+    expect(manifest.stores?.embeddings?.description).toBe("Document embeddings");
+    expect(manifest.stores?.sessions?.description).toBe("Session cache");
+    expect(manifest.signals?.["order-placed"]?.description).toBe("Order placed event");
+    expect(manifest.channels?.["booking-confirmed"]?.description).toBe(
+      "Booking confirmation email",
+    );
+    expect(manifest.clocks?.["expire-holds"]?.description).toBe("Expire unpaid holds");
+    expect(manifest.gates?.member?.description).toBe("Verified members only");
+    expect(manifest.vault?.STRIPE_KEY?.description).toBe("Payments gateway key");
+  });
 });
 
 describe("extractManifest — on(http.resource(...))", () => {

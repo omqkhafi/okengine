@@ -41,7 +41,47 @@ See [Store](/docs/elements/store) for the query-builder surface.
 | ---------------------------- | ------- | ----------------------------------------------------- |
 | `fx.call(flow, input?)`      | `call`  | The callee's `out` — runs through the same pipeline   |
 | `fx.step(name, fn)`          | —       | Durable step: replays from the journal, never re-runs |
+| `fx.all([...thunks])`        | —       | Parallel; first rejection aborts siblings             |
+| `fx.race([...thunks])`       | —       | First settle wins; losers aborted                     |
+| `fx.retry(fn, opts?)`        | —       | Exponential backoff + jitter (plain Promise)          |
+| `fx.signal`                  | —       | Ambient `AbortSignal` for the current branch          |
 | `fx.fail(code, data, opts?)` | —       | Typed failure value (`opts.message` overrides)        |
+
+## Concurrency and retry
+
+Pass **thunks** to `all` / `race` — not already-started Promises — so each branch gets an abort scope before work begins.
+
+```typescript
+const [user, stock] = await fx.all([
+  () => fx.store(db).findById(users, input.userId),
+  () => fx.store(db).findById(inventory, input.sku),
+]);
+
+const charge = await fx.step("charge", () =>
+  fx.retry(() => fx.call(stripeCharge, { amount: input.total }), {
+    retries: 3,
+    delay: "100ms",
+    backoff: 2,
+    jitter: true,
+  }),
+);
+```
+
+| `fx.retry` option | Default | Meaning                                      |
+| ----------------- | ------- | -------------------------------------------- |
+| `retries`         | `0`     | Extra attempts after the first               |
+| `delay`           | `50`    | Initial backoff — ms number or `"100ms"`     |
+| `backoff`         | `2`     | Multiplier after each retry                  |
+| `jitter`          | `true`  | Full jitter on the delay (thundering-herd)   |
+| `when`            | thrown  | Predicate; skips `AbortError` and sleep park |
+
+<Callout title="Cooperative cancel">
+  Losing branches see `fx.signal` abort. Drivers that do not yet honor the signal may still finish
+  in the background — check `fx.signal.aborted` in long user work, and prefer `fx.all` over bare
+  `Promise.all`.
+</Callout>
+
+**Consequence:** put `fx.retry` inside `fx.step` on durable flows so a completed charge never re-runs on resume. Coarse whole-body retry is `flow({ retry: { … } })` on the same journal session.
 
 ## Channel
 

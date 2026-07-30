@@ -77,6 +77,7 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 | `in`     | Input contract — validated before `do` runs; bad input is a 422 |
 | `out`    | Output contract — the return value is checked against it        |
 | `errors` | Typed failures — **returned** with `fx.fail`, never thrown      |
+| `retry`  | Optional whole-`do` backoff on thrown errors (same journal)     |
 | `do`     | The work — every read, write, emit, and call goes through `fx`  |
 
 Failures are values, not exceptions:
@@ -195,6 +196,8 @@ Everything a flow may touch, on one object:
 | `fx.clock.now()` / `.sleep(…)`          | —               | Injected time / durable sleep                |
 | `fx.cache.get/set`                      | —               | Shared cache with effect-aware invalidation  |
 | `fx.step(name, fn)`                     | —               | Named durable step — never re-runs on replay |
+| `fx.all` / `fx.race` / `fx.retry`       | —               | Structured concurrency + backoff retry       |
+| `fx.signal`                             | —               | Ambient `AbortSignal` for the current branch |
 | `fx.id()` · `fx.log` · `fx.t`           | —               | UUIDs, redacting logger, i18n                |
 | `fx.auth` · `fx.operator` · `fx.tenant` | —               | Who is calling (user / operator / tenant)    |
 
@@ -227,6 +230,8 @@ export const chargeOrder = flow({
 
 **Consequence:** kill the process between the two steps and the run **resumes at `confirm`** — completed steps replay from the journal, so the card is not charged twice. This is verified by the engine's own test suite: after resume, `create-intent` has run exactly once.
 
+For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow({ retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
+
 ## Composition is just calls
 
 Wiring is values flowing between flows — declared in code, never configured in a dashboard:
@@ -250,6 +255,16 @@ That bypasses the effect graph: the Manifest can't see the call, cache keys miss
 <Accordion title="Should I throw or fx.fail?">
 
 `fx.fail(code, data)` for expected outcomes — anything in `errors`. A throw is a crash: the run fails with a 500-shaped error and no typed code for the client. Expected failures are values so clients can switch on `error.code`.
+
+</Accordion>
+<Accordion title="Promise.all left orphan work running after one branch failed">
+
+Use `fx.all` (or `fx.race`) with thunks. The first rejection aborts siblings through `fx.signal`. Bare `Promise.all` / `Promise.race` do not cancel losers.
+
+</Accordion>
+<Accordion title="Durable flow retried a completed charge">
+
+Put `fx.retry` **inside** `fx.step`, not around it. Completed steps replay from the journal and never re-run. `flow({ retry })` is for coarse whole-body retries on the same session.
 
 </Accordion>
 <Accordion title="How do I share logic between flows — a private function?">

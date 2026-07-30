@@ -83,6 +83,31 @@ describe("parseChangelog", () => {
       parseChangelog(["## v1.0.0 — 2026-01-01", "", "- orphan bullet", ""].join("\n")),
     ).toThrow(/bullet outside a group/);
   });
+
+  test("skips ## Unreleased — staging for the next bump, not a published release", () => {
+    const releases = parseChangelog(
+      [
+        "# Changelog",
+        "",
+        "## Unreleased",
+        "",
+        "### Added",
+        "",
+        "- Upcoming thing.",
+        "",
+        "## v1.2.3 — 2026-01-02",
+        "",
+        "### Fixed",
+        "",
+        "- Shipped bugfix.",
+        "",
+      ].join("\n"),
+    );
+
+    expect(releases).toHaveLength(1);
+    expect(releases[0]!.version).toBe("1.2.3");
+    expect(releases[0]!.groups[0]!.items).toEqual(["Shipped bugfix."]);
+  });
 });
 
 describe("splitInlineCode", () => {

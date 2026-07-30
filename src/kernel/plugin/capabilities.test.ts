@@ -81,4 +81,22 @@ describe("plugin capability capture", () => {
       },
     });
   });
+
+  test("table description lands on capabilities.tables", () => {
+    const audit = plugin("audit", { version: "1.0.0" }).table("audit_events", undefined, {
+      description: "Immutable audit log",
+      plane: "operator",
+    });
+    const { api, snapshot } = createRecordingApi({
+      name: "audit",
+      version: "1.0.0",
+    });
+    audit.register(api);
+    expect(snapshot().capabilities.tables).toEqual({
+      audit_events: {
+        description: "Immutable audit log",
+        plane: "operator",
+      },
+    });
+  });
 });

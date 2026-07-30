@@ -40,6 +40,8 @@ export interface StoreDeclBase {
 
 /** Options for {@link store.sql}. */
 export interface SqlStoreOptions {
+  /** Optional human description for Console / docs (falls back to the store name). */
+  readonly description?: string;
   /**
    * Schema tables — okengine {@link TableHandle}s and/or Drizzle tables.
    * Classification is read from TableHandle columns when present.
@@ -56,6 +58,7 @@ export interface SqlStoreOptions {
 export interface SqlStoreDecl extends StoreDeclBase {
   readonly facet: "sql";
   readonly ref: `sql:${string}`;
+  readonly description?: string;
   readonly schema?: SqlStoreOptions["schema"];
   readonly classify?: SqlStoreOptions["classify"];
   /**
@@ -94,6 +97,8 @@ export interface FilesStoreDecl extends StoreDeclBase {
 
 /** Options for {@link store.index}. */
 export interface IndexStoreOptions {
+  /** Optional human description for Console / docs (falls back to the index name). */
+  readonly description?: string;
   /** Vector dimensions (default 3 for tests; set explicitly in apps). */
   readonly dims?: number;
 }
@@ -102,6 +107,7 @@ export interface IndexStoreOptions {
 export interface IndexStoreDecl extends StoreDeclBase {
   readonly facet: "index";
   readonly ref: `index:${string}`;
+  readonly description?: string;
   readonly dims?: number;
 }
 
@@ -119,6 +125,7 @@ export function sql(name: string, options: SqlStoreOptions = {}): SqlStoreDecl {
     facet: "sql",
     name,
     ref: `sql:${name}`,
+    ...(options.description !== undefined ? { description: options.description } : {}),
     schema: options.schema,
     classify: options.classify,
     table(table) {
@@ -147,7 +154,7 @@ export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
     facet: "kv",
     name,
     ref: `kv:${name}`,
-    description: options.description,
+    ...(options.description !== undefined ? { description: options.description } : {}),
   };
 }
 
@@ -162,7 +169,7 @@ export function files(name: string, options: FilesStoreOptions = {}): FilesStore
     facet: "files",
     name,
     ref: `files:${name}`,
-    description: options.description,
+    ...(options.description !== undefined ? { description: options.description } : {}),
   };
 }
 
@@ -177,6 +184,7 @@ export function index(name: string, options: IndexStoreOptions = {}): IndexStore
     facet: "index",
     name,
     ref: `index:${name}`,
+    ...(options.description !== undefined ? { description: options.description } : {}),
     dims: options.dims,
   };
 }

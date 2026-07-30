@@ -32,8 +32,12 @@ import {
   touchDryRunStore,
 } from "./dry-run.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
+import { currentAbortSignal } from "./abort-scope.ts";
+import { fxAll, fxRace, fxRetry, type FxRetryOptions, type FxThunk } from "./concurrency.ts";
 import type { JournalSession } from "./journal.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
+
+export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
 /** Named ref: plain string or `{ name }` element handle. */
 export type NamedRef = string | { readonly name: string };
@@ -337,6 +341,34 @@ export interface Fx {
    * @param fn - Step body
    */
   step<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+  /**
+   * Ambient abort signal for the current structured-concurrency branch.
+   * Outside `all` / `race`, a never-aborted signal.
+   */
+  readonly signal: AbortSignal;
+  /**
+   * Run thunks in parallel. On first rejection, abort sibling branches and
+   * rethrow. Pass thunks (not started Promises) so abort scopes exist first.
+   *
+   * @param thunks - Parallel work units
+   */
+  all<const T extends readonly unknown[]>(thunks: {
+    readonly [K in keyof T]: FxThunk<T[K]>;
+  }): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }>;
+  /**
+   * Race thunks. The first settle wins; losers are aborted.
+   *
+   * @param thunks - Competing work units
+   */
+  race<T>(thunks: ReadonlyArray<FxThunk<T>>): Promise<T>;
+  /**
+   * Retry a thunk with exponential backoff and optional full jitter.
+   * Prefer wrapping inside {@link Fx.step} so durable replay skips completed work.
+   *
+   * @param fn - Operation
+   * @param opts - Retry policy
+   */
+  retry<T>(fn: FxThunk<T>, opts?: FxRetryOptions): Promise<T>;
 }
 
 /**
@@ -1034,6 +1066,18 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return journal.step(name, fn);
       }
       return await fn();
+    },
+    get signal(): AbortSignal {
+      return currentAbortSignal();
+    },
+    all(thunks) {
+      return fxAll(thunks);
+    },
+    race(thunks) {
+      return fxRace(thunks);
+    },
+    retry(fn, opts) {
+      return fxRetry(fn, opts);
     },
   };
 

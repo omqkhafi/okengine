@@ -4,12 +4,15 @@
 
 import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { fsDriver } from "../../drivers/fs.ts";
+import { libsqlDriver, libsqlIndexDriver } from "../../drivers/libsql.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
+import { pgliteDriver } from "../../drivers/pglite.ts";
+import { pgvectorDriver } from "../../drivers/pgvector.ts";
 import { postgresDriver } from "../../drivers/postgres.ts";
 import { redisDriver } from "../../drivers/redis.ts";
 import { s3Driver } from "../../drivers/s3.ts";
 import { sqliteDriver } from "../../drivers/sqlite.ts";
-import type { FilesDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
+import type { FilesDriver, IndexDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
 import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runtime
@@ -34,6 +37,7 @@ export function bindStore(
   const sqlId = resolveSqlDriverId(options, env, docker);
   const kvId = resolveKvDriverId(options, env, docker);
   const filesId = resolveFilesDriverId(options, env, docker);
+  const indexId = resolveIndexDriverId(options, env, docker);
   const sqlUrl = sqlUrlFor(sqlId, docker);
   const kvUrl = kvUrlFor(kvId, docker);
   const filesRoot = filesRootFor(filesId);
@@ -41,6 +45,7 @@ export function bindStore(
   const sqlBindings: Record<string, { name: string; primary: { url: string } }> = {};
   const kvBindings: Record<string, { url?: string }> = {};
   const filesBindings: Record<string, { root?: string }> = {};
+  const indexBindings: Record<string, { url?: string }> = {};
 
   for (const decl of options.stores ?? []) {
     if (isSqlDecl(decl)) {
@@ -52,6 +57,10 @@ export function bindStore(
       kvBindings[decl.name] = kvUrl !== undefined ? { url: kvUrl } : {};
     } else if (isFilesDecl(decl)) {
       filesBindings[decl.name] = filesRoot !== undefined ? { root: filesRoot } : {};
+    } else if (isIndexDecl(decl)) {
+      // SQL-backed index drivers share the sql facet's URL — the runtime opens
+      // one connection and hands it to both (never a second, redundant one).
+      indexBindings[decl.name] = indexId === "memory" ? {} : { url: sqlUrl };
     }
   }
 
@@ -63,11 +72,12 @@ export function bindStore(
       sql: sqlDriverFor(sqlId),
       kv: kvDriverFor(kvId),
       files: filesDriverFor(filesId),
-      index: memoryDrivers.index,
+      index: indexDriverFor(indexId),
     },
     sql: sqlBindings,
     kv: kvBindings,
     files: filesBindings,
+    index: indexBindings,
     now,
     domainDdl,
   });
@@ -132,12 +142,37 @@ export function resolveFilesDriverId(
   return docker ? "s3" : "memory";
 }
 
+/**
+ * Index driver — same resolution chain as sql/kv/files. Defaults to `memory`;
+ * a configured `pgvector` / `libsql` is honoured at real boot (and fails loud
+ * if its SQL engine or peer is missing — never silently back to memory).
+ *
+ * @param options - Boot options
+ * @param env - Active env
+ * @param docker - Docker mode
+ */
+export function resolveIndexDriverId(
+  options: BootOptions,
+  env: ConfigEnv,
+  docker: boolean,
+): string {
+  const fromEnv = process.env.OKE_INDEX_DRIVER?.trim();
+  if (docker && fromEnv) return fromEnv;
+  const resolved = resolveDriverId(options.config?.drivers?.store?.index, env);
+  if (resolved) return resolved;
+  return "memory";
+}
+
 function sqlDriverFor(id: string): SqlDriver {
   switch (id) {
     case "postgres":
       return postgresDriver;
     case "sqlite":
       return sqliteDriver;
+    case "libsql":
+      return libsqlDriver;
+    case "pglite":
+      return pgliteDriver;
     case "memory":
       return memoryDrivers.sql;
     default:
@@ -169,6 +204,23 @@ function filesDriverFor(id: string): FilesDriver {
   }
 }
 
+/**
+ * Single id → index driver switch — shared by `bindStore` and the Console's
+ * Manifest runtime so resolution can never drift into two maintained copies.
+ */
+export function indexDriverFor(id: string): IndexDriver {
+  switch (id) {
+    case "memory":
+      return memoryDrivers.index;
+    case "pgvector":
+      return pgvectorDriver;
+    case "libsql":
+      return libsqlIndexDriver;
+    default:
+      throw new Error(`oke boot: unknown index driver "${id}"`);
+  }
+}
+
 function sqlUrlFor(sqlId: string, docker: boolean): string {
   if (sqlId === "postgres") {
     const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
@@ -183,6 +235,12 @@ function sqlUrlFor(sqlId: string, docker: boolean): string {
   }
   if (sqlId === "sqlite") {
     return process.env.OKE_SQLITE_URL ?? ".oke/app.sqlite";
+  }
+  if (sqlId === "libsql") {
+    return process.env.OKE_LIBSQL_URL ?? ".oke/app.libsql";
+  }
+  if (sqlId === "pglite") {
+    return process.env.OKE_PGLITE_URL ?? ".oke/pgdata";
   }
   return ":memory:";
 }
@@ -215,4 +273,8 @@ function isKvDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "kv" }> 
 
 function isFilesDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "files" }> {
   return decl.facet === "files";
+}
+
+function isIndexDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "index" }> {
+  return decl.facet === "index";
 }

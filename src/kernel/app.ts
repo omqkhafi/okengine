@@ -33,6 +33,7 @@ import {
 } from "./auth-resolve.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
+import { fxRetry } from "./concurrency.ts";
 import {
   createFxContext,
   resolveName,
@@ -680,13 +681,22 @@ export function oke(options: OkeOptions): OkeApp {
       hooks,
       async () => {
         try {
+          const invoke = async (input: unknown) => {
+            const run = () => {
+              // Flow-level retry re-enters `do` on the same journal session —
+              // rewind so completed steps/effects replay instead of re-executing.
+              journalSession?.rewind();
+              return flowDef.do(input as never, fx);
+            };
+            return flowDef.retry ? fxRetry(run, flowDef.retry) : run();
+          };
           if (!alreadyValidated) {
             const parsed = await validate(flowDef.in, ctx.input);
             if (!parsed.ok) return parsed.failure;
             ctx.input = parsed.value;
-            return await flowDef.do(parsed.value as never, fx);
+            return await invoke(parsed.value);
           }
-          return await flowDef.do(ctx.input as never, fx);
+          return await invoke(ctx.input);
         } catch (err) {
           // A durable sleep that has not yet elapsed suspends the run — this
           // is a park, not a pipeline failure, so it must not throw upward.

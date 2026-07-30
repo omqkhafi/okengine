@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.3.5 · measured 2026-07-30T21:21:21.716Z_
+_okengine v0.3.6 · measured 2026-07-30T23:10:10.005Z_
 
 Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,30 +10,30 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 
 |                       | Measured  | Limit     |
 | --------------------- | --------- | --------- |
-| Kernel (edge profile) | 9.52 kB   | 15.00 kB  |
+| Kernel (edge profile) | 12.09 kB  | 15.00 kB  |
 | Client runtime        | 1.67 kB   | 3.00 kB   |
 | Console initial load  | 86.24 kB  | 300.00 kB |
-| Cold start on Bun     | 26.668 ms | 75.000 ms |
+| Cold start on Bun     | 26.028 ms | 75.000 ms |
 | p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
 |          | Measured | Ceiling  |
 | -------- | -------- | -------- |
-| okengine | 49.68 kB | 50.67 kB |
+| okengine | 51.07 kB | 52.09 kB |
 | ai       | 3.35 kB  | 3.60 kB  |
 | auth     | 4.85 kB  | 5.10 kB  |
-| channel  | 4.57 kB  | 4.82 kB  |
+| channel  | 4.59 kB  | 4.84 kB  |
 | client   | 1.80 kB  | 2.05 kB  |
-| clock    | 8.85 kB  | 9.10 kB  |
+| clock    | 9.75 kB  | 10.00 kB |
 | config   | 890 B    | 1.12 kB  |
-| console  | 69.85 kB | 71.25 kB |
-| gate     | 3.80 kB  | 4.05 kB  |
+| console  | 71.24 kB | 72.67 kB |
+| gate     | 3.85 kB  | 4.10 kB  |
 | mcp      | 9.26 kB  | 9.51 kB  |
-| plugins  | 4.74 kB  | 4.99 kB  |
+| plugins  | 4.77 kB  | 5.02 kB  |
 | runs     | 6.15 kB  | 6.40 kB  |
-| signal   | 861 B    | 1.09 kB  |
-| store    | 12.34 kB | 12.59 kB |
+| signal   | 888 B    | 1.12 kB  |
+| store    | 12.63 kB | 12.88 kB |
 | test     | 9.15 kB  | 9.40 kB  |
 | vault    | 2.42 kB  | 2.67 kB  |
 
@@ -41,7 +41,7 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 20.15 kB | 20.55 kB |
+| drivers              | 45.95 kB | 46.87 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 663 B    | 919 B    |
 | ai-openai-compatible | 936 B    | 1.16 kB  |
@@ -52,11 +52,13 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 | channel-unifonic     | 695 B    | 951 B    |
 | channel-wa-cloud     | 742 B    | 998 B    |
 | channel-webpush      | 1.66 kB  | 1.91 kB  |
-| drizzle-dialect      | 315 B    | 571 B    |
+| drizzle-dialect      | 326 B    | 582 B    |
 | fs                   | 701 B    | 957 B    |
 | kv-lua               | 1.01 kB  | 1.26 kB  |
+| libsql               | 7.34 kB  | 7.59 kB  |
 | memory               | 4.12 kB  | 4.37 kB  |
-| pgvector             | 1001 B   | 1.23 kB  |
+| pglite               | 620 B    | 876 B    |
+| pgvector             | 23.11 kB | 23.57 kB |
 | postgres             | 1.38 kB  | 1.63 kB  |
 | redis                | 2.00 kB  | 2.25 kB  |
 | s3                   | 958 B    | 1.19 kB  |

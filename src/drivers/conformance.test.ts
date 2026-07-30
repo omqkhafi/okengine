@@ -11,7 +11,9 @@ import {
   runSqlConformance,
 } from "./conformance.ts";
 import { fsDriver } from "./fs.ts";
+import { libsqlDriver, libsqlIndexDriver } from "./libsql.ts";
 import { memoryFilesDriver, memoryIndexDriver, memoryKvDriver, memorySqlDriver } from "./memory.ts";
+import { pgliteDriver } from "./pglite.ts";
 import { pgvectorDriver } from "./pgvector.ts";
 import { createPostgresFakeClient, postgresDriver } from "./postgres.ts";
 import { createRedisFakeClient, redisDriver } from "./redis.ts";
@@ -21,6 +23,8 @@ import { sqliteDriver } from "./sqlite.ts";
 describe("sql conformance", () => {
   test("memory", () => runSqlConformance(memorySqlDriver));
   test("sqlite", () => runSqlConformance(sqliteDriver, { url: ":memory:" }));
+  test("libsql", () => runSqlConformance(libsqlDriver, { url: ":memory:" }));
+  test("pglite", () => runSqlConformance(pgliteDriver, { url: "memory://" }));
   test("postgres (fake Bun.SQL client)", () =>
     runSqlConformance(postgresDriver, {
       client: createPostgresFakeClient(),
@@ -46,6 +50,7 @@ describe("files conformance", () => {
 describe("index conformance", () => {
   test("memory", () => runIndexConformance(memoryIndexDriver, { dims: 3 }));
   test("pgvector", () => runIndexConformance(pgvectorDriver, { dims: 3 }));
+  test("libsql", () => runIndexConformance(libsqlIndexDriver, { dims: 3 }));
 });
 
 describe("protocol naming", () => {
@@ -53,6 +58,8 @@ describe("protocol naming", () => {
     const ids = [
       memorySqlDriver.id,
       sqliteDriver.id,
+      libsqlDriver.id,
+      pgliteDriver.id,
       postgresDriver.id,
       memoryKvDriver.id,
       redisDriver.id,
@@ -61,10 +68,13 @@ describe("protocol naming", () => {
       s3Driver.id,
       memoryIndexDriver.id,
       pgvectorDriver.id,
+      libsqlIndexDriver.id,
     ];
     expect(ids).toEqual([
       "memory",
       "sqlite",
+      "libsql",
+      "pglite",
       "postgres",
       "memory",
       "redis",
@@ -73,6 +83,7 @@ describe("protocol naming", () => {
       "s3",
       "memory",
       "pgvector",
+      "libsql",
     ]);
     for (const id of ids) {
       expect(id).not.toMatch(/neon|dragonfly|minio|upstash|cloudflare/i);

@@ -25,6 +25,7 @@ import {
 } from "../../../channels/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Channels panel.
@@ -183,7 +184,7 @@ export function ChannelsPanel() {
                     )}
                     onClick={() => setSearch(openTemplate(search, t.name))}
                   >
-                    <span>{t.name}</span>
+                    <span>{displayLabel(t.name, t.description)}</span>
                     <span className="font-mono text-xs">{t.medium}</span>
                   </button>
                 </li>
@@ -260,8 +261,12 @@ export function ChannelsPanel() {
 
           {open ? (
             <section aria-label="Template detail" className="mb-8">
-              <h2 className="text-base text-[var(--oke-fg)]">{open.name}</h2>
+              <h2 className="text-base text-[var(--oke-fg)]">
+                {displayLabel(open.name, open.description)}
+              </h2>
               <p className="mt-1 text-sm text-[var(--oke-muted)]">
+                {open.description ? <span className="font-mono">{open.name}</span> : null}
+                {open.description ? " · " : ""}
                 From {open.from ?? "unset"} · Locales {open.locales.join(", ") || "none"}
               </p>
 

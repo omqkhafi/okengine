@@ -1,10 +1,18 @@
 /**
  * `pgvector` driver — vector index facet over Postgres + pgvector.
  *
+ * Real ANN via drizzle-orm's pg vector API: `vector(dims)` column, HNSW index
+ * (`vector_cosine_ops`), `cosineDistance` ordering — no JS-side distance math
+ * on the SQL path. One implementation serves both the `postgres` and `pglite`
+ * sql drivers (identical wire dialect); the caller injects the already-open
+ * {@link SqlConnection} (shared with `store.sql`, never a second connection).
+ *
  * When no SQL connection is provided, falls back to an in-process cosine index
  * so the conformance suite runs without a live Postgres.
  */
 
+import { cosineDistance } from "drizzle-orm";
+import { PgDialect, index as pgIndex, pgTable, text, vector } from "drizzle-orm/pg-core";
 import type {
   IndexDriver,
   IndexHit,
@@ -26,48 +34,75 @@ export async function openPgvectorIndex(options: IndexOpenOptions): Promise<Inde
   return openPgvectorMemory(options.dims);
 }
 
+const pgDialect = new PgDialect();
+
 async function openPgvectorSql(
   name: string,
   dims: number,
   sql: SqlConnection,
 ): Promise<IndexStore> {
-  const table = `oke_idx_${name.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+  if (sql.driverId !== "postgres" && sql.driverId !== "pglite") {
+    throw new Error(
+      `pgvector index: needs a postgres/pglite SQL connection, got "${sql.driverId}" — ` +
+        `set store.sql to "postgres" or "pglite" so the index shares its connection`,
+    );
+  }
+
+  const tableName = `oke_idx_${name.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+  const indexName = `${tableName}_hnsw`;
+  const table = pgTable(
+    tableName,
+    {
+      id: text("id").primaryKey(),
+      embedding: vector("embedding", { dimensions: dims }).notNull(),
+      meta: text("meta"),
+    },
+    (t) => [pgIndex(indexName).using("hnsw", t.embedding.op("vector_cosine_ops"))],
+  );
+
+  // Extension + DDL — fail loud when pgvector is not installed (never fall back).
+  await sql.exec(`CREATE EXTENSION IF NOT EXISTS vector`);
   await sql.exec(
-    `CREATE TABLE IF NOT EXISTS "${table}" (id TEXT PRIMARY KEY, embedding TEXT NOT NULL, meta TEXT)`,
+    `CREATE TABLE IF NOT EXISTS "${tableName}" (id TEXT PRIMARY KEY, embedding vector(${dims}) NOT NULL, meta TEXT)`,
+  );
+  await sql.exec(
+    `CREATE INDEX IF NOT EXISTS "${indexName}" ON "${tableName}" USING hnsw (embedding vector_cosine_ops)`,
   );
 
   return {
     driverId: "pgvector",
-    async upsert(id, vector, meta) {
-      if (vector.length !== dims) {
-        throw new Error(`vector dims ${vector.length} !== index dims ${dims}`);
+    async upsert(id, vec, meta) {
+      if (vec.length !== dims) {
+        throw new Error(`vector dims ${vec.length} !== index dims ${dims}`);
       }
-      await sql.exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
-      await sql.exec(`INSERT INTO "${table}" (id, embedding, meta) VALUES (?, ?, ?)`, [
-        id,
-        JSON.stringify(vector),
-        meta ? JSON.stringify(meta) : null,
-      ]);
+      await sql.exec(
+        `INSERT INTO "${tableName}" (id, embedding, meta) VALUES (?, ?::vector, ?) ` +
+          `ON CONFLICT (id) DO UPDATE SET embedding = excluded.embedding, meta = excluded.meta`,
+        [id, JSON.stringify(vec), meta ? JSON.stringify(meta) : null],
+      );
     },
-    async search(vector, topK = 10): Promise<IndexHit[]> {
-      const rows = await sql.query(`SELECT id, embedding, meta FROM "${table}"`);
-      const hits: IndexHit[] = rows.map((row) => {
-        const emb = JSON.parse(String(row.embedding)) as number[];
+    async search(vec, topK = 10): Promise<IndexHit[]> {
+      const distance = pgDialect.sqlToQuery(cosineDistance(table.embedding, [...vec]));
+      const distanceSql = distance.sql.replace(/\$\d+/g, "?");
+      const rows = await sql.query(
+        `SELECT "id", "meta", ${distanceSql} AS "distance" FROM "${tableName}" ` +
+          `ORDER BY "distance" ASC LIMIT ?`,
+        [...distance.params, Math.max(1, Math.floor(topK))],
+      );
+      return rows.map((row) => {
         const metaRaw = row.meta;
         return {
           id: String(row.id),
-          score: cosine(vector, emb),
+          score: 1 - Number(row.distance),
           meta:
             typeof metaRaw === "string"
               ? (JSON.parse(metaRaw) as Record<string, unknown>)
               : undefined,
         };
       });
-      hits.sort((a, b) => b.score - a.score);
-      return hits.slice(0, topK);
     },
     async delete(id) {
-      const result = await sql.exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
+      const result = await sql.exec(`DELETE FROM "${tableName}" WHERE id = ?`, [id]);
       return result.changes > 0;
     },
     async close() {

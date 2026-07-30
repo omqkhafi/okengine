@@ -168,16 +168,15 @@ export function OkeLogoIcon({
 }
 
 function setFaviconHref(href: string) {
-  for (const el of document.querySelectorAll<HTMLLinkElement>(
-    "link[rel='icon'], link[rel='shortcut icon']",
-  )) {
-    el.remove();
+  let link = document.querySelector<HTMLLinkElement>("link[data-oke-favicon-cycle]");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    link.type = "image/svg+xml";
+    link.dataset.okeFaviconCycle = "";
+    document.head.appendChild(link);
   }
-  const link = document.createElement("link");
-  link.rel = "icon";
-  link.type = "image/svg+xml";
   link.href = href;
-  document.head.appendChild(link);
 }
 
 /**

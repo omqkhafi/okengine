@@ -130,6 +130,23 @@ describe("willNotFireFor", () => {
   });
 });
 
+describe("index driver resolution", () => {
+  test("console manifest runtime uses the shared boot switch (memory default)", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const decl = runtime.declarations.get("index:docs");
+    expect(decl).toBeDefined();
+    const handle = (await runtime.open(decl!, {
+      effects: { reads: ["index:docs"], writes: ["index:docs"] },
+    })) as import("../../elements/store.ts").IndexStoreFxHandle;
+    expect(handle.driverId).toBe("memory");
+    await handle.upsert("d1", [1, 0, 0], { t: 1 });
+    const hits = await handle.search([1, 0, 0], 1);
+    expect(hits[0]?.id).toBe("d1");
+    expect(hits[0]?.meta).toEqual({ t: 1 });
+    await runtime.close();
+  });
+});
+
 describe("PII masking survives SELECT *", () => {
   test("masks classified columns; reveal returns cleartext", async () => {
     const runtime = await createManifestStoreRuntime(MANIFEST);

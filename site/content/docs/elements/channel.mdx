@@ -71,10 +71,11 @@ Locally the `console` driver captures mail into an inbox instead of sending; in 
 | `binder.template(name, opts)`  | Typed template bound to that medium             |
 | `channel.template(name, opts)` | Medium-agnostic template (one body, any medium) |
 
-| Template option | Type                  | Meaning                                           |
-| --------------- | --------------------- | ------------------------------------------------- |
-| `schema`        | zod / Standard Schema | The data the template may reference — typed sends |
-| `locales`       | string[]              | Languages this template is rendered in            |
+| Template option | Type                  | Meaning                                                    |
+| --------------- | --------------------- | ---------------------------------------------------------- |
+| `description`   | string                | Human title in the Console (falls back to the template id) |
+| `schema`        | zod / Standard Schema | The data the template may reference — typed sends          |
+| `locales`       | string[]              | Languages this template is rendered in                     |
 
 ## The human physics
 

@@ -86,13 +86,14 @@ The declaration is identical in shape for all three — switching physics later 
 
 ### Options
 
-| Option       | Type                              | Default          | Meaning                                                        |
-| ------------ | --------------------------------- | ---------------- | -------------------------------------------------------------- |
-| `delivery`   | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                               |
-| `schema`     | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                |
-| `retries`    | number                            | `3`              | Max delivery attempts before dead-letter (`once`)              |
-| `deadLetter` | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                |
-| `optional`   | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check) |
+| Option        | Type                              | Default          | Meaning                                                        |
+| ------------- | --------------------------------- | ---------------- | -------------------------------------------------------------- |
+| `delivery`    | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                               |
+| `description` | string                            | —                | Human title in the Console (falls back to the signal name)     |
+| `schema`      | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                |
+| `retries`     | number                            | `3`              | Max delivery attempts before dead-letter (`once`)              |
+| `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                |
+| `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check) |
 
 ## When delivery fails
 

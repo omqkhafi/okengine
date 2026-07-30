@@ -8,7 +8,16 @@
 import type { ColumnClassification, StoreFacet } from "../manifest/types.ts";
 
 /** Protocol ids for store drivers in scope. */
-export type StoreDriverId = "sqlite" | "postgres" | "memory" | "redis" | "fs" | "s3" | "pgvector";
+export type StoreDriverId =
+  | "sqlite"
+  | "postgres"
+  | "libsql"
+  | "pglite"
+  | "memory"
+  | "redis"
+  | "fs"
+  | "s3"
+  | "pgvector";
 
 /** Facets a driver may serve. */
 export type DriverFacet = StoreFacet;
@@ -37,7 +46,7 @@ export interface SqlConnectOptions {
 /** Low-level SQL connection used by every sql driver. */
 export interface SqlConnection {
   /** Protocol driver id. */
-  readonly driverId: "sqlite" | "postgres" | "memory";
+  readonly driverId: "sqlite" | "postgres" | "libsql" | "pglite" | "memory";
   /** Primary vs replica. */
   readonly role: SqlRole;
   /**
@@ -61,7 +70,7 @@ export interface SqlConnection {
 /** SQL driver factory. */
 export interface SqlDriver {
   /** Protocol id. */
-  readonly id: "sqlite" | "postgres" | "memory";
+  readonly id: "sqlite" | "postgres" | "libsql" | "pglite" | "memory";
   /** Facet this driver serves. */
   readonly facet: "sql";
   /**
@@ -248,7 +257,7 @@ export interface IndexHit {
 
 /** Vector index handle. */
 export interface IndexStore {
-  readonly driverId: "memory" | "pgvector";
+  readonly driverId: "memory" | "pgvector" | "libsql";
   /**
    * Upsert a vector.
    *
@@ -280,15 +289,15 @@ export interface IndexOpenOptions {
   readonly name: string;
   /** Vector dimensions. */
   readonly dims: number;
-  /** Postgres URL when using pgvector. */
+  /** SQL URL when the index driver shares the sql facet's engine. */
   readonly url?: string;
-  /** Injected SQL connection for pgvector tests. */
+  /** Injected SQL connection — shared with `store.sql` at boot. */
   readonly sql?: SqlConnection;
 }
 
 /** Index driver factory. */
 export interface IndexDriver {
-  readonly id: "memory" | "pgvector";
+  readonly id: "memory" | "pgvector" | "libsql";
   readonly facet: "index";
   /**
    * Open an index.

@@ -165,6 +165,8 @@ export interface Flow {
 /** One Signal declaration. */
 export interface Signal {
   delivery: SignalDelivery;
+  /** Optional human description (falls back to the signal map key). */
+  description?: string;
   retries?: number;
   deadLetter?: boolean;
   schema?: JsonSchema;
@@ -201,6 +203,8 @@ export interface DeclaredColumn extends ColumnClassification {
   default?: string | number | boolean | null;
   /** Database column name (snake_case by default). */
   sqlName?: string;
+  /** Optional human description (falls back to the column map key). */
+  description?: string;
   /** Foreign key when `.references()` was declared. */
   references?: DeclaredColumnReference;
 }
@@ -217,6 +221,8 @@ export interface Table {
 /** One Store declaration. */
 export interface Store {
   facet: StoreFacet;
+  /** Optional human description (falls back to the store map key). */
+  description?: string;
   tables?: Record<string, Table>;
   namespaces?: string[];
   buckets?: string[];
@@ -230,6 +236,8 @@ export interface Clock {
   every?: string;
   timezone?: string;
   overridable?: boolean;
+  /** Optional human description (falls back to the clock map key). */
+  description?: string;
 }
 
 /** Named gate — policy or rate strategy. */
@@ -242,6 +250,8 @@ export interface Gate {
   keyBy?: string;
   scopes?: string[];
   roles?: string[];
+  /** Optional human description (falls back to the gate map key). */
+  description?: string;
 }
 
 /** Vault secret / config contract (never a secret value). */
@@ -258,6 +268,8 @@ export interface SecretContract {
 
 /** Channel template. */
 export interface Channel {
+  /** Optional human description (falls back to the channel map key). */
+  description?: string;
   medium?: ChannelMedium;
   locales?: string[];
   schema?: JsonSchema;
@@ -302,12 +314,21 @@ export interface Ai {
   agents?: Record<string, AiAgent>;
 }
 
+/** Per-table metadata on a Manifest {@link Plugin}. */
+export interface PluginTable {
+  plane?: string;
+  /** Optional human description (falls back to the table name). */
+  description?: string;
+}
+
 /** Plugin capability declaration. */
 export interface Plugin {
   origin?: PluginOrigin;
   version?: string;
   declares?: string[];
   intercepts?: string[];
+  /** Optional metadata for `table:*` contributions. */
+  tables?: Record<string, PluginTable>;
 }
 
 /** Tenancy configuration (resolver is code; isolation is data). */

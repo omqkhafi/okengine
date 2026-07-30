@@ -55,6 +55,8 @@ export interface SchemaColumnDecl extends ColumnDef {
   readonly tableName?: string;
   /** Foreign key when `.references()` was used. */
   readonly references?: ColumnReference;
+  /** Optional human description for Console / docs (falls back to the JS key). */
+  readonly description?: string;
 }
 
 /** Table from {@link store.schema.table} — extends {@link TableHandle}. */
@@ -75,6 +77,8 @@ export interface FieldBuilder {
   retain(duration: string): FieldBuilder;
   /** Override snake_case SQL name. */
   as(sqlName: string): FieldBuilder;
+  /** Optional human description for Console / docs (falls back to the JS key). */
+  describe(description: string): FieldBuilder;
   /**
    * Declare a foreign key to another column (dialect-agnostic).
    *
@@ -100,6 +104,7 @@ interface FieldState {
   readonly defaultFnKind?: DefaultFnKind;
   readonly classification?: ColumnClassification;
   readonly sqlName?: string;
+  readonly description?: string;
   readonly references?: ColumnReference;
 }
 
@@ -145,6 +150,7 @@ function createBuilder(state: FieldState): FieldBuilder {
     retain: (duration) =>
       next({ classification: mergeClassification(state.classification, { retain: duration }) }),
     as: (sqlName) => next({ sqlName }),
+    describe: (description) => next({ description }),
     references: (ref, actions) =>
       next({
         references: actions ? { ref, actions } : { ref },
@@ -163,6 +169,7 @@ function createBuilder(state: FieldState): FieldBuilder {
         ...(state.defaultFn ? { defaultFn: state.defaultFn } : {}),
         ...(state.defaultFnKind ? { defaultFnKind: state.defaultFnKind } : {}),
         ...(state.classification ? { classification: state.classification } : {}),
+        ...(state.description !== undefined ? { description: state.description } : {}),
         ...(state.references ? { references: state.references } : {}),
       };
     },

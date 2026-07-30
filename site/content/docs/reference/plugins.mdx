@@ -64,22 +64,22 @@ Plugin flows appear in the Manifest, plugin tables land in `schema.generated.ts`
 
 Every method below exists on both the fluent definition and the boot-time builder the registry records:
 
-| Method                           | Contributes                                         |
-| -------------------------------- | --------------------------------------------------- |
-| `.flow(def)`                     | An ordinary flow — Manifest, Console, client types  |
-| `.hook(stage, fn)`               | A per-request intercept at one pipeline stage       |
-| `.edge(fn)`                      | A handler for HTTP requests that match **no** flow  |
-| `.decorate(key, value)`          | A typed context decoration, visible to flows        |
-| `.element({ kind, name })`       | An element contribution (e.g. `store.sql` facet)    |
-| `.driver(id, impl)`              | A protocol-named driver for an existing element     |
-| `.image(role, recipe)`           | An image recipe for a docker role                   |
-| `.table(name, columns, options)` | A whole DB table, merged into the generated schema  |
-| `.errors(map)`                   | Typed errors flows can fail with                    |
-| `.client(name, ext)`             | A typed client extension                            |
-| `.consolePanel(panel)`           | A Console panel (ESM entry loaded at runtime)       |
-| `.cli(name, handler)`            | An `oke <name>` CLI command                         |
-| `.config(schema)`                | A config schema; values live on the plugin identity |
-| `.needs(dep)`                    | A declared dependency (e.g. `"store.kv"`)           |
+| Method                           | Contributes                                                                                   |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `.flow(def)`                     | An ordinary flow — Manifest, Console, client types                                            |
+| `.hook(stage, fn)`               | A per-request intercept at one pipeline stage                                                 |
+| `.edge(fn)`                      | A handler for HTTP requests that match **no** flow                                            |
+| `.decorate(key, value)`          | A typed context decoration, visible to flows                                                  |
+| `.element({ kind, name })`       | An element contribution (e.g. `store.sql` facet)                                              |
+| `.driver(id, impl)`              | A protocol-named driver for an existing element                                               |
+| `.image(role, recipe)`           | An image recipe for a docker role                                                             |
+| `.table(name, columns, options)` | A whole DB table, merged into the generated schema (`options.description` / `plane` optional) |
+| `.errors(map)`                   | Typed errors flows can fail with                                                              |
+| `.client(name, ext)`             | A typed client extension                                                                      |
+| `.consolePanel(panel)`           | A Console panel (ESM entry loaded at runtime)                                                 |
+| `.cli(name, handler)`            | An `oke <name>` CLI command                                                                   |
+| `.config(schema)`                | A config schema; values live on the plugin identity                                           |
+| `.needs(dep)`                    | A declared dependency (e.g. `"store.kv"`)                                                     |
 
 New infrastructure is a **driver** for an existing element, never a ninth element — plugins follow the same law.
 
@@ -194,11 +194,11 @@ A plugin may declare **its own tables** with `field.*` columns, merged into the 
 plugin("billing", { version: "2.1.0" }).table(
   "invoices",
   { id: field.text().primaryKey().defaultFn(id) },
-  { plane: "user" },
+  { plane: "user", description: "Customer invoices" },
 );
 ```
 
-Extending an existing **app-owned** table with plugin columns is not supported in v1 — contribute a separate table and reference the app's by key. The optional `plane` metadata (`"operator" | "user" | "shared"`) keeps data-plane isolation intact for privacy tooling.
+Extending an existing **app-owned** table with plugin columns is not supported in v1 — contribute a separate table and reference the app's by key. The optional `plane` metadata (`"operator" | "user" | "shared"`) keeps data-plane isolation intact for privacy tooling. Optional `description` is a human title in the Console (falls back to the table name).
 
 ## Identity, config, and dependencies
 

@@ -28,6 +28,7 @@ export interface StoreChild {
   readonly cache: StoreCacheView;
   readonly willNotFire: WillNotFire;
   readonly piiColumns: readonly string[];
+  readonly columnDescriptions: Readonly<Record<string, string>>;
 }
 
 /** One store row from `console.store.list`. */
@@ -35,6 +36,7 @@ export interface StoreRecord {
   readonly ref: string;
   readonly facet: StoreFacet;
   readonly name: string;
+  readonly description?: string;
   readonly children: readonly StoreChild[];
   readonly replicaLagMs: number | null;
   readonly migrationDrift: {

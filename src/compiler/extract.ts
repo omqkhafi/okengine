@@ -420,6 +420,7 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
   const chain: string[] = [];
   let sqlType: "text" | "integer" | undefined;
   let sqlName: string | undefined;
+  let description: string | undefined;
   let defaultValue: string | number | boolean | null | undefined;
   let hasDefault = false;
   let cur: AstNode | undefined = node;
@@ -434,6 +435,9 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
         chain.push(method);
         if (method === "as") {
           sqlName = stringArg(call.arguments[0]) ?? sqlName;
+        }
+        if (method === "describe") {
+          description = stringArg(call.arguments[0]) ?? description;
         }
         if (method === "default") {
           const lit = call.arguments[0];
@@ -504,6 +508,7 @@ function parseFieldChain(node: AstNode, key: string): DeclaredColumn | undefined
     ...(methods.has("primaryKey") ? { primaryKey: true } : {}),
     ...(methods.has("unique") ? { unique: true } : {}),
     ...(hasDefault ? { default: defaultValue ?? null } : {}),
+    ...(description !== undefined ? { description } : {}),
     ...(methods.has("pii") ? { pii: true } : {}),
     ...(methods.has("sensitive") ? { sensitive: true } : {}),
   };
@@ -597,7 +602,12 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const storeName = stringArg(call.arguments[0]) ?? "store";
         const ref = `${facet}:${storeName}` as const;
         const bindingName = enclosingConstName(call, program);
+        const storeOpts = objectArg(call.arguments[1]);
+        const description = stringProp(storeOpts, "description");
         scope.stores[storeName] = scope.stores[storeName] ?? { facet };
+        if (description) {
+          scope.stores[storeName]!.description = description;
+        }
         if (facet === "sql") {
           attachSchemaOption(call.arguments[1], scope.stores[storeName]!, scope);
         }
@@ -643,7 +653,13 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
     if (obj === "gate" && prop === "policy") {
       const policyName = stringArg(call.arguments[0]);
       if (policyName) {
-        scope.gates[policyName] = { kind: "policy", roles: [policyName] };
+        const opts = objectArg(call.arguments[1]);
+        const description = stringProp(opts, "description");
+        scope.gates[policyName] = {
+          kind: "policy",
+          roles: [policyName],
+          ...(description ? { description } : {}),
+        };
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
           scope.gateIds.set(bindingName, policyName);
@@ -661,26 +677,23 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       const max = numberProp(opts, "max");
       const per = stringProp(opts, "per");
       const keyBy = stringProp(opts, "keyBy");
+      const description = stringProp(opts, "description");
       if (max !== undefined && per) {
         const expr = `rate:${strategy}:${max}/${per}`;
         const bindingName = enclosingConstName(call, program);
+        const rateGate = {
+          kind: "rate" as const,
+          strategy,
+          max,
+          per,
+          ...(keyBy ? { keyBy } : {}),
+          ...(description ? { description } : {}),
+        };
         if (bindingName) {
-          scope.gates[bindingName] = {
-            kind: "rate",
-            strategy,
-            max,
-            per,
-            ...(keyBy ? { keyBy } : {}),
-          };
+          scope.gates[bindingName] = rateGate;
           scope.gateIds.set(bindingName, expr);
         } else {
-          scope.gates[expr] = {
-            kind: "rate",
-            strategy,
-            max,
-            per,
-            ...(keyBy ? { keyBy } : {}),
-          };
+          scope.gates[expr] = rateGate;
         }
       }
     }
@@ -691,9 +704,11 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       if (templateName) {
         const medium = stringProp(opts, "medium");
         const locales = stringArrayProp(opts, "locales");
+        const description = stringProp(opts, "description");
         scope.channels[templateName] = {
           ...(medium ? { medium: medium as Channel["medium"] } : { medium: "email" }),
           ...(locales ? { locales } : {}),
+          ...(description ? { description } : {}),
         };
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
@@ -809,6 +824,9 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       if (delivery) {
         const signal: Signal = {
           delivery,
+          ...(stringProp(opts, "description")
+            ? { description: stringProp(opts, "description") }
+            : {}),
           ...(numberProp(opts, "retries") !== undefined
             ? { retries: numberProp(opts, "retries") }
             : {}),
@@ -838,6 +856,9 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         ...(stringProp(opts, "cron") ? { cron: stringProp(opts, "cron") } : {}),
         ...(boolProp(opts, "overridable") !== undefined
           ? { overridable: boolProp(opts, "overridable") }
+          : {}),
+        ...(stringProp(opts, "description")
+          ? { description: stringProp(opts, "description") }
           : {}),
       };
     }

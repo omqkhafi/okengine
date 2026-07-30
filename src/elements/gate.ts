@@ -13,6 +13,7 @@ export type {
   GateDecl,
   GatePolicyContext,
   PolicyGateDecl,
+  PolicyGateOptions,
   RateGateDecl,
   RateOptions,
 } from "./gate/declare.ts";

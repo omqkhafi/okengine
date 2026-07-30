@@ -333,6 +333,7 @@ interface ConsoleClient {
         ref: string;
         facet: "sql" | "kv" | "files" | "index";
         name: string;
+        description?: string;
         children: Array<{
           name: string;
           effectRef: string;
@@ -349,6 +350,7 @@ interface ConsoleClient {
             channels: string[];
           };
           piiColumns: string[];
+          columnDescriptions: Record<string, string>;
         }>;
         replicaLagMs: number | null;
         migrationDrift: {
@@ -987,6 +989,7 @@ interface ConsoleClient {
         summary: string | null;
         scopes: Array<{ kind: "app" | "unit" | "flow"; name?: string }>;
         declares: string[];
+        tables: Record<string, { plane?: string; description?: string }>;
         intercepts: Array<{
           stage: string;
           meanMs: number | null;

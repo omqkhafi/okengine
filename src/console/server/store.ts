@@ -69,6 +69,8 @@ export interface ConsoleStoreChild {
   readonly cache: ConsoleStoreCacheView;
   readonly willNotFire: ConsoleWillNotFire;
   readonly piiColumns: readonly string[];
+  /** Column key → optional human description (SQL tables). */
+  readonly columnDescriptions: Readonly<Record<string, string>>;
 }
 
 /** One row in `console.store.list`. */
@@ -76,6 +78,7 @@ export interface ConsoleStoreRow {
   readonly ref: ResourceRef;
   readonly facet: StoreFacet;
   readonly name: string;
+  readonly description?: string;
   readonly children: readonly ConsoleStoreChild[];
   readonly replicaLagMs: number | null;
   readonly migrationDrift: ConsoleMigrationDrift | null;
@@ -152,6 +155,7 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
       ref,
       facet,
       name,
+      ...(store.description !== undefined ? { description: store.description } : {}),
       children,
       replicaLagMs,
       migrationDrift: facet === "sql" ? drift : null,
@@ -219,8 +223,25 @@ function childrenOf(
       },
       willNotFire,
       piiColumns,
+      columnDescriptions: columnDescriptionsFor(store, childName),
     };
   });
+}
+
+function columnDescriptionsFor(
+  store: NonNullable<Manifest["stores"]>[string],
+  tableName: string,
+): Readonly<Record<string, string>> {
+  const cols = store.tables?.[tableName]?.columns;
+  if (!cols) return {};
+  const out: Record<string, string> = {};
+  for (const [key, col] of Object.entries(cols)) {
+    if (col && typeof col === "object" && "description" in col) {
+      const d = (col as { description?: string }).description;
+      if (typeof d === "string" && d.length > 0) out[key] = d;
+    }
+  }
+  return out;
 }
 
 function flowsTouching(manifest: Manifest, ref: ResourceRef, kind: "reads" | "writes"): string[] {
@@ -778,6 +799,9 @@ export function cacheKeyInvalidatedBy(key: string, writeRef: ResourceRef): boole
 
 /**
  * Open a memory StoreRuntime seeded from Manifest stores (Console default).
+ *
+ * The Console Manifest sandbox uses memory drivers for every facet. Real app
+ * boot resolves configured drivers before the Console binds to live runtimes.
  *
  * @param manifest - Manifest snapshot
  * @param now - Clock

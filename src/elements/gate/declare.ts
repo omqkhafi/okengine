@@ -45,6 +45,16 @@ export interface RateOptions {
    * Without it, no override is possible (console §4.1).
    */
   readonly overridable?: boolean;
+  /** Optional human description for Console / docs (falls back to the rate name). */
+  readonly description?: string;
+}
+
+/** Options object form of {@link gate.policy} (keeps the two-arg check form valid). */
+export interface PolicyGateOptions {
+  /** Predicate over {@link GatePolicyContext}. */
+  readonly check: (ctx: GatePolicyContext) => boolean | Promise<boolean>;
+  /** Optional human description for Console / docs (falls back to the policy name). */
+  readonly description?: string;
 }
 
 /** Policy gate declaration. */
@@ -52,6 +62,7 @@ export interface PolicyGateDecl {
   readonly kind: "policy";
   readonly name: string;
   readonly check: (ctx: GatePolicyContext) => boolean | Promise<boolean>;
+  readonly description?: string;
 }
 
 /** Rate gate declaration. */
@@ -63,6 +74,7 @@ export interface RateGateDecl {
   readonly per: string;
   readonly keyBy?: string;
   readonly overridable: boolean;
+  readonly description?: string;
 }
 
 /** Declared gate handle. */
@@ -76,11 +88,11 @@ export interface GateNamespace {
    * Declare a named ABAC / auth policy.
    *
    * @param name - Policy id (also a Module:Action when it contains `:`)
-   * @param check - Predicate over {@link GatePolicyContext}
+   * @param checkOrOptions - Predicate, or `{ check, description? }`
    */
   policy(
     name: string,
-    check: (ctx: GatePolicyContext) => boolean | Promise<boolean>,
+    checkOrOptions: ((ctx: GatePolicyContext) => boolean | Promise<boolean>) | PolicyGateOptions,
   ): PolicyGateDecl;
   /**
    * Declare a rate limit (atomic Lua on the kv driver).
@@ -98,13 +110,23 @@ export const gate: GateNamespace = {
    * Declare a named ABAC / auth policy.
    *
    * @param name - Policy id (also a Module:Action when it contains `:`)
-   * @param check - Predicate over {@link GatePolicyContext}
+   * @param checkOrOptions - Predicate, or `{ check, description? }`
    */
   policy(
     name: string,
-    check: (ctx: GatePolicyContext) => boolean | Promise<boolean>,
+    checkOrOptions: ((ctx: GatePolicyContext) => boolean | Promise<boolean>) | PolicyGateOptions,
   ): PolicyGateDecl {
-    return { kind: "policy", name, check };
+    if (typeof checkOrOptions === "function") {
+      return { kind: "policy", name, check: checkOrOptions };
+    }
+    return {
+      kind: "policy",
+      name,
+      check: checkOrOptions.check,
+      ...(checkOrOptions.description !== undefined
+        ? { description: checkOrOptions.description }
+        : {}),
+    };
   },
 
   /**
@@ -129,6 +151,7 @@ export const gate: GateNamespace = {
       per: options.per,
       keyBy: options.keyBy,
       overridable: options.overridable ?? false,
+      ...(options.description !== undefined ? { description: options.description } : {}),
     };
   },
 };

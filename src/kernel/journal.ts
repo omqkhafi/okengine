@@ -201,6 +201,12 @@ export interface JournalSession {
    * @param execute - Side-effecting body
    */
   effect<T>(effectKind: string, resource: string, execute: () => T | Promise<T>): Promise<T>;
+  /**
+   * Rewind the replay cursor to the start of the entry list.
+   * Used by flow-level retry so a re-entered `do` replays completed steps
+   * instead of treating the cursor as past them.
+   */
+  rewind(): void;
   /** Persist current run status / output. */
   commit(
     status: JournalRunStatus,
@@ -324,6 +330,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
         cursor = run.entries.length;
         await persist();
         return value;
+      },
+      rewind() {
+        cursor = 0;
       },
       async commit(status, patch) {
         run.status = status;

@@ -41,6 +41,7 @@ export type ChannelsFace = "inbox" | "deliverability";
 /** One Manifest template row. */
 export interface ConsoleChannelTemplate {
   readonly name: string;
+  readonly description?: string;
   readonly medium: string;
   readonly locales: readonly string[];
   readonly from: string | null;
@@ -214,6 +215,7 @@ export function projectTemplates(manifest: Manifest | null): readonly ConsoleCha
   return Object.entries(manifest?.channels ?? {})
     .map(([name, c]) => ({
       name,
+      ...(c.description !== undefined ? { description: c.description } : {}),
       medium: c.medium ?? "email",
       locales: c.locales ?? [],
       from: c.from ?? null,

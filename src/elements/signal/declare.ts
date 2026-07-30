@@ -17,6 +17,8 @@ export interface SignalOptions {
    * - `live` — client-subscribable stream (replayable)
    */
   readonly delivery: SignalDelivery;
+  /** Optional human description for Console / docs (falls back to the signal name). */
+  readonly description?: string;
   /** Max delivery attempts before dead-letter (once). */
   readonly retries?: number;
   /** Preserve exhausted messages in the DLQ (once). */
@@ -35,6 +37,8 @@ export interface SignalDecl<T = unknown> {
   readonly name: string;
   /** Delivery physics. */
   readonly delivery: SignalDelivery;
+  /** Optional human description. */
+  readonly description?: string;
   /** Max retries before DLQ. */
   readonly retries: number;
   /** Whether exhausted messages enter the DLQ. */
@@ -64,6 +68,7 @@ export function signal<T = unknown>(name: string, options: SignalOptions): Signa
   return {
     name,
     delivery: options.delivery,
+    ...(options.description !== undefined ? { description: options.description } : {}),
     retries: options.retries ?? 3,
     deadLetter: options.deadLetter ?? true,
     schema: options.schema,

@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-30T21:21:21.716Z",
-  "version": "0.3.5",
+  "measuredAt": "2026-07-30T23:10:10.005Z",
+  "version": "0.3.6",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 9751,
+      "value": 12376,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 26.668,
+      "value": 26.028,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 50872,
-      "limit": 51890,
+      "value": 52291,
+      "limit": 53337,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -85,8 +85,8 @@
     {
       "id": "export:./channel",
       "label": "channel",
-      "value": 4677,
-      "limit": 4933,
+      "value": 4698,
+      "limit": 4954,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -105,8 +105,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 9067,
-      "limit": 9323,
+      "value": 9987,
+      "limit": 10243,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 71528,
-      "limit": 72959,
+      "value": 72951,
+      "limit": 74411,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -135,8 +135,8 @@
     {
       "id": "export:./gate",
       "label": "gate",
-      "value": 3891,
-      "limit": 4147,
+      "value": 3945,
+      "limit": 4201,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -155,8 +155,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 4857,
-      "limit": 5113,
+      "value": 4885,
+      "limit": 5141,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./signal",
       "label": "signal",
-      "value": 861,
-      "limit": 1117,
+      "value": 888,
+      "limit": 1144,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -185,8 +185,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 12640,
-      "limit": 12896,
+      "value": 12935,
+      "limit": 13194,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -215,8 +215,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 20629,
-      "limit": 21042,
+      "value": 47050,
+      "limit": 47991,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -325,8 +325,8 @@
     {
       "id": "export:./drivers/drizzle-dialect",
       "label": "drizzle-dialect",
-      "value": 315,
-      "limit": 571,
+      "value": 326,
+      "limit": 582,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -353,6 +353,16 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/libsql",
+      "label": "libsql",
+      "value": 7517,
+      "limit": 7773,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/memory",
       "label": "memory",
       "value": 4222,
@@ -363,10 +373,20 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/pglite",
+      "label": "pglite",
+      "value": 620,
+      "limit": 876,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/pgvector",
       "label": "pgvector",
-      "value": 1001,
-      "limit": 1257,
+      "value": 23662,
+      "limit": 24136,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

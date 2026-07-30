@@ -29,6 +29,7 @@ export interface OutcomeRow {
 /** Template row. */
 export interface ChannelTemplate {
   readonly name: string;
+  readonly description?: string;
   readonly medium: string;
   readonly locales: readonly string[];
   readonly from: string | null;

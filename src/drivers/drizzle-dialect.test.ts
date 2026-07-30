@@ -10,11 +10,15 @@ describe("SQL_DRIVER_TO_DRIZZLE_DIALECT", () => {
     expect(SQL_DRIVER_TO_DRIZZLE_DIALECT).toEqual({
       sqlite: "sqlite",
       postgres: "postgresql",
+      libsql: "sqlite",
+      pglite: "postgresql",
     });
   });
 
   test("drizzleDialectFromSqlDriver resolves", () => {
     expect(drizzleDialectFromSqlDriver("sqlite")).toBe("sqlite");
     expect(drizzleDialectFromSqlDriver("postgres")).toBe("postgresql");
+    expect(drizzleDialectFromSqlDriver("libsql")).toBe("sqlite");
+    expect(drizzleDialectFromSqlDriver("pglite")).toBe("postgresql");
   });
 });

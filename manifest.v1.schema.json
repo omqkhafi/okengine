@@ -321,6 +321,10 @@
           "type": "string",
           "enum": ["once", "broadcast", "live"]
         },
+        "description": {
+          "description": "Optional human description; consumers fall back to the signal map key.",
+          "type": "string"
+        },
         "retries": { "type": "integer", "minimum": 0 },
         "deadLetter": { "type": "boolean" },
         "schema": { "$ref": "#/$defs/JsonSchema" },
@@ -354,6 +358,10 @@
           ]
         },
         "sqlName": { "type": "string", "minLength": 1 },
+        "description": {
+          "description": "Optional human description; consumers fall back to the column map key.",
+          "type": "string"
+        },
         "pii": { "type": "boolean" },
         "sensitive": { "type": "boolean" },
         "retain": { "type": "string", "minLength": 1 },
@@ -408,6 +416,10 @@
           "type": "string",
           "enum": ["sql", "kv", "files", "index"]
         },
+        "description": {
+          "description": "Optional human description; consumers fall back to the store map key.",
+          "type": "string"
+        },
         "tables": {
           "type": "object",
           "propertyNames": { "type": "string", "minLength": 1 },
@@ -451,7 +463,11 @@
         "cron": { "type": "string", "minLength": 1 },
         "every": { "type": "string", "minLength": 1 },
         "timezone": { "type": "string", "minLength": 1 },
-        "overridable": { "type": "boolean" }
+        "overridable": { "type": "boolean" },
+        "description": {
+          "description": "Optional human description; consumers fall back to the clock map key.",
+          "type": "string"
+        }
       }
     },
     "Gate": {
@@ -485,6 +501,10 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
+        },
+        "description": {
+          "description": "Optional human description; consumers fall back to the gate map key.",
+          "type": "string"
         }
       }
     },
@@ -502,6 +522,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "description": "Optional human description; consumers fall back to the channel map key.",
+          "type": "string"
+        },
         "medium": {
           "type": "string",
           "enum": ["email", "sms", "whatsapp", "push", "any"]
@@ -580,6 +604,18 @@
         }
       }
     },
+    "PluginTable": {
+      "description": "Optional metadata for a plugin-contributed table.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plane": { "type": "string", "minLength": 1 },
+        "description": {
+          "description": "Optional human description; consumers fall back to the table name.",
+          "type": "string"
+        }
+      }
+    },
     "Plugin": {
       "type": "object",
       "additionalProperties": false,
@@ -600,6 +636,12 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "uniqueItems": true
+        },
+        "tables": {
+          "description": "Optional metadata for table:* contributions.",
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/PluginTable" }
         }
       }
     },

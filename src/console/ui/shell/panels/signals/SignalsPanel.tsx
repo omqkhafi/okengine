@@ -31,6 +31,7 @@ import {
 } from "../../../signals/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Signals panel. List + detail + DLQ state lives in URL search params.
@@ -248,13 +249,18 @@ export function SignalsPanel() {
                         onClick={() => setSearch(openSignal(search, s.name))}
                       >
                         <span className="font-medium">
-                          {s.name}
+                          {displayLabel(s.name, s.description)}
                           {s.orphaned ? (
                             <span role="status" className="ml-2 text-xs text-[var(--oke-muted)]">
                               orphaned
                             </span>
                           ) : null}
                         </span>
+                        {s.description ? (
+                          <span className="font-mono text-xs text-[var(--oke-muted)]">
+                            {s.name}
+                          </span>
+                        ) : null}
                         <span className="text-xs text-[var(--oke-muted)]">
                           {s.delivery === "once" && (
                             <>
@@ -299,7 +305,12 @@ export function SignalsPanel() {
             <div className="flex flex-col gap-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold">{open.name}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {displayLabel(open.name, open.description)}
+                  </h2>
+                  {open.description ? (
+                    <p className="font-mono text-sm text-[var(--oke-muted)]">{open.name}</p>
+                  ) : null}
                   <p
                     role="status"
                     className="mt-2 max-w-prose text-sm leading-relaxed"

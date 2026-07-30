@@ -29,6 +29,7 @@ export interface DstAmbiguityView {
 /** One cron row from `console.clock.list`. */
 export interface ClockCronRecord {
   readonly name: string;
+  readonly description?: string;
   readonly status: CronStatus;
   readonly timezone: string;
   readonly overridable: boolean;

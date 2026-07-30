@@ -18,6 +18,8 @@ export interface ClockOptions {
    * Without it, no override is possible (console §4.1).
    */
   readonly overridable?: boolean;
+  /** Optional human description for Console / docs (falls back to the clock name). */
+  readonly description?: string;
 }
 
 /**
@@ -34,6 +36,8 @@ export interface ClockDecl {
   readonly timezone: string;
   /** Whether Console override is allowed. */
   readonly overridable: boolean;
+  /** Optional human description. */
+  readonly description?: string;
 }
 
 /**
@@ -52,5 +56,6 @@ export function clock(name: string, options: ClockOptions = {}): ClockDecl {
     every: options.every,
     timezone: options.timezone ?? "UTC",
     overridable: options.overridable ?? false,
+    ...(options.description !== undefined ? { description: options.description } : {}),
   };
 }

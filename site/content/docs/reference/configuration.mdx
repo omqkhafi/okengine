@@ -36,10 +36,10 @@ drivers: {
 
 | Key                | Shape          | Driver ids (verified)                                                        |
 | ------------------ | -------------- | ---------------------------------------------------------------------------- |
-| `store.sql`        | env driver map | `sqlite` · `postgres` · `memory`                                             |
+| `store.sql`        | env driver map | `sqlite` · `postgres` · `libsql` · `pglite` · `memory`                       |
 | `store.kv`         | env driver map | `memory` · `redis`                                                           |
 | `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
-| `store.index`      | env driver map | `memory` · `pgvector`                                                        |
+| `store.index`      | env driver map | `memory` · `pgvector` · `libsql`                                             |
 | `signal`           | env driver map | `memory` · `postgres` · `redis` · `nats`                                     |
 | `clock`            | env driver map | `memory` · `postgres` · `frozen`                                             |
 | `vault`            | env driver map | `dotenv` · `openbao` · `memory`                                              |

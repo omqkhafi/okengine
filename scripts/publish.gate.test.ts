@@ -110,7 +110,7 @@ describe("publish workflow", () => {
     }
   });
 
-  test("bump-version --dry-run touches both package.json files identically", async () => {
+  test("bump-version --dry-run touches both package.json files and changelog", async () => {
     const proc = Bun.spawn(["bun", "run", "scripts/bump-version.ts", "patch", "--dry-run"], {
       cwd: ROOT,
       stdout: "pipe",
@@ -118,9 +118,10 @@ describe("publish workflow", () => {
     });
     const stderr = await new Response(proc.stderr).text();
     const code = await proc.exited;
-    expect(code).toBe(0);
+    expect(code, stderr).toBe(0);
     expect(stderr).toContain("package.json");
     expect(stderr).toContain("packages/create-oke/package.json");
+    expect(stderr).toContain("changelog.md");
     // Both paths appear; versions in dry-run output share one arrow target.
     const match = stderr.match(/→\s+(\d+\.\d+\.\d+)/);
     expect(match?.[1]).toBeTruthy();

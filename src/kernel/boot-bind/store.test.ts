@@ -3,7 +3,13 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { resolveFilesDriverId, resolveKvDriverId, resolveSqlDriverId } from "./store.ts";
+import {
+  indexDriverFor,
+  resolveFilesDriverId,
+  resolveIndexDriverId,
+  resolveKvDriverId,
+  resolveSqlDriverId,
+} from "./store.ts";
 
 describe("bindStore driver resolution", () => {
   const prev = {
@@ -11,6 +17,7 @@ describe("bindStore driver resolution", () => {
     sql: process.env.OKE_SQL_DRIVER,
     kv: process.env.OKE_KV_DRIVER,
     files: process.env.OKE_FILES_DRIVER,
+    index: process.env.OKE_INDEX_DRIVER,
   };
 
   afterEach(() => {
@@ -22,6 +29,8 @@ describe("bindStore driver resolution", () => {
     else process.env.OKE_KV_DRIVER = prev.kv;
     if (prev.files === undefined) delete process.env.OKE_FILES_DRIVER;
     else process.env.OKE_FILES_DRIVER = prev.files;
+    if (prev.index === undefined) delete process.env.OKE_INDEX_DRIVER;
+    else process.env.OKE_INDEX_DRIVER = prev.index;
   });
 
   test("local env keeps sqlite / memory from config", () => {
@@ -65,5 +74,54 @@ describe("bindStore driver resolution", () => {
     expect(resolveSqlDriverId({}, "docker", true)).toBe("postgres");
     expect(resolveKvDriverId({}, "docker", true)).toBe("redis");
     expect(resolveFilesDriverId({}, "docker", true)).toBe("s3");
+  });
+});
+
+describe("bindStore index driver resolution", () => {
+  const prevIndex = process.env.OKE_INDEX_DRIVER;
+
+  afterEach(() => {
+    if (prevIndex === undefined) delete process.env.OKE_INDEX_DRIVER;
+    else process.env.OKE_INDEX_DRIVER = prevIndex;
+  });
+
+  test("defaults to memory when no index driver is configured", () => {
+    expect(resolveIndexDriverId({}, "local", false)).toBe("memory");
+    expect(resolveIndexDriverId({}, "docker", true)).toBe("memory");
+    expect(indexDriverFor("memory").id).toBe("memory");
+  });
+
+  test("config drivers.store.index is honoured per env", () => {
+    const options = {
+      config: {
+        drivers: {
+          store: {
+            index: { local: "memory", docker: "pgvector", prod: "pgvector" },
+          },
+        },
+      },
+    };
+    expect(resolveIndexDriverId(options, "local", false)).toBe("memory");
+    expect(resolveIndexDriverId(options, "docker", true)).toBe("pgvector");
+    expect(resolveIndexDriverId(options, "prod", false)).toBe("pgvector");
+  });
+
+  test("libsql resolves from config", () => {
+    const options = {
+      config: { drivers: { store: { index: { local: "libsql" } } } },
+    };
+    expect(resolveIndexDriverId(options, "local", false)).toBe("libsql");
+    expect(indexDriverFor("libsql").id).toBe("libsql");
+  });
+
+  test("docker mode honours OKE_INDEX_DRIVER override", () => {
+    process.env.OKE_INDEX_DRIVER = "pgvector";
+    expect(resolveIndexDriverId({}, "docker", true)).toBe("pgvector");
+    expect(resolveIndexDriverId({}, "local", false)).toBe("memory");
+  });
+
+  test("indexDriverFor returns the configured driver and throws on unknown ids", () => {
+    expect(indexDriverFor("pgvector").id).toBe("pgvector");
+    expect(() => indexDriverFor("chroma")).toThrow(/unknown index driver "chroma"/);
   });
 });

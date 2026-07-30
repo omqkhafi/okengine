@@ -36,6 +36,10 @@ const EXPORT_BUILD_EXTERNALS = [
   "ajv-formats",
   "oxc-parser",
   "zod",
+  "@libsql/client",
+  "@libsql/*",
+  "@electric-sql/pglite",
+  "@electric-sql/*",
 ] as const;
 
 /** How a sample is gated. */

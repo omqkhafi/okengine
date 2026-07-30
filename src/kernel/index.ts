@@ -118,13 +118,26 @@ export {
   type FxJson,
   type FxLog,
   type FxOperator,
+  type FxRetryOptions,
   type FxSearchOptions,
   type FxSendOptions,
   type FxStoreHandle,
   type FxTenant,
+  type FxThunk,
   type JsonResult,
   type NamedRef,
 } from "./fx.ts";
+
+export {
+  abortError,
+  abortableSleep,
+  currentAbortSignal,
+  isAbortError,
+  linkAbort,
+  withAbortSignal,
+} from "./abort-scope.ts";
+
+export { defaultRetryWhen, fxAll, fxRace, fxRetry, resolveRetryDelayMs } from "./concurrency.ts";
 
 export {
   DryRunWriteIsolationError,
@@ -200,6 +213,7 @@ export {
   type PluginOptions,
   type PluginRegistration,
   type TableContribution,
+  type PluginTableMeta,
   type PluginTableOptions,
 } from "./plugin.ts";
 

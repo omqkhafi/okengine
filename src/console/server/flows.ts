@@ -158,6 +158,7 @@ const SignalsListOut = z.object({
   signals: z.array(
     z.object({
       name: z.string(),
+      description: z.string().optional(),
       delivery: z.enum(["once", "broadcast", "live"]),
       retries: z.number(),
       deadLetterEnabled: z.boolean(),
@@ -336,6 +337,7 @@ const ChannelsListOut = z.object({
   templates: z.array(
     z.object({
       name: z.string(),
+      description: z.string().optional(),
       medium: z.string(),
       locales: z.array(z.string()),
       from: z.string().nullable(),
@@ -465,6 +467,7 @@ const CronHealthOut = z.object({
 
 const ClockCronOut = z.object({
   name: z.string(),
+  description: z.string().optional(),
   status: z.enum(["active", "paused", "orphaned"]),
   timezone: z.string(),
   overridable: z.boolean(),
@@ -753,6 +756,7 @@ const GatesListOut = z.object({
   gates: z.array(
     z.object({
       name: z.string(),
+      description: z.string().optional(),
       kind: z.enum(["policy", "rate"]),
       scopes: z.array(z.string()),
       roles: z.array(z.string()),
@@ -853,6 +857,13 @@ const PluginsListOut = z.object({
         }),
       ),
       declares: z.array(z.string()),
+      tables: z.record(
+        z.string(),
+        z.object({
+          plane: z.string().optional(),
+          description: z.string().optional(),
+        }),
+      ),
       intercepts: z.array(
         z.object({
           stage: z.string(),
@@ -1216,6 +1227,7 @@ const StoreListOut = z.object({
       ref: z.string(),
       facet: z.enum(["sql", "kv", "files", "index"]),
       name: z.string(),
+      description: z.string().optional(),
       children: z.array(
         z.object({
           name: z.string(),
@@ -1229,6 +1241,7 @@ const StoreListOut = z.object({
           }),
           willNotFire: WillNotFireOut,
           piiColumns: z.array(z.string()),
+          columnDescriptions: z.record(z.string(), z.string()),
         }),
       ),
       replicaLagMs: z.number().nullable(),

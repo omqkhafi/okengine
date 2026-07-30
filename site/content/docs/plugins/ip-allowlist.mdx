@@ -46,8 +46,8 @@ A client whose IP is not on the list receives `403` with a typed denial:
 <Callout type="error">
   Standard reverse proxies **append** to `X-Forwarded-For` — left-side hops are attacker-controlled.
   The plugin trusts the hop `trustedProxyDepth` from the **right** (default `1` = last hop). Set
-  this to your real proxy count; wrong depth bypasses the allowlist — topology-dependent, not
-  drop-in.
+  this to your real proxy count — wrong depth bypasses the allowlist (topology-dependent, not
+  drop-in).
 </Callout>
 
 ## Notes

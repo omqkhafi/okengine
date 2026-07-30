@@ -16,6 +16,7 @@ export interface FlowGatesRecord {
 /** Declared gate definition. */
 export interface GateDefRecord {
   readonly name: string;
+  readonly description?: string;
   readonly kind: "policy" | "rate";
   readonly scopes: readonly string[];
   readonly roles: readonly string[];

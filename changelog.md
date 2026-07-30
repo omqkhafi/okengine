@@ -4,8 +4,58 @@ Release history for `okengine`. One section per published tag, in reverse order.
 This file is the canonical source: the site's `/changelog` page is derived from
 it, so a release is only announced once it is written here.
 
-Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
-an `### Added` / `### Changed` / `### Fixed` group.
+Upcoming work lives under `## Unreleased`. `bun run bump` promotes that
+section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
+`### Added` / `### Changed` / `### Fixed` group.
+
+## Unreleased
+
+### Fixed
+
+- Console production builds resolve shared display labels across element panels.
+- Animated docs favicons no longer remove Next-managed metadata nodes during navigation.
+
+## v0.3.6 — 2026-07-31
+
+### Added
+
+- `oke-ship` agent skill — after every implementation, append changelog
+  notes under `## Unreleased` and sync site docs via `oke-docs`.
+  Wired into `AGENTS.md` so sessions close work with changelog + docs.
+- `libsql` and `pglite` Store SQL drivers as optional peers. libSQL adds
+  native `F32_BLOB` / `vector_top_k` ANN; PGlite provides opt-in
+  PostgreSQL + pgvector parity without changing the local SQLite default.
+- Real pgvector ANN for PostgreSQL and PGlite: `vector(dims)` storage,
+  HNSW with cosine operators, and similarity-ranked search through
+  Drizzle's native vector API.
+- Optional `description` on element declarations — `store.*`, `signal`,
+  `channel.template`, `clock`, `gate.policy` / `gate.rate`,
+  `field.*.describe(…)`, and `plugin.table` — extracted into the
+  Manifest and preferred as Console titles when set (raw key fallback).
+- `fx.all` / `fx.race` — structured concurrency on plain Promises:
+  pass thunks, first failure or settle aborts sibling branches via an
+  ambient `AbortSignal` (`fx.signal`). No generators or monadic wrapper.
+- `fx.retry(fn, { retries, delay, backoff, jitter, when? })` — exponential
+  backoff with full jitter. Prefer inside `fx.step` so durable replay
+  skips completed work.
+- `flow({ retry })` — coarse whole-`do` retry on the same journal session
+  (rewinds the durable cursor between attempts).
+
+### Changed
+
+- `bun run bump` promotes `## Unreleased` into `## v{next} — {today}`
+  (and leaves a fresh empty Unreleased). Changelog notes for unfinished
+  work no longer land on an already-shipped version section.
+- SQL-backed indexes share the SQL facet's existing connection. PGlite
+  remains an explicit dialect-parity choice; measured WASM startup and
+  warm CRUD remain meaningfully slower than native SQLite.
+
+### Fixed
+
+- `store.index()` now honors `drivers.store.index` at real boot and uses
+  the same driver switch in the Console. Explicit `pgvector` or `libsql`
+  configuration fails loudly when its SQL engine, extension, or optional
+  peer is unavailable instead of silently using memory.
 
 ## v0.3.5 — 2026-07-31
 

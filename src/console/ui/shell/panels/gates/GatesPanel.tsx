@@ -24,6 +24,7 @@ import {
 } from "../../../gates/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Input } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Gates panel. Inquiry direction and selection live in URL search params.
@@ -282,11 +283,17 @@ export function GatesPanel() {
                       aria-label="Gate chain"
                       className="mt-3 list-decimal space-y-1 pl-5 text-sm"
                     >
-                      {openFlowRow.gates.map((g) => (
-                        <li key={g}>
-                          <code className="font-mono">{g}</code>
-                        </li>
-                      ))}
+                      {openFlowRow.gates.map((g) => {
+                        const def = data?.gates.find((d) => d.name === g);
+                        return (
+                          <li key={g}>
+                            <span>{displayLabel(g, def?.description)}</span>
+                            {def?.description ? (
+                              <code className="ml-2 font-mono text-[var(--oke-muted)]">{g}</code>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ol>
                   )}
                 </div>

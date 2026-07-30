@@ -28,6 +28,7 @@ export interface SignalEndpoint {
 /** One row in `console.signals.list`. */
 export interface ConsoleSignalRow {
   readonly name: string;
+  readonly description?: string;
   readonly delivery: "once" | "broadcast" | "live";
   readonly retries: number;
   readonly deadLetterEnabled: boolean;
@@ -112,8 +113,10 @@ export async function projectSignalsList(
       withCause(dl, cfg.name, options.runs),
     );
 
+    const description = options.manifest?.signals?.[cfg.name]?.description;
     rows.push({
       name: cfg.name,
+      ...(description !== undefined ? { description } : {}),
       delivery: cfg.delivery,
       retries: stats?.retries ?? cfg.retries,
       deadLetterEnabled: stats?.deadLetterEnabled ?? cfg.deadLetter,
@@ -142,8 +145,10 @@ export async function projectSignalsList(
     if (rows.some((r) => r.name === name)) continue;
     const producers = producersOf(name, flows);
     const consumers = consumersOf(name, flows);
+    const description = options.manifest?.signals?.[name]?.description;
     rows.push({
       name,
+      ...(description !== undefined ? { description } : {}),
       delivery: stats.delivery,
       retries: stats.retries,
       deadLetterEnabled: stats.deadLetterEnabled,

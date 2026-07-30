@@ -18,7 +18,15 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 | `DATABASE_URL`      | Postgres connection (`postgres` driver, drizzle-kit) | `postgres://localhost:5432/oke` |
 | `OKE_STORE_SQL_URL` | Explicit SQL URL override                            | —                               |
 | `OKE_SQLITE_URL`    | SQLite file path (`sqlite` driver)                   | `.oke/app.sqlite`               |
+| `OKE_LIBSQL_URL`    | libSQL URL or file path (`libsql` driver)            | `.oke/app.libsql`               |
+| `OKE_PGLITE_URL`    | PGlite data dir or `memory://` (`pglite` driver)     | `.oke/pgdata`                   |
 | `OKE_SQL_DRIVER`    | Force the sql driver id at boot                      | config map                      |
+
+## Index store
+
+| Variable           | Used for                  | Default when unset |
+| ------------------ | ------------------------- | ------------------ |
+| `OKE_INDEX_DRIVER` | Force the index driver id | config map         |
 
 ## KV store
 

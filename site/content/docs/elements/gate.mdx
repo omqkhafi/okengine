@@ -74,10 +74,14 @@ A denied request never reaches `do`. It returns one of three typed failures, lik
 
 ## Two kinds of gates
 
-| Declaration                | Question it answers                    | Evaluated against                  |
-| -------------------------- | -------------------------------------- | ---------------------------------- |
-| `gate.policy(name, check)` | Is this principal allowed? (ABAC)      | auth / operator / request metadata |
-| `gate.rate(options)`       | Is there budget left for this subject? | an atomic counter on the kv driver |
+| Declaration                           | Question it answers                    | Evaluated against                  |
+| ------------------------------------- | -------------------------------------- | ---------------------------------- |
+| `gate.policy(name, check \| options)` | Is this principal allowed? (ABAC)      | auth / operator / request metadata |
+| `gate.rate(options)`                  | Is there budget left for this subject? | an atomic counter on the kv driver |
+
+`gate.policy(name, check)` stays the terse form. Pass
+`{ check, description }` when you want a human title in the Console
+(falls back to the policy name).
 
 ### The policy context
 
@@ -97,13 +101,14 @@ A policy name containing `:` is also a `Module:Action` permission — the same d
 
 ### Rate options
 
-| Option        | Type         | Default                    | Meaning                                      |
-| ------------- | ------------ | -------------------------- | -------------------------------------------- |
-| `max`         | number       | — (**required**)           | Takes allowed within `per`                   |
-| `per`         | string       | — (**required**)           | Window / refill period (`"1m"`, `"60s"`, …)  |
-| `keyBy`       | string       | —                          | Subject dimension (`"ip"`, `"user"`, …)      |
-| `strategy`    | RateStrategy | `"sliding-window-counter"` | Algorithm (below)                            |
-| `overridable` | boolean      | `false`                    | Allow the Console to retune `max`/`per` live |
+| Option        | Type         | Default                    | Meaning                                                  |
+| ------------- | ------------ | -------------------------- | -------------------------------------------------------- |
+| `max`         | number       | — (**required**)           | Takes allowed within `per`                               |
+| `per`         | string       | — (**required**)           | Window / refill period (`"1m"`, `"60s"`, …)              |
+| `keyBy`       | string       | —                          | Subject dimension (`"ip"`, `"user"`, …)                  |
+| `strategy`    | RateStrategy | `"sliding-window-counter"` | Algorithm (below)                                        |
+| `overridable` | boolean      | `false`                    | Allow the Console to retune `max`/`per` live             |
+| `description` | string       | —                          | Human title in the Console (falls back to the rate name) |
 
 | Strategy                 | Behavior                                               |
 | ------------------------ | ------------------------------------------------------ |

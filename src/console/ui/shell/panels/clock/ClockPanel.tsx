@@ -27,6 +27,7 @@ import {
 } from "../../../clock/index.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Input } from "../../components/ui.tsx";
+import { displayLabel } from "../../../display.ts";
 
 /**
  * Clock panel. Timeline + waiting-on + schedules; actions through `fx`.
@@ -264,7 +265,7 @@ export function ClockPanel() {
                     onClick={() => setSearch(openCron(search, c.name))}
                   >
                     <span className="flex items-center gap-1">
-                      {c.name}
+                      {displayLabel(c.name, c.description)}
                       {c.external ? <span aria-label="external effect">↗</span> : null}
                       {c.health.overdue ? (
                         <span role="status" className="text-[var(--oke-danger)]">
@@ -288,8 +289,14 @@ export function ClockPanel() {
               aria-live="polite"
               className="space-y-3 border-t border-[var(--oke-line)] pt-3"
             >
-              <h3 className="text-base font-medium">{openCronRow.name}</h3>
+              <h3 className="text-base font-medium">
+                {displayLabel(openCronRow.name, openCronRow.description)}
+              </h3>
               <p className="text-sm text-[var(--oke-muted)]">
+                {openCronRow.description ? (
+                  <span className="font-mono">{openCronRow.name}</span>
+                ) : null}
+                {openCronRow.description ? " · " : ""}
                 {openCronRow.effectiveCron ?? openCronRow.effectiveEvery} · {openCronRow.timezone}
                 {openCronRow.status !== "active" ? ` · ${openCronRow.status}` : ""}
               </p>

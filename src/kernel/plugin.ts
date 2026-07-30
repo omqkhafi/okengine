@@ -111,9 +111,7 @@ export interface TableContribution {
    * Non-column metadata (e.g. data plane). Prefer this over stuffing `plane`
    * into the column map.
    */
-  readonly options?: {
-    readonly plane?: "operator" | "user" | "shared" | string;
-  };
+  readonly options?: PluginTableOptions;
   /**
    * Opaque schema descriptor (legacy). Prefer {@link columns} + {@link options}.
    * Still set for plane-only contributions so older readers keep working.
@@ -124,6 +122,14 @@ export interface TableContribution {
 /** Options for {@link PluginApi.table} / {@link PluginDef.table}. */
 export interface PluginTableOptions {
   readonly plane?: "operator" | "user" | "shared" | string;
+  /** Optional human description for Console / docs (falls back to the table name). */
+  readonly description?: string;
+}
+
+/** Per-table metadata captured on {@link PluginCapabilities} / Manifest Plugin. */
+export interface PluginTableMeta {
+  readonly plane?: string;
+  readonly description?: string;
 }
 
 /** Driver contribution. */
@@ -253,6 +259,8 @@ export interface PluginCapabilities {
   readonly intercepts: readonly string[];
   /** Declared dependencies from `.needs()`. */
   readonly needs: readonly string[];
+  /** Optional metadata for contributed tables (description / plane). */
+  readonly tables?: Readonly<Record<string, PluginTableMeta>>;
 }
 
 /** Snapshot of everything a registration requested. */

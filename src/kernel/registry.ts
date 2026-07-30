@@ -166,6 +166,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
   return {
     api,
     snapshot(): PluginRegistration {
+      const tableMeta = tablesMetaFromContributions(tables);
       return {
         capabilities: {
           name: identity.name,
@@ -173,6 +174,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
           declares: declares.slice(),
           intercepts: intercepts.slice(),
           needs: needs.slice(),
+          ...(tableMeta ? { tables: tableMeta } : {}),
         },
         hooks: { ...hooks },
         edges: edges.slice(),
@@ -440,9 +442,12 @@ function normalizeTableContribution(
     };
   }
 
-  if (columnsOrOptions && isPlaneOnlyOptions(columnsOrOptions)) {
+  if (columnsOrOptions && isLegacyTableOptions(columnsOrOptions)) {
     const planeOptions: PluginTableOptions = {
-      plane: columnsOrOptions.plane as string,
+      ...(typeof columnsOrOptions.plane === "string" ? { plane: columnsOrOptions.plane } : {}),
+      ...(typeof columnsOrOptions.description === "string"
+        ? { description: columnsOrOptions.description }
+        : {}),
     };
     return {
       name,
@@ -462,9 +467,27 @@ function normalizeTableContribution(
   return { name };
 }
 
-function isPlaneOnlyOptions(
-  value: Readonly<Record<string, unknown>>,
-): value is { readonly plane: string } {
+function isLegacyTableOptions(value: Readonly<Record<string, unknown>>): boolean {
   const keys = Object.keys(value);
-  return keys.length === 1 && keys[0] === "plane" && typeof value.plane === "string";
+  if (keys.length === 0) return false;
+  return keys.every((k) => k === "plane" || k === "description");
+}
+
+function tablesMetaFromContributions(
+  contributions: readonly TableContribution[],
+): Record<string, { readonly plane?: string; readonly description?: string }> | undefined {
+  if (contributions.length === 0) return undefined;
+  const out: Record<string, { readonly plane?: string; readonly description?: string }> = {};
+  let any = false;
+  for (const t of contributions) {
+    const plane = t.options?.plane;
+    const description = t.options?.description;
+    if (plane === undefined && description === undefined) continue;
+    any = true;
+    out[t.name] = {
+      ...(plane !== undefined ? { plane } : {}),
+      ...(description !== undefined ? { description } : {}),
+    };
+  }
+  return any ? out : undefined;
 }

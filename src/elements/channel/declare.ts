@@ -14,6 +14,8 @@ export interface ChannelMediumOptions {
 
 /** Options for {@link channel.template} / medium `.template`. */
 export interface ChannelTemplateOptions {
+  /** Optional human description for Console / docs (falls back to the template name). */
+  readonly description?: string;
   readonly medium?: ChannelMedium;
   readonly locales?: string[];
   readonly schema?: unknown;
@@ -24,6 +26,7 @@ export interface ChannelTemplateOptions {
 export interface ChannelTemplateDecl {
   readonly kind: "template";
   readonly name: string;
+  readonly description?: string;
   readonly medium: ChannelMedium;
   readonly locales?: string[];
   readonly schema?: unknown;
@@ -65,6 +68,7 @@ function mediumBinder(
         kind: "template",
         name,
         medium,
+        ...(opts.description !== undefined ? { description: opts.description } : {}),
         ...(opts.locales ? { locales: opts.locales } : {}),
         ...(opts.schema !== undefined ? { schema: opts.schema } : {}),
         ...(from !== undefined ? { from } : {}),
@@ -110,6 +114,7 @@ export const channel: ChannelNamespace = {
       kind: "template",
       name,
       medium: options.medium ?? "email",
+      ...(options.description !== undefined ? { description: options.description } : {}),
       ...(options.locales ? { locales: options.locales } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.from !== undefined ? { from: options.from } : {}),

@@ -20,6 +20,7 @@ import {
   type VaultListResponse,
   type VaultSearch,
 } from "../../../vault/index.ts";
+import { displayLabel } from "../../../display.ts";
 import { consoleCalls } from "../../client.ts";
 import { Button, Input } from "../../components/ui.tsx";
 
@@ -191,7 +192,10 @@ export function VaultPanel() {
                       )}
                       onClick={() => setSearch(openVault(search, s.name))}
                     >
-                      <span className="font-mono">{s.name}</span>
+                      <span>{displayLabel(s.name, s.description)}</span>
+                      {s.description ? (
+                        <span className="font-mono text-xs text-[var(--oke-muted)]">{s.name}</span>
+                      ) : null}
                       <span className="truncate text-xs">
                         {s.sensitive ? (s.fingerprint ?? "unset") : (s.cleartext ?? "unset")}
                       </span>
@@ -225,9 +229,11 @@ export function VaultPanel() {
           ) : (
             <div className="flex max-w-2xl flex-col gap-6">
               <div>
-                <h2 className="font-mono text-lg text-[var(--oke-fg)]">{open.name}</h2>
+                <h2 className="text-lg text-[var(--oke-fg)]">
+                  {displayLabel(open.name, open.description)}
+                </h2>
                 {open.description ? (
-                  <p className="text-sm text-[var(--oke-muted)]">{open.description}</p>
+                  <p className="font-mono text-sm text-[var(--oke-muted)]">{open.name}</p>
                 ) : null}
                 {open.rotate ? (
                   <p className="text-sm text-[var(--oke-muted)]">Rotate hint: {open.rotate}</p>
