@@ -47,4 +47,4 @@ Every scaffold writes an `AGENTS.md` so coding agents know the OKE contract
 | npm (CLI) | [`create-oke`](https://www.npmjs.com/package/create-oke) — use this with `bunx`                         |
 | JSR       | [`@omqkhafi/create-oke`](https://jsr.io/@omqkhafi/create-oke) — same sources; prefer npm for the binary |
 
-Requires **Bun ≥ 1.3**. Docs: [okengine.vercel.app](https://okengine.vercel.app) · [handbook](https://okengine.vercel.app/docs).
+Requires **Bun ≥ 1.3**. Docs: [oke.omqkhafi.dev](https://oke.omqkhafi.dev) · [handbook](https://oke.omqkhafi.dev/docs).

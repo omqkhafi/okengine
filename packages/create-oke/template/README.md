@@ -74,4 +74,4 @@ Supported controls you uncomment are preserved when the generated stack refreshe
 
 ## Agent contract
 
-See [`AGENTS.md`](./AGENTS.md). Handbook: [okengine.vercel.app/docs](https://okengine.vercel.app/docs)
+See [`AGENTS.md`](./AGENTS.md). Handbook: [oke.omqkhafi.dev/docs](https://oke.omqkhafi.dev/docs)

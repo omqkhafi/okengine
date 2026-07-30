@@ -381,7 +381,7 @@ describe("non-TTY CLI", () => {
       };
       expect(nextStepsText(result)).toContain("oke dev");
       expect(nextStepsText(result)).toContain("bun install");
-      expect(nextStepsText(result)).toContain("okengine.vercel.app");
+      expect(nextStepsText(result)).toContain("oke.omqkhafi.dev");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

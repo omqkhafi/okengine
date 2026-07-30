@@ -7,6 +7,15 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.3.1 — 2026-07-30
+
+### Changed
+
+- Docs origin cut over from `okengine.vercel.app` to
+  [`oke.omqkhafi.dev`](https://oke.omqkhafi.dev). Error links, README,
+  scaffold next-steps, site `metadataBase`, and `llms.txt` examples now
+  point at the custom domain.
+
 ## v0.3.0 — 2026-07-30
 
 ### Added

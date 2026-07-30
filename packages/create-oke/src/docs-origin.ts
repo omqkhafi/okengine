@@ -2,11 +2,10 @@
  * Canonical public docs origin for scaffolded AGENTS.md and next-steps.
  *
  * Keep in lockstep with `src/docs-origin.ts` in the okengine package.
- * Flip both when the custom domain is attached: `https://oke.omqkhafi.dev`.
  */
 
-/** Live docs site (Vercel). Planned cutover: `https://oke.omqkhafi.dev`. */
-export const DOCS_ORIGIN = "https://okengine.vercel.app" as const;
+/** Live docs site. */
+export const DOCS_ORIGIN = "https://oke.omqkhafi.dev" as const;
 
 /**
  * Absolute docs URL for a path under the handbook / site.

@@ -15,7 +15,7 @@ _"Stop gluing APIs, jobs, and queues into one backend. One law collapses them �
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Bun >=1.3](https://img.shields.io/badge/Bun-%3E%3D1.3-black.svg)](https://bun.sh)
 
-**Docs:** [okengine.vercel.app](https://okengine.vercel.app) · **Handbook:** [/docs](https://okengine.vercel.app/docs) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke)
+**Docs:** [oke.omqkhafi.dev](https://oke.omqkhafi.dev) · **Handbook:** [/docs](https://oke.omqkhafi.dev/docs) · **CLI:** `oke` · **Scaffold:** [`create-oke`](https://www.npmjs.com/package/create-oke)
 
 > [!WARNING]
 > **Early development (`v0.x`) — not production-ready.**
@@ -100,7 +100,7 @@ export const update = mounted.update;
 export const remove = mounted.remove;
 ```
 
-Full walkthrough: [Basic usage](https://okengine.vercel.app/docs/get-started/basic-usage).
+Full walkthrough: [Basic usage](https://oke.omqkhafi.dev/docs/get-started/basic-usage).
 
 ## Documentation
 
@@ -108,11 +108,11 @@ Everything beyond this page lives in the site handbook:
 
 | Resource      | Link                                                                  |
 | ------------- | --------------------------------------------------------------------- |
-| Docs site     | [okengine.vercel.app](https://okengine.vercel.app)                    |
-| Handbook      | [/docs](https://okengine.vercel.app/docs)                             |
-| Changelog     | [/changelog](https://okengine.vercel.app/changelog)                   |
-| Agents index  | [/llms.txt](https://okengine.vercel.app/llms.txt)                     |
-| CLI reference | [/docs/reference/cli](https://okengine.vercel.app/docs/reference/cli) |
+| Docs site     | [oke.omqkhafi.dev](https://oke.omqkhafi.dev)                    |
+| Handbook      | [/docs](https://oke.omqkhafi.dev/docs)                             |
+| Changelog     | [/changelog](https://oke.omqkhafi.dev/changelog)                   |
+| Agents index  | [/llms.txt](https://oke.omqkhafi.dev/llms.txt)                     |
+| CLI reference | [/docs/reference/cli](https://oke.omqkhafi.dev/docs/reference/cli) |
 | Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json)                  |
 | Budgets       | [`BUDGETS.md`](BUDGETS.md)                                            |
 | Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                  |
