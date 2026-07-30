@@ -7,6 +7,14 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.3.4 — 2026-07-30
+
+### Fixed
+
+- Re-release of v0.3.3 so tag CI can publish: OpenBao bootstrap waits for
+  Raft `/sys/health` active before policy writes, and the `plugins`
+  export budget is rebased after the CORS / IP-allowlist hardening.
+
 ## v0.3.3 — 2026-07-30
 
 ### Added
