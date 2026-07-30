@@ -1,0 +1,249 @@
+---
+title: "Plugins"
+description: "The plugin API reference — what a plugin may contribute, hook stages, whole-table schema contributions, and identity rules. First-party plugins live in the Plugins section."
+icon: "Puzzle"
+source: "docs/spec/unified-theory.md"
+---
+
+A plugin is a definition that receives the app at `.plug()` time, adds capabilities, and returns it **with accumulated types**. Plugins are how OKE's own built-ins are built — auth, the Console, docker derivation, channels — so the extension API you get is the one we use ourselves.
+
+<Callout title="The one rule">
+  Public API only. Every built-in feature goes through the same `plugin()` surface you do — if the
+  core team ever needs a private hook, the API is treated as broken and gets fixed.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Define the plugin
+
+`plugin(name, { version })` returns a fluent definition. Each method **queues** a contribution — nothing executes yet:
+
+```typescript title="src/plugins/audit.ts"
+import { plugin, field, id, now } from "okengine";
+
+export const audit = plugin("audit", { version: "1.0.0" })
+  .table("audit_log", {
+    id: field.text().primaryKey().defaultFn(id),
+    flowId: field.text().notNull(),
+    at: field.integer().notNull().defaultFn(now),
+  })
+  .hook("afterHandle", async (ctx, fxOrErr, fx) => {
+    // observe every completed flow
+  });
+```
+
+</Step>
+
+<Step>
+### Plug it into the app
+
+`.plug()` executes the queued registration, records the capability list into the Manifest, and accumulates the plugin's types into the app (decorations become typed on the flow context):
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { audit } from "./plugins/audit.ts";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(audit);
+```
+
+</Step>
+
+<Step>
+### Everything derives as usual
+
+Plugin flows appear in the Manifest, plugin tables land in `schema.generated.ts` on the next `oke db push`, plugin panels show up in the Console. No extra wiring — a contribution is ordinary OKE, just authored elsewhere.
+
+</Step>
+
+</Steps>
+
+## What a plugin may contribute
+
+Every method below exists on both the fluent definition and the boot-time builder the registry records:
+
+| Method                           | Contributes                                         |
+| -------------------------------- | --------------------------------------------------- |
+| `.flow(def)`                     | An ordinary flow — Manifest, Console, client types  |
+| `.hook(stage, fn)`               | A per-request intercept at one pipeline stage       |
+| `.edge(fn)`                      | A handler for HTTP requests that match **no** flow  |
+| `.decorate(key, value)`          | A typed context decoration, visible to flows        |
+| `.element({ kind, name })`       | An element contribution (e.g. `store.sql` facet)    |
+| `.driver(id, impl)`              | A protocol-named driver for an existing element     |
+| `.image(role, recipe)`           | An image recipe for a docker role                   |
+| `.table(name, columns, options)` | A whole DB table, merged into the generated schema  |
+| `.errors(map)`                   | Typed errors flows can fail with                    |
+| `.client(name, ext)`             | A typed client extension                            |
+| `.consolePanel(panel)`           | A Console panel (ESM entry loaded at runtime)       |
+| `.cli(name, handler)`            | An `oke <name>` CLI command                         |
+| `.config(schema)`                | A config schema; values live on the plugin identity |
+| `.needs(dep)`                    | A declared dependency (e.g. `"store.kv"`)           |
+
+New infrastructure is a **driver** for an existing element, never a ninth element — plugins follow the same law.
+
+## Hooks run inside the pipeline
+
+A hook intercepts every flow invocation at one stage, in documented order:
+
+| Stage          | Runs                              |
+| -------------- | --------------------------------- |
+| `onRequest`    | First — request just arrived      |
+| `onParse`      | After input parsing               |
+| `onAuth`       | After gate resolution             |
+| `beforeHandle` | Immediately before the flow body  |
+| `afterHandle`  | After a successful body           |
+| `onError`      | When the flow fails               |
+| `onResponse`   | Last — before the response leaves |
+
+The handler itself is a pipeline slot, not a hook name — you cannot replace a flow's body from a plugin, only observe and short-circuit around it. A hook may return `void`, a `Response` (short-circuit), or a `FlowFailure`.
+
+At `onResponse`, `ctx.response` holds the **final serialized HTTP response** — mutate it in place (rebuild with new headers) to stamp headers on every outcome, including failures. Non-HTTP triggers leave `ctx.response` undefined; middleware hooks must no-op then. The official plugins rely on exactly this contract.
+
+## Edge handlers answer unmatched requests
+
+Hooks only ever see requests a flow owns — an `OPTIONS` preflight for a path bound to `GET` matches nothing and would 404 untouched. `.edge(fn)` closes that gap: handlers run in install order when the router finds no flow, the first returned `Response` answers, and `undefined` passes to the next handler, then the plain 404:
+
+```typescript
+plugin("cors", { version: "1.0.0" }).edge((request, info) => {
+  if (info.method === "OPTIONS" && request.headers.has("origin")) {
+    return new Response(null, { status: 204, headers: preflightHeaders(request) });
+  }
+  return undefined; // not mine — let someone else answer, else 404
+});
+```
+
+There is no flow context on the edge (no flow matched!), so handlers receive only `(request, { method, path })` — no `ctx`, no `fx`. The official CORS plugin's preflight handling is built on exactly this.
+
+## Runtime configuration: code or DB
+
+Plugin options are static by default — changing them means a redeploy. Every official plugin also accepts a `configSource()`, which keeps code as the floor and lets a database row override it live, with a KV binding as the automatic read-through cache:
+
+<Steps>
+
+<Step>
+### Declare the source and its sync flow
+
+```typescript title="src/app.ts"
+import { every, oke, on, store } from "okengine";
+import { configSource, maintenanceMode } from "okengine/plugins";
+
+const db = store.sql("app");
+const cache = store.kv("cache");
+
+const maintenance = configSource({
+  plugin: "maintenance-mode",
+  code: { enabled: false }, // the floor — always safe
+  db: { store: db }, // source of truth (optional)
+  kv: cache, // read-through cache (optional)
+});
+
+on(every("30s"), maintenance.sync()); // one clock flow refreshes the box
+
+export const app = oke({ name: "shop", env: "dev" }).plug(maintenanceMode(maintenance));
+```
+
+</Step>
+
+<Step>
+### Push the contributed table
+
+A DB-backed source makes the plugin contribute its own config table (`maintenance_mode_config`) — created by the usual `oke db push`, no hand-written DDL:
+
+```bash
+oke db push
+```
+
+</Step>
+
+<Step>
+### Change config without a deploy
+
+Insert or update the single config row; every instance picks it up within one sync interval:
+
+```sql
+INSERT INTO maintenance_mode_config ("key", "value")
+VALUES ('config', '{"enabled": true, "retryAfter": 300}');
+```
+
+</Step>
+
+</Steps>
+
+| Rule                 | Behavior                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| Code is the floor    | `current()` always returns at least the `code` config — boot is never blocked on the DB                   |
+| Shallow merge        | DB values replace `code` keys one-for-one (no deep merging)                                               |
+| KV read-through      | With `kv` set, sync ticks hit the database only after the TTL (default `30s`) expires                     |
+| Effects are declared | The sync flow's `effects` cover exactly the stores it touches — least privilege holds                     |
+| Fail loud            | A config row that is not valid JSON fails the sync flow — visible in Console runs, never silently ignored |
+| Identity             | The plugin identity snapshot is the `code` config — DB edits never trip the conflict guard                |
+
+<Callout title="Why a sync flow, not a hook read?">
+  Every store access goes through `fx`, and `fx` is capability-gated per flow — a hook cannot read a
+  store the flow did not declare. So the refresh lives in a real flow with declared effects, and
+  hooks read the in-memory box synchronously. The fx rule holds with zero exceptions.
+</Callout>
+
+## Plugin tables are whole tables
+
+A plugin may declare **its own tables** with `field.*` columns, merged into the generated domain schema at `oke db` time — the CLI loads your live app entry, collects every plugged plugin's contributions, and emits them alongside app tables:
+
+```typescript
+plugin("billing", { version: "2.1.0" }).table(
+  "invoices",
+  { id: field.text().primaryKey().defaultFn(id) },
+  { plane: "user" },
+);
+```
+
+Extending an existing **app-owned** table with plugin columns is not supported in v1 — contribute a separate table and reference the app's by key. The optional `plane` metadata (`"operator" | "user" | "shared"`) keeps data-plane isolation intact for privacy tooling.
+
+## Identity, config, and dependencies
+
+| Concept    | Rule                                                                           |
+| ---------- | ------------------------------------------------------------------------------ |
+| Name       | Stable plugin id — the Manifest key and conflict namespace                     |
+| `version`  | Semver string recorded in the Manifest                                         |
+| `config`   | Snapshot for identity dedup: same name + same config → no-op re-plug           |
+| Conflict   | Same name + **different** config → loud boot error, never a silent merge       |
+| `.needs()` | Declares runtime dependencies so boot fails early when a capability is missing |
+
+## Troubleshooting
+
+<Accordions type="single">
+  <Accordion title="Boot error: plugin already registered with different config">
+    You plugged the same plugin name twice with different `config` snapshots. This is deliberate —
+    two configurations of one plugin would silently diverge. Pass identical config, or rename one
+    instance.
+  </Accordion>
+  <Accordion title="My plugin table is missing from schema.generated.ts">
+    The CLI reads table contributions from the live app entry. Make sure the plugin is actually
+    `.plug()`ed in `src/app.ts` (or `db.entry` if overridden), then re-run `oke db push`.
+  </Accordion>
+  <Accordion title="My hook never runs">
+    Hooks are per-request intercepts keyed by stage — check the stage name against the pipeline
+    table above, and confirm the flow you expect actually reaches that stage (a gate denial never
+    reaches `beforeHandle`).
+  </Accordion>
+</Accordions>
+
+## Learn more
+
+- [Security Headers](/docs/plugins/security-headers) · [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) · [Compression](/docs/plugins/compression) · [Maintenance Mode](/docs/plugins/maintenance-mode) · [IP Allowlist](/docs/plugins/ip-allowlist) — first-party plugins built on exactly this API
+- [Flow](/docs/elements/flow) — what plugin flows and hooks plug into
+- [Store](/docs/elements/store) — `field.*` builders and schema sync
+- [Configuration](/docs/reference/configuration) — where plugin config is declared
+
+## Next
+
+<Cards>
+  <Card
+    title="Security Headers"
+    description="The full secure-headers set on every response."
+    href="/docs/plugins/security-headers"
+  />
+  <Card title="CORS" description="Cross-origin rules at the edge." href="/docs/plugins/cors" />
+  <Card title="Flow" description="Triggers, effects, and durability." href="/docs/elements/flow" />
+</Cards>

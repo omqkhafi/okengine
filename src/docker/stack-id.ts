@@ -56,6 +56,7 @@ export function hostPortForInstance(
   if (role === "signal") return 17_000 + n;
   if (role === "store.files") return 18_000 + n;
   if (role === "channel.email") return 20_000 + n;
+  if (role === "vault") return 22_000 + n;
   return defaultHostPort(role, containerPort) + n;
 }
 

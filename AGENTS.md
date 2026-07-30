@@ -53,11 +53,12 @@ A direct `node:` import (or any other side-channel I/O) in element or flow code 
 
 ## Ports
 
-| Port     | Surface |
-| -------- | ------- |
-| **6530** | App     |
-| **6533** | Console |
-| **6535** | MCP     |
+| Port     | Surface              |
+| -------- | -------------------- |
+| **6530** | App                  |
+| **6533** | Console              |
+| **6535** | MCP                  |
+| **6536** | Docs MCP (read-only) |
 
 Mnemonic: O·K·E = 6·5·3.
 
@@ -76,18 +77,18 @@ A regression fails the build. Claims we cannot measure, we do not make.
 
 Published packages:
 
-- `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
+- `okengine` — framework. Subpath exports: `.`, `./client`, `./test`, `./config`, `./auth`, `./plugins`, `./drivers/*`. `"sideEffects": false`. CLI binary: `oke`.
 - `create-oke` — scaffold CLI (`bunx create-oke@latest <name>`). Lives in `packages/create-oke` and ships one standard starter from `packages/create-oke/template`.
 
 Engine: Bun `>=1.3`.
 
 ## Documentation authority
 
-| Surface  | Path                          |
-| -------- | ----------------------------- |
-| Theory   | `site/content/docs/elements/` |
-| Console  | `site/content/docs/console/`  |
-| CLI      | `site/content/docs/cli.md`    |
-| Manifest | `manifest.v1.schema.json`     |
+| Surface  | Path                                 |
+| -------- | ------------------------------------ |
+| Theory   | `site/content/docs/elements/`        |
+| Console  | `site/content/docs/console/`         |
+| CLI      | `site/content/docs/reference/cli.md` |
+| Manifest | `manifest.v1.schema.json`            |
 
 **If the documentation is silent, stop and ask.**

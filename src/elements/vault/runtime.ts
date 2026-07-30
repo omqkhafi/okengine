@@ -71,7 +71,7 @@ export interface CreateVaultRuntimeOptions {
   readonly secrets?: readonly VaultSecretDecl[];
   /**
    * Resolution chain — first hit wins.
-   * Default for prod: `[sops]`; for tests callers pass memory/env layers.
+   * Callers pass the env-appropriate layers (env / openbao / memory / …).
    */
   readonly chain?: readonly VaultChainLayer[];
   /**

@@ -4,17 +4,10 @@
  * - a secret value never appears in a log or trace even when passed to fx.log
  * - fingerprints instead of values
  * - resolution chain (first hit wins)
- * - sops/age via Typage (in-process, no Go binary)
  */
 
 import { describe, expect, test } from "bun:test";
-import * as age from "age-encryption";
-import {
-  buildSopsFixture,
-  envVaultDriver,
-  memoryVaultDriver,
-  sopsVaultDriver,
-} from "../drivers/index.ts";
+import { envVaultDriver, memoryVaultDriver } from "../drivers/index.ts";
 import { createFx } from "../kernel/fx.ts";
 import {
   createVaultRuntime,
@@ -236,26 +229,6 @@ describe("redaction + fingerprints", () => {
     expect(fp).toBe(fingerprintSecretSync(secret));
     expect(fp).not.toContain(secret);
     expect(fp?.startsWith("sha256:")).toBe(true);
-  });
-});
-
-describe("sops / age (Typage)", () => {
-  test("decrypts SOPS JSON in-process with age-encryption", async () => {
-    const identity = await age.generateIdentity();
-    const recipient = await age.identityToRecipient(identity);
-    const { json } = await buildSopsFixture({ STRIPE_KEY: "sk_sops_decrypted" }, recipient);
-
-    const runtime = createVaultRuntime({
-      secrets: [vault("STRIPE_KEY")],
-      chain: [
-        {
-          driver: sopsVaultDriver,
-          options: { ciphertext: json, ageIdentity: identity },
-        },
-      ],
-    });
-    await runtime.boot();
-    expect(runtime.read("STRIPE_KEY")).toBe("sk_sops_decrypted");
   });
 });
 

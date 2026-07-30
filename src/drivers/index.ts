@@ -102,8 +102,7 @@ export type { VaultDriverId, VaultOpenOptions, VaultBag, VaultDriver } from "./v
 
 export { memoryVaultDriver } from "./vault-memory.ts";
 export { envVaultDriver } from "./vault-env.ts";
-export { sopsVaultDriver, buildSopsFixture, sopsEncryptValue } from "./vault-sops.ts";
-export { openbaoVaultDriver } from "./vault-openbao.ts";
+export { openbaoVaultDriver, OpenBaoUnavailableError } from "./vault-openbao.ts";
 export { infisicalVaultDriver } from "./vault-infisical.ts";
 export { managedVaultDriver } from "./vault-managed.ts";
 

@@ -1,0 +1,96 @@
+---
+title: "CSRF"
+description: "Official plugin — cross-site request forgery defense using fetch metadata (Sec-Fetch-Site) with an Origin fallback. Stateless: no tokens, no cookies, no session reads."
+icon: "ShieldAlert"
+source: "src/plugins/csrf.ts"
+---
+
+`csrf()` blocks browsers on other sites from mutating your state. It runs at `onAuth` — before gate policies and the flow body — using the fetch-metadata headers every modern browser sends, with an `Origin` check as the fallback. No tokens to mint, no cookies to double-submit, no session reads: the defense is stateless.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { csrf } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(csrf());
+```
+
+`GET`/`HEAD`/`OPTIONS` always pass. A `POST` with `Sec-Fetch-Site: cross-site` now gets the gate element's typed `Forbidden` — unless its `Origin` is yours or allow-listed.
+
+## How it decides
+
+<Steps>
+
+<Step>
+### Fetch metadata first
+
+`Sec-Fetch-Site: same-origin` and `none` pass. `same-site` passes by default (your subdomains) — set `allowSameSite: false` when subdomains host untrusted content. `cross-site` falls through to the Origin check.
+
+</Step>
+
+<Step>
+### Origin fallback
+
+With `cross-site` (or no metadata at all — older browsers), the `Origin` header must be the app's own origin or an entry in `allowOrigins`; anything else is `Forbidden`.
+
+</Step>
+
+<Step>
+### Headerless clients
+
+Requests carrying neither header — curl, server-to-server calls, webhooks — are not browser CSRF vectors, so they pass by default. Set `allowNoHeader: false` to fail closed when your auth is purely cookie-based.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option          | Type       | Default | Does                                                                           |
+| --------------- | ---------- | ------- | ------------------------------------------------------------------------------ |
+| `allowOrigins`  | `string[]` | none    | Absolute origins allowed to mutate cross-site (e.g. a separately-hosted admin) |
+| `allowSameSite` | `boolean`  | `true`  | Allow `Sec-Fetch-Site: same-site` (your subdomains)                            |
+| `allowNoHeader` | `boolean`  | `true`  | Allow mutating requests with neither metadata nor `Origin`                     |
+
+## Notes
+
+| Behavior          | Detail                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| Denial shape      | The gate element's typed `Forbidden` (`error.data.reason: "csrf"`) — same as any gate denial               |
+| Legacy browsers   | No fetch metadata → the `Origin` check carries the defense                                                 |
+| Token patterns    | Double-submit tokens can layer on later for defense-in-depth; fetch metadata alone covers current browsers |
+| Non-HTTP triggers | No-op — clock and signal flows are never browser-driven                                                    |
+
+## Runtime configuration
+
+Allow-listed origins are exactly the config you want to change live. Pass a `configSource()` and the rules follow the database within one sync interval:
+
+```typescript
+const rules = configSource({
+  plugin: "csrf",
+  code: { allowOrigins: ["https://admin.example.com"] },
+  db: { store: db },
+  kv: cache,
+});
+on(every("30s"), rules.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(csrf(rules));
+```
+
+See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Next
+
+<Cards>
+  <Card title="CORS" description="Cross-origin rules at the edge." href="/docs/plugins/cors" />
+  <Card
+    title="Gate"
+    description="The element behind the typed denials."
+    href="/docs/elements/gate"
+  />
+  <Card
+    title="Security Headers"
+    description="The full secure-headers set on every response."
+    href="/docs/plugins/security-headers"
+  />
+</Cards>

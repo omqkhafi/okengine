@@ -1,144 +1,158 @@
 ---
 title: "Flow"
-description: "behavior — Endpoints, jobs, consumers, and workflows are one species. You bind a typed trigger with `on`, declare contracts, and implement `do` through `fx`."
+description: "Behavior — endpoints, jobs, consumers, and workflows as one species: a typed trigger, declared contracts, and a do that touches the world only through fx."
 icon: "Workflow"
 source: "docs/spec/unified-theory.md"
 ---
 
-Flow is the element for **behavior**.
+Flow is how your backend **does anything**. An HTTP endpoint, a queue consumer, a cron job, a multi-step payment workflow — in other stacks these are four frameworks; here they are one species with one shape: `on(trigger, flow)`. Learn the shape once, and only the trigger ever changes.
 
-Endpoints, jobs, consumers, and workflows are one species. You bind a typed trigger with `on`, declare contracts, and implement `do` through `fx`.
-
-<Callout title="Governing rule">
-  Every backend behavior is a Flow: `on(Trigger) → Effects`. There is one species — not a zoo of
-  endpoints, jobs, and consumers.
+<Callout title="The one rule">
+  All world access goes through `fx`. A direct `fetch`, `Date.now()`, or `node:` import inside a
+  flow is a defect — effects are **inferred from what a flow touches through `fx`**, and that
+  inference is what powers the Manifest, the Console, caching, and durability.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Flow"
-    description="Essence: behavior. Replaces: endpoint · handler · consumer · job · workflow · webhook."
-  />
-</Cards>
+<Steps>
 
-## Anatomy of a Flow
+<Step>
+### Write the flow
 
-Every Flow — whatever starts it — is the same four declarations plus a `do`. Learn this shape once; only the first line changes across the five trigger types below.
+Four declarations plus a `do`:
 
-```typescript
+```typescript title="src/flows/orders/create.ts"
+import { on, flow, http } from "okengine";
+import { z } from "zod";
+
 export const createOrder = on(
-  http.post("/orders"), // ① trigger — what starts the flow
+  http.post("/orders"),
   flow({
-    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }), // ② in — validated input
-    out: z.object({ id: z.string() }), // ③ out — typed output
-    errors: { OutOfStock: z.object({ left: z.number() }) }, // ④ typed failures, returned not thrown
+    in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
+    out: z.object({ id: z.string() }),
+    errors: { OutOfStock: z.object({ left: z.number() }) },
     do: async (input, fx) => {
-      // ⑤ do — the work; every read, write, emit, and call goes through fx
-      const [product] = await fx
-        .store(db)
-        .select()
-        .from(products)
-        .where(eq(products.sku, input.sku))
-        .limit(1);
-      if (!product || product.stock < input.qty) {
-        return fx.fail("OutOfStock", { left: product?.stock ?? 0 });
-      }
       const id = fx.id();
       await fx
         .store(db)
         .insert(orders)
-        .values({ id, ...input, status: "pending", createdAt: Date.now() });
+        .values({ id, ...input, status: "pending" });
       return { id };
     },
   }),
 );
 ```
 
+</Step>
+
+<Step>
+### Run it
+
+`oke dev` picks up every exported flow — no route registration, no controller wiring:
+
+```bash
+oke dev
+```
+
+</Step>
+
+<Step>
+### Call it
+
+```bash
+curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type: application/json'
+# { "data": { "id": "…" }, "error": null }
+```
+
+</Step>
+
+</Steps>
+
+## Anatomy of a Flow
+
+| Part     | Role                                                            |
+| -------- | --------------------------------------------------------------- |
+| trigger  | What starts the flow — `http`, a signal, `every`, a row change  |
+| `in`     | Input contract — validated before `do` runs; bad input is a 422 |
+| `out`    | Output contract — the return value is checked against it        |
+| `errors` | Typed failures — **returned** with `fx.fail`, never thrown      |
+| `do`     | The work — every read, write, emit, and call goes through `fx`  |
+
+Failures are values, not exceptions:
+
+```typescript
+do: async (input, fx) => {
+  const [product] = await fx.store(db).select().from(products).where(eq(products.sku, input.sku));
+  if (!product || product.stock < input.qty) {
+    return fx.fail("OutOfStock", { left: product?.stock ?? 0 }); // declared in errors
+  }
+  // …
+};
+```
+
+Every response follows one envelope — success `{ data, error: null }`, failure `{ data: null, error: { code, data } }` — so clients handle outcomes by `error.code`, not by parsing status text.
+
 ## The five triggers
 
-One law, five ways to start it. Only part ① differs — the `flow({ … })` underneath never changes species. Each type below gets its own section and its own example, written for this page.
+| Trigger                      | Starts when                  | Replaces           |
+| ---------------------------- | ---------------------------- | ------------------ |
+| `http.post("/orders")`       | a request arrives            | endpoint · handler |
+| `orderPlaced` (a signal)     | another flow emits           | queue consumer     |
+| `every("1h")`                | time passes                  | cron job           |
+| `db.table(orders).changed()` | a row changes                | CDC pipeline       |
+| — none                       | another flow calls `fx.call` | "private" helper   |
 
-| Trigger         | Starts when                  | Replaces           |
-| --------------- | ---------------------------- | ------------------ |
-| `http`          | a request arrives            | endpoint · handler |
-| `signal`        | another flow emits           | queue consumer     |
-| `every` (clock) | time passes                  | cron job           |
-| store change    | a row changes                | CDC pipeline       |
-| — none          | another flow calls `fx.call` | "private" helper   |
-
-### 1 · http — a request arrives
-
-Bind a method and a path. Path params and body validate against `in`; gates evaluate before `do` runs; the return value must match `out`.
+### http — a request arrives
 
 ```typescript
 export const findOrder = on(
-  http.get("/orders/:id").gate(member), // gates sit at the trigger
+  http.get("/orders/:id").gate(member), // gates evaluate before do runs
   flow({
     in: z.object({ id: z.string() }),
-    out: z.object({ id: z.string(), status: z.string() }),
+    out: Order,
     errors: { NotFound: z.object({}) },
     do: async ({ id }, fx) => (await fx.store(db).findById(orders, id)) ?? fx.fail("NotFound", {}),
   }),
 );
 ```
 
-CRUD is five bindings of that one shape — method and path carry the convention:
+### signal — another flow emits
 
-| Operation | Trigger                      |
-| --------- | ---------------------------- |
-| create    | `http.post("/orders")`       |
-| list      | `http.get("/orders")`        |
-| get       | `http.get("/orders/:id")`    |
-| update    | `http.patch("/orders/:id")`  |
-| remove    | `http.delete("/orders/:id")` |
-
-Use `store.resource` when the five conventional CRUD Flows share one table and contract.
-
-### 2 · signal — another flow emits
-
-Declare the signal once — delivery physics is part of the declaration, never guessed:
-
-```typescript
-export const orderPlaced = signal("order-placed", {
-  schema: z.object({ orderId: z.string() }),
-  delivery: "once", // queue physics: one consumer, retries, DLQ
-});
-```
-
-The producer emits through `fx`, transactionally with its writes. The consumer is another Flow — the same species; there is no `subscribe()` and no listener registration:
+The producer emits through `fx` (transactionally with its writes); the consumer is the same species — no `subscribe()`, no listener registration:
 
 ```typescript
 await fx.emit(orderPlaced, { orderId: id }); // inside the producing flow
 
 on(
-  orderPlaced, // the signal value itself is the trigger
+  orderPlaced,
   flow({
-    do: async ({ orderId }, fx) => await fx.send(receipt, { to: orderId, data: { orderId } }),
-  }),
-);
-```
-
-### 3 · clock — time passes
-
-`every("1h")` is a trigger value, not a registration with a scheduler library.
-
-```typescript
-on(
-  every("1h"),
-  flow({
-    do: (_, fx) => {
-      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-      return fx.store(db).delete(sessions).where(lt(sessions.createdAt, cutoff));
+    do: async ({ orderId }, fx) => {
+      /* … */
     },
   }),
 );
 ```
 
-### 4 · store change — a row changes
+### clock — time passes
 
-CDC is built in. The trigger names a table (and optionally a column); the flow receives `{ before, after }`:
+`every("1h")` is a trigger value, not a registration with a scheduler library:
+
+```typescript
+on(
+  every("1h"),
+  flow({
+    do: async (_, fx) => {
+      const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000;
+      await fx.store(db).delete(sessions).where(lt(sessions.createdAt, cutoff));
+    },
+  }),
+);
+```
+
+### store change — a row changes
+
+CDC is built in; the flow receives `{ before, after }`:
 
 ```typescript
 on(
@@ -149,107 +163,50 @@ on(
 );
 ```
 
-### 5 · no trigger — nothing starts it
+### no trigger — a callable flow
 
-Drop `on()` and it is still a real Flow — contracts, effects, and a Manifest entry. Nothing in the world starts it; another flow calls it through `fx.call`:
+Drop `on()` and it is still a real Flow — contracts, Manifest entry, everything. Other flows call it through `fx.call`:
 
 ```typescript
 export const getOrder = flow({
-  // no on() — not wired to any trigger
-  in: z.object({ id: z.string() }),
-  out: z.object({ id: z.string(), status: z.string() }),
+  in: OrderRef,
+  out: Order,
   do: async ({ id }, fx) => {
-    const [order] = await fx.store(db).select().from(orders).where(eq(orders.id, id)).limit(1);
-    return order;
+    /* … */
   },
 });
 
-// …called from any other flow:
-const o = await fx.call(getOrder, { id: orderId });
+const order = await fx.call(getOrder, { id: orderId }); // from any other flow
 ```
 
-### How the five harmonize
+## fx — the only door
 
-Wiring is just values flowing between flows. `createOrder` ends with `await fx.emit(orderPlaced, …)` — and that emission is what starts the consumer. The connection is declared in code, not configured in a dashboard:
+Everything a flow may touch, on one object:
 
-```typescript
-on(http.post("/orders"), createOrder); // ① a request arrives
-on(orderPlaced, sendReceipt); // ② its emit starts the consumer
-on(every("1h"), sweepExpired); // ③ time passes
-on(db.table(orders).changed("status"), reverify); // ④ a row changes
-// ⑤ getOrder — nothing starts it; every flow above can fx.call it
-```
+| Surface                                 | Effect recorded | What it does                                 |
+| --------------------------------------- | --------------- | -------------------------------------------- |
+| `fx.store(db).select/insert/…`          | read / write    | SQL, KV, files, index sessions               |
+| `fx.emit(signal, payload)`              | emit            | Publish a signal (transactional with writes) |
+| `fx.send(template, opts)`               | send            | Reach a human (email · SMS · …)              |
+| `fx.ask(prompt, input)`                 | ask             | Call a versioned AI prompt                   |
+| `fx.run(agent, input)`                  | ask             | Run a bounded agent                          |
+| `fx.call(flow, input)`                  | call            | Invoke another flow                          |
+| `fx.vault(contract)`                    | read            | Read a secret (redacted from logs)           |
+| `fx.clock.now()` / `.sleep(…)`          | —               | Injected time / durable sleep                |
+| `fx.cache.get/set`                      | —               | Shared cache with effect-aware invalidation  |
+| `fx.step(name, fn)`                     | —               | Named durable step — never re-runs on replay |
+| `fx.id()` · `fx.log` · `fx.t`           | —               | UUIDs, redacting logger, i18n                |
+| `fx.auth` · `fx.operator` · `fx.tenant` | —               | Who is calling (user / operator / tenant)    |
 
-<Callout title="Registry isolation — tested, not a caveat">
-  Multiple `oke()` apps in one process are isolated by default: `registry: "consume"` drains the
-  global registry at construction, so a later app cannot inherit this app's routes. `"keep"` and
-  `"ignore"` are explicit embedding opt-outs. Tested in `src/kernel/registry-isolation.test.ts`.
+<Callout title="Why this strictness pays off">
+  Effects are inferred from `fx` usage, so the Manifest knows exactly which flows read `orders` or
+  send PII to a model — without you declaring any of it. That one graph drives the Console panels,
+  cache invalidation, least-privilege tokens, and durable replay.
 </Callout>
 
-## Query surface through `fx.store(db)`
+## Durability — flows that survive the process
 
-`fx.store(db)` is a single-table session. Four capabilities, each shown in use:
-
-**`.orderBy()` — stable ordering.** Keyset pages order by `(createdAt, id)` so pagination never drifts:
-
-```typescript
-const rows = await fx.store(db).select().from(notes).orderBy(desc(notes.createdAt), desc(notes.id));
-```
-
-**`.limit()` — top-N, with or without `.where()`.** A chained `where → orderBy → limit` issues exactly one SELECT:
-
-```typescript
-const latest = await fx.store(db).select().from(notes).limit(20); // no .where() needed
-```
-
-**`and` / `or` — real parenthesized logic.** Mixed AND/OR at one level is rejected — group explicitly:
-
-```typescript
-.where(or(lt(notes.createdAt, c), and(eq(notes.createdAt, c), lt(notes.id, id))))
-// one parenthesized OR — the keyset-cursor predicate
-```
-
-**`like` / `ilike` — search.** Notes uses `like` for the `q` title search; `ilike` is the case-insensitive variant:
-
-```typescript
-.where(like(notes.title, `%${input.q}%`))
-```
-
-<Callout title="Response envelope">
-Every Flow returns either data matching `out` — `{ data, error: null }` — or a typed failure via `fx.fail(code, data)` — `{ data: null, error: { code, data, message } }`.
-</Callout>
-
-## Examples
-
-Three realistic scenarios. Each names what follows from its behavior — not just its syntax.
-
-### A typical endpoint
-
-`create` can be mounted as part of `store.resource`. The shape is the same `http` trigger shown above; no second snippet is repeated here.
-
-**Consequence:** `create` answers **201** through `fx.json.create(row)` in `src/elements/store/resource.ts`. A typed failure stays an envelope (`{ data: null, error: … }`) — it never crashes the process.
-
-### A background job
-
-### Scheduled cleanup
-
-```typescript
-on(
-  every("1h"),
-  flow({
-    do: (_, fx) => {
-      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-      return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
-    },
-  }),
-);
-```
-
-**Consequence:** if this flow throws, **only that run fails**. `runPipeline` catches a handler throw into `ctx.error` and does not rethrow (`src/kernel/hooks.ts`); the cron interval keeps firing. The app process does not exit.
-
-### A durable, multi-step flow
-
-### Durable payment
+Set `durable: true` and every `fx` call is journaled. Wrap side effects in `fx.step` and they never re-run on replay:
 
 ```typescript
 export const chargeOrder = flow({
@@ -258,7 +215,6 @@ export const chargeOrder = flow({
   out: z.boolean(),
   do: async ({ orderId }, fx) => {
     const intent = await fx.step("create-intent", () =>
-      // never re-runs on replay
       stripe(fx.vault(stripeKey)).create(orderId),
     );
 
@@ -269,31 +225,51 @@ export const chargeOrder = flow({
 });
 ```
 
-**Consequence:** kill the process between the two `fx.step` calls and the run **resumes at `confirm`** — completed steps replay from the journal and never re-run. Proven by `src/elements/clock.test.ts` (`killed mid-execution resumes at the failed step, not the beginning`): after resume, `calls` is `["create-intent", "confirm"]` — `create-intent` ran once. The card is not charged twice.
+**Consequence:** kill the process between the two steps and the run **resumes at `confirm`** — completed steps replay from the journal, so the card is not charged twice. This is verified by the engine's own test suite: after resume, `create-intent` has run exactly once.
+
+## Composition is just calls
+
+Wiring is values flowing between flows — declared in code, never configured in a dashboard:
+
+```typescript
+on(http.post("/orders"), createOrder); // ① a request arrives
+on(orderPlaced, sendReceipt); // ② its emit starts the consumer
+on(every("1h"), sweepExpired); // ③ time passes
+on(db.table(orders).changed("status"), reverify); // ④ a row changes
+// ⑤ getOrder — nothing starts it; every flow above can fx.call it
+```
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="My flow used fetch / Date.now directly and weird things happened">
+
+That bypasses the effect graph: the Manifest can't see the call, cache keys miss it, durable replay re-executes it, and tests can't freeze it. Move it behind `fx` — `fx.ask` / `fx.send` / `fx.clock.now()`, or a step inside a durable flow for true third-party calls.
+
+</Accordion>
+<Accordion title="Should I throw or fx.fail?">
+
+`fx.fail(code, data)` for expected outcomes — anything in `errors`. A throw is a crash: the run fails with a 500-shaped error and no typed code for the client. Expected failures are values so clients can switch on `error.code`.
+
+</Accordion>
+<Accordion title="How do I share logic between flows — a private function?">
+
+Make it a plain flow with no trigger and `fx.call` it. You keep contracts, the Manifest entry, and tracing; a bare function would hide the work from the effect graph.
+
+</Accordion>
+<Accordion title="What happens if a cron flow throws?">
+
+Only that run fails — the schedule keeps firing and the process does not exit. The failed run lands in Console → Runs with its trace.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
 - [Signal](/docs/elements/signal) — delivery physics (`once` · `broadcast` · `live`)
-- [Clock](/docs/elements/clock) — cron, delay, durable sleep
+- [Clock](/docs/elements/clock) — schedules and durable sleep
 - [Console · Flows](/docs/console/flows) — the Manifest-derived panel
 - [Runs](/docs/console/runs) — how a flow execution is observed
-
-## See it running
-
-Continue with the standard starter or the next element:
-
-<Cards>
-  <Card
-    title="Basic Usage"
-    description="Scaffold the starter, edit a Flow, use the typed client, and test it."
-    href="/docs/get-started/basic-usage"
-  />
-  <Card
-    title="Signal"
-    description="Delivery physics for once, broadcast, and live data."
-    href="/docs/elements/signal"
-  />
-</Cards>
 
 ## Next
 

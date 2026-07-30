@@ -1,0 +1,92 @@
+---
+title: "IP Allowlist"
+description: "Official plugin — allow/deny rules by client IP at the edge of the pipeline, with the same typed Forbidden denial the gate element produces."
+icon: "ListChecks"
+source: "src/plugins/ip-allowlist.ts"
+---
+
+`ipAllowlist()` enforces IP rules at `onAuth`, before any gate policy or flow body runs. Internal admin surfaces, staging environments, and webhook endpoints stop unknown clients at the edge with the same typed `Forbidden` denial the [gate element](/docs/elements/gate) produces.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { ipAllowlist } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(
+  ipAllowlist({ allow: ["203.0.113.7", "2001:db8::42"] }),
+);
+```
+
+A client whose IP is not on the list receives `403` with a typed denial:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "Forbidden",
+    "data": { "reason": "ip_not_allowed", "ip": "198.51.100.9" }
+  }
+}
+```
+
+## Options
+
+| Option   | Type       | Default             | Does                                                       |
+| -------- | ---------- | ------------------- | ---------------------------------------------------------- |
+| `allow`  | `string[]` | — (everyone passes) | Exact IPs permitted — every other client is denied         |
+| `deny`   | `string[]` | — (nobody blocked)  | Exact IPs blocked — checked first, so deny wins on overlap |
+| `header` | `string`   | `"x-forwarded-for"` | Header carrying the client IP (first hop wins)             |
+
+```typescript
+.plug(ipAllowlist({ deny: ["198.51.100.9"], header: "x-real-ip" }))
+```
+
+<Callout type="warn">
+  The IP header is only trustworthy behind a proxy that **sets or overwrites** it (your load
+  balancer, reverse proxy, or platform edge). A client connecting directly can send any
+  `x-forwarded-for` value it likes — an allowlist is a strong boundary only when the proxy owns the
+  header.
+</Callout>
+
+## Notes
+
+| Behavior          | Detail                                                                             |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| XFF parsing       | First comma-separated hop is the client; proxy-appended tails are ignored          |
+| Missing header    | Denied when `allow` is set (unknown is not allowed); permitted for deny-only rules |
+| Deny wins         | An IP in both lists is blocked                                                     |
+| Non-HTTP triggers | No-op — there is no client IP outside HTTP                                         |
+
+## Runtime configuration
+
+Block an abusive IP from the database and every instance picks it up on the next sync:
+
+```typescript
+const rules = configSource({
+  plugin: "ip-allowlist",
+  code: { deny: [] },
+  db: { store: db },
+  kv: cache,
+});
+on(every("30s"), rules.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(ipAllowlist(rules));
+```
+
+See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Next
+
+<Cards>
+  <Card
+    title="Maintenance Mode"
+    description="Drain traffic with one flag."
+    href="/docs/plugins/maintenance-mode"
+  />
+  <Card
+    title="Gate"
+    description="Policies and rate limits after the IP edge."
+    href="/docs/elements/gate"
+  />
+  <Card title="Plugin API" description="Build your own plugin." href="/docs/reference/plugins" />
+</Cards>

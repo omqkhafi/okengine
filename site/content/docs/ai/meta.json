@@ -1,5 +1,5 @@
 {
   "title": "AI Resources",
   "icon": "Bot",
-  "pages": ["resources"]
+  "pages": ["mcp", "skills", "llms-txt"]
 }

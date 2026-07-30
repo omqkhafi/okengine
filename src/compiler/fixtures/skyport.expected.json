@@ -162,7 +162,7 @@
     }
   },
   "drivers": {
-    "prod": ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"]
+    "prod": ["postgres", "redis", "s3", "smtp", "openbao", "anthropic", "pgvector"]
   },
   "tenancy": {
     "isolation": "row"

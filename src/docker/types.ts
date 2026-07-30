@@ -60,6 +60,7 @@ export interface RecipeExtraPort {
 export interface RecipeApplyResult {
   readonly environment?: Readonly<Record<string, string>>;
   readonly command?: string | readonly string[];
+  readonly entrypoint?: string | readonly string[];
   readonly healthcheck?: ComposeHealthcheck;
   readonly volumes?: readonly string[];
   readonly user?: string;

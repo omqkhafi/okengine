@@ -39,11 +39,18 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/console/plugins": "Puzzle",
   "/docs/console/privacy": "EyeOff",
   "/docs/console/tenancy": "Building2",
+  "/docs/reference": "BookMarked",
+  "/docs/reference/plugins": "Puzzle",
+  "/docs/reference/cli": "Terminal",
+  "/docs/reference/security": "Shield",
   "/docs/plugins": "Puzzle",
-  "/docs/cli": "Terminal",
-  "/docs/security": "Shield",
+  "/docs/plugins/compression": "Shrink",
+  "/docs/plugins/cors": "Globe",
+  "/docs/plugins/csrf": "ShieldAlert",
+  "/docs/plugins/ip-allowlist": "ListChecks",
+  "/docs/plugins/maintenance-mode": "Construction",
+  "/docs/plugins/security-headers": "ShieldCheck",
   "/docs/ai": "Bot",
-  "/docs/ai/resources": "Brain",
 };
 
 /** Folder display name → docs path for icon lookup. */
@@ -52,9 +59,8 @@ const FOLDER_PATHS: Readonly<Record<string, string>> = {
   "Get Started": "/docs/get-started",
   Elements: "/docs/elements",
   Console: "/docs/console",
+  Reference: "/docs/reference",
   Plugins: "/docs/plugins",
-  "CLI Reference": "/docs/cli",
-  Security: "/docs/security",
   "AI Resources": "/docs/ai",
 };
 

@@ -29,7 +29,6 @@ const BUILD_EXTERNALS = ["@duckdb/node-api", "@duckdb/*"] as const;
 /** Heavy optional / peer packages — not counted in export:* gzip samples. */
 const EXPORT_BUILD_EXTERNALS = [
   ...BUILD_EXTERNALS,
-  "age-encryption",
   "sently",
   "sently/*",
   "ajv",
@@ -515,7 +514,7 @@ export function formatBudgetsMarkdown(snapshot: BudgetsSnapshot): string {
     "",
     `_okengine v${snapshot.version} · measured ${snapshot.measuredAt}_`,
     "",
-    "Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `age-encryption`, `sently`, `oxc-parser`, `ajv`).",
+    "Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).",
   ];
   const order: readonly BudgetGroup[] = ["core", "exports", "drivers"];
   for (const group of order) {

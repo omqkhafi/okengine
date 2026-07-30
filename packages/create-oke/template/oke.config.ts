@@ -36,9 +36,9 @@ export default defineConfig({
     },
     vault: {
       local: "dotenv",
-      docker: "dotenv",
+      docker: "openbao",
       test: "memory",
-      prod: "sops",
+      prod: "openbao",
     },
     channel: {
       email: {
@@ -54,6 +54,7 @@ export default defineConfig({
     "store.kv": "redis:8-alpine",
     "store.files": "rustfs/rustfs:1.0.0-beta.11",
     "channel.email": "axllent/mailpit:v1.22.3",
+    vault: "openbao/openbao:2.6.1",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

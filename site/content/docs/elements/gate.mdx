@@ -1,50 +1,158 @@
 ---
 title: "Gate"
-description: "permission to act — Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run."
+description: "Permission to act — auth policies and rate limits attached to the trigger, evaluated before any effect runs, denied as typed errors."
 icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-Gate is the element for **permission to act**.
+Gate is how your app answers **"may this happen?"** before it happens: is this request from a verified member? has this IP exhausted its minute quota? Gates attach to the trigger — the pipeline evaluates them before a single store write, emit, or channel send runs.
 
-Auth, session, ABAC, rate limits, quotas, and feature flags sit at the trigger — permission to act before effects run.
-
-<Callout title="Governing rule">
-  Permission sits at the trigger. Auth is built-in (hybrid session, argon2id) with zero-config
-  defaults.
+<Callout title="The one rule">
+  Permission sits **at the trigger**, and denial is a typed error value — never a thrown exception,
+  never an effect that runs halfway and rolls back.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Gate"
-    description="Essence: permission to act. Replaces: auth · session · ABAC · rate limit · quota · feature flag."
-  />
-</Cards>
+<Steps>
 
-## Drivers available
+<Step>
+### Declare your gates
 
-<Cards>
-  <Card title="auth" description="Built-in hybrid session; alternatives via protocol adapters." />
-  <Card title="rate limit" description="Default `sliding-window-counter`." />
-  <Card title="ABAC · flags" description="Permission, quota, and feature-flag gates." />
-</Cards>
+Policies are named predicates; rate limits are declarative budgets. Both live once, app-wide:
 
-## Example
-
-```typescript
+```typescript title="src/gates.ts"
 import { gate } from "okengine";
 
 export const member = gate.policy("member", ({ auth }) => !!auth?.verified);
 
 export const fair = gate.rate({
-  strategy: "sliding-window-counter", // near-exact, two keys, no boundary bursts
+  strategy: "sliding-window-counter", // the default — near-exact, no boundary bursts
   max: 60,
   per: "1m",
   keyBy: "ip",
 });
 ```
+
+</Step>
+
+<Step>
+### Attach them to triggers
+
+`.gate(...)` composes in registration order — evaluated left to right, first denial wins:
+
+```typescript title="src/flows/links/shorten.ts"
+export const shorten = on(
+  http.post("/links").gate(member, fair),
+  flow({
+    in: NewLink,
+    out: LinkCode,
+    errors: { Taken },
+    do: async ({ url, code }, fx) => {
+      /* runs only if both gates passed */
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Denials are typed failures
+
+A denied request never reaches `do`. It returns one of three typed failures, like any entry in `errors: { … }`:
+
+| Gate result                      | Typed failure                         |
+| -------------------------------- | ------------------------------------- |
+| Policy denied, not authenticated | `Unauthorized`                        |
+| Policy denied, authenticated     | `Forbidden` (with gate name + reason) |
+| Rate limit exceeded              | `RateLimited` (with `retryAfterMs`)   |
+
+</Step>
+
+</Steps>
+
+## Two kinds of gates
+
+| Declaration                | Question it answers                    | Evaluated against                  |
+| -------------------------- | -------------------------------------- | ---------------------------------- |
+| `gate.policy(name, check)` | Is this principal allowed? (ABAC)      | auth / operator / request metadata |
+| `gate.rate(options)`       | Is there budget left for this subject? | an atomic counter on the kv driver |
+
+### The policy context
+
+The predicate receives everything it may decide with — nothing else:
+
+| Field      | Contents                                                 |
+| ---------- | -------------------------------------------------------- |
+| `auth`     | User principal: `userId`, `scopes` (a `Set`), `verified` |
+| `operator` | Operator principal (Console plane): `id`                 |
+| `meta`     | Request metadata for keying decisions: `ip`, `userId`, … |
+
+```typescript
+export const admin = gate.policy("admin", ({ auth }) => auth.scopes.has("admin"));
+```
+
+A policy name containing `:` is also a `Module:Action` permission — the same declaration feeds role-based access reviews in the Console.
+
+### Rate options
+
+| Option        | Type         | Default                    | Meaning                                      |
+| ------------- | ------------ | -------------------------- | -------------------------------------------- |
+| `max`         | number       | — (**required**)           | Takes allowed within `per`                   |
+| `per`         | string       | — (**required**)           | Window / refill period (`"1m"`, `"60s"`, …)  |
+| `keyBy`       | string       | —                          | Subject dimension (`"ip"`, `"user"`, …)      |
+| `strategy`    | RateStrategy | `"sliding-window-counter"` | Algorithm (below)                            |
+| `overridable` | boolean      | `false`                    | Allow the Console to retune `max`/`per` live |
+
+| Strategy                 | Behavior                                               |
+| ------------------------ | ------------------------------------------------------ |
+| `sliding-window-counter` | Near-exact, two keys, no boundary bursts — the default |
+| `fixed-window`           | Cheapest; allows bursts at window boundaries           |
+| `sliding-log`            | Exact; stores one timestamp per take                   |
+| `token-bucket`           | Steady refill; permits saved-up bursts                 |
+| `leaky-bucket`           | Smooths output to a constant rate                      |
+
+All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory driver in tests.
+
+## Identity comes from auth
+
+Gates don't log users in — they decide about principals that already exist. The built-in auth plugin (`okengine/auth`) provides the user plane: hybrid sessions, argon2id password hashing, roles, API keys, and invites, with zero-config defaults. Whatever it establishes lands on `fx.auth`, which is exactly what your policies read.
+
+## Every decision is recorded
+
+Pass **and** deny, every evaluation lands on the run's `gates` dimension in the telemetry trace. The Console (`:6533` → Gates) shows which gates fired on a request and their outcomes — an audit trail of permission decisions you never had to build. Rate gates declared `overridable: true` can also be retuned (`max`/`per`) from the Console without a redeploy; anything else rejects edits by design.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Can a policy read the request body?">
+
+No — and that is deliberate. Gates run before the flow, so they see only the policy context (`auth`, `operator`, `meta`). Body-dependent decisions belong inside `do`, expressed as typed `errors`.
+
+</Accordion>
+<Accordion title="Logged-in users still get Forbidden">
+
+`Forbidden` means the request _was_ authenticated but a policy said no. The failure includes the gate name and reason — check whether your predicate requires `verified` or a scope the user lacks.
+
+</Accordion>
+<Accordion title="Which keyBy should I use?">
+
+`"ip"` for public unauthenticated surfaces (sign-up, password reset), `"user"` for authenticated quotas. Keying an authenticated endpoint by IP punishes users behind shared NAT; keying a public endpoint by user is impossible.
+
+</Accordion>
+<Accordion title="The Console won't retune my rate limit">
+
+The gate was declared without `overridable: true`. Add it and redeploy — live retuning is opt-in per gate so a mistyped change cannot silently open a floodgate.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — the trigger pipeline gates plug into
+- [Console · Gates](/docs/console/gates) — decision audit and live retuning
+- [Vault](/docs/elements/vault) — the credentials your policies protect
 
 ## Next
 

@@ -1,0 +1,159 @@
+---
+title: "Configuration"
+description: "Every option in oke.config.ts — drivers per environment, images, i18n, tenancy, privacy, db sync, topology, ports, and console."
+icon: "Settings2"
+---
+
+Complete reference for `oke.config.ts`. Every option below is verified against `defineConfig`; the four environment keys everywhere are `local` · `docker` · `test` · `prod`.
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  // options below
+});
+```
+
+## drivers
+
+Which backend each element talks to, per environment. A value is either a driver id string or a rich object:
+
+```typescript
+drivers: {
+  store: {
+    sql: { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
+    kv: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
+    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
+  },
+  signal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
+  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
+  vault: { local: "dotenv", docker: "openbao", test: "memory", prod: "openbao" },
+  channel: {
+    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+  },
+},
+```
+
+| Key                | Shape          | Driver ids (verified)                                                        |
+| ------------------ | -------------- | ---------------------------------------------------------------------------- |
+| `store.sql`        | env driver map | `sqlite` · `postgres` · `memory`                                             |
+| `store.kv`         | env driver map | `memory` · `redis`                                                           |
+| `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
+| `store.index`      | env driver map | `memory` · `pgvector`                                                        |
+| `signal`           | env driver map | `memory` · `postgres` · `redis` · `nats`                                     |
+| `clock`            | env driver map | `memory` · `postgres` · `frozen`                                             |
+| `vault`            | env driver map | `dotenv` · `openbao` · `memory`                                              |
+| `channel.email`    | env driver map | `console` · `smtp` · `resend`                                                |
+| `channel.sms`      | env driver map | `console` · `unifonic`                                                       |
+| `channel.whatsapp` | env driver map | medium declared; drivers added per provider                                  |
+| `channel.push`     | env driver map | medium declared; drivers added per provider                                  |
+| `ai`               | env driver map | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` |
+| `runs`             | env driver map | runs-store driver (distinct from top-level `runs`)                           |
+| `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred              |
+
+When `docker` is omitted it inherits the `prod` driver. The rich object form adds connection detail:
+
+```typescript
+sql: {
+  prod: { driver: "postgres", pool: { max: 20 }, replicas: ["postgres://ro-1/db"] },
+},
+```
+
+| Field      | Type              | Meaning                                     |
+| ---------- | ----------------- | ------------------------------------------- |
+| `url`      | connection string | Overrides the env-var resolution            |
+| `pool`     | `{ max?, min? }`  | SQL pool sizing                             |
+| `replicas` | `string[]`        | Read-only routing targets (read flows only) |
+
+## images
+
+Container image pins keyed by element role — vendor choice lives here, never in driver ids:
+
+```typescript
+images: {
+  "store.sql": "postgres:18",
+  "store.kv": "redis:8",
+  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+  "channel.email": "axllent/mailpit:v1.22.3",
+  vault: "openbao/openbao:2.6.1",
+},
+```
+
+## i18n
+
+| Option    | Type       | Default | Meaning                                     |
+| --------- | ---------- | ------- | ------------------------------------------- |
+| `locales` | `string[]` | —       | Supported locales                           |
+| `default` | string     | —       | Fallback locale (channel templates, `fx.t`) |
+| `dir`     | record     | —       | Per-locale direction: `"ltr"` \| `"rtl"`    |
+
+```typescript
+i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
+```
+
+## tenancy
+
+Multi-tenant isolation policy.
+
+| Option      | Type                              | Meaning                                  |
+| ----------- | --------------------------------- | ---------------------------------------- |
+| `isolation` | `"row" \| "schema" \| "database"` | How tenants are separated in the store   |
+| `resolve`   | string \| function                | Tenant resolver — reads `ctx.auth.orgId` |
+
+## privacy
+
+Presence of this block turns the CORE privacy tooling on in the Console — masking, classification surfaces. It is not a `.plug()` call.
+
+```typescript
+privacy: {},
+```
+
+## runs
+
+Runs retention and redaction at the config surface — **not** the same key as `drivers.runs`.
+
+| Option   | Type                     | Meaning                                               |
+| -------- | ------------------------ | ----------------------------------------------------- |
+| `redact` | `Record<string, string>` | Field → retention duration; presence turns privacy on |
+
+## db
+
+Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated to `oke schema generate`.
+
+| Option      | Default                     | Meaning                                                                     |
+| ----------- | --------------------------- | --------------------------------------------------------------------------- |
+| `autoPush`  | `true` (local only)         | Auto-run `db push` on schema change in `oke dev`; forced off in docker/prod |
+| `config`    | `"drizzle.config.ts"`       | Path to the drizzle-kit config                                              |
+| `declare`   | `"src/schema.decl.ts"`      | Abstract schema module (`store.schema.table` exports)                       |
+| `generated` | `"src/schema.generated.ts"` | Where `oke db` emits dialect Drizzle                                        |
+| `entry`     | `src/app.ts`                | App entry for collecting plugin table contributions                         |
+
+## topology
+
+| Value        | Meaning                                          |
+| ------------ | ------------------------------------------------ |
+| `"monolith"` | One process serves everything (default posture)  |
+| `"services"` | Split deployment units derived from the Manifest |
+
+## ports
+
+| Option    | Default | Surface |
+| --------- | ------- | ------- |
+| `app`     | `6530`  | App     |
+| `console` | `6533`  | Console |
+| `mcp`     | `6535`  | MCP     |
+
+## console
+
+Production Console exposure.
+
+| Option         | Type                                 | Default | Meaning                   |
+| -------------- | ------------------------------------ | ------- | ------------------------- |
+| `prod.enabled` | boolean                              | —       | Serve the Console in prod |
+| `prod.auth`    | `"required" \| "optional" \| "none"` | —       | Access requirement        |
+
+## Learn more
+
+- [CLI Reference](/docs/reference/cli) — `oke dev` · `oke db` · `oke docker`
+- [Environment Variables](/docs/reference/environment-variables) — URL and secret resolution
+- [Store](/docs/elements/store) — what the store drivers back

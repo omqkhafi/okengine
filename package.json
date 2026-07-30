@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "repository": {
@@ -18,7 +18,8 @@
     "src",
     "manifest.v1.schema.json",
     "AGENTS.md",
-    "README.md"
+    "README.md",
+    "site/content/docs"
   ],
   "type": "module",
   "sideEffects": false,
@@ -30,6 +31,7 @@
     "./auth": "./src/auth/index.ts",
     "./console": "./src/console/index.ts",
     "./mcp": "./src/mcp/index.ts",
+    "./plugins": "./src/plugins/index.ts",
     "./store": "./src/elements/store.ts",
     "./signal": "./src/elements/signal.ts",
     "./clock": "./src/elements/clock.ts",
@@ -54,7 +56,7 @@
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
-    "site:dev": "bun run --cwd site dev",
+    "dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
     "ci:workflow": "bun scripts/ci.ts --workflow",
     "ci": "bun scripts/ci.ts",
@@ -87,7 +89,6 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
-    "age-encryption": "^0.3.0",
     "arktype": "^2.2.3",
     "axe-core": "^4.12.1",
     "clsx": "^2.1.1",
@@ -111,16 +112,12 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "age-encryption": "^0.3.0",
     "drizzle-kit": ">=1.0.0-rc.0",
     "drizzle-orm": ">=1.0.0-rc.0",
     "drizzle-seed": ">=0.3.0",
     "zod": ">=3.23.0"
   },
   "peerDependenciesMeta": {
-    "age-encryption": {
-      "optional": true
-    },
     "drizzle-kit": {
       "optional": true
     },

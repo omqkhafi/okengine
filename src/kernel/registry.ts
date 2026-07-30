@@ -20,6 +20,7 @@ import type {
   ClientExtensionContribution,
   ConsolePanelContribution,
   DriverContribution,
+  EdgeHandler,
   ImageRecipeContribution,
   PluginApi,
   PluginCapabilities,
@@ -62,6 +63,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
   snapshot(): PluginRegistration;
 } {
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
+  const edges: EdgeHandler[] = [];
   const decorations: Record<string, unknown> = {};
   const elements: PluginElement[] = [];
   const tables: TableContribution[] = [];
@@ -81,7 +83,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
     if (!declares.includes(cap)) declares.push(cap);
   }
 
-  function pushIntercept(stage: HookStage): void {
+  function pushIntercept(stage: HookStage | "edge"): void {
     if (!intercepts.includes(stage)) intercepts.push(stage);
   }
 
@@ -91,6 +93,11 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
       // Tag so runPipeline can attribute real wall-clock cost to this plugin.
       list.push(tagHookWithPlugin(identity.name, fn));
       pushIntercept(stage);
+      return api;
+    },
+    edge(fn) {
+      edges.push(fn);
+      pushIntercept("edge");
       return api;
     },
     decorate(key, value) {
@@ -168,6 +175,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
           needs: needs.slice(),
         },
         hooks: { ...hooks },
+        edges: edges.slice(),
         decorations: { ...decorations },
         elements: elements.slice(),
         tables: tables.slice(),
@@ -231,6 +239,12 @@ export interface PluginRegistry {
    * @param flowName - Flow name (for `flow` kind)
    */
   hooksAt(scopeKind: PluginScope["kind"], unit: string | undefined, flowName: string): HookMap;
+  /**
+   * Edge handlers in install order. They answer requests that match no
+   * flow, so there is no flow/unit scope to filter by — every installed
+   * handler runs.
+   */
+  edgeHandlers(): readonly EdgeHandler[];
   /**
    * Merged decorations visible to a flow at the given unit.
    *
@@ -377,6 +391,13 @@ export function createPluginRegistry(): PluginRegistry {
           (scope.kind === "flow" && scope.name === flowName);
         if (!applies) continue;
         Object.assign(out, registration.decorations);
+      }
+      return out;
+    },
+    edgeHandlers() {
+      const out: EdgeHandler[] = [];
+      for (const entry of installed) {
+        out.push(...entry.registration.edges);
       }
       return out;
     },

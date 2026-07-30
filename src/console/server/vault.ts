@@ -6,12 +6,15 @@
  * rotation blast radius are derived — never reimplemented in the UI.
  */
 
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ConfigEnv } from "../../config/index.ts";
-import { envVaultDriver, memoryVaultDriver } from "../../drivers/index.ts";
+import { envVaultDriver, memoryVaultDriver, openbaoVaultDriver } from "../../drivers/index.ts";
+import { parseDotenv } from "../../drivers/vault-dotenv-parse.ts";
 import {
   createVaultRuntime,
   vault as declareVault,
+  type VaultChainLayer,
   type VaultResolutionSource,
   type VaultResolutionStep,
   type VaultRuntime,
@@ -234,6 +237,22 @@ export async function createManifestVaultRuntime(
 
   const seed = options.seed ?? {};
   const composeEnv = resolveComposeEnvPath(cwd);
+  const envMap = parseDotenv(readFileSync(composeEnv.path, "utf8").toString());
+  const openbaoUrl = process.env.OKE_VAULT_URL ?? envMap.get("OKE_VAULT_URL");
+  const openbaoToken = process.env.OKE_VAULT_TOKEN ?? envMap.get("OKE_VAULT_TOKEN");
+  const openbaoMount = process.env.OKE_VAULT_MOUNT ?? envMap.get("OKE_VAULT_MOUNT") ?? "secret";
+  const driverLayer: VaultChainLayer =
+    openbaoUrl && openbaoToken
+      ? {
+          driver: openbaoVaultDriver,
+          source: "driver",
+          options: { url: openbaoUrl, token: openbaoToken, mount: openbaoMount },
+        }
+      : {
+          driver: memoryVaultDriver,
+          source: "driver",
+          options: { secrets: seed },
+        };
   const runtime = createVaultRuntime({
     secrets,
     allowDevFallbacks: options.allowDevFallbacks ?? (options.env ?? "local") !== "prod",
@@ -250,11 +269,7 @@ export async function createManifestVaultRuntime(
         source: composeEnv.source,
         options: { path: composeEnv.path },
       },
-      {
-        driver: memoryVaultDriver,
-        source: "driver",
-        options: { secrets: seed },
-      },
+      driverLayer,
     ],
   });
   await runtime.boot();

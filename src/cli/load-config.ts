@@ -10,6 +10,7 @@ import type { Manifest } from "../manifest/types.ts";
 const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
 const DEFAULT_KV_IMAGE = "redis:8-alpine";
+const DEFAULT_VAULT_IMAGE = "openbao/openbao:2.6.1";
 
 /**
  * Extract protocol id from a driver ref.
@@ -64,6 +65,11 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
   const needsKv = kv === "redis" || (config.drivers?.prod ?? []).includes("redis");
   if (needsKv) {
     out["store.kv"] = DEFAULT_KV_IMAGE;
+  }
+
+  const vault = dockerOrProdId(config.drivers?.vault);
+  if (vault === "openbao") {
+    out.vault = DEFAULT_VAULT_IMAGE;
   }
 
   return out;

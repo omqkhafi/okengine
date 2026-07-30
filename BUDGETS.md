@@ -4,7 +4,7 @@ Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run bud
 
 _okengine v0.2.9 · measured 2026-07-29T02:30:52.639Z_
 
-Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `age-encryption`, `sently`, `oxc-parser`, `ajv`).
+Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
 ## Core
 
@@ -70,4 +70,3 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 | vault-managed        | 416 B    | 672 B    |
 | vault-memory         | 375 B    | 631 B    |
 | vault-openbao        | 608 B    | 864 B    |
-| vault-sops           | 1.59 kB  | 1.84 kB  |

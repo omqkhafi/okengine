@@ -23,7 +23,7 @@ import {
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
-import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
+import { APP_PORT, CONSOLE_PORT, DOCS_MCP_PORT, MCP_PORT } from "../runtime/types.ts";
 import {
   formatDevBanner,
   formatDevLogSeparator,
@@ -92,6 +92,12 @@ export interface DevServeMcpOptions {
   readonly hostname?: string;
 }
 
+/** Options for {@link DevOptions.serveDocsMcp}. */
+export interface DevServeDocsMcpOptions {
+  readonly port: number;
+  readonly hostname?: string;
+}
+
 /** Live `oke dev` session — returned when {@link DevOptions.keepAlive} is false. */
 export interface DevSession {
   readonly plan: DevPlan;
@@ -101,6 +107,10 @@ export interface DevSession {
   readonly consolePort: number;
   readonly mcpPort: number;
   readonly mcpUrl: URL | null;
+  /** Docs MCP listen port (read-only, unauthenticated). */
+  readonly docsMcpPort: number;
+  /** Docs MCP base URL — null when the surface was skipped. */
+  readonly docsMcpUrl: URL | null;
   /** Shared with Console — mint `oke-mcp` tokens against this store/secret. */
   readonly secret: string | null;
   readonly sessions: SessionStore | null;
@@ -167,6 +177,7 @@ export interface DevOptions {
   readonly appPort?: number;
   readonly consolePort?: number;
   readonly mcpPort?: number;
+  readonly docsMcpPort?: number;
   /**
    * Boot compose (injectable).
    *
@@ -187,6 +198,12 @@ export interface DevOptions {
    * Default: {@link serveMcp} on :6535.
    */
   readonly serveMcp?: (options: DevServeMcpOptions) => Promise<DevMcpHandle>;
+  /**
+   * Serve the read-only docs MCP (injectable).
+   * Default: {@link serveDocsMcp} on :6536. Boot failure skips the surface —
+   * docs search must never take `oke dev` down.
+   */
+  readonly serveDocsMcp?: (options: DevServeDocsMcpOptions) => Promise<DevMcpHandle>;
   /**
    * Boot + serve the app entry (injectable).
    * Default: spawn `bun --hot` on the shipped {@link ./dev-app-runner.ts}
@@ -210,6 +227,7 @@ export interface DevPlan {
   readonly appPort: number;
   readonly consolePort: number;
   readonly mcpPort: number;
+  readonly docsMcpPort: number;
   readonly stackRoles: readonly string[] | null;
   readonly composeFiles: readonly string[] | null;
   readonly stackEnv: Readonly<Record<string, string>> | null;
@@ -234,24 +252,29 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
   const preferredConsole = options.consolePort ?? CONSOLE_PORT;
   const preferredMcp = options.mcpPort ?? MCP_PORT;
+  const preferredDocsMcp = options.docsMcpPort ?? DOCS_MCP_PORT;
   // Explicit overrides (incl. `0` ephemeral) skip probing; otherwise +1 until free.
   const ports =
     options.appPort !== undefined ||
     options.consolePort !== undefined ||
-    options.mcpPort !== undefined
+    options.mcpPort !== undefined ||
+    options.docsMcpPort !== undefined
       ? {
           app: preferredApp,
           console: preferredConsole,
           mcp: preferredMcp,
+          docsMcp: preferredDocsMcp,
         }
       : await resolveDevPorts({
           app: preferredApp,
           console: preferredConsole,
           mcp: preferredMcp,
+          docsMcp: preferredDocsMcp,
         });
   const appPort = ports.app;
   const consolePort = ports.console;
   const mcpPort = ports.mcp;
+  const docsMcpPort = ports.docsMcp;
   const keepAlive = options.keepAlive ?? true;
 
   let entry = options.entry;
@@ -396,6 +419,27 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           });
         // Compose files live under docker/; cwd for compose is that directory.
         await up(composeFiles, dockerOut);
+
+        // Real OpenBao vault: init once / unseal every start, then expose the
+        // least-privilege app token to the app + Console (never root).
+        const vaultSpec = derived.specs.find((s) => s.role === "vault");
+        if (vaultSpec) {
+          const { ensureOpenBao, openbaoStackEnv } = await import("./openbao-bootstrap.ts");
+          const vaultNames = await tryLoadVaultSecretNames(cwd);
+          const boot = await ensureOpenBao({
+            cwd,
+            url: `http://127.0.0.1:${vaultSpec.hostPort}`,
+            names: vaultNames,
+          });
+          Object.assign(stackEnv!, openbaoStackEnv(boot));
+          const envPath = resolve(dockerOut, ".env.docker");
+          const current = await Bun.file(envPath).text();
+          const tokenLine = `OKE_VAULT_TOKEN=${boot.appToken}`;
+          const next = /OKE_VAULT_TOKEN=.*/.test(current)
+            ? current.replace(/OKE_VAULT_TOKEN=.*/, tokenLine)
+            : `${current.trimEnd()}\nOKE_VAULT_TOKEN=${boot.appToken}\nOKE_VAULT_MOUNT=secret\n`;
+          await Bun.write(envPath, next);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(msg);
@@ -439,6 +483,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     appPort,
     consolePort,
     mcpPort,
+    docsMcpPort,
     stackRoles,
     composeFiles,
     stackEnv,
@@ -587,6 +632,24 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       };
     });
 
+  const serveDocsMcpSurface =
+    options.serveDocsMcp ??
+    (async (docsOptions) => {
+      const { serveDocsMcp } = await import("../mcp/docs-server.ts");
+      const server = await serveDocsMcp({
+        port: docsOptions.port,
+        hostname: docsOptions.hostname ?? "127.0.0.1",
+      });
+      write(formatServiceLine("Docs MCP", `http://127.0.0.1:${server.port}`));
+      return {
+        port: server.port,
+        url: server.url,
+        stop() {
+          server.stop(true);
+        },
+      };
+    });
+
   const regen =
     options.regenClient ??
     (async (appUrl) => {
@@ -626,8 +689,21 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     });
   }
 
+  // Docs MCP is independent of Console state — read-only, no sessions/secret.
+  // Boot failure (missing docs content, busy port) skips it, never kills dev.
+  let docsMcpServer: DevMcpHandle | null = null;
+  try {
+    docsMcpServer = await serveDocsMcpSurface({ port: docsMcpPort, hostname: "127.0.0.1" });
+  } catch (err) {
+    write(
+      formatStatusLine(`Docs MCP skipped — ${err instanceof Error ? err.message : String(err)}`),
+    );
+  }
+
   const boundMcpPort = mcpServer?.port ?? mcpPort;
   const mcpUrl = mcpServer?.url ?? null;
+  const boundDocsMcpPort = docsMcpServer?.port ?? docsMcpPort;
+  const docsMcpUrl = docsMcpServer?.url ?? null;
 
   const appUrl = app.url?.origin ?? `http://127.0.0.1:${boundAppPort}`;
   await regen(appUrl);
@@ -682,6 +758,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     app.stop();
     consoleServer.stop();
     mcpServer?.stop();
+    docsMcpServer?.stop();
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
   };
@@ -699,12 +776,15 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       appPort: boundAppPort,
       consolePort: boundConsolePort,
       mcpPort: boundMcpPort,
+      docsMcpPort: boundDocsMcpPort,
     },
     stop,
     appPort: boundAppPort,
     consolePort: boundConsolePort,
     mcpPort: boundMcpPort,
     mcpUrl,
+    docsMcpPort: boundDocsMcpPort,
+    docsMcpUrl,
     secret,
     sessions,
     consoleState,
@@ -719,6 +799,21 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   // Keep the process alive.
   await new Promise(() => {});
   return { code: 0, plan: session.plan, session };
+}
+
+/**
+ * Declared vault secret names from the project Manifest (policy scope).
+ *
+ * @param cwd - Project root
+ */
+async function tryLoadVaultSecretNames(cwd: string): Promise<readonly string[]> {
+  try {
+    const { extractManifest } = await import("../compiler/extract.ts");
+    const manifest = await extractManifest({ rootDir: cwd });
+    return Object.keys(manifest.vault ?? {});
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -1,68 +1,252 @@
 ---
 title: "Store"
-description: "data at rest (sql · kv · files · index) — SQL, KV, files, and search index are facets of one Store surface. Drivers are named after protocols, not vendors."
+description: "Data at rest — SQL tables, KV cache, file blobs, and vector search, declared once and swapped per environment by driver."
 icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Store is the element for **data at rest (sql · kv · files · index)**.
+Store is where your app's **data at rest** lives. It covers four kinds of storage — relational tables, key-value cache, file blobs, and vector search — behind one declaration style. Your flow code never changes between SQLite on your laptop and Postgres in production; only the driver does.
 
-SQL, KV, files, and search index are facets of one Store surface. Drivers are named after protocols, not vendors.
-
-<Callout title="Governing rule">
-  Drivers are named after protocols, not vendors. Vendor choice lives in `images`, keyed by role.
+<Callout title="The one rule">
+  Drivers are named after **protocols**, not vendors (`postgres`, `redis`, `s3` — never `neon` or
+  `minio`). Vendor choice lives in the `images` map of `oke.config.ts`.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Store"
-    description="Essence: data at rest (`sql` · `kv` · `files` · `index`). Replaces: database · cache · KV · file storage · search index."
-  />
-</Cards>
+<Steps>
 
-## Drivers available
+<Step>
+### Declare a table
 
-<Cards>
-  <Card title="store.sql" description="Dev `sqlite` · prod `postgres` via Bun.sql / bun:sqlite." />
-  <Card title="store.kv" description="Dev `memory` · prod `redis` (protocol, not vendor)." />
-  <Card title="store.files" description="Dev `fs` · prod `s3` via Bun.S3." />
-  <Card title="store.index" description="Default `pgvector` — RAG without another service." />
-</Cards>
+In `src/schema.decl.ts`, describe your tables with plain field builders — no ORM syntax:
 
-## store.resource — declarative CRUD + list
+```typescript title="src/schema.decl.ts"
+import { store, field, id, now } from "okengine";
 
-`store.resource(db, table, opts)` expands one declaration into the five ordinary `flow({…})`s of a CRUD resource — list, create, get, update, remove — each still the one species, composed through `fx.store(db)`. Mount all five verbs at once with `on(http.resource(path, resource.all()))`; the return value is the ops bag for `adopt`.
+export const notes = store.schema.table("notes", {
+  id: field.text().primaryKey().defaultFn(id),
+  title: field.text().notNull(),
+  body: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+```
+
+</Step>
+
+<Step>
+### Declare the store
+
+Bind the schema to a SQL store in `src/core.ts`:
+
+```typescript title="src/core.ts"
+import { store } from "okengine";
+import { notes } from "./schema.decl";
+
+export const db = store.sql("notes", { schema: { notes } });
+```
+
+</Step>
+
+<Step>
+### Push the schema
+
+`oke dev` runs this automatically on save; or run it by hand:
+
+```bash
+oke db push   # dev — applies the schema to your local database
+```
+
+</Step>
+
+<Step>
+### Read and write in a Flow
+
+All data access goes through `fx.store(db)` — a typed session, one table at a time:
+
+```typescript title="src/flows/notes/create.ts"
+export const createNote = on(
+  http.post("/notes"),
+  flow({
+    in: z.object({ title: z.string(), body: z.string() }),
+    out: z.object({ id: z.string() }),
+    do: async (input, fx) => {
+      const id = fx.id();
+      await fx
+        .store(db)
+        .insert(notes)
+        .values({ id, ...input, createdAt: Date.now() });
+      return { id };
+    },
+  }),
+);
+```
+
+</Step>
+
+</Steps>
+
+## The four facets
+
+Pick the facet that matches the physics of your data. Each declaration is one line; the runtime handle shows what flows can do with it.
+
+| Facet                     | Declares          | Best for                              | `fx.store(…)` handle                                   |
+| ------------------------- | ----------------- | ------------------------------------- | ------------------------------------------------------ |
+| `store.sql(name, opts)`   | a SQL database    | domain tables, relations, constraints | `select` · `insert` · `update` · `delete` · `findById` |
+| `store.kv(name)`          | a key-value space | cache, sessions, rate limits          | `get` · `set(key, value, ttl?)` · `delete` · `list`    |
+| `store.files(name)`       | a blob bucket     | uploads, exports, attachments         | `put` · `get` · `delete` · `list(prefix?)`             |
+| `store.index(name, opts)` | a vector index    | semantic search / RAG (`dims`)        | `upsert` · `search(vector, topK?)` · `delete`          |
 
 ```typescript
-const notesR = store.resource(db, notesTable, {
-  in: NewNote,
-  out: Note,
+export const cache = store.kv("sessions");
+export const uploads = store.files("attachments");
+export const embeddings = store.index("docs", { dims: 1536 });
+```
+
+## CRUD without boilerplate — `store.resource`
+
+Five conventional endpoints (list, create, get, update, remove) expand from one declaration. Each is an ordinary Flow underneath — same contracts, same `fx`:
+
+```typescript
+const notesR = store.resource(db, notes, {
+  in: NewNote, // create/update input schema
+  out: Note, // response schema
   update: NewNote.partial(),
   list: {
-    cursor: [notesTable.createdAt, notesTable.id], // keyset columns
+    cursor: [notes.createdAt, notes.id], // keyset pagination columns
     direction: "desc",
-    search: [notesTable.title], // ?search= / ?q=
-    filter: "all", // ?col=op.value — ColumnScope: "all" | Column[] | "none"
+    search: [notes.title], // ?search= / ?q=
+    filter: "all", // ?col=op.value — "all" | Column[] | "none"
     order: "all", // ?order=col.desc
   },
   unit: "notes",
 });
 
 const mounted = on(http.resource("/notes", notesR.all()));
-export const list = mounted.list;
-export const create = mounted.create;
-export const get = mounted.get;
-export const update = mounted.update;
-export const remove = mounted.remove;
 ```
 
-The list URL is the whole query — `?cursor=` / `?offset=` / `?limit=` paginate (keyset when `cursor` columns are set, else offset), `?search=` runs a substring match over `search` columns, `?col=op.value` filters (PostgREST ops `eq ne gt gte lt lte like ilike in is`), `?order=col.asc,other.desc` orders, and `?select=id,title` projects. Values are UTF-8 — English, Arabic, any language round-trips. `list` answers the Stripe envelope `{ data, meta: { nextCursor, hasNextPage }, error: null }`; `create` answers 201; `remove` 204; `get` / `update` / `remove` return a typed `NotFound`.
+The list endpoint's URL is the whole query language:
 
-## Examples
+| Param                               | Meaning                                             | Example                 |
+| ----------------------------------- | --------------------------------------------------- | ----------------------- |
+| `?cursor=` / `?offset=` / `?limit=` | paginate (keyset when `cursor` columns are set)     | `?limit=20&cursor=eyJ…` |
+| `?search=` (`?q=`)                  | substring match over `search` columns               | `?q=invoice`            |
+| `?col=op.value`                     | filter — ops `eq ne gt gte lt lte like ilike in is` | `?title=like.%draft%`   |
+| `?or=(…)` / `?and=(…)`              | grouped boolean filters                             | `?or=(a.eq.1,b.eq.2)`   |
+| `?order=`                           | sort                                                | `?order=createdAt.desc` |
+| `?select=`                          | project columns                                     | `?select=id,title`      |
 
-Three realistic list configurations using the public resource API.
+Responses follow the Stripe-style envelope: `{ data, meta: { nextCursor, hasNextPage }, error }`. `create` answers **201**, `remove` answers **204**, and a missing row is a typed `NotFound` — never a crash.
+
+## Querying by hand
+
+When `store.resource` is too conventional, `fx.store(db)` is the full single-table session:
+
+```typescript
+// select — chain where / orderBy / limit / offset in any order
+const latest = await fx
+  .store(db)
+  .select()
+  .from(notes)
+  .where(like(notes.title, `%${input.q}%`))
+  .orderBy(desc(notes.createdAt))
+  .limit(20);
+
+// findById, insert, update, delete
+const one = await fx.store(db).findById(notes, input.id);
+await fx.store(db).update(notes).set({ title: input.title }).where(eq(notes.id, input.id));
+await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
+```
+
+<Callout title="One table per call — no relational with:">
+  `fx.store` is deliberately **single-table**: Drizzle's relational `findMany({ with: … })` is not
+  available through `fx`. Compose joins as separate single-table reads (or `fx.call`) so every
+  table shows up explicitly in the Manifest's `reads` / `writes` — powering caching and PII masking.
+</Callout>
+
+## Schema — declare once, generate per dialect
+
+The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle for the active dialect (`sqliteTable` locally, `pgTable` in docker/prod) into `src/schema.generated.ts`.
+
+| Field API                                    | Meaning                                         |
+| -------------------------------------------- | ----------------------------------------------- |
+| `field.text()` / `field.integer()`           | v1 column primitives                            |
+| `.primaryKey()` · `.notNull()` · `.unique()` | constraints                                     |
+| `.default(v)` · `.defaultFn(id \| now)`      | defaults                                        |
+| `.pii()` · `.sensitive()` · `.retain("30d")` | privacy classification                          |
+| `.as("sql_name")`                            | override the automatic `camelCase → snake_case` |
+| `.references(() => col, { onDelete })`       | foreign key                                     |
+
+### Foreign keys and relations
+
+Declare FKs on fields, and relation metadata once per schema:
+
+```typescript
+export const daily = store.schema.table("daily", {
+  id: field.text().primaryKey(),
+  code: field
+    .text()
+    .notNull()
+    .references(() => links.code),
+  day: field.text().notNull(),
+  clicks: field.integer().notNull().default(0),
+});
+
+export const relations = store.schema.relations({ links, daily }, (r) => ({
+  links: { daily: r.many.daily({ from: r.links.code, to: r.daily.code }) },
+  daily: { link: r.one.links({ from: r.daily.code, to: r.links.code, optional: false }) },
+}));
+```
+
+<Callout title="Many-to-many">
+  A junction table with two foreign keys plus two `one` / `many` relations composes many-to-many.
+  There is no separate API and no `.through()` — the junction is an ordinary table.
+</Callout>
+
+### Syncing the schema
+
+| Command           | When                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| `oke db push`     | Dev — apply directly to the live local DB (no migration files) |
+| `oke db generate` | Write versioned SQL under `drizzle/` for review                |
+| `oke db migrate`  | Apply those files — human or CI, **never** at boot             |
+
+`oke dev` (local) auto-pushes when the schema file changes — opt out with `--no-db-push` or `db: { autoPush: false }`. Docker/prod **never** auto-apply DDL; a missing table fails loudly as **OKE1101**, telling you to run `oke db migrate`.
+
+<Callout title="Escape hatch">
+  Hand-written Drizzle in `src/schema.ts` stays supported — if there is nothing to emit, the emit
+  step is skipped and your file is used as-is. Plugins may contribute **whole new tables**;
+  extending an app-owned table with plugin columns is not supported in v1.
+</Callout>
+
+## Per-environment drivers
+
+Same flow code, different backends — configured once in `oke.config.ts`:
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    sql:   { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
+    kv:    { local: "memory", docker: "redis",    test: "memory", prod: "redis" },
+    files: { local: "fs",     docker: "s3",       test: "memory", prod: "s3" },
+  },
+},
+```
+
+| Facet   | Local    | Docker / prod | Runs as                                 |
+| ------- | -------- | ------------- | --------------------------------------- |
+| `sql`   | `sqlite` | `postgres`    | file on disk → container + named volume |
+| `kv`    | `memory` | `redis`       | in-process → container                  |
+| `files` | `fs`     | `s3`          | project folder → RustFS container       |
+| `index` | `memory` | `pgvector`    | in-process → pgvector image             |
+
+Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
+
+## Privacy built in
+
+Columns tagged `.pii()` or `.sensitive()` are masked at the store boundary — flows, logs, and the Console see a mask, not the value. Revealing cleartext PII requires an explicit `pii:reveal` gate on the flow, so access is a permission, not a convention.
+
+## Examples — what follows from each choice
 
 ### An admin table
 
@@ -70,34 +254,15 @@ Three realistic list configurations using the public resource API.
 list: { mode: "offset", count: "exact", limit: 20 },
 ```
 
-_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`)._
-
-**Consequence:** with `count: "exact"` (the offset default), list runs `COUNT(*)` via `store.count` (`src/elements/store/resource.ts`) to fill `meta.total`. On a huge table that count is the cost — set `count: "none"` to skip `meta.total` and return only `meta.offset`.
+**Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` to fill `meta.total`. On a huge table that count is the real cost — set `count: "none"` to return only `meta.offset`.
 
 ### An infinite feed
 
-### An infinite feed resource
-
 ```typescript
-const notesR = store.resource(db, notesTable, {
-  in: NewNote,
-  out: Note,
-  update: NewNote.partial(),
-  list: {
-    cursor: [notesTable.createdAt, notesTable.id],
-    direction: "desc",
-    limit: 20,
-    maxLimit: 100,
-    search: [notesTable.title],
-    filter: "all",
-    order: "all",
-  },
-  unit: "notes",
-  breaking: true,
-});
+list: { cursor: [notes.createdAt, notes.id], direction: "desc", limit: 20, maxLimit: 100 },
 ```
 
-**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set (`src/elements/store/resource.ts`) — it stays stable under concurrent inserts, while offset pages shift when rows are inserted ahead of the window.
+**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
 
 ### A public, restricted endpoint
 
@@ -105,131 +270,38 @@ const notesR = store.resource(db, notesTable, {
 list: { mode: "offset", filter: "none", limit: 20 },
 ```
 
-_Illustrative configuration, type-checked against the real API (`src/elements/store/resource-list-docs.fixture.ts`)._
+**Consequence:** a request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
 
-**Consequence:** a request that filters on a forbidden column — e.g. `?secret=eq.x` — fails with **422** and a `ValidationError` whose message is exactly `unknown list param "secret"` (`badInput` in `src/elements/store/resource.ts` when `filter === "none"`).
+## Troubleshooting
 
-## Domain schema — declare → generate
+<Accordions>
+<Accordion title="OKE1101 — missing table in docker or prod">
 
-Recommended path: declare tables with `store.schema.table` + `field.*` (ORM-agnostic), then let `oke db` emit dialect-specific Drizzle before sync.
+Schema DDL never runs automatically outside local dev. Run `oke db push` against the target database for a dev-style sync, or `oke db generate` + `oke db migrate` for reviewed, versioned migrations.
 
-```typescript
-import { store, field, id, now } from "okengine";
+</Accordion>
+<Accordion title="I need a join — with: is not supported">
 
-export const notes = store.schema.table("notes", {
-  id: field.text().primaryKey().defaultFn(id),
-  title: field.text().notNull(),
-  body: field.text().notNull().pii(),
-  createdAt: field.integer().notNull().defaultFn(now),
-});
+`fx.store` is one table per call by design. Read each table separately and compose in the flow (or extract a shared flow and `fx.call` it). Every table then appears explicitly in the Manifest's effect graph — which is what powers cache invalidation and PII masking.
 
-export const db = store.sql("notes", { schema: { notes } });
-```
+</Accordion>
+<Accordion title="Pagination shows duplicates when rows are inserted">
 
-Put declarations in `src/schema.decl.ts` (or set `db.declare` in `oke.config.ts`). `oke db push|generate|migrate` emits `src/schema.generated.ts` (`sqliteTable` or `pgTable` from `drivers.store.sql`) and then runs drizzle-kit as today. Point `drizzle.config.ts` `schema` at the generated file.
+You are on offset paging. Switch `list` to keyset by setting `cursor` columns with a stable order (e.g. `[createdAt, id]`) — the page boundary becomes a row predicate, not a row count.
 
-**Escape hatch:** hand-written Drizzle `src/schema.ts` remains supported. If there is nothing to emit (no declare module and no plugged plugin tables), emit is skipped and Prompt 42 / OKE1101 / docker-prod never-auto-DDL are unchanged.
+</Accordion>
+<Accordion title="meta.total is slow on a big table">
 
-v1 field primitives: `field.text` · `field.integer`, plus `.primaryKey()` · `.notNull()` · `.unique()` · `.default(v)` · `.defaultFn(fn)` · `.pii()` · `.sensitive()` · `.retain(duration)` · `.as(sqlName)` · `.references()`.
+`count: "exact"` runs `COUNT(*)` per page. Set `count: "none"` in the `list` options to skip it, or use keyset mode where totals are rarely needed.
 
-### Foreign keys and relations
-
-<Cards>
-  <Card
-    title=".references()"
-    description="Dialect-agnostic FK on a field — emitted as Drizzle `.references(() => table.col)` for sqlite and postgres."
-  />
-  <Card
-    title="store.schema.relations"
-    description="Mirrors drizzle-orm `defineRelations` (`r.one.*` / `r.many.*` + `from` / `to`) — emitted into the same generated file."
-  />
-  <Card
-    title="Per dialect"
-    description="Same pre-step: `sqliteTable` / `pgTable` with FK chains, then `defineRelations(...)` when relations are declared."
-  />
-</Cards>
-
-| API                      | Shape                                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `field.*.references`     | `(ref, actions?) => FieldBuilder` — lazy `() => links.code`; optional `{ onDelete, onUpdate }` |
-| `store.schema.relations` | `(tables, (r) => config) => SchemaRelationsDecl` — same shape as `defineRelations`             |
-
-<Callout title="Many-to-many">
-  A junction table with two foreign keys plus two `one` / `many` relations composes many-to-many.
-  There is no separate many-to-many API and no `.through()` — the junction is an ordinary table.
-</Callout>
-
-<Callout title="No relational with: through fx">
-Relational `with:` — Drizzle RQB `db.query.*.findMany({ with: … })` — is **not supported** through `fx`. `fx.store` is a single-table session: effect inference, cache keys, and PII masking each assume one table per call, and declared relations (`store.schema.relations`, emitted as `defineRelations`) are schema metadata for drizzle-kit, not an `fx` handle. Compose with separate single-table `fx.store` reads (or `fx.call`) so each table appears explicitly in Manifest `reads` / `writes`.
-</Callout>
-
-### Plugin tables (known v1 limit)
-
-Plugins may declare **additional whole tables** (with `field.*` columns) that merge into the generated domain schema. At emit time `oke db` loads the live app entry (`src/app.ts`, or `db.entry` / `package.json` `okengine.entry`) and merges `app.plugins.tableContributions()` alongside app decls — the same file drizzle-kit then syncs. Extending an existing app-owned table with plugin columns is **not** supported in v1 — contribute a separate table instead (e.g. `two_factor_credentials` keyed by `userId`, not ALTER-style columns on `users`).
-
-## Domain schema sync (`oke db`)
-
-Domain schema is synced with **drizzle-kit** — not a hand-rolled migrator. Abstract decls (above) emit into that same loop; there is no third schema CLI.
-
-| Command           | When                                                         |
-| ----------------- | ------------------------------------------------------------ |
-| `oke db push`     | Dev — apply schema to the live local DB (no migration files) |
-| `oke db generate` | Write versioned SQL under `drizzle/` for review              |
-| `oke db migrate`  | Explicitly apply those files (human or CI — never boot-time) |
-
-`oke dev` (local) auto-runs `oke db push` when `schema.ts` / `schema.decl.ts` / `app.ts` changes. Opt out with `--no-db-push` or `db: { autoPush: false }` in `oke.config.ts`. Docker/prod never auto-push; a missing table surfaces as **OKE1101** → run `oke db migrate`.
-
-This is **not** `oke schema generate`, which only emits core/plugin stub handles into `schema/oke.ts`.
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Domain schema — declare → generate](/docs/elements/store#domain-schema--declare--generate) — declare tables, then `oke db` emits Drizzle
-- [Console · Store](/docs/console/store) — browse sql/kv/files/index; cache keys; PII masking
-- [CLI Reference](/docs/cli) — `oke db push` / `generate` / `migrate`
-
-## Schema declaration example
-
-```typescript
-import { store, field } from "okengine";
-
-/** Short links — `code` is the human-facing unique key. */
-export const links = store.schema.table("links", {
-  id: field.text().primaryKey(), // `increment` targets this column
-  code: field.text().notNull().unique(), // the short, human-facing key
-  url: field.text().notNull(),
-  userId: field.text().notNull(),
-  clicks: field.integer().notNull().default(0),
-  createdAt: field.integer().notNull(),
-});
-
-/** Per-link daily click counts — FK to `links.code`. */
-export const daily = store.schema.table("daily", {
-  id: field.text().primaryKey(),
-  code: field
-    .text()
-    .notNull()
-    .references(() => links.code),
-  day: field.text().notNull(), // "YYYY-MM-DD"
-  clicks: field.integer().notNull().default(0),
-});
-
-/** links ↔ daily — one link has many daily rows. */
-export const relations = store.schema.relations({ links, daily }, (r) => ({
-  links: {
-    daily: r.many.daily({
-      from: r.links.code,
-      to: r.daily.code,
-    }),
-  },
-  daily: {
-    link: r.one.links({
-      from: r.daily.code,
-      to: r.links.code,
-      optional: false,
-    }),
-  },
-}));
-```
+- [Flow](/docs/elements/flow) — the `fx.store` session inside `do`
+- [Console · Store](/docs/console/store) — browse data, cache keys, PII masking
+- [CLI Reference](/docs/reference/cli) — `oke db push` · `generate` · `migrate`
 
 ## Next
 

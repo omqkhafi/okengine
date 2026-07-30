@@ -1,0 +1,101 @@
+---
+title: "Maintenance Mode"
+description: "Official plugin — drain HTTP traffic with one flag: every flow returns a 503 ServiceUnavailable envelope with an optional Retry-After, while allow-listed paths and an operator bypass header stay alive."
+icon: "Construction"
+source: "src/plugins/maintenance-mode.ts"
+---
+
+`maintenanceMode()` short-circuits every HTTP invocation at `onRequest` — the earliest pipeline stage — with a typed `503 ServiceUnavailable` envelope. Deploys, migrations, and incidents stop traffic with one flag instead of a deploy-time firewall rule.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { maintenanceMode } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(
+  maintenanceMode({ enabled: process.env.MAINTENANCE_MODE === "1" }),
+);
+```
+
+With `MAINTENANCE_MODE=1` in the environment, every HTTP flow answers:
+
+```json
+{
+  "data": null,
+  "error": {
+    "code": "ServiceUnavailable",
+    "data": { "retryAfter": 300 },
+    "message": "Service is under maintenance."
+  }
+}
+```
+
+## Options
+
+| Option         | Type       | Default                           | Does                                                 |
+| -------------- | ---------- | --------------------------------- | ---------------------------------------------------- |
+| `enabled`      | `boolean`  | `true`                            | Master switch — drive it from the environment        |
+| `retryAfter`   | `number`   | — (omitted)                       | `Retry-After` seconds on the 503                     |
+| `allowPaths`   | `string[]` | — (none)                          | Path prefixes that keep serving (e.g. `["/health"]`) |
+| `bypassHeader` | `string`   | — (none)                          | Header whose non-empty value lets a request through  |
+| `message`      | `string`   | `"Service is under maintenance."` | Failure message in the envelope                      |
+
+```typescript
+.plug(
+  maintenanceMode({
+    enabled: process.env.MAINTENANCE_MODE === "1",
+    retryAfter: 300,
+    allowPaths: ["/health"],       // load-balancer checks stay green
+    bypassHeader: "x-ops-token",   // operators keep working
+  }),
+)
+```
+
+<Callout type="info">
+  The bypass header is presence-based — an ops convenience, not authentication. Anyone who learns
+  the header name passes through, so treat its value as a light secret and never as a security
+  boundary.
+</Callout>
+
+## Notes
+
+| Behavior          | Detail                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| Pipeline position | `onRequest` — flows never parse, authenticate, or execute                           |
+| Still shaped      | The 503 flows through `onResponse`, so Security Headers and Compression apply to it |
+| Non-HTTP triggers | No-op — clock flows and signal subscribers keep running                             |
+| Infra routes      | `/_oke/*` bypass the pipeline entirely and stay up                                  |
+
+## Runtime configuration
+
+The flagship `configSource()` use case — flip `enabled` from the database and drain traffic without a redeploy:
+
+```typescript
+const maintenance = configSource({
+  plugin: "maintenance-mode",
+  code: { enabled: false },
+  db: { store: db },
+  kv: cache,
+});
+on(every("30s"), maintenance.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(maintenanceMode(maintenance));
+```
+
+See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Next
+
+<Cards>
+  <Card
+    title="IP Allowlist"
+    description="Allow/deny rules by client IP."
+    href="/docs/plugins/ip-allowlist"
+  />
+  <Card
+    title="Security Headers"
+    description="The full secure-headers set on every response."
+    href="/docs/plugins/security-headers"
+  />
+  <Card title="Plugin API" description="Build your own plugin." href="/docs/reference/plugins" />
+</Cards>

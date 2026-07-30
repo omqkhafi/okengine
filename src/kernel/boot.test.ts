@@ -100,7 +100,6 @@ describe("boot — lazy element needs", () => {
         external: [
           "@duckdb/node-api",
           "@duckdb/*",
-          "age-encryption",
           "sently",
           "sently/*",
           "ajv",

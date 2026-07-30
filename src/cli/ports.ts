@@ -52,7 +52,7 @@ export async function findFreePort(
 }
 
 /**
- * Resolve distinct free ports for app · Console · MCP (dev only).
+ * Resolve distinct free ports for app · Console · MCP · docs MCP (dev only).
  *
  * @param preferred - Preferred ports
  * @param probe - Injectable busy check (tests)
@@ -62,12 +62,14 @@ export async function resolveDevPorts(
     readonly app: number;
     readonly console: number;
     readonly mcp: number;
+    readonly docsMcp: number;
   },
   probe: (port: number) => Promise<boolean> = isPortInUse,
 ): Promise<{
   readonly app: number;
   readonly console: number;
   readonly mcp: number;
+  readonly docsMcp: number;
 }> {
   const occupied = new Set<number>();
   const app = await findFreePort(preferred.app, occupied, probe);
@@ -75,5 +77,7 @@ export async function resolveDevPorts(
   const consolePort = await findFreePort(preferred.console, occupied, probe);
   if (consolePort !== 0) occupied.add(consolePort);
   const mcp = await findFreePort(preferred.mcp, occupied, probe);
-  return { app, console: consolePort, mcp };
+  if (mcp !== 0) occupied.add(mcp);
+  const docsMcp = await findFreePort(preferred.docsMcp, occupied, probe);
+  return { app, console: consolePort, mcp, docsMcp };
 }

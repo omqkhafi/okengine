@@ -1,70 +1,154 @@
 ---
 title: "Channel"
-description: "reaching humans — Email, SMS, WhatsApp, and push have physics Signal cannot express: consent, locale, receipts, and fallback chains."
+description: "Reaching humans — email, SMS, WhatsApp, and push with consent, locale, receipts, and fallback chains built in."
 icon: "Mail"
 source: "docs/spec/unified-theory.md"
 ---
 
-Channel is the element for **reaching humans**.
+Channel is how your app **reaches humans**: the order-confirmation email, the OTP text, the WhatsApp notification. Reaching a person is not the same problem as moving data between machines — it needs consent (did they opt out?), locale (which language?), receipts (did it land?), and fallback (email failed, try SMS). Those physics are built into the element, so every flow gets them for free.
 
-Email, SMS, WhatsApp, and push have physics Signal cannot express: consent, locale, receipts, and fallback chains.
-
-<Callout title="Governing rule">
-  Reaching a human has physics Signal cannot express: consent, locale, receipts, and fallback
-  chains.
+<Callout title="The one rule">
+  Sends go through `fx.send` and declared templates — never through a raw SMTP or provider client
+  inside a flow. That is what makes consent, locale, and receipts unavoidable rather than optional.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Channel"
-    description="Essence: reaching humans. Replaces: email · SMS · WhatsApp · push."
-  />
-</Cards>
+<Steps>
 
-## Drivers available
+<Step>
+### Declare a medium and a template
 
-<Cards>
-  <Card title="channel.email" description="Dev `console` inbox · prod `smtp`." />
-  <Card
-    title="SMS · WhatsApp · push"
-    description="Human mediums with consent and fallback chains."
-  />
-</Cards>
+A medium binder carries your defaults; a template names the message and types its data:
 
-## Why this is an element
-
-<Callout title="Why">
-  Channel is an element because human reach has irreducible physics — consent, locale, receipts —
-  that machine messaging does not.
-</Callout>
-
-<Cards>
-  <Card title="consent" description="Opt-out and suppression are first-class." />
-  <Card title="locale" description="Localized templates and resolution chains." />
-  <Card title="fallback" description="Cross-medium chains recorded as chains, not outcomes." />
-</Cards>
-
-## Example
-
-```typescript
+```typescript title="src/channels.ts"
 import { channel } from "okengine";
 import { z } from "zod";
 
 export const mail = channel.email({ from: "Provisions <no-reply@provisions.sa>" });
-export const sms = channel.sms({ sender: "PROVISIONS" });
-export const wa = channel.whatsapp();
 
 export const orderConfirmed = mail.template("order-confirmed", {
   schema: z.object({ name: z.string(), orderId: z.string(), total: z.number() }),
-});
-
-export const otpCode = channel.template("otp-code", {
-  // medium-agnostic
-  schema: z.object({ code: z.string() }),
+  locales: ["en", "ar"],
 });
 ```
+
+</Step>
+
+<Step>
+### Send it from a Flow
+
+One call — consent, locale resolution, and the receipt happen around it:
+
+```typescript title="src/flows/orders/confirm.ts"
+do: async (input, fx) => {
+  await fx.send(orderConfirmed, {
+    to: input.email,
+    data: { name: input.name, orderId: input.id, total: input.total },
+  });
+};
+```
+
+</Step>
+
+<Step>
+### Read it in development
+
+Locally the `console` driver captures mail into an inbox instead of sending; in docker mode the stack runs **Mailpit**, a real SMTP catcher with a web UI — so you see the exact rendered message without ever touching a real mailbox.
+
+</Step>
+
+</Steps>
+
+## Mediums and templates
+
+| Declaration                    | Produces                                        |
+| ------------------------------ | ----------------------------------------------- |
+| `channel.email({ from })`      | Email binder (default sender)                   |
+| `channel.sms({ sender })`      | SMS binder (sender id)                          |
+| `channel.whatsapp()`           | WhatsApp binder                                 |
+| `channel.push()`               | Push binder                                     |
+| `binder.template(name, opts)`  | Typed template bound to that medium             |
+| `channel.template(name, opts)` | Medium-agnostic template (one body, any medium) |
+
+| Template option | Type                  | Meaning                                           |
+| --------------- | --------------------- | ------------------------------------------------- |
+| `schema`        | zod / Standard Schema | The data the template may reference — typed sends |
+| `locales`       | string[]              | Languages this template is rendered in            |
+
+## The human physics
+
+### Consent is checked before sending
+
+Opt-out is first-class: a subject who opted out of a medium is **suppressed** — the send resolves without contacting the provider, and the receipt says so. You never hand-roll "did they unsubscribe?" checks.
+
+### Locale resolves through a chain
+
+Templates render per recipient locale, falling back through your configured chain (`ar` → default `en`) instead of failing when a translation is missing. Locales and the default come from the `i18n` block in `oke.config.ts`.
+
+### Fallback chains are explicit
+
+`via` orders the mediums to try — first success wins, and **every** attempt is recorded:
+
+```typescript
+await fx.send(otpCode, { to: user.phone, data: { code }, via: [sms, wa] });
+// sms fails → whatsapp tried → receipt status "fallback" with both attempts
+```
+
+### Receipts for everything
+
+Each send records its attempts — driver, ok/error, timestamp, message id — so "did the user actually get it?" is a Console query, not a guess. In a dry run, sends are recorded as _would have fired_ and never contact a real provider.
+
+## Per-environment drivers
+
+```typescript title="oke.config.ts"
+drivers: {
+  channel: {
+    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+  },
+},
+images: {
+  "channel.email": "axllent/mailpit:v1.22.3", // SMTP catcher for the docker stack
+},
+```
+
+| Driver     | Medium | Behavior                                             |
+| ---------- | ------ | ---------------------------------------------------- |
+| `console`  | any    | Captures into a readable inbox — local + tests       |
+| `smtp`     | email  | Real SMTP — Mailpit in docker, your provider in prod |
+| `resend`   | email  | Resend API                                           |
+| `unifonic` | sms    | Unifonic SMS API                                     |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="I sent an email in dev but nothing arrived">
+
+Nothing _should_ arrive — the `console` driver captures mail instead of sending. Read the dev inbox, or run `oke dev --docker` and open Mailpit's web UI to see the rendered message.
+
+</Accordion>
+<Accordion title="A user says they stopped receiving messages">
+
+Check consent first: if they opted out, sends to them are suppressed by design. The Console shows the suppression on the receipt — it is a delivered-as-intended outcome, not a bug.
+
+</Accordion>
+<Accordion title="The Arabic version didn't render">
+
+Locale resolution falls back through the chain to your default locale when a translation is missing — the send still succeeds with the fallback body. Check that the template declares `locales: ["en", "ar"]` and that the Arabic body exists in the catalog.
+
+</Accordion>
+<Accordion title="How do I know which medium finally delivered?">
+
+The receipt keeps every attempt in order with its outcome. A send that succeeded on a later medium reports status `fallback` — you can see the full chain in Console → Channels.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — `fx.send` inside `do`
+- [Console · Channels](/docs/console/channels) — receipts, attempts, suppression
+- [Signal](/docs/elements/signal) — machine-to-machine messaging, the other side of the line
 
 ## Next
 

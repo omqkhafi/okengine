@@ -1,0 +1,117 @@
+---
+title: "fx"
+description: "The complete fx surface — every call a flow can make, its signature, and the effect it records."
+icon: "Braces"
+---
+
+`fx` is the second argument of every `do` — the single door to the world. This page is the whole surface; each entry notes the **effect it records**, which is what feeds the Manifest, caching, and capability checks.
+
+```typescript
+flow({
+  do: async (input, fx) => {
+    // everything below, on this one object
+  },
+});
+```
+
+## Stores
+
+| Signature                                                           | Records      | Returns                                                   |
+| ------------------------------------------------------------------- | ------------ | --------------------------------------------------------- |
+| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | rows (`where` · `orderBy` · `limit` · `offset` chainable) |
+| `fx.store(sqlDecl).insert(t).values(v)`                             | `write`      | `Promise<void>`                                           |
+| `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                           |
+| `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                           |
+| `fx.store(sqlDecl).findById(t, id)`                                 | `read`       | row \| undefined                                          |
+| `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write | per op                                                    |
+| `fx.store(files).put / get / delete / list(prefix?)`                | read / write | per op                                                    |
+| `fx.store(index).upsert / search(vector, topK?) / delete`           | read / write | per op                                                    |
+
+See [Store](/docs/elements/store) for the query-builder surface.
+
+## Signals
+
+| Signature                   | Records | Notes                                            |
+| --------------------------- | ------- | ------------------------------------------------ |
+| `fx.emit(signal, payload?)` | `emit`  | With the postgres driver, joins your transaction |
+
+## Flows
+
+| Signature                    | Records | Returns / notes                                       |
+| ---------------------------- | ------- | ----------------------------------------------------- |
+| `fx.call(flow, input?)`      | `call`  | The callee's `out` — runs through the same pipeline   |
+| `fx.step(name, fn)`          | —       | Durable step: replays from the journal, never re-runs |
+| `fx.fail(code, data, opts?)` | —       | Typed failure value (`opts.message` overrides)        |
+
+## Channel
+
+| Signature                                 | Records | Notes                                                               |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------- |
+| `fx.send(template, { to?, data?, via? })` | `send`  | `via` orders the fallback chain; dry runs record _would have fired_ |
+
+## AI
+
+| Signature                              | Records | Returns                                     |
+| -------------------------------------- | ------- | ------------------------------------------- |
+| `fx.ask(prompt, input?, { via? })`     | `ask`   | Object validated against the prompt's `out` |
+| `fx.run(agent, input?)`                | `ask`   | Agent result                                |
+| `fx.stream(model, { prompt?, data? })` | `ask`   | `AsyncIterable<string>` of chunks           |
+| `fx.search(embed, query, { topK? })`   | `read`  | Matches from the index/embed                |
+
+AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them.
+
+## Vault
+
+| Signature            | Records | Returns / notes                                                         |
+| -------------------- | ------- | ----------------------------------------------------------------------- |
+| `fx.vault(contract)` | `read`  | Cleartext, inside this flow only — registered with the redactor at boot |
+
+## Clock
+
+| Signature                         | Notes                                                 |
+| --------------------------------- | ----------------------------------------------------- |
+| `fx.clock.now()`                  | Epoch-ms, injectable — the only legal "now"           |
+| `fx.clock.sleep(label, duration)` | Durable sleep in `durable` flows; immediate otherwise |
+
+Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`.
+
+## Cache
+
+| Signature                              | Notes                                     |
+| -------------------------------------- | ----------------------------------------- |
+| `fx.cache.get(key)`                    | Value or `undefined`                      |
+| `fx.cache.set(key, value, ttl?)`       | Optional TTL string                       |
+| `fx.cache.getOrSet(key, ttl, produce)` | Read-through; writes invalidate by effect |
+
+## Responses
+
+| Helper                         | Status | Body                           |
+| ------------------------------ | ------ | ------------------------------ |
+| `fx.json.ok(value, { meta? })` | 200    | `{ data, meta?, error: null }` |
+| `fx.json.create(value)`        | 201    | `{ data, error: null }`        |
+| `fx.json.empty()`              | 204    | no body                        |
+| `fx.json.with(data, meta)`     | 200    | paginated envelope             |
+
+Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control.
+
+## Logging, i18n, ids
+
+| Signature                                  | Notes                                    |
+| ------------------------------------------ | ---------------------------------------- |
+| `fx.log.debug/info/warn/error(msg, data?)` | Redacting — secrets print as `***`       |
+| `fx.t(key, params?)`                       | Localized message from the `i18n` config |
+| `fx.id()`                                  | UUID — the only legal id generator       |
+
+## Principals
+
+| Property      | Shape                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| `fx.auth`     | `{ userId: string \| null, scopes: Set<string>, verified?: boolean }` |
+| `fx.operator` | `{ id: string \| null }` — Console plane                              |
+| `fx.tenant`   | `{ id: string \| null }` — active tenant                              |
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — why `fx` is the only door
+- [Errors](/docs/reference/errors) — what `fx.fail` produces
+- [Configuration](/docs/reference/configuration) — the drivers behind these calls

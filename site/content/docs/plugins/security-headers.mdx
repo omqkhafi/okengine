@@ -1,0 +1,136 @@
+---
+title: "Security Headers"
+description: "Official plugin — the complete secure-headers set on every HTTP response, failures included. Full helmet.js parity with API-first defaults, a CSP builder with report-only mode, and live DB-driven config."
+icon: "ShieldCheck"
+source: "src/plugins/security-headers.ts"
+---
+
+`securityHeaders()` stamps security headers on **every** HTTP flow response — successes, failures, and short-circuits alike, because it runs at `onResponse`, the last pipeline stage. An explicit value your app already set is never overridden unless you ask for it.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { securityHeaders } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(securityHeaders());
+```
+
+Every HTTP response now carries:
+
+| Header                              | Value         |
+| ----------------------------------- | ------------- |
+| `X-Content-Type-Options`            | `nosniff`     |
+| `X-Frame-Options`                   | `DENY`        |
+| `Referrer-Policy`                   | `no-referrer` |
+| `Origin-Agent-Cluster`              | `?1`          |
+| `X-DNS-Prefetch-Control`            | `off`         |
+| `X-Download-Options`                | `noopen`      |
+| `X-Permitted-Cross-Domain-Policies` | `none`        |
+| `X-XSS-Protection`                  | `0`           |
+| `X-Powered-By`                      | removed       |
+
+## Helmet parity
+
+Every [helmet.js](https://helmet.js.org/) middleware maps to an option here — same defaults wherever helmet's default is safe for an API, plus three deliberate deviations marked `opt-in`:
+
+| Helmet middleware               | This plugin                                                                               | Default match?                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `contentSecurityPolicy`         | `contentSecurityPolicy` — string **or** `{ directives, useDefaults, reportOnly }` builder | Same default directives; ours is opt-in like helmet's structure suggests    |
+| `crossOriginEmbedderPolicy`     | `crossOriginEmbedderPolicy`                                                               | Yes — off unless set                                                        |
+| `crossOriginOpenerPolicy`       | `crossOriginOpenerPolicy`                                                                 | **opt-in** — helmet's `same-origin` default breaks cross-origin API clients |
+| `crossOriginResourcePolicy`     | `crossOriginResourcePolicy`                                                               | **opt-in** — same API rationale                                             |
+| `originAgentCluster`            | `originAgentCluster`                                                                      | Yes — `?1`                                                                  |
+| `referrerPolicy`                | `referrerPolicy`                                                                          | Yes — `no-referrer`                                                         |
+| `strictTransportSecurity`       | `hsts`                                                                                    | **opt-in** — HSTS is sticky; never on plain-HTTP local dev                  |
+| `xContentTypeOptions`           | always on                                                                                 | Yes — `nosniff`                                                             |
+| `xDnsPrefetchControl`           | `dnsPrefetchControl`                                                                      | Yes — `off`; `{ allow: true }` → `on`                                       |
+| `xDownloadOptions`              | `downloadOptions`                                                                         | Yes — `noopen`                                                              |
+| `xFrameOptions`                 | `frameOptions`                                                                            | Yes — stricter: `DENY` over helmet's `SAMEORIGIN`                           |
+| `xPermittedCrossDomainPolicies` | `permittedCrossDomainPolicies`                                                            | Yes — `none`                                                                |
+| `xPoweredBy`                    | `poweredBy`                                                                               | Yes — removed; a string sets a decoy value                                  |
+| `xXssProtection`                | `xssProtection`                                                                           | Yes — `0` (disables the legacy buggy auditor)                               |
+
+Beyond parity: headers land on **failures too** (helmet middleware ordering bugs are a classic Express footgun), app-set values win by default, and every option can be driven live from the database (below).
+
+## Options
+
+| Option                         | Type                                                             | Default         | Does                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `contentSecurityPolicy`        | `string` · `{ directives, useDefaults?, reportOnly? }`           | — (omitted)     | CSP header; object form merges over helmet's default directives, camelCase or kebab keys |
+| `frameOptions`                 | `"DENY"` · `"SAMEORIGIN"`                                        | `"DENY"`        | `X-Frame-Options` value                                                                  |
+| `referrerPolicy`               | `string`                                                         | `"no-referrer"` | `Referrer-Policy` value                                                                  |
+| `hsts`                         | `boolean` · `{ maxAge?, includeSubDomains?, preload? }`          | `false`         | `Strict-Transport-Security` — `true` = one year                                          |
+| `permissionsPolicy`            | `string`                                                         | — (omitted)     | `Permissions-Policy` value                                                               |
+| `crossOriginOpenerPolicy`      | `"same-origin"` · `"same-origin-allow-popups"` · `"unsafe-none"` | — (omitted)     | `Cross-Origin-Opener-Policy` value                                                       |
+| `crossOriginResourcePolicy`    | `"same-origin"` · `"same-site"` · `"cross-origin"`               | — (omitted)     | `Cross-Origin-Resource-Policy` value                                                     |
+| `crossOriginEmbedderPolicy`    | `"require-corp"` · `"credentialless"`                            | — (omitted)     | `Cross-Origin-Embedder-Policy` value                                                     |
+| `originAgentCluster`           | `boolean`                                                        | `true`          | `Origin-Agent-Cluster: ?1` — `false` omits                                               |
+| `dnsPrefetchControl`           | `boolean` · `{ allow: boolean }`                                 | `true` → `off`  | `X-DNS-Prefetch-Control`; `false` omits                                                  |
+| `downloadOptions`              | `boolean`                                                        | `true`          | `X-Download-Options: noopen` — `false` omits                                             |
+| `permittedCrossDomainPolicies` | `"none"` · `"master-only"` · `"by-content-type"` · `"all"`       | `"none"`        | `X-Permitted-Cross-Domain-Policies` value                                                |
+| `poweredBy`                    | `boolean` · `string`                                             | `true`          | `true` removes `X-Powered-By`, a string sets a decoy, `false` keeps the app's            |
+| `xssProtection`                | `boolean`                                                        | `true`          | `X-XSS-Protection: 0` — `false` omits                                                    |
+| `override`                     | `boolean`                                                        | `false`         | Replace values the app set explicitly                                                    |
+
+```typescript
+.plug(
+  securityHeaders({
+    contentSecurityPolicy: {
+      directives: { scriptSrc: ["'self'", "https://cdn.example.com"] }, // merged over the defaults
+      reportOnly: true, // Content-Security-Policy-Report-Only while you tune
+    },
+    hsts: { maxAge: 63072000, includeSubDomains: true },
+    permissionsPolicy: "camera=(), microphone=()",
+  }),
+)
+```
+
+<Callout type="warn">
+  HSTS is off by default because it is **sticky** — once a browser sees it, it insists on HTTPS for
+  the whole `max-age`. Enable it only on deployments that already serve HTTPS (never on plain-HTTP
+  local dev). The same caution applies to `upgrade-insecure-requests` in the default CSP.
+</Callout>
+
+## Runtime configuration
+
+Header policy is exactly the config you want to flip without a redeploy — enable HSTS the day HTTPS lands, tighten the CSP after an audit. Pass a `configSource()` and options follow the database within one sync interval:
+
+```typescript
+const headers = configSource({
+  plugin: "security-headers",
+  code: { hsts: false }, // safe floor for local dev
+  db: { store: db },
+  kv: cache,
+});
+on(every("30s"), headers.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(securityHeaders(headers));
+```
+
+```sql
+INSERT INTO security_headers_config ("key", "value")
+VALUES ('config', '{"hsts": true}');
+```
+
+See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Notes
+
+| Behavior          | Detail                                                                |
+| ----------------- | --------------------------------------------------------------------- |
+| Failures included | `onResponse` runs after `onError` — denials get the same headers      |
+| App wins          | A header set earlier (app hook, flow) is kept unless `override: true` |
+| Non-HTTP triggers | No-op — nothing to stamp outside HTTP                                 |
+| Scope             | Flow responses — infra routes (`/_oke/*`, 404s) bypass the pipeline   |
+
+## Next
+
+<Cards>
+  <Card title="CORS" description="Cross-origin rules at the edge." href="/docs/plugins/cors" />
+  <Card title="CSRF" description="Block cross-site state changes." href="/docs/plugins/csrf" />
+  <Card
+    title="Plugin API"
+    description="Runtime configuration contract."
+    href="/docs/reference/plugins"
+  />
+</Cards>

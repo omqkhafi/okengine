@@ -1,0 +1,123 @@
+---
+title: "MCP"
+description: "The runtime MCP server on :6535 — read tools for Manifest, schemas, effects, and traces, write actions gated by per-call human confirmation — plus the read-only docs MCP on :6536."
+icon: "Plug"
+source: "docs/spec/unified-theory.md"
+---
+
+OKE serves an [MCP](https://modelcontextprotocol.io) endpoint on port **6535** so an AI agent can operate your running app: read its Manifest and traces, and take a small set of safe actions. It speaks JSON-RPC over HTTP (MCP protocol `2024-11-05`), requires a Bearer token **even on localhost**, and never forwards that token upstream — adapters receive structured operator ids instead.
+
+<Callout title="The one rule">
+  MCP inherits the operator's capability and can never exceed it. Server-level controls alone are
+  exactly where the confused-deputy problem lives, so access descends to the tool, the operation,
+  and each parameter.
+</Callout>
+
+## Read tools
+
+Default-safe — they return inert data envelopes, never live handles:
+
+| Tool               | Returns                                        | Scope (any of)                                |
+| ------------------ | ---------------------------------------------- | --------------------------------------------- |
+| `oke.manifest.get` | The current Manifest catalogue                 | `mcp:manifest:read` · `console:manifest:read` |
+| `oke.schema.get`   | In/out/error schemas for one flow (`flowId`)   | `mcp:schema:read` · `console:manifest:read`   |
+| `oke.effects.get`  | Declared effects for one flow (`flowId`)       | `mcp:effects:read` · `console:manifest:read`  |
+| `oke.traces.list`  | Recent runs (`limit` ≤ 200, optional `flowId`) | `mcp:traces:read` · `console:runs:read`       |
+| `oke.traces.get`   | One run/trace record (`runId`)                 | `mcp:traces:read` · `console:runs:read`       |
+
+## Write tools — confirmed, every single call
+
+Two actions are write-class, and each call needs a **fresh, single-use** confirmation — there is no session-level consent cache to leak:
+
+| Tool                            | Does                                                    | Scope (any of)                                         |
+| ------------------------------- | ------------------------------------------------------- | ------------------------------------------------------ |
+| `oke.action.invoke`             | Invoke a flow by id (sensitive)                         | `mcp:action:invoke` · `console:flows:invoke`           |
+| `oke.action.structural_propose` | Propose a structural diff — reviewable, **not applied** | `mcp:action:structural` · `console:structural:propose` |
+
+<Steps>
+
+<Step>
+### Request a confirmation token
+
+`oke.action.confirm` with the target `tool`, the exact `args`, and a human `reason` — it returns a single-use token.
+
+</Step>
+
+<Step>
+### Call the write tool
+
+Pass the token as `confirmToken` plus the phrase `CONFIRM` in `confirmation`. Token, phrase, args, and principal must all match what was confirmed.
+
+</Step>
+
+<Step>
+### The token dies
+
+Consumed tokens cannot be replayed; the next write needs a new confirmation. A mismatch fails with `write tool requires fresh human confirmation` and the `confirmVia` hint.
+
+</Step>
+
+</Steps>
+
+## Structural changes arrive as diffs
+
+`oke.action.structural_propose` is how an agent suggests a file change: it takes `title`, `relativePath`, and `contents`, and produces a **reviewable diff** for a human — it is never applied to the tree. This is the boundary that lets an agent propose boldly while a human stays the one who merges.
+
+## The security model
+
+| Layer               | Enforcement                                                 |
+| ------------------- | ----------------------------------------------------------- |
+| Authentication      | Bearer session token required — even on `127.0.0.1`         |
+| Scope inheritance   | `console:*` / `mcp:*` expand to every declared tool scope   |
+| Per-tool ACL        | Each tool declares required scopes + read/write class       |
+| Per-parameter rules | `maxLength`, enum allow-lists, forbidden parameters         |
+| Token hygiene       | Caller token never forwarded — structured operator ids only |
+| Confirmation        | Single-use, per call, phrase + token + args bound           |
+
+## Docs MCP — a second, docs-only server
+
+`oke dev` also boots `okengine-docs-mcp` on port **6536** — the same protocol, but exposing the documentation itself instead of a live Manifest. It is how an agent answers "how do I … in OKE?" from the real pages rather than its training data.
+
+| Fact     | Value                                  |
+| -------- | -------------------------------------- |
+| Port     | `6536` (moves upward when busy)        |
+| Auth     | None — public documentation, read-only |
+| Endpoint | `POST http://127.0.0.1:6536/mcp`       |
+| Health   | `GET http://127.0.0.1:6536/health`     |
+| Tools    | `oke.docs.search` · `oke.docs.get`     |
+
+```json
+{
+  "mcpServers": {
+    "okengine-docs": { "url": "http://127.0.0.1:6536/mcp" }
+  }
+}
+```
+
+The docs content ships inside the `okengine` package, so the index your agent searches is exactly the version you have installed. If the surface cannot boot (missing content, busy port), `oke dev` prints `Docs MCP skipped — …` and continues — docs search never takes your dev session down.
+
+## Learn more
+
+- [Console · Access](/docs/console/access) — how operator tokens and grants work
+- [Agent contracts](/docs/ai/skills) — what agents are taught about the system they operate
+- [Flow](/docs/elements/flow) — the effects the MCP reads back
+
+## Next
+
+<Cards>
+  <Card
+    title="Skills"
+    description="AGENTS.md and the shipped agent skills."
+    href="/docs/ai/skills"
+  />
+  <Card
+    title="llms.txt"
+    description="Machine-readable documentation surfaces."
+    href="/docs/ai/llms-txt"
+  />
+  <Card
+    title="AI element"
+    description="Models inside your app — the other direction."
+    href="/docs/elements/ai"
+  />
+</Cards>

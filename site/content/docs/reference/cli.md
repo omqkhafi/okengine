@@ -10,7 +10,7 @@ source: "docs/cli.md"
 ```bash
 bun add okengine                 # ONE package
 
-oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535
+oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535 · docs MCP :6536
                                  #   → client types + domain schema push on save (local)
 oke dev --local                  # -l  session-only local (in-memory; never writes .oke/mode)
 oke dev --no-db-push             #     opt out of auto oke db push on schema change
@@ -40,8 +40,8 @@ oke privacy erase --subject <id> # crypto-shredding: deletes the key, not the te
 oke upgrade                      # run codemods for a breaking change, print the diff
 ```
 
-In development, app, Console, and MCP prefer the canonical ports and move upward when
-occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
+In development, app, Console, MCP, and docs MCP prefer the canonical ports and move upward
+when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
 each built-in service, preventing one service's offset port from overlapping another's.
 
 ### Additional commands

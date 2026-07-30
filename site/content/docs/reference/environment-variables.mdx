@@ -1,0 +1,87 @@
+---
+title: "Environment Variables"
+description: "Every environment variable OKE reads — connection URLs, driver overrides, secrets, and CLI flags, grouped by what they configure."
+icon: "Terminal"
+---
+
+OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. In docker mode these are written for you into `docker/.env.docker`; this page is the full map.
+
+<Callout title="Precedence">
+  For anything with both an `OKE_*` variable and a conventional one (like `DATABASE_URL`), the
+  conventional variable wins first, then the `OKE_*` form, then the built-in default.
+</Callout>
+
+## SQL store
+
+| Variable            | Used for                                             | Default when unset              |
+| ------------------- | ---------------------------------------------------- | ------------------------------- |
+| `DATABASE_URL`      | Postgres connection (`postgres` driver, drizzle-kit) | `postgres://localhost:5432/oke` |
+| `OKE_STORE_SQL_URL` | Explicit SQL URL override                            | —                               |
+| `OKE_SQLITE_URL`    | SQLite file path (`sqlite` driver)                   | `.oke/app.sqlite`               |
+| `OKE_SQL_DRIVER`    | Force the sql driver id at boot                      | config map                      |
+
+## KV store
+
+| Variable           | Used for                 | Default when unset |
+| ------------------ | ------------------------ | ------------------ |
+| `REDIS_URL`        | Redis connection         | driver default     |
+| `OKE_STORE_KV_URL` | Explicit KV URL override | —                  |
+| `OKE_KV_DRIVER`    | Force the kv driver id   | config map         |
+
+## Files store
+
+| Variable               | Used for                         | Default when unset |
+| ---------------------- | -------------------------------- | ------------------ |
+| `S3_BUCKET`            | Bucket name (`s3` driver)        | —                  |
+| `S3_ENDPOINT`          | S3-compatible endpoint (RustFS)  | —                  |
+| `S3_ACCESS_KEY_ID`     | Access key                       | —                  |
+| `S3_SECRET_ACCESS_KEY` | Secret key                       | —                  |
+| `S3_REGION`            | Region                           | —                  |
+| `S3_SESSION_TOKEN`     | Session token (temporary creds)  | —                  |
+| `OKE_STORE_FILES_DB`   | Explicit files location override | —                  |
+| `OKE_FILES_DRIVER`     | Force the files driver id        | config map         |
+
+## Vault (OpenBao)
+
+Written by the first-boot bootstrap; you normally only set these when pointing at an external vault.
+
+| Variable          | Used for                    | Default when unset |
+| ----------------- | --------------------------- | ------------------ |
+| `OKE_VAULT_URL`   | OpenBao base URL            | —                  |
+| `OKE_VAULT_TOKEN` | App token (least-privilege) | —                  |
+| `OKE_VAULT_MOUNT` | KV v2 mount path            | `"secret"`         |
+
+## Channel (email)
+
+| Variable                | Used for                                  |
+| ----------------------- | ----------------------------------------- |
+| `SMTP_URL`              | Full SMTP connection string (`smtp://…`)  |
+| `SMTP_USER`             | Overrides the user embedded in `SMTP_URL` |
+| `SMTP_PASSWORD`         | Overrides the password in `SMTP_URL`      |
+| `OKE_CHANNEL_EMAIL_URL` | OKE-specific alternative to `SMTP_URL`    |
+
+## AI providers
+
+| Variable            | Used for                                |
+| ------------------- | --------------------------------------- |
+| `ANTHROPIC_API_KEY` | `anthropic` driver credential           |
+| `ANTHROPIC_MODEL`   | Model override for the anthropic driver |
+| `OPENAI_API_KEY`    | `openai-compatible` driver credential   |
+
+## Framework behavior
+
+| Variable              | Used for                                                      |
+| --------------------- | ------------------------------------------------------------- |
+| `OKE_DOCKER`          | `"1"` marks docker mode (set by the CLI, not by you)          |
+| `OKE_DB_AUTO_PUSH`    | Overrides `db.autoPush` at boot                               |
+| `OKE_DRIZZLE_DIALECT` | `"sqlite"` \| `"postgresql"` for generated drizzle config     |
+| `OKE_DEV_REQUEST_LOG` | `"1"` logs requests during `oke dev` (set by the CLI)         |
+| `OKE_CONSOLE_SECRET`  | Console session secret — set explicitly in production         |
+| `PORT`                | App port in production containers (default `6530`)            |
+| `NODE_ENV`            | `"production"` switches the Console to its production posture |
+
+## Learn more
+
+- [Configuration](/docs/reference/configuration) — the declarative side of the same knobs
+- [Vault](/docs/elements/vault) — how `OKE_VAULT_*` gets minted on first boot
+- [CLI Reference](/docs/reference/cli) — which commands write these for you

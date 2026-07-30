@@ -106,15 +106,15 @@ Full walkthrough: [Basic usage](https://okengine.vercel.app/docs/get-started/bas
 
 Everything beyond this page lives in the site handbook:
 
-| Resource      | Link                                                 |
-| ------------- | ---------------------------------------------------- |
-| Docs site     | [okengine.vercel.app](https://okengine.vercel.app)   |
-| Handbook      | [/docs](https://okengine.vercel.app/docs)            |
-| Changelog     | [/changelog](https://okengine.vercel.app/changelog)  |
-| Agents index  | [/llms.txt](https://okengine.vercel.app/llms.txt)    |
-| CLI reference | [/docs/cli](https://okengine.vercel.app/docs/cli)    |
-| Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json) |
-| Budgets       | [`BUDGETS.md`](BUDGETS.md)                           |
-| Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                 |
+| Resource      | Link                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| Docs site     | [okengine.vercel.app](https://okengine.vercel.app)                    |
+| Handbook      | [/docs](https://okengine.vercel.app/docs)                             |
+| Changelog     | [/changelog](https://okengine.vercel.app/changelog)                   |
+| Agents index  | [/llms.txt](https://okengine.vercel.app/llms.txt)                     |
+| CLI reference | [/docs/reference/cli](https://okengine.vercel.app/docs/reference/cli) |
+| Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json)                  |
+| Budgets       | [`BUDGETS.md`](BUDGETS.md)                                            |
+| Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                  |
 
 Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine). MIT.

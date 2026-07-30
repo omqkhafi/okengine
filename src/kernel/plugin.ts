@@ -6,9 +6,9 @@
  * and records exactly what was requested (capability capture). We never
  * statically analyse plugin source to guess intent.
  *
- * Contributions: flows · hooks · context decorations · elements · drivers ·
- * image recipes · DB schema · typed errors · client extensions · CLI
- * commands · Console panels.
+ * Contributions: flows · hooks · edge handlers (unmatched requests) ·
+ * context decorations · elements · drivers · image recipes · DB schema ·
+ * typed errors · client extensions · CLI commands · Console panels.
  *
  * @see docs/spec/unified-theory.md §14
  * @see docs/spec/console.md §9.15
@@ -87,6 +87,17 @@ export interface ImageRecipeContribution {
   readonly recipe: string;
 }
 
+/**
+ * Edge handler — runs for HTTP requests that match **no** flow (the prime
+ * example: a CORS preflight `OPTIONS` for a path bound to another method).
+ * Handlers run in install order; the first to return a {@link Response}
+ * answers, `undefined` passes to the next handler, then the plain 404.
+ */
+export type EdgeHandler = (
+  request: Request,
+  info: { readonly method: string; readonly path: string },
+) => undefined | Response | Promise<undefined | Response>;
+
 /** Table / DB schema contribution. */
 export interface TableContribution {
   /** Table name — conflict namespace shared across plugins. */
@@ -135,6 +146,12 @@ export interface PluginApi {
    * @param fn - Hook function
    */
   hook(stage: HookStage, fn: HookFn): PluginApi;
+  /**
+   * Register an edge handler (intercept — requests that match no flow).
+   *
+   * @param fn - Edge handler
+   */
+  edge(fn: EdgeHandler): PluginApi;
   /**
    * Decorate the invocation context (declare — once at boot).
    *
@@ -242,6 +259,7 @@ export interface PluginCapabilities {
 export interface PluginRegistration {
   readonly capabilities: PluginCapabilities;
   readonly hooks: Partial<Record<HookStage, HookFn[]>>;
+  readonly edges: readonly EdgeHandler[];
   readonly decorations: Readonly<Record<string, unknown>>;
   readonly elements: readonly PluginElement[];
   readonly tables: readonly TableContribution[];
@@ -285,6 +303,12 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
    * @param fn - Hook function
    */
   hook(stage: HookStage, fn: HookFn): PluginDef<D>;
+  /**
+   * Queue an edge handler contribution (requests that match no flow).
+   *
+   * @param fn - Edge handler
+   */
+  edge(fn: EdgeHandler): PluginDef<D>;
   /**
    * Queue a context decoration. Accumulates types for `.plug()`.
    *
@@ -395,6 +419,12 @@ export function plugin(name: string, options: PluginOptions): PluginDef {
     hook(stage, fn) {
       steps.push((api) => {
         api.hook(stage, fn);
+      });
+      return def;
+    },
+    edge(fn) {
+      steps.push((api) => {
+        api.edge(fn);
       });
       return def;
     },

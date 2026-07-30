@@ -1,0 +1,53 @@
+---
+title: "Skills"
+description: "What OKE ships to teach AI agents the system — the repo-level AGENTS.md contract and the installable skills under .agents/skills/."
+icon: "GraduationCap"
+source: "docs/spec/unified-theory.md"
+---
+
+Tools alone don't make a good operator — an agent also needs to know the _vocabulary_: what a Flow is, why `fx` is the only door, which driver ids are legal. OKE ships that knowledge as contracts and skills that agents load automatically, so sessions start aligned instead of drifting and getting corrected.
+
+## The three layers
+
+| Layer              | Path                       | Loaded when                                       | Teaches                                                               |
+| ------------------ | -------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| **Agent contract** | `AGENTS.md` (repo root)    | Every agent session, automatically                | The one law, eight elements, ten exports, the fx rule, ports, budgets |
+| **Element skill**  | `.agents/skills/oke/`      | Building or changing an okengine app              | The element contract in depth — declaration patterns per element      |
+| **Docs skill**     | `.agents/skills/oke-docs/` | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
+
+## AGENTS.md — the root contract
+
+Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, and peers) read at session start. It is deliberately short and absolute: every backend behavior is a Flow (`on(Trigger) → Effects`), there are eight elements and ten exports, all world access goes through `fx`, drivers are named after protocols, and the ports/budgets are fixed. Its closing rule is the one that keeps agents honest: **if the documentation is silent, stop and ask** — never invent the API.
+
+## Skills — installable know-how
+
+Skills are `SKILL.md` packages an agent loads when the work matches their description. The two OKE ships:
+
+| Skill      | Use it for                          | Inside                                                    |
+| ---------- | ----------------------------------- | --------------------------------------------------------- |
+| `oke`      | App work — flows, elements, drivers | The agent contract, element patterns, the fx invariants   |
+| `oke-docs` | Docs work — new pages, rewrites     | The page skeleton, verification sources, the density gate |
+
+Both live in the repo under `.agents/skills/`, so they travel with the code and stay versioned with what they describe.
+
+## How contracts compose with MCP
+
+Contracts teach the _vocabulary_; [MCP](/docs/ai/mcp) grants the _hands_. An agent that knows the eight elements from `AGENTS.md` reads the Manifest through `oke.manifest.get` with the right mental model — and its write attempts still pass through [per-call human confirmation](/docs/ai/mcp), because knowing the system is not the same as being trusted by it.
+
+## Learn more
+
+- [MCP](/docs/ai/mcp) — the runtime surface these contracts pair with
+- [Introduction](/docs/get-started/introduction) — the eight elements in human terms
+- [llms.txt](/docs/ai/llms-txt) — feeding an agent the docs themselves
+
+## Next
+
+<Cards>
+  <Card
+    title="llms.txt"
+    description="Machine-readable documentation surfaces."
+    href="/docs/ai/llms-txt"
+  />
+  <Card title="MCP" description="Runtime server :6535." href="/docs/ai/mcp" />
+  <Card title="AI element" description="Models inside your app." href="/docs/elements/ai" />
+</Cards>

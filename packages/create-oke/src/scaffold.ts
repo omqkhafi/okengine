@@ -21,7 +21,6 @@ import {
   shouldSkipTemplatePath,
   transformConfigForSqlDriver,
   transformPackageJson,
-  transformSchemaForSqlDriver,
   resolveOkengineDependency,
   type ScaffoldPackageJson,
   type SqlDriverId,

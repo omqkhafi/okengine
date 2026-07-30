@@ -88,6 +88,16 @@ export async function runDockerDerive(
       await writeDerivedFiles(result, outDir, { writeStackEnv: false });
     }
 
+    const vaultSpec = result.specs.find((s) => s.role === "vault");
+    if (vaultSpec) {
+      const rel = composeDir === "." ? ".oke/openbao/" : `${composeDir}/../.oke/openbao/`;
+      write(
+        `oke docker: OpenBao first boot — bring the stack up (e.g. \`oke dev -d\`), and oke ` +
+          `will initialize + unseal it once. Root/unseal material stays on the host at ${rel} ` +
+          `(0600, gitignored) — back it up; losing it loses every secret permanently.\n`,
+      );
+    }
+
     write(`oke docker: wrote ${result.files.length} file(s) → ${composeDir}/\n`);
     for (const f of result.files) write(`  ${composeDir}/${f.path}\n`);
     write(

@@ -8,7 +8,7 @@ business logic. Default `create-oke` template.
 ```bash
 bun install
 oke dev          # app :6530 · Console :6533 · MCP :6535
-# or: oke mode docker && oke dev   # postgres · redis · Mailpit · RustFS · sops
+# or: oke mode docker && oke dev   # postgres · redis · Mailpit · RustFS · OpenBao
 ```
 
 Local `oke dev` auto-runs `oke db push` when `schema.decl.ts` changes (opt out:
@@ -52,7 +52,17 @@ for the active dialect), then add real flows under
 ## Docker mode (`oke dev --docker`)
 
 Closest to production protocols: Postgres, Redis, SMTP (Mailpit), S3 (RustFS),
-vault `sops`/age. Compose credentials land in `docker/.env.docker`.
+and a real OpenBao vault (durable Raft storage, real init/unseal — not a
+`-dev` server). Compose credentials land in `docker/.env.docker`.
+
+On first `oke dev --docker` / `oke docker --prod` bring-up, `oke` initializes
+OpenBao, unseals it, and mints a least-privilege token for the app. The root
+token and the single unseal key stay on the host under `.oke/openbao/`
+(`0600`, gitignored) — never in `docker/.env.docker`, never in YAML.
+
+> **Single point of failure by design:** back up `.oke/openbao/unseal.key` to
+> a separate safe location. Losing it means losing every secret permanently,
+> with no recovery.
 
 Host ports are unique per project so multiple apps can run at once. Use
 `oke stack` or the `oke dev` Docker summary for the Mailpit UI and RustFS

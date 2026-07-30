@@ -272,6 +272,121 @@ describe("oke dev MCP live wiring", () => {
   });
 });
 
+describe("oke dev docs MCP", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
+  test("boots the real docs MCP on :6536 next to the runtime MCP — no auth, search works", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-docs-mcp-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      silentClaim: true,
+      keepAlive: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      docsMcpPort: 0,
+      startApp: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: () => {},
+      // Docs MCP must boot even when Console state is absent (headless).
+      serveConsole: async () => ({ stop() {} }),
+      serveMcp: async () => ({ stop() {} }),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    expect(session).toBeDefined();
+    if (!session) return;
+
+    expect(session.docsMcpUrl).toBeTruthy();
+    const docsBase = session.docsMcpUrl!.origin;
+    const host = `127.0.0.1:${session.docsMcpPort}`;
+
+    const health = await fetch(`${docsBase}/health`, { headers: { host } });
+    expect(health.status).toBe(200);
+    expect(await health.json()).toEqual({ ok: true, surface: "docs-mcp" });
+
+    // No Authorization header — docs MCP serves public documentation.
+    const listRes = await fetch(`${docsBase}/mcp`, {
+      method: "POST",
+      headers: { host, "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(listRes.status).toBe(200);
+    const listBody = (await listRes.json()) as {
+      result: { tools: { name: string }[] };
+    };
+    const toolNames = listBody.result.tools.map((t) => t.name);
+    expect(toolNames).toContain("oke.docs.search");
+    expect(toolNames).toContain("oke.docs.get");
+
+    const searchRes = await fetch(`${docsBase}/mcp`, {
+      method: "POST",
+      headers: { host, "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "oke.docs.search", arguments: { query: "vault" } },
+      }),
+    });
+    expect(searchRes.status).toBe(200);
+    const searchBody = (await searchRes.json()) as {
+      result: {
+        structuredContent: { kind: string; content: { hits: { slug: string }[] } };
+      };
+    };
+    expect(searchBody.result.structuredContent.kind).toBe(MCP_DATA_KIND);
+    expect(searchBody.result.structuredContent.content.hits.length).toBeGreaterThan(0);
+
+    session.stop();
+    session = undefined;
+    await expect(fetch(`${docsBase}/health`, { headers: { host } })).rejects.toThrow();
+  }, 60_000);
+
+  test("skips docs MCP without killing oke dev when the surface fails to boot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-docs-skip-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+
+    const writes: string[] = [];
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      silentClaim: true,
+      keepAlive: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      docsMcpPort: 0,
+      startApp: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: (t) => {
+        writes.push(t);
+      },
+      serveConsole: async () => ({ stop() {} }),
+      serveMcp: async () => ({ stop() {} }),
+      serveDocsMcp: async () => {
+        throw new Error("docs content missing");
+      },
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    expect(session).toBeDefined();
+    if (!session) return;
+    expect(session.docsMcpUrl).toBeNull();
+    expect(writes.join("")).toContain("Docs MCP skipped");
+  }, 60_000);
+});
+
 /**
  * Write a minimal HTTP flow app whose `do` returns `{ version }`.
  *
@@ -311,7 +426,13 @@ export const app = oke({ name: "dev-hot", env: "test" }).adopt({ ping });
 /** Stub Console + MCP so boot/hot tests isolate the app child. */
 function stubSurfaces(): Pick<
   DevOptions,
-  "serveConsole" | "serveMcp" | "regenClient" | "write" | "silentClaim" | "keepAlive"
+  | "serveConsole"
+  | "serveMcp"
+  | "serveDocsMcp"
+  | "regenClient"
+  | "write"
+  | "silentClaim"
+  | "keepAlive"
 > {
   return {
     silentClaim: true,
@@ -320,6 +441,7 @@ function stubSurfaces(): Pick<
     write: () => {},
     serveConsole: async () => ({ stop() {} }),
     serveMcp: async () => ({ stop() {} }),
+    serveDocsMcp: async () => ({ stop() {} }),
   };
 }
 

@@ -2,7 +2,7 @@ import { defineConfig } from "okengine/config";
 
 export default defineConfig({
   drivers: {
-    prod: ["postgres", "redis", "s3", "smtp", "sops", "anthropic", "pgvector"],
+    prod: ["postgres", "redis", "s3", "smtp", "openbao", "anthropic", "pgvector"],
     store: {
       sql: { local: "sqlite", prod: { driver: "postgres" } },
       kv: { prod: "redis" },
@@ -10,7 +10,7 @@ export default defineConfig({
       index: { prod: "pgvector" },
     },
     signal: { prod: "postgres" },
-    vault: { prod: "sops" },
+    vault: { prod: "openbao" },
     channel: { email: { prod: "smtp" } },
     ai: { prod: { driver: "anthropic" } },
   },

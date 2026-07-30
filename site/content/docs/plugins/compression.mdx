@@ -1,0 +1,60 @@
+---
+title: "Compression"
+description: "Official plugin — gzip response bodies for clients that send Accept-Encoding: gzip, with a size threshold and content-type matcher. Bun.serve does not compress on its own."
+icon: "Shrink"
+source: "src/plugins/compression.ts"
+---
+
+`compression()` gzips HTTP response bodies with the native `Bun.gzipSync` binding when the client advertises `Accept-Encoding: gzip`. `Bun.serve` never compresses on its own — without this plugin every byte goes over the wire raw, no matter how large the JSON.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { compression } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(compression());
+```
+
+A client sending `Accept-Encoding: gzip` now receives `Content-Encoding: gzip` with a `Vary: Accept-Encoding` marker; a client that does not ask gets the untouched body.
+
+## Options
+
+| Option    | Type     | Default                                      | Does                                                                    |
+| --------- | -------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| `minSize` | `number` | `1024`                                       | Bodies smaller than this pass through raw (gzip can grow tiny payloads) |
+| `match`   | `RegExp` | JSON · `+json` · javascript · xml · `text/*` | Which `Content-Type`s are compressible                                  |
+
+```typescript
+.plug(compression({ minSize: 0 })) // compress even tiny bodies (tests, debugging)
+```
+
+## Notes
+
+| Behavior          | Detail                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| Negotiation       | Runs only when `Accept-Encoding` allows gzip — `gzip;q=0` is respected |
+| Already encoded   | Skips responses that already carry `Content-Encoding`                  |
+| `no-transform`    | Skips responses whose `Cache-Control` forbids transformation           |
+| Content-Length    | Deleted after compression — stale lengths would corrupt the response   |
+| Non-HTTP triggers | No-op — nothing to compress outside HTTP                               |
+
+## Runtime configuration
+
+Thresholds and matchers can follow the database like every other official plugin — pass a `configSource()` as the options. See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Next
+
+<Cards>
+  <Card
+    title="Security Headers"
+    description="The full secure-headers set on every response."
+    href="/docs/plugins/security-headers"
+  />
+  <Card
+    title="IP Allowlist"
+    description="Allow/deny rules by client IP."
+    href="/docs/plugins/ip-allowlist"
+  />
+  <Card title="Plugin API" description="Build your own plugin." href="/docs/reference/plugins" />
+</Cards>

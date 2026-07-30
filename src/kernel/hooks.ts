@@ -150,19 +150,34 @@ export interface PipelineResult {
   readonly response: Response | undefined;
 }
 
+/** Serialize a pipeline outcome into an HTTP response (app-layer encoder). */
+export type PipelineEncoder = (result: {
+  readonly response?: Response | undefined;
+  readonly failure?: FlowFailure | undefined;
+  readonly output?: unknown;
+  readonly error?: unknown;
+}) => Response;
+
 /**
  * Run the seven-stage pipeline around `handler`.
+ *
+ * When `encode` is given (HTTP triggers), the outcome is serialized into
+ * `ctx.response` **before** `onResponse`, so the last stage sees — and may
+ * replace — the final response, as {@link InvocationContext.response}
+ * documents. Without `encode` (non-HTTP triggers) behavior is unchanged.
  *
  * @param ctx - Invocation context
  * @param fx - Fx door
  * @param hooks - Merged hooks
  * @param handler - Flow body (the `handler` stage)
+ * @param encode - HTTP response encoder (e.g. `encodeExecuteResult`)
  */
 export async function runPipeline(
   ctx: InvocationContext,
   fx: Fx,
   hooks: HookMap,
   handler: () => unknown | Promise<unknown>,
+  encode?: PipelineEncoder,
 ): Promise<PipelineResult> {
   let shortCircuit: "response" | "error" | undefined;
 
@@ -213,6 +228,13 @@ export async function runPipeline(
 
   if (shortCircuit === "error" || ctx.error !== undefined) {
     await runStage("onError", hooks, ctx, fx);
+  }
+
+  // Serialize before the last stage so `onResponse` sees the final response
+  // (short-circuit wins; encoder input mirrors the app layer exactly).
+  if (encode !== undefined && ctx.response === undefined) {
+    const failure = isFlowFailure(ctx.error) ? ctx.error : undefined;
+    ctx.response = encode({ failure, output: ctx.result, error: ctx.error });
   }
 
   await runStage("onResponse", hooks, ctx, fx);

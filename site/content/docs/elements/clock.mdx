@@ -1,119 +1,169 @@
 ---
 title: "Clock"
-description: "time — Cron, delay, timeout, durable sleep, and TTL — time as an element, not a bolted-on scheduler library."
+description: "Time — recurring schedules, intervals, and durable sleeps as first-class declarations, not a bolted-on cron library."
 icon: "Clock"
 source: "docs/spec/unified-theory.md"
 ---
 
-Clock is the element for **time**.
+Clock is how your app deals with **time**: cleanup jobs that run every hour, reports due at 9am Riyadh time, a flow that pauses for seven days and wakes up even after a deploy. There is no separate scheduler to install — a schedule is a trigger, and the flow it fires is the same species as every other flow.
 
-Cron, delay, timeout, durable sleep, and TTL — time as an element, not a bolted-on scheduler library.
-
-<Callout title="Governing rule">
-  Clock defaults to `postgres` — durability needs transactional storage.
+<Callout title="The one rule">
+  Flow code never calls `Date.now()` — it asks `fx.clock.now()`. Time is injected, which makes it
+  deterministic in tests and auditable in traces.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Clock"
-    description="Essence: time. Replaces: cron · delay · timeout · durable sleep · TTL."
-  />
-</Cards>
+<Steps>
 
-## Drivers available
+<Step>
+### Fire a flow on an interval
 
-<Cards>
-  <Card title="postgres" description="Default — durable schedules and wakes." />
-  <Card title="every / delay / sleep" description="Cron, delay, timeout, durable sleep, TTL." />
-</Cards>
+The simplest schedule is an anonymous interval trigger:
 
-## Example
+```typescript title="src/flows/links/purge.ts"
+import { on, flow, every } from "okengine";
 
-```typescript
-import { on, flow, http, every } from "okengine";
-import { eq, lt } from "drizzle-orm";
-import { db } from "../../core";
-import { member, fair } from "../../gates";
-import { linkClicked, linkStats } from "./signals";
-import { NewLink, LinkCode, Link, NotFound, Taken } from "./shapes";
-import { links } from "../../schema";
-
-// ① HTTP — "an endpoint"
-export const shorten = on(
-  http.post("/links").gate(member, fair),
-  flow({
-    in: NewLink,
-    out: LinkCode,
-    errors: { Taken },
-    do: async ({ url, code }, fx) => {
-      if (await fx.store(db).exists(links, { code })) return fx.fail("Taken", {});
-      const id = fx.id();
-      await fx
-        .store(db)
-        .insert(links)
-        .values({ id, code, url, userId: fx.auth.userId, clicks: 0, createdAt: Date.now() });
-      return { code };
-    },
-  }),
-);
-
-// ② HTTP — the hot path
-export const redirect = on(
-  http.get("/:code").gate(fair),
-  flow({
-    in: LinkCode,
-    out: Link,
-    errors: { NotFound },
-    do: async ({ code }, fx) => {
-      const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
-      if (!link) return fx.fail("NotFound", {});
-
-      await fx.emit(linkClicked, { code, at: Date.now() }); // same transaction as any write
-      return link;
-    },
-  }),
-);
-
-// ③ SIGNAL — "a queue consumer", and the same species as ① and ②
-on(
-  linkClicked,
-  flow({
-    do: async ({ code }, fx) => {
-      const [link] = await fx.store(db).select().from(links).where(eq(links.code, code)).limit(1);
-      const clicks = await fx.store(db).increment(links, link.id, "clicks");
-      await fx.emit(linkStats, { code, clicks }); // live: pushed to subscribers
-    },
-  }),
-);
-
-// ④ CLOCK — "a cron job", and still the same species
-on(
+export const purgeOld = on(
   every("1h"),
   flow({
-    do: (_, fx) => {
-      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-      return fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
+    do: async (_, fx) => {
+      const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+      await fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
     },
   }),
 );
+```
 
-// ⑤ A plain flow with no trigger — callable, not "private"
-export const stats = flow({
-  in: LinkCode,
-  out: z.object({ clicks: z.number() }),
-  do: async ({ code }, fx) => {
-    const [link] = await fx
-      .store(db)
-      .select({ clicks: links.clicks })
-      .from(links)
-      .where(eq(links.code, code))
-      .limit(1);
-    return link ?? { clicks: 0 };
-  },
+</Step>
+
+<Step>
+### Or declare a named schedule
+
+A named `clock()` shows up in the Console, supports cron expressions and timezones, and can be paused or retuned at runtime:
+
+```typescript title="src/clocks.ts"
+import { clock } from "okengine";
+
+export const dailyReport = clock("daily-report", {
+  cron: "0 9 * * *", // 09:00
+  timezone: "Asia/Riyadh",
+  overridable: true, // the Console may edit this schedule
 });
 ```
+
+```typescript title="src/flows/reports/daily.ts"
+export const sendDaily = on(
+  dailyReport,
+  flow({
+    do: async (_, fx) => {
+      /* … */
+    },
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Ask for time inside flows
+
+`fx.clock` is the only clock a flow knows:
+
+```typescript
+do: async (input, fx) => {
+  const now = fx.clock.now(); // epoch-ms, injectable
+  await fx.clock.sleep("wait-for-payment", "7d"); // durable — survives restarts
+};
+```
+
+</Step>
+
+</Steps>
+
+## Two kinds of schedules
+
+| Declaration         | Shows in Console | Cron + timezone | Runtime-editable   | Use for                           |
+| ------------------- | ---------------- | --------------- | ------------------ | --------------------------------- |
+| `every("1h")`       | no               | no              | no                 | Simple fixed intervals            |
+| `clock(name, opts)` | yes              | yes             | when `overridable` | Business schedules operators tune |
+
+Both are triggers consumed with the same `on(trigger, flow)` — the flow underneath does not know the difference.
+
+### `clock()` options
+
+| Option        | Type    | Default | Meaning                                                      |
+| ------------- | ------- | ------- | ------------------------------------------------------------ |
+| `cron`        | string  | —       | Cron expression `m h dom mon dow` (this or `every` required) |
+| `every`       | string  | —       | Fixed interval: `"30s"` · `"10m"` · `"1h"` · `"7d"`          |
+| `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                            |
+| `overridable` | boolean | `false` | Allow the Console to edit / pause the schedule               |
+
+## Sleeping inside a flow
+
+`fx.clock.sleep(label, duration)` is a **durable** sleep: in a `durable: true` flow the wake time is journaled, so the flow resumes after restarts and deploys instead of losing its place. The `label` names the step in the journal — it is what the Console shows when you inspect a sleeping run.
+
+In a non-durable flow the same call resolves immediately, so code reads identically in tests.
+
+## What the runtime guarantees
+
+| Guarantee          | What it means                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| Leader election    | With several replicas, only one instance fires each cron tick                               |
+| Catch-up `"one"`   | A schedule missed during downtime fires **once**, not once per missed tick                  |
+| Reconciled at boot | Named clocks are written into the store (`oke_crons`) — the scheduler reads state, not code |
+| DST-aware          | Ambiguous local times around DST transitions are detected and handled                       |
+
+## Per-environment drivers
+
+```typescript title="oke.config.ts"
+drivers: {
+  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
+},
+```
+
+| Driver     | Behavior                                                            |
+| ---------- | ------------------------------------------------------------------- |
+| `memory`   | In-process timers — fast local loop, lost on exit                   |
+| `postgres` | Schedules and wakes persisted in your Postgres — survives restarts  |
+| `frozen`   | Deterministic test clock — time advances only when the test says so |
+
+`frozen` is why the no-`Date.now()` rule pays off: tests inject time travel through `fx.clock` and every flow obeys it automatically.
+
+## Operating schedules from the Console
+
+The Console (`:6533` → Clock) lists every named clock with a four-number health view — drift, past-due, next run, and which replica holds the leader lease. From there you can **pause**, **edit the schedule**, or **wake early** — but only for clocks declared with `overridable: true`. A non-overridable clock rejects edits with `ScheduleNotOverridableError`, so a mistyped production change cannot silently reshape your cadence.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="I used Date.now() and tests are flaky">
+
+Replace it with `fx.clock.now()`. Direct time calls bypass the injected clock, so the `frozen` test driver cannot control them — that is exactly the class of bug the rule exists to remove.
+
+</Accordion>
+<Accordion title="The server was down and the cron didn't catch up">
+
+That is by design: catch-up policy is `"one"` — the schedule fires a single time after downtime, never a storm of one-run-per-missed-tick. If you genuinely need backfill, trigger the flow from the Console.
+
+</Accordion>
+<Accordion title="Console won't let me edit a schedule">
+
+The clock was declared without `overridable: true`. Add it and redeploy — the restriction is deliberate, so only schedules you marked as operator-tunable can drift from code.
+
+</Accordion>
+<Accordion title="How do I run something once, later — not recurring?">
+
+Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the work, in a `durable: true` flow. The sleep survives restarts, so "remind me in 7 days" is one line, not a cron row.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — `on(trigger, flow)` and the `fx` surface
+- [Console · Clock](/docs/console/clock) — health numbers, pause / edit / wake early
+- [Signal](/docs/elements/signal) — reacting to events instead of time
 
 ## Next
 

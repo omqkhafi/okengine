@@ -1,24 +1,17 @@
 /**
  * Protocol-named vault driver contracts.
  *
- * Driver ids: `sops` · `env` · `openbao` · `infisical` · `managed` · `memory`.
+ * Driver ids: `env` · `openbao` · `infisical` · `managed` · `memory`.
  * Never vendor names (`neon`, `infisical-cloud`, …) — vendor choice lives in `images`.
  */
 
 /** Protocol ids for vault drivers. */
-export type VaultDriverId = "sops" | "env" | "openbao" | "infisical" | "managed" | "memory";
+export type VaultDriverId = "env" | "openbao" | "infisical" | "managed" | "memory";
 
 /** Options when opening a vault backend. */
 export interface VaultOpenOptions {
-  /**
-   * Path to a SOPS-encrypted file (`sops` driver) or a dotenv file (`env` driver).
-   * Prefer JSON / ENV formats produced by `sops -e` for SOPS.
-   */
+  /** Path to a dotenv file (`env` driver). */
   readonly path?: string;
-  /** Inline SOPS ciphertext (tests). */
-  readonly ciphertext?: string | Uint8Array;
-  /** Age identity (`AGE-SECRET-KEY-…`) for Typage decryption. */
-  readonly ageIdentity?: string;
   /** Env prefix filter for the `env` driver (default: none — whole `process.env`). */
   readonly envPrefix?: string;
   /** Injected env map for tests (defaults to `process.env`). */

@@ -501,16 +501,6 @@
       "gate": "regression",
       "group": "drivers",
       "ok": true
-    },
-    {
-      "id": "export:./drivers/vault-sops",
-      "label": "vault-sops",
-      "value": 1626,
-      "limit": 1882,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "drivers",
-      "ok": true
     }
   ]
 }

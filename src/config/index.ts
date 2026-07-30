@@ -293,24 +293,11 @@ export function normalizeDriversConfig(
 /**
  * Fill missing `docker` pins from `prod` (compose infra ≈ production protocols).
  *
- * Vault is the exception: `prod: "sops"` becomes `docker: "dotenv"` so
- * `oke dev -d` can read `docker/.env.docker` without age keys.
- *
  * @param map - Env → driver map
- * @param options - Element-specific defaults
  */
-export function fillDockerFromProd(
-  map: EnvDriverMap | undefined,
-  options: { readonly vault?: boolean } = {},
-): EnvDriverMap | undefined {
+export function fillDockerFromProd(map: EnvDriverMap | undefined): EnvDriverMap | undefined {
   if (!map) return undefined;
   if (map.docker !== undefined || map.prod === undefined) return map;
-  if (options.vault) {
-    const prodId = typeof map.prod === "string" ? map.prod : map.prod.driver;
-    if (prodId === "sops") {
-      return { ...map, docker: "dotenv" };
-    }
-  }
   return { ...map, docker: map.prod };
 }
 
@@ -346,7 +333,7 @@ export function fillDriversDockerFromProd(
     ...(store !== undefined ? { store } : {}),
     signal: fillDockerFromProd(drivers.signal),
     clock: fillDockerFromProd(drivers.clock),
-    vault: fillDockerFromProd(drivers.vault, { vault: true }),
+    vault: fillDockerFromProd(drivers.vault),
     ...(channel !== undefined ? { channel } : {}),
     ai: fillDockerFromProd(drivers.ai),
     runs: fillDockerFromProd(drivers.runs),

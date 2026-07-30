@@ -146,6 +146,39 @@ describe("hooks — order and composition", () => {
     expect(order).toEqual(["onAuth", "onResponse"]);
   });
 
+  test("onResponse sees the serialized data response and may replace it", async () => {
+    let seenAtHook: Response | undefined;
+
+    on(
+      http.get("/data"),
+      flow({
+        name: "data",
+        do: () => ({ ok: true }),
+      }),
+    );
+
+    const app = oke({ name: "data-res" }).hook("onResponse", (ctx) => {
+      seenAtHook = ctx.response;
+      if (!ctx.response) return;
+      const headers = new Headers(ctx.response.headers);
+      headers.set("x-stamped", "yes");
+      ctx.response = new Response(ctx.response.body, {
+        status: ctx.response.status,
+        headers,
+      });
+    });
+
+    const res = await app.fetch(new Request("http://localhost/data"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-stamped")).toBe("yes");
+    // The hook saw the real serialized response, not undefined.
+    expect(seenAtHook).toBeDefined();
+    expect(seenAtHook!.headers.get("content-type")).toContain("application/json");
+    // The body survived the rebuild untouched.
+    const body = (await res.json()) as { data?: { ok: boolean } };
+    expect(body.data?.ok).toBe(true);
+  });
+
   test("hook short-circuits with FlowFailure and runs onError", async () => {
     const order: string[] = [];
 

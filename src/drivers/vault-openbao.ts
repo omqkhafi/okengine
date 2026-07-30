@@ -1,21 +1,30 @@
 /**
- * `openbao` vault driver — HashiCorp Vault / OpenBao KV v2 HTTP API.
+ * `openbao` vault driver — OpenBao (Vault-compatible) KV v2 HTTP API.
  *
  * Protocol-named; image/vendor choice lives in `images`.
  */
 
 import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
+/** Error thrown when the remote OpenBao is unreachable / sealed / errors. */
+export class OpenBaoUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OpenBaoUnavailableError";
+  }
+}
+
 /**
- * OpenBao / Vault KV driver.
+ * OpenBao KV-v2 bag. Reads are loaded at open when `url` + `token` resolve;
+ * writes (`set` / `delete`) hit the HTTP API directly.
  *
- * Expects `url` + `token` + optional `mount` (default `secret`).
- * Fetches `GET {url}/v1/{mount}/data/{name}` for each requested secret
- * lazily via a cached bag loaded at open when `secrets` seed keys are listed,
- * or returns empty until {@link VaultBag.get} is called against a remote.
+ * When `url` and `token` are provided, an unreachable, sealed, or erroring
+ * OpenBao is **fatal** (fail-loud) — the bag never silently degrades to an
+ * empty / seed-only view.
  *
  * For boot validation the runtime passes declared names; this driver loads
- * all keys under `mount` when the LIST API is available, else uses seed names.
+ * all keys under `mount` when the LIST API is available, else falls back to
+ * GETs for the seed names.
  */
 export const openbaoVaultDriver: VaultDriver = {
   id: "openbao",
@@ -30,36 +39,60 @@ export const openbaoVaultDriver: VaultDriver = {
       ),
     );
 
-    if (url && token) {
-      // Best-effort LIST; ignore failures (permission / disabled).
-      try {
-        const listRes = await fetchFn(`${url}/v1/${mount}/metadata?list=true`, {
-          headers: { "X-Vault-Token": token },
-        });
-        if (listRes.ok) {
-          const body = (await listRes.json()) as {
-            data?: { keys?: string[] };
-          };
-          for (const key of body.data?.keys ?? []) {
-            const getRes = await fetchFn(`${url}/v1/${mount}/data/${key}`, {
-              headers: { "X-Vault-Token": token },
-            });
-            if (!getRes.ok) continue;
-            const got = (await getRes.json()) as {
-              data?: { data?: Record<string, unknown> };
-            };
-            const data = got.data?.data ?? {};
-            const value =
-              typeof data.value === "string"
-                ? data.value
-                : typeof data[key] === "string"
-                  ? (data[key] as string)
-                  : JSON.stringify(data);
-            map.set(key.replace(/\/$/, ""), value);
-          }
+    const remote = url !== undefined && token !== undefined;
+    let mutableRemote = false;
+
+    if (remote && url !== undefined && token !== undefined) {
+      const headers = { "X-Vault-Token": token };
+      const base = `${url}/v1/${mount}`;
+
+      async function listNames(): Promise<string[]> {
+        const res = await fetchFn(`${base}/metadata?list=true`, { headers });
+        if (!res.ok) return [];
+        const body = (await res.json()) as { data?: { keys?: string[] } };
+        return (body.data?.keys ?? []).map((k) => k.replace(/\/$/, ""));
+      }
+
+      async function readName(name: string): Promise<boolean> {
+        const res = await fetchFn(`${base}/data/${encodeURIComponent(name)}`, { headers });
+        if (res.status === 404) return false;
+        if (!res.ok) {
+          throw new OpenBaoUnavailableError(
+            `openbao vault: GET ${name} failed (${res.status}) — sealed or unauthorized?`,
+          );
         }
-      } catch {
-        // Remote unavailable — bag stays at seed / empty; boot validation reports gaps.
+        const body = (await res.json()) as { data?: { data?: Record<string, unknown> } };
+        const data = body.data?.data ?? {};
+        const value =
+          typeof data.value === "string"
+            ? data.value
+            : typeof data[name] === "string"
+              ? (data[name] as string)
+              : JSON.stringify(data);
+        map.set(name, value);
+        return true;
+      }
+
+      // LIST when the token has metadata list; otherwise only fetch the
+      // seed/declared names so a least-privilege token still works. A
+      // connection-level failure here must never degrade to an empty bag.
+      let names: string[] = [];
+      try {
+        names = await listNames();
+      } catch (err) {
+        if (map.size === 0) {
+          throw new OpenBaoUnavailableError(
+            `openbao vault: unreachable at ${url} — ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        // Fall through: LIST denied but we still have declared names to GET.
+      }
+      if (names.length > 0) {
+        for (const key of names) await readName(key);
+        mutableRemote = true;
+      } else if (map.size > 0) {
+        for (const name of map.keys()) await readName(name);
+        mutableRemote = true;
       }
     }
 
@@ -71,6 +104,40 @@ export const openbaoVaultDriver: VaultDriver = {
       names() {
         return [...map.keys()];
       },
+      ...(mutableRemote && url !== undefined && token !== undefined
+        ? {
+            set(name: string, value: string) {
+              void (async () => {
+                const res = await fetchFn(`${url}/v1/${mount}/data/${encodeURIComponent(name)}`, {
+                  method: "POST",
+                  headers: { "X-Vault-Token": token, "content-type": "application/json" },
+                  body: JSON.stringify({ data: { value } }),
+                });
+                if (!res.ok) {
+                  throw new OpenBaoUnavailableError(
+                    `openbao vault: write ${name} failed (${res.status})`,
+                  );
+                }
+                map.set(name, value);
+              })();
+            },
+            delete(name: string) {
+              const had = map.delete(name);
+              void (async () => {
+                const res = await fetchFn(`${url}/v1/${mount}/data/${encodeURIComponent(name)}`, {
+                  method: "DELETE",
+                  headers: { "X-Vault-Token": token },
+                });
+                if (!res.ok && res.status !== 404) {
+                  throw new OpenBaoUnavailableError(
+                    `openbao vault: delete ${name} failed (${res.status})`,
+                  );
+                }
+              })();
+              return had;
+            },
+          }
+        : {}),
     };
   },
 };

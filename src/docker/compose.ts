@@ -130,6 +130,7 @@ export function emitComposeLayers(
     };
     if (applied.environment) service.environment = applied.environment;
     if (applied.command) service.command = applied.command;
+    if (applied.entrypoint) service.entrypoint = applied.entrypoint;
     if (applied.healthcheck) service.healthcheck = applied.healthcheck;
     if (applied.volumes) service.volumes = applied.volumes;
     if (applied.user) service.user = applied.user;
@@ -245,6 +246,10 @@ export function buildStackEnv(
       env.SMTP_HOST = host;
       env.SMTP_PORT = String(spec.hostPort);
       if (uiHost !== undefined) env.MAILPIT_UI_URL = `http://${host}:${uiHost}`;
+    } else if (spec.role === "vault") {
+      // Token is minted by the bootstrap — never a generated password here.
+      env[`${prefix}_URL`] = url;
+      env.OKE_VAULT_URL = url;
     } else {
       env[`${prefix}_USER`] = spec.credentials.user;
       env[`${prefix}_PASSWORD`] = spec.credentials.password;
@@ -267,6 +272,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "store.index": "store.index — search index",
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
+  vault: "vault — OpenBao",
 };
 
 /** Friendly aliases emitted beside their role block. */

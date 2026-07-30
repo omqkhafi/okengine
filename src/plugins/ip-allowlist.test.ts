@@ -1,0 +1,105 @@
+/**
+ * `ip-allowlist` plugin — allow/deny semantics, XFF parsing, and
+ * missing-header behavior through the real pipeline.
+ */
+
+import { beforeEach, describe, expect, test } from "bun:test";
+import { oke } from "../kernel/app.ts";
+import { flow, resetFlowSeq } from "../kernel/flow.ts";
+import { on, resetBindings } from "../kernel/on.ts";
+import { http } from "../kernel/triggers.ts";
+import { ipAllowlist } from "./ip-allowlist.ts";
+
+beforeEach(() => {
+  resetBindings();
+  resetFlowSeq();
+});
+
+/** Shorthand: GET /x with an optional x-forwarded-for header. */
+function get(ip?: string): Request {
+  return new Request(
+    "http://localhost/x",
+    ip === undefined ? undefined : { headers: { "x-forwarded-for": ip } },
+  );
+}
+
+describe("ipAllowlist plugin", () => {
+  test("allow list: listed IPs pass, others get 403 Forbidden", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "ips" }).plug(ipAllowlist({ allow: ["203.0.113.7"] }));
+
+    const ok = await app.fetch(get("203.0.113.7"));
+    expect(ok.status).toBe(200);
+
+    const denied = await app.fetch(get("198.51.100.9"));
+    expect(denied.status).toBe(403);
+    const body = (await denied.json()) as { error: { code: string; data: { reason: string } } };
+    expect(body.error.code).toBe("Forbidden");
+    expect(body.error.data.reason).toBe("ip_not_allowed");
+  });
+
+  test("deny list: blocked IPs get 403 ip_denied, others pass", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "ips-deny" }).plug(ipAllowlist({ deny: ["198.51.100.9"] }));
+
+    const blocked = await app.fetch(get("198.51.100.9"));
+    expect(blocked.status).toBe(403);
+    const body = (await blocked.json()) as { error: { data: { reason: string } } };
+    expect(body.error.data.reason).toBe("ip_denied");
+
+    const ok = await app.fetch(get("203.0.113.7"));
+    expect(ok.status).toBe(200);
+  });
+
+  test("deny wins over allow on overlap", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "ips-both" }).plug(
+      ipAllowlist({ allow: ["203.0.113.7"], deny: ["203.0.113.7"] }),
+    );
+
+    const res = await app.fetch(get("203.0.113.7"));
+    expect(res.status).toBe(403);
+  });
+
+  test("XFF first hop is the client; later hops are ignored", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "ips-xff" }).plug(ipAllowlist({ allow: ["203.0.113.7"] }));
+
+    const proxied = await app.fetch(get("203.0.113.7, 10.0.0.1, 10.0.0.2"));
+    expect(proxied.status).toBe(200);
+
+    const spoofedTail = await app.fetch(get("198.51.100.9, 203.0.113.7"));
+    expect(spoofedTail.status).toBe(403);
+  });
+
+  test("missing header: denied when allow is set, permitted for deny-only", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const strict = oke({ name: "ips-missing-allow" }).plug(ipAllowlist({ allow: ["203.0.113.7"] }));
+
+    const denied = await strict.fetch(get());
+    expect(denied.status).toBe(403);
+
+    resetBindings();
+    resetFlowSeq();
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+
+    const lax = oke({ name: "ips-missing-deny" }).plug(ipAllowlist({ deny: ["198.51.100.9"] }));
+    const ok = await lax.fetch(get());
+    expect(ok.status).toBe(200);
+  });
+
+  test("custom header name is honored", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "ips-custom" }).plug(
+      ipAllowlist({ allow: ["203.0.113.7"], header: "x-real-ip" }),
+    );
+
+    const res = await app.fetch(
+      new Request("http://localhost/x", { headers: { "x-real-ip": "203.0.113.7" } }),
+    );
+    expect(res.status).toBe(200);
+
+    const wrongHeader = await app.fetch(get("203.0.113.7"));
+    expect(wrongHeader.status).toBe(403);
+  });
+});

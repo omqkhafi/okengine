@@ -1,0 +1,92 @@
+---
+title: "CORS"
+description: "Official plugin — cross-origin rules at the edge: preflight OPTIONS answered even for paths bound to other methods, plus CORS headers on matched responses. Closed by default."
+icon: "Globe"
+source: "src/plugins/cors.ts"
+---
+
+`cors()` decides which websites may call your app from a browser. It answers preflight `OPTIONS` requests itself — even for paths bound to other methods, which would otherwise 404 before any middleware could run — and stamps `Access-Control-*` headers on matched responses.
+
+## Quick start
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { cors } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "dev" }).plug(
+  cors({ origin: "https://app.example.com" }),
+);
+```
+
+Browsers on `https://app.example.com` can now call every flow; every other origin gets a quiet `204` on preflight with **no** CORS headers, so the browser blocks it. Same-origin traffic never needs this plugin — browsers only enforce CORS across origins.
+
+<Callout title="Closed by default">
+  `cors()` with no `origin` opens nothing. Cross-origin access is a deliberate decision — pass
+  `"*"`, one origin, or an exact-match list when you mean it.
+</Callout>
+
+## Options
+
+| Option           | Type                          | Default                                                | Does                                                                        |
+| ---------------- | ----------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `origin`         | `"*"` · `string` · `string[]` | none (closed)                                          | Origins allowed cross-origin; lists are exact matches                       |
+| `methods`        | `string[]`                    | GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS     | Methods answered on preflight                                               |
+| `allowedHeaders` | `string[]`                    | reflect the request's `Access-Control-Request-Headers` | `Access-Control-Allow-Headers` on preflight                                 |
+| `exposedHeaders` | `string[]`                    | omit                                                   | `Access-Control-Expose-Headers` on actual responses                         |
+| `credentials`    | `boolean`                     | `false`                                                | Send `Access-Control-Allow-Credentials`; `"*"` is then reflected per-origin |
+| `maxAge`         | `number`                      | omit                                                   | `Access-Control-Max-Age` seconds on preflight                               |
+
+```typescript
+.plug(cors({
+  origin: ["https://app.example.com", "https://admin.example.com"],
+  credentials: true,
+  maxAge: 600,
+}))
+```
+
+## Notes
+
+| Behavior          | Detail                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| Preflight         | Answered by the plugin's **edge handler** — runs even when no flow matches the path/method |
+| Denied preflight  | `204` with no CORS headers — the correct, quiet failure; the browser blocks it             |
+| Credentials + `*` | Browsers reject that pair, so the plugin reflects the request origin instead               |
+| `Vary`            | `Origin` (plus request-method/headers on preflight) is appended, never duplicated          |
+| Non-HTTP triggers | No-op                                                                                      |
+
+## Runtime configuration
+
+Origin lists belong to the class of config you want to change without a redeploy — an emergency integration, a partner cutover. Pass a `configSource()` instead of static options and the origin rule follows the database:
+
+```typescript
+const origins = configSource({
+  plugin: "cors",
+  code: { origin: "https://app.example.com" },
+  db: { store: db },
+  kv: cache,
+});
+on(every("30s"), origins.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(cors(origins));
+```
+
+See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configuration-code-or-db) for the full contract.
+
+## Next
+
+<Cards>
+  <Card
+    title="CSRF"
+    description="Block cross-site state changes with fetch metadata."
+    href="/docs/plugins/csrf"
+  />
+  <Card
+    title="Security Headers"
+    description="The full secure-headers set on every response."
+    href="/docs/plugins/security-headers"
+  />
+  <Card
+    title="Plugin API"
+    description="Edge handlers and runtime configuration."
+    href="/docs/reference/plugins"
+  />
+</Cards>

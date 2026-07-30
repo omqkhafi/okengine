@@ -1,0 +1,54 @@
+---
+title: "llms.txt"
+description: "Machine-readable documentation — the index, the full concatenated text, and per-page markdown endpoints this site serves for agents."
+icon: "FileText"
+source: "docs/spec/unified-theory.md"
+---
+
+This documentation site serves machine-readable twins of every page, following the `llms.txt` convention — so an agent can pull exactly the docs it needs (or all of them) instead of scraping HTML. Three endpoints, three granularities:
+
+| Endpoint                | Contains                                            | Pull it when                                  |
+| ----------------------- | --------------------------------------------------- | --------------------------------------------- |
+| `/llms.txt`             | Index of every docs page (title, link, description) | The agent needs the map — what exists, where  |
+| `/llms-full.txt`        | All pages concatenated as one markdown document     | You want the whole docs in one context window |
+| `/llms.mdx/docs/⟨slug⟩` | One page as markdown                                | The agent needs just the Vault page, say      |
+
+## Use them
+
+```bash
+# the map
+curl https://okengine.vercel.app/llms.txt
+
+# everything, for stuffing into context
+curl https://okengine.vercel.app/llms-full.txt
+
+# one page — e.g. the Vault element
+curl https://okengine.vercel.app/llms.mdx/docs/elements/vault
+```
+
+<Callout title="Which one first?">
+  Start with `/llms.txt` — it is small and tells the agent which slugs exist. Fetch `/llms-full.txt`
+  only when breadth matters more than tokens; per-page `/llms.mdx` is the precise instrument.
+</Callout>
+
+## How it pairs with the docs MCP
+
+These endpoints serve the _published_ docs of the framework. During `oke dev`, the [docs MCP server](/docs/ai/mcp) also runs on :6536 (`oke.docs.search` / `oke.docs.get`), answering from the same content over the MCP protocol — pick the plain HTTP endpoints for one-shot context, the MCP tools when the agent is already connected as a client.
+
+## Learn more
+
+- [MCP](/docs/ai/mcp) — runtime and docs MCP servers
+- [Agent contracts](/docs/ai/skills) — teaching agents the vocabulary these pages use
+- [Reference](/docs/reference/configuration) — the most-cited pages for config questions
+
+## Next
+
+<Cards>
+  <Card title="MCP" description="Runtime :6535 · docs :6536." href="/docs/ai/mcp" />
+  <Card
+    title="Skills"
+    description="AGENTS.md and the shipped agent skills."
+    href="/docs/ai/skills"
+  />
+  <Card title="AI element" description="Models inside your app." href="/docs/elements/ai" />
+</Cards>

@@ -1,0 +1,15 @@
+{
+  "title": "Plugins",
+  "icon": "Puzzle",
+  "pages": [
+    "---Security---",
+    "security-headers",
+    "cors",
+    "csrf",
+    "ip-allowlist",
+    "---Operations---",
+    "maintenance-mode",
+    "---Performance---",
+    "compression"
+  ]
+}

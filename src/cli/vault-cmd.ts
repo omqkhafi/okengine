@@ -2,8 +2,42 @@
  * `oke vault` — set · list · import · key rotate.
  */
 
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseDotenv, formatDotenv } from "../drivers/vault-dotenv-parse.ts";
+
+/** Resolved OpenBao target for direct API writes (docker / prod vault). */
+interface OpenBaoTarget {
+  readonly url: string;
+  readonly token: string;
+  readonly mount: string;
+}
+
+/**
+ * Resolve a live OpenBao target when the active vault is OpenBao.
+ *
+ * Sources, in order: `OKE_VAULT_*` env · persisted `.oke/openbao/` host
+ * material + `docker/.env.docker` URL. Returns `null` when neither resolves
+ * (local dotenv loop) so `oke vault set` keeps the file path.
+ *
+ * @param cwd - Project root
+ */
+export async function resolveOpenBaoTarget(cwd: string): Promise<OpenBaoTarget | null> {
+  const mount = process.env.OKE_VAULT_MOUNT ?? "secret";
+  const envUrl = process.env.OKE_VAULT_URL;
+  const envToken = process.env.OKE_VAULT_TOKEN;
+  if (envUrl && envToken) {
+    return { url: envUrl.replace(/\/$/, ""), token: envToken, mount };
+  }
+  const appTokenPath = resolve(cwd, ".oke/openbao/app.token");
+  const composeEnvPath = resolve(cwd, "docker/.env.docker");
+  if (!existsSync(appTokenPath) || !existsSync(composeEnvPath)) return null;
+  const envFile = parseDotenv(readFileSync(composeEnvPath, "utf8"));
+  const url = envFile.get("OKE_VAULT_URL");
+  const token = readFileSync(appTokenPath, "utf8").trim();
+  if (!url || !token) return null;
+  return { url: url.replace(/\/$/, ""), token, mount };
+}
 
 /** In-memory / file-backed vault bag for CLI (dotenv-shaped). */
 export interface VaultCliStore {
@@ -77,6 +111,35 @@ oke vault key rotate
     if (!name) {
       console.error("Usage: oke vault set <NAME> [value]");
       return 1;
+    }
+    const ob = await resolveOpenBaoTarget(cwd);
+    if (ob && !options.store && !options.envFile) {
+      let value = rest[1];
+      if (value === undefined) {
+        const read =
+          options.readLine ??
+          (async () => {
+            write(`Enter value for ${name}: `);
+            const chunks: Buffer[] = [];
+            for await (const chunk of Bun.stdin.stream()) {
+              chunks.push(Buffer.from(chunk));
+              if (Buffer.concat(chunks).includes(0x0a)) break;
+            }
+            return Buffer.concat(chunks).toString("utf8").trim();
+          });
+        value = await read(`Enter value for ${name}: `);
+      }
+      const res = await fetch(`${ob.url}/v1/${ob.mount}/data/${encodeURIComponent(name)}`, {
+        method: "POST",
+        headers: { "X-Vault-Token": ob.token, "content-type": "application/json" },
+        body: JSON.stringify({ data: { value } }),
+      });
+      if (!res.ok) {
+        console.error(`oke vault: OpenBao write failed (${res.status}) — sealed / unauthorized?`);
+        return 1;
+      }
+      write(`oke vault: set ${name} (openbao)\n`);
+      return 0;
     }
     let value = rest[1];
     if (value === undefined) {

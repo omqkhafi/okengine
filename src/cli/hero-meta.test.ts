@@ -20,7 +20,7 @@ const SAMPLE: OkeConfig = {
     },
     signal: { local: "memory", docker: "postgres", prod: "postgres" },
     clock: { local: "memory", docker: "postgres", prod: "postgres" },
-    vault: { local: "dotenv", docker: "dotenv", prod: "sops" },
+    vault: { local: "dotenv", docker: "openbao", prod: "openbao" },
     channel: {
       email: { local: "console", docker: "smtp", prod: "smtp" },
     },

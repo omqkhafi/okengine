@@ -7,7 +7,65 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
-## Unreleased
+## v0.3.0 — 2026-07-30
+
+### Added
+
+- Official plugins — first-party extensions shipped inside `okengine`,
+  importable from `okengine/plugins` and attached with `.plug()`, built
+  entirely on the public plugin API. The set: `securityHeaders()` (full
+  helmet.js parity with API-first defaults — the complete secure-headers
+  set on every response, failures included, plus a CSP builder with
+  report-only mode), `cors()` (preflight `OPTIONS` answered at the edge
+  even for paths bound to other methods; closed by default), `csrf()`
+  (stateless fetch-metadata defense with an `Origin` fallback — no
+  tokens, no cookies), `compression()` (native `Bun.gzipSync` for
+  clients that accept gzip, with size and content-type thresholds),
+  `maintenanceMode()` (one-flag 503 drain with `Retry-After`,
+  allow-listed paths, and an operator bypass header), and
+  `ipAllowlist()` (allow/deny rules by client IP at the edge of the
+  pipeline). All no-op safely on non-HTTP triggers.
+- `configSource()` — runtime-mutable plugin configuration: code as the
+  floor, a DB row as the source of truth, and a KV binding as the
+  automatic read-through cache. Every official plugin accepts one in
+  place of static options; one clock-bound sync flow (declared effects,
+  so the fx rule holds) refreshes the in-memory box that hooks read.
+  Flip maintenance mode, open a CORS origin, or enable HSTS from the
+  database — no redeploy.
+- Plugin API: new `.edge(fn)` contribution — handlers for HTTP requests
+  that match **no** flow (e.g. CORS preflight for a path bound to
+  another method), run in install order before the plain 404, recorded
+  as an `edge` intercept capability. The CORS plugin is built on it.
+- Kernel: HTTP flows now serialize their outcome into `ctx.response`
+  **before** the `onResponse` pipeline stage, so the last stage sees — and
+  may replace — the final response, as `InvocationContext.response` always
+  documented. Encoder input mirrors the app layer exactly; non-HTTP
+  triggers are unchanged.
+- Docs MCP: `oke dev` now boots the read-only docs MCP server next to the
+  runtime MCP — app :6530 · Console :6533 · MCP :6535 · docs MCP :6536. No
+  Bearer token (public documentation). Tools: `oke.docs.search`,
+  `oke.docs.get` — agents answer "how do I … in OKE?" from the real pages
+  instead of training-data memory. Docs content now ships inside the
+  published package so the surface works in installed apps. Boot failure
+  (missing content, busy port) skips the surface, never takes `oke dev`
+  down.
+- Documentation overhaul — all eight element pages rewritten to one
+  standard (quick start → contract → per-environment drivers →
+  troubleshooting). New sections: Reference (`oke.config.ts` options,
+  environment variables, error codes, the full `fx` API, plugin API),
+  AI Resources (runtime + docs MCP, agent contracts and skills,
+  `llms.txt` endpoints), and a categorized Plugins section (Security ·
+  Operations · Performance). CLI Reference and Security moved under
+  Reference.
+
+### Changed
+
+- Vault: real OpenBao is now the `docker` / `prod` default driver (durable
+  single-node Raft, real init/unseal, least-privilege app token). The
+  previous age-based driver and its optional peer dependency were removed
+  entirely. Single-point-of-failure by design: back up
+  `.oke/openbao/unseal.key` to a separate safe location — losing it means
+  losing every secret permanently, with no recovery.
 
 ## v0.2.9 — 2026-07-29
 
@@ -186,8 +244,8 @@ error }` envelope; `create` → 201, `empty` → 204, list pages attach
 - `oke.config.ts` driver maps gain a `stack` profile for `oke dev -s` (local
   server). Boot forces `env: "stack"` under `OKE_STACK=1` so every element uses
   server drivers — not a mix of `dev`/`test` + prod store.
-- `defineConfig` copies missing `stack` pins from `prod` (vault `sops` →
-  `dotenv` for `.env.stack`), so server protocols are available under `-s`
+- `defineConfig` copies missing `stack` pins from `prod` (vault pins copy
+  like every other element), so server protocols are available under `-s`
   without duplicating every map by hand.
 - Durable Console sessions in `.oke/console.sqlite`, so operator login survives
   `oke dev` restarts without clearing cookies.

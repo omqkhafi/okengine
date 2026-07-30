@@ -44,6 +44,9 @@ describe("auth plugin", () => {
       hook() {
         return this;
       },
+      edge() {
+        return this;
+      },
       decorate() {
         return this;
       },

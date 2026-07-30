@@ -674,29 +674,37 @@ export function oke(options: OkeOptions): OkeApp {
 
     const alreadyValidated = extras?.validated === true;
 
-    const result = await runPipeline(ctx, fx, hooks, async () => {
-      try {
-        if (!alreadyValidated) {
-          const parsed = await validate(flowDef.in, ctx.input);
-          if (!parsed.ok) return parsed.failure;
-          ctx.input = parsed.value;
-          return await flowDef.do(parsed.value as never, fx);
+    const result = await runPipeline(
+      ctx,
+      fx,
+      hooks,
+      async () => {
+        try {
+          if (!alreadyValidated) {
+            const parsed = await validate(flowDef.in, ctx.input);
+            if (!parsed.ok) return parsed.failure;
+            ctx.input = parsed.value;
+            return await flowDef.do(parsed.value as never, fx);
+          }
+          return await flowDef.do(ctx.input as never, fx);
+        } catch (err) {
+          // A durable sleep that has not yet elapsed suspends the run — this
+          // is a park, not a pipeline failure, so it must not throw upward.
+          if (flowDef.durable && journalSession && isJournalSuspend(err)) {
+            ctx.state.sleeping = {
+              wakeAt: err.wakeAt,
+              label: err.label,
+              runId: journalSession.runId,
+            };
+            return undefined;
+          }
+          throw err;
         }
-        return await flowDef.do(ctx.input as never, fx);
-      } catch (err) {
-        // A durable sleep that has not yet elapsed suspends the run — this
-        // is a park, not a pipeline failure, so it must not throw upward.
-        if (flowDef.durable && journalSession && isJournalSuspend(err)) {
-          ctx.state.sleeping = {
-            wakeAt: err.wakeAt,
-            label: err.label,
-            runId: journalSession.runId,
-          };
-          return undefined;
-        }
-        throw err;
-      }
-    });
+      },
+      // HTTP flows serialize before `onResponse` so the last stage can see
+      // and replace the final response (plugin header/middleware surfaces).
+      trigger.kind === "http" ? encodeExecuteResult : undefined,
+    );
 
     const endedAt = now();
 
@@ -925,6 +933,12 @@ export function oke(options: OkeOptions): OkeApp {
 
       const matched = router.match(method, url.pathname);
       if (!matched) {
+        // Plugin edge handlers answer requests no flow owns (e.g. CORS
+        // preflight for a path bound to another method) — first Response wins.
+        for (const handle of pluginRegistry.edgeHandlers()) {
+          const edgeResponse = await handle(request, { method, path: url.pathname });
+          if (edgeResponse !== undefined) return respond(edgeResponse);
+        }
         return respond(new Response("Not Found", { status: 404 }));
       }
       const { value: binding, params } = matched;

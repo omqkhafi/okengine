@@ -1,68 +1,158 @@
 ---
 title: "Signal"
-description: "data in motion — Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default."
+description: "Data in motion — queues, pub/sub, and streams as one declaration whose delivery physics you choose explicitly."
 icon: "Radio"
 source: "docs/spec/unified-theory.md"
 ---
 
-Signal is the element for **data in motion**.
+Signal is how your app moves data between flows and to clients: background jobs, events, fan-out notifications, live feeds. What other stacks split into a queue library, a pub/sub client, and a streaming platform is **one declaration** here — you pick the delivery physics, and the driver underneath is swappable per environment.
 
-Queues, pub/sub, and streams collapse into one Signal. Delivery physics (`once` · `broadcast` · `live`) is mandatory — no silent default.
-
-<Callout title="Governing rule">
-  `delivery` is mandatory with no default. Delivery physics is a semantic decision; guessing it
-  produces silent, expensive bugs.
+<Callout title="The one rule">
+  `delivery` is **mandatory with no default**. Delivery physics is a semantic decision about your
+  data — guessing it produces silent, expensive bugs, so omitting it is a type error.
 </Callout>
 
-## At a glance
+## Quick start
 
-<Cards>
-  <Card
-    title="Signal"
-    description="Essence: data in motion. Replaces: queue · pub/sub · stream · websocket · SSE · event bus."
-  />
-</Cards>
+<Steps>
 
-## Drivers available
+<Step>
+### Declare the signal
 
-<Cards>
-  <Card title="memory" description="Dev default — in-process, no extra service." />
-  <Card title="postgres" description="Prod default — transactional with your data." />
-  <Card title="redis" description="Explicit alternative for throughput; outbox relay kept." />
-  <Card title="nats · kafka" description="Explicit high-throughput alternatives." />
-</Cards>
+A signal is a named, typed channel. The schema describes the payload; `delivery` describes its physics:
 
-## Why this is an element
-
-<Callout title="Why">
-  Queue, pub/sub, and stream were always the same object with different delivery physics — so
-  delivery is an option, not three ecosystems.
-</Callout>
-
-<Cards>
-  <Card title="once" description="Queue semantics: competing consumers, retries, DLQ." />
-  <Card title="broadcast" description="Pub/sub: fan-out to every subscriber." />
-  <Card title="live" description="Stream: client-subscribable, replayable." />
-</Cards>
-
-## Example
-
-```typescript
+```typescript title="src/signals.ts"
 import { signal } from "okengine";
 import { z } from "zod";
 
-export const linkClicked = signal("link-clicked", {
-  schema: z.object({ code: z.string(), at: z.number(), referrer: z.string().optional() }),
+export const orderPlaced = signal("order-placed", {
+  schema: z.object({ orderId: z.string(), total: z.number() }),
   delivery: "once", // queue physics: one consumer, retries, DLQ
   retries: 3,
   deadLetter: true,
 });
-
-export const linkStats = signal("link-stats", {
-  schema: z.object({ code: z.string(), clicks: z.number() }),
-  delivery: "live", // stream physics: clients subscribe
-});
 ```
+
+</Step>
+
+<Step>
+### Emit it from a Flow
+
+Producers never touch a broker client — they call `fx.emit`:
+
+```typescript title="src/flows/orders/place.ts"
+do: async (input, fx) => {
+  await fx.store(db).insert(orders).values({ id: input.id /* … */ });
+  await fx.emit(orderPlaced, { orderId: input.id, total: input.total });
+  // With the postgres driver this enrols in the same transaction as the insert —
+  // the message is only ever sent if the row is committed.
+};
+```
+
+</Step>
+
+<Step>
+### Consume it with a Flow
+
+A signal is a trigger like any other — the consumer is an ordinary Flow:
+
+```typescript title="src/flows/orders/send-confirmation.ts"
+export const sendConfirmation = on(
+  orderPlaced,
+  flow({
+    in: z.object({ orderId: z.string(), total: z.number() }),
+    do: async (input, fx) => {
+      await fx.channel(email).send(/* … */);
+    },
+  }),
+);
+```
+
+</Step>
+
+</Steps>
+
+That's the loop: declare → `fx.emit` → `on(signal, flow)`. The runtime handles routing, retries, and dead-lettering.
+
+## The three delivery physics
+
+| `delivery`    | Semantics                                              | Use for                                                    |
+| ------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| `"once"`      | Queue: competing consumers, retries, dead-letter queue | Jobs that must happen exactly once — emails, payments sync |
+| `"broadcast"` | Pub/sub: **every** subscriber receives a copy          | Cache invalidation, cross-service events                   |
+| `"live"`      | Stream: client-subscribable and replayable             | Live feeds, dashboards, progress updates                   |
+
+The declaration is identical in shape for all three — switching physics later is a one-word change, not a migration to another library.
+
+### Options
+
+| Option       | Type                              | Default          | Meaning                                                        |
+| ------------ | --------------------------------- | ---------------- | -------------------------------------------------------------- |
+| `delivery`   | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                               |
+| `schema`     | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                |
+| `retries`    | number                            | `3`              | Max delivery attempts before dead-letter (`once`)              |
+| `deadLetter` | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                |
+| `optional`   | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check) |
+
+## When delivery fails
+
+`once` signals retry automatically. Every attempt keeps a **typed failure reason**, and the full attempt history survives into the DLQ — so when a message lands there you see _why_ each attempt failed, not just that it did.
+
+The **Console** (`:6533` → Signals) shows the topology (which flows emit and consume each signal), per-subscriber delivery stats, and the DLQ contents with replay / discard controls — no separate broker UI to run.
+
+<Callout title="Orphan emits fail loudly">
+  Emitting a signal with zero subscribers is normally an error — it almost always means a typo or a
+  forgotten consumer. Set `optional: true` on the declaration only when zero-subscriber emits are
+  genuinely expected (e.g. an integration hook).
+</Callout>
+
+## Per-environment drivers
+
+```typescript title="oke.config.ts"
+drivers: {
+  signal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
+},
+```
+
+| Driver     | Runs as                          | Best for                                                                  |
+| ---------- | -------------------------------- | ------------------------------------------------------------------------- |
+| `memory`   | in-process                       | Local loop + tests — zero infrastructure                                  |
+| `postgres` | your existing Postgres container | Default for docker/prod — emits join your DB transaction (outbox pattern) |
+| `redis`    | Redis container                  | Explicit alternative when throughput outgrows Postgres                    |
+| `nats`     | NATS container                   | High-throughput fan-out                                                   |
+
+`postgres` is the default outside local dev for a reason: `fx.emit` enrols in the caller's transaction, so "write row + emit event" commits or rolls back **atomically** — the classic dual-write bug is designed out.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Emit fails with a 'no subscribers' error">
+
+You emitted a signal that no flow consumes. Either wire a consumer with `on(signal, flow)`, or set `optional: true` on the declaration if zero-subscriber emits are intentional.
+
+</Accordion>
+<Accordion title="A message keeps retrying and then disappears">
+
+After `retries` attempts the message moves to the DLQ — it is not lost. Open Console → Signals, inspect the typed failure reasons on each attempt, fix the consumer, then replay.
+
+</Accordion>
+<Accordion title="once vs broadcast vs live — how do I choose?">
+
+Ask: _how many consumers should process each message?_ One → `once`. All of them → `broadcast`. Clients over time, with replay → `live`. If you need retries and a DLQ, you want `once`.
+
+</Accordion>
+<Accordion title="My emit happened but the row didn't (or vice versa)">
+
+That is the dual-write problem, and it means the signal driver is not `postgres`. With the `postgres` driver the emit joins your SQL transaction; with `redis` / `nats` an outbox relay keeps the guarantee, but `postgres` is the only mode where atomicity is literal.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — `on(trigger, flow)` and `fx.emit`
+- [Console · Signals](/docs/console/signals) — topology, delivery stats, DLQ replay
+- [Clock](/docs/elements/clock) — scheduled and delayed work
 
 ## Next
 
