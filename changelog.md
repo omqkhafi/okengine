@@ -20,6 +20,9 @@ an `### Added` / `### Changed` / `### Fixed` group.
 - Site logo assets live under `site/public/logo/` (wordmarks + letter
   variants); README and favicon paths follow. The docs site cycles the
   O / K / E favicon letters.
+- Rebased the `plugins` export budget after the CORS / IP-allowlist
+  hardening (4.45 kB → 4.74 kB), and refreshed the published budgets
+  snapshot.
 
 ### Fixed
 
@@ -29,6 +32,9 @@ an `### Added` / `### Changed` / `### Fixed` group.
   credentialed access.
 - `ipAllowlist` no longer trusts the leftmost XFF hop (spoofable when
   proxies append). Wrong or non-positive `trustedProxyDepth` fails loud.
+- OpenBao bootstrap waits for `/sys/health` active (Raft leader writable)
+  after unseal before mounts/policies — fixes flaky restart CI when
+  single-node Raft still reports `readonly storage`.
 
 ## v0.3.2 — 2026-07-30
 

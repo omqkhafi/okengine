@@ -123,6 +123,36 @@ async function api<T>(fetchFn: OpenBaoFetch, url: string, init?: RequestInit): P
 }
 
 /**
+ * Wait until OpenBao Raft storage is active (writable).
+ *
+ * `/v1/sys/health` returns 200 only when initialized, unsealed, and the
+ * active leader — not while sealed (503) or standby (429). Polling seal-status
+ * alone is not enough after restart.
+ *
+ * @param fetchFn - Injected fetch
+ * @param url - Base URL without trailing slash
+ */
+async function waitForActiveStorage(fetchFn: OpenBaoFetch, url: string): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  let lastStatus = 0;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetchFn(`${url}/v1/sys/health`);
+      lastStatus = res.status;
+      // Drain the body so keep-alive clients don't stall.
+      await res.arrayBuffer().catch(() => undefined);
+      if (res.status === 200) return;
+    } catch {
+      // process up, Raft not ready yet
+    }
+    await Bun.sleep(250);
+  }
+  throw new OpenBaoBootstrapError(
+    `openbao bootstrap: storage not active after unseal (health → ${lastStatus || "unreachable"})`,
+  );
+}
+
+/**
  * Ensure OpenBao is initialized + unsealed, mint/reuse the app token.
  *
  * Fails loud when: server unreachable · initialized but host unseal key
@@ -217,6 +247,10 @@ export async function ensureOpenBao(
       throw new OpenBaoBootstrapError("openbao bootstrap: still sealed after unseal");
     }
   }
+
+  // Single-node Raft can report unsealed before storage is writable
+  // (`cannot write to readonly storage` / `cannot find peer` during election).
+  await waitForActiveStorage(fetchFn, url);
 
   const rootHeaders = { "X-Vault-Token": rootToken, "content-type": "application/json" };
 

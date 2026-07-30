@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-30T12:36:04.208Z",
-  "version": "0.3.2",
+  "measuredAt": "2026-07-30T20:40:33.315Z",
+  "version": "0.3.3",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 24.598,
+      "value": 24.442,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -155,8 +155,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 4561,
-      "limit": 4817,
+      "value": 4857,
+      "limit": 5113,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

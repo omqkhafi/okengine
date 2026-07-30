@@ -34,6 +34,8 @@ function fakeOpenBao(calls: { url: string; method: string; body?: string }[]) {
   const routes: Record<string, () => Response> = {
     "GET /v1/sys/seal-status": () =>
       Response.json({ sealed: false, initialized: false, t: 1, n: 1, progress: 0 }),
+    "GET /v1/sys/health": () =>
+      Response.json({ initialized: true, sealed: false, standby: false }, { status: 200 }),
     "POST /v1/sys/init": () =>
       Response.json({ keys: ["unseal-key-1"], keys_base64: ["dW5zZWFs"], root_token: "root-tok" }),
     "POST /v1/sys/unseal": () => Response.json({ sealed: false, t: 1, n: 1, progress: 0 }),
