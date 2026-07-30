@@ -22,6 +22,10 @@ export interface CorsOptions {
    * exact-match list (`"https://app.example.com"`). Default **none** —
    * cross-origin is closed until you open it. Same-origin traffic needs
    * no CORS headers at all.
+   *
+   * `"*"` cannot be combined with {@link CorsOptions.credentials} —
+   * construction throws. List exact origins when cookies/auth headers are
+   * involved; there is no "any origin + credentials" shortcut.
    */
   readonly origin?: "*" | string | readonly string[];
   /**
@@ -37,9 +41,10 @@ export interface CorsOptions {
   /** `Access-Control-Expose-Headers` on actual responses. Omitted unless provided. */
   readonly exposedHeaders?: readonly string[];
   /**
-   * Send `Access-Control-Allow-Credentials: true`. When set, an `origin`
-   * of `"*"` is answered by reflecting the request origin — browsers
-   * reject `"*"` together with credentials.
+   * Send `Access-Control-Allow-Credentials: true`. Requires an explicit
+   * origin allowlist (string or list) — never `"*"`. Construction throws
+   * on `origin: "*" + credentials: true` (that pair would otherwise be
+   * silently rewritten into reflected-origin access for every site).
    */
   readonly credentials?: boolean;
   /** `Access-Control-Max-Age` seconds on preflight. Omitted unless provided. */
@@ -47,6 +52,21 @@ export interface CorsOptions {
 }
 
 const DEFAULT_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+
+const WILDCARD_CREDENTIALS_ERROR =
+  'cors: origin: "*" cannot be combined with credentials: true — list exact origins instead ' +
+  '(browsers reject "*" with credentials; reflecting the request origin would grant any site ' +
+  "credentialed access)";
+
+/**
+ * Reject the dangerous `origin: "*" + credentials: true` pair.
+ * Fail loud at construction (and again if runtime config introduces it).
+ */
+function assertSafeCorsOptions(options: CorsOptions): void {
+  if (options.origin === "*" && options.credentials === true) {
+    throw new Error(WILDCARD_CREDENTIALS_ERROR);
+  }
+}
 
 /** True when `origin` is permitted by the configured origin rule. */
 export function originAllowed(origin: string, rule: CorsOptions["origin"]): boolean {
@@ -58,7 +78,7 @@ export function originAllowed(origin: string, rule: CorsOptions["origin"]): bool
 
 /** The `Access-Control-Allow-Origin` value for a permitted origin. */
 function allowOriginValue(origin: string, options: CorsOptions): string {
-  return options.origin === "*" && options.credentials !== true ? "*" : origin;
+  return options.origin === "*" ? "*" : origin;
 }
 
 /** Is this request a CORS preflight? */
@@ -82,10 +102,13 @@ function isPreflight(request: Request, method: string): boolean {
  * @param options - Origin rules and friends, or a config source
  */
 export function cors(options: CorsOptions | ConfigSource<CorsOptions> = {}): PluginDef {
-  const def = plugin("cors", { version: "0.0.1", config: pluginConfigSnapshot(options) })
+  assertSafeCorsOptions(pluginConfigSnapshot(options));
+
+  const def = plugin("cors", { version: "0.0.2", config: pluginConfigSnapshot(options) })
     .edge((request, info) => {
       if (!isPreflight(request, info.method)) return undefined;
       const resolved = resolvePluginOptions(options);
+      assertSafeCorsOptions(resolved);
       const origin = request.headers.get("origin")!;
       if (!originAllowed(origin, resolved.origin)) {
         return new Response(null, { status: 204 });
@@ -113,6 +136,7 @@ export function cors(options: CorsOptions | ConfigSource<CorsOptions> = {}): Plu
       const origin = ctx.request.headers.get("origin");
       if (origin === null) return;
       const resolved = resolvePluginOptions(options);
+      assertSafeCorsOptions(resolved);
       if (!originAllowed(origin, resolved.origin)) return;
 
       ctx.response = withHeaders(ctx.response, (headers) => {

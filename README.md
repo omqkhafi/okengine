@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="site/public/OKE-W.svg" />
-    <img alt="OKE" src="site/public/OKE-B.svg" width="220" />
+    <source media="(prefers-color-scheme: dark)" srcset="site/public/logo/OKE-W.svg" />
+    <img alt="OKE" src="site/public/logo/OKE-B.svg" width="220" />
   </picture>
 </p>
 

@@ -80,13 +80,26 @@ describe("cors plugin — preflight", () => {
     expect(reflected.headers.get("access-control-allow-origin")).toBe("*");
   });
 
-  test("credentials reflect the origin instead of stamping *", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "cors-cred" }).plug(cors({ origin: "*", credentials: true }));
+  test('origin: "*" + credentials: true throws at construction — no silent reflect', () => {
+    expect(() => cors({ origin: "*", credentials: true })).toThrow(
+      /origin:\s*"\*"\s+cannot be combined with credentials:\s*true/i,
+    );
+  });
 
-    const res = await app.fetch(preflight());
-    expect(res.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
-    expect(res.headers.get("access-control-allow-credentials")).toBe("true");
+  test("allowlist + credentials reflects only listed origins", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "cors-cred" }).plug(
+      cors({ origin: ["https://app.example.com", "https://admin.example.com"], credentials: true }),
+    );
+
+    const allowed = await app.fetch(preflight());
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
+    expect(allowed.headers.get("access-control-allow-credentials")).toBe("true");
+
+    const denied = await app.fetch(preflight("/x", { origin: "https://evil.example.com" }));
+    expect(denied.status).toBe(204);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+    expect(denied.headers.get("access-control-allow-credentials")).toBeNull();
   });
 });
 
@@ -104,6 +117,27 @@ describe("cors plugin — actual requests", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
     expect(res.headers.get("access-control-expose-headers")).toBe("x-total");
+  });
+
+  test("allowlist + credentials on matched responses reflects only listed origins", async () => {
+    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    const app = oke({ name: "cors-actual-cred" }).plug(
+      cors({ origin: ["https://app.example.com"], credentials: true }),
+    );
+
+    const ok = await app.fetch(
+      new Request("http://localhost/x", { headers: { origin: "https://app.example.com" } }),
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
+    expect(ok.headers.get("access-control-allow-credentials")).toBe("true");
+
+    const denied = await app.fetch(
+      new Request("http://localhost/x", { headers: { origin: "https://evil.example.com" } }),
+    );
+    expect(denied.status).toBe(200);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+    expect(denied.headers.get("access-control-allow-credentials")).toBeNull();
   });
 
   test("denied origins get no CORS headers on matched responses", async () => {

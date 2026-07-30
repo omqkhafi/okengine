@@ -32,28 +32,29 @@ A client whose IP is not on the list receives `403` with a typed denial:
 
 ## Options
 
-| Option   | Type       | Default             | Does                                                       |
-| -------- | ---------- | ------------------- | ---------------------------------------------------------- |
-| `allow`  | `string[]` | — (everyone passes) | Exact IPs permitted — every other client is denied         |
-| `deny`   | `string[]` | — (nobody blocked)  | Exact IPs blocked — checked first, so deny wins on overlap |
-| `header` | `string`   | `"x-forwarded-for"` | Header carrying the client IP (first hop wins)             |
+| Option              | Type       | Default             | Does                                                                   |
+| ------------------- | ---------- | ------------------- | ---------------------------------------------------------------------- |
+| `allow`             | `string[]` | — (everyone passes) | Exact IPs permitted — every other client is denied                     |
+| `deny`              | `string[]` | — (nobody blocked)  | Exact IPs blocked — checked first, so deny wins on overlap             |
+| `header`            | `string`   | `"x-forwarded-for"` | Header carrying the client IP                                          |
+| `trustedProxyDepth` | `number`   | `1`                 | Trusted proxies that append XFF; client IP is that many from the right |
 
 ```typescript
-.plug(ipAllowlist({ deny: ["198.51.100.9"], header: "x-real-ip" }))
+.plug(ipAllowlist({ deny: ["198.51.100.9"], trustedProxyDepth: 1 }))
 ```
 
-<Callout type="warn">
-  The IP header is only trustworthy behind a proxy that **sets or overwrites** it (your load
-  balancer, reverse proxy, or platform edge). A client connecting directly can send any
-  `x-forwarded-for` value it likes — an allowlist is a strong boundary only when the proxy owns the
-  header.
+<Callout type="error">
+  Standard reverse proxies **append** to `X-Forwarded-For` — left-side hops are attacker-controlled.
+  The plugin trusts the hop `trustedProxyDepth` from the **right** (default `1` = last hop). Set
+  this to your real proxy count; wrong depth bypasses the allowlist — topology-dependent, not
+  drop-in.
 </Callout>
 
 ## Notes
 
 | Behavior          | Detail                                                                             |
 | ----------------- | ---------------------------------------------------------------------------------- |
-| XFF parsing       | First comma-separated hop is the client; proxy-appended tails are ignored          |
+| XFF parsing       | Last hop (depth `1`) is the client; left-side spoofed entries are ignored          |
 | Missing header    | Denied when `allow` is set (unknown is not allowed); permitted for deny-only rules |
 | Deny wins         | An IP in both lists is blocked                                                     |
 | Non-HTTP triggers | No-op — there is no client IP outside HTTP                                         |

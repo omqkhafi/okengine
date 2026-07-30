@@ -7,6 +7,29 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.3.3 — 2026-07-30
+
+### Added
+
+- `ipAllowlist({ trustedProxyDepth })` — how many trusted proxies append to
+  `X-Forwarded-For` (default `1`). Client IP is taken that many hops from
+  the right, matching how reverse proxies append rather than overwrite.
+
+### Changed
+
+- Site logo assets live under `site/public/logo/` (wordmarks + letter
+  variants); README and favicon paths follow. The docs site cycles the
+  O / K / E favicon letters.
+
+### Fixed
+
+- `cors({ origin: "*", credentials: true })` now throws at construction
+  (and again if runtime config introduces the pair) instead of reflecting
+  the request origin — that rewrite would have granted any site
+  credentialed access.
+- `ipAllowlist` no longer trusts the leftmost XFF hop (spoofable when
+  proxies append). Wrong or non-positive `trustedProxyDepth` fails loud.
+
 ## v0.3.2 — 2026-07-30
 
 ### Changed

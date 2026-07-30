@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 import { Provider } from "@/components/provider";
 import { Topbar } from "@/components/chrome/topbar";
+import { OkeFaviconCycle } from "@/components/oke-logo-icon";
 import { source } from "@/lib/source";
 import type { Metadata } from "next";
 import "./global.css";
@@ -33,6 +34,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
     <html lang="en" className={inter.className} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         <Provider>
+          <OkeFaviconCycle />
           <Topbar tree={source.getPageTree()} />
           {children}
         </Provider>

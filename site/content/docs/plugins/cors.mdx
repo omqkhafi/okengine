@@ -27,14 +27,14 @@ Browsers on `https://app.example.com` can now call every flow; every other origi
 
 ## Options
 
-| Option           | Type                          | Default                                                | Does                                                                        |
-| ---------------- | ----------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `origin`         | `"*"` · `string` · `string[]` | none (closed)                                          | Origins allowed cross-origin; lists are exact matches                       |
-| `methods`        | `string[]`                    | GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS     | Methods answered on preflight                                               |
-| `allowedHeaders` | `string[]`                    | reflect the request's `Access-Control-Request-Headers` | `Access-Control-Allow-Headers` on preflight                                 |
-| `exposedHeaders` | `string[]`                    | omit                                                   | `Access-Control-Expose-Headers` on actual responses                         |
-| `credentials`    | `boolean`                     | `false`                                                | Send `Access-Control-Allow-Credentials`; `"*"` is then reflected per-origin |
-| `maxAge`         | `number`                      | omit                                                   | `Access-Control-Max-Age` seconds on preflight                               |
+| Option           | Type                          | Default                                                | Does                                                                      |
+| ---------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `origin`         | `"*"` · `string` · `string[]` | none (closed)                                          | Origins allowed cross-origin; lists are exact matches                     |
+| `methods`        | `string[]`                    | GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS     | Methods answered on preflight                                             |
+| `allowedHeaders` | `string[]`                    | reflect the request's `Access-Control-Request-Headers` | `Access-Control-Allow-Headers` on preflight                               |
+| `exposedHeaders` | `string[]`                    | omit                                                   | `Access-Control-Expose-Headers` on actual responses                       |
+| `credentials`    | `boolean`                     | `false`                                                | Send `Access-Control-Allow-Credentials`; requires an explicit origin list |
+| `maxAge`         | `number`                      | omit                                                   | `Access-Control-Max-Age` seconds on preflight                             |
 
 ```typescript
 .plug(cors({
@@ -44,13 +44,19 @@ Browsers on `https://app.example.com` can now call every flow; every other origi
 }))
 ```
 
+<Callout type="error">
+  `cors({ origin: "*", credentials: true })` throws at construction. Browsers reject that literal
+  pair; reflecting the request origin would grant **any** site credentialed access. List exact
+  origins for cookies/`Authorization` — no any-origin + credentials shortcut.
+</Callout>
+
 ## Notes
 
 | Behavior          | Detail                                                                                     |
 | ----------------- | ------------------------------------------------------------------------------------------ |
 | Preflight         | Answered by the plugin's **edge handler** — runs even when no flow matches the path/method |
 | Denied preflight  | `204` with no CORS headers — the correct, quiet failure; the browser blocks it             |
-| Credentials + `*` | Browsers reject that pair, so the plugin reflects the request origin instead               |
+| Credentials + `*` | Construction throws — enumerate origins; never reflect `*` into credentialed access        |
 | `Vary`            | `Origin` (plus request-method/headers on preflight) is appended, never duplicated          |
 | Non-HTTP triggers | No-op                                                                                      |
 
