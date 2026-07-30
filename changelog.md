@@ -7,6 +7,18 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.3.5 — 2026-07-31
+
+### Changed
+
+- `bun run ci` is the single local pre-push gate (format, lint, typecheck,
+  integration tests, budgets, gate, site). Removed the unused
+  `ci:workflow` split.
+- Tag-push CI no longer re-runs budgets (local-only); parallel jobs stay
+  lint/fmt, typecheck, test, gate, site → publish.
+- GitHub Actions runtimes upgraded off deprecated Node 20:
+  `actions/checkout@v6`, `oven-sh/setup-bun@v2.2.0`, `actions/setup-node@v6`.
+
 ## v0.3.4 — 2026-07-30
 
 ### Fixed
