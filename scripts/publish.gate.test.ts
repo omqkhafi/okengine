@@ -37,7 +37,6 @@ describe("publish workflow", () => {
         lint?: unknown;
         typecheck?: unknown;
         test?: unknown;
-        budgets?: unknown;
         gate?: unknown;
         site?: unknown;
         ci?: { needs?: string | string[] };
@@ -50,17 +49,19 @@ describe("publish workflow", () => {
     const tagList = Array.isArray(tags) ? tags : tags ? [tags] : [];
     expect(tagList).toContain("v*");
 
-    for (const key of ["lint", "typecheck", "test", "budgets", "gate", "site", "ci"] as const) {
+    for (const key of ["lint", "typecheck", "test", "gate", "site", "ci"] as const) {
       expect(parsed.jobs?.[key]).toBeTruthy();
     }
+    expect(parsed.jobs?.["budgets"]).toBeUndefined();
     expect(parsed.jobs?.["publish-npm"]).toBeTruthy();
     expect(parsed.jobs?.["publish-jsr"]).toBeTruthy();
 
     const ciNeeds = parsed.jobs?.ci?.needs;
     const ciNeedList = Array.isArray(ciNeeds) ? ciNeeds : ciNeeds ? [ciNeeds] : [];
-    for (const need of ["lint", "typecheck", "test", "budgets", "gate", "site"]) {
+    for (const need of ["lint", "typecheck", "test", "gate", "site"]) {
       expect(ciNeedList).toContain(need);
     }
+    expect(ciNeedList).not.toContain("budgets");
 
     for (const key of ["publish-npm", "publish-jsr"] as const) {
       const job = parsed.jobs?.[key];
@@ -75,7 +76,7 @@ describe("publish workflow", () => {
     expect(yml).toContain("bun run fmt:check");
     expect(yml).toContain("bun run typecheck");
     expect(yml).toContain("CREATE_OKE_INTEGRATION=1 bun run test");
-    expect(yml).toContain("bun run budgets -- --dry-run");
+    expect(yml).not.toContain("bun run budgets");
     expect(yml).toContain("bun run gate");
     expect(yml).toContain("bun run site:build");
     expect(yml).toContain("bun install --frozen-lockfile");

@@ -5,7 +5,7 @@
  *
  * Uses the real CLI `startApp` (boot → serve). No injection.
  * Opt-in via `CREATE_OKE_INTEGRATION=1` (same as scaffold.integration.test.ts).
- * Enabled on GitHub Actions via the `test` job / `bun run ci:integration`.
+ * Enabled on GitHub Actions via the `test` job and locally via `bun run ci`.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";

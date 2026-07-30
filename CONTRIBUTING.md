@@ -21,26 +21,23 @@ the PR or an issue — do not invent behaviour.
 
 ## What a PR needs to pass
 
-From the repo root (Bun `>=1.3`):
+One local pre-push gate from the repo root (Bun `>=1.3`):
 
 ```bash
-bun run typecheck
-bun run lint
-bun run fmt:check
-bun test
-bun run ci          # full local gate (integration via CREATE_OKE_INTEGRATION=1)
+bun run ci
 ```
 
-| Check                    | Command                        | What it enforces                                                            |
-| ------------------------ | ------------------------------ | --------------------------------------------------------------------------- |
-| Types                    | `bun run typecheck`            | root + create-oke `tsc --noEmit`                                            |
-| Lint                     | `bun run lint`                 | oxlint (type-aware)                                                         |
-| Format                   | `bun run fmt:check`            | oxfmt                                                                       |
-| Unit / integration tests | `bun test`                     | Behaviour; set `CREATE_OKE_INTEGRATION=1` for create-oke scaffold/dev gates |
-| Budgets                  | `bun run budgets -- --dry-run` | AGENTS caps + export regressions                                            |
-| Site                     | `bun run site:build`           | Docs site Next build                                                        |
+| Check     | What it runs                        | Enforces                                                |
+| --------- | ----------------------------------- | ------------------------------------------------------- |
+| Format    | `bun run fmt:check`                 | oxfmt                                                   |
+| Lint      | `bun run lint`                      | oxlint                                                  |
+| Typecheck | `bun run typecheck`                 | root + create-oke `tsc --noEmit`                        |
+| Tests     | `CREATE_OKE_INTEGRATION=1 bun test` | Behaviour + create-oke scaffold/dev integration         |
+| Budgets   | `bun run budgets -- --dry-run`      | AGENTS caps + export regressions                        |
+| Gate      | `bun run gate`                      | Doc staleness, removed-driver, error registry, codemods |
+| Site      | `bun run site:build`                | Docs site Next build                                    |
 
-Tag-push CI runs these checks as **parallel jobs**, then publishes when the `ci` aggregator succeeds.
+Tag-push CI runs these checks as **parallel jobs** (without `budgets`, which stays local-only), then publishes when the `ci` aggregator succeeds.
 
 ## Writing a driver
 

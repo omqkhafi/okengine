@@ -59,7 +59,6 @@
     "gate": "bun test src/cli/doc-staleness.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts",
     "dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
-    "ci:workflow": "bun scripts/ci.ts --workflow",
     "ci": "bun scripts/ci.ts",
     "bump": "bun run scripts/bump-version.ts",
     "release": "bun run scripts/publish.ts",
