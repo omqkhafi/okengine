@@ -1,5 +1,5 @@
 /**
- * Gate: the removed `sops` vault driver stays gone from the tracked tree.
+ * Gate: the removed vault driver id stays gone from the tracked tree.
  *
  * Mirrors {@link ../cli/doc-staleness.test.ts} — `git grep` must find zero
  * hits (this file splits the token so it never matches itself).
@@ -11,7 +11,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "../..");
 
 /** Forbidden driver id, split so this file does not match itself. */
-const FORBIDDEN_SOPS = ["so", "ps"].join("");
+const FORBIDDEN_DRIVER = ["so", "ps"].join("");
 /** Forbidden optional peer, split so this file does not match itself. */
 const FORBIDDEN_AGE = ["age", "-", "encryption"].join("");
 
@@ -44,9 +44,9 @@ function assertZeroGitGrep(pattern: string, ignorePrefixes: readonly string[] = 
   expect(hits.join("\n")).toBe("");
 }
 
-describe("sops vault removal gate", () => {
+describe("removed vault driver gate", () => {
   test("tracked tree has zero matches for the removed driver id", () => {
-    assertZeroGitGrep(FORBIDDEN_SOPS);
+    assertZeroGitGrep(FORBIDDEN_DRIVER);
   });
 
   test("tracked tree has zero matches for the removed age peer outside lockfiles", () => {

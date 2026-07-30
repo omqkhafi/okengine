@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "repository": {
@@ -56,6 +56,7 @@
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
+    "gate": "bun test src/cli/doc-staleness.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts",
     "dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
     "ci:workflow": "bun scripts/ci.ts --workflow",

@@ -106,15 +106,15 @@ Full walkthrough: [Basic usage](https://oke.omqkhafi.dev/docs/get-started/basic-
 
 Everything beyond this page lives in the site handbook:
 
-| Resource      | Link                                                                  |
-| ------------- | --------------------------------------------------------------------- |
-| Docs site     | [oke.omqkhafi.dev](https://oke.omqkhafi.dev)                    |
+| Resource      | Link                                                               |
+| ------------- | ------------------------------------------------------------------ |
+| Docs site     | [oke.omqkhafi.dev](https://oke.omqkhafi.dev)                       |
 | Handbook      | [/docs](https://oke.omqkhafi.dev/docs)                             |
 | Changelog     | [/changelog](https://oke.omqkhafi.dev/changelog)                   |
 | Agents index  | [/llms.txt](https://oke.omqkhafi.dev/llms.txt)                     |
 | CLI reference | [/docs/reference/cli](https://oke.omqkhafi.dev/docs/reference/cli) |
-| Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json)                  |
-| Budgets       | [`BUDGETS.md`](BUDGETS.md)                                            |
-| Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                  |
+| Manifest      | [`manifest.v1.schema.json`](manifest.v1.schema.json)               |
+| Budgets       | [`BUDGETS.md`](BUDGETS.md)                                         |
+| Contributing  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                               |
 
 Pre-1.0. Published on [npm](https://www.npmjs.com/package/okengine) and [JSR](https://jsr.io/@omqkhafi/okengine). MIT.

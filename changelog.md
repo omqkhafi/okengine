@@ -7,6 +7,23 @@ it, so a release is only announced once it is written here.
 Section headings are `## v<version> — <YYYY-MM-DD>`, and every bullet belongs to
 an `### Added` / `### Changed` / `### Fixed` group.
 
+## v0.3.2 — 2026-07-30
+
+### Changed
+
+- Rebased the `vault-openbao` export budget after a genuine size increase
+  (608 B → 1.06 kB), and refreshed the published budgets snapshot.
+
+### Fixed
+
+- Docs skill forbidden-token lists no longer trip the stack-mode and
+  removed-driver `git grep` gates (tokens are split the same way the
+  gate tests avoid matching themselves).
+- Restored the missing `bun run gate` script so CI’s gate job runs again
+  (staleness, removed-driver, error-registry, and upgrade codemod checks).
+- Renamed and scrubbed the removed-driver gate file so it does not match
+  its own forbidden id under case-insensitive search.
+
 ## v0.3.1 — 2026-07-30
 
 ### Changed

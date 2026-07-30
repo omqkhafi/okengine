@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-29T02:30:52.639Z",
-  "version": "0.2.9",
+  "measuredAt": "2026-07-30T12:36:04.208Z",
+  "version": "0.3.2",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 9699,
+      "value": 9751,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 23.938,
+      "value": 24.598,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 50678,
-      "limit": 51692,
+      "value": 50872,
+      "limit": 51890,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 4961,
-      "limit": 5217,
+      "value": 4971,
+      "limit": 5227,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -105,8 +105,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 9070,
-      "limit": 9326,
+      "value": 9067,
+      "limit": 9323,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -115,8 +115,8 @@
     {
       "id": "export:./config",
       "label": "config",
-      "value": 936,
-      "limit": 1192,
+      "value": 890,
+      "limit": 1146,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 70599,
-      "limit": 72011,
+      "value": 71528,
+      "limit": 72959,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -147,6 +147,16 @@
       "label": "mcp",
       "value": 9483,
       "limit": 9739,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "exports",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins",
+      "label": "plugins",
+      "value": 4561,
+      "limit": 4817,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +185,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 12609,
-      "limit": 12865,
+      "value": 12640,
+      "limit": 12896,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -185,8 +195,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 9371,
-      "limit": 9627,
+      "value": 9369,
+      "limit": 9625,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -195,8 +205,8 @@
     {
       "id": "export:./vault",
       "label": "vault",
-      "value": 2477,
-      "limit": 2733,
+      "value": 2476,
+      "limit": 2732,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +215,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 21100,
-      "limit": 21522,
+      "value": 20629,
+      "limit": 21042,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -313,6 +323,16 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/drizzle-dialect",
+      "label": "drizzle-dialect",
+      "value": 315,
+      "limit": 571,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/fs",
       "label": "fs",
       "value": 701,
@@ -375,8 +395,8 @@
     {
       "id": "export:./drivers/s3",
       "label": "s3",
-      "value": 825,
-      "limit": 1081,
+      "value": 958,
+      "limit": 1214,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -495,8 +515,8 @@
     {
       "id": "export:./drivers/vault-openbao",
       "label": "vault-openbao",
-      "value": 608,
-      "limit": 864,
+      "value": 1082,
+      "limit": 1338,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

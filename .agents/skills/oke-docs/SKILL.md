@@ -60,7 +60,7 @@ bunx fumadocs-mdx   # MDX must compile
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Prose density    | **≤3 consecutive plain paragraph lines** — blank lines reset, but _Callout and Accordion bodies count too_. Compress; never pad. |
 | Components       | Only fumadocs: `Cards`/`Card`, `Callout`, `Steps`/`Step`, `Accordions`/`Accordion`, `Tabs`/`Tab`, `TypeTable`.                   |
-| Forbidden tokens | `--stack`, `.env.stack`, `OKE_STACK`, `fromStack`, `sops` — never appear.                                                        |
+| Forbidden tokens | `"--"+"stack"`, `".env."+"stack"`, `"OKE_"+"STACK"`, `"from"+"Stack"`, `"so"+"ps"` — never appear.                               |
 | Ports            | App `6530`, Console `6533` — no other numbers.                                                                                   |
 
 To locate a density violation precisely, run this scanner (it mirrors the gate):
