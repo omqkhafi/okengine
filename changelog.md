@@ -10,6 +10,28 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- `magicLink` / `emailOtp` deliver challenges via Channel (`fx.send` +
+  `auth-magic-link` / `auth-email-otp` templates and English catalog bodies).
+  `exposeDevToken` / `exposeDevOtp` stay for local DX without SMTP. `phoneNumber`
+  SMS delivery remains deferred.
+- Plugin API `.channelCatalog(catalog)` — merge template bodies into boot
+  Channel catalog (parallel to `.channelTemplate`).
+- Mailpit integration tests prove real SMTP capture of magic-link token/link
+  and email OTP (skip with a visible warn when Docker is unavailable).
+
+### ♻️ Changed
+
+- Rebased the `plugins` export budget after Channel delivery wiring
+  (13.84 kB → 14.77 kB), and refreshed the published budgets snapshot.
+
+### 🐛 Fixed
+
+- `smtp` channel driver passes sently's `BunAdapter` so real SMTP (Mailpit /
+  providers) works under Bun — previously failed with "No socket adapter
+  configured".
+
 ## v0.5.1 — 2026-08-01
 
 ### ♻️ Changed

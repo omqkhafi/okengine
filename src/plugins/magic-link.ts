@@ -1,8 +1,9 @@
 /**
  * Magic-link Gate auth method plugin.
  *
- * Delivery via Channel is optional in v1 — when {@link MagicLinkOptions.exposeDevToken}
- * is set, the request response includes `devToken` for tests / local DX.
+ * Delivers the one-time token via Channel (`fx.send` + `auth-magic-link`
+ * template). {@link MagicLinkOptions.exposeDevToken} remains available for
+ * local DX without Mailpit / SMTP.
  */
 
 import {
@@ -18,6 +19,7 @@ import {
   putVerification,
   type VerificationStore,
 } from "../auth/verification.ts";
+import { channel } from "../elements/channel.ts";
 import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import {
   AuthFailed,
@@ -32,6 +34,30 @@ import {
 } from "./auth/shared.ts";
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_FROM = "OKE <no-reply@oke.local>";
+const DEFAULT_BASE_URL = "http://127.0.0.1:6530";
+
+/** Channel template for magic-link delivery. */
+export const magicLinkTemplate = channel.email({ from: DEFAULT_FROM }).template("auth-magic-link", {
+  description: "Magic-link sign-in email",
+  schema: z.object({
+    email: z.string(),
+    token: z.string(),
+    link: z.string(),
+  }),
+  locales: ["en"],
+});
+
+/** Default English body for {@link magicLinkTemplate}. */
+export const magicLinkCatalog = {
+  "auth-magic-link": {
+    en: {
+      subject: "Your sign-in link",
+      text: "Sign in with this link:\n{{link}}\n\nOr enter this token:\n{{token}}\n",
+      html: '<p>Sign in with this link:</p><p><a href="{{link}}">{{link}}</a></p><p>Or enter this token:</p><p><code>{{token}}</code></p>',
+    },
+  },
+} as const;
 
 /** Options for {@link magicLink}. */
 export interface MagicLinkOptions extends AuthMethodOptions {
@@ -43,6 +69,13 @@ export interface MagicLinkOptions extends AuthMethodOptions {
   readonly verifications?: VerificationStore;
   /** Return raw token in the request response (test / local). */
   readonly exposeDevToken?: boolean;
+  /**
+   * App origin used to build the magic link (default `OKE_APP_URL` or
+   * `http://127.0.0.1:6530`).
+   */
+  readonly baseUrl?: string;
+  /** Override the template `from` address. */
+  readonly from?: string;
 }
 
 /**
@@ -55,6 +88,19 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
   const identities = opts.identities ?? createIdentityStore();
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
+  const baseUrl = (opts.baseUrl ?? process.env.OKE_APP_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
+  const tmpl =
+    opts.from !== undefined
+      ? channel.email({ from: opts.from }).template("auth-magic-link", {
+          description: "Magic-link sign-in email",
+          schema: z.object({
+            email: z.string(),
+            token: z.string(),
+            link: z.string(),
+          }),
+          locales: ["en"],
+        })
+      : magicLinkTemplate;
 
   const request = flow({
     name: "auth.requestMagicLink",
@@ -66,7 +112,8 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
       devToken: z.string().optional(),
     }),
     errors: { AuthFailed, AuthRateLimited },
-    do: async (input) => {
+    effects: { sends: ["auth-magic-link"] },
+    do: async (input, fx) => {
       const email = normalizeEmail(input.email);
       if (!email.includes("@")) return fail("AuthFailed", { reason: "invalid_email" });
       const token = `ml_${crypto.randomUUID().replace(/-/g, "")}`;
@@ -79,6 +126,11 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
         createdAt: now,
         consumedAt: null,
         attempts: 0,
+      });
+      const link = `${baseUrl}/auth/magic-link/verify?token=${encodeURIComponent(token)}`;
+      await fx.send(tmpl, {
+        to: email,
+        data: { email, token, link },
       });
       return {
         ok: true as const,
@@ -136,6 +188,9 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
 
   return plugin("magicLink", { version: "0.0.1", config: { method: "magic-link" } })
     .needs("auth")
+    .needs("channel")
+    .channelTemplate(tmpl)
+    .channelCatalog(magicLinkCatalog)
     .binding(bindPublicAuth("/magic-link/request", request, "otp"))
     .binding(bindPublicAuth("/magic-link/verify", verify, "otp"));
 }

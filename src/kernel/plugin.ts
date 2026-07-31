@@ -15,6 +15,7 @@
  */
 
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
+import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
 import type { GateDecl } from "../elements/gate/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
@@ -288,6 +289,12 @@ export interface PluginApi {
    * @param decl - Template from `channel.email.template(...)` etc.
    */
   channelTemplate(decl: ChannelTemplateDecl): PluginApi;
+  /**
+   * Contribute template body catalog entries (merged into boot channel catalog).
+   *
+   * @param catalog - Locale bodies keyed by template name (`{{field}}` interpolation)
+   */
+  channelCatalog(catalog: TemplateCatalog): PluginApi;
 }
 
 /** Captured capability lists for the Manifest. */
@@ -328,6 +335,7 @@ export interface PluginRegistration {
   readonly signals: readonly SignalDecl[];
   readonly gates: readonly GateDecl[];
   readonly channelTemplates: readonly ChannelTemplateDecl[];
+  readonly channelCatalogs: readonly TemplateCatalog[];
 }
 
 /**
@@ -467,6 +475,8 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
   gate(decl: GateDecl): PluginDef<D>;
   /** Queue a channel template. */
   channelTemplate(decl: ChannelTemplateDecl): PluginDef<D>;
+  /** Queue channel template body catalog entries. */
+  channelCatalog(catalog: TemplateCatalog): PluginDef<D>;
 }
 
 /** Extract accumulated decoration types from a {@link PluginDef}. */
@@ -621,6 +631,12 @@ export function plugin(name: string, options: PluginOptions): PluginDef {
     channelTemplate(decl) {
       steps.push((api) => {
         api.channelTemplate(decl);
+      });
+      return def;
+    },
+    channelCatalog(catalog) {
+      steps.push((api) => {
+        api.channelCatalog(catalog);
       });
       return def;
     },

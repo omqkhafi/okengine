@@ -2,8 +2,8 @@
  * Exploit-proof security audit for the seven Gate auth method plugins.
  *
  * Real HTTP against a booted app — rate limits, gate posture, single-use tokens,
- * anonymous non-escalation, channel delivery gap, TOTP constant-time compare,
- * and WebAuthn signature + origin verification.
+ * anonymous non-escalation, Channel delivery (email wired / phone deferred),
+ * TOTP constant-time compare, and WebAuthn signature + origin verification.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -420,8 +420,8 @@ describe("auth methods — anonymous non-escalation", () => {
   });
 });
 
-describe("auth methods — channel delivery gap", () => {
-  test("magic / email-otp / phone generate codes but do not expose them without exposeDev*", async () => {
+describe("auth methods — channel delivery", () => {
+  test("magic / email-otp send via fx.send; phone remains unwired; exposeDev* stays off by default", async () => {
     resetBindings();
     resetFlowSeq();
     const app = oke({
@@ -450,15 +450,17 @@ describe("auth methods — channel delivery gap", () => {
     expect(phoneBody.data.ok).toBe(true);
     expect(phoneBody.data.devOtp).toBeUndefined();
 
-    // No Channel import / send path in these plugins — codes exist only in the
-    // verification store (unreachable without exposeDev* or a future Channel wire).
     const magicSrc = await Bun.file(new URL("./magic-link.ts", import.meta.url)).text();
     const emailSrc = await Bun.file(new URL("./email-otp.ts", import.meta.url)).text();
     const phoneSrc = await Bun.file(new URL("./phone-number.ts", import.meta.url)).text();
-    for (const src of [magicSrc, emailSrc, phoneSrc]) {
-      expect(src).not.toMatch(/fx\.channel|channel\./);
-      expect(src).not.toMatch(/from ["'].*channel/);
-    }
+    expect(magicSrc).toMatch(/fx\.send/);
+    expect(magicSrc).toMatch(/channel\./);
+    expect(emailSrc).toMatch(/fx\.send/);
+    expect(emailSrc).toMatch(/channel\./);
+    // SMS delivery stays deferred — phone must not import Channel or fx.send.
+    expect(phoneSrc).not.toMatch(/fx\.send/);
+    expect(phoneSrc).not.toMatch(/channel\./);
+    expect(phoneSrc).not.toMatch(/from ["'].*channel/);
 
     await app.stop();
   });

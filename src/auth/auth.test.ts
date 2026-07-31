@@ -102,6 +102,9 @@ describe("auth plugin", () => {
       channelTemplate() {
         return this;
       },
+      channelCatalog() {
+        return this;
+      },
     });
     expect(tables).toContain("oke_operators");
     expect(tables).toContain("oke_operator_credentials");

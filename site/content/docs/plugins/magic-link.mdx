@@ -5,12 +5,13 @@ icon: "Link2"
 source: "docs/spec/unified-theory.md"
 ---
 
-`magicLink()` issues a hashed, single-use token (default 10 minutes). Verify exchanges it for a
-hybrid session and creates the user on first success.
+`magicLink()` issues a hashed, single-use token (default 10 minutes). Request sends the link
+via Channel (`auth-magic-link`); verify exchanges it for a hybrid session and creates the user
+on first success.
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(magicLink())`. Tokens are hashed at rest — never log the raw link.
-  Channel email delivery is not wired yet; use `exposeDevToken` locally.
+  Delivery goes through `fx.send`; use `exposeDevToken` only for local DX without SMTP.
 </Callout>
 
 ## Quick start
@@ -28,7 +29,7 @@ export const app = oke({
   name: "shop",
   env: "local",
   gate: { auth: {} },
-}).plug(magicLink({ exposeDevToken: true }));
+}).plug(magicLink({ baseUrl: "http://127.0.0.1:6530" }));
 ```
 
 </Step>
@@ -38,10 +39,12 @@ export const app = oke({
 
 ```typescript
 const { data } = await api.auth.requestMagicLink({ email: "ali@example.com" });
-// data.ok === true; data.devToken only when exposeDevToken
+// data.ok === true; Channel delivers auth-magic-link
+// data.devToken only when exposeDevToken
 ```
 
-`POST /auth/magic-link/request`.
+`POST /auth/magic-link/request`. Locally the `console` driver captures mail; with
+`oke dev --docker`, Mailpit receives the real SMTP message.
 
 </Step>
 
@@ -49,7 +52,7 @@ const { data } = await api.auth.requestMagicLink({ email: "ali@example.com" });
 ### Verify
 
 ```typescript
-const { data } = await api.auth.verifyMagicLink({ token: data!.devToken! });
+const { data } = await api.auth.verifyMagicLink({ token });
 // session tokens + userId
 ```
 
@@ -62,14 +65,16 @@ const { data } = await api.auth.verifyMagicLink({ token: data!.devToken! });
 
 ## Options
 
-| Option           | Type                | Default  | Meaning                                   |
-| ---------------- | ------------------- | -------- | ----------------------------------------- |
-| `secret`         | `string`            | active\* | HMAC secret (\*from `gate.auth`)          |
-| `sessions`       | `SessionStore`      | active\* | Session store                             |
-| `ttlMs`          | `number`            | 10m      | Challenge lifetime                        |
-| `exposeDevToken` | `boolean`           | `false`  | Include raw token in the request response |
-| `identities`     | `IdentityStore`     | new      | Email → user map                          |
-| `verifications`  | `VerificationStore` | new      | Challenge store                           |
+| Option           | Type                | Default                    | Meaning                                   |
+| ---------------- | ------------------- | -------------------------- | ----------------------------------------- |
+| `secret`         | `string`            | active\*                   | HMAC secret (\*from `gate.auth`)          |
+| `sessions`       | `SessionStore`      | active\*                   | Session store                             |
+| `ttlMs`          | `number`            | 10m                        | Challenge lifetime                        |
+| `baseUrl`        | `string`            | `OKE_APP_URL` or `:6530`   | Origin used to build the magic link       |
+| `from`           | `string`            | `OKE <no-reply@oke.local>` | Template From address                     |
+| `exposeDevToken` | `boolean`           | `false`                    | Include raw token in the request response |
+| `identities`     | `IdentityStore`     | new                        | Email → user map                          |
+| `verifications`  | `VerificationStore` | new                        | Challenge store                           |
 
 ## Surfaces
 
@@ -78,8 +83,8 @@ const { data } = await api.auth.verifyMagicLink({ token: data!.devToken! });
 | `auth.requestMagicLink` | `POST /auth/magic-link/request` | `gate.public` + otp rate |
 | `auth.verifyMagicLink`  | `POST /auth/magic-link/verify`  | `gate.public` + otp rate |
 
-**Consequence:** until Channel delivery ships, production apps must send the link themselves
-(or keep `exposeDevToken` off and never log tokens).
+**Consequence:** the plugin contributes the `auth-magic-link` Channel template and English
+catalog body (`{{link}}`, `{{token}}`). Override copy by merging your own catalog at boot.
 
 ## Troubleshooting
 
@@ -91,8 +96,9 @@ Token expired (default 10m), already used, or mistyped. Request a new link.
 </Accordion>
 <Accordion title="No email arrived">
 
-v1 does not send mail. Use `exposeDevToken` in local/test, or deliver `devToken` / your own
-link via a Channel Flow you own.
+In `local` / `test` the `console` driver captures mail into the inbox — nothing hits a mailbox.
+Run `oke dev --docker` and open Mailpit (`MAILPIT_UI_URL`) to see the rendered message. For
+unit tests without SMTP, set `exposeDevToken: true`.
 
 </Accordion>
 </Accordions>
@@ -101,12 +107,12 @@ link via a Channel Flow you own.
 
 - [Email OTP](/docs/plugins/email-otp) — numeric code instead of a link
 - [Gate](/docs/elements/gate) — `gate.auth`
-- [Channel](/docs/elements/channel) — when you wire delivery yourself
+- [Channel](/docs/elements/channel) — `fx.send`, Mailpit, consents
 
 ## Next
 
 <Cards>
   <Card title="Email OTP" description="Six-digit email codes." href="/docs/plugins/email-otp" />
   <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
-  <Card title="Username" description="Password sign-in." href="/docs/plugins/username" />
+  <Card title="Channel" description="Email delivery and Mailpit." href="/docs/elements/channel" />
 </Cards>

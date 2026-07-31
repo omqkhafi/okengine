@@ -5,12 +5,13 @@ icon: "MailCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-`emailOtp()` stores a hashed 6-digit code (default 10 minutes, 5 attempts). Verify creates the
-user on first success and returns hybrid session tokens.
+`emailOtp()` stores a hashed 6-digit code (default 10 minutes, 5 attempts). Request sends the
+code via Channel (`auth-email-otp`); verify creates the user on first success and returns hybrid
+session tokens.
 
 <Callout title="The one rule">
-  Enable `gate.auth`, then `.plug(emailOtp())`. Never log raw OTPs. Channel email delivery is not
-  wired yet — use `exposeDevOtp` locally.
+  Enable `gate.auth`, then `.plug(emailOtp())`. Never log raw OTPs. Delivery goes through `fx.send`;
+  use `exposeDevOtp` only for local DX without SMTP.
 </Callout>
 
 ## Quick start
@@ -28,7 +29,7 @@ export const app = oke({
   name: "shop",
   env: "local",
   gate: { auth: {} },
-}).plug(emailOtp({ exposeDevOtp: true }));
+}).plug(emailOtp());
 ```
 
 </Step>
@@ -38,7 +39,7 @@ export const app = oke({
 
 ```typescript
 const { data } = await api.auth.requestEmailOtp({ email: "ali@example.com" });
-// data.devOtp when exposeDevOtp
+// Channel delivers auth-email-otp; data.devOtp only when exposeDevOtp
 ```
 
 `POST /auth/email-otp/request` — prior active codes for that email are invalidated.
@@ -51,7 +52,7 @@ const { data } = await api.auth.requestEmailOtp({ email: "ali@example.com" });
 ```typescript
 const { data } = await api.auth.verifyEmailOtp({
   email: "ali@example.com",
-  otp: data!.devOtp!,
+  otp,
 });
 ```
 
@@ -64,14 +65,15 @@ const { data } = await api.auth.verifyEmailOtp({
 
 ## Options
 
-| Option          | Type                | Default  | Meaning                                 |
-| --------------- | ------------------- | -------- | --------------------------------------- |
-| `secret`        | `string`            | active\* | HMAC secret (\*from `gate.auth`)        |
-| `sessions`      | `SessionStore`      | active\* | Session store                           |
-| `ttlMs`         | `number`            | 10m      | Challenge lifetime                      |
-| `exposeDevOtp`  | `boolean`           | `false`  | Include raw OTP in the request response |
-| `identities`    | `IdentityStore`     | new      | Email → user map                        |
-| `verifications` | `VerificationStore` | new      | Challenge store                         |
+| Option          | Type                | Default                    | Meaning                                 |
+| --------------- | ------------------- | -------------------------- | --------------------------------------- |
+| `secret`        | `string`            | active\*                   | HMAC secret (\*from `gate.auth`)        |
+| `sessions`      | `SessionStore`      | active\*                   | Session store                           |
+| `ttlMs`         | `number`            | 10m                        | Challenge lifetime                      |
+| `from`          | `string`            | `OKE <no-reply@oke.local>` | Template From address                   |
+| `exposeDevOtp`  | `boolean`           | `false`                    | Include raw OTP in the request response |
+| `identities`    | `IdentityStore`     | new                        | Email → user map                        |
+| `verifications` | `VerificationStore` | new                        | Challenge store                         |
 
 ## Surfaces
 
@@ -80,13 +82,16 @@ const { data } = await api.auth.verifyEmailOtp({
 | `auth.requestEmailOtp` | `POST /auth/email-otp/request` | `gate.public` + otp rate |
 | `auth.verifyEmailOtp`  | `POST /auth/email-otp/verify`  | `gate.public` + otp rate |
 
+**Consequence:** the plugin contributes the `auth-email-otp` Channel template and English
+catalog body (`{{otp}}`). Override copy by merging your own catalog at boot.
+
 ## Troubleshooting
 
 <Accordions>
 <Accordion title="No email with the code">
 
-v1 does not send mail. Use `exposeDevOtp` in local/test, or send the code via your own Channel
-Flow.
+In `local` / `test` the `console` driver captures mail — open the inbox, or run
+`oke dev --docker` and check Mailpit. For unit tests without SMTP, set `exposeDevOtp: true`.
 
 </Accordion>
 <Accordion title="AuthFailed after a few tries">
@@ -99,7 +104,8 @@ Five failed attempts consume the challenge. Request a new OTP.
 ## Learn more
 
 - [Magic link](/docs/plugins/magic-link) — link instead of a code
-- [Phone number](/docs/plugins/phone-number) — SMS OTP (E.164)
+- [Phone number](/docs/plugins/phone-number) — SMS OTP (E.164; delivery deferred)
+- [Channel](/docs/elements/channel) — `fx.send`, Mailpit, consents
 - [Gate](/docs/elements/gate) — `gate.auth`
 
 ## Next
@@ -107,5 +113,5 @@ Five failed attempts consume the challenge. Request a new OTP.
 <Cards>
   <Card title="Phone number" description="E.164 SMS OTP." href="/docs/plugins/phone-number" />
   <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
-  <Card title="Two-factor" description="TOTP step-up." href="/docs/plugins/two-factor" />
+  <Card title="Channel" description="Email delivery and Mailpit." href="/docs/elements/channel" />
 </Cards>

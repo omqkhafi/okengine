@@ -16,9 +16,14 @@ export {
 } from "./config-source.ts";
 export { cors, type CorsOptions } from "./cors.ts";
 export { csrf, type CsrfOptions } from "./csrf.ts";
-export { emailOtp, type EmailOtpOptions } from "./email-otp.ts";
+export { emailOtp, emailOtpCatalog, emailOtpTemplate, type EmailOtpOptions } from "./email-otp.ts";
 export { ipAllowlist, type IpAllowlistOptions } from "./ip-allowlist.ts";
-export { magicLink, type MagicLinkOptions } from "./magic-link.ts";
+export {
+  magicLink,
+  magicLinkCatalog,
+  magicLinkTemplate,
+  type MagicLinkOptions,
+} from "./magic-link.ts";
 export { maintenanceMode, type MaintenanceModeOptions } from "./maintenance-mode.ts";
 export {
   createPasskeyStore,

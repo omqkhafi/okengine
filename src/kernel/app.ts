@@ -35,6 +35,7 @@ import {
   type GateOptions,
   type ResolvedGateConfig,
 } from "../elements/gate/config.ts";
+import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { fxRetry } from "./concurrency.ts";
@@ -663,11 +664,14 @@ export function oke(options: OkeOptions): OkeApp {
     const pluginSignals = pluginRegistry.signalContributions();
     const pluginClocks = pluginRegistry.clockContributions();
     const pluginChannelTemplates = pluginRegistry.channelTemplateContributions();
+    const pluginChannelCatalogs = pluginRegistry.channelCatalogContributions();
     if (pluginSecrets.length > 0) available.add("vault");
     if (pluginGates.length > 0) available.add("gate");
     if (pluginSignals.length > 0) available.add("signal");
     if (pluginClocks.length > 0) available.add("clock");
-    if (pluginChannelTemplates.length > 0) available.add("channel");
+    if (pluginChannelTemplates.length > 0 || pluginChannelCatalogs.length > 0) {
+      available.add("channel");
+    }
     // gate.auth (auto-absorbed auth plugin) satisfies `.needs("auth")`.
     if (gateConfig.auth) available.add("auth");
     assertPluginNeeds(caps, { pluginNames, available });
@@ -676,6 +680,7 @@ export function oke(options: OkeOptions): OkeApp {
     const baseSignals = overrides?.signals ?? options.signals ?? [];
     const baseClocks = overrides?.clocks ?? options.clocks ?? [];
     const baseChannel = overrides?.channel ?? options.channel;
+    const mergedCatalog = mergeTemplateCatalogs(baseChannel?.catalog, ...pluginChannelCatalogs);
 
     const merged: BootOptions = {
       env: bootEnv,
@@ -692,6 +697,7 @@ export function oke(options: OkeOptions): OkeApp {
       channel: {
         ...(baseChannel ?? {}),
         templates: [...(baseChannel?.templates ?? []), ...pluginChannelTemplates],
+        ...(mergedCatalog ? { catalog: mergedCatalog } : {}),
       },
       ai: overrides?.ai ?? options.ai,
       runs: overrides?.runs ?? options.runs,
@@ -1298,6 +1304,29 @@ function archiveFromInput(
     if (typeof v === "string" && v.length > 0) out[name] = v;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Deep-merge channel template catalogs (later parts win per locale).
+ *
+ * @param parts - Catalog fragments (undefined skipped)
+ */
+function mergeTemplateCatalogs(
+  ...parts: readonly (TemplateCatalog | undefined)[]
+): TemplateCatalog | undefined {
+  const out: Record<
+    string,
+    Record<string, { readonly subject?: string; readonly text?: string; readonly html?: string }>
+  > = {};
+  let any = false;
+  for (const part of parts) {
+    if (!part) continue;
+    any = true;
+    for (const [template, locales] of Object.entries(part)) {
+      out[template] = { ...(out[template] ?? {}), ...locales };
+    }
+  }
+  return any ? out : undefined;
 }
 
 /** @internal expose smart router type for tests */

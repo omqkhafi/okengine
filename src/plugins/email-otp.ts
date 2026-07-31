@@ -1,5 +1,9 @@
 /**
  * Email OTP Gate auth method plugin.
+ *
+ * Delivers the one-time code via Channel (`fx.send` + `auth-email-otp`
+ * template). {@link EmailOtpOptions.exposeDevOtp} remains available for
+ * local DX without Mailpit / SMTP.
  */
 
 import {
@@ -17,6 +21,7 @@ import {
   putVerification,
   type VerificationStore,
 } from "../auth/verification.ts";
+import { channel } from "../elements/channel.ts";
 import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import {
   AuthFailed,
@@ -32,6 +37,28 @@ import {
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+const DEFAULT_FROM = "OKE <no-reply@oke.local>";
+
+/** Channel template for email OTP delivery. */
+export const emailOtpTemplate = channel.email({ from: DEFAULT_FROM }).template("auth-email-otp", {
+  description: "Email OTP sign-in code",
+  schema: z.object({
+    email: z.string(),
+    otp: z.string(),
+  }),
+  locales: ["en"],
+});
+
+/** Default English body for {@link emailOtpTemplate}. */
+export const emailOtpCatalog = {
+  "auth-email-otp": {
+    en: {
+      subject: "Your sign-in code",
+      text: "Your one-time sign-in code is: {{otp}}\n",
+      html: "<p>Your one-time sign-in code is:</p><p><strong>{{otp}}</strong></p>",
+    },
+  },
+} as const;
 
 /** Options for {@link emailOtp}. */
 export interface EmailOtpOptions extends AuthMethodOptions {
@@ -41,6 +68,8 @@ export interface EmailOtpOptions extends AuthMethodOptions {
   readonly verifications?: VerificationStore;
   /** Return raw OTP in the request response (test / local). */
   readonly exposeDevOtp?: boolean;
+  /** Override the template `from` address. */
+  readonly from?: string;
 }
 
 /**
@@ -53,6 +82,17 @@ export function emailOtp(opts: EmailOtpOptions = {}): PluginDef {
   const identities = opts.identities ?? createIdentityStore();
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
+  const tmpl =
+    opts.from !== undefined
+      ? channel.email({ from: opts.from }).template("auth-email-otp", {
+          description: "Email OTP sign-in code",
+          schema: z.object({
+            email: z.string(),
+            otp: z.string(),
+          }),
+          locales: ["en"],
+        })
+      : emailOtpTemplate;
 
   const request = flow({
     name: "auth.requestEmailOtp",
@@ -64,7 +104,8 @@ export function emailOtp(opts: EmailOtpOptions = {}): PluginDef {
       devOtp: z.string().optional(),
     }),
     errors: { AuthFailed, AuthRateLimited },
-    do: async (input) => {
+    effects: { sends: ["auth-email-otp"] },
+    do: async (input, fx) => {
       const email = normalizeEmail(input.email);
       if (!email.includes("@")) return fail("AuthFailed", { reason: "invalid_email" });
       const otp = generateOtp(6);
@@ -83,6 +124,10 @@ export function emailOtp(opts: EmailOtpOptions = {}): PluginDef {
         createdAt: now,
         consumedAt: null,
         attempts: 0,
+      });
+      await fx.send(tmpl, {
+        to: email,
+        data: { email, otp },
       });
       return {
         ok: true as const,
@@ -134,6 +179,9 @@ export function emailOtp(opts: EmailOtpOptions = {}): PluginDef {
 
   return plugin("emailOtp", { version: "0.0.1", config: { method: "email-otp" } })
     .needs("auth")
+    .needs("channel")
+    .channelTemplate(tmpl)
+    .channelCatalog(emailOtpCatalog)
     .binding(bindPublicAuth("/email-otp/request", request, "otp"))
     .binding(bindPublicAuth("/email-otp/verify", verify, "otp"));
 }

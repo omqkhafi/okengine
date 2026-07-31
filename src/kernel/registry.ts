@@ -13,6 +13,7 @@
  */
 
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
+import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
 import type { GateDecl } from "../elements/gate/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
@@ -85,6 +86,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
   const signals: SignalDecl[] = [];
   const gates: GateDecl[] = [];
   const channelTemplates: ChannelTemplateDecl[] = [];
+  const channelCatalogs: TemplateCatalog[] = [];
   const needs: string[] = [];
   const declares: string[] = [];
   const intercepts: string[] = [];
@@ -204,6 +206,13 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
       pushDeclare(`channel:${decl.name}`);
       return api;
     },
+    channelCatalog(catalog) {
+      channelCatalogs.push(catalog);
+      for (const name of Object.keys(catalog)) {
+        pushDeclare(`channel-catalog:${name}`);
+      }
+      return api;
+    },
   };
 
   return {
@@ -238,6 +247,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
         signals: signals.slice(),
         gates: gates.slice(),
         channelTemplates: channelTemplates.slice(),
+        channelCatalogs: channelCatalogs.slice(),
       };
     },
   };
@@ -318,6 +328,8 @@ export interface PluginRegistry {
   gateContributions(): readonly GateDecl[];
   /** Channel templates from installed plugins. */
   channelTemplateContributions(): readonly ChannelTemplateDecl[];
+  /** Channel template body catalogs from installed plugins. */
+  channelCatalogContributions(): readonly TemplateCatalog[];
   /** HTTP Bindings from installed plugins (auth method plugins). */
   bindingContributions(): readonly Binding[];
 }
@@ -488,6 +500,9 @@ export function createPluginRegistry(): PluginRegistry {
     },
     channelTemplateContributions() {
       return firstPerPlugin(installed, (r) => r.channelTemplates);
+    },
+    channelCatalogContributions() {
+      return firstPerPlugin(installed, (r) => r.channelCatalogs);
     },
     bindingContributions() {
       return firstPerPlugin(installed, (r) => r.bindings);

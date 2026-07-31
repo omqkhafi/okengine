@@ -77,6 +77,7 @@ Every method below exists on both the fluent definition and the boot-time builde
 | `.signal(decl)`                  | A signal declaration — merged into boot signals                                               |
 | `.gate(decl)`                    | A gate declaration — merged into boot gates                                                   |
 | `.channelTemplate(decl)`         | A channel template — merged into boot channel templates                                       |
+| `.channelCatalog(catalog)`       | Template body catalog entries — merged into boot channel catalog (`{{field}}` interpolation)  |
 | `.driver(id, impl)`              | A protocol-named driver for an existing element                                               |
 | `.image(role, recipe)`           | An image recipe for a docker role                                                             |
 | `.table(name, columns, options)` | A whole DB table, merged into the generated schema (`options.description` / `plane` optional) |

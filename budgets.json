@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-07-31T23:14:26.448Z",
-  "version": "0.5.0",
+  "measuredAt": "2026-07-31T23:52:38.284Z",
+  "version": "0.5.1",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 35.554,
+      "value": 33.16,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 61558,
-      "limit": 62790,
+      "value": 61696,
+      "limit": 62930,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 13724,
-      "limit": 13999,
+      "value": 13736,
+      "limit": 14011,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 81551,
-      "limit": 83183,
+      "value": 81683,
+      "limit": 83317,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 14172,
-      "limit": 14456,
+      "value": 15124,
+      "limit": 15427,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -235,8 +235,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 47780,
-      "limit": 48736,
+      "value": 47828,
+      "limit": 48785,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -305,8 +305,8 @@
     {
       "id": "export:./drivers/channel-smtp",
       "label": "channel-smtp",
-      "value": 405,
-      "limit": 661,
+      "value": 455,
+      "limit": 711,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
