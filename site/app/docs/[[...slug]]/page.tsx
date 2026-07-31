@@ -2,8 +2,13 @@ import { DocsPageActions } from "@/components/docs-page-actions";
 import { getMDXComponents } from "@/components/mdx";
 import { getPageImageUrl, getPageMarkdownUrl, source } from "@/lib/source";
 import { githubBlobUrl } from "@/lib/shared";
-import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
-import { createRelativeLink } from "fumadocs-ui/mdx";
+import {
+  DocsBody,
+  DocsDescription,
+  DocsPage,
+  DocsTitle,
+} from "@fumadocs/base-ui/layouts/docs/page";
+import { createRelativeLink } from "@fumadocs/base-ui/mdx";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 

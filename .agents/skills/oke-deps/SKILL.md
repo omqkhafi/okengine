@@ -82,7 +82,7 @@ bun pm view <name> versions --json   # when on a prerelease / RC line
 Known traps (see [pins.md](pins.md)):
 
 - **drizzle-orm / drizzle-kit** — intentional `^1.0.0-rc.*`; npm `latest` is still `0.x`. Never “upgrade” to 0.x. After install, confirm lockfile stayed on the RC (canary suffixes can drop `drizzle-kit/cli`).
-- **fumadocs-ui** — must remain `npm:@fumadocs/base-ui@…` aligned with `fumadocs-core`.
+- **@fumadocs/base-ui** — use the real package name with `^`, aligned with `fumadocs-core` (not a `fumadocs-ui` npm alias).
 - **template `okengine`** — always `file:../..` (or whatever the template already uses).
 
 ### 3. Edit ranges
@@ -131,7 +131,7 @@ Keep it short: table or list of **from → to**, what was skipped and why (downg
 
 - Running `ncu -u` on everything with no reject list
 - Trusting npm `latest` over an intentional RC
-- Rewriting fumadocs-ui alias to bare `fumadocs-ui@…`
+- Reintroducing a `fumadocs-ui` → `@fumadocs/base-ui` npm alias
 - Changing `@types/bun` from `"latest"` to a semver
 - Updating only `package.json` and skipping `bun install`
 - Claiming done with a red typecheck caused by the bump

@@ -1,7 +1,7 @@
 import { getPageImageUrl, source } from "@/lib/source";
 import { notFound } from "next/navigation";
 import { ImageResponse } from "next/og";
-import { generate as DefaultImage } from "fumadocs-ui/og";
+import { generate as DefaultImage } from "@fumadocs/base-ui/og";
 import { appName } from "@/lib/shared";
 
 export const revalidate = false;

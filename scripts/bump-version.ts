@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Atomically bump `okengine` and `create-oke` to the same version.
+ * Atomically bump `okengine`, `create-oke`, and `site` to the same version.
  *
- * Updates both package.json files and both jsr.json files in lockstep,
- * and promotes `## Unreleased` in `changelog.md` into
- * `## v<new> — <today>`. Does not touch git or the bundled starter's
- * project seed version.
+ * Updates package.json (+ jsr.json where present) in lockstep, and promotes
+ * `## Unreleased` in `changelog.md` into `## v<new> — <today>`. Does not
+ * touch git or the bundled starter's project seed version.
  *
  * Usage:
  *   bun run scripts/bump-version.ts [patch|minor|major] [--dry-run]
@@ -19,8 +18,12 @@ import { parseArgs } from "node:util";
 const REPO_ROOT = join(import.meta.dir, "..");
 const CHANGELOG_PATH = join(REPO_ROOT, "changelog.md");
 
-/** Published packages that always share one version timeline. */
-const PACKAGE_DIRS = [REPO_ROOT, join(REPO_ROOT, "packages/create-oke")] as const;
+/** Packages that always share one version timeline (published + site). */
+const PACKAGE_DIRS = [
+  REPO_ROOT,
+  join(REPO_ROOT, "packages/create-oke"),
+  join(REPO_ROOT, "site"),
+] as const;
 
 /** Semver bump kind. */
 type BumpKind = "patch" | "minor" | "major";

@@ -25,8 +25,8 @@ import {
 import { Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ThemeSwitch } from "fumadocs-ui/layouts/shared/slots/theme-switch";
+import { useSearchContext } from "@fumadocs/base-ui/contexts/search";
+import { ThemeSwitch } from "@fumadocs/base-ui/layouts/shared/slots/theme-switch";
 import type * as PageTree from "fumadocs-core/page-tree";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DocsTreeNav } from "@/components/chrome/docs-sidebar";

@@ -8,9 +8,9 @@
 
 import { GithubMark } from "@/components/chrome/icons";
 import { cn } from "@/lib/cn";
-import { buttonVariants } from "fumadocs-ui/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "fumadocs-ui/components/ui/popover";
-import { MarkdownCopyButton } from "fumadocs-ui/layouts/docs/page";
+import { buttonVariants } from "@fumadocs/base-ui/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@fumadocs/base-ui/components/ui/popover";
+import { MarkdownCopyButton } from "@fumadocs/base-ui/layouts/docs/page";
 import { Bot, Check, ChevronDown, ExternalLinkIcon, Sparkles, TextIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 

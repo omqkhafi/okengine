@@ -10,6 +10,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.5.1 — 2026-08-01
+
 ### ♻️ Changed
 
 - Official plugin rename: `securityHeaders()` / `"security-headers"` →
@@ -17,6 +19,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   `headers_config`). Docs page was already `/docs/plugins/headers`.
 - Rebased the `plugins` export budget after passkey WebAuthn verify
   (13.21 kB → 13.84 kB), and refreshed the published budgets snapshot.
+- `site` joins the version lockstep (`bun run bump` updates
+  `site/package.json` with `okengine` + `create-oke`).
+- Site depends on `@fumadocs/base-ui` (`^`) directly — dropped the
+  `fumadocs-ui` npm alias.
 
 ### 🔒 Security
 

@@ -1,6 +1,6 @@
 import { DocsSidebar } from "@/components/chrome/docs-sidebar";
 import { source } from "@/lib/source";
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
+import { DocsLayout } from "@fumadocs/base-ui/layouts/docs";
 
 /**
  * Docs shell. Fumadocs' own nav, sidebar, search toggle, and theme switch are

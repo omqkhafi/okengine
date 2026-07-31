@@ -13,8 +13,8 @@
 import { ChevronDown, GitBranch, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { ThemeSwitch } from "fumadocs-ui/layouts/shared/slots/theme-switch";
+import { useSearchContext } from "@fumadocs/base-ui/contexts/search";
+import { ThemeSwitch } from "@fumadocs/base-ui/layouts/shared/slots/theme-switch";
 import type * as PageTree from "fumadocs-core/page-tree";
 import { useMemo, useState, type ReactNode } from "react";
 import { GithubMark } from "@/components/chrome/icons";
