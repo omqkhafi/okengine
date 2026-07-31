@@ -61,13 +61,25 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 /**
- * Writes JSON with trailing newline (2-space indent).
+ * Replaces the top-level `"version"` string in a JSON manifest in place.
+ * Preserves oxfmt layout (compact arrays stay compact) — full re-stringify
+ * was expanding `jsr.json` publish lists and failing `fmt:check`.
  *
- * @param path - Absolute path
- * @param value - JSON-serializable value
+ * @param path - Absolute path to package.json or jsr.json
+ * @param version - New semver string
+ * @param dryRun - When true, do not write
  */
-function writeJson(path: string, value: unknown): void {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+function setManifestVersion(path: string, version: string, dryRun: boolean): void {
+  const raw = readFileSync(path, "utf-8");
+  const next = raw.replace(/("version"\s*:\s*")([^"]*)(")/, `$1${version}$3`);
+  if (next === raw) {
+    throw new Error(`${path} has no "version" string field to replace.`);
+  }
+  const parsed = JSON.parse(next) as { version?: unknown };
+  if (parsed.version !== version) {
+    throw new Error(`${path}: version rewrite failed (got ${String(parsed.version)}).`);
+  }
+  if (!dryRun) writeFileSync(path, next, "utf-8");
 }
 
 /**
@@ -142,17 +154,13 @@ function assertLockstep(): string {
 function applyVersion(dir: string, version: string, dryRun: boolean): string[] {
   const updated: string[] = [];
   const pkgPath = join(dir, "package.json");
-  const pkg = readJson(pkgPath);
-  pkg.version = version;
+  setManifestVersion(pkgPath, version, dryRun);
   updated.push(pkgPath);
-  if (!dryRun) writeJson(pkgPath, pkg);
 
   const jsrPath = join(dir, "jsr.json");
   if (existsSync(jsrPath)) {
-    const jsr = readJson(jsrPath);
-    jsr.version = version;
+    setManifestVersion(jsrPath, version, dryRun);
     updated.push(jsrPath);
-    if (!dryRun) writeJson(jsrPath, jsr);
   }
   return updated;
 }

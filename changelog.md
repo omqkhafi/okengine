@@ -10,6 +10,14 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.4.2 — 2026-07-31
+
+### 🐛 Fixed
+
+- `bun run bump` updates package/jsr `"version"` fields in place so oxfmt
+  compact arrays in `jsr.json` are not rewritten into multi-line form
+  (which failed `fmt:check` after the v0.4.1 cut).
+
 ## v0.4.1 — 2026-07-31
 
 ### 🐛 Fixed
