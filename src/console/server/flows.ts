@@ -751,6 +751,7 @@ const GatesListOut = z.object({
       plane: z.enum(["user", "operator"]),
       gates: z.array(z.string()),
       unguarded: z.boolean(),
+      explicitPublic: z.boolean(),
     }),
   ),
   gates: z.array(
@@ -2817,6 +2818,7 @@ function createGatesList(state: ConsoleState) {
           plane: f.plane,
           gates: [...f.gates],
           unguarded: f.unguarded,
+          explicitPublic: f.explicitPublic,
         })),
         gates: projection.gates.map((g) => ({
           name: g.name,

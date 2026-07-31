@@ -7,7 +7,10 @@
  * @see docs/spec/console.md §2.2–2.3
  */
 
+import type { PasswordHashOptions } from "../runtime/types.ts";
 import { createBunCrypto } from "../runtime/primitives.ts";
+import { assertNotBreached, type BreachCheckFn } from "./breach-check.ts";
+import { assertPasswordPolicy, type PasswordPolicyOptions } from "./password-policy.ts";
 import type { OperatorCredentialRow, OperatorRow, OperatorSsoLinkRow } from "./tables.ts";
 
 /** Operator-plane store. */
@@ -38,6 +41,22 @@ export interface CreateOperatorOptions {
   readonly invitedBy?: string | null;
   readonly id?: string;
   readonly roles?: readonly string[];
+  /**
+   * Password length / character-class policy. Defaults applied when omitted
+   * (minLength 12, letter + number). Pass custom knobs to tighten/loosen
+   * within reason — never skip without {@link skipPasswordPolicy}.
+   */
+  readonly passwordPolicy?: PasswordPolicyOptions;
+  /**
+   * Explicit opt-out of password policy (test harness only).
+   * Production credential-set paths must omit this — same shape as
+   * `unguardedHttp: "allow"` restricted to tests.
+   */
+  readonly skipPasswordPolicy?: boolean;
+  /** Bun.password cost knobs (argon2id floor enforced). */
+  readonly passwordHash?: PasswordHashOptions;
+  /** Optional breach check (`true` = reject). */
+  readonly breachCheck?: BreachCheckFn;
 }
 
 /**
@@ -50,6 +69,10 @@ export async function createOperator(
   store: OperatorStore,
   options: CreateOperatorOptions,
 ): Promise<OperatorRow> {
+  if (!options.skipPasswordPolicy) {
+    assertPasswordPolicy(options.password, options.passwordPolicy ?? {});
+  }
+  await assertNotBreached(options.password, options.breachCheck);
   const crypto = createBunCrypto();
   const id = options.id ?? crypto.randomUUID();
   const row: OperatorRow = {
@@ -64,7 +87,10 @@ export async function createOperator(
   store.operators.set(id, row);
   store.credentials.set(id, {
     operatorId: id,
-    passwordHash: await crypto.hashPassword(options.password, "argon2id"),
+    passwordHash: await crypto.hashPassword(
+      options.password,
+      options.passwordHash ?? { algorithm: "argon2id" },
+    ),
     loginEnabled: true,
   });
   store.ssoLinks.set(id, []);

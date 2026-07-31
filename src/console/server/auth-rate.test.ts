@@ -53,18 +53,18 @@ describe("auth-rate strategy", () => {
     await createOperator(store, {
       email: "ops@example.com",
       name: "Ops",
-      password: "password123",
+      password: "password1234",
     });
 
     const tMissing = performance.now();
-    expect(await authenticateOperator(store, "missing@example.com", "password123")).toBeNull();
+    expect(await authenticateOperator(store, "missing@example.com", "password1234")).toBeNull();
     const missingMs = performance.now() - tMissing;
 
     const tBad = performance.now();
     expect(await authenticateOperator(store, "ops@example.com", "wrong-password")).toBeNull();
     const badMs = performance.now() - tBad;
 
-    expect(await authenticateOperator(store, "ops@example.com", "password123")).not.toBeNull();
+    expect(await authenticateOperator(store, "ops@example.com", "password1234")).not.toBeNull();
 
     // Both paths pay an argon2 verify — neither should be near-instant.
     expect(missingMs).toBeGreaterThan(5);

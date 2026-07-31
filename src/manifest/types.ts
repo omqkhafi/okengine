@@ -327,6 +327,8 @@ export interface Plugin {
   version?: string;
   declares?: string[];
   intercepts?: string[];
+  /** Declared `.needs()` dependencies (plugin names or element/driver ids). */
+  needs?: string[];
   /** Optional metadata for `table:*` contributions. */
   tables?: Record<string, PluginTable>;
 }

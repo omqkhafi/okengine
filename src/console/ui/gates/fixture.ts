@@ -20,24 +20,28 @@ export const GATES_LIST_FIXTURE: GatesListResponse = {
       plane: "user",
       gates: ["member", "booking:create", "rate:sliding-window-counter:300/1m"],
       unguarded: false,
+      explicitPublic: false,
     },
     {
       flowId: "health.ping",
       plane: "user",
       gates: [],
       unguarded: true,
+      explicitPublic: false,
     },
     {
       flowId: "reports.export",
       plane: "user",
       gates: ["staff"],
       unguarded: false,
+      explicitPublic: false,
     },
     {
       flowId: "console.store.query",
       plane: "operator",
       gates: [],
       unguarded: false,
+      explicitPublic: false,
     },
   ],
   gates: [

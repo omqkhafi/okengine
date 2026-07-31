@@ -2,6 +2,7 @@
   "title": "Plugins",
   "icon": "Puzzle",
   "pages": [
+    "index",
     "---Security---",
     "security-headers",
     "cors",

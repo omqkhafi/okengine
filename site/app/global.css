@@ -124,6 +124,40 @@
   animation-iteration-count: infinite;
 }
 
+/*
+ * 404 unmatched-route probe: a dash walks the trigger → effects line and never
+ * lands. Paired with a soft pulse on the empty effects pin.
+ */
+@keyframes oke-route-probe {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes oke-route-miss {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.oke-route-probe {
+  animation-name: oke-route-probe;
+  animation-duration: 1.4s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.oke-route-miss {
+  animation-name: oke-route-miss;
+  animation-duration: 1.8s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oke-seam-trace {
     animation: none;
@@ -135,6 +169,11 @@
   }
 
   .oke-chip-flow {
+    animation: none;
+  }
+
+  .oke-route-probe,
+  .oke-route-miss {
     animation: none;
   }
 }

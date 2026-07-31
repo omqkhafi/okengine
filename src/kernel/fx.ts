@@ -75,6 +75,33 @@ export interface FxOperator {
   readonly id: string | null;
 }
 
+/**
+ * Read-only originating identity for audit / attribution.
+ * Never consulted by gate evaluation — authorization stays on {@link Fx.auth}.
+ */
+export interface FxPrincipal {
+  readonly userId: string | null;
+  readonly operatorId: string | null;
+  readonly scopes: ReadonlySet<string>;
+  readonly verified?: boolean;
+  readonly plane?: "user" | "operator";
+}
+
+/**
+ * Freeze a principal snapshot for propagation across {@link Fx.call}.
+ *
+ * @param p - Live or frozen principal
+ */
+export function freezePrincipal(p: FxPrincipal): FxPrincipal {
+  return {
+    userId: p.userId,
+    operatorId: p.operatorId,
+    scopes: new Set(p.scopes),
+    ...(p.verified !== undefined ? { verified: p.verified } : {}),
+    ...(p.plane !== undefined ? { plane: p.plane } : {}),
+  };
+}
+
 /** Active tenant (multi-tenancy as a dimension of `fx`). */
 export interface FxTenant {
   readonly id: string | null;
@@ -334,6 +361,12 @@ export interface Fx {
   readonly auth: FxAuth;
   /** Operator-plane principal. */
   readonly operator: FxOperator;
+  /**
+   * Read-only originating identity (audit / attribution).
+   * On HTTP entry, tracks the resolved principal; across {@link Fx.call},
+   * propagates explicitly — never copied into {@link Fx.auth}.
+   */
+  readonly principal: FxPrincipal;
   /** Active tenant. */
   readonly tenant: FxTenant;
   /**
@@ -419,6 +452,11 @@ export interface CreateFxOptions {
   readonly auth?: FxAuth;
   /** Operator principal. */
   readonly operator?: FxOperator;
+  /**
+   * Frozen originating principal (e.g. propagated across {@link Fx.call}).
+   * When omitted, {@link Fx.principal} tracks live {@link Fx.auth} / {@link Fx.operator}.
+   */
+  readonly principal?: FxPrincipal;
   /** Tenant. */
   readonly tenant?: FxTenant;
   /** Secret name → value map for `fx.vault`. */
@@ -522,6 +560,27 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   };
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: FxTenant = options.tenant ?? { id: null };
+  const principal: FxPrincipal =
+    options.principal ??
+    ({
+      get userId() {
+        return auth.userId;
+      },
+      get operatorId() {
+        return operator.id;
+      },
+      get scopes() {
+        return auth.scopes;
+      },
+      get verified() {
+        return auth.verified;
+      },
+      get plane() {
+        if (operator.id) return "operator" as const;
+        if (auth.userId) return "user" as const;
+        return undefined;
+      },
+    } satisfies FxPrincipal);
   const journal = options.journal;
 
   async function gated<T>(
@@ -1069,6 +1128,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     auth,
     operator,
+    principal,
     tenant,
     fail,
     json: {

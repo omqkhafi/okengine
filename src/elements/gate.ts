@@ -8,7 +8,7 @@
  * @module
  */
 
-export { gate } from "./gate/declare.ts";
+export { gate, GATE_PUBLIC_NAME } from "./gate/declare.ts";
 export type {
   GateDecl,
   GatePolicyContext,
@@ -17,6 +17,17 @@ export type {
   RateGateDecl,
   RateOptions,
 } from "./gate/declare.ts";
+
+export {
+  GateBootError,
+  assertHttpGatePosture,
+  collectUnguardedHttpGaps,
+  hasHttpGatePosture,
+  isPublicGateRef,
+  unguardedHttpAllowActive,
+  type AssertHttpGatePostureOptions,
+  type GatePostureGap,
+} from "./gate/boot.ts";
 
 export {
   createGateRuntime,

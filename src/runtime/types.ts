@@ -131,6 +131,26 @@ export interface RuntimeTimers {
 export type PasswordAlgorithm = "argon2id" | "bcrypt" | "pbkdf2";
 
 /**
+ * Bun.password cost knobs. Defaults match Bun's argon2id floor
+ * (`memoryCost: 65536`, `timeCost: 2`) — never weaker.
+ */
+export interface PasswordHashOptions {
+  /** Algorithm (Bun default `argon2id`). */
+  readonly algorithm?: PasswordAlgorithm;
+  /** Argon2 memory cost in KiB (floor 65536). */
+  readonly memoryCost?: number;
+  /** Argon2 time cost / iterations (floor 2). */
+  readonly timeCost?: number;
+  /** bcrypt cost (only when `algorithm: "bcrypt"`). */
+  readonly cost?: number;
+}
+
+/** Bun argon2id defaults — also the configuration floor. */
+export const ARGON2ID_MEMORY_COST_FLOOR = 65_536;
+/** Bun argon2id timeCost floor. */
+export const ARGON2ID_TIME_COST_FLOOR = 2;
+
+/**
  * Crypto surface — Web Crypto plus password hash/verify.
  * Bun binds `Bun.password`; web-standard uses PBKDF2 via SubtleCrypto.
  */
@@ -149,9 +169,12 @@ export interface RuntimeCrypto {
    * Hash a password.
    *
    * @param password - Plaintext
-   * @param algorithm - Hash algorithm (Bun default `argon2id`)
+   * @param algorithmOrOptions - Algorithm string or Bun cost options
    */
-  hashPassword(password: string, algorithm?: PasswordAlgorithm): Promise<string>;
+  hashPassword(
+    password: string,
+    algorithmOrOptions?: PasswordAlgorithm | PasswordHashOptions,
+  ): Promise<string>;
   /**
    * Verify a password against a hash from {@link RuntimeCrypto.hashPassword}.
    *

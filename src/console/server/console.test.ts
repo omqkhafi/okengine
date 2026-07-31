@@ -69,7 +69,7 @@ describe("console kernel", () => {
             claimCode: code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password123",
+            password: "password1234",
           }),
         }),
       );
@@ -89,7 +89,7 @@ describe("console kernel", () => {
             claimCode: code,
             email: "other@example.com",
             name: "Other",
-            password: "password123",
+            password: "password1234",
           }),
         }),
       );
@@ -127,7 +127,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password123",
+            password: "password1234",
           }),
         }),
       );
@@ -175,7 +175,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password123",
+            password: "password1234",
           }),
         }),
       );
@@ -223,7 +223,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password123",
+            password: "password1234",
           }),
         }),
       );
@@ -317,7 +317,7 @@ describe("console serve security", () => {
           claimCode: server.console.state.claim.code,
           email: "ops@example.com",
           name: "Ops",
-          password: "password123",
+          password: "password1234",
         }),
       }),
     );

@@ -66,8 +66,13 @@ export interface ConsoleFlowGatesRow {
   readonly flowId: string;
   readonly plane: "user" | "operator";
   readonly gates: readonly string[];
-  /** User-plane with empty chain — public. */
+  /**
+   * User-plane with empty chain — missing auth posture (boot error when
+   * `unguardedHttp: "deny"`). Distinct from {@link explicitPublic}.
+   */
   readonly unguarded: boolean;
+  /** Chain includes the reserved `public` sentinel (`gate.public`). */
+  readonly explicitPublic: boolean;
 }
 
 /**
@@ -449,11 +454,13 @@ function projectFlows(manifest: Manifest | null): ConsoleFlowGatesRow[] {
   for (const [flowId, flow] of Object.entries(manifest.flows)) {
     const plane = flow.plane === "operator" ? "operator" : "user";
     const gates = [...(flow.gates ?? [])];
+    const explicitPublic = gates.includes("public");
     rows.push({
       flowId,
       plane,
       gates,
       unguarded: plane === "user" && gates.length === 0,
+      explicitPublic,
     });
   }
   return rows.sort((a, b) => a.flowId.localeCompare(b.flowId));

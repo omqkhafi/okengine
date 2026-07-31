@@ -1,4 +1,4 @@
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Provider } from "@/components/provider";
 import { Topbar } from "@/components/chrome/topbar";
 import { OkeFaviconCycle } from "@/components/oke-logo-icon";
@@ -6,8 +6,10 @@ import { source } from "@/lib/source";
 import type { Metadata } from "next";
 import "./global.css";
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "./fonts/InterVariable.woff2",
+  weight: "100 900",
+  display: "swap",
 });
 
 export const metadata: Metadata = {

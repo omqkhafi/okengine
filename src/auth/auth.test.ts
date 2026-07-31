@@ -218,7 +218,7 @@ describe("operator plane", () => {
     const op = await createOperator(store, {
       email: "ops@example.com",
       name: "Ops",
-      password: "correct horse battery staple",
+      password: "correct horse battery staple 1",
     });
 
     expect(store.credentials.has(op.id)).toBe(true);
@@ -231,7 +231,7 @@ describe("operator plane", () => {
     const authed = await authenticateOperator(
       store,
       "ops@example.com",
-      "correct horse battery staple",
+      "correct horse battery staple 1",
     );
     expect(authed?.id).toBe(op.id);
   });

@@ -53,6 +53,21 @@ export interface SessionCrypto {
   readonly accessTtlMs?: number;
   readonly refreshTtlMs?: number;
   /**
+   * Idle timeout — reject refresh when `now - lastActiveAt > idleTtlMs`.
+   * Opt-in (undefined = disabled).
+   */
+  readonly idleTtlMs?: number;
+  /**
+   * Absolute lifetime from `session.createdAt` (hard stop even if refresh would extend).
+   * Opt-in; when set should be ≤ refreshTtlMs.
+   */
+  readonly absoluteTtlMs?: number;
+  /**
+   * When true, issuing a session revokes other active families for the same principal.
+   * Opt-in (default false).
+   */
+  readonly singleSessionPerUser?: boolean;
+  /**
    * Audience stamped on issued access tokens.
    * MCP tokens must use `"oke-mcp"` (console §10.3 — never accept another aud).
    */
@@ -97,8 +112,14 @@ export async function issueSession(
   const t = now();
   const accessTtl = crypto.accessTtlMs ?? ACCESS_TTL_MS;
   const refreshTtl = crypto.refreshTtlMs ?? REFRESH_TTL_MS;
+  const absoluteCap =
+    crypto.absoluteTtlMs !== undefined ? Math.min(refreshTtl, crypto.absoluteTtlMs) : refreshTtl;
   const sessionId = cryptoRandomId();
   const familyId = cryptoRandomId();
+
+  if (crypto.singleSessionPerUser) {
+    revokePrincipalSessions(store, principal.plane, principal.id, t);
+  }
 
   const session: SessionRow = {
     id: sessionId,
@@ -107,7 +128,8 @@ export async function issueSession(
     familyId,
     revokedAt: null,
     createdAt: t,
-    expiresAt: t + refreshTtl,
+    expiresAt: t + absoluteCap,
+    lastActiveAt: t,
   };
   store.sessions.set(sessionId, session);
   if (crypto.audience !== undefined) {
@@ -174,9 +196,17 @@ export async function rotateRefresh(
   if (existing.expiresAt <= t || session.expiresAt <= t) {
     throw new SessionError("refresh token expired");
   }
+  if (crypto.absoluteTtlMs !== undefined && session.createdAt + crypto.absoluteTtlMs <= t) {
+    throw new SessionError("session absolute lifetime exceeded");
+  }
+  const lastActive = session.lastActiveAt ?? session.createdAt;
+  if (crypto.idleTtlMs !== undefined && lastActive + crypto.idleTtlMs <= t) {
+    throw new SessionError("session idle timeout exceeded");
+  }
 
   existing.usedAt = t;
   existing.revokedAt = t;
+  session.lastActiveAt = t;
 
   const accessTtl = crypto.accessTtlMs ?? ACCESS_TTL_MS;
   const refreshTtl = crypto.refreshTtlMs ?? REFRESH_TTL_MS;
@@ -305,6 +335,8 @@ export async function verifyAccess(
   if (session.principalId !== claims.sub) {
     throw new SessionError("session does not belong to requester");
   }
+  // Touch idle clock on successful access verify.
+  session.lastActiveAt = now();
   return claims;
 }
 
@@ -321,6 +353,31 @@ export function revokeFamily(store: SessionStore, familyId: string, at: number =
   }
   for (const token of store.refresh.values()) {
     if (token.familyId === familyId) token.revokedAt = at;
+  }
+}
+
+/**
+ * Revoke all active sessions for a principal (single-session-per-user).
+ *
+ * @param store - Session store
+ * @param plane - Auth plane
+ * @param principalId - Subject id
+ * @param at - Timestamp
+ */
+export function revokePrincipalSessions(
+  store: SessionStore,
+  plane: AuthPlane,
+  principalId: string,
+  at: number = Date.now(),
+): void {
+  for (const session of store.sessions.values()) {
+    if (
+      session.plane === plane &&
+      session.principalId === principalId &&
+      session.revokedAt === null
+    ) {
+      revokeFamily(store, session.familyId, at);
+    }
   }
 }
 

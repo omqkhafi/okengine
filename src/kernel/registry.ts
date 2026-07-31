@@ -12,7 +12,13 @@
  * @see docs/spec/console.md §9.15
  */
 
-import type { FlowErrorMap } from "./flow.ts";
+import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
+import type { ClockDecl } from "../elements/clock/declare.ts";
+import type { GateDecl } from "../elements/gate/declare.ts";
+import type { SignalDecl } from "../elements/signal/declare.ts";
+import type { VaultSecretDecl } from "../elements/vault/declare.ts";
+import type { SchemaInput } from "../validation/standard-schema.ts";
+import type { AnyFlowDef, FlowErrorMap } from "./flow.ts";
 import type { HookFn, HookMap, HookStage } from "./hooks.ts";
 import { tagHookWithPlugin } from "./hook-timing.ts";
 import type {
@@ -30,8 +36,6 @@ import type {
   PluginTableOptions,
   TableContribution,
 } from "./plugin.ts";
-import type { SchemaInput } from "../validation/standard-schema.ts";
-import type { AnyFlowDef } from "./flow.ts";
 
 /** Attachment-point scope — the position is the scope. No escape hatch. */
 export type PluginScope =
@@ -74,6 +78,11 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
   const flows: AnyFlowDef[] = [];
   const errors: FlowErrorMap = {};
   const client: ClientExtensionContribution[] = [];
+  const vaultSecrets: VaultSecretDecl[] = [];
+  const clocks: ClockDecl[] = [];
+  const signals: SignalDecl[] = [];
+  const gates: GateDecl[] = [];
+  const channelTemplates: ChannelTemplateDecl[] = [];
   const needs: string[] = [];
   const declares: string[] = [];
   const intercepts: string[] = [];
@@ -161,6 +170,31 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
       pushDeclare("config");
       return api;
     },
+    vault(secret) {
+      vaultSecrets.push(secret);
+      pushDeclare(`vault:${secret.name}`);
+      return api;
+    },
+    clock(decl) {
+      clocks.push(decl);
+      pushDeclare(`clock:${decl.name}`);
+      return api;
+    },
+    signal(decl) {
+      signals.push(decl);
+      pushDeclare(`signal:${decl.name}`);
+      return api;
+    },
+    gate(decl) {
+      gates.push(decl);
+      pushDeclare(`gate:${decl.name}`);
+      return api;
+    },
+    channelTemplate(decl) {
+      channelTemplates.push(decl);
+      pushDeclare(`channel:${decl.name}`);
+      return api;
+    },
   };
 
   return {
@@ -189,6 +223,11 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
         errors: { ...errors },
         client: client.slice(),
         configSchema,
+        vaultSecrets: vaultSecrets.slice(),
+        clocks: clocks.slice(),
+        signals: signals.slice(),
+        gates: gates.slice(),
+        channelTemplates: channelTemplates.slice(),
       };
     },
   };
@@ -259,6 +298,16 @@ export interface PluginRegistry {
    * plugin name). Used by `oke db` emit to merge plugin `field.*` tables.
    */
   tableContributions(): readonly TableContribution[];
+  /** Vault contracts from installed plugins (first install per plugin name). */
+  vaultContributions(): readonly VaultSecretDecl[];
+  /** Clock schedules from installed plugins. */
+  clockContributions(): readonly ClockDecl[];
+  /** Signal declarations from installed plugins. */
+  signalContributions(): readonly SignalDecl[];
+  /** Gate declarations from installed plugins. */
+  gateContributions(): readonly GateDecl[];
+  /** Channel templates from installed plugins. */
+  channelTemplateContributions(): readonly ChannelTemplateDecl[];
 }
 
 /**
@@ -413,9 +462,44 @@ export function createPluginRegistry(): PluginRegistry {
       }
       return out;
     },
+    vaultContributions() {
+      return firstPerPlugin(installed, (r) => r.vaultSecrets);
+    },
+    clockContributions() {
+      return firstPerPlugin(installed, (r) => r.clocks);
+    },
+    signalContributions() {
+      return firstPerPlugin(installed, (r) => r.signals);
+    },
+    gateContributions() {
+      return firstPerPlugin(installed, (r) => r.gates);
+    },
+    channelTemplateContributions() {
+      return firstPerPlugin(installed, (r) => r.channelTemplates);
+    },
   };
 
   return registry;
+}
+
+/**
+ * Collect contributions from the first install of each plugin name.
+ *
+ * @param installed - Registry installs
+ * @param pick - Selector
+ */
+function firstPerPlugin<T>(
+  installed: readonly InstalledPlugin[],
+  pick: (r: PluginRegistration) => readonly T[],
+): T[] {
+  const seenPlugins = new Set<string>();
+  const out: T[] = [];
+  for (const entry of installed) {
+    if (seenPlugins.has(entry.plugin.name)) continue;
+    seenPlugins.add(entry.plugin.name);
+    out.push(...pick(entry.registration));
+  }
+  return out;
 }
 
 /**

@@ -69,7 +69,7 @@ describe("console security gates (whole surface)", () => {
           claimCode: handle.state.claim.code,
           email: "ops@example.com",
           name: "Ops",
-          password: "password123",
+          password: "password1234",
         }),
       }),
     );
@@ -234,7 +234,7 @@ describe("console security gates (whole surface)", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           email: "ops@example.com",
-          password: "password123",
+          password: "password1234",
         }),
       }),
     );
@@ -252,7 +252,7 @@ describe("console security gates (whole surface)", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           email: "other@example.com",
-          password: "password123",
+          password: "password1234",
         }),
       }),
     );

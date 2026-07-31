@@ -11,6 +11,8 @@ export interface FlowGatesRecord {
   readonly plane: "user" | "operator";
   readonly gates: readonly string[];
   readonly unguarded: boolean;
+  /** Chain includes the reserved `public` sentinel. */
+  readonly explicitPublic?: boolean;
 }
 
 /** Declared gate definition. */

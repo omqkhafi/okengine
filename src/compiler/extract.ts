@@ -671,6 +671,25 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       }
     }
 
+    if (obj === "gate" && prop === "scope") {
+      const scopeName = stringArg(call.arguments[0]);
+      if (scopeName) {
+        scope.gates[scopeName] = {
+          kind: "policy",
+          roles: [scopeName],
+          scopes: [scopeName],
+        };
+        const bindingName = enclosingConstName(call, program);
+        if (bindingName) {
+          scope.gateIds.set(bindingName, scopeName);
+          scope.bindings.set(bindingName, {
+            kind: "unknown",
+            ref: scopeName,
+          });
+        }
+      }
+    }
+
     if (obj === "gate" && prop === "rate") {
       const opts = objectArg(call.arguments[0]);
       const strategy = (stringProp(opts, "strategy") ?? "sliding-window-counter") as RateStrategy;

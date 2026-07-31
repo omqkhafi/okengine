@@ -1,4 +1,4 @@
-import { on, flow, http } from "okengine";
+import { on, flow, http, gate } from "okengine";
 import { z } from "zod";
 
 import "./shapes";
@@ -6,7 +6,7 @@ import "./signals";
 
 /** First-run welcome — visit :6530/ after `oke dev`. */
 export const root = on(
-  http.get("/"),
+  http.get("/").gate(gate.public),
   flow({
     out: z.object({
       ok: z.literal(true),
@@ -23,7 +23,7 @@ export const root = on(
 
 /** Replace with your unit's flows. */
 export const health = on(
-  http.get("/health"),
+  http.get("/health").gate(gate.public),
   flow({
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),

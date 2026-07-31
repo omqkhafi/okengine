@@ -11,6 +11,7 @@ import { AnimatePresence, motion, MotionConfig, type Variants } from "framer-mot
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
+import { AiOnboardButton } from "@/components/landing/ai-onboard-button";
 import { cn } from "@/lib/cn";
 import { ELEMENTS, EXPORTS, REAL_TODAY, TAGLINE } from "@/lib/elements";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
@@ -288,6 +289,7 @@ export function HeroTitle() {
             </span>
             <span className="relative">Install</span>
           </Link>
+          <AiOnboardButton />
         </motion.div>
 
         <motion.ul className="mt-8 flex flex-wrap gap-2" variants={pills}>

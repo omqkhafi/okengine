@@ -6,7 +6,31 @@
  * @module
  */
 
-export { auth, type AuthPluginOptions } from "./plugin.ts";
+export {
+  auth,
+  sessionCryptoFromAuthOptions,
+  type AuthPluginOptions,
+  type AuthSessionOptions,
+} from "./plugin.ts";
+
+export {
+  assertPasswordPolicy,
+  resolvePasswordPolicy,
+  PasswordPolicyError,
+  DEFAULT_PASSWORD_MIN_LENGTH,
+  type PasswordPolicyOptions,
+  type ResolvedPasswordPolicy,
+} from "./password-policy.ts";
+
+export {
+  assertNotBreached,
+  createHibpBreachCheck,
+  sha1HexUpper,
+  BreachCheckError,
+  type BreachCheckFn,
+  type BreachCheckErrorMode,
+  type HibpBreachCheckOptions,
+} from "./breach-check.ts";
 
 export {
   assertPlaneAccess,
@@ -63,6 +87,7 @@ export {
   rotateRefresh,
   verifyAccess,
   revokeFamily,
+  revokePrincipalSessions,
   bindSessionScopes,
   bindSessionAudience,
   ACCESS_TTL_MS,

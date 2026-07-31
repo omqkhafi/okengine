@@ -187,6 +187,9 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
 
   const beforeHandle: HookFn = async (ctx, fxOrErr) => {
     const names = gateNamesOf(ctx.trigger);
+    // Empty chain: boot audit should have rejected this when unguardedHttp is
+    // "deny". If we still reach here without a gate runtime, skip (legacy /
+    // unbooted). Public sentinel is a normal named gate in `names`.
     if (names.length === 0 || !deps.gates) return;
 
     const policyCtx = policyContextOf(fxOrErr as Fx, ctx);

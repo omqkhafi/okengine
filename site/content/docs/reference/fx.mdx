@@ -163,6 +163,14 @@ Returning a plain value instead answers 200 with `{ data: value, error: null }` 
 | `fx.operator` | `{ id: string \| null }` — Console plane                              |
 | `fx.tenant`   | `{ id: string \| null }` — active tenant                              |
 
+## Not on `fx`
+
+<Callout title="No fx.metric">
+  Investigated and declined. [Runs](/docs/console/runs) already own per-invocation
+  observability as wide events; a parallel counter/gauge API would be a second
+  instrumentation path without a sink.
+</Callout>
+
 ## Learn more
 
 - [Flow](/docs/elements/flow) — why `fx` is the only door

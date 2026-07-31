@@ -74,16 +74,26 @@ A denied request never reaches `do`. It returns one of three typed failures, lik
 
 <GatePipeline />
 
-## Two kinds of gates
+## Gate declarations
 
-| Declaration                           | Question it answers                    | Evaluated against                  |
-| ------------------------------------- | -------------------------------------- | ---------------------------------- |
-| `gate.policy(name, check \| options)` | Is this principal allowed? (ABAC)      | auth / operator / request metadata |
-| `gate.rate(options)`                  | Is there budget left for this subject? | an atomic counter on the kv driver |
+| Declaration                           | Question it answers                         | Evaluated against                  |
+| ------------------------------------- | ------------------------------------------- | ---------------------------------- |
+| `gate.policy(name, check \| options)` | Is this principal allowed? (ABAC)           | auth / operator / request metadata |
+| `gate.scope(name)`                    | Does `auth.scopes` contain this exact name? | `auth.scopes`                      |
+| `gate.public`                         | Intentionally unauthenticated surface       | always allows                      |
+| `gate.rate(options)`                  | Is there budget left for this subject?      | an atomic counter on the kv driver |
 
 `gate.policy(name, check)` stays the terse form. Pass
 `{ check, description }` when you want a human title in the Console
 (falls back to the policy name).
+
+`gate.scope(name)` is sugar for
+`gate.policy(name, ({ auth }) => auth.scopes.has(name))` — one string is
+both the policy id and the scope checked. Fine-grained authorization
+stays opt-in: attach `gate.scope(...)` only where you need it.
+
+`gate.public` is the explicit public sentinel. Every HTTP trigger must
+carry a gate or `gate.public` at boot — omit neither (see below).
 
 ### The policy context
 
@@ -96,7 +106,8 @@ The predicate receives everything it may decide with — nothing else:
 | `meta`     | Request metadata for keying decisions: `ip`, `userId`, … |
 
 ```typescript
-export const admin = gate.policy("admin", ({ auth }) => auth.scopes.has("admin"));
+export const admin = gate.scope("admin");
+// same as: gate.policy("admin", ({ auth }) => auth.scopes.has("admin"));
 ```
 
 A policy name containing `:` is also a `Module:Action` permission — the same declaration feeds role-based access reviews in the Console.
@@ -121,6 +132,27 @@ A policy name containing `:` is also a `Module:Action` permission — the same d
 | `leaky-bucket`           | Smooths output to a constant rate                      |
 
 All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory driver in tests.
+
+## Auth posture at boot
+
+Every HTTP trigger must declare authentication posture — attach a gate, or
+attach `gate.public`. Omitting both fails boot with `GateBootError` (same
+fail-loud standard as Vault). Fine-grained authorization (`gate.scope`,
+roles) stays opt-in.
+
+```typescript
+on(http.get("/health").gate(gate.public), flow({ /* … */ }));
+on(http.post("/bookings").gate(member, canBook), flow({ /* … */ }));
+```
+
+Test harness opt-out (`unguardedHttp: "allow"`) is honoured **only** when
+`env === "test"` — never a production-wide bypass. Real apps migrate one
+trigger at a time with `gate.public` (or a real policy), not a global flag.
+
+```typescript
+// createTestApp / env: "test" only — ignored in local/prod/docker
+oke({ name: "app", env: "test", unguardedHttp: "allow" });
+```
 
 ## Identity comes from auth
 

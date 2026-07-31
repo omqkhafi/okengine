@@ -1,5 +1,14 @@
 {
   "title": "Reference",
   "icon": "BookMarked",
-  "pages": ["configuration", "fx", "environment-variables", "errors", "plugins", "cli", "security"]
+  "pages": [
+    "index",
+    "configuration",
+    "fx",
+    "environment-variables",
+    "errors",
+    "plugins",
+    "cli",
+    "security"
+  ]
 }

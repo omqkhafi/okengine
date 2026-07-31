@@ -808,6 +808,7 @@ interface ConsoleClient {
         plane: "user" | "operator";
         gates: string[];
         unguarded: boolean;
+        explicitPublic: boolean;
       }>;
       gates: Array<{
         name: string;

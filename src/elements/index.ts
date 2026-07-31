@@ -62,6 +62,13 @@ export type { ClockDecl, ClockOptions, ClockRuntime, TimeTravel, DurableResult }
 
 export {
   gate,
+  GATE_PUBLIC_NAME,
+  GateBootError,
+  assertHttpGatePosture,
+  collectUnguardedHttpGaps,
+  hasHttpGatePosture,
+  isPublicGateRef,
+  unguardedHttpAllowActive,
   createGateRuntime,
   takeRate,
   deriveModuleActions,
@@ -72,6 +79,7 @@ export {
 export type {
   GateDecl,
   GatePolicyContext,
+  GatePostureGap,
   GateRuntime,
   RateOptions,
   RateTakeResult,

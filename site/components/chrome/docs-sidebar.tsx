@@ -130,6 +130,22 @@ function TreeSeparator({ name }: { name?: ReactNode }) {
   );
 }
 
+/**
+ * Whether a page is this folder's landing (`…/section/index.mdx` → `/docs/section`).
+ * Fumadocs may leave it in `children` instead of `folder.index`; either way, the
+ * sidebar omits it — the URL stays reachable from Cards / direct links.
+ *
+ * @param folder - Accordion folder
+ * @param pageUrl - Candidate page URL
+ */
+function isFolderLandingPage(folder: PageTree.Folder, pageUrl: string): boolean {
+  if (folder.index?.url === pageUrl) return true;
+  const siblings = folder.children.filter(
+    (child): child is PageTree.Item => child.type === "page" && child.url !== pageUrl,
+  );
+  return siblings.length > 0 && siblings.every((child) => child.url.startsWith(`${pageUrl}/`));
+}
+
 /** Children of one accordion group. */
 function GroupBody({
   node,
@@ -142,22 +158,12 @@ function GroupBody({
 }) {
   return (
     <div className="py-1 text-sm">
-      {node.index ? (
-        <TreeLink
-          href={node.index.url}
-          active={isUrlActive(node.index.url, pathname)}
-          icon={node.index.icon}
-          depth={0}
-          onNavigate={onNavigate}
-        >
-          {node.index.name}
-        </TreeLink>
-      ) : null}
       {node.children.map((child, index) => {
         if (child.type === "separator") {
           return <TreeSeparator key={`sep-${index}`} name={child.name} />;
         }
         if (child.type === "page") {
+          if (isFolderLandingPage(node, child.url)) return null;
           return (
             <TreeLink
               key={child.url}

@@ -6,10 +6,15 @@
 
 import type {
   PasswordAlgorithm,
+  PasswordHashOptions,
   RuntimeCrypto,
   RuntimeEnv,
   RuntimeFiles,
   RuntimeTimers,
+} from "./types.ts";
+import {
+  ARGON2ID_MEMORY_COST_FLOOR,
+  ARGON2ID_TIME_COST_FLOOR,
 } from "./types.ts";
 
 /** HTML / WinterTC timers on `globalThis`. */
@@ -124,7 +129,11 @@ export function createWebCrypto(): RuntimeCrypto {
     getRandomValues(array) {
       return web.getRandomValues(array);
     },
-    async hashPassword(password, algorithm = "pbkdf2") {
+    async hashPassword(password, algorithmOrOptions = "pbkdf2") {
+      const algorithm =
+        typeof algorithmOrOptions === "string"
+          ? algorithmOrOptions
+          : (algorithmOrOptions.algorithm ?? "pbkdf2");
       if (algorithm !== "pbkdf2") {
         throw new Error(
           `web-standard runtime supports only pbkdf2 passwords (got ${algorithm}); use the Bun adapter for argon2id/bcrypt`,
@@ -156,10 +165,37 @@ export function createBunCrypto(): RuntimeCrypto {
     getRandomValues(array) {
       return web.getRandomValues(array);
     },
-    async hashPassword(password, algorithm = "argon2id") {
+    async hashPassword(password, algorithmOrOptions = "argon2id") {
+      const opts: PasswordHashOptions =
+        typeof algorithmOrOptions === "string"
+          ? { algorithm: algorithmOrOptions }
+          : algorithmOrOptions;
+      const algorithm: PasswordAlgorithm = opts.algorithm ?? "argon2id";
       if (algorithm === "pbkdf2") return hashPbkdf2(password);
-      const algo = algorithm === "bcrypt" ? "bcrypt" : "argon2id";
-      return Bun.password.hash(password, algo);
+      if (algorithm === "bcrypt") {
+        if (opts.cost !== undefined) {
+          return Bun.password.hash(password, { algorithm: "bcrypt", cost: opts.cost });
+        }
+        return Bun.password.hash(password, "bcrypt");
+      }
+      // argon2id — never weaker than Bun's defaults (m=65536, t=2).
+      const memoryCost = opts.memoryCost ?? ARGON2ID_MEMORY_COST_FLOOR;
+      const timeCost = opts.timeCost ?? ARGON2ID_TIME_COST_FLOOR;
+      if (memoryCost < ARGON2ID_MEMORY_COST_FLOOR) {
+        throw new TypeError(
+          `argon2id memoryCost must be >= ${ARGON2ID_MEMORY_COST_FLOOR} (Bun default floor)`,
+        );
+      }
+      if (timeCost < ARGON2ID_TIME_COST_FLOOR) {
+        throw new TypeError(
+          `argon2id timeCost must be >= ${ARGON2ID_TIME_COST_FLOOR} (Bun default floor)`,
+        );
+      }
+      return Bun.password.hash(password, {
+        algorithm: "argon2id",
+        memoryCost,
+        timeCost,
+      });
     },
     async verifyPassword(password, hash) {
       if (hash.startsWith("pbkdf2$")) return verifyPbkdf2(password, hash);

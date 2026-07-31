@@ -36,11 +36,11 @@ oke dev
 The standard starter already exports a health Flow:
 
 ```typescript title="flows/main"
-import { on, flow, http } from "okengine";
+import { on, flow, http, gate } from "okengine";
 import { z } from "zod";
 
 export const health = on(
-  http.get("/health"),
+  http.get("/health").gate(gate.public),
   flow({
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
@@ -76,6 +76,13 @@ const { data, error } = await api.main.health({});
 
 `data` and `error` are inferred from the Flow contracts — no separate client
 schema or codegen project.
+
+For Bearer sessions today, pass `auth: { getToken, refresh }` on
+`createClient` options. Reactive session hooks and framework bindings are
+**not** in `okengine/client` (hard &lt;3 kB budget) — the planned shape is a
+framework-agnostic session adapter, then an opt-in `okengine/client-react`
+subpath (`SessionProvider` / `useSession`). Plugin `.client()` mirroring
+stays deferred until that seam merges into `createClient`.
 
 </Step>
 

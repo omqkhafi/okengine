@@ -36,11 +36,13 @@ import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { fxRetry } from "./concurrency.ts";
 import {
   createFxContext,
+  freezePrincipal,
   resolveName,
   type CreateFxOptions,
   type Fx,
   type FxAuth,
   type FxOperator,
+  type FxPrincipal,
   type NamedRef,
 } from "./fx.ts";
 import {
@@ -151,6 +153,12 @@ export interface OkeOptions {
   readonly secrets?: BootOptions["secrets"];
   /** Gate declarations for the runtime. */
   readonly gates?: BootOptions["gates"];
+  /**
+   * HTTP auth-posture enforcement at boot.
+   * Default `"deny"`. `"allow"` is honoured only when `env === "test"` —
+   * never a production-wide bypass (use per-trigger `gate.public` instead).
+   */
+  readonly unguardedHttp?: BootOptions["unguardedHttp"];
   /** Signal declarations. */
   readonly signals?: BootOptions["signals"];
   /** Named clock declarations. */
@@ -482,9 +490,20 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
-    const { bootApplication } = await import("./boot.ts");
+    const { bootApplication, resolveElementNeeds } = await import("./boot.ts");
+    const { assertHttpGatePosture } = await import("../elements/gate/boot.ts");
+    const {
+      assertPluginNeeds,
+      buildAvailableNeedTokens,
+    } = await import("./plugin-needs.ts");
     bootEnv = overrides?.env ?? options.env ?? "local";
-    const merged: BootOptions = {
+    const unguardedHttp = overrides?.unguardedHttp ?? options.unguardedHttp ?? "deny";
+    // `"allow"` is honoured only when bootEnv === "test" — never a prod bypass.
+    assertHttpGatePosture(adopted, { unguardedHttp, env: bootEnv });
+
+    const caps = pluginRegistry.capabilities();
+    const pluginNames = new Set(Object.keys(caps));
+    const elementNeeds = resolveElementNeeds({
       env: bootEnv,
       docker: overrides?.docker ?? options.docker,
       config: overrides?.config ?? options.config,
@@ -496,6 +515,73 @@ export function oke(options: OkeOptions): OkeApp {
       clocks: overrides?.clocks ?? options.clocks,
       stores: overrides?.stores ?? options.stores,
       channel: overrides?.channel ?? options.channel,
+      ai: overrides?.ai ?? options.ai,
+      runs: overrides?.runs ?? options.runs,
+      bindings: adopted,
+      flows: [...flowsByName.values()],
+    });
+    const driverIds: string[] = [];
+    for (const c of Object.values(caps)) {
+      for (const d of c.declares) {
+        if (d.startsWith("driver:")) driverIds.push(d.slice("driver:".length));
+      }
+    }
+    const stores = overrides?.stores ?? options.stores ?? [];
+    const available = buildAvailableNeedTokens({
+      elements: {
+        storeSql:
+          elementNeeds.store ||
+          stores.some((s) => s.facet === "sql") ||
+          pluginRegistry.tableContributions().length > 0,
+        storeKv: elementNeeds.store || stores.some((s) => s.facet === "kv"),
+        storeFiles: elementNeeds.store || stores.some((s) => s.facet === "files"),
+        storeIndex: elementNeeds.store || stores.some((s) => s.facet === "index"),
+        signal: elementNeeds.signal,
+        clock: elementNeeds.clock,
+        gate: elementNeeds.gate,
+        vault: elementNeeds.vault,
+        channel: elementNeeds.channel,
+        ai: elementNeeds.ai,
+      },
+      driverIds,
+    });
+    const pluginSecrets = pluginRegistry.vaultContributions();
+    const pluginGates = pluginRegistry.gateContributions();
+    const pluginSignals = pluginRegistry.signalContributions();
+    const pluginClocks = pluginRegistry.clockContributions();
+    const pluginChannelTemplates = pluginRegistry.channelTemplateContributions();
+    if (pluginSecrets.length > 0) available.add("vault");
+    if (pluginGates.length > 0) available.add("gate");
+    if (pluginSignals.length > 0) available.add("signal");
+    if (pluginClocks.length > 0) available.add("clock");
+    if (pluginChannelTemplates.length > 0) available.add("channel");
+    assertPluginNeeds(caps, { pluginNames, available });
+
+    const baseSecrets = overrides?.secrets ?? options.secrets ?? [];
+    const baseGates = overrides?.gates ?? options.gates ?? [];
+    const baseSignals = overrides?.signals ?? options.signals ?? [];
+    const baseClocks = overrides?.clocks ?? options.clocks ?? [];
+    const baseChannel = overrides?.channel ?? options.channel;
+
+    const merged: BootOptions = {
+      env: bootEnv,
+      docker: overrides?.docker ?? options.docker,
+      config: overrides?.config ?? options.config,
+      elements: overrides?.elements ?? options.elements,
+      secrets: [...baseSecrets, ...pluginSecrets],
+      vault: overrides?.vault ?? options.vault,
+      gates: [...baseGates, ...pluginGates],
+      unguardedHttp,
+      signals: [...baseSignals, ...pluginSignals],
+      clocks: [...baseClocks, ...pluginClocks],
+      stores: overrides?.stores ?? options.stores,
+      channel: {
+        ...(baseChannel ?? {}),
+        templates: [
+          ...(baseChannel?.templates ?? []),
+          ...pluginChannelTemplates,
+        ],
+      },
       ai: overrides?.ai ?? options.ai,
       runs: overrides?.runs ?? options.runs,
       now: overrides?.now ?? options.fx?.now,
@@ -554,6 +640,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly auth?: ResolvedPrincipal | FxAuth;
       readonly operator?: FxOperator;
       readonly principal?: ResolvedPrincipal;
+      /** Frozen origin identity for {@link Fx.principal} across `fx.call`. */
+      readonly originPrincipal?: FxPrincipal;
     },
   ): Promise<ExecuteResult> {
     registerFlow(flowDef);
@@ -649,6 +737,7 @@ export function oke(options: OkeOptions): OkeApp {
       runTelemetry: telemetry,
       now,
       ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
+      ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(capability ? { capability } : {}),
       ...(booted
         ? {
@@ -665,9 +754,12 @@ export function oke(options: OkeOptions): OkeApp {
         if (!target) {
           return undefined;
         }
-        const inner = await execute(target, callInput, {
-          kind: "internal",
-        } satisfies InternalTrigger);
+        const inner = await execute(
+          target,
+          callInput,
+          { kind: "internal" } satisfies InternalTrigger,
+          { originPrincipal: freezePrincipal(fx.principal) },
+        );
         if (inner.failure) return inner.failure;
         return inner.output;
       },

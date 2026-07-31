@@ -10,6 +10,63 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- Homepage **Onboard an AI** button (hero CTAs) copies a short bootstrap
+  prompt pointing at the live `/llms.txt` index and the repo-root
+  `AGENTS.md` — distinct from the per-page docs “Copy prompt” action.
+- Docs section landings at `/docs/get-started`, `/docs/elements`,
+  `/docs/plugins`, `/docs/console`, `/docs/reference`, and `/docs/ai` —
+  definition plus Cards routing for direct URLs (not listed in the
+  sidebar).
+- Site 404 page — branded “No Flow matched” composition with the
+  unmatched path, a probing trigger→Effects visual, and home / docs CTAs.
+- `gate.scope(name)` — sugar for
+  `gate.policy(name, ({ auth }) => auth.scopes.has(name))` (single source
+  of truth for the scope string).
+- `gate.public` — explicit public sentinel for intentionally
+  unauthenticated HTTP surfaces; name `"public"` is reserved.
+- `GateBootError` — every HTTP trigger must carry a gate or `gate.public`
+  at boot (fail loud). Explicit opt-out: `oke({ unguardedHttp: "allow" })`.
+  `createTestApp` opts out for the harness.
+- `fx.principal` — read-only originating identity for audit; propagates
+  across `fx.call` without filling `fx.auth` (authorization stays
+  fail-closed).
+- Auth password policy (`assertPasswordPolicy`), Bun.password cost knobs
+  (`memoryCost` / `timeCost` with Bun argon2id floor), pluggable
+  breach-check + `createHibpBreachCheck` (HIBP k-anonymity range API),
+  and session idle / absolute / single-session-per-user options on
+  `auth()`.
+- Plugin `.needs()` resolution at boot (`PluginNeedsError`) for plugin
+  names and element/driver ids.
+- Plugin element contributions: `.vault()`, `.clock()`, `.signal()`,
+  `.gate()`, `.channelTemplate()` — merged into boot options.
+
+### ♻️ Changed
+
+- `fx.metric` recorded as investigated and **declined**: Runs wide events
+  already cover per-invocation observability; no parallel counter/gauge API
+  (see `reports/2026-07-31-fx-metric-decision.md` and the fx reference).
+- Console HTTP bindings auto-attach `gate.public` or
+  `console:operator` for auth posture; Gates panel distinguishes
+  unguarded vs explicit public.
+
+### 🔒 Security
+
+- HTTP empty gate chains no longer silently public at boot — declare a
+  gate or `gate.public`. `unguardedHttp: "allow"` is honoured **only**
+  when `env === "test"` (never a production-wide bypass).
+- Default password policy enforced on `createOperator` (minLength 12,
+  letter + number); tests needing short passwords must pass
+  `skipPasswordPolicy: true` explicitly.
+
+### 🐛 Fixed
+
+- Site `next build` no longer fetches Inter from Google Fonts at build
+  time: Inter Variable is vendored under `site/app/fonts/` (OFL) and
+  loaded via `next/font/local`, so offline / network-restricted CI builds
+  cannot fail with a fonts.gstatic.com 403.
+
 ## v0.4.3 — 2026-07-31
 
 ### 🐛 Fixed

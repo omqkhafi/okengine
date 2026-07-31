@@ -1,0 +1,49 @@
+---
+title: "Plugins"
+description: "Official okengine/plugins extensions — security, operations, and performance at the edge."
+icon: "Puzzle"
+source: "docs/spec/unified-theory.md"
+---
+
+First-party plugins you `.plug()` onto an app. Each page is one export from `okengine/plugins`.
+
+## Security
+
+<Cards>
+  <Card
+    title="Security Headers"
+    description="Secure headers on every HTTP response."
+    href="/docs/plugins/security-headers"
+  />
+  <Card title="CORS" description="Cross-origin rules; closed by default." href="/docs/plugins/cors" />
+  <Card
+    title="CSRF"
+    description="Fetch-metadata forgery defense, no tokens."
+    href="/docs/plugins/csrf"
+  />
+  <Card
+    title="IP Allowlist"
+    description="Allow/deny by client IP at the edge."
+    href="/docs/plugins/ip-allowlist"
+  />
+</Cards>
+
+## Operations
+
+<Cards>
+  <Card
+    title="Maintenance Mode"
+    description="Drain HTTP with 503 and Retry-After."
+    href="/docs/plugins/maintenance-mode"
+  />
+</Cards>
+
+## Performance
+
+<Cards>
+  <Card
+    title="Compression"
+    description="gzip responses when the client accepts it."
+    href="/docs/plugins/compression"
+  />
+</Cards>

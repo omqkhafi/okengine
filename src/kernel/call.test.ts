@@ -53,6 +53,46 @@ describe("fx.call — untriggered flows", () => {
     expect(stats.triggers).toHaveLength(0);
   });
 
+  test("fx.call propagates fx.principal without filling fx.auth", async () => {
+    const audit = flow({
+      name: "audit.log",
+      do: (_input: { event: string }, fx) => ({
+        authUserId: fx.auth.userId,
+        principalUserId: fx.principal.userId,
+        principalScopes: [...fx.principal.scopes],
+      }),
+    });
+
+    const act = on(
+      http.post("/act"),
+      flow({
+        name: "act",
+        effects: { calls: ["audit.log"] },
+        do: async (_input: Record<string, never>, fx) => {
+          return fx.call("audit.log", { event: "act" });
+        },
+      }),
+    );
+
+    const app = oke({ name: "principal-call", unguardedHttp: "allow" }).adopt(audit);
+    await app.boot({ env: "test", unguardedHttp: "allow" });
+
+    const result = await app.execute(act, {}, act.$trigger ?? act.triggers[0]!, {
+      principal: {
+        userId: "user-1",
+        scopes: ["booking:create"],
+        verified: true,
+      },
+    });
+
+    expect(result.failure).toBeUndefined();
+    expect(result.output).toEqual({
+      authUserId: null,
+      principalUserId: "user-1",
+      principalScopes: ["booking:create"],
+    });
+  });
+
   test("http and signal invocations of the same flow execute identically", async () => {
     let runs = 0;
     const work = flow({

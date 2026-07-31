@@ -14,6 +14,11 @@
  * @see docs/spec/console.md §9.15
  */
 
+import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
+import type { ClockDecl } from "../elements/clock/declare.ts";
+import type { GateDecl } from "../elements/gate/declare.ts";
+import type { SignalDecl } from "../elements/signal/declare.ts";
+import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { AnyFlowDef, FlowErrorMap } from "./flow.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
@@ -245,6 +250,36 @@ export interface PluginApi {
    * @param schema - Standard Schema
    */
   config(schema: SchemaInput): PluginApi;
+  /**
+   * Contribute a vault secret/config contract (merged into boot secrets).
+   *
+   * @param secret - Vault contract from `vault.secret(...)` / `vault.config(...)`
+   */
+  vault(secret: VaultSecretDecl): PluginApi;
+  /**
+   * Contribute a named clock schedule (merged into boot clocks).
+   *
+   * @param decl - Clock from `clock(...)`
+   */
+  clock(decl: ClockDecl): PluginApi;
+  /**
+   * Contribute a signal declaration (merged into boot signals).
+   *
+   * @param decl - Signal from `signal(...)`
+   */
+  signal(decl: SignalDecl): PluginApi;
+  /**
+   * Contribute a gate declaration (merged into boot gates).
+   *
+   * @param decl - Gate from `gate.policy` / `gate.scope` / `gate.rate` / `gate.public`
+   */
+  gate(decl: GateDecl): PluginApi;
+  /**
+   * Contribute a channel template (merged into boot channel templates).
+   *
+   * @param decl - Template from `channel.email.template(...)` etc.
+   */
+  channelTemplate(decl: ChannelTemplateDecl): PluginApi;
 }
 
 /** Captured capability lists for the Manifest. */
@@ -279,6 +314,11 @@ export interface PluginRegistration {
   readonly errors: FlowErrorMap;
   readonly client: readonly ClientExtensionContribution[];
   readonly configSchema: SchemaInput | undefined;
+  readonly vaultSecrets: readonly VaultSecretDecl[];
+  readonly clocks: readonly ClockDecl[];
+  readonly signals: readonly SignalDecl[];
+  readonly gates: readonly GateDecl[];
+  readonly channelTemplates: readonly ChannelTemplateDecl[];
 }
 
 /**
@@ -402,6 +442,16 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
    * @param schema - Standard Schema
    */
   config(schema: SchemaInput): PluginDef<D>;
+  /** Queue a vault secret/config contract. */
+  vault(secret: VaultSecretDecl): PluginDef<D>;
+  /** Queue a clock schedule. */
+  clock(decl: ClockDecl): PluginDef<D>;
+  /** Queue a signal declaration. */
+  signal(decl: SignalDecl): PluginDef<D>;
+  /** Queue a gate declaration. */
+  gate(decl: GateDecl): PluginDef<D>;
+  /** Queue a channel template. */
+  channelTemplate(decl: ChannelTemplateDecl): PluginDef<D>;
 }
 
 /** Extract accumulated decoration types from a {@link PluginDef}. */
@@ -520,6 +570,36 @@ export function plugin(name: string, options: PluginOptions): PluginDef {
     config(schema) {
       steps.push((api) => {
         api.config(schema);
+      });
+      return def;
+    },
+    vault(secret) {
+      steps.push((api) => {
+        api.vault(secret);
+      });
+      return def;
+    },
+    clock(decl) {
+      steps.push((api) => {
+        api.clock(decl);
+      });
+      return def;
+    },
+    signal(decl) {
+      steps.push((api) => {
+        api.signal(decl);
+      });
+      return def;
+    },
+    gate(decl) {
+      steps.push((api) => {
+        api.gate(decl);
+      });
+      return def;
+    },
+    channelTemplate(decl) {
+      steps.push((api) => {
+        api.channelTemplate(decl);
       });
       return def;
     },

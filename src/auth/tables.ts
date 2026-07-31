@@ -117,6 +117,8 @@ export interface SessionRow {
   revokedAt: number | null;
   createdAt: number;
   expiresAt: number;
+  /** Last activity epoch-ms (idle timeout). Updated on refresh / access touch. */
+  lastActiveAt: number;
 }
 
 /** Refresh token (hashed at rest); rotation with reuse detection. */

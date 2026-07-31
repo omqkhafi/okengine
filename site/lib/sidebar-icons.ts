@@ -51,6 +51,13 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/plugins/maintenance-mode": "Construction",
   "/docs/plugins/security-headers": "ShieldCheck",
   "/docs/ai": "Bot",
+  "/docs/ai/mcp": "Plug",
+  "/docs/ai/skills": "Sparkles",
+  "/docs/ai/llms-txt": "FileText",
+  "/docs/reference/configuration": "Settings",
+  "/docs/reference/fx": "Braces",
+  "/docs/reference/environment-variables": "Variable",
+  "/docs/reference/errors": "CircleAlert",
 };
 
 /** Folder display name → docs path for icon lookup. */

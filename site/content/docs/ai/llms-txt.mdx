@@ -31,6 +31,9 @@ curl https://oke.omqkhafi.dev/llms.mdx/docs/elements/vault
   only when breadth matters more than tokens; per-page `/llms.mdx` is the precise instrument.
 </Callout>
 
+The homepage **Onboard an AI** button copies a one-line prompt that points an agent at
+`/llms.txt` plus the repo-root `AGENTS.md` — project-wide context, not a single docs page.
+
 ## How it pairs with the docs MCP
 
 These endpoints serve the _published_ docs of the framework. During `oke dev`, the [docs MCP server](/docs/ai/mcp) also runs on :6536 (`oke.docs.search` / `oke.docs.get`), answering from the same content over the MCP protocol — pick the plain HTTP endpoints for one-shot context, the MCP tools when the agent is already connected as a client.

@@ -8,6 +8,7 @@ import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
 import { createManifestAiRuntime } from "./ai.ts";
+import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";
 import { consolePlugin } from "./plugin.ts";
 import {
@@ -66,6 +67,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
       sessions: state.sessions,
       now: state.now,
     },
+    gates: [...CONSOLE_GATES],
     runs: { driver: "memory" },
   })
     .plug(auth({ secret: state.secret }))

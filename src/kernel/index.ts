@@ -103,6 +103,7 @@ export {
 export {
   createFx,
   createFxContext,
+  freezePrincipal,
   isJsonResult,
   jsonResultBrand,
   resolveName,
@@ -118,6 +119,7 @@ export {
   type FxJson,
   type FxLog,
   type FxOperator,
+  type FxPrincipal,
   type FxRetryOptions,
   type FxSearchOptions,
   type FxSendOptions,
@@ -243,6 +245,16 @@ export {
   type PluginRegistry,
   type PluginScope,
 } from "./registry.ts";
+
+export {
+  assertPluginNeeds,
+  buildAvailableNeedTokens,
+  collectUnmetPluginNeeds,
+  PluginNeedsError,
+  ELEMENT_NEED_TOKENS,
+  type PluginNeedGap,
+  type PluginNeedsContext,
+} from "./plugin-needs.ts";
 
 export {
   createRouter,

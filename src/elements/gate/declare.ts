@@ -63,6 +63,11 @@ export interface PolicyGateDecl {
   readonly name: string;
   readonly check: (ctx: GatePolicyContext) => boolean | Promise<boolean>;
   readonly description?: string;
+  /**
+   * Scope strings this policy requires (set by {@link GateNamespace.scope}).
+   * Same string is the policy id and the scope checked on `auth.scopes`.
+   */
+  readonly scopes?: readonly string[];
 }
 
 /** Rate gate declaration. */
@@ -95,6 +100,19 @@ export interface GateNamespace {
     checkOrOptions: ((ctx: GatePolicyContext) => boolean | Promise<boolean>) | PolicyGateOptions,
   ): PolicyGateDecl;
   /**
+   * Shorthand for a scope check — single source of truth for the scope string.
+   *
+   * Equivalent to `gate.policy(name, ({ auth }) => auth.scopes.has(name))`.
+   *
+   * @param name - Scope id (also the policy name / Module:Action when it contains `:`)
+   */
+  scope(name: string): PolicyGateDecl;
+  /**
+   * Explicit public sentinel — intentionally unauthenticated HTTP surface.
+   * Counts as declared auth posture for boot (see gate boot audit).
+   */
+  readonly public: PolicyGateDecl;
+  /**
    * Declare a rate limit (atomic Lua on the kv driver).
    *
    * @param options - Strategy / max / per / keyBy
@@ -102,8 +120,11 @@ export interface GateNamespace {
   rate(options: RateOptions): RateGateDecl;
 }
 
+/** Reserved policy name for {@link gate.public}. */
+export const GATE_PUBLIC_NAME = "public";
+
 /**
- * Gate element namespace — `gate.policy` · `gate.rate`.
+ * Gate element namespace — `gate.policy` · `gate.scope` · `gate.public` · `gate.rate`.
  */
 export const gate: GateNamespace = {
   /**
@@ -116,6 +137,11 @@ export const gate: GateNamespace = {
     name: string,
     checkOrOptions: ((ctx: GatePolicyContext) => boolean | Promise<boolean>) | PolicyGateOptions,
   ): PolicyGateDecl {
+    if (name === GATE_PUBLIC_NAME) {
+      throw new TypeError(
+        'gate.policy: name "public" is reserved — use gate.public for intentionally unauthenticated surfaces',
+      );
+    }
     if (typeof checkOrOptions === "function") {
       return { kind: "policy", name, check: checkOrOptions };
     }
@@ -127,6 +153,30 @@ export const gate: GateNamespace = {
         ? { description: checkOrOptions.description }
         : {}),
     };
+  },
+
+  /**
+   * Shorthand for a scope check — single source of truth for the scope string.
+   *
+   * @param name - Scope id (also the policy name)
+   */
+  scope(name: string): PolicyGateDecl {
+    if (name === GATE_PUBLIC_NAME) {
+      throw new TypeError('gate.scope: name "public" is reserved — use gate.public');
+    }
+    return {
+      kind: "policy",
+      name,
+      check: ({ auth }) => auth.scopes.has(name),
+      scopes: [name],
+    };
+  },
+
+  public: {
+    kind: "policy",
+    name: GATE_PUBLIC_NAME,
+    check: () => true,
+    description: "Intentionally unauthenticated (public) surface",
   },
 
   /**

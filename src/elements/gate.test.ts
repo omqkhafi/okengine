@@ -11,10 +11,12 @@ import { createRedisFakeClient, redisDriver } from "../drivers/redis.ts";
 import type { Manifest } from "../manifest/types.ts";
 import {
   ALL_RATE_STRATEGIES,
+  assertHttpGatePosture,
   createGateRuntime,
   deriveModuleActions,
   formatGatesList,
   gate,
+  GateBootError,
   takeRate,
 } from "./gate.ts";
 
@@ -33,6 +35,34 @@ describe("gate declaration", () => {
     expect(fair.kind).toBe("rate");
     expect(fair.name).toBe("rate:sliding-window-counter:60/1m");
     expect(fair.strategy).toBe("sliding-window-counter");
+  });
+
+  test("scope is sugar over policy with auth.scopes.has(name)", async () => {
+    const canBook = gate.scope("booking:create");
+    expect(canBook.kind).toBe("policy");
+    expect(canBook.name).toBe("booking:create");
+    expect(canBook.scopes).toEqual(["booking:create"]);
+    expect(
+      await canBook.check({
+        auth: { userId: "u1", scopes: new Set(["booking:create"]), verified: true },
+        operator: { id: null },
+      }),
+    ).toBe(true);
+    expect(
+      await canBook.check({
+        auth: { userId: "u1", scopes: new Set(), verified: true },
+        operator: { id: null },
+      }),
+    ).toBe(false);
+  });
+
+  test("public sentinel always allows and reserves the name", async () => {
+    expect(gate.public.name).toBe("public");
+    expect(await gate.public.check({ auth: { userId: null, scopes: new Set() }, operator: { id: null } })).toBe(
+      true,
+    );
+    expect(() => gate.policy("public", () => true)).toThrow(/reserved/);
+    expect(() => gate.scope("public")).toThrow(/reserved/);
   });
 
   test("defaults strategy to sliding-window-counter", () => {
@@ -114,6 +144,41 @@ describe("five rate strategies — concurrency", () => {
     }
     expect(allowed).toBe(max);
     await kv.close();
+  });
+});
+
+describe("gate boot posture", () => {
+  const unguarded = [
+    {
+      trigger: { kind: "http" as const, method: "GET", path: "/health", gates: [] as const },
+      flow: { name: "health.ping" },
+    },
+  ];
+
+  test("GateBootError lists every unguarded HTTP trigger", () => {
+    expect(() =>
+      assertHttpGatePosture([
+        ...unguarded,
+        {
+          trigger: { kind: "http", method: "POST", path: "/x", gates: [gate.public] },
+          flow: { name: "x.public" },
+        },
+      ]),
+    ).toThrow(GateBootError);
+  });
+
+  test("unguardedHttp allow skips audit only when env is test", () => {
+    expect(() =>
+      assertHttpGatePosture(unguarded, { unguardedHttp: "allow", env: "test" }),
+    ).not.toThrow();
+  });
+
+  test("unguardedHttp allow has no effect outside env === test", () => {
+    for (const env of ["local", "prod", "docker"] as const) {
+      expect(() =>
+        assertHttpGatePosture(unguarded, { unguardedHttp: "allow", env }),
+      ).toThrow(GateBootError);
+    }
   });
 });
 
