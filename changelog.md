@@ -10,6 +10,18 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.4.1 — 2026-07-31
+
+### 🐛 Fixed
+
+- Competitor-mention gate no longer matches its own comment: the Rust-core
+  peer name in the allowlisted split comment is split the same way as the
+  search needle.
+- Site `next build` with TypeScript 7: enable `experimental.useTypeScriptCli`
+  so Next runs the project-local `tsc` instead of the removed JS compiler API,
+  and point it at `tsconfig.build.json` so Bun `*.test.ts` files stay out of
+  the production typecheck.
+
 ## v0.4.0 — 2026-07-31
 
 ### ✨ Added

@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dir, "../..");
 const FORBIDDEN_HONO = ["Ho", "no"].join("");
 /** Forbidden peer name. */
 const FORBIDDEN_ELYSIA = ["Ely", "sia"].join("");
-/** Forbidden peer name (covers Encore.ts). */
+/** Forbidden peer name (covers Enc + ore.ts). */
 const FORBIDDEN_ENCORE = ["Enc", "ore"].join("");
 /** Forbidden peer name. */
 const FORBIDDEN_NESTJS = ["Nest", "JS"].join("");

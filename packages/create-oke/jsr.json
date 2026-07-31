@@ -1,13 +1,22 @@
 {
   "name": "@omqkhafi/create-oke",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"
   },
   "publish": {
-    "include": ["src", "template", "README.md", "package.json", "jsr.json"],
-    "exclude": ["**/*.test.ts", "**/tests/**"]
+    "include": [
+      "src",
+      "template",
+      "README.md",
+      "package.json",
+      "jsr.json"
+    ],
+    "exclude": [
+      "**/*.test.ts",
+      "**/tests/**"
+    ]
   }
 }
