@@ -35,8 +35,8 @@ export interface ConfigSourceDb {
 /** Options for {@link configSource}. */
 export interface ConfigSourceOptions<T extends object> {
   /**
-   * Plugin id this config belongs to (e.g. `"security-headers"`) — derives
-   * the DB row key, the KV key, and the default table name.
+   * Plugin id this config belongs to (e.g. `"headers"`) — derives the DB
+   * row key, the KV key, and the default table name.
    */
   readonly plugin: string;
   /**

@@ -1,11 +1,12 @@
 /**
- * Passkey (WebAuthn-shaped) Gate auth method plugin — simplified v1 ceremony.
+ * Passkey (WebAuthn) Gate auth method plugin.
  *
- * Registration / authentication accept attestation-like payloads for tests
- * without a full WebAuthn library. Production should replace the ceremony
- * with a standards-compliant verifier.
+ * Registration and authentication verify clientDataJSON origin + challenge,
+ * authenticatorData rpId hash, and ECDSA P-256 signature against the stored
+ * SPKI public key. Presence-only authenticate is rejected.
  */
 
+import { constantTimeEqual } from "../auth/constant-time.ts";
 import {
   createVerificationStore,
   hashChallenge,
@@ -26,11 +27,13 @@ import {
   z,
   type AuthMethodOptions,
 } from "./auth/shared.ts";
+import { verifyWebAuthnCeremony } from "./passkey-webauthn.ts";
 
-/** Stored passkey credential (simplified). */
+/** Stored passkey credential. */
 export interface PasskeyCredential {
   readonly credentialId: string;
   readonly userId: string;
+  /** Base64url SPKI public key (ECDSA P-256). */
   readonly publicKey: string;
   counter: number;
   readonly createdAt: number;
@@ -55,18 +58,34 @@ export interface PasskeyOptions extends AuthMethodOptions {
   readonly challenges?: VerificationStore;
   /** Relying party id (default `localhost`). */
   readonly rpId?: string;
+  /**
+   * Allowed `clientDataJSON.origin` values.
+   * Default: `http://localhost` and `https://localhost`.
+   */
+  readonly origins?: readonly string[];
 }
 
+const CeremonyIn = z.object({
+  credentialId: z.string().min(1),
+  publicKey: z.string().min(1).optional(),
+  userId: z.string().min(1).optional(),
+  challenge: z.string().min(1),
+  clientDataJSON: z.string().min(1),
+  authenticatorData: z.string().min(1),
+  signature: z.string().min(1),
+});
+
 /**
- * Passkey register / authenticate options + simplified ceremony (`oke_passkeys`).
+ * Passkey register / authenticate with cryptographic WebAuthn verify (`oke_passkeys`).
  *
- * @param opts - Stores / RP id
+ * @param opts - Stores / RP id / allowed origins
  */
 export function passkey(opts: PasskeyOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
   const passkeys = opts.passkeys ?? createPasskeyStore();
   const challenges = opts.challenges ?? createVerificationStore();
   const rpId = opts.rpId ?? "localhost";
+  const origins = opts.origins ?? ["http://localhost", "https://localhost"];
 
   const registerOptions = flow({
     name: "auth.passkeyRegisterOptions",
@@ -100,11 +119,9 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     name: "auth.passkeyRegister",
     unit: "auth",
     plane: "user",
-    in: z.object({
-      credentialId: z.string().min(1),
+    in: CeremonyIn.extend({
       publicKey: z.string().min(1),
       userId: z.string().min(1),
-      challenge: z.string().optional(),
     }),
     out: z.object({ ok: z.literal(true) }),
     errors: { AuthFailed },
@@ -113,20 +130,28 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
       if (!sessionUser || sessionUser !== input.userId) {
         return fail("AuthFailed", { reason: "unauthenticated" });
       }
-      if (input.challenge) {
-        const hash = await hashChallenge(input.challenge);
-        const now = runtime.now();
-        let found = false;
-        for (const row of challenges.rows.values()) {
-          if (row.identifier !== `passkey-reg:${input.userId}`) continue;
-          if (row.consumedAt !== null || row.expiresAt <= now) continue;
-          if (row.value === hash) {
-            row.consumedAt = now;
-            found = true;
-            break;
-          }
-        }
-        if (!found) return fail("AuthFailed", { reason: "invalid_credentials" });
+      const consumed = await consumeChallenge(
+        challenges,
+        `passkey-reg:${input.userId}`,
+        input.challenge,
+        runtime.now(),
+      );
+      if (!consumed) return fail("AuthFailed", { reason: "invalid_credentials" });
+
+      const verified = await verifyWebAuthnCeremony({
+        expectedType: "webauthn.create",
+        expectedChallenge: input.challenge,
+        expectedOrigins: origins,
+        rpId,
+        publicKeySpkiB64url: input.publicKey,
+        clientDataJSON: input.clientDataJSON,
+        authenticatorData: input.authenticatorData,
+        signature: input.signature,
+      });
+      if (!verified.ok) {
+        return fail("AuthFailed", {
+          reason: verified.reason === "invalid_origin" ? "invalid_origin" : "invalid_credentials",
+        });
       }
       if (passkeys.byCredentialId.has(input.credentialId)) {
         return fail("AuthFailed", { reason: "invalid_credentials" });
@@ -135,7 +160,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         credentialId: input.credentialId,
         userId: input.userId,
         publicKey: input.publicKey,
-        counter: 0,
+        counter: verified.signCount,
         createdAt: runtime.now(),
       };
       passkeys.byCredentialId.set(cred.credentialId, cred);
@@ -170,7 +195,6 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
         consumedAt: null,
         attempts: 0,
       });
-      // Simplified: empty allow list when no email mapping (caller supplies credentialId).
       return { challenge, rpId, allowCredentials: [] as string[] };
     },
   });
@@ -179,19 +203,44 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     name: "auth.passkeyAuthenticate",
     unit: "auth",
     plane: "user",
-    in: z.object({
-      credentialId: z.string().min(1),
-      userId: z.string().min(1),
+    in: CeremonyIn.extend({
+      challenge: z.string().min(1),
+      /** Challenge bucket key from authenticate options (default `anonymous`). */
+      email: z.string().optional(),
     }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
     do: async (input) => {
-      // Simplified v1: presence of stored credential + matching userId issues a session.
       const cred = passkeys.byCredentialId.get(input.credentialId);
-      if (!cred || cred.userId !== input.userId) {
-        return fail("AuthFailed", { reason: "invalid_credentials" });
+      if (!cred) return fail("AuthFailed", { reason: "invalid_credentials" });
+
+      const bucket = input.email?.trim().toLowerCase() || "anonymous";
+      const consumed = await consumeChallenge(
+        challenges,
+        `passkey-auth:${bucket}`,
+        input.challenge,
+        runtime.now(),
+      );
+      if (!consumed) return fail("AuthFailed", { reason: "invalid_credentials" });
+
+      const verified = await verifyWebAuthnCeremony({
+        expectedType: "webauthn.get",
+        expectedChallenge: input.challenge,
+        expectedOrigins: origins,
+        rpId,
+        publicKeySpkiB64url: cred.publicKey,
+        clientDataJSON: input.clientDataJSON,
+        authenticatorData: input.authenticatorData,
+        signature: input.signature,
+        previousSignCount: cred.counter,
+      });
+      if (!verified.ok) {
+        return fail("AuthFailed", {
+          reason: verified.reason === "invalid_origin" ? "invalid_origin" : "invalid_credentials",
+        });
       }
-      cred.counter += 1;
+      cred.counter = verified.signCount;
+
       const issued = await issueSessionWithScopes(runtime.sessions, runtime.crypto, {
         id: cred.userId,
         plane: "user",
@@ -213,4 +262,21 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     .binding(bindSessionAuth("/passkey/register", register))
     .binding(bindPublicAuth("/passkey/authenticate/options", authenticateOptions, "otp"))
     .binding(bindPublicAuth("/passkey/authenticate", authenticate, "otp"));
+}
+
+async function consumeChallenge(
+  store: VerificationStore,
+  identifier: string,
+  challenge: string,
+  now: number,
+): Promise<boolean> {
+  const hash = await hashChallenge(challenge);
+  for (const row of store.rows.values()) {
+    if (row.identifier !== identifier) continue;
+    if (row.consumedAt !== null || row.expiresAt <= now) continue;
+    if (!constantTimeEqual(row.value, hash)) continue;
+    row.consumedAt = now;
+    return true;
+  }
+  return false;
 }

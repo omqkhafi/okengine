@@ -4,6 +4,7 @@
  * v1 verify accepts `{ userId, code }` after password sign-in when 2FA is enabled.
  */
 
+import { constantTimeEqual } from "../auth/constant-time.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import { plugin, type PluginDef } from "../kernel/plugin.ts";
 import {
@@ -163,11 +164,14 @@ export async function verifyTotp(
   if (!/^\d{6}$/.test(code)) return false;
   const key = base32Decode(secretBase32);
   const counter = Math.floor(nowSec / 30);
+  // Compare every window with constant-time equality — never short-circuit on
+  // the first match (avoids leaking which step matched via `===` timing).
+  let ok = 0;
   for (let w = -1; w <= 1; w++) {
     const otp = await hotp(key, counter + w);
-    if (otp === code) return true;
+    ok |= constantTimeEqual(otp, code) ? 1 : 0;
   }
-  return false;
+  return ok === 1;
 }
 
 async function hotp(key: Uint8Array, counter: number): Promise<string> {

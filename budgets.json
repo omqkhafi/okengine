@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-31T21:06:09.494Z",
-  "version": "0.4.3",
+  "measuredAt": "2026-07-31T23:14:26.448Z",
+  "version": "0.5.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 12709,
+      "value": 12749,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 37.239,
+      "value": 35.554,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 61453,
-      "limit": 62683,
+      "value": 61558,
+      "limit": 62790,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 13585,
-      "limit": 13857,
+      "value": 13724,
+      "limit": 13999,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 81456,
-      "limit": 83086,
+      "value": 81551,
+      "limit": 83183,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 13266,
-      "limit": 13532,
+      "value": 14172,
+      "limit": 14456,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

@@ -10,6 +10,26 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ♻️ Changed
+
+- Official plugin rename: `securityHeaders()` / `"security-headers"` →
+  `headers()` / `"headers"` (options type `HeadersOptions`; config table
+  `headers_config`). Docs page was already `/docs/plugins/headers`.
+- Rebased the `plugins` export budget after passkey WebAuthn verify
+  (13.21 kB → 13.84 kB), and refreshed the published budgets snapshot.
+
+### 🔒 Security
+
+- `twoFactor` TOTP verify uses constant-time comparison across the ±1 step
+  window (no plain `===` short-circuit).
+- `passkey` register / authenticate now require a real WebAuthn ceremony:
+  `clientDataJSON` origin + challenge, `authenticatorData` rpId hash, and
+  ECDSA P-256 signature against the stored SPKI public key. Presence-only
+  authenticate is rejected; challenges are single-use. New option `origins`.
+- Exploit-proof HTTP audit tests for all seven Gate auth method plugins
+  (rate limits, gate posture, single-use tokens, anonymous non-escalation,
+  Channel delivery gap, TOTP compare, passkey signature/origin).
+
 ## v0.5.0 — 2026-08-01
 
 ### ✨ Added

@@ -19,7 +19,7 @@ import { createPluginRegistry } from "../kernel/registry.ts";
 import { http } from "../kernel/triggers.ts";
 import { configSource, resolvePluginOptions } from "./config-source.ts";
 import { maintenanceMode } from "./maintenance-mode.ts";
-import { securityHeaders } from "./security-headers.ts";
+import { headers } from "./headers.ts";
 
 beforeEach(() => {
   resetBindings();
@@ -74,7 +74,7 @@ describe("configSource — box semantics", () => {
     };
     const fx = createFxContext({ flow: "x.config-sync", effects, storeRuntime: runtime }).fx;
 
-    const table = defineTable("security_headers_config", { key: true, value: true });
+    const table = defineTable("headers_config", { key: true, value: true });
     const sql = fx.store(db) as SqlStoreHandle;
     await sql.ensureTable(table);
     await sql
@@ -83,7 +83,7 @@ describe("configSource — box semantics", () => {
       .execute();
 
     const source = configSource({
-      plugin: "security-headers",
+      plugin: "headers",
       code: { hsts: false },
       db: { store: db },
       kv: cfg,
@@ -110,11 +110,11 @@ describe("configSource — box semantics", () => {
 
     const effects = { reads: ["sql:cfgdb" as const], writes: ["sql:cfgdb" as const] };
     const fx = createFxContext({ flow: "x.config-sync", effects, storeRuntime: runtime }).fx;
-    const table = defineTable("security_headers_config", { key: true, value: true });
+    const table = defineTable("headers_config", { key: true, value: true });
     await (fx.store(db) as SqlStoreHandle).ensureTable(table);
 
     const source = configSource({
-      plugin: "security-headers",
+      plugin: "headers",
       code: { frameOptions: "DENY" as const },
       db: { store: db },
     });
@@ -132,13 +132,13 @@ describe("configSource — box semantics", () => {
 
     const effects = { reads: ["sql:cfgdb" as const], writes: ["sql:cfgdb" as const] };
     const fx = createFxContext({ flow: "x.config-sync", effects, storeRuntime: runtime }).fx;
-    const table = defineTable("security_headers_config", { key: true, value: true });
+    const table = defineTable("headers_config", { key: true, value: true });
     const sql = fx.store(db) as SqlStoreHandle;
     await sql.ensureTable(table);
     await sql.insert(table).values({ key: "config", value: "{not json" }).execute();
 
     const source = configSource({
-      plugin: "security-headers",
+      plugin: "headers",
       code: {},
       db: { store: db },
     });
@@ -171,17 +171,17 @@ describe("configSource — plugin wiring", () => {
   test("DB-backed sources contribute their config table; static options do not", () => {
     const db = store.sql("cfgdb");
     const source = configSource({
-      plugin: "security-headers",
+      plugin: "headers",
       code: {},
       db: { store: db },
     });
 
     const registry = createPluginRegistry();
-    const registration = registry.plug(securityHeaders(source), { kind: "app" });
-    expect(registration?.tables.map((t) => t.name)).toEqual(["security_headers_config"]);
+    const registration = registry.plug(headers(source), { kind: "app" });
+    expect(registration?.tables.map((t) => t.name)).toEqual(["headers_config"]);
 
     const staticRegistry = createPluginRegistry();
-    const staticRegistration = staticRegistry.plug(securityHeaders({}), { kind: "app" });
+    const staticRegistration = staticRegistry.plug(headers({}), { kind: "app" });
     expect(staticRegistration?.tables).toEqual([]);
   });
 

@@ -93,16 +93,16 @@ ninth element — the set of eight is closed.
 
 ## Traditional vs OKE
 
-| Seam               | Maintained by hand                                        | Derived by OKE                                                                  |
-| ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Behavior model     | Endpoints, jobs, consumers, workflows as separate species | One species — Flow: `on(Trigger) → Effects`                                     |
-| Cache invalidation | Hand-written keys; drift from writers                     | Derived from effects recorded through `fx`                                      |
-| HTTP glue          | Middleware copied per repo                                | Official plugins — `securityHeaders`, `cors`, `csrf`, compression, IP allowlist |
-| Secrets / config   | Env sprawl; fails on first request                        | Vault contracts; `VaultBootError` at boot                                       |
-| Observability      | Bolted on; separate source of truth                       | Console from the Manifest, dev and prod (`:6533`)                               |
-| Permissions        | Ad-hoc checks scattered in handlers                       | Least-privilege matrix from declared effects                                    |
-| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev --docker`                        |
-| Client / agents    | Separate codegen or hand-kept schemas                     | Typed client and MCP (`:6535`) from the same Manifest                           |
+| Seam               | Maintained by hand                                        | Derived by OKE                                                          |
+| ------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Behavior model     | Endpoints, jobs, consumers, workflows as separate species | One species — Flow: `on(Trigger) → Effects`                             |
+| Cache invalidation | Hand-written keys; drift from writers                     | Derived from effects recorded through `fx`                              |
+| HTTP glue          | Middleware copied per repo                                | Official plugins — `headers`, `cors`, `csrf`, compression, IP allowlist |
+| Secrets / config   | Env sprawl; fails on first request                        | Vault contracts; `VaultBootError` at boot                               |
+| Observability      | Bolted on; separate source of truth                       | Console from the Manifest, dev and prod (`:6533`)                       |
+| Permissions        | Ad-hoc checks scattered in handlers                       | Least-privilege matrix from declared effects                            |
+| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev --docker`                |
+| Client / agents    | Separate codegen or hand-kept schemas                     | Typed client and MCP (`:6535`) from the same Manifest                   |
 
 ## Ambition, stated plainly
 

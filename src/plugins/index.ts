@@ -28,6 +28,14 @@ export {
   type PasskeyStore,
 } from "./passkey.ts";
 export {
+  b64urlDecode,
+  b64urlEncode,
+  buildAuthenticatorData,
+  signWebAuthnAssertion,
+  verifyWebAuthnCeremony,
+  type WebAuthnVerifyOptions,
+} from "./passkey-webauthn.ts";
+export {
   createPhoneStore,
   phoneNumber,
   type PhoneNumberOptions,
@@ -35,11 +43,11 @@ export {
 } from "./phone-number.ts";
 export {
   defaultCspDirectives,
-  securityHeaders,
+  headers,
   type CspOptions,
+  type HeadersOptions,
   type HstsOptions,
-  type SecurityHeadersOptions,
-} from "./security-headers.ts";
+} from "./headers.ts";
 export {
   createTwoFactorStore,
   twoFactor,

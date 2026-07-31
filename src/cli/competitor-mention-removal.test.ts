@@ -2,7 +2,7 @@
  * Gate: named competitor comparisons stay gone from the tracked tree.
  *
  * Mirrors {@link ./doc-staleness.test.ts} — `git grep` must find zero hits
- * (the security-headers decoy header fixture may still use a common
+ * (the headers decoy header fixture may still use a common
  * `X-Powered-By` value; that path is allow-listed).
  */
 
@@ -28,8 +28,8 @@ const FORBIDDEN_COMPARISON_PATH = ["get-started/", "comparison"].join("");
 /** Word-boundary classic Node framework — `-F` false-positives on `CallExpression`. */
 const FORBIDDEN_EXPRESS = ["\\b", "Ex", "press", "\\b"].join("");
 
-/** Decoy `X-Powered-By` fixture value in the security-headers plugin tests. */
-const EXPRESS_ALLOW = ["src/plugins/security-headers.test.ts:"];
+/** Decoy `X-Powered-By` fixture value in the headers plugin tests. */
+const EXPRESS_ALLOW = ["src/plugins/headers.test.ts:"];
 
 /**
  * Run `git grep -F` and assert zero matches after ignoring allow-listed paths.

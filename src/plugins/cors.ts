@@ -13,7 +13,7 @@ import {
   isConfigSource,
   type ConfigSource,
 } from "./config-source.ts";
-import { appendVary, withHeaders } from "./headers.ts";
+import { appendVary, withHeaders } from "./response-headers.ts";
 
 /** Options for {@link cors}. */
 export interface CorsOptions {

@@ -11,7 +11,7 @@ import {
   withConfigTable,
   type ConfigSource,
 } from "./config-source.ts";
-import { appendVary } from "./headers.ts";
+import { appendVary } from "./response-headers.ts";
 
 /** Options for {@link compression}. */
 export interface CompressionOptions {

@@ -75,6 +75,8 @@ export {
   type VerificationRow,
 } from "./verification.ts";
 
+export { constantTimeEqual } from "./constant-time.ts";
+
 export {
   createIdentityStore,
   createUserWithPassword,

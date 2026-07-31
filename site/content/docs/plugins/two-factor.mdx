@@ -7,6 +7,7 @@ source: "docs/spec/unified-theory.md"
 
 `twoFactor()` adds RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s) after someone already has a session.
 Enable returns a secret, `otpauth://` URL, and recovery codes; verify mints a new session.
+TOTP codes are compared in constant time (±1 step window).
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(twoFactor())`. Enable and disable need a Bearer session —
@@ -103,7 +104,7 @@ enable. A recovery code works once, then is consumed.
 
 ## Learn more
 
-- [Passkey](/docs/plugins/passkey) — WebAuthn-shaped register / authenticate
+- [Passkey](/docs/plugins/passkey) — WebAuthn register / authenticate
 - [Gate](/docs/elements/gate) — session + policies
 - [Username](/docs/plugins/username) — first factor to enroll against
 

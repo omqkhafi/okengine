@@ -2,18 +2,18 @@
 title: "Headers"
 description: "Official plugin — the complete secure-headers set on every HTTP response, failures included. Full helmet.js parity with API-first defaults, a CSP builder with report-only mode, and live DB-driven config."
 icon: "ShieldCheck"
-source: "src/plugins/security-headers.ts"
+source: "src/plugins/headers.ts"
 ---
 
-`securityHeaders()` stamps security headers on **every** HTTP flow response — successes, failures, and short-circuits alike, because it runs at `onResponse`, the last pipeline stage. An explicit value your app already set is never overridden unless you ask for it.
+`headers()` stamps security headers on **every** HTTP flow response — successes, failures, and short-circuits alike, because it runs at `onResponse`, the last pipeline stage. An explicit value your app already set is never overridden unless you ask for it.
 
 ## Quick start
 
 ```typescript title="src/app.ts"
 import { oke } from "okengine";
-import { securityHeaders } from "okengine/plugins";
+import { headers } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "dev" }).plug(securityHeaders());
+export const app = oke({ name: "shop", env: "dev" }).plug(headers());
 ```
 
 Every HTTP response now carries:
@@ -75,7 +75,7 @@ Beyond parity: headers land on **failures too** (middleware that only wraps happ
 
 ```typescript
 .plug(
-  securityHeaders({
+  headers({
     contentSecurityPolicy: {
       directives: { scriptSrc: ["'self'", "https://cdn.example.com"] }, // merged over the defaults
       reportOnly: true, // Content-Security-Policy-Report-Only while you tune
@@ -97,18 +97,18 @@ Beyond parity: headers land on **failures too** (middleware that only wraps happ
 Header policy is exactly the config you want to flip without a redeploy — enable HSTS the day HTTPS lands, tighten the CSP after an audit. Pass a `configSource()` and options follow the database within one sync interval:
 
 ```typescript
-const headers = configSource({
-  plugin: "security-headers",
+const headerConfig = configSource({
+  plugin: "headers",
   code: { hsts: false }, // safe floor for local dev
   db: { store: db },
   kv: cache,
 });
-on(every("30s"), headers.sync());
-export const app = oke({ name: "shop", env: "dev" }).plug(securityHeaders(headers));
+on(every("30s"), headerConfig.sync());
+export const app = oke({ name: "shop", env: "dev" }).plug(headers(headerConfig));
 ```
 
 ```sql
-INSERT INTO security_headers_config ("key", "value")
+INSERT INTO headers_config ("key", "value")
 VALUES ('config', '{"hsts": true}');
 ```
 

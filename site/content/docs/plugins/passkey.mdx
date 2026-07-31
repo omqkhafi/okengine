@@ -1,18 +1,18 @@
 ---
 title: "Passkey"
-description: "Official plugin — simplified WebAuthn register and authenticate under /auth."
+description: "Official plugin — WebAuthn register and authenticate under /auth with signature and origin checks."
 icon: "FingerprintPattern"
 source: "docs/spec/unified-theory.md"
 ---
 
-`passkey()` adds register and authenticate Flows for passkey-shaped credentials (`oke_passkeys`).
-v1 is a simplified ceremony — options return a challenge; register/authenticate accept the
-payload your client posts (not a full browser WebAuthn SDK).
+`passkey()` adds register and authenticate Flows for WebAuthn credentials (`oke_passkeys`).
+Options return a challenge; register and authenticate verify `clientDataJSON` origin + challenge,
+`authenticatorData` rpId hash, and an ECDSA P-256 signature against the stored SPKI public key.
 
 <Callout title="The one rule">
   Enable `gate.auth`, then `.plug(passkey())`. Registration needs a Bearer session; authenticate is
-  public. Wire `navigator.credentials` (or tests) yourself — the plugin stores and verifies the
-  posted fields.
+  public. Post the full ceremony fields — presence of a stored credential alone never issues a
+  session.
 </Callout>
 
 ## Quick start
@@ -30,7 +30,7 @@ export const app = oke({
   name: "shop",
   env: "local",
   gate: { auth: {} },
-}).plug(passkey());
+}).plug(passkey({ origins: ["http://localhost", "https://localhost"] }));
 ```
 
 </Step>
@@ -45,10 +45,13 @@ const opts = await api.auth.passkeyRegisterOptions({});
 // opts.data: { challenge, rpId, userId }
 
 await api.auth.passkeyRegister({
-  credentialId: "...",
-  publicKey: "...",
+  credentialId: "...", // base64url
+  publicKey: "...", // base64url SPKI (ECDSA P-256)
   userId: opts.data!.userId,
   challenge: opts.data!.challenge,
+  clientDataJSON: "...", // base64url JSON { type, challenge, origin }
+  authenticatorData: "...", // base64url
+  signature: "...", // base64url ECDSA over authData || SHA-256(clientDataJSON)
 });
 ```
 
@@ -60,15 +63,18 @@ Paths: `POST /auth/passkey/register/options`, `POST /auth/passkey/register`.
 ### Authenticate
 
 ```typescript
-await api.auth.passkeyAuthenticateOptions({});
+const opts = await api.auth.passkeyAuthenticateOptions({});
 const { data } = await api.auth.passkeyAuthenticate({
   credentialId: "...",
-  userId: "...",
+  challenge: opts.data!.challenge,
+  clientDataJSON: "...",
+  authenticatorData: "...",
+  signature: "...",
 });
 ```
 
 Paths: `POST /auth/passkey/authenticate/options`, `POST /auth/passkey/authenticate`.
-v1 issues a session when the stored credential matches `userId`.
+Challenges are single-use; wrong origin → `invalid_origin`; bad signature → `invalid_credentials`.
 
 </Step>
 
@@ -76,14 +82,15 @@ v1 issues a session when the stored credential matches `userId`.
 
 ## Options
 
-| Option       | Type                | Default       | Meaning                          |
-| ------------ | ------------------- | ------------- | -------------------------------- |
-| `secret`     | `string`            | active\*      | HMAC secret (\*from `gate.auth`) |
-| `sessions`   | `SessionStore`      | active\*      | Session store                    |
-| `now`        | `() => number`      | `Date.now`    | Injectable clock                 |
-| `passkeys`   | `PasskeyStore`      | new           | Credential → user mapping        |
-| `challenges` | `VerificationStore` | new           | Registration / auth challenges   |
-| `rpId`       | `string`            | `"localhost"` | Relying party id in options      |
+| Option       | Type                | Default                                    | Meaning                          |
+| ------------ | ------------------- | ------------------------------------------ | -------------------------------- |
+| `secret`     | `string`            | active\*                                   | HMAC secret (\*from `gate.auth`) |
+| `sessions`   | `SessionStore`      | active\*                                   | Session store                    |
+| `now`        | `() => number`      | `Date.now`                                 | Injectable clock                 |
+| `passkeys`   | `PasskeyStore`      | new                                        | Credential → user mapping        |
+| `challenges` | `VerificationStore` | new                                        | Registration / auth challenges   |
+| `rpId`       | `string`            | `"localhost"`                              | Relying party id                 |
+| `origins`    | `string[]`          | `["http://localhost","https://localhost"]` | Allowed `clientDataJSON.origin`  |
 
 ## Surfaces
 
@@ -94,8 +101,8 @@ v1 issues a session when the stored credential matches `userId`.
 | `auth.passkeyAuthenticateOptions` | `POST /auth/passkey/authenticate/options` | `gate.public` + otp rate |
 | `auth.passkeyAuthenticate`        | `POST /auth/passkey/authenticate`         | `gate.public` + otp rate |
 
-**Consequence:** production apps should replace the simplified verify with a standards-compliant
-WebAuthn verifier when you leave local/test.
+**Consequence:** a stolen `credentialId` without the private key cannot mint a session. Set
+`origins` to your real app origins before production.
 
 ## Troubleshooting
 
@@ -105,10 +112,15 @@ WebAuthn verifier when you leave local/test.
 Sign in with another method first. `userId` in the body must match the Bearer session.
 
 </Accordion>
+<Accordion title="authenticate returns invalid_origin">
+
+`clientDataJSON.origin` must be in `passkey({ origins })`. Default allows only localhost HTTP/S.
+
+</Accordion>
 <Accordion title="authenticate returns invalid_credentials">
 
-Unknown `credentialId`, or `userId` does not match the stored credential. Re-run registration
-after a successful session.
+Unknown `credentialId`, consumed/expired challenge, bad signature, or rpId hash mismatch.
+Re-run authenticate options for a fresh challenge, then sign with the enrolled private key.
 
 </Accordion>
 </Accordions>
