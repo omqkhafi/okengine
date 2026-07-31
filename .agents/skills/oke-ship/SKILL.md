@@ -71,7 +71,7 @@ Site gate: the newest **versioned** release (`## v…`) must equal `package.json
 
 Rules:
 
-- Groups only when non-empty, in order: `Added` · `Changed` · `Deprecated` · `Removed` · `Fixed` · `Security`
+- Groups only when non-empty, in order: `### ✨ Added` · `### ♻️ Changed` · `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🐛 Fixed` · `### 🔒 Security`
 - Bullets: user/product impact, not a file dump. Match existing voice (short, wrapped lines OK).
 - One idea per bullet.
 

@@ -92,6 +92,64 @@ describe("fx.race — structured concurrency", () => {
   });
 });
 
+describe("fx.using — scoped cleanup", () => {
+  test("release runs on success and on thrown error", async () => {
+    const fx = createFx({ flow: "t", effects: {} });
+    const released: string[] = [];
+
+    const ok = await fx.using(
+      async () => "res-a",
+      (r) => {
+        released.push(`ok:${r}`);
+      },
+      async (r) => r.toUpperCase(),
+    );
+    expect(ok).toBe("RES-A");
+    expect(released).toEqual(["ok:res-a"]);
+
+    await expect(
+      fx.using(
+        async () => "res-b",
+        async (r) => {
+          released.push(`err:${r}`);
+        },
+        async () => {
+          throw new Error("boom");
+        },
+      ),
+    ).rejects.toThrow("boom");
+    expect(released).toEqual(["ok:res-a", "err:res-b"]);
+  });
+
+  test("release runs when a sibling fx.race winner aborts mid-use", async () => {
+    const fx = createFx({ flow: "t", effects: {} });
+    let released = false;
+
+    const winner = await fx.race([
+      () =>
+        fx.using(
+          async () => "lock",
+          () => {
+            released = true;
+          },
+          () =>
+            new Promise<never>(() => {
+              // Stay pending until ambient abort releases us.
+            }),
+        ),
+      async () => {
+        await new Promise((r) => setTimeout(r, 5));
+        return "fast";
+      },
+    ]);
+
+    expect(winner).toBe("fast");
+    // Let the abort listener settle.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(released).toBe(true);
+  });
+});
+
 describe("fx.retry", () => {
   test("retries then succeeds", async () => {
     const fx = createFx({ flow: "t", effects: {} });

@@ -5,31 +5,43 @@ source: README.md
 icon: Download
 ---
 
-This page gets you from zero to a running app. Prefer Bun throughout — the engine targets **Bun ≥ 1.3**.
+This page gets you from zero to a running app on Bun. The engine targets
+**Bun ≥ 1.3** — prefer it for install, scaffold, and `oke dev`.
+
+<Callout title="The one rule">
+  Prefer `bun add okengine` when you want the `oke` CLI on your PATH. JSR (`@omqkhafi/okengine`) is
+  the library API only.
+</Callout>
+
+## Quick start
 
 <Steps>
 
+<Step>
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.3 (`bun --version`)
 - A terminal and a code editor
 
-### Install the package
+</Step>
 
-Add the framework (ships the `oke` CLI):
+<Step>
+### Install the package
 
 ```bash title="Terminal"
 bun add okengine
 ```
 
-<Callout title="JSR">
-  Library API only: `bunx jsr add @omqkhafi/okengine`. Prefer npm / `bun add` when you want the
-  `oke` CLI on your PATH via the package.
-</Callout>
+Library-only via JSR:
 
+```bash title="Terminal"
+bunx jsr add @omqkhafi/okengine
+```
+
+</Step>
+
+<Step>
 ### Scaffold with create-oke
-
-Create the standard recommended project layout:
 
 ```bash title="Terminal"
 bunx create-oke@latest my-app
@@ -37,73 +49,113 @@ bunx create-oke@latest my-app --template standard
 bunx create-oke@latest my-app --sql postgres
 ```
 
-The standard template is the only starter. `--sql postgres` opts into a
-`pgTable` schema and pins local, Docker, and production to Postgres; the default
-keeps local SQLite with Docker and production on Postgres.
+`standard` is the only starter. Default: local SQLite, Docker/production
+Postgres. `--sql postgres` pins `store.sql` for **local, Docker, and
+production** — schema stays dialect-agnostic (`store.schema.table`).
 
-### Run the app
+</Step>
+
+<Step>
+### Run and verify
 
 ```bash title="Terminal"
 cd my-app
 oke dev
 ```
 
-Local mode watches domain schema paths (`schema.ts` / `schema.decl.ts` / `app.ts`)
-and auto-runs `oke db push` (drizzle-kit) so the database stays in sync. Opt out
-with `oke dev --no-db-push` or `db: { autoPush: false }` in `oke.config.ts`. For
-production, generate and apply migrations deliberately:
+Three ports come up together (mnemonic: **O·K·E = 6·5·3**):
+
+<Surfaces />
+
+Open `http://localhost:6533`. If the Console lists your flows, the install
+worked — **derived, not configured.**
+
+</Step>
+
+</Steps>
+
+## Local database sync
+
+Local mode watches schema paths and auto-runs `oke db push` so the database
+stays in sync. Opt out with `oke dev --no-db-push` or
+`db: { autoPush: false }` in `oke.config.ts`.
+
+For production, generate and apply migrations deliberately — never automatic on
+boot:
 
 ```bash title="Terminal"
 oke db generate   # write drizzle/*.sql
-oke db migrate    # apply — never automatic on boot
+oke db migrate    # apply
 ```
 
-Three ports come up together (mnemonic: **O·K·E = 6·5·3**):
-
-| Port    | Surface  |
-| ------- | -------- |
-| `:6530` | Your app |
-| `:6533` | Console  |
-| `:6535` | MCP      |
-
-Open the Console — flows, contracts, effects, and an architecture diagram are already there. **Derived, not configured.**
+## Docker mode
 
 Want Postgres/Redis like production while the app stays on host Bun?
+
+<DevModes />
 
 ```bash title="Terminal"
 oke dev --docker   # or: oke dev -d
 # or set the saved default: oke mode docker
 ```
 
-That uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when omitted). Compose files and credentials land under `docker/` (`.env.docker` beside compose). Host ports — including Mailpit UI / RustFS console extras — are unique per project so multiple apps can run at once. Bare `oke dev` prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults to `local`.
+Uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when
+omitted). Compose and credentials land under `docker/` (`.env.docker` beside
+compose); host ports are unique per project.
 
-The generated env follows each protocol instead of forcing one generic credential shape:
+Bare `oke dev` prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults
+to `local`.
 
-- Postgres: `DATABASE_URL` plus `OKE_STORE_SQL_*`
-- Redis: `REDIS_URL` plus `OKE_STORE_KV_PASSWORD`
-- S3-compatible files: `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_URL`, `S3_REGION`, and `S3_CONSOLE_URL`
-- SMTP email: `SMTP_URL`, `SMTP_HOST`, `SMTP_PORT`, and `MAILPIT_UI_URL` with optional `SMTP_USER` / `SMTP_PASSWORD`
+| Protocol            | Env shape (generated)                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Postgres            | `DATABASE_URL` plus `OKE_STORE_SQL_*`                                                                           |
+| Redis               | `REDIS_URL` plus `OKE_STORE_KV_PASSWORD`                                                                        |
+| S3-compatible files | `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_URL`, `S3_REGION`, `S3_CONSOLE_URL` |
+| SMTP email          | `SMTP_URL`, `SMTP_HOST`, `SMTP_PORT`, `MAILPIT_UI_URL`, optional `SMTP_USER` / `SMTP_PASSWORD`                  |
 
-Each section also includes commented controls (for example Redis memory policy,
-Postgres init options, Bun S3 session tokens, and Mailpit limits). Uncommented
-supported controls are preserved when `oke dev --docker` regenerates the file.
+Each section also includes commented controls (Redis memory policy, Postgres
+init options, Bun S3 session tokens, Mailpit limits). Uncommented supported
+controls are preserved when `oke dev --docker` regenerates the file.
 
-### Verify the install
+## Troubleshooting
 
-Hit the app (path depends on the template) or open `http://localhost:6533`. If the Console lists your flows, the install worked.
+<Accordions>
 
-</Steps>
+<Accordion title="oke: command not found after install">
+  Use `bun add okengine` (npm package), not JSR alone — the CLI ships with the npm distribution. Or
+  invoke via `bunx oke dev` from the project.
+</Accordion>
 
-## Next steps
+<Accordion title="Console is empty / no flows listed">
+  Confirm `oke dev` is running and you opened `:6533`, not `:6530`. Flows appear only after the app
+  boots and the Manifest is extracted — fix TypeScript errors in the terminal first.
+</Accordion>
 
-Continue to [Basic Usage](/docs/get-started/basic-usage) for your first Flow,
-typed client, and test.
+<Accordion title="Database out of sync after editing schema">
+  Local `oke dev` auto-pushes by default. If you passed `--no-db-push` or set `db.autoPush: false`,
+  run `oke db push` yourself, or re-enable auto-push.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [CLI Reference](/docs/reference/cli) — `oke`, `create-oke`, mode, and db commands
+- [Environment variables](/docs/reference/environment-variables) — protocol-shaped env
+- [Configuration](/docs/reference/configuration) — `oke.config.ts` drivers and `db.autoPush`
+
+## Next
 
 <Cards>
   <Card
     title="Basic Usage"
-    description="First flows, client, and tests."
+    description="Health Flow, typed client, and bun:test."
     href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Introduction"
+    description="The one law, eight elements, ten exports."
+    href="/docs/get-started/introduction"
   />
   <Card
     title="CLI Reference"

@@ -114,6 +114,15 @@ describe("bindStore index driver resolution", () => {
     expect(indexDriverFor("libsql").id).toBe("libsql");
   });
 
+  test("meilisearch resolves from config as a fourth id", () => {
+    const options = {
+      config: { drivers: { store: { index: { local: "meilisearch", docker: "meilisearch" } } } },
+    };
+    expect(resolveIndexDriverId(options, "local", false)).toBe("meilisearch");
+    expect(resolveIndexDriverId(options, "docker", true)).toBe("meilisearch");
+    expect(indexDriverFor("meilisearch").id).toBe("meilisearch");
+  });
+
   test("docker mode honours OKE_INDEX_DRIVER override", () => {
     process.env.OKE_INDEX_DRIVER = "pgvector";
     expect(resolveIndexDriverId({}, "docker", true)).toBe("pgvector");

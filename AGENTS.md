@@ -96,3 +96,5 @@ Engine: Bun `>=1.3`.
 ## After every implementation
 
 Before claiming work done: run [`.agents/skills/oke-ship`](.agents/skills/oke-ship/SKILL.md) — append notes to `changelog.md` under `## Unreleased` (never under a shipped `## v…` section), and update site docs via [`.agents/skills/oke-docs`](.agents/skills/oke-docs/SKILL.md) for any user-facing surface. Version bump is separate: `bun run bump` promotes Unreleased into the next `## vX.Y.Z`.
+
+Dependency bumps (one package, one `package.json`, or all): [`.agents/skills/oke-deps`](.agents/skills/oke-deps/SKILL.md).

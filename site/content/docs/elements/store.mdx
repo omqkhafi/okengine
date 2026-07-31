@@ -90,12 +90,7 @@ export const createNote = on(
 
 Pick the facet that matches the physics of your data. Each declaration is one line; the runtime handle shows what flows can do with it.
 
-| Facet                      | Declares          | Best for                              | `fx.store(…)` handle                                   |
-| -------------------------- | ----------------- | ------------------------------------- | ------------------------------------------------------ |
-| `store.sql(name, opts)`    | a SQL database    | domain tables, relations, constraints | `select` · `insert` · `update` · `delete` · `findById` |
-| `store.kv(name, opts?)`    | a key-value space | cache, sessions, rate limits          | `get` · `set(key, value, ttl?)` · `delete` · `list`    |
-| `store.files(name, opts?)` | a blob bucket     | uploads, exports, attachments         | `put` · `get` · `delete` · `list(prefix?)`             |
-| `store.index(name, opts)`  | a vector index    | semantic search / RAG (`dims`)        | `upsert` · `search(vector, topK?)` · `delete`          |
+<StoreFacets />
 
 Every facet accepts optional `description` — a human title in the Console
 (falls back to the store name). `store.index` also takes `dims`.
@@ -281,6 +276,32 @@ drivers: {
 | `libsql`         | `libsql` sql               | `libsql_vector_idx` + `vector_top_k` |
 
 **Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing `vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to `memory`.
+
+### Full-text search — `meilisearch` (opt-in)
+
+`meilisearch` is a fourth `store.index` backend, opt-in only — `memory` stays the default. It is a genuinely different capability from the vector ANN drivers: typo-tolerant, faceted full-text relevance, not cosine similarity. The two models are kept apart by a **discriminated union** on `driverId`, so TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at runtime:
+
+| `driverId`                       | `upsert`              | `search`                                 | `score` means               |
+| -------------------------------- | --------------------- | ---------------------------------------- | --------------------------- |
+| `memory` / `pgvector` / `libsql` | `(id, vector, meta?)` | `search(vector, topK?)` → `IndexHit[]`   | cosine similarity           |
+| `meilisearch`                    | `(id, document)`      | `search(q, opts?)` → `{ hits, facets? }` | relevance (`_rankingScore`) |
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    index: { local: "meilisearch", docker: "meilisearch", prod: "meilisearch" },
+  },
+},
+images: {
+  "store.index": "getmeili/meilisearch:v1.37",
+},
+```
+
+- **Local mode** needs the `meilisearch` binary on `PATH` (a documented prerequisite, like Docker for `--docker` — OKE never auto-downloads binaries). `oke dev` spawns it with a generated master key persisted under `.oke/meilisearch/` (`0700`/`0600`).
+- **Docker / prod** uses the image recipe; the app gets `OKE_STORE_INDEX_URL` + `OKE_STORE_INDEX_KEY` from Compose — a standalone HTTP service, never the shared `sqlUrl`.
+- **Fail-loud:** a configured meilisearch that is unreachable or unhealthy throws `MeilisearchUnavailableError` — never a silent memory fallback.
+- **Not for vectors:** `ai.embed` / `fx.search` stay vector-only; pointing an embed `into` a meilisearch index fails loud (embeddings don't apply).
+- **Alpine caveat:** the raw glibc binary fails on Alpine/musl _hosts_; the official image is musl-clean. Install the binary for your platform (e.g. Homebrew / install script), or use `--docker`.
 
 ## Privacy built in
 

@@ -17,7 +17,8 @@ export type StoreDriverId =
   | "redis"
   | "fs"
   | "s3"
-  | "pgvector";
+  | "pgvector"
+  | "meilisearch";
 
 /** Facets a driver may serve. */
 export type DriverFacet = StoreFacet;
@@ -248,15 +249,19 @@ export interface FilesDriver {
   open(options: FilesOpenOptions): Promise<FilesBucket>;
 }
 
-/** Vector index hit. */
+/** Index hit — score meaning depends on the driver. */
 export interface IndexHit {
   readonly id: string;
+  /**
+   * Vector drivers: cosine similarity (higher = more similar).
+   * Full-text (`meilisearch`): relevance score (`_rankingScore`, higher = more relevant).
+   */
   readonly score: number;
   readonly meta?: Record<string, unknown>;
 }
 
-/** Vector index handle. */
-export interface IndexStore {
+/** Vector (ANN) index handle. */
+export interface VectorIndexStore {
   readonly driverId: "memory" | "pgvector" | "libsql";
   /**
    * Upsert a vector.
@@ -272,7 +277,7 @@ export interface IndexStore {
    * @param vector - Query embedding
    * @param topK - Max hits
    */
-  search(vector: readonly number[], topK?: number): Promise<IndexHit[]>;
+  search(vector: readonly number[], topK?: number): Promise<readonly IndexHit[]>;
   /**
    * Delete a vector.
    *
@@ -283,28 +288,104 @@ export interface IndexStore {
   close(): Promise<void>;
 }
 
+/** Full-text search options (meilisearch). */
+export interface TextIndexSearchOptions {
+  /** Max hits (Meilisearch `limit`). */
+  readonly topK?: number;
+  /** Filter expression (attribute must be filterable). */
+  readonly filter?: string | string[];
+  /** Facet attributes to aggregate. */
+  readonly facets?: string[];
+}
+
+/** Full-text search result (meilisearch). */
+export interface TextIndexSearchResult {
+  readonly hits: readonly IndexHit[];
+  /** Facet counts per attribute, when `facets` was requested. */
+  readonly facetDistribution?: Record<string, Record<string, number>>;
+}
+
+/** Full-text index handle. */
+export interface TextIndexStore {
+  readonly driverId: "meilisearch";
+  /**
+   * Upsert a document.
+   *
+   * @param id - Document id
+   * @param document - Field map (must include the id field)
+   */
+  upsert(id: string, document: Record<string, unknown>): Promise<void>;
+  /**
+   * Full-text search.
+   *
+   * @param q - Query text (typo tolerant)
+   * @param opts - topK / filter / facets
+   */
+  search(q: string, opts?: TextIndexSearchOptions): Promise<TextIndexSearchResult>;
+  /**
+   * Delete a document.
+   *
+   * @param id - Document id
+   */
+  delete(id: string): Promise<boolean>;
+  /** Close / release. */
+  close(): Promise<void>;
+}
+
+/** Index handle — discriminated by `driverId`. */
+export type IndexStore = VectorIndexStore | TextIndexStore;
+
 /** Options when opening an index. */
 export interface IndexOpenOptions {
   /** Index name. */
   readonly name: string;
-  /** Vector dimensions. */
+  /** Vector dimensions (vector drivers only). */
   readonly dims: number;
-  /** SQL URL when the index driver shares the sql facet's engine. */
+  /**
+   * Vector: SQL URL when the driver shares the sql facet's engine.
+   * Meilisearch: base HTTP URL.
+   */
   readonly url?: string;
-  /** Injected SQL connection — shared with `store.sql` at boot. */
+  /** Injected SQL connection — shared with `store.sql` at boot (vector only). */
   readonly sql?: SqlConnection;
+  /** Meilisearch API / master key. */
+  readonly apiKey?: string;
+  /** Injected fetch (tests). */
+  readonly fetch?: typeof fetch;
 }
 
-/** Index driver factory. */
-export interface IndexDriver {
+/** Vector index driver factory. */
+export interface VectorIndexDriver {
   readonly id: "memory" | "pgvector" | "libsql";
   readonly facet: "index";
   /**
-   * Open an index.
+   * Open a vector index.
    *
    * @param options - Name / dims / SQL
    */
-  open(options: IndexOpenOptions): Promise<IndexStore>;
+  open(options: IndexOpenOptions): Promise<VectorIndexStore>;
+}
+
+/** Full-text index driver factory. */
+export interface TextIndexDriver {
+  readonly id: "meilisearch";
+  readonly facet: "index";
+  /**
+   * Open a full-text index.
+   *
+   * @param options - Name / HTTP URL / apiKey
+   */
+  open(options: IndexOpenOptions): Promise<TextIndexStore>;
+}
+
+/** Index driver factory — discriminated by `id`. */
+export type IndexDriver = VectorIndexDriver | TextIndexDriver;
+
+/** True when the index driver shares the sql facet's engine (never memory). */
+export function indexDriverNeedsSql(
+  driver: IndexDriver,
+): driver is VectorIndexDriver & { id: "pgvector" | "libsql" } {
+  return driver.id === "pgvector" || driver.id === "libsql";
 }
 
 /** Union of all store drivers. */

@@ -33,7 +33,15 @@ import {
 } from "./dry-run.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
 import { currentAbortSignal } from "./abort-scope.ts";
-import { fxAll, fxRace, fxRetry, type FxRetryOptions, type FxThunk } from "./concurrency.ts";
+import {
+  fxAll,
+  fxRace,
+  fxRetry,
+  fxUsing,
+  type FxRetryOptions,
+  type FxThunk,
+} from "./concurrency.ts";
+import { maskRedactedDeep, Redacted } from "./redacted.ts";
 import type { JournalSession } from "./journal.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
 
@@ -262,9 +270,13 @@ export interface Fx {
   /**
    * Read a vault secret (records `secret`).
    *
+   * Returns a {@link Redacted} — printing / logging / serializing it yields a
+   * placeholder, never the value. Call `.reveal()` at the one boundary that
+   * needs the real value (e.g. passing a credential to a driver).
+   *
    * @param secret - Secret name or handle
    */
-  vault(secret: NamedRef): string;
+  vault(secret: NamedRef): Redacted<string>;
   /** Cache surface. */
   readonly cache: FxCache;
   /**
@@ -369,6 +381,20 @@ export interface Fx {
    * @param opts - Retry policy
    */
   retry<T>(fn: FxThunk<T>, opts?: FxRetryOptions): Promise<T>;
+  /**
+   * Scope a resource to `use` — `release` runs exactly once when `use`
+   * settles or the ambient abort signal fires (e.g. a sibling `fx.race`
+   * winner). Same-attempt cleanup; not journaled.
+   *
+   * @param acquire - Open the resource
+   * @param release - Cleanup, always run
+   * @param use - Work with the resource
+   */
+  using<A, T>(
+    acquire: () => A | Promise<A>,
+    release: (resource: A) => void | Promise<void>,
+    use: (resource: A) => T | Promise<T>,
+  ): Promise<T>;
 }
 
 /**
@@ -850,9 +876,12 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     data?: Record<string, unknown>,
   ): { message: string; data?: Record<string, unknown> } {
     const vault = options.vaultRuntime;
-    if (!vault) return { message, data };
+    // Redacted<T> never yields the real value, but replace instances with a
+    // placeholder so payloads stay plain JSON (and never re-wrap on replay).
+    const maskedData = data ? maskRedactedDeep(data) : undefined;
+    if (!vault) return { message, data: maskedData };
     const safeMessage = vault.redactString(message);
-    const safeData = data ? (vault.redact(data) as Record<string, unknown>) : undefined;
+    const safeData = maskedData ? (vault.redact(maskedData) as Record<string, unknown>) : undefined;
     return { message: safeMessage, data: safeData };
   }
 
@@ -925,7 +954,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         duration: Math.max(0, now() - timestamp),
         reversibility: reversibilityOf("secret"),
       });
-      return value;
+      return new Redacted(value);
     },
     cache,
     send(template, opts) {
@@ -1078,6 +1107,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     retry(fn, opts) {
       return fxRetry(fn, opts);
+    },
+    using(acquire, release, use) {
+      return fxUsing(acquire, release, use);
     },
   };
 

@@ -8,7 +8,14 @@
 import { expect } from "bun:test";
 import { createSqlStoreHandle } from "../elements/store/sql-session.ts";
 import { defineTable } from "../elements/store/table.ts";
-import type { FilesDriver, IndexDriver, KvDriver, SqlDriver, SqlConnectOptions } from "./types.ts";
+import type {
+  FilesDriver,
+  KvDriver,
+  SqlDriver,
+  SqlConnectOptions,
+  TextIndexDriver,
+  VectorIndexDriver,
+} from "./types.ts";
 
 /** SQL conformance against one driver. */
 export async function runSqlConformance(
@@ -118,9 +125,9 @@ export async function runFilesConformance(
   }
 }
 
-/** Index conformance against one driver. */
+/** Vector index conformance against one driver. */
 export async function runIndexConformance(
-  driver: IndexDriver,
+  driver: VectorIndexDriver,
   openOpts: {
     name?: string;
     dims?: number;
@@ -141,6 +148,36 @@ export async function runIndexConformance(
     const hits = await index.search([1, 0, 0], 2);
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0]?.id).toBe("d1");
+    expect(await index.delete("d1")).toBe(true);
+    expect(index.driverId).toBe(driver.id);
+  } finally {
+    await index.close();
+  }
+}
+
+/** Full-text index conformance against one driver. */
+export async function runTextIndexConformance(
+  driver: TextIndexDriver,
+  openOpts: {
+    name?: string;
+    url?: string;
+    apiKey?: string;
+    fetch?: typeof fetch;
+  } = {},
+): Promise<void> {
+  const index = await driver.open({
+    name: openOpts.name ?? "conf-text",
+    dims: 0,
+    url: openOpts.url,
+    apiKey: openOpts.apiKey,
+    fetch: openOpts.fetch,
+  });
+  try {
+    await index.upsert("d1", { id: "d1", title: "hello world" });
+    await index.upsert("d2", { id: "d2", title: "goodbye world" });
+    const found = await index.search("hello", { topK: 1 });
+    expect(found.hits.length).toBeGreaterThan(0);
+    expect(found.hits[0]?.id).toBe("d1");
     expect(await index.delete("d1")).toBe(true);
     expect(index.driverId).toBe(driver.id);
   } finally {

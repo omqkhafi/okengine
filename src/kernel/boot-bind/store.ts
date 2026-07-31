@@ -5,6 +5,7 @@
 import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { fsDriver } from "../../drivers/fs.ts";
 import { libsqlDriver, libsqlIndexDriver } from "../../drivers/libsql.ts";
+import { meilisearchDriver } from "../../drivers/meilisearch.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
 import { pgliteDriver } from "../../drivers/pglite.ts";
 import { pgvectorDriver } from "../../drivers/pgvector.ts";
@@ -45,7 +46,7 @@ export function bindStore(
   const sqlBindings: Record<string, { name: string; primary: { url: string } }> = {};
   const kvBindings: Record<string, { url?: string }> = {};
   const filesBindings: Record<string, { root?: string }> = {};
-  const indexBindings: Record<string, { url?: string }> = {};
+  const indexBindings: Record<string, { url?: string; apiKey?: string }> = {};
 
   for (const decl of options.stores ?? []) {
     if (isSqlDecl(decl)) {
@@ -60,7 +61,14 @@ export function bindStore(
     } else if (isIndexDecl(decl)) {
       // SQL-backed index drivers share the sql facet's URL — the runtime opens
       // one connection and hands it to both (never a second, redundant one).
-      indexBindings[decl.name] = indexId === "memory" ? {} : { url: sqlUrl };
+      // Meilisearch is a standalone HTTP service: its own URL + key, never sqlUrl.
+      if (indexId === "memory") {
+        indexBindings[decl.name] = {};
+      } else if (indexId === "meilisearch") {
+        indexBindings[decl.name] = { url: indexUrlFor(docker), apiKey: indexApiKeyFor() };
+      } else {
+        indexBindings[decl.name] = { url: sqlUrl };
+      }
     }
   }
 
@@ -216,6 +224,8 @@ export function indexDriverFor(id: string): IndexDriver {
       return pgvectorDriver;
     case "libsql":
       return libsqlIndexDriver;
+    case "meilisearch":
+      return meilisearchDriver;
     default:
       throw new Error(`oke boot: unknown index driver "${id}"`);
   }
@@ -261,6 +271,24 @@ function kvUrlFor(kvId: string, docker: boolean): string | undefined {
 function filesRootFor(filesId: string): string | undefined {
   if (filesId !== "s3") return undefined;
   return process.env.S3_BUCKET ?? process.env.OKE_STORE_FILES_DB ?? undefined;
+}
+
+/** Meilisearch base URL — standalone HTTP service, fail loud when missing. */
+function indexUrlFor(docker: boolean): string {
+  const url = process.env.OKE_STORE_INDEX_URL ?? undefined;
+  if (!url) {
+    throw new Error(
+      docker
+        ? "oke boot: meilisearch index needs OKE_STORE_INDEX_URL (did `oke dev -d` write docker/.env.docker?)"
+        : "oke boot: meilisearch index needs OKE_STORE_INDEX_URL",
+    );
+  }
+  return url;
+}
+
+/** Meilisearch API / master key. */
+function indexApiKeyFor(): string | undefined {
+  return process.env.OKE_STORE_INDEX_KEY ?? process.env.MEILI_MASTER_KEY ?? undefined;
 }
 
 function isSqlDecl(decl: StoreDecl): decl is Extract<StoreDecl, { facet: "sql" }> {

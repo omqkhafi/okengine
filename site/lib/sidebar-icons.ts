@@ -9,7 +9,7 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs": "BookOpen",
   "/docs/get-started": "Rocket",
   "/docs/get-started/introduction": "BookOpen",
-  "/docs/get-started/comparison": "Scale",
+  "/docs/get-started/why": "Compass",
   "/docs/get-started/installation": "Download",
   "/docs/get-started/basic-usage": "SquareTerminal",
   "/docs/elements": "Boxes",

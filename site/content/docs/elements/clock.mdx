@@ -83,10 +83,7 @@ do: async (input, fx) => {
 
 ## Two kinds of schedules
 
-| Declaration         | Shows in Console | Cron + timezone | Runtime-editable   | Use for                           |
-| ------------------- | ---------------- | --------------- | ------------------ | --------------------------------- |
-| `every("1h")`       | no               | no              | no                 | Simple fixed intervals            |
-| `clock(name, opts)` | yes              | yes             | when `overridable` | Business schedules operators tune |
+<ClockSchedules />
 
 Both are triggers consumed with the same `on(trigger, flow)` — the flow underneath does not know the difference.
 

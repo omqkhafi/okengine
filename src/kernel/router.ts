@@ -1,6 +1,6 @@
 /**
- * HTTP router — compiled RegExp matching with a Trie fallback
- * (Hono's SmartRouter idea), plus a linear preset for cold-start edge builds.
+ * HTTP router — compiled RegExp matching with a Trie fallback, plus a linear
+ * preset for cold-start edge builds.
  *
  * Chosen at build/startup: try RegExp first; on unsupported patterns fall
  * back to Trie. The `edge` preset uses LinearRouter for fast registration.
@@ -141,7 +141,7 @@ function matchCompiled<T>(dyn: CompiledDynamic<T>, path: string): RouteMatch<T> 
 
 /**
  * Compiled RegExp router — O(1) static map, plus per-bucket compiled
- * regular expressions for parametric routes (Hono RegExpRouter idea).
+ * regular expressions for parametric routes.
  */
 export class RegExpRouter<T> implements Router<T> {
   readonly name = "RegExpRouter";

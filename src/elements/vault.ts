@@ -2,7 +2,7 @@
  * Vault element — protected knowledge.
  *
  * Physics: secrets · config · environment.
- * Drivers: `env` · `openbao` · `infisical` · `managed`.
+ * Drivers: `env` · `openbao` · `managed`.
  *
  * A declaration is a contract, never a value. Boot validates every contract
  * and lists all gaps at once. Logs/traces receive fingerprints and redaction

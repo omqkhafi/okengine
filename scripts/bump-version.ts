@@ -222,8 +222,15 @@ export function promoteUnreleasedSection(raw: string, version: string, date: str
  */
 function applyChangelog(version: string, dryRun: boolean): string {
   const raw = readFileSync(CHANGELOG_PATH, "utf-8");
-  const next = promoteUnreleasedSection(raw, version, todayLocal());
-  if (!dryRun) writeFileSync(CHANGELOG_PATH, next.endsWith("\n") ? next : `${next}\n`, "utf-8");
+  try {
+    const next = promoteUnreleasedSection(raw, version, todayLocal());
+    if (!dryRun) writeFileSync(CHANGELOG_PATH, next.endsWith("\n") ? next : `${next}\n`, "utf-8");
+  } catch (err) {
+    // A rehearsal right after a release finds an empty Unreleased: report the
+    // path anyway. Real bumps keep the hard failure — never cut an empty release.
+    if (!dryRun) throw err;
+    console.error(`[bump]   note: ${(err as Error).message}`);
+  }
   return CHANGELOG_PATH;
 }
 

@@ -12,6 +12,8 @@ const ROOT = join(import.meta.dir, "../..");
 
 /** Forbidden driver id, split so this file does not match itself. */
 const FORBIDDEN_DRIVER = ["so", "ps"].join("");
+/** Forbidden vault driver id, split so this file does not match itself. */
+const FORBIDDEN_SECRETS_SAAS = ["infi", "sical"].join("");
 /** Forbidden optional peer, split so this file does not match itself. */
 const FORBIDDEN_AGE = ["age", "-", "encryption"].join("");
 
@@ -47,6 +49,10 @@ function assertZeroGitGrep(pattern: string, ignorePrefixes: readonly string[] = 
 describe("removed vault driver gate", () => {
   test("tracked tree has zero matches for the removed driver id", () => {
     assertZeroGitGrep(FORBIDDEN_DRIVER);
+  });
+
+  test("tracked tree has zero matches for the removed secrets-saas driver id", () => {
+    assertZeroGitGrep(FORBIDDEN_SECRETS_SAAS, ["changelog.md:"]);
   });
 
   test("tracked tree has zero matches for the removed age peer outside lockfiles", () => {

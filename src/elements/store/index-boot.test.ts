@@ -22,8 +22,8 @@ import {
   createStoreRuntime,
   index as declareIndex,
   sql as declareSql,
-  type IndexStoreFxHandle,
   type SqlStoreHandle,
+  type VectorIndexStoreFxHandle,
 } from "../store.ts";
 
 const WRITE_CTX = (name: string) => ({
@@ -67,7 +67,7 @@ describe("store.index boot wiring — memory", () => {
   test("boot with no configured index driver resolves memory end to end", async () => {
     const kb = declareIndex("kb", { dims: 3 });
     const runtime = bindStore({ stores: [kb] }, "local", () => Date.now());
-    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as IndexStoreFxHandle;
+    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
     expect(handle.driverId).toBe("memory");
     await handle.upsert("near", [1, 0, 0]);
     await handle.upsert("far", [0, 1, 0]);
@@ -89,14 +89,14 @@ describe("store.index boot wiring — libsql", () => {
       "local",
       () => Date.now(),
     );
-    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as IndexStoreFxHandle;
+    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
     expect(handle.driverId).toBe("libsql");
 
     await handle.upsert("near", [1, 0.1, 0], { label: "near" });
     await handle.upsert("far", [0, 1, 0]);
     await handle.upsert("farther", [-1, 0, 0]);
     const hits = await handle.search([1, 0, 0], 3);
-    expect(hits.map((h) => h.id)).toEqual(["near", "far", "farther"]);
+    expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
     expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
     expect(hits[0]!.meta).toEqual({ label: "near" });
     expect(await handle.delete("farther")).toBe(true);
@@ -120,7 +120,7 @@ describe("store.index boot wiring — libsql", () => {
       index: { kb: { url: ":memory:" } },
     });
     // Index first: it must open the connection the sql facet then reuses.
-    const idxHandle = (await runtime.open(kb, WRITE_CTX("kb"))) as IndexStoreFxHandle;
+    const idxHandle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
     await idxHandle.upsert("a", [1, 0, 0]);
     const sqlHandle = (await runtime.open(docs, {
       effects: { reads: ["sql:docs"], writes: ["sql:docs"] },
@@ -161,14 +161,14 @@ describe("store.index boot wiring — pglite + pgvector", () => {
       "local",
       () => Date.now(),
     );
-    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as IndexStoreFxHandle;
+    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
     expect(handle.driverId).toBe("pgvector");
 
     await handle.upsert("near", [1, 0.1, 0], { label: "near" });
     await handle.upsert("far", [0, 1, 0]);
     await handle.upsert("farther", [-1, 0, 0]);
     const hits = await handle.search([1, 0, 0], 3);
-    expect(hits.map((h) => h.id)).toEqual(["near", "far", "farther"]);
+    expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
     expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
     expect(hits[0]!.meta).toEqual({ label: "near" });
     expect(await handle.delete("farther")).toBe(true);
@@ -224,6 +224,48 @@ describe("store.index boot wiring — fail loud", () => {
     );
     await expect(runtime.open(kb, WRITE_CTX("kb"))).rejects.toThrow(/cannot share sql driver/);
     await runtime.close();
+  });
+
+  test("meilisearch without OKE_STORE_INDEX_URL throws at bind — never sqlUrl, never memory", () => {
+    const prev = process.env.OKE_STORE_INDEX_URL;
+    delete process.env.OKE_STORE_INDEX_URL;
+    try {
+      const kb = declareIndex("kb");
+      expect(() =>
+        bindStore(
+          { config: { drivers: { store: { index: { local: "meilisearch" } } } }, stores: [kb] },
+          "local",
+          () => Date.now(),
+        ),
+      ).toThrow(/OKE_STORE_INDEX_URL/);
+    } finally {
+      if (prev === undefined) delete process.env.OKE_STORE_INDEX_URL;
+      else process.env.OKE_STORE_INDEX_URL = prev;
+    }
+  });
+
+  test("meilisearch binds its own URL + key (never the sql connection)", async () => {
+    const prevUrl = process.env.OKE_STORE_INDEX_URL;
+    const prevKey = process.env.OKE_STORE_INDEX_KEY;
+    process.env.OKE_STORE_INDEX_URL = "http://127.0.0.1:7700";
+    process.env.OKE_STORE_INDEX_KEY = "master-key";
+    try {
+      const kb = declareIndex("kb");
+      const runtime = bindStore(
+        { config: { drivers: { store: { index: { local: "meilisearch" } } } }, stores: [kb] },
+        "local",
+        () => Date.now(),
+      );
+      // No live server in unit tests: opening must fail loud (unreachable),
+      // proving the binding pointed at HTTP, not silently degraded to memory.
+      await expect(runtime.open(kb, WRITE_CTX("kb"))).rejects.toThrow(/meilisearch index/);
+      await runtime.close();
+    } finally {
+      if (prevUrl === undefined) delete process.env.OKE_STORE_INDEX_URL;
+      else process.env.OKE_STORE_INDEX_URL = prevUrl;
+      if (prevKey === undefined) delete process.env.OKE_STORE_INDEX_KEY;
+      else process.env.OKE_STORE_INDEX_KEY = prevKey;
+    }
   });
 });
 

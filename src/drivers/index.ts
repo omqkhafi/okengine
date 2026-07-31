@@ -23,12 +23,18 @@ export type {
   FilesDriver,
   IndexHit,
   IndexStore,
+  VectorIndexStore,
+  TextIndexStore,
+  TextIndexSearchOptions,
+  TextIndexSearchResult,
   IndexOpenOptions,
   IndexDriver,
+  VectorIndexDriver,
+  TextIndexDriver,
   StoreDriver,
   ClassificationMap,
 } from "./types.ts";
-export { classificationKey } from "./types.ts";
+export { classificationKey, indexDriverNeedsSql } from "./types.ts";
 
 export type {
   SignalDriverId,
@@ -79,6 +85,13 @@ export { pgvectorDriver, openPgvectorIndex } from "./pgvector.ts";
 
 export { libsqlDriver, connectLibsql, libsqlIndexDriver, openLibsqlIndex } from "./libsql.ts";
 
+export {
+  meilisearchDriver,
+  openMeilisearchIndex,
+  MeilisearchUnavailableError,
+  type MeilisearchIndexOptions,
+} from "./meilisearch.ts";
+
 export { pgliteDriver, connectPglite } from "./pglite.ts";
 
 export { memorySignalDriver, openMemorySignal } from "./signal-memory.ts";
@@ -107,7 +120,6 @@ export type { VaultDriverId, VaultOpenOptions, VaultBag, VaultDriver } from "./v
 export { memoryVaultDriver } from "./vault-memory.ts";
 export { envVaultDriver } from "./vault-env.ts";
 export { openbaoVaultDriver, OpenBaoUnavailableError } from "./vault-openbao.ts";
-export { infisicalVaultDriver } from "./vault-infisical.ts";
 export { managedVaultDriver } from "./vault-managed.ts";
 
 export type {

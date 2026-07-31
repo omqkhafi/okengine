@@ -13,14 +13,14 @@
 
 import { customType, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type {
-  IndexDriver,
   IndexHit,
   IndexOpenOptions,
-  IndexStore,
   SqlConnectOptions,
   SqlConnection,
   SqlDriver,
   SqlRow,
+  VectorIndexDriver,
+  VectorIndexStore,
 } from "./types.ts";
 
 /** `@libsql/client` is an optional peer — loaded only when this driver runs. */
@@ -100,7 +100,7 @@ const f32Blob = customType<{
  *
  * @param options - Name / dims / shared SQL connection
  */
-export async function openLibsqlIndex(options: IndexOpenOptions): Promise<IndexStore> {
+export async function openLibsqlIndex(options: IndexOpenOptions): Promise<VectorIndexStore> {
   const ownsSql = !options.sql;
   const sql = options.sql ?? (await connectLibsql({ url: options.url }));
   if (sql.driverId !== "libsql") {
@@ -172,7 +172,7 @@ export async function openLibsqlIndex(options: IndexOpenOptions): Promise<IndexS
 }
 
 /** Protocol-named libsql index driver. */
-export const libsqlIndexDriver: IndexDriver = {
+export const libsqlIndexDriver: VectorIndexDriver = {
   id: "libsql",
   facet: "index",
   open: openLibsqlIndex,

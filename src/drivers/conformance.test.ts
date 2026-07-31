@@ -9,10 +9,13 @@ import {
   runIndexConformance,
   runKvConformance,
   runSqlConformance,
+  runTextIndexConformance,
 } from "./conformance.ts";
 import { fsDriver } from "./fs.ts";
 import { libsqlDriver, libsqlIndexDriver } from "./libsql.ts";
 import { memoryFilesDriver, memoryIndexDriver, memoryKvDriver, memorySqlDriver } from "./memory.ts";
+import { meilisearchDriver } from "./meilisearch.ts";
+import { createMeilisearchFakeFetch } from "./meilisearch.test.ts";
 import { pgliteDriver } from "./pglite.ts";
 import { pgvectorDriver } from "./pgvector.ts";
 import { createPostgresFakeClient, postgresDriver } from "./postgres.ts";
@@ -24,7 +27,8 @@ describe("sql conformance", () => {
   test("memory", () => runSqlConformance(memorySqlDriver));
   test("sqlite", () => runSqlConformance(sqliteDriver, { url: ":memory:" }));
   test("libsql", () => runSqlConformance(libsqlDriver, { url: ":memory:" }));
-  test("pglite", () => runSqlConformance(pgliteDriver, { url: "memory://" }));
+  // pglite cold-starts WASM + extension load — slow disks / CI need > default 5s
+  test("pglite", () => runSqlConformance(pgliteDriver, { url: "memory://" }), 15_000);
   test("postgres (fake Bun.SQL client)", () =>
     runSqlConformance(postgresDriver, {
       client: createPostgresFakeClient(),
@@ -53,6 +57,15 @@ describe("index conformance", () => {
   test("libsql", () => runIndexConformance(libsqlIndexDriver, { dims: 3 }));
 });
 
+describe("text index conformance", () => {
+  test("meilisearch (injected fetch)", () =>
+    runTextIndexConformance(meilisearchDriver, {
+      url: "http://127.0.0.1:7700",
+      apiKey: "master-key",
+      fetch: createMeilisearchFakeFetch(),
+    }));
+});
+
 describe("protocol naming", () => {
   test("driver ids are protocols, never vendors", () => {
     const ids = [
@@ -69,6 +82,7 @@ describe("protocol naming", () => {
       memoryIndexDriver.id,
       pgvectorDriver.id,
       libsqlIndexDriver.id,
+      meilisearchDriver.id,
     ];
     expect(ids).toEqual([
       "memory",
@@ -84,6 +98,7 @@ describe("protocol naming", () => {
       "memory",
       "pgvector",
       "libsql",
+      "meilisearch",
     ]);
     for (const id of ids) {
       expect(id).not.toMatch(/neon|dragonfly|minio|upstash|cloudflare/i);

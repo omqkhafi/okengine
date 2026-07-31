@@ -89,7 +89,7 @@ function StageNote({ children }: { children: ReactNode }) {
 export function ManifestPipeline() {
   return (
     <figure
-      className="not-prose m-0 w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+      className="@container not-prose m-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
       aria-label="Manifest pipeline in three stages: you write TypeScript flows whose world access goes through fx; at build time the compiler extracts manifest.oke.json, recording flows, triggers, contracts, effects, gates, signals and drivers; and every downstream surface — typed client, OpenAPI and docs, Console panels and traces, architecture diagram, MCP surface, capability matrix, cache invalidation keys, Dockerfile and compose — is derived from that one artifact."
     >
       <StageHeader index="01" title="You write TypeScript" meta="src/flows/**" />
@@ -134,19 +134,19 @@ export function ManifestPipeline() {
         title="Every surface is derived"
         meta={`${DERIVED_SURFACES.length} surfaces`}
       />
-      <ul className="grid gap-px bg-fd-border sm:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-px bg-fd-border @min-[32rem]:grid-cols-3">
         {DERIVED_SURFACE_GROUPS.map((group) => (
-          <li key={group.label} className="bg-fd-card px-4 py-4 sm:px-6">
+          <li key={group.label} className="min-w-0 bg-fd-card px-4 py-4 sm:px-6">
             <p className="font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
               {group.label}
             </p>
             <ul className="mt-2.5 flex flex-col gap-1.5">
               {group.surfaces.map((surface) => (
-                <li key={surface} className="flex gap-2 text-sm text-fd-foreground">
-                  <span aria-hidden className="text-fd-muted-foreground/50 select-none">
+                <li key={surface} className="flex min-w-0 gap-2 text-sm text-fd-foreground">
+                  <span aria-hidden className="shrink-0 text-fd-muted-foreground/50 select-none">
                     ↳
                   </span>
-                  <span className="min-w-0">{surface}</span>
+                  <span className="min-w-0 break-words">{surface}</span>
                 </li>
               ))}
             </ul>

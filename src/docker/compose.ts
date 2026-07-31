@@ -250,6 +250,11 @@ export function buildStackEnv(
       // Token is minted by the bootstrap — never a generated password here.
       env[`${prefix}_URL`] = url;
       env.OKE_VAULT_URL = url;
+    } else if (spec.role === "store.index") {
+      // Meilisearch: standalone HTTP URL + the generated master key.
+      env[`${prefix}_URL`] = url;
+      env.OKE_STORE_INDEX_URL = url;
+      env.OKE_STORE_INDEX_KEY = spec.credentials.password;
     } else {
       env[`${prefix}_USER`] = spec.credentials.user;
       env[`${prefix}_PASSWORD`] = spec.credentials.password;

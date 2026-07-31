@@ -485,6 +485,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (!index) {
         throw new Error(`ai: index "${decl.into}" not registered`);
       }
+      if (index.driverId === "meilisearch") {
+        throw new Error(
+          `ai: embed into "${decl.into}" needs a vector index (memory/pgvector/libsql) — ` +
+            `"${index.driverId}" is full-text; embeddings don't apply`,
+        );
+      }
       const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
       const client = await clientFor(modelName);
       if (!client.embed) {

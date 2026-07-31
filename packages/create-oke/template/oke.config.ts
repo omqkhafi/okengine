@@ -55,6 +55,10 @@ export default defineConfig({
     "store.files": "rustfs/rustfs:1.0.0-beta.11",
     "channel.email": "axllent/mailpit:v1.22.3",
     vault: "openbao/openbao:2.6.1",
+    // Opt in to full-text search (meilisearch store.index driver):
+    //   drivers.store.index: { local: "meilisearch", docker: "meilisearch", test: "memory", prod: "meilisearch" }
+    // and pin its image. Local mode then needs the `meilisearch` binary on PATH.
+    // "store.index": "getmeili/meilisearch:v1.37",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

@@ -11,7 +11,7 @@ import { DOCS_CONTENT_DIR, stripYamlFrontmatter } from "./markdown-source";
 const MAX_CONSECUTIVE = 3;
 
 const STRUCTURAL =
-  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
+  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|FlowTriggers|SignalDelivery|StoreFacets|ClockSchedules|GatePipeline|VaultResolution|ChannelPhysics|AiGuardrails|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
 
 /**
  * Whether a non-empty line counts as a plain prose paragraph line.
@@ -75,9 +75,10 @@ function maxConsecutivePlain(body: string): number {
 }
 
 describe("docs prose density", () => {
-  test(`index + elements + console + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
+  test(`index + get-started + elements + console + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
     const files = [
       join(DOCS_CONTENT_DIR, "index.mdx"),
+      ...(await listMdx("get-started")),
       ...(await listMdx("elements")),
       ...(await listMdx("console")),
       ...(await listMdx("reference")),

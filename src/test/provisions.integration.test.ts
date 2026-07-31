@@ -56,7 +56,7 @@ describe("Provisions integration", () => {
       effects: { secrets: ["STRIPE_KEY"], emits: ["order-news"] },
       do: async ({ orderId }, fx) => {
         const key = fx.vault(stripeKey);
-        expect(key.startsWith("sk_")).toBe(true);
+        expect(key.reveal().startsWith("sk_")).toBe(true);
 
         await fx.step("create-intent", async () => ({ id: `pi_${orderId}` }));
         await fx.clock.sleep("verify-window", "2m");

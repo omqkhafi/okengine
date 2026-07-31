@@ -263,6 +263,28 @@ describe("embeddings into store.index", () => {
     const hits = await index.search((await client.embed!({ input: "hello world" })).vectors[0]!, 1);
     expect(hits[0]?.id).toBe("doc-1");
   });
+
+  test("embed into a meilisearch (full-text) index fails loud", async () => {
+    const smart = ai.model("smart", { provider: "mock" });
+    const embed = ai.embed("docs", { model: smart, into: "kb" });
+    const client = await mockAiDriver.open({ model: "mock" });
+    const textIndex = {
+      driverId: "meilisearch" as const,
+      upsert: async () => {},
+      search: async () => ({ hits: [] }),
+      delete: async () => true,
+      close: async () => {},
+    };
+    const runtime = createAiRuntime({
+      models: [smart],
+      embeds: [embed],
+      clients: { smart: client },
+      indexes: { kb: textIndex as never },
+    });
+    await expect(runtime.embed("docs", "doc-1", "hello world")).rejects.toThrow(
+      /needs a vector index/,
+    );
+  });
 });
 
 describe("model fallback chain", () => {

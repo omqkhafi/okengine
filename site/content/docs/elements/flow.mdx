@@ -96,13 +96,7 @@ Every response follows one envelope — success `{ data, error: null }`, failure
 
 ## The five triggers
 
-| Trigger                      | Starts when                  | Replaces           |
-| ---------------------------- | ---------------------------- | ------------------ |
-| `http.post("/orders")`       | a request arrives            | endpoint · handler |
-| `orderPlaced` (a signal)     | another flow emits           | queue consumer     |
-| `every("1h")`                | time passes                  | cron job           |
-| `db.table(orders).changed()` | a row changes                | CDC pipeline       |
-| — none                       | another flow calls `fx.call` | "private" helper   |
+<FlowTriggers />
 
 ### http — a request arrives
 
@@ -192,7 +186,7 @@ Everything a flow may touch, on one object:
 | `fx.ask(prompt, input)`                 | ask             | Call a versioned AI prompt                   |
 | `fx.run(agent, input)`                  | ask             | Run a bounded agent                          |
 | `fx.call(flow, input)`                  | call            | Invoke another flow                          |
-| `fx.vault(contract)`                    | read            | Read a secret (redacted from logs)           |
+| `fx.vault(contract)`                    | read            | Read a secret (`Redacted`; logs masked)      |
 | `fx.clock.now()` / `.sleep(…)`          | —               | Injected time / durable sleep                |
 | `fx.cache.get/set`                      | —               | Shared cache with effect-aware invalidation  |
 | `fx.step(name, fn)`                     | —               | Named durable step — never re-runs on replay |
@@ -218,12 +212,12 @@ export const chargeOrder = flow({
   out: z.boolean(),
   do: async ({ orderId }, fx) => {
     const intent = await fx.step("create-intent", () =>
-      stripe(fx.vault(stripeKey)).create(orderId),
+      stripe(fx.vault(stripeKey).reveal()).create(orderId),
     );
 
     await fx.clock.sleep("verify-window", "2m"); // survives restart and deploy
 
-    return fx.step("confirm", () => stripe(fx.vault(stripeKey)).confirm(intent));
+    return fx.step("confirm", () => stripe(fx.vault(stripeKey).reveal()).confirm(intent));
   },
 });
 ```

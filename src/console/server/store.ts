@@ -329,6 +329,7 @@ export interface StoreQueryInput {
   readonly prefix?: string;
   readonly limit?: number;
   readonly vector?: readonly number[];
+  readonly q?: string;
   readonly topK?: number;
   readonly revealPii?: boolean;
 }
@@ -350,6 +351,7 @@ export interface StoreQueryResult {
     readonly score: number;
     readonly meta?: Record<string, unknown>;
   }>;
+  readonly facetDistribution?: Record<string, Record<string, number>>;
   readonly masked: boolean;
   readonly routedRole?: "primary" | "replica";
 }
@@ -438,12 +440,20 @@ export async function queryStore(
 
   // index
   const idx = handle as IndexStoreFxHandle;
+  void manifest;
+  if (idx.driverId === "meilisearch") {
+    const q = input.q ?? "";
+    if (q.trim().length === 0) {
+      return { facet, hits: [], masked: false };
+    }
+    const result = await idx.search(q, { topK: input.topK ?? 5 });
+    return { facet, hits: result.hits, facetDistribution: result.facetDistribution, masked: false };
+  }
   const vector = input.vector ?? [];
   if (vector.length === 0) {
     return { facet, hits: [], masked: false };
   }
   const hits = await idx.search(vector, input.topK ?? 5);
-  void manifest;
   return { facet, hits, masked: false };
 }
 

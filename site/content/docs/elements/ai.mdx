@@ -86,6 +86,8 @@ export const triage = smart.prompt("ticket-triage", {
 | `evals`      | string                | Path to a `.jsonl` eval set, regression-gated via `oke eval`   |
 | `budget`     | object                | `maxCostPerCall` — cost is a first-class dimension             |
 
+<AiGuardrails />
+
 ## Agents with real guardrails
 
 An agent's tools are your flows — each carrying its own gates, effects, and typed errors, so the agent can never do anything a flow couldn't:

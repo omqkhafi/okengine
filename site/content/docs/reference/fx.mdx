@@ -44,6 +44,7 @@ See [Store](/docs/elements/store) for the query-builder surface.
 | `fx.all([...thunks])`        | —       | Parallel; first rejection aborts siblings             |
 | `fx.race([...thunks])`       | —       | First settle wins; losers aborted                     |
 | `fx.retry(fn, opts?)`        | —       | Exponential backoff + jitter (plain Promise)          |
+| `fx.using(acq, rel, use)`    | —       | `release` runs once on settle or ambient abort        |
 | `fx.signal`                  | —       | Ambient `AbortSignal` for the current branch          |
 | `fx.fail(code, data, opts?)` | —       | Typed failure value (`opts.message` overrides)        |
 
@@ -81,6 +82,18 @@ const charge = await fx.step("charge", () =>
   `Promise.all`.
 </Callout>
 
+`fx.using(acquire, release, use)` scopes a process-local resource to one attempt: `release` runs
+exactly once when `use` settles **or** when the ambient signal aborts (a sibling `fx.race` winner,
+a failing `fx.all` sibling). It is not journaled — do not hold handles across durable park/resume.
+
+```typescript
+const rows = await fx.using(
+  () => pool.acquire(),
+  (conn) => conn.release(),
+  (conn) => conn.query("select …"),
+);
+```
+
 **Consequence:** put `fx.retry` inside `fx.step` on durable flows so a completed charge never re-runs on resume. Coarse whole-body retry is `flow({ retry: { … } })` on the same journal session.
 
 ## Channel
@@ -102,9 +115,9 @@ AI calls are nondeterministic: journaling is forced on and auto-cache disabled a
 
 ## Vault
 
-| Signature            | Records | Returns / notes                                                         |
-| -------------------- | ------- | ----------------------------------------------------------------------- |
-| `fx.vault(contract)` | `read`  | Cleartext, inside this flow only — registered with the redactor at boot |
+| Signature            | Records | Returns / notes                                                                           |
+| -------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `fx.vault(contract)` | `read`  | `Redacted<string>` — prints/logs as a placeholder; `.reveal()` at the credential boundary |
 
 ## Clock
 

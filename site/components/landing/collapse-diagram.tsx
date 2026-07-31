@@ -21,11 +21,12 @@
  * Readability: forty labelled nodes do not fit a 420 viewBox at the 11.5px
  * floor this project holds SVG text to — the ring would need a radius of about
  * 500 before adjacent labels near twelve o'clock stopped overlapping, and the
- * text would then render at four real pixels. So the nodes are points, the ring
- * is broken into one arc per element, and exactly one label is drawn at a time,
- * as a clamped chip: whatever the pointer or the change feed is on. Nothing is
- * lost to a screen reader — every node's `aria-label` still enumerates its
- * seams by name, and the panel labels enumerate all forty concerns.
+ * text would then render at four real pixels. So the nodes are points; the ring
+ * carries one labelled arc per element (the eight groups); and the live chips
+ * name the active source plus a short fan of its destinations (A → B, C, D),
+ * clamped into the viewBox. Nothing is lost to a screen reader — every node's
+ * `aria-label` still enumerates its seams by name, and the panel labels
+ * enumerate all forty concerns.
  *
  * Two live layers carry the argument without the user touching anything.
  * Hovering any node lights only its own seams — two to fifteen of them in the
@@ -34,9 +35,9 @@
  * deterministic hash of the beat index, never `Math.random`: the server renders
  * beat zero too, and a different pick in the browser is a hydration mismatch.
  *
- * Concept inspired by the stepped "problem space" diagrams on https://iii.dev
- * (see site/NOTICE); geometry, markup, interaction, and copy are written from
- * scratch here.
+ * Concept inspired by stepped "problem space" diagrams common on backend
+ * framework marketing sites (see site/NOTICE); geometry, markup, interaction,
+ * and copy are written from scratch here.
  *
  * Motion note: each kind of value gets the transition that suits it — springs
  * for anything that changes size, so an arriving node has weight; a long ease
@@ -101,10 +102,28 @@ import {
 
 const VIEW = 420;
 const C = VIEW / 2;
-const CONCERN_RING = 152;
-const ELEMENT_RING = 88;
-const ELEMENT_R = 14;
-const HUB_R = 36;
+/**
+ * Pulled in from the viewBox edge so chips and group names sit in a real outer
+ * band — at 152 the longest labels clamped sideways and cut across the ring.
+ */
+const CONCERN_RING = 118;
+/** Arc that brackets each element's cluster, just outside the concern dots. */
+const GROUP_ARC_RING = CONCERN_RING + 10;
+/**
+ * Group names sit outside the arc by more than half a line of type — otherwise
+ * the stroke cuts through "Channel" / "Vault" / "Store".
+ */
+const GROUP_LABEL_RING = GROUP_ARC_RING + 16;
+/** Preferred radius for concern chips — well clear of the group-name band. */
+const CHIP_RING = GROUP_LABEL_RING + 32;
+const ELEMENT_RING = 72;
+const ELEMENT_R = 13;
+const HUB_R = 32;
+/**
+ * Destination chips drawn with the active source. The busiest zoo node owns
+ * fifteen seams; four named ends keep the fan readable beside the readout.
+ */
+const MAX_DEST_LABELS = 4;
 /** Wordmark size inside the law hub (viewBox units; aspect matches OkeLogo). */
 const HUB_LOGO_W = 50;
 const HUB_LOGO_H = (HUB_LOGO_W * 87) / 327;
@@ -208,6 +227,26 @@ function pointAt(radius: number, angle: number): Point {
   return { x: round(C + radius * Math.cos(rad)), y: round(C + radius * Math.sin(rad)) };
 }
 
+/**
+ * SVG arc along `radius` from `startAngle` to `endAngle` (degrees).
+ *
+ * @param radius - Distance from the diagram centre
+ * @param startAngle - Arc start, degrees
+ * @param endAngle - Arc end, degrees
+ * @param clockwise - Sweep flag: the same direction `angleAt` walks the ring.
+ *   Flipped label paths go anticlockwise so bottom-half names stay upright —
+ *   without it a reversed span normalises to ~330° and the text rides the
+ *   whole ring onto its neighbours.
+ */
+function arcPath(radius: number, startAngle: number, endAngle: number, clockwise = true): string {
+  const start = pointAt(radius, startAngle);
+  const end = pointAt(radius, endAngle);
+  let sweep = clockwise ? endAngle - startAngle : startAngle - endAngle;
+  if (sweep < 0) sweep += 360;
+  const large = sweep > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${large} ${clockwise ? 1 : 0} ${end.x} ${end.y}`;
+}
+
 /** Where a ray leaving the centre at `angle` meets the hub circle. */
 function hubDock(angle: number): Point {
   return pointAt(HUB_R, angle);
@@ -227,8 +266,40 @@ const CONCERNS = ZOO_CONCERNS.map((concern, i) => {
     group,
     angle,
     node: pointAt(CONCERN_RING, angle),
-    /** Where this concern's label chip wants to sit, before clamping. */
-    labelPoint: pointAt(CONCERN_RING + 20, angle),
+    /** Preferred chip seat on the outward ray — placement may step in radially. */
+    labelPoint: pointAt(CHIP_RING, angle),
+  };
+});
+
+/**
+ * One labelled arc per element: the blank gap slots already break the ring into
+ * eight clusters; these arcs and names make that grouping legible without
+ * crowding the concern dots. The name rides the arc on a `textPath`, so
+ * "Vault" and "Channel" curve with their cluster instead of cutting across it.
+ */
+const GROUP_ARCS = ZOO_CONCERN_GROUPS.map((group, gi) => {
+  const firstSlot = group.start + gi * ARC_GAP_SLOTS;
+  const lastSlot = group.end - 1 + gi * ARC_GAP_SLOTS;
+  const startAngle = angleAt(firstSlot - ARC_GAP_SLOTS * 0.35);
+  const endAngle = angleAt(lastSlot + ARC_GAP_SLOTS * 0.35);
+  const midAngle = angleAt((firstSlot + lastSlot) / 2);
+  /**
+   * Flip every name whose arc sits below the horizontal midline (screen
+   * angles run 0° east → 180° west through the bottom): clockwise text past
+   * the midline rides more upside-down than upright, so "Store", "Clock",
+   * "Gate", and "Vault" run the other way while "Channel" and "AI" do not.
+   */
+  const midRad = ((midAngle % 360) + 360) % 360;
+  const bottomHalf = midRad > 0 && midRad < 180;
+  return {
+    element: group.element,
+    start: group.start,
+    end: group.end,
+    id: `group-arc-${group.element.toLowerCase().replace(/[^a-z]/g, "")}`,
+    path: arcPath(GROUP_ARC_RING, startAngle, endAngle),
+    textPath: bottomHalf
+      ? arcPath(GROUP_LABEL_RING, endAngle, startAngle, false)
+      : arcPath(GROUP_LABEL_RING, startAngle, endAngle),
   };
 });
 
@@ -250,8 +321,8 @@ const ELEMENT_NODES = ELEMENTS.filter((element) =>
     node: pointAt(ELEMENT_RING, angle),
     /** Where this element's trunk docks against the hub. */
     dock: hubDock(angle),
-    /** Where this element's label chip wants to sit, before clamping. */
-    labelPoint: pointAt(CONCERN_RING + 20, angle),
+    /** Preferred chip seat on the outward ray — placement may step in radially. */
+    labelPoint: pointAt(ELEMENT_RING + 32, angle),
     /** Concern indices this element subsumes, in ring order. */
     concerns: owned.map((entry) => entry.i),
     /** Index of the first concern that brings this element into the graph. */
@@ -379,6 +450,19 @@ function wiredTo(index: number, visible: number): ReadonlyArray<string> {
   return zooSeamsOf(index, visible).map(
     (seam) => CONCERNS[seam.a === index ? seam.b : seam.a]!.text,
   );
+}
+
+/**
+ * Ring positions of the concerns `index` is wired to, capped for on-diagram
+ * chips so a fifteen-seam node still reads as A → B, C, D.
+ *
+ * @param index - Ring position of the source concern
+ * @param visible - Concerns present at the current step
+ */
+function destinationIndices(index: number, visible: number): ReadonlyArray<number> {
+  return zooSeamsOf(index, visible)
+    .map((seam) => (seam.a === index ? seam.b : seam.a))
+    .slice(0, MAX_DEST_LABELS);
 }
 
 type TabId = "zoo" | "okengine";
@@ -602,65 +686,329 @@ const PANEL_SVG = "absolute inset-0 size-full";
 const LABEL_CHAR = 6.9;
 const CHIP_PAD_X = 7;
 const CHIP_H = 18;
-const CHIP_MARGIN = 3;
+const CHIP_MARGIN = 4;
+/** Gap between the leader trace and the chip edge. */
+const ARROW_GAP = 4;
+/** Length of the leader's bent end segment, in viewBox units. */
+const ELBOW_LEN = 9;
+/** Padding between chip boxes when resolving overlaps. */
+const CHIP_GAP = 9;
+/** Furthest a collision-resolved chip may sit. */
+const CHIP_RING_MAX = VIEW / 2 - CHIP_H / 2 - CHIP_MARGIN;
 
 /** Keep `value` inside `[min, max]`. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/** Chip box size for `label` at `emphasis`. */
+function chipSize(
+  label: string,
+  emphasis: "source" | "destination",
+): { readonly width: number; readonly height: number } {
+  const padX = emphasis === "source" ? CHIP_PAD_X : CHIP_PAD_X - 1;
+  const height = emphasis === "source" ? CHIP_H : CHIP_H - 2;
+  return { width: label.length * LABEL_CHAR + padX * 2, height };
+}
+
+/** Whether two axis-aligned boxes overlap, with `pad` of clearance. */
+function boxesOverlap(
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+  pad = CHIP_GAP,
+): boolean {
+  return !(
+    ax + aw / 2 + pad < bx - bw / 2 ||
+    bx + bw / 2 + pad < ax - aw / 2 ||
+    ay + ah / 2 + pad < by - bh / 2 ||
+    by + bh / 2 + pad < ay - ah / 2
+  );
+}
+
 /**
- * The one label on screen, drawn as a chip beside the node it names.
+ * Seat a chip on the ray from the centre at `angle`, preferring `wantR`.
  *
- * Forty labels do not fit the ring, so only the node under the pointer, the
- * keyboard focus, or the change feed is named — and because the longest label
- * is wider than the margin outside the ring, the chip is clamped into the
- * viewBox rather than allowed to run off the edge. It sits over the mesh on an
- * opaque card fill, which is what keeps it legible where it has to overlap.
+ * Tries the preferred radius, then steps outward (collision resolution), then
+ * inward — never slides sideways around the ring.
  *
- * @param label - Concern or element name
- * @param at - Where the chip would like to sit, before clamping
- * @param reduced - Whether the visitor asked for reduced motion
- * @param tone - Soft element ink for the chip stroke and text, when lit
+ * @param angle - Degrees, same convention as `angleAt`
+ * @param wantR - Preferred distance from the centre
+ * @param width - Chip width
+ * @param height - Chip height
  */
-function LabelChip({
-  label,
-  at,
-  reduced,
-  tone,
-}: {
+function placeOnRay(
+  angle: number,
+  wantR: number,
+  width: number,
+  height: number,
+): { readonly x: number; readonly y: number; readonly r: number } {
+  const minR = GROUP_LABEL_RING + 8;
+  const preferred = clamp(wantR, minR, CHIP_RING_MAX);
+  const tryR = (
+    r: number,
+  ): { readonly x: number; readonly y: number; readonly r: number } | null => {
+    const point = pointAt(r, angle);
+    if (
+      point.x - width / 2 >= CHIP_MARGIN &&
+      point.x + width / 2 <= VIEW - CHIP_MARGIN &&
+      point.y - height / 2 >= CHIP_MARGIN &&
+      point.y + height / 2 <= VIEW - CHIP_MARGIN
+    ) {
+      return { x: point.x, y: point.y, r };
+    }
+    return null;
+  };
+  const hit = tryR(preferred);
+  if (hit) return hit;
+  for (let r = preferred + 2; r <= CHIP_RING_MAX; r += 2) {
+    const outward = tryR(r);
+    if (outward) return outward;
+  }
+  for (let r = preferred - 2; r >= minR; r -= 2) {
+    const inward = tryR(r);
+    if (inward) return inward;
+  }
+  const fallback = pointAt(minR, angle);
+  return { x: fallback.x, y: fallback.y, r: minR };
+}
+
+/** One chip to lay out — source or destination. */
+type ChipSpec = {
+  readonly key: string;
   readonly label: string;
-  readonly at: Point;
-  readonly reduced: boolean;
+  readonly angle: number;
+  readonly emphasis: "source" | "destination";
   readonly tone?: string;
-}) {
-  const width = label.length * LABEL_CHAR + CHIP_PAD_X * 2;
-  const x = clamp(at.x, width / 2 + CHIP_MARGIN, VIEW - width / 2 - CHIP_MARGIN);
-  const y = clamp(at.y, CHIP_H / 2 + CHIP_MARGIN, VIEW - CHIP_H / 2 - CHIP_MARGIN);
-  const ink = tone ?? "var(--color-fd-foreground)";
+  /** Radius of the node the arrow leaves — concern ring by default. */
+  readonly nodeR?: number;
+  /** Preferred chip radius — outer band by default. */
+  readonly preferR?: number;
+};
+
+/** A chip after collision resolution. */
+type ChipSeat = ChipSpec & {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+  readonly width: number;
+  readonly height: number;
+  /** Angle used for the arrow (may be nudged off the node ray). */
+  readonly drawAngle: number;
+  readonly nodeR: number;
+};
+
+/**
+ * Lay out chips so boxes do not overlap.
+ *
+ * Sources pin their radius (they are the anchor of the A → B,C,D reading);
+ * destinations yield: push outward, then fan a few degrees off the node, and
+ * drop a destination that still collides — fewer clear labels beat a stacked
+ * pile of `job` / `workflow`.
+ *
+ * @param specs - Chips to place (source first when present)
+ */
+function layoutChips(specs: ReadonlyArray<ChipSpec>): ReadonlyArray<ChipSeat> {
+  type Working = {
+    spec: ChipSpec;
+    width: number;
+    height: number;
+    r: number;
+    drawAngle: number;
+    x: number;
+    y: number;
+    keep: boolean;
+  };
+  const items: Working[] = specs.map((spec) => {
+    const size = chipSize(spec.label, spec.emphasis);
+    const prefer = spec.preferR ?? CHIP_RING;
+    const seat = placeOnRay(spec.angle, prefer, size.width, size.height);
+    return {
+      spec,
+      width: size.width,
+      height: size.height,
+      r: seat.r,
+      drawAngle: spec.angle,
+      x: seat.x,
+      y: seat.y,
+      keep: true,
+    };
+  });
+
+  const reseat = (item: Working) => {
+    const seat = placeOnRay(item.drawAngle, item.r, item.width, item.height);
+    item.x = seat.x;
+    item.y = seat.y;
+    item.r = seat.r;
+  };
+
+  /** Preferential victim: a destination; the one that is easier to move. */
+  const victimOf = (a: Working, b: Working): Working | null => {
+    if (a.spec.emphasis === "source" && b.spec.emphasis === "source") return null;
+    if (a.spec.emphasis === "source") return b;
+    if (b.spec.emphasis === "source") return a;
+    return a.r <= b.r ? a : b;
+  };
+
+  for (let pass = 0; pass < 60; pass += 1) {
+    let moved = false;
+    for (let i = 0; i < items.length; i += 1) {
+      const a = items[i]!;
+      if (!a.keep) continue;
+      for (let j = i + 1; j < items.length; j += 1) {
+        const b = items[j]!;
+        if (!b.keep) continue;
+        if (!boxesOverlap(a.x, a.y, a.width, a.height, b.x, b.y, b.width, b.height)) continue;
+        const victim = victimOf(a, b);
+        if (victim === null) {
+          // Two sources — almost never; shove the later one hard outward.
+          const other = a.r < b.r ? b : a;
+          other.r = Math.min(CHIP_RING_MAX, other.r + 20);
+          reseat(other);
+          moved = true;
+          continue;
+        }
+        // 1) Radial push.
+        if (victim.r + 14 <= CHIP_RING_MAX) {
+          victim.r += 14;
+          reseat(victim);
+          moved = true;
+          continue;
+        }
+        // 2) Fan off the node's ray in widening steps.
+        if (Math.abs(victim.drawAngle - victim.spec.angle) < 14) {
+          const sign = victim.spec.angle >= (a === victim ? b.spec.angle : a.spec.angle) ? 1 : -1;
+          const step = 8 + Math.abs(victim.drawAngle - victim.spec.angle);
+          victim.drawAngle = victim.spec.angle + sign * step;
+          victim.r = victim.spec.preferR ?? CHIP_RING;
+          reseat(victim);
+          moved = true;
+          continue;
+        }
+        // 3) No clear seat — drop the destination.
+        victim.keep = false;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
+  return items
+    .filter((item) => item.keep)
+    .map((item) => ({
+      ...item.spec,
+      x: item.x,
+      y: item.y,
+      r: item.r,
+      width: item.width,
+      height: item.height,
+      drawAngle: item.drawAngle,
+      nodeR: item.spec.nodeR ?? CONCERN_RING,
+    }));
+}
+
+/**
+ * A laid-out label chip with a leader trace from its node toward the box.
+ *
+ * @param seat - Collision-resolved seat from `layoutChips`
+ * @param reduced - Whether the visitor asked for reduced motion
+ */
+function LabelChip({ seat, reduced }: { readonly seat: ChipSeat; readonly reduced: boolean }) {
+  const { label, emphasis, tone, angle, drawAngle, x, y, r, width, height, nodeR } = seat;
+  const ink =
+    tone ??
+    (emphasis === "source" ? "var(--color-fd-foreground)" : "var(--color-fd-muted-foreground)");
+  const stroke = tone ?? "var(--color-fd-border)";
+  /**
+   * The connector leaves its pin on the node's true ray, then breaks square
+   * and plugs into the chip edge — the bent leader of a technical drawing,
+   * not an arrowhead. The creeping dash rides both segments.
+   */
+  const pin = pointAt(nodeR + 7, angle);
+  const shaftStart = pointAt(nodeR + 9.5, angle);
+  const rad = (drawAngle * Math.PI) / 180;
+  const cosA = Math.cos(rad);
+  const sinA = Math.sin(rad);
+  /** Shallow rays break horizontal into a side edge; steep rays break vertical. */
+  const horizontal = Math.abs(cosA) >= Math.abs(sinA);
+  const end = horizontal
+    ? { x: round(x - Math.sign(cosA) * (width / 2 + ARROW_GAP)), y: round(y) }
+    : { x: round(x), y: round(y - Math.sign(sinA) * (height / 2 + ARROW_GAP)) };
+  const shaftLen = Math.hypot(end.x - shaftStart.x, end.y - shaftStart.y);
+  /**
+   * The bent end earns its place only on diagonals — a leader that is
+   * already axis-aligned stays a clean straight line, and so does one too
+   * short to bend without doubling back on itself.
+   */
+  const collinear = horizontal ? Math.abs(sinA) < 0.21 : Math.abs(cosA) < 0.21;
+  const bent = !collinear && shaftLen > ELBOW_LEN + 8;
+  const elbow = horizontal
+    ? { x: round(end.x - Math.sign(cosA) * ELBOW_LEN), y: end.y }
+    : { x: end.x, y: round(end.y - Math.sign(sinA) * ELBOW_LEN) };
+  const trace = bent
+    ? `M ${shaftStart.x} ${shaftStart.y} L ${elbow.x} ${elbow.y} L ${end.x} ${end.y}`
+    : `M ${shaftStart.x} ${shaftStart.y} L ${end.x} ${end.y}`;
+  const showArrow = r - nodeR > 18;
   return (
     <motion.g
-      key={label}
       initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ opacity: emphasis === "source" ? 1 : 0.92 }}
       transition={reduced ? INSTANT : FADE}
       pointerEvents="none"
       aria-hidden="true"
     >
+      {showArrow ? (
+        <g opacity={emphasis === "source" ? 0.95 : 0.78} style={reduced ? undefined : TINT}>
+          <path
+            d={trace}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="0.9"
+            opacity="0.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d={trace}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={emphasis === "source" ? 1.05 : 0.9}
+            strokeDasharray="2.5 4.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={reduced ? undefined : "oke-chip-flow"}
+          />
+          <circle
+            cx={pin.x}
+            cy={pin.y}
+            r="2.1"
+            fill="var(--color-fd-background)"
+            stroke={stroke}
+            strokeWidth="1"
+          />
+          <circle cx={pin.x} cy={pin.y} r="0.8" fill={stroke} />
+        </g>
+      ) : null}
       <rect
         x={round(x - width / 2)}
-        y={round(y - CHIP_H / 2)}
+        y={round(y - height / 2)}
         width={round(width)}
-        height={CHIP_H}
+        height={height}
         rx="4"
         fill="var(--color-fd-card)"
-        stroke={tone ?? "var(--color-fd-border)"}
-        strokeWidth="1"
+        stroke={stroke}
+        strokeWidth={emphasis === "source" ? 1 : 0.85}
+        opacity={emphasis === "source" ? 1 : 0.94}
         style={reduced ? undefined : TINT}
       />
       <text
         x={round(x)}
-        y={round(y + 4)}
+        y={round(y + 3.5)}
         textAnchor="middle"
         // 11.5 in a 420 viewBox keeps the label above ~8 real px on a 390px
         // screen, the floor this project holds SVG text to.
@@ -672,6 +1020,192 @@ function LabelChip({
         {label}
       </text>
     </motion.g>
+  );
+}
+
+/**
+ * The eight group arcs and their element names — the ring's own legend.
+ *
+ * When a group's concerns already carry source/destination chips, the name is
+ * suppressed so "Store" does not sit among `database` / `cache` as if it were
+ * another destination. The arc stays, so the clustering remains visible.
+ *
+ * @param visible - Concerns present at the current step
+ * @param activeElement - Element currently lit by hover or the change feed
+ * @param quietElements - Elements whose name would collide with live chips
+ * @param reduced - Whether the visitor asked for reduced motion
+ */
+function GroupBands({
+  visible,
+  activeElement,
+  quietElements,
+  reduced,
+}: {
+  readonly visible: number;
+  readonly activeElement: string | null;
+  readonly quietElements?: ReadonlyArray<string>;
+  readonly reduced: boolean;
+}) {
+  const fade = reduced ? INSTANT : FADE;
+  const tint = reduced ? undefined : TINT;
+  return (
+    <g aria-hidden="true">
+      {GROUP_ARCS.map((arc) => {
+        const shown = arc.start < visible;
+        const lit = activeElement === arc.element;
+        const quiet = quietElements?.includes(arc.element) ?? false;
+        const tone = toneForElementName(arc.element);
+        return (
+          <motion.g
+            key={arc.element}
+            initial={false}
+            animate={{ opacity: shown ? (lit ? 1 : activeElement ? 0.45 : 0.85) : 0 }}
+            transition={fade}
+          >
+            <path
+              d={arc.path}
+              fill="none"
+              stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
+              strokeWidth={lit ? 1.5 : 1}
+              strokeLinecap="round"
+              opacity={lit ? 0.9 : 0.55}
+              style={tint}
+            />
+            {quiet ? null : (
+              <>
+                <defs>
+                  <path id={arc.id} d={arc.textPath} fill="none" />
+                </defs>
+                <text
+                  fontSize="11.5"
+                  fontFamily="var(--font-mono, ui-monospace, monospace)"
+                  fill={lit ? tone : "var(--color-fd-foreground)"}
+                  opacity={lit ? 1 : 0.55}
+                  style={tint}
+                >
+                  <textPath href={`#${arc.id}`} startOffset="50%" textAnchor="middle">
+                    {arc.element}
+                  </textPath>
+                </text>
+              </>
+            )}
+          </motion.g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Source chip plus destination chips: A → B, C, D.
+ *
+ * @param source - Active concern on the ring
+ * @param destinations - Other ends to name (already capped)
+ * @param reduced - Whether the visitor asked for reduced motion
+ */
+function SourceDestLabels({
+  source,
+  destinations,
+  reduced,
+}: {
+  readonly source: number;
+  readonly destinations: ReadonlyArray<number>;
+  readonly reduced: boolean;
+}) {
+  const src = CONCERNS[source]!;
+  const seats = layoutChips([
+    {
+      key: `src-${src.text}`,
+      label: src.text,
+      angle: src.angle,
+      emphasis: "source",
+      tone: toneForElementName(src.element),
+    },
+    ...destinations.map((index) => {
+      const dest = CONCERNS[index]!;
+      return {
+        key: `dest-${dest.text}`,
+        label: dest.text,
+        angle: dest.angle,
+        emphasis: "destination" as const,
+        tone: toneForElementName(dest.element),
+      };
+    }),
+  ]);
+  return (
+    <>
+      {seats.map((seat) => (
+        <LabelChip key={seat.key} seat={seat} reduced={reduced} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Leaf label on the hub side. The element already carries its two-letter
+ * symbol, so a second name chip beside it would read as a phantom node —
+ * destinations are the leaves, named when the element itself is the source.
+ */
+function HubConcernLabels({
+  source,
+  reduced,
+}: {
+  readonly source: number;
+  readonly reduced: boolean;
+}) {
+  const concern = CONCERNS[source]!;
+  const seats = layoutChips([
+    {
+      key: `hub-${concern.text}`,
+      label: concern.text,
+      angle: concern.angle,
+      emphasis: "source",
+      tone: toneForElementName(concern.element),
+    },
+  ]);
+  const seat = seats[0];
+  return seat ? <LabelChip seat={seat} reduced={reduced} /> : null;
+}
+
+/** Element chip plus its leaf destinations, collision-resolved. */
+function HubElementLabels({
+  element,
+  visible,
+  reduced,
+}: {
+  readonly element: (typeof ELEMENT_NODES)[number];
+  readonly visible: number;
+  readonly reduced: boolean;
+}) {
+  const seats = layoutChips([
+    {
+      key: `el-${element.name}`,
+      label: element.name,
+      angle: element.angle,
+      emphasis: "source",
+      tone: toneForElementName(element.name),
+      nodeR: ELEMENT_RING,
+      preferR: ELEMENT_RING + 34,
+    },
+    ...element.concerns
+      .filter((index) => index < visible)
+      .map((index) => {
+        const dest = CONCERNS[index]!;
+        return {
+          key: `hub-dest-${dest.text}`,
+          label: dest.text,
+          angle: dest.angle,
+          emphasis: "destination" as const,
+          tone: toneForElementName(dest.element),
+        };
+      }),
+  ]);
+  return (
+    <>
+      {seats.map((seat) => (
+        <LabelChip key={seat.key} seat={seat} reduced={reduced} />
+      ))}
+    </>
   );
 }
 
@@ -824,12 +1358,19 @@ type PanelProps = {
 function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
   const active = hover?.kind === "concern" ? hover.index : null;
   const changed = beat?.concern ?? null;
-  /** The one concern named on screen: what the pointer is on, else the change. */
+  /** Concern named on screen: what the pointer is on, else the change. */
   const named = active ?? changed;
   const litTone =
     named === null ? "var(--color-fd-foreground)" : toneForElementName(CONCERNS[named]!.element);
   const litSeams = litSeamsFor(active, active === null ? changed : null, visible, reduced);
   const lanes = beat === null || active !== null ? null : dashedSeams(beat, visible);
+  const destinations = named === null ? [] : destinationIndices(named, visible);
+  const destSet = new Set(destinations);
+  const activeElement = named === null ? null : CONCERNS[named]!.element;
+  const quietElements =
+    named === null
+      ? undefined
+      : [activeElement!, ...destinations.map((index) => CONCERNS[index]!.element)];
   const node = reduced ? INSTANT : NODE;
   const fade = reduced ? INSTANT : FADE;
   const tint = reduced ? undefined : TINT;
@@ -851,6 +1392,13 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
        * fails on the first paint.
        */}
       <title>{`The infrastructure zoo: ${TOTAL} concerns and the ${zooSeamCount(TOTAL)} seams between them`}</title>
+
+      <GroupBands
+        visible={visible}
+        activeElement={activeElement}
+        quietElements={quietElements}
+        reduced={reduced}
+      />
 
       {/* The mesh, dimmed as a whole when the pointer singles a node out. */}
       <g
@@ -902,12 +1450,13 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         const shown = i < visible;
         const isActive = active === i;
         const isLive = active === null && changed === i;
-        const dimmed = active !== null && !isActive;
+        const isDest = named !== null && destSet.has(i);
+        const dimmed = active !== null && !isActive && !isDest;
         const tone = toneForElementName(concern.element);
-        const lit = isActive || isLive;
-        const halo = isActive ? 12 : isLive ? 10 : 0;
-        const ring = shown ? (isActive ? 6.4 : 4.8) : 0;
-        const dot = shown ? (isActive ? 2.6 : 1.9) : 0;
+        const lit = isActive || isLive || isDest;
+        const halo = isActive ? 12 : isLive || isDest ? 10 : 0;
+        const ring = shown ? (isActive ? 6.4 : isDest ? 5.6 : 4.8) : 0;
+        const dot = shown ? (isActive ? 2.6 : isDest ? 2.2 : 1.9) : 0;
         return (
           <motion.g
             key={concern.text}
@@ -943,7 +1492,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
               initial={false}
-              animate={{ r: ring, strokeWidth: isActive ? 1.4 : 1 }}
+              animate={{ r: ring, strokeWidth: isActive ? 1.4 : isDest ? 1.15 : 1 }}
               transition={radius(ring, node, fade)}
             />
             <motion.circle
@@ -962,12 +1511,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       })}
 
       {named === null ? null : (
-        <LabelChip
-          label={CONCERNS[named]!.text}
-          at={CONCERNS[named]!.labelPoint}
-          reduced={reduced}
-          tone={toneForElementName(CONCERNS[named]!.element)}
-        />
+        <SourceDestLabels source={named} destinations={destinations} reduced={reduced} />
       )}
     </motion.svg>
   );
@@ -989,18 +1533,15 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
   const changedElement = changed === null ? undefined : elementOf(changed);
 
   /**
-   * The one label on screen. Hovering an element names the arc rather than any
-   * one concern of it, which is the only label the eight symbols do not already
-   * carry.
+   * Labels: hovering an element names it as the source and its leaves as
+   * destinations; a concern (hover or beat) names the leaf beside its symbol.
    */
   const hoveredElement =
     hover?.kind === "element" ? ELEMENT_NODES.find((n) => n.name === hover.name) : undefined;
   const namedConcern = hover?.kind === "concern" ? hover.index : hover === null ? changed : null;
-  const named: { readonly label: string; readonly at: Point } | null = hoveredElement
-    ? { label: hoveredElement.name, at: hoveredElement.labelPoint }
-    : namedConcern === null
-      ? null
-      : { label: CONCERNS[namedConcern]!.text, at: CONCERNS[namedConcern]!.labelPoint };
+  const bandElement =
+    activeElement ?? (changedElement && hover === null ? changedElement.name : null);
+  const quietElements = bandElement === null ? undefined : [bandElement];
 
   const node = reduced ? INSTANT : NODE;
   const draw = reduced ? INSTANT : DRAW;
@@ -1026,6 +1567,13 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           <stop offset="100%" stopColor="var(--color-fd-foreground)" stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      <GroupBands
+        visible={visible}
+        activeElement={bandElement}
+        quietElements={quietElements}
+        reduced={reduced}
+      />
 
       <g aria-hidden="true">
         {/* The closed set of eight sits on one orbit. */}
@@ -1262,19 +1810,10 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         );
       })}
 
-      {named === null ? null : (
-        <LabelChip
-          label={named.label}
-          at={named.at}
-          reduced={reduced}
-          tone={
-            hoveredElement
-              ? toneForElementName(hoveredElement.name)
-              : namedConcern === null
-                ? undefined
-                : toneForElementName(CONCERNS[namedConcern]!.element)
-          }
-        />
+      {hoveredElement ? (
+        <HubElementLabels element={hoveredElement} visible={visible} reduced={reduced} />
+      ) : namedConcern === null ? null : (
+        <HubConcernLabels source={namedConcern} reduced={reduced} />
       )}
     </motion.svg>
   );
@@ -1343,11 +1882,14 @@ export function CollapseDiagram() {
      * transform animates and warn under the OS preference.
      */
     <MotionConfig reducedMotion="never" transition={reduced ? INSTANT : FADE}>
-      <div className="w-full overflow-hidden rounded-xl border border-fd-border bg-fd-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-fd-border px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span aria-hidden className="size-2 rounded-full bg-fd-primary ring-2 ring-fd-border" />
-            <div className="relative h-4 w-20">
+      <div className="@container w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-fd-border px-3 py-2.5 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full bg-fd-primary ring-2 ring-fd-border"
+            />
+            <div className="relative h-4 w-20 shrink-0">
               <AnimatePresence initial={false}>
                 <motion.span
                   key={tab}
@@ -1364,7 +1906,7 @@ export function CollapseDiagram() {
           <div
             role="tablist"
             aria-label="Backend shape"
-            className="flex items-center gap-0.5 rounded-md border border-fd-border p-0.5"
+            className="flex max-w-full flex-wrap items-center gap-0.5 rounded-md border border-fd-border p-0.5"
           >
             {TABS.map((item) => (
               <button
@@ -1389,10 +1931,14 @@ export function CollapseDiagram() {
           </div>
         </div>
 
-        <div className="grid gap-px bg-fd-border lg:grid-cols-[minmax(0,1fr)_19rem]">
-          <div className="bg-fd-card px-4 py-5 sm:px-6" onMouseLeave={() => setHover(null)}>
+        {/* Stats column beside the ring only when the container is wide (homepage / large docs). */}
+        <div className="grid gap-px bg-fd-border @min-[48rem]:grid-cols-[minmax(0,1fr)_min(17rem,32%)]">
+          <div
+            className="min-w-0 bg-fd-card px-3 py-4 sm:px-6 sm:py-5"
+            onMouseLeave={() => setHover(null)}
+          >
             {/* Square cell: both shapes are 420×420, so they crossfade in place. */}
-            <div className="relative mx-auto aspect-square w-full max-w-120">
+            <div className="relative mx-auto aspect-square w-full max-w-full @min-[36rem]:max-w-[36rem]">
               <AnimatePresence initial={false}>
                 <Panel
                   key={tab}

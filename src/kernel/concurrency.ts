@@ -8,6 +8,7 @@
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import {
   abortableSleep,
+  abortError,
   currentAbortSignal,
   isAbortError,
   linkAbort,
@@ -142,6 +143,53 @@ export async function fxRace<T>(thunks: ReadonlyArray<FxThunk<T>>): Promise<T> {
       );
     }
   });
+}
+
+/**
+ * Scope a resource to a unit of work — `release` runs exactly once when
+ * `use` settles or when the ambient abort signal fires, whichever comes
+ * first. Uses the same AbortSignal as {@link Fx.signal}; no second
+ * cancellation channel.
+ *
+ * Process-local only: do not journal acquire/release, and do not hold
+ * handles across durable park/resume — journal replay returns values and
+ * never re-enters step bodies.
+ *
+ * @param acquire - Open the resource
+ * @param release - Cleanup, always run
+ * @param use - Work with the resource
+ */
+export async function fxUsing<A, T>(
+  acquire: () => A | Promise<A>,
+  release: (resource: A) => void | Promise<void>,
+  use: (resource: A) => T | Promise<T>,
+): Promise<T> {
+  const resource = await acquire();
+  const signal = currentAbortSignal();
+  let released = false;
+
+  const releaseOnce = async (): Promise<void> => {
+    if (released) return;
+    released = true;
+    await release(resource);
+  };
+
+  const onAbort = (): void => {
+    void releaseOnce();
+  };
+
+  if (signal.aborted) {
+    await releaseOnce();
+    throw abortError(signal.reason);
+  }
+  signal.addEventListener("abort", onAbort);
+
+  try {
+    return await use(resource);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+    await releaseOnce();
+  }
 }
 
 /**

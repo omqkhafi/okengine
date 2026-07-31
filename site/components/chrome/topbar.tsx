@@ -13,7 +13,15 @@
 
 "use client";
 
-import { animate, AnimatePresence, motion, MotionConfig, useMotionValue } from "framer-motion";
+import {
+  animate,
+  AnimatePresence,
+  motion,
+  MotionConfig,
+  useMotionValue,
+  useMotionValueEvent,
+  type MotionValue,
+} from "framer-motion";
 import { Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -82,6 +90,66 @@ function usePaneWidth(paneWidth: string, reduced: boolean) {
 }
 
 /**
+ * Active-tab underline pinned to the strip's bottom edge.
+ *
+ * A shared `layoutId` morph fights the brand-cell width spring and leaves the
+ * hairline floating on the Y axis. One measured bar that only animates `x` /
+ * `width` stays flush with the border through every route change.
+ *
+ * @param activeId - Current tab id, or null when none match
+ * @param paneWidthMv - Brand-cell width motion value; each frame remeasures tabs
+ * @param reduced - Skip the slide when the user prefers reduced motion
+ */
+function useActiveTabIndicator(
+  activeId: string | null,
+  paneWidthMv: MotionValue<string | number>,
+  reduced: boolean,
+) {
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef(new Map<string, HTMLAnchorElement>());
+  const x = useMotionValue(0);
+  const width = useMotionValue(0);
+  const ready = useRef(false);
+
+  const measure = (animated: boolean) => {
+    const strip = stripRef.current;
+    const tab = activeId ? tabRefs.current.get(activeId) : undefined;
+    if (!strip || !tab) return;
+
+    const stripRect = strip.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const nextX = tabRect.left - stripRect.left;
+    const nextW = tabRect.width;
+    if (nextW <= 0) return;
+
+    const slide = animated && ready.current && !reduced;
+    if (slide) {
+      void animate(x, nextX, EASE);
+      void animate(width, nextW, EASE);
+    } else {
+      x.jump(nextX);
+      width.jump(nextW);
+      ready.current = true;
+    }
+  };
+
+  useMeasureEffect(() => {
+    measure(true);
+    const strip = stripRef.current;
+    if (!strip) return;
+    // Catches viewport / font-driven tab resizes the pane spring does not.
+    const observer = new ResizeObserver(() => measure(false));
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [activeId, reduced]);
+
+  // Brand width spring reshapes the flex strip every frame — follow it.
+  useMotionValueEvent(paneWidthMv, "change", () => measure(false));
+
+  return { stripRef, tabRefs, x, width };
+}
+
+/**
  * Fixed site header. Mount once, in the root layout.
  *
  * @param tree - Docs page tree, for the mobile overlay's docs navigation
@@ -93,6 +161,13 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
   const { paneWidth, rule } = headerGeometry(pathname);
   const reduced = useClientReducedMotion();
   const { sizerRef, width } = usePaneWidth(paneWidth, reduced);
+  const activeTabId = NAV_TABS.find((tab) => isNavTabActive(tab, pathname))?.id ?? null;
+  const {
+    stripRef,
+    tabRefs,
+    x: indicatorX,
+    width: indicatorWidth,
+  } = useActiveTabIndicator(activeTabId, width, reduced);
 
   /*
    * The overlay is tied to the pathname it was opened on, so navigating away
@@ -160,13 +235,17 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
           </div>
 
           {/* Desktop tab strip. */}
-          <div className="hidden min-w-0 flex-1 items-stretch lg:flex">
+          <div ref={stripRef} className="relative hidden min-w-0 flex-1 items-stretch lg:flex">
             {NAV_TABS.map((tab) => {
               const active = isNavTabActive(tab, pathname);
               return (
                 <Link
                   key={tab.id}
                   href={tab.href}
+                  ref={(node) => {
+                    if (node) tabRefs.current.set(tab.id, node);
+                    else tabRefs.current.delete(tab.id);
+                  }}
                   className={cn(
                     "group/tab relative flex flex-1 items-center justify-center border-e px-2 transition-colors duration-150 xl:px-4",
                     rule,
@@ -183,24 +262,17 @@ export function Topbar({ tree }: { tree: PageTree.Root }) {
                   >
                     {tab.label}
                   </span>
-                  {/* Shared element: slides from the previous tab to this one. */}
-                  {active ? (
-                    reduced ? (
-                      <span
-                        aria-hidden
-                        className="absolute inset-x-0 -bottom-px h-0.5 bg-fd-foreground/50"
-                      />
-                    ) : (
-                      <motion.span
-                        layoutId="oke-active-tab"
-                        aria-hidden
-                        className="absolute inset-x-0 -bottom-px h-0.5 bg-fd-foreground/50"
-                      />
-                    )
-                  ) : null}
                 </Link>
               );
             })}
+
+            {activeTabId ? (
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute left-0 -bottom-px h-0.5 bg-fd-foreground/50"
+                style={{ x: indicatorX, width: indicatorWidth }}
+              />
+            ) : null}
 
             <a
               href={REPO_URL}

@@ -87,8 +87,9 @@ export function Features() {
      * (and warn) while we are still gating those props ourselves.
      */
     <MotionConfig reducedMotion="never" transition={CHIP_SPRING}>
-      <div className="not-prose w-full">
-        <ul className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border sm:grid-cols-2 lg:grid-cols-4">
+      {/* Container queries: docs article is narrower than the homepage band. */}
+      <div className="@container not-prose w-full max-w-full min-w-0">
+        <ul className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border @min-[28rem]:grid-cols-2 @min-[52rem]:grid-cols-4">
           {ELEMENTS.map((feature, i) => (
             <FeatureCard key={feature.name} feature={feature} index={i} />
           ))}
@@ -117,7 +118,7 @@ function FeatureCard({ feature, index }: { feature: (typeof ELEMENTS)[number]; i
         onPointerLeave={() => setActive(false)}
         onFocus={() => setActive(true)}
         onBlur={() => setActive(false)}
-        className="group relative flex h-full min-h-56 flex-col overflow-hidden bg-fd-card px-5 py-4 transition-colors hover:bg-fd-secondary/40"
+        className="group relative flex h-full min-h-48 flex-col overflow-hidden bg-fd-card px-4 py-4 transition-colors hover:bg-fd-secondary/40 @min-[28rem]:min-h-56 @min-[28rem]:px-5"
       >
         <Grid kind={feature.preview} />
 

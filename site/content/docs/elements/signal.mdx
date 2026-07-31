@@ -76,11 +76,7 @@ That's the loop: declare → `fx.emit` → `on(signal, flow)`. The runtime handl
 
 ## The three delivery physics
 
-| `delivery`    | Semantics                                              | Use for                                                    |
-| ------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| `"once"`      | Queue: competing consumers, retries, dead-letter queue | Jobs that must happen exactly once — emails, payments sync |
-| `"broadcast"` | Pub/sub: **every** subscriber receives a copy          | Cache invalidation, cross-service events                   |
-| `"live"`      | Stream: client-subscribable and replayable             | Live feeds, dashboards, progress updates                   |
+<SignalDelivery />
 
 The declaration is identical in shape for all three — switching physics later is a one-word change, not a migration to another library.
 

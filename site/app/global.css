@@ -107,6 +107,23 @@
   animation-fill-mode: backwards;
 }
 
+/*
+ * Chip-connector dash: data creeps from the node pin to its label. The
+ * dasharray is 2.5 + 4.5 = 7 units long, so one −7 offset loop is seamless.
+ */
+@keyframes oke-chip-flow {
+  to {
+    stroke-dashoffset: -7;
+  }
+}
+
+.oke-chip-flow {
+  animation-name: oke-chip-flow;
+  animation-duration: 900ms;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oke-seam-trace {
     animation: none;
@@ -114,6 +131,10 @@
   }
 
   .oke-seam-lit {
+    animation: none;
+  }
+
+  .oke-chip-flow {
     animation: none;
   }
 }
@@ -130,6 +151,20 @@ html > body[data-scroll-locked] {
 /* Docs prose rhythm — slightly denser, easier scan than default Fumadocs gaps */
 #nd-page article {
   font-size: 0.95rem;
+}
+
+/* Comparison tables in a narrow docs column wrap instead of blowing the layout. */
+#nd-page article :where(table) {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+#nd-page article :where(th),
+#nd-page article :where(td) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 #nd-page article h2 {

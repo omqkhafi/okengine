@@ -36,11 +36,12 @@ truth; and the changelog is parsed from the committed root changelog.md rather
 than fetched from the GitHub releases API, so the static export is
 deterministic and builds with no network.
 
-iii (diagram concept only)
---------------------------
+Problem-space diagram (concept only)
+------------------------------------
 The idea of arguing the problem with a tabbed panel whose first view is a
-complete-graph mesh of infrastructure concerns ("problem space") comes from the
-iii framework's site. No code, markup, or copy was taken: the geometry, node
-list, labels, and prose in `site/components/landing/collapse-diagram.tsx` were
-written from scratch, and the nodes are drawn from okengine's own `replaces`
-lists in `site/lib/elements.ts`.
+complete-graph mesh of infrastructure concerns ("problem space") comes from
+third-party framework marketing diagrams of that shape. No code, markup, or
+copy was taken: the geometry, node list, labels, and prose in
+`site/components/landing/collapse-diagram.tsx` were written from scratch, and
+the nodes are drawn from okengine's own `replaces` lists in
+`site/lib/elements.ts`.

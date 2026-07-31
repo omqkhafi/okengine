@@ -9,6 +9,7 @@ import {
   type Fx,
   type FxStubStoreHandle,
 } from "./fx.ts";
+import { Redacted } from "./redacted.ts";
 
 /** Narrow stub handle for tests that exercise the in-memory store. */
 function stub(fx: Fx, ref: string): FxStubStoreHandle {
@@ -99,7 +100,7 @@ describe("fx — effect ledger", () => {
     await fx.emit("order-placed", {});
     await fx.send("order-confirmed", { to: "u1" });
     await fx.ask("triage@1", {});
-    expect(fx.vault("STRIPE_KEY")).toBe("sk_test");
+    expect(fx.vault("STRIPE_KEY").reveal()).toBe("sk_test");
     await fx.call("payments.charge", {});
 
     expect(ledger.entries).toHaveLength(7);
@@ -130,7 +131,7 @@ describe("fx — wholesale swap", () => {
         sleep: async () => undefined,
       },
       vault() {
-        return "";
+        return new Redacted("");
       },
       cache: {
         get: async () => undefined,
@@ -192,6 +193,14 @@ describe("fx — wholesale swap", () => {
       },
       retry(fn) {
         return Promise.resolve().then(fn);
+      },
+      async using(acquire, release, use) {
+        const resource = await acquire();
+        try {
+          return await use(resource);
+        } finally {
+          await release(resource);
+        }
       },
     };
 

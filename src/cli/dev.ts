@@ -339,6 +339,24 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     loadedConfig = null;
   }
 
+  // Local mode + a configured `meilisearch` store.index: bring the server up
+  // as a fourth local process (binary on PATH — a documented prerequisite,
+  // like Docker for --docker). Docker mode instead relies on the recipe.
+  let meili: import("./meilisearch-local.ts").LocalMeilisearchHandle | null = null;
+  if (mode === "local") {
+    const indexId = resolveDriverId(loadedConfig?.drivers?.store?.index, "local") ?? "memory";
+    if (indexId === "meilisearch") {
+      try {
+        const { startLocalMeilisearch } = await import("./meilisearch-local.ts");
+        meili = await startLocalMeilisearch({ cwd });
+        write(formatStatusLine(`meilisearch local server on ${meili.url}`));
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        return { code: 1 };
+      }
+    }
+  }
+
   if (mode === "docker") {
     let images = options.images;
     if (!images) {
@@ -567,6 +585,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           OKE_KV_DRIVER: stackKvDriver,
         }
       : {}),
+    ...(meili?.overlay ?? {}),
   };
   process.env.OKE_DEV_REQUEST_LOG = "1";
 
@@ -755,6 +774,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stopped = true;
     autoPushRunner.cancel();
     watcher.close();
+    meili?.stop();
     app.stop();
     consoleServer.stop();
     mcpServer?.stop();

@@ -6,11 +6,12 @@
  * documented deep-link API — offer copy-prompt instead of fake hrefs.
  */
 
+import { GithubMark } from "@/components/chrome/icons";
 import { cn } from "@/lib/cn";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "fumadocs-ui/components/ui/popover";
 import { MarkdownCopyButton } from "fumadocs-ui/layouts/docs/page";
-import { Check, ChevronDown, Copy, ExternalLinkIcon, TextIcon } from "lucide-react";
+import { Bot, Check, ChevronDown, ExternalLinkIcon, Sparkles, TextIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 export interface DocsPageActionsProps {
@@ -44,35 +45,48 @@ export function cursorPromptHref(text: string): string {
 }
 
 /**
- * Copy Markdown + honest Open menu for a docs page.
+ * Copy Markdown + Copy prompt + honest Open menu for a docs page.
  */
 export function DocsPageActions({ markdownUrl, githubUrl }: DocsPageActionsProps): ReactNode {
   return (
     <div className="flex flex-row gap-2 items-center border-b pb-6">
       <MarkdownCopyButton markdownUrl={markdownUrl} />
+      <CopyPromptButton markdownUrl={markdownUrl} />
       <HonestViewOptions markdownUrl={markdownUrl} githubUrl={githubUrl} />
     </div>
   );
 }
 
-function HonestViewOptions({ markdownUrl, githubUrl }: DocsPageActionsProps): ReactNode {
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
+function CopyPromptButton({ markdownUrl }: { readonly markdownUrl: string }): ReactNode {
+  const [copied, setCopied] = useState(false);
 
+  async function copyPrompt(): Promise<void> {
+    await navigator.clipboard.writeText(cursorPromptForMarkdown(markdownUrl));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copyPrompt()}
+      className={cn(buttonVariants({ color: "secondary", size: "sm" }), "gap-2")}
+    >
+      {copied ? <Check className="size-3.5" /> : <Bot className="size-3.5" />}
+      Copy prompt
+    </button>
+  );
+}
+
+function HonestViewOptions({ markdownUrl, githubUrl }: DocsPageActionsProps): ReactNode {
   const items = useMemo(() => {
     const prompt = cursorPromptForMarkdown(markdownUrl);
     return {
-      prompt,
       cursorHref: cursorPromptHref(prompt),
       markdownHref: markdownUrl,
       githubHref: githubUrl,
     };
   }, [githubUrl, markdownUrl]);
-
-  async function copyAssistantPrompt(): Promise<void> {
-    await navigator.clipboard.writeText(items.prompt);
-    setCopiedPrompt(true);
-    window.setTimeout(() => setCopiedPrompt(false), 1500);
-  }
 
   return (
     <Popover>
@@ -89,17 +103,11 @@ function HonestViewOptions({ markdownUrl, githubUrl }: DocsPageActionsProps): Re
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col min-w-56">
-        {items.githubHref ? <MenuLink href={items.githubHref} title="Open in GitHub" /> : null}
+        {items.githubHref ? (
+          <MenuLink href={items.githubHref} title="Open in GitHub" icon={<GithubMark />} />
+        ) : null}
         <MenuLink href={items.markdownHref} title="View as Markdown" icon={<TextIcon />} />
-        <MenuLink href={items.cursorHref} title="Open in Cursor" />
-        <button
-          type="button"
-          onClick={() => void copyAssistantPrompt()}
-          className="text-sm p-2 rounded-lg inline-flex items-center gap-2 hover:text-fd-accent-foreground hover:bg-fd-accent [&_svg]:size-4 text-left"
-        >
-          {copiedPrompt ? <Check /> : <Copy />}
-          Copy prompt for ChatGPT / Claude
-        </button>
+        <MenuLink href={items.cursorHref} title="Open in Cursor" icon={<Sparkles />} />
       </PopoverContent>
     </Popover>
   );

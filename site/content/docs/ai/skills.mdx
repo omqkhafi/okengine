@@ -7,14 +7,15 @@ source: "docs/spec/unified-theory.md"
 
 Tools alone don't make a good operator — an agent also needs to know the _vocabulary_: what a Flow is, why `fx` is the only door, which driver ids are legal. OKE ships that knowledge as contracts and skills that agents load automatically, so sessions start aligned instead of drifting and getting corrected.
 
-## The four layers
+## The layers
 
 | Layer              | Path                       | Loaded when                                       | Teaches                                                               |
 | ------------------ | -------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
 | **Agent contract** | `AGENTS.md` (repo root)    | Every agent session, automatically                | The one law, eight elements, ten exports, the fx rule, ports, budgets |
 | **Element skill**  | `.agents/skills/oke/`      | Building or changing an okengine app              | The element contract in depth — declaration patterns per element      |
 | **Docs skill**     | `.agents/skills/oke-docs/` | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
-| **Ship skill**     | `.agents/skills/oke-ship/` | After any implementation, before claiming done    | Changelog under the current version + docs sync via `oke-docs`        |
+| **Ship skill**     | `.agents/skills/oke-ship/` | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`            |
+| **Deps skill**     | `.agents/skills/oke-deps/` | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)       |
 
 ## AGENTS.md — the root contract
 
@@ -22,13 +23,14 @@ Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, an
 
 ## Skills — installable know-how
 
-Skills are `SKILL.md` packages an agent loads when the work matches their description. The three OKE ships:
+Skills are `SKILL.md` packages an agent loads when the work matches their description. OKE ships:
 
 | Skill      | Use it for                                   | Inside                                                                    |
 | ---------- | -------------------------------------------- | ------------------------------------------------------------------------- |
 | `oke`      | App work — flows, elements, drivers          | The agent contract, element patterns, the fx invariants                   |
 | `oke-docs` | Docs work — new pages, rewrites              | The page skeleton, verification sources, the density gate                 |
 | `oke-ship` | Closing an implementation — changelog + docs | Append under `## Unreleased`; `bun run bump` promotes it into `## vX.Y.Z` |
+| `oke-deps` | Dependency updates — one package or all      | Scope map, `ncu` + Bun, reject downgrades / protect RC and aliases        |
 
 All live in the repo under `.agents/skills/`, so they travel with the code and stay versioned with what they describe.
 

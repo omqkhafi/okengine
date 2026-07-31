@@ -24,9 +24,11 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 
 ## Index store
 
-| Variable           | Used for                  | Default when unset |
-| ------------------ | ------------------------- | ------------------ |
-| `OKE_INDEX_DRIVER` | Force the index driver id | config map         |
+| Variable              | Used for                                            | Default when unset |
+| --------------------- | --------------------------------------------------- | ------------------ |
+| `OKE_INDEX_DRIVER`    | Force the index driver id                           | config map         |
+| `OKE_STORE_INDEX_URL` | Meilisearch base URL (`meilisearch` driver)         | —                  |
+| `OKE_STORE_INDEX_KEY` | Meilisearch API / master key (`meilisearch` driver) | `MEILI_MASTER_KEY` |
 
 ## KV store
 

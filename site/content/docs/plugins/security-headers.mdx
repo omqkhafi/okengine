@@ -51,7 +51,7 @@ Every [helmet.js](https://helmet.js.org/) middleware maps to an option here — 
 | `xPoweredBy`                    | `poweredBy`                                                                               | Yes — removed; a string sets a decoy value                                  |
 | `xXssProtection`                | `xssProtection`                                                                           | Yes — `0` (disables the legacy buggy auditor)                               |
 
-Beyond parity: headers land on **failures too** (helmet middleware ordering bugs are a classic Express footgun), app-set values win by default, and every option can be driven live from the database (below).
+Beyond parity: headers land on **failures too** (middleware that only wraps happy paths skips error responses), app-set values win by default, and every option can be driven live from the database (below).
 
 ## Options
 

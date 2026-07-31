@@ -18,7 +18,12 @@ import type {
   SqlDriver,
   SqlRole,
   SqlRow,
+  TextIndexSearchOptions,
+  TextIndexSearchResult,
+  VectorIndexDriver,
+  VectorIndexStore,
 } from "../../drivers/types.ts";
+import { indexDriverNeedsSql } from "../../drivers/types.ts";
 import { buildClassificationMap, type MaskRowsOptions } from "./classify.ts";
 import {
   createStoreCache,
@@ -64,7 +69,15 @@ export interface CreateStoreRuntimeOptions {
   readonly files?: Readonly<Record<string, { readonly root?: string; readonly client?: unknown }>>;
   /** Index open options keyed by store name. */
   readonly index?: Readonly<
-    Record<string, { readonly dims?: number; readonly url?: string; readonly sql?: SqlConnection }>
+    Record<
+      string,
+      {
+        readonly dims?: number;
+        readonly url?: string;
+        readonly apiKey?: string;
+        readonly sql?: SqlConnection;
+      }
+    >
   >;
   /** Clock for cache TTLs. */
   readonly now?: () => number;
@@ -115,17 +128,29 @@ export interface FilesStoreFxHandle {
   list(prefix?: string): Promise<string[]>;
 }
 
-/** Index handle on `fx.store`. */
-export interface IndexStoreFxHandle {
+/** Vector index handle on `fx.store`. */
+export interface VectorIndexStoreFxHandle {
   readonly ref: `index:${string}`;
   readonly driverId: "memory" | "pgvector" | "libsql";
   upsert(id: string, vector: readonly number[], meta?: Record<string, unknown>): Promise<void>;
   search(
     vector: readonly number[],
     topK?: number,
-  ): Promise<Array<{ id: string; score: number; meta?: Record<string, unknown> }>>;
+  ): Promise<ReadonlyArray<{ id: string; score: number; meta?: Record<string, unknown> }>>;
   delete(id: string): Promise<boolean>;
 }
+
+/** Full-text index handle on `fx.store`. */
+export interface TextIndexStoreFxHandle {
+  readonly ref: `index:${string}`;
+  readonly driverId: "meilisearch";
+  upsert(id: string, document: Record<string, unknown>): Promise<void>;
+  search(q: string, opts?: TextIndexSearchOptions): Promise<TextIndexSearchResult>;
+  delete(id: string): Promise<boolean>;
+}
+
+/** Index handle on `fx.store` — discriminated by `driverId`. */
+export type IndexStoreFxHandle = VectorIndexStoreFxHandle | TextIndexStoreFxHandle;
 
 /** Store runtime. */
 export interface StoreRuntime {
@@ -259,9 +284,9 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     return conn;
   }
 
-  /** Index drivers backed by a SQL engine borrow the sql facet's connection. */
+  /** SQL-backed index drivers borrow the sql facet's connection. */
   async function sqlConnForIndex(
-    driver: IndexDriver,
+    driver: VectorIndexDriver & { id: "pgvector" | "libsql" },
     url: string | undefined,
   ): Promise<SqlConnection> {
     const sqlDriver = options.drivers.sql;
@@ -338,24 +363,34 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     let idx = indexes.get(decl.name);
     if (!idx) {
       const binding = options.index?.[decl.name] ?? {};
-      let sql = binding.sql;
-      if (!sql && driver.id !== "memory") {
-        sql = await sqlConnForIndex(driver, binding.url);
-      }
       idx = await driver.open({
         name: decl.name,
         dims: binding.dims ?? decl.dims ?? 3,
         url: binding.url,
-        sql,
+        apiKey: binding.apiKey,
+        sql: indexDriverNeedsSql(driver)
+          ? (binding.sql ?? (await sqlConnForIndex(driver, binding.url)))
+          : undefined,
       });
       indexes.set(decl.name, idx);
     }
+    if (idx.driverId === "meilisearch") {
+      const text = idx;
+      return {
+        ref: `index:${decl.name}`,
+        driverId: text.driverId,
+        upsert: (id, document) => text.upsert(id, document),
+        search: (q, opts) => text.search(q, opts),
+        delete: (id) => text.delete(id),
+      };
+    }
+    const vector = idx as VectorIndexStore;
     return {
       ref: `index:${decl.name}`,
-      driverId: idx.driverId,
-      upsert: (id, vector, meta) => idx!.upsert(id, vector, meta),
-      search: (vector, topK) => idx!.search(vector, topK),
-      delete: (id) => idx!.delete(id),
+      driverId: vector.driverId,
+      upsert: (id, vec, meta) => vector.upsert(id, vec, meta),
+      search: (vec, topK) => vector.search(vec, topK),
+      delete: (id) => vector.delete(id),
     };
   }
 

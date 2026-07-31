@@ -137,7 +137,7 @@ describe("index driver resolution", () => {
     expect(decl).toBeDefined();
     const handle = (await runtime.open(decl!, {
       effects: { reads: ["index:docs"], writes: ["index:docs"] },
-    })) as import("../../elements/store.ts").IndexStoreFxHandle;
+    })) as import("../../elements/store.ts").VectorIndexStoreFxHandle;
     expect(handle.driverId).toBe("memory");
     await handle.upsert("d1", [1, 0, 0], { t: 1 });
     const hits = await handle.search([1, 0, 0], 1);

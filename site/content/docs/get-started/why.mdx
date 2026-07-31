@@ -1,0 +1,141 @@
+---
+title: Why OKE
+description: The six seams every TypeScript backend maintains by hand — and what OKE derives from one Manifest instead.
+source: docs/spec/unified-theory.md
+icon: Compass
+---
+
+Every TypeScript backend works on day one. The bill arrives later: the cache
+that serves last month's schema, the secret that only exists on your laptop,
+the dashboard that has never heard of your new Flow.
+
+None of these are router problems. They are **seams** — copies of your code's
+knowledge, kept in places the compiler cannot check, updated by memory.
+
+<Callout title="The one rule">
+  **All world access goes through `fx`.** What a Flow reads, writes, emits, and reveals is recorded
+  — so the seams below are derived from one Manifest, not re-typed per project.
+</Callout>
+
+## The six seams
+
+### The cache that lies
+
+You add a column to `orders` and update three writers. The hand-bumped cache
+key in `checkout` is not one of them. A customer finds it a week later.
+
+**OKE derives:** reads and writes are recorded through `fx`, so invalidation
+follows the Flow — there is no separate key to remember.
+
+### The secret that fails in prod
+
+`STRIPE_KEY` lives in your laptop's `.env`, a README, and a teammate's shell
+history. The deploy boots fine — the first charge request dies at 2am.
+
+**OKE derives:** [Vault](/docs/elements/vault) contracts declare the need in
+code; boot resolves every contract and fails loud with every gap listed —
+never halfway.
+
+### The glue you rewrite
+
+CORS rules, security headers, CSRF tokens, compression — copied from the last
+repo, tweaked, and already drifting from whatever that repo does today.
+
+**OKE derives:** the official `okengine/plugins` set ships this glue once —
+shared lifecycle, optional live DB config, nothing to re-copy.
+
+### The dashboard that doesn't know you
+
+Your observability stack learned your routes from sampled traffic. The Flow
+you deployed an hour ago is invisible until someone wires it by hand.
+
+**OKE derives:** the [Console](/docs/console/overview) reads the Manifest —
+flows, effects, traces, architecture — current on every save, in dev and prod
+(`:6533`).
+
+### The permission check in the wrong place
+
+`if (!user.isAdmin)` sits in handler forty-one of sixty. Which Flows touch
+`payments`? grep answers slowly; review answers never.
+
+**OKE derives:** declared effects produce a least-privilege matrix — widening
+access appears in Manifest Diff, not in a diff nobody reads.
+
+### Local works, prod doesn't
+
+Local runs one vendor client, CI another, prod a third — three glue stories
+for the same database. "Works on my machine" is a driver mismatch.
+
+**OKE derives:** drivers are named after protocols (`postgres`, `redis`,
+`s3`), the vendor lives in `images`, and `oke dev --docker` runs the real
+stack locally.
+
+## The tax is drift
+
+Every seam above is the same shape: a hand-maintained copy of knowledge the
+code already has. Watch one change propagate both ways.
+
+<DriftBoard />
+
+On the left, versions scatter and stay scattered. On the right, one Manifest
+feeds five surfaces — they cannot disagree, because none of them is a copy.
+
+## The answer's shape
+
+Forty infrastructure concerns collapse into eight elements — each kept only
+because it has irreducible physics. One change costs up to fifteen seams in
+the zoo; here it always costs two.
+
+<CollapseBoard />
+
+New infrastructure becomes a **driver** for an existing element, never a
+ninth element — the set of eight is closed.
+
+## Traditional vs OKE
+
+| Seam               | Maintained by hand                                        | Derived by OKE                                                                  |
+| ------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Behavior model     | Endpoints, jobs, consumers, workflows as separate species | One species — Flow: `on(Trigger) → Effects`                                     |
+| Cache invalidation | Hand-written keys; drift from writers                     | Derived from effects recorded through `fx`                                      |
+| HTTP glue          | Middleware copied per repo                                | Official plugins — `securityHeaders`, `cors`, `csrf`, compression, IP allowlist |
+| Secrets / config   | Env sprawl; fails on first request                        | Vault contracts; `VaultBootError` at boot                                       |
+| Observability      | Bolted on; separate source of truth                       | Console from the Manifest, dev and prod (`:6533`)                               |
+| Permissions        | Ad-hoc checks scattered in handlers                       | Least-privilege matrix from declared effects                                    |
+| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev --docker`                        |
+| Client / agents    | Separate codegen or hand-kept schemas                     | Typed client and MCP (`:6535`) from the same Manifest                           |
+
+## Ambition, stated plainly
+
+|                 | Statement                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| **Ambition**    | The default, most capable TypeScript backend — Bun-first, Web-Standards portable, contract-first |
+| **Grounded in** | Eight elements, effect inference through `fx`, Gate and Vault, the official plugin set           |
+| **Maturity**    | **pre-1.0** — published and usable; not independently battle-tested at scale yet                 |
+
+## Learn more
+
+- [Introduction](/docs/get-started/introduction) — the one law, eight elements, ten exports
+- [Flow](/docs/elements/flow) — how effects are recorded and inferred
+- [Vault](/docs/elements/vault) — fail-loud secret contracts
+- [Plugins](/docs/reference/plugins) — the official HTTP glue set
+- [Console · Overview](/docs/console/overview) — the Manifest-derived operator UI
+
+## Next
+
+<Cards>
+  <Card
+    title="Installation"
+    description="Scaffold with create-oke and open the Console."
+    href="/docs/get-started/installation"
+  />
+  <Card
+    title="Basic Usage"
+    description="Health Flow, typed client, and bun:test."
+    href="/docs/get-started/basic-usage"
+  />
+  <Card
+    title="Introduction"
+    description="The one law, eight elements, ten exports."
+    href="/docs/get-started/introduction"
+  />
+</Cards>

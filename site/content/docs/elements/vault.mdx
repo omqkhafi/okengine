@@ -55,7 +55,9 @@ oke vault set STRIPE_KEY sk_test_your_key_here
 <Step>
 ### Read it in a Flow
 
-Flows read secrets through `fx.vault` — never through `process.env`:
+Flows read secrets through `fx.vault` — never through `process.env`. `fx.vault` returns a
+`Redacted<string>`: printing, logging, or serializing it yields a placeholder, never the value.
+Call `.reveal()` once at the boundary that needs the real credential:
 
 ```typescript title="src/flows/billing/charge.ts"
 export const charge = on(
@@ -64,13 +66,16 @@ export const charge = on(
     in: ChargeInput,
     out: z.object({ id: z.string() }),
     do: async (input, fx) => {
-      const key = fx.vault(stripeKey); // cleartext, inside this flow only
-      const intent = await stripe(key).create(input);
+      const key = fx.vault(stripeKey); // Redacted — safe to pass to fx.log
+      const intent = await stripe(key.reveal()).create(input);
       return { id: intent.id };
     },
   }),
 );
 ```
+
+`fx.log` masks any `Redacted` found in the logged data (nested included). A revealed string that
+still reaches `fx.log` is scrubbed by the boot redactor as before.
 
 </Step>
 
@@ -111,13 +116,7 @@ export const dbUrl = vault.secret("DATABASE_URL", {
 
 At boot, each contract is resolved through this chain — **first hit wins**:
 
-| #   | Source               | Typical content                                   |
-| --- | -------------------- | ------------------------------------------------- |
-| 1   | `process.env`        | Real environment (CI, hosting platform)           |
-| 2   | `.env.local`         | Your machine's local overrides (gitignored)       |
-| 3   | `docker/.env.docker` | Generated compose stack credentials               |
-| 4   | vault driver         | OpenBao in docker/prod mode                       |
-| 5   | `dev` fallback       | The `dev:` option on the contract (never in prod) |
+<VaultResolution />
 
 If every layer misses a contract, boot **fails** before any request is served:
 
@@ -167,7 +166,7 @@ vault: {
 | `openbao` | OpenBao (KV v2) | Docker + prod — durable, access-controlled |
 | `memory`  | in-process map  | Tests                                      |
 
-Other drivers (`infisical`, `managed`) implement the same `VaultDriver` interface — adding one is a driver exercise, not an architecture change.
+Other drivers (`managed`) implement the same `VaultDriver` interface — adding one is a driver exercise, not an architecture change.
 
 ## OpenBao in docker and prod
 

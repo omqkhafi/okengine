@@ -14,11 +14,11 @@
 import { cosineDistance } from "drizzle-orm";
 import { PgDialect, index as pgIndex, pgTable, text, vector } from "drizzle-orm/pg-core";
 import type {
-  IndexDriver,
   IndexHit,
   IndexOpenOptions,
-  IndexStore,
   SqlConnection,
+  VectorIndexDriver,
+  VectorIndexStore,
 } from "./types.ts";
 
 /**
@@ -26,7 +26,7 @@ import type {
  *
  * @param options - Name / dims / SQL connection
  */
-export async function openPgvectorIndex(options: IndexOpenOptions): Promise<IndexStore> {
+export async function openPgvectorIndex(options: IndexOpenOptions): Promise<VectorIndexStore> {
   if (options.sql) {
     return openPgvectorSql(options.name, options.dims, options.sql);
   }
@@ -40,7 +40,7 @@ async function openPgvectorSql(
   name: string,
   dims: number,
   sql: SqlConnection,
-): Promise<IndexStore> {
+): Promise<VectorIndexStore> {
   if (sql.driverId !== "postgres" && sql.driverId !== "pglite") {
     throw new Error(
       `pgvector index: needs a postgres/pglite SQL connection, got "${sql.driverId}" — ` +
@@ -111,7 +111,7 @@ async function openPgvectorSql(
   };
 }
 
-function openPgvectorMemory(dims: number): IndexStore {
+function openPgvectorMemory(dims: number): VectorIndexStore {
   const docs = new Map<string, { vector: number[]; meta?: Record<string, unknown> }>();
   return {
     driverId: "pgvector",
@@ -154,7 +154,7 @@ function cosine(a: readonly number[], b: readonly number[]): number {
 }
 
 /** Protocol-named pgvector driver. */
-export const pgvectorDriver: IndexDriver = {
+export const pgvectorDriver: VectorIndexDriver = {
   id: "pgvector",
   facet: "index",
   open: openPgvectorIndex,

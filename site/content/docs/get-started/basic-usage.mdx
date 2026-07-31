@@ -1,11 +1,24 @@
 ---
 title: Basic Usage
-description: Scaffold the standard starter, write a Flow, and inspect it in the Console.
+description: Scaffold the standard starter, call the health Flow, and inspect it in the Console.
 source: packages/create-oke/template
 icon: SquareTerminal
 ---
 
-## Scaffold an app
+Write your first Flow, call it from a typed client, and prove it with
+`bun:test` — using the same standard starter `create-oke` scaffolds.
+
+<Callout title="The one rule">
+  All reads, writes, emits, sends, and external calls belong behind `fx`. That is what makes effects
+  inspectable and tests deterministic.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Scaffold and run
 
 ```bash title="Terminal"
 bunx create-oke@latest my-app
@@ -13,26 +26,16 @@ cd my-app
 oke dev
 ```
 
-The app runs on `:6530`, the Console on `:6533`, and MCP on `:6535`.
+<Surfaces />
 
-## Mental model
+</Step>
 
-Every backend behavior has one shape:
+<Step>
+### Read the health Flow
 
-```text
-on(Trigger) → Effects
-```
+The standard starter already exports a health Flow:
 
-1. **Trigger** — how work starts (`http.post`, `every("10m")`, a signal, …)
-2. **Contracts** — `in`, `out`, and typed `errors`
-3. **`do`** — the body; world access goes only through `fx`
-4. **Effects** — inferred from the `fx` calls
-
-## Your first Flow
-
-The standard starter includes a health Flow:
-
-```typescript
+```typescript title="flows/main"
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
@@ -45,63 +48,95 @@ export const health = on(
 );
 ```
 
-Open `src/flows/main/index.ts`, change the route or output, and save. The app and
-Console update together from the same Manifest.
+Change the route or output and save. App and Console update together from the
+same Manifest.
 
-<Callout title="The invariant">
-  All reads, writes, emits, sends, and external calls belong behind `fx`. This is what makes effects
-  inspectable and tests deterministic.
-</Callout>
+</Step>
 
-## Wire the app
+<Step>
+### Call it from a typed client
 
-The starter adopts the module in `src/app.ts`:
+Adopted modules become namespaces on the client:
 
-```typescript
+```typescript title="app"
 import { oke } from "okengine";
 import * as main from "./flows/main";
 
-export const app = oke({ name: "my-app" }).adopt({ main });
+export const app = oke({ name: "standard" }).adopt({ main });
 export type App = typeof app;
 ```
 
-The namespace becomes the typed-client namespace and each exported Flow becomes
-a method.
-
-## Typed client
-
-```typescript
+```typescript title="client"
 import { createClient } from "okengine/client";
-import type { App } from "../src/app";
+import type { App } from "./app";
 
 const api = createClient<App>("http://localhost:6530");
 const { data, error } = await api.main.health({});
 ```
 
-`data` and `error` are inferred from the Flow contracts; no separate client
-schema or code-generation project is required.
+`data` and `error` are inferred from the Flow contracts — no separate client
+schema or codegen project.
+
+</Step>
+
+</Steps>
+
+## Mental model
+
+Every backend behavior has one shape:
+
+<FlowShape />
+
+## From Flow to client
+
+Export → adopt → call or test. Same App type — no separate codegen project.
+
+<ClientLoop />
 
 ## Test
 
-Use `createTestApp` to boot the same app with test drivers:
+Boot the same app with test drivers:
 
-```typescript
+```typescript title="tests/standard.test.ts"
 import { expect, test } from "bun:test";
 import { createTestApp } from "okengine/test";
 import { app } from "../src/app";
 
-test("health", async () => {
+test("boots — health flow", async () => {
   const t = await createTestApp(app);
   const { data, error } = await t.api.main.health({});
   expect(error).toBeNull();
   expect(data).toEqual({ ok: true });
-  await app.stop();
 });
 ```
 
 ```bash title="Terminal"
 bun test
 ```
+
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title="api.main.health is not a function / type error">
+  Confirm the Flow is `export`ed from the module you `.adopt({main})`, and that `createClient` is
+  typed with your `App` type. Restart `oke dev` after renaming exports so the Manifest refreshes.
+</Accordion>
+
+<Accordion title="createTestApp fails to boot">
+  The starter patches test env and stores on the app options. Keep the template's side-imports
+  (vault, gates, channels, core db) — removing them can leave Vault or Store unresolved under test
+  drivers.
+</Accordion>
+
+</Accordions>
+
+## Learn more
+
+- [Flow](/docs/elements/flow) — triggers, contracts, effects, and composition
+- [Store](/docs/elements/store) — SQL, KV, files, index
+- [fx](/docs/reference/fx) — the full effect surface
+- [Console · Overview](/docs/console/overview) — Manifest-derived panels
 
 ## Next
 

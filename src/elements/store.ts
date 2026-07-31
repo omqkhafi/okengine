@@ -116,6 +116,8 @@ export type {
   KvStoreFxHandle,
   FilesStoreFxHandle,
   IndexStoreFxHandle,
+  VectorIndexStoreFxHandle,
+  TextIndexStoreFxHandle,
 } from "./store/runtime.ts";
 
 export { fileKeyWarnings, contentAddressedKey, projectFileKeys } from "./store/files-policy.ts";

@@ -7,10 +7,10 @@ import type {
   FilesBucket,
   FilesDriver,
   FilesOpenOptions,
-  IndexDriver,
   IndexHit,
   IndexOpenOptions,
-  IndexStore,
+  VectorIndexDriver,
+  VectorIndexStore,
   KvDriver,
   KvNamespace,
   KvOpenOptions,
@@ -638,10 +638,10 @@ function cosine(a: readonly number[], b: readonly number[]): number {
 }
 
 /** Memory index driver. */
-export const memoryIndexDriver: IndexDriver = {
+export const memoryIndexDriver: VectorIndexDriver = {
   id: "memory",
   facet: "index",
-  async open(options: IndexOpenOptions): Promise<IndexStore> {
+  async open(options: IndexOpenOptions): Promise<VectorIndexStore> {
     const docs = new Map<string, { vector: number[]; meta?: Record<string, unknown> }>();
     return {
       driverId: "memory",

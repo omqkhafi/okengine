@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { envVaultDriver, memoryVaultDriver } from "../drivers/index.ts";
 import { createFx } from "../kernel/fx.ts";
+import { REDACTED_PLACEHOLDER, Redacted } from "../kernel/redacted.ts";
 import {
   createVaultRuntime,
   fingerprintSecretSync,
@@ -200,17 +201,39 @@ describe("redaction + fingerprints", () => {
     const lines: Array<{ message: string; data?: Record<string, unknown> }> = [];
     const { fx } = createFxContextWithVault(runtime, lines);
 
-    const value = fx.vault("STRIPE_KEY");
-    expect(value).toBe(secret);
+    const wrapped = fx.vault("STRIPE_KEY");
+    expect(wrapped.reveal()).toBe(secret);
 
-    fx.log.info(`charging with ${value}`, { key: value, nested: { k: value } });
+    fx.log.info(`charging with ${wrapped}`, { key: wrapped, nested: { k: wrapped } });
+    // Revealed cleartext still hits the known-value substring scrub.
     fx.log.error(secret, { stripe: secret });
 
     for (const line of lines) {
       expect(line.message).not.toContain(secret);
       expect(JSON.stringify(line.data ?? {})).not.toContain(secret);
-      expect(line.message).toContain(SECRET_MASK);
     }
+    expect(lines[0]!.message).toContain(REDACTED_PLACEHOLDER);
+    expect(lines[1]!.message).toContain(SECRET_MASK);
+  });
+
+  test("Redacted from fx.vault is masked in fx.log without a vault runtime", () => {
+    const secret = "sk_no_vault_runtime";
+    const lines: Array<{ message: string; data?: Record<string, unknown> }> = [];
+    const fx = createFx({
+      flow: "test.redacted",
+      secrets: { STRIPE_KEY: secret },
+      onLog: (_level, message, data) => lines.push({ message, data }),
+    });
+
+    const wrapped = fx.vault("STRIPE_KEY");
+    expect(wrapped).toBeInstanceOf(Redacted);
+    expect(String(wrapped)).toBe(REDACTED_PLACEHOLDER);
+    expect(`${wrapped}`).toBe(REDACTED_PLACEHOLDER);
+    expect(JSON.stringify({ v: wrapped })).toBe(`{"v":"${REDACTED_PLACEHOLDER}"}`);
+
+    fx.log.info("paying", { key: wrapped, nested: { k: [wrapped] } });
+    expect(JSON.stringify(lines[0]!.data)).not.toContain(secret);
+    expect(lines[0]!.data?.key).toBe(REDACTED_PLACEHOLDER);
   });
 
   test("fingerprint is stable and not the value", async () => {

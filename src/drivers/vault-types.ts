@@ -1,12 +1,12 @@
 /**
  * Protocol-named vault driver contracts.
  *
- * Driver ids: `env` · `openbao` · `infisical` · `managed` · `memory`.
- * Never vendor names (`neon`, `infisical-cloud`, …) — vendor choice lives in `images`.
+ * Driver ids: `env` · `openbao` · `managed` · `memory`.
+ * Never vendor names (`neon`, …) — vendor choice lives in `images`.
  */
 
 /** Protocol ids for vault drivers. */
-export type VaultDriverId = "env" | "openbao" | "infisical" | "managed" | "memory";
+export type VaultDriverId = "env" | "openbao" | "managed" | "memory";
 
 /** Options when opening a vault backend. */
 export interface VaultOpenOptions {
@@ -16,7 +16,7 @@ export interface VaultOpenOptions {
   readonly envPrefix?: string;
   /** Injected env map for tests (defaults to `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
-  /** OpenBao / Infisical / managed base URL. */
+  /** OpenBao / managed base URL. */
   readonly url?: string;
   /** Token / API key for remote vaults. */
   readonly token?: string;

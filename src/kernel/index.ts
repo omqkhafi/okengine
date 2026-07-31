@@ -137,7 +137,16 @@ export {
   withAbortSignal,
 } from "./abort-scope.ts";
 
-export { defaultRetryWhen, fxAll, fxRace, fxRetry, resolveRetryDelayMs } from "./concurrency.ts";
+export {
+  defaultRetryWhen,
+  fxAll,
+  fxRace,
+  fxRetry,
+  fxUsing,
+  resolveRetryDelayMs,
+} from "./concurrency.ts";
+
+export { isRedacted, maskRedactedDeep, REDACTED_PLACEHOLDER, Redacted } from "./redacted.ts";
 
 export {
   DryRunWriteIsolationError,

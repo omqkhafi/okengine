@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-07-30T23:10:10.005Z",
-  "version": "0.3.6",
+  "measuredAt": "2026-07-31T14:43:22.043Z",
+  "version": "0.4.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 12376,
+      "value": 12631,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -25,7 +25,7 @@
     {
       "id": "consoleInitialGzipBytes",
       "label": "Console initial load",
-      "value": 88312,
+      "value": 88280,
       "limit": 307200,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 26.028,
+      "value": 24.393,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,7 +55,7 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 52291,
+      "value": 52767,
       "limit": 53337,
       "unit": "bytes",
       "gate": "regression",
@@ -65,7 +65,7 @@
     {
       "id": "export:./ai",
       "label": "ai",
-      "value": 3427,
+      "value": 3522,
       "limit": 3683,
       "unit": "bytes",
       "gate": "regression",
@@ -105,12 +105,12 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 9987,
+      "value": 10253,
       "limit": 10243,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./config",
@@ -125,7 +125,7 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 72951,
+      "value": 73360,
       "limit": 74411,
       "unit": "bytes",
       "gate": "regression",
@@ -185,7 +185,7 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 12935,
+      "value": 13006,
       "limit": 13194,
       "unit": "bytes",
       "gate": "regression",
@@ -195,7 +195,7 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 9369,
+      "value": 9456,
       "limit": 9625,
       "unit": "bytes",
       "gate": "regression",
@@ -215,7 +215,7 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 47050,
+      "value": 47944,
       "limit": 47991,
       "unit": "bytes",
       "gate": "regression",
@@ -363,6 +363,16 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/meilisearch",
+      "label": "meilisearch",
+      "value": 1417,
+      "limit": 1673,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/memory",
       "label": "memory",
       "value": 4222,
@@ -497,16 +507,6 @@
       "label": "vault-env",
       "value": 894,
       "limit": 1150,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "drivers",
-      "ok": true
-    },
-    {
-      "id": "export:./drivers/vault-infisical",
-      "label": "vault-infisical",
-      "value": 571,
-      "limit": 827,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

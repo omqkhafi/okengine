@@ -104,5 +104,5 @@ Consequences stated: "**Consequence:** …" for non-obvious choices.⟩
 - [ ] No `src/` paths, test names, or internal ids anywhere
 - [ ] `bun test lib` → 0 fail (prose density ≤3, incl. inside Callout/Accordion bodies)
 - [ ] `bunx fumadocs-mdx` → compiles
-- [ ] No forbidden tokens (`"--"+"stack"`, `".env."+"stack"`, `"OKE_"+"STACK"`, `"from"+"Stack"`, `"so"+"ps"`)
+- [ ] No forbidden tokens (`"--"+"stack"`, `".env."+"stack"`, `"OKE_"+"STACK"`, `"from"+"Stack"`, `"so"+"ps"`, named peers — `"Ho"+"no"`, `"Ely"+"sia"`, `"Enc"+"ore"`, `"Nest"+"JS"`, `"Fast"+"ify"`, `"iii"+".dev"`, `"Ex"+"press"`)
 - [ ] Cross-links point to pages that exist
