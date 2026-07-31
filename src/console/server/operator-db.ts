@@ -157,7 +157,8 @@ export function migrateOperatorSchema(db: Database): void {
       family_id TEXT NOT NULL,
       revoked_at INTEGER,
       created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL
+      expires_at INTEGER NOT NULL,
+      last_active_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.refreshTokens} (
       id TEXT PRIMARY KEY NOT NULL,
@@ -169,6 +170,20 @@ export function migrateOperatorSchema(db: Database): void {
       revoked_at INTEGER
     );
   `);
+  ensureSessionLastActiveColumn(db);
+}
+
+/**
+ * Add `last_active_at` when opening an older console.sqlite that predates idle TTL.
+ *
+ * @param db - Open database
+ */
+function ensureSessionLastActiveColumn(db: Database): void {
+  const cols = db.query(`PRAGMA table_info(${AUTH_TABLES.sessions})`).all() as Array<{
+    name: string;
+  }>;
+  if (cols.some((c) => c.name === "last_active_at")) return;
+  db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN last_active_at INTEGER`);
 }
 
 /**
@@ -181,7 +196,7 @@ export function loadSessionStore(db: Database): SessionStore {
 
   const sessionRows = db
     .query(
-      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at
+      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at
        FROM ${AUTH_TABLES.sessions}`,
     )
     .all() as Array<{
@@ -192,6 +207,7 @@ export function loadSessionStore(db: Database): SessionStore {
     revoked_at: number | null;
     created_at: number;
     expires_at: number;
+    last_active_at: number | null;
   }>;
 
   for (const row of sessionRows) {
@@ -203,6 +219,7 @@ export function loadSessionStore(db: Database): SessionStore {
       revokedAt: row.revoked_at,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
+      lastActiveAt: row.last_active_at ?? row.created_at,
     };
     store.sessions.set(session.id, session);
   }
@@ -250,8 +267,8 @@ export function persistSessions(db: Database, store: SessionStore): void {
 
   const insertSession = db.query(
     `INSERT INTO ${AUTH_TABLES.sessions}
-      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at)
-     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires)`,
+      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at)
+     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires, $lastActive)`,
   );
   for (const session of store.sessions.values()) {
     insertSession.run({
@@ -262,6 +279,7 @@ export function persistSessions(db: Database, store: SessionStore): void {
       $revoked: session.revokedAt,
       $created: session.createdAt,
       $expires: session.expiresAt,
+      $lastActive: session.lastActiveAt,
     });
   }
 

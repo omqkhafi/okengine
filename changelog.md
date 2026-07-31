@@ -62,6 +62,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### 🐛 Fixed
 
+- `gate.public` is always seeded into the Gate runtime — attaching
+  `.gate(gate.public)` on a trigger no longer denies with
+  `Unauthorized` / `unknown gate: public` when the sentinel was not
+  also listed in `oke({ gates })`.
+- Console `.oke/console.sqlite` sessions persist and hydrate
+  `last_active_at` (idle TTL); older DBs gain the column on open.
 - Site `next build` no longer fetches Inter from Google Fonts at build
   time: Inter Variable is vendored under `site/app/fonts/` (OFL) and
   loaded via `next/font/local`, so offline / network-restricted CI builds

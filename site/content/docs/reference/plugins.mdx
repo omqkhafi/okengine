@@ -207,12 +207,12 @@ Extending an existing **app-owned** table with plugin columns is not supported i
 
 ## Identity, config, and dependencies
 
-| Concept    | Rule                                                                           |
-| ---------- | ------------------------------------------------------------------------------ |
-| Name       | Stable plugin id — the Manifest key and conflict namespace                     |
-| `version`  | Semver string recorded in the Manifest                                         |
-| `config`   | Snapshot for identity dedup: same name + same config → no-op re-plug           |
-| Conflict   | Same name + **different** config → loud boot error, never a silent merge       |
+| Concept    | Rule                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| Name       | Stable plugin id — the Manifest key and conflict namespace                                   |
+| `version`  | Semver string recorded in the Manifest                                                       |
+| `config`   | Snapshot for identity dedup: same name + same config → no-op re-plug                         |
+| Conflict   | Same name + **different** config → loud boot error, never a silent merge                     |
 | `.needs()` | Declares runtime dependencies (plugin name or element/driver id); unmet → `PluginNeedsError` |
 
 ## Troubleshooting

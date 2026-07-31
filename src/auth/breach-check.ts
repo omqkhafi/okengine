@@ -83,9 +83,7 @@ export function createHibpBreachCheck(options: HibpBreachCheckOptions): BreachCh
     } catch (err) {
       if (err instanceof BreachCheckError) throw err;
       if (onError === "allow") return false;
-      throw new BreachCheckError(
-        err instanceof Error ? err.message : "HIBP range request failed",
-      );
+      throw new BreachCheckError(err instanceof Error ? err.message : "HIBP range request failed");
     }
   };
 }

@@ -92,8 +92,10 @@ A denied request never reaches `do`. It returns one of three typed failures, lik
 both the policy id and the scope checked. Fine-grained authorization
 stays opt-in: attach `gate.scope(...)` only where you need it.
 
-`gate.public` is the explicit public sentinel. Every HTTP trigger must
-carry a gate or `gate.public` at boot — omit neither (see below).
+`gate.public` is the explicit public sentinel. It is always registered
+in the Gate runtime — attach it on the trigger; you do not list it in
+`oke({ gates })`. Every HTTP trigger must carry a gate or `gate.public`
+at boot — omit neither (see below).
 
 ### The policy context
 
@@ -141,8 +143,8 @@ fail-loud standard as Vault). Fine-grained authorization (`gate.scope`,
 roles) stays opt-in.
 
 ```typescript
-on(http.get("/health").gate(gate.public), flow({ /* … */ }));
-on(http.post("/bookings").gate(member, canBook), flow({ /* … */ }));
+on(http.get("/health").gate(gate.public), flow({/* … */}));
+on(http.post("/bookings").gate(member, canBook), flow({/* … */}));
 ```
 
 Test harness opt-out (`unguardedHttp: "allow"`) is honoured **only** when

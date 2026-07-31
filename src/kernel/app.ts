@@ -492,10 +492,7 @@ export function oke(options: OkeOptions): OkeApp {
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
     const { bootApplication, resolveElementNeeds } = await import("./boot.ts");
     const { assertHttpGatePosture } = await import("../elements/gate/boot.ts");
-    const {
-      assertPluginNeeds,
-      buildAvailableNeedTokens,
-    } = await import("./plugin-needs.ts");
+    const { assertPluginNeeds, buildAvailableNeedTokens } = await import("./plugin-needs.ts");
     bootEnv = overrides?.env ?? options.env ?? "local";
     const unguardedHttp = overrides?.unguardedHttp ?? options.unguardedHttp ?? "deny";
     // `"allow"` is honoured only when bootEnv === "test" — never a prod bypass.
@@ -577,10 +574,7 @@ export function oke(options: OkeOptions): OkeApp {
       stores: overrides?.stores ?? options.stores,
       channel: {
         ...(baseChannel ?? {}),
-        templates: [
-          ...(baseChannel?.templates ?? []),
-          ...pluginChannelTemplates,
-        ],
+        templates: [...(baseChannel?.templates ?? []), ...pluginChannelTemplates],
       },
       ai: overrides?.ai ?? options.ai,
       runs: overrides?.runs ?? options.runs,

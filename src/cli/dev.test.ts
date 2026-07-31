@@ -396,14 +396,14 @@ describe("oke dev docs MCP", () => {
 async function writePingApp(dir: string, version: string): Promise<void> {
   await Bun.write(
     join(dir, "src/flows/ping.ts"),
-    `import { on, flow, http } from ${JSON.stringify(OKE_INDEX)};
+    `import { on, flow, http, gate } from ${JSON.stringify(OKE_INDEX)};
 
-export const ping = on(http.get("/ping"), flow({
+export const ping = on(http.get("/ping").gate(gate.public), flow({
   name: "ping",
   do: () => ({ version: ${JSON.stringify(version)} as const }),
 }));
 
-export const slow = on(http.get("/slow"), flow({
+export const slow = on(http.get("/slow").gate(gate.public), flow({
   name: "slow",
   do: async () => {
     const started = ${JSON.stringify(version)};

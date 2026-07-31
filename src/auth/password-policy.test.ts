@@ -5,19 +5,11 @@ import {
   sha1HexUpper,
   BreachCheckError,
 } from "./breach-check.ts";
-import {
-  assertPasswordPolicy,
-  PasswordPolicyError,
-} from "./password-policy.ts";
+import { assertPasswordPolicy, PasswordPolicyError } from "./password-policy.ts";
 import { createBunCrypto } from "../runtime/primitives.ts";
 import { ARGON2ID_MEMORY_COST_FLOOR } from "../runtime/types.ts";
 import { createOperator, createOperatorStore } from "./operator.ts";
-import {
-  createSessionStore,
-  issueSession,
-  rotateRefresh,
-  SessionError,
-} from "./sessions.ts";
+import { createSessionStore, issueSession, rotateRefresh, SessionError } from "./sessions.ts";
 
 describe("password policy", () => {
   test("defaults require length 12, letter, number", () => {
@@ -76,14 +68,14 @@ describe("HIBP k-anonymity helper", () => {
     const suffix = full.slice(5);
     const check = createHibpBreachCheck({
       userAgent: "oke-test",
-      fetch: async (input) => {
+      fetch: (async (input) => {
         const url = String(input);
         expect(url).toContain("/range/");
         if (url.includes(`/range/${prefix}`)) {
           return new Response(`${suffix}:12\nDEADBEEF00:1\n`, { status: 200 });
         }
         return new Response("AAAAA00000:1\n", { status: 200 });
-      },
+      }) as typeof fetch,
     });
     expect(await check("password")).toBe(true);
     expect(await check("not-in-list-xyz")).toBe(false);

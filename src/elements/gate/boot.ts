@@ -45,7 +45,7 @@ export interface HttpTriggerPosture {
 
 /** Binding shape consumed by the audit. */
 export interface BindingPosture {
-  readonly trigger: { readonly kind: string } & Partial<HttpTriggerPosture>;
+  readonly trigger: { readonly kind: string } & Omit<Partial<HttpTriggerPosture>, "kind">;
   readonly flow: { readonly name: string };
 }
 
@@ -88,9 +88,7 @@ export function hasHttpGatePosture(
  *
  * @param bindings - Adopted / registered bindings
  */
-export function collectUnguardedHttpGaps(
-  bindings: readonly BindingPosture[],
-): GatePostureGap[] {
+export function collectUnguardedHttpGaps(bindings: readonly BindingPosture[]): GatePostureGap[] {
   const gaps: GatePostureGap[] = [];
   for (const b of bindings) {
     if (b.trigger.kind !== "http") continue;

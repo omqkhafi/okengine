@@ -12,10 +12,7 @@ import type {
   RuntimeFiles,
   RuntimeTimers,
 } from "./types.ts";
-import {
-  ARGON2ID_MEMORY_COST_FLOOR,
-  ARGON2ID_TIME_COST_FLOOR,
-} from "./types.ts";
+import { ARGON2ID_MEMORY_COST_FLOOR, ARGON2ID_TIME_COST_FLOOR } from "./types.ts";
 
 /** HTML / WinterTC timers on `globalThis`. */
 export function createTimers(): RuntimeTimers {

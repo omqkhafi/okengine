@@ -163,6 +163,7 @@ describe("fx — wholesale swap", () => {
       id: () => "fixed-id",
       auth: { userId: "u1", scopes: new Set(["a"]) },
       operator: { id: null },
+      principal: { userId: "u1", operatorId: null, scopes: new Set(["a"]) },
       tenant: { id: "t1" },
       fail,
       json: {

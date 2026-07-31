@@ -57,9 +57,7 @@ export interface AuthPluginOptions {
  *
  * @param options - Auth plugin options
  */
-export function sessionCryptoFromAuthOptions(
-  options: AuthPluginOptions,
-): {
+export function sessionCryptoFromAuthOptions(options: AuthPluginOptions): {
   readonly accessTtlMs?: number;
   readonly refreshTtlMs?: number;
   readonly idleTtlMs?: number;

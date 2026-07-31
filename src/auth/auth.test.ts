@@ -84,6 +84,21 @@ describe("auth plugin", () => {
       config() {
         return this;
       },
+      vault() {
+        return this;
+      },
+      clock() {
+        return this;
+      },
+      signal() {
+        return this;
+      },
+      gate() {
+        return this;
+      },
+      channelTemplate() {
+        return this;
+      },
     });
     expect(tables).toContain("oke_operators");
     expect(tables).toContain("oke_operator_credentials");

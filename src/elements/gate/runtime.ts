@@ -3,7 +3,7 @@
  */
 
 import { parseDurationMs } from "../clock/duration.ts";
-import type { GateDecl, GatePolicyContext, RateGateDecl } from "./declare.ts";
+import { gate, type GateDecl, type GatePolicyContext, type RateGateDecl } from "./declare.ts";
 import { takeRate } from "./strategies.ts";
 
 /** KV surface required for rate gates. */
@@ -58,6 +58,8 @@ export interface GateRuntime {
  */
 export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateRuntime {
   const map = new Map<string, GateDecl>();
+  // Built-in sentinel — `.gate(gate.public)` works without listing it in `oke({ gates })`.
+  map.set(gate.public.name, gate.public);
   for (const g of options.gates ?? []) {
     map.set(g.name, g);
   }

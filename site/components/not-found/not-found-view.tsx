@@ -152,13 +152,7 @@ export function NotFoundView() {
  * @param pathLiteral - JSON-stringified pathname for the trigger line
  * @param reduced - Prefer reduced motion
  */
-function UnmatchedRoute({
-  pathLiteral,
-  reduced,
-}: {
-  pathLiteral: string;
-  reduced: boolean;
-}) {
+function UnmatchedRoute({ pathLiteral, reduced }: { pathLiteral: string; reduced: boolean }) {
   return (
     <figure
       className="overflow-hidden rounded-xl border border-fd-border bg-fd-card/80"

@@ -58,9 +58,12 @@ describe("gate declaration", () => {
 
   test("public sentinel always allows and reserves the name", async () => {
     expect(gate.public.name).toBe("public");
-    expect(await gate.public.check({ auth: { userId: null, scopes: new Set() }, operator: { id: null } })).toBe(
-      true,
-    );
+    expect(
+      await gate.public.check({
+        auth: { userId: null, scopes: new Set() },
+        operator: { id: null },
+      }),
+    ).toBe(true);
     expect(() => gate.policy("public", () => true)).toThrow(/reserved/);
     expect(() => gate.scope("public")).toThrow(/reserved/);
   });
@@ -175,14 +178,23 @@ describe("gate boot posture", () => {
 
   test("unguardedHttp allow has no effect outside env === test", () => {
     for (const env of ["local", "prod", "docker"] as const) {
-      expect(() =>
-        assertHttpGatePosture(unguarded, { unguardedHttp: "allow", env }),
-      ).toThrow(GateBootError);
+      expect(() => assertHttpGatePosture(unguarded, { unguardedHttp: "allow", env })).toThrow(
+        GateBootError,
+      );
     }
   });
 });
 
 describe("gate runtime", () => {
+  test("public sentinel is always registered", async () => {
+    const rt = createGateRuntime();
+    const ok = await rt.allow(["public"], {
+      auth: { userId: null, scopes: new Set() },
+      operator: { id: null },
+    });
+    expect(ok).toBe(true);
+  });
+
   test("policy then rate — evaluation order", async () => {
     const kv = await memoryKvDriver.open({ name: "gate-rt" });
     const member = gate.policy("member", ({ auth }) => !!auth.verified);

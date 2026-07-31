@@ -30,9 +30,7 @@ export const DEFAULT_PASSWORD_MIN_LENGTH = 12;
  *
  * @param options - Partial policy
  */
-export function resolvePasswordPolicy(
-  options: PasswordPolicyOptions = {},
-): ResolvedPasswordPolicy {
+export function resolvePasswordPolicy(options: PasswordPolicyOptions = {}): ResolvedPasswordPolicy {
   return {
     minLength: options.minLength ?? DEFAULT_PASSWORD_MIN_LENGTH,
     requireLetter: options.requireLetter ?? true,
@@ -47,10 +45,7 @@ export function resolvePasswordPolicy(
  * @param password - Plaintext
  * @param options - Policy (defaults applied)
  */
-export function assertPasswordPolicy(
-  password: string,
-  options: PasswordPolicyOptions = {},
-): void {
+export function assertPasswordPolicy(password: string, options: PasswordPolicyOptions = {}): void {
   const policy = resolvePasswordPolicy(options);
   const reasons: string[] = [];
   if (password.length < policy.minLength) {

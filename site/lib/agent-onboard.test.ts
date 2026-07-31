@@ -3,12 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  agentOnboardPrompt,
-  agentsMdUrl,
-  DOCS_ORIGIN,
-  llmsTxtUrl,
-} from "./agent-onboard";
+import { agentOnboardPrompt, agentsMdUrl, DOCS_ORIGIN, llmsTxtUrl } from "./agent-onboard";
 
 describe("agent onboard prompt", () => {
   test("uses canonical llms.txt and raw AGENTS.md URLs", () => {
