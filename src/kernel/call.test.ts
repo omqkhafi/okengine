@@ -28,7 +28,7 @@ describe("fx.call — untriggered flows", () => {
       }),
     );
 
-    const app = oke({ name: "call" }).adopt(stats);
+    const app = oke({ autoBoot: false, name: "call" }).adopt(stats);
 
     // Direct call (Linkly ⑤)
     await expect(app.call(stats, { code: "sa" })).resolves.toEqual({
@@ -74,7 +74,9 @@ describe("fx.call — untriggered flows", () => {
       }),
     );
 
-    const app = oke({ name: "principal-call", unguardedHttp: "allow" }).adopt(audit);
+    const app = oke({ autoBoot: false, name: "principal-call", unguardedHttp: "allow" }).adopt(
+      audit,
+    );
     await app.boot({ env: "test", unguardedHttp: "allow" });
 
     const result = await app.execute(act, {}, act.$trigger ?? act.triggers[0]!, {
@@ -106,7 +108,7 @@ describe("fx.call — untriggered flows", () => {
     on(http.post("/work"), work);
     on({ name: "tick", delivery: "broadcast" }, work);
 
-    const app = oke({ name: "identical" });
+    const app = oke({ autoBoot: false, name: "identical" });
 
     const a = await app.fetch(
       new Request("http://localhost/work", {

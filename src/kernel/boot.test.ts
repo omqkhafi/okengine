@@ -190,8 +190,8 @@ describe("boot — cron fires without manual dispatch", () => {
   });
 });
 
-describe("boot — HTTP gate wiring lives behind boot", () => {
-  test("unbooted app still serves without gates (legacy)", async () => {
+describe("boot — HTTP gate wiring on the default path", () => {
+  test("autoBoot: false still serves without gates (explicit escape hatch)", async () => {
     resetBindings();
     resetFlowSeq();
     on(
@@ -201,9 +201,46 @@ describe("boot — HTTP gate wiring lives behind boot", () => {
         do: () => ({ ok: true }),
       }),
     );
-    const app = oke({ name: "legacy" });
+    const app = oke({ name: "legacy", autoBoot: false });
     const res = await app.fetch(new Request("http://localhost/ping", { method: "GET" }));
     expect(res.status).toBe(200);
+    expect(app.booted).toBe(false);
+  });
+
+  test("bare oke().fetch() enforces gate posture by default (no flags)", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const { GateBootError } = await import("../elements/gate/boot.ts");
+    on(
+      http.get("/ping"),
+      flow({
+        name: "ping",
+        do: () => ({ ok: true }),
+      }),
+    );
+    const app = oke({ name: "default-posture" });
+    await expect(
+      app.fetch(new Request("http://localhost/ping", { method: "GET" })),
+    ).rejects.toThrow(GateBootError);
+    expect(app.booted).toBe(false);
+  });
+
+  test("bare oke().fetch() with gate.public boots and serves", async () => {
+    resetBindings();
+    resetFlowSeq();
+    const { gate } = await import("../elements/gate.ts");
+    on(
+      http.get("/ping").gate(gate.public),
+      flow({
+        name: "ping-public",
+        do: () => ({ ok: true }),
+      }),
+    );
+    const app = oke({ name: "default-public", env: "test", startScheduler: false });
+    const res = await app.fetch(new Request("http://localhost/ping", { method: "GET" }));
+    expect(res.status).toBe(200);
+    expect(app.booted).toBe(true);
+    await app.stop();
   });
 });
 

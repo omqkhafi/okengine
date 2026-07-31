@@ -12,6 +12,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- Docs · [Client](/docs/reference/client) — `okengine/client` reference
+  (`createClient` forms, REST vs RPC, Bearer auth + gate denials,
+  elements-from-the-client, envelope helpers, `oke client add`).
 - Homepage **Onboard an AI** button (hero CTAs) copies a short bootstrap
   prompt pointing at the live `/llms.txt` index and the repo-root
   `AGENTS.md` — distinct from the per-page docs “Copy prompt” action.
@@ -27,8 +30,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `gate.public` — explicit public sentinel for intentionally
   unauthenticated HTTP surfaces; name `"public"` is reserved.
 - `GateBootError` — every HTTP trigger must carry a gate or `gate.public`
-  at boot (fail loud). Explicit opt-out: `oke({ unguardedHttp: "allow" })`.
-  `createTestApp` opts out for the harness.
+  at boot (fail loud). Test-only opt-out: `unguardedHttp: "allow"` when
+  `env === "test"` (`createTestApp` opts out for the harness).
+- Docs · [Gate](/docs/elements/gate), [fx](/docs/reference/fx),
+  [Plugins](/docs/reference/plugins), [Client](/docs/reference/client),
+  [Console Gates](/docs/console/gates) — auth posture, `gate.scope` /
+  `gate.public`, `fx.principal`, `.needs()`, unguarded vs explicit public.
 - `fx.principal` — read-only originating identity for audit; propagates
   across `fx.call` without filling `fx.auth` (authorization stays
   fail-closed).
@@ -56,6 +63,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - HTTP empty gate chains no longer silently public at boot — declare a
   gate or `gate.public`. `unguardedHttp: "allow"` is honoured **only**
   when `env === "test"` (never a production-wide bypass).
+- `autoBoot` now defaults to `true` — the first `fetch` / `execute`
+  runs full boot (gate posture, vault, capabilities, element pipeline).
+  Pre-boot ungated execution requires an explicit
+  `oke({ autoBoot: false })` (unit-test escape hatch only). No shipping
+  path had been setting `autoBoot: true`; CLI/Console already called
+  `.boot()` explicitly, but bare `oke({…}).fetch()` was silently ungated.
 - Default password policy enforced on `createOperator` (minLength 12,
   letter + number); tests needing short passwords must pass
   `skipPasswordPolicy: true` explicitly.

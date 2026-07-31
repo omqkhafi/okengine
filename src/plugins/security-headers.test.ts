@@ -19,7 +19,7 @@ beforeEach(() => {
 describe("securityHeaders plugin", () => {
   test("sets the default trio on a successful response", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec" }).plug(securityHeaders());
+    const app = oke({ autoBoot: false, name: "sec" }).plug(securityHeaders());
 
     const res = await app.fetch(new Request("http://localhost/x"));
 
@@ -32,7 +32,7 @@ describe("securityHeaders plugin", () => {
 
   test("helmet-parity defaults: agent cluster, dns prefetch, download, cross-domain, xss filter", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-parity" }).plug(securityHeaders());
+    const app = oke({ autoBoot: false, name: "sec-parity" }).plug(securityHeaders());
 
     const res = await app.fetch(new Request("http://localhost/x"));
 
@@ -45,7 +45,7 @@ describe("securityHeaders plugin", () => {
 
   test("each parity default can be switched off", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-off" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-off" }).plug(
       securityHeaders({
         originAgentCluster: false,
         dnsPrefetchControl: false,
@@ -65,7 +65,7 @@ describe("securityHeaders plugin", () => {
 
   test("dnsPrefetchControl allow, custom cross-domain policy, COEP stamps when configured", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-tuned" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-tuned" }).plug(
       securityHeaders({
         dnsPrefetchControl: { allow: true },
         permittedCrossDomainPolicies: "by-content-type",
@@ -92,7 +92,7 @@ describe("securityHeaders plugin", () => {
             }),
         }),
       );
-      return oke({ name }).plug(securityHeaders(options));
+      return oke({ autoBoot: false, name }).plug(securityHeaders(options));
     };
 
     const removed = await poweredByApp({}, "sec-pb-off").fetch(new Request("http://localhost/x"));
@@ -112,7 +112,7 @@ describe("securityHeaders plugin", () => {
 
   test("structured CSP merges over helmet's defaults, camelCase keys, report-only mode", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-csp-builder" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-csp-builder" }).plug(
       securityHeaders({
         contentSecurityPolicy: {
           directives: { scriptSrc: ["'self'", "https://cdn.example.com"] },
@@ -132,7 +132,7 @@ describe("securityHeaders plugin", () => {
 
   test("structured CSP with useDefaults: false emits exactly the given directives", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-csp-bare" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-csp-bare" }).plug(
       securityHeaders({
         contentSecurityPolicy: { useDefaults: false, directives: { "default-src": ["'none'"] } },
       }),
@@ -155,7 +155,7 @@ describe("securityHeaders plugin", () => {
         fail("Forbidden", {}),
       ),
     );
-    const app = oke({ name: "sec-fail" }).plug(securityHeaders());
+    const app = oke({ autoBoot: false, name: "sec-fail" }).plug(securityHeaders());
 
     const res = await app.fetch(new Request("http://localhost/deny"));
 
@@ -165,7 +165,7 @@ describe("securityHeaders plugin", () => {
 
   test("adds CSP only when configured", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-csp" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-csp" }).plug(
       securityHeaders({ contentSecurityPolicy: "default-src 'self'" }),
     );
 
@@ -176,7 +176,7 @@ describe("securityHeaders plugin", () => {
 
   test("HSTS is off by default", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-hsts-off" }).plug(securityHeaders());
+    const app = oke({ autoBoot: false, name: "sec-hsts-off" }).plug(securityHeaders());
 
     const res = await app.fetch(new Request("http://localhost/x"));
 
@@ -185,7 +185,7 @@ describe("securityHeaders plugin", () => {
 
   test("hsts: true stamps a one-year max-age", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-hsts-on" }).plug(securityHeaders({ hsts: true }));
+    const app = oke({ autoBoot: false, name: "sec-hsts-on" }).plug(securityHeaders({ hsts: true }));
 
     const res = await app.fetch(new Request("http://localhost/x"));
 
@@ -194,7 +194,7 @@ describe("securityHeaders plugin", () => {
 
   test("hsts object tunes max-age, subdomains, preload", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-hsts-tuned" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-hsts-tuned" }).plug(
       securityHeaders({ hsts: { maxAge: 63072000, includeSubDomains: true, preload: true } }),
     );
 
@@ -207,7 +207,7 @@ describe("securityHeaders plugin", () => {
 
   test("permissions-policy and cross-origin policies stamp when configured", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-extra" }).plug(
+    const app = oke({ autoBoot: false, name: "sec-extra" }).plug(
       securityHeaders({
         permissionsPolicy: "camera=(), microphone=()",
         crossOriginOpenerPolicy: "same-origin",
@@ -224,7 +224,7 @@ describe("securityHeaders plugin", () => {
 
   test("an explicit app-set value wins by default", async () => {
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "sec-keep" });
+    const app = oke({ autoBoot: false, name: "sec-keep" });
     app.hook("onResponse", (ctx) => {
       if (!ctx.response) return;
       const headers = new Headers(ctx.response.headers);

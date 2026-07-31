@@ -1,15 +1,17 @@
 ---
 title: "Gate"
-description: "Permission to act — auth policies and rate limits attached to the trigger, evaluated before any effect runs, denied as typed errors."
+description: "Permission to act — policies and rate limits on the HTTP trigger, evaluated before any effect runs."
 icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
 
-Gate is how your app answers **"may this happen?"** before it happens: is this request from a verified member? has this IP exhausted its minute quota? Gates attach to the trigger — the pipeline evaluates them before a single store write, emit, or channel send runs.
+Gate answers **"may this happen?"** before it happens: is this a verified member? has this IP
+burned its minute quota? Attach gates to the HTTP trigger — the pipeline checks them before a
+store write, emit, or channel send runs.
 
 <Callout title="The one rule">
-  Permission sits **at the trigger**, and denial is a typed error value — never a thrown exception,
-  never an effect that runs halfway and rolls back.
+  Every HTTP trigger declares posture: attach a real gate, or attach `gate.public`. Omitting both
+  fails boot. Denial is a typed error value — never a thrown exception mid-`do`.
 </Callout>
 
 ## Quick start
@@ -17,50 +19,69 @@ Gate is how your app answers **"may this happen?"** before it happens: is this r
 <Steps>
 
 <Step>
-### Declare your gates
+### Declare gates
 
-Policies are named predicates; rate limits are declarative budgets. Both live once, app-wide:
+Policies are named predicates; rate limits are declarative budgets. Register policies you reuse
+with `oke({ gates: […] })`:
 
 ```typescript title="src/gates.ts"
 import { gate } from "okengine";
 
-export const member = gate.policy("member", ({ auth }) => !!auth?.verified);
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+
+export const canBook = gate.scope("booking:create");
 
 export const fair = gate.rate({
-  strategy: "sliding-window-counter", // the default — near-exact, no boundary bursts
   max: 60,
   per: "1m",
   keyBy: "ip",
 });
 ```
 
+`gate.scope(name)` is sugar for
+`gate.policy(name, ({ auth }) => auth.scopes.has(name))` — one string is both the policy id and
+the scope checked.
+
 </Step>
 
 <Step>
 ### Attach them to triggers
 
-`.gate(...)` composes in registration order — evaluated left to right, first denial wins:
+`.gate(...)` composes in registration order — left to right, first denial wins. Public routes
+must say so explicitly:
 
 ```typescript title="src/flows/links/shorten.ts"
+import { on, flow, http, gate } from "okengine";
+
+export const health = on(
+  http.get("/health").gate(gate.public),
+  flow({
+    out: HealthOut,
+    do: () => ({ ok: true as const }),
+  }),
+);
+
 export const shorten = on(
-  http.post("/links").gate(member, fair),
+  http.post("/links").gate(member, canBook, fair),
   flow({
     in: NewLink,
     out: LinkCode,
     errors: { Taken },
     do: async ({ url, code }, fx) => {
-      /* runs only if both gates passed */
+      /* runs only if every gate passed */
     },
   }),
 );
 ```
+
+Do **not** put `gate.public` in `oke({ gates })` — attach it on the trigger only.
 
 </Step>
 
 <Step>
 ### Denials are typed failures
 
-A denied request never reaches `do`. It returns one of three typed failures, like any entry in `errors: { … }`:
+A denied request never reaches `do`. It returns one of three typed failures:
 
 | Gate result                      | Typed failure                         |
 | -------------------------------- | ------------------------------------- |
@@ -74,7 +95,7 @@ A denied request never reaches `do`. It returns one of three typed failures, lik
 
 <GatePipeline />
 
-## Gate declarations
+## Declarations
 
 | Declaration                           | Question it answers                         | Evaluated against                  |
 | ------------------------------------- | ------------------------------------------- | ---------------------------------- |
@@ -83,36 +104,20 @@ A denied request never reaches `do`. It returns one of three typed failures, lik
 | `gate.public`                         | Intentionally unauthenticated surface       | always allows                      |
 | `gate.rate(options)`                  | Is there budget left for this subject?      | an atomic counter on the kv driver |
 
-`gate.policy(name, check)` stays the terse form. Pass
-`{ check, description }` when you want a human title in the Console
-(falls back to the policy name).
+Pass `{ check, description }` on `gate.policy` when you want a human title in the Console (falls
+back to the policy name). The name `"public"` is reserved — use `gate.public`, not
+`gate.policy("public", …)`.
 
-`gate.scope(name)` is sugar for
-`gate.policy(name, ({ auth }) => auth.scopes.has(name))` — one string is
-both the policy id and the scope checked. Fine-grained authorization
-stays opt-in: attach `gate.scope(...)` only where you need it.
-
-`gate.public` is the explicit public sentinel. It is always registered
-in the Gate runtime — attach it on the trigger; you do not list it in
-`oke({ gates })`. Every HTTP trigger must carry a gate or `gate.public`
-at boot — omit neither (see below).
-
-### The policy context
-
-The predicate receives everything it may decide with — nothing else:
+### Policy context
 
 | Field      | Contents                                                 |
 | ---------- | -------------------------------------------------------- |
 | `auth`     | User principal: `userId`, `scopes` (a `Set`), `verified` |
 | `operator` | Operator principal (Console plane): `id`                 |
-| `meta`     | Request metadata for keying decisions: `ip`, `userId`, … |
+| `meta`     | Request metadata for keying: `ip`, `userId`, …           |
 
-```typescript
-export const admin = gate.scope("admin");
-// same as: gate.policy("admin", ({ auth }) => auth.scopes.has("admin"));
-```
-
-A policy name containing `:` is also a `Module:Action` permission — the same declaration feeds role-based access reviews in the Console.
+A policy name containing `:` is also a `Module:Action` permission for Console role reviews.
+Fine-grained authorization (`gate.scope`, roles) stays opt-in — attach it only where you need it.
 
 ### Rate options
 
@@ -133,58 +138,73 @@ A policy name containing `:` is also a `Module:Action` permission — the same d
 | `token-bucket`           | Steady refill; permits saved-up bursts                 |
 | `leaky-bucket`           | Smooths output to a constant rate                      |
 
-All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory driver in tests.
+All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory
+driver in tests.
 
 ## Auth posture at boot
 
-Every HTTP trigger must declare authentication posture — attach a gate, or
-attach `gate.public`. Omitting both fails boot with `GateBootError` (same
-fail-loud standard as Vault). Fine-grained authorization (`gate.scope`,
-roles) stays opt-in.
+Every HTTP trigger must carry a gate or `gate.public`. Omitting both fails boot with
+`GateBootError` — message starts with `gate boot failed —` and lists every gap (same fail-loud
+standard as Vault). Signal, clock, and internal triggers are unchanged.
 
 ```typescript
 on(http.get("/health").gate(gate.public), flow({/* … */}));
 on(http.post("/bookings").gate(member, canBook), flow({/* … */}));
 ```
 
-Test harness opt-out (`unguardedHttp: "allow"`) is honoured **only** when
-`env === "test"` — never a production-wide bypass. Real apps migrate one
-trigger at a time with `gate.public` (or a real policy), not a global flag.
+**Consequence:** first `fetch` / `execute` auto-boots (`autoBoot` defaults to `true`) — a plain
+`oke({…}).fetch(request)` enforces posture. `oke({ autoBoot: false })` is a unit-test escape hatch
+only. A rate-only chain is declared posture but does **not** authenticate.
 
-```typescript
-// createTestApp / env: "test" only — ignored in local/prod/docker
-oke({ name: "app", env: "test", unguardedHttp: "allow" });
-```
+`unguardedHttp: "allow"` skips the audit **only** when `env === "test"` (e.g. `createTestApp`).
+In `local` / `prod` / `docker` migrate with per-trigger `gate.public` — never a prod-wide bypass.
 
-## Identity comes from auth
+## Identity and decisions
 
-Gates don't log users in — they decide about principals that already exist. The built-in auth plugin (`okengine/auth`) provides the user plane: hybrid sessions, argon2id password hashing, roles, API keys, and invites, with zero-config defaults. Whatever it establishes lands on `fx.auth`, which is exactly what your policies read.
+Gates don't log users in — they decide on principals that already exist.
 
-## Every decision is recorded
+`okengine/auth` issues hybrid sessions; resolved identity lands on `fx.auth` (and
+`fx.operator` on the Console plane). For audit across `fx.call`, use read-only
+`fx.principal` — it never fills `fx.auth` on the callee (see [fx](/docs/reference/fx)).
 
-Pass **and** deny, every evaluation lands on the run's `gates` dimension in the telemetry trace. The Console (`:6533` → Gates) shows which gates fired on a request and their outcomes — an audit trail of permission decisions you never had to build. Rate gates declared `overridable: true` can also be retuned (`max`/`per`) from the Console without a redeploy; anything else rejects edits by design.
+Pass **and** deny, every evaluation lands on the run's `gates` dimension.
+
+Console (`:6533` → Gates) shows the chain and outcomes. Rate gates with
+`overridable: true` can be retuned live; anything else rejects edits by design.
 
 ## Troubleshooting
 
 <Accordions>
+<Accordion title="Boot: gate boot failed — N HTTP trigger(s) missing auth posture">
+
+The listed flows have an empty `.gate(...)` chain. Attach a policy/rate gate, or
+`.gate(gate.public)` for intentionally open surfaces. First `fetch` auto-boots by default —
+no separate `app.boot()` needed. Do not rely on `unguardedHttp: "allow"` outside `env: "test"`.
+
+</Accordion>
 <Accordion title="Can a policy read the request body?">
 
-No — and that is deliberate. Gates run before the flow, so they see only the policy context (`auth`, `operator`, `meta`). Body-dependent decisions belong inside `do`, expressed as typed `errors`.
+No. Gates run before the flow, so they see only `auth`, `operator`, and `meta`. Body-dependent
+decisions belong inside `do` as typed `errors`.
 
 </Accordion>
 <Accordion title="Logged-in users still get Forbidden">
 
-`Forbidden` means the request _was_ authenticated but a policy said no. The failure includes the gate name and reason — check whether your predicate requires `verified` or a scope the user lacks.
+`Forbidden` means the request was authenticated but a policy said no. Check `verified` or a
+missing scope — the failure includes the gate name and reason.
 
 </Accordion>
 <Accordion title="Which keyBy should I use?">
 
-`"ip"` for public unauthenticated surfaces (sign-up, password reset), `"user"` for authenticated quotas. Keying an authenticated endpoint by IP punishes users behind shared NAT; keying a public endpoint by user is impossible.
+`"ip"` for public surfaces (sign-up, password reset), `"user"` for authenticated quotas. Keying
+an authenticated endpoint by IP punishes shared NAT; keying a public endpoint by user is
+impossible.
 
 </Accordion>
 <Accordion title="The Console won't retune my rate limit">
 
-The gate was declared without `overridable: true`. Add it and redeploy — live retuning is opt-in per gate so a mistyped change cannot silently open a floodgate.
+The gate was declared without `overridable: true`. Add it and redeploy — live retuning is opt-in
+so a mistyped change cannot silently open a floodgate.
 
 </Accordion>
 </Accordions>
@@ -192,8 +212,9 @@ The gate was declared without `overridable: true`. Add it and redeploy — live 
 ## Learn more
 
 - [Flow](/docs/elements/flow) — the trigger pipeline gates plug into
+- [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`
 - [Console · Gates](/docs/console/gates) — decision audit and live retuning
-- [Vault](/docs/elements/vault) — the credentials your policies protect
+- [Vault](/docs/elements/vault) — credentials your policies protect
 
 ## Next
 

@@ -5,6 +5,7 @@
     "index",
     "configuration",
     "fx",
+    "client",
     "environment-variables",
     "errors",
     "plugins",

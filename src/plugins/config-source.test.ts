@@ -156,7 +156,7 @@ describe("configSource — plugin wiring", () => {
     });
 
     on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "cfg-live" }).plug(maintenanceMode(source));
+    const app = oke({ autoBoot: false, name: "cfg-live" }).plug(maintenanceMode(source));
 
     expect((await app.fetch(new Request("http://localhost/x"))).status).toBe(200);
 

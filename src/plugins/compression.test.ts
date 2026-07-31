@@ -38,7 +38,7 @@ describe("acceptsGzip", () => {
 describe("compression plugin", () => {
   test("gzips a large JSON body when the client accepts gzip", async () => {
     on(http.get("/big"), flow({ name: "big.get", do: bigPayload }));
-    const app = oke({ name: "zip" }).plug(compression());
+    const app = oke({ autoBoot: false, name: "zip" }).plug(compression());
 
     const res = await app.fetch(
       new Request("http://localhost/big", { headers: { "accept-encoding": "gzip" } }),
@@ -59,7 +59,7 @@ describe("compression plugin", () => {
 
   test("passes through untouched without Accept-Encoding: gzip", async () => {
     on(http.get("/big"), flow({ name: "big.get", do: bigPayload }));
-    const app = oke({ name: "zip-plain" }).plug(compression());
+    const app = oke({ autoBoot: false, name: "zip-plain" }).plug(compression());
 
     const res = await app.fetch(new Request("http://localhost/big"));
 
@@ -70,7 +70,7 @@ describe("compression plugin", () => {
 
   test("skips bodies under minSize", async () => {
     on(http.get("/small"), flow({ name: "small.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "zip-small" }).plug(compression());
+    const app = oke({ autoBoot: false, name: "zip-small" }).plug(compression());
 
     const res = await app.fetch(
       new Request("http://localhost/small", { headers: { "accept-encoding": "gzip" } }),
@@ -81,7 +81,7 @@ describe("compression plugin", () => {
 
   test("minSize: 0 compresses even tiny bodies", async () => {
     on(http.get("/small"), flow({ name: "small.get", do: () => ({ ok: true }) }));
-    const app = oke({ name: "zip-zero" }).plug(compression({ minSize: 0 }));
+    const app = oke({ autoBoot: false, name: "zip-zero" }).plug(compression({ minSize: 0 }));
 
     const res = await app.fetch(
       new Request("http://localhost/small", { headers: { "accept-encoding": "gzip" } }),
@@ -112,7 +112,7 @@ describe("compression plugin", () => {
           ),
       }),
     );
-    const app = oke({ name: "zip-skip" }).plug(compression());
+    const app = oke({ autoBoot: false, name: "zip-skip" }).plug(compression());
 
     const img = await app.fetch(
       new Request("http://localhost/img", { headers: { "accept-encoding": "gzip" } }),

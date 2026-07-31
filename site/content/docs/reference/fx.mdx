@@ -48,6 +48,10 @@ See [Store](/docs/elements/store) for the query-builder surface.
 | `fx.signal`                  | —       | Ambient `AbortSignal` for the current branch          |
 | `fx.fail(code, data, opts?)` | —       | Typed failure value (`opts.message` overrides)        |
 
+`fx.call` starts the callee with an **empty** `fx.auth` (fail-closed for authorization). For
+audit/attribution only, read `fx.principal` — it propagates the originating identity without
+copying into `fx.auth`. Gates never consult `fx.principal`.
+
 ## Concurrency and retry
 
 Pass **thunks** to `all` / `race` — not already-started Promises — so each branch gets an abort scope before work begins.
@@ -157,11 +161,15 @@ Returning a plain value instead answers 200 with `{ data: value, error: null }` 
 
 ## Principals
 
-| Property      | Shape                                                                 |
-| ------------- | --------------------------------------------------------------------- |
-| `fx.auth`     | `{ userId: string \| null, scopes: Set<string>, verified?: boolean }` |
-| `fx.operator` | `{ id: string \| null }` — Console plane                              |
-| `fx.tenant`   | `{ id: string \| null }` — active tenant                              |
+| Property       | Shape                                                                     |
+| -------------- | ------------------------------------------------------------------------- |
+| `fx.auth`      | `{ userId: string \| null, scopes: Set<string>, verified?: boolean }`     |
+| `fx.operator`  | `{ id: string \| null }` — Console plane                                  |
+| `fx.principal` | Read-only origin: `userId`, `operatorId`, `scopes`, `verified?`, `plane?` |
+| `fx.tenant`    | `{ id: string \| null }` — active tenant                                  |
+
+**Consequence:** use `fx.auth` / gates for authorization; use `fx.principal` only when a callee
+must log who started the call chain.
 
 ## Not on `fx`
 

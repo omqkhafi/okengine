@@ -26,7 +26,7 @@ describe("plugin edge handlers", () => {
       }
       return undefined;
     });
-    const app = oke({ name: "edge" }).plug(edge);
+    const app = oke({ autoBoot: false, name: "edge" }).plug(edge);
 
     const preflight = await app.fetch(new Request("http://localhost/x", { method: "OPTIONS" }));
     expect(preflight.status).toBe(204);
@@ -42,13 +42,13 @@ describe("plugin edge handlers", () => {
     const answer = plugin("edge-answer", { version: "0.0.1" }).edge(
       () => new Response("answered", { status: 418 }),
     );
-    const app = oke({ name: "edge-order" }).plug(pass).plug(answer);
+    const app = oke({ autoBoot: false, name: "edge-order" }).plug(pass).plug(answer);
 
     const res = await app.fetch(new Request("http://localhost/nowhere", { method: "OPTIONS" }));
     expect(res.status).toBe(418);
     expect(await res.text()).toBe("answered");
 
-    const noPlugins = oke({ name: "edge-none" });
+    const noPlugins = oke({ autoBoot: false, name: "edge-none" });
     const missing = await noPlugins.fetch(
       new Request("http://localhost/nowhere", { method: "OPTIONS" }),
     );

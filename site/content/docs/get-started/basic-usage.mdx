@@ -75,14 +75,11 @@ const { data, error } = await api.main.health({});
 ```
 
 `data` and `error` are inferred from the Flow contracts — no separate client
-schema or codegen project.
+schema or codegen project. For Bearer sessions, pass `auth: { getToken, refresh }`.
 
-For Bearer sessions today, pass `auth: { getToken, refresh }` on
-`createClient` options. Reactive session hooks and framework bindings are
-**not** in `okengine/client` (hard &lt;3 kB budget) — the planned shape is a
-framework-agnostic session adapter, then an opt-in `okengine/client-react`
-subpath (`SessionProvider` / `useSession`). Plugin `.client()` mirroring
-stays deferred until that seam merges into `createClient`.
+Reactive hooks and framework bindings are **not** in `okengine/client` (hard
+&lt;3 kB budget). See [Client](/docs/reference/client) for REST vs RPC, options,
+and helpers.
 
 </Step>
 

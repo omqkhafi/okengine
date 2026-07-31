@@ -1,11 +1,13 @@
 ---
 title: "Gates"
-description: "Permission matrix, rate counters, MFA map."
+description: "Permission inquiry, rate counters, and continuous audit of unguarded vs explicitly public flows."
 icon: "Shield"
 source: "docs/spec/console.md"
 ---
 
-Answers: **permission matrix, rate counters, MFA map**
+The Gates panel answers **who may do what** without dumping a giant roles×permissions matrix as
+the home screen. Inquire from a principal or from a flow; the simulator shows the chain in
+evaluation order.
 
 <Callout title="Governing rule">
   Refuse the giant roles×permissions matrix as the entry point — inquire from principal or from
@@ -15,10 +17,10 @@ Answers: **permission matrix, rate counters, MFA map**
 ## What this panel shows
 
 <Cards>
-  <Card title="Simulator" description="Gate chain in evaluation order — where a 403 stopped." />
+  <Card title="Simulator" description="Gate chain in evaluation order — where a denial stopped." />
   <Card
-    title="Unguarded flows"
-    description="Continuous audit: public user-plane flows after deploy."
+    title="Unguarded vs public"
+    description="Empty chain (missing posture) vs gate.public (intentional)."
   />
   <Card title="Deploy diff" description="Permission widening caught from Manifest Diff." />
   <Card
@@ -26,6 +28,17 @@ Answers: **permission matrix, rate counters, MFA map**
     description="Operator holding an application scope is a violation."
   />
 </Cards>
+
+## Unguarded vs explicit public
+
+| Flag            | Meaning                                                                      |
+| --------------- | ---------------------------------------------------------------------------- |
+| Unguarded       | User-plane flow with an **empty** gate chain — missing auth posture          |
+| Explicit public | Chain includes the reserved `public` sentinel (`gate.public` on the trigger) |
+
+App boot fails on unguarded HTTP triggers (`GateBootError`) unless `env === "test"` and
+`unguardedHttp: "allow"`. Prefer fixing the flow: attach a policy, or attach `gate.public` when
+the surface is intentionally open. See [Gate](/docs/elements/gate).
 
 ## Catalog
 

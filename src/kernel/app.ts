@@ -171,8 +171,10 @@ export interface OkeOptions {
   readonly ai?: BootOptions["ai"];
   /**
    * Boot automatically on first {@link OkeApp.execute} / {@link OkeApp.fetch}
-   * call. Default `false` — call {@link OkeApp.boot} explicitly (tests
-   * usually want a fail-fast boot before serving any request).
+   * call. Default `true` — gate posture, vault, capabilities, and the element
+   * pipeline must run before any real traffic. Opt out only for intentional
+   * pre-boot unit tests: `oke({ autoBoot: false })` skips `doBoot` entirely
+   * (no gates / elements) and must never ship as a serving default.
    */
   readonly autoBoot?: boolean;
   /**
@@ -601,13 +603,14 @@ export function oke(options: OkeOptions): OkeApp {
   }
 
   /**
-   * Boot lazily when `autoBoot` is enabled; otherwise legacy (pre-boot)
-   * execution continues to work without gates / element runtimes — existing
-   * callers that never call {@link OkeApp.boot} see unchanged behavior.
+   * Boot lazily on first execute/fetch unless {@link OkeOptions.autoBoot} is
+   * explicitly `false` (legacy pre-boot escape hatch for unit tests).
+   * Default is on — security posture and element runtimes are not optional
+   * for traffic-serving apps.
    */
   async function ensureBoot(): Promise<BootResult | undefined> {
     if (bootResult) return bootResult;
-    if (options.autoBoot !== true) return undefined;
+    if (options.autoBoot === false) return undefined;
     if (!bootPromise) {
       bootPromise = doBoot();
     }
@@ -670,8 +673,8 @@ export function oke(options: OkeOptions): OkeApp {
     const startedAt = now();
     const telemetry = createRunTelemetry();
 
-    // Element pipeline wiring only kicks in once booted — pre-boot execution
-    // (existing tests) runs exactly as before, with no gates / elements.
+    // Element pipeline wiring only kicks in once booted — `autoBoot: false`
+    // keeps intentional pre-boot unit tests ungated (no elements either).
     let principals: PrincipalBag | undefined;
     let hooks: HookMap = composedHooks;
     let capability: CapabilityToken | undefined;

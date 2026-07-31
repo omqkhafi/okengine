@@ -232,6 +232,11 @@ Extending an existing **app-owned** table with plugin columns is not supported i
     table above, and confirm the flow you expect actually reaches that stage (a gate denial never
     reaches `beforeHandle`).
   </Accordion>
+  <Accordion title="Boot: plugin boot failed — unmet .needs() dependencies">
+    A plugged plugin declared `.needs("auth")` or `.needs("store.sql")` (or another token) and
+    nothing satisfied it. Plug the named peer plugin, or ensure the element/driver is available at
+    boot (tables imply `store.sql`; declared clocks imply `clock`, and so on).
+  </Accordion>
 </Accordions>
 
 ## Learn more

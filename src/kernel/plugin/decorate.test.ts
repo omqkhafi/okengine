@@ -37,7 +37,7 @@ describe("plugin decorate — types and runtime", () => {
       }),
     );
 
-    const app = oke({ name: "decorate" }).plug(audit);
+    const app = oke({ autoBoot: false, name: "decorate" }).plug(audit);
     await app.fetch(new Request("http://localhost/x"));
 
     expect(seen).toEqual({ enabled: true, retain: "2y" });
@@ -51,7 +51,7 @@ describe("plugin decorate — types and runtime", () => {
       currency: "SAR" as const,
     });
 
-    const app = oke({ name: "types" }).plug(withAudit).plug(withBilling);
+    const app = oke({ autoBoot: false, name: "types" }).plug(withAudit).plug(withBilling);
 
     type AppDeco = typeof app extends OkeApp<infer D> ? D : never;
     type HasBoth = ExpectExtends<
@@ -94,7 +94,7 @@ describe("plugin decorate — types and runtime", () => {
       }),
     );
 
-    const app = oke({ name: "deco-scope" });
+    const app = oke({ autoBoot: false, name: "deco-scope" });
     app.unit("orders").plug(plugin("flag", { version: "1.0.0" }).decorate("flag", "orders-only"));
 
     await app.fetch(new Request("http://localhost/orders"));

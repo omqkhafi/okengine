@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { gate } from "../elements/gate.ts";
 import { oke } from "../kernel/app.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
@@ -55,14 +56,14 @@ function rawHttp(port: number, payload: string): Promise<string> {
 
 function buildApp() {
   on(
-    http.get("/ping"),
+    http.get("/ping").gate(gate.public),
     flow({
       name: "ping",
       do: () => ({ ok: true as const, n: 1 }),
     }),
   );
   on(
-    http.get("/notes/:id"),
+    http.get("/notes/:id").gate(gate.public),
     flow({
       name: "notes.get",
       do: ({ id }: { id: string }) => ({ id }),

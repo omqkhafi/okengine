@@ -48,7 +48,7 @@ describe("plugin scoping — attachment point is the scope", () => {
       fired.push("rate-limit");
     });
 
-    const app = oke({ name: "scoping" });
+    const app = oke({ autoBoot: false, name: "scoping" });
     app.unit("orders").plug(rateLimit);
 
     await app.fetch(new Request("http://localhost/orders"));
@@ -87,7 +87,7 @@ describe("plugin scoping — attachment point is the scope", () => {
       fired.push("audit");
     });
 
-    const app = oke({ name: "app-scope" }).plug(audit);
+    const app = oke({ autoBoot: false, name: "app-scope" }).plug(audit);
 
     await app.fetch(new Request("http://localhost/a"));
     await app.fetch(new Request("http://localhost/b"));
@@ -121,7 +121,7 @@ describe("plugin scoping — attachment point is the scope", () => {
     on(http.get("/marked"), marked);
     on(http.get("/plain"), plain);
 
-    const app = oke({ name: "flow-scope" });
+    const app = oke({ autoBoot: false, name: "flow-scope" });
 
     await app.fetch(new Request("http://localhost/marked"));
     await app.fetch(new Request("http://localhost/plain"));

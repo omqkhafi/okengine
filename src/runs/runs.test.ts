@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { fsDriver, memoryFilesDriver } from "../drivers/index.ts";
+import { gate } from "../elements/gate.ts";
 import { oke } from "../kernel/app.ts";
 import { flow } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
@@ -54,8 +55,10 @@ describe("zero-instrumentation dimensions", () => {
     });
     await runs.open();
 
+    const member = gate.policy("member", ({ auth }) => !!auth.verified);
+
     on(
-      http.get("/book").gate("member"),
+      http.get("/book").gate(member),
       flow({
         name: "book.create",
         unit: "bookings",
@@ -74,8 +77,9 @@ describe("zero-instrumentation dimensions", () => {
     const app = oke({
       name: "runs-dims",
       runs,
+      gates: [member],
       fx: {
-        auth: { userId: "user_42", scopes: new Set(["book:write"]) },
+        auth: { userId: "user_42", scopes: new Set(["book:write"]), verified: true },
         tenant: { id: "org_a41" },
       },
     });

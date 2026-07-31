@@ -45,7 +45,7 @@ describe("flow — one species", () => {
     on(http.post("/work"), shared);
     on(signal, shared);
 
-    const app = oke({ name: "one-species" });
+    const app = oke({ autoBoot: false, name: "one-species" });
     expect(app.bindings).toHaveLength(2);
     expect(app.bindings[0]?.flow).toBe(shared);
     expect(app.bindings[1]?.flow).toBe(shared);
@@ -115,7 +115,7 @@ describe("five trigger kinds", () => {
       }),
     );
 
-    const app = oke({ name: "five" });
+    const app = oke({ autoBoot: false, name: "five" });
 
     const res = await app.fetch(new Request("http://localhost/abc", { method: "GET" }));
     expect(res.status).toBe(200);

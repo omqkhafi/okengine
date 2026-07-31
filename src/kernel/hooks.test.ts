@@ -74,7 +74,7 @@ describe("hooks — order and composition", () => {
 
     on(http.get("/ordered"), f);
 
-    const app = oke({ name: "hooks-order" })
+    const app = oke({ autoBoot: false, name: "hooks-order" })
       .hook("onRequest", () => {
         order.push("app:onRequest");
       })
@@ -128,7 +128,7 @@ describe("hooks — order and composition", () => {
       }),
     );
 
-    const app = oke({ name: "sc-res" })
+    const app = oke({ autoBoot: false, name: "sc-res" })
       .hook("onAuth", () => {
         order.push("onAuth");
         return new Response("denied", { status: 401 });
@@ -157,7 +157,7 @@ describe("hooks — order and composition", () => {
       }),
     );
 
-    const app = oke({ name: "data-res" }).hook("onResponse", (ctx) => {
+    const app = oke({ autoBoot: false, name: "data-res" }).hook("onResponse", (ctx) => {
       seenAtHook = ctx.response;
       if (!ctx.response) return;
       const headers = new Headers(ctx.response.headers);
@@ -192,7 +192,7 @@ describe("hooks — order and composition", () => {
       }),
     );
 
-    const app = oke({ name: "sc-err" })
+    const app = oke({ autoBoot: false, name: "sc-err" })
       .hook("beforeHandle", () => {
         order.push("beforeHandle");
         return fail("Nope", {});

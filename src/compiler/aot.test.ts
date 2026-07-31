@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
+import { gate } from "../elements/gate.ts";
 import { oke } from "../kernel/app.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
@@ -118,7 +119,7 @@ describe("typed error narrowing end-to-end", () => {
     const FlightFull = z.object({ seatsLeft: z.number() });
 
     on(
-      http.post("/bookings"),
+      http.post("/bookings").gate(gate.public),
       flow({
         name: "bookings.create",
         in: Booking,
