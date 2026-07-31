@@ -24,7 +24,11 @@ new random `userId`. Use it for guest carts or try-before-account flows.
 import { oke } from "okengine";
 import { anonymous } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(anonymous());
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(anonymous());
 ```
 
 </Step>

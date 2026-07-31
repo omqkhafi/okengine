@@ -10,6 +10,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.5.0 — 2026-08-01
+
 ### ✨ Added
 
 - `oke({ gate })` — nested Gate bag (`auth`, `policies`, `rateLimit`,
@@ -30,7 +32,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Docs · [Client](/docs/reference/client) — `okengine/client` reference
   (`createClient` forms, REST vs RPC, Bearer auth + gate denials,
   elements-from-the-client, envelope helpers, `oke client add`).
-- Homepage **Onboard an AI** button (hero CTAs) copies a short bootstrap
+- Homepage **Onboard AI** button (hero CTAs) copies a short bootstrap
   prompt pointing at the live `/llms.txt` index and the repo-root
   `AGENTS.md` — distinct from the per-page docs “Copy prompt” action.
 - Docs section landings at `/docs/get-started`, `/docs/elements`,
@@ -112,6 +114,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   cannot fail with a fonts.gstatic.com 403.
 - Unhandled throws in HTTP Flows encode as `500 InternalError` — never
   as empty `204` (which `encodeSuccess(undefined)` previously produced).
+- Docs · auth method plugin Quick Starts enable `oke({ gate: { auth } })` before
+  `.plug(...)` (`.needs("auth")`); Client notes built-in `POST /auth/refresh`;
+  Gate docs cover session idle/absolute/`singleSessionPerUser` and
+  `createHibpBreachCheck`; drop false Console rate-limit retune claims.
+- Homepage element lattice — compact phone layout, stacked chrome, and no
+  spotlight/hover chase on coarse pointers (touch).
 
 ## v0.4.3 — 2026-07-31
 

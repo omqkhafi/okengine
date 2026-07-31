@@ -285,8 +285,8 @@ Message text lives in `error.data.message`; HTTP status may appear as `error.dat
 <Accordion title="401 loops or refresh never sticks">
 
 `auth.refresh` runs once per call on HTTP 401. It must update the store `getToken` reads — the
-return value is ignored. There is no built-in app refresh route; wire a Flow that rotates the
-refresh token, or re-login when rotation fails.
+return value is ignored. With `gate.auth`, `POST /auth/refresh` is built in; `memorySession.refresh(api)`
+calls `api.auth.refresh({ refreshToken })`. Re-login when rotation fails or no refresh token remains.
 
 </Accordion>
 

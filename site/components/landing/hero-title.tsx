@@ -264,31 +264,6 @@ export function HeroTitle() {
           >
             Get started
           </Link>
-          <Link
-            href="/docs/get-started/installation"
-            className="group relative inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground sm:text-sm"
-          >
-            <span
-              className="absolute inset-0 opacity-[0.04] transition-opacity group-hover:opacity-[0.08]"
-              style={{
-                backgroundImage: `repeating-linear-gradient(
-                  -45deg,
-                  transparent,
-                  transparent 4px,
-                  currentColor 4px,
-                  currentColor 5px
-                )`,
-              }}
-            />
-            <span className="absolute top-0 -right-[6px] -left-[6px] h-px bg-fd-foreground/20 transition-colors group-hover:bg-fd-foreground/30" />
-            <span className="absolute bottom-0 -right-[6px] -left-[6px] h-px bg-fd-foreground/20 transition-colors group-hover:bg-fd-foreground/30" />
-            <span className="absolute -top-[6px] -bottom-[6px] left-0 w-px bg-fd-foreground/20 transition-colors group-hover:bg-fd-foreground/30" />
-            <span className="absolute -top-[6px] -bottom-[6px] right-0 w-px bg-fd-foreground/20 transition-colors group-hover:bg-fd-foreground/30" />
-            <span className="absolute -right-[6px] -bottom-[6px] translate-x-1/2 translate-y-1/2 font-mono text-[8px] leading-none text-fd-foreground/40 select-none">
-              +
-            </span>
-            <span className="relative">Install</span>
-          </Link>
           <AiOnboardButton />
         </motion.div>
 

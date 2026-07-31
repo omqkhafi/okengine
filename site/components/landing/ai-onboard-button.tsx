@@ -5,7 +5,7 @@
 
 "use client";
 
-import { Check, Bot } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { agentOnboardPrompt } from "@/lib/agent-onboard";
 
@@ -27,7 +27,7 @@ export function AiOnboardButton(): ReactNode {
       type="button"
       onClick={() => void copyPrompt()}
       className="group relative inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-medium text-fd-muted-foreground transition-colors hover:text-fd-foreground sm:text-sm"
-      aria-label="Copy AI onboarding prompt"
+      aria-label="Copy AI onboard prompt"
     >
       <span
         className="absolute inset-0 opacity-[0.04] transition-opacity group-hover:opacity-[0.08]"
@@ -48,9 +48,9 @@ export function AiOnboardButton(): ReactNode {
       {copied ? (
         <Check className="relative size-3.5" aria-hidden />
       ) : (
-        <Bot className="relative size-3.5" aria-hidden />
+        <Sparkles className="relative size-3.5" aria-hidden />
       )}
-      <span className="relative">{copied ? "Copied" : "Onboard an AI"}</span>
+      <span className="relative">{copied ? "Copied" : "Onboard AI"}</span>
     </button>
   );
 }

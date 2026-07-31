@@ -24,7 +24,11 @@ user on first success and returns hybrid session tokens.
 import { oke } from "okengine";
 import { emailOtp } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(emailOtp({ exposeDevOtp: true }));
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(emailOtp({ exposeDevOtp: true }));
 ```
 
 </Step>

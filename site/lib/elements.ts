@@ -1,5 +1,14 @@
 import type { LucideIcon } from "lucide-react";
-import { Bot, Clock, Database, KeyRound, Mail, Radio, ShieldCheck, Workflow } from "lucide-react";
+import {
+  Clock,
+  Database,
+  KeyRound,
+  Mail,
+  Radio,
+  ShieldCheck,
+  Sparkles,
+  Workflow,
+} from "lucide-react";
 
 /** Preview fragment kind for Features cards (okengine extension). */
 export type ElementPreviewKind =
@@ -103,7 +112,7 @@ export const ELEMENTS: ReadonlyArray<{
     description: "Models, prompts, agents, and RAG with cost and PII rules.",
     replaces: "model calls · prompts · embeddings · agents · RAG",
     href: "/docs/elements/ai",
-    icon: Bot,
+    icon: Sparkles,
     preview: "ai",
   },
 ];

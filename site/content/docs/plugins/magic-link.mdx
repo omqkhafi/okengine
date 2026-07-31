@@ -24,7 +24,11 @@ hybrid session and creates the user on first success.
 import { oke } from "okengine";
 import { magicLink } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(magicLink({ exposeDevToken: true }));
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(magicLink({ exposeDevToken: true }));
 ```
 
 </Step>

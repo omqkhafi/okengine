@@ -26,7 +26,11 @@ payload your client posts (not a full browser WebAuthn SDK).
 import { oke } from "okengine";
 import { passkey } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(passkey());
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(passkey());
 ```
 
 </Step>
@@ -34,22 +38,18 @@ export const app = oke({ name: "shop", env: "local" }).plug(passkey());
 <Step>
 ### Register (session required)
 
+Wire Bearer on `createClient` (`auth.getToken` / `memorySession`) — calls take input only.
+
 ```typescript
-const opts = await api.auth.passkeyRegisterOptions(
-  {},
-  { headers: { Authorization: `Bearer ${accessToken}` } },
-);
+const opts = await api.auth.passkeyRegisterOptions({});
 // opts.data: { challenge, rpId, userId }
 
-await api.auth.passkeyRegister(
-  {
-    credentialId: "...",
-    publicKey: "...",
-    userId: opts.data!.userId,
-    challenge: opts.data!.challenge,
-  },
-  { headers: { Authorization: `Bearer ${accessToken}` } },
-);
+await api.auth.passkeyRegister({
+  credentialId: "...",
+  publicKey: "...",
+  userId: opts.data!.userId,
+  challenge: opts.data!.challenge,
+});
 ```
 
 Paths: `POST /auth/passkey/register/options`, `POST /auth/passkey/register`.

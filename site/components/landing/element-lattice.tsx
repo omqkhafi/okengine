@@ -6,11 +6,16 @@
  * shows what you actually import rather than a build artifact.
  *
  * Motion carries the same claim. The cells deal in once on mount, a spotlight
- * follows the pointer across the panel, and the hovered or focused cell takes a
- * single shared highlight that glides from wherever it last was — one lit cell
- * at a time, never eight competing ones. While nobody is pointing, a beat walks
- * the ring one element per period and the header reads out what that element
- * replaces, so the panel argues for itself without being touched.
+ * follows the pointer across the panel (fine pointer only), and the hovered or
+ * focused cell takes a single shared highlight that glides from wherever it
+ * last was — one lit cell at a time, never eight competing ones. While nobody
+ * is pointing, a beat walks the ring one element per period and the header
+ * reads out what that element replaces, so the panel argues for itself without
+ * being touched.
+ *
+ * Touch / coarse pointers skip the spotlight and sticky hover: tap selects via
+ * focus, and the idle walk still runs. Compact padding and a stacked chrome
+ * keep the 2×4 phone grid readable.
  *
  * Everything is spring-driven through one `MotionConfig`. We honor
  * prefers-reduced-motion ourselves (after hydration) rather than via
@@ -65,11 +70,28 @@ const CELL_STATIC: Variants = {
 };
 
 /**
+ * True when the device has a fine pointer with hover — spotlight + hover wash.
+ * Coarse / touch-only devices rely on focus and the idle walk instead.
+ */
+function useFinePointer(): boolean {
+  const [fine, setFine] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const sync = () => setFine(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return fine;
+}
+
+/**
  * Hero-column grid of the eight elements — symbol, name, and essence per cell,
  * each linking to its reference page.
  */
 export function ElementLattice() {
   const reduced = useClientReducedMotion();
+  const finePointer = useFinePointer();
   const [active, setActive] = useState<number | null>(null);
   const [pointing, setPointing] = useState(false);
   /*
@@ -79,7 +101,7 @@ export function ElementLattice() {
    */
   const [beat, setBeat] = useState<number | null>(null);
 
-  /** The walk yields to a real pointer, and never starts under reduced motion. */
+  /** The walk yields to a real pointer/focus, and never starts under reduced motion. */
   const walking = !reduced && active === null;
   const cell = reduced ? CELL_STATIC : CELL;
 
@@ -111,45 +133,55 @@ export function ElementLattice() {
       <div className="relative w-full max-w-[38rem]">
         <div
           aria-hidden
-          className="pointer-events-none absolute -inset-6 bg-grid-black/[0.02] mask-[radial-gradient(70%_60%_at_50%_45%,white,transparent)] dark:bg-grid-white/[0.02]"
+          className="pointer-events-none absolute -inset-3 bg-grid-black/[0.02] mask-[radial-gradient(70%_60%_at_50%_45%,white,transparent)] sm:-inset-6 dark:bg-grid-white/[0.02]"
         />
 
         <motion.div
           initial={reduced ? false : "hidden"}
           animate="shown"
           variants={PANEL}
-          onPointerMove={(event) => {
-            const box = event.currentTarget.getBoundingClientRect();
-            pointerX.set(event.clientX - box.left);
-            pointerY.set(event.clientY - box.top);
-          }}
-          onPointerEnter={() => setPointing(true)}
-          onPointerLeave={() => {
-            setPointing(false);
-            setActive(null);
-          }}
+          onPointerMove={
+            finePointer
+              ? (event) => {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  pointerX.set(event.clientX - box.left);
+                  pointerY.set(event.clientY - box.top);
+                }
+              : undefined
+          }
+          onPointerEnter={finePointer ? () => setPointing(true) : undefined}
+          onPointerLeave={
+            finePointer
+              ? () => {
+                  setPointing(false);
+                  setActive(null);
+                }
+              : undefined
+          }
           className="relative overflow-hidden rounded-xl border border-fd-border bg-fd-card"
         >
-          {/* Spotlight — a wash the pointer carries, masked to a soft circle. */}
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-fd-foreground/[0.05]"
-            style={{ maskImage: spotlight }}
-            initial={false}
-            animate={{ opacity: pointing ? 1 : 0 }}
-            transition={{ duration: reduced ? 0 : 0.3 }}
-          />
+          {/* Spotlight — fine pointer only; touch skips the wash chase. */}
+          {finePointer ? (
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-fd-foreground/[0.05]"
+              style={{ maskImage: spotlight }}
+              initial={false}
+              animate={{ opacity: pointing ? 1 : 0 }}
+              transition={{ duration: reduced ? 0 : 0.3 }}
+            />
+          ) : null}
 
           <motion.div
             variants={cell}
-            className="relative flex items-baseline justify-between gap-4 border-b border-fd-border px-4 py-3"
+            className="relative flex flex-col gap-1 border-b border-fd-border px-3 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:px-4 sm:py-3"
           >
-            <p className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+            <p className="shrink-0 font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
               eight elements
             </p>
 
             {/* Reads out what the element under the beat or the pointer replaces. */}
-            <div className="relative h-4 min-w-0 flex-1">
+            <div className="relative min-h-4 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.p
                   key={focused?.name ?? "law"}
@@ -157,7 +189,7 @@ export function ElementLattice() {
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                  className="absolute inset-0 truncate text-right text-[11px] text-fd-muted-foreground"
+                  className="text-[11px] leading-snug text-fd-muted-foreground sm:absolute sm:inset-0 sm:truncate sm:text-right sm:leading-none"
                 >
                   {focused ? (
                     <>
@@ -208,10 +240,10 @@ export function ElementLattice() {
 
                   <Link
                     href={element.href}
-                    onPointerEnter={() => setActive(i)}
+                    onPointerEnter={finePointer ? () => setActive(i) : undefined}
                     onFocus={() => setActive(i)}
                     onBlur={() => setActive(null)}
-                    className="relative flex h-full flex-col p-4"
+                    className="relative flex min-h-[7.25rem] flex-col p-3 sm:min-h-0 sm:p-4"
                   >
                     <div className="flex items-start justify-between">
                       {/*
@@ -241,14 +273,14 @@ export function ElementLattice() {
 
                     <motion.span
                       className={cn(
-                        "mt-7 block font-mono text-2xl leading-none font-medium tracking-tight transition-colors",
+                        "mt-4 block font-mono text-xl leading-none font-medium tracking-tight transition-colors sm:mt-7 sm:text-2xl",
                         highlighted ? tone.mark : "text-fd-foreground",
                       )}
                       animate={reduced ? undefined : { y: isActive ? -2 : 0 }}
                     >
                       {element.symbol}
                     </motion.span>
-                    <span className="mt-2 block text-sm font-medium text-fd-foreground">
+                    <span className="mt-1.5 block text-sm font-medium text-fd-foreground sm:mt-2">
                       {element.name}
                     </span>
                     <span className="mt-0.5 block text-[11px] leading-snug text-fd-muted-foreground">
@@ -275,7 +307,7 @@ export function ElementLattice() {
 
           <motion.div
             variants={cell}
-            className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-fd-border px-4 py-3"
+            className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-fd-border px-3 py-2.5 sm:px-4 sm:py-3"
           >
             {/* Idle beat walks a highlight along the footer rule. */}
             {lit === null || beat === null || reduced ? null : (
@@ -297,7 +329,7 @@ export function ElementLattice() {
              * Footer mirrors the header: header says what the lit element replaces;
              * footer points at the reference page and what the element is for.
              */}
-            <div className="relative h-4 min-w-0 flex-1">
+            <div className="relative min-h-4 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.div
                   key={focused?.name ?? "idle"}
@@ -305,7 +337,7 @@ export function ElementLattice() {
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                  className="absolute inset-0 flex items-baseline justify-between gap-x-4"
+                  className="flex flex-col gap-1 sm:absolute sm:inset-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-x-4"
                 >
                   {focused ? (
                     <>
@@ -315,7 +347,7 @@ export function ElementLattice() {
                       >
                         docs/elements/{focused.preview}
                       </Link>
-                      <p className="min-w-0 truncate text-right text-[11px] text-fd-muted-foreground">
+                      <p className="min-w-0 text-[11px] leading-snug text-fd-muted-foreground sm:truncate sm:text-right sm:leading-none">
                         {focused.description}
                       </p>
                     </>

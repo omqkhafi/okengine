@@ -147,7 +147,7 @@ Fine-grained authorization (`gate.scope`, roles) stays opt-in — attach it only
 | `per`         | string       | — (**required**)           | Window / refill period (`"1m"`, `"60s"`, …)              |
 | `keyBy`       | string       | —                          | Subject dimension (`"ip"`, `"user"`, …)                  |
 | `strategy`    | RateStrategy | `"sliding-window-counter"` | Algorithm (below)                                        |
-| `overridable` | boolean      | `false`                    | Allow the Console to retune `max`/`per` live             |
+| `overridable` | boolean      | `false`                    | Catalog flag in Console (rate edit UI not shipped)       |
 | `description` | string       | —                          | Human title in the Console (falls back to the rate name) |
 
 | Strategy                 | Behavior                                               |
@@ -208,19 +208,38 @@ export const app = oke({
 | `POST /auth/revoke`        | when `gate.auth` is set                |
 | `GET /auth/me`             | Bearer session (`auth.session` policy) |
 
-| Auth option                            | Default   | Meaning                                                                        |
-| -------------------------------------- | --------- | ------------------------------------------------------------------------------ |
-| `secret`                               | minted\*  | HMAC for access tokens (\*`prod` requires you set it)                          |
-| `basePath`                             | `"/auth"` | HTTP prefix for auth Flows                                                     |
-| `http`                                 | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)                           |
-| `emailAndPassword.enabled`             | `false`   | Sign-up / sign-in email Flows                                                  |
-| `passwordPolicy`                       | secure\*  | `\*` minLength 12, letter + number; sign-up → `AuthFailed` / `password_policy` |
-| `breachCheck`                          | unset     | Optional HIBP (or custom) check → `AuthFailed` / `password_breached`           |
-| `session.freshAgeMs`                   | 24h       | Window for step-up `auth.fresh` policy                                         |
-| `session.accessTtlMs` / `refreshTtlMs` | 14m / 30d | Access / refresh lifetimes                                                     |
-| `cookies.enabled`                      | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                           |
-| `secondaryStorage.enabled`             | `false`   | Hot auth data in `store.kv` when configured                                    |
-| `user` / `session` / …                 | defaults  | `modelName` / `fields` / `additionalFields`                                    |
+| Auth option                                 | Default   | Meaning                                                                        |
+| ------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
+| `secret`                                    | minted\*  | HMAC for access tokens (\*`prod` requires you set it)                          |
+| `basePath`                                  | `"/auth"` | HTTP prefix for auth Flows                                                     |
+| `http`                                      | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)                           |
+| `audience`                                  | `oke-app` | Audience stamped on access tokens                                              |
+| `emailAndPassword.enabled`                  | `false`   | Sign-up / sign-in email Flows                                                  |
+| `emailAndPassword.requireEmailVerification` | `false`   | Block sign-in until email is verified                                          |
+| `passwordPolicy`                            | secure\*  | `\*` minLength 12, letter + number; sign-up → `AuthFailed` / `password_policy` |
+| `breachCheck`                               | unset     | `(password) => Promise<boolean>` — `true` rejects as `password_breached`       |
+| `session.freshAgeMs`                        | 24h       | Window for step-up `auth.fresh` policy                                         |
+| `session.accessTtlMs` / `refreshTtlMs`      | 14m / 30d | Access / refresh lifetimes                                                     |
+| `session.idleTtlMs`                         | unset     | Opt-in: reject refresh when idle too long                                      |
+| `session.absoluteTtlMs`                     | unset     | Opt-in: hard cap from session creation                                         |
+| `session.singleSessionPerUser`              | `false`   | Opt-in: issuing a session revokes other families for that user                 |
+| `cookies.enabled`                           | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                           |
+| `secondaryStorage.enabled`                  | `false`   | Hot auth data in `store.kv` when configured                                    |
+| `user` / `session` / …                      | defaults  | `modelName` / `fields` / `additionalFields`                                    |
+
+HIBP via `createHibpBreachCheck` from `okengine/auth` (k-anonymity range API; requires
+`userAgent`; `onError` defaults to `"reject"` — fail closed while the check is enabled):
+
+```typescript
+import { createHibpBreachCheck } from "okengine/auth";
+
+gate: {
+  auth: {
+    emailAndPassword: { enabled: true },
+    breachCheck: createHibpBreachCheck({ userAgent: "shop/1.0" }),
+  },
+}
+```
 
 Customize tables, then run `oke schema generate` (supports `--check` in CI). Extra sign-in
 shapes: [Plugins](/docs/plugins) (username, magic link, OTP, TOTP, passkeys). Call auth from
@@ -233,7 +252,8 @@ Gates decide on principals that already exist. `gate.auth` issues hybrid session
 (see [fx](/docs/reference/fx)).
 
 Pass **and** deny land on the run's `gates` dimension. Console (`:6533` → Gates) shows the
-chain. Rate gates with `overridable: true` can be retuned live.
+chain. Rate `overridable` is a catalog flag only — Clock schedules are what the Console can
+edit live today.
 
 ## Troubleshooting
 
@@ -273,11 +293,6 @@ are rejected — not accepted silently. Tighten or loosen via `gate.auth.passwor
 Keying an authenticated endpoint by IP punishes shared NAT.
 
 </Accordion>
-<Accordion title="The Console won't retune my rate limit">
-
-Declare the rate with `overridable: true` and redeploy — live retuning is opt-in.
-
-</Accordion>
 </Accordions>
 
 ## Learn more
@@ -286,7 +301,7 @@ Declare the rate with `overridable: true` and redeploy — live retuning is opt-
 - [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`
 - [Client](/docs/reference/client) — Bearer `createClient` + `okengine/client/auth`
 - [Plugins](/docs/plugins) — username, magic link, OTP, TOTP, passkeys
-- [Console · Gates](/docs/console/gates) — decision audit and live retuning
+- [Console · Gates](/docs/console/gates) — decision audit and posture
 - [Vault](/docs/elements/vault) — credentials your policies protect
 
 ## Next

@@ -24,7 +24,11 @@ Enable returns a secret, `otpauth://` URL, and recovery codes; verify mints a ne
 import { oke } from "okengine";
 import { twoFactor } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(twoFactor());
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(twoFactor());
 ```
 
 </Step>
@@ -32,11 +36,10 @@ export const app = oke({ name: "shop", env: "local" }).plug(twoFactor());
 <Step>
 ### Enable (session required)
 
+Wire Bearer on `createClient` (`auth.getToken` / `memorySession`) — calls take input only.
+
 ```typescript
-const { data } = await api.auth.twoFactorEnable(
-  {},
-  { headers: { Authorization: `Bearer ${accessToken}` } },
-);
+const { data } = await api.auth.twoFactorEnable({});
 // data.secret, data.otpauthUrl, data.recoveryCodes
 ```
 
@@ -54,7 +57,7 @@ const { data } = await api.auth.twoFactorVerify({ userId, code: "123456" });
 ```
 
 `POST /auth/two-factor/verify`. Missing / disabled factor or bad code → `AuthFailed` /
-`invalid_credentials`. Disable: `api.auth.twoFactorDisable` with Bearer.
+`invalid_credentials`. Disable: `api.auth.twoFactorDisable` (Bearer via `auth.getToken`).
 
 </Step>
 
@@ -86,8 +89,8 @@ sign-in when the account has 2FA enabled.
 <Accordions>
 <Accordion title="twoFactorEnable returns AuthFailed unauthenticated">
 
-Pass a valid `Authorization: Bearer` access token from email/password (or another method)
-first.
+Wire a session into `createClient` (`auth.getToken` / `memorySession`) from email/password
+(or another method) first — enable is gated on Bearer.
 
 </Accordion>
 <Accordion title="verify always fails">

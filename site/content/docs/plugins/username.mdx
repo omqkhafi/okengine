@@ -24,7 +24,11 @@ Flows under `/auth` and contributes the `oke_usernames` table.
 import { oke } from "okengine";
 import { username } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(username());
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(username());
 ```
 
 </Step>

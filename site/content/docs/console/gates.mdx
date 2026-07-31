@@ -45,9 +45,13 @@ App authors configure Gate under `oke({ gate: { policies, auth, unguardedHttp } 
 
 ## Catalog
 
+Policies, rates, and `/auth/*` Bindings from the Manifest — inquire and audit, not a live
+rate editor. Rate `overridable` is a catalog flag; schedule edits live under
+[Clock](/docs/console/clock).
+
 <Cards>
-  <Card title="Dev" description="full" />
-  <Card title="Prod" description="limits if `overridable`" />
+  <Card title="Dev" description="full catalog + simulator" />
+  <Card title="Prod" description="same inquire surface; no silent ungated HTTP" />
 </Cards>
 
 ## Learn more

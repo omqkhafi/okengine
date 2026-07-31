@@ -24,7 +24,11 @@ source: "docs/spec/unified-theory.md"
 import { oke } from "okengine";
 import { phoneNumber } from "okengine/plugins";
 
-export const app = oke({ name: "shop", env: "local" }).plug(phoneNumber({ exposeDevOtp: true }));
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(phoneNumber({ exposeDevOtp: true }));
 ```
 
 </Step>
