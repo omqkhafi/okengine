@@ -21,6 +21,7 @@ import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { AnyFlowDef, FlowErrorMap } from "./flow.ts";
 import type { HookFn, HookMap, HookStage } from "./hooks.ts";
 import { tagHookWithPlugin } from "./hook-timing.ts";
+import type { Binding } from "./on.ts";
 import type {
   CliContribution,
   ClientExtensionContribution,
@@ -76,6 +77,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
   const cli: CliContribution[] = [];
   const images: ImageRecipeContribution[] = [];
   const flows: AnyFlowDef[] = [];
+  const bindings: Binding[] = [];
   const errors: FlowErrorMap = {};
   const client: ClientExtensionContribution[] = [];
   const vaultSecrets: VaultSecretDecl[] = [];
@@ -155,6 +157,13 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
       pushDeclare(`table:${name}`);
       return api;
     },
+    binding(binding) {
+      bindings.push(binding);
+      flows.push(binding.flow);
+      pushDeclare(`binding:${binding.flow.name}`);
+      pushDeclare(`flow:${binding.flow.name}`);
+      return api;
+    },
     flow(flowDef) {
       flows.push(flowDef);
       pushDeclare(`flow:${flowDef.name}`);
@@ -220,6 +229,7 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
         cli: cli.slice(),
         images: images.slice(),
         flows: flows.slice(),
+        bindings: bindings.slice(),
         errors: { ...errors },
         client: client.slice(),
         configSchema,
@@ -308,6 +318,8 @@ export interface PluginRegistry {
   gateContributions(): readonly GateDecl[];
   /** Channel templates from installed plugins. */
   channelTemplateContributions(): readonly ChannelTemplateDecl[];
+  /** HTTP Bindings from installed plugins (auth method plugins). */
+  bindingContributions(): readonly Binding[];
 }
 
 /**
@@ -476,6 +488,9 @@ export function createPluginRegistry(): PluginRegistry {
     },
     channelTemplateContributions() {
       return firstPerPlugin(installed, (r) => r.channelTemplates);
+    },
+    bindingContributions() {
+      return firstPerPlugin(installed, (r) => r.bindings);
     },
   };
 

@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-07-31T18:02:57.423Z",
+  "measuredAt": "2026-07-31T21:06:09.494Z",
   "version": "0.4.3",
   "budgets": [
     {
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 25.071,
+      "value": 37.239,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 54844,
-      "limit": 55941,
+      "value": 61453,
+      "limit": 62683,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 6179,
-      "limit": 6435,
+      "value": 13585,
+      "limit": 13857,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -97,6 +97,26 @@
       "label": "client",
       "value": 1843,
       "limit": 2099,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "exports",
+      "ok": true
+    },
+    {
+      "id": "export:./client-react",
+      "label": "client-react",
+      "value": 8009,
+      "limit": 8265,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "exports",
+      "ok": true
+    },
+    {
+      "id": "export:./client/auth",
+      "label": "client/auth",
+      "value": 573,
+      "limit": 829,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 76129,
-      "limit": 77652,
+      "value": 81456,
+      "limit": 83086,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -135,8 +155,8 @@
     {
       "id": "export:./gate",
       "label": "gate",
-      "value": 4507,
-      "limit": 4763,
+      "value": 6287,
+      "limit": 6543,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -155,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 4938,
-      "limit": 5194,
+      "value": 13266,
+      "limit": 13532,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -195,8 +215,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 9479,
-      "limit": 9735,
+      "value": 9488,
+      "limit": 9744,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",

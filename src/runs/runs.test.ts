@@ -77,7 +77,7 @@ describe("zero-instrumentation dimensions", () => {
     const app = oke({
       name: "runs-dims",
       runs,
-      gates: [member],
+      gate: { policies: [member] },
       fx: {
         auth: { userId: "user_42", scopes: new Set(["book:write"]), verified: true },
         tenant: { id: "org_a41" },

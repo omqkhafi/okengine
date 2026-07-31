@@ -217,9 +217,9 @@ export async function createTestApp<App extends OkeApp>(
     env: "test",
     // Test-only opt-out (honoured because env is "test" below). Production
     // boots never skip posture via this flag.
-    unguardedHttp: options.boot?.unguardedHttp ?? appOpts.unguardedHttp ?? "allow",
+    unguardedHttp: options.boot?.unguardedHttp ?? appOpts.gate?.unguardedHttp ?? "allow",
     startScheduler: options.startScheduler ?? options.boot?.startScheduler ?? false,
-    gates: options.gates ?? options.boot?.gates ?? appOpts.gates,
+    gates: options.gates ?? options.boot?.gates ?? appOpts.gate?.policies,
     secrets: options.secrets ?? options.boot?.secrets ?? appOpts.secrets,
     signals: options.signals ?? options.boot?.signals ?? appOpts.signals,
     stores: options.boot?.stores ?? appOpts.stores,

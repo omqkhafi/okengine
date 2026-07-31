@@ -77,7 +77,7 @@ describe("createTestApp — four-applications surface", () => {
 
     const app = oke({
       name: "harness",
-      gates: [member],
+      gate: { policies: [member] },
       signals: [orderPlaced],
       clocks: [clock("expire-stale", { every: "1h" })],
       channel: { templates: [orderConfirmed] },

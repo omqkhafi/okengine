@@ -75,11 +75,8 @@ const { data, error } = await api.main.health({});
 ```
 
 `data` and `error` are inferred from the Flow contracts — no separate client
-schema or codegen project. For Bearer sessions, pass `auth: { getToken, refresh }`.
-
-Reactive hooks and framework bindings are **not** in `okengine/client` (hard
-&lt;3 kB budget). See [Client](/docs/reference/client) for REST vs RPC, options,
-and helpers.
+schema. Bearer: `auth: { getToken, refresh }` (`okengine/client/auth` helpers;
+`useSession` in `okengine/client-react`). Full options: [Client](/docs/reference/client).
 
 </Step>
 

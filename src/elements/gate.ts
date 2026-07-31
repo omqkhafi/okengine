@@ -19,6 +19,14 @@ export type {
 } from "./gate/declare.ts";
 
 export {
+  resolveGateConfig,
+  type GateOptions,
+  type GateRateLimitOptions,
+  type ResolvedGateConfig,
+  type ResolveGateConfigOptions,
+} from "./gate/config.ts";
+
+export {
   GateBootError,
   assertHttpGatePosture,
   collectUnguardedHttpGaps,

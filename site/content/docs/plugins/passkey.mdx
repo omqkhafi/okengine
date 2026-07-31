@@ -1,0 +1,128 @@
+---
+title: "Passkey"
+description: "Official plugin — simplified WebAuthn register and authenticate under /auth."
+icon: "FingerprintPattern"
+source: "docs/spec/unified-theory.md"
+---
+
+`passkey()` adds register and authenticate Flows for passkey-shaped credentials (`oke_passkeys`).
+v1 is a simplified ceremony — options return a challenge; register/authenticate accept the
+payload your client posts (not a full browser WebAuthn SDK).
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(passkey())`. Registration needs a Bearer session; authenticate is
+  public. Wire `navigator.credentials` (or tests) yourself — the plugin stores and verifies the
+  posted fields.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { passkey } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(passkey());
+```
+
+</Step>
+
+<Step>
+### Register (session required)
+
+```typescript
+const opts = await api.auth.passkeyRegisterOptions(
+  {},
+  { headers: { Authorization: `Bearer ${accessToken}` } },
+);
+// opts.data: { challenge, rpId, userId }
+
+await api.auth.passkeyRegister(
+  {
+    credentialId: "...",
+    publicKey: "...",
+    userId: opts.data!.userId,
+    challenge: opts.data!.challenge,
+  },
+  { headers: { Authorization: `Bearer ${accessToken}` } },
+);
+```
+
+Paths: `POST /auth/passkey/register/options`, `POST /auth/passkey/register`.
+
+</Step>
+
+<Step>
+### Authenticate
+
+```typescript
+await api.auth.passkeyAuthenticateOptions({});
+const { data } = await api.auth.passkeyAuthenticate({
+  credentialId: "...",
+  userId: "...",
+});
+```
+
+Paths: `POST /auth/passkey/authenticate/options`, `POST /auth/passkey/authenticate`.
+v1 issues a session when the stored credential matches `userId`.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option       | Type                | Default       | Meaning                          |
+| ------------ | ------------------- | ------------- | -------------------------------- |
+| `secret`     | `string`            | active\*      | HMAC secret (\*from `gate.auth`) |
+| `sessions`   | `SessionStore`      | active\*      | Session store                    |
+| `now`        | `() => number`      | `Date.now`    | Injectable clock                 |
+| `passkeys`   | `PasskeyStore`      | new           | Credential → user mapping        |
+| `challenges` | `VerificationStore` | new           | Registration / auth challenges   |
+| `rpId`       | `string`            | `"localhost"` | Relying party id in options      |
+
+## Surfaces
+
+| Flow                              | Path                                      | Gate                     |
+| --------------------------------- | ----------------------------------------- | ------------------------ |
+| `auth.passkeyRegisterOptions`     | `POST /auth/passkey/register/options`     | session + bearer         |
+| `auth.passkeyRegister`            | `POST /auth/passkey/register`             | session + bearer         |
+| `auth.passkeyAuthenticateOptions` | `POST /auth/passkey/authenticate/options` | `gate.public` + otp rate |
+| `auth.passkeyAuthenticate`        | `POST /auth/passkey/authenticate`         | `gate.public` + otp rate |
+
+**Consequence:** production apps should replace the simplified verify with a standards-compliant
+WebAuthn verifier when you leave local/test.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="register fails with unauthenticated">
+
+Sign in with another method first. `userId` in the body must match the Bearer session.
+
+</Accordion>
+<Accordion title="authenticate returns invalid_credentials">
+
+Unknown `credentialId`, or `userId` does not match the stored credential. Re-run registration
+after a successful session.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Two-factor](/docs/plugins/two-factor) — TOTP step-up
+- [Gate](/docs/elements/gate) — `gate.auth`
+- [Client](/docs/reference/client) — calling `/auth` from the browser
+
+## Next
+
+<Cards>
+  <Card title="Two-factor" description="TOTP enable / verify." href="/docs/plugins/two-factor" />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+  <Card title="Anonymous" description="Guest sessions." href="/docs/plugins/anonymous" />
+</Cards>

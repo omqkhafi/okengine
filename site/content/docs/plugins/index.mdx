@@ -1,19 +1,35 @@
 ---
 title: "Plugins"
-description: "Official okengine/plugins extensions — security, operations, and performance at the edge."
+description: "Official okengine/plugins extensions — authentication, security, operations, and performance."
 icon: "Puzzle"
 source: "docs/spec/unified-theory.md"
 ---
 
 First-party plugins you `.plug()` onto an app. Each page is one export from `okengine/plugins`.
 
+## Authentication
+
+<Cards>
+  <Card title="Username" description="Username + password." href="/docs/plugins/username" />
+  <Card
+    title="Anonymous"
+    description="Guest session, no password."
+    href="/docs/plugins/anonymous"
+  />
+  <Card title="Magic link" description="One-time email link." href="/docs/plugins/magic-link" />
+  <Card title="Email OTP" description="Six-digit email codes." href="/docs/plugins/email-otp" />
+  <Card title="Phone number" description="E.164 SMS OTP." href="/docs/plugins/phone-number" />
+  <Card title="Two-factor" description="TOTP enable / verify." href="/docs/plugins/two-factor" />
+  <Card title="Passkey" description="WebAuthn-shaped passkeys." href="/docs/plugins/passkey" />
+</Cards>
+
 ## Security
 
 <Cards>
   <Card
-    title="Security Headers"
+    title="Headers"
     description="Secure headers on every HTTP response."
-    href="/docs/plugins/security-headers"
+    href="/docs/plugins/headers"
   />
   <Card
     title="CORS"

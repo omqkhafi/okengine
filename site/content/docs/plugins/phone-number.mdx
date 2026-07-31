@@ -1,0 +1,107 @@
+---
+title: "Phone number"
+description: "Official plugin — E.164 phone OTP request and verify under /auth."
+icon: "Smartphone"
+source: "docs/spec/unified-theory.md"
+---
+
+`phoneNumber()` signs people in with a phone number in E.164 form (`+15551234567`). Codes are
+6 digits, hashed, 10 minutes, 5 attempts — same security shape as email OTP.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(phoneNumber())`. Reject non-E.164 numbers. SMS Channel delivery is
+  not wired yet — use `exposeDevOtp` locally. Prefer stronger methods when phone is the only factor.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { phoneNumber } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(phoneNumber({ exposeDevOtp: true }));
+```
+
+</Step>
+
+<Step>
+### Request a code
+
+```typescript
+const { data, error } = await api.auth.requestPhoneOtp({ phone: "+15551234567" });
+```
+
+`POST /auth/phone/request`. Invalid E.164 → `AuthFailed` / `invalid_phone`.
+
+</Step>
+
+<Step>
+### Verify
+
+```typescript
+const { data } = await api.auth.verifyPhoneOtp({
+  phone: "+15551234567",
+  otp: data!.devOtp!,
+});
+```
+
+`POST /auth/phone/verify` — first success creates a phone → `userId` mapping.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option          | Type                | Default  | Meaning                                 |
+| --------------- | ------------------- | -------- | --------------------------------------- |
+| `secret`        | `string`            | active\* | HMAC secret (\*from `gate.auth`)        |
+| `sessions`      | `SessionStore`      | active\* | Session store                           |
+| `ttlMs`         | `number`            | 10m      | Challenge lifetime                      |
+| `exposeDevOtp`  | `boolean`           | `false`  | Include raw OTP in the request response |
+| `phones`        | `PhoneStore`        | new      | Phone → userId map                      |
+| `verifications` | `VerificationStore` | new      | Challenge store                         |
+
+## Surfaces
+
+| Flow                   | Path                       | Gate                     |
+| ---------------------- | -------------------------- | ------------------------ |
+| `auth.requestPhoneOtp` | `POST /auth/phone/request` | `gate.public` + otp rate |
+| `auth.verifyPhoneOtp`  | `POST /auth/phone/verify`  | `gate.public` + otp rate |
+
+E.164 pattern: `^\+[1-9]\d{7,14}$`.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="invalid_phone">
+
+Number must start with `+` and a non-zero country digit, then 7–14 more digits. No spaces or
+dashes.
+
+</Accordion>
+<Accordion title="No SMS arrived">
+
+v1 does not send SMS. Use `exposeDevOtp` in local/test, or deliver via your own Channel Flow.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Email OTP](/docs/plugins/email-otp) — email variant of the same OTP rules
+- [Gate](/docs/elements/gate) — `gate.auth`
+- [Channel](/docs/elements/channel) — when you wire SMS yourself
+
+## Next
+
+<Cards>
+  <Card title="Email OTP" description="Six-digit email codes." href="/docs/plugins/email-otp" />
+  <Card title="Two-factor" description="TOTP step-up." href="/docs/plugins/two-factor" />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+</Cards>

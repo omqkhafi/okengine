@@ -9,7 +9,7 @@ The Gates panel answers **who may do what** without dumping a giant roles×permi
 the home screen. Inquire from a principal or from a flow; the simulator shows the chain in
 evaluation order.
 
-<Callout title="Governing rule">
+<Callout title="The one rule">
   Refuse the giant roles×permissions matrix as the entry point — inquire from principal or from
   flow.
 </Callout>
@@ -37,12 +37,33 @@ evaluation order.
 | Explicit public | Chain includes the reserved `public` sentinel (`gate.public` on the trigger) |
 
 App boot fails on unguarded HTTP triggers (`GateBootError`) unless `env === "test"` and
-`unguardedHttp: "allow"`. Prefer fixing the flow: attach a policy, or attach `gate.public` when
-the surface is intentionally open. See [Gate](/docs/elements/gate).
+`gate: { unguardedHttp: "allow" }`. Prefer fixing the flow: attach a policy, or attach
+`gate.public` when the surface is intentionally open.
+
+App authors configure Gate under `oke({ gate: { policies, auth, unguardedHttp } })` — see
+[Gate](/docs/elements/gate). Builtin `/auth/*` Flows from `gate.auth` are audited the same way.
 
 ## Catalog
 
 <Cards>
   <Card title="Dev" description="full" />
   <Card title="Prod" description="limits if `overridable`" />
+</Cards>
+
+## Learn more
+
+- [Gate](/docs/elements/gate) — policies, rate limits, `gate.auth`, posture
+- [Plugins](/docs/plugins) — plugged sign-in method plugins
+- [Access](/docs/console/access) — roles and API keys
+
+## Next
+
+<Cards>
+  <Card title="Gate" description="Declare policies and auth." href="/docs/elements/gate" />
+  <Card title="Access" description="Roles and API keys." href="/docs/console/access" />
+  <Card
+    title="Overview"
+    description="Console panels from the Manifest."
+    href="/docs/console/overview"
+  />
 </Cards>

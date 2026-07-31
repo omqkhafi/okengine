@@ -66,7 +66,8 @@ Every method below exists on both the fluent definition and the boot-time builde
 
 | Method                           | Contributes                                                                                   |
 | -------------------------------- | --------------------------------------------------------------------------------------------- |
-| `.flow(def)`                     | An ordinary flow — Manifest, Console, client types                                            |
+| `.flow(def)`                     | An ordinary flow — Manifest / Console metadata (does **not** join the HTTP router alone)      |
+| `.binding({ trigger, flow })`    | A real Binding — joins `adopted` + the router on `app.plug()` (auth method plugins)           |
 | `.hook(stage, fn)`               | A per-request intercept at one pipeline stage                                                 |
 | `.edge(fn)`                      | A handler for HTTP requests that match **no** flow                                            |
 | `.decorate(key, value)`          | A typed context decoration, visible to flows                                                  |
@@ -234,14 +235,14 @@ Extending an existing **app-owned** table with plugin columns is not supported i
   </Accordion>
   <Accordion title="Boot: plugin boot failed — unmet .needs() dependencies">
     A plugged plugin declared `.needs("auth")` or `.needs("store.sql")` (or another token) and
-    nothing satisfied it. Plug the named peer plugin, or ensure the element/driver is available at
-    boot (tables imply `store.sql`; declared clocks imply `clock`, and so on).
+    nothing satisfied it. For `"auth"`, enable `oke({ gate: { auth } })`. Otherwise plug the peer
+    plugin, or ensure the element/driver is available (tables imply `store.sql`, and so on).
   </Accordion>
 </Accordions>
 
 ## Learn more
 
-- [Security Headers](/docs/plugins/security-headers) · [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) · [Compression](/docs/plugins/compression) · [Maintenance Mode](/docs/plugins/maintenance-mode) · [IP Allowlist](/docs/plugins/ip-allowlist) — first-party plugins built on exactly this API
+- [Plugins](/docs/plugins) — [username](/docs/plugins/username) · [anonymous](/docs/plugins/anonymous) · [magic link](/docs/plugins/magic-link) · [email OTP](/docs/plugins/email-otp) · [phone](/docs/plugins/phone-number) · [two-factor](/docs/plugins/two-factor) · [passkey](/docs/plugins/passkey) · [Headers](/docs/plugins/headers) · [CORS](/docs/plugins/cors) · [CSRF](/docs/plugins/csrf) · [Compression](/docs/plugins/compression) · [Maintenance Mode](/docs/plugins/maintenance-mode) · [IP Allowlist](/docs/plugins/ip-allowlist)
 - [Flow](/docs/elements/flow) — what plugin flows and hooks plug into
 - [Store](/docs/elements/store) — `field.*` builders and schema sync
 - [Configuration](/docs/reference/configuration) — where plugin config is declared
@@ -250,9 +251,9 @@ Extending an existing **app-owned** table with plugin columns is not supported i
 
 <Cards>
   <Card
-    title="Security Headers"
+    title="Headers"
     description="The full secure-headers set on every response."
-    href="/docs/plugins/security-headers"
+    href="/docs/plugins/headers"
   />
   <Card title="CORS" description="Cross-origin rules at the edge." href="/docs/plugins/cors" />
   <Card title="Flow" description="Triggers, effects, and durability." href="/docs/elements/flow" />

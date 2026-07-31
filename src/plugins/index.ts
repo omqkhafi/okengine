@@ -4,6 +4,7 @@
  * `.plug()`.
  */
 
+export { anonymous, type AnonymousPluginOptions } from "./anonymous.ts";
 export { compression, type CompressionOptions } from "./compression.ts";
 export {
   configSource,
@@ -15,8 +16,23 @@ export {
 } from "./config-source.ts";
 export { cors, type CorsOptions } from "./cors.ts";
 export { csrf, type CsrfOptions } from "./csrf.ts";
+export { emailOtp, type EmailOtpOptions } from "./email-otp.ts";
 export { ipAllowlist, type IpAllowlistOptions } from "./ip-allowlist.ts";
+export { magicLink, type MagicLinkOptions } from "./magic-link.ts";
 export { maintenanceMode, type MaintenanceModeOptions } from "./maintenance-mode.ts";
+export {
+  createPasskeyStore,
+  passkey,
+  type PasskeyCredential,
+  type PasskeyOptions,
+  type PasskeyStore,
+} from "./passkey.ts";
+export {
+  createPhoneStore,
+  phoneNumber,
+  type PhoneNumberOptions,
+  type PhoneStore,
+} from "./phone-number.ts";
 export {
   defaultCspDirectives,
   securityHeaders,
@@ -24,3 +40,18 @@ export {
   type HstsOptions,
   type SecurityHeadersOptions,
 } from "./security-headers.ts";
+export {
+  createTwoFactorStore,
+  twoFactor,
+  verifyTotp,
+  type TwoFactorOptions,
+  type TwoFactorRow,
+  type TwoFactorStore,
+} from "./two-factor.ts";
+export {
+  createUsernameStore,
+  username,
+  type UsernamePluginOptions,
+  type UsernameRow,
+  type UsernameStore,
+} from "./username.ts";

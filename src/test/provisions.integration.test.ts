@@ -111,7 +111,7 @@ describe("Provisions integration", () => {
 
     const app = oke({
       name: "provisions",
-      gates: [member, canOrder],
+      gate: { policies: [member, canOrder] },
       secrets: [stripeKey],
       signals: [orderPlaced, orderNews],
       channel: { templates: [orderConfirmed] },

@@ -79,7 +79,7 @@ describe("pipeline — Unauthorized for anonymous", () => {
     const runs = createRunsRuntime({ driver: memoryRunsDriver });
     const app = oke({
       name: "gates-pipeline",
-      gates: [member],
+      gate: { policies: [member] },
       runs,
       env: "test",
     });
@@ -116,7 +116,7 @@ describe("pipeline — Unauthorized for anonymous", () => {
 
     const app = oke({
       name: "gates-forbid",
-      gates: [member, canOrder],
+      gate: { policies: [member, canOrder] },
       env: "test",
     });
     await app.boot({ env: "test", gates: [member, canOrder] });
@@ -157,7 +157,7 @@ describe("pipeline — evaluated gates on the run", () => {
     await runs.open();
     const app = oke({
       name: "gates-eval",
-      gates: [member, canOrder],
+      gate: { policies: [member, canOrder] },
       runs,
       env: "test",
     });
@@ -208,9 +208,11 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const sessions = createSessionStore();
     const app = oke({
       name: "auth-forge",
-      gates: [member],
+      gate: {
+        auth: { secret: "hmac-secret-for-tests", sessions, http: false },
+        policies: [member],
+      },
       env: "local",
-      auth: { secret: "hmac-secret-for-tests", sessions },
       startScheduler: false,
     });
     await app.boot({ env: "local", gates: [member], startScheduler: false });
@@ -262,9 +264,11 @@ describe("pipeline — Bearer cryptographic verification", () => {
     });
     const app = oke({
       name: "auth-expired",
-      gates: [member],
+      gate: {
+        auth: { secret, sessions, now: () => nowMs, http: false },
+        policies: [member],
+      },
       env: "local",
-      auth: { secret, sessions, now: () => nowMs },
       elements: { clock: clockRt },
       startScheduler: false,
     });
@@ -314,7 +318,7 @@ describe("pipeline — Bearer cryptographic verification", () => {
 
     const app = oke({
       name: "no-inject",
-      gates: [member],
+      gate: { policies: [member] },
       env: "local",
       startScheduler: false,
     });

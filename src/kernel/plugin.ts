@@ -21,6 +21,7 @@ import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
 import type { AnyFlowDef, FlowErrorMap } from "./flow.ts";
+import type { Binding } from "./on.ts";
 import type { HookFn, HookStage } from "./hooks.ts";
 
 /** Brand carrying accumulated decoration types through the builder. */
@@ -232,6 +233,13 @@ export interface PluginApi {
     options?: PluginTableOptions,
   ): PluginApi;
   /**
+   * Contribute an HTTP (or other) Binding into the app router + adopted set.
+   * Required for auth method plugins — registry `flows[]` alone does not route.
+   *
+   * @param binding - Trigger + flow pair
+   */
+  binding(binding: Binding): PluginApi;
+  /**
    * Contribute a flow.
    *
    * @param flowDef - Flow definition
@@ -311,6 +319,7 @@ export interface PluginRegistration {
   readonly cli: readonly CliContribution[];
   readonly images: readonly ImageRecipeContribution[];
   readonly flows: readonly AnyFlowDef[];
+  readonly bindings: readonly Binding[];
   readonly errors: FlowErrorMap;
   readonly client: readonly ClientExtensionContribution[];
   readonly configSchema: SchemaInput | undefined;
@@ -423,6 +432,12 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
     columns?: Readonly<Record<string, unknown>>,
     options?: PluginTableOptions,
   ): PluginDef<D>;
+  /**
+   * Queue a Binding contribution (joins router + adopted on app.plug).
+   *
+   * @param binding - Trigger + flow
+   */
+  binding(binding: Binding): PluginDef<D>;
   /**
    * Queue a flow contribution.
    *
@@ -552,6 +567,12 @@ export function plugin(name: string, options: PluginOptions): PluginDef {
     table(tableName, columns, options) {
       steps.push((api) => {
         api.table(tableName, columns, options);
+      });
+      return def;
+    },
+    binding(binding) {
+      steps.push((api) => {
+        api.binding(binding);
       });
       return def;
     },

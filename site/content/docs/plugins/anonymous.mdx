@@ -1,0 +1,91 @@
+---
+title: "Anonymous"
+description: "Official plugin — issue a user-plane session with a random id and no password."
+icon: "UserRoundMinus"
+source: "docs/spec/unified-theory.md"
+---
+
+`anonymous()` creates a throwaway principal: one public Flow returns hybrid session tokens for a
+new random `userId`. Use it for guest carts or try-before-account flows.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(anonymous())`. Treat the session like any other Bearer principal —
+  gates still decide what it may do.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { anonymous } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(anonymous());
+```
+
+</Step>
+
+<Step>
+### Sign in anonymously
+
+```typescript
+const { data } = await api.auth.signInAnonymous();
+// data.userId is a fresh UUID; store tokens like any other session
+```
+
+`POST /auth/sign-in/anonymous` — no body.
+
+</Step>
+
+<Step>
+### Gate what guests can do
+
+Attach real policies to guest-capable Flows (`gate.scope`, custom policies). Anonymous only
+issues a session — it does not grant scopes.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option        | Type           | Default    | Meaning                                                     |
+| ------------- | -------------- | ---------- | ----------------------------------------------------------- |
+| `secret`      | `string`       | active\*   | HMAC secret (\*from `gate.auth` when plugged after `oke()`) |
+| `sessions`    | `SessionStore` | active\*   | Session store shared with Gate auth                         |
+| `now`         | `() => number` | `Date.now` | Injectable clock                                            |
+| `emailDomain` | `string`       | —          | Reserved; unused in v1                                      |
+
+## Surfaces
+
+| Flow                   | Path                           | Gate                         |
+| ---------------------- | ------------------------------ | ---------------------------- |
+| `auth.signInAnonymous` | `POST /auth/sign-in/anonymous` | `gate.public` + sign-in rate |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="plugin boot failed — needs &quot;auth&quot;">
+
+Set `oke({ gate: { auth: { … } } })` before `.plug(anonymous())`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Gate](/docs/elements/gate) — policies on the new principal
+- [Username](/docs/plugins/username) — upgrade path to a real credential
+- [Plugins](/docs/plugins) — all auth method plugins
+
+## Next
+
+<Cards>
+  <Card title="Username" description="Username + password." href="/docs/plugins/username" />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+  <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
+</Cards>

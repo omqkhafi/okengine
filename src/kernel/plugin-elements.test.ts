@@ -36,7 +36,7 @@ describe("plugin element contributions", () => {
 
     const app = oke({
       name: "plugin-elements",
-      gates: [gate.public],
+      gate: { policies: [gate.public] },
       vault: { allowDevFallbacks: true },
     }).plug(twoFactor);
 

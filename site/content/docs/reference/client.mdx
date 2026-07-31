@@ -144,26 +144,29 @@ Prefer `error?.code === "FlightFull"` for inference; use `isErrorCode` in shared
 
 ## Auth on the client
 
-The app pipeline accepts **Bearer** access tokens (`Authorization: Bearer …`). Gates decide on
-that principal — they do not log anyone in. Your Flows (backed by `okengine/auth` sessions)
-return tokens to the UI; the client only attaches and refreshes the access token.
+One client: `createClient`. With `gate.auth`, the app exposes `/auth/*` Flows
+(sign-in, refresh, me). Helpers under `okengine/client/auth` store tokens — they are
+**not** a second factory.
 
 ```typescript
-let accessToken: string | null = null;
+import { createClient } from "okengine/client";
+import { memorySession } from "okengine/client/auth";
+import { app } from "./app";
+
+const session = memorySession();
 
 const api = createClient(app, "http://localhost:6530", {
   auth: {
-    getToken: () => accessToken,
-    refresh: async () => {
-      // Call a Flow *you* wrote that rotates the refresh token (okengine/auth
-      // has rotateRefresh — there is no built-in app refresh route).
-      // Update accessToken before returning; the return value is unused.
-      accessToken = await rotateAccessToken();
-      return accessToken;
-    },
+    getToken: () => session.getToken(),
+    refresh: () => session.refresh(api),
   },
 });
+
+const { data } = await api.auth.signInEmail({ email, password });
+if (data) session.set(data);
 ```
+
+React: `useSession(api, session)` from `okengine/client-react`.
 
 | Step                   | What happens                                                     |
 | ---------------------- | ---------------------------------------------------------------- |
@@ -187,12 +190,15 @@ route.
 
 A 401 with no `{ data, error }` body becomes `TransportError` with `data.status: 401`.
 
-Not in `okengine/client` today: cookie jars, session React hooks, or a merged plugin `.client()`
-helper.
+| Helper                      | Package                 | Role                                             |
+| --------------------------- | ----------------------- | ------------------------------------------------ |
+| `memorySession`             | `okengine/client/auth`  | In-memory access/refresh bag for `auth.getToken` |
+| `AUTH_ERROR_CODES`          | `okengine/client/auth`  | Common auth Flow / gate codes                    |
+| `useSession(api, session?)` | `okengine/client-react` | React status + `auth.me`                         |
 
-A planned `okengine/client-react` package will hold hooks without growing the core client past
-its size budget. For browser apps also see [CORS](/docs/plugins/cors) and
-[CSRF](/docs/plugins/csrf).
+Core `okengine/client` stays under the size budget — helpers are separate exports. Not in
+core today: cookie jars or plugin `.client()` decorations. Browser apps: also see
+[CORS](/docs/plugins/cors) and [CSRF](/docs/plugins/csrf).
 
 ## Elements from the client
 

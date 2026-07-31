@@ -1,0 +1,108 @@
+---
+title: "Magic link"
+description: "Official plugin — request and verify a one-time email link to sign in under /auth."
+icon: "Link2"
+source: "docs/spec/unified-theory.md"
+---
+
+`magicLink()` issues a hashed, single-use token (default 10 minutes). Verify exchanges it for a
+hybrid session and creates the user on first success.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(magicLink())`. Tokens are hashed at rest — never log the raw link.
+  Channel email delivery is not wired yet; use `exposeDevToken` locally.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { magicLink } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(magicLink({ exposeDevToken: true }));
+```
+
+</Step>
+
+<Step>
+### Request a link
+
+```typescript
+const { data } = await api.auth.requestMagicLink({ email: "ali@example.com" });
+// data.ok === true; data.devToken only when exposeDevToken
+```
+
+`POST /auth/magic-link/request`.
+
+</Step>
+
+<Step>
+### Verify
+
+```typescript
+const { data } = await api.auth.verifyMagicLink({ token: data!.devToken! });
+// session tokens + userId
+```
+
+`POST /auth/magic-link/verify`. Bad or reused tokens → `AuthFailed` /
+`invalid_credentials`.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option           | Type                | Default  | Meaning                                   |
+| ---------------- | ------------------- | -------- | ----------------------------------------- |
+| `secret`         | `string`            | active\* | HMAC secret (\*from `gate.auth`)          |
+| `sessions`       | `SessionStore`      | active\* | Session store                             |
+| `ttlMs`          | `number`            | 10m      | Challenge lifetime                        |
+| `exposeDevToken` | `boolean`           | `false`  | Include raw token in the request response |
+| `identities`     | `IdentityStore`     | new      | Email → user map                          |
+| `verifications`  | `VerificationStore` | new      | Challenge store                           |
+
+## Surfaces
+
+| Flow                    | Path                            | Gate                     |
+| ----------------------- | ------------------------------- | ------------------------ |
+| `auth.requestMagicLink` | `POST /auth/magic-link/request` | `gate.public` + otp rate |
+| `auth.verifyMagicLink`  | `POST /auth/magic-link/verify`  | `gate.public` + otp rate |
+
+**Consequence:** until Channel delivery ships, production apps must send the link themselves
+(or keep `exposeDevToken` off and never log tokens).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="verify returns invalid_credentials">
+
+Token expired (default 10m), already used, or mistyped. Request a new link.
+
+</Accordion>
+<Accordion title="No email arrived">
+
+v1 does not send mail. Use `exposeDevToken` in local/test, or deliver `devToken` / your own
+link via a Channel Flow you own.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Email OTP](/docs/plugins/email-otp) — numeric code instead of a link
+- [Gate](/docs/elements/gate) — `gate.auth`
+- [Channel](/docs/elements/channel) — when you wire delivery yourself
+
+## Next
+
+<Cards>
+  <Card title="Email OTP" description="Six-digit email codes." href="/docs/plugins/email-otp" />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+  <Card title="Username" description="Password sign-in." href="/docs/plugins/username" />
+</Cards>

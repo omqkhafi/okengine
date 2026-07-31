@@ -75,6 +75,9 @@ describe("auth plugin", () => {
         tables.push(name);
         return this;
       },
+      binding() {
+        return this;
+      },
       flow() {
         return this;
       },

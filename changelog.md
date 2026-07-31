@@ -12,6 +12,21 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `oke({ gate })` — nested Gate bag (`auth`, `policies`, `rateLimit`,
+  `unguardedHttp`). Builtin hybrid auth materializes `/auth/*` as real
+  Bindings on the same `ensureBoot → doBoot` posture path; `.needs("auth")`
+  is satisfied without `.plug(auth())`. Schema customize +
+  `oke schema generate` emit real columns; opt-in cookies, kv secondary,
+  hooks, `freshAge`, auth rate presets, enumeration-safe credential errors.
+  Docs · [Gate](/docs/elements/gate).
+- `okengine/client/auth` helpers (`memorySession`, `AUTH_ERROR_CODES`) and
+  `okengine/client-react` `useSession` — still one client (`createClient`).
+- Gate auth method plugins (`okengine/plugins`): `username`, `anonymous`,
+  `magicLink`, `emailOtp`, `phoneNumber`, `twoFactor`, `passkey` — each
+  `.needs("auth")` and contributes HTTP Bindings under `/auth/...`.
+  Docs · one page per method under [Plugins](/docs/plugins)
+  (`username`, `anonymous`, `magic-link`, `email-otp`, `phone-number`,
+  `two-factor`, `passkey`).
 - Docs · [Client](/docs/reference/client) — `okengine/client` reference
   (`createClient` forms, REST vs RPC, Bearer auth + gate denials,
   elements-from-the-client, envelope helpers, `oke client add`).
@@ -51,6 +66,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Root `oke({ auth })` / `oke({ gates })` / `oke({ unguardedHttp })` moved
+  to `oke({ gate: { auth, policies, unguardedHttp } })` (hard migrate).
+  Console uses `gate.auth` with `http: false` (keeps `/console/session/*`).
+- Plugin `.binding()` contributes HTTP Bindings into the app router on
+  `.plug()` (auth method plugins); SmartRouter build is deferred until
+  first match so plugs can still add routes.
 - `fx.metric` recorded as investigated and **declined**: Runs wide events
   already cover per-invocation observability; no parallel counter/gauge API
   (see `reports/2026-07-31-fx-metric-decision.md` and the fx reference).

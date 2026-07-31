@@ -1,0 +1,113 @@
+---
+title: "Username"
+description: "Official plugin — username + password sign-up and sign-in under /auth, plugged onto gate.auth."
+icon: "UserRound"
+source: "docs/spec/unified-theory.md"
+---
+
+`username()` lets people register and sign in with a username instead of email. It adds two public
+Flows under `/auth` and contributes the `oke_usernames` table.
+
+<Callout title="The one rule">
+  Enable `gate.auth` first, then `.plug(username())`. The plugin `.needs("auth")` and joins the HTTP
+  router via Bindings — not registry metadata alone.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { username } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(username());
+```
+
+</Step>
+
+<Step>
+### Sign up
+
+```typescript
+const { data, error } = await api.auth.signUpUsername({
+  username: "ali",
+  password: "CorrectHorse1",
+});
+```
+
+`POST /auth/sign-up/username` — usernames are normalized to lowercase; allowed pattern
+`[a-z0-9._-]{3,64}`.
+
+</Step>
+
+<Step>
+### Sign in
+
+```typescript
+const { data } = await api.auth.signInUsername({
+  username: "ali",
+  password: "CorrectHorse1",
+});
+// data: accessToken, refreshToken, accessExpiresAt, userId
+```
+
+Unknown username and bad password both return `AuthFailed` with
+`reason: "invalid_credentials"` (enumeration-safe).
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option      | Type            | Default    | Meaning                                                     |
+| ----------- | --------------- | ---------- | ----------------------------------------------------------- |
+| `secret`    | `string`        | active\*   | HMAC secret (\*from `gate.auth` when plugged after `oke()`) |
+| `sessions`  | `SessionStore`  | active\*   | Session store shared with Gate auth                         |
+| `now`       | `() => number`  | `Date.now` | Injectable clock                                            |
+| `usernames` | `UsernameStore` | new map    | Shared in-memory credential store                           |
+
+## Surfaces
+
+| Flow                  | Path                          | Gate                         |
+| --------------------- | ----------------------------- | ---------------------------- |
+| `auth.signUpUsername` | `POST /auth/sign-up/username` | `gate.public` + sign-up rate |
+| `auth.signInUsername` | `POST /auth/sign-in/username` | `gate.public` + sign-in rate |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="plugin boot failed — needs &quot;auth&quot;">
+
+Set `oke({ gate: { auth: { … } } })` before `.plug(username())`.
+
+</Accordion>
+<Accordion title="AuthFailed invalid_credentials on sign-up">
+
+Username taken, or it fails the `[a-z0-9._-]{3,64}` pattern after lowercasing. Same error shape
+on purpose — do not treat it as "exists" in the UI.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Gate](/docs/elements/gate) — `gate.auth` and posture
+- [Plugins](/docs/plugins) — all auth method plugins
+- [Client](/docs/reference/client) — `createClient` + `memorySession`
+
+## Next
+
+<Cards>
+  <Card
+    title="Anonymous"
+    description="Session without a password."
+    href="/docs/plugins/anonymous"
+  />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+  <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
+</Cards>

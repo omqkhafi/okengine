@@ -74,9 +74,11 @@ describe("fx.call — untriggered flows", () => {
       }),
     );
 
-    const app = oke({ autoBoot: false, name: "principal-call", unguardedHttp: "allow" }).adopt(
-      audit,
-    );
+    const app = oke({
+      autoBoot: false,
+      name: "principal-call",
+      gate: { unguardedHttp: "allow" },
+    }).adopt(audit);
     await app.boot({ env: "test", unguardedHttp: "allow" });
 
     const result = await app.execute(act, {}, act.$trigger ?? act.triggers[0]!, {

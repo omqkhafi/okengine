@@ -87,7 +87,9 @@ export function auth(options: AuthPluginOptions = {}): PluginDef {
     builder = builder.table(name, undefined, {
       plane: name.includes("operator")
         ? "operator"
-        : name.includes("identit") || name === AUTH_TABLES.credentials
+        : name.includes("identit") ||
+            name === AUTH_TABLES.credentials ||
+            name === AUTH_TABLES.verifications
           ? "user"
           : "shared",
     });

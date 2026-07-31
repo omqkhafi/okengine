@@ -60,12 +60,12 @@ With `MAINTENANCE_MODE=1` in the environment, every HTTP flow answers:
 
 ## Notes
 
-| Behavior          | Detail                                                                              |
-| ----------------- | ----------------------------------------------------------------------------------- |
-| Pipeline position | `onRequest` — flows never parse, authenticate, or execute                           |
-| Still shaped      | The 503 flows through `onResponse`, so Security Headers and Compression apply to it |
-| Non-HTTP triggers | No-op — clock flows and signal subscribers keep running                             |
-| Infra routes      | `/_oke/*` bypass the pipeline entirely and stay up                                  |
+| Behavior          | Detail                                                                     |
+| ----------------- | -------------------------------------------------------------------------- |
+| Pipeline position | `onRequest` — flows never parse, authenticate, or execute                  |
+| Still shaped      | The 503 flows through `onResponse`, so Headers and Compression apply to it |
+| Non-HTTP triggers | No-op — clock flows and signal subscribers keep running                    |
+| Infra routes      | `/_oke/*` bypass the pipeline entirely and stay up                         |
 
 ## Runtime configuration
 
@@ -93,9 +93,9 @@ See [Plugins → Runtime configuration](/docs/reference/plugins#runtime-configur
     href="/docs/plugins/ip-allowlist"
   />
   <Card
-    title="Security Headers"
+    title="Headers"
     description="The full secure-headers set on every response."
-    href="/docs/plugins/security-headers"
+    href="/docs/plugins/headers"
   />
   <Card title="Plugin API" description="Build your own plugin." href="/docs/reference/plugins" />
 </Cards>

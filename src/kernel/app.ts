@@ -25,12 +25,16 @@ import {
 // when an app actually boots (AGENTS.md / unified-theory budget: cold start < 75 ms).
 import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
+import { createAppAuthBinding, verifyBearerToken, type AppAuthBinding } from "./auth-resolve.ts";
+import { createAuthHttpBindings, type AuthHttpMaterialization } from "../auth/bindings.ts";
+import { auth as authPlugin } from "../auth/plugin.ts";
+import { tokenFromCookieHeader } from "../auth/cookies.ts";
+import { setActiveGateAuthContext } from "../auth/method-context.ts";
 import {
-  createAppAuthBinding,
-  verifyBearerToken,
-  type AppAuthBinding,
-  type CreateAppAuthBindingOptions,
-} from "./auth-resolve.ts";
+  resolveGateConfig,
+  type GateOptions,
+  type ResolvedGateConfig,
+} from "../elements/gate/config.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { fxRetry } from "./concurrency.ts";
@@ -151,14 +155,11 @@ export interface OkeOptions {
   readonly vault?: BootOptions["vault"];
   /** Vault secret contracts (shorthand for `vault.secrets`). */
   readonly secrets?: BootOptions["secrets"];
-  /** Gate declarations for the runtime. */
-  readonly gates?: BootOptions["gates"];
   /**
-   * HTTP auth-posture enforcement at boot.
-   * Default `"deny"`. `"allow"` is honoured only when `env === "test"` —
-   * never a production-wide bypass (use per-trigger `gate.public` instead).
+   * Nested Gate bag — auth, policies, rate limits, HTTP posture.
+   * Replaces root `auth` / `gates` / `unguardedHttp`.
    */
-  readonly unguardedHttp?: BootOptions["unguardedHttp"];
+  readonly gate?: GateOptions;
   /** Signal declarations. */
   readonly signals?: BootOptions["signals"];
   /** Named clock declarations. */
@@ -184,11 +185,6 @@ export interface OkeOptions {
   readonly startScheduler?: boolean;
   /** Scheduler tick period ms (default 1000). Forwarded to boot. */
   readonly schedulerIntervalMs?: number;
-  /**
-   * Builtin hybrid-session auth (HMAC access tokens).
-   * Required to accept `Authorization: Bearer` in production.
-   */
-  readonly auth?: CreateAppAuthBindingOptions;
 }
 
 /** Payload for a CDC invocation. */
@@ -415,6 +411,22 @@ export function oke(options: OkeOptions): OkeApp {
       ? [...(options.bindings ?? [])]
       : [...listBindings(), ...(options.bindings ?? [])];
   if (registry === "consume") resetBindings();
+
+  // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
+  // before posture audit (same ensureBoot → doBoot path — never a side channel).
+  const gateConfig: ResolvedGateConfig = resolveGateConfig({
+    gate: options.gate,
+    env: options.env,
+  });
+  let authMaterialization: AuthHttpMaterialization | undefined;
+  if (gateConfig.auth?.http) {
+    authMaterialization = createAuthHttpBindings(gateConfig.auth, {
+      rateLimitEnabled: gateConfig.rateLimitEnabled,
+      sessions: gateConfig.auth.sessions,
+    });
+    adopted.push(...authMaterialization.bindings);
+  }
+
   /** Retained for test harness / boot merges. */
   const $options = options;
 
@@ -427,6 +439,29 @@ export function oke(options: OkeOptions): OkeApp {
   /** Runtime route table — types accumulate on the returned {@link OkeApp}. */
   const routes: RuntimeRouteMap = {};
 
+  // Absorb auth() tables into gate.auth — `.needs("auth")` sees plugin name.
+  if (gateConfig.auth) {
+    applyPlugin(
+      pluginRegistry,
+      authPlugin({
+        secret: gateConfig.auth.secret,
+        accessTtlMs: gateConfig.auth.session.accessTtlMs,
+        refreshTtlMs: gateConfig.auth.session.refreshTtlMs,
+        session: {
+          accessTtlMs: gateConfig.auth.session.accessTtlMs,
+          refreshTtlMs: gateConfig.auth.session.refreshTtlMs,
+          idleTtlMs: gateConfig.auth.session.idleTtlMs,
+          absoluteTtlMs: gateConfig.auth.session.absoluteTtlMs,
+          singleSessionPerUser: gateConfig.auth.session.singleSessionPerUser,
+        },
+        password: gateConfig.auth.password,
+        passwordPolicy: gateConfig.auth.passwordPolicy,
+        breachCheck: gateConfig.auth.breachCheck,
+      }),
+      appPluginScope,
+    );
+  }
+
   const smart = createRouter<Binding>(options.router ?? "default");
   for (const b of adopted) {
     if (b.trigger.kind === "http") {
@@ -434,8 +469,64 @@ export function oke(options: OkeOptions): OkeApp {
       compiled.set(b, compileHttpBinding(b, aot));
     }
   }
-  smart.build();
+  // Defer SmartRouter selection until first match so `.plug()` can still
+  // contribute auth-method Bindings before traffic (plan Phase 2).
   const router: Router<Binding> = smart;
+
+  function adoptBinding(b: Binding): void {
+    adopted.push(b);
+    registerFlow(b.flow);
+    if (b.trigger.kind === "http") {
+      smart.add(b.trigger.method, b.trigger.path, b);
+      compiled.set(b, compileHttpBinding(b, aot));
+    }
+  }
+
+  // Phase 1a: mirror tokens into Set-Cookie when gate.auth.cookies.enabled.
+  if (gateConfig.auth?.cookies.enabled) {
+    const cookieCfg = gateConfig.auth.cookies;
+    const basePath = gateConfig.auth.basePath;
+    const list = appHooks.afterHandle ?? (appHooks.afterHandle = []);
+    list.push(async (ctx) => {
+      const res = ctx.response;
+      if (!(res instanceof Response) || !ctx.request) return;
+      const url = new URL(ctx.request.url);
+      const path = url.pathname;
+      const underAuth = path === basePath || path.startsWith(`${basePath}/`);
+      const isRevoke = path === `${basePath}/revoke` || path.endsWith("/revoke");
+      const isIssue = underAuth && !isRevoke;
+      if (!isIssue && !isRevoke) return;
+      const { buildAuthSetCookies, clearAuthSetCookies } = await import("../auth/cookies.ts");
+      const { ACCESS_TTL_MS, REFRESH_TTL_MS } = await import("../auth/sessions.ts");
+      if (isRevoke || res.status >= 400) {
+        if (isRevoke) {
+          const headers = new Headers(res.headers);
+          for (const c of clearAuthSetCookies(cookieCfg)) headers.append("Set-Cookie", c);
+          ctx.response = new Response(res.body, { status: res.status, headers });
+        }
+        return;
+      }
+      try {
+        const body = (await res.clone().json()) as {
+          data?: { accessToken?: string; refreshToken?: string };
+        };
+        if (!body.data?.accessToken || !body.data?.refreshToken) return;
+        const headers = new Headers(res.headers);
+        const accessTtl = gateConfig.auth!.session.accessTtlMs ?? ACCESS_TTL_MS;
+        const refreshTtl = gateConfig.auth!.session.refreshTtlMs ?? REFRESH_TTL_MS;
+        for (const c of buildAuthSetCookies(
+          cookieCfg,
+          { accessToken: body.data.accessToken, refreshToken: body.data.refreshToken },
+          { access: Math.floor(accessTtl / 1000), refresh: Math.floor(refreshTtl / 1000) },
+        )) {
+          headers.append("Set-Cookie", c);
+        }
+        ctx.response = new Response(res.body, { status: res.status, headers });
+      } catch {
+        /* ignore non-JSON */
+      }
+    });
+  }
 
   function flushFlowPlugins(flowDef: AnyFlowDef): void {
     let done = flushedPlugins.get(flowDef);
@@ -464,12 +555,22 @@ export function oke(options: OkeOptions): OkeApp {
   let bootPromise: Promise<BootResult> | undefined;
   let bootEnv: BootOptions["env"] = options.env ?? "local";
   let authBinding: AppAuthBinding | undefined =
-    options.auth !== undefined
+    gateConfig.auth !== undefined
       ? createAppAuthBinding({
-          ...options.auth,
-          now: options.fx?.now,
+          secret: gateConfig.auth.secret,
+          sessions: authMaterialization?.ctx.sessions ?? gateConfig.auth.sessions,
+          now: gateConfig.auth.now ?? options.fx?.now,
         })
       : undefined;
+  if (authBinding) {
+    setActiveGateAuthContext({
+      secret: authBinding.secret,
+      sessions: authBinding.sessions,
+      now: authBinding.now,
+    });
+  } else {
+    setActiveGateAuthContext(undefined);
+  }
   const journalStore = createMemoryJournalStore();
   const sleepingRuns = new Map<
     string,
@@ -496,12 +597,22 @@ export function oke(options: OkeOptions): OkeApp {
     const { assertHttpGatePosture } = await import("../elements/gate/boot.ts");
     const { assertPluginNeeds, buildAvailableNeedTokens } = await import("./plugin-needs.ts");
     bootEnv = overrides?.env ?? options.env ?? "local";
-    const unguardedHttp = overrides?.unguardedHttp ?? options.unguardedHttp ?? "deny";
-    // `"allow"` is honoured only when bootEnv === "test" — never a prod bypass.
+
+    // Prod without a real secret fails even if construction minted a dev secret.
+    if (gateConfig.auth?.secretMinted && bootEnv === "prod") {
+      throw new Error(
+        "gate.auth: secret is required in production (set gate.auth.secret or OKE_AUTH_SECRET)",
+      );
+    }
+
+    const unguardedHttp = overrides?.unguardedHttp ?? gateConfig.unguardedHttp ?? "deny";
+    // Auth bindings are in `adopted` — missing posture fails with GateBootError.
     assertHttpGatePosture(adopted, { unguardedHttp, env: bootEnv });
 
     const caps = pluginRegistry.capabilities();
     const pluginNames = new Set(Object.keys(caps));
+    const authGates = authMaterialization?.authGates ?? [];
+    const baseGates = overrides?.gates ?? gateConfig.policies ?? [];
     const elementNeeds = resolveElementNeeds({
       env: bootEnv,
       docker: overrides?.docker ?? options.docker,
@@ -509,7 +620,7 @@ export function oke(options: OkeOptions): OkeApp {
       elements: overrides?.elements ?? options.elements,
       secrets: overrides?.secrets ?? options.secrets,
       vault: overrides?.vault ?? options.vault,
-      gates: overrides?.gates ?? options.gates,
+      gates: [...baseGates, ...authGates],
       signals: overrides?.signals ?? options.signals,
       clocks: overrides?.clocks ?? options.clocks,
       stores: overrides?.stores ?? options.stores,
@@ -532,12 +643,15 @@ export function oke(options: OkeOptions): OkeApp {
           elementNeeds.store ||
           stores.some((s) => s.facet === "sql") ||
           pluginRegistry.tableContributions().length > 0,
-        storeKv: elementNeeds.store || stores.some((s) => s.facet === "kv"),
+        storeKv:
+          elementNeeds.store ||
+          stores.some((s) => s.facet === "kv") ||
+          gateConfig.auth?.secondaryStorage.enabled === true,
         storeFiles: elementNeeds.store || stores.some((s) => s.facet === "files"),
         storeIndex: elementNeeds.store || stores.some((s) => s.facet === "index"),
         signal: elementNeeds.signal,
         clock: elementNeeds.clock,
-        gate: elementNeeds.gate,
+        gate: elementNeeds.gate || baseGates.length > 0 || authGates.length > 0,
         vault: elementNeeds.vault,
         channel: elementNeeds.channel,
         ai: elementNeeds.ai,
@@ -554,10 +668,11 @@ export function oke(options: OkeOptions): OkeApp {
     if (pluginSignals.length > 0) available.add("signal");
     if (pluginClocks.length > 0) available.add("clock");
     if (pluginChannelTemplates.length > 0) available.add("channel");
+    // gate.auth (auto-absorbed auth plugin) satisfies `.needs("auth")`.
+    if (gateConfig.auth) available.add("auth");
     assertPluginNeeds(caps, { pluginNames, available });
 
     const baseSecrets = overrides?.secrets ?? options.secrets ?? [];
-    const baseGates = overrides?.gates ?? options.gates ?? [];
     const baseSignals = overrides?.signals ?? options.signals ?? [];
     const baseClocks = overrides?.clocks ?? options.clocks ?? [];
     const baseChannel = overrides?.channel ?? options.channel;
@@ -569,7 +684,7 @@ export function oke(options: OkeOptions): OkeApp {
       elements: overrides?.elements ?? options.elements,
       secrets: [...baseSecrets, ...pluginSecrets],
       vault: overrides?.vault ?? options.vault,
-      gates: [...baseGates, ...pluginGates],
+      gates: [...baseGates, ...authGates, ...pluginGates],
       unguardedHttp,
       signals: [...baseSignals, ...pluginSignals],
       clocks: [...baseClocks, ...pluginClocks],
@@ -700,12 +815,24 @@ export function oke(options: OkeOptions): OkeApp {
       }
 
       const binding = authBinding;
+      const cookieOpts = gateConfig.auth?.cookies;
       const elementHooks = createElementPipelineHooks({
         gates: booted.gate,
         principals,
         telemetry,
         allowTestPrincipals: testMode,
-        verifyBearer: binding ? (token) => verifyBearerToken(binding, token) : undefined,
+        verifyBearer: binding ? async (token) => verifyBearerToken(binding, token) : undefined,
+        // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
+        resolveToken:
+          binding && cookieOpts?.enabled
+            ? (request) => {
+                const header = request.headers.get("authorization");
+                if (header?.startsWith("Bearer ")) {
+                  return header.slice("Bearer ".length).trim() || undefined;
+                }
+                return tokenFromCookieHeader(request.headers.get("cookie"), cookieOpts);
+              }
+            : undefined,
       });
 
       // Element hooks run first in the app-level onAuth/beforeHandle chain —
@@ -931,8 +1058,13 @@ export function oke(options: OkeOptions): OkeApp {
       }
     },
     plug(pluginDef) {
+      const before = new Set(pluginRegistry.bindingContributions().map((b) => b.flow.name));
       applyPlugin(pluginRegistry, pluginDef, appPluginScope);
-      // Decoration accumulate on the interface; runtime object is unchanged.
+      for (const b of pluginRegistry.bindingContributions()) {
+        if (before.has(b.flow.name)) continue;
+        adoptBinding(b);
+      }
+      // Decorations accumulate on the interface; runtime object is unchanged.
       return app as never;
     },
     pluginCapabilities() {

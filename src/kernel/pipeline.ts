@@ -53,6 +53,13 @@ export interface PipelineDeps {
    */
   readonly verifyBearer?: (token: string) => Promise<ResolvedPrincipal>;
   /**
+   * Optional token extraction (e.g. cookie → Bearer when cookies enabled).
+   * When omitted, only `Authorization: Bearer` is read.
+   *
+   * @param request - Incoming HTTP request
+   */
+  readonly resolveToken?: (request: Request) => string | undefined;
+  /**
    * When true, `ctx.state.principal` / execute `extras.principal` injection
    * is honoured (test harness only). Must be false for production HTTP.
    */
@@ -158,14 +165,22 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
       delete ctx.state.principal;
     }
 
-    const header = ctx.request?.headers.get("authorization");
-    if (header?.startsWith("Bearer ")) {
-      const token = header.slice("Bearer ".length).trim();
+    let token: string | undefined;
+    if (deps.resolveToken && ctx.request) {
+      token = deps.resolveToken(ctx.request);
+    } else {
+      const header = ctx.request?.headers.get("authorization");
+      if (header?.startsWith("Bearer ")) {
+        token = header.slice("Bearer ".length).trim() || undefined;
+      }
+    }
+
+    if (token !== undefined) {
       if (!token) {
         return fail("Unauthorized", {});
       }
       if (!deps.verifyBearer) {
-        // Bearer present but no auth binding — refuse rather than trust.
+        // Token present but no auth binding — refuse rather than trust.
         return fail("Unauthorized", {});
       }
       try {

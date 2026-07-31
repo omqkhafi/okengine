@@ -1,10 +1,16 @@
 /**
- * `oke schema generate` — core + plugin tables → `schema/oke.ts`.
+ * `oke schema generate` — core + auth + plugin tables → `schema/oke.ts`.
  */
 
 import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import {
+  resolveAuthSchema,
+  type AuthSchemaOptions,
+  type ResolvedAuthModel,
+  type ResolvedAuthSchema,
+} from "../auth/schema.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { loadManifest } from "./load-config.ts";
 
@@ -25,10 +31,12 @@ export interface SchemaGenerateOptions {
   readonly write?: (text: string) => void;
   /** Extra table names (plugins / tests). */
   readonly extraTables?: readonly string[];
+  /** Auth schema customization (from `gate.auth` / tests). */
+  readonly authSchema?: AuthSchemaOptions | false;
 }
 
 /**
- * Generate `schema/oke.ts` from Manifest store tables + core Console tables.
+ * Generate `schema/oke.ts` from Manifest store tables + core auth columns.
  *
  * @param options - Manifest / check flag
  */
@@ -42,23 +50,41 @@ export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Pr
     if (await file.exists()) manifest = await loadManifest(path);
   }
 
+  const authSchema =
+    options.authSchema === false
+      ? undefined
+      : resolveAuthSchema(options.authSchema ?? loadAuthSchemaFromManifest(manifest));
+
   const tables = new Set<string>([
-    "oke_roles",
-    "oke_role_grants",
-    "oke_api_keys",
     "oke_overrides",
     "oke_crons",
     "oke_signal_config",
     "oke_console_prefs",
     ...(options.extraTables ?? []),
   ]);
+  if (authSchema) {
+    for (const name of authSchema.tableNames) tables.add(name);
+  } else {
+    for (const name of [
+      "oke_roles",
+      "oke_role_grants",
+      "oke_api_keys",
+      "oke_identities",
+      "oke_credentials",
+      "oke_sessions",
+      "oke_refresh_tokens",
+      "oke_verifications",
+    ]) {
+      tables.add(name);
+    }
+  }
   if (manifest?.stores) {
     for (const store of Object.values(manifest.stores)) {
       for (const t of Object.keys(store.tables ?? {})) tables.add(t);
     }
   }
 
-  const source = emitSchemaSource([...tables].sort());
+  const source = emitSchemaSource([...tables].sort(), authSchema);
   const out = resolve(cwd, options.out ?? SCHEMA_OUT);
   const fp = hashSource(source);
 
@@ -91,26 +117,25 @@ export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Pr
  * @param manifest - Optional manifest
  */
 export async function schemaFingerprint(cwd: string, manifest?: Manifest): Promise<string> {
-  const tables = new Set<string>([
-    "oke_roles",
-    "oke_role_grants",
-    "oke_api_keys",
-    "oke_overrides",
-    "oke_crons",
-    "oke_signal_config",
-    "oke_console_prefs",
-  ]);
   let m = manifest;
   if (!m) {
     const path = resolve(cwd, "oke.manifest.json");
     if (await Bun.file(path).exists()) m = await loadManifest(path);
   }
+  const authSchema = resolveAuthSchema(loadAuthSchemaFromManifest(m));
+  const tables = new Set<string>([
+    "oke_overrides",
+    "oke_crons",
+    "oke_signal_config",
+    "oke_console_prefs",
+    ...authSchema.tableNames,
+  ]);
   if (m?.stores) {
     for (const store of Object.values(m.stores)) {
       for (const t of Object.keys(store.tables ?? {})) tables.add(t);
     }
   }
-  return hashSource(emitSchemaSource([...tables].sort()));
+  return hashSource(emitSchemaSource([...tables].sort(), authSchema));
 }
 
 /**
@@ -150,7 +175,7 @@ export async function schemaCli(args: readonly string[]): Promise<number> {
     else if (a === "--help" || a === "-h") {
       console.log(`oke schema generate [--check|-c] [--out|-o schema/oke.ts]
 
-Emit core + plugin tables. Use --check in CI to fail on drift.
+Emit core auth columns + Manifest store tables. Use --check in CI to fail on drift.
 `);
       return 0;
     }
@@ -159,25 +184,72 @@ Emit core + plugin tables. Use --check in CI to fail on drift.
 }
 
 /**
- * Emit a Drizzle-compatible stub schema module.
+ * Emit a schema module with real auth columns when resolved.
  *
  * @param tables - Table names
+ * @param authSchema - Resolved auth schema (optional)
  */
-export function emitSchemaSource(tables: readonly string[]): string {
+export function emitSchemaSource(
+  tables: readonly string[],
+  authSchema?: ResolvedAuthSchema,
+): string {
+  const byTable = new Map<string, ResolvedAuthModel>();
+  if (authSchema) {
+    for (const model of Object.values(authSchema.models)) {
+      byTable.set(model.tableName, model);
+    }
+  }
+
   const decls = tables
-    .map(
-      (name) =>
-        `/** Generated table handle — wire columns in your app schema. */\nexport const ${camel(name)} = { name: "${name}" } as const;\n`,
-    )
+    .map((name) => {
+      const model = byTable.get(name);
+      if (model) return emitAuthTable(model);
+      return `/** Generated table handle — wire columns in your app schema. */\nexport const ${camel(name)} = { name: "${name}" } as const;\n`;
+    })
     .join("\n");
+
   return `/**
  * Generated by \`oke schema generate\` — do not edit.
- * Core Console tables + Manifest store tables.
+ * Core Gate auth tables + Manifest store tables.
  */
 
 ${decls}
 export const okeTables = [${tables.map((t) => `"${t}"`).join(", ")}] as const;
 `;
+}
+
+function emitAuthTable(model: ResolvedAuthModel): string {
+  const cols = model.columns
+    .map((c) => {
+      const extras: string[] = [`sqlType: "${c.sqlType}"`];
+      if (c.primary) extras.push("primary: true");
+      if (c.required) extras.push("required: true");
+      if (c.defaultValue !== undefined) {
+        extras.push(`defaultValue: ${JSON.stringify(c.defaultValue)}`);
+      }
+      return `    ${c.logical}: { name: "${c.sqlName}", ${extras.join(", ")} }`;
+    })
+    .join(",\n");
+  return `/** Auth model \`${model.model}\` → \`${model.tableName}\`. */
+export const ${camel(model.tableName)} = {
+  name: "${model.tableName}",
+  model: "${model.model}",
+  columns: {
+${cols}
+  },
+} as const;
+`;
+}
+
+/**
+ * Read optional auth schema customization from Manifest extensions.
+ *
+ * @param manifest - Loaded Manifest
+ */
+function loadAuthSchemaFromManifest(manifest: Manifest | undefined): AuthSchemaOptions {
+  if (!manifest) return {};
+  const ext = (manifest as { authSchema?: AuthSchemaOptions }).authSchema;
+  return ext ?? {};
 }
 
 function hashSource(source: string): string {

@@ -23,6 +23,8 @@ export const AUTH_TABLES = {
   // Session tables (auth element owns these)
   sessions: "oke_sessions",
   refreshTokens: "oke_refresh_tokens",
+  // Challenges / OTP / magic-link (Gate auth + method plugins)
+  verifications: "oke_verifications",
 } as const;
 
 /** Plane column values stored on shared tables. */

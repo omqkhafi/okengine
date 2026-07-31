@@ -1,6 +1,6 @@
 ---
 title: "Gate"
-description: "Permission to act — policies and rate limits on the HTTP trigger, evaluated before any effect runs."
+description: "Permission to act — policies, rate limits, and built-in auth on the HTTP trigger, evaluated before any effect runs."
 icon: "ShieldCheck"
 source: "docs/spec/unified-theory.md"
 ---
@@ -19,10 +19,10 @@ store write, emit, or channel send runs.
 <Steps>
 
 <Step>
-### Declare gates
+### Declare policies and register the Gate bag
 
-Policies are named predicates; rate limits are declarative budgets. Register policies you reuse
-with `oke({ gates: […] })`:
+Policies are named predicates; rate limits are declarative budgets. Put the ones you reuse in
+`oke({ gate: { policies } })`:
 
 ```typescript title="src/gates.ts"
 import { gate } from "okengine";
@@ -42,16 +42,27 @@ export const fair = gate.rate({
 `gate.policy(name, ({ auth }) => auth.scopes.has(name))` — one string is both the policy id and
 the scope checked.
 
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { member, canBook, fair } from "./gates";
+
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { policies: [member, canBook, fair] },
+});
+```
+
 </Step>
 
 <Step>
 ### Attach them to triggers
 
-`.gate(...)` composes in registration order — left to right, first denial wins. Public routes
-must say so explicitly:
+`.gate(...)` composes left to right — first denial wins. Public routes must say so explicitly:
 
 ```typescript title="src/flows/links/shorten.ts"
 import { on, flow, http, gate } from "okengine";
+import { member, canBook, fair } from "../../gates";
 
 export const health = on(
   http.get("/health").gate(gate.public),
@@ -74,12 +85,12 @@ export const shorten = on(
 );
 ```
 
-Do **not** put `gate.public` in `oke({ gates })` — attach it on the trigger only.
+Do **not** put `gate.public` in `gate.policies` — attach it on the trigger only.
 
 </Step>
 
 <Step>
-### Denials are typed failures
+### See typed denials
 
 A denied request never reaches `do`. It returns one of three typed failures:
 
@@ -94,6 +105,15 @@ A denied request never reaches `do`. It returns one of three typed failures:
 </Steps>
 
 <GatePipeline />
+
+## `oke({ gate })` bag
+
+| Option          | Type                    | Default  | Meaning                                                         |
+| --------------- | ----------------------- | -------- | --------------------------------------------------------------- |
+| `policies`      | `GateDecl[]`            | `[]`     | Named policy / rate decls for the Gate runtime                  |
+| `auth`          | `GateAuthOptions`       | —        | Builtin hybrid sessions + `/auth/*` Flows (see below)           |
+| `rateLimit`     | `{ enabled?: boolean }` | see note | When auth is on, defaults `true` — stricter rates on auth paths |
+| `unguardedHttp` | `"deny"` \| `"allow"`   | `"deny"` | `"allow"` skips posture audit **only** when `env === "test"`    |
 
 ## Declarations
 
@@ -144,42 +164,82 @@ driver in tests.
 ## Auth posture at boot
 
 Every HTTP trigger must carry a gate or `gate.public`. Omitting both fails boot with
-`GateBootError` — message starts with `gate boot failed —` and lists every gap (same fail-loud
-standard as Vault). Signal, clock, and internal triggers are unchanged.
+`GateBootError` — message starts with `gate boot failed —` and lists every gap.
 
 ```typescript
 on(http.get("/health").gate(gate.public), flow({/* … */}));
 on(http.post("/bookings").gate(member, canBook), flow({/* … */}));
 ```
 
-**Consequence:** first `fetch` / `execute` auto-boots (`autoBoot` defaults to `true`) — a plain
-`oke({…}).fetch(request)` enforces posture. `oke({ autoBoot: false })` is a unit-test escape hatch
-only. A rate-only chain is declared posture but does **not** authenticate.
+**Consequence:** first `fetch` / `execute` auto-boots (`autoBoot` defaults to `true`).
+`oke({ autoBoot: false })` is a unit-test escape hatch only. A rate-only chain is declared
+posture but does **not** authenticate.
 
-`unguardedHttp: "allow"` skips the audit **only** when `env === "test"` (e.g. `createTestApp`).
-In `local` / `prod` / `docker` migrate with per-trigger `gate.public` — never a prod-wide bypass.
+`gate: { unguardedHttp: "allow" }` skips the audit **only** when `env === "test"`.
+In `local` / `prod` / `docker` migrate with per-trigger `gate.public`.
+
+## Built-in auth (`gate.auth`)
+
+Enable hybrid sessions (Bearer access + revocable refresh). Auth HTTP surfaces are ordinary
+Bindings under `/auth` — same posture audit and pipeline as your app Flows:
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { member, canBook } from "./gates";
+
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: {
+    auth: {
+      emailAndPassword: { enabled: true },
+      session: { freshAgeMs: 24 * 60 * 60_000 },
+    },
+    policies: [member, canBook],
+  },
+});
+```
+
+| Surface                    | When                                   |
+| -------------------------- | -------------------------------------- |
+| `POST /auth/sign-up/email` | `emailAndPassword.enabled`             |
+| `POST /auth/sign-in/email` | `emailAndPassword.enabled`             |
+| `POST /auth/refresh`       | when `gate.auth` is set                |
+| `POST /auth/revoke`        | when `gate.auth` is set                |
+| `GET /auth/me`             | Bearer session (`auth.session` policy) |
+
+| Auth option                            | Default   | Meaning                                               |
+| -------------------------------------- | --------- | ----------------------------------------------------- |
+| `secret`                               | minted\*  | HMAC for access tokens (\*`prod` requires you set it) |
+| `basePath`                             | `"/auth"` | HTTP prefix for auth Flows                            |
+| `http`                                 | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)  |
+| `emailAndPassword.enabled`             | `false`   | Sign-up / sign-in email Flows                         |
+| `session.freshAgeMs`                   | 24h       | Window for step-up `auth.fresh` policy                |
+| `session.accessTtlMs` / `refreshTtlMs` | 14m / 30d | Access / refresh lifetimes                            |
+| `cookies.enabled`                      | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)  |
+| `secondaryStorage.enabled`             | `false`   | Hot auth data in `store.kv` when configured           |
+| `user` / `session` / …                 | defaults  | `modelName` / `fields` / `additionalFields`           |
+
+Customize tables, then run `oke schema generate` (supports `--check` in CI). Extra sign-in
+shapes: [Plugins](/docs/plugins) (username, magic link, OTP, TOTP, passkeys). Call auth from
+[createClient](/docs/reference/client) — one client, helpers in `okengine/client/auth`.
 
 ## Identity and decisions
 
-Gates don't log users in — they decide on principals that already exist.
+Gates decide on principals that already exist. `gate.auth` issues hybrid sessions onto
+`fx.auth` (Console: `fx.operator`). Audit across `fx.call` uses read-only `fx.principal`
+(see [fx](/docs/reference/fx)).
 
-`okengine/auth` issues hybrid sessions; resolved identity lands on `fx.auth` (and
-`fx.operator` on the Console plane). For audit across `fx.call`, use read-only
-`fx.principal` — it never fills `fx.auth` on the callee (see [fx](/docs/reference/fx)).
-
-Pass **and** deny, every evaluation lands on the run's `gates` dimension.
-
-Console (`:6533` → Gates) shows the chain and outcomes. Rate gates with
-`overridable: true` can be retuned live; anything else rejects edits by design.
+Pass **and** deny land on the run's `gates` dimension. Console (`:6533` → Gates) shows the
+chain. Rate gates with `overridable: true` can be retuned live.
 
 ## Troubleshooting
 
 <Accordions>
 <Accordion title="Boot: gate boot failed — N HTTP trigger(s) missing auth posture">
 
-The listed flows have an empty `.gate(...)` chain. Attach a policy/rate gate, or
-`.gate(gate.public)` for intentionally open surfaces. First `fetch` auto-boots by default —
-no separate `app.boot()` needed. Do not rely on `unguardedHttp: "allow"` outside `env: "test"`.
+Empty `.gate(...)` chain. Attach a policy/rate gate, or `.gate(gate.public)`. First `fetch`
+auto-boots — do not rely on `gate.unguardedHttp: "allow"` outside `env: "test"`.
 
 </Accordion>
 <Accordion title="Can a policy read the request body?">
@@ -190,21 +250,24 @@ decisions belong inside `do` as typed `errors`.
 </Accordion>
 <Accordion title="Logged-in users still get Forbidden">
 
-`Forbidden` means the request was authenticated but a policy said no. Check `verified` or a
-missing scope — the failure includes the gate name and reason.
+`Forbidden` means authenticated but a policy said no. Check `verified` or a missing scope —
+the failure includes the gate name and reason.
+
+</Accordion>
+<Accordion title="Prod boot: gate.auth: secret is required">
+
+Set `gate.auth.secret` (or provide it before boot). Non-prod may mint a development secret.
 
 </Accordion>
 <Accordion title="Which keyBy should I use?">
 
-`"ip"` for public surfaces (sign-up, password reset), `"user"` for authenticated quotas. Keying
-an authenticated endpoint by IP punishes shared NAT; keying a public endpoint by user is
-impossible.
+`"ip"` for public surfaces (sign-up, password reset), `"user"` for authenticated quotas.
+Keying an authenticated endpoint by IP punishes shared NAT.
 
 </Accordion>
 <Accordion title="The Console won't retune my rate limit">
 
-The gate was declared without `overridable: true`. Add it and redeploy — live retuning is opt-in
-so a mistyped change cannot silently open a floodgate.
+Declare the rate with `overridable: true` and redeploy — live retuning is opt-in.
 
 </Accordion>
 </Accordions>
@@ -213,6 +276,8 @@ so a mistyped change cannot silently open a floodgate.
 
 - [Flow](/docs/elements/flow) — the trigger pipeline gates plug into
 - [fx](/docs/reference/fx) — `fx.auth`, `fx.operator`, `fx.principal`
+- [Client](/docs/reference/client) — Bearer `createClient` + `okengine/client/auth`
+- [Plugins](/docs/plugins) — username, magic link, OTP, TOTP, passkeys
 - [Console · Gates](/docs/console/gates) — decision audit and live retuning
 - [Vault](/docs/elements/vault) — credentials your policies protect
 
@@ -220,11 +285,7 @@ so a mistyped change cannot silently open a floodgate.
 
 <Cards>
   <Card title="Vault" description="Continue to Vault." href="/docs/elements/vault" />
-  <Card
-    title="Introduction"
-    description="Eight elements overview."
-    href="/docs/get-started/introduction"
-  />
+  <Card title="Plugins" description="Sign-in method plugins under /auth." href="/docs/plugins" />
   <Card
     title="Console"
     description="Panels derived from the Manifest."

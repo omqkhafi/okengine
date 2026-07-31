@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.4.3 · measured 2026-07-31T18:02:57.423Z_
+_okengine v0.4.3 · measured 2026-07-31T21:06:09.494Z_
 
 Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -13,29 +13,31 @@ Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs th
 | Kernel (edge profile) | 12.41 kB  | 15.00 kB  |
 | Client runtime        | 1.67 kB   | 3.00 kB   |
 | Console initial load  | 86.21 kB  | 300.00 kB |
-| Cold start on Bun     | 25.071 ms | 75.000 ms |
+| Cold start on Bun     | 37.239 ms | 75.000 ms |
 | p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
-|          | Measured | Ceiling  |
-| -------- | -------- | -------- |
-| okengine | 53.56 kB | 54.63 kB |
-| ai       | 3.44 kB  | 3.69 kB  |
-| auth     | 6.03 kB  | 6.28 kB  |
-| channel  | 4.59 kB  | 4.84 kB  |
-| client   | 1.80 kB  | 2.05 kB  |
-| clock    | 10.09 kB | 10.34 kB |
-| config   | 890 B    | 1.12 kB  |
-| console  | 74.34 kB | 75.83 kB |
-| gate     | 4.40 kB  | 4.65 kB  |
-| mcp      | 9.39 kB  | 9.64 kB  |
-| plugins  | 4.82 kB  | 5.07 kB  |
-| runs     | 6.15 kB  | 6.40 kB  |
-| signal   | 888 B    | 1.12 kB  |
-| store    | 12.70 kB | 12.96 kB |
-| test     | 9.26 kB  | 9.51 kB  |
-| vault    | 2.42 kB  | 2.67 kB  |
+|              | Measured | Ceiling  |
+| ------------ | -------- | -------- |
+| okengine     | 60.01 kB | 61.21 kB |
+| ai           | 3.44 kB  | 3.69 kB  |
+| auth         | 13.27 kB | 13.53 kB |
+| channel      | 4.59 kB  | 4.84 kB  |
+| client       | 1.80 kB  | 2.05 kB  |
+| client-react | 7.82 kB  | 8.07 kB  |
+| client/auth  | 573 B    | 829 B    |
+| clock        | 10.09 kB | 10.34 kB |
+| config       | 890 B    | 1.12 kB  |
+| console      | 79.55 kB | 81.14 kB |
+| gate         | 6.14 kB  | 6.39 kB  |
+| mcp          | 9.39 kB  | 9.64 kB  |
+| plugins      | 12.96 kB | 13.21 kB |
+| runs         | 6.15 kB  | 6.40 kB  |
+| signal       | 888 B    | 1.12 kB  |
+| store        | 12.70 kB | 12.96 kB |
+| test         | 9.27 kB  | 9.52 kB  |
+| vault        | 2.42 kB  | 2.67 kB  |
 
 ## Drivers
 

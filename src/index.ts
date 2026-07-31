@@ -102,13 +102,16 @@ export {
   GateBootError,
   assertHttpGatePosture,
   createGateRuntime,
+  resolveGateConfig,
   takeRate,
   deriveModuleActions,
   ALL_RATE_STRATEGIES,
   type GateDecl,
+  type GateOptions,
   type GatePostureGap,
   type GateRuntime,
   type RateOptions,
+  type ResolvedGateConfig,
 } from "./elements/gate.ts";
 
 export {

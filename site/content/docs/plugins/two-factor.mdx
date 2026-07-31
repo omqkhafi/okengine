@@ -1,0 +1,113 @@
+---
+title: "Two-factor"
+description: "Official plugin — TOTP enable, verify, and disable for an authenticated session."
+icon: "LockKeyhole"
+source: "docs/spec/unified-theory.md"
+---
+
+`twoFactor()` adds RFC 6238 TOTP (HMAC-SHA1, 6 digits, 30s) after someone already has a session.
+Enable returns a secret, `otpauth://` URL, and recovery codes; verify mints a new session.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(twoFactor())`. Enable and disable need a Bearer session —
+  verify is public and takes `{ userId, code }` after password (or other) sign-in.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug it
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { twoFactor } from "okengine/plugins";
+
+export const app = oke({ name: "shop", env: "local" }).plug(twoFactor());
+```
+
+</Step>
+
+<Step>
+### Enable (session required)
+
+```typescript
+const { data } = await api.auth.twoFactorEnable(
+  {},
+  { headers: { Authorization: `Bearer ${accessToken}` } },
+);
+// data.secret, data.otpauthUrl, data.recoveryCodes
+```
+
+`POST /auth/two-factor/enable` — writes `oke_two_factor`. Store recovery codes once; they are
+shown only here.
+
+</Step>
+
+<Step>
+### Verify a code
+
+```typescript
+const { data } = await api.auth.twoFactorVerify({ userId, code: "123456" });
+// hybrid session tokens — recovery codes also accepted once each
+```
+
+`POST /auth/two-factor/verify`. Missing / disabled factor or bad code → `AuthFailed` /
+`invalid_credentials`. Disable: `api.auth.twoFactorDisable` with Bearer.
+
+</Step>
+
+</Steps>
+
+## Options
+
+| Option     | Type             | Default    | Meaning                          |
+| ---------- | ---------------- | ---------- | -------------------------------- |
+| `secret`   | `string`         | active\*   | HMAC secret (\*from `gate.auth`) |
+| `sessions` | `SessionStore`   | active\*   | Session store                    |
+| `now`      | `() => number`   | `Date.now` | Injectable clock                 |
+| `factors`  | `TwoFactorStore` | new        | Per-user TOTP + recovery hashes  |
+| `issuer`   | `string`         | `"oke"`    | Label in `otpauth://` URLs       |
+
+## Surfaces
+
+| Flow                    | Path                            | Gate                     |
+| ----------------------- | ------------------------------- | ------------------------ |
+| `auth.twoFactorEnable`  | `POST /auth/two-factor/enable`  | session + bearer         |
+| `auth.twoFactorVerify`  | `POST /auth/two-factor/verify`  | `gate.public` + otp rate |
+| `auth.twoFactorDisable` | `POST /auth/two-factor/disable` | session + bearer         |
+
+**Consequence:** verify issues a full session for `userId` — use it as the step after first-factor
+sign-in when the account has 2FA enabled.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="twoFactorEnable returns AuthFailed unauthenticated">
+
+Pass a valid `Authorization: Bearer` access token from email/password (or another method)
+first.
+
+</Accordion>
+<Accordion title="verify always fails">
+
+Code must be six digits. Check clock skew (±1 window), and that you enrolled the `secret` from
+enable. A recovery code works once, then is consumed.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Passkey](/docs/plugins/passkey) — WebAuthn-shaped register / authenticate
+- [Gate](/docs/elements/gate) — session + policies
+- [Username](/docs/plugins/username) — first factor to enroll against
+
+## Next
+
+<Cards>
+  <Card title="Passkey" description="WebAuthn register and assert." href="/docs/plugins/passkey" />
+  <Card title="Gate" description="Builtin auth and policies." href="/docs/elements/gate" />
+  <Card title="Email OTP" description="Passwordless email codes." href="/docs/plugins/email-otp" />
+</Cards>

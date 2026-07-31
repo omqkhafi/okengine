@@ -14,6 +14,97 @@ export {
 } from "./plugin.ts";
 
 export {
+  resolveGateAuth,
+  mintDevAuthSecret,
+  normalizeBasePath,
+  DEFAULT_FRESH_AGE_MS,
+  type GateAuthOptions,
+  type GateAuthSessionOptions,
+  type EmailAndPasswordOptions,
+  type AccountLinkingOptions,
+  type AuthCookieOptions,
+  type AuthSecondaryStorageOptions,
+  type AuthDatabaseHooks,
+  type ResolvedGateAuth,
+  type ResolveGateAuthOptions,
+} from "./config.ts";
+
+export {
+  resolveAuthSchema,
+  authFieldSqlType,
+  AUTH_MODEL_DEFAULT_FIELDS,
+  AUTH_MODEL_DEFAULT_TABLES,
+  type AuthCoreModel,
+  type AuthFieldType,
+  type AuthAdditionalField,
+  type AuthModelOptions,
+  type AuthSchemaOptions,
+  type ResolvedAuthSchema,
+  type ResolvedAuthModel,
+  type ResolvedAuthColumn,
+} from "./schema.ts";
+
+export {
+  createAuthHttpBindings,
+  createAuthRateGates,
+  createAuthPolicyGates,
+  createFreshSessionGate,
+  isSessionFresh,
+  bindAuthHttp,
+  AUTH_SESSION_GATE,
+  AUTH_RATE_PRESETS,
+  type AuthHttpMaterialization,
+  type AuthRuntimeContext,
+} from "./bindings.ts";
+
+export {
+  setActiveGateAuthContext,
+  getActiveGateAuthContext,
+  type ActiveGateAuthContext,
+} from "./method-context.ts";
+
+export { createAuthSecondaryStorage, type AuthKv } from "./secondary-storage.ts";
+
+export {
+  createVerificationStore,
+  putVerification,
+  findActiveVerification,
+  hashChallenge,
+  generateOtp,
+  type VerificationStore,
+  type VerificationRow,
+} from "./verification.ts";
+
+export {
+  createIdentityStore,
+  createUserWithPassword,
+  authenticateUser,
+  getUserById,
+  normalizeEmail,
+  IdentityError,
+  type IdentityStore,
+  type UserIdentityRow,
+  type UserAccountRow,
+  type CreateUserWithPasswordOptions,
+} from "./identity.ts";
+
+export {
+  authCookieNames,
+  buildAuthSetCookies,
+  clearAuthSetCookies,
+  tokenFromCookieHeader,
+  parseCookieHeader,
+} from "./cookies.ts";
+
+export {
+  touchRateLimit,
+  createLoginAttemptBag,
+  AUTH_RATE_LIMIT,
+  AUTH_RATE_WINDOW_MS,
+  type LoginAttemptBag,
+} from "./rate.ts";
+
+export {
   assertPasswordPolicy,
   resolvePasswordPolicy,
   PasswordPolicyError,

@@ -2,7 +2,6 @@
  * ConsoleApp — operator-plane app built on `createClient<ConsoleApp>`.
  */
 
-import { auth } from "../../auth/index.ts";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
@@ -62,15 +61,18 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
     bindings,
     autoBoot: false,
     fx: { now: state.now },
-    auth: {
-      secret: state.secret,
-      sessions: state.sessions,
-      now: state.now,
+    gate: {
+      auth: {
+        secret: state.secret,
+        sessions: state.sessions,
+        now: state.now,
+        // Console owns `/console/session/*` — no app `/auth/*` surfaces.
+        http: false,
+      },
+      policies: [...CONSOLE_GATES],
     },
-    gates: [...CONSOLE_GATES],
     runs: { driver: "memory" },
   })
-    .plug(auth({ secret: state.secret }))
     .plug(consolePlugin())
     .adopt({
       console: {
