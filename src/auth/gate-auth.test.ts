@@ -218,6 +218,58 @@ describe("gate.auth — email Flows + security", () => {
     await app.stop();
   });
 
+  test("sign-up rejects weak passwords with AuthFailed password_policy", async () => {
+    const app = oke({
+      name: "auth-weak-password",
+      env: "test",
+      registry: "ignore",
+      gate: {
+        auth: {
+          secret: "test-secret-at-least-16",
+          emailAndPassword: { enabled: true },
+        },
+      },
+    });
+    await app.boot({ env: "test" });
+
+    const res = await app.fetch(
+      new Request("http://localhost/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "weak@example.com",
+          password: "123",
+          name: "Weak",
+        }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      data: null;
+      error: { code: string; data?: { reason?: string; reasons?: string[] } };
+    };
+    expect(body.data).toBeNull();
+    expect(body.error.code).toBe("AuthFailed");
+    expect(body.error.data?.reason).toBe("password_policy");
+    expect(body.error.data?.reasons?.some((r) => r.includes("minLength"))).toBe(true);
+
+    // Rejection is real — same email can still sign up with a strong password.
+    const ok = await app.fetch(
+      new Request("http://localhost/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "weak@example.com",
+          password: "CorrectHorse1",
+          name: "Strong",
+        }),
+      }),
+    );
+    expect(ok.status).toBe(200);
+
+    await app.stop();
+  });
+
   test("enumeration: email_taken looks like invalid_credentials", async () => {
     const app = oke({
       name: "auth-enum",

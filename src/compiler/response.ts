@@ -91,8 +91,22 @@ export function encodeExecuteResult(result: {
 }): Response {
   if (result.response) return result.response;
   if (result.failure) return encodeFailure(result.failure);
-  if (result.error !== undefined && isFlowFailure(result.error)) {
-    return encodeFailure(result.error);
+  if (result.error !== undefined) {
+    if (isFlowFailure(result.error)) {
+      return encodeFailure(result.error);
+    }
+    // Unhandled throws must never look like success (`undefined` → 204).
+    return Response.json(
+      {
+        data: null,
+        error: {
+          code: "InternalError",
+          data: {},
+          message: result.error instanceof Error ? result.error.message : "internal error",
+        },
+      } satisfies FailureEnvelope,
+      { status: 500 },
+    );
   }
   return encodeSuccess(result.output);
 }

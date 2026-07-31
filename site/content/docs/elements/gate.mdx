@@ -208,17 +208,19 @@ export const app = oke({
 | `POST /auth/revoke`        | when `gate.auth` is set                |
 | `GET /auth/me`             | Bearer session (`auth.session` policy) |
 
-| Auth option                            | Default   | Meaning                                               |
-| -------------------------------------- | --------- | ----------------------------------------------------- |
-| `secret`                               | minted\*  | HMAC for access tokens (\*`prod` requires you set it) |
-| `basePath`                             | `"/auth"` | HTTP prefix for auth Flows                            |
-| `http`                                 | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)  |
-| `emailAndPassword.enabled`             | `false`   | Sign-up / sign-in email Flows                         |
-| `session.freshAgeMs`                   | 24h       | Window for step-up `auth.fresh` policy                |
-| `session.accessTtlMs` / `refreshTtlMs` | 14m / 30d | Access / refresh lifetimes                            |
-| `cookies.enabled`                      | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)  |
-| `secondaryStorage.enabled`             | `false`   | Hot auth data in `store.kv` when configured           |
-| `user` / `session` / …                 | defaults  | `modelName` / `fields` / `additionalFields`           |
+| Auth option                            | Default   | Meaning                                                                        |
+| -------------------------------------- | --------- | ------------------------------------------------------------------------------ |
+| `secret`                               | minted\*  | HMAC for access tokens (\*`prod` requires you set it)                          |
+| `basePath`                             | `"/auth"` | HTTP prefix for auth Flows                                                     |
+| `http`                                 | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)                           |
+| `emailAndPassword.enabled`             | `false`   | Sign-up / sign-in email Flows                                                  |
+| `passwordPolicy`                       | secure\*  | `\*` minLength 12, letter + number; sign-up → `AuthFailed` / `password_policy` |
+| `breachCheck`                          | unset     | Optional HIBP (or custom) check → `AuthFailed` / `password_breached`           |
+| `session.freshAgeMs`                   | 24h       | Window for step-up `auth.fresh` policy                                         |
+| `session.accessTtlMs` / `refreshTtlMs` | 14m / 30d | Access / refresh lifetimes                                                     |
+| `cookies.enabled`                      | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                           |
+| `secondaryStorage.enabled`             | `false`   | Hot auth data in `store.kv` when configured                                    |
+| `user` / `session` / …                 | defaults  | `modelName` / `fields` / `additionalFields`                                    |
 
 Customize tables, then run `oke schema generate` (supports `--check` in CI). Extra sign-in
 shapes: [Plugins](/docs/plugins) (username, magic link, OTP, TOTP, passkeys). Call auth from
@@ -257,6 +259,12 @@ the failure includes the gate name and reason.
 <Accordion title="Prod boot: gate.auth: secret is required">
 
 Set `gate.auth.secret` (or provide it before boot). Non-prod may mint a development secret.
+
+</Accordion>
+<Accordion title="Sign-up returns AuthFailed password_policy">
+
+Default policy requires length ≥ 12 plus a letter and a number. Short passwords like `"123"`
+are rejected — not accepted silently. Tighten or loosen via `gate.auth.passwordPolicy`.
 
 </Accordion>
 <Accordion title="Which keyBy should I use?">

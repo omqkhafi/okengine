@@ -93,6 +93,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Default password policy enforced on `createOperator` (minLength 12,
   letter + number); tests needing short passwords must pass
   `skipPasswordPolicy: true` explicitly.
+- `POST /auth/sign-up/email` maps password-policy / breach-check failures
+  to `AuthFailed` (`reason: "password_policy"` | `"password_breached"`)
+  instead of an empty `204` from an unhandled throw. Weak passwords were
+  never stored; the status alone looked like silent success.
 
 ### 🐛 Fixed
 
@@ -106,6 +110,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   time: Inter Variable is vendored under `site/app/fonts/` (OFL) and
   loaded via `next/font/local`, so offline / network-restricted CI builds
   cannot fail with a fonts.gstatic.com 403.
+- Unhandled throws in HTTP Flows encode as `500 InternalError` — never
+  as empty `204` (which `encodeSuccess(undefined)` previously produced).
 
 ## v0.4.3 — 2026-07-31
 

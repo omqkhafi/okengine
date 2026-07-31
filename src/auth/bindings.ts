@@ -13,6 +13,7 @@ import { flow, type AnyFlowDef } from "../kernel/flow.ts";
 import type { Binding } from "../kernel/on.ts";
 import { http, normalizeTrigger, type HttpTrigger, type Trigger } from "../kernel/triggers.ts";
 import type { ResolvedGateAuth } from "./config.ts";
+import { BreachCheckError } from "./breach-check.ts";
 import {
   authenticateUser,
   createIdentityStore,
@@ -21,6 +22,7 @@ import {
   IdentityError,
   type IdentityStore,
 } from "./identity.ts";
+import { PasswordPolicyError } from "./password-policy.ts";
 import {
   createSessionStore,
   issueSessionWithScopes,
@@ -105,6 +107,8 @@ const EmailPasswordIn = z.object({
 
 const AuthFailed = z.object({
   reason: z.string().optional(),
+  /** Password-policy failure details (`reason: "password_policy"`). */
+  reasons: z.array(z.string()).optional(),
 });
 
 const AuthRateLimited = z.object({
@@ -361,6 +365,15 @@ export function createAuthHttpBindings(
             userId: user.id,
           };
         } catch (err) {
+          if (err instanceof PasswordPolicyError) {
+            return fail("AuthFailed", {
+              reason: "password_policy",
+              reasons: [...err.reasons],
+            });
+          }
+          if (err instanceof BreachCheckError) {
+            return fail("AuthFailed", { reason: "password_breached" });
+          }
           if (err instanceof IdentityError) {
             // Enumeration-safe on email_taken — same shape as generic failure.
             if (err.code === "email_taken") {
