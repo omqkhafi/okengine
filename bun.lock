@@ -75,7 +75,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -91,7 +91,6 @@
       "name": "site",
       "version": "0.0.8",
       "dependencies": {
-        "@orama/orama": "^3.1.18",
         "cnfast": "^0.1.0",
         "framer-motion": "^12.43.0",
         "fumadocs-core": "16.14.0",
@@ -408,8 +407,6 @@
     "@next/swc-win32-arm64-msvc": ["@next/swc-win32-arm64-msvc@16.2.12", "", { "os": "win32", "cpu": "arm64" }, "sha512-X6hzsOUJac/e7AWSbn9gQ9nzHld1xWP5iyjHpYWvud8pufB679O1xg4JDyKr8Xd69Jvd+kM2Der6uftiZCmjYA=="],
 
     "@next/swc-win32-x64-msvc": ["@next/swc-win32-x64-msvc@16.2.12", "", { "os": "win32", "cpu": "x64" }, "sha512-F6fakeHuFTLOPt0bslQJdf+xtT+WIP9DVn/m4y1w1mRnVPyh3D/cNvzlRkxM444xfm+IvvYNSOrKiA2CDJ0Uxw=="],
-
-    "@orama/orama": ["@orama/orama@3.1.18", "", {}, "sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA=="],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.142.0", "", { "os": "android", "cpu": "arm" }, "sha512-ZiRGDutGsv1G6bL/ozy/koC0Sv39T1DqyoC4KD1DOy9ZoACm1O5UWhEK2c02Qdk+4lfLVkvFa/mQ0fm/4h1BtQ=="],
 

@@ -10,6 +10,14 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.4.3 — 2026-07-31
+
+### 🐛 Fixed
+
+- Site search client matches fumadocs 16.14's ZBSearch move: use
+  `staticClient` (no custom `@orama/orama` init). Fresh installs were
+  failing `next build` typecheck under `useTypeScriptCli`.
+
 ## v0.4.2 — 2026-07-31
 
 ### 🐛 Fixed
