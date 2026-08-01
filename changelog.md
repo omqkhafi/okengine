@@ -31,6 +31,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `smtp` channel driver passes sently's `BunAdapter` so real SMTP (Mailpit /
   providers) works under Bun — previously failed with "No socket adapter
   configured".
+- Mailpit auth-delivery tests use real `test.skip` when Docker is unavailable
+  (never an empty pass).
 
 ## v0.5.1 — 2026-08-01
 
