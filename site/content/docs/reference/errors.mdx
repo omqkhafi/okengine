@@ -14,6 +14,19 @@ OKE1101  domain table not found — migrations have not been applied.
 
 Codes are permanent once published — you can match on them safely across upgrades.
 
+## Localized messages
+
+Typed failures and OKE codes ship English and Arabic ICU catalogs. Locale comes
+from `Accept-Language` (matched to `i18n.locales`); fallback is `i18n.default`.
+
+| Surface            | Keys                                       | How it appears                           |
+| ------------------ | ------------------------------------------ | ---------------------------------------- |
+| `fx.fail` / `fail` | `errors.{code}` · `errors.{code}.{reason}` | Optional `error.message` on the envelope |
+| Thrown `OkeError`  | `oke.{code}.cause` · `oke.{code}.fix`      | Cause + fix lines in the thrown message  |
+
+Override via `defineLocale`. Pass `fail(code, data, { message })` for a custom
+string. Custom app codes stay message-less until registered.
+
 ## OKE numeric codes
 
 | Code   | Name              | Cause                                            | Fix                                             |
@@ -75,6 +88,7 @@ Thrown by specific subsystems — each names its own cause:
 
 ## Learn more
 
+- [i18n](/docs/reference/i18n) — catalogs, `fx.t`, locale matching
 - [Flow](/docs/elements/flow) — `fx.fail` and the response envelope
 - [Gate](/docs/elements/gate) — where the three denials come from
 - [CLI Reference](/docs/reference/cli) — `oke db migrate` and friends

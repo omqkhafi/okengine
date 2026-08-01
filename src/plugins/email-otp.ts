@@ -46,16 +46,21 @@ export const emailOtpTemplate = channel.email({ from: DEFAULT_FROM }).template("
     email: z.string(),
     otp: z.string(),
   }),
-  locales: ["en"],
+  locales: ["en", "ar"],
 });
 
-/** Default English body for {@link emailOtpTemplate}. */
+/** Default EN/AR bodies for {@link emailOtpTemplate}. */
 export const emailOtpCatalog = {
   "auth-email-otp": {
     en: {
       subject: "Your sign-in code",
       text: "Your one-time sign-in code is: {{otp}}\n",
       html: "<p>Your one-time sign-in code is:</p><p><strong>{{otp}}</strong></p>",
+    },
+    ar: {
+      subject: "رمز تسجيل الدخول",
+      text: "رمز تسجيل الدخول لمرة واحدة هو: {{otp}}\n",
+      html: '<p dir="rtl">رمز تسجيل الدخول لمرة واحدة هو:</p><p dir="rtl"><strong>{{otp}}</strong></p>',
     },
   },
 } as const;
@@ -90,7 +95,7 @@ export function emailOtp(opts: EmailOtpOptions = {}): PluginDef {
             email: z.string(),
             otp: z.string(),
           }),
-          locales: ["en"],
+          locales: ["en", "ar"],
         })
       : emailOtpTemplate;
 

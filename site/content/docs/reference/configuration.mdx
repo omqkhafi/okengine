@@ -94,6 +94,10 @@ For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3:8b` — a balan
 i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 ```
 
+`fx.t` catalogs are ICU strings from `defineLocale` / `defineMessages` — see
+[i18n](/docs/reference/i18n). Built-ins also cover failure `error.message` and
+OKE cause/fix; Channel templates keep separate `locales` + `{{field}}` bodies.
+
 ## tenancy
 
 Multi-tenant isolation policy.

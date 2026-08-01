@@ -33,6 +33,7 @@ describe("gateDenialFailure", () => {
       },
     );
     expect(anon.error.code).toBe("Unauthorized");
+    expect(anon.error.message).toBe("Authentication required.");
 
     const forbid = gateDenialFailure(
       { name: "order:create", kind: "policy", allowed: false },
@@ -42,6 +43,8 @@ describe("gateDenialFailure", () => {
       },
     );
     expect(forbid.error.code).toBe("Forbidden");
+    expect(forbid.error.data).toEqual({ gate: "order:create", reason: "policy_denied" });
+    expect(forbid.error.message).toBe("Policy denied this request.");
 
     const rate = gateDenialFailure(
       {
@@ -58,6 +61,7 @@ describe("gateDenialFailure", () => {
     );
     expect(rate.error.code).toBe("RateLimited");
     expect(rate.error.data).toEqual({ retryAfterMs: 1500 });
+    expect(rate.error.message).toBe("Too many requests. Try again later.");
   });
 });
 

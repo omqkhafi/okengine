@@ -147,8 +147,11 @@ export { webpushChannelDriver, openWebPushChannel } from "./channel-webpush.ts";
 export type {
   AiDriverId,
   AiMessage,
+  AiToolDef,
+  AiToolCall,
   AiCompleteOptions,
   AiCompleteResult,
+  AiStreamChunk,
   AiEmbedOptions,
   AiEmbedResult,
   AiModelClient,
@@ -158,7 +161,14 @@ export type {
 
 export { mockAiDriver, createMockAiDriver } from "./ai-mock.ts";
 export { anthropicAiDriver, openAnthropic } from "./ai-anthropic.ts";
-export { openaiCompatibleAiDriver, openOpenaiCompatible } from "./ai-openai-compatible.ts";
+export {
+  openaiCompatibleAiDriver,
+  openOpenaiCompatible,
+  OPENAI_COMPAT_DEFAULT_BASE,
+  normalizeOpenaiCompatibleBaseUrl,
+  isOpenaiCloudBase,
+  openaiCompatibleHeaders,
+} from "./ai-openai-compatible.ts";
 export {
   ollamaAiDriver,
   openOllama,

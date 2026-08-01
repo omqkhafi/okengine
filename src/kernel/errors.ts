@@ -7,6 +7,9 @@
  */
 
 import { docsUrl as absoluteDocsUrl } from "../docs-origin.ts";
+import { getActiveDefaultLocale, getActiveLocale } from "../i18n/locale-context.ts";
+import { getMessageCatalogs, translate } from "../i18n/messages.ts";
+import { resolveFailureMessage } from "../i18n/failure-message.ts";
 
 /** Numeric OKE error code (permanent once published). */
 export type OkeErrorCode = number;
@@ -43,10 +46,11 @@ export class OkeError extends Error {
   /**
    * @param definition - Registry entry
    * @param params - Values for `{placeholders}` in cause/fix
+   * @param locale - Optional locale (defaults to active request locale)
    */
-  constructor(definition: OkeErrorDefinition, params: OkeErrorParams = {}) {
-    const causeText = interpolate(definition.cause, params);
-    const fix = interpolate(definition.fix, params);
+  constructor(definition: OkeErrorDefinition, params: OkeErrorParams = {}, locale?: string) {
+    const causeText = localizeOkePart(definition.code, "cause", definition.cause, params, locale);
+    const fix = localizeOkePart(definition.code, "fix", definition.fix, params, locale);
     const docsUrl = absoluteDocsUrl(`/e/${definition.code}`);
     const message = formatOkeMessage(definition.code, causeText, fix, docsUrl);
     super(message);
@@ -184,13 +188,18 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
 /**
  * Create a flow-boundary failure value (does not throw).
  *
+ * When `opts.message` is omitted, attaches a localized message from the
+ * built-in / app catalogs (`errors.{code}.{reason}` → `errors.{code}`) using
+ * the active request locale. Custom codes with no catalog entry stay
+ * message-less.
+ *
  * @param code - Declared error code from the flow's `errors` map
  * @param data - Error payload
  * @param opts - Optional message override
  */
 export function fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E> {
-  const error: FlowErrorValue<E> =
-    opts?.message !== undefined ? { code, data, message: opts.message } : { code, data };
+  const message = opts?.message !== undefined ? opts.message : resolveFailureMessage(code, data);
+  const error: FlowErrorValue<E> = message !== undefined ? { code, data, message } : { code, data };
   return { data: null, error };
 }
 
@@ -215,4 +224,46 @@ function interpolate(template: string, params: OkeErrorParams): string {
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => {
     return params[key] ?? `{${key}}`;
   });
+}
+
+/**
+ * Localize one OKE cause/fix line from catalogs, falling back to the registry
+ * English template.
+ *
+ * @param code - Numeric OKE code
+ * @param part - `cause` or `fix`
+ * @param fallback - Registry English template
+ * @param params - Interpolation params
+ * @param locale - Optional locale override
+ */
+function localizeOkePart(
+  code: OkeErrorCode,
+  part: "cause" | "fix",
+  fallback: string,
+  params: OkeErrorParams,
+  locale?: string,
+): string {
+  const key = `oke.${code}.${part}`;
+  const catalogs = getMessageCatalogs();
+  const active = locale ?? getActiveLocale("en");
+  const defaultLocale = getActiveDefaultLocale("en");
+  if (catalogs[active]?.[key] === undefined && catalogs[defaultLocale]?.[key] === undefined) {
+    return interpolate(fallback, params);
+  }
+  const formatted = translate({
+    locale: active,
+    defaultLocale,
+    catalogs,
+    key,
+    values: params,
+  });
+  // Catalog returned uninterpolated ICU (missing args) → registry template.
+  if (
+    Object.keys(params).length === 0 ||
+    formatted.includes("{flow}") ||
+    formatted.includes("{resource}")
+  ) {
+    return interpolate(fallback, params);
+  }
+  return formatted;
 }

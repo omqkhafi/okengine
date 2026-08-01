@@ -88,6 +88,17 @@ export const triage = smart.prompt("ticket-triage", {
 
 <AiGuardrails />
 
+## Tools are flows (same `fx.call` path)
+
+Offer flows as tools on a one-shot ask — each model-initiated call goes through the host flow’s `fx.call`, so capability, Manifest `calls`, and Runs stay honest. No silent extra authority for the model:
+
+```typescript
+const result = await fx.ask(triage, input, {
+  tools: [getBooking, refundBooking],
+  maxSteps: 6,
+});
+```
+
 ## Agents with real guardrails
 
 An agent's tools are your flows — each carrying its own gates, effects, and typed errors, so the agent can never do anything a flow couldn't:
@@ -101,7 +112,25 @@ export const support = ai.agent("support", {
 });
 ```
 
-`maxSteps` bounds the loop; `budget.maxCostPerRun` bounds the spend. Both are declared, so "the agent ran away" is a violated contract, not a surprise.
+`maxSteps` bounds the loop; `budget.maxCostPerRun` bounds the spend. Both are declared, so "the agent ran away" is a violated contract, not a surprise. `fx.run(support, { message })` uses the same tool loop and the same `fx.call` dispatch as `fx.ask(…, { tools })`.
+
+## Rate limits via Gate
+
+AI calls are expensive — reuse `gate.rate`, don’t invent a parallel budget. Presets: `aiRateGate("ask" | "agent" | "embed")` (defaults 20 / 10 / 60 per minute, `keyBy: "user"`). Attach on the HTTP trigger:
+
+```typescript
+on(http.post("/triage").gate(member, aiRateGate("ask")), triageFlow);
+```
+
+Use `keyBy: "ip"` on public unauthenticated AI edges. Cost caps stay on prompt/agent `budget` decls.
+
+## Secrets stay out of prompts
+
+`Redacted` values (e.g. from `fx.vault`) stringify to `[redacted]` in provider-facing messages — the same placeholder as logs. Never cleartext to a model.
+
+## Streaming
+
+`fx.stream(model, { prompt })` yields real provider tokens (Ollama NDJSON, OpenAI-compatible SSE). Cancel by aborting the ambient signal — the same one `fx.all` / `fx.race` already use. Drivers without `stream` fail loud (no stub echo).
 
 ## PII cannot leak by accident
 
@@ -159,6 +188,23 @@ export const smart = ai.model("smart", {
 - **Docker:** the image recipe pulls the configured model and writes `OKE_AI_URL` into `docker/.env.docker`.
 - **Fail-loud:** unreachable or unhealthy Ollama throws `OllamaUnavailableError` — never a silent mock fallback.
 - **PII:** `ollama` counts as on-premise for the build-time egress check (same as `mock`).
+
+### OpenAI-compatible endpoints (one driver)
+
+`openai-compatible` is the shared chat/completions client — OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio, and Ollama’s `/v1` shim. You do **not** get a separate driver per vendor; only `baseUrl`, `apiKey`, `model`, and optional `headers` change.
+
+| Target             | Typical `baseUrl`                     | Key                                                         |
+| ------------------ | ------------------------------------- | ----------------------------------------------------------- |
+| OpenAI             | `https://api.openai.com/v1` (default) | required (`OPENAI_API_KEY`)                                 |
+| Groq               | `https://api.groq.com/openai/v1`      | required                                                    |
+| Together           | `https://api.together.xyz/v1`         | required                                                    |
+| OpenRouter         | `https://openrouter.ai/api/v1`        | required; optional `HTTP-Referer` / `X-Title` via `headers` |
+| LM Studio / local  | e.g. `http://127.0.0.1:1234/v1`       | optional                                                    |
+| Ollama OpenAI shim | `http://127.0.0.1:11434/v1`           | optional                                                    |
+
+Prefer the native `ollama` driver for local Ollama (`/api/chat`). Point `openai-compatible` at Ollama `/v1` only when you need the OpenAI wire shape.
+
+**Consequence:** a missing key against the default OpenAI cloud base fails at open; a custom `baseUrl` may omit the key. HTTP errors always throw — never a silent mock fallback.
 
 ## Troubleshooting
 

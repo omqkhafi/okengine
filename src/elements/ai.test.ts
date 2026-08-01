@@ -56,13 +56,22 @@ describe("agent gate denial is recorded", () => {
 
     const refund = ai.agent("support", {
       tools: ["bookings.refundBooking"],
-      maxSteps: 2,
+      maxSteps: 1,
+      model: "smart",
     });
 
     const called: string[] = [];
     const runtime = createAiRuntime({
+      models: [ai.model("smart")],
       agents: [refund],
       gates,
+      defaultDriver: createMockAiDriver({
+        "*": {
+          __toolCalls: [
+            { id: "c1", name: "bookings.refundBooking", arguments: { reason: "customer" } },
+          ],
+        },
+      }),
       gatesForFlow: (name) => (name === "bookings.refundBooking" ? ["member"] : []),
       callFlow: async (name) => {
         called.push(name);
@@ -87,8 +96,16 @@ describe("agent gate denial is recorded", () => {
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
     const gates = createGateRuntime({ gates: [member] });
     const runtime = createAiRuntime({
-      agents: [ai.agent("support", { tools: ["bookings.getBooking"], maxSteps: 1 })],
+      models: [ai.model("smart")],
+      agents: [
+        ai.agent("support", { tools: ["bookings.getBooking"], maxSteps: 1, model: "smart" }),
+      ],
       gates,
+      defaultDriver: createMockAiDriver({
+        "*": {
+          __toolCalls: [{ id: "c1", name: "bookings.getBooking", arguments: {} }],
+        },
+      }),
       gatesForFlow: () => ["member"],
       callFlow: async () => ({ booking: "B1" }),
     });
@@ -367,13 +384,20 @@ describe("agent tool trail carries effects; denials are not errors", () => {
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
     const gates = createGateRuntime({ gates: [member] });
     const runtime = createAiRuntime({
+      models: [ai.model("smart")],
       agents: [
         ai.agent("support", {
           tools: ["bookings.refundBooking"],
           maxSteps: 1,
+          model: "smart",
         }),
       ],
       gates,
+      defaultDriver: createMockAiDriver({
+        "*": {
+          __toolCalls: [{ id: "c1", name: "bookings.refundBooking", arguments: {} }],
+        },
+      }),
       gatesForFlow: () => ["member"],
       effectsForFlow: (name) =>
         name === "bookings.refundBooking"

@@ -25,7 +25,12 @@ export type {
   AiPromptOptions,
 } from "./ai/declare.ts";
 
-export { createAiRuntime, AiSchemaValidationError } from "./ai/runtime.ts";
+export {
+  createAiRuntime,
+  AiSchemaValidationError,
+  promptContentFromInput,
+  AI_DEFAULT_MAX_STEPS,
+} from "./ai/runtime.ts";
 export type {
   AgentDenial,
   AgentRunRecord,
@@ -38,8 +43,12 @@ export type {
   AiJournalEntry,
   AiRuntime,
   AiSchemaMismatch,
+  AiStreamOptions,
   CreateAiRuntimeOptions,
 } from "./ai/runtime.ts";
+
+export { AI_RATE_PRESETS, aiRateGate, createAiRateGates } from "./ai/rate.ts";
+export type { AiRatePreset } from "./ai/rate.ts";
 
 export { assertAllowPiiForAsk, AiPiiBuildError, type PiiAskCheckInput } from "./ai/pii.ts";
 

@@ -36,6 +36,9 @@ import {
   type ResolvedGateConfig,
 } from "../elements/gate/config.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
+import { parseAcceptLanguage } from "../elements/channel/locale.ts";
+import { runWithLocale } from "../i18n/locale-context.ts";
+import { getMessageCatalogs, matchConfiguredLocale } from "../i18n/messages.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { fxRetry } from "./concurrency.ts";
@@ -568,6 +571,9 @@ export function oke(options: OkeOptions): OkeApp {
       secret: authBinding.secret,
       sessions: authBinding.sessions,
       now: authBinding.now,
+      passwordPolicy: gateConfig.auth?.passwordPolicy,
+      password: gateConfig.auth?.password,
+      breachCheck: gateConfig.auth?.breachCheck,
     });
   } else {
     setActiveGateAuthContext(undefined);
@@ -698,6 +704,10 @@ export function oke(options: OkeOptions): OkeApp {
         ...(baseChannel ?? {}),
         templates: [...(baseChannel?.templates ?? []), ...pluginChannelTemplates],
         ...(mergedCatalog ? { catalog: mergedCatalog } : {}),
+        defaultLocale:
+          baseChannel?.defaultLocale ??
+          (overrides?.config ?? options.config)?.i18n?.default ??
+          "en",
       },
       ai: overrides?.ai ?? options.ai,
       runs: overrides?.runs ?? options.runs,
@@ -760,10 +770,52 @@ export function oke(options: OkeOptions): OkeApp {
       readonly principal?: ResolvedPrincipal;
       /** Frozen origin identity for {@link Fx.principal} across `fx.call`. */
       readonly originPrincipal?: FxPrincipal;
+      /** Explicit locale override for {@link Fx.t} / channel sends. */
+      readonly locale?: string;
     },
   ): Promise<ExecuteResult> {
     registerFlow(flowDef);
 
+    const i18nConfig = options.config?.i18n;
+    const configuredLocales = i18nConfig?.locales ?? ["en", "ar"];
+    const defaultLocale = i18nConfig?.default ?? "en";
+    const acceptLanguage = extras?.request?.headers.get("accept-language") ?? undefined;
+    const resolvedLocale = matchConfiguredLocale(
+      extras?.locale ?? parseAcceptLanguage(acceptLanguage),
+      configuredLocales,
+      defaultLocale,
+    );
+
+    return runWithLocale({ locale: resolvedLocale, defaultLocale }, () =>
+      executeInLocale({
+        flowDef,
+        input,
+        trigger,
+        extras,
+        resolvedLocale,
+        defaultLocale,
+      }),
+    );
+  }
+
+  async function executeInLocale(args: {
+    readonly flowDef: AnyFlowDef;
+    readonly input: unknown;
+    readonly trigger: Trigger;
+    readonly extras?: {
+      readonly request?: Request;
+      readonly params?: Record<string, string>;
+      readonly validated?: boolean;
+      readonly auth?: ResolvedPrincipal | FxAuth;
+      readonly operator?: FxOperator;
+      readonly principal?: ResolvedPrincipal;
+      readonly originPrincipal?: FxPrincipal;
+      readonly locale?: string;
+    };
+    readonly resolvedLocale: string;
+    readonly defaultLocale: string;
+  }): Promise<ExecuteResult> {
+    const { flowDef, input, trigger, extras, resolvedLocale, defaultLocale } = args;
     const booted = await ensureBoot();
 
     const unitBag = flowDef.unit !== undefined ? unitHooks.get(flowDef.unit) : undefined;
@@ -866,6 +918,12 @@ export function oke(options: OkeOptions): OkeApp {
       effects: flowDef.effects,
       runTelemetry: telemetry,
       now,
+      i18n: {
+        locale: resolvedLocale,
+        defaultLocale,
+        catalogs: getMessageCatalogs(),
+        ...options.fx?.i18n,
+      },
       ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
       ...(capability ? { capability } : {}),
@@ -888,7 +946,10 @@ export function oke(options: OkeOptions): OkeApp {
           target,
           callInput,
           { kind: "internal" } satisfies InternalTrigger,
-          { originPrincipal: freezePrincipal(fx.principal) },
+          {
+            originPrincipal: freezePrincipal(fx.principal),
+            locale: resolvedLocale,
+          },
         );
         if (inner.failure) return inner.failure;
         return inner.output;

@@ -14,7 +14,11 @@ import type { Binding } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
 import { createEnv } from "../../runtime/primitives.ts";
 
-export const AuthFailed = z.object({ reason: z.string().optional() });
+export const AuthFailed = z.object({
+  reason: z.string().optional(),
+  /** Policy failure details (`username_policy` / `password_policy`). */
+  reasons: z.array(z.string()).optional(),
+});
 export const AuthRateLimited = z.object({ reason: z.string() });
 
 export const SessionTokensOut = z.object({

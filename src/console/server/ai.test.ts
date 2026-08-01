@@ -84,6 +84,12 @@ describe("projectAiPanel", () => {
     const member = gate.policy("member", ({ auth }) => !!auth.verified);
     const gates = createGateRuntime({ gates: [member] });
 
+    const toolClient = await createMockAiDriver({
+      "*": {
+        __toolCalls: [{ id: "c1", name: "bookings.refundBooking", arguments: {} }],
+      },
+    }).open();
+
     const runtime = createAiRuntime({
       models: [smart],
       prompts: [triage],
@@ -91,6 +97,7 @@ describe("projectAiPanel", () => {
         ai.agent("support", {
           tools: ["bookings.refundBooking"],
           maxSteps: 1,
+          model: "smart",
         }),
       ],
       clients: { smart: okClient },
@@ -113,7 +120,24 @@ describe("projectAiPanel", () => {
       // expected
     }
 
-    await runtime.runAgent("support", {
+    // Agent tool loop is model-driven — use a client that requests the tool.
+    const agentRuntime = createAiRuntime({
+      models: [smart],
+      agents: [
+        ai.agent("support", {
+          tools: ["bookings.refundBooking"],
+          maxSteps: 1,
+          model: "smart",
+        }),
+      ],
+      clients: { smart: toolClient },
+      gates,
+      gatesForFlow: () => ["member"],
+      effectsForFlow: (name) => effectsForFlowFromManifest(manifest, name),
+      callFlow: async () => ({ ok: true }),
+    });
+
+    await agentRuntime.runAgent("support", {
       message: "refund",
       auth: { userId: "u1", scopes: new Set(), verified: false },
     });
@@ -143,13 +167,18 @@ describe("projectAiPanel", () => {
     });
     expect(okProj.prompts[0]!.manifestDiffPath).toBe("/ai/prompts/ticket-triage/version");
     expect(okProj.versions[0]!.evalScore.samples.length).toBeGreaterThan(0);
-    expect(okProj.agentRuns[0]!.trail[0]!.status).toBe("denied");
-    expect(okProj.agentRuns[0]!.trail[0]!.denial?.gate).toBe("member");
-    expect(okProj.agentRuns[0]!.trail[0]!.effects).toEqual([
+
+    const agentProj = projectAiPanel({
+      manifest,
+      aiRuntime: agentRuntime,
+    });
+    expect(agentProj.agentRuns[0]!.trail[0]!.status).toBe("denied");
+    expect(agentProj.agentRuns[0]!.trail[0]!.denial?.gate).toBe("member");
+    expect(agentProj.agentRuns[0]!.trail[0]!.effects).toEqual([
       { kind: "write", resource: "sql:bookings" },
       { kind: "send", resource: "refund-notice" },
     ]);
-    expect(okProj.denials).toHaveLength(1);
+    expect(agentProj.denials).toHaveLength(1);
 
     const badProj = projectAiPanel({
       manifest,

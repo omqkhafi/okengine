@@ -4,11 +4,10 @@
  * Any pulled model works via `model` / `OKE_AI_MODEL`. The documented local-dev
  * default is `qwen3:8b` (balanced starting point — override freely). Fail-loud:
  * configured but unreachable throws {@link OllamaUnavailableError} — never a
- * silent mock fallback. Streaming and tool-calling are out of scope for this
- * baseline; `complete` only.
+ * silent mock fallback.
  *
- * Native API: `POST /api/chat` with `stream: false` (not the OpenAI-compat
- * shim). Default base URL `http://127.0.0.1:11434`.
+ * Native API: `POST /api/chat` (not the OpenAI-compat shim). Default base URL
+ * `http://127.0.0.1:11434`. Supports `complete`, `stream` (NDJSON), and tools.
  */
 
 import type {
@@ -17,6 +16,8 @@ import type {
   AiDriver,
   AiModelClient,
   AiOpenOptions,
+  AiStreamChunk,
+  AiToolCall,
 } from "./ai-types.ts";
 
 /** Documented local-dev default — override via `model` / `OKE_AI_MODEL`. */
@@ -91,24 +92,7 @@ export async function openOllama(options: AiOpenOptions = {}): Promise<AiModelCl
     model,
     async complete(opts: AiCompleteOptions): Promise<AiCompleteResult> {
       const resolvedModel = resolveOllamaModel(options, opts.model);
-      const body: Record<string, unknown> = {
-        model: resolvedModel,
-        messages: opts.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.name !== undefined ? { name: m.name } : {}),
-        })),
-        stream: false,
-        // Thinking models (e.g. qwen3) otherwise spend the token budget in
-        // `message.thinking` and leave `content` empty — baseline complete
-        // wants the answer text. Streaming / deep think is a later pass.
-        think: false,
-      };
-      const modelOptions: Record<string, unknown> = {};
-      if (opts.temperature !== undefined) modelOptions.temperature = opts.temperature;
-      if (opts.maxTokens !== undefined) modelOptions.num_predict = opts.maxTokens;
-      if (Object.keys(modelOptions).length > 0) body.options = modelOptions;
-      if (opts.responseFormat !== undefined) body.format = opts.responseFormat;
+      const body = buildChatBody(resolvedModel, opts, false);
 
       let res: Response;
       try {
@@ -116,8 +100,10 @@ export async function openOllama(options: AiOpenOptions = {}): Promise<AiModelCl
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
+          ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
         });
       } catch (err) {
+        if (isAbortError(err)) throw err;
         throw new OllamaUnavailableError(
           `ollama: unreachable at ${baseUrl} — ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -130,16 +116,46 @@ export async function openOllama(options: AiOpenOptions = {}): Promise<AiModelCl
       }
 
       const text = raw.message?.content ?? "";
+      const toolCalls = parseOllamaToolCalls(raw.message?.tool_calls);
       return {
         text,
         raw,
         model: raw.model ?? resolvedModel,
         driverId: "ollama",
+        ...(toolCalls !== undefined ? { toolCalls } : {}),
         usage: {
           inputTokens: raw.prompt_eval_count,
           outputTokens: raw.eval_count,
         },
       };
+    },
+    async *stream(opts: AiCompleteOptions): AsyncIterable<AiStreamChunk> {
+      const resolvedModel = resolveOllamaModel(options, opts.model);
+      const body = buildChatBody(resolvedModel, opts, true);
+
+      let res: Response;
+      try {
+        res = await fetchFn(`${baseUrl}/api/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+          ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+        });
+      } catch (err) {
+        if (isAbortError(err)) throw err;
+        throw new OllamaUnavailableError(
+          `ollama: unreachable at ${baseUrl} — ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      if (!res.ok) {
+        const raw = (await res.json().catch(() => ({}))) as OllamaChatResponse;
+        const msg = raw.error ?? `ollama HTTP ${res.status}`;
+        throw new OllamaUnavailableError(`ollama: ${msg}`);
+      }
+      if (!res.body) {
+        throw new OllamaUnavailableError("ollama: stream response has no body");
+      }
+      yield* readOllamaNdjson(res.body, opts.signal);
     },
   };
 }
@@ -149,6 +165,112 @@ export const ollamaAiDriver: AiDriver = {
   id: "ollama",
   open: openOllama,
 };
+
+function buildChatBody(
+  resolvedModel: string,
+  opts: AiCompleteOptions,
+  stream: boolean,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: resolvedModel,
+    messages: opts.messages.map((m) => {
+      const msg: Record<string, unknown> = {
+        role: m.role,
+        content: m.content,
+      };
+      if (m.name !== undefined) msg.name = m.name;
+      if (m.toolCalls !== undefined && m.toolCalls.length > 0) {
+        msg.tool_calls = m.toolCalls.map((tc) => ({
+          type: "function",
+          function: {
+            name: tc.name,
+            arguments: tc.arguments,
+          },
+        }));
+      }
+      return msg;
+    }),
+    stream,
+    // Thinking models (e.g. qwen3) otherwise spend the token budget in
+    // `message.thinking` and leave `content` empty — baseline complete
+    // wants the answer text.
+    think: false,
+  };
+  const modelOptions: Record<string, unknown> = {};
+  if (opts.temperature !== undefined) modelOptions.temperature = opts.temperature;
+  if (opts.maxTokens !== undefined) modelOptions.num_predict = opts.maxTokens;
+  if (Object.keys(modelOptions).length > 0) body.options = modelOptions;
+  if (opts.responseFormat !== undefined) body.format = opts.responseFormat;
+  if (opts.tools !== undefined && opts.tools.length > 0) {
+    body.tools = opts.tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        ...(t.description !== undefined ? { description: t.description } : {}),
+        ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+      },
+    }));
+  }
+  return body;
+}
+
+function parseOllamaToolCalls(
+  raw: readonly OllamaToolCall[] | undefined,
+): readonly AiToolCall[] | undefined {
+  if (!raw || raw.length === 0) return undefined;
+  return raw.map((tc, i) => ({
+    id: `ollama_call_${i}`,
+    name: tc.function?.name ?? "",
+    arguments: tc.function?.arguments ?? {},
+  }));
+}
+
+/**
+ * Parse Ollama NDJSON stream lines.
+ *
+ * @param body - Response body
+ * @param signal - Optional abort
+ */
+async function* readOllamaNdjson(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<AiStreamChunk> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw abortAsError(signal.reason);
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const chunk = JSON.parse(trimmed) as OllamaChatResponse;
+          const delta = chunk.message?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            yield { text: delta };
+          }
+          if (chunk.done) {
+            yield { text: "", done: true };
+            return;
+          }
+        } catch {
+          // ignore malformed lines
+        }
+      }
+    }
+    yield { text: "", done: true };
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 /**
  * Probe Ollama — fail loud before the first completion.
@@ -175,9 +297,29 @@ async function healthCheck(baseUrl: string, fetchFn: typeof globalThis.fetch): P
   }
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+function abortAsError(reason?: unknown): Error {
+  if (reason instanceof Error) return reason;
+  const err = new Error(reason !== undefined ? String(reason) : "This operation was aborted");
+  err.name = "AbortError";
+  return err;
+}
+
+interface OllamaToolCall {
+  readonly function?: { readonly name?: string; readonly arguments?: unknown };
+}
+
 interface OllamaChatResponse {
   readonly model?: string;
-  readonly message?: { readonly role?: string; readonly content?: string };
+  readonly message?: {
+    readonly role?: string;
+    readonly content?: string;
+    readonly tool_calls?: readonly OllamaToolCall[];
+  };
+  readonly done?: boolean;
   readonly prompt_eval_count?: number;
   readonly eval_count?: number;
   readonly error?: string;

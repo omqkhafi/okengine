@@ -45,16 +45,21 @@ export const magicLinkTemplate = channel.email({ from: DEFAULT_FROM }).template(
     token: z.string(),
     link: z.string(),
   }),
-  locales: ["en"],
+  locales: ["en", "ar"],
 });
 
-/** Default English body for {@link magicLinkTemplate}. */
+/** Default EN/AR bodies for {@link magicLinkTemplate}. */
 export const magicLinkCatalog = {
   "auth-magic-link": {
     en: {
       subject: "Your sign-in link",
       text: "Sign in with this link:\n{{link}}\n\nOr enter this token:\n{{token}}\n",
       html: '<p>Sign in with this link:</p><p><a href="{{link}}">{{link}}</a></p><p>Or enter this token:</p><p><code>{{token}}</code></p>',
+    },
+    ar: {
+      subject: "رابط تسجيل الدخول",
+      text: "سجّل الدخول عبر هذا الرابط:\n{{link}}\n\nأو أدخل هذا الرمز:\n{{token}}\n",
+      html: '<p dir="rtl">سجّل الدخول عبر هذا الرابط:</p><p dir="rtl"><a href="{{link}}">{{link}}</a></p><p dir="rtl">أو أدخل هذا الرمز:</p><p dir="rtl"><code>{{token}}</code></p>',
     },
   },
 } as const;
@@ -98,7 +103,7 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
             token: z.string(),
             link: z.string(),
           }),
-          locales: ["en"],
+          locales: ["en", "ar"],
         })
       : magicLinkTemplate;
 

@@ -102,20 +102,23 @@ const rows = await fx.using(
 
 ## Channel
 
-| Signature                                 | Records | Notes                                                               |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------- |
-| `fx.send(template, { to?, data?, via? })` | `send`  | `via` orders the fallback chain; dry runs record _would have fired_ |
+| Signature                                    | Records | Notes                                                                                      |
+| -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `fx.send(template, { to?, data?, via?, … })` | `send`  | `via` orders fallback; `locale` / `profileLocale` / `acceptLanguage` feed the locale chain |
+
+Omit locale opts and the send uses `fx.locale`. Dry runs record _would have fired_ and never
+contact a provider. Channel bodies use `{{field}}` catalogs — not ICU (see [Channel](/docs/elements/channel)).
 
 ## AI
 
-| Signature                              | Records | Returns                                     |
-| -------------------------------------- | ------- | ------------------------------------------- |
-| `fx.ask(prompt, input?, { via? })`     | `ask`   | Object validated against the prompt's `out` |
-| `fx.run(agent, input?)`                | `ask`   | Agent result                                |
-| `fx.stream(model, { prompt?, data? })` | `ask`   | `AsyncIterable<string>` of chunks           |
-| `fx.search(embed, query, { topK? })`   | `read`  | Matches from the index/embed                |
+| Signature                                             | Records                   | Returns                                                                       |
+| ----------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| `fx.ask(prompt, input?, { via?, tools?, maxSteps? })` | `ask` (+ `call` per tool) | Object validated against the prompt's `out`                                   |
+| `fx.run(agent, input?)`                               | `ask`                     | Agent result                                                                  |
+| `fx.stream(model, { prompt?, data? })`                | `ask`                     | `AsyncIterable<string>` — real driver stream; cancels via ambient `fx.signal` |
+| `fx.search(embed, query, { topK? })`                  | `read`                    | Matches from the index/embed                                                  |
 
-AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them.
+AI calls are nondeterministic: journaling is forced on and auto-cache disabled around them. `tools` are Flow refs — each model tool call goes through `fx.call` (same capability and Runs path).
 
 ## Vault
 
@@ -153,11 +156,59 @@ Returning a plain value instead answers 200 with `{ data: value, error: null }` 
 
 ## Logging, i18n, ids
 
-| Signature                                  | Notes                                    |
-| ------------------------------------------ | ---------------------------------------- |
-| `fx.log.debug/info/warn/error(msg, data?)` | Redacting — secrets print as `***`       |
-| `fx.t(key, params?)`                       | Localized message from the `i18n` config |
-| `fx.id()`                                  | UUID — the only legal id generator       |
+| Signature                                  | Notes                                                       |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| `fx.log.debug/info/warn/error(msg, data?)` | Redacting — secrets print as `***`                          |
+| `fx.t(key, values?)`                       | ICU MessageFormat — active locale → `i18n.default` → key    |
+| `fx.locale`                                | Active locale (`Accept-Language` matched to `i18n.locales`) |
+| `fx.id()`                                  | UUID — the only legal id generator                          |
+
+`fx.t` uses [ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
+(FormatJS): `{name}`, plurals, `select` / `selectordinal`, rich-text tags.
+Full syntax and escaping: [i18n · ICU](/docs/reference/i18n#icu-messageformat).
+
+Register catalogs with `defineLocale` before boot (nested trees → dot keys). Augment
+`Register` so keys autocomplete and typos fail at compile time:
+
+```typescript
+import { defineLocale, defineMessages, type MessagesFor } from "okengine";
+
+export const en = defineMessages({
+  greeting: "Hello, {name}",
+  items: "{count, plural, one {# item} other {# items}}",
+  place: "You finished {place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}!",
+  status: "{status, select, online {Online} offline {Offline} other {Unknown}}",
+  cta: "Read <docs>the docs</docs>",
+});
+defineLocale("en", en);
+
+defineLocale("ar", {
+  greeting: "مرحباً، {name}",
+  items: "{count, plural, zero {لا عناصر} one {عنصر واحد} other {# عناصر}}",
+  place: "أنهيت في المرتبة {place, selectordinal, other {#}}!",
+  status: "{status, select, online {متصل} offline {غير متصل} other {غير معروف}}",
+  cta: "اقرأ <docs>التوثيق</docs>",
+} satisfies MessagesFor<typeof en>);
+
+declare module "okengine" {
+  interface Register {
+    messages: typeof en;
+  }
+}
+```
+
+```typescript
+fx.t("greeting", { name: input.name });
+fx.t("items", { count: 3 });
+fx.t("cta", { docs: (chunks) => `<a href="/docs">${chunks.join("")}</a>` });
+```
+
+Supported locales and the fallback come from `oke.config.ts` `i18n`.
+`create-oke` scaffolds English and Arabic locale modules already wired this way.
+
+Built-in `errors.*` / `oke.*` catalogs localize `fx.fail` messages and thrown
+`OkeError` cause/fix the same way — full i18n guide:
+[i18n](/docs/reference/i18n), [Errors](/docs/reference/errors).
 
 ## Principals
 
@@ -181,5 +232,6 @@ must log who started the call chain.
 ## Learn more
 
 - [Flow](/docs/elements/flow) — why `fx` is the only door
+- [Channel](/docs/elements/channel) — `fx.send`, consent, locale chain, `{{field}}` catalogs
 - [Errors](/docs/reference/errors) — what `fx.fail` produces
-- [Configuration](/docs/reference/configuration) — the drivers behind these calls
+- [Configuration](/docs/reference/configuration) — drivers and the `i18n` block

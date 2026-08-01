@@ -152,7 +152,7 @@ describe("openai-compatible driver", () => {
     expect(paths.some((p) => p.endsWith("/embeddings"))).toBe(true);
   });
 
-  test("requires apiKey", async () => {
+  test("requires apiKey for default OpenAI cloud base", async () => {
     const prev = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     try {
@@ -160,6 +160,107 @@ describe("openai-compatible driver", () => {
     } finally {
       if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
     }
+  });
+
+  test("custom baseUrl may omit apiKey (local / self-hosted)", async () => {
+    const prev = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    const headersSeen: Array<Record<string, string> | undefined> = [];
+    try {
+      const fetchFn: typeof fetch = Object.assign(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          headersSeen.push(init?.headers as Record<string, string> | undefined);
+          return new Response(
+            JSON.stringify({
+              model: "local",
+              choices: [{ message: { content: "ok" } }],
+            }),
+            { status: 200 },
+          );
+        },
+        { preconnect: () => {} },
+      ) as typeof fetch;
+      const client = await openOpenaiCompatible({
+        baseUrl: "http://127.0.0.1:1234/v1",
+        model: "local",
+        fetch: fetchFn,
+      });
+      const result = await client.complete({
+        messages: [{ role: "user", content: "hi" }],
+      });
+      expect(result.text).toBe("ok");
+      expect(headersSeen[0]?.Authorization).toBeUndefined();
+    } finally {
+      if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
+    }
+  });
+
+  test("same driver serves Groq-shaped baseUrl + key + OpenRouter headers", async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchFn: typeof fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          headers: init?.headers as Record<string, string>,
+        });
+        return new Response(
+          JSON.stringify({
+            model: "llama-3.1-8b-instant",
+            choices: [{ message: { content: "groq-ok" } }],
+          }),
+          { status: 200 },
+        );
+      },
+      { preconnect: () => {} },
+    ) as typeof fetch;
+
+    const groq = await openOpenaiCompatible({
+      apiKey: "gsk-test",
+      baseUrl: "https://api.groq.com/openai/v1",
+      model: "llama-3.1-8b-instant",
+      fetch: fetchFn,
+    });
+    expect((await groq.complete({ messages: [{ role: "user", content: "x" }] })).text).toBe(
+      "groq-ok",
+    );
+    expect(calls[0]!.url).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(calls[0]!.headers.Authorization).toBe("Bearer gsk-test");
+
+    calls.length = 0;
+    const openrouter = await openOpenaiCompatible({
+      apiKey: "or-test",
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "meta-llama/llama-3.1-8b-instruct",
+      headers: {
+        "HTTP-Referer": "https://example.com",
+        "X-Title": "oke-test",
+      },
+      fetch: fetchFn,
+    });
+    expect((await openrouter.complete({ messages: [{ role: "user", content: "x" }] })).text).toBe(
+      "groq-ok",
+    );
+    expect(calls[0]!.headers["HTTP-Referer"]).toBe("https://example.com");
+    expect(calls[0]!.headers["X-Title"]).toBe("oke-test");
+    expect(calls[0]!.headers.Authorization).toBe("Bearer or-test");
+  });
+
+  test("HTTP error fails loud (no silent mock fallback)", async () => {
+    const fetchFn = Object.assign(
+      async () =>
+        new Response(JSON.stringify({ error: { message: "quota exceeded" } }), {
+          status: 429,
+        }),
+      { preconnect: () => {} },
+    ) as typeof fetch;
+    const client = await openOpenaiCompatible({
+      apiKey: "sk-test",
+      baseUrl: "https://api.together.xyz/v1",
+      fetch: fetchFn,
+    });
+    await expect(client.complete({ messages: [{ role: "user", content: "x" }] })).rejects.toThrow(
+      "quota exceeded",
+    );
   });
 });
 

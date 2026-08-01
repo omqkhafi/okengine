@@ -82,8 +82,8 @@ const { data } = await api.auth.verifyEmailOtp({
 | `auth.requestEmailOtp` | `POST /auth/email-otp/request` | `gate.public` + otp rate |
 | `auth.verifyEmailOtp`  | `POST /auth/email-otp/verify`  | `gate.public` + otp rate |
 
-**Consequence:** the plugin contributes the `auth-email-otp` Channel template and English
-catalog body (`{{otp}}`). Override copy by merging your own catalog at boot.
+**Consequence:** the plugin contributes the `auth-email-otp` Channel template and EN/AR
+catalog bodies (`{{otp}}`). Override copy by merging your own catalog at boot.
 
 ## Troubleshooting
 

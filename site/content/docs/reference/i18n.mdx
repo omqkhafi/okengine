@@ -1,0 +1,313 @@
+---
+title: "i18n"
+description: "ICU message catalogs for fx.t, typed keys, request locale, and how failures and channels pick a language."
+icon: "Languages"
+source: "docs/spec/unified-theory.md"
+---
+
+App copy lives in message catalogs — greetings, plurals, and status lines you
+format inside a Flow with `fx.t`. Configure supported locales once in
+`oke.config.ts`; the request's `Accept-Language` picks the active tag.
+
+<Callout title="The one rule">
+  Register catalogs with `defineLocale` before boot, list every locale in `i18n.locales`, and call
+  `fx.t(key, values?)` for Flow copy. Channel emails use a separate `{{ field }}` catalog — not ICU.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Configure locales
+
+```typescript title="oke.config.ts"
+i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
+```
+
+If `i18n` is omitted, boot still defaults to `locales: ["en", "ar"]` and
+`default: "en"`.
+
+</Step>
+
+<Step>
+### Register catalogs
+
+Side-effect import locale modules before boot (the starter already does this
+from `src/app.ts`):
+
+```typescript title="src/locales/en.ts"
+import { defineMessages, defineLocale } from "okengine";
+
+export const en = defineMessages({
+  greeting: "Hello, {name}",
+  items: "{count, plural, one {# item} other {# items}}",
+  errors: { notFound: "Not found" },
+});
+defineLocale("en", en);
+
+declare module "okengine" {
+  interface Register {
+    messages: typeof en;
+  }
+}
+```
+
+```typescript title="src/locales/ar.ts"
+import { defineLocale, type MessagesFor } from "okengine";
+import { en } from "./en";
+
+defineLocale("ar", {
+  greeting: "مرحباً، {name}",
+  items: "{count, plural, zero {لا عناصر} one {عنصر واحد} other {# عناصر}}",
+  errors: { notFound: "غير موجود" },
+} satisfies MessagesFor<typeof en>);
+```
+
+</Step>
+
+<Step>
+### Use `fx.t` in a Flow
+
+```typescript
+do: async (input, fx) => {
+  return {
+    text: fx.t("greeting", { name: input.name }),
+    countLabel: fx.t("items", { count: input.count }),
+    locale: fx.locale,
+  };
+},
+```
+
+Send `Accept-Language: ar` (or `ar-SA`) against `locales: ["en", "ar"]` and
+`fx.locale` is `"ar"`. Missing keys fall back through `i18n.default`, then the
+key string itself.
+
+</Step>
+
+</Steps>
+
+## Config (`i18n`)
+
+| Option    | Type       | Default (when omitted) | Meaning                                     |
+| --------- | ---------- | ---------------------- | ------------------------------------------- |
+| `locales` | `string[]` | `["en", "ar"]`         | Tags matched against `Accept-Language`      |
+| `default` | string     | `"en"`                 | Fallback for `fx.t`, Channel, fail messages |
+| `dir`     | record     | —                      | Per-locale direction: `"ltr"` \| `"rtl"`    |
+
+Matching: exact tag → language subtag (`ar-SA` → `ar`) → `default`.
+
+## `fx.t` and `fx.locale`
+
+| Signature            | Notes                                                    |
+| -------------------- | -------------------------------------------------------- |
+| `fx.t(key, values?)` | ICU MessageFormat — active locale → `i18n.default` → key |
+| `fx.locale`          | Active BCP 47 tag for this run                           |
+
+Nested trees flatten to dot keys (`errors.notFound`). App overlays win over
+built-in keys for the same locale.
+
+## ICU MessageFormat
+
+`fx.t` formats catalog strings with
+[ICU MessageFormat](https://unicode-org.github.io/icu/userguide/format_parse/messages/)
+(FormatJS). The active locale drives plural/select rules — English `one`/`other` vs Arabic `zero`/`two`/`few`/`many` on the same key.
+
+| Feature         | Syntax sketch                                             | `values`                    |
+| --------------- | --------------------------------------------------------- | --------------------------- |
+| Interpolation   | `Hello, {name}`                                           | `{ name: "Ada" }`           |
+| Exact plural    | `{count, plural, =0 {none} one {# item} other {# items}}` | `{ count: 0 }`              |
+| Cardinal plural | `{count, plural, one {…} other {…}}`                      | `{ count: number }`         |
+| Ordinal         | `{place, selectordinal, one {#st} two {#nd} other {#th}}` | `{ place: number }`         |
+| Select          | `{status, select, online {…} offline {…} other {…}}`      | `{ status: "online" }`      |
+| Rich-text tag   | `Read <docs>the docs</docs>`                              | `{ docs: (chunks) => "…" }` |
+
+`#` inside a plural/ordinal branch is the numeric argument. Always include an
+`other` (or `=N`) branch — ICU requires a fallback.
+
+### Interpolation
+
+```typescript
+// catalog: "Hello, {name}"
+fx.t("greeting", { name: "Ada" }); // → "Hello, Ada"
+```
+
+Values may be `string`, `number`, `boolean`, `Date`, `null` / `undefined`, or a
+rich-text function (below). Missing args leave the source string unformatted.
+
+### Plurals (cardinal)
+
+```typescript
+// en: "{count, plural, =0 {no items} one {# item} other {# items}}"
+fx.t("items", { count: 0 }); // → "no items"
+fx.t("items", { count: 1 }); // → "1 item"
+fx.t("items", { count: 5 }); // → "5 items"
+```
+
+#### Arabic cardinals
+
+Arabic (`ar`) uses six [CLDR](https://cldr.unicode.org/index/cldr-spec/plural-rules)
+cardinal categories. FormatJS picks the branch from `fx.locale` — an English `one`/`other` skeleton on `ar` misfires for dual, paucal, and hundreds.
+
+| Category | When (integers)                        | Typical form                       |
+| -------- | -------------------------------------- | ---------------------------------- |
+| `zero`   | `n = 0`                                | No items / special zero phrasing   |
+| `one`    | `n = 1`                                | Singular                           |
+| `two`    | `n = 2`                                | Dual                               |
+| `few`    | `n % 100` in `3…10` (also `103…110` …) | Paucal — often sound plural        |
+| `many`   | `n % 100` in `11…99`                   | Accusative / “tamyīz” style counts |
+| `other`  | `100…102`, `200…202`, … and fractions  | General plural / leftover integers |
+
+Write every branch on the Arabic catalog (starter `items` key):
+
+```typescript
+// ar catalog
+items: "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصراً} other {# عنصر}}";
+```
+
+```typescript
+// fx.locale === "ar"
+fx.t("items", { count: 0 }); // → "لا عناصر"      (zero)
+fx.t("items", { count: 1 }); // → "عنصر واحد"     (one)
+fx.t("items", { count: 2 }); // → "عنصران"        (two)
+fx.t("items", { count: 5 }); // → "5 عناصر"       (few)
+fx.t("items", { count: 11 }); // → "11 عنصراً"     (many)
+fx.t("items", { count: 100 }); // → "100 عنصر"      (other)
+fx.t("items", { count: 103 }); // → "103 عناصر"     (few — 103 % 100 = 3)
+```
+
+**Consequence:** copy the six-way shape for Arabic noun counts; do not reuse an
+English `one`/`other` skeleton. `#` still inserts the number inside a branch.
+
+### Ordinals (`selectordinal`)
+
+```typescript
+// "You finished {place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}!"
+fx.t("place", { place: 1 }); // → "You finished 1st!"
+fx.t("place", { place: 11 }); // → "You finished 11th!"
+```
+
+### Select (enums)
+
+```typescript
+// "{status, select, online {Online} offline {Offline} other {Unknown}}"
+fx.t("status", { status: "online" }); // → "Online"
+fx.t("status", { status: "away" }); // → "Unknown"
+```
+
+### Rich-text tags
+
+Tags in the message become function values. The function receives the formatted
+inner chunks and returns a string (HTML, Markdown, plain wrappers):
+
+```typescript
+// catalog: "Read <docs>the docs</docs>"
+fx.t("cta", {
+  docs: (chunks) => `<a href="/docs">${chunks.join("")}</a>`,
+});
+// → 'Read <a href="/docs">the docs</a>'
+```
+
+### Escaping
+
+| Need                        | Write                                      |
+| --------------------------- | ------------------------------------------ |
+| Apostrophe in copy          | Double it: `this flow''s effects`          |
+| Literal `{` / `}` in output | Quote the braces: `'{'optional: true'}'`   |
+| Channel-style `{{field}}`   | Not ICU — use Channel catalogs, not `fx.t` |
+
+Malformed ICU falls back to the raw catalog string (no throw from `fx.t`).
+
+## Typed keys
+
+Augment `Register` with your English tree so `fx.t` autocompletes and rejects
+typos. Keep other locales aligned with `satisfies MessagesFor<typeof en>`.
+
+| Helper           | Role                                             |
+| ---------------- | ------------------------------------------------ |
+| `defineMessages` | Preserve a `const` English (or canonical) tree   |
+| `defineLocale`   | Register / replace a locale's flat catalog       |
+| `MessagesFor<T>` | Same key shape as `T`; leaf values are strings   |
+| `AppMessageKey`  | Flattened key union once `Register` is augmented |
+
+## Built-in failure catalogs
+
+English and Arabic ship for typed failures and OKE codes — no app registration
+required:
+
+| Surface            | Keys                                       | Appears as                       |
+| ------------------ | ------------------------------------------ | -------------------------------- |
+| `fx.fail` / `fail` | `errors.{code}` · `errors.{code}.{reason}` | Optional `error.message`         |
+| Thrown `OkeError`  | `oke.{code}.cause` · `oke.{code}.fix`      | Cause + fix lines in the message |
+
+Override any key with `defineLocale`. Pass `fail(code, data, { message })` (or
+`fx.t(...)`) when you need a one-off string. Custom app codes stay message-less
+until registered. Full tables: [Errors](/docs/reference/errors).
+
+## Channel catalogs are separate
+
+`fx.send` templates use `{{field}}` bodies and their own `locales` list — not
+ICU. Omit `locale` / `profileLocale` / `acceptLanguage` on `fx.send` and the
+send uses `fx.locale`. Details: [Channel](/docs/elements/channel).
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="fx.t returns the key string unchanged">
+
+No catalog entry for that key in the active locale or `i18n.default`. Register
+it with `defineLocale`, import the locale module before boot, and check the
+flattened key (`errors.notFound`, not `errors: { notFound }`).
+
+</Accordion>
+<Accordion title="Response is English despite Accept-Language: ar">
+
+The tag must match `i18n.locales` (exact or base language). A request for `fr`
+with only `["en", "ar"]` falls back to `i18n.default`. Confirm the header reaches
+the app (proxies sometimes strip it).
+
+</Accordion>
+<Accordion title="Email body is still English while fx.t is Arabic">
+
+Channel catalogs are separate `{{field}}` strings. Add an `ar` body on the
+template / plugin catalog; `fx.t` does not translate Channel templates.
+
+</Accordion>
+<Accordion title="TypeScript rejects a key that exists at runtime">
+
+Augment `Register` with `messages: typeof en` in the English locale module.
+Without that, `fx.t` accepts any `string` and loses autocomplete.
+
+</Accordion>
+<Accordion title="Plural message looks wrong or returns the raw template">
+
+Missing `other` (or `=N`), a typo in a branch name, or an unescaped `{` / `'`
+makes FormatJS reject the message — `fx.t` then returns the catalog source.
+Keep `#` inside plural/ordinal branches only; double apostrophes (`''`).
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [fx](/docs/reference/fx) — full `fx` surface including `fx.t` / `fx.locale`
+- [Errors](/docs/reference/errors) — localized failure messages and OKE codes
+- [Configuration](/docs/reference/configuration) — `i18n` block next to drivers
+- [Channel](/docs/elements/channel) — `{{field}}` templates and locale chain
+- [Flow](/docs/elements/flow) — envelope shape with optional `error.message`
+
+## Next
+
+<Cards>
+  <Card
+    title="Errors"
+    description="OKE codes, denials, and localized messages."
+    href="/docs/reference/errors"
+  />
+  <Card
+    title="Channel"
+    description="Human reach — templates, consent, locale chain."
+    href="/docs/elements/channel"
+  />
+  <Card title="fx" description="The complete fx surface and effects." href="/docs/reference/fx" />
+</Cards>

@@ -177,6 +177,32 @@ export {
 } from "./compiler/index.ts";
 
 export {
+  defineLocale,
+  defineMessages,
+  flattenMessages,
+  formatMessage,
+  getMessageCatalogs,
+  interpolateMessage,
+  isRtlLocale,
+  matchConfiguredLocale,
+  parseAcceptLanguage,
+  resolveFailureMessage,
+  resolveLocale,
+  runWithLocale,
+  translate,
+  type AppMessageKey,
+  type FlattenKeys,
+  type LocaleContext,
+  type MessageCatalog,
+  type MessageCatalogs,
+  type MessageTree,
+  type MessageValue,
+  type MessageValues,
+  type MessagesFor,
+  type Register,
+} from "./i18n/index.ts";
+
+export {
   createBunRuntime,
   createWebStandardRuntime,
   APP_PORT,

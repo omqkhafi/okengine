@@ -92,7 +92,9 @@ do: async (input, fx) => {
 };
 ```
 
-Every response follows one envelope — success `{ data, error: null }`, failure `{ data: null, error: { code, data } }` — so clients handle outcomes by `error.code`, not by parsing status text.
+Every response follows one envelope — success `{ data, error: null }`, failure
+`{ data: null, error: { code, data, message? } }` — clients switch on `error.code`.
+Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); custom codes stay message-less unless registered or `{ message }` is passed.
 
 ## The five triggers
 
@@ -178,22 +180,22 @@ const order = await fx.call(getOrder, { id: orderId }); // from any other flow
 
 Everything a flow may touch, on one object:
 
-| Surface                                 | Effect recorded | What it does                                 |
-| --------------------------------------- | --------------- | -------------------------------------------- |
-| `fx.store(db).select/insert/…`          | read / write    | SQL, KV, files, index sessions               |
-| `fx.emit(signal, payload)`              | emit            | Publish a signal (transactional with writes) |
-| `fx.send(template, opts)`               | send            | Reach a human (email · SMS · …)              |
-| `fx.ask(prompt, input)`                 | ask             | Call a versioned AI prompt                   |
-| `fx.run(agent, input)`                  | ask             | Run a bounded agent                          |
-| `fx.call(flow, input)`                  | call            | Invoke another flow                          |
-| `fx.vault(contract)`                    | read            | Read a secret (`Redacted`; logs masked)      |
-| `fx.clock.now()` / `.sleep(…)`          | —               | Injected time / durable sleep                |
-| `fx.cache.get/set`                      | —               | Shared cache with effect-aware invalidation  |
-| `fx.step(name, fn)`                     | —               | Named durable step — never re-runs on replay |
-| `fx.all` / `fx.race` / `fx.retry`       | —               | Structured concurrency + backoff retry       |
-| `fx.signal`                             | —               | Ambient `AbortSignal` for the current branch |
-| `fx.id()` · `fx.log` · `fx.t`           | —               | UUIDs, redacting logger, i18n                |
-| `fx.auth` · `fx.operator` · `fx.tenant` | —               | Who is calling (user / operator / tenant)    |
+| Surface                                     | Effect recorded | What it does                                 |
+| ------------------------------------------- | --------------- | -------------------------------------------- |
+| `fx.store(db).select/insert/…`              | read / write    | SQL, KV, files, index sessions               |
+| `fx.emit(signal, payload)`                  | emit            | Publish a signal (transactional with writes) |
+| `fx.send(template, opts)`                   | send            | Reach a human (email · SMS · …)              |
+| `fx.ask(prompt, input)`                     | ask             | Call a versioned AI prompt                   |
+| `fx.run(agent, input)`                      | ask             | Run a bounded agent                          |
+| `fx.call(flow, input)`                      | call            | Invoke another flow                          |
+| `fx.vault(contract)`                        | read            | Read a secret (`Redacted`; logs masked)      |
+| `fx.clock.now()` / `.sleep(…)`              | —               | Injected time / durable sleep                |
+| `fx.cache.get/set`                          | —               | Shared cache with effect-aware invalidation  |
+| `fx.step(name, fn)`                         | —               | Named durable step — never re-runs on replay |
+| `fx.all` / `fx.race` / `fx.retry`           | —               | Structured concurrency + backoff retry       |
+| `fx.signal`                                 | —               | Ambient `AbortSignal` for the current branch |
+| `fx.id()` · `fx.log` · `fx.t` · `fx.locale` | —               | UUIDs, redacting logger, ICU i18n            |
+| `fx.auth` · `fx.operator` · `fx.tenant`     | —               | Who is calling (user / operator / tenant)    |
 
 <Callout title="Why this strictness pays off">
   Effects are inferred from `fx` usage, so the Manifest knows exactly which flows read `orders` or
@@ -275,6 +277,7 @@ Only that run fails — the schedule keeps firing and the process does not exit.
 
 ## Learn more
 
+- [fx](/docs/reference/fx) — full `fx` surface, including ICU `fx.t` / `fx.locale`
 - [Signal](/docs/elements/signal) — delivery physics (`once` · `broadcast` · `live`)
 - [Clock](/docs/elements/clock) — schedules and durable sleep
 - [Console · Flows](/docs/console/flows) — the Manifest-derived panel

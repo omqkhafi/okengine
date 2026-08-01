@@ -305,7 +305,7 @@ export function createAuthHttpBindings(
         }
         if (touchRateLimit(bag, ctx.now()) === "rate_limited") {
           return fail("AuthRateLimited", {
-            reason: "too many sign-in attempts; retry later",
+            reason: "rate_limited",
           });
         }
         const user = await authenticateUser(identities, input.email, input.password);

@@ -83,8 +83,8 @@ const { data } = await api.auth.verifyMagicLink({ token });
 | `auth.requestMagicLink` | `POST /auth/magic-link/request` | `gate.public` + otp rate |
 | `auth.verifyMagicLink`  | `POST /auth/magic-link/verify`  | `gate.public` + otp rate |
 
-**Consequence:** the plugin contributes the `auth-magic-link` Channel template and English
-catalog body (`{{link}}`, `{{token}}`). Override copy by merging your own catalog at boot.
+**Consequence:** the plugin contributes the `auth-magic-link` Channel template and EN/AR
+catalog bodies (`{{link}}`, `{{token}}`). Override copy by merging your own catalog at boot.
 
 ## Troubleshooting
 

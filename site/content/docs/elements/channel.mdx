@@ -87,7 +87,12 @@ Opt-out is first-class: a subject who opted out of a medium is **suppressed** �
 
 ### Locale resolves through a chain
 
-Templates render per recipient locale, falling back through your configured chain (`ar` → default `en`) instead of failing when a translation is missing. Locales and the default come from the `i18n` block in `oke.config.ts`.
+Templates render per recipient locale, falling back through your configured chain
+(`ar` → default `en`) instead of failing when a translation is missing.
+
+Locales come from `oke.config.ts` `i18n`. Catalog bodies use `{{field}}` — not
+ICU ([i18n](/docs/reference/i18n) / `fx.t` owns flow copy). Pass `locale` /
+`profileLocale` / `acceptLanguage` on `fx.send`, or omit them for `fx.locale`.
 
 ### Fallback chains are explicit
 

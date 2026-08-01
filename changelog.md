@@ -12,6 +12,38 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- AI tool-calling through the same path as `fx.call` — `fx.ask(prompt, input, {
+tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
+  each tool is a Flow (capability, Manifest `calls`, Runs portal). No silent
+  extra authority for the model.
+- Real `fx.stream` — Ollama NDJSON and `openai-compatible` SSE; cancellation
+  reuses the ambient `AbortSignal` from `fx.all` / `fx.race` (one channel).
+- `AI_RATE_PRESETS` / `aiRateGate("ask" | "agent" | "embed")` — Gate rate
+  presets for expensive AI edges (defaults 20 / 10 / 60 per minute,
+  `keyBy: "user"`). Cost caps stay on prompt/agent `budget` decls.
+- Optional `headers` on AI open options (e.g. OpenRouter `HTTP-Referer` /
+  `X-Title`) — still one `openai-compatible` driver, not per-vendor ids.
+- Live Ollama tool-calling integration test (gated ask → real tool → ledger
+  portal; skip-visible without a reachable Ollama).
+- `defineLocale` / `fx.t` — register EN/AR (or any) message catalogs; `fx.t`
+  resolves locale → `i18n.default` → key. Request locale comes from
+  `Accept-Language` (matched against `oke.config` `i18n.locales`).
+  `fx.locale` exposes the active tag; channel `fx.send` defaults to it.
+  Starter ships `src/locales/en.ts` + `ar.ts`.
+- ICU MessageFormat for `fx.t` (FormatJS `intl-messageformat`) — interpolation,
+  cardinal/ordinal plurals, `select` / `selectordinal`, and rich-text tags
+  (`<tag>…</tag>` with function values).
+- Type-safe message keys — `defineMessages`, `MessagesFor<typeof en>`, and
+  `declare module "okengine" { interface Register { messages: typeof en } }`
+  so `fx.t` autocompletes keys and rejects typos at compile time.
+- Docs — [i18n](/docs/reference/i18n) reference page (ICU catalogs, typed keys,
+  locale matching, built-in failure messages vs Channel `{{field}}`).
+- `magicLink` / `emailOtp` Channel catalogs include Arabic bodies alongside
+  English (`locales: ["en", "ar"]`).
+- Built-in EN/AR ICU catalogs for typed failures (`errors.*`) and OKE codes
+  (`oke.*.cause` / `oke.*.fix`). `fail` / `fx.fail` attach a localized
+  `error.message` from the active request locale; thrown `OkeError` localizes
+  cause and fix. Override via `defineLocale`; explicit `{ message }` wins.
 - `ollama` AI driver — thin native `POST /api/chat` client for any pulled
   model (`OKE_AI_MODEL` / `ai.model`); documented local-dev default
   `qwen3:8b` (balanced starting point, fully overridable). Base URL
@@ -30,11 +62,50 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   Channel catalog (parallel to `.channelTemplate`).
 - Mailpit integration tests prove real SMTP capture of magic-link token/link
   and email OTP (skip with a visible warn when Docker is unavailable).
+- `username({ usernamePolicy, passwordPolicy })` — tunable min/max length,
+  charset, letter/number/symbol requirements, and reserved names on sign-up.
+  Policy failures return `AuthFailed` with `reason: "username_policy"` /
+  `"password_policy"` and a `reasons` array (taken usernames stay
+  enumeration-safe as `invalid_credentials`).
+- `username` default reserved blocklist (`DEFAULT_RESERVED_USERNAMES`) —
+  `admin` / `root` / `api` / `auth` / `anonymous` and peers. `reserved: []`
+  opts out; a custom list replaces (does not merge).
+- `usernamePolicy.extraAllowedChars` — append characters to the default
+  (or `allowedChars`) charset without replacing the whole set.
+- `usernamePolicy.extraReserved` — append names to the default (or
+  `reserved`) blocklist without replacing it.
+- `usernamePolicy` shape rules — `mustStartWithLetter`,
+  `forbidEdgeSymbols` (default on), `forbidConsecutiveSymbols` (default on).
 
 ### ♻️ Changed
 
+- `openai-compatible` AI driver is the shared chat/completions client for
+  OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio, and Ollama `/v1` —
+  configure via `baseUrl` + `apiKey` + `model`. apiKey is required only for
+  the default OpenAI cloud base; custom bases may omit it. Native `ollama`
+  remains the first-class local path.
+- Native `ollama` driver adds tools + streaming (`stream: true` NDJSON) on
+  `/api/chat` (still fail-loud; never silent mock fallback).
+- Effect inference: `fx.ask(…, { tools: […] })` with static Flow refs adds
+  them to Manifest `effects.calls`.
+- Rebased export/driver budgets after AI depth (tools, stream, rate presets)
+  and related Unreleased work; refreshed `budgets.json` / `BUDGETS.md`.
+- Rebased the Store-only `oke()` gzip graph baseline (41.4 kB → 50 kB) after
+  shared `fx` growth (stream + i18n).
 - Rebased the `plugins` export budget after Channel delivery wiring
   (13.84 kB → 14.77 kB), and refreshed the published budgets snapshot.
+- Rebased the `plugins` export budget after username policy wiring
+  (14.77 kB → 15.54 kB), and refreshed the published budgets snapshot.
+- Rebased the `plugins` export budget after username Gate-auth parity
+  (15.54 kB → 15.97 kB), and refreshed the published budgets snapshot.
+- `username()` sign-up inherits `gate.auth.passwordPolicy`, `password`
+  hash knobs, and `breachCheck` (same as email/password Gate auth).
+  Explicit plugin opts still override for that method only.
+
+### 🔒 Security
+
+- `Redacted` values in `fx.ask` / stream prompts are masked with
+  `[redacted]` before they reach any provider (same class as `fx.log`).
 
 ### 🐛 Fixed
 

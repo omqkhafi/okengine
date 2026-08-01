@@ -71,6 +71,7 @@
     "@duckdb/node-api": "^1.5.5-r.2",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "intl-messageformat": "^11.2.13",
     "oxc-parser": "^0.142.0",
     "sently": "^0.8.0"
   },

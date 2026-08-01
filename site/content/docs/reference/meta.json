@@ -5,6 +5,7 @@
     "index",
     "configuration",
     "fx",
+    "i18n",
     "client",
     "environment-variables",
     "errors",

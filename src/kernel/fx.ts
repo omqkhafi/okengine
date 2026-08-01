@@ -32,7 +32,7 @@ import {
   touchDryRunStore,
 } from "./dry-run.ts";
 import { fail, type FailOptions, type FlowFailure } from "./errors.ts";
-import { currentAbortSignal } from "./abort-scope.ts";
+import { currentAbortSignal, linkAbort } from "./abort-scope.ts";
 import {
   fxAll,
   fxRace,
@@ -44,6 +44,8 @@ import {
 import { maskRedactedDeep, Redacted } from "./redacted.ts";
 import type { JournalSession } from "./journal.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
+import { translate, type MessageCatalogs } from "../i18n/messages.ts";
+import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
 
 export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
@@ -217,11 +219,21 @@ export interface FxSendOptions {
   readonly to?: string;
   readonly via?: readonly NamedRef[];
   readonly data?: Record<string, unknown>;
+  /** Explicit recipient locale (wins over profile / Accept-Language). */
+  readonly locale?: string;
+  /** Profile locale for the channel resolution chain. */
+  readonly profileLocale?: string;
+  /** Raw `Accept-Language` header value. */
+  readonly acceptLanguage?: string;
 }
 
 /** Options for {@link Fx.ask}. */
 export interface FxAskOptions {
   readonly via?: readonly NamedRef[];
+  /** Flow refs offered as tools — each model call goes through `fx.call`. */
+  readonly tools?: readonly NamedRef[];
+  /** Bound on tool invocations (default 6). */
+  readonly maxSteps?: number;
 }
 
 /** Options for {@link Fx.search}. */
@@ -349,12 +361,18 @@ export interface Fx {
   /** Logger. */
   readonly log: FxLog;
   /**
-   * i18n stub — returns the key, optionally with JSON params suffix.
+   * Localized ICU message from registered `defineLocale` catalogs.
+   * Falls back through the active locale → `i18n.default` → the key.
    *
-   * @param key - Message key
-   * @param params - Interpolation params
+   * Augment `Register` (`declare module "okengine"`) with `messages` for
+   * key autocomplete and compile-time typos.
+   *
+   * @param key - Dot-separated message key
+   * @param values - ICU values (interpolation, plurals, select, rich tags)
    */
-  t(key: string, params?: Record<string, unknown>): string;
+  t(key: AppMessageKey, values?: MessageValues): string;
+  /** Active locale for {@link Fx.t} and default channel sends. */
+  readonly locale: string;
   /** Generate a unique id (UUID). */
   id(): string;
   /** User-plane auth principal. */
@@ -515,6 +533,15 @@ export interface CreateFxOptions {
   readonly journal?: JournalSession;
   /** When true (or when `journal` is set), journal every fx call. */
   readonly durable?: boolean;
+  /**
+   * i18n for {@link Fx.t}. When omitted, `fx.t` returns the key
+   * (optionally with a JSON params suffix) — same as an empty catalog.
+   */
+  readonly i18n?: {
+    readonly locale?: string;
+    readonly defaultLocale?: string;
+    readonly catalogs?: MessageCatalogs;
+  };
 }
 
 /** Bundle returned by {@link createFxContext}. */
@@ -560,6 +587,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   };
   const operator: FxOperator = options.operator ?? { id: null };
   const tenant: FxTenant = options.tenant ?? { id: null };
+  const defaultLocale = options.i18n?.defaultLocale ?? "en";
+  const locale = options.i18n?.locale ?? defaultLocale;
+  const catalogs = options.i18n?.catalogs ?? {};
   const principal: FxPrincipal =
     options.principal ??
     ({
@@ -1030,6 +1060,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
             to: opts?.to ?? "",
             data: opts?.data,
             via: opts?.via?.map(resolveName),
+            locale: opts?.locale ?? locale,
+            profileLocale: opts?.profileLocale,
+            acceptLanguage: opts?.acceptLanguage,
           });
           return { ok: result.ok as true };
         }
@@ -1047,6 +1080,10 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (options.aiRuntime) {
           return options.aiRuntime.ask(name, input, {
             via: opts?.via?.map(resolveName),
+            tools: opts?.tools?.map(resolveName),
+            maxSteps: opts?.maxSteps,
+            // Host fx.call — same capability / ledger / Runs path as any call.
+            callTool: (tool, toolInput) => fx.call(tool, toolInput),
           });
         }
         return {};
@@ -1093,6 +1130,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               scopes: auth.scopes,
               verified: auth.verified,
             },
+            callTool: (tool, toolInput) => fx.call(tool, toolInput),
           });
         }
         return { ok: true, steps: 0, denials: [], output: input };
@@ -1102,27 +1140,45 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       const name = resolveName(model);
       const chunks = (async function* () {
         await gated("ask", name, async () => undefined);
-        const text =
-          typeof opts?.data === "object" && opts?.data !== null
-            ? JSON.stringify(opts.data)
-            : String(opts?.prompt ?? "");
-        if (text.length === 0) {
-          yield "";
+        if (isDryRun()) {
+          recordWouldHaveFired("ask", name);
           return;
         }
-        // Chunk for clients that consume streaming tokens.
-        const size = Math.max(1, Math.ceil(text.length / 3));
-        for (let i = 0; i < text.length; i += size) {
-          yield text.slice(i, i + size);
+        if (!options.aiRuntime) {
+          throw new Error(`fx.stream: AI runtime is not configured for model "${name}"`);
+        }
+        // One cancellation channel: ambient ALS signal (Prompt 57) + local
+        // controller aborted when the consumer stops iterating.
+        const ambient = currentAbortSignal();
+        const local = new AbortController();
+        const unlink = linkAbort(ambient, local);
+        try {
+          for await (const text of options.aiRuntime.stream(name, {
+            prompt: opts?.prompt,
+            data: opts?.data,
+            signal: local.signal,
+          })) {
+            if (local.signal.aborted) break;
+            yield text;
+          }
+        } finally {
+          unlink();
+          if (!local.signal.aborted) local.abort();
         }
       })();
       return chunks;
     },
     log,
-    t(key, params) {
-      if (params === undefined) return key;
-      return `${key}:${JSON.stringify(params)}`;
+    t(key, values) {
+      return translate({
+        locale,
+        defaultLocale,
+        catalogs,
+        key,
+        values,
+      });
     },
+    locale,
     id() {
       return crypto.randomUUID();
     },

@@ -94,7 +94,7 @@ export function gateDenialFailure(evaluation: GateEvaluation, ctx: GatePolicyCon
   }
   return fail("Forbidden", {
     gate: evaluation.name,
-    reason: evaluation.reason ?? "policy denied",
+    reason: evaluation.reason ?? "policy_denied",
   });
 }
 

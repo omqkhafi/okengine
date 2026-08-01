@@ -4,10 +4,12 @@
  * Nondeterministic ⇒ journaling forced, auto-cache disabled.
  * Schema-validation failures are their own class (console §9.10).
  * Agent denials are recorded on the denial ledger — not errors.
+ * Tool invocations go through a caller-supplied `callTool` (host `fx.call`).
  */
 
-import type { AiDriver, AiModelClient } from "../../drivers/ai-types.ts";
+import type { AiDriver, AiMessage, AiModelClient, AiToolDef } from "../../drivers/ai-types.ts";
 import type { IndexStore } from "../../drivers/types.ts";
+import { maskRedactedDeep } from "../../kernel/redacted.ts";
 import type { GatePolicyContext } from "../gate/declare.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
 import type { AiAgentDecl, AiEmbedDecl, AiModelDecl, AiPromptDecl } from "./declare.ts";
@@ -17,6 +19,9 @@ import {
   validatePromptOut,
   type AiSchemaMismatch,
 } from "./schema.ts";
+
+/** Default bound for tool / agent loops. */
+export const AI_DEFAULT_MAX_STEPS = 6;
 
 /** Recorded agent tool denial (containment proof — not an error). */
 export interface AgentDenial {
@@ -102,7 +107,8 @@ export interface CreateAiRuntimeOptions {
   /** Gate runtime for agent tool calls. */
   readonly gates?: GateRuntime;
   /**
-   * Invoke a flow by name (agent tools). Must honour the flow's gates.
+   * Invoke a flow by name (agent tools / boot fallback). Prefer per-ask
+   * `callTool` from the host `fx.call` so caller capability applies.
    *
    * @param name - Flow name
    * @param input - Tool input
@@ -116,11 +122,16 @@ export interface CreateAiRuntimeOptions {
   readonly gatesForFlow?: (flowName: string) => readonly string[];
   /**
    * Resolve declared effects for a tool flow (Manifest).
-   * The UI must not re-derive these — they come from the runtime ledger.
    *
    * @param flowName - Flow name
    */
   readonly effectsForFlow?: (flowName: string) => readonly AgentToolEffect[];
+  /**
+   * Resolve tool JSON-schema parameters for a flow (defaults to empty object).
+   *
+   * @param flowName - Flow name
+   */
+  readonly toolSchemaForFlow?: (flowName: string) => unknown;
   /** Index stores for embeds (`into` name → store). */
   readonly indexes?: Readonly<Record<string, IndexStore>>;
   /** Injectable clock. */
@@ -136,6 +147,15 @@ export interface CreateAiRuntimeOptions {
 export interface AiAskOptions {
   readonly via?: readonly string[];
   readonly allowPii?: boolean;
+  /** Flow names offered as tools — each model call dispatches via `callTool`. */
+  readonly tools?: readonly string[];
+  /** Bound on tool invocations (default {@link AI_DEFAULT_MAX_STEPS}). */
+  readonly maxSteps?: number;
+  /**
+   * Host-flow dispatch — must be `fx.call` so capability + Runs apply.
+   * Falls back to runtime `callFlow` when omitted.
+   */
+  readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
 }
 
 /** Agent run options. */
@@ -144,6 +164,15 @@ export interface AiAgentRunOptions {
   readonly auth?: GatePolicyContext["auth"];
   readonly operator?: GatePolicyContext["operator"];
   readonly meta?: GatePolicyContext["meta"];
+  /** Host-flow dispatch — must be `fx.call` when wired from fx.run. */
+  readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
+}
+
+/** Stream options. */
+export interface AiStreamOptions {
+  readonly prompt?: string;
+  readonly data?: unknown;
+  readonly signal?: AbortSignal;
 }
 
 /** AI runtime surface. */
@@ -162,11 +191,11 @@ export interface AiRuntime {
   /** Journal of ask results (replay without re-calling the model). */
   readonly journal: readonly AiJournalEntry[];
   /**
-   * Ask a prompt with optional model fallback chain.
+   * Ask a prompt with optional model fallback chain and optional tools.
    *
    * @param prompt - Prompt name
    * @param input - Prompt input
-   * @param opts - via / allowPii
+   * @param opts - via / tools / callTool / allowPii
    */
   ask(prompt: string, input?: unknown, opts?: AiAskOptions): Promise<Record<string, unknown>>;
   /**
@@ -187,6 +216,13 @@ export interface AiRuntime {
     readonly cost: number;
   }>;
   /**
+   * Stream model tokens (real driver stream; fails loud if unsupported).
+   *
+   * @param model - Model name
+   * @param options - Prompt / data / signal
+   */
+  stream(model: string, options?: AiStreamOptions): AsyncIterable<string>;
+  /**
    * Embed text into the configured index store.
    *
    * @param embed - Embed name
@@ -194,6 +230,17 @@ export interface AiRuntime {
    * @param text - Text to embed
    */
   embed(embed: string, id: string, text: string): Promise<void>;
+}
+
+/**
+ * Build provider-facing prompt text — Redacted values become placeholders.
+ *
+ * @param input - Ask input or stream data
+ */
+export function promptContentFromInput(input: unknown): string {
+  const masked = maskRedactedDeep(input);
+  if (typeof masked === "string") return masked;
+  return JSON.stringify(masked ?? {});
 }
 
 /**
@@ -233,8 +280,207 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     return opened;
   }
 
+  /** Wire model id for a logical binding (never send the binding name to providers). */
+  function wireModel(logicalName: string, client: AiModelClient): string {
+    return models.get(logicalName)?.model ?? client.model;
+  }
+
   function effectsFor(tool: string): readonly AgentToolEffect[] {
     return options.effectsForFlow?.(tool) ?? [];
+  }
+
+  function toolDefsFor(toolNames: readonly string[]): AiToolDef[] {
+    return toolNames.map((name) => ({
+      name,
+      description: `Flow tool: ${name}`,
+      parameters: options.toolSchemaForFlow?.(name) ?? { type: "object", properties: {} },
+    }));
+  }
+
+  async function dispatchTool(opts: {
+    readonly tool: string;
+    readonly args: unknown;
+    readonly agentLabel: string;
+    readonly allowedTools: ReadonlySet<string>;
+    readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
+    readonly auth?: GatePolicyContext["auth"];
+    readonly operator?: GatePolicyContext["operator"];
+    readonly meta?: GatePolicyContext["meta"];
+    readonly trail: AgentToolStep[];
+    readonly runDenials: AgentDenial[];
+  }): Promise<unknown> {
+    const {
+      tool,
+      args,
+      agentLabel,
+      allowedTools,
+      callTool,
+      auth,
+      operator,
+      meta,
+      trail,
+      runDenials,
+    } = opts;
+    const effects = effectsFor(tool);
+
+    if (!allowedTools.has(tool)) {
+      const denial: AgentDenial = {
+        agent: agentLabel,
+        tool,
+        gate: "(unknown-tool)",
+        reason: `tool "${tool}" was not offered`,
+        at: now(),
+      };
+      runDenials.push(denial);
+      denials.push(denial);
+      trail.push({ tool, status: "denied", effects, denial, at: denial.at });
+      throw new Error(`ai: model requested unknown tool "${tool}"`);
+    }
+
+    const requiredGates = options.gatesForFlow?.(tool) ?? [];
+    if (requiredGates.length > 0 && options.gates) {
+      const ctx: GatePolicyContext = {
+        auth: auth ?? { userId: null, scopes: new Set() },
+        operator: operator ?? { id: null },
+        meta,
+      };
+      const evaluations = await options.gates.check(requiredGates, ctx);
+      const denied = evaluations.find((e) => !e.allowed);
+      if (denied) {
+        const denial: AgentDenial = {
+          agent: agentLabel,
+          tool,
+          gate: denied.name,
+          reason: denied.reason ?? "gate denied",
+          at: now(),
+        };
+        runDenials.push(denial);
+        denials.push(denial);
+        trail.push({ tool, status: "denied", effects, denial, at: denial.at });
+        return { error: denial.reason, denied: true };
+      }
+    }
+
+    const invoke = callTool ?? options.callFlow;
+    if (!invoke) {
+      const denial: AgentDenial = {
+        agent: agentLabel,
+        tool,
+        gate: "(no-callFlow)",
+        reason: "callFlow not configured",
+        at: now(),
+      };
+      runDenials.push(denial);
+      denials.push(denial);
+      trail.push({ tool, status: "denied", effects, denial, at: denial.at });
+      return { error: denial.reason, denied: true };
+    }
+
+    const output = await invoke(tool, args);
+    trail.push({ tool, status: "ok", effects, at: now() });
+    return output;
+  }
+
+  async function toolLoop(opts: {
+    readonly client: AiModelClient;
+    readonly modelName: string;
+    readonly messages: AiMessage[];
+    readonly tools: readonly string[];
+    readonly maxSteps: number;
+    readonly agentLabel: string;
+    readonly responseFormat?: unknown;
+    readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
+    readonly auth?: GatePolicyContext["auth"];
+    readonly operator?: GatePolicyContext["operator"];
+    readonly meta?: GatePolicyContext["meta"];
+  }): Promise<{
+    readonly output: unknown;
+    readonly text: string;
+    readonly raw: unknown;
+    readonly lastToolResult: unknown;
+    readonly trail: AgentToolStep[];
+    readonly denials: AgentDenial[];
+    readonly steps: number;
+    readonly cost: number;
+  }> {
+    const messages = [...opts.messages];
+    const defs = toolDefsFor(opts.tools);
+    const allowed = new Set(opts.tools);
+    const trail: AgentToolStep[] = [];
+    const runDenials: AgentDenial[] = [];
+    let steps = 0;
+    let cost = 0;
+    let lastText = "";
+    let lastRaw: unknown = {};
+    let lastToolResult: unknown;
+
+    const providerModel = wireModel(opts.modelName, opts.client);
+    while (steps < opts.maxSteps) {
+      const result = await opts.client.complete({
+        model: providerModel,
+        messages,
+        tools: defs.length > 0 ? defs : undefined,
+        responseFormat: opts.responseFormat,
+      });
+      cost += result.usage?.cost ?? 0;
+      lastText = result.text;
+      lastRaw = result.raw !== undefined ? result.raw : result.text;
+
+      const toolCalls = result.toolCalls;
+      if (!toolCalls || toolCalls.length === 0) {
+        return {
+          output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+          text: lastText,
+          raw: lastRaw,
+          lastToolResult,
+          trail,
+          denials: runDenials,
+          steps,
+          cost,
+        };
+      }
+
+      messages.push({
+        role: "assistant",
+        content: result.text || "",
+        toolCalls,
+      });
+
+      for (const tc of toolCalls) {
+        if (steps >= opts.maxSteps) break;
+        steps++;
+        const toolResult = await dispatchTool({
+          tool: tc.name,
+          args: tc.arguments,
+          agentLabel: opts.agentLabel,
+          allowedTools: allowed,
+          callTool: opts.callTool,
+          auth: opts.auth,
+          operator: opts.operator,
+          meta: opts.meta,
+          trail,
+          runDenials,
+        });
+        lastToolResult = toolResult;
+        messages.push({
+          role: "tool",
+          content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? null),
+          toolCallId: tc.id,
+          name: tc.name,
+        });
+      }
+    }
+
+    return {
+      output: lastToolResult !== undefined ? lastToolResult : lastRaw,
+      text: lastText,
+      raw: lastRaw,
+      lastToolResult,
+      trail,
+      denials: runDenials,
+      steps,
+      cost,
+    };
   }
 
   return {
@@ -251,9 +497,10 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       if (!decl) throw new Error(`ai: unknown prompt "${prompt}"`);
       const version = decl.version;
       const started = now();
+      const tools = opts?.tools ?? [];
 
       // Replay from journal when input matches (nondeterministic contract)
-      if (journalingForced) {
+      if (journalingForced && tools.length === 0) {
         const hit = [...journal]
           .reverse()
           .find(
@@ -272,25 +519,46 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       let lastError: string | undefined;
       let lastSchema: AiSchemaMismatch | undefined;
       let totalCost = 0;
+      const userContent = promptContentFromInput(input);
 
       for (const modelName of via) {
         const attemptStart = now();
         try {
           const client = await clientFor(modelName);
-          const result = await client.complete({
-            model: modelName,
-            messages: [
-              {
-                role: "user",
-                content: typeof input === "string" ? input : JSON.stringify(input ?? {}),
-              },
-            ],
-            responseFormat: decl.out,
-          });
-          const attemptCost = result.usage?.cost ?? 0;
-          totalCost += attemptCost;
+          let raw: unknown;
+          let attemptCost = 0;
+
+          if (tools.length > 0) {
+            const loop = await toolLoop({
+              client,
+              modelName,
+              messages: [{ role: "user", content: userContent }],
+              tools,
+              maxSteps: opts?.maxSteps ?? AI_DEFAULT_MAX_STEPS,
+              agentLabel: prompt,
+              responseFormat: decl.out,
+              callTool: opts?.callTool,
+            });
+            raw = loop.lastToolResult !== undefined && !loop.text ? loop.lastToolResult : loop.raw;
+            attemptCost = loop.cost;
+            totalCost += attemptCost;
+            if (loop.denials.length > 0 && loop.trail.every((t) => t.status === "denied")) {
+              throw new Error(
+                `ai: all tool calls denied for prompt "${prompt}": ${loop.denials[0]?.reason}`,
+              );
+            }
+          } else {
+            const result = await client.complete({
+              model: wireModel(modelName, client),
+              messages: [{ role: "user", content: userContent }],
+              responseFormat: decl.out,
+            });
+            attemptCost = result.usage?.cost ?? 0;
+            totalCost += attemptCost;
+            raw = result.raw !== undefined ? result.raw : result.text;
+          }
+
           const latencyMs = Math.max(0, now() - attemptStart);
-          const raw = result.raw !== undefined ? result.raw : result.text;
 
           try {
             const output = decl.out
@@ -379,102 +647,64 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     async runAgent(agent, runOpts) {
       const decl = agents.get(agent);
       if (!decl) throw new Error(`ai: unknown agent "${agent}"`);
-      const maxSteps = decl.maxSteps ?? 6;
-      const runDenials: AgentDenial[] = [];
-      const trail: AgentToolStep[] = [];
-      let steps = 0;
-      let output: unknown = { message: runOpts.message };
+      const maxSteps = decl.maxSteps ?? AI_DEFAULT_MAX_STEPS;
+      const modelName = decl.model ?? [...models.keys()][0] ?? "mock";
+      const client = await clientFor(modelName);
       const started = now();
 
-      // Simple tool loop: try each declared tool once (bounded).
-      for (const tool of decl.tools) {
-        if (steps >= maxSteps) break;
-        steps++;
-        const effects = effectsFor(tool);
-        const requiredGates = options.gatesForFlow?.(tool) ?? [];
-        if (requiredGates.length > 0 && options.gates) {
-          const ctx: GatePolicyContext = {
-            auth: runOpts.auth ?? {
-              userId: null,
-              scopes: new Set(),
-            },
-            operator: runOpts.operator ?? { id: null },
-            meta: runOpts.meta,
-          };
-          const evaluations = await options.gates.check(requiredGates, ctx);
-          const denied = evaluations.find((e) => !e.allowed);
-          if (denied) {
-            const denial: AgentDenial = {
-              agent,
-              tool,
-              gate: denied.name,
-              reason: denied.reason ?? "gate denied",
-              at: now(),
-            };
-            runDenials.push(denial);
-            denials.push(denial);
-            trail.push({
-              tool,
-              status: "denied",
-              effects,
-              denial,
-              at: denial.at,
-            });
-            continue;
-          }
-        }
-        if (!options.callFlow) {
-          const denial: AgentDenial = {
-            agent,
-            tool,
-            gate: "(no-callFlow)",
-            reason: "callFlow not configured",
-            at: now(),
-          };
-          runDenials.push(denial);
-          denials.push(denial);
-          trail.push({
-            tool,
-            status: "denied",
-            effects,
-            denial,
-            at: denial.at,
-          });
-          continue;
-        }
-        output = await options.callFlow(tool, {
-          message: runOpts.message,
-        });
-        trail.push({
-          tool,
-          status: "ok",
-          effects,
-          at: now(),
-        });
-      }
+      const loop = await toolLoop({
+        client,
+        modelName,
+        messages: [{ role: "user", content: promptContentFromInput(runOpts.message) }],
+        tools: decl.tools,
+        maxSteps,
+        agentLabel: agent,
+        callTool: runOpts.callTool,
+        auth: runOpts.auth,
+        operator: runOpts.operator,
+        meta: runOpts.meta,
+      });
 
       const record: AgentRunRecord = {
         id: `agent-run-${++runSeq}`,
         agent,
         message: runOpts.message,
-        ok: runDenials.length === 0,
-        steps,
-        trail,
-        denials: runDenials,
-        output,
+        ok: loop.denials.length === 0,
+        steps: loop.steps,
+        trail: loop.trail,
+        denials: loop.denials,
+        output: loop.output,
         at: started,
-        cost: 0,
+        cost: loop.cost,
       };
       agentRuns.push(record);
 
       return {
         ok: record.ok,
-        steps,
-        denials: runDenials,
-        trail,
-        output,
+        steps: loop.steps,
+        denials: loop.denials,
+        trail: loop.trail,
+        output: loop.output,
         cost: record.cost,
       };
+    },
+
+    async *stream(model, streamOpts) {
+      const client = await clientFor(model);
+      if (!client.stream) {
+        throw new Error(`ai: model "${model}" (driver ${client.driverId}) does not support stream`);
+      }
+      const content =
+        streamOpts?.data !== undefined
+          ? promptContentFromInput(streamOpts.data)
+          : promptContentFromInput(streamOpts?.prompt ?? "");
+      for await (const chunk of client.stream({
+        model: wireModel(model, client),
+        messages: [{ role: "user", content }],
+        signal: streamOpts?.signal,
+      })) {
+        if (chunk.text) yield chunk.text;
+      }
     },
 
     async embed(embedName, id, text) {

@@ -1,11 +1,13 @@
 ---
 name: oke-docs
-description: Authors and rewrites OKE documentation pages under site/content/docs to the project's information-architecture standard — source-verified API claims, the progressive-disclosure page skeleton (plain intro, one rule, Quick start Steps, reference tables, Troubleshooting Accordions, Next cards), and the site's hard gates (prose density ≤3, fumadocs components, forbidden tokens). Use when creating a new docs page, editing or improving any page under site/content/docs (elements, console, get-started), or when the user asks to raise documentation quality.
+description: Authors and rewrites OKE documentation pages under site/content/docs to the project's information-architecture standard — source-verified API claims, the progressive-disclosure page skeleton (plain intro, one rule, Quick start Steps, reference tables, Troubleshooting Accordions, Next cards), and the site's hard gates (prose density ≤3, fumadocs components, forbidden tokens). Use when creating a new docs page, editing or improving any page under site/content/docs (elements, console, get-started), or when the user asks to raise documentation quality. For the prompt "/oke-docs update site docs" after an implementation, use the oke-docs-update skill (it inventories stale pages then applies this standard).
 ---
 
 # OKE Docs — information architecture standard
 
 Rewrite or author docs pages the way the eight element pages were rewritten (canonical examples: `site/content/docs/elements/vault.mdx`, `flow.mdx`, `store.mdx`). The goal: a page an ordinary user can learn from, where every claim is true in the source code.
+
+**After a code change**, when the user says `/oke-docs update site docs`, load [oke-docs-update](../oke-docs-update/SKILL.md) first — it picks which pages to sync, then this skill’s rules apply to each page.
 
 ## The workflow
 

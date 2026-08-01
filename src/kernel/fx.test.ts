@@ -160,6 +160,7 @@ describe("fx — wholesale swap", () => {
         error() {},
       },
       t: (key) => key,
+      locale: "en",
       id: () => "fixed-id",
       auth: { userId: "u1", scopes: new Set(["a"]) },
       operator: { id: null },
@@ -213,6 +214,32 @@ describe("fx — wholesale swap", () => {
 
     await expect(runFlow(fake)).resolves.toBe("hello");
     expect(calls).toEqual(["emit:order-placed"]);
+  });
+});
+
+describe("fx.t — catalogs", () => {
+  test("resolves locale then default with ICU values", () => {
+    const fx = createFx({
+      flow: "x",
+      effects: {},
+      i18n: {
+        locale: "ar",
+        defaultLocale: "en",
+        catalogs: {
+          en: {
+            "errors.notFound": "Not found",
+            greeting: "Hello, {name}",
+            items: "{count, plural, one {# item} other {# items}}",
+          },
+          ar: { greeting: "مرحباً، {name}" },
+        },
+      },
+    });
+    expect(fx.locale).toBe("ar");
+    expect(fx.t("greeting", { name: "Ada" })).toBe("مرحباً، Ada");
+    expect(fx.t("errors.notFound")).toBe("Not found");
+    expect(fx.t("items", { count: 2 })).toBe("2 items");
+    expect(fx.t("missing")).toBe("missing");
   });
 });
 

@@ -1,8 +1,10 @@
 /**
  * `openai-compatible` AI driver — thin HTTP client for OpenAI-shaped APIs.
  *
- * Covers OpenAI, vLLM, Groq, Together, LM Studio, and most self-hosted
- * servers (unified-theory §16). Injectable `fetch` for tests. Never a
+ * One protocol driver for OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio,
+ * Ollama `/v1`, and other chat/completions endpoints. Configure via
+ * `baseUrl` + `apiKey` + `model` (+ optional `headers`). Native Ollama stays
+ * on the separate `ollama` driver. Injectable `fetch` for tests. Never a
  * production default — prod must declare.
  */
 
@@ -14,23 +16,67 @@ import type {
   AiEmbedResult,
   AiModelClient,
   AiOpenOptions,
+  AiStreamChunk,
+  AiToolCall,
 } from "./ai-types.ts";
 
-const DEFAULT_BASE = "https://api.openai.com/v1";
+/** Default OpenAI cloud base — apiKey is required for this origin. */
+export const OPENAI_COMPAT_DEFAULT_BASE = "https://api.openai.com/v1";
+
+/**
+ * Normalize a chat/embeddings base URL (strip trailing slash).
+ *
+ * @param raw - Base URL
+ */
+export function normalizeOpenaiCompatibleBaseUrl(raw: string): string {
+  return raw.trim().replace(/\/$/, "");
+}
+
+/**
+ * Whether this base is the OpenAI cloud default (key required).
+ *
+ * @param baseUrl - Normalized base
+ */
+export function isOpenaiCloudBase(baseUrl: string): boolean {
+  return normalizeOpenaiCompatibleBaseUrl(baseUrl) === OPENAI_COMPAT_DEFAULT_BASE;
+}
+
+/**
+ * Build request headers: content-type, optional Bearer, optional extras.
+ *
+ * @param apiKey - Bearer token when present
+ * @param extra - Caller headers
+ */
+export function openaiCompatibleHeaders(
+  apiKey: string | undefined,
+  extra?: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    ...(extra ?? {}),
+  };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
 
 /**
  * Open an OpenAI-compatible chat / embeddings client.
  *
- * @param options - API key / model / base URL / injectable fetch
+ * apiKey is required for the default OpenAI cloud base. Custom `baseUrl`
+ * (LM Studio, Ollama `/v1`, Groq, …) may omit the key — Authorization is
+ * then omitted. HTTP failures always throw (never silent mock fallback).
+ *
+ * @param options - API key / model / base URL / headers / injectable fetch
  */
 export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise<AiModelClient> {
+  const baseUrl = normalizeOpenaiCompatibleBaseUrl(options.baseUrl ?? OPENAI_COMPAT_DEFAULT_BASE);
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (isOpenaiCloudBase(baseUrl) && !apiKey) {
     throw new Error("openai-compatible: apiKey is required (or OPENAI_API_KEY)");
   }
   const model = options.model ?? "gpt-4o-mini";
-  const baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
   const fetchFn = options.fetch ?? globalThis.fetch;
+  const extraHeaders = options.headers;
 
   return {
     driverId: "openai-compatible",
@@ -39,52 +85,82 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       const resolvedModel = opts.model ?? model;
       const body: Record<string, unknown> = {
         model: resolvedModel,
-        messages: opts.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.name !== undefined ? { name: m.name } : {}),
-        })),
+        messages: opts.messages.map(serializeMessage),
       };
       if (opts.temperature !== undefined) body.temperature = opts.temperature;
       if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
       if (opts.responseFormat !== undefined) {
         body.response_format = opts.responseFormat;
       }
+      if (opts.tools !== undefined && opts.tools.length > 0) {
+        body.tools = opts.tools.map((t) => ({
+          type: "function",
+          function: {
+            name: t.name,
+            ...(t.description !== undefined ? { description: t.description } : {}),
+            ...(t.parameters !== undefined ? { parameters: t.parameters } : {}),
+          },
+        }));
+      }
 
       const res = await fetchFn(`${baseUrl}/chat/completions`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: openaiCompatibleHeaders(apiKey, extraHeaders),
         body: JSON.stringify(body),
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       const raw = (await res.json().catch(() => ({}))) as OpenAiChatResponse;
       if (!res.ok) {
         const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
         throw new Error(`openai-compatible: ${msg}`);
       }
-      const text = raw.choices?.[0]?.message?.content ?? "";
+      const message = raw.choices?.[0]?.message;
+      const text = message?.content ?? "";
+      const toolCalls = parseToolCalls(message?.tool_calls);
       return {
         text,
         raw,
         model: raw.model ?? resolvedModel,
         driverId: "openai-compatible",
+        ...(toolCalls !== undefined ? { toolCalls } : {}),
         usage: {
           inputTokens: raw.usage?.prompt_tokens,
           outputTokens: raw.usage?.completion_tokens,
         },
       };
     },
+    async *stream(opts: AiCompleteOptions): AsyncIterable<AiStreamChunk> {
+      const resolvedModel = opts.model ?? model;
+      const body: Record<string, unknown> = {
+        model: resolvedModel,
+        messages: opts.messages.map(serializeMessage),
+        stream: true,
+      };
+      if (opts.temperature !== undefined) body.temperature = opts.temperature;
+      if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
+
+      const res = await fetchFn(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: openaiCompatibleHeaders(apiKey, extraHeaders),
+        body: JSON.stringify(body),
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      });
+      if (!res.ok) {
+        const raw = (await res.json().catch(() => ({}))) as OpenAiChatResponse;
+        const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
+        throw new Error(`openai-compatible: ${msg}`);
+      }
+      if (!res.body) {
+        throw new Error("openai-compatible: stream response has no body");
+      }
+      yield* readOpenaiSse(res.body, opts.signal);
+    },
     async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
       const resolvedModel = opts.model ?? model;
       const input = opts.input;
       const res = await fetchFn(`${baseUrl}/embeddings`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: openaiCompatibleHeaders(apiKey, extraHeaders),
         body: JSON.stringify({ model: resolvedModel, input }),
       });
       const raw = (await res.json().catch(() => ({}))) as OpenAiEmbedResponse;
@@ -111,10 +187,124 @@ export const openaiCompatibleAiDriver: AiDriver = {
   open: openOpenaiCompatible,
 };
 
+function serializeMessage(m: AiCompleteOptions["messages"][number]): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    role: m.role,
+    content: m.content,
+  };
+  if (m.name !== undefined) out.name = m.name;
+  if (m.toolCallId !== undefined) out.tool_call_id = m.toolCallId;
+  if (m.toolCalls !== undefined && m.toolCalls.length > 0) {
+    out.tool_calls = m.toolCalls.map((tc) => ({
+      id: tc.id,
+      type: "function",
+      function: {
+        name: tc.name,
+        arguments:
+          typeof tc.arguments === "string" ? tc.arguments : JSON.stringify(tc.arguments ?? {}),
+      },
+    }));
+  }
+  return out;
+}
+
+function parseToolCalls(
+  raw: readonly OpenAiToolCall[] | undefined,
+): readonly AiToolCall[] | undefined {
+  if (!raw || raw.length === 0) return undefined;
+  return raw.map((tc, i) => {
+    const name = tc.function?.name ?? "";
+    const argStr = tc.function?.arguments ?? "{}";
+    let args: unknown = argStr;
+    try {
+      args = JSON.parse(argStr) as unknown;
+    } catch {
+      args = { _raw: argStr };
+    }
+    return {
+      id: tc.id ?? `call_${i}`,
+      name,
+      arguments: args,
+    };
+  });
+}
+
+/**
+ * Parse OpenAI SSE chat.completion.chunk stream.
+ *
+ * @param body - Response body
+ * @param signal - Optional abort
+ */
+async function* readOpenaiSse(
+  body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
+): AsyncGenerator<AiStreamChunk> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw abortAsError(signal.reason);
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") {
+          yield { text: "", done: true };
+          return;
+        }
+        try {
+          const chunk = JSON.parse(data) as {
+            choices?: readonly {
+              delta?: { content?: string | null };
+              finish_reason?: string | null;
+            }[];
+          };
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            yield { text: delta };
+          }
+          if (chunk.choices?.[0]?.finish_reason) {
+            yield { text: "", done: true };
+            return;
+          }
+        } catch {
+          // ignore malformed SSE lines
+        }
+      }
+    }
+    yield { text: "", done: true };
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function abortAsError(reason?: unknown): Error {
+  if (reason instanceof Error) return reason;
+  const err = new Error(reason !== undefined ? String(reason) : "This operation was aborted");
+  err.name = "AbortError";
+  return err;
+}
+
+interface OpenAiToolCall {
+  readonly id?: string;
+  readonly function?: { readonly name?: string; readonly arguments?: string };
+}
+
 interface OpenAiChatResponse {
   readonly model?: string;
   readonly choices?: readonly {
-    readonly message?: { readonly content?: string | null };
+    readonly message?: {
+      readonly content?: string | null;
+      readonly tool_calls?: readonly OpenAiToolCall[];
+    };
   }[];
   readonly usage?: {
     readonly prompt_tokens?: number;

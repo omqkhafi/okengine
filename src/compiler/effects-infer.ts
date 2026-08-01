@@ -164,6 +164,13 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     if (chain.rootMethod === "ask" && call === chain.rootCall) {
       const ref = resolvePrompt(call.arguments[0], options.bindings);
       if (ref) asks.add(ref);
+      // fx.ask(…, { tools: [flowRef, …] }) → effects.calls (same as fx.call)
+      const askOpts = call.arguments[2];
+      if (askOpts && askOpts.type === "ObjectExpression") {
+        for (const toolRef of toolsFromAskOptions(askOpts, options.bindings)) {
+          calls.add(toolRef);
+        }
+      }
       continue;
     }
 
@@ -453,6 +460,45 @@ function resolvePrompt(
     return binding.ref;
   }
   return identifierName(node);
+}
+
+/**
+ * Resolve `tools: […]` from an `fx.ask` options object literal.
+ *
+ * @param opts - ObjectExpression
+ * @param bindings - Known bindings
+ */
+function toolsFromAskOptions(
+  opts: AstNode,
+  bindings: ReadonlyMap<string, InferBinding>,
+): FlowRef[] {
+  const props = ((opts as AstNode & { properties?: AstNode[] }).properties ?? []).filter(
+    (p) => p.type === "Property" || p.type === "ObjectProperty",
+  );
+  let toolsNode: AstNode | undefined;
+  for (const prop of props) {
+    const keyNode = (prop as AstNode & { key?: AstNode }).key;
+    const key =
+      keyNode?.type === "Identifier"
+        ? (keyNode as Identifier).name
+        : keyNode?.type === "Literal" && typeof (keyNode as Literal).value === "string"
+          ? ((keyNode as Literal).value as string)
+          : undefined;
+    if (key === "tools") {
+      toolsNode = (prop as AstNode & { value?: AstNode }).value;
+      break;
+    }
+  }
+  if (!toolsNode || toolsNode.type !== "ArrayExpression") return [];
+  const els = ((toolsNode as AstNode & { elements?: AstNode[] }).elements ?? []).filter(
+    (el): el is AstNode => el !== null && el !== undefined,
+  );
+  const out: FlowRef[] = [];
+  for (const el of els) {
+    const ref = resolveNamed(el, bindings, "flow");
+    if (ref) out.push(ref as FlowRef);
+  }
+  return out;
 }
 
 /**

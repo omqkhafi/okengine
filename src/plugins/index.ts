@@ -62,9 +62,18 @@ export {
   type TwoFactorStore,
 } from "./two-factor.ts";
 export {
+  assertUsernamePolicy,
   createUsernameStore,
+  DEFAULT_RESERVED_USERNAMES,
+  DEFAULT_USERNAME_ALLOWED_CHARS,
+  DEFAULT_USERNAME_MAX_LENGTH,
+  DEFAULT_USERNAME_MIN_LENGTH,
+  resolveUsernamePolicy,
   username,
+  UsernamePolicyError,
+  type ResolvedUsernamePolicy,
   type UsernamePluginOptions,
+  type UsernamePolicyOptions,
   type UsernameRow,
   type UsernameStore,
 } from "./username.ts";

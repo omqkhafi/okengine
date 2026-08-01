@@ -24,7 +24,14 @@ const BUDGETS_JSON_PATH = resolve(ROOT, "budgets.json");
  * Deps measured separately from OKE code in export samples.
  * Edge/client absolute gates keep the historical smaller external list.
  */
-const BUILD_EXTERNALS = ["@duckdb/node-api", "@duckdb/*"] as const;
+const BUILD_EXTERNALS = [
+  "@duckdb/node-api",
+  "@duckdb/*",
+  // ICU MessageFormat — adopted FormatJS runtime; kept out of the edge
+  // micro-bundle the same way other heavy deps are measured separately.
+  "intl-messageformat",
+  "@formatjs/*",
+] as const;
 
 /** Heavy optional / peer packages — not counted in export:* gzip samples. */
 const EXPORT_BUILD_EXTERNALS = [
