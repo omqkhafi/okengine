@@ -4,8 +4,16 @@
 
 import { describe, expect, test } from "bun:test";
 import { anthropicAiDriver, openAnthropic } from "./ai-anthropic.ts";
-import { openaiCompatibleAiDriver, openOpenaiCompatible } from "./ai-openai-compatible.ts";
 import { mockAiDriver } from "./ai-mock.ts";
+import {
+  normalizeOllamaBaseUrl,
+  ollamaAiDriver,
+  OLLAMA_DEFAULT_MODEL,
+  openOllama,
+  OllamaUnavailableError,
+  resolveOllamaModel,
+} from "./ai-ollama.ts";
+import { openaiCompatibleAiDriver, openOpenaiCompatible } from "./ai-openai-compatible.ts";
 
 describe("anthropic driver", () => {
   test("id is anthropic; mock remains the only default elsewhere", () => {
@@ -152,5 +160,73 @@ describe("openai-compatible driver", () => {
     } finally {
       if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
     }
+  });
+});
+
+describe("ollama driver", () => {
+  test("id is ollama; documented default model is qwen3:8b (overridable)", () => {
+    expect(ollamaAiDriver.id).toBe("ollama");
+    expect(OLLAMA_DEFAULT_MODEL).toBe("qwen3:8b");
+    expect(resolveOllamaModel({ model: "llama3.2:1b" })).toBe("llama3.2:1b");
+    expect(normalizeOllamaBaseUrl("localhost:11434")).toBe("http://localhost:11434");
+    expect(normalizeOllamaBaseUrl("http://127.0.0.1:11434/v1")).toBe("http://127.0.0.1:11434");
+  });
+
+  test("complete via injectable fetch — native /api/chat, any model name", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetchFn: typeof fetch = Object.assign(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/api/tags")) {
+          return new Response(JSON.stringify({ models: [] }), { status: 200 });
+        }
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        calls.push({ url, body });
+        return new Response(
+          JSON.stringify({
+            model: "llama3.2:1b",
+            message: { role: "assistant", content: "pong" },
+            prompt_eval_count: 4,
+            eval_count: 1,
+          }),
+          { status: 200 },
+        );
+      },
+      { preconnect: () => {} },
+    ) as typeof fetch;
+
+    const client = await openOllama({
+      model: "llama3.2:1b",
+      baseUrl: "http://ollama.test:11434",
+      fetch: fetchFn,
+    });
+    const result = await client.complete({
+      messages: [{ role: "user", content: "ping" }],
+      temperature: 0,
+      maxTokens: 16,
+    });
+
+    expect(result.driverId).toBe("ollama");
+    expect(result.text).toBe("pong");
+    expect(result.usage?.inputTokens).toBe(4);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("http://ollama.test:11434/api/chat");
+    expect(calls[0]!.body.model).toBe("llama3.2:1b");
+    expect(calls[0]!.body.stream).toBe(false);
+    expect(calls[0]!.body.think).toBe(false);
+    expect(calls[0]!.body.options).toEqual({ temperature: 0, num_predict: 16 });
+  });
+
+  test("unreachable server throws OllamaUnavailableError (no silent fallback)", async () => {
+    const fetchFn: typeof fetch = Object.assign(
+      async () => {
+        throw new TypeError("connection refused");
+      },
+      { preconnect: () => {} },
+    ) as typeof fetch;
+
+    await expect(
+      openOllama({ baseUrl: "http://127.0.0.1:9", fetch: fetchFn }),
+    ).rejects.toBeInstanceOf(OllamaUnavailableError);
   });
 });

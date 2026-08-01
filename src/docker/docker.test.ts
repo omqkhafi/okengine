@@ -66,6 +66,31 @@ describe("image recipes", () => {
     expect(url).toBe("http://127.0.0.1:7700");
   });
 
+  test("ollama matches the official image, pulls configured model, emits http URL", () => {
+    expect(recipeFor("ollama/ollama:latest").id).toBe("ollama");
+    const spec: ServiceSpec = {
+      role: "ai",
+      serviceName: "ai",
+      image: "ollama/ollama:latest",
+      port: 11434,
+      hostPort: 11434,
+      credentials: { user: "oke", password: "unused", database: "oke" },
+    };
+    const applied = recipeFor(spec.image).apply(spec);
+    expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3:8b}");
+    expect(applied.volumes).toContain("ai-data:/root/.ollama");
+    expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
+    expect(String(applied.command)).toContain("ollama pull");
+    const url = recipeFor(spec.image).url(spec, {
+      host: "127.0.0.1",
+      port: 11434,
+      user: "oke",
+      password: "unused",
+      database: "oke",
+    });
+    expect(url).toBe("http://127.0.0.1:11434");
+  });
+
   test("a new image recipe is ≤15 lines", async () => {
     const src = await Bun.file(`${import.meta.dir}/recipes/postgres.ts`).text();
     const exportLines = src
@@ -236,6 +261,20 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_INDEX_URL).toBe("http://127.0.0.1:7700");
     expect(result.stackEnv.OKE_STORE_INDEX_KEY).toBe("meili-master-key");
     expect(result.stackEnv.DATABASE_URL).toBeUndefined();
+  });
+
+  test("ai ollama emits OKE_AI_URL and documents the default model control", () => {
+    const result = deriveInfrastructure({
+      images: { ai: "ollama/ollama:latest" },
+      app: "skyport",
+    });
+    const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
+    expect(yml).toContain("ollama/ollama:latest");
+    expect(yml).toContain("OKE_AI_MODEL");
+    expect(yml).toContain("qwen3:8b");
+    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434");
+    const envText = formatStackEnv(result.stackEnv);
+    expect(envText).toContain("# ── ai — Ollama");
   });
 
   test("emits protocol-specific env keys plus optional control notes", () => {

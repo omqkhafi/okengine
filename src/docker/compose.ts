@@ -255,6 +255,10 @@ export function buildStackEnv(
       env[`${prefix}_URL`] = url;
       env.OKE_STORE_INDEX_URL = url;
       env.OKE_STORE_INDEX_KEY = spec.credentials.password;
+    } else if (spec.role === "ai") {
+      // Ollama: standalone HTTP URL; model is a stack control (OKE_AI_MODEL).
+      env[`${prefix}_URL`] = url;
+      env.OKE_AI_URL = url;
     } else {
       env[`${prefix}_USER`] = spec.credentials.user;
       env[`${prefix}_PASSWORD`] = spec.credentials.password;
@@ -278,6 +282,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
   vault: "vault — OpenBao",
+  ai: "ai — Ollama (local models)",
 };
 
 /** Friendly aliases emitted beside their role block. */
@@ -305,6 +310,7 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY",
     "MP_SMTP_AUTH_ALLOW_INSECURE",
   ],
+  ai: ["OKE_AI_URL", "OKE_AI_MODEL"],
 };
 
 /** Optional controls documented in `.env.docker` and preserved on regeneration. */
@@ -319,6 +325,8 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY=1",
     "MP_SMTP_AUTH_ALLOW_INSECURE=1",
   ],
+  // qwen3:8b is a balanced local-dev starting point — override freely.
+  ai: ["OKE_AI_MODEL=qwen3:8b"],
 };
 
 /**
@@ -335,6 +343,7 @@ function roleFromEnvKey(key: string): string | undefined {
   }
   if (key === "PGDATA" || key === "POSTGRES_INITDB_ARGS") return "store.sql";
   if (key.startsWith("OKE_STORE_KV_MAXMEMORY")) return "store.kv";
+  if (key === "OKE_AI_URL" || key === "OKE_AI_MODEL" || key === "OLLAMA_HOST") return "ai";
   return undefined;
 }
 

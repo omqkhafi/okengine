@@ -12,6 +12,16 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `ollama` AI driver — thin native `POST /api/chat` client for any pulled
+  model (`OKE_AI_MODEL` / `ai.model`); documented local-dev default
+  `qwen3:8b` (balanced starting point, fully overridable). Base URL
+  `http://127.0.0.1:11434` via `OKE_AI_URL` / `OLLAMA_HOST`. Unreachable
+  servers throw `OllamaUnavailableError` — never a silent mock fallback.
+- Ollama Docker recipe (`images.ai: "ollama/ollama"`) — pulls the configured
+  model, health-checks, writes `OKE_AI_URL`. Boot resolves `drivers.ai`
+  through a shared `aiDriverFor` switch (same class as store.index).
+- Live Ollama integration test (real completion; skips visibly without a
+  reachable Ollama / explicit Docker opt-in).
 - `magicLink` / `emailOtp` deliver challenges via Channel (`fx.send` +
   `auth-magic-link` / `auth-email-otp` templates and English catalog bodies).
   `exposeDevToken` / `exposeDevOtp` stay for local DX without SMTP. `phoneNumber`

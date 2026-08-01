@@ -130,6 +130,36 @@ Because `fx.ask` is nondeterministic, the runtime adjusts around it: journaling 
 
 There is deliberately **no production default**: `prod` must name a driver, which keeps the model choice visible in `oke.config.ts` where review can see it.
 
+### Local Ollama
+
+`ollama` is a local-model driver — any model you have pulled works. Pin it in `drivers.ai`; optionally pin `images.ai` for compose.
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    ai: { local: "ollama", docker: "ollama", prod: "anthropic" },
+  },
+  images: {
+    ai: "ollama/ollama:latest",
+  },
+});
+```
+
+```typescript title="src/ai.ts"
+export const smart = ai.model("smart", {
+  provider: "ollama",
+  model: "qwen3:8b", // balanced local-dev starting point — override freely
+});
+```
+
+- **Model:** set on `ai.model(…, { model })` or `OKE_AI_MODEL`. `qwen3:8b` is a reasonable balanced starting point for local dev — not the only option.
+- **URL:** default `http://127.0.0.1:11434`. Override with `OKE_AI_URL` or `OLLAMA_HOST` (bare `host:port` is fine).
+- **Docker:** the image recipe pulls the configured model and writes `OKE_AI_URL` into `docker/.env.docker`.
+- **Fail-loud:** unreachable or unhealthy Ollama throws `OllamaUnavailableError` — never a silent mock fallback.
+- **PII:** `ollama` counts as on-premise for the build-time egress check (same as `mock`).
+
 ## Troubleshooting
 
 <Accordions>
@@ -141,6 +171,11 @@ A flow sends a classified PII field to a third-party model. Either stop sending 
 <Accordion title="Which model will prod actually call?">
 
 The one you declared. There is no fallback or guess — if `prod` has no AI driver configured, that's a configuration gap to fix, not a silent default.
+
+</Accordion>
+<Accordion title="oke boot: ollama driver needs OKE_AI_URL">
+
+Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3:8b` or your `OKE_AI_MODEL`).
 
 </Accordion>
 <Accordion title="A prompt edit made answers worse — how do I catch that pre-merge?">

@@ -5,6 +5,7 @@
 import type { ImageRecipe } from "../types.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
+import { ollama } from "./ollama.ts";
 import { openbao } from "./openbao.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
@@ -18,9 +19,10 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   rustfs,
   openbao,
   meilisearch,
+  ollama,
 ];
 
-export { mailpit, meilisearch, openbao, postgres, redis, rustfs };
+export { mailpit, meilisearch, ollama, openbao, postgres, redis, rustfs };
 
 /**
  * Resolve the recipe for an image reference.

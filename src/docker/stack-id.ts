@@ -57,6 +57,7 @@ export function hostPortForInstance(
   if (role === "store.files") return 18_000 + n;
   if (role === "channel.email") return 20_000 + n;
   if (role === "vault") return 22_000 + n;
+  if (role === "ai") return 23_000 + n;
   return defaultHostPort(role, containerPort) + n;
 }
 
@@ -121,6 +122,7 @@ export const STACK_CONTROL_KEYS = [
   "MP_MAX_MESSAGES",
   "MP_SMTP_AUTH_ACCEPT_ANY",
   "MP_SMTP_AUTH_ALLOW_INSECURE",
+  "OKE_AI_MODEL",
 ] as const;
 
 /**

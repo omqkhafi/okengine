@@ -76,8 +76,11 @@ images: {
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",
   vault: "openbao/openbao:2.6.1",
+  ai: "ollama/ollama:latest",
 },
 ```
+
+For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3:8b` — a balanced local-dev starting point; override freely) and writes `OKE_AI_URL`.
 
 ## i18n
 
