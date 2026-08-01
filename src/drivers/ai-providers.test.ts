@@ -265,9 +265,9 @@ describe("openai-compatible driver", () => {
 });
 
 describe("ollama driver", () => {
-  test("id is ollama; documented default model is qwen3:8b (overridable)", () => {
+  test("id is ollama; documented default model is qwen3.5:9b (overridable)", () => {
     expect(ollamaAiDriver.id).toBe("ollama");
-    expect(OLLAMA_DEFAULT_MODEL).toBe("qwen3:8b");
+    expect(OLLAMA_DEFAULT_MODEL).toBe("qwen3.5:9b");
     expect(resolveOllamaModel({ model: "llama3.2:1b" })).toBe("llama3.2:1b");
     expect(normalizeOllamaBaseUrl("localhost:11434")).toBe("http://localhost:11434");
     expect(normalizeOllamaBaseUrl("http://127.0.0.1:11434/v1")).toBe("http://127.0.0.1:11434");

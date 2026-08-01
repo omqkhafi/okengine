@@ -77,7 +77,7 @@ describe("image recipes", () => {
       credentials: { user: "oke", password: "unused", database: "oke" },
     };
     const applied = recipeFor(spec.image).apply(spec);
-    expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3:8b}");
+    expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3.5:9b}");
     expect(applied.volumes).toContain("ai-data:/root/.ollama");
     expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
     expect(String(applied.command)).toContain("ollama pull");
@@ -271,7 +271,7 @@ describe("deriveInfrastructure", () => {
     const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
     expect(yml).toContain("ollama/ollama:latest");
     expect(yml).toContain("OKE_AI_MODEL");
-    expect(yml).toContain("qwen3:8b");
+    expect(yml).toContain("qwen3.5:9b");
     expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434");
     const envText = formatStackEnv(result.stackEnv);
     expect(envText).toContain("# ── ai — Ollama");

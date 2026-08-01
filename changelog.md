@@ -10,6 +10,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.6.0 — 2026-08-01
+
 ### ✨ Added
 
 - AI tool-calling through the same path as `fx.call` — `fx.ask(prompt, input, {
@@ -46,9 +48,10 @@ tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
   cause and fix. Override via `defineLocale`; explicit `{ message }` wins.
 - `ollama` AI driver — thin native `POST /api/chat` client for any pulled
   model (`OKE_AI_MODEL` / `ai.model`); documented local-dev default
-  `qwen3:8b` (balanced starting point, fully overridable). Base URL
-  `http://127.0.0.1:11434` via `OKE_AI_URL` / `OLLAMA_HOST`. Unreachable
-  servers throw `OllamaUnavailableError` — never a silent mock fallback.
+  `qwen3.5:9b` (balanced starting point, fully overridable; Apple Silicon
+  can use `qwen3.5:9b-mlx`). Base URL `http://127.0.0.1:11434` via
+  `OKE_AI_URL` / `OLLAMA_HOST`. Unreachable servers throw
+  `OllamaUnavailableError` — never a silent mock fallback.
 - Ollama Docker recipe (`images.ai: "ollama/ollama"`) — pulls the configured
   model, health-checks, writes `OKE_AI_URL`. Boot resolves `drivers.ai`
   through a shared `aiDriverFor` switch (same class as store.index).
@@ -79,6 +82,10 @@ tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
 
 ### ♻️ Changed
 
+- Ollama documented local-dev default model is `qwen3.5:9b` (was
+  `qwen3:8b`; same as `qwen3.5:latest` on the [Ollama library](https://ollama.com/library/qwen3.5)).
+  On Apple Silicon, set `OKE_AI_MODEL=qwen3.5:9b-mlx` for the MLX build.
+  Docker recipe / compose control use the non-MLX tag.
 - `openai-compatible` AI driver is the shared chat/completions client for
   OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio, and Ollama `/v1` —
   configure via `baseUrl` + `apiKey` + `model`. apiKey is required only for

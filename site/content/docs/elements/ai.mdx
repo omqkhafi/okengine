@@ -179,11 +179,11 @@ export default defineConfig({
 ```typescript title="src/ai.ts"
 export const smart = ai.model("smart", {
   provider: "ollama",
-  model: "qwen3:8b", // balanced local-dev starting point — override freely
+  model: "qwen3.5:9b", // balanced local-dev starting point — override freely
 });
 ```
 
-- **Model:** set on `ai.model(…, { model })` or `OKE_AI_MODEL`. `qwen3:8b` is a reasonable balanced starting point for local dev — not the only option.
+- **Model:** set on `ai.model(…, { model })` or `OKE_AI_MODEL`. `qwen3.5:9b` ([Ollama library](https://ollama.com/library/qwen3.5); same as `qwen3.5:latest`) is a reasonable balanced starting point for local dev — not the only option. On Apple Silicon, prefer `qwen3.5:9b-mlx` for the MLX build.
 - **URL:** default `http://127.0.0.1:11434`. Override with `OKE_AI_URL` or `OLLAMA_HOST` (bare `host:port` is fine).
 - **Docker:** the image recipe pulls the configured model and writes `OKE_AI_URL` into `docker/.env.docker`.
 - **Fail-loud:** unreachable or unhealthy Ollama throws `OllamaUnavailableError` — never a silent mock fallback.
@@ -221,7 +221,7 @@ The one you declared. There is no fallback or guess — if `prod` has no AI driv
 </Accordion>
 <Accordion title="oke boot: ollama driver needs OKE_AI_URL">
 
-Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3:8b` or your `OKE_AI_MODEL`).
+Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3.5:9b`, or `qwen3.5:9b-mlx` on Apple Silicon, or your `OKE_AI_MODEL`).
 
 </Accordion>
 <Accordion title="A prompt edit made answers worse — how do I catch that pre-merge?">

@@ -2,7 +2,7 @@
  * Ollama image recipe — local model server (`ollama/ollama`).
  *
  * Serves on 11434 and pulls the configured model after serve is up.
- * `OKE_AI_MODEL` defaults to `qwen3:8b` (balanced local-dev starting point —
+ * `OKE_AI_MODEL` defaults to `qwen3.5:9b` (balanced local-dev starting point —
  * override freely); models persist on a named volume under `/root/.ollama`.
  */
 
@@ -14,7 +14,7 @@ const OLLAMA_BOOT = [
   "/bin/ollama serve &",
   "pid=$!",
   'i=0; until /bin/ollama list >/dev/null 2>&1; do i=$((i+1)); [ "$i" -lt 90 ] || exit 1; sleep 1; done',
-  '/bin/ollama pull "${OKE_AI_MODEL:-qwen3:8b}"',
+  '/bin/ollama pull "${OKE_AI_MODEL:-qwen3.5:9b}"',
   "wait $pid",
 ].join("; ");
 
@@ -26,7 +26,7 @@ export const ollama: ImageRecipe = {
   apply: (s) => ({
     environment: {
       OLLAMA_HOST: "0.0.0.0:11434",
-      OKE_AI_MODEL: "${OKE_AI_MODEL:-qwen3:8b}",
+      OKE_AI_MODEL: "${OKE_AI_MODEL:-qwen3.5:9b}",
     },
     entrypoint: ["/bin/sh", "-c"],
     command: [OLLAMA_BOOT],

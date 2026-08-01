@@ -2,7 +2,8 @@
  * `ollama` AI driver — thin fetch client for the native Ollama HTTP API.
  *
  * Any pulled model works via `model` / `OKE_AI_MODEL`. The documented local-dev
- * default is `qwen3:8b` (balanced starting point — override freely). Fail-loud:
+ * default is `qwen3.5:9b` (balanced starting point — override freely; on Apple
+ * Silicon consider `qwen3.5:9b-mlx`). Fail-loud:
  * configured but unreachable throws {@link OllamaUnavailableError} — never a
  * silent mock fallback.
  *
@@ -21,7 +22,7 @@ import type {
 } from "./ai-types.ts";
 
 /** Documented local-dev default — override via `model` / `OKE_AI_MODEL`. */
-export const OLLAMA_DEFAULT_MODEL = "qwen3:8b";
+export const OLLAMA_DEFAULT_MODEL = "qwen3.5:9b";
 
 /** Default Ollama listen URL (host installs + compose host port). */
 export const OLLAMA_DEFAULT_BASE_URL = "http://127.0.0.1:11434";
@@ -191,7 +192,7 @@ function buildChatBody(
       return msg;
     }),
     stream,
-    // Thinking models (e.g. qwen3) otherwise spend the token budget in
+    // Thinking models (e.g. qwen3 / qwen3.5) otherwise spend the token budget in
     // `message.thinking` and leave `content` empty — baseline complete
     // wants the answer text.
     think: false,

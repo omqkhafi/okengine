@@ -5,7 +5,7 @@
  * 1. `OKE_TEST_OLLAMA_URL` — point at any reachable Ollama
  * 2. Ollama already listening on `http://127.0.0.1:11434`
  * 3. `OKE_TEST_OLLAMA_DOCKER=1` — start `ollama/ollama` via the recipe and pull
- *    `qwen3:8b` (slow first run)
+ *    `qwen3.5:9b` (slow first run)
  *
  * Without one of those, the suite skips with a visible reason (never an empty pass).
  */

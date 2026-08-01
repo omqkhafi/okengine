@@ -325,8 +325,8 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY=1",
     "MP_SMTP_AUTH_ALLOW_INSECURE=1",
   ],
-  // qwen3:8b is a balanced local-dev starting point — override freely.
-  ai: ["OKE_AI_MODEL=qwen3:8b"],
+  // qwen3.5:9b is a balanced local-dev starting point — override freely.
+  ai: ["OKE_AI_MODEL=qwen3.5:9b"],
 };
 
 /**

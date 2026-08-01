@@ -100,6 +100,8 @@ describe("ollama live — tool-calling via fx.call", () => {
 
       await kv.close();
     },
-    120_000,
+    // Match ai-ollama.integration.test.ts — cold model load on a 6GB+ pull
+    // can exceed a short CI wall clock even when the hot path is ~7s.
+    25 * 60_000,
   );
 });
