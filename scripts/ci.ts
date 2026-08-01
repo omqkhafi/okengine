@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Local pre-push CI — one sequential gate matching what you run before tagging.
+ * Local pre-push CI -- one sequential gate matching what you run before tagging.
  *
  * Usage:
  *   bun run ci
@@ -16,6 +16,9 @@ interface Check {
 
 const ROOT = join(import.meta.dir, "..");
 const CHECKS: readonly Check[] = [
+  // Budgets first -- cold-start samples need a quiet machine; Format/Lint/
+  // Typecheck/Tests heat the CPU and falsely inflate the Bun subprocess probe.
+  { label: "Budgets", command: ["bun", "run", "budgets", "--", "--dry-run"] },
   { label: "Format", command: ["bun", "run", "fmt:check"] },
   { label: "Lint", command: ["bun", "run", "lint"] },
   { label: "Typecheck", command: ["bun", "run", "typecheck"] },
@@ -24,13 +27,14 @@ const CHECKS: readonly Check[] = [
     command: ["bun", "run", "test"],
     env: { CREATE_OKE_INTEGRATION: "1" },
   },
-  { label: "Budgets", command: ["bun", "run", "budgets", "--", "--dry-run"] },
   { label: "Gate", command: ["bun", "run", "gate"] },
   { label: "Site build", command: ["bun", "run", "site:build"] },
 ];
 
+const ESC = "\x1b";
 const useColor = process.env.NO_COLOR === undefined && Boolean(process.stdout.isTTY);
-const paint = (code: number, text: string): string => (useColor ? `[${code}m${text}[0m` : text);
+const paint = (code: number, text: string): string =>
+  useColor ? `${ESC}[${code}m${text}${ESC}[0m` : text;
 const bold = (text: string): string => paint(1, text);
 const dim = (text: string): string => paint(2, text);
 const green = (text: string): string => paint(32, text);
@@ -43,7 +47,7 @@ function duration(startedAt: number): string {
 }
 
 async function runCheck(check: Check, index: number, total: number): Promise<boolean> {
-  console.log(`\n${cyan("◆")} ${bold(`[${index + 1}/${total}] ${check.label}`)}`);
+  console.log(`\n${cyan("*")} ${bold(`[${index + 1}/${total}] ${check.label}`)}`);
   const startedAt = performance.now();
   const child = Bun.spawn(check.command, {
     cwd: ROOT,
@@ -56,17 +60,17 @@ async function runCheck(check: Check, index: number, total: number): Promise<boo
 
   const elapsed = duration(startedAt);
   if (exitCode === 0) {
-    console.log(`${green("✓")} ${check.label} ${dim(`(${elapsed})`)}`);
+    console.log(`${green("ok")} ${check.label} ${dim(`(${elapsed})`)}`);
     return true;
   }
 
-  console.error(`${red("✗")} ${check.label} ${dim(`(${elapsed})`)}`);
+  console.error(`${red("fail")} ${check.label} ${dim(`(${elapsed})`)}`);
   return false;
 }
 
 const startedAt = performance.now();
 
-console.log(`\n${bold("OKE CI")} ${dim(`· local · ${CHECKS.length} checks`)}`);
+console.log(`\n${bold("OKE CI")} ${dim(`local - ${CHECKS.length} checks`)}`);
 
 for (const [index, check] of CHECKS.entries()) {
   if (!(await runCheck(check, index, CHECKS.length))) {
@@ -76,5 +80,5 @@ for (const [index, check] of CHECKS.entries()) {
 }
 
 console.log(
-  `\n${green(bold("CI passed"))} ${dim(`· ${CHECKS.length}/${CHECKS.length} checks · ${duration(startedAt)}`)}\n`,
+  `\n${green(bold("CI passed"))} ${dim(`${CHECKS.length}/${CHECKS.length} checks - ${duration(startedAt)}`)}\n`,
 );

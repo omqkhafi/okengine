@@ -1,6 +1,6 @@
 {
   "name": "site",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,6 +10,7 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@fumadocs/base-ui": "^16.14.0",
     "cnfast": "^0.1.0",
     "framer-motion": "^12.43.0",

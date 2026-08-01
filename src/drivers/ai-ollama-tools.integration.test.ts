@@ -1,7 +1,8 @@
 /**
  * Live Ollama tool-calling through fx.ask → fx.call (capability + ledger).
  *
- * Same skip-visible convention as ai-ollama.integration.test.ts.
+ * Opt-in via `OKE_TEST_OLLAMA_URL` (reachable Ollama). A local daemon on
+ * :11434 is not enough — set the URL explicitly. Never an empty pass.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -11,7 +12,6 @@ import { createGateRuntime, gate } from "../elements/gate.ts";
 import { createFxContext } from "../kernel/fx.ts";
 import { OLLAMA_DEFAULT_MODEL, openOllama } from "./ai-ollama.ts";
 
-const DEFAULT_LOCAL = "http://127.0.0.1:11434";
 const ENV_URL = process.env.OKE_TEST_OLLAMA_URL?.trim();
 
 async function probeOllama(url: string): Promise<boolean> {
@@ -23,12 +23,14 @@ async function probeOllama(url: string): Promise<boolean> {
   }
 }
 
-const localUp = ENV_URL ? await probeOllama(ENV_URL) : await probeOllama(DEFAULT_LOCAL);
-const canLive = Boolean(ENV_URL) || localUp;
+const reachable = ENV_URL ? await probeOllama(ENV_URL) : false;
+const canLive = Boolean(ENV_URL) && reachable;
 
 if (!canLive) {
   console.log(
-    "skip: live ollama tool-calling e2e (OKE_TEST_OLLAMA_URL not set; no Ollama on :11434)",
+    ENV_URL
+      ? `skip: live ollama tool-calling e2e (unreachable at ${ENV_URL})`
+      : "skip: live ollama tool-calling e2e (OKE_TEST_OLLAMA_URL not set)",
   );
 }
 const live = canLive ? test : test.skip;
@@ -37,7 +39,7 @@ describe("ollama live — tool-calling via fx.call", () => {
   live(
     "gated ask → real tool call → capability ledger portal entry",
     async () => {
-      const url = ENV_URL || DEFAULT_LOCAL;
+      const url = ENV_URL!;
       const model = process.env.OKE_AI_MODEL?.trim() || OLLAMA_DEFAULT_MODEL;
 
       const kv = await memoryKvDriver.open({ name: "ollama-tools-rate" });

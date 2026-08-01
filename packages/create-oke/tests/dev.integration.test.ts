@@ -4,8 +4,8 @@
  * and serves one real flow request — then shuts down with no lingering port.
  *
  * Uses the real CLI `startApp` (boot → serve). No injection.
- * Opt-in via `CREATE_OKE_INTEGRATION=1` (same as scaffold.integration.test.ts).
- * Enabled on GitHub Actions via the `test` job and locally via `bun run ci`.
+ * Opt-in via `CREATE_OKE_DEV_INTEGRATION=1` (separate from scaffold's
+ * `CREATE_OKE_INTEGRATION` so default CI only pays for one install).
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -15,9 +15,13 @@ import { join } from "node:path";
 import { runDev, type DevSession } from "../../../src/cli/dev.ts";
 import { scaffold } from "../src/scaffold.ts";
 
-const ENABLED = process.env["CREATE_OKE_INTEGRATION"] === "1";
+const ENABLED = process.env["CREATE_OKE_DEV_INTEGRATION"] === "1";
 const SECRET = "oke-create-oke-dev-integration-secret";
 const TIMEOUT_MS = 180_000;
+
+if (!ENABLED) {
+  console.log("skip: create-oke oke dev boot (CREATE_OKE_DEV_INTEGRATION≠1)");
+}
 
 describe.skipIf(!ENABLED)("create-oke oke dev boot (Prompt 24 harness)", () => {
   let session: DevSession | undefined;

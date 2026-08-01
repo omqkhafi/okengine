@@ -1,8 +1,9 @@
 /**
  * Real Mailpit end-to-end: magic-link / email-otp request → SMTP → Mailpit API.
  *
- * Gated on a live Docker daemon — same real-skip pattern as pgvector /
- * Meilisearch (`const live = … ? test : test.skip`). Never an empty pass.
+ * Opt-in via `OKE_TEST_DOCKER=1` plus a live Docker daemon — same real-skip
+ * pattern as pgvector / Meilisearch (`const live = … ? test : test.skip`).
+ * Never an empty pass.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -36,9 +37,14 @@ function dockerAvailable(): boolean {
   }
 }
 
-const DOCKER = dockerAvailable();
+const WANT = process.env.OKE_TEST_DOCKER === "1";
+const DOCKER = WANT && dockerAvailable();
 if (!DOCKER) {
-  console.log("skip: mailpit e2e (docker daemon not available)");
+  console.log(
+    WANT
+      ? "skip: mailpit e2e (docker daemon not available)"
+      : "skip: mailpit e2e (OKE_TEST_DOCKER≠1)",
+  );
 }
 const live = DOCKER ? test : test.skip;
 

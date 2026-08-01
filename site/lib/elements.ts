@@ -9,7 +9,6 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
-
 /** Preview fragment kind for Features cards (okengine extension). */
 export type ElementPreviewKind =
   | "flow"
@@ -131,12 +130,17 @@ export const POSITIONING =
 /** Published `okengine` version (injected from the monorepo root package.json). */
 export const OKE_VERSION = process.env.NEXT_PUBLIC_OKE_VERSION ?? "0.0.0";
 
-/** Honest “what’s real today” facts — not growth metrics. */
-export const REAL_TODAY: ReadonlyArray<{ readonly label: string; readonly href?: string }> = [
-  { label: "Backend" },
-  { label: "Bun" },
-  { label: "TS" },
-  { label: `v${OKE_VERSION}` },
+/**
+ * Honest “what’s real today” facts — not growth metrics.
+ * Presentation (brand marks / ink) lives in the hero; this is just the labels.
+ */
+export const REAL_TODAY: ReadonlyArray<{
+  readonly id: "backend" | "typescript" | "version";
+  readonly label: string;
+}> = [
+  { id: "typescript", label: "TypeScript" },
+  { id: "backend", label: "Backend" },
+  { id: "version", label: `v${OKE_VERSION}` },
 ];
 
 /**

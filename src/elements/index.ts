@@ -132,6 +132,11 @@ export {
   RetryTransport,
   FallbackTransport,
   FallbackError,
+  parseSndrWebhook,
+  verifySndrSignature,
+  parseUnifonicWebhook,
+  toChannelSendResult,
+  toDeliveryEvent,
 } from "./channel.ts";
 export type {
   ChannelTemplateDecl,
@@ -150,6 +155,10 @@ export type {
   Transport,
   MediumCosts,
   EmailAuthResult,
+  EmailEvent,
+  DeliveryEvent,
+  AnySendResult,
+  SentlyChannelSendResult,
 } from "./channel.ts";
 
 export {

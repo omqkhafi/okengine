@@ -35,6 +35,9 @@
   --oke-el-vault: oklch(0.52 0.1 95);
   --oke-el-channel: oklch(0.5 0.1 210);
   --oke-el-ai: oklch(0.52 0.12 15);
+
+  /* Pointer spotlight ink — mono in both themes (landing-motion recipe). */
+  --sently-spot-ink: rgb(0 0 0 / 0.05);
 }
 
 .dark {
@@ -46,6 +49,8 @@
   --oke-el-vault: oklch(0.8 0.09 95);
   --oke-el-channel: oklch(0.74 0.08 210);
   --oke-el-ai: oklch(0.76 0.1 15);
+
+  --sently-spot-ink: rgb(255 255 255 / 0.06);
 }
 
 @media (min-width: 64rem) {
@@ -158,6 +163,86 @@
   animation-iteration-count: infinite;
 }
 
+/*
+ * Landing-motion toolbox (shared class names with the sently reference so
+ * recipes stay copy-pasteable). Packets, pulses, beams, dots, spotlights.
+ */
+@keyframes sently-packet-flow {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+.sently-packet-flow {
+  animation-name: sently-packet-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes sently-node-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.sently-node-pulse {
+  animation: sently-node-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes sently-beam-x {
+  from {
+    left: -4rem;
+  }
+  to {
+    left: calc(100% + 4rem);
+  }
+}
+
+.sently-beam-x {
+  animation: sently-beam-x 4.2s linear infinite;
+}
+
+@keyframes sently-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.sently-dot-pulse {
+  animation: sently-dot-pulse 2.2s ease-in-out infinite;
+}
+
+.sently-spotlight {
+  position: relative;
+}
+
+.sently-spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  background: radial-gradient(
+    150px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--sently-spot-ink),
+    transparent 70%
+  );
+}
+
+.sently-spotlight:hover::after {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oke-seam-trace {
     animation: none;
@@ -175,6 +260,24 @@
   .oke-route-probe,
   .oke-route-miss {
     animation: none;
+  }
+
+  .sently-packet-flow {
+    animation: none;
+    opacity: 0 !important;
+  }
+
+  .sently-node-pulse {
+    animation: none;
+  }
+
+  .sently-beam-x,
+  .sently-dot-pulse {
+    animation: none;
+  }
+
+  .sently-spotlight::after {
+    transition: none;
   }
 }
 

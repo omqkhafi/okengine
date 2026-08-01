@@ -18,7 +18,7 @@ describe("fallbackWeeklyCostDelta", () => {
         status: "fallback",
         attempts: [
           { driverId: "wa-cloud", ok: false, at: weekStart + 1 },
-          { driverId: "unifonic", ok: true, at: weekStart + 2 },
+          { driverId: "taqnyat", ok: true, at: weekStart + 2 },
         ],
         at: weekStart + 3,
       },
@@ -39,7 +39,7 @@ describe("fallbackWeeklyCostDelta", () => {
         status: "fallback",
         attempts: [
           { driverId: "wa-cloud", ok: false, at: weekStart + 6 },
-          { driverId: "unifonic", ok: true, at: weekStart + 7 },
+          { driverId: "msegat", ok: true, at: weekStart + 7 },
         ],
         at: weekStart + 8,
       },

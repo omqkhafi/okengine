@@ -10,6 +10,72 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.6.1 — 2026-08-01
+
+### ✨ Added
+
+- Channel drivers on [sently](https://sently.omqkhafi.dev) 1.0 —
+  `sndr` (email), `taqnyat` / `msegat` / `unifonic` (SMS); `wa-cloud`,
+  `webpush`, and `fcm` wrap sently transports. Boot resolves `resend` /
+  `sndr` / `taqnyat` / `msegat` / `unifonic` from env. SMS fallback chains
+  use sently `FallbackTransport` / `RetryTransport`. Re-exports
+  `toChannelSendResult`, `parseSndrWebhook`, `parseUnifonicWebhook`, and
+  `toDeliveryEvent` from `okengine/channel`.
+- `scripts/webpush-interop.ts` — manual Channel → Web Push check against a
+  real browser subscription (reuse sently’s subscribe page; prints push-service
+  HTTP status / headers / body). Default VAPID subject uses `@example.com`
+  (Apple rejects `@oke.local` / `@localhost` with `403 BadJwtToken`).
+- Root `.env.example` (and create-oke template) covering Channel, Store, Vault,
+  AI, and Console keys — copy to `.env.local`.
+
+### ♻️ Changed
+
+- Dependency `sently` bumped to `1.0.0`.
+- `webpush` driver sends through sently `createPushSender` wrapping
+  `WebPushTransport` (same Channel surface; push sender pipeline for hooks).
+- Root `README.md` redesigned with [shieldcn](https://shieldcn.dev/) —
+  adaptive glow header, shadcn-styled npm / JSR / license / Bun / stars / CI
+  badges, and scaffold commands aligned to `create-oke`’s `standard` template
+  (dropped the stale `--template hello`).
+- Local CI test suite is leaner by default: Docker live suites need
+  `OKE_TEST_DOCKER=1`, Ollama live needs `OKE_TEST_OLLAMA_URL` or
+  `OKE_TEST_OLLAMA_DOCKER=1` (no auto-probe on `:11434`), create-oke
+  `oke dev` boot needs `CREATE_OKE_DEV_INTEGRATION=1`, and npm pack /
+  JSR dry-run run under `bun run gate` via `PUBLISH_GATE=1`.
+- Site homepage motion — proof strip and budgets tree read
+  `budgets.json`, Flow simulator for the one-law band, settle reveals,
+  spotlights, and reduced-motion gates across the landing bands.
+- Landing polish — hero fact chips share the law-chip shell (border /
+  card), with a TypeScript brand mark in `#3178C6` and mono icons for
+  Backend / version; Manifest wiring diagram with packet flow, and
+  icons on proof / budget / surface chips.
+- Hero element lattice sits lower and larger, with the lit-cell accent as
+  a 1px rule on the cell’s bottom edge and a roomier docs footer; the
+  collapse diagram’s idle feed lights a small multi-element operation
+  each beat instead of a single concern.
+- Landing budgets panel: four AGENTS caps as headline metrics (measured
+  of limit, % used), then `okengine` and `okengine/plugins` as
+  baselines with leaf entrypoints / per-plugin rows collapsed by
+  default (Base UI Collapsible); plugins grouped auth · security · ops
+  · perf — rounded timings (`36 ms`, `< 1 ms`) instead of
+  false-precision decimals; Features panel keeps the shared card
+  chrome.
+- CI budgets measure each official `okengine/plugins` named module
+  (regression group `plugins` in `budgets.json` / `BUDGETS.md`), not
+  only the plugins barrel.
+- One-law band: full-width claim, then two equal peer panels — a
+  vertical Flow path (matching CodePanel chrome) beside the starter
+  snippet, instead of stacking the diagram under the heading.
+- Element feature cards drop the decorative dot lattice and drifting
+  placeholder icons — content and preview chips only.
+- Local `bun run ci` runs Budgets first so the cold-start probe is not inflated
+  by Format/Lint/Typecheck/Tests heating the machine.
+
+### 🐛 Fixed
+
+- `bun run budgets` writes oxfmt-aligned `BUDGETS.md` tables, so Format no
+  longer fails after every budgets refresh.
+
 ## v0.6.0 — 2026-08-01
 
 ### ✨ Added

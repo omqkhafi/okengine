@@ -6,7 +6,12 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRouter } from "../kernel/router.ts";
-import { type BudgetGroup, resolveExportBudgetTargets } from "./exports.ts";
+import {
+  type BudgetGroup,
+  OFFICIAL_PLUGIN_BUDGETS,
+  PLUGIN_BUDGET_CATEGORIES,
+  resolveExportBudgetTargets,
+} from "./exports.ts";
 import {
   CLIENT_BUDGET_BYTES,
   COLD_START_BUDGET_MS,
@@ -56,7 +61,16 @@ export type BudgetGate = "absolute" | "regression";
 const GROUP_HEADINGS: Readonly<Record<BudgetGroup, string>> = {
   core: "Core",
   exports: "Exports",
+  plugins: "Plugins",
   drivers: "Drivers",
+};
+
+/** Docs category → markdown subheading under Plugins. */
+const PLUGIN_CATEGORY_HEADINGS: Readonly<Record<string, string>> = {
+  auth: "Auth",
+  security: "Security",
+  ops: "Ops",
+  perf: "Perf",
 };
 
 /** One measured budget sample. */
@@ -489,13 +503,13 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
 }
 
 /**
- * Format a snapshot for CI logs (Core / Exports / Drivers sections).
+ * Format a snapshot for CI logs (Core / Exports / Plugins / Drivers).
  *
  * @param snapshot - Measured budgets
  */
 export function formatBudgetsReport(snapshot: BudgetsSnapshot): string {
   const lines = [`okengine budgets v${snapshot.version} @ ${snapshot.measuredAt}`];
-  const order: readonly BudgetGroup[] = ["core", "exports", "drivers"];
+  const order: readonly BudgetGroup[] = ["core", "exports", "plugins", "drivers"];
   for (const group of order) {
     const rows = snapshot.budgets.filter((b) => b.group === group);
     if (rows.length === 0) continue;
@@ -512,6 +526,28 @@ export function formatBudgetsReport(snapshot: BudgetsSnapshot): string {
 }
 
 /**
+ * Markdown table with column widths padded so `oxfmt` is a no-op.
+ * Compact `|---|` tables get realigned by oxfmt and make Format fail after
+ * every `bun run budgets` refresh.
+ *
+ * @param headers - Column headers (use `""` for an unnamed first column)
+ * @param rows - Body cells
+ */
+export function formatMarkdownTable(
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): string[] {
+  const widths = headers.map((header, i) =>
+    Math.max(header.length, ...rows.map((row) => (row[i] ?? "").length)),
+  );
+  const cell = (value: string, i: number): string => value.padEnd(widths[i]!);
+  const line = (cells: readonly string[]): string =>
+    `| ${cells.map((value, i) => cell(value, i)).join(" | ")} |`;
+  const sep = `| ${widths.map((w) => "-".repeat(w)).join(" | ")} |`;
+  return [line(headers), sep, ...rows.map((row) => line(row))];
+}
+
+/**
  * Full markdown document for [`BUDGETS.md`](../../BUDGETS.md).
  * Written by `bun run budgets` — do not edit the tables by hand.
  *
@@ -525,24 +561,51 @@ export function formatBudgetsMarkdown(snapshot: BudgetsSnapshot): string {
     "",
     `_okengine v${snapshot.version} · measured ${snapshot.measuredAt}_`,
     "",
-    "Core rows are absolute AGENTS caps. Exports and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).",
+    "Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).",
   ];
-  const order: readonly BudgetGroup[] = ["core", "exports", "drivers"];
+  const order: readonly BudgetGroup[] = ["core", "exports", "plugins", "drivers"];
   for (const group of order) {
     const rows = snapshot.budgets.filter((b) => b.group === group);
     if (rows.length === 0) continue;
     const limitCol = group === "core" ? "Limit" : "Ceiling";
     lines.push("");
     lines.push(`## ${GROUP_HEADINGS[group]}`);
-    lines.push("");
-    lines.push(`| | Measured | ${limitCol} |`);
-    lines.push("|---|---|---|");
-    for (const b of rows) {
-      const mark = b.ok ? "" : " **FAIL**";
-      lines.push(
-        `| ${b.label}${mark} | ${formatValue(b.value, b.unit)} | ${formatValue(b.limit, b.unit)} |`,
-      );
+    if (group === "plugins") {
+      for (const category of PLUGIN_BUDGET_CATEGORIES) {
+        const names = new Set(
+          OFFICIAL_PLUGIN_BUDGETS.filter((p) => p.category === category).map((p) => p.name),
+        );
+        const catRows = rows.filter((b) => names.has(b.label));
+        if (catRows.length === 0) continue;
+        lines.push("");
+        lines.push(`### ${PLUGIN_CATEGORY_HEADINGS[category] ?? category}`);
+        lines.push("");
+        lines.push(
+          ...formatMarkdownTable(
+            ["", "Measured", limitCol],
+            catRows.map((b) => {
+              const mark = b.ok ? "" : " **FAIL**";
+              return [
+                `${b.label}${mark}`,
+                formatValue(b.value, b.unit),
+                formatValue(b.limit, b.unit),
+              ];
+            }),
+          ),
+        );
+      }
+      continue;
     }
+    lines.push("");
+    lines.push(
+      ...formatMarkdownTable(
+        ["", "Measured", limitCol],
+        rows.map((b) => {
+          const mark = b.ok ? "" : " **FAIL**";
+          return [`${b.label}${mark}`, formatValue(b.value, b.unit), formatValue(b.limit, b.unit)];
+        }),
+      ),
+    );
   }
   return `${lines.join("\n")}\n`;
 }

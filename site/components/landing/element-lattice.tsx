@@ -7,7 +7,7 @@
  *
  * Motion carries the same claim. The cells deal in once on mount, a spotlight
  * follows the pointer across the panel (fine pointer only), and the hovered or
- * focused cell takes a single shared highlight that glides from wherever it
+ * focused cell takes a single shared bottom accent that glides from wherever it
  * last was — one lit cell at a time, never eight competing ones. While nobody
  * is pointing, a beat walks the ring one element per period and the header
  * reads out what that element replaces, so the panel argues for itself without
@@ -130,7 +130,7 @@ export function ElementLattice() {
      * never request those animates when `reduced` is set.
      */
     <MotionConfig reducedMotion="never" transition={SPRING}>
-      <div className="relative w-full max-w-[38rem]">
+      <div className="relative w-full max-w-[42rem]">
         <div
           aria-hidden
           className="pointer-events-none absolute -inset-3 bg-grid-black/[0.02] mask-[radial-gradient(70%_60%_at_50%_45%,white,transparent)] sm:-inset-6 dark:bg-grid-white/[0.02]"
@@ -216,25 +216,30 @@ export function ElementLattice() {
               const highlighted = isActive || isLit;
               return (
                 <motion.li key={element.name} variants={cell} className="relative bg-fd-card">
-                  {/* One shared highlight for the whole grid: it glides, it never blinks. */}
+                  {/*
+                   * Highlight sits on the cell's bottom edge — a 1px rule that
+                   * glides between cells. The idle beat uses the same seat, fainter.
+                   */}
                   {isActive ? (
                     reduced ? (
-                      <span aria-hidden className={cn("absolute inset-0", tone.wash)} />
+                      <span
+                        aria-hidden
+                        className={cn("absolute inset-x-0 bottom-0 h-px", tone.hairline)}
+                      />
                     ) : (
                       <motion.span
                         layoutId="oke-lattice-cell"
                         aria-hidden
-                        className={cn("absolute inset-0", tone.wash)}
+                        className={cn("absolute inset-x-0 bottom-0 h-px", tone.hairline)}
                       />
                     )
                   ) : null}
 
-                  {/* The beat's own, fainter wash — no layout, so the two never fight. */}
                   <motion.span
                     aria-hidden
-                    className={cn("absolute inset-0", tone.lit)}
+                    className={cn("absolute inset-x-0 bottom-0 h-px", tone.hairline)}
                     initial={false}
-                    animate={{ opacity: isLit ? 1 : 0 }}
+                    animate={{ opacity: isLit && !isActive ? 0.45 : 0 }}
                     transition={{ duration: reduced ? 0 : 0.5, ease: "easeOut" }}
                   />
 
@@ -243,7 +248,7 @@ export function ElementLattice() {
                     onPointerEnter={finePointer ? () => setActive(i) : undefined}
                     onFocus={() => setActive(i)}
                     onBlur={() => setActive(null)}
-                    className="relative flex min-h-[7.25rem] flex-col p-3 sm:min-h-0 sm:p-4"
+                    className="relative flex min-h-[7.75rem] flex-col p-3 sm:min-h-[8.5rem] sm:p-4"
                   >
                     <div className="flex items-start justify-between">
                       {/*
@@ -286,19 +291,6 @@ export function ElementLattice() {
                     <span className="mt-0.5 block text-[11px] leading-snug text-fd-muted-foreground">
                       {element.essence}
                     </span>
-
-                    {/* Hairline that draws in under the cell you are on. */}
-                    <motion.span
-                      aria-hidden
-                      className={cn(
-                        "absolute inset-x-0 bottom-0 h-px origin-left",
-                        tone.hairline,
-                        reduced && (isActive ? "scale-x-100" : "scale-x-0"),
-                      )}
-                      initial={false}
-                      animate={reduced ? undefined : { scaleX: isActive ? 1 : 0 }}
-                      transition={{ duration: 0.28, ease: "easeOut" }}
-                    />
                   </Link>
                 </motion.li>
               );
@@ -307,7 +299,7 @@ export function ElementLattice() {
 
           <motion.div
             variants={cell}
-            className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-fd-border px-3 py-2.5 sm:px-4 sm:py-3"
+            className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-fd-border px-3.5 py-3.5 sm:px-5 sm:py-4"
           >
             {/* Idle beat walks a highlight along the footer rule. */}
             {lit === null || beat === null || reduced ? null : (
@@ -329,7 +321,7 @@ export function ElementLattice() {
              * Footer mirrors the header: header says what the lit element replaces;
              * footer points at the reference page and what the element is for.
              */}
-            <div className="relative min-h-4 min-w-0 flex-1">
+            <div className="relative min-h-5 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.div
                   key={focused?.name ?? "idle"}
@@ -337,22 +329,22 @@ export function ElementLattice() {
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                  className="flex flex-col gap-1 sm:absolute sm:inset-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-x-4"
+                  className="flex flex-col gap-1.5 sm:absolute sm:inset-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-x-5"
                 >
                   {focused ? (
                     <>
                       <Link
                         href={focused.href}
-                        className="shrink-0 font-mono text-xs text-fd-foreground underline-offset-2 hover:underline"
+                        className="shrink-0 font-mono text-[13px] text-fd-foreground underline-offset-2 hover:underline"
                       >
                         docs/elements/{focused.preview}
                       </Link>
-                      <p className="min-w-0 text-[11px] leading-snug text-fd-muted-foreground sm:truncate sm:text-right sm:leading-none">
+                      <p className="min-w-0 text-xs leading-snug text-fd-muted-foreground sm:truncate sm:text-right sm:leading-none">
                         {focused.description}
                       </p>
                     </>
                   ) : (
-                    <p className="text-[11px] text-fd-muted-foreground">
+                    <p className="text-xs text-fd-muted-foreground">
                       New infrastructure is a driver — never a ninth element.
                     </p>
                   )}

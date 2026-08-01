@@ -11,3 +11,14 @@ export type { Attachment, MailOptions, SendResult, Transport, RetryConfig } from
 export { SentlyError } from "sently/errors";
 export { RetryTransport } from "sently/transports/retry";
 export { FallbackTransport, FallbackError, type FallbackAttempt } from "sently/transports/fallback";
+export {
+  toChannelSendResult,
+  type AnySendResult,
+  type ChannelSendResult as SentlyChannelSendResult,
+} from "sently/channel-result";
+export {
+  parse as parseSndrWebhook,
+  verifySignature as verifySndrSignature,
+} from "sently/webhooks/sndr";
+export { parse as parseUnifonicWebhook } from "sently/webhooks/unifonic";
+export { toDeliveryEvent, type EmailEvent, type DeliveryEvent } from "sently/webhooks";

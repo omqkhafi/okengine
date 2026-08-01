@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-08-01T01:52:06.122Z",
-  "version": "0.5.1",
+  "measuredAt": "2026-08-01T19:55:11.270Z",
+  "version": "0.6.1",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 35.867,
+      "value": 65.82,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -45,7 +45,7 @@
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0.001,
+      "value": 0.003,
       "limit": 1,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 65719,
-      "limit": 67034,
+      "value": 66004,
+      "limit": 67325,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -85,8 +85,8 @@
     {
       "id": "export:./channel",
       "label": "channel",
-      "value": 4698,
-      "limit": 4954,
+      "value": 5127,
+      "limit": 5383,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 85638,
-      "limit": 87351,
+      "value": 85924,
+      "limit": 87643,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 18993,
-      "limit": 19373,
+      "value": 18992,
+      "limit": 19372,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -215,8 +215,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 10771,
-      "limit": 11027,
+      "value": 11080,
+      "limit": 11336,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -233,10 +233,140 @@
       "ok": true
     },
     {
+      "id": "export:./plugins/username",
+      "label": "username",
+      "value": 10214,
+      "limit": 10470,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/anonymous",
+      "label": "anonymous",
+      "value": 5596,
+      "limit": 5852,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/magicLink",
+      "label": "magicLink",
+      "value": 9367,
+      "limit": 9623,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/emailOtp",
+      "label": "emailOtp",
+      "value": 9311,
+      "limit": 9567,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/phoneNumber",
+      "label": "phoneNumber",
+      "value": 8670,
+      "limit": 8926,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/twoFactor",
+      "label": "twoFactor",
+      "value": 9272,
+      "limit": 9528,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/passkey",
+      "label": "passkey",
+      "value": 9589,
+      "limit": 9845,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/headers",
+      "label": "headers",
+      "value": 2319,
+      "limit": 2575,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/cors",
+      "label": "cors",
+      "value": 2147,
+      "limit": 2403,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/csrf",
+      "label": "csrf",
+      "value": 4177,
+      "limit": 4433,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/ipAllowlist",
+      "label": "ipAllowlist",
+      "value": 4296,
+      "limit": 4552,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/maintenanceMode",
+      "label": "maintenanceMode",
+      "value": 1630,
+      "limit": 1886,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
+      "id": "export:./plugins/compression",
+      "label": "compression",
+      "value": 1941,
+      "limit": 2197,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "plugins",
+      "ok": true
+    },
+    {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 49690,
-      "limit": 50684,
+      "value": 49532,
+      "limit": 50523,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -265,8 +395,8 @@
     {
       "id": "export:./drivers/ai-ollama",
       "label": "ai-ollama",
-      "value": 1875,
-      "limit": 2131,
+      "value": 1877,
+      "limit": 2133,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -295,8 +425,18 @@
     {
       "id": "export:./drivers/channel-fcm",
       "label": "channel-fcm",
-      "value": 777,
-      "limit": 1033,
+      "value": 964,
+      "limit": 1220,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
+      "id": "export:./drivers/channel-msegat",
+      "label": "channel-msegat",
+      "value": 740,
+      "limit": 996,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -313,6 +453,16 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/channel-sently-map",
+      "label": "channel-sently-map",
+      "value": 454,
+      "limit": 710,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/channel-smtp",
       "label": "channel-smtp",
       "value": 455,
@@ -323,10 +473,30 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/channel-sndr",
+      "label": "channel-sndr",
+      "value": 375,
+      "limit": 631,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
+      "id": "export:./drivers/channel-taqnyat",
+      "label": "channel-taqnyat",
+      "value": 737,
+      "limit": 993,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/channel-unifonic",
       "label": "channel-unifonic",
-      "value": 695,
-      "limit": 951,
+      "value": 756,
+      "limit": 1012,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -335,8 +505,8 @@
     {
       "id": "export:./drivers/channel-wa-cloud",
       "label": "channel-wa-cloud",
-      "value": 742,
-      "limit": 998,
+      "value": 800,
+      "limit": 1056,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -345,8 +515,8 @@
     {
       "id": "export:./drivers/channel-webpush",
       "label": "channel-webpush",
-      "value": 1700,
-      "limit": 1956,
+      "value": 947,
+      "limit": 1203,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -415,8 +585,8 @@
     {
       "id": "export:./drivers/ollama",
       "label": "ollama",
-      "value": 1868,
-      "limit": 2124,
+      "value": 1870,
+      "limit": 2126,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

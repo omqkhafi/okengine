@@ -7,9 +7,14 @@ export {
   exportBudgetLabel,
   isMeasurableDriverFile,
   listDriverModules,
+  OFFICIAL_PLUGIN_BUDGETS,
+  PLUGIN_BUDGET_CATEGORIES,
   resolveExportBudgetTargets,
+  resolvePluginBudgetTargets,
   type BudgetGroup,
   type ExportBudgetTarget,
+  type OfficialPluginBudget,
+  type PluginBudgetCategory,
 } from "./exports.ts";
 
 export {

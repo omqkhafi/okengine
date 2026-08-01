@@ -1,7 +1,9 @@
 /**
- * `wa-cloud` channel driver — WhatsApp Cloud API (Meta).
+ * `wa-cloud` channel driver — WhatsApp Cloud API via sently.
  */
 
+import { WhatsAppCloudTransport } from "sently/transports/whatsapp-cloud";
+import { mapSentlySendError, mapSentlySendResult } from "./channel-sently-map.ts";
 import type {
   ChannelDriver,
   ChannelMessage,
@@ -13,64 +15,48 @@ import type {
 /**
  * Open a WhatsApp Cloud API driver.
  *
- * @param options - `token` (access token) + `from` (phone number id)
+ * @param options - `token`/`apiKey` (access token) + `from` (phone number id)
  */
 export function openWaCloudChannel(options: ChannelOpenOptions = {}): ChannelDriver {
-  const token = options.token ?? options.apiKey;
+  const accessToken = options.token ?? options.apiKey;
   const phoneNumberId = options.from;
-  const fetchFn = options.fetch ?? globalThis.fetch;
-  const base = options.url ?? "https://graph.facebook.com/v19.0";
+  if (!accessToken || !phoneNumberId) {
+    throw new Error("wa-cloud: token and from (phone number id) are required");
+  }
+
+  const transport = new WhatsAppCloudTransport({ accessToken, phoneNumberId });
 
   const channel: ChannelTransport = {
     provider: "wa-cloud",
     mediums: ["whatsapp"],
     async send(message: ChannelMessage): Promise<ChannelSendResult> {
-      if (!token || !phoneNumberId) {
-        throw new Error("wa-cloud: token and from (phone number id) are required");
+      try {
+        const templateName =
+          message.template ??
+          (typeof message.data?.template === "string" ? message.data.template : undefined);
+        const language =
+          message.locale ??
+          (typeof message.data?.language === "string" ? message.data.language : "en_US");
+
+        const result = templateName
+          ? await transport.send({
+              to: message.to,
+              template: { name: templateName, language },
+            })
+          : await transport.send({
+              to: message.to,
+              text: message.text ?? "",
+            });
+
+        return mapSentlySendResult("wa-cloud", result);
+      } catch (err) {
+        return mapSentlySendError("wa-cloud", err);
       }
-      const res = await fetchFn(`${base}/${phoneNumberId}/messages`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: message.to,
-          type: "text",
-          text: { body: message.text ?? "" },
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        messages?: Array<{ id?: string }>;
-        error?: { message?: string };
-      };
-      const id = body.messages?.[0]?.id ?? crypto.randomUUID();
-      if (!res.ok) {
-        return {
-          ok: false,
-          messageId: id,
-          driverId: "wa-cloud",
-          attempts: [
-            {
-              driverId: "wa-cloud",
-              ok: false,
-              error: body.error?.message ?? `HTTP ${res.status}`,
-              at: Date.now(),
-            },
-          ],
-        };
-      }
-      return {
-        ok: true,
-        messageId: id,
-        driverId: "wa-cloud",
-        attempts: [{ driverId: "wa-cloud", ok: true, at: Date.now(), messageId: id }],
-      };
     },
+    verify: () => transport.verify(),
   };
 
-  return { id: "wa-cloud", channel };
+  return { id: "wa-cloud", channel, whatsappTransport: transport };
 }
 
 /** WhatsApp Cloud driver factory. */

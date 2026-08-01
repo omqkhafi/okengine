@@ -1,7 +1,9 @@
 /**
- * `unifonic` channel driver — SMS via Unifonic REST API.
+ * `unifonic` channel driver — SMS via sently's Unifonic transport.
  */
 
+import { UnifonicTransport } from "sently/transports/unifonic";
+import { mapSentlySendError, mapSentlySendResult } from "./channel-sently-map.ts";
 import type {
   ChannelDriver,
   ChannelMessage,
@@ -13,59 +15,40 @@ import type {
 /**
  * Open a Unifonic SMS driver.
  *
- * @param options - `apiKey` + optional `from` (sender id)
+ * @param options - `apiKey`/`appSid` (AppSid) + optional `sender`/`from` (SenderID)
  */
 export function openUnifonicChannel(options: ChannelOpenOptions = {}): ChannelDriver {
-  const apiKey = options.apiKey;
-  const from = options.from ?? "OKE";
-  const fetchFn = options.fetch ?? globalThis.fetch;
-  const base = options.url ?? "https://el.cloud.unifonic.com";
+  const appSid = options.appSid ?? options.apiKey;
+  const senderId = options.sender ?? options.from;
+  if (!appSid) {
+    throw new Error("unifonic channel: appSid (or apiKey) is required");
+  }
+
+  const transport = new UnifonicTransport({
+    appSid,
+    ...(senderId ? { senderId } : {}),
+    ...(options.url?.startsWith("https://") ? { statusCallback: options.url } : {}),
+  });
 
   const channel: ChannelTransport = {
     provider: "unifonic",
     mediums: ["sms"],
     async send(message: ChannelMessage): Promise<ChannelSendResult> {
-      if (!apiKey) {
-        throw new Error("unifonic: apiKey is required");
+      try {
+        const result = await transport.send({
+          to: message.to,
+          body: message.text ?? String(message.data?.code ?? ""),
+          ...(message.from ? { from: message.from } : {}),
+        });
+        return mapSentlySendResult("unifonic", result);
+      } catch (err) {
+        return mapSentlySendError("unifonic", err);
       }
-      const body = new URLSearchParams({
-        AppSid: apiKey,
-        Recipient: message.to,
-        Body: message.text ?? String(message.data?.code ?? ""),
-        SenderID: message.from ?? from,
-      });
-      const res = await fetchFn(`${base}/rest/SMS/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
-      const text = await res.text();
-      const id = crypto.randomUUID();
-      if (!res.ok) {
-        return {
-          ok: false,
-          messageId: id,
-          driverId: "unifonic",
-          attempts: [
-            {
-              driverId: "unifonic",
-              ok: false,
-              error: text || `HTTP ${res.status}`,
-              at: Date.now(),
-            },
-          ],
-        };
-      }
-      return {
-        ok: true,
-        messageId: id,
-        driverId: "unifonic",
-        attempts: [{ driverId: "unifonic", ok: true, at: Date.now(), messageId: id }],
-      };
     },
+    verify: () => transport.verify(),
   };
 
-  return { id: "unifonic", channel };
+  return { id: "unifonic", channel, smsTransport: transport };
 }
 
 /** Unifonic driver factory. */

@@ -24,15 +24,15 @@ That is `bun scripts/ci.ts` — **sequential**; it stops at the first failing ch
 
 ## Checks (in order)
 
-| #   | Label      | Command                                     | Typical fix                                                                                |
-| --- | ---------- | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 1   | Format     | `bun run fmt:check`                         | `bun run fmt` (oxfmt write)                                                                |
-| 2   | Lint       | `bun run lint`                              | Fix oxlint findings; do not disable rules casually                                         |
-| 3   | Typecheck  | `bun run typecheck`                         | Fix `tsc --noEmit` (+ `packages/create-oke` typecheck)                                     |
-| 4   | Tests      | `bun run test` (`CREATE_OKE_INTEGRATION=1`) | Fix failing tests; live suites must skip-visible, never silent green                       |
-| 5   | Budgets    | `bun run budgets -- --dry-run`              | Shrink export or rebase snapshot via release/publish flow — no silent budget lies          |
-| 6   | Gate       | `bun run gate`                              | Doc-staleness, competitor-mention, vault-driver-removal, errors registry, upgrade codemods |
-| 7   | Site build | `bun run site:build`                        | Fix MDX/docs build under `site/` (prose density, fumadocs, links)                          |
+| #   | Label      | Command                                     | Typical fix                                                                                                                                                                                                                                        |
+| --- | ---------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Budgets    | `bun run budgets -- --dry-run`              | Shrink export or rebase snapshot via release/publish flow — no silent budget lies. Cold start needs a quiet machine (pause `bun:dev` / heavy load); it runs first on purpose                                                                       |
+| 2   | Format     | `bun run fmt:check`                         | `bun run fmt` (oxfmt write). If `BUDGETS.md` flips every budgets refresh, the markdown tables must be oxfmt-aligned (see `formatBudgetsMarkdown`)                                                                                                  |
+| 3   | Lint       | `bun run lint`                              | Fix oxlint findings; do not disable rules casually                                                                                                                                                                                                 |
+| 4   | Typecheck  | `bun run typecheck`                         | Fix `tsc --noEmit` (+ `packages/create-oke` typecheck)                                                                                                                                                                                             |
+| 5   | Tests      | `bun run test` (`CREATE_OKE_INTEGRATION=1`) | Fix failing tests; live suites must skip-visible, never silent green. Docker live needs `OKE_TEST_DOCKER=1`; Ollama live needs `OKE_TEST_OLLAMA_URL` or `OKE_TEST_OLLAMA_DOCKER=1`; create-oke `oke dev` boot needs `CREATE_OKE_DEV_INTEGRATION=1` |
+| 6   | Gate       | `bun run gate` (`PUBLISH_GATE=1`)           | Doc-staleness, competitor-mention, vault-driver-removal, errors registry, upgrade codemods, npm pack + jsr publish dry-run                                                                                                                         |
+| 7   | Site build | `bun run site:build`                        | Fix MDX/docs build under `site/` (prose density, fumadocs, links)                                                                                                                                                                                  |
 
 ## Workflow
 
@@ -47,7 +47,8 @@ Task:
 
 ### Fix discipline
 
-- **Format first** when Format fails — run `bun run fmt`, then full `bun run ci` again.
+- **Format** when Format fails — run `bun run fmt`, then full `bun run ci` again.
+- **Budgets / cold start** — pause local `bun:dev` (and anything hammering the CPU) before re-running; do not raise the 75 ms cap to paper over load.
 - **Do not** `--no-verify`, skip hooks, or delete/weaken gates to get green.
 - **Do not** expand test skips to hide regressions. Integration skips stay skip-visible (`console.log("skip: …")` + `test.skip`).
 - Budgets / Gate / Site failures are real — treat them like test failures.

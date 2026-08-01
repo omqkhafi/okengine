@@ -16,7 +16,10 @@ import { cn } from "@/lib/cn";
 export function BandLabel({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-2 border-b border-fd-border px-5 py-3 sm:px-8">
-      <span aria-hidden className="size-1 rounded-full bg-fd-muted-foreground/60" />
+      <span
+        aria-hidden
+        className="sently-dot-pulse size-1 rounded-full bg-fd-muted-foreground/60"
+      />
       <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
         {children}
       </span>

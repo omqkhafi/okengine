@@ -8,13 +8,24 @@
 "use client";
 
 import { AnimatePresence, motion, MotionConfig, type Variants } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Package, Server } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { TypescriptMark } from "@/components/chrome/icons";
 import { AiOnboardButton } from "@/components/landing/ai-onboard-button";
 import { cn } from "@/lib/cn";
 import { ELEMENTS, EXPORTS, REAL_TODAY, TAGLINE } from "@/lib/elements";
 import { useClientReducedMotion } from "@/lib/use-client-reduced-motion";
+
+/**
+ * One shared shell with the law chip above — icons carry identity.
+ * TypeScript keeps the brand mark in `#3178C6`; the others stay mono.
+ */
+const HERO_PILL_ICON: Record<(typeof REAL_TODAY)[number]["id"], ReactNode> = {
+  backend: <Server aria-hidden className="size-3 text-fd-foreground/70" strokeWidth={1.75} />,
+  typescript: <TypescriptMark className="size-3 text-[#3178C6] dark:text-[#79b8ff]" />,
+  version: <Package aria-hidden className="size-3 text-fd-foreground/70" strokeWidth={1.75} />,
+};
 
 /** Beat ids — each number in the headline is a real count from the framework. */
 type BeatId = "law" | "elements" | "exports";
@@ -270,10 +281,11 @@ export function HeroTitle() {
         <motion.ul className="mt-8 flex flex-wrap gap-2" variants={pills}>
           {REAL_TODAY.map((item) => (
             <motion.li
-              key={item.label}
+              key={item.id}
               variants={pillVariants}
-              className="rounded-full border border-fd-border px-2.5 py-0.5 font-mono text-[11px] text-fd-muted-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full border border-fd-border bg-fd-card px-2.5 py-1 font-mono text-[11px] text-fd-muted-foreground"
             >
+              {HERO_PILL_ICON[item.id]}
               {item.label}
             </motion.li>
           ))}

@@ -1,7 +1,9 @@
 /**
- * `fcm` channel driver — Firebase Cloud Messaging HTTP v1 (protocol-shaped).
+ * `fcm` channel driver — Firebase Cloud Messaging HTTP v1 via sently.
  */
 
+import { FcmTransport } from "sently/transports/fcm";
+import { mapSentlySendError, mapSentlySendResult } from "./channel-sently-map.ts";
 import type {
   ChannelDriver,
   ChannelMessage,
@@ -13,70 +15,64 @@ import type {
 /**
  * Open an FCM push driver.
  *
- * @param options - `token` (OAuth access token) + `from` (project id)
+ * Prefer service-account credentials (`clientEmail` + `privateKey` + `from`/
+ * `projectId`). For tests, pass `token` as a pre-fetched access token via
+ * `getAccessToken` (still requires `from` / project id).
+ *
+ * @param options - Project id + service account or injectable token
  */
 export function openFcmChannel(options: ChannelOpenOptions = {}): ChannelDriver {
+  const projectId = options.projectId ?? options.from;
+  if (!projectId) {
+    throw new Error("fcm channel: projectId (or from) is required");
+  }
+
+  const clientEmail = options.clientEmail ?? options.user;
+  const privateKey = options.privateKey ?? options.pass;
   const accessToken = options.token ?? options.apiKey;
-  const projectId = options.from;
-  const fetchFn = options.fetch ?? globalThis.fetch;
-  const base = options.url ?? "https://fcm.googleapis.com";
+
+  if (!accessToken && !(clientEmail && privateKey)) {
+    throw new Error(
+      "fcm channel: clientEmail+privateKey (service account) or token (access token) required",
+    );
+  }
+  if ((clientEmail && !privateKey) || (!clientEmail && privateKey)) {
+    throw new Error("fcm channel: clientEmail and privateKey must be provided together");
+  }
+
+  // Token-only mode (tests / pre-fetched OAuth): sently still requires placeholder
+  // service-account fields; getAccessToken skips JWT exchange.
+  const transport = new FcmTransport({
+    projectId,
+    clientEmail: clientEmail ?? "oke-fcm@local",
+    privateKey:
+      privateKey ??
+      "-----BEGIN PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF6PZGFw=\n-----END PRIVATE KEY-----\n",
+    ...(accessToken ? { getAccessToken: async () => accessToken } : {}),
+  });
 
   const channel: ChannelTransport = {
     provider: "fcm",
     mediums: ["push"],
     async send(message: ChannelMessage): Promise<ChannelSendResult> {
-      if (!accessToken || !projectId) {
-        throw new Error("fcm: token and from (project id) are required");
+      try {
+        const title = message.subject ?? message.template ?? "notification";
+        const body = message.text ?? "";
+        const result = await transport.send({
+          token: message.to,
+          title,
+          body,
+          ...(message.data ? { data: { ...message.data } } : {}),
+        });
+        return mapSentlySendResult("fcm", result);
+      } catch (err) {
+        return mapSentlySendError("fcm", err);
       }
-      const res = await fetchFn(`${base}/v1/projects/${projectId}/messages:send`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: {
-            token: message.to,
-            notification: {
-              title: message.subject ?? message.template ?? "notification",
-              body: message.text ?? "",
-            },
-            data: Object.fromEntries(
-              Object.entries(message.data ?? {}).map(([k, v]) => [k, String(v)]),
-            ),
-          },
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        name?: string;
-        error?: { message?: string };
-      };
-      const id = body.name ?? crypto.randomUUID();
-      if (!res.ok) {
-        return {
-          ok: false,
-          messageId: id,
-          driverId: "fcm",
-          attempts: [
-            {
-              driverId: "fcm",
-              ok: false,
-              error: body.error?.message ?? `HTTP ${res.status}`,
-              at: Date.now(),
-            },
-          ],
-        };
-      }
-      return {
-        ok: true,
-        messageId: id,
-        driverId: "fcm",
-        attempts: [{ driverId: "fcm", ok: true, at: Date.now(), messageId: id }],
-      };
     },
+    verify: () => transport.verify(),
   };
 
-  return { id: "fcm", channel };
+  return { id: "fcm", channel, pushTransport: transport };
 }
 
 /** FCM driver factory. */

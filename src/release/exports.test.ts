@@ -9,7 +9,9 @@ import {
   exportBudgetLabel,
   isMeasurableDriverFile,
   listDriverModules,
+  OFFICIAL_PLUGIN_BUDGETS,
   resolveExportBudgetTargets,
+  resolvePluginBudgetTargets,
 } from "./exports.ts";
 
 const ROOT = resolve(import.meta.dir, "../..");
@@ -29,10 +31,30 @@ describe("export budget targets", () => {
     expect(exportBudgetLabel(".")).toBe("okengine");
     expect(exportBudgetLabel("./channel")).toBe("channel");
     expect(exportBudgetLabel("./drivers/postgres")).toBe("postgres");
+    expect(exportBudgetLabel("./plugins/cors")).toBe("cors");
     expect(exportBudgetGroup(".")).toBe("exports");
     expect(exportBudgetGroup("./channel")).toBe("exports");
+    expect(exportBudgetGroup("./plugins")).toBe("exports");
+    expect(exportBudgetGroup("./plugins/cors")).toBe("plugins");
     expect(exportBudgetGroup("./drivers")).toBe("drivers");
     expect(exportBudgetGroup("./drivers/postgres")).toBe("drivers");
+  });
+
+  test("official plugin catalogue files exist and resolve uniquely", async () => {
+    const plugins = resolvePluginBudgetTargets();
+    expect(plugins.length).toBe(OFFICIAL_PLUGIN_BUDGETS.length);
+    expect(new Set(plugins.map((t) => t.id)).size).toBe(plugins.length);
+
+    for (const plugin of OFFICIAL_PLUGIN_BUDGETS) {
+      const path = join(ROOT, "src/plugins", plugin.file);
+      expect(await Bun.file(path).exists()).toBe(true);
+      const target = plugins.find((t) => t.label === plugin.name);
+      expect(target).toBeDefined();
+      expect(target!.id).toBe(`export:./plugins/${plugin.name}`);
+      expect(target!.group).toBe("plugins");
+      expect(target!.category).toBe(plugin.category);
+      expect(target!.entry).toBe(path);
+    }
   });
 
   test("every non-glob package export and every driver module is covered", async () => {
@@ -63,6 +85,10 @@ describe("export budget targets", () => {
       expect(target!.label).toBe(name);
       expect(target!.group).toBe("drivers");
       expect(target!.entry).toBe(join(ROOT, "src/drivers", file));
+    }
+
+    for (const plugin of OFFICIAL_PLUGIN_BUDGETS) {
+      expect(bySubpath.get(`./plugins/${plugin.name}`)).toBeDefined();
     }
 
     // No duplicates.

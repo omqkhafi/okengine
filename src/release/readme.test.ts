@@ -37,6 +37,26 @@ describe("budgets markdown", () => {
           ok: true,
         },
         {
+          id: "export:./plugins/cors",
+          label: "cors",
+          value: 2048,
+          limit: 2304,
+          unit: "bytes",
+          gate: "regression",
+          group: "plugins",
+          ok: true,
+        },
+        {
+          id: "export:./plugins/username",
+          label: "username",
+          value: 3072,
+          limit: 3328,
+          unit: "bytes",
+          gate: "regression",
+          group: "plugins",
+          ok: true,
+        },
+        {
           id: "export:./drivers/postgres",
           label: "postgres",
           value: 1413,
@@ -52,10 +72,18 @@ describe("budgets markdown", () => {
     expect(md.startsWith("# Budgets\n")).toBe(true);
     expect(md).toContain("## Core");
     expect(md).toContain("## Exports");
+    expect(md).toContain("## Plugins");
+    expect(md).toContain("### Auth");
+    expect(md).toContain("### Security");
     expect(md).toContain("## Drivers");
-    expect(md).toContain("| channel |");
-    expect(md).toContain("| postgres |");
+    expect(md).toMatch(/\|\s*channel\s*\|/);
+    expect(md).toMatch(/\|\s*cors\s*\|/);
+    expect(md).toMatch(/\|\s*username\s*\|/);
+    expect(md).toMatch(/\|\s*postgres\s*\|/);
     expect(md).toContain("[`budgets.json`](budgets.json)");
     expect(md).not.toContain("./channel");
+    // oxfmt-aligned separators (not compact `|---|---|---|`) so Format stays green
+    expect(md).not.toContain("|---|---|---|");
+    expect(md).toMatch(/\| -{3,} \| -{3,} \| -{3,} \|/);
   });
 });

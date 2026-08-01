@@ -30,6 +30,7 @@ drivers: {
   vault: { local: "dotenv", docker: "openbao", test: "memory", prod: "openbao" },
   channel: {
     email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+    sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
   },
 },
 ```
@@ -43,10 +44,10 @@ drivers: {
 | `signal`           | env driver map | `memory` · `postgres` · `redis` · `nats`                                     |
 | `clock`            | env driver map | `memory` · `postgres` · `frozen`                                             |
 | `vault`            | env driver map | `dotenv` · `openbao` · `memory`                                              |
-| `channel.email`    | env driver map | `console` · `smtp` · `resend`                                                |
-| `channel.sms`      | env driver map | `console` · `unifonic`                                                       |
-| `channel.whatsapp` | env driver map | medium declared; drivers added per provider                                  |
-| `channel.push`     | env driver map | medium declared; drivers added per provider                                  |
+| `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr`                                       |
+| `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |
+| `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                       |
+| `channel.push`     | env driver map | `console` · `webpush` · `fcm`                                                |
 | `ai`               | env driver map | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` |
 | `runs`             | env driver map | runs-store driver (distinct from top-level `runs`)                           |
 | `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred              |

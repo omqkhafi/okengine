@@ -3,11 +3,11 @@
  *
  * Opt-in (never auto-pull a multi-GB model in ordinary `bun test`):
  * 1. `OKE_TEST_OLLAMA_URL` — point at any reachable Ollama
- * 2. Ollama already listening on `http://127.0.0.1:11434`
- * 3. `OKE_TEST_OLLAMA_DOCKER=1` — start `ollama/ollama` via the recipe and pull
+ * 2. `OKE_TEST_OLLAMA_DOCKER=1` — start `ollama/ollama` via the recipe and pull
  *    `qwen3.5:9b` (slow first run)
  *
  * Without one of those, the suite skips with a visible reason (never an empty pass).
+ * A local daemon on :11434 is not enough — set `OKE_TEST_OLLAMA_URL` explicitly.
  */
 
 import { afterAll, describe, expect, test } from "bun:test";
@@ -20,7 +20,6 @@ import { bindAi } from "../kernel/boot-bind/ai.ts";
 import { OLLAMA_DEFAULT_MODEL, openOllama } from "./ai-ollama.ts";
 
 const OLLAMA_IMAGE = "ollama/ollama:latest";
-const DEFAULT_LOCAL = "http://127.0.0.1:11434";
 const ENV_URL = process.env.OKE_TEST_OLLAMA_URL?.trim();
 const WANT_DOCKER = process.env.OKE_TEST_OLLAMA_DOCKER === "1";
 
@@ -32,23 +31,12 @@ function dockerAvailable(): boolean {
   }
 }
 
-async function probeOllama(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(1_500) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 const DOCKER = dockerAvailable();
-const localUp = ENV_URL ? false : await probeOllama(DEFAULT_LOCAL);
-const canLive = Boolean(ENV_URL) || localUp || (WANT_DOCKER && DOCKER);
+const canLive = Boolean(ENV_URL) || (WANT_DOCKER && DOCKER);
 
 if (!canLive) {
   const reasons: string[] = [];
   if (!ENV_URL) reasons.push("OKE_TEST_OLLAMA_URL not set");
-  if (!localUp) reasons.push("no Ollama on :11434");
   if (!WANT_DOCKER) reasons.push("OKE_TEST_OLLAMA_DOCKER≠1");
   else if (!DOCKER) reasons.push("docker daemon not available");
   console.log(`skip: live ollama e2e (${reasons.join("; ")})`);
@@ -92,10 +80,6 @@ async function resolveLiveUrl(): Promise<{ url: string; model: string }> {
   if (ENV_URL) {
     await waitForOllama(ENV_URL, 30_000, false);
     return { url: ENV_URL, model: process.env.OKE_AI_MODEL?.trim() || OLLAMA_DEFAULT_MODEL };
-  }
-
-  if (localUp) {
-    return { url: DEFAULT_LOCAL, model: process.env.OKE_AI_MODEL?.trim() || OLLAMA_DEFAULT_MODEL };
   }
 
   const dir = await mkdtemp(join(tmpdir(), "oke-ollama-"));

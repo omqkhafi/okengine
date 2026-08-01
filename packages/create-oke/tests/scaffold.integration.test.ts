@@ -2,8 +2,8 @@
  * Gate: scaffold the standard starter into a temp directory, run
  * `bun install` + `bun test`, and assert pass.
  *
- * Opt-in via `CREATE_OKE_INTEGRATION=1` so root `bun test` / local `bun run ci`
- * stay fast. Enabled on GitHub Actions via the `test` job env.
+ * Opt-in via `CREATE_OKE_INTEGRATION=1` so plain `bun test` stays fast.
+ * Enabled by local `bun run ci` and the GitHub Actions `test` job.
  */
 
 import { describe, test } from "bun:test";

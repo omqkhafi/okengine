@@ -31,7 +31,7 @@ describe("export gzip budgets", () => {
     );
   });
 
-  test("formatBudgetsReport groups Core / Exports / Drivers with short names", () => {
+  test("formatBudgetsReport groups Core / Exports / Plugins / Drivers with short names", () => {
     const snapshot: BudgetsSnapshot = {
       measuredAt: "2026-07-25T00:00:00.000Z",
       version: "0.0.0",
@@ -57,6 +57,16 @@ describe("export gzip budgets", () => {
           ok: true,
         },
         {
+          id: "export:./plugins/cors",
+          label: "cors",
+          value: 100,
+          limit: 200,
+          unit: "bytes",
+          gate: "regression",
+          group: "plugins",
+          ok: true,
+        },
+        {
           id: "export:./drivers/postgres",
           label: "postgres",
           value: 100,
@@ -71,8 +81,10 @@ describe("export gzip budgets", () => {
     const report = formatBudgetsReport(snapshot);
     expect(report).toContain("\nCore\n");
     expect(report).toContain("\nExports\n");
+    expect(report).toContain("\nPlugins\n");
     expect(report).toContain("\nDrivers\n");
     expect(report).toContain("[ok] channel:");
+    expect(report).toContain("[ok] cors:");
     expect(report).toContain("[ok] postgres:");
     expect(report).not.toContain("regression Export");
     expect(report).not.toContain("./channel");

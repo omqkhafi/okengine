@@ -2,7 +2,8 @@
  * Protocol-named channel driver contracts.
  *
  * Email transports implement sently's {@link Transport} so sently transports
- * run unchanged. Non-email media (sms / whatsapp / push) use {@link ChannelTransport}.
+ * run unchanged. Non-email media expose sently SMS / WhatsApp / Push transports
+ * plus a {@link ChannelTransport} adapter for the OKE runtime.
  */
 
 import type { MailOptions, SendResult, Transport, VerifyResult } from "sently";
@@ -19,11 +20,66 @@ export type {
   RetryConfig,
 } from "sently";
 
+/**
+ * Sently-compatible SMS transport (structural — sently keeps `SmsTransport` on
+ * internal sms-types; OKE drivers wrap concrete sently transports).
+ */
+export interface SmsTransport {
+  readonly provider?: string;
+  send(options: {
+    readonly to: string;
+    readonly body: string;
+    readonly from?: string;
+    readonly messageId?: string;
+  }): Promise<{
+    readonly messageId: string;
+    readonly to: string;
+    readonly status: string;
+    readonly response: string;
+    readonly provider?: string;
+    readonly providerIndex?: number;
+  }>;
+  verify?(): Promise<VerifyResult>;
+  close?(): Promise<void>;
+}
+
+/** Sently-compatible WhatsApp transport (structural). */
+export interface WhatsAppTransport {
+  readonly provider?: string;
+  send(options: unknown): Promise<{
+    readonly messageId: string;
+    readonly to: string;
+    readonly status: string;
+    readonly response: string;
+    readonly provider?: string;
+    readonly providerIndex?: number;
+  }>;
+  verify?(): Promise<VerifyResult>;
+  close?(): Promise<void>;
+}
+
+/** Sently-compatible push transport (structural). */
+export interface PushTransport {
+  readonly provider?: string;
+  send(options: unknown): Promise<{
+    readonly messageId: string;
+    readonly status: string;
+    readonly response: string;
+    readonly provider?: string;
+    readonly providerIndex?: number;
+  }>;
+  verify?(): Promise<VerifyResult>;
+  close?(): Promise<void>;
+}
+
 /** Protocol ids for channel drivers. */
 export type ChannelDriverId =
   | "console"
   | "smtp"
   | "resend"
+  | "sndr"
+  | "taqnyat"
+  | "msegat"
   | "unifonic"
   | "wa-cloud"
   | "fcm"
@@ -82,12 +138,19 @@ export interface ChannelTransport {
 
 /**
  * Dual-shape driver: email drivers expose a sently {@link Transport};
- * others expose a {@link ChannelTransport}.
+ * SMS / WhatsApp / push expose the matching sently transport plus a
+ * {@link ChannelTransport} adapter.
  */
 export interface ChannelDriver {
   readonly id: ChannelDriverId;
   /** Sently-compatible email transport (smtp / resend / console-email). */
   readonly transport?: Transport;
+  /** Sently SMS transport (used by runtime FallbackTransport chains). */
+  readonly smsTransport?: SmsTransport;
+  /** Sently WhatsApp transport. */
+  readonly whatsappTransport?: WhatsAppTransport;
+  /** Sently push transport (webpush / fcm). */
+  readonly pushTransport?: PushTransport;
   /** Medium-agnostic transport. */
   readonly channel?: ChannelTransport;
 }
@@ -102,6 +165,20 @@ export interface ChannelOpenOptions {
   readonly pass?: string;
   readonly url?: string;
   readonly token?: string;
+  /** Taqnyat bearer (alias of `token` / `apiKey`). */
+  readonly bearerToken?: string;
+  /** Msegat account username (alias of `user`). */
+  readonly userName?: string;
+  /** SMS alphanumeric sender id (alias of `from`). */
+  readonly sender?: string;
+  /** Unifonic AppSid (alias of `apiKey`). */
+  readonly appSid?: string;
+  /** FCM / GCP project id (alias of `from`). */
+  readonly projectId?: string;
+  /** FCM service-account client email. */
+  readonly clientEmail?: string;
+  /** FCM service-account PEM private key. */
+  readonly privateKey?: string;
   /** VAPID keys for webpush. */
   readonly vapidPublicKey?: string;
   readonly vapidPrivateKey?: string;

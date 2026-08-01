@@ -1,6 +1,6 @@
 {
   "name": "okengine",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "One law. Eight elements. Ten exports. One package. One manifest. Every backend need is derived, never added.",
   "license": "MIT",
   "repository": {
@@ -58,7 +58,7 @@
     "prepack": "bun run build",
     "bench": "bun test ./src/runtime/cold-start.bench.ts src/client/budget.test.ts src/console/budget.test.ts src/kernel/budget.test.ts src/kernel/routing-budget.test.ts src/runs/bench.test.ts",
     "budgets": "bun src/release/publish.ts",
-    "gate": "bun test src/cli/doc-staleness.test.ts src/cli/competitor-mention-removal.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts",
+    "gate": "PUBLISH_GATE=1 bun test src/cli/doc-staleness.test.ts src/cli/competitor-mention-removal.test.ts src/drivers/vault-driver-removal.test.ts src/kernel/errors.registry.test.ts src/upgrade/codemods.test.ts scripts/publish.gate.test.ts",
     "dev": "bun run --cwd site dev",
     "site:build": "bun run --cwd site build",
     "ci": "bun scripts/ci.ts",
@@ -73,7 +73,7 @@
     "ajv-formats": "^3.0.1",
     "intl-messageformat": "^11.2.13",
     "oxc-parser": "^0.142.0",
-    "sently": "^0.8.0"
+    "sently": "1.0.0"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",

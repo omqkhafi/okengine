@@ -1,5 +1,8 @@
 /**
- * Publish gate: workflow shape + JSR dry-run for both packages.
+ * Publish gate: workflow shape always; pack + JSR dry-run behind `PUBLISH_GATE=1`.
+ *
+ * Heavy preflight (`npm pack --dry-run`, `jsr publish --dry-run`) runs from
+ * `bun run gate` (sets `PUBLISH_GATE=1`), not ordinary `bun test`.
  *
  * Real npm/JSR publish is NOT part of this gate — that runs on version-tag
  * push (`v*`) after platform trusted-publisher / JSR linking is configured.
@@ -17,6 +20,11 @@ const PACKAGES = [
   { dir: ROOT, name: "okengine" },
   { dir: join(ROOT, "packages/create-oke"), name: "create-oke" },
 ] as const;
+
+const PUBLISH_GATE = process.env.PUBLISH_GATE === "1";
+if (!PUBLISH_GATE) {
+  console.log("skip: npm pack / jsr publish dry-run (PUBLISH_GATE≠1; run via `bun run gate`)");
+}
 
 describe("publish workflow", () => {
   test("ci.yml parses and mirrors gflows gate → split npm/JSR publish", () => {
@@ -152,7 +160,7 @@ describe("publish workflow", () => {
   });
 });
 
-describe("npm pack includes Console SPA", () => {
+describe.skipIf(!PUBLISH_GATE)("npm pack includes Console SPA", () => {
   test("okengine tarball contains src/console/ui/dist/index.html", async () => {
     const build = Bun.spawn(["bun", "run", "build"], {
       cwd: ROOT,
@@ -178,7 +186,7 @@ describe("npm pack includes Console SPA", () => {
   }, 180_000);
 });
 
-describe("jsr publish --dry-run", () => {
+describe.skipIf(!PUBLISH_GATE)("jsr publish --dry-run", () => {
   for (const pkg of PACKAGES) {
     test(`${pkg.name}: bunx jsr publish --dry-run`, async () => {
       const proc = Bun.spawn(["bunx", "jsr", "publish", "--dry-run", "--allow-dirty"], {

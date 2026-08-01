@@ -106,13 +106,25 @@ export function fallbackWeeklyCostDelta(
 function mediumFromDriver(driverId: string, receiptMedium: string): string {
   const id = driverId.toLowerCase();
   if (id.includes("wa") || id.includes("whatsapp")) return "whatsapp";
-  if (id.includes("sms") || id.includes("unifonic") || id.includes("twilio")) {
+  if (
+    id.includes("sms") ||
+    id.includes("taqnyat") ||
+    id.includes("msegat") ||
+    id.includes("unifonic") ||
+    id.includes("twilio")
+  ) {
     return "sms";
   }
   if (id.includes("push") || id.includes("fcm") || id.includes("webpush")) {
     return "push";
   }
-  if (id.includes("smtp") || id.includes("resend") || id.includes("ses") || id.includes("email")) {
+  if (
+    id.includes("smtp") ||
+    id.includes("resend") ||
+    id.includes("sndr") ||
+    id.includes("ses") ||
+    id.includes("email")
+  ) {
     return "email";
   }
   return receiptMedium === "any" ? "email" : receiptMedium;

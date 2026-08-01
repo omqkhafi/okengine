@@ -139,10 +139,14 @@ export { createChannelInbox } from "./channel-types.ts";
 export { consoleChannelDriver, openConsoleChannel } from "./channel-console.ts";
 export { smtpChannelDriver, openSmtpChannel } from "./channel-smtp.ts";
 export { resendChannelDriver, openResendChannel } from "./channel-resend.ts";
+export { sndrChannelDriver, openSndrChannel } from "./channel-sndr.ts";
+export { taqnyatChannelDriver, openTaqnyatChannel } from "./channel-taqnyat.ts";
+export { msegatChannelDriver, openMsegatChannel } from "./channel-msegat.ts";
 export { unifonicChannelDriver, openUnifonicChannel } from "./channel-unifonic.ts";
 export { waCloudChannelDriver, openWaCloudChannel } from "./channel-wa-cloud.ts";
 export { fcmChannelDriver, openFcmChannel } from "./channel-fcm.ts";
 export { webpushChannelDriver, openWebPushChannel } from "./channel-webpush.ts";
+export { mapSentlySendResult, mapSentlySendError } from "./channel-sently-map.ts";
 
 export type {
   AiDriverId,

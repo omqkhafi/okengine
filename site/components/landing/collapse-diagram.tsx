@@ -30,8 +30,9 @@
  *
  * Two live layers carry the argument without the user touching anything.
  * Hovering any node lights only its own seams — two to fifteen of them in the
- * zoo, always two here. While idle, a change feed jumps around the ring, one
- * concern per beat, and costs that one change in both shapes. The jump is a
+ * zoo, always two here. While idle, a change feed jumps around the ring: each
+ * beat lights a small real-world operation — a few concerns on different
+ * elements at once — and costs that bundle in both shapes. The jump is a
  * deterministic hash of the beat index, never `Math.random`: the server renders
  * beat zero too, and a different pick in the browser is a hydration mismatch.
  *
@@ -148,14 +149,20 @@ const LAST_STEP = ZOO_CONCERN_GROUPS.length - 1;
 const STEP_MIN_MS = 250;
 const STEP_MAX_MS = 650;
 
-/** Change-feed period: one changed concern per beat. */
-const BEAT_MS = 1100;
+/** Change-feed period: one small multi-concern operation per beat. */
+const BEAT_MS = 1400;
 
 /** One lap of the travelling dash along a lit seam. */
 const TRACE_MS = 650;
 
-/** Seams of the changed concern that carry a travelling dash, not just a glow. */
-const BEAT_LANES = 3;
+/** Seams of the changed concerns that carry a travelling dash, not just a glow. */
+const BEAT_LANES = 4;
+
+/**
+ * Concerns lit together each beat — enough to read as traffic across elements,
+ * few enough that the chips still fit the outer band.
+ */
+const BEAT_OPS = 3;
 
 /** Anything that changes size arrives with weight. */
 const NODE: Transition = { type: "spring", stiffness: 320, damping: 26, mass: 0.6 };
@@ -412,25 +419,46 @@ function mix32(value: number): number {
 const FEED_WINDOW = 8;
 
 /**
- * Which concern the feed changes on `tick`. A hash rather than `tick % visible`,
- * so the feed reads like change traffic instead of a lap of the ring, with a
- * repeated pick nudged along so every beat is visibly a new change.
+ * Which concerns the feed changes on `tick` — a small operation across distinct
+ * elements. A hash rather than `tick % visible`, so the feed reads like change
+ * traffic instead of a lap of the ring; the lead pick is folded over a short
+ * window so consecutive beats never open on the same concern.
  *
- * The nudge has to compare against the pick that was actually shown, not the
- * raw hash behind it, so the sequence is folded forward over a short fixed
- * window — bounded work, and the same answer on the server as in the browser.
+ * Integer arithmetic only: the server renders beat zero too, and a different
+ * pick in the browser is a hydration mismatch.
  *
  * @param tick - Beat index since the feed started
  * @param visible - Concerns present at the current step
  */
-function changedConcern(tick: number, visible: number): number {
-  if (visible < 2) return 0;
-  let shown = mix32(tick - FEED_WINDOW) % visible;
+function changedConcerns(tick: number, visible: number): ReadonlyArray<number> {
+  if (visible < 1) return [];
+  if (visible === 1) return [0];
+
+  let lead = mix32(tick - FEED_WINDOW) % visible;
   for (let t = tick - FEED_WINDOW + 1; t <= tick; t += 1) {
     const pick = mix32(t) % visible;
-    shown = pick === shown ? (pick + 1) % visible : pick;
+    lead = pick === lead ? (pick + 1) % visible : pick;
   }
-  return shown;
+
+  const picks: number[] = [lead];
+  const usedElements = new Set<string>([CONCERNS[lead]!.element]);
+  const want = Math.min(BEAT_OPS, visible);
+
+  for (let attempt = 1; picks.length < want && attempt < visible * 3; attempt += 1) {
+    const index = (lead + attempt * (1 + (mix32(tick + attempt * 17) % 7))) % visible;
+    const element = CONCERNS[index]!.element;
+    if (usedElements.has(element)) continue;
+    usedElements.add(element);
+    picks.push(index);
+  }
+
+  // Not enough distinct elements yet (early steps) — fill with unused indices.
+  for (let index = 0; picks.length < want && index < visible; index += 1) {
+    if (picks.includes(index)) continue;
+    picks.push(index);
+  }
+
+  return picks;
 }
 
 /** `a, b and c`, for a caption that names the concerns it is counting. */
@@ -601,26 +629,29 @@ function readoutFor(
   }
 
   if (beat) {
-    const concern = CONCERNS[beat.concern]!;
-    const cost = changeCost(tab, beat.concern, visible);
+    const labels = beat.concerns.map((index) => CONCERNS[index]!.text);
+    const cost = beat.concerns.reduce((sum, index) => sum + changeCost(tab, index, visible), 0);
+    const elements = [...new Set(beat.concerns.map((index) => CONCERNS[index]!.element))];
     // The worst one change can cost in this shape — always two on the hub side,
     // which is the whole point of the comparison.
     const busiest = tab === "zoo" ? zooBusiest(visible) : null;
     return {
       mode: "live",
-      progress: `change ${beat.index + 1}`,
+      progress: `op ${beat.index + 1}`,
       rows: [
-        { label: "changed", value: concern.text },
+        { label: "changed", value: labels.join(" · ") },
         { label: "edges re-checked", value: `${cost}` },
         {
-          label: "busiest node",
-          value: busiest ? `${busiest.label} · ${busiest.seams}` : `any · ${TREE_CHANGE_COST}`,
+          label: tab === "zoo" ? "busiest node" : "elements",
+          value: busiest
+            ? `${busiest.label} · ${busiest.seams}`
+            : `${elements.join(" · ")} · ${TREE_CHANGE_COST} each`,
         },
       ],
       note:
         tab === "zoo"
-          ? `Change ${concern.text} and all ${cost} of its seams have to be re-checked.`
-          : `Change ${concern.text} and it is one spoke — ${concern.element} is already bound to the law.`,
+          ? `Change ${listOf(labels)} and ${cost} seams have to be re-checked.`
+          : `Change ${listOf(labels)} — ${beat.concerns.length} spoke${s(beat.concerns.length)} across ${elements.join(", ")}, each element already bound to the law.`,
     };
   }
 
@@ -637,15 +668,15 @@ function readoutFor(
         value: tab === "zoo" ? `${zooPassCost(visible)}` : `${step + 1}`,
       },
     ],
-    note: "Hover any node, or let the feed cost one change at a time.",
+    note: "Hover any node, or let the feed cost a small multi-element operation.",
   };
 }
 
-/** One beat of the change feed: concern `concern` just changed. */
-type Beat = { readonly index: number; readonly concern: number };
+/** One beat of the change feed: the concerns in a small real-world operation. */
+type Beat = { readonly index: number; readonly concerns: ReadonlyArray<number> };
 
 /**
- * Seams of the changed concern that carry a travelling dash, keyed by edge with
+ * Seams of the changed concerns that carry a travelling dash, keyed by edge with
  * the lane that phases it.
  *
  * Integer arithmetic only: a `Math.random` or `Math.sin` pick would choose
@@ -653,8 +684,9 @@ type Beat = { readonly index: number; readonly concern: number };
  * hydration mismatch on the first paint.
  */
 function dashedSeams(beat: Beat, visible: number): ReadonlyMap<string, number> {
+  const live = new Set(beat.concerns);
   const seams = SEAM_EDGES.filter(
-    (edge) => edge.b < visible && (edge.a === beat.concern || edge.b === beat.concern),
+    (edge) => edge.b < visible && (live.has(edge.a) || live.has(edge.b)),
   );
   const lanes = new Map<string, number>();
   for (let lane = 0; lane < BEAT_LANES && lane < seams.length; lane += 1) {
@@ -1031,35 +1063,40 @@ function LabelChip({ seat, reduced }: { readonly seat: ChipSeat; readonly reduce
  * another destination. The arc stays, so the clustering remains visible.
  *
  * @param visible - Concerns present at the current step
- * @param activeElement - Element currently lit by hover or the change feed
+ * @param activeElement - Element currently focused by hover (single)
+ * @param litElements - Elements lit together by a multi-op beat
  * @param quietElements - Elements whose name would collide with live chips
  * @param reduced - Whether the visitor asked for reduced motion
  */
 function GroupBands({
   visible,
   activeElement,
+  litElements,
   quietElements,
   reduced,
 }: {
   readonly visible: number;
   readonly activeElement: string | null;
+  readonly litElements?: ReadonlyArray<string>;
   readonly quietElements?: ReadonlyArray<string>;
   readonly reduced: boolean;
 }) {
   const fade = reduced ? INSTANT : FADE;
   const tint = reduced ? undefined : TINT;
+  const litSet = new Set(litElements ?? (activeElement === null ? [] : [activeElement]));
+  const focusing = litSet.size > 0;
   return (
     <g aria-hidden="true">
       {GROUP_ARCS.map((arc) => {
         const shown = arc.start < visible;
-        const lit = activeElement === arc.element;
+        const lit = litSet.has(arc.element);
         const quiet = quietElements?.includes(arc.element) ?? false;
         const tone = toneForElementName(arc.element);
         return (
           <motion.g
             key={arc.element}
             initial={false}
-            animate={{ opacity: shown ? (lit ? 1 : activeElement ? 0.45 : 0.85) : 0 }}
+            animate={{ opacity: shown ? (lit ? 1 : focusing ? 0.45 : 0.85) : 0 }}
             transition={fade}
           >
             <path
@@ -1142,29 +1179,37 @@ function SourceDestLabels({
 }
 
 /**
- * Leaf label on the hub side. The element already carries its two-letter
- * symbol, so a second name chip beside it would read as a phantom node —
- * destinations are the leaves, named when the element itself is the source.
+ * Leaf labels on the hub side. A hover names one concern; the change feed names
+ * the whole small operation. The element already carries its two-letter symbol,
+ * so these chips sit on the outer band rather than beside the element nodes.
  */
 function HubConcernLabels({
-  source,
+  sources,
   reduced,
 }: {
-  readonly source: number;
+  readonly sources: ReadonlyArray<number>;
   readonly reduced: boolean;
 }) {
-  const concern = CONCERNS[source]!;
-  const seats = layoutChips([
-    {
-      key: `hub-${concern.text}`,
-      label: concern.text,
-      angle: concern.angle,
-      emphasis: "source",
-      tone: toneForElementName(concern.element),
-    },
-  ]);
-  const seat = seats[0];
-  return seat ? <LabelChip seat={seat} reduced={reduced} /> : null;
+  if (sources.length === 0) return null;
+  const seats = layoutChips(
+    sources.map((index, rank) => {
+      const concern = CONCERNS[index]!;
+      return {
+        key: `hub-${concern.text}`,
+        label: concern.text,
+        angle: concern.angle,
+        emphasis: rank === 0 ? ("source" as const) : ("destination" as const),
+        tone: toneForElementName(concern.element),
+      };
+    }),
+  );
+  return (
+    <>
+      {seats.map((seat) => (
+        <LabelChip key={seat.key} seat={seat} reduced={reduced} />
+      ))}
+    </>
+  );
 }
 
 /** Element chip plus its leaf destinations, collision-resolved. */
@@ -1320,29 +1365,30 @@ type LitSeam = {
 
 /**
  * The seams to light: those of the node under the pointer, or failing that
- * those of the concern the change feed just changed.
+ * those of the concerns the change feed just changed.
  *
  * @param active - Hovered concern, if any
- * @param changed - Concern the current beat changed, if the feed is running
+ * @param changed - Concerns the current beat changed, if the feed is running
  * @param visible - Concerns present at the current step
  * @param reduced - Whether the visitor asked for reduced motion
  */
 function litSeamsFor(
   active: number | null,
-  changed: number | null,
+  changed: ReadonlyArray<number>,
   visible: number,
   reduced: boolean,
 ): ReadonlyArray<LitSeam> {
-  const index = active ?? changed;
-  if (index === null) return [];
+  const live = active !== null ? [active] : changed;
+  if (live.length === 0) return [];
   const strong = active !== null;
-  return SEAM_EDGES.filter(
-    (edge) => edge.b < visible && (edge.a === index || edge.b === index),
-  ).map((edge) => ({
-    edge,
-    strong,
-    delayMs: reduced || strong ? 0 : hopsBetween(edge.a, edge.b) * WAVE_MS,
-  }));
+  const set = new Set(live);
+  return SEAM_EDGES.filter((edge) => edge.b < visible && (set.has(edge.a) || set.has(edge.b))).map(
+    (edge) => ({
+      edge,
+      strong,
+      delayMs: reduced || strong ? 0 : hopsBetween(edge.a, edge.b) * WAVE_MS,
+    }),
+  );
 }
 
 type PanelProps = {
@@ -1357,20 +1403,24 @@ type PanelProps = {
 /** The curated seams between the concerns present so far. */
 function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
   const active = hover?.kind === "concern" ? hover.index : null;
-  const changed = beat?.concern ?? null;
-  /** Concern named on screen: what the pointer is on, else the change. */
-  const named = active ?? changed;
+  const changed = beat?.concerns ?? [];
+  const liveSet = new Set(changed);
+  /** Concern named on screen: what the pointer is on, else the lead change. */
+  const named = active ?? changed[0] ?? null;
   const litTone =
     named === null ? "var(--color-fd-foreground)" : toneForElementName(CONCERNS[named]!.element);
-  const litSeams = litSeamsFor(active, active === null ? changed : null, visible, reduced);
+  const litSeams = litSeamsFor(active, active === null ? changed : [], visible, reduced);
   const lanes = beat === null || active !== null ? null : dashedSeams(beat, visible);
-  const destinations = named === null ? [] : destinationIndices(named, visible);
+  /** Hover fans destinations; a multi-op beat names its own leaves instead. */
+  const destinations = active !== null ? destinationIndices(active, visible) : [];
   const destSet = new Set(destinations);
   const activeElement = named === null ? null : CONCERNS[named]!.element;
   const quietElements =
-    named === null
-      ? undefined
-      : [activeElement!, ...destinations.map((index) => CONCERNS[index]!.element)];
+    active !== null
+      ? [activeElement!, ...destinations.map((index) => CONCERNS[index]!.element)]
+      : changed.length > 0
+        ? changed.map((index) => CONCERNS[index]!.element)
+        : undefined;
   const node = reduced ? INSTANT : NODE;
   const fade = reduced ? INSTANT : FADE;
   const tint = reduced ? undefined : TINT;
@@ -1396,6 +1446,13 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       <GroupBands
         visible={visible}
         activeElement={activeElement}
+        litElements={
+          active !== null
+            ? [activeElement!]
+            : changed.length > 0
+              ? changed.map((index) => CONCERNS[index]!.element)
+              : undefined
+        }
         quietElements={quietElements}
         reduced={reduced}
       />
@@ -1449,14 +1506,14 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       {CONCERNS.map((concern, i) => {
         const shown = i < visible;
         const isActive = active === i;
-        const isLive = active === null && changed === i;
-        const isDest = named !== null && destSet.has(i);
-        const dimmed = active !== null && !isActive && !isDest;
+        const isLive = active === null && liveSet.has(i);
+        const isDest = destSet.has(i);
+        const dimmed = active !== null ? !isActive && !isDest : changed.length > 0 && !isLive;
         const tone = toneForElementName(concern.element);
         const lit = isActive || isLive || isDest;
         const halo = isActive ? 12 : isLive || isDest ? 10 : 0;
-        const ring = shown ? (isActive ? 6.4 : isDest ? 5.6 : 4.8) : 0;
-        const dot = shown ? (isActive ? 2.6 : isDest ? 2.2 : 1.9) : 0;
+        const ring = shown ? (isActive ? 6.4 : isLive || isDest ? 5.6 : 4.8) : 0;
+        const dot = shown ? (isActive ? 2.6 : isLive || isDest ? 2.2 : 1.9) : 0;
         return (
           <motion.g
             key={concern.text}
@@ -1492,7 +1549,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               stroke={lit ? tone : "var(--color-fd-muted-foreground)"}
               style={tint}
               initial={false}
-              animate={{ r: ring, strokeWidth: isActive ? 1.4 : isDest ? 1.15 : 1 }}
+              animate={{ r: ring, strokeWidth: isActive ? 1.4 : isLive || isDest ? 1.15 : 1 }}
               transition={radius(ring, node, fade)}
             />
             <motion.circle
@@ -1510,9 +1567,11 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         );
       })}
 
-      {named === null ? null : (
-        <SourceDestLabels source={named} destinations={destinations} reduced={reduced} />
-      )}
+      {active !== null ? (
+        <SourceDestLabels source={active} destinations={destinations} reduced={reduced} />
+      ) : changed.length > 0 ? (
+        <HubConcernLabels sources={changed} reduced={reduced} />
+      ) : null}
     </motion.svg>
   );
 }
@@ -1529,19 +1588,36 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
     return CONCERNS[index]!.element === hover.name;
   };
 
-  const changed = beat?.concern ?? null;
-  const changedElement = changed === null ? undefined : elementOf(changed);
+  const changed = beat?.concerns ?? [];
+  const liveSet = new Set(changed);
+  const changedElements = [
+    ...new Map(
+      changed
+        .map((index) => elementOf(index))
+        .filter((element): element is NonNullable<typeof element> => element !== undefined)
+        .map((element) => [element.name, element]),
+    ).values(),
+  ];
 
   /**
    * Labels: hovering an element names it as the source and its leaves as
-   * destinations; a concern (hover or beat) names the leaf beside its symbol.
+   * destinations; a concern hover or a multi-op beat names the leaves.
    */
   const hoveredElement =
     hover?.kind === "element" ? ELEMENT_NODES.find((n) => n.name === hover.name) : undefined;
-  const namedConcern = hover?.kind === "concern" ? hover.index : hover === null ? changed : null;
-  const bandElement =
-    activeElement ?? (changedElement && hover === null ? changedElement.name : null);
-  const quietElements = bandElement === null ? undefined : [bandElement];
+  const namedConcerns = hover?.kind === "concern" ? [hover.index] : hover === null ? changed : [];
+  const quietElements =
+    activeElement !== null
+      ? [activeElement]
+      : changedElements.length > 0
+        ? changedElements.map((element) => element.name)
+        : undefined;
+  const litElements =
+    activeElement !== null
+      ? [activeElement]
+      : changedElements.length > 0
+        ? changedElements.map((element) => element.name)
+        : undefined;
 
   const node = reduced ? INSTANT : NODE;
   const draw = reduced ? INSTANT : DRAW;
@@ -1570,7 +1646,8 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
 
       <GroupBands
         visible={visible}
-        activeElement={bandElement}
+        activeElement={activeElement}
+        litElements={litElements}
         quietElements={quietElements}
         reduced={reduced}
       />
@@ -1595,7 +1672,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           const shown = i < visible;
           const touched = isActiveConcern(i);
           const dimmed = hover !== null && !touched;
-          const lit = touched || (changed === i && hover === null);
+          const lit = touched || (liveSet.has(i) && hover === null);
           const tone = toneForElementName(concern.element);
           return (
             <motion.line
@@ -1620,8 +1697,14 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         {ELEMENT_NODES.map((element) => {
           const shown = element.firstConcern < visible;
           const touched = activeElement === element.name;
-          const dimmed = activeElement !== null && !touched;
-          const lit = touched || (changedElement?.name === element.name && hover === null);
+          const dimmed =
+            activeElement !== null
+              ? !touched
+              : changedElements.length > 0 &&
+                !changedElements.some((entry) => entry.name === element.name);
+          const lit =
+            touched ||
+            (hover === null && changedElements.some((entry) => entry.name === element.name));
           const trunkDelay = reduced || !shown ? 0 : SPOKE_LEAD_S;
           const tone = toneForElementName(element.name);
           return (
@@ -1650,30 +1733,39 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           );
         })}
 
-        {/* One trace per beat, concern → element → law. */}
-        {!reduced && beat !== null && changed !== null && changedElement && hover === null ? (
-          <SeamTrace
-            key={`trace-${beat.index}`}
-            d={`M ${CONCERNS[changed]!.node.x} ${CONCERNS[changed]!.node.y} L ${changedElement.node.x} ${changedElement.node.y} L ${changedElement.dock.x} ${changedElement.dock.y}`}
-            delayMs={0}
-            durationMs={TRACE_MS}
-            strokeWidth={1.8}
-            opacity={0.8}
-            stroke={toneForElementName(changedElement.name)}
-          />
-        ) : null}
+        {/* One trace per lit concern in the beat: concern → element → law. */}
+        {!reduced && beat !== null && hover === null
+          ? changed.map((index, lane) => {
+              const element = elementOf(index);
+              const concern = CONCERNS[index];
+              if (!element || !concern) return null;
+              return (
+                <SeamTrace
+                  key={`trace-${beat.index}-${concern.text}`}
+                  d={`M ${concern.node.x} ${concern.node.y} L ${element.node.x} ${element.node.y} L ${element.dock.x} ${element.dock.y}`}
+                  delayMs={(lane * TRACE_MS) / Math.max(1, changed.length)}
+                  durationMs={TRACE_MS}
+                  strokeWidth={1.8}
+                  opacity={0.8}
+                  stroke={toneForElementName(element.name)}
+                />
+              );
+            })
+          : null}
       </g>
 
       {/* Element circles cover the inner ends of the concern spokes. */}
       {ELEMENT_NODES.map((element) => {
         const shown = element.firstConcern < visible;
         const touched = activeElement === element.name;
-        const lit = changedElement?.name === element.name && hover === null;
+        const lit = hover === null && changedElements.some((entry) => entry.name === element.name);
         const inked = touched || lit;
         const tone = toneForElementName(element.name);
         const owned = element.concerns.filter((index) => index < visible);
         const halo = touched ? ELEMENT_R + 8 : lit ? ELEMENT_R + 6 : 0;
         const ring = shown ? ELEMENT_R : 0;
+        const elementDimmed =
+          activeElement !== null ? !touched : changedElements.length > 0 && !lit;
         return (
           <motion.g
             key={element.name}
@@ -1684,7 +1776,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             onFocus={() => onHover({ kind: "element", name: element.name })}
             onBlur={() => onHover(null)}
             initial={false}
-            animate={{ opacity: shown ? (activeElement !== null && !touched ? 0.4 : 1) : 0 }}
+            animate={{ opacity: shown ? (elementDimmed ? 0.4 : 1) : 0 }}
             transition={fade}
             pointerEvents={shown ? "auto" : "none"}
             style={{ cursor: shown ? "pointer" : "default", outline: "none" }}
@@ -1766,12 +1858,12 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
       {CONCERNS.map((concern, i) => {
         const shown = i < visible;
         const isActive = isActiveConcern(i);
-        const isLive = hover === null && changed === i;
-        const dimmed = hover !== null && !isActive;
+        const isLive = hover === null && liveSet.has(i);
+        const dimmed = hover !== null ? !isActive : changed.length > 0 && !isLive;
         const lit = isActive || isLive;
         const tone = toneForElementName(concern.element);
         const halo = isActive ? 9.5 : isLive ? 8 : 0;
-        const dot = shown ? (isActive ? 4.6 : 3.6) : 0;
+        const dot = shown ? (isActive ? 4.6 : isLive ? 4.2 : 3.6) : 0;
         return (
           <motion.g
             key={concern.text}
@@ -1812,8 +1904,8 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
 
       {hoveredElement ? (
         <HubElementLabels element={hoveredElement} visible={visible} reduced={reduced} />
-      ) : namedConcern === null ? null : (
-        <HubConcernLabels source={namedConcern} reduced={reduced} />
+      ) : (
+        <HubConcernLabels sources={namedConcerns} reduced={reduced} />
       )}
     </motion.svg>
   );
@@ -1871,7 +1963,7 @@ export function CollapseDiagram() {
   const edges = tab === "zoo" ? zooSeamCount(visible) : treeEdgeCount(visible);
   const Panel = tab === "zoo" ? ZooPanel : HubPanel;
   const beat: Beat | null = feeding
-    ? { index: tick, concern: changedConcern(tick, visible) }
+    ? { index: tick, concerns: changedConcerns(tick, visible) }
     : null;
   const readout = readoutFor(tab, visible, shownStep, hover, beat);
 

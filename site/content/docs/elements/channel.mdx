@@ -109,23 +109,52 @@ Each send records its attempts — driver, ok/error, timestamp, message id — s
 
 ## Per-environment drivers
 
+Boot opens the email driver from `drivers.channel.email`, and appends an SMS
+driver when `drivers.channel.sms` is set (other than `console`). WhatsApp and
+push drivers are passed via `BootOptions.channel.drivers` when you need them.
+
 ```typescript title="oke.config.ts"
 drivers: {
   channel: {
     email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+    // optional — omit until you need SMS at boot
+    sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
   },
 },
 images: {
-  "channel.email": "axllent/mailpit:v1.22.3", // SMTP catcher for the docker stack
+  "channel.email": "axllent/mailpit:v1.22.3",
 },
 ```
 
-| Driver     | Medium | Behavior                                             |
-| ---------- | ------ | ---------------------------------------------------- |
-| `console`  | any    | Captures into a readable inbox — local + tests       |
-| `smtp`     | email  | Real SMTP — Mailpit in docker, your provider in prod |
-| `resend`   | email  | Resend API                                           |
-| `unifonic` | sms    | Unifonic SMS API                                     |
+| Driver     | Medium   | Behavior                                                            |
+| ---------- | -------- | ------------------------------------------------------------------- |
+| `console`  | any      | Captures into a readable inbox — local + tests                      |
+| `smtp`     | email    | Real SMTP — Mailpit in docker, your provider in prod                |
+| `resend`   | email    | Resend HTTP API (`RESEND_API_KEY`)                                  |
+| `sndr`     | email    | SNDR HTTP API (`SNDR_API_KEY`)                                      |
+| `taqnyat`  | sms      | Taqnyat SMS (`TAQNYAT_BEARER_TOKEN` + `TAQNYAT_SENDER`)             |
+| `msegat`   | sms      | Msegat SMS (`MSEGAT_USERNAME` + `MSEGAT_API_KEY` + `MSEGAT_SENDER`) |
+| `unifonic` | sms      | Unifonic el.cloud SMS (`UNIFONIC_APPSID`)                           |
+| `wa-cloud` | whatsapp | Meta WhatsApp Cloud API                                             |
+| `webpush`  | push     | Web Push + VAPID (`createPushSender` → `WebPushTransport`)          |
+| `fcm`      | push     | Firebase Cloud Messaging HTTP v1                                    |
+
+Email fallback uses ordered email transports; SMS with multiple SMS drivers uses
+the same failover path. Credentials for boot-opened drivers are listed under
+[Environment Variables](/docs/reference/environment-variables).
+
+`webpush` needs VAPID keys — open it yourself and include it in
+`BootOptions.channel.drivers` (boot does not open push from env):
+
+```typescript
+import { openWebPushChannel } from "okengine/drivers/channel-webpush";
+
+openWebPushChannel({
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY!,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY!,
+  vapidSubject: process.env.VAPID_SUBJECT,
+});
+```
 
 ## Troubleshooting
 
@@ -145,9 +174,42 @@ Check consent first: if they opted out, sends to them are suppressed by design. 
 Locale resolution falls back through the chain to your default locale when a translation is missing — the send still succeeds with the fallback body. Check that the template declares `locales: ["en", "ar"]` and that the Arabic body exists in the catalog.
 
 </Accordion>
+<Accordion title="How do I ingest SNDR / Unifonic delivery webhooks?">
+
+```typescript
+import {
+  parseSndrWebhook,
+  verifySndrSignature,
+  parseUnifonicWebhook,
+  toDeliveryEvent,
+} from "okengine/channel";
+```
+
+Verify the signature when the provider sends one, parse the body, then call
+`ingestOutcome` on your channel runtime with the bounce/complaint fields.
+Console reads the receipt ledger — never raw webhook JSON.
+
+</Accordion>
 <Accordion title="How do I know which medium finally delivered?">
 
 The receipt keeps every attempt in order with its outcome. A send that succeeded on a later medium reports status `fallback` — you can see the full chain in Console → Channels.
+
+</Accordion>
+<Accordion title="How do I verify Web Push against a real browser?">
+
+Subscribe in a real browser with sently’s `examples/webpush-interop` page
+(paste the same `VAPID_PUBLIC_KEY`), copy the `PushSubscription` JSON, then:
+
+```sh
+export VAPID_PUBLIC_KEY='…'
+export VAPID_PRIVATE_KEY='…'
+bun scripts/webpush-interop.ts /tmp/push-sub.json
+```
+
+That path is Channel → `webpush` → sently `createPushSender` →
+`WebPushTransport`, and it prints the push-service HTTP response.
+
+Confirm a visible OS notification titled `okengine webpush interop`.
 
 </Accordion>
 </Accordions>
@@ -156,6 +218,8 @@ The receipt keeps every attempt in order with its outcome. A send that succeeded
 
 - [Flow](/docs/elements/flow) — `fx.send` inside `do`
 - [Console · Channels](/docs/console/channels) — receipts, attempts, suppression
+- [Environment Variables](/docs/reference/environment-variables) — Channel boot credentials
+- [Configuration](/docs/reference/configuration) — `drivers.channel.*` maps
 - [Signal](/docs/elements/signal) — machine-to-machine messaging, the other side of the line
 
 ## Next

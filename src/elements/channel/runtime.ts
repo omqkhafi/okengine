@@ -246,10 +246,104 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     }
   }
 
+  async function sendViaSmsFallback(
+    chain: ChannelDriver[],
+    message: ChannelMessage,
+  ): Promise<{ result: ChannelSendResult; attempts: ChannelAttempt[] } | undefined> {
+    const sms = chain
+      .map((d) => (d.smsTransport ? { driver: d, transport: d.smsTransport } : undefined))
+      .filter(
+        (
+          x,
+        ): x is { driver: ChannelDriver; transport: NonNullable<ChannelDriver["smsTransport"]> } =>
+          !!x,
+      );
+    if (sms.length === 0) return undefined;
+
+    const attempts: ChannelAttempt[] = [];
+    const transports = sms.map(({ transport }) =>
+      options.retry ? new RetryTransport(transport) : transport,
+    );
+    const fallback = new FallbackTransport(transports, {
+      onFallback(failedIndex, error) {
+        const provider =
+          transports[failedIndex]?.provider ?? sms[failedIndex]?.driver.id ?? `sms-${failedIndex}`;
+        attempts.push({
+          driverId: provider,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          at: now(),
+        });
+      },
+    });
+
+    const body = {
+      to: message.to,
+      body: message.text ?? String(message.data?.code ?? ""),
+      ...(message.from ? { from: message.from } : {}),
+    };
+
+    try {
+      const sendResult = await fallback.send(body);
+      const driverId =
+        sendResult.provider ??
+        transports[sendResult.providerIndex ?? 0]?.provider ??
+        sms[0]?.driver.id ??
+        "sms";
+      attempts.push({
+        driverId,
+        ok: true,
+        at: now(),
+        messageId: sendResult.messageId,
+      });
+      return {
+        result: {
+          ok: true,
+          messageId: sendResult.messageId,
+          driverId,
+          attempts,
+        },
+        attempts,
+      };
+    } catch (err) {
+      const fbAttempts =
+        err &&
+        typeof err === "object" &&
+        "attempts" in err &&
+        Array.isArray((err as { attempts: FallbackAttempt[] }).attempts)
+          ? (err as { attempts: FallbackAttempt[] }).attempts
+          : [];
+      for (const a of fbAttempts) {
+        if (!attempts.some((x) => x.driverId === a.provider && !x.ok)) {
+          attempts.push({
+            driverId: a.provider,
+            ok: false,
+            error: a.error instanceof Error ? a.error.message : String(a.error),
+            at: now(),
+          });
+        }
+      }
+      return {
+        result: {
+          ok: false,
+          messageId: crypto.randomUUID(),
+          driverId: "fallback",
+          attempts,
+        },
+        attempts,
+      };
+    }
+  }
+
   async function sendViaChannelChain(
     chain: ChannelDriver[],
     message: ChannelMessage,
   ): Promise<{ result: ChannelSendResult; attempts: ChannelAttempt[] }> {
+    if (message.medium === "sms") {
+      const viaSms = await sendViaSmsFallback(chain, message);
+      if (viaSms) return viaSms;
+    }
+
     const attempts: ChannelAttempt[] = [];
     for (const d of chain) {
       if (!d.channel) continue;
