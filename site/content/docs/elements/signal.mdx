@@ -82,14 +82,14 @@ The declaration is identical in shape for all three — switching physics later 
 
 ### Options
 
-| Option        | Type                              | Default          | Meaning                                                        |
-| ------------- | --------------------------------- | ---------------- | -------------------------------------------------------------- |
-| `delivery`    | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                               |
-| `description` | string                            | —                | Human title in the Console (falls back to the signal name)     |
-| `schema`      | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                |
-| `retries`     | number                            | `3`              | Max delivery attempts before dead-letter (`once`)              |
-| `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                |
-| `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check) |
+| Option        | Type                              | Default          | Meaning                                                                                           |
+| ------------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
+| `delivery`    | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                                                                  |
+| `description` | string                            | —                | Human title in the Console (falls back to the signal name)                                        |
+| `schema`      | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                                                   |
+| `retries`     | number                            | `3`              | Retry budget for `once` — dead-letter when `attempts > retries` (`retries + 1` total invocations) |
+| `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                                                   |
+| `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check)                                    |
 
 ## When delivery fails
 
@@ -98,10 +98,28 @@ The declaration is identical in shape for all three — switching physics later 
 The **Console** (`:6533` → Signals) shows the topology (which flows emit and consume each signal), per-subscriber delivery stats, and the DLQ contents with replay / discard controls — no separate broker UI to run.
 
 <Callout title="Orphan emits fail loudly">
-  Emitting a signal with zero subscribers is normally an error — it almost always means a typo or a
-  forgotten consumer. Set `optional: true` on the declaration only when zero-subscriber emits are
-  genuinely expected (e.g. an integration hook).
+  Emitting a signal with zero subscribers throws **OKE1042** unless `optional: true`. Use that flag
+  only when zero-subscriber emits are intentional (e.g. an integration hook or a producer that
+  commits for a consumer in another process).
 </Callout>
+
+## Durability and leases (`once`)
+
+Committed `once` messages survive process death. A claim sets `lockedBy` and a visibility lease (`leaseExpiresAt`, default **30s**). There is no background sweeper: the next consumer reclaim query takes `pending` rows **or** `inflight` rows whose lease has expired.
+
+<Callout title="At-least-once, not exactly-once">
+  Delivery is **at-least-once** — finish side effects then die before ack, and the message may run
+  again; make consumers idempotent. Handlers must finish within `leaseMs` (default 30s): a healthy
+  but slower handler can be reclaimed while still running. Lease heartbeat is not offered yet.
+</Callout>
+
+## Live replay
+
+`live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
+
+## Orphaned signal config
+
+When a signal disappears from code, reconciliation marks its config row `orphaned` — it is never deleted. Pending and DLQ messages for that name stay in storage. Drain and replay require an active declaration again: restore the `signal(…)` (and a consumer), then replay from the Console or bus.
 
 ## Per-environment drivers
 
@@ -123,24 +141,29 @@ drivers: {
 ## Troubleshooting
 
 <Accordions>
-<Accordion title="Emit fails with a 'no subscribers' error">
+<Accordion title="Emit fails with OKE1042 (no subscriber)">
 
-You emitted a signal that no flow consumes. Either wire a consumer with `on(signal, flow)`, or set `optional: true` on the declaration if zero-subscriber emits are intentional.
+You emitted a signal that nobody currently subscribes to. Wire a consumer with `on(signal, flow)` before emit, or set `optional: true` when zero-subscriber emits are intentional.
 
 </Accordion>
 <Accordion title="A message keeps retrying and then disappears">
 
-After `retries` attempts the message moves to the DLQ — it is not lost. Open Console → Signals, inspect the typed failure reasons on each attempt, fix the consumer, then replay.
+When `attempts > retries` the message moves to the DLQ (if `deadLetter: true`) — it is not lost. Open Console → Signals, inspect the typed failure reasons, fix the consumer, then replay.
 
 </Accordion>
 <Accordion title="once vs broadcast vs live — how do I choose?">
 
-Ask: _how many consumers should process each message?_ One → `once`. All of them → `broadcast`. Clients over time, with replay → `live`. If you need retries and a DLQ, you want `once`.
+Ask: _how many consumers should process each message?_ One → `once`. All of them → `broadcast`. Clients over time, with full retained replay → `live`. Retries and a DLQ are `once` only.
 
 </Accordion>
 <Accordion title="My emit happened but the row didn't (or vice versa)">
 
 That is the dual-write problem, and it means the signal driver is not `postgres`. With the `postgres` driver the emit joins your SQL transaction; with `redis` / `nats` an outbox relay keeps the guarantee, but `postgres` is the only mode where atomicity is literal.
+
+</Accordion>
+<Accordion title="The same once message ran twice">
+
+At-least-once: crash-after-claim reclaims when the lease expires, and a handler slower than `leaseMs` can be reclaimed while still running. Idempotent consumers are required; there is no lease heartbeat yet.
 
 </Accordion>
 </Accordions>

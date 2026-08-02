@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.6.1 · measured 2026-08-01T19:55:11.270Z_
+_okengine v0.6.1 · measured 2026-08-02T08:57:26.597Z_
 
 Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -13,8 +13,8 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | Kernel (edge profile) | 14.91 kB  | 15.00 kB  |
 | Client runtime        | 1.67 kB   | 3.00 kB   |
 | Console initial load  | 86.21 kB  | 300.00 kB |
-| Cold start on Bun     | 65.820 ms | 75.000 ms |
-| p99 routing overhead  | 0.003 ms  | 1.000 ms  |
+| Cold start on Bun     | 35.951 ms | 75.000 ms |
+| p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
@@ -29,12 +29,12 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | client/auth  | 573 B    | 829 B    |
 | clock        | 12.94 kB | 13.20 kB |
 | config       | 890 B    | 1.12 kB  |
-| console      | 83.91 kB | 85.59 kB |
+| console      | 84.08 kB | 85.76 kB |
 | gate         | 6.14 kB  | 6.39 kB  |
 | mcp          | 9.39 kB  | 9.64 kB  |
 | plugins      | 18.55 kB | 18.92 kB |
 | runs         | 6.15 kB  | 6.40 kB  |
-| signal       | 888 B    | 1.12 kB  |
+| signal       | 895 B    | 1.12 kB  |
 | store        | 15.01 kB | 15.31 kB |
 | test         | 10.82 kB | 11.07 kB |
 | vault        | 2.42 kB  | 2.67 kB  |
@@ -78,7 +78,7 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 48.37 kB | 49.34 kB |
+| drivers              | 51.58 kB | 52.61 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 896 B    | 1.13 kB  |
 | ai-ollama            | 1.83 kB  | 2.08 kB  |
@@ -106,11 +106,11 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | postgres             | 1.38 kB  | 1.63 kB  |
 | redis                | 2.00 kB  | 2.25 kB  |
 | s3                   | 958 B    | 1.19 kB  |
-| signal-engine        | 3.32 kB  | 3.57 kB  |
-| signal-memory        | 3.36 kB  | 3.61 kB  |
-| signal-nats          | 3.85 kB  | 4.10 kB  |
-| signal-postgres      | 5.19 kB  | 5.44 kB  |
-| signal-redis         | 4.48 kB  | 4.73 kB  |
+| signal-engine        | 6.25 kB  | 6.50 kB  |
+| signal-memory        | 6.29 kB  | 6.54 kB  |
+| signal-nats          | 6.77 kB  | 7.02 kB  |
+| signal-postgres      | 8.25 kB  | 8.50 kB  |
+| signal-redis         | 7.40 kB  | 7.65 kB  |
 | sqlite               | 440 B    | 696 B    |
 | vault-dotenv-parse   | 562 B    | 818 B    |
 | vault-env            | 894 B    | 1.12 kB  |

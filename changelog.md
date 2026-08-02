@@ -10,6 +10,27 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- Signal `once` visibility leases (`leaseExpiresAt`, default 30s) with **lazy
+  reclaim at claim time** — expired `inflight` rows are taken by the next
+  consumer query (memory + postgres); no background sweeper. Chaos proof:
+  SIGKILL after claim still redelivers after the lease expires.
+
+### ♻️ Changed
+
+- Signal docs and delivery cards state real physics: **at-least-once** (not
+  exactly-once), `retries` means dead-letter when `attempts > retries`,
+  `live` replays full retained history (unbounded), and slow handlers that
+  outlive `leaseMs` can double-deliver without a crash (no heartbeat yet).
+- Orphan signal config stays recoverable by re-declaring; pending/DLQ rows
+  are not deleted when a signal disappears from code.
+
+### 🐛 Fixed
+
+- Emitting a non-`optional` signal with zero subscribers now throws
+  **OKE1042** (previously silent success despite docs claiming a loud fail).
+
 ## v0.6.1 — 2026-08-01
 
 ### ✨ Added

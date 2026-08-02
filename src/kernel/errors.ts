@@ -143,8 +143,8 @@ export const OKE_ERRORS = {
     fix: 'Add "{resource}" to this flow\'s effects.calls.',
   },
   /**
-   * Emit target has no subscriber (unified-theory §21 example).
-   * Reserved now so the number stays permanent.
+   * Emit target has no subscriber (unified-theory §21).
+   * Thrown at emit when `optional` is false and nobody is subscribed.
    */
   ORPHAN_EMIT: {
     code: 1042,

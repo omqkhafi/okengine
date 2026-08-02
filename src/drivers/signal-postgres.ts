@@ -8,6 +8,7 @@
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
+import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
 import type {
   DeadLetter,
   LiveHandler,
@@ -24,6 +25,7 @@ import type {
   SignalTransaction,
   SignalUnsubscribe,
 } from "./signal-types.ts";
+import { SIGNAL_DEFAULT_LEASE_MS } from "./signal-types.ts";
 
 /** Row shape in `oke_signal_messages`. */
 interface MsgRow {
@@ -37,6 +39,7 @@ interface MsgRow {
   available_at: number;
   status: "pending" | "inflight" | "delivered" | "dead";
   locked_by: string | null;
+  lease_expires_at: number | null;
   delivered_to: string;
 }
 
@@ -100,7 +103,10 @@ export function createPostgresSignalFake(options?: {
       writes: Array<[string, unknown]>;
     };
     committed = {
-      messages: snap.messages,
+      messages: snap.messages.map((m) => ({
+        ...m,
+        lease_expires_at: m.lease_expires_at ?? null,
+      })),
       writes: new Map(snap.writes),
     };
   }
@@ -150,26 +156,28 @@ export function createPostgresSignalFake(options?: {
       const text = sql.trim();
       const state = view();
 
-      // Claim: SELECT … FOR UPDATE SKIP LOCKED
+      // Claim: SELECT … FOR UPDATE SKIP LOCKED (pending or lease-expired inflight)
       const claim =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'once'\s+AND\s+status\s*=\s*'pending'\s+AND\s+available_at\s*<=\s*\?\s+AND\s+locked_by\s+IS\s+NULL\s+ORDER\s+BY\s+created_at\s+ASC\s+LIMIT\s+1\s+FOR\s+UPDATE\s+SKIP\s+LOCKED$/i.exec(
+        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'once'\s+AND\s+available_at\s*<=\s*\?\s+AND\s+\(\s*\(status\s*=\s*'pending'\s+AND\s+locked_by\s+IS\s+NULL\)\s+OR\s+\(status\s*=\s*'inflight'\s+AND\s+lease_expires_at\s+IS\s+NOT\s+NULL\s+AND\s+lease_expires_at\s*<=\s*\?\)\s*\)\s+ORDER\s+BY\s+created_at\s+ASC\s+LIMIT\s+1\s+FOR\s+UPDATE\s+SKIP\s+LOCKED$/i.exec(
           text,
         );
       if (claim) {
         const signal = String(params[0]);
         const t = Number(params[1]);
-        const row = state.messages.find(
-          (m) =>
-            m.signal === signal &&
-            m.delivery === "once" &&
-            m.status === "pending" &&
-            m.available_at <= t &&
-            m.locked_by === null,
-        );
+        const leaseCutoff = Number(params[2]);
+        const row = state.messages.find((m) => {
+          if (m.signal !== signal || m.delivery !== "once" || m.available_at > t) return false;
+          if (m.status === "pending" && m.locked_by === null) return true;
+          if (
+            m.status === "inflight" &&
+            m.lease_expires_at !== null &&
+            m.lease_expires_at <= leaseCutoff
+          ) {
+            return true;
+          }
+          return false;
+        });
         if (!row) return [];
-        row.status = "inflight";
-        row.locked_by = String(params[2] ?? "worker");
-        row.attempts += 1;
         return [{ ...row }];
       }
 
@@ -268,6 +276,10 @@ export function createPostgresSignalFake(options?: {
           available_at: Number(row.available_at),
           status: (row.status as MsgRow["status"]) ?? "pending",
           locked_by: (row.locked_by as string | null) ?? null,
+          lease_expires_at:
+            row.lease_expires_at === undefined || row.lease_expires_at === null
+              ? null
+              : Number(row.lease_expires_at),
           delivered_to: String(row.delivered_to ?? "[]"),
         });
         return { changes: 1 };
@@ -306,6 +318,10 @@ export function createPostgresSignalFake(options?: {
           }
         }
         return { changes: 1 };
+      }
+
+      if (/^ALTER\s+TABLE\s+oke_signal_messages\s+ADD\s+COLUMN/i.test(text)) {
+        return { changes: 0 };
       }
 
       throw new Error(`postgres signal fake: unsupported exec: ${sql}`);
@@ -368,8 +384,17 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     available_at BIGINT,
     status TEXT,
     locked_by TEXT,
+    lease_expires_at BIGINT,
     delivered_to TEXT
   )`);
+  // Existing tables created before leases: add the column in place.
+  try {
+    await sql.exec(
+      `ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
+    );
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
   await sql.exec(`CREATE TABLE IF NOT EXISTS oke_signal_writes (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -398,6 +423,7 @@ function rowToMessage(row: Record<string, unknown>): SignalMessage {
 export async function openPostgresSignal(options: SignalOpenOptions): Promise<SignalBus> {
   const now = options.now ?? (() => Date.now());
   const signals = options.signals;
+  const leaseMs = options.leaseMs ?? SIGNAL_DEFAULT_LEASE_MS;
   const sql =
     (options.sql as PostgresSignalSql | undefined) ??
     createPostgresSignalFake({
@@ -468,6 +494,22 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     return decl;
   }
 
+  function hasSubscriber(name: string): boolean {
+    if (consumers.some((c) => c.signal === name)) return true;
+    const live = liveHandlers.get(name);
+    return live !== undefined && live.size > 0;
+  }
+
+  function assertEmitAllowed(name: string): void {
+    const decl = requireDecl(name);
+    if (decl.optional) return;
+    if (hasSubscriber(name)) return;
+    throw new OkeError(OKE_ERRORS.ORPHAN_EMIT, {
+      flow: "unknown",
+      resource: name,
+    });
+  }
+
   async function insertEmit(
     tx: PostgresSignalSql,
     signal: string,
@@ -476,7 +518,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     const decl = requireDecl(signal);
     const t = now();
     await tx.exec(
-      `INSERT INTO oke_signal_messages (id, signal, payload, delivery, attempts, failures, created_at, available_at, status, locked_by, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO oke_signal_messages (id, signal, payload, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
         signal,
@@ -487,6 +529,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
         t,
         t,
         "pending",
+        null,
         null,
         "[]",
       ],
@@ -507,7 +550,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       },
       async emit(signal, payload) {
         if (finished) throw new Error("transaction finished");
-        requireDecl(signal);
+        assertEmitAllowed(signal);
         stagedEmits.push({ signal, payload });
       },
       async commit() {
@@ -547,6 +590,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     signal: string,
     payload?: unknown,
   ): Promise<void> {
+    assertEmitAllowed(signal);
     await insertEmit(tx, signal, payload);
   }
 
@@ -601,21 +645,21 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     const msg = rowToMessage(row);
     try {
       await consumer.handler(msg);
-      await sql.exec(`UPDATE oke_signal_messages SET status = ?, locked_by = NULL WHERE id = ?`, [
-        "delivered",
-        msg.id,
-      ]);
+      await sql.exec(
+        `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, lease_expires_at = NULL WHERE id = ?`,
+        ["delivered", msg.id],
+      );
       noteDelivered();
     } catch (err) {
       const failures = [...msg.failures, failureFromError(err, msg.attempts)];
       if (msg.attempts > decl.retries) {
         await sql.exec(
-          `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, failures = ? WHERE id = ?`,
+          `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, lease_expires_at = NULL, failures = ? WHERE id = ?`,
           [decl.deadLetter ? "dead" : "delivered", JSON.stringify(failures), msg.id],
         );
       } else {
         await sql.exec(
-          `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, failures = ?, available_at = ? WHERE id = ?`,
+          `UPDATE oke_signal_messages SET status = ?, locked_by = NULL, lease_expires_at = NULL, failures = ?, available_at = ? WHERE id = ?`,
           ["pending", JSON.stringify(failures), now(), msg.id],
         );
       }
@@ -632,25 +676,27 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
 
   async function drainOncePass(): Promise<boolean> {
     let progress = false;
+    const t = now();
     for (const consumer of consumers) {
       const decl = signals.get(consumer.signal);
       if (decl?.delivery !== "once") continue;
       const claimed = await sql.query(
-        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'once' AND status = 'pending' AND available_at <= ? AND locked_by IS NULL ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
-        [consumer.signal, now(), consumer.subscriberId],
+        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'once' AND available_at <= ? AND ((status = 'pending' AND locked_by IS NULL) OR (status = 'inflight' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)) ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
+        [consumer.signal, t, t],
       );
       if (claimed[0]) {
         progress = true;
         const row = claimed[0];
-        if (row.locked_by == null) {
-          await sql.exec(
-            `UPDATE oke_signal_messages SET status = 'inflight', locked_by = ?, attempts = ? WHERE id = ?`,
-            [consumer.subscriberId, Number(row.attempts) + 1, row.id],
-          );
-          row.locked_by = consumer.subscriberId;
-          row.attempts = Number(row.attempts) + 1;
-          row.status = "inflight";
-        }
+        const attempts = Number(row.attempts) + 1;
+        const leaseExpiresAt = t + leaseMs;
+        await sql.exec(
+          `UPDATE oke_signal_messages SET status = 'inflight', locked_by = ?, attempts = ?, lease_expires_at = ? WHERE id = ?`,
+          [consumer.subscriberId, attempts, leaseExpiresAt, row.id],
+        );
+        row.locked_by = consumer.subscriberId;
+        row.attempts = attempts;
+        row.status = "inflight";
+        row.lease_expires_at = leaseExpiresAt;
         await deliverOnce(row, consumer);
       }
     }
@@ -726,7 +772,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
       while (list.length > 50) list.shift();
       noteDelivered();
       await sql.exec(
-        `UPDATE oke_signal_messages SET status = 'delivered', locked_by = NULL WHERE id = ?`,
+        `UPDATE oke_signal_messages SET status = 'delivered', locked_by = NULL, lease_expires_at = NULL WHERE id = ?`,
         [row.id],
       );
     }
@@ -945,12 +991,12 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
             const deliveredTo = new Set(JSON.parse(String(row?.delivered_to ?? "[]")) as string[]);
             deliveredTo.delete(options.subscriberId);
             await sql.exec(
-              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, attempts = 0, available_at = ?, delivered_to = ? WHERE id = ?`,
+              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, lease_expires_at = NULL, attempts = 0, available_at = ?, delivered_to = ? WHERE id = ?`,
               [now(), JSON.stringify([...deliveredTo]), m.id],
             );
           } else {
             await sql.exec(
-              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, attempts = 0, available_at = ?, delivered_to = '[]' WHERE id = ?`,
+              `UPDATE oke_signal_messages SET status = 'pending', locked_by = NULL, lease_expires_at = NULL, attempts = 0, available_at = ?, delivered_to = '[]' WHERE id = ?`,
               [now(), m.id],
             );
           }

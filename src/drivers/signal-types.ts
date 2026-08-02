@@ -188,12 +188,21 @@ export interface SignalTransaction {
   rollback(): Promise<void>;
 }
 
+/** Default visibility lease for `once` claims (ms). */
+export const SIGNAL_DEFAULT_LEASE_MS = 30_000;
+
 /** Options when opening a signal bus. */
 export interface SignalOpenOptions {
   /** Registered signal declarations (name → decl). */
   readonly signals: ReadonlyMap<string, SignalDecl>;
   /** Clock. */
   readonly now?: () => number;
+  /**
+   * Visibility lease for `once` claims (ms).
+   * Expired `inflight` rows are reclaimed lazily at the next claim.
+   * Defaults to {@link SIGNAL_DEFAULT_LEASE_MS}.
+   */
+  readonly leaseMs?: number;
   /**
    * Durable path for chaos / crash recovery tests.
    * When set, committed state survives process death.

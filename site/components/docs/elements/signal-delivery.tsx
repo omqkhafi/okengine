@@ -28,7 +28,7 @@ const PHYSICS: ReadonlyArray<{
     icon: CircleDot,
     semantic: "Queue — competing consumers",
     guarantee: "Retries + dead-letter queue",
-    useFor: "Exactly-once jobs: emails, payment sync",
+    useFor: "At-least-once jobs: emails, payment sync (idempotent consumers)",
   },
   {
     id: "broadcast",

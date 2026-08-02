@@ -12,6 +12,8 @@ export interface CreateSignalRuntimeOptions {
   readonly driver: SignalDriver;
   /** Clock. */
   readonly now?: () => number;
+  /** Visibility lease for `once` claims (ms). */
+  readonly leaseMs?: number;
   /** Durable path for chaos recovery. */
   readonly durablePath?: string;
   /** Injected clients forwarded to the driver. */
@@ -69,6 +71,7 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
       bus = await options.driver.open({
         signals: declarations,
         now: options.now,
+        leaseMs: options.leaseMs,
         durablePath: options.durablePath,
         sql: options.sql,
         redis: options.redis,

@@ -55,6 +55,8 @@ export type {
   SignalDiscardOptions,
 } from "./signal-types.ts";
 
+export { SIGNAL_DEFAULT_LEASE_MS } from "./signal-types.ts";
+
 export {
   memorySqlDriver,
   memoryKvDriver,

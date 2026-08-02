@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-01T19:55:11.270Z",
+  "measuredAt": "2026-08-02T08:57:26.597Z",
   "version": "0.6.1",
   "budgets": [
     {
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 65.82,
+      "value": 35.951,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -45,7 +45,7 @@
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0.003,
+      "value": 0.001,
       "limit": 1,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 66004,
-      "limit": 67325,
+      "value": 66008,
+      "limit": 67329,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 85924,
-      "limit": 87643,
+      "value": 86096,
+      "limit": 87818,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -195,8 +195,8 @@
     {
       "id": "export:./signal",
       "label": "signal",
-      "value": 888,
-      "limit": 1144,
+      "value": 895,
+      "limit": 1151,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -365,8 +365,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 49532,
-      "limit": 50523,
+      "value": 52818,
+      "limit": 53875,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -645,8 +645,8 @@
     {
       "id": "export:./drivers/signal-engine",
       "label": "signal-engine",
-      "value": 3397,
-      "limit": 3653,
+      "value": 6400,
+      "limit": 6656,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -655,8 +655,8 @@
     {
       "id": "export:./drivers/signal-memory",
       "label": "signal-memory",
-      "value": 3442,
-      "limit": 3698,
+      "value": 6438,
+      "limit": 6694,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -665,8 +665,8 @@
     {
       "id": "export:./drivers/signal-nats",
       "label": "signal-nats",
-      "value": 3940,
-      "limit": 4196,
+      "value": 6933,
+      "limit": 7189,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -675,8 +675,8 @@
     {
       "id": "export:./drivers/signal-postgres",
       "label": "signal-postgres",
-      "value": 5313,
-      "limit": 5569,
+      "value": 8443,
+      "limit": 8699,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -685,8 +685,8 @@
     {
       "id": "export:./drivers/signal-redis",
       "label": "signal-redis",
-      "value": 4586,
-      "limit": 4842,
+      "value": 7574,
+      "limit": 7830,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

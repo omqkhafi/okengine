@@ -11,6 +11,7 @@ import { dirname } from "node:path";
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
+import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
 import type {
   DeadLetter,
   LiveHandler,
@@ -27,6 +28,7 @@ import type {
   SignalTransaction,
   SignalUnsubscribe,
 } from "./signal-types.ts";
+import { SIGNAL_DEFAULT_LEASE_MS } from "./signal-types.ts";
 
 /** Internal mutable message. */
 interface MutMessage {
@@ -41,6 +43,8 @@ interface MutMessage {
   status: "pending" | "inflight" | "delivered" | "dead";
   /** For once: which consumer holds the claim. */
   lockedBy: string | null;
+  /** For once: when the claim lease expires (epoch ms); null when unlocked. */
+  leaseExpiresAt: number | null;
   /** For broadcast: subscriber ids that already received. */
   deliveredTo: Set<string>;
 }
@@ -48,9 +52,10 @@ interface MutMessage {
 /** Persisted snapshot for chaos recovery. */
 interface Snapshot {
   messages: Array<
-    Omit<MutMessage, "deliveredTo" | "lockedBy"> & {
+    Omit<MutMessage, "deliveredTo" | "lockedBy" | "leaseExpiresAt"> & {
       deliveredTo: string[];
       lockedBy: string | null;
+      leaseExpiresAt: number | null;
     }
   >;
   writes: Array<[string, unknown]>;
@@ -76,6 +81,7 @@ export async function createSignalEngine(
   const now = options.now ?? (() => Date.now());
   const signals = options.signals;
   const durablePath = options.durablePath;
+  const leaseMs = options.leaseMs ?? SIGNAL_DEFAULT_LEASE_MS;
 
   let messages: MutMessage[] = [];
   let writes = new Map<string, unknown>();
@@ -153,6 +159,7 @@ export async function createSignalEngine(
       messages = snap.messages.map((m) => ({
         ...m,
         lockedBy: m.lockedBy,
+        leaseExpiresAt: m.leaseExpiresAt ?? null,
         deliveredTo: new Set(m.deliveredTo),
       }));
       writes = new Map(snap.writes);
@@ -173,6 +180,7 @@ export async function createSignalEngine(
         availableAt: m.availableAt,
         status: m.status,
         lockedBy: m.lockedBy,
+        leaseExpiresAt: m.leaseExpiresAt,
         deliveredTo: [...m.deliveredTo],
       })),
       writes: [...writes.entries()],
@@ -189,8 +197,25 @@ export async function createSignalEngine(
     return decl;
   }
 
+  function hasSubscriber(name: string): boolean {
+    if (consumers.some((c) => c.signal === name)) return true;
+    const live = liveHandlers.get(name);
+    return live !== undefined && live.size > 0;
+  }
+
+  function assertEmitAllowed(name: string): void {
+    const decl = requireDecl(name);
+    if (decl.optional) return;
+    if (hasSubscriber(name)) return;
+    throw new OkeError(OKE_ERRORS.ORPHAN_EMIT, {
+      flow: "unknown",
+      resource: name,
+    });
+  }
+
   function stageEmit(stagedMessages: MutMessage[], name: string, payload: unknown): void {
     const decl = requireDecl(name);
+    assertEmitAllowed(name);
     const t = now();
     stagedMessages.push({
       id: crypto.randomUUID(),
@@ -203,6 +228,7 @@ export async function createSignalEngine(
       availableAt: t,
       status: "pending",
       lockedBy: null,
+      leaseExpiresAt: null,
       deliveredTo: new Set(),
     });
   }
@@ -297,17 +323,23 @@ export async function createSignalEngine(
   }
 
   /**
-   * Claim the next `once` message with SKIP LOCKED semantics.
+   * Claim the next `once` message with SKIP LOCKED + lazy lease reclaim.
+   *
+   * Eligible: pending/unlocked, or inflight whose `leaseExpiresAt` has passed.
+   * No background sweeper — reclaim happens only at claim time.
    */
   function claimOnce(signal: string, consumerId: string): MutMessage | null {
     const t = now();
     for (const m of messages) {
       if (m.signal !== signal || m.delivery !== "once") continue;
-      if (m.status !== "pending") continue;
       if (m.availableAt > t) continue;
-      if (m.lockedBy !== null) continue;
+      const pendingOk = m.status === "pending" && m.lockedBy === null;
+      const leaseExpired =
+        m.status === "inflight" && m.leaseExpiresAt !== null && m.leaseExpiresAt <= t;
+      if (!pendingOk && !leaseExpired) continue;
       m.status = "inflight";
       m.lockedBy = consumerId;
+      m.leaseExpiresAt = t + leaseMs;
       m.attempts += 1;
       return m;
     }
@@ -320,10 +352,12 @@ export async function createSignalEngine(
       await consumer.handler(toPublic(m));
       m.status = "delivered";
       m.lockedBy = null;
+      m.leaseExpiresAt = null;
       noteDelivered();
     } catch (err) {
       m.failures.push(failureFromError(err, m.attempts));
       m.lockedBy = null;
+      m.leaseExpiresAt = null;
       if (m.attempts > decl.retries) {
         if (decl.deadLetter) {
           m.status = "dead";
@@ -348,6 +382,9 @@ export async function createSignalEngine(
       const m = claimOnce(consumer.signal, consumer.subscriberId);
       if (!m) continue;
       progress = true;
+      // Persist claim + lease before the handler runs so a crash mid-handler
+      // leaves a reclaimable inflight row (not a silent pending that never locked).
+      await persist();
       await deliverOnce(m, consumer);
     }
     return progress;
@@ -571,6 +608,7 @@ export async function createSignalEngine(
         if (!options.dryRun) {
           m.status = "pending";
           m.lockedBy = null;
+          m.leaseExpiresAt = null;
           m.availableAt = now();
           m.attempts = 0;
           if (m.delivery === "broadcast") {

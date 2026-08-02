@@ -3,12 +3,12 @@
  * - delivery is mandatory with no default
  * - rolled-back transaction emits nothing
  * - crash between write and emit loses nothing (transactional outbox)
- * - competing consumers under once receive each message exactly once
+ * - competing consumers under once receive each message once
  * - broadcast reaches every subscriber
  * - live is client-subscribable
  * - DLQ preserves typed failure reasons per attempt
  * - redis / nats keep an outbox relay (semantics never regress)
- * - chaos: kill process mid-transaction
+ * - chaos: kill process mid-transaction; SIGKILL after claim + lease reclaim
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -148,6 +148,22 @@ for (const { label, driver, setup } of drivers) {
       expect(numbers).toEqual(["1", "2"]);
     });
 
+    test("once: a single emit is received by exactly one of two consumers", async () => {
+      const once = signal("order-placed", { delivery: "once", retries: 2 });
+      const bus = await openBus(driver, [once], setup?.() ?? {});
+      const got: string[] = [];
+      await bus.subscribe("order-placed", "worker-a", async () => {
+        got.push("a");
+      });
+      await bus.subscribe("order-placed", "worker-b", async () => {
+        got.push("b");
+      });
+      await bus.emit("order-placed", { n: 1 });
+      await bus.drain();
+      expect(got).toHaveLength(1);
+      expect(got[0] === "a" || got[0] === "b").toBe(true);
+    });
+
     test("broadcast reaches every subscriber", async () => {
       const bcast = signal("news", { delivery: "broadcast" });
       const bus = await openBus(driver, [bcast], setup?.() ?? {});
@@ -262,7 +278,7 @@ describe("postgres transactional emit (dual-write fix)", () => {
 describe("redis / nats outbox relay", () => {
   test("redis relay publishes after commit, not on rollback", async () => {
     const redis = createSignalRedisFake();
-    const once = signal("order-placed", { delivery: "once" });
+    const once = signal("order-placed", { delivery: "once", optional: true });
     const bus = await openBus(redisSignalDriver, [once], { redis });
 
     const tx = await bus.begin();
@@ -280,7 +296,7 @@ describe("redis / nats outbox relay", () => {
 
   test("nats relay publishes after commit, not on rollback", async () => {
     const nats = createSignalNatsFake();
-    const once = signal("order-placed", { delivery: "once" });
+    const once = signal("order-placed", { delivery: "once", optional: true });
     const bus = await openBus(natsSignalDriver, [once], { nats });
 
     const tx = await bus.begin();
@@ -347,7 +363,7 @@ describe("chaos — kill process mid-transaction", () => {
           import { memorySignalDriver } from ${JSON.stringify(join(import.meta.dir, "../drivers/signal-memory.ts"))};
           import { signal } from ${JSON.stringify(join(import.meta.dir, "signal/declare.ts"))};
           import { createSignalRuntime } from ${JSON.stringify(join(import.meta.dir, "signal/runtime.ts"))};
-          const orderPlaced = signal("order-placed", { delivery: "once", retries: 3, deadLetter: true });
+          const orderPlaced = signal("order-placed", { delivery: "once", retries: 3, deadLetter: true, optional: true });
           const runtime = createSignalRuntime({ driver: memorySignalDriver, durablePath: ${JSON.stringify(durablePath)} });
           runtime.register(orderPlaced);
           const bus = await runtime.start();
@@ -429,6 +445,74 @@ describe("chaos — kill process mid-transaction", () => {
         status: "pending",
       });
       expect(seen).toEqual([{ id: "1" }]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("SIGKILL after claim: committed message is reclaimed after lease expiry", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-signal-chaos-consume-"));
+    const durablePath = join(dir, "bus.json");
+    const markerPath = join(dir, "claimed");
+    const leaseMs = 80;
+    try {
+      const commit = Bun.spawn({
+        cmd: ["bun", join(import.meta.dir, "signal/chaos-child.ts"), durablePath, "commit"],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await commit.exited).toBe(0);
+
+      const consumer = Bun.spawn({
+        cmd: [
+          "bun",
+          join(import.meta.dir, "signal/chaos-child.ts"),
+          durablePath,
+          "consume-hang",
+          markerPath,
+          String(leaseMs),
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      for (let i = 0; i < 100; i++) {
+        if (await Bun.file(markerPath).exists()) break;
+        await Bun.sleep(10);
+      }
+      expect(await Bun.file(markerPath).exists()).toBe(true);
+      consumer.kill(9);
+      await consumer.exited;
+
+      // Advance past the visibility lease so reclaim-at-claim can take the row.
+      await Bun.sleep(leaseMs + 40);
+
+      let clock = Date.now() + leaseMs + 1_000;
+      const orderPlaced = signal("order-placed", {
+        delivery: "once",
+        retries: 3,
+        deadLetter: true,
+      });
+      const runtime = createSignalRuntime({
+        driver: memorySignalDriver,
+        durablePath,
+        now: () => clock,
+        leaseMs,
+      });
+      runtime.register(orderPlaced);
+      const bus = await runtime.start();
+      openBuses.push(bus);
+
+      const seen: Array<{ payload: unknown; attempts: number }> = [];
+      await bus.subscribe("order-placed", "rescue", async (m) => {
+        seen.push({ payload: m.payload, attempts: m.attempts });
+      });
+      await bus.drain();
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.payload).toEqual({ id: "1" });
+      // Original claim in the killed child + reclaim here.
+      expect(seen[0]!.attempts).toBeGreaterThanOrEqual(2);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
