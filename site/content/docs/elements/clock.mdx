@@ -141,15 +141,15 @@ Detection attaches `dstAmbiguity` on the cron row and the Console shows it. `oke
 
 ```typescript title="oke.config.ts"
 drivers: {
-  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
+  clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
 },
 ```
 
-| Driver     | Behavior                                                              |
-| ---------- | --------------------------------------------------------------------- |
-| `memory`   | In-process CronStore + timers — single process; lost on exit          |
-| `frozen`   | Deterministic test clock — time advances only when the test says so   |
-| `postgres` | Accepted in config — **not implemented yet** (boot still uses memory) |
+| Driver   | Behavior                                                                                 |
+| -------- | ---------------------------------------------------------------------------------------- |
+| `memory` | In-process CronStore + timers — single process; lost on exit                             |
+| `file`   | On-disk CronStore (`.oke/crons.json`) — multi-process leader election on a shared volume |
+| `frozen` | Deterministic test clock — time advances only when the test says so                      |
 
 `frozen` is why the no-`Date.now()` rule pays off: tests inject time travel through `fx.clock` and every flow obeys it automatically.
 

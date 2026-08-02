@@ -42,6 +42,11 @@ export interface CreateClockRuntimeOptions {
 
 /** Clock runtime. */
 export interface ClockRuntime {
+  /**
+   * Effective driver id selected at construction
+   * (`memory` · `file` · `frozen`).
+   */
+  readonly driverId: "memory" | "file" | "frozen";
   /** Instance id used for leases. */
   readonly instanceId: string;
   /** Cron store the scheduler reads. */
@@ -107,6 +112,11 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
   const leaseMs = options.leaseMs ?? 30_000;
   const declarations = new Map<string, ClockDecl>();
   const handlers = new Map<string, CronHandler>();
+  const driverId: ClockRuntime["driverId"] = timeTravel
+    ? "frozen"
+    : store.kind === "file"
+      ? "file"
+      : "memory";
 
   async function fire(name: string): Promise<boolean> {
     const row = await store.get(name);
@@ -161,6 +171,7 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
   }
 
   const runtime: ClockRuntime = {
+    driverId,
     instanceId,
     store,
     declarations,

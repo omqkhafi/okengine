@@ -18,9 +18,9 @@ const SAMPLE: OkeConfig = {
       sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
       kv: { local: "memory", docker: "redis", prod: "redis" },
     },
-    signal: { local: "memory", docker: "postgres", prod: "postgres" },
-    clock: { local: "memory", docker: "postgres", prod: "postgres" },
-    vault: { local: "dotenv", docker: "openbao", prod: "openbao" },
+    signal: { local: "memory", docker: "redis", prod: "redis" },
+    clock: { local: "memory", docker: "file", prod: "file" },
+    vault: { local: "env", docker: "openbao", prod: "openbao" },
     channel: {
       email: { local: "console", docker: "smtp", prod: "smtp" },
     },
@@ -62,8 +62,9 @@ describe("hero-meta", () => {
     expect(store).toContain("postgres");
     expect(store).toContain("redis");
     expect(store).not.toContain("sqlite");
-    expect(rows.find((r) => r.element === "signal")?.detail).toBe("postgres");
-    expect(rows.find((r) => r.element === "clock")?.detail).toBe("postgres");
+    expect(rows.find((r) => r.element === "signal")?.detail).toBe("redis");
+    expect(rows.find((r) => r.element === "clock")?.detail).toBe("file");
+    expect(rows.find((r) => r.element === "gate")?.detail).toBe("redis");
     expect(rows.find((r) => r.element === "channel")?.detail).toContain("smtp");
   });
 

@@ -1,0 +1,247 @@
+/**
+ * Boot-level acceptance: binders honour `drivers.*` config pins.
+ *
+ * Asserts runtime identity (driverId / store kind / chain), not hero strings.
+ */
+
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createRedisFakeClient } from "../../drivers/redis.ts";
+import { createSignalRedisFake } from "../../drivers/signal-redis.ts";
+import { clock } from "../../elements/clock.ts";
+import { gate } from "../../elements/gate.ts";
+import { signal } from "../../elements/signal.ts";
+import { vault } from "../../elements/vault.ts";
+import { buildVaultBootChain } from "../../elements/vault/boot-chain.ts";
+import { bootApplication } from "../boot.ts";
+
+describe("boot binders honour drivers.* config", () => {
+  const prevCwd = process.cwd();
+  let tmp: string | undefined;
+
+  afterEach(async () => {
+    process.chdir(prevCwd);
+    if (tmp) {
+      await rm(tmp, { recursive: true, force: true });
+      tmp = undefined;
+    }
+    delete process.env.OKE_VAULT_URL;
+    delete process.env.OKE_VAULT_TOKEN;
+    delete process.env.REDIS_URL;
+  });
+
+  test("vault: drivers.vault env builds env chain layers", async () => {
+    process.env.APP_NAME = "honor-config";
+    try {
+      const result = await bootApplication({
+        env: "local",
+        secrets: [vault.config("APP_NAME", { description: "app" })],
+        config: {
+          drivers: {
+            vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
+          },
+        },
+      });
+      try {
+        expect(result.vault).toBeDefined();
+        expect(result.vault!.chainDriverIds).toContain("env");
+        expect(result.vault!.chainDriverIds).toContain("memory");
+        expect(result.vault!.chainDriverIds[0]).toBe("env");
+      } finally {
+        await result.close();
+      }
+    } finally {
+      delete process.env.APP_NAME;
+    }
+  });
+
+  test("vault: drivers.vault openbao with credentials selects openbao layer", () => {
+    process.env.OKE_VAULT_URL = "http://127.0.0.1:8200";
+    process.env.OKE_VAULT_TOKEN = "test-token";
+    const chain = buildVaultBootChain({
+      driverId: "openbao",
+      env: "local",
+      missingOpenbao: "throw",
+    });
+    expect(chain.map((l) => l.driver.id)).toContain("openbao");
+    expect(chain.map((l) => l.driver.id)).toContain("env");
+  });
+
+  test("vault: openbao without credentials fails loud in prod", async () => {
+    delete process.env.OKE_VAULT_URL;
+    delete process.env.OKE_VAULT_TOKEN;
+    await expect(
+      bootApplication({
+        env: "prod",
+        secrets: [vault.config("APP_NAME", { description: "app", dev: "x" })],
+        vault: { allowDevFallbacks: true },
+        config: {
+          drivers: {
+            vault: { prod: "openbao" },
+          },
+        },
+      }),
+    ).rejects.toThrow(/openbao.*OKE_VAULT_URL/);
+  });
+
+  test("clock: drivers.clock memory binds memory CronStore", async () => {
+    const result = await bootApplication({
+      env: "local",
+      startScheduler: false,
+      clocks: [clock("tick", { every: "1h" })],
+      config: {
+        drivers: {
+          clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
+        },
+      },
+    });
+    try {
+      expect(result.clock!.driverId).toBe("memory");
+      expect(result.clock!.store.kind).toBe("memory");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("clock: drivers.clock file binds file CronStore", async () => {
+    tmp = await mkdtemp(join(tmpdir(), "oke-clock-file-"));
+    process.chdir(tmp);
+    const result = await bootApplication({
+      env: "local",
+      startScheduler: false,
+      clocks: [clock("tick", { every: "1h" })],
+      config: {
+        drivers: {
+          clock: { local: "file", docker: "file", test: "frozen", prod: "file" },
+        },
+      },
+    });
+    try {
+      expect(result.clock!.driverId).toBe("file");
+      expect(result.clock!.store.kind).toBe("file");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("clock: drivers.clock postgres fails loud", async () => {
+    await expect(
+      bootApplication({
+        env: "local",
+        startScheduler: false,
+        clocks: [clock("tick", { every: "1h" })],
+        config: {
+          drivers: {
+            clock: { local: "postgres" },
+          },
+        },
+      }),
+    ).rejects.toThrow(/clock driver "postgres" is not implemented/);
+  });
+
+  test("gate: drivers.store.kv redis opens redis-backed oke:gates", async () => {
+    const fake = createRedisFakeClient();
+    const result = await bootApplication({
+      env: "local",
+      gates: [gate.rate({ max: 10, per: "1m" })],
+      clients: { kv: fake },
+      config: {
+        drivers: {
+          store: {
+            kv: { local: "redis", docker: "redis", prod: "redis" },
+          },
+        },
+      },
+    });
+    try {
+      expect(result.gate!.kvDriverId).toBe("redis");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("gate: drivers.store.kv memory keeps memory oke:gates", async () => {
+    const result = await bootApplication({
+      env: "local",
+      gates: [gate.rate({ max: 10, per: "1m" })],
+      config: {
+        drivers: {
+          store: {
+            kv: { local: "memory", docker: "redis", prod: "redis" },
+          },
+        },
+      },
+    });
+    try {
+      expect(result.gate!.kvDriverId).toBe("memory");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("signal: drivers.signal memory binds memory", async () => {
+    const result = await bootApplication({
+      env: "local",
+      signals: [signal("ping", { delivery: "once" })],
+      config: {
+        drivers: {
+          signal: { local: "memory", docker: "redis", prod: "redis" },
+        },
+      },
+    });
+    try {
+      expect(result.signal!.driverId).toBe("memory");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("signal: drivers.signal redis binds redis", async () => {
+    const fake = createSignalRedisFake();
+    const result = await bootApplication({
+      env: "local",
+      signals: [signal("ping", { delivery: "once" })],
+      clients: { signalRedis: fake },
+      config: {
+        drivers: {
+          signal: { local: "redis", docker: "redis", prod: "redis" },
+        },
+      },
+    });
+    try {
+      expect(result.signal!.driverId).toBe("redis");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("signal: drivers.signal postgres fails loud (never silent memory)", async () => {
+    await expect(
+      bootApplication({
+        env: "local",
+        signals: [signal("ping", { delivery: "once" })],
+        config: {
+          drivers: {
+            signal: { local: "postgres" },
+          },
+        },
+      }),
+    ).rejects.toThrow(/signal driver "postgres"/);
+  });
+
+  test("signal: drivers.signal nats fails loud", async () => {
+    await expect(
+      bootApplication({
+        env: "local",
+        signals: [signal("ping", { delivery: "once" })],
+        config: {
+          drivers: {
+            signal: { local: "nats" },
+          },
+        },
+      }),
+    ).rejects.toThrow(/signal driver "nats"/);
+  });
+});

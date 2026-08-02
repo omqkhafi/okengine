@@ -9,7 +9,7 @@ export default defineConfig({
       files: { prod: "s3" },
       index: { prod: "pgvector" },
     },
-    signal: { prod: "postgres" },
+    signal: { prod: "redis" },
     vault: { prod: "openbao" },
     channel: { email: { prod: "smtp" } },
     ai: { prod: { driver: "anthropic" } },

@@ -24,6 +24,8 @@ export interface CreateSignalRuntimeOptions {
 
 /** Signal runtime. */
 export interface SignalRuntime {
+  /** Bound protocol driver id (`memory` · `postgres` · `redis` · `nats`). */
+  readonly driverId: string;
   /** Underlying bus (after {@link SignalRuntime.start}). */
   readonly bus: SignalBus | null;
   /**
@@ -59,6 +61,7 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
   let bus: SignalBus | null = null;
 
   const runtime: SignalRuntime = {
+    driverId: options.driver.id,
     get bus() {
       return bus;
     },

@@ -156,6 +156,12 @@ export function resolveHeroElements(
   // `-d` reads the `docker` profile for every element (not a store-only override).
   const configEnv: ConfigEnv = options.configEnv ?? (options.docker ? "docker" : "local");
 
+  // Gate rates share `drivers.store.kv` (no separate drivers.gate).
+  const gateKv =
+    options.kvDriver ??
+    resolveDriverId(drivers?.store?.kv, configEnv) ??
+    (options.docker ? "redis" : "memory");
+
   const byName: Record<string, string> = {
     flow: "●",
     signal: resolveDriverId(drivers?.signal, configEnv) ?? "—",
@@ -164,7 +170,7 @@ export function resolveHeroElements(
       kv: options.kvDriver,
     }),
     clock: resolveDriverId(drivers?.clock, configEnv) ?? "—",
-    gate: "—",
+    gate: gateKv,
     vault: resolveDriverId(drivers?.vault, configEnv) ?? "—",
     channel: channelDetail(drivers?.channel, configEnv),
     ai: resolveDriverId(drivers?.ai, configEnv) ?? "—",

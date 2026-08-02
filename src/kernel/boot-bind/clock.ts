@@ -2,9 +2,13 @@
  * Lazy clock binder — loaded only when Clock is declared.
  */
 
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import {
   clock as declareClock,
   createClockRuntime,
+  createFileCronStore,
+  createMemoryCronStore,
   createTestClockRuntime,
   type ClockDecl,
   type ClockRuntime,
@@ -18,8 +22,26 @@ export interface BindClockResult {
   readonly clockDecls: ReadonlyMap<string, ClockDecl>;
 }
 
+/** Default on-disk cron store path (multi-process leader election). */
+export const DEFAULT_FILE_CRON_PATH = ".oke/crons.json";
+
+/**
+ * Resolve `drivers.clock` for the active env.
+ *
+ * @param options - Boot options
+ * @param env - Active environment
+ */
+export function resolveClockDriverId(options: BootOptions, env: ConfigEnv): string {
+  const resolved = resolveDriverId(options.config?.drivers?.clock, env);
+  if (resolved) return resolved;
+  return env === "test" ? "frozen" : "memory";
+}
+
 /**
  * Construct / adopt a Clock runtime, register decls, reconcile.
+ *
+ * Supported ids: `frozen` · `memory` · `file`. `postgres` (and any other id)
+ * fail loud — there is no postgres CronStore.
  *
  * @param options - Boot options
  * @param env - Active environment
@@ -32,13 +54,36 @@ export async function bindClock(
   now: () => number,
   prebuilt?: ClockRuntime,
 ): Promise<BindClockResult> {
-  const clockDriver =
-    resolveDriverId(options.config?.drivers?.clock, env) ?? (env === "test" ? "frozen" : "memory");
-  const clock =
-    prebuilt ??
-    (clockDriver === "frozen" || env === "test"
-      ? createTestClockRuntime(now(), { instanceId: options.instanceId })
-      : createClockRuntime({ instanceId: options.instanceId, now }));
+  const clockDriver = resolveClockDriverId(options, env);
+
+  let clock: ClockRuntime;
+  if (prebuilt) {
+    clock = prebuilt;
+  } else if (clockDriver === "frozen" || env === "test") {
+    clock = createTestClockRuntime(now(), { instanceId: options.instanceId });
+  } else if (clockDriver === "memory") {
+    clock = createClockRuntime({
+      instanceId: options.instanceId,
+      now,
+      store: createMemoryCronStore(),
+    });
+  } else if (clockDriver === "file") {
+    const path = resolve(process.cwd(), DEFAULT_FILE_CRON_PATH);
+    mkdirSync(dirname(path), { recursive: true });
+    clock = createClockRuntime({
+      instanceId: options.instanceId,
+      now,
+      store: createFileCronStore(path),
+    });
+  } else if (clockDriver === "postgres") {
+    throw new Error(
+      'oke boot: clock driver "postgres" is not implemented — use "memory", "file", or "frozen"',
+    );
+  } else {
+    throw new Error(
+      `oke boot: unknown clock driver "${clockDriver}" (expected memory · file · frozen)`,
+    );
+  }
 
   const clockDecls = new Map<string, ClockDecl>();
   for (const c of options.clocks ?? []) {

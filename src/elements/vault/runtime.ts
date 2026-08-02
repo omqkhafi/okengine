@@ -88,6 +88,11 @@ export interface VaultRuntime {
   /** Declared contracts by name. */
   readonly contracts: ReadonlyMap<string, VaultSecretDecl>;
   /**
+   * Driver ids of each chain layer in order (`env` · `openbao` · `memory` · `managed`).
+   * Available before {@link boot}.
+   */
+  readonly chainDriverIds: readonly string[];
+  /**
    * Open every chain layer, merge (first wins), validate all contracts,
    * register redaction. Throws {@link VaultBootError} listing every gap.
    */
@@ -245,8 +250,11 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
     booted = true;
   }
 
+  const chainDriverIds = (options.chain ?? []).map((layer) => layer.driver.id);
+
   return {
     contracts,
+    chainDriverIds,
     get booted() {
       return booted;
     },

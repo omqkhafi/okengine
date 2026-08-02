@@ -165,7 +165,8 @@ Fine-grained authorization (`gate.scope`, roles) stays opt-in — attach it only
 | `leaky-bucket`           | Smooths output to a constant rate                      |
 
 All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory
-driver in tests.
+driver in tests. Boot opens a dedicated `oke:gates` namespace on **`drivers.store.kv`**
+(`memory` locally · `redis` in docker/prod) so multi-instance rate limits share counters.
 
 ## Auth posture at boot
 

@@ -114,6 +114,14 @@ export interface BootOptions {
   readonly onSignal?: (signal: string, payload: unknown) => void | Promise<void>;
   /** Injectable clock for test / frozen harnesses. */
   readonly now?: () => number;
+  /**
+   * Test-only client injection for binders that open redis / signal redis.
+   * Production apps leave this unset.
+   */
+  readonly clients?: {
+    readonly kv?: import("../drivers/types.ts").KvClientLike;
+    readonly signalRedis?: import("../drivers/signal-types.ts").SignalRedisClientLike;
+  };
   /** Instance id for leader election. */
   readonly instanceId?: string;
   /**
@@ -344,7 +352,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   let signal = pre.signal;
   if (needs.signal) {
     if (!signal) {
-      signal = await signalBind!.bindSignal(options, env, now);
+      signal = await signalBind!.bindSignal(options, env, now, docker);
     } else {
       // Pre-built: still register decls / start if needed.
       for (const decl of options.signals ?? []) {
@@ -376,7 +384,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   // Gate (before AI)
   let gate = pre.gate;
   if (needs.gate && !gate) {
-    gate = await gateBind!.bindGate(options, now);
+    gate = await gateBind!.bindGate(options, now, env, docker);
   }
 
   // 5. Channel

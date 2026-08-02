@@ -25,9 +25,9 @@ drivers: {
     kv: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
     files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
   },
-  signal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
-  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
-  vault: { local: "dotenv", docker: "openbao", test: "memory", prod: "openbao" },
+  signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
+  clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
+  vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
   channel: {
     email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
     sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
@@ -41,9 +41,9 @@ drivers: {
 | `store.kv`         | env driver map | `memory` · `redis`                                                           |
 | `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
 | `store.index`      | env driver map | `memory` · `pgvector` · `libsql` · `meilisearch`                             |
-| `signal`           | env driver map | `memory` · `postgres` · `redis` · `nats`                                     |
-| `clock`            | env driver map | `memory` · `frozen` · `postgres` (id accepted; store not wired yet)          |
-| `vault`            | env driver map | `dotenv` · `openbao` · `memory`                                              |
+| `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind  |
+| `clock`            | env driver map | `memory` · `file` · `frozen`                                                 |
+| `vault`            | env driver map | `env` · `openbao` · `memory` · `managed`                                     |
 | `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr`                                       |
 | `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |
 | `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                       |

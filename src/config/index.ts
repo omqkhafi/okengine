@@ -344,7 +344,7 @@ export function fillDriversDockerFromProd(
  * Define an `oke.config.ts` document.
  *
  * Missing `docker` driver pins are filled from `prod` so `oke dev -d` uses the
- * same server protocols as production (vault → dotenv for `docker/.env.docker`).
+ * same server protocols as production (vault → `env` for `docker/.env.docker`).
  * Legacy `dev`/`stack` keys are normalized to `local`/`docker`.
  *
  * @param config - Driver / tenancy / i18n / topology

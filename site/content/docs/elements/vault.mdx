@@ -158,11 +158,12 @@ The **Console** (`:6533`) can also set and rotate values, but it is **write-only
 
 ## Per-environment drivers
 
-Which backend holds your values depends on the mode — configured once in `oke.config.ts`:
+Which backend holds your values depends on the mode — configured once in `oke.config.ts`.
+App boot and the Console share the same resolution-chain builder (`env` layers → backend):
 
 ```typescript title="oke.config.ts"
 vault: {
-  local: "dotenv",   // .env.local — zero ceremony
+  local: "env",      // .env.local — zero ceremony
   docker: "openbao", // real vault in the compose stack
   test: "memory",    // seeded map — deterministic tests
   prod: "openbao",   // real vault in production
@@ -171,7 +172,7 @@ vault: {
 
 | Driver    | Backend         | Best for                                   |
 | --------- | --------------- | ------------------------------------------ |
-| `dotenv`  | `.env.local`    | Local loop — no infra at all               |
+| `env`     | `.env.local`    | Local loop — no infra at all               |
 | `openbao` | OpenBao (KV v2) | Docker + prod — durable, access-controlled |
 | `memory`  | in-process map  | Tests                                      |
 

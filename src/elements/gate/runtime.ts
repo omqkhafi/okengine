@@ -8,6 +8,8 @@ import { takeRate } from "./strategies.ts";
 
 /** KV surface required for rate gates. */
 export interface GateKv {
+  /** Driver id when known (`memory` · `redis`). */
+  readonly driverId?: "memory" | "redis";
   eval<T = unknown>(script: string, keys: readonly string[], args?: readonly string[]): Promise<T>;
 }
 
@@ -35,6 +37,8 @@ export interface GateEvaluation {
 export interface GateRuntime {
   /** Registered declarations by name. */
   readonly gates: ReadonlyMap<string, GateDecl>;
+  /** KV backend used for rate limits (`memory` · `redis`, or unset). */
+  readonly kvDriverId: "memory" | "redis" | undefined;
   /**
    * Evaluate a gate chain in order; stop on first denial.
    *
@@ -64,6 +68,7 @@ export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateR
     map.set(g.name, g);
   }
   const now = options.now ?? (() => Date.now());
+  const kvDriverId = options.kv?.driverId;
 
   async function evaluateOne(name: string, ctx: GatePolicyContext): Promise<GateEvaluation> {
     const decl = map.get(name);
@@ -125,6 +130,7 @@ export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateR
 
   return {
     gates: map,
+    kvDriverId,
     async check(names, ctx) {
       const out: GateEvaluation[] = [];
       for (const name of names) {

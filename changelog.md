@@ -98,7 +98,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Clock docs match proven physics: catch-up `"one"` (health counts gaps,
   runtime fires once), DST is Console warn-only (not doctor / not rewritten),
   leader election requires a shared CronStore, `overridable` gates **edit**
-  only, and `postgres` clock driver is config-accepted but not wired yet.
+  only, and boot clock drivers are `memory` · `file` · `frozen` (`postgres`
+  rejected — no CronStore impl).
+- Standard template / config docs: signal docker/prod → `redis`, clock
+  docker/prod → `file`, vault local label `env` (was mislabeled `dotenv`).
+- Hero banner shows Gate’s kv backend (`drivers.store.kv`); compose image
+  planning no longer pulls SQL solely for fictional signal/clock postgres.
 
 ### 🐛 Fixed
 
@@ -106,6 +111,15 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   **OKE1042** (previously silent success despite docs claiming a loud fail).
 - Surfaces strip and install docs now include docs MCP on **:6536** alongside
   app / Console / MCP (the fourth `oke dev` port was missing from the cards).
+- Docs site `next dev` no longer 500s on unknown `/docs/...` paths under
+  `output: "export"` — export is production-only so missing pages hit
+  `notFound()` instead of "missing param in generateStaticParams".
+- App boot binders now honour `drivers.*` instead of silently ignoring config:
+  **Vault** resolves `env` / `openbao` / `memory` / `managed` via the shared
+  chain builder (same as Console); **Signal** binds `memory` / `redis` and
+  fails loud for `postgres` / `nats`; **Clock** binds `memory` / `file` /
+  `frozen` and rejects `postgres`; **Gate** rate KV uses `drivers.store.kv`
+  (`oke:gates` namespace) instead of a private memory bag.
 
 ## v0.6.1 — 2026-08-01
 

@@ -26,7 +26,7 @@ describe("fillDockerFromProd / defineConfig", () => {
   });
 
   test("vault prod → docker copies the prod driver", () => {
-    expect(fillDockerFromProd({ local: "dotenv", prod: "openbao" })?.docker).toBe("openbao");
+    expect(fillDockerFromProd({ local: "env", prod: "openbao" })?.docker).toBe("openbao");
   });
 
   test("defineConfig fills every element from prod", () => {
@@ -37,9 +37,9 @@ describe("fillDockerFromProd / defineConfig", () => {
           kv: { local: "memory", prod: "redis" },
           files: { local: "fs", prod: "s3" },
         },
-        signal: { local: "memory", prod: "postgres" },
-        clock: { local: "memory", prod: "postgres" },
-        vault: { local: "dotenv", prod: "openbao" },
+        signal: { local: "memory", prod: "redis" },
+        clock: { local: "memory", prod: "file" },
+        vault: { local: "env", prod: "openbao" },
         channel: {
           email: { local: "console", prod: "smtp" },
         },
@@ -49,8 +49,8 @@ describe("fillDockerFromProd / defineConfig", () => {
     expect(cfg.drivers?.store?.sql?.docker).toBe("postgres");
     expect(cfg.drivers?.store?.kv?.docker).toBe("redis");
     expect(cfg.drivers?.store?.files?.docker).toBe("s3");
-    expect(cfg.drivers?.signal?.docker).toBe("postgres");
-    expect(cfg.drivers?.clock?.docker).toBe("postgres");
+    expect(cfg.drivers?.signal?.docker).toBe("redis");
+    expect(cfg.drivers?.clock?.docker).toBe("file");
     expect(cfg.drivers?.vault?.docker).toBe("openbao");
     expect(cfg.drivers?.channel?.email?.docker).toBe("smtp");
     expect(cfg.drivers?.ai?.docker).toBe("anthropic");

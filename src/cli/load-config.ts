@@ -47,14 +47,13 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
   const index = dockerOrProdId(config.drivers?.store?.index);
   const kv = dockerOrProdId(config.drivers?.store?.kv);
   const signal = dockerOrProdId(config.drivers?.signal);
-  const clock = dockerOrProdId(config.drivers?.clock);
 
+  // Only real SQL-consuming facets pull a SQL image. Clock/signal no longer
+  // advertise a fictional postgres CronStore / LISTEN bus via compose.
   const needsSql =
     sql === "postgres" ||
     sql === "pgvector" ||
     index === "pgvector" ||
-    signal === "postgres" ||
-    clock === "postgres" ||
     (config.drivers?.prod ?? []).some((p) => p === "postgres" || p === "pgvector");
 
   if (needsSql) {
@@ -62,7 +61,8 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
       sql === "pgvector" || index === "pgvector" ? DEFAULT_PGVECTOR_IMAGE : DEFAULT_SQL_IMAGE;
   }
 
-  const needsKv = kv === "redis" || (config.drivers?.prod ?? []).includes("redis");
+  const needsKv =
+    kv === "redis" || signal === "redis" || (config.drivers?.prod ?? []).includes("redis");
   if (needsKv) {
     out["store.kv"] = DEFAULT_KV_IMAGE;
   }

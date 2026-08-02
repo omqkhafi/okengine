@@ -13,7 +13,10 @@ const { version: okeVersion } = JSON.parse(readFileSync(join(rootDir, "package.j
 
 /** @type {import('next').NextConfig} */
 const config = {
-  output: "export",
+  // Static export only for production builds. In `next dev`, `output: "export"`
+  // turns unknown dynamic paths into 500s ("missing param in generateStaticParams")
+  // instead of the app's `notFound()` 404 — see vercel/next.js#56477.
+  output: process.env.NODE_ENV === "production" ? "export" : undefined,
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_OKE_VERSION: okeVersion,

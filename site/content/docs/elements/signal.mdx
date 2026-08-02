@@ -225,18 +225,18 @@ When a signal disappears from code, reconciliation marks its config row `orphane
 
 ```typescript title="oke.config.ts"
 drivers: {
-  signal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
+  signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
 },
 ```
 
-| Driver     | Runs as                          | Best for                                                             |
-| ---------- | -------------------------------- | -------------------------------------------------------------------- |
-| `memory`   | in-process                       | Local loop + tests — zero infrastructure                             |
-| `postgres` | your existing Postgres container | Default for docker/prod — durable outbox table `oke_signal_messages` |
-| `redis`    | Redis container                  | Explicit alternative when throughput outgrows Postgres               |
-| `nats`     | NATS container                   | High-throughput fan-out                                              |
+| Driver     | Runs as        | Boot today                                                                |
+| ---------- | -------------- | ------------------------------------------------------------------------- |
+| `memory`   | in-process     | Local loop + tests — zero infrastructure                                  |
+| `redis`    | Redis / Valkey | Default for docker/prod — Streams + pub/sub via `Bun.redis`               |
+| `postgres` | Postgres       | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds |
+| `nats`     | NATS           | Driver exists; boot **fails loud** until a production NATS client binds   |
 
-`postgres` keeps committed emits in `oke_signal_messages`. `fx.emit` finishes that outbox write when the call resolves; consumers claim with `FOR UPDATE SKIP LOCKED` and lazy lease reclaim. Pairing an arbitrary Store insert with emit inside **one** shared SQL transaction is not what `fx.emit` does today — keep consumers idempotent (at-least-once).
+`redis` is the honestly boot-bound durable path today. Pairing an arbitrary Store insert with emit inside **one** shared SQL transaction is not what `fx.emit` does — keep consumers idempotent (at-least-once).
 
 ## Troubleshooting
 
@@ -258,7 +258,7 @@ Ask: _how many consumers should process each message?_ One → `once`. All of th
 </Accordion>
 <Accordion title="My emit happened but the row didn't (or vice versa)">
 
-`fx.emit` commits the signal outbox when it resolves; it does not wrap your Store insert. Treat delivery as at-least-once and make the consumer idempotent (or check the row before acting). Prefer `postgres` when you want a durable outbox table rather than in-process memory.
+`fx.emit` commits the signal outbox when it resolves; it does not wrap your Store insert. Treat delivery as at-least-once and make the consumer idempotent (or check the row before acting). Prefer `redis` (or a future LISTEN-capable postgres bind) when you want durable delivery rather than in-process memory.
 
 </Accordion>
 <Accordion title="The same once message ran twice">

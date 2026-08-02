@@ -52,6 +52,8 @@ export interface CronRow {
 
 /** Store surface for reconciled crons. */
 export interface CronStore {
+  /** Backing kind when known (`memory` · `file`). */
+  readonly kind?: "memory" | "file";
   /**
    * @param name - Cron name
    */
@@ -201,6 +203,7 @@ export function createMemoryCronStore(seed?: readonly CronRow[]): CronStore {
   }
 
   return {
+    kind: "memory",
     async get(name) {
       const r = rows.get(name);
       return r ? structuredClone(r) : undefined;
@@ -292,6 +295,7 @@ export function createFileCronStore(path: string): CronStore {
   }
 
   return {
+    kind: "file",
     async get(name) {
       return withFileLock(async () => {
         const map = await loadUnlocked();

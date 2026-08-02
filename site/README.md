@@ -24,5 +24,6 @@ bun run site:build
 
 ## Deployment
 
-`next.config.mjs` sets `output: 'export'`. The build produces a static `out/`
-directory — host it anywhere (no cloud lock-in).
+`next.config.mjs` sets `output: 'export'` for production builds only (so
+`next dev` can 404 unknown docs paths instead of throwing). The build
+produces a static `out/` directory — host it anywhere (no cloud lock-in).

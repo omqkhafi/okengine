@@ -24,18 +24,18 @@ export default defineConfig({
     },
     signal: {
       local: "memory",
-      docker: "postgres",
+      docker: "redis",
       test: "memory",
-      prod: "postgres",
+      prod: "redis",
     },
     clock: {
       local: "memory",
-      docker: "postgres",
+      docker: "file",
       test: "frozen",
-      prod: "postgres",
+      prod: "file",
     },
     vault: {
-      local: "dotenv",
+      local: "env",
       docker: "openbao",
       test: "memory",
       prod: "openbao",
