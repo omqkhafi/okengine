@@ -195,6 +195,8 @@ The **Console** (`:6533` → Signals) shows the topology (which flows emit and c
 
 ## Durability and leases (`once`)
 
+<SignalOnceLease />
+
 Committed `once` messages survive process death. A claim sets `lockedBy` and a visibility lease (`leaseExpiresAt`, default **30s**). There is no background sweeper: the next consumer reclaim query takes `pending` rows **or** `inflight` rows whose lease has expired.
 
 <Callout title="At-least-once, not exactly-once">
@@ -204,6 +206,8 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 </Callout>
 
 ## Live replay
+
+<SignalLiveReplay />
 
 `live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
 

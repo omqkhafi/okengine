@@ -85,7 +85,8 @@ do: async (input, fx) => {
 
 <ClockSchedules />
 
-Both are triggers consumed with the same `on(trigger, flow)` — the flow underneath does not know the difference.
+Both are triggers consumed with the same `on(trigger, flow)` — the flow underneath does not know the
+difference.
 
 ### `clock()` options
 
@@ -99,13 +100,20 @@ Both are triggers consumed with the same `on(trigger, flow)` — the flow undern
 
 ## Sleeping inside a flow
 
-`fx.clock.sleep(label, duration)` is a **durable** sleep: in a `durable: true` flow the wake time is journaled, so the flow resumes after restarts and deploys instead of losing its place. The `label` names the step in the journal — it is what the Console shows when you inspect a sleeping run.
+<ClockSleep />
+
+`fx.clock.sleep(label, duration)` is a **durable** sleep: in a `durable: true` flow the wake time is
+journaled, so the flow resumes after restarts and deploys instead of losing its place. The `label`
+names the step in the journal — it is what the Console shows when you inspect a sleeping run.
 
 In a non-durable flow the same call resolves immediately, so code reads identically in tests.
 
-Completed journal steps never re-run on resume — a process killed mid-flow continues at the next unfinished step.
+Completed journal steps never re-run on resume — a process killed mid-flow continues at the next
+unfinished step.
 
 ## What the runtime guarantees
+
+<ClockCatchUp />
 
 | Guarantee          | What it means                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
@@ -114,9 +122,12 @@ Completed journal steps never re-run on resume — a process killed mid-flow con
 | Reconciled at boot | Named clocks land in `oke_crons`; the scheduler reads the Store, not the source                    |
 | DST detection      | Ambiguous local times get a Console warning — schedules are not rewritten or blocked               |
 
-**Leader election needs a shared store.** The default in-memory CronStore is per process. Multi-replica exclusivity only holds when every instance opens the same durable CronStore (file-backed store is available for that; a Postgres cron driver is not wired yet).
+**Leader election needs a shared store.** The default in-memory CronStore is per process. Multi-replica
+exclusivity only holds when every instance opens the same durable CronStore (file-backed store is
+available for that; a Postgres cron driver is not wired yet).
 
-**Catch-up example:** an hourly clock down for five hours reports `missedRuns: 5` and `catchUp: "one"`, then a single tick runs the handler once.
+**Catch-up example:** an hourly clock down for five hours reports `missedRuns: 5` and
+`catchUp: "one"`, then a single tick runs the handler once.
 
 ## DST warnings (detect only)
 

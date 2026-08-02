@@ -7,8 +7,10 @@ description: >-
   bring a docs page to life, add or fix Store/Flow/Signal/element visuals, raise
   micro-interaction quality, visualize claims that tables under-teach, or when
   editing StoreFacets, StoreKvTtl, StoreFilesVariants, StoreIndexModes,
-  FlowTriggers, SignalDelivery, or sibling element figures. Companion to oke-docs
-  (page IA) and landing-motion (marketing surfaces).
+  FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease, SignalLiveReplay,
+  ClockSchedules, ClockCatchUp, ClockSleep, GatePipeline, AiBlocks, AiGuardrails,
+  AiPiiEgress, or sibling element figures. Companion to oke-docs (page IA) and
+  landing-motion (marketing surfaces).
 ---
 
 # OKE Docs Visuals — element teaching figures
@@ -17,11 +19,15 @@ Ambient demos that **prove** a claim. If removing the motion leaves the same und
 
 Canonical quality bar (read before inventing):
 
-| Page | Component | What motion proves |
-| ---- | --------- | ------------------ |
-| Flow | `FlowTriggers` | Any trigger → one Flow species |
-| Signal | `SignalDelivery` | once / broadcast / live packet physics |
-| Store | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` | Facet physics; TTL contrast; putImage fan-out; vector vs text |
+| Page   | Component                                                               | What motion proves                                                                     |
+| ------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Flow   | `FlowTriggers` + `FlowDurable`                                          | Any trigger → one Flow species; kill→resume skips completed `fx.step`                  |
+| Vault  | `VaultResolution` + `VaultRedacted`                                     | First-hit chain + fail-loud; Redacted until `.reveal()`                                |
+| Signal | `SignalDelivery` + `SignalOnceLease` / `SignalLiveReplay`               | once / broadcast / live packet physics; lease reclaim; late `bus.live()` history       |
+| Store  | `StoreFacets` + `StoreKvTtl` / `StoreFilesVariants` / `StoreIndexModes` | Facet physics; TTL contrast; putImage fan-out; vector vs text                          |
+| Clock  | `ClockSchedules` + `ClockCatchUp` / `ClockSleep`                        | two triggers → one Flow; catch-up `"one"`; durable sleep survives restart              |
+| Gate   | `GatePipeline`                                                          | Left-to-right chain; first denial wins; typed Unauthorized / Forbidden / RateLimited   |
+| AI     | `AiBlocks` + `AiGuardrails` / `AiPiiEgress`                             | Four decls; versioned / PII / maxSteps / no prod default; third-party vs ollama egress |
 
 Shared primitives: [`site/components/docs/reveal.tsx`](../../../site/components/docs/reveal.tsx) (`RevealGroup`, `RevealItem`, `useTick`, `BeatPing`). Tone: `CHIP_TONE` + `--oke-el-*` from [`site/lib/element-tones.ts`](../../../site/lib/element-tones.ts).
 
@@ -57,12 +63,12 @@ Write the aria-label as the claim. Every phase label, driver id, key shape, and 
 
 ### 3. Patterns (use these)
 
-| Pattern | When | How |
-| ------- | ---- | --- |
-| **Contrast cards** | Same call, different drivers | Two `RevealItem` cards, shared `useTick` beat, opposite end states (`StoreKvTtl`) |
-| **Tick cycle** | Ordered ops / phases | `useTick(ms)` → `phase % N`; `BeatPing` on the active chip; light sinks by phase (`StoreFacets` SQL/KV demos) |
-| **SVG packet / fan-out** | Path or one→many | Animate `cx`/`opacity` only (not SVG `width`); spring settle between discrete positions (`SignalDelivery`, Files put→get) |
-| **Mode spotlight** | Discriminated union | Cards take turns `tone.lit` + distinct mini-demo per mode (`StoreIndexModes`, `FlowTriggers`) |
+| Pattern                  | When                         | How                                                                                                                       |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Contrast cards**       | Same call, different drivers | Two `RevealItem` cards, shared `useTick` beat, opposite end states (`StoreKvTtl`)                                         |
+| **Tick cycle**           | Ordered ops / phases         | `useTick(ms)` → `phase % N`; `BeatPing` on the active chip; light sinks by phase (`StoreFacets` SQL/KV demos)             |
+| **SVG packet / fan-out** | Path or one→many             | Animate `cx`/`opacity` only (not SVG `width`); spring settle between discrete positions (`SignalDelivery`, Files put→get) |
+| **Mode spotlight**       | Discriminated union          | Cards take turns `tone.lit` + distinct mini-demo per mode (`StoreIndexModes`, `FlowTriggers`)                             |
 
 House motion rules:
 
@@ -86,7 +92,7 @@ House motion rules:
 3. Add the tag name to the prose-density `STRUCTURAL` regex in:
    - [`site/lib/prose-density.gate.test.ts`](../../../site/lib/prose-density.gate.test.ts)
    - [oke-docs SKILL.md](../oke-docs/SKILL.md) scanner + Components table
-4. Use in MDX: `<StoreKvTtl />` under the matching `###` heading.
+4. Use in MDX: `<StoreKvTtl />` / `<FlowDurable />` under the matching heading.
 5. Changelog under `## Unreleased` → Changed (via oke-ship when closing work).
 
 ### 6. Placement
@@ -115,14 +121,14 @@ When an element has independent facets (sql · kv · files · index):
 
 ## Anti-patterns
 
-| Don’t | Do |
-| ----- | -- |
-| Hover-only verb chips as the whole demo | Ambient `useTick` / packet loop that teaches |
-| Animate SVG `width` keyframes | Discrete phase opacity / `cx` springs (width anim is flaky) |
-| Invent visual “APIs” not in runtime | Quote real methods, drivers, key shapes |
-| `RevealItem as="p"` | `as="div"` |
+| Don’t                                                                 | Do                                                           |
+| --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Hover-only verb chips as the whole demo                               | Ambient `useTick` / packet loop that teaches                 |
+| Animate SVG `width` keyframes                                         | Discrete phase opacity / `cx` springs (width anim is flaky)  |
+| Invent visual “APIs” not in runtime                                   | Quote real methods, drivers, key shapes                      |
+| `RevealItem as="p"`                                                   | `as="div"`                                                   |
 | Duplicate a table and a demo that say the same thing without contrast | Demo for the non-obvious claim; keep a thin consequence line |
-| Landing-page purple glow / random sparkle | Monochrome + element tone; information first |
+| Landing-page purple glow / random sparkle                             | Monochrome + element tone; information first                 |
 
 ## Checklist
 
@@ -142,6 +148,10 @@ When an element has independent facets (sql · kv · files · index):
 - Primitives: `site/components/docs/reveal.tsx`
 - Store overview + marks: `site/components/docs/elements/store-facets.tsx`
 - Store physics: `site/components/docs/elements/store-physics.tsx`
-- Flow / Signal bars: `flow-triggers.tsx`, `signal-delivery.tsx`
+- Flow bars: `flow-triggers.tsx`, `flow-durable.tsx`
+- Signal bars: `signal-delivery.tsx`, `signal-physics.tsx` (`SignalOnceLease`, `SignalLiveReplay`)
+- Clock bars: `clock-schedules.tsx`, `clock-physics.tsx` (`ClockCatchUp`, `ClockSleep`)
+- Gate bars: `gate-pipeline.tsx`
+- AI bars: `ai-blocks.tsx`, `ai-guardrails.tsx`, `ai-physics.tsx` (`AiPiiEgress`)
 - Page IA: [oke-docs](../oke-docs/SKILL.md)
 - Marketing (not element docs): personal `landing-motion` skill

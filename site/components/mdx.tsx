@@ -11,18 +11,24 @@ import { ClientLoop } from "@/components/docs/client-loop";
 import { CollapseBoard } from "@/components/docs/collapse-board";
 import { DevModes } from "@/components/docs/dev-modes";
 import { DriftBoard } from "@/components/docs/drift-board";
+import { AiBlocks } from "@/components/docs/elements/ai-blocks";
 import { AiGuardrails } from "@/components/docs/elements/ai-guardrails";
+import { AiPiiEgress } from "@/components/docs/elements/ai-physics";
 import { ChannelPhysics } from "@/components/docs/elements/channel-physics";
+import { ClockCatchUp, ClockSleep } from "@/components/docs/elements/clock-physics";
 import { ClockSchedules } from "@/components/docs/elements/clock-schedules";
+import { FlowDurable } from "@/components/docs/elements/flow-durable";
 import { FlowTriggers } from "@/components/docs/elements/flow-triggers";
 import { GatePipeline } from "@/components/docs/elements/gate-pipeline";
 import { SignalDelivery } from "@/components/docs/elements/signal-delivery";
+import { SignalLiveReplay, SignalOnceLease } from "@/components/docs/elements/signal-physics";
 import { StoreFacetMark, StoreFacets } from "@/components/docs/elements/store-facets";
 import {
   StoreFilesVariants,
   StoreIndexModes,
   StoreKvTtl,
 } from "@/components/docs/elements/store-physics";
+import { VaultRedacted } from "@/components/docs/elements/vault-redacted";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
 import { Features } from "@/components/docs/features";
 import { FlowShape } from "@/components/docs/flow-shape";
@@ -36,9 +42,11 @@ import { Vocabulary } from "@/components/landing/vocabulary";
  * (Features, CollapseDiagram, ManifestPipeline, Surfaces, Vocabulary, plus
  * custom FlowShape / DevModes / ClientLoop / DriftBoard / CollapseBoard) and
  * per-element visuals
- * (FlowTriggers, SignalDelivery, StoreFacets, StoreFacetMark, StoreKvTtl,
- * StoreFilesVariants, StoreIndexModes, ClockSchedules, GatePipeline,
- * VaultResolution, ChannelPhysics, AiGuardrails).
+ * (FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease,
+ * SignalLiveReplay, StoreFacets, StoreFacetMark, StoreKvTtl,
+ * StoreFilesVariants, StoreIndexModes, ClockSchedules, ClockCatchUp,
+ * ClockSleep, GatePipeline, VaultResolution, VaultRedacted, ChannelPhysics,
+ * AiBlocks, AiGuardrails, AiPiiEgress).
  *
  * @param components - Extra overrides from the page renderer
  */
@@ -69,17 +77,25 @@ export function getMDXComponents(components?: MDXComponents) {
     DriftBoard,
     CollapseBoard,
     FlowTriggers,
+    FlowDurable,
     SignalDelivery,
+    SignalOnceLease,
+    SignalLiveReplay,
     StoreFacets,
     StoreFacetMark,
     StoreKvTtl,
     StoreFilesVariants,
     StoreIndexModes,
     ClockSchedules,
+    ClockCatchUp,
+    ClockSleep,
     GatePipeline,
     VaultResolution,
+    VaultRedacted,
     ChannelPhysics,
+    AiBlocks,
     AiGuardrails,
+    AiPiiEgress,
     ...components,
   } satisfies MDXComponents;
 }

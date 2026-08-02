@@ -77,6 +77,8 @@ export const triage = smart.prompt("ticket-triage", {
 | `ai.embed(name, opts)`     | Embedding pipeline into a `store.index` (searched via `fx.search`) |
 | `ai.agent(name, opts)`     | Bounded agent whose tools are **your own flows**                   |
 
+<AiBlocks />
+
 ### Prompt options
 
 | Option       | Type                  | Meaning                                                        |
@@ -85,6 +87,10 @@ export const triage = smart.prompt("ticket-triage", {
 | `version`    | number                | Artifact version — diffs and regressions tracked per version   |
 | `evals`      | string                | Path to a `.jsonl` eval set, regression-gated via `oke eval`   |
 | `budget`     | object                | `maxCostPerCall` — cost is a first-class dimension             |
+
+## Declared guardrails
+
+Cost, egress, and model choice are contracts — not runtime hope. Each guardrail is declared up front; violating one fails the build or the run.
 
 <AiGuardrails />
 
@@ -135,6 +141,8 @@ Use `keyBy: "ip"` on public unauthenticated AI edges. Cost caps stay on prompt/a
 ## PII cannot leak by accident
 
 At build time, OKE checks which fields each `fx.ask` sends against your store classifications. If a PII field (`.pii()` in your schema) would reach a third-party model, the build fails:
+
+<AiPiiEgress />
 
 ```text
 build failed: flow "ticket-triage" sends pii field(s) [email] to a third-party model without allowPii

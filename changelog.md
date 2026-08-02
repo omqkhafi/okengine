@@ -32,6 +32,35 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- AI docs visuals match Flow/Signal/Store quality: `AiBlocks` (model /
+  prompt / embed / agent ambient demos), upgraded `AiGuardrails` with per-card
+  mini physics, and `AiPiiEgress` (anthropic build-fail vs ollama on-premise)
+  under the PII heading.
+- Channel docs visual `ChannelPhysics` rebuilt as a Gate/Vault-quality chain
+  demo: one `fx.send` walks consent → locale → same-medium `via` drivers →
+  receipt, cycling clean send / opted-out suppression / catalog body miss /
+  `smtp`→`resend` failover (`status: "fallback"`). Page prose corrected to
+  match runtime (`via` is driver ids, not SMS→WhatsApp; locale then catalog
+  fallback; dry-run is would-have-fired, not a receipt).
+- Clock docs visuals match Flow/Signal quality: `ClockSchedules` (every +
+  named clock → one Flow), `ClockCatchUp` (missedRuns counted, fire once),
+  `ClockSleep` (durable sleep journals wakeAt across restart).
+- Signal docs visuals raised to the Store/Flow quality bar: `SignalDelivery`
+  mode-spotlight (competing claim / every-subscriber copy / late
+  `bus.live()` history), plus `SignalOnceLease` (claim → 30s lease →
+  reclaim) and `SignalLiveReplay` (retain then full-history replay) under
+  the headings that teach those claims.
+- Flow docs visuals: `FlowTriggers` upgraded (fan-in packet, contract chips,
+  real CDC syntax) and new `FlowDurable` contrast demo — kill mid-run with
+  `durable: true` resumes without re-running completed `fx.step`s.
+- Gate docs visual `GatePipeline` rebuilt as a Vault-quality chain demo:
+  `.gate(member, canBook, fair)` evaluates left to right, later gates skip
+  after the first denial, and the outcome cycles `do runs` /
+  `Unauthorized` / `Forbidden` / `RateLimited` from real principal states.
+- Vault docs visuals: `VaultRedacted` (hold Redacted vs `.reveal()` at the
+  provider boundary) plus polished `VaultResolution` using real
+  `VaultResolutionSource` ids; mask placeholder corrected to `[redacted]` /
+  `[redacted:secret]`.
 - Store docs reorganized around **four facets, one handle** (`sql` · `kv` ·
   `files` · `index`) with separate Advanced sections for cross-facet and
   cross-element composition; KV + basic Files CRUD examples added from the

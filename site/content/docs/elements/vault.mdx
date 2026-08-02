@@ -83,6 +83,14 @@ still reaches `fx.log` is scrubbed by the boot redactor as before.
 
 That's the whole loop: declare → set → read. Everything below is what OKE guarantees on top of it.
 
+## Redacted until you reveal
+
+<VaultRedacted />
+
+Pass the wrapper freely — `fx.log`, `String()`, and `JSON.stringify` all yield
+`[redacted]`. Call `.reveal()` once at the provider boundary that needs the
+credential.
+
 ## Two kinds of contracts
 
 | Declaration                         | Sensitive? | Console shows    | Use for                     |
@@ -143,8 +151,9 @@ In docker mode, `oke vault set` writes straight to the running OpenBao — no gi
 The **Console** (`:6533`) can also set and rotate values, but it is **write-only**: it shows a salted fingerprint (`sha256:…`) per secret, never the cleartext. When you rotate a key there, the panel shows the **blast radius** — which in-flight durable runs will wake up with the new value.
 
 <Callout title="Secrets never reach logs">
-  Every loaded secret is registered with the redactor at boot. Even if you accidentally pass one to
-  `fx.log`, the log line shows `***` — the value, never. Traces and the Console get fingerprints.
+  `fx.vault` returns `Redacted` — `fx.log` shows `[redacted]`. A revealed string that still reaches
+  a log is scrubbed by the boot redactor to `[redacted:secret]`. Traces and the Console get
+  fingerprints, never cleartext.
 </Callout>
 
 ## Per-environment drivers

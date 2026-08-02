@@ -205,6 +205,8 @@ Everything a flow may touch, on one object:
 
 ## Durability — flows that survive the process
 
+<FlowDurable />
+
 Set `durable: true` and every `fx` call is journaled. Wrap side effects in `fx.step` and they never re-run on replay:
 
 ```typescript

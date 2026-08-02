@@ -1,10 +1,12 @@
 /**
  * Vault resolution chain — a probe descends the layers until first hit.
  *
- * Each run probes one layer per beat; the hit layer cycles 1 → 2 → 3 → 4 → 5
- * across runs, and every sixth run misses all five so the fail row lights.
- * Layers past the hit read `skipped` — that is the whole semantics of
- * "first hit wins". Deterministic from one tick, never Math.random.
+ * Layer ids match `VaultResolutionSource`: process.env → .env.local →
+ * .env.docker → driver → dev-fallback. Each run probes one layer per beat;
+ * the hit layer cycles 1 → 2 → 3 → 4 → 5 across runs, and every sixth run
+ * misses all five so the fail row lights. Layers past the hit read `skipped`
+ * — that is the whole semantics of "first hit wins". Deterministic from one
+ * tick, never Math.random.
  */
 
 "use client";
@@ -13,6 +15,7 @@ import { BeatPing, RevealGroup, RevealItem, useTick } from "@/components/docs/re
 import { CHIP_TONE } from "@/lib/element-tones";
 import { cn } from "@/lib/cn";
 
+/** Spec order from vault runtime — source ids are the Console labels. */
 const LAYERS: ReadonlyArray<{
   readonly n: string;
   readonly source: string;
@@ -20,16 +23,16 @@ const LAYERS: ReadonlyArray<{
 }> = [
   { n: "1", source: "process.env", content: "Real env (CI, hosting)" },
   { n: "2", source: ".env.local", content: "Local overrides (gitignored)" },
-  { n: "3", source: "docker/.env.docker", content: "Generated compose credentials" },
-  { n: "4", source: "vault driver", content: "OpenBao (docker / prod)" },
-  { n: "5", source: "dev fallback", content: "dev: on the contract — never in prod" },
+  { n: "3", source: ".env.docker", content: "Compose credentials (docker/.env.docker)" },
+  { n: "4", source: "driver", content: "OpenBao bag (docker / prod)" },
+  { n: "5", source: "dev-fallback", content: "dev: on the contract — never in prod" },
 ];
 
 const TICK_MS = 800;
 const BEATS_PER_RUN = 6;
 
+const tone = CHIP_TONE.yellow;
 const hit = CHIP_TONE.emerald;
-const probe = CHIP_TONE.yellow;
 const fail = CHIP_TONE.rose;
 
 /**
@@ -46,8 +49,8 @@ export function VaultResolution() {
 
   return (
     <figure
-      className="not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Vault resolution chain: process.env, .env.local, docker env, the vault driver, then the dev fallback. First hit wins; if every layer misses, boot fails with VaultBootError."
+      className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+      aria-label="Vault resolution chain: process.env, .env.local, .env.docker, driver, then dev-fallback. First hit wins; if every layer misses, boot fails with VaultBootError."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Resolution chain — first hit wins</p>
@@ -68,15 +71,15 @@ export function VaultResolution() {
               key={layer.n}
               className={cn(
                 "flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 transition-colors duration-300 sm:px-5",
-                resolved ? hit.lit : probing ? "bg-fd-secondary/40" : "bg-fd-card",
+                resolved ? hit.lit : probing ? tone.lit : "bg-fd-card",
               )}
             >
               <span className="relative flex w-5 shrink-0 items-center gap-1.5">
                 <span className="font-mono text-[10px] text-fd-muted-foreground/70">{layer.n}</span>
                 {probing && tick !== null ? (
                   <span className="relative flex size-1.5" aria-hidden>
-                    <BeatPing key={t} className={probe.wash} />
-                    <span className={cn("size-1.5 rounded-full", probe.hairline)} />
+                    <BeatPing key={t} className={tone.wash} />
+                    <span className={cn("size-1.5 rounded-full", tone.hairline)} />
                   </span>
                 ) : null}
               </span>

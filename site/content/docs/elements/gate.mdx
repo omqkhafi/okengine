@@ -104,7 +104,13 @@ A denied request never reaches `do`. It returns one of three typed failures:
 
 </Steps>
 
+## First denial wins
+
 <GatePipeline />
+
+`.gate(member, canBook, fair)` evaluates left to right — first denial wins
+(`Unauthorized` · `Forbidden` · `RateLimited`); later gates are skipped. `do`
+runs only when every gate passed.
 
 ## `oke({ gate })` bag
 
