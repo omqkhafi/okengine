@@ -44,6 +44,11 @@ export function createTransport(base: string, opts: ClientOptions = {}): Transpo
             await opts.auth.refresh();
             continue;
           }
+          if (res.status >= 500) {
+            const structured = await decodeIfEnvelope(res);
+            if (structured) return structured;
+            throw new Error(`HTTP ${res.status}`);
+          }
           return decode(res);
         } catch (err) {
           const transient = isTransient(err);
@@ -110,19 +115,36 @@ async function once(
     ctrl && opts.timeout !== undefined ? setTimeout(() => ctrl.abort(), opts.timeout) : undefined;
 
   try {
-    const res = await fetchFn(url, {
+    return await fetchFn(url, {
       method,
       headers,
       body,
       signal: ctrl?.signal,
     });
-    if (res.status >= 500) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    return res;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+/**
+ * Decode a JSON `{ data, error }` envelope from a 5xx response, or `null`
+ * when the body is not a structured OKE failure (retry as transport error).
+ *
+ * @param res - HTTP response (body consumed)
+ */
+async function decodeIfEnvelope(res: Response): Promise<ClientResult | null> {
+  const text = await res.text();
+  if (!text) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
+    return json as ClientResult;
+  }
+  return null;
 }
 
 function rpcRequest(

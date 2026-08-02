@@ -3,6 +3,7 @@
  * `oke` CLI entry.
  */
 
+import { aiCli } from "./ai.ts";
 import { branchCli } from "./branch.ts";
 import { buildCli } from "./build.ts";
 import { clientAddCli } from "./client-add.ts";
@@ -77,6 +78,10 @@ if (cmd === "build") {
 
 if (cmd === "eval") {
   process.exit(await evalCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "ai") {
+  process.exit(await aiCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "branch") {

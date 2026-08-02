@@ -52,6 +52,8 @@ export type DevRequestLogInput = {
   readonly flow?: string;
   readonly status: number;
   readonly ms: number;
+  /** Human failure detail (error.message / code) for 4xx/5xx. */
+  readonly detail?: string;
 };
 
 /**
@@ -71,6 +73,39 @@ export function isSilentDevRequest(method: string, path: string): boolean {
 }
 
 /**
+ * Extract a short failure detail from an OKE JSON envelope body.
+ *
+ * @param response - HTTP response (cloned; original body stays readable)
+ */
+export async function failureDetailFromResponse(response: Response): Promise<string | undefined> {
+  if (response.status < 400) return undefined;
+  try {
+    const body: unknown = await response.clone().json();
+    if (body === null || typeof body !== "object" || !("error" in body)) return undefined;
+    const error = (body as { error: unknown }).error;
+    if (error === null || typeof error !== "object") return undefined;
+    const rec = error as { message?: unknown; code?: unknown; data?: unknown };
+    if (typeof rec.message === "string" && rec.message.trim().length > 0) {
+      return rec.message.trim();
+    }
+    if (
+      rec.data !== null &&
+      typeof rec.data === "object" &&
+      "reason" in rec.data &&
+      typeof (rec.data as { reason: unknown }).reason === "string"
+    ) {
+      const reason = (rec.data as { reason: string }).reason;
+      const code = typeof rec.code === "string" ? rec.code : "Error";
+      return `${code}: ${reason}`;
+    }
+    if (typeof rec.code === "string") return rec.code;
+  } catch {
+    // non-JSON error bodies stay status-only
+  }
+  return undefined;
+}
+
+/**
  * Print one request line when {@link shouldLogDevRequests} is on.
  *
  * @param input - Request summary
@@ -86,6 +121,7 @@ export function logDevRequest(input: DevRequestLogInput): void {
       flow: input.flow,
       status: input.status,
       ms: input.ms,
+      detail: input.detail,
     }),
   );
 }
@@ -115,6 +151,7 @@ export async function timedDevFetch(
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
   const response = await handle(request);
+  const detail = await failureDetailFromResponse(response);
   logDevRequest({
     surface: options.surface ?? currentDevSurface(),
     method,
@@ -122,6 +159,7 @@ export async function timedDevFetch(
     flow: options.resolveFlow?.(request, response),
     status: response.status,
     ms: Math.round(performance.now() - started),
+    detail,
   });
   return response;
 }

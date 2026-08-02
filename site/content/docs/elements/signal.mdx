@@ -43,8 +43,8 @@ Producers never touch a broker client — they call `fx.emit`:
 ```typescript title="src/flows/orders/place.ts"
 do: async (input, fx) => {
   await fx.store(db).insert(orders).values({ id: input.id /* … */ });
-  await fx.emit(orderPlaced, { orderId: input.id, total: input.total });
-  // fx.emit commits the signal outbox when the call resolves (postgres → oke_signal_messages).
+  await fx.emit(orderPlaced, { orderId: input.id, total: input.total }, { key: input.id });
+  // optional `key` keeps same-order events serialized under `once`
 };
 ```
 
@@ -85,7 +85,7 @@ The declaration is identical in shape for all three — switching physics later 
 | ------------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------- |
 | `delivery`    | `"once" \| "broadcast" \| "live"` | — (**required**) | Delivery physics                                                                                  |
 | `description` | string                            | —                | Human title in the Console (falls back to the signal name)                                        |
-| `schema`      | zod / Standard Schema             | —                | Payload contract; typed emits and Manifest docs                                                   |
+| `schema`      | zod / Standard Schema             | —                | Payload contract — validated at emit (**OKE1043** on failure); Manifest docs                      |
 | `retries`     | number                            | `3`              | Retry budget for `once` — dead-letter when `attempts > retries` (`retries + 1` total invocations) |
 | `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                                                   |
 | `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check)                                    |
@@ -187,17 +187,33 @@ const unsub = await bus.live("order-status", (payload) => {
 
 The **Console** (`:6533` → Signals) shows the topology (which flows emit and consume each signal), per-subscriber delivery stats, and the DLQ contents with replay / discard controls — no separate broker UI to run.
 
-<Callout title="Orphan emits fail loudly">
-  Emitting a signal with zero subscribers throws **OKE1042** unless `optional: true`. Use that flag
-  only when zero-subscriber emits are intentional (e.g. an integration hook or a producer that
-  commits for a consumer in another process).
+<Callout title="Orphan emits and schema fail loudly">
+  Zero subscribers throws **OKE1042** unless `optional: true`. A payload that fails the signal's
+  Standard Schema throws **OKE1043** before the message is staged — same `validate()` path as Flow
+  `in`.
 </Callout>
+
+## Per-key ordering (`once`)
+
+`fx.emit(signal, payload, { key })` is optional and additive. When `key` is set, no two messages
+sharing the same `(signal, key)` are claimed concurrently — a per-key serialization lock, not a
+partitioned log.
+
+The lock **is** the in-flight message's visibility lease: while that row is `inflight` with an
+unexpired `leaseExpiresAt`, same-key siblings stay unclaimable. Crash → lease expiry → reclaim
+(same clock as unkeyed `once`). Omit `key` for pure competing-consumer behavior.
+
+```typescript
+await fx.emit(orderPlaced, { orderId, total }, { key: orderId });
+await fx.emit(orderPlaced, { orderId, total: total + fee }, { key: orderId });
+// Same key → never concurrent; complete in emission order across competing workers.
+```
 
 ## Durability and leases (`once`)
 
 <SignalOnceLease />
 
-Committed `once` messages survive process death. A claim sets `lockedBy` and a visibility lease (`leaseExpiresAt`, default **30s**). There is no background sweeper: the next consumer reclaim query takes `pending` rows **or** `inflight` rows whose lease has expired.
+Committed `once` messages survive process death. A claim sets `lockedBy` and a visibility lease (`leaseExpiresAt`, default **30s**). There is no background sweeper: the next consumer reclaim query takes `pending` rows **or** `inflight` rows whose lease has expired. Per-key locks reuse this same lease — no second timeout.
 
 <Callout title="At-least-once, not exactly-once">
   Delivery is **at-least-once** — finish side effects then die before ack, and the message may run
@@ -244,6 +260,11 @@ drivers: {
 <Accordion title="Emit fails with OKE1042 (no subscriber)">
 
 You emitted a signal that nobody currently subscribes to. Wire a consumer with `on(signal, flow)` before emit, or set `optional: true` when zero-subscriber emits are intentional.
+
+</Accordion>
+<Accordion title="Emit fails with OKE1043 (schema)">
+
+The payload failed the signal's Standard Schema at emit time — nothing was staged. Fix the payload shape, or remove `schema` if the contract was intentional.
 
 </Accordion>
 <Accordion title="A message keeps retrying and then disappears">

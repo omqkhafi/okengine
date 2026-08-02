@@ -67,6 +67,25 @@ export {
   stackInstanceId,
 } from "./stack-id.ts";
 export {
+  OKE_DEV_PROJECT_RE,
+  composeProjectName,
+  defaultDockerRunner,
+  downStack,
+  isOkeDevProject,
+  isOkeProjectRoot,
+  listOkeComposeProjects,
+  listStackContainers,
+  parseJsonRecords,
+  projectFromResourceName,
+  projectsFromContainerSelection,
+  resolveSelection,
+  selectionKey,
+  type DockerRunResult,
+  type DockerRunner,
+  type OkeContainer,
+  type OkeStack,
+} from "./cleanup.ts";
+export {
   formatImagesLock,
   pinImages,
   type DigestResolver,

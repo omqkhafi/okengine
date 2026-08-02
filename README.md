@@ -44,6 +44,7 @@ Requires [Bun](https://bun.sh) `>=1.3.14`.
 ```bash
 bunx create-oke@latest my-app                      # scaffold (recommended)
 bun add okengine                                   # framework + `oke` CLI
+bun install -g okengine                            # global `oke` on PATH
 bunx jsr add @omqkhafi/okengine                    # JSR — library API only
 ```
 

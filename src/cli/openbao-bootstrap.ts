@@ -221,8 +221,15 @@ export async function ensureOpenBao(
     if (!existsSync(unsealPath) || !existsSync(rootPath)) {
       throw new OpenBaoBootstrapError(
         `openbao bootstrap: OpenBao is initialized but ${stateDir} is missing ` +
-          `unseal.key/root.token. Without the unseal key the data is unrecoverable. ` +
-          `Restore your backup of .oke/openbao/ — permanent loss otherwise.`,
+          `unseal.key/root.token. Without the unseal key the vault data is unrecoverable.\n` +
+          `\n` +
+          `Usual cause in docker mode: a previous vault volume survived after the project\n` +
+          `(or .oke/openbao/) was deleted — Compose stop keeps volumes on purpose.\n` +
+          `\n` +
+          `Restore a backup of .oke/openbao/ if you have one.\n` +
+          `\n` +
+          `Dev reset (wipes vault secrets only, then re-init on next oke dev):\n` +
+          `  cd docker && docker compose -f compose.yml -f compose.vault.yml down -v`,
       );
     }
     unsealKey = readFileSync(unsealPath, "utf8").trim();

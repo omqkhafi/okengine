@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.6.1 · measured 2026-08-02T09:46:33.221Z_
+_okengine v0.6.1 · measured 2026-08-02T13:46:41.635Z_
 
 Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,34 +10,34 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                       | Measured  | Limit     |
 | --------------------- | --------- | --------- |
-| Kernel (edge profile) | 14.96 kB  | 15.00 kB  |
-| Client runtime        | 1.67 kB   | 3.00 kB   |
-| Console initial load  | 86.21 kB  | 300.00 kB |
-| Cold start on Bun     | 39.708 ms | 75.000 ms |
-| p99 routing overhead  | 0.002 ms  | 1.000 ms  |
+| Kernel (edge profile) | 15.00 kB  | 15.00 kB  |
+| Client runtime        | 1.70 kB   | 3.00 kB   |
+| Console initial load  | 86.32 kB  | 300.00 kB |
+| Cold start on Bun     | 37.269 ms | 75.000 ms |
+| p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
 |              | Measured | Ceiling  |
 | ------------ | -------- | -------- |
-| okengine     | 66.08 kB | 67.40 kB |
+| okengine     | 66.41 kB | 67.74 kB |
 | ai           | 7.15 kB  | 7.40 kB  |
 | auth         | 15.83 kB | 16.15 kB |
 | channel      | 5.01 kB  | 5.26 kB  |
-| client       | 1.80 kB  | 2.05 kB  |
+| client       | 1.83 kB  | 2.08 kB  |
 | client-react | 7.82 kB  | 8.07 kB  |
 | client/auth  | 573 B    | 829 B    |
-| clock        | 13.45 kB | 13.72 kB |
+| clock        | 13.53 kB | 13.80 kB |
 | config       | 890 B    | 1.12 kB  |
-| console      | 85.67 kB | 87.38 kB |
-| gate         | 6.14 kB  | 6.39 kB  |
-| mcp          | 9.39 kB  | 9.64 kB  |
+| console      | 87.08 kB | 88.82 kB |
+| gate         | 6.16 kB  | 6.41 kB  |
+| mcp          | 9.46 kB  | 9.71 kB  |
 | plugins      | 18.55 kB | 18.92 kB |
 | runs         | 6.15 kB  | 6.40 kB  |
-| signal       | 895 B    | 1.12 kB  |
-| store        | 16.58 kB | 16.92 kB |
-| test         | 10.82 kB | 11.07 kB |
-| vault        | 2.42 kB  | 2.67 kB  |
+| signal       | 905 B    | 1.13 kB  |
+| store        | 16.70 kB | 17.04 kB |
+| test         | 10.84 kB | 11.09 kB |
+| vault        | 2.44 kB  | 2.69 kB  |
 
 ## Plugins
 
@@ -78,10 +78,10 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 51.58 kB | 52.61 kB |
+| drivers              | 52.35 kB | 53.39 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 896 B    | 1.13 kB  |
-| ai-ollama            | 1.83 kB  | 2.08 kB  |
+| ai-ollama            | 1.97 kB  | 2.22 kB  |
 | ai-openai-compatible | 1.78 kB  | 2.03 kB  |
 | channel-console      | 734 B    | 990 B    |
 | channel-fcm          | 964 B    | 1.19 kB  |
@@ -100,17 +100,17 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | libsql               | 7.34 kB  | 7.59 kB  |
 | meilisearch          | 1.38 kB  | 1.63 kB  |
 | memory               | 4.12 kB  | 4.37 kB  |
-| ollama               | 1.83 kB  | 2.08 kB  |
+| ollama               | 1.96 kB  | 2.21 kB  |
 | pglite               | 620 B    | 876 B    |
 | pgvector             | 23.11 kB | 23.57 kB |
 | postgres             | 1.38 kB  | 1.63 kB  |
 | redis                | 2.00 kB  | 2.25 kB  |
 | s3                   | 958 B    | 1.19 kB  |
-| signal-engine        | 6.25 kB  | 6.50 kB  |
-| signal-memory        | 6.29 kB  | 6.54 kB  |
-| signal-nats          | 6.77 kB  | 7.02 kB  |
-| signal-postgres      | 8.25 kB  | 8.50 kB  |
-| signal-redis         | 7.40 kB  | 7.65 kB  |
+| signal-engine        | 6.66 kB  | 6.91 kB  |
+| signal-memory        | 6.70 kB  | 6.95 kB  |
+| signal-nats          | 7.18 kB  | 7.43 kB  |
+| signal-postgres      | 8.79 kB  | 9.04 kB  |
+| signal-redis         | 7.80 kB  | 8.05 kB  |
 | sqlite               | 440 B    | 696 B    |
 | vault-dotenv-parse   | 562 B    | 818 B    |
 | vault-env            | 894 B    | 1.12 kB  |

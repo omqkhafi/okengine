@@ -5,7 +5,7 @@
 
 import { resolve } from "node:path";
 
-/** Mode-aware template (matches `packages/create-oke/template/drizzle.config.ts`). */
+/** Mode-aware template (matches create-oke templates' drizzle.config.ts). */
 const DRIZZLE_CONFIG_TEMPLATE = `import { defineConfig } from "drizzle-kit";
 
 /**

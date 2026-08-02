@@ -7,14 +7,17 @@
  * configured but unreachable throws {@link OllamaUnavailableError} — never a
  * silent mock fallback.
  *
- * Native API: `POST /api/chat` (not the OpenAI-compat shim). Default base URL
- * `http://127.0.0.1:11434`. Supports `complete`, `stream` (NDJSON), and tools.
+ * Native API: `POST /api/chat` and `POST /api/embeddings` (not the OpenAI-compat
+ * shim). Default base URL `http://127.0.0.1:11434`. Supports `complete`,
+ * `stream` (NDJSON), `embed`, and tools.
  */
 
 import type {
   AiCompleteOptions,
   AiCompleteResult,
   AiDriver,
+  AiEmbedOptions,
+  AiEmbedResult,
   AiModelClient,
   AiOpenOptions,
   AiStreamChunk,
@@ -157,6 +160,41 @@ export async function openOllama(options: AiOpenOptions = {}): Promise<AiModelCl
         throw new OllamaUnavailableError("ollama: stream response has no body");
       }
       yield* readOllamaNdjson(res.body, opts.signal);
+    },
+    async embed(opts: AiEmbedOptions): Promise<AiEmbedResult> {
+      const resolvedModel = resolveOllamaModel(options, opts.model);
+      const inputs = Array.isArray(opts.input) ? opts.input : [opts.input];
+      const vectors: number[][] = [];
+
+      for (const prompt of inputs) {
+        let res: Response;
+        try {
+          res = await fetchFn(`${baseUrl}/api/embeddings`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ model: resolvedModel, prompt }),
+          });
+        } catch (err) {
+          throw new OllamaUnavailableError(
+            `ollama: unreachable at ${baseUrl} — ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        const raw = (await res.json().catch(() => ({}))) as OllamaEmbedResponse;
+        if (!res.ok) {
+          const msg = raw.error ?? `ollama embed HTTP ${res.status}`;
+          throw new OllamaUnavailableError(`ollama: ${msg}`);
+        }
+        if (!Array.isArray(raw.embedding)) {
+          throw new OllamaUnavailableError("ollama: embed response missing embedding");
+        }
+        vectors.push(raw.embedding);
+      }
+
+      return {
+        vectors,
+        model: resolvedModel,
+        driverId: "ollama",
+      };
     },
   };
 }
@@ -323,5 +361,10 @@ interface OllamaChatResponse {
   readonly done?: boolean;
   readonly prompt_eval_count?: number;
   readonly eval_count?: number;
+  readonly error?: string;
+}
+
+interface OllamaEmbedResponse {
+  readonly embedding?: readonly number[];
   readonly error?: string;
 }

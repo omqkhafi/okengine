@@ -96,16 +96,18 @@ boot — pass them on `BootOptions.channel.drivers` with their open options.
 
 ## AI providers
 
-| Variable            | Used for                                                                                                                                  | Default when unset                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `ANTHROPIC_API_KEY` | `anthropic` driver credential                                                                                                             | —                                 |
-| `ANTHROPIC_MODEL`   | Model override for the anthropic driver                                                                                                   | —                                 |
-| `OPENAI_API_KEY`    | `openai-compatible` driver credential                                                                                                     | —                                 |
-| `OPENAI_BASE_URL`   | `openai-compatible` base URL                                                                                                              | OpenAI cloud                      |
-| `OKE_AI_DRIVER`     | Force the AI driver id (honoured in docker mode)                                                                                          | config map                        |
-| `OKE_AI_URL`        | Ollama (or openai-compatible) base URL                                                                                                    | `http://127.0.0.1:11434` (ollama) |
-| `OKE_AI_MODEL`      | Default model for `ollama` (any pulled model; `qwen3.5:9b` is a balanced local-dev starting point; on Apple Silicon try `qwen3.5:9b-mlx`) | `qwen3.5:9b`                      |
-| `OLLAMA_HOST`       | Alternate Ollama host (`host:port` or URL) when `OKE_AI_URL` is unset                                                                     | —                                 |
+| Variable              | Used for                                                                                                                                  | Default when unset                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `ANTHROPIC_API_KEY`   | `anthropic` driver credential                                                                                                             | —                                 |
+| `ANTHROPIC_MODEL`     | Model override for the anthropic driver                                                                                                   | —                                 |
+| `OPENAI_API_KEY`      | `openai-compatible` driver credential                                                                                                     | —                                 |
+| `OPENAI_BASE_URL`     | `openai-compatible` base URL                                                                                                              | OpenAI cloud                      |
+| `OKE_AI_DRIVER`       | Force the AI driver id (honoured in docker mode)                                                                                          | config map                        |
+| `OKE_AI_URL`          | Ollama (or openai-compatible) base URL                                                                                                    | `http://127.0.0.1:11434` (ollama) |
+| `OKE_AI_MODEL`        | Default model for `ollama` (any pulled model; `qwen3.5:9b` is a balanced local-dev starting point; on Apple Silicon try `qwen3.5:9b-mlx`) | `qwen3.5:9b`                      |
+| `OKE_AI_VISION_MODEL` | Vision model id written by `oke ai setup` (logical `ai.model("vision")`)                                                                  | —                                 |
+| `OKE_AI_EMBED_MODEL`  | Embedding model id written by `oke ai setup`                                                                                              | —                                 |
+| `OLLAMA_HOST`         | Alternate Ollama host (`host:port` or URL) when `OKE_AI_URL` is unset                                                                     | —                                 |
 
 ## Framework behavior
 

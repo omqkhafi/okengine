@@ -12,29 +12,33 @@ import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
 import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
-import type {
-  DeadLetter,
-  LiveHandler,
-  SignalBus,
-  SignalDiscardOptions,
-  SignalDriverId,
-  SignalFailureReason,
-  SignalHandler,
-  SignalMessage,
-  SignalOpenOptions,
-  SignalReplayOptions,
-  SignalReplayResult,
-  SignalStats,
-  SignalTransaction,
-  SignalUnsubscribe,
+import {
+  SIGNAL_DEFAULT_LEASE_MS,
+  validateSignalEmitPayload,
+  type DeadLetter,
+  type LiveHandler,
+  type SignalBus,
+  type SignalDiscardOptions,
+  type SignalDriverId,
+  type SignalEmitOptions,
+  type SignalFailureReason,
+  type SignalHandler,
+  type SignalMessage,
+  type SignalOpenOptions,
+  type SignalReplayOptions,
+  type SignalReplayResult,
+  type SignalStats,
+  type SignalTransaction,
+  type SignalUnsubscribe,
 } from "./signal-types.ts";
-import { SIGNAL_DEFAULT_LEASE_MS } from "./signal-types.ts";
 
 /** Internal mutable message. */
 interface MutMessage {
   id: string;
   signal: string;
   payload: unknown;
+  /** Optional per-key ordering token (`once` serialization). */
+  key: string | null;
   delivery: SignalDelivery;
   attempts: number;
   failures: SignalFailureReason[];
@@ -158,6 +162,7 @@ export async function createSignalEngine(
     if (snap) {
       messages = snap.messages.map((m) => ({
         ...m,
+        key: m.key ?? null,
         lockedBy: m.lockedBy,
         leaseExpiresAt: m.leaseExpiresAt ?? null,
         deliveredTo: new Set(m.deliveredTo),
@@ -173,6 +178,7 @@ export async function createSignalEngine(
         id: m.id,
         signal: m.signal,
         payload: m.payload,
+        key: m.key,
         delivery: m.delivery,
         attempts: m.attempts,
         failures: m.failures,
@@ -213,14 +219,22 @@ export async function createSignalEngine(
     });
   }
 
-  function stageEmit(stagedMessages: MutMessage[], name: string, payload: unknown): void {
+  async function stageEmit(
+    stagedMessages: MutMessage[],
+    name: string,
+    payload: unknown,
+    options?: SignalEmitOptions,
+  ): Promise<void> {
     const decl = requireDecl(name);
     assertEmitAllowed(name);
+    const value = await validateSignalEmitPayload(name, decl, payload);
     const t = now();
+    const key = typeof options?.key === "string" && options.key.length > 0 ? options.key : null;
     stagedMessages.push({
       id: crypto.randomUUID(),
       signal: name,
-      payload: payload ?? null,
+      payload: value,
+      key,
       delivery: decl.delivery,
       attempts: 0,
       failures: [],
@@ -244,9 +258,9 @@ export async function createSignalEngine(
         if (done) throw new Error("transaction finished");
         stagedWrites.set(key, value);
       },
-      async emit(signal, payload) {
+      async emit(signal, payload, options) {
         if (done) throw new Error("transaction finished");
-        stageEmit(stagedMessages, signal, payload);
+        await stageEmit(stagedMessages, signal, payload, options);
       },
       async commit() {
         if (done) throw new Error("transaction finished");
@@ -266,9 +280,13 @@ export async function createSignalEngine(
     return Promise.resolve(tx);
   }
 
-  async function emit(signal: string, payload?: unknown): Promise<void> {
+  async function emit(
+    signal: string,
+    payload?: unknown,
+    options?: SignalEmitOptions,
+  ): Promise<void> {
     const tx = await begin();
-    await tx.emit(signal, payload);
+    await tx.emit(signal, payload, options);
     await tx.commit();
   }
 
@@ -313,6 +331,7 @@ export async function createSignalEngine(
       id: m.id,
       signal: m.signal,
       payload: m.payload,
+      ...(m.key !== null ? { key: m.key } : {}),
       delivery: m.delivery,
       attempts: m.attempts,
       failures: [...m.failures],
@@ -322,10 +341,25 @@ export async function createSignalEngine(
     };
   }
 
+  /** True when another same-(signal, key) message holds an unexpired lease. */
+  function keyHeldByOther(candidate: MutMessage, t: number): boolean {
+    if (candidate.key === null) return false;
+    return messages.some(
+      (other) =>
+        other !== candidate &&
+        other.signal === candidate.signal &&
+        other.key === candidate.key &&
+        other.status === "inflight" &&
+        other.leaseExpiresAt !== null &&
+        other.leaseExpiresAt > t,
+    );
+  }
+
   /**
    * Claim the next `once` message with SKIP LOCKED + lazy lease reclaim.
    *
-   * Eligible: pending/unlocked, or inflight whose `leaseExpiresAt` has passed.
+   * Eligible: pending/unlocked, or inflight whose `leaseExpiresAt` has passed,
+   * and not blocked by a same-key unexpired inflight (per-key serialization).
    * No background sweeper — reclaim happens only at claim time.
    */
   function claimOnce(signal: string, consumerId: string): MutMessage | null {
@@ -337,6 +371,7 @@ export async function createSignalEngine(
       const leaseExpired =
         m.status === "inflight" && m.leaseExpiresAt !== null && m.leaseExpiresAt <= t;
       if (!pendingOk && !leaseExpired) continue;
+      if (keyHeldByOther(m, t)) continue;
       m.status = "inflight";
       m.lockedBy = consumerId;
       m.leaseExpiresAt = t + leaseMs;

@@ -232,7 +232,12 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
 | `oke db generate` | Write versioned SQL under `drizzle/` for review                |
 | `oke db migrate`  | Apply those files — human or CI, **never** at boot             |
 
-`oke dev` (local) auto-pushes when the schema file changes — opt out with `--no-db-push` or `db: { autoPush: false }`. Docker/prod **never** auto-apply DDL; a missing table fails loudly as **OKE1101**, telling you to run `oke db migrate`.
+`oke dev` (local) auto-pushes when you save a schema _input_ (`schema.decl.ts`,
+hand-written `schema.ts`, `app.ts` for plugin tables, or `drizzle.config.ts`) —
+not when emit rewrites `schema.generated.ts`.
+
+Opt out with `--no-db-push` or `db: { autoPush: false }`. Docker/prod **never**
+auto-apply DDL; a missing table fails as **OKE1101** (`oke db migrate`).
 
 <Callout title="Escape hatch">
   Hand-written Drizzle in `src/schema.ts` stays supported — if there is nothing to emit, the emit

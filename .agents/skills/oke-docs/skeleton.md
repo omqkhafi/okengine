@@ -58,7 +58,7 @@ Consequences stated: "**Consequence:** …" for non-obvious choices.⟩
 ## Per-environment drivers
 
 ```typescript title="oke.config.ts"
-⟨the real block from packages/create-oke/template/oke.config.ts⟩
+⟨the real block from packages/create-oke/templates/standard/oke.config.ts⟩
 ```
 ````
 

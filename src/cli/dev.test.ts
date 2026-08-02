@@ -645,6 +645,46 @@ describe("oke dev mode resolution", () => {
     expect(await readDevMode(dir)).toBeNull();
   });
 
+  test("session stop calls composeStop after a successful docker up", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-compose-stop-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    await writeDevMode(dir, "docker");
+    let upCalls = 0;
+    let stopCalls = 0;
+    let stoppedFiles: readonly string[] | undefined;
+    const result = await runDev({
+      cwd: dir,
+      stdinIsTTY: false,
+      images: { "store.sql": "postgres:16-alpine" },
+      credentials: {
+        "store.sql": {
+          user: "oke",
+          password: "test-password-not-in-yaml",
+          database: "oke",
+        },
+      },
+      composeUp: async (files) => {
+        upCalls++;
+        expect(files.length).toBeGreaterThan(0);
+      },
+      composeStop: (files) => {
+        stopCalls++;
+        stoppedFiles = files;
+      },
+      startApp: async () => ({ stop() {} }),
+      serveConsole: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: () => {},
+      keepAlive: false,
+    });
+    expect(result.code).toBe(0);
+    expect(upCalls).toBe(1);
+    expect(result.session).toBeDefined();
+    result.session!.stop();
+    expect(stopCalls).toBe(1);
+    expect(stoppedFiles?.length).toBeGreaterThan(0);
+  });
+
   test("saved docker + compose failure exits loudly (no silent downgrade)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-fail-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");

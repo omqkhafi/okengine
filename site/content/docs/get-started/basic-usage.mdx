@@ -1,12 +1,12 @@
 ---
 title: Basic Usage
-description: Scaffold the standard starter, call the health Flow, and inspect it in the Console.
-source: packages/create-oke/template
+description: Scaffold the standard Notes starter, call health and notes Flows, and inspect them in the Console.
+source: packages/create-oke/templates/standard
 icon: SquareTerminal
 ---
 
 Write your first Flow, call it from a typed client, and prove it with
-`bun:test` — using the same standard starter `create-oke` scaffolds.
+`bun:test` — using the same standard Notes starter `create-oke` scaffolds.
 
 <Callout title="The one rule">
   All reads, writes, emits, sends, and external calls belong behind `fx`. That is what makes effects
@@ -26,6 +26,9 @@ cd my-app
 oke dev
 ```
 
+Use `--template advanced` for the same Notes domain with files attach, a daily
+digest Clock, and an AI summarize stub.
+
 <Surfaces />
 
 </Step>
@@ -33,7 +36,7 @@ oke dev
 <Step>
 ### Read the health Flow
 
-The standard starter already exports a health Flow:
+The standard starter already exports a named health Flow:
 
 ```typescript title="flows/main"
 import { on, flow, http, gate } from "okengine";
@@ -42,13 +45,16 @@ import { z } from "zod";
 export const health = on(
   http.get("/health").gate(gate.public),
   flow({
+    name: "main.health",
+    unit: "main",
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),
 );
 ```
 
-Change the route or output and save. App and Console update together from the
+Named flows show up as `main.health` (not `flow_1`) in `oke dev` logs.
+Change the route or output and save — App and Console update together from the
 same Manifest.
 
 </Step>
@@ -61,8 +67,9 @@ Adopted modules become namespaces on the client:
 ```typescript title="app"
 import { oke } from "okengine";
 import * as main from "./flows/main";
+import * as notes from "./flows/notes";
 
-export const app = oke({ name: "standard" }).adopt({ main });
+export const app = oke({ name: "notes" }).adopt({ main, notes });
 export type App = typeof app;
 ```
 

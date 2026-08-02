@@ -23,7 +23,10 @@ export interface SignalOptions {
   readonly retries?: number;
   /** Preserve exhausted messages in the DLQ (once). */
   readonly deadLetter?: boolean;
-  /** Optional payload schema (Standard Schema / opaque). */
+  /**
+   * Optional payload schema (Standard Schema).
+   * Enforced at `emit` via the same `validate()` path as Flow `in`.
+   */
   readonly schema?: unknown;
   /** Allow emit with zero subscribers (skip orphan check). */
   readonly optional?: boolean;

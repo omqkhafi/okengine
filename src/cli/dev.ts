@@ -101,7 +101,7 @@ export interface DevServeDocsMcpOptions {
 /** Live `oke dev` session — returned when {@link DevOptions.keepAlive} is false. */
 export interface DevSession {
   readonly plan: DevPlan;
-  /** Stop app · Console · MCP · watcher. */
+  /** Stop app · Console · MCP · watcher · docker compose (when this session started it). */
   readonly stop: () => void;
   readonly appPort: number;
   readonly consolePort: number;
@@ -185,6 +185,19 @@ export interface DevOptions {
    * @param cwd - Compose directory (`docker/`)
    */
   readonly composeUp?: (composeFiles: readonly string[], cwd: string) => Promise<void>;
+  /**
+   * Stop compose containers on session exit (injectable). Keeps volumes.
+   * Default: `docker compose … stop` with the same `-f` / cwd / env as up.
+   *
+   * @param composeFiles - `-f` list used at up
+   * @param cwd - Compose directory (`docker/`)
+   * @param env - Stack env merged into the process env for compose
+   */
+  readonly composeStop?: (
+    composeFiles: readonly string[],
+    cwd: string,
+    env: Readonly<Record<string, string>>,
+  ) => void;
   /**
    * Regenerate client types (injectable).
    *
@@ -330,6 +343,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   let stackRoles: string[] | null = null;
   let composeFiles: string[] | null = null;
   let stackEnv: Record<string, string> | null = null;
+  /** Set only after a successful `compose up` — torn down on SIGINT / stop. */
+  let dockerStarted: {
+    files: readonly string[];
+    cwd: string;
+    env: Record<string, string>;
+  } | null = null;
   let stackSqlDriver = "postgres";
   let stackKvDriver = "redis";
   let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null = null;
@@ -437,6 +456,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           });
         // Compose files live under docker/; cwd for compose is that directory.
         await up(composeFiles, dockerOut);
+        // Remember for SIGINT / terminal close — `stop` keeps volumes (not `down -v`).
+        dockerStarted = {
+          files: composeFiles,
+          cwd: dockerOut,
+          env: { ...stackEnv! },
+        };
 
         // Real OpenBao vault: init once / unseal every start, then expose the
         // least-privilege app token to the app + Console (never root).
@@ -450,6 +475,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             names: vaultNames,
           });
           Object.assign(stackEnv!, openbaoStackEnv(boot));
+          Object.assign(dockerStarted.env, openbaoStackEnv(boot));
           const envPath = resolve(dockerOut, ".env.docker");
           const current = await Bun.file(envPath).text();
           const tokenLine = `OKE_VAULT_TOKEN=${boot.appToken}`;
@@ -779,8 +805,34 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     consoleServer.stop();
     mcpServer?.stop();
     docsMcpServer?.stop();
+    if (dockerStarted) {
+      const started = dockerStarted;
+      dockerStarted = null;
+      const stopCompose =
+        options.composeStop ??
+        ((files, dir, env) => {
+          const args = ["compose", ...files.flatMap((f) => ["-f", f]), "stop"];
+          const result = Bun.spawnSync(["docker", ...args], {
+            cwd: dir,
+            stdout: "inherit",
+            stderr: "inherit",
+            env: { ...process.env, ...env },
+          });
+          if (result.exitCode !== 0) {
+            console.error(
+              `oke dev: docker compose stop exited ${result.exitCode ?? "unknown"} (containers may still be running)`,
+            );
+          }
+        });
+      try {
+        stopCompose(started.files, started.cwd, started.env);
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+      }
+    }
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
+    process.off("SIGHUP", onSignal);
   };
 
   const onSignal = () => {
@@ -789,6 +841,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   };
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
+  // Terminal close often delivers SIGHUP rather than SIGINT.
+  process.on("SIGHUP", onSignal);
 
   const session: DevSession = {
     plan: {

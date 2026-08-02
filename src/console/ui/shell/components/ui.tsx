@@ -58,14 +58,16 @@ export function Input({ className, ...props }: ComponentProps<typeof BaseInput>)
 /**
  * Field label + control.
  *
- * @param props - Label text, optional error, children
+ * @param props - Label text, optional hint/error, children
  */
 export function Field({
   label,
+  hint,
   error,
   children,
 }: {
   readonly label: string;
+  readonly hint?: string;
   readonly error?: string;
   readonly children: ReactNode;
 }) {
@@ -77,6 +79,8 @@ export function Field({
         <span role="alert" className="text-xs text-[var(--oke-danger)]">
           {error}
         </span>
+      ) : hint ? (
+        <span className="text-xs text-[var(--oke-muted)]">{hint}</span>
       ) : null}
     </label>
   );

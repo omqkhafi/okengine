@@ -19,6 +19,7 @@ import type {
 } from "../elements/store.ts";
 import type { SqlRow } from "../drivers/types.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
+import type { SignalEmitOptions } from "../drivers/signal-types.ts";
 import type { VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
@@ -295,8 +296,9 @@ export interface Fx {
    *
    * @param signal - Signal name or handle
    * @param payload - Payload
+   * @param options - Optional emit options (`key` for per-key once ordering)
    */
-  emit(signal: NamedRef, payload?: unknown): Promise<void>;
+  emit(signal: NamedRef, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
   /**
    * Call another flow (records `call`). Stub returns `undefined`.
    *
@@ -1031,11 +1033,11 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     store(ref) {
       return storeHandle(ref);
     },
-    emit(signal, payload) {
+    emit(signal, payload, emitOptions) {
       const name = resolveName(signal);
       return gated("emit", name, async () => {
         if (options.signalRuntime) {
-          await options.signalRuntime.emit(name, payload);
+          await options.signalRuntime.emit(name, payload, emitOptions);
         }
       });
     },

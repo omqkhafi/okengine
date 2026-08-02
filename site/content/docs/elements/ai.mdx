@@ -167,9 +167,28 @@ Because `fx.ask` is nondeterministic, the runtime adjusts around it: journaling 
 
 There is deliberately **no production default**: `prod` must name a driver, which keeps the model choice visible in `oke.config.ts` where review can see it.
 
+### Setup wizard
+
+```bash title="Terminal"
+oke ai setup
+oke ai setup --provider ollama --yes
+```
+
+Writes `drivers.ai`, `.env.local`, and `src/ai.ts`.
+
+Ollama: short quiz (use case · speed/quality · vision) → detect installed models
+→ picks that fit your **machine tier** (~4GB OS/IDE headroom). Labels say
+**≈16GB-class**, not “download 16GB” — pull size is usually much smaller than RAM.
+
+Cloud: short chat list + **Other…** for any model id. **← Back** returns a step.
+`create-oke` runs the same model wizard **before** install when you enable AI
+(customize or `--ai`). Standalone `oke ai setup` remains for existing apps.
+
 ### Local Ollama
 
-`ollama` is a local-model driver — any model you have pulled works. Pin it in `drivers.ai`; optionally pin `images.ai` for compose.
+`ollama` is a local-model driver — any pulled model works. Pin `drivers.ai`;
+optionally pin `images.ai` for compose. Native `complete`, `stream`, and
+`embed` (`POST /api/embeddings`) — no OpenAI shim required for local RAG.
 
 ```typescript title="oke.config.ts"
 import { defineConfig } from "okengine/config";
@@ -229,7 +248,7 @@ The one you declared. There is no fallback or guess — if `prod` has no AI driv
 </Accordion>
 <Accordion title="oke boot: ollama driver needs OKE_AI_URL">
 
-Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3.5:9b`, or `qwen3.5:9b-mlx` on Apple Silicon, or your `OKE_AI_MODEL`).
+Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3.5:9b`, or `qwen3.5:9b-mlx` on Apple Silicon, or your `OKE_AI_MODEL`). Prefer `oke ai setup` to wire driver, env, and `src/ai.ts` in one pass.
 
 </Accordion>
 <Accordion title="A prompt edit made answers worse — how do I catch that pre-merge?">

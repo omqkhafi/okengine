@@ -10,7 +10,32 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.7.0 — 2026-08-02
+
 ### ✨ Added
+
+- `oke docker clean` — discover leftover `oke-dev-*` compose stacks and remove
+  containers, networks, and volumes (`down -v`). Inside a project: current
+  stack (+ optional other stacks); outside: pick any. Non-TTY: `--yes` /
+  `--all --yes`.
+- Signal `emit(…, { key })` — optional per-key serialization for `once`:
+  same `(signal, key)` is never claimed by two consumers at once; the
+  in-flight message's visibility lease is the lock (no second timeout).
+  Omit `key` for unchanged competing-consumer behavior.
+- Signal `schema` enforced at emit via Standard Schema (`validate()`, same
+  path as Flow `in`) — invalid payloads throw **OKE1043** before stage /
+  commit; valid payloads succeed.
+- `create-oke` TTY wizard: template (standard|advanced) · recommended defaults ·
+  customize (local|docker first, then optional other side + AI; saved to
+  `~/.oke/create-defaults.json`) · reuse when saved for that template.
+  Non-TTY / `--yes` stay zero-prompt.
+- `oke ai setup` — interactive AI provider + curated Ollama catalog (detect /
+  recommend / pull chat·vision·embed); thin paths for OpenAI-compatible and
+  Anthropic. Writes `drivers.ai`, `.env.local`, and `src/ai.ts`.
+- Native Ollama `embed` via `POST /api/embeddings` (no openai-compatible shim
+  required for local RAG).
+- `create-oke --ai` / `--no-ai` — force or skip the AI model wizard (models
+  selected before install).
 
 - `fx.store(files).image(key\|bytes)` — Bun.Image pipeline (resize / rotate /
   flip / modulate → jpeg/png/webp, plus heic/avif with WebP fallback) with
@@ -32,6 +57,34 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Install docs list `bun install -g okengine` for a global `oke` on PATH
+  (package name is `okengine`; there is no separate `oke` npm package).
+- `create-oke` ships two Notes starters under `templates/{standard,advanced}`
+  (named flows — no `flow_1`). TTY: pick template first; customize asks
+  **local|docker** once, walks facets for that side, then optionally the other
+  (defaults if no). Reuse only when saved `template` matches. `.oke/mode`
+  follows primary (recommended: standard → local, advanced → docker).
+- `create-oke` TTY menu offers **reuse previous settings** only when
+  `~/.oke/create-defaults.json` already exists for the selected template;
+  customize always saves there (user-global) so the next matching project can
+  inherit the same picks.
+- `create-oke` rejects a non-empty target directory at the **project name**
+  step (TTY) or before scaffold (flags / `--yes`), with a clear
+  `"name" already exists` message — not after the full wizard.
+- `create-oke` customize wizard offers **← Back** on each driver / yes-no step
+  (first-step Back returns to the recommended / reuse / customize question).
+- `create-oke` customize asks AI after both env passes; when both sides are in
+  play, **AI Provider — local** and **AI Provider — docker** stay available.
+- `oke ai setup` Ollama path: short needs quiz (use case · speed/quality ·
+  vision) → panel that separates **machine RAM** from **≈GB-class model tier**
+  (comfortable / tight / too large, ~4GB OS/IDE headroom) → recommended /
+  installed / manual picks with **← Back** between steps. Catalog `ramGb` is
+  machine tier, not download size — a 24GB laptop is never offered a “24GB
+  model.” create-oke passes `--provider ollama` when either env uses Ollama
+  (even if local is mock).
+- `oke ai setup` cloud providers (OpenAI, Anthropic, Gemini, OpenRouter, …)
+  offer short curated **Select Chat Model** lists with ⭐ Recommended, plus
+  **Other…** to type any model id (also on Ollama manual picks).
 - AI docs visuals match Flow/Signal/Store quality: `AiBlocks` (model /
   prompt / embed / agent ambient demos), upgraded `AiGuardrails` with per-card
   mini physics, and `AiPiiEgress` (anthropic build-fail vs ollama on-premise)
@@ -104,9 +157,45 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   docker/prod → `file`, vault local label `env` (was mislabeled `dotenv`).
 - Hero banner shows Gate’s kv backend (`drivers.store.kv`); compose image
   planning no longer pulls SQL solely for fictional signal/clock postgres.
+- `create-oke` runs AI **model** selection in the customize wizard (and
+  `--ai`) **before** `bun install` — writes `.env.local` + `src/ai.ts`
+  without spawning `oke ai setup` after install. Per-env `drivers.ai` pins
+  from customize are preserved. Standalone `oke ai setup` remains for
+  existing apps.
+- `oke dev --docker` stops Compose containers on SIGINT / SIGTERM / SIGHUP
+  / session stop (`docker compose … stop`) — volumes stay; next `oke dev`
+  brings them back up.
 
 ### 🐛 Fixed
 
+- `oke dev` parses again when linked to a local `okengine` checkout — a
+  JSDoc glob (`templates/*/drizzle…`) closed the block comment early and
+  broke `ensure-drizzle-config.ts`.
+- Ollama docker recipe escapes shell `$pid` / `$i` as `$$` so Compose no
+  longer warns `The "i"/"pid" variable is not set` on `oke dev --docker`.
+- OpenBao missing-keys error names the usual cause (orphaned vault volume
+  after project recreate) and prints the exact `docker compose … down -v`
+  recovery for local docker.
+- `create-oke` / `oke ai setup` no longer nest `drivers.ai` inside
+  `channel` — the banner showed `ai: —` even after picking Ollama. AI pins
+  are written as a sibling of `channel` under `drivers`.
+- Console first-admin claim no longer returns an opaque **500 /
+  `TransportError`** for weak passwords. The form requires ≥ 12 characters
+  (letter + number), policy failures return `ClaimFailed` with a clear
+  message, the wizard shows that message (not the bare code), structured
+  5xx envelopes survive the client transport, and `oke dev` request logs
+  print the failure detail under the status line.
+- `create-oke` seeds project `.oke/mode` from the wizard profile
+  (`local-only` / recommended → `local`, `docker-ready` → `docker`) so
+  `oke dev` does not re-ask “Run against” after scaffold.
+- `create-oke` customize no longer poisons `images` with driver pins
+  (e.g. `libsql`) leaked from comments / env maps — fixes
+  `oke docker: no image recipe matches "libsql"` after picking store.index
+  drivers that are not compose services.
+- `oke dev` auto `oke db push` no longer loops when emit rewrites
+  `schema.generated.ts` — the watcher triggers only on declaration inputs
+  (`schema.decl.ts` / `schema.ts` / `app.ts` / drizzle config), never the
+  generated output.
 - Emitting a non-`optional` signal with zero subscribers now throws
   **OKE1042** (previously silent success despite docs claiming a loud fail).
 - Surfaces strip and install docs now include docs MCP on **:6536** alongside

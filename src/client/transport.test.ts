@@ -47,6 +47,27 @@ describe("transport — retry", () => {
     expect(error?.code).toBe("TransportError");
     expect(n).toBe(2);
   });
+
+  test("structured 5xx envelope is returned (not TransportError)", async () => {
+    const api = createClient<PingApp>("http://app.test", {
+      fetch: async () =>
+        Response.json(
+          {
+            data: null,
+            error: {
+              code: "InternalError",
+              data: {},
+              message: "password policy failed: minLength 12",
+            },
+          },
+          { status: 500 },
+        ),
+    });
+
+    const { error } = await api.sys.ping();
+    expect(error?.code).toBe("InternalError");
+    expect(error?.message).toMatch(/password policy/i);
+  });
 });
 
 describe("transport — timeout", () => {

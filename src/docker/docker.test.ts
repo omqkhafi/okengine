@@ -81,6 +81,10 @@ describe("image recipes", () => {
     expect(applied.volumes).toContain("ai-data:/root/.ollama");
     expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
     expect(String(applied.command)).toContain("ollama pull");
+    // Compose must see `$$` so `$pid` / `$i` are not treated as project env.
+    expect(String(applied.command)).toContain("pid=$$!");
+    expect(String(applied.command)).toContain("wait $$pid");
+    expect(String(applied.command)).not.toMatch(/(?<!\$)\$pid\b/);
     const url = recipeFor(spec.image).url(spec, {
       host: "127.0.0.1",
       port: 11434,

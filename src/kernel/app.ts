@@ -55,6 +55,7 @@ import {
 } from "./fx.ts";
 import {
   currentDevSurface,
+  failureDetailFromResponse,
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
@@ -1180,7 +1181,7 @@ export function oke(options: OkeOptions): OkeApp {
       const url = new URL(request.url);
       const method = request.method.toUpperCase();
 
-      const respond = (response: Response): Response => {
+      const respond = async (response: Response): Promise<Response> => {
         if (shouldLogDevRequests()) {
           logDevRequest({
             surface: currentDevSurface(),
@@ -1189,6 +1190,7 @@ export function oke(options: OkeOptions): OkeApp {
             flow: flowLabel,
             status: response.status,
             ms: Math.round(performance.now() - started),
+            detail: await failureDetailFromResponse(response),
           });
         }
         return response;

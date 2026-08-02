@@ -12,11 +12,18 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative, resolve } from "node:path";
-import { resolveLocalOkengineRoot, resolveTemplateDir, type TemplateId } from "./templates.ts";
+import { basename, join, relative, resolve } from "node:path";
+import {
+  resolveLocalOkengineRoot,
+  resolveTemplateDir,
+  TEMPLATE_DEFAULT_MODE,
+  type TemplateId,
+} from "./templates.ts";
 import { agentsMdContent } from "./agents-md.ts";
+import type { CreateDefaults } from "./create-defaults.ts";
 import {
   DEFAULT_SQL_DRIVER,
+  applyCreateAnswers,
   sanitizeProjectName,
   shouldSkipTemplatePath,
   transformConfigForSqlDriver,
@@ -42,8 +49,11 @@ export type ScaffoldOptions = {
   /**
    * Store SQL driver — pins `oke.config.ts` `store.sql` local/docker/prod
    * when `postgres`. Default `sqlite` keeps the dual-mode config.
+   * Ignored when {@link createDefaults} is set.
    */
   readonly sqlDriver?: SqlDriverId;
+  /** Full customize / reuse answers — applied after copy. */
+  readonly createDefaults?: CreateDefaults;
 };
 
 /** Result of a successful scaffold. */
@@ -56,9 +66,35 @@ export type ScaffoldResult = {
   readonly okengineDependency: string;
   /** Store SQL driver applied to schema + config. */
   readonly sqlDriver: SqlDriverId;
+  /** Customize answers applied, if any. */
+  readonly createDefaults?: CreateDefaults;
   /** Relative paths written (POSIX), sorted. */
   readonly files: readonly string[];
 };
+
+/**
+ * Why `targetDir` cannot host a new project, or `null` when it is free / empty.
+ *
+ * Used by the wizard (early name validation) and {@link scaffold}.
+ *
+ * @param targetDir - Absolute or cwd-relative destination
+ */
+export function targetDirectoryBlockReason(targetDir: string): string | null {
+  const abs = resolve(targetDir);
+  if (!existsSync(abs)) return null;
+  let entries: string[];
+  try {
+    entries = readdirSync(abs);
+  } catch {
+    return `create-oke: cannot read target directory: ${abs}`;
+  }
+  if (entries.length === 0) return null;
+  const folder = basename(abs);
+  return (
+    `create-oke: "${folder}" already exists and is not empty (${abs}). ` +
+    `Pick another name, or remove that directory first.`
+  );
+}
 
 /**
  * Scaffold a new okengine project from the standard template.
@@ -70,14 +106,15 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
   const targetDir = resolve(options.targetDir);
   const sourceDir = resolveTemplateDir(options.source.id);
   const label = options.source.id;
-  const sqlDriver = options.sqlDriver ?? DEFAULT_SQL_DRIVER;
+  const createDefaults = options.createDefaults;
+  const sqlDriver =
+    createDefaults?.drivers.store.sql.local === "postgres" || options.sqlDriver === "postgres"
+      ? "postgres"
+      : (options.sqlDriver ?? DEFAULT_SQL_DRIVER);
 
-  if (existsSync(targetDir)) {
-    const entries = readdirSync(targetDir);
-    if (entries.length > 0) {
-      throw new Error(`create-oke: target directory is not empty: ${targetDir}`);
-    }
-  } else {
+  const blocked = targetDirectoryBlockReason(targetDir);
+  if (blocked) throw new Error(blocked);
+  if (!existsSync(targetDir)) {
     mkdirSync(targetDir, { recursive: true });
   }
 
@@ -95,7 +132,11 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
     const nextPkg = transformPackageJson(sourcePkg, name, okengineDependency);
     writeFileSync(pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`, "utf8");
 
-    applySqlDriverTransforms(targetDir, sqlDriver);
+    if (createDefaults) {
+      applyCreateDefaultsTransforms(targetDir, createDefaults);
+    } else {
+      applySqlDriverTransforms(targetDir, sqlDriver);
+    }
 
     if (options.writeAgentsMd !== false) {
       const agentsPath = join(targetDir, "AGENTS.md");
@@ -110,6 +151,10 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
       if (!written.includes(".env.local")) written.push(".env.local");
     }
 
+    // Seed `.oke/mode` so `oke dev` does not re-ask local vs docker.
+    writeProjectDevMode(targetDir, resolveInitialDevMode(createDefaults, options.source.id));
+    if (!written.includes(".oke/mode")) written.push(".oke/mode");
+
     written.sort();
     return {
       targetDir,
@@ -118,6 +163,7 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
       label,
       okengineDependency,
       sqlDriver,
+      ...(createDefaults !== undefined ? { createDefaults } : {}),
       files: written,
     };
   } catch (e) {
@@ -145,6 +191,47 @@ function applySqlDriverTransforms(targetDir: string, sqlDriver: SqlDriverId): vo
     const next = transformConfigForSqlDriver(readFileSync(configPath, "utf8"), sqlDriver);
     writeFileSync(configPath, next, "utf8");
   }
+}
+
+/**
+ * Apply full customize / reuse defaults to `oke.config.ts`.
+ *
+ * @param targetDir - Scaffolded project root
+ * @param defaults - Persisted create answers
+ */
+function applyCreateDefaultsTransforms(targetDir: string, defaults: CreateDefaults): void {
+  const configPath = join(targetDir, "oke.config.ts");
+  if (!existsSync(configPath)) {
+    throw new Error("create-oke: scaffolded project has no oke.config.ts");
+  }
+  const next = applyCreateAnswers(readFileSync(configPath, "utf8"), defaults);
+  writeFileSync(configPath, next, "utf8");
+}
+
+/**
+ * Map create-oke profile / template → persisted `oke dev` mode.
+ *
+ * @param defaults - Customize / reuse answers, or undefined for recommended
+ * @param template - Starter id (recommended path uses template default mode)
+ */
+export function resolveInitialDevMode(
+  defaults: CreateDefaults | undefined,
+  template: TemplateId = "standard",
+): "local" | "docker" {
+  if (defaults?.profile === "docker-ready") return "docker";
+  if (defaults?.profile === "local-only") return "local";
+  return TEMPLATE_DEFAULT_MODE[template];
+}
+
+/**
+ * Write project-local `.oke/mode` (same shape as `oke mode` / `oke dev`).
+ *
+ * @param targetDir - Scaffolded project root
+ * @param mode - Mode to save
+ */
+function writeProjectDevMode(targetDir: string, mode: "local" | "docker"): void {
+  mkdirSync(join(targetDir, ".oke"), { recursive: true });
+  writeFileSync(join(targetDir, ".oke", "mode"), `${mode}\n`, "utf8");
 }
 
 /**

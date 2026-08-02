@@ -151,6 +151,12 @@ export const OKE_ERRORS = {
     cause: 'Flow "{flow}" emits signal "{resource}" with no subscriber.',
     fix: "Add `on({resource}, …)` or mark the signal `{ optional: true }`.",
   },
+  /** Emit payload failed the signal's declared Standard Schema. */
+  SIGNAL_SCHEMA: {
+    code: 1043,
+    cause: '"{resource}": {detail}',
+    fix: "Fix schema payload.",
+  },
   /**
    * Domain table/column missing under docker/prod (migrations not applied).
    * Store/DDL band starts at 1100.

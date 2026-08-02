@@ -41,6 +41,7 @@ export type {
   SignalDriver,
   SignalBus,
   SignalMessage,
+  SignalEmitOptions,
   SignalFailureReason,
   DeadLetter,
   SignalTransaction,

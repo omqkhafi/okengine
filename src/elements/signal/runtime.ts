@@ -3,7 +3,7 @@
  * emit / subscribe / live / drain for `fx` and tests.
  */
 
-import type { SignalDriver, SignalBus } from "../../drivers/signal-types.ts";
+import type { SignalBus, SignalDriver, SignalEmitOptions } from "../../drivers/signal-types.ts";
 import type { SignalDecl } from "./declare.ts";
 
 /** Options for {@link createSignalRuntime}. */
@@ -45,8 +45,9 @@ export interface SignalRuntime {
    *
    * @param name - Signal name
    * @param payload - Payload
+   * @param options - Optional emit options (`key` for per-key once ordering)
    */
-  emit(name: string, payload?: unknown): Promise<void>;
+  emit(name: string, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
   /** Close the bus. */
   close(): Promise<void>;
 }
@@ -82,9 +83,9 @@ export function createSignalRuntime(options: CreateSignalRuntimeOptions): Signal
       });
       return bus;
     },
-    async emit(name, payload) {
+    async emit(name, payload, options) {
       const b = await this.start();
-      await b.emit(name, payload);
+      await b.emit(name, payload, options);
     },
     async close() {
       if (bus) {

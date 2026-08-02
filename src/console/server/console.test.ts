@@ -53,6 +53,51 @@ describe("console kernel", () => {
     }
   });
 
+  test("claim rejects weak passwords with ClaimFailed password_policy (not 500)", async () => {
+    const handle = await startConsoleApp({
+      cwd,
+      secret: "test-secret-console",
+      silentClaim: true,
+    });
+    try {
+      const weak = await handle.app.fetch(
+        new Request("http://console.test/console/setup/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            claimCode: handle.state.claim.code,
+            email: "ops@example.com",
+            name: "Ops",
+            password: "short1A",
+          }),
+        }),
+      );
+      // Zod min(12) rejects before createOperator — still not an opaque 500.
+      expect(weak.status).toBe(422);
+      const shortOkZod = await handle.app.fetch(
+        new Request("http://console.test/console/setup/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            claimCode: handle.state.claim.code,
+            email: "ops@example.com",
+            name: "Ops",
+            password: "longenoughword",
+          }),
+        }),
+      );
+      expect(shortOkZod.status).toBe(400);
+      const body = (await shortOkZod.json()) as {
+        error: { code: string; message?: string; data?: { reason?: string } };
+      };
+      expect(body.error.code).toBe("ClaimFailed");
+      expect(body.error.data?.reason).toBe("password_policy");
+      expect(body.error.message).toMatch(/12 characters/i);
+    } finally {
+      await handle.app.stop();
+    }
+  });
+
   test("claim creates first operator and closes the wizard permanently", async () => {
     const handle = await startConsoleApp({
       cwd,

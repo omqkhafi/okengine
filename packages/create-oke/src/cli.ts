@@ -1,19 +1,50 @@
 /**
- * `create-oke` CLI — one standard starter.
+ * `create-oke` CLI — standard|advanced Notes starters with recommended / reuse / customize.
  *
  * ```bash
- * bunx create-oke@latest <name> [--template standard]
+ * bunx create-oke@latest <name> [--template standard|advanced]
  * bunx create-oke@latest <name> --yes
  * bunx create-oke@latest   # interactive when stdin is a TTY
  * ```
  */
 
-import { cancel, confirm, intro, isCancel, note, outro, spinner, text } from "@clack/prompts";
+import {
+  cancel,
+  confirm,
+  intro,
+  isCancel,
+  log,
+  note,
+  outro,
+  select,
+  spinner,
+  text,
+} from "@clack/prompts";
 import { basename, relative, resolve } from "node:path";
 import { existsSync, rmSync } from "node:fs";
 import { agentsMdContent } from "./agents-md.ts";
+import {
+  createDefaultsPath,
+  readCreateDefaults,
+  writeCreateDefaults,
+  type CreateDefaults,
+  type EnvDriverPins,
+} from "./create-defaults.ts";
 import { docsUrl } from "./docs-origin.ts";
-import { scaffold, type ScaffoldResult, type ScaffoldSource } from "./scaffold.ts";
+import { applyAiSetup, type AiSetupApplyInput } from "./ai-setup/apply.ts";
+import {
+  aiPrefWithModels,
+  applyInputFromAiPref,
+  nonInteractiveAiApply,
+} from "./ai-setup/from-pref.ts";
+import { askAiSetup } from "./ai-setup/prompts.ts";
+import { askCustomizeFlow } from "./customize-flow.ts";
+import {
+  scaffold,
+  targetDirectoryBlockReason,
+  type ScaffoldResult,
+  type ScaffoldSource,
+} from "./scaffold.ts";
 import {
   DEFAULT_TEMPLATE,
   TEMPLATE_PURPOSES,
@@ -22,6 +53,11 @@ import {
   type TemplateId,
 } from "./templates.ts";
 import { DEFAULT_SQL_DRIVER, SQL_DRIVERS, isSqlDriverId, type SqlDriverId } from "./transform.ts";
+import { WIZARD_BACK } from "./wizard-select.ts";
+export { WIZARD_BACK, selectWithBack, withBackOption, type WizardBack } from "./wizard-select.ts";
+
+/** How AI setup is requested on the CLI. */
+export type AiCliMode = "prompt" | "skip" | "force";
 
 /** Parsed CLI arguments. */
 export type CliArgs = {
@@ -43,8 +79,59 @@ export type CliArgs = {
   readonly install: boolean | undefined;
   /** Write `AGENTS.md` (default true). */
   readonly agentsMd: boolean;
+  /** AI setup after install. */
+  readonly ai: AiCliMode;
   readonly targetDir: string | undefined;
 };
+
+/** Defaults-branch choice after project name. */
+export type DefaultsBranch = "recommended" | "reuse" | "customize";
+
+/** One Clack option for the recommended / reuse / customize branch. */
+export type DefaultsBranchOption = {
+  readonly value: DefaultsBranch;
+  readonly label: string;
+  readonly hint: string;
+};
+
+/**
+ * Build the defaults-branch menu. **Reuse** appears only when previous
+ * settings exist for the selected template.
+ *
+ * @param hasPreviousForTemplate - Matching create-defaults on disk
+ * @param template - Selected starter
+ */
+export function defaultsBranchOptions(
+  hasPreviousForTemplate: boolean,
+  template: TemplateId = "standard",
+): DefaultsBranchOption[] {
+  const options: DefaultsBranchOption[] = [
+    {
+      value: "recommended",
+      label: "★  Yes, use recommended defaults",
+      hint:
+        template === "advanced"
+          ? "Notes · docker-ready pins · .oke/mode docker"
+          : "Notes · local-first pins · .oke/mode local",
+    },
+  ];
+  if (hasPreviousForTemplate) {
+    options.push({
+      value: "reuse",
+      label: "↻  No, reuse previous settings",
+      hint: `~/.oke/create-defaults.json (${template})`,
+    });
+  }
+  options.push({
+    value: "customize",
+    label: "◆  No, customize settings",
+    hint:
+      template === "standard"
+        ? "local|docker · SQL · optional AI"
+        : "local|docker · all facets · optional AI",
+  });
+  return options;
+}
 
 /** Answers collected by the interactive ask step (no clack types). */
 export type InteractiveAnswers = {
@@ -52,6 +139,10 @@ export type InteractiveAnswers = {
   readonly choice: TemplateId;
   readonly installAndRun: boolean;
   readonly agentsMd: boolean;
+  /** `undefined` = recommended template defaults (no createDefaults apply). */
+  readonly createDefaults: CreateDefaults | undefined;
+  /** Model / env apply payload — written after scaffold, before install. */
+  readonly aiApply: AiSetupApplyInput | null;
 };
 
 /**
@@ -63,6 +154,9 @@ export type ScaffoldCallArgs = {
   readonly source: ScaffoldSource;
   readonly agentsMd: boolean;
   readonly sqlDriver: SqlDriverId;
+  readonly createDefaults?: CreateDefaults;
+  /** Apply `src/ai.ts` + `.env.local` after scaffold (before install). */
+  readonly aiApply?: AiSetupApplyInput | null;
 };
 
 /**
@@ -80,6 +174,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let yes = false;
   let install: boolean | undefined;
   let agentsMd = true;
+  let ai: AiCliMode = "prompt";
   let targetDir: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
@@ -106,6 +201,26 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     }
     if (a === "--agents-md") {
       agentsMd = true;
+      continue;
+    }
+    if (a === "--no-ai" || a === "--ai=skip") {
+      ai = "skip";
+      continue;
+    }
+    if (a === "--ai") {
+      const next = argv[i + 1];
+      if (next === "skip") {
+        i++;
+        ai = "skip";
+        continue;
+      }
+      ai = "force";
+      continue;
+    }
+    if (a.startsWith("--ai=")) {
+      const value = a.slice("--ai=".length);
+      if (value === "skip") ai = "skip";
+      else ai = "force";
       continue;
     }
     if (a === "--sql") {
@@ -172,6 +287,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     yes,
     install,
     agentsMd,
+    ai,
     targetDir,
   };
 }
@@ -217,7 +333,7 @@ export function helpText(): string {
   return `create-oke — scaffold an okengine app
 
 Usage:
-  bunx create-oke@latest <name> [--template standard]
+  bunx create-oke@latest <name> [--template standard|advanced]
   bunx create-oke@latest <name> --yes
   bunx create-oke@latest          # interactive (TTY only)
 
@@ -231,21 +347,21 @@ Options:
   --no-install          Skip bun install
   --agents-md           Write AGENTS.md (default)
   --no-agents-md        Skip AGENTS.md
+  --ai                  Configure AI in the wizard (models before install)
+  --no-ai, --ai skip    Skip AI configuration
   -h, --help            Show this help
 
 Template:
 ${templateLines}
 
-No telemetry. Bun only. On a TTY, a project name alone still opens the wizard
-(confirm name and install). Non-TTY / --yes / --template stay fully scriptable.
+On a TTY: pick standard|advanced, then recommended defaults, customize
+(local or docker first; optional other side; saved to ~/.oke/create-defaults.json),
+or reuse when saved for that template. Non-TTY / --yes stay zero-prompt.
 `;
 }
 
 /**
  * Whether the CLI should open the interactive Clack flow.
- *
- * TTY humans get the wizard even when a name is pre-filled. Config flags
- * `--template` or `--yes` skips prompts for CI/agents.
  *
  * @param args - Parsed args
  * @param stdinIsTTY - `process.stdin.isTTY`
@@ -270,8 +386,6 @@ export function sourceFromArgs(args: CliArgs): ScaffoldSource {
 /**
  * Map flag-driven {@link CliArgs} to scaffold call args.
  *
- * Requires a positional project name (and thus `targetDir`).
- *
  * @param args - Parsed CLI args with `name` set
  */
 export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
@@ -284,51 +398,99 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     source: sourceFromArgs(args),
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriver,
+    aiApply: args.ai === "force" ? nonInteractiveAiApply("ollama") : null,
   };
 }
 
 /**
  * Pure map from interactive answers → scaffold call args.
  *
- * Independent of clack — unit-tested against {@link scaffoldArgsFromCli}
- * for the standard template.
- *
  * @param answers - Collected interactive answers
+ * @param sqlDriverOverride - Optional `--sql` flag merge
  */
-export function scaffoldArgsFromAnswers(answers: InteractiveAnswers): ScaffoldCallArgs {
+export function scaffoldArgsFromAnswers(
+  answers: InteractiveAnswers,
+  sqlDriverOverride?: SqlDriverId,
+): ScaffoldCallArgs {
   const targetDir = resolve(answers.name.trim());
   const name = basename(targetDir);
-  // Interactive always keeps the dual-mode default (local sqlite ·
-  // docker/prod postgres). Opt into postgres-everywhere with `--sql postgres`.
+  let createDefaults = answers.createDefaults;
+  let sqlDriver: SqlDriverId = DEFAULT_SQL_DRIVER;
+
+  if (createDefaults && sqlDriverOverride === "postgres") {
+    createDefaults = {
+      ...createDefaults,
+      drivers: {
+        ...createDefaults.drivers,
+        store: {
+          ...createDefaults.drivers.store,
+          sql: {
+            local: "postgres",
+            docker: "postgres",
+            test: createDefaults.drivers.store.sql.test,
+            prod: "postgres",
+          },
+        },
+      },
+    };
+    sqlDriver = "postgres";
+  } else if (!createDefaults && sqlDriverOverride) {
+    sqlDriver = sqlDriverOverride;
+  } else if (createDefaults?.drivers.store.sql.local === "postgres") {
+    sqlDriver = "postgres";
+  }
+
   return {
     name,
     targetDir,
     source: { kind: "template", id: answers.choice },
     agentsMd: answers.agentsMd,
-    sqlDriver: DEFAULT_SQL_DRIVER,
+    sqlDriver,
+    ...(createDefaults !== undefined ? { createDefaults } : {}),
+    aiApply: answers.aiApply,
   };
 }
 
 /**
  * Ask step — clack prompts only. Returns answers or `null` on cancel.
  *
- * Injectable for tests; production uses {@link askInteractiveAnswers}.
- *
  * @param partial - Name already known (pre-filled in the prompt)
  */
 export type AskInteractiveFn = (partial: {
   readonly name?: string;
   readonly agentsMd?: boolean;
+  readonly sqlDriver?: SqlDriverId;
+  readonly ai?: AiCliMode;
+  readonly template?: TemplateId;
 }) => Promise<InteractiveAnswers | null>;
+
+/** Injectable persistence seams for tests. */
+export type CreateDefaultsIo = {
+  readonly path: string;
+  readonly read: () => CreateDefaults | null;
+  readonly write: (defaults: CreateDefaults) => void;
+};
 
 /**
  * Collect interactive answers via `@clack/prompts`.
  *
  * @param partial - Optional pre-filled project name / agents-md default
+ * @param io - Persistence seams (tests)
  * @returns Answers, or `null` if the user cancelled
  */
 export async function askInteractiveAnswers(
-  partial: { readonly name?: string; readonly agentsMd?: boolean } = {},
+  partial: {
+    readonly name?: string;
+    readonly agentsMd?: boolean;
+    readonly sqlDriver?: SqlDriverId;
+    readonly ai?: AiCliMode;
+    readonly template?: TemplateId;
+  } = {},
+  io: CreateDefaultsIo = {
+    path: createDefaultsPath(),
+    read: () => readCreateDefaults(),
+    write: (d) => writeCreateDefaults(d),
+  },
 ): Promise<InteractiveAnswers | null> {
   const nameValue = await text({
     message: "Project name",
@@ -336,11 +498,92 @@ export async function askInteractiveAnswers(
     initialValue: partial.name ?? "my-app",
     validate: (value) => {
       if (!value?.trim()) return "Project name is required";
+      const blocked = targetDirectoryBlockReason(resolve(value.trim()));
+      if (blocked) {
+        return blocked.replace(/^create-oke:\s*/, "");
+      }
       return undefined;
     },
   });
   if (isCancel(nameValue)) return null;
   const name = String(nameValue).trim();
+
+  const templateValue = await select({
+    message: "Starter template",
+    options: TEMPLATES.map((id) => ({
+      value: id,
+      label: id === "standard" ? "★  standard" : "◆  advanced",
+      hint: TEMPLATE_PURPOSES[id],
+    })),
+    initialValue: partial.template ?? DEFAULT_TEMPLATE,
+  });
+  if (isCancel(templateValue)) return null;
+  const template = templateValue as TemplateId;
+
+  let createDefaults: CreateDefaults | undefined;
+  let aiApply: AiSetupApplyInput | null = null;
+
+  for (;;) {
+    const previous = io.read();
+    const canReuse = previous !== null && previous.template === template;
+    const branchValue = await select({
+      message: "Would you like to use the recommended oke defaults?",
+      options: defaultsBranchOptions(canReuse, template),
+    });
+    if (isCancel(branchValue)) return null;
+    const branch = branchValue as DefaultsBranch;
+
+    if (branch === "recommended") {
+      createDefaults = undefined;
+      break;
+    }
+
+    if (branch === "reuse") {
+      const prev = io.read() ?? previous;
+      if (!prev || prev.template !== template) {
+        note(
+          "No saved settings for this template — customize or use recommended.",
+          "Previous settings",
+        );
+        continue;
+      }
+      createDefaults = prev;
+      if (prev.ai.enabled && partial.ai !== "skip") {
+        aiApply = applyInputFromAiPref(prev.ai);
+        if (!aiApply?.chatModel && prev.ai.provider && prev.ai.provider !== "mock") {
+          const picked = await askAiSetup({ provider: prev.ai.provider });
+          if (picked === null) return null;
+          aiApply = picked;
+          io.write({
+            ...prev,
+            ai: aiPrefWithModels(prev.ai, picked),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+      note(`Reusing settings from ${io.path}`, "Previous settings");
+      break;
+    }
+
+    const customized = await askCustomizeFlow(template);
+    if (customized === null) return null;
+    if (customized === WIZARD_BACK) continue;
+    createDefaults = customized;
+    io.write(customized);
+    note(`Saved globally for next projects → ${io.path}`, "Defaults");
+    if (customized.ai.enabled && partial.ai !== "skip") {
+      aiApply = applyInputFromAiPref(customized.ai);
+    }
+    break;
+  }
+
+  if (partial.ai === "skip") {
+    aiApply = null;
+  } else if (partial.ai === "force" && !aiApply) {
+    const picked = await askAiSetup({});
+    if (picked === null) return null;
+    aiApply = picked;
+  }
 
   const agentsMd = partial.agentsMd ?? true;
 
@@ -352,10 +595,28 @@ export async function askInteractiveAnswers(
 
   return {
     name,
-    choice: DEFAULT_TEMPLATE,
+    choice: template,
     installAndRun: Boolean(installAndRunValue),
     agentsMd,
+    createDefaults,
+    aiApply,
   };
+}
+
+/**
+ * Provider passed to `oke ai setup` — prefer Ollama when either env uses it.
+ *
+ * @param localProvider - Menu id chosen for local
+ * @param pins - Resolved driver pins
+ */
+export function aiSetupProviderFor(localProvider: string, pins: EnvDriverPins): string {
+  if (localProvider === "ollama" || pins.local === "ollama") return "ollama";
+  if (pins.docker === "ollama") return "ollama";
+  if (localProvider === "mock") {
+    if (pins.docker === "anthropic") return "anthropic";
+    if (pins.docker === "openai-compatible") return "openai";
+  }
+  return localProvider;
 }
 
 /**
@@ -373,7 +634,7 @@ export function shouldInstall(args: CliArgs): boolean {
  * Run the CLI.
  *
  * @param argv - Args after the binary
- * @param options - Test seams (stdin TTY, ask injection, skip real install/dev)
+ * @param options - Test seams
  * @returns Exit code
  */
 export async function run(
@@ -383,6 +644,7 @@ export async function run(
     readonly ask?: AskInteractiveFn;
     /** When false, skip spawning bun install / oke dev (tests). Default true. */
     readonly runPostScaffold?: boolean;
+    readonly createDefaultsIo?: CreateDefaultsIo;
   } = {},
 ): Promise<number> {
   let args: CliArgs;
@@ -400,7 +662,18 @@ export async function run(
 
   const stdinIsTTY = options.stdinIsTTY ?? process.stdin.isTTY;
   if (shouldPrompt(args, stdinIsTTY)) {
-    return runInteractive(args, options.ask ?? askInteractiveAnswers, options);
+    const ask =
+      options.ask ??
+      ((partial) =>
+        askInteractiveAnswers(
+          partial,
+          options.createDefaultsIo ?? {
+            path: createDefaultsPath(),
+            read: () => readCreateDefaults(),
+            write: (d) => writeCreateDefaults(d),
+          },
+        ));
+    return runInteractive(args, ask, options);
   }
 
   if (args.name === undefined) {
@@ -410,15 +683,22 @@ export async function run(
     return 1;
   }
 
+  const cliScaffold = scaffoldArgsFromCli(args);
+  const earlyBlock = targetDirectoryBlockReason(cliScaffold.targetDir);
+  if (earlyBlock) {
+    console.error(earlyBlock);
+    return 1;
+  }
+
   if (args.yes) {
     const source = sourceFromArgs(args);
     console.log(
-      `Using defaults: ${source.kind}=${source.id} sql=${args.sqlDriver} agents-md=${args.agentsMd} install=${shouldInstall(args)}`,
+      `Using defaults: ${source.kind}=${source.id} sql=${args.sqlDriver} agents-md=${args.agentsMd} install=${shouldInstall(args)} ai=${args.ai}`,
     );
   }
 
   return runScaffold({
-    ...scaffoldArgsFromCli(args),
+    ...cliScaffold,
     interactive: false,
     install: shouldInstall(args),
     startDev: false,
@@ -440,14 +720,19 @@ async function runInteractive(
 ): Promise<number> {
   intro("create-oke");
 
-  const answers = await ask({ name: args.name, agentsMd: args.agentsMd });
+  const answers = await ask({
+    name: args.name,
+    agentsMd: args.agentsMd,
+    sqlDriver: args.sqlDriverExplicit ? args.sqlDriver : undefined,
+    ai: args.ai,
+  });
   if (answers === null) {
     cancel("Cancelled.");
     return 1;
   }
 
   return runScaffold({
-    ...scaffoldArgsFromAnswers(answers),
+    ...scaffoldArgsFromAnswers(answers, args.sqlDriverExplicit ? args.sqlDriver : undefined),
     interactive: true,
     install: answers.installAndRun,
     startDev: answers.installAndRun,
@@ -474,6 +759,8 @@ async function runScaffold(
     source,
     agentsMd,
     sqlDriver,
+    createDefaults,
+    aiApply,
     interactive,
     install,
     startDev,
@@ -507,8 +794,24 @@ async function runScaffold(
       source,
       writeAgentsMd: agentsMd,
       sqlDriver,
+      ...(createDefaults !== undefined ? { createDefaults } : {}),
     });
     if (spun) spun.stop("Scaffolded.");
+
+    // Models were chosen in the wizard — write env + src/ai.ts before install
+    // so `--no-install` still gets a complete AI project. Preserve per-env
+    // `drivers.ai` pins from customize; flatten only when pins were never written.
+    if (runPostScaffold && aiApply) {
+      try {
+        applyAiSetup(targetDir, aiApply, {
+          updateDrivers: createDefaults?.drivers.ai == null,
+        });
+        if (interactive) log.success("AI configured.");
+      } catch (err) {
+        if (interactive) log.warn("AI config write failed.");
+        console.error(err instanceof Error ? err.message : String(err));
+      }
+    }
 
     if (runPostScaffold && install) {
       const installSpun = interactive ? spinner() : undefined;

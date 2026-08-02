@@ -87,8 +87,8 @@ export async function openNatsSignal(options: SignalOpenOptions): Promise<Signal
 
   return {
     driverId: "nats",
-    async emit(signal, payload) {
-      await outbox.emit(signal, payload);
+    async emit(signal, payload, options) {
+      await outbox.emit(signal, payload, options);
       await relayToNats(signal, payload);
     },
     async begin() {
@@ -96,9 +96,9 @@ export async function openNatsSignal(options: SignalOpenOptions): Promise<Signal
       const tx = await outbox.begin();
       return {
         write: (k, v) => tx.write(k, v),
-        async emit(signal, payload) {
+        async emit(signal, payload, options) {
           staged.push({ signal, payload });
-          await tx.emit(signal, payload);
+          await tx.emit(signal, payload, options);
         },
         async commit() {
           await tx.commit();

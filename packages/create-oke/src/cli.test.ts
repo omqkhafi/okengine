@@ -3,10 +3,21 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  WIZARD_BACK,
+  aiSetupProviderFor,
+  defaultsBranchOptions,
   formatCdPath,
   nextStepsText,
   parseArgs,
@@ -15,17 +26,44 @@ import {
   scaffoldArgsFromCli,
   shouldPrompt,
   sourceFromArgs,
+  withBackOption,
   type InteractiveAnswers,
 } from "./cli.ts";
-import { listTemplateFiles, scaffold } from "./scaffold.ts";
-import { DEFAULT_TEMPLATE, TEMPLATES, packageRoot, resolveTemplateDir } from "./templates.ts";
 import {
+  createDefaultsPath,
+  readCreateDefaults,
+  toCreateDefaults,
+  writeCreateDefaults,
+} from "./create-defaults.ts";
+import { pinsDockerReady, pinsLocalOnly, recommendedDefaults } from "./drivers-catalog.ts";
+import { listTemplateFiles, scaffold, targetDirectoryBlockReason } from "./scaffold.ts";
+import {
+  DEFAULT_TEMPLATE,
+  TEMPLATE_DEFAULT_MODE,
+  TEMPLATES,
+  packageRoot,
+  resolveTemplateDir,
+} from "./templates.ts";
+import {
+  applyCreateAnswers,
   sanitizeProjectName,
   shouldSkipTemplatePath,
   transformConfigForSqlDriver,
   transformPackageJson,
   transformSchemaForSqlDriver,
 } from "./transform.ts";
+
+describe("defaultsBranchOptions", () => {
+  test("hides reuse when no previous settings exist", () => {
+    const values = defaultsBranchOptions(false).map((o) => o.value);
+    expect(values).toEqual(["recommended", "customize"]);
+  });
+
+  test("offers reuse when previous settings exist", () => {
+    const values = defaultsBranchOptions(true).map((o) => o.value);
+    expect(values).toEqual(["recommended", "reuse", "customize"]);
+  });
+});
 
 describe("parseArgs", () => {
   test("defaults template to standard", () => {
@@ -37,7 +75,7 @@ describe("parseArgs", () => {
 
   test("accepts --template and -t", () => {
     expect(parseArgs(["x", "--template", "standard"]).template).toBe("standard");
-    expect(parseArgs(["x", "-t", "standard"]).template).toBe("standard");
+    expect(parseArgs(["x", "-t", "advanced"]).template).toBe("advanced");
     expect(parseArgs(["x", "--template=standard"]).template).toBe("standard");
     expect(parseArgs(["x", "--template", "standard"]).templateExplicit).toBe(true);
   });
@@ -100,39 +138,295 @@ describe("sourceFromArgs", () => {
   });
 });
 
+function recommendedAnswers(overrides: Partial<InteractiveAnswers> = {}): InteractiveAnswers {
+  return {
+    name: "x",
+    choice: "standard",
+    installAndRun: false,
+    agentsMd: true,
+    createDefaults: undefined,
+    aiApply: null,
+    ...overrides,
+  };
+}
+
 describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
-  test("each --template path matches interactive choice", () => {
+  test("each --template path matches interactive choice (recommended)", () => {
     for (const id of TEMPLATES) {
-      const answers: InteractiveAnswers = {
-        name: "x",
-        choice: id,
-        installAndRun: false,
-        agentsMd: true,
-      };
+      const answers = recommendedAnswers({ choice: id });
       const fromAnswers = scaffoldArgsFromAnswers(answers);
       const fromFlags = scaffoldArgsFromCli(parseArgs(["x", "--template", id]));
-      expect(fromAnswers).toEqual(fromFlags);
-      expect(fromAnswers.source).toEqual({ kind: "template", id });
-      expect(fromAnswers.sqlDriver).toBe("sqlite");
+      expect(fromAnswers.name).toBe(fromFlags.name);
+      expect(fromAnswers.targetDir).toBe(fromFlags.targetDir);
+      expect(fromAnswers.source).toEqual(fromFlags.source);
+      expect(fromAnswers.agentsMd).toBe(fromFlags.agentsMd);
+      expect(fromAnswers.sqlDriver).toBe(fromFlags.sqlDriver);
+      expect(fromAnswers.createDefaults).toBeUndefined();
     }
   });
 
-  test("interactive never opts into --sql postgres (flag-only)", () => {
-    const answers: InteractiveAnswers = {
-      name: "x",
-      choice: "standard",
-      installAndRun: false,
-      agentsMd: true,
-    };
-    expect(scaffoldArgsFromAnswers(answers).sqlDriver).toBe("sqlite");
+  test("interactive never opts into --sql postgres without override", () => {
+    expect(scaffoldArgsFromAnswers(recommendedAnswers()).sqlDriver).toBe("sqlite");
     expect(
       scaffoldArgsFromCli(parseArgs(["x", "--template", "standard", "--sql", "postgres"]))
         .sqlDriver,
     ).toBe("postgres");
   });
 
-  test("only standard is available", () => {
-    expect(TEMPLATES).toEqual(["standard"]);
+  test("standard and advanced are available", () => {
+    expect(TEMPLATES).toEqual(["standard", "advanced"]);
+  });
+});
+
+describe("defaultsBranchOptions template hints", () => {
+  test("reuse hint names the selected template", () => {
+    const reuse = defaultsBranchOptions(true, "advanced").find((o) => o.value === "reuse");
+    expect(reuse?.hint).toContain("advanced");
+  });
+});
+
+describe("parseArgs AI flags", () => {
+  test("accepts --ai / --no-ai / --ai skip", () => {
+    expect(parseArgs(["x"]).ai).toBe("prompt");
+    expect(parseArgs(["x", "--ai"]).ai).toBe("force");
+    expect(parseArgs(["x", "--no-ai"]).ai).toBe("skip");
+    expect(parseArgs(["x", "--ai", "skip"]).ai).toBe("skip");
+    expect(parseArgs(["x", "--ai=skip"]).ai).toBe("skip");
+  });
+});
+
+describe("wizard ← Back", () => {
+  test("withBackOption appends sentinel when allowed", () => {
+    const base = [{ value: "memory", label: "memory" }];
+    expect(withBackOption(base, false)).toEqual(base);
+    const withBack = withBackOption(base, true);
+    expect(withBack.at(-1)).toEqual({ value: WIZARD_BACK, label: "←  Back" });
+    expect(WIZARD_BACK).toBe("__back__");
+  });
+});
+
+describe("aiSetupProviderFor", () => {
+  test("prefers ollama when docker is ollama even if local is mock", () => {
+    expect(
+      aiSetupProviderFor("mock", {
+        local: "mock",
+        docker: "ollama",
+        test: "mock",
+        prod: "ollama",
+      }),
+    ).toBe("ollama");
+  });
+
+  test("keeps local ollama", () => {
+    expect(
+      aiSetupProviderFor("ollama", {
+        local: "ollama",
+        docker: "anthropic",
+        test: "mock",
+        prod: "anthropic",
+      }),
+    ).toBe("ollama");
+  });
+});
+
+describe("interactive branches", () => {
+  test("recommended → no createDefaults, no AI setup", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-rec-"));
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      const code = await run([dir], {
+        stdinIsTTY: true,
+        runPostScaffold: false,
+        ask: async () => recommendedAnswers({ name: dir }),
+      });
+      expect(code).toBe(0);
+      const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
+      expect(config).toContain('local: "sqlite"');
+      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("local");
+      expect(existsSync(join(dir, "src", "flows", "notes", "index.ts"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("recommended advanced → docker mode + advanced Notes flows", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-rec-adv-"));
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      const code = await run([dir], {
+        stdinIsTTY: true,
+        runPostScaffold: false,
+        ask: async () => recommendedAnswers({ name: dir, choice: "advanced" }),
+      });
+      expect(code).toBe(0);
+      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("docker");
+      const notes = readFileSync(join(dir, "src", "flows", "notes", "index.ts"), "utf8");
+      expect(notes).toContain('name: "notes.digest"');
+      expect(notes).toContain('name: "notes.attach"');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("reuse previous settings round-trip", async () => {
+    const home = mkdtempSync(join(tmpdir(), "oke-reuse-"));
+    const path = createDefaultsPath(home);
+    const base = recommendedDefaults("local-only");
+    const saved = {
+      ...base,
+      drivers: {
+        ...base.drivers,
+        store: {
+          ...base.drivers.store,
+          sql: {
+            local: "libsql",
+            docker: "postgres",
+            test: "memory",
+            prod: "postgres",
+          },
+        },
+      },
+    };
+    writeCreateDefaults(saved, path);
+
+    const dir = mkdtempSync(join(tmpdir(), "oke-reuse-app-"));
+    rmSync(dir, { recursive: true, force: true });
+
+    try {
+      const code = await run([dir], {
+        stdinIsTTY: true,
+        runPostScaffold: false,
+        ask: async () =>
+          recommendedAnswers({
+            name: dir,
+            createDefaults: saved,
+            aiApply: null,
+          }),
+      });
+      expect(code).toBe(0);
+      const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
+      expect(config).toContain('local: "libsql"');
+      const templateConfig = readFileSync(
+        join(resolveTemplateDir("standard"), "oke.config.ts"),
+        "utf8",
+      );
+      expect(() => applyCreateAnswers(templateConfig, saved)).not.toThrow();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("customize answers applied + persistence write", async () => {
+    const home = mkdtempSync(join(tmpdir(), "oke-custom-"));
+    const path = createDefaultsPath(home);
+    const customized = toCreateDefaults({
+      template: "standard",
+      profile: "local-only",
+      drivers: {
+        store: {
+          sql: pinsLocalOnly("pglite", "postgres", "memory"),
+          kv: pinsLocalOnly("memory", "redis", "memory"),
+          files: pinsLocalOnly("fs", "s3", "memory"),
+          index: null,
+        },
+        signal: pinsLocalOnly("memory", "redis", "memory"),
+        clock: pinsLocalOnly("memory", "file", "frozen"),
+        vault: pinsLocalOnly("env", "openbao", "memory"),
+        channel: { email: pinsLocalOnly("console", "smtp", "console") },
+        ai: null,
+      },
+      ai: { enabled: false, provider: null, driver: null },
+    });
+
+    const dir = mkdtempSync(join(tmpdir(), "oke-custom-app-"));
+    rmSync(dir, { recursive: true, force: true });
+
+    try {
+      const code = await run([dir], {
+        stdinIsTTY: true,
+        runPostScaffold: false,
+        ask: async (partial) => {
+          writeCreateDefaults(customized, path);
+          return recommendedAnswers({
+            name: dir,
+            createDefaults: customized,
+            agentsMd: partial.agentsMd ?? true,
+          });
+        },
+      });
+      expect(code).toBe(0);
+      expect(existsSync(path)).toBe(true);
+      expect(readCreateDefaults(path)?.drivers.store.sql.local).toBe("pglite");
+      expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toContain('local: "pglite"');
+      // local-only profile → seed oke dev mode so the prompt is not repeated.
+      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("local");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("docker-ready profile seeds .oke/mode as docker", async () => {
+    const customized = toCreateDefaults({
+      template: "advanced",
+      profile: "docker-ready",
+      drivers: {
+        store: {
+          sql: pinsDockerReady("sqlite", "postgres", "memory"),
+          kv: pinsLocalOnly("memory", "redis", "memory"),
+          files: pinsLocalOnly("fs", "s3", "memory"),
+          index: null,
+        },
+        signal: pinsLocalOnly("memory", "redis", "memory"),
+        clock: pinsLocalOnly("memory", "file", "frozen"),
+        vault: pinsLocalOnly("env", "openbao", "memory"),
+        channel: { email: pinsLocalOnly("console", "smtp", "console") },
+        ai: null,
+      },
+      ai: { enabled: false, provider: null, driver: null },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "oke-docker-mode-"));
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      const code = await run([dir], {
+        stdinIsTTY: true,
+        runPostScaffold: false,
+        ask: async () =>
+          recommendedAnswers({
+            name: dir,
+            createDefaults: customized,
+            aiApply: null,
+          }),
+      });
+      expect(code).toBe(0);
+      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("docker");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("non-TTY --yes stays zero-prompt recommended", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oke-yes-"));
+    rmSync(dir, { recursive: true, force: true });
+    try {
+      let askCalled = false;
+      const code = await run([dir, "--yes", "--no-install", "--no-ai"], {
+        stdinIsTTY: false,
+        runPostScaffold: false,
+        ask: async () => {
+          askCalled = true;
+          return recommendedAnswers({ name: dir });
+        },
+      });
+      expect(code).toBe(0);
+      expect(askCalled).toBe(false);
+      const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
+      expect(config).toContain('local: "sqlite"');
+      expect(config).not.toMatch(/\bai:\s*\{/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -234,9 +528,12 @@ describe("scaffold structure", () => {
           name: `app-${id}`,
           source: { kind: "template", id },
         });
-        const extras = ["AGENTS.md"];
+        const extras = ["AGENTS.md", ".oke/mode"];
         if (expected.includes(".env.example")) extras.push(".env.local");
         expect([...result.files].sort()).toEqual([...expected, ...extras].sort());
+        expect(readFileSync(join(result.targetDir, ".oke", "mode"), "utf8").trim()).toBe(
+          TEMPLATE_DEFAULT_MODE[id],
+        );
         expect(result.files).toContain(".gitignore");
         expect(result.files).toContain("README.md");
         expect(result.sqlDriver).toBe("sqlite");
@@ -245,21 +542,22 @@ describe("scaffold structure", () => {
         );
         const readme = readFileSync(join(result.targetDir, "README.md"), "utf8");
         expect(readme).toMatch(/oke dev/);
-        expect(readme).toMatch(new RegExp(`^# ${id}`, "m"));
+        expect(readme).toMatch(new RegExp(`Notes \\(${id}\\)`, "i"));
+        expect(readme).toMatch(/notes\.(create|attach|digest)|main\.health/);
         expect(readFileSync(join(result.targetDir, ".gitignore"), "utf8")).toMatch(/node_modules/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string };
         };
         expect(pkg.name).toBe(`app-${id}`);
-        expect(pkg.dependencies.okengine).not.toBe("file:../..");
+        expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     }
   });
 
-  test("standard has full four-applications layout and no business domain", () => {
+  test("standard has Notes layout (gates/vault/channels + notes flows)", () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-standard-assert-"));
     try {
       const result = scaffold({
@@ -275,12 +573,16 @@ describe("scaffold structure", () => {
         "src/locales/ar.ts",
         "src/flows/main/shapes.ts",
         "src/flows/main/signals.ts",
+        "src/flows/notes/index.ts",
         "src/core.ts",
         "src/schema.decl.ts",
         "src/app.ts",
       ]) {
         expect(result.files).toContain(path);
       }
+      const notes = readFileSync(join(result.targetDir, "src/flows/notes/index.ts"), "utf8");
+      expect(notes).toContain('name: "notes.create"');
+      expect(notes).not.toContain('name: "notes.digest"');
       const all = result.files
         .filter((f) => f.endsWith(".ts") || f.endsWith(".md"))
         .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
@@ -335,10 +637,65 @@ describe("scaffold structure", () => {
   });
 });
 
+describe("targetDirectoryBlockReason", () => {
+  test("null when missing or empty", () => {
+    const root = mkdtempSync(join(tmpdir(), "oke-target-ok-"));
+    const missing = join(root, "fresh");
+    const empty = join(root, "empty");
+    mkdirSync(empty);
+    try {
+      expect(targetDirectoryBlockReason(missing)).toBeNull();
+      expect(targetDirectoryBlockReason(empty)).toBeNull();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("names the conflicting folder when not empty", () => {
+    const root = mkdtempSync(join(tmpdir(), "oke-target-busy-"));
+    const busy = join(root, "oke-1");
+    mkdirSync(busy);
+    writeFileSync(join(busy, "package.json"), "{}\n");
+    try {
+      const reason = targetDirectoryBlockReason(busy);
+      expect(reason).toMatch(/"oke-1" already exists and is not empty/);
+      expect(reason).toContain(busy);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("non-TTY CLI", () => {
   test("no args + non-TTY → zero prompts, exit 1", async () => {
     const code = await run([], { stdinIsTTY: false, runPostScaffold: false });
     expect(code).toBe(1);
+  });
+
+  test("existing non-empty dir fails before scaffold", async () => {
+    const root = mkdtempSync(join(tmpdir(), "create-oke-exists-"));
+    const target = join(root, "oke-1");
+    mkdirSync(target);
+    writeFileSync(join(target, "README.md"), "already here\n");
+    try {
+      const proc = Bun.spawn(
+        ["bun", "run", join(packageRoot(), "src/index.ts"), target, "--yes", "--no-install"],
+        {
+          cwd: root,
+          stdin: "pipe",
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      proc.stdin.end();
+      const code = await proc.exited;
+      const err = await new Response(proc.stderr).text();
+      expect(code).toBe(1);
+      expect(err).toMatch(/"oke-1" already exists and is not empty/);
+      expect(readFileSync(join(target, "README.md"), "utf8")).toBe("already here\n");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("spawned with piped stdin shows no clack prompts", async () => {

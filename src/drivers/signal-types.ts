@@ -4,6 +4,12 @@
 
 import type { SignalDelivery } from "../manifest/types.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
+import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
+import {
+  isStandardSchema,
+  normalizeIssuePath,
+  type SchemaInput,
+} from "../validation/standard-schema.ts";
 
 /** Protocol ids for signal drivers. */
 export type SignalDriverId = "memory" | "postgres" | "redis" | "nats";
@@ -24,11 +30,25 @@ export interface SignalFailureReason {
   readonly attempt: number;
 }
 
+/** Options for {@link SignalBus.emit} / {@link SignalTransaction.emit}. */
+export interface SignalEmitOptions {
+  /**
+   * Per-key serialization for `once` delivery.
+   *
+   * When set, no two messages sharing the same `(signal, key)` are claimed
+   * concurrently — the in-flight message's visibility lease is the lock.
+   * Omit for pure competing-consumer behavior (no ordering guarantee).
+   */
+  readonly key?: string;
+}
+
 /** A durable signal message. */
 export interface SignalMessage {
   readonly id: string;
   readonly signal: string;
   readonly payload: unknown;
+  /** Optional ordering key from {@link SignalEmitOptions.key}. */
+  readonly key?: string;
   readonly delivery: SignalDelivery;
   readonly attempts: number;
   readonly failures: readonly SignalFailureReason[];
@@ -180,8 +200,9 @@ export interface SignalTransaction {
    *
    * @param signal - Signal name
    * @param payload - Payload
+   * @param options - Optional emit options (`key` for per-key once ordering)
    */
-  emit(signal: string, payload?: unknown): Promise<void>;
+  emit(signal: string, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
   /** Commit writes + emits together. */
   commit(): Promise<void>;
   /** Discard the transaction — nothing is visible. */
@@ -261,8 +282,9 @@ export interface SignalBus {
    *
    * @param signal - Signal name
    * @param payload - Payload
+   * @param options - Optional emit options (`key` for per-key once ordering)
    */
-  emit(signal: string, payload?: unknown): Promise<void>;
+  emit(signal: string, payload?: unknown, options?: SignalEmitOptions): Promise<void>;
   /** Begin a transaction that enrols writes + emits. */
   begin(): Promise<SignalTransaction>;
   /**
@@ -331,4 +353,32 @@ export interface SignalDriver {
    * @param options - Declarations and injected clients
    */
   open(options: SignalOpenOptions): Promise<SignalBus>;
+}
+
+/**
+ * Validate an emit payload against the signal declaration's Standard Schema.
+ *
+ * @param name - Signal name (for OKE1043)
+ * @param decl - Declared signal
+ * @param payload - Raw emit payload
+ */
+export async function validateSignalEmitPayload(
+  name: string,
+  decl: SignalDecl,
+  payload: unknown,
+): Promise<unknown> {
+  const schema = decl.schema as SchemaInput | undefined;
+  if (schema === undefined || schema === null || !isStandardSchema(schema)) {
+    return payload ?? null;
+  }
+  const result = await schema["~standard"].validate(payload ?? null);
+  if (!result.issues) return result.value;
+  const detail =
+    result.issues
+      .map((i) => {
+        const path = normalizeIssuePath(i.path);
+        return path.length > 0 ? `${path.join(".")}: ${i.message}` : i.message;
+      })
+      .join("; ") || "invalid payload";
+  throw new OkeError(OKE_ERRORS.SIGNAL_SCHEMA, { resource: name, detail });
 }

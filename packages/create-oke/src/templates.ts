@@ -1,25 +1,30 @@
 /**
- * Standard template resolution.
- *
- * The only starter lives in this package at `template/`.
+ * Starter template resolution — `templates/standard` · `templates/advanced`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The single supported starter template. */
-export const TEMPLATES = ["standard"] as const;
+/** Supported starter templates. */
+export const TEMPLATES = ["standard", "advanced"] as const;
 
 /** A known clean starter template. */
 export type TemplateId = (typeof TEMPLATES)[number];
 
-/** Default when `--template` is omitted (recommended project layout). */
+/** Default when `--template` is omitted. */
 export const DEFAULT_TEMPLATE: TemplateId = "standard";
 
 /** One-line purpose for the starter (interactive select + help). */
 export const TEMPLATE_PURPOSES: Readonly<Record<TemplateId, string>> = {
-  standard: "Full recommended file layout, empty scaffolding",
+  standard: "Notes app — local-first (sqlite · memory · console email)",
+  advanced: "Notes app — docker-ready (postgres · redis · s3 · openbao)",
+};
+
+/** Recommended `.oke/mode` when using recommended defaults (no customize). */
+export const TEMPLATE_DEFAULT_MODE: Readonly<Record<TemplateId, "local" | "docker">> = {
+  standard: "local",
+  advanced: "docker",
 };
 
 /**
@@ -43,7 +48,7 @@ export function packageRoot(): string {
  *
  * Order:
  * 1. `CREATE_OKE_TEMPLATE` env (absolute path to a template)
- * 2. Bundled `template/`
+ * 2. Bundled `templates/<id>/`
  *
  * @param template - Template id
  * @returns Absolute path to the template source tree
@@ -52,7 +57,7 @@ export function resolveTemplateDir(template: TemplateId): string {
   const envRoot = process.env["CREATE_OKE_TEMPLATE"];
   if (envRoot && existsSync(envRoot)) return resolve(envRoot);
   const pkg = packageRoot();
-  const bundled = resolve(pkg, "template");
+  const bundled = resolve(pkg, "templates", template);
   if (existsSync(bundled)) return bundled;
 
   throw new Error(`create-oke: template "${template}" not found at ${bundled}`);

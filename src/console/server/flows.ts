@@ -7,8 +7,10 @@
 import { z } from "zod";
 import {
   authenticateOperator,
+  BreachCheckError,
   createOperator,
   issueSession,
+  PasswordPolicyError,
   scopesForRoles,
   userPrincipal,
   type IssuedSession,
@@ -24,6 +26,7 @@ import { maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.t
 import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
+import { consoleFailureMessage } from "./i18n.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { tenancyDeclared } from "./store.ts";
 
@@ -38,7 +41,8 @@ const ClaimIn = z.object({
   claimCode: z.string().min(1),
   email: z.string().email(),
   name: z.string().min(1),
-  password: z.string().min(8),
+  /** Matches default operator password policy (minLength 12). */
+  password: z.string().min(12),
 });
 
 const SessionOut = z.object({
@@ -292,7 +296,11 @@ const InvokeOut = z.object({
 });
 
 const SetupClosed = z.object({ reason: z.string() });
-const ClaimFailed = z.object({ reason: z.string() });
+const ClaimFailed = z.object({
+  reason: z.string(),
+  /** Password-policy detail lines when `reason` is `password_policy`. */
+  reasons: z.array(z.string()).optional(),
+});
 const AuthFailed = z.object({});
 const AuthRateLimited = z.object({ reason: z.string() });
 const NotFound = z.object({ flowId: z.string() });
@@ -1688,17 +1696,39 @@ function createSetupClaim(state: ConsoleState) {
     errors: { SetupClosed, ClaimFailed },
     do: async (input: z.infer<typeof ClaimIn>, fx) => {
       if (state.setupClosed) {
-        return fail("SetupClosed", { reason: "first operator already exists" });
+        const data = { reason: "first_operator_exists" };
+        return fail("SetupClosed", data, { message: consoleFailureMessage("SetupClosed", data) });
       }
       const verified = verifyClaimCode(state.claim, input.claimCode, state.now);
       if (!verified.ok) {
-        return fail("ClaimFailed", { reason: verified.reason });
+        const data = { reason: verified.reason };
+        return fail("ClaimFailed", data, { message: consoleFailureMessage("ClaimFailed", data) });
       }
-      const op = await createOperator(state.operators, {
-        email: input.email,
-        name: input.name,
-        password: input.password,
-      });
+      let op: Awaited<ReturnType<typeof createOperator>>;
+      try {
+        op = await createOperator(state.operators, {
+          email: input.email,
+          name: input.name,
+          password: input.password,
+        });
+      } catch (err) {
+        if (err instanceof PasswordPolicyError) {
+          const data = {
+            reason: "password_policy",
+            reasons: [...err.reasons],
+          };
+          return fail("ClaimFailed", data, {
+            message: consoleFailureMessage("ClaimFailed", data),
+          });
+        }
+        if (err instanceof BreachCheckError) {
+          const data = { reason: "password_breached" };
+          return fail("ClaimFailed", data, {
+            message: consoleFailureMessage("ClaimFailed", data),
+          });
+        }
+        throw err;
+      }
       state.persistOperator(op.id);
       const issued = await issueOperatorSession(state, op.id);
       fx.log.info("console.setup.claim", { operatorId: op.id });

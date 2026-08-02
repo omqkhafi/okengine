@@ -8,14 +8,19 @@
 
 import type { ImageRecipe } from "../types.ts";
 
-/** Start serve, pull configured model, keep serve in foreground. */
+/**
+ * Start serve, pull configured model, keep serve in foreground.
+ *
+ * Shell `$` must be written as `$$` so Compose does not interpolate `pid` /
+ * `i` as project env (same pattern as the redis recipe).
+ */
 const OLLAMA_BOOT = [
   "set -e",
   "/bin/ollama serve &",
-  "pid=$!",
-  'i=0; until /bin/ollama list >/dev/null 2>&1; do i=$((i+1)); [ "$i" -lt 90 ] || exit 1; sleep 1; done',
-  '/bin/ollama pull "${OKE_AI_MODEL:-qwen3.5:9b}"',
-  "wait $pid",
+  "pid=$$!",
+  'i=0; until /bin/ollama list >/dev/null 2>&1; do i=$$((i+1)); [ "$$i" -lt 90 ] || exit 1; sleep 1; done',
+  '/bin/ollama pull "$${OKE_AI_MODEL:-qwen3.5:9b}"',
+  "wait $$pid",
 ].join("; ");
 
 /** Ollama local model server. API on 11434. */

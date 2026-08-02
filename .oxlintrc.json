@@ -4,7 +4,7 @@
     "typeAware": true
   },
   "ignorePatterns": [
-    "packages/create-oke/template/**",
+    "packages/create-oke/templates/**",
     "**/dist/**",
     "site/next-env.d.ts",
     "src/compiler/fixtures/**"

@@ -300,6 +300,8 @@ export function formatRequestLine(options: {
   /** Instant for date/time columns (default now). */
   readonly at?: Date;
   readonly color?: boolean;
+  /** Failure detail printed on a follow-up line (4xx/5xx). */
+  readonly detail?: string;
 }): string {
   const s = termStyle(options.color ?? termColorEnabled());
   const at = options.at ?? new Date();
@@ -323,7 +325,7 @@ export function formatRequestLine(options: {
   const path = options.path.length > 28 ? `${options.path.slice(0, 27)}…` : options.path.padEnd(28);
   const flow = (options.flow ?? "—").padEnd(22);
   const ms = `${options.ms}ms`.padStart(6);
-  return (
+  const main =
     `${surfaceColor}●${s.reset}  ` +
     `${surfaceColor}${options.surface.padEnd(7)}${s.reset}  ` +
     `${methodColor}${method}${s.reset} ` +
@@ -332,8 +334,11 @@ export function formatRequestLine(options: {
     `${s.dim}${ms}${s.reset}  ` +
     `${statusColor}${options.status}${s.reset}  ` +
     `${s.dim}${date}${s.reset}  ` +
-    `${s.dim}${time}${s.reset}\n`
-  );
+    `${s.dim}${time}${s.reset}\n`;
+  const detail = options.detail?.trim();
+  if (!detail || options.status < 400) return main;
+  const clipped = detail.length > 120 ? `${detail.slice(0, 119)}…` : detail;
+  return `${main}${s.dim}   ↳ ${clipped}${s.reset}\n`;
 }
 
 /**

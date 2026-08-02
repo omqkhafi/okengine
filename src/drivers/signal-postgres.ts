@@ -9,29 +9,32 @@ import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { SignalDelivery } from "../manifest/types.ts";
 import { DryRunWriteIsolationError, setDryRunMessageId, withDryRun } from "../kernel/dry-run.ts";
 import { OkeError, OKE_ERRORS } from "../kernel/errors.ts";
-import type {
-  DeadLetter,
-  LiveHandler,
-  SignalBus,
-  SignalDiscardOptions,
-  SignalDriver,
-  SignalFailureReason,
-  SignalHandler,
-  SignalMessage,
-  SignalOpenOptions,
-  SignalReplayOptions,
-  SignalReplayResult,
-  SignalStats,
-  SignalTransaction,
-  SignalUnsubscribe,
+import {
+  SIGNAL_DEFAULT_LEASE_MS,
+  validateSignalEmitPayload,
+  type DeadLetter,
+  type LiveHandler,
+  type SignalBus,
+  type SignalDiscardOptions,
+  type SignalDriver,
+  type SignalEmitOptions,
+  type SignalFailureReason,
+  type SignalHandler,
+  type SignalMessage,
+  type SignalOpenOptions,
+  type SignalReplayOptions,
+  type SignalReplayResult,
+  type SignalStats,
+  type SignalTransaction,
+  type SignalUnsubscribe,
 } from "./signal-types.ts";
-import { SIGNAL_DEFAULT_LEASE_MS } from "./signal-types.ts";
 
 /** Row shape in `oke_signal_messages`. */
 interface MsgRow {
   id: string;
   signal: string;
   payload: string;
+  ordering_key: string | null;
   delivery: SignalDelivery;
   attempts: number;
   failures: string;
@@ -72,6 +75,9 @@ export interface PostgresSignalSql {
 
 const CHANNEL = "oke_signal";
 
+/** Claim next once-row: pending/unlocked or lease-expired, blocked by same-key inflight. */
+const CLAIM_ONCE_SQL = `SELECT * FROM oke_signal_messages WHERE signal=? AND delivery='once' AND available_at<=? AND ((status='pending' AND locked_by IS NULL) OR (status='inflight' AND lease_expires_at IS NOT NULL AND lease_expires_at<=?)) AND (ordering_key IS NULL OR NOT EXISTS (SELECT 1 FROM oke_signal_messages h WHERE h.signal=oke_signal_messages.signal AND h.ordering_key=oke_signal_messages.ordering_key AND h.id<>oke_signal_messages.id AND h.status='inflight' AND h.lease_expires_at IS NOT NULL AND h.lease_expires_at>?)) ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
+
 /**
  * In-memory Postgres-protocol fake with transactions, SKIP LOCKED, LISTEN/NOTIFY.
  */
@@ -105,6 +111,7 @@ export function createPostgresSignalFake(options?: {
     committed = {
       messages: snap.messages.map((m) => ({
         ...m,
+        ordering_key: m.ordering_key ?? null,
         lease_expires_at: m.lease_expires_at ?? null,
       })),
       writes: new Map(snap.writes),
@@ -156,26 +163,38 @@ export function createPostgresSignalFake(options?: {
       const text = sql.trim();
       const state = view();
 
-      // Claim: SELECT … FOR UPDATE SKIP LOCKED (pending or lease-expired inflight)
-      const claim =
-        /^SELECT\s+\*\s+FROM\s+oke_signal_messages\s+WHERE\s+signal\s*=\s*\?\s+AND\s+delivery\s*=\s*'once'\s+AND\s+available_at\s*<=\s*\?\s+AND\s+\(\s*\(status\s*=\s*'pending'\s+AND\s+locked_by\s+IS\s+NULL\)\s+OR\s+\(status\s*=\s*'inflight'\s+AND\s+lease_expires_at\s+IS\s+NOT\s+NULL\s+AND\s+lease_expires_at\s*<=\s*\?\)\s*\)\s+ORDER\s+BY\s+created_at\s+ASC\s+LIMIT\s+1\s+FOR\s+UPDATE\s+SKIP\s+LOCKED$/i.exec(
-          text,
-        );
-      if (claim) {
+      // Claim: SELECT … FOR UPDATE SKIP LOCKED (pending or lease-expired inflight),
+      // with per-key serialization when ordering_key is set.
+      const isOnceClaim =
+        /FOR\s+UPDATE\s+SKIP\s+LOCKED/i.test(text) &&
+        /oke_signal_messages/i.test(text) &&
+        /delivery\s*=\s*'once'/i.test(text);
+      if (isOnceClaim) {
         const signal = String(params[0]);
         const t = Number(params[1]);
         const leaseCutoff = Number(params[2]);
+        const keyLeaseCutoff = params.length >= 4 ? Number(params[3]) : t;
         const row = state.messages.find((m) => {
           if (m.signal !== signal || m.delivery !== "once" || m.available_at > t) return false;
-          if (m.status === "pending" && m.locked_by === null) return true;
-          if (
+          const pendingOk = m.status === "pending" && m.locked_by === null;
+          const leaseExpired =
             m.status === "inflight" &&
             m.lease_expires_at !== null &&
-            m.lease_expires_at <= leaseCutoff
-          ) {
-            return true;
+            m.lease_expires_at <= leaseCutoff;
+          if (!pendingOk && !leaseExpired) return false;
+          if (m.ordering_key != null && m.ordering_key !== "") {
+            const blocked = state.messages.some(
+              (other) =>
+                other.id !== m.id &&
+                other.signal === m.signal &&
+                other.ordering_key === m.ordering_key &&
+                other.status === "inflight" &&
+                other.lease_expires_at !== null &&
+                other.lease_expires_at > keyLeaseCutoff,
+            );
+            if (blocked) return false;
           }
-          return false;
+          return true;
         });
         if (!row) return [];
         return [{ ...row }];
@@ -269,6 +288,10 @@ export function createPostgresSignalFake(options?: {
           id: String(row.id),
           signal: String(row.signal),
           payload: String(row.payload),
+          ordering_key:
+            row.ordering_key === undefined || row.ordering_key === null
+              ? null
+              : String(row.ordering_key),
           delivery: row.delivery as SignalDelivery,
           attempts: Number(row.attempts ?? 0),
           failures: String(row.failures ?? "[]"),
@@ -377,6 +400,7 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     id TEXT PRIMARY KEY,
     signal TEXT,
     payload TEXT,
+    ordering_key TEXT,
     delivery TEXT,
     attempts INTEGER,
     failures TEXT,
@@ -387,11 +411,16 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     lease_expires_at BIGINT,
     delivered_to TEXT
   )`);
-  // Existing tables created before leases: add the column in place.
+  // Existing tables created before leases / keys: add columns in place.
   try {
     await sql.exec(
       `ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
     );
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
+  try {
+    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS ordering_key TEXT`);
   } catch {
     /* fake / older engines without IF NOT EXISTS — ignore */
   }
@@ -402,10 +431,15 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
 }
 
 function rowToMessage(row: Record<string, unknown>): SignalMessage {
+  const key =
+    row.ordering_key === undefined || row.ordering_key === null || row.ordering_key === ""
+      ? undefined
+      : String(row.ordering_key);
   return {
     id: String(row.id),
     signal: String(row.signal),
     payload: JSON.parse(String(row.payload)),
+    ...(key !== undefined ? { key } : {}),
     delivery: row.delivery as SignalDelivery,
     attempts: Number(row.attempts),
     failures: JSON.parse(String(row.failures ?? "[]")) as SignalFailureReason[],
@@ -514,15 +548,19 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     tx: PostgresSignalSql,
     signal: string,
     payload: unknown,
+    options?: SignalEmitOptions,
   ): Promise<void> {
     const decl = requireDecl(signal);
     const t = now();
+    const orderingKey =
+      typeof options?.key === "string" && options.key.length > 0 ? options.key : null;
     await tx.exec(
-      `INSERT INTO oke_signal_messages (id, signal, payload, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
         signal,
         JSON.stringify(payload ?? null),
+        orderingKey,
         decl.delivery,
         0,
         "[]",
@@ -540,7 +578,11 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     let finished = false;
     // Defer the real SQL begin until commit so staging is local,
     // then enrol everything in one postgres transaction.
-    const stagedEmits: Array<{ signal: string; payload: unknown }> = [];
+    const stagedEmits: Array<{
+      signal: string;
+      payload: unknown;
+      options?: SignalEmitOptions;
+    }> = [];
     const stagedWrites = new Map<string, unknown>();
 
     return {
@@ -548,10 +590,12 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
         if (finished) throw new Error("transaction finished");
         stagedWrites.set(key, value);
       },
-      async emit(signal, payload) {
+      async emit(signal, payload, options) {
         if (finished) throw new Error("transaction finished");
         assertEmitAllowed(signal);
-        stagedEmits.push({ signal, payload });
+        // Validate before staging so commit never sees an invalid payload.
+        const value = await validateSignalEmitPayload(signal, requireDecl(signal), payload);
+        stagedEmits.push({ signal, payload: value, options });
       },
       async commit() {
         if (finished) throw new Error("transaction finished");
@@ -564,7 +608,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
             ]);
           }
           for (const e of stagedEmits) {
-            await insertEmit(tx, e.signal, e.payload);
+            await insertEmit(tx, e.signal, e.payload, e.options);
           }
         });
         await sql.notify(CHANNEL, "commit");
@@ -584,19 +628,26 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
    * @param tx - Caller's postgres transaction
    * @param signal - Signal name
    * @param payload - Payload
+   * @param options - Optional emit options
    */
   async function emitInTransaction(
     tx: PostgresSignalSql,
     signal: string,
     payload?: unknown,
+    options?: SignalEmitOptions,
   ): Promise<void> {
     assertEmitAllowed(signal);
-    await insertEmit(tx, signal, payload);
+    const value = await validateSignalEmitPayload(signal, requireDecl(signal), payload);
+    await insertEmit(tx, signal, value, options);
   }
 
-  async function emit(signal: string, payload?: unknown): Promise<void> {
+  async function emit(
+    signal: string,
+    payload?: unknown,
+    options?: SignalEmitOptions,
+  ): Promise<void> {
     const tx = await begin();
-    await tx.emit(signal, payload);
+    await tx.emit(signal, payload, options);
     await tx.commit();
   }
 
@@ -680,10 +731,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     for (const consumer of consumers) {
       const decl = signals.get(consumer.signal);
       if (decl?.delivery !== "once") continue;
-      const claimed = await sql.query(
-        `SELECT * FROM oke_signal_messages WHERE signal = ? AND delivery = 'once' AND available_at <= ? AND ((status = 'pending' AND locked_by IS NULL) OR (status = 'inflight' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)) ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`,
-        [consumer.signal, t, t],
-      );
+      const claimed = await sql.query(CLAIM_ONCE_SQL, [consumer.signal, t, t, t]);
       if (claimed[0]) {
         progress = true;
         const row = claimed[0];

@@ -125,6 +125,21 @@ describe("term", () => {
     expect(out).not.toMatch(/\u001b\[/);
   });
 
+  test("formatRequestLine prints failure detail under 4xx/5xx", () => {
+    const out = formatRequestLine({
+      surface: "Console",
+      method: "POST",
+      path: "/console/setup/claim",
+      flow: "console.setup.claim",
+      status: 400,
+      ms: 1,
+      detail: "Password needs at least 12 characters, including a letter and a number.",
+      color: false,
+    });
+    expect(out).toContain("400");
+    expect(out).toContain("↳ Password needs at least 12 characters");
+  });
+
   test("formatStackSummary is scannable", () => {
     const out = formatStackSummary({
       project: "oke-dev-a3f791",

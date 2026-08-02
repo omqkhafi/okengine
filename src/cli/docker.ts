@@ -1,5 +1,5 @@
 /**
- * `oke docker` — Dockerfile + per-role compose files.
+ * `oke docker` — Dockerfile + per-role compose files · `clean` leftover stacks.
  */
 
 import { resolve } from "node:path";
@@ -10,6 +10,8 @@ import {
   type DeriveOptions,
   type DeriveResult,
 } from "../docker/index.ts";
+import { dockerCleanCli, dockerCleanHelp } from "./docker-clean.ts";
+import { EXIT_OK } from "./exit.ts";
 import { loadOkeConfig, loadManifest, resolveImages } from "./load-config.ts";
 
 /** Options for {@link runDockerDerive}. */
@@ -112,11 +114,16 @@ export async function runDockerDerive(
 }
 
 /**
- * CLI entry for `oke docker [--prod|-p] [--out|-o dir]`.
+ * CLI entry for `oke docker [clean] …` / derive flags.
  *
  * @param args - Args after `docker`
  */
 export async function dockerCli(args: readonly string[]): Promise<number> {
+  const [head, ...rest] = args;
+  if (head === "clean") {
+    return dockerCleanCli(rest);
+  }
+
   let prod = false;
   let outDir: string | undefined;
   let configPath: string | undefined;
@@ -132,8 +139,13 @@ export async function dockerCli(args: readonly string[]): Promise<number> {
 
 Derive Dockerfile + compose.<role>.yml under docker/ (default).
 --prod is opt-in (never the default). Credentials are never written into YAML.
-`);
-      return 0;
+
+${dockerCleanHelp()}`);
+      return EXIT_OK;
+    } else if (!a.startsWith("-")) {
+      console.error(`oke docker: unknown subcommand ${a}`);
+      console.error("Run `oke docker --help` for usage.");
+      return 1;
     }
   }
   const { code } = await runDockerDerive({

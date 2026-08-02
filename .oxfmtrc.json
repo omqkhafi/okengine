@@ -1,4 +1,4 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["**/dist/**", "packages/create-oke/template/**", "budgets.json", "**/*.svg"]
+  "ignorePatterns": ["**/dist/**", "packages/create-oke/templates/**", "budgets.json", "**/*.svg"]
 }

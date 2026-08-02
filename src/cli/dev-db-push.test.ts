@@ -139,6 +139,65 @@ export const entries = sqliteTable("entries", {
     expect(pushes.length).toBeGreaterThan(before);
   });
 
+  test("schema.generated.ts change does not re-trigger dbPush", async () => {
+    const cwd = await scaffoldProject();
+    const pushes: string[] = [];
+    const watcher = controlledWatcher();
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((r) => {
+      resolveReady = r;
+    });
+
+    const result = await runDev({
+      cwd,
+      local: true,
+      keepAlive: false,
+      dryRun: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      silentClaim: true,
+      stdinIsTTY: false,
+      startApp: async () => ({
+        port: 0,
+        url: new URL("http://127.0.0.1:9"),
+        stop() {},
+      }),
+      serveConsole: async () => ({
+        port: 0,
+        stop() {},
+      }),
+      serveMcp: async () => ({
+        port: 0,
+        url: new URL("http://127.0.0.1:9"),
+        stop() {},
+      }),
+      regenClient: async () => {},
+      dbPush: async () => {
+        pushes.push("push");
+        return 0;
+      },
+      onDbAutoPush: () => {
+        resolveReady();
+      },
+      watchFs: watcher.watchFs,
+      onReady: async (session) => {
+        sessions.push(session);
+      },
+    });
+
+    expect(result.code).toBe(0);
+    await Promise.race([ready, Bun.sleep(800)]);
+    const before = pushes.length;
+    expect(before).toBeGreaterThanOrEqual(1);
+
+    // Simulate emit writing schema.generated.ts after push — must not loop.
+    watcher.change("schema.generated.ts");
+    watcher.change("src/schema.generated.ts");
+    await Bun.sleep(500);
+    expect(pushes.length).toBe(before);
+  });
+
   test("--no-db-push / noDbPush never calls dbPush", async () => {
     const cwd = await scaffoldProject();
     const pushes: string[] = [];

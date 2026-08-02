@@ -1,3 +1,6 @@
-# Filled by `prepack` / `bun ./src/sync-templates.ts` from ../../templates and ../../examples.
-templates/
+# Local installs inside bundled starters (never ship).
+templates/**/node_modules/
+templates/**/bun.lock
+templates/**/.oke/
+templates/**/.env.local
 examples/

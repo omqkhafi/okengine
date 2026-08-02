@@ -128,13 +128,13 @@ Runs retention and redaction at the config surface — **not** the same key as `
 
 Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated to `oke schema generate`.
 
-| Option      | Default                     | Meaning                                                                     |
-| ----------- | --------------------------- | --------------------------------------------------------------------------- |
-| `autoPush`  | `true` (local only)         | Auto-run `db push` on schema change in `oke dev`; forced off in docker/prod |
-| `config`    | `"drizzle.config.ts"`       | Path to the drizzle-kit config                                              |
-| `declare`   | `"src/schema.decl.ts"`      | Abstract schema module (`store.schema.table` exports)                       |
-| `generated` | `"src/schema.generated.ts"` | Where `oke db` emits dialect Drizzle                                        |
-| `entry`     | `src/app.ts`                | App entry for collecting plugin table contributions                         |
+| Option      | Default                     | Meaning                                                                                                           |
+| ----------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `autoPush`  | `true` (local only)         | Auto-run `db push` when schema inputs change in `oke dev` (not on emit of `generated`); forced off in docker/prod |
+| `config`    | `"drizzle.config.ts"`       | Path to the drizzle-kit config                                                                                    |
+| `declare`   | `"src/schema.decl.ts"`      | Abstract schema module (`store.schema.table` exports)                                                             |
+| `generated` | `"src/schema.generated.ts"` | Where `oke db` emits dialect Drizzle                                                                              |
+| `entry`     | `src/app.ts`                | App entry for collecting plugin table contributions                                                               |
 
 ## topology
 

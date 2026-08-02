@@ -20,7 +20,7 @@ Follow this order — never skip step 2.
    - Element declarations: `src/elements/<name>.ts` + `src/elements/<name>/declare.ts`
    - Runtime handles (what flows actually call): `src/elements/<name>/runtime.ts`, `src/kernel/fx.ts`
    - Driver id unions: `src/drivers/*-types.ts` (e.g. `ChannelDriverId`, `AiDriverId`)
-   - Real default configs: `packages/create-oke/template/oke.config.ts`
+   - Real default configs: `packages/create-oke/templates/standard/oke.config.ts`
    - Error codes users see: grep the error class name
    - Cross-link targets must exist: check `site/content/docs/console/*.mdx` before linking
    - **Correct the old page when it lies** (precedents: it listed `kafka` as a signal driver that doesn't exist; it used `Date.now()` inside flows, violating the fx rule).

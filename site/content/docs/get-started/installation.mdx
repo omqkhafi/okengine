@@ -9,8 +9,8 @@ This page gets you from zero to a running app on Bun. The engine targets
 **Bun ≥ 1.3.14** — prefer it for install, scaffold, and `oke dev`.
 
 <Callout title="The one rule">
-  Prefer `bun add okengine` when you want the `oke` CLI on your PATH. JSR (`@omqkhafi/okengine`) is
-  the library API only.
+  The npm package is `okengine`; the CLI binary is `oke`. Use `bun add` in a project or `bun install
+  -g okengine` for a global `oke` on PATH. JSR is the library API only.
 </Callout>
 
 ## Quick start
@@ -28,8 +28,16 @@ This page gets you from zero to a running app on Bun. The engine targets
 <Step>
 ### Install the package
 
+Project dependency (framework + local `oke`):
+
 ```bash title="Terminal"
 bun add okengine
+```
+
+Global CLI (`oke` on PATH):
+
+```bash title="Terminal"
+bun install -g okengine
 ```
 
 Library-only via JSR:
@@ -46,12 +54,23 @@ bunx jsr add @omqkhafi/okengine
 ```bash title="Terminal"
 bunx create-oke@latest my-app
 bunx create-oke@latest my-app --template standard
+bunx create-oke@latest my-app --template advanced
 bunx create-oke@latest my-app --sql postgres
+bunx create-oke@latest my-app --yes
 ```
 
-`standard` is the only starter. Default: local SQLite, Docker/production
-Postgres. `--sql postgres` pins `store.sql` for **local, Docker, and
-production** — schema stays dialect-agnostic (`store.schema.table`).
+Two Notes starters: **standard** (local-first) and **advanced** (docker-ready +
+files/digest/AI). On a TTY: pick a template, then **recommended defaults**,
+**customize** (choose **local** or **docker** first, walk that side’s facets,
+optionally customize the other; saved to `~/.oke/create-defaults.json`), or
+**reuse** when saved settings match that template. The project-name step rejects
+a path that already exists and is not empty.
+
+Non-TTY / `--yes` stay scriptable. Default pins: local SQLite · Docker/prod
+Postgres. `--sql postgres` pins SQL envs; `--ai` runs the AI model wizard
+**before** install. Scaffold writes `.oke/mode` from the primary side
+(recommended: standard → `local`, advanced → `docker`) so the first `oke dev`
+skips the mode prompt unless you delete that file or pass `--local` / `--docker`.
 
 </Step>
 
@@ -67,7 +86,10 @@ Four ports come up together (mnemonic: **O·K·E = 6·5·3**):
 
 <Surfaces />
 
-Open `http://localhost:6533`. If the Console lists your flows, the install
+Open `http://localhost:6533`. On first boot, claim the Console with the
+**claim code** printed once in the `oke dev` log, then create the first
+operator. Password policy matches Gate auth: **≥ 12 characters, with a letter
+and a number.** After that, if the Console lists your flows, the install
 worked — **derived, not configured.**
 
 </Step>
@@ -103,8 +125,9 @@ Uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when
 omitted). Compose and credentials land under `docker/` (`.env.docker` beside
 compose); host ports are unique per project.
 
-Bare `oke dev` prompts once on a TTY (saved in `.oke/mode`); non-TTY defaults
-to `local`.
+Bare `oke dev` uses `.oke/mode` when present (seeded by create-oke). On a TTY
+with no saved mode it prompts once and writes the file; non-TTY defaults to
+`local`.
 
 | Protocol            | Env shape (generated)                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -122,8 +145,9 @@ controls are preserved when `oke dev --docker` regenerates the file.
 <Accordions>
 
 <Accordion title="oke: command not found after install">
-  Use `bun add okengine` (npm package), not JSR alone — the CLI ships with the npm distribution. Or
-  invoke via `bunx oke dev` from the project.
+  Install the npm package `okengine` (not JSR alone): `bun add okengine` in the project, or `bun
+  install -g okengine` for a global binary. Or invoke via `bunx oke dev`. There is no separate `oke`
+  package name — only `okengine`.
 </Accordion>
 
 <Accordion title="Console is empty / no flows listed">
@@ -131,9 +155,21 @@ controls are preserved when `oke dev --docker` regenerates the file.
   boots and the Manifest is extracted — fix TypeScript errors in the terminal first.
 </Accordion>
 
+<Accordion title="Create first operator fails (password / claim code)">
+  Use a password with at least 12 characters, including a letter and a number. Copy the claim code
+  from the current `oke dev` boot log (it expires in 30 minutes; restart mint a new one). The form
+  and the request log now show the reason — not a bare `TransportError` / `500`.
+</Accordion>
+
 <Accordion title="Database out of sync after editing schema">
   Local `oke dev` auto-pushes by default. If you passed `--no-db-push` or set `db.autoPush: false`,
   run `oke db push` yourself, or re-enable auto-push.
+</Accordion>
+
+<Accordion title="Docker containers left after deleting a project">
+  Each project gets its own `oke-dev-<id>` compose stack; `oke dev` stop keeps volumes. Run
+  `oke docker clean` (TTY picker) or `oke docker clean --all --yes` from anywhere to remove
+  leftover containers, networks, and volumes.
 </Accordion>
 
 </Accordions>

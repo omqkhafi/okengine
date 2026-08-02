@@ -258,6 +258,19 @@ describe("errors — registry", () => {
     expect(err.message).toContain("→");
   });
 
+  test("OKE1043 is reserved for signal schema emit failures", () => {
+    const def = OKE_ERRORS.SIGNAL_SCHEMA;
+    expect(def.code).toBe(1043);
+    expect(lookupOkeError(1043)).toEqual(def);
+    const err = new OkeError(def, {
+      resource: "order-placed",
+      detail: "total: Expected number, received string",
+    });
+    expect(err.message).toContain("OKE1043");
+    expect(err.message).toContain("order-placed");
+    expect(err.message).toContain("https://oke.omqkhafi.dev/e/1043");
+  });
+
   test("fx.fail returns a value, not an exception", () => {
     const fx = createFx({ flow: "x", effects: {} });
     const result = fx.fail(

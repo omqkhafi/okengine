@@ -287,7 +287,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "docker",
-    summary: "Dockerfile + compose.<role>.yml",
+    summary: "derive compose · clean leftover stacks",
     leaf: true,
     flags: [
       {
@@ -299,6 +299,24 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
       CONFIG,
       MANIFEST,
       HELP,
+    ],
+    subcommands: [
+      {
+        name: "clean",
+        summary: "Remove oke-dev stacks (containers, networks, volumes)",
+        flags: [
+          {
+            long: "--yes",
+            short: "-y",
+            summary: "Non-interactive confirm",
+          },
+          {
+            long: "--all",
+            summary: "Every oke-dev-* stack (required with --yes outside a project)",
+          },
+          HELP,
+        ],
+      },
     ],
   },
   {
@@ -345,6 +363,56 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     summary: "prompt eval sets (CI gate)",
     leaf: true,
     flags: [MANIFEST, HELP],
+  },
+  {
+    name: "ai",
+    summary: "configure AI driver + models",
+    subcommands: [
+      {
+        name: "setup",
+        summary: "Interactive / flagged AI provider + model setup",
+        flags: [
+          {
+            long: "--provider",
+            takesValue: true,
+            valueName: "id",
+            summary: "ollama · openai · anthropic · gemini · lmstudio · openrouter · custom",
+          },
+          {
+            long: "--chat",
+            takesValue: true,
+            valueName: "model",
+            summary: "Chat model id",
+          },
+          {
+            long: "--vision",
+            takesValue: true,
+            valueName: "model",
+            summary: "Vision model id",
+          },
+          {
+            long: "--embed",
+            takesValue: true,
+            valueName: "model",
+            summary: "Embedding model id",
+          },
+          {
+            long: "--pull",
+            summary: "Pull missing Ollama models (default)",
+          },
+          {
+            long: "--no-pull",
+            summary: "Skip ollama pull",
+          },
+          {
+            long: "--yes",
+            short: "-y",
+            summary: "Non-interactive (requires --provider)",
+          },
+          HELP,
+        ],
+      },
+    ],
   },
   {
     name: "branch",
@@ -459,6 +527,16 @@ export function flagTokensFor(command: CliCommand, sub?: string): readonly strin
 }
 
 function formatCommandUsage(cmd: CliCommand): string {
+  // Leaf + subcommands (e.g. `oke docker` derive · `oke docker clean`).
+  if (cmd.leaf && cmd.subcommands && cmd.subcommands.length > 0) {
+    const flagHint = cmd.flags
+      ?.filter((f) => f.long !== "--help")
+      .slice(0, 2)
+      .map((f) => formatFlagHint(f))
+      .join(" ");
+    const subs = cmd.subcommands.map((s) => s.name).join("|");
+    return `oke ${cmd.name}${flagHint ? ` ${flagHint}` : ""} · ${subs}`;
+  }
   if (cmd.subcommands?.length === 1) {
     const sub = cmd.subcommands[0]!;
     const flagHint = sub.flags

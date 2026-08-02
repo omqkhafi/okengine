@@ -45,7 +45,9 @@ Our path is concrete: a booking name containing "ignore previous instructions an
 - **Plugin panels** run in a sandboxed iframe without `allow-same-origin`, communicating only over a `postMessage` bridge with their own CSP, no access to the operator session token, and exposure limited to that plugin's declared flows.
 - **Session and framing:** `frame-ancestors 'none'`, `SameSite=Strict`, step-up authentication before destructive actions.
 - **Secret write path:** TLS required, no autocomplete, never echoed, never logged, not retained in browser memory after submission.
-- **The setup claim code** is rate-limited and compared in constant time.
+- **The setup claim code** is rate-limited and compared in constant time. The first-operator password
+  uses the same policy as Gate auth (minLength 12, letter + number); weak passwords return
+  `ClaimFailed` / `password_policy`, not an opaque 500.
 
 #### 10.5 Reversibility governs the confirmation pattern
 

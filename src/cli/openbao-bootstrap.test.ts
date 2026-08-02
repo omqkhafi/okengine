@@ -145,5 +145,6 @@ describe("openbao bootstrap material gates", () => {
     }
     expect(failed).toBeInstanceOf(OpenBaoBootstrapError);
     expect(String(failed)).toContain("unrecoverable");
+    expect(String(failed)).toContain("compose.vault.yml down -v");
   });
 });

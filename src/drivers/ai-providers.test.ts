@@ -318,6 +318,37 @@ describe("ollama driver", () => {
     expect(calls[0]!.body.options).toEqual({ temperature: 0, num_predict: 16 });
   });
 
+  test("embed via injectable fetch — native /api/embeddings", async () => {
+    const paths: string[] = [];
+    const fetchFn: typeof fetch = Object.assign(
+      async (input: string | URL | Request) => {
+        const url = String(input);
+        paths.push(url);
+        if (url.endsWith("/api/tags")) {
+          return new Response(JSON.stringify({ models: [] }), { status: 200 });
+        }
+        if (url.endsWith("/api/embeddings")) {
+          return new Response(JSON.stringify({ embedding: [0.1, 0.2, 0.3] }), {
+            status: 200,
+          });
+        }
+        return new Response(JSON.stringify({ error: "unexpected" }), { status: 500 });
+      },
+      { preconnect: () => {} },
+    ) as typeof fetch;
+
+    const client = await openOllama({
+      model: "nomic-embed-text",
+      baseUrl: "http://ollama.test:11434",
+      fetch: fetchFn,
+    });
+    const emb = await client.embed!({ input: ["a", "b"] });
+    expect(emb.driverId).toBe("ollama");
+    expect(emb.vectors).toHaveLength(2);
+    expect(emb.vectors[0]).toEqual([0.1, 0.2, 0.3]);
+    expect(paths.filter((p) => p.endsWith("/api/embeddings"))).toHaveLength(2);
+  });
+
   test("unreachable server throws OllamaUnavailableError (no silent fallback)", async () => {
     const fetchFn: typeof fetch = Object.assign(
       async () => {

@@ -51,5 +51,5 @@ Published packages:
 - `okengine` — framework (`oke` CLI)
 - `create-oke` — scaffold CLI
 
-The standard starter lives in `packages/create-oke/template`. Do not expand the
-ten public exports without a spec change.
+Notes starters live in `packages/create-oke/templates/{standard,advanced}`. Do
+not expand the ten public exports without a spec change.

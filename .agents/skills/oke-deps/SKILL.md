@@ -4,7 +4,7 @@ description: >-
   Updates OKE package.json dependencies (one package, one workspace
   package.json, or all). Use when the user asks to update dependencies,
   bump deps, upgrade packages, run outdated, refresh the lockfile, or
-  update root / site / create-oke / template package.json. Bun-first;
+  update root / site / create-oke / templates package.json. Bun-first;
   refuses silent downgrades and protects intentional pins.
 ---
 
@@ -15,12 +15,12 @@ query the registry, then edit ranges and install.
 
 ## Package map
 
-| Target     | Path                                        | Notes                                |
-| ---------- | ------------------------------------------- | ------------------------------------ |
-| root       | `package.json`                              | framework + Console tooling          |
-| site       | `site/package.json`                         | docs site (Next / fumadocs)          |
-| create-oke | `packages/create-oke/package.json`          | scaffold CLI                         |
-| template   | `packages/create-oke/template/package.json` | starter; pins `okengine` via `file:` |
+| Target     | Path                                           | Notes                                |
+| ---------- | ---------------------------------------------- | ------------------------------------ |
+| root       | `package.json`                                 | framework + Console tooling          |
+| site       | `site/package.json`                            | docs site (Next / fumadocs)          |
+| create-oke | `packages/create-oke/package.json`             | scaffold CLI                         |
+| templates  | `packages/create-oke/templates/*/package.json` | starters; pin `okengine` via `file:` |
 
 Default when the user says “update dependencies” with no path: **all four**.
 When they name a path or package, scope tightly.
@@ -41,12 +41,12 @@ Task:
 
 Parse the request:
 
-| User says                                   | Do                                             |
-| ------------------------------------------- | ---------------------------------------------- |
-| “update dependencies” / “all”               | all four `package.json` files                  |
-| path to a `package.json`                    | that file only                                 |
-| package name(s) (`vite`, `next`, …)         | bump those names wherever they appear in scope |
-| “root” / “site” / “create-oke” / “template” | that row in the map                            |
+| User says                                    | Do                                             |
+| -------------------------------------------- | ---------------------------------------------- |
+| “update dependencies” / “all”                | all four `package.json` files                  |
+| path to a `package.json`                     | that file only                                 |
+| package name(s) (`vite`, `next`, …)          | bump those names wherever they appear in scope |
+| “root” / “site” / “create-oke” / “templates” | that row in the map                            |
 
 Do **not** bump unrelated workspace packages when a path or name is given.
 

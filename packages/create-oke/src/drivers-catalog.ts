@@ -1,0 +1,217 @@
+/**
+ * Boot-implemented driver choices offered by the create-oke customize wizard.
+ *
+ * Never lists ids that fail loud at boot (signal postgres/nats, clock postgres,
+ * ai bedrock/vertex).
+ */
+
+import type { CreateDefaults, CreateProfile, EnvDriverPins } from "./create-defaults.ts";
+import type { TemplateId } from "./templates.ts";
+
+/** One selectable driver option. */
+export type DriverChoice = {
+  readonly value: string;
+  readonly label: string;
+};
+
+/** Standard template docker/prod pins (unchanged for local-only profile). */
+export const TEMPLATE_DOCKER_PROD = {
+  sql: "postgres",
+  kv: "redis",
+  files: "s3",
+  signal: "redis",
+  clock: "file",
+  vault: "openbao",
+  email: "smtp",
+} as const;
+
+/** Standard template local defaults. */
+export const TEMPLATE_LOCAL = {
+  sql: "sqlite",
+  kv: "memory",
+  files: "fs",
+  signal: "memory",
+  clock: "memory",
+  vault: "env",
+  email: "console",
+} as const;
+
+/** Test-column defaults (always applied). */
+export const TEMPLATE_TEST = {
+  sql: "memory",
+  kv: "memory",
+  files: "memory",
+  signal: "memory",
+  clock: "frozen",
+  vault: "memory",
+  email: "console",
+} as const;
+
+export const SQL_CHOICES: readonly DriverChoice[] = [
+  { value: "sqlite", label: "sqlite" },
+  { value: "postgres", label: "postgres" },
+  { value: "libsql", label: "libsql" },
+  { value: "pglite", label: "pglite" },
+  { value: "memory", label: "memory" },
+];
+
+export const KV_CHOICES: readonly DriverChoice[] = [
+  { value: "memory", label: "memory" },
+  { value: "redis", label: "redis" },
+];
+
+export const FILES_CHOICES: readonly DriverChoice[] = [
+  { value: "fs", label: "fs" },
+  { value: "s3", label: "s3" },
+  { value: "memory", label: "memory" },
+];
+
+export const INDEX_CHOICES: readonly DriverChoice[] = [
+  { value: "memory", label: "memory" },
+  { value: "pgvector", label: "pgvector" },
+  { value: "libsql", label: "libsql" },
+  { value: "meilisearch", label: "meilisearch" },
+];
+
+export const SIGNAL_CHOICES: readonly DriverChoice[] = [
+  { value: "memory", label: "memory" },
+  { value: "redis", label: "redis" },
+];
+
+export const CLOCK_CHOICES: readonly DriverChoice[] = [
+  { value: "memory", label: "memory" },
+  { value: "file", label: "file" },
+  { value: "frozen", label: "frozen" },
+];
+
+export const VAULT_CHOICES: readonly DriverChoice[] = [
+  { value: "env", label: "env" },
+  { value: "openbao", label: "openbao" },
+  { value: "managed", label: "managed" },
+  { value: "memory", label: "memory" },
+];
+
+export const EMAIL_CHOICES: readonly DriverChoice[] = [
+  { value: "console", label: "console" },
+  { value: "smtp", label: "smtp" },
+  { value: "resend", label: "resend" },
+  { value: "sndr", label: "sndr" },
+];
+
+/** AI menu providers → protocol driver. */
+export const AI_PROVIDERS = [
+  { value: "ollama", label: "◎  Ollama (Local)", driver: "ollama" },
+  { value: "openai", label: "◈  OpenAI", driver: "openai-compatible" },
+  { value: "anthropic", label: "◉  Anthropic", driver: "anthropic" },
+  { value: "gemini", label: "◇  Gemini", driver: "openai-compatible" },
+  { value: "lmstudio", label: "▣  LM Studio", driver: "openai-compatible" },
+  { value: "openrouter", label: "⇄  OpenRouter", driver: "openai-compatible" },
+  { value: "custom", label: "⋯  Custom OpenAI Compatible", driver: "openai-compatible" },
+  { value: "mock", label: "◌  Mock (dev only)", driver: "mock" },
+] as const;
+
+export type AiProviderId = (typeof AI_PROVIDERS)[number]["value"];
+
+/**
+ * Build env pins for local-only: user local + template docker/prod + test.
+ *
+ * @param local - Chosen local driver
+ * @param dockerProd - Template docker/prod pin for this facet
+ * @param test - Test pin
+ */
+export function pinsLocalOnly(local: string, dockerProd: string, test: string): EnvDriverPins {
+  return { local, docker: dockerProd, test, prod: dockerProd };
+}
+
+/**
+ * Build env pins when the user chose both columns (docker-ready).
+ *
+ * @param local - Local driver
+ * @param docker - Docker driver (also copied to prod)
+ * @param test - Test pin
+ */
+export function pinsDockerReady(local: string, docker: string, test: string): EnvDriverPins {
+  return { local, docker, test, prod: docker };
+}
+
+/**
+ * Default recommended create-defaults (matches template driver maps).
+ *
+ * @param profile - Profile assumption
+ * @param template - Starter id
+ */
+export function recommendedDefaults(
+  profile: CreateProfile = "docker-ready",
+  template: TemplateId = "standard",
+): CreateDefaults {
+  const store = {
+    sql: pinsLocalOnly(TEMPLATE_LOCAL.sql, TEMPLATE_DOCKER_PROD.sql, TEMPLATE_TEST.sql),
+    kv: pinsLocalOnly(TEMPLATE_LOCAL.kv, TEMPLATE_DOCKER_PROD.kv, TEMPLATE_TEST.kv),
+    files: pinsLocalOnly(TEMPLATE_LOCAL.files, TEMPLATE_DOCKER_PROD.files, TEMPLATE_TEST.files),
+    index: null as EnvDriverPins | null,
+  };
+  return {
+    version: 1,
+    template,
+    profile,
+    drivers: {
+      store,
+      signal: pinsLocalOnly(
+        TEMPLATE_LOCAL.signal,
+        TEMPLATE_DOCKER_PROD.signal,
+        TEMPLATE_TEST.signal,
+      ),
+      clock: pinsLocalOnly(TEMPLATE_LOCAL.clock, TEMPLATE_DOCKER_PROD.clock, TEMPLATE_TEST.clock),
+      vault: pinsLocalOnly(TEMPLATE_LOCAL.vault, TEMPLATE_DOCKER_PROD.vault, TEMPLATE_TEST.vault),
+      channel: {
+        email: pinsLocalOnly(TEMPLATE_LOCAL.email, TEMPLATE_DOCKER_PROD.email, TEMPLATE_TEST.email),
+      },
+      ai: null,
+    },
+    ai: { enabled: false, provider: null, driver: null },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Driver facet ids walked during customize (env columns only). */
+export type CustomizeFacetId =
+  | "sql"
+  | "kv"
+  | "files"
+  | "enableIndex"
+  | "index"
+  | "signal"
+  | "clock"
+  | "vault"
+  | "email";
+
+/**
+ * Facets shown for a template (AI is asked after both env passes).
+ *
+ * @param template - Starter id
+ */
+export function customizeFacetsFor(template: TemplateId): readonly CustomizeFacetId[] {
+  if (template === "standard") return ["sql"];
+  return ["sql", "kv", "files", "enableIndex", "index", "signal", "clock", "vault", "email"];
+}
+
+/**
+ * Resolve protocol driver for an AI provider menu id.
+ *
+ * @param provider - Menu value
+ */
+export function aiDriverForProvider(provider: string): string {
+  const hit = AI_PROVIDERS.find((p) => p.value === provider);
+  return hit?.driver ?? "mock";
+}
+
+/** Default image pins keyed by role (standard template). */
+export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
+  "store.sql": "postgres:18-alpine",
+  "store.kv": "redis:8-alpine",
+  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+  "channel.email": "axllent/mailpit:v1.22.3",
+  vault: "openbao/openbao:2.6.1",
+  "store.index": "getmeili/meilisearch:v1.37",
+  ai: "ollama/ollama:latest",
+};

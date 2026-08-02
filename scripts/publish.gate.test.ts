@@ -137,12 +137,14 @@ describe("publish workflow", () => {
     expect(stderr).not.toMatch(/template\/package\.json/);
   });
 
-  test("the standard starter stays at seed version 0.0.1", () => {
-    const pkgPath = join(ROOT, "packages/create-oke/template/package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
-      version?: string;
-    };
-    expect(pkg.version).toBe("0.0.1");
+  test("starters stay at seed version 0.0.1", () => {
+    for (const id of ["standard", "advanced"] as const) {
+      const pkgPath = join(ROOT, "packages/create-oke/templates", id, "package.json");
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+        version?: string;
+      };
+      expect(pkg.version).toBe("0.0.1");
+    }
   });
 
   test("package.json has no publish lifecycle script (npm re-entry footgun)", () => {

@@ -222,8 +222,8 @@ export async function openRedisSignal(options: SignalOpenOptions): Promise<Signa
 
   return {
     driverId: "redis",
-    async emit(signal, payload) {
-      await outbox.emit(signal, payload);
+    async emit(signal, payload, options) {
+      await outbox.emit(signal, payload, options);
       await relayToRedis(signal, payload);
     },
     async begin() {
@@ -231,9 +231,9 @@ export async function openRedisSignal(options: SignalOpenOptions): Promise<Signa
       const tx = await outbox.begin();
       return {
         write: (k, v) => tx.write(k, v),
-        async emit(signal, payload) {
+        async emit(signal, payload, options) {
           staged.push({ signal, payload });
-          await tx.emit(signal, payload);
+          await tx.emit(signal, payload, options);
         },
         async commit() {
           await tx.commit();

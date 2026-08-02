@@ -15,7 +15,12 @@ describe("isDomainSchemaWatchPath", () => {
     expect(isDomainSchemaWatchPath("drizzle.config.ts")).toBe(true);
     expect(isDomainSchemaWatchPath("flows/notes/schema.ts")).toBe(true);
     expect(isDomainSchemaWatchPath("src/schema.decl.ts")).toBe(true);
-    expect(isDomainSchemaWatchPath("src/schema.generated.ts")).toBe(true);
+  });
+
+  test("ignores emit output (avoids push ↔ generated feedback loop)", () => {
+    expect(isDomainSchemaWatchPath("src/schema.generated.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("schema.generated.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("flows/notes/schema.generated.tsx")).toBe(false);
   });
 
   test("ignores unrelated files", () => {

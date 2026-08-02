@@ -9,6 +9,27 @@ import { consoleCalls, setAccessToken } from "../client.ts";
 import { OkeLogo } from "../components/oke-logo.tsx";
 import { Button, Field, Input } from "../components/ui.tsx";
 
+/** Prefer human message / reason over a bare error code. */
+function clientErrorText(error: {
+  readonly code: string;
+  readonly message?: string;
+  readonly data?: unknown;
+}): string {
+  if (typeof error.message === "string" && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (error.data !== null && typeof error.data === "object") {
+    const data = error.data as { message?: unknown; reason?: unknown };
+    if (typeof data.message === "string" && data.message.trim().length > 0) {
+      return data.message;
+    }
+    if (error.code === "TransportError" && typeof data.message === "string") {
+      return data.message;
+    }
+  }
+  return error.code;
+}
+
 /**
  * Setup wizard page.
  */
@@ -18,7 +39,7 @@ export function SetupWizard() {
     queryKey: ["console.setup.status"],
     queryFn: async () => {
       const res = await consoleCalls.setupStatus();
-      if (res.error) throw new Error(res.error.code);
+      if (res.error) throw new Error(clientErrorText(res.error));
       return res.data as { setupClosed: boolean; claimRequired: boolean };
     },
   });
@@ -37,7 +58,7 @@ export function SetupWizard() {
         name,
         password,
       });
-      if (res.error) throw new Error(res.error.code);
+      if (res.error) throw new Error(clientErrorText(res.error));
       return res.data as { accessToken: string };
     },
     onSuccess: (data) => {
@@ -110,13 +131,13 @@ export function SetupWizard() {
             required
           />
         </Field>
-        <Field label="Password">
+        <Field label="Password" hint="At least 12 characters, with a letter and a number.">
           <Input
             name="password"
             type="password"
             value={password}
             onValueChange={(v) => setPassword(String(v ?? ""))}
-            minLength={8}
+            minLength={12}
             autoComplete="new-password"
             required
           />
@@ -142,7 +163,7 @@ function LoginForm() {
   const login = useMutation({
     mutationFn: async () => {
       const res = await consoleCalls.sessionLogin({ email, password });
-      if (res.error) throw new Error(res.error.code);
+      if (res.error) throw new Error(clientErrorText(res.error));
       return res.data as { accessToken: string };
     },
     onSuccess: (data) => {

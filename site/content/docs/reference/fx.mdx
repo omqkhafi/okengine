@@ -33,9 +33,9 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 ## Signals
 
-| Signature                   | Records | Notes                                                                                                             |
-| --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| `fx.emit(signal, payload?)` | `emit`  | Commits the signal outbox when the call resolves; throws **OKE1042** if nobody subscribes and `optional` is false |
+| Signature                             | Records | Notes                                                                                                                                           |
+| ------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fx.emit(signal, payload?, { key? })` | `emit`  | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; throws **OKE1042** (orphan) or **OKE1043** (schema) |
 
 ## Flows
 
