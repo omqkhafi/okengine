@@ -127,6 +127,8 @@ export {
   createFilesImagePipeline,
   putImageToBucket,
   variantObjectKey,
+  resolveFilesImageCtorOptions,
+  DEFAULT_FILES_IMAGE_MAX_PIXELS,
 } from "./store/files-image.ts";
 export type {
   FilesImageMeta,

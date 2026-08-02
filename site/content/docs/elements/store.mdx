@@ -136,6 +136,9 @@ const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
 | `image(…).put(outKey)`                                                  | `read` + `write` (key source) | Persist the encoded result                                                                                                                                        |
 | `putImage(key, data, opts?)`                                            | `write`                       | Original + named variants; keys are `{stem}.{variant}.{ext}`                                                                                                      |
 
+`maxPixels` defaults to **16 MP** (`4096×4096`) — always on unless you raise it
+or pass `maxPixels: false`.
+
 ## CRUD without boilerplate — `store.resource`
 
 Five conventional endpoints (list, create, get, update, remove) expand from one declaration. Each is an ordinary Flow underneath — same contracts, same `fx`:

@@ -17,7 +17,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   `metadata` / `bytes` / `blob` / `placeholder` / `put` terminals; and
   `putImage(key, data, { variants, placeholder })` that writes the original
   plus `{stem}.{variant}.{ext}` derivatives and optional ThumbHash LQIP.
-  Requires Bun `>=1.3.14`.
+  Requires Bun `>=1.3.14`. Image decode defaults to a **16 MP**
+  (`4096×4096`) `maxPixels` ceiling (raise or pass `false` to opt out).
 - Signal `once` visibility leases (`leaseExpiresAt`, default 30s) with **lazy
   reclaim at claim time** — expired `inflight` rows are taken by the next
   consumer query (memory + postgres); no background sweeper. Chaos proof:

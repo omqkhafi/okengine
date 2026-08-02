@@ -5,6 +5,15 @@
  * store access still goes through the files handle (and fx gating).
  */
 
+/**
+ * Default decompression-bomb ceiling — `4096 × 4096` (16 MP).
+ *
+ * Rationale: covers typical phone / web uploads (4K ≈ 8.3 MP) while refusing
+ * header-claimed canvases that would allocate multi-hundred-MB pixel buffers.
+ * Raise with `maxPixels`, or pass `false` to disable (explicit opt-out).
+ */
+export const DEFAULT_FILES_IMAGE_MAX_PIXELS = 4096 * 4096;
+
 /** Image dimensions + sniffed format (header only — no full decode). */
 export interface FilesImageMeta {
   readonly width: number;
@@ -14,8 +23,12 @@ export interface FilesImageMeta {
 
 /** Bun.Image constructor guards. */
 export interface FilesImageOptions {
-  /** Reject when width×height exceeds this (checked after header). */
-  readonly maxPixels?: number;
+  /**
+   * Reject when width×height exceeds this (checked after header, before the
+   * pixel buffer). Default {@link DEFAULT_FILES_IMAGE_MAX_PIXELS}. Pass
+   * `false` to disable the guard.
+   */
+  readonly maxPixels?: number | false;
   /** Apply JPEG EXIF Orientation before other ops. Default true. */
   readonly autoOrient?: boolean;
 }
@@ -101,7 +114,11 @@ export interface PutImageOptions {
   readonly variants?: Readonly<Record<string, ImageVariantSpec>>;
   /** Include a ThumbHash LQIP data URL on the result. */
   readonly placeholder?: boolean;
-  readonly maxPixels?: number;
+  /**
+   * Pixel ceiling — default {@link DEFAULT_FILES_IMAGE_MAX_PIXELS}.
+   * Pass `false` to disable.
+   */
+  readonly maxPixels?: number | false;
   readonly autoOrient?: boolean;
 }
 
@@ -170,11 +187,21 @@ function toBytes(data: Uint8Array | string): Uint8Array {
   return typeof data === "string" ? new TextEncoder().encode(data) : data;
 }
 
-function ctorOptions(opts?: FilesImageOptions): Bun.Image.ConstructorOptions | undefined {
-  if (!opts) return undefined;
-  const out: Bun.Image.ConstructorOptions = {};
-  if (opts.maxPixels !== undefined) out.maxPixels = opts.maxPixels;
-  if (opts.autoOrient !== undefined) out.autoOrient = opts.autoOrient;
+/**
+ * Resolve Bun.Image constructor options — `maxPixels` always set
+ * (secure-by-default; never omit the guard).
+ *
+ * @param opts - Caller options
+ */
+export function resolveFilesImageCtorOptions(
+  opts?: FilesImageOptions,
+): Bun.Image.ConstructorOptions {
+  const maxPixels =
+    opts?.maxPixels === false
+      ? Number.POSITIVE_INFINITY
+      : (opts?.maxPixels ?? DEFAULT_FILES_IMAGE_MAX_PIXELS);
+  const out: Bun.Image.ConstructorOptions = { maxPixels };
+  if (opts?.autoOrient !== undefined) out.autoOrient = opts.autoOrient;
   return out;
 }
 
@@ -205,7 +232,8 @@ async function encodeBytes(
   ops: readonly Op[],
   formatOp: FormatOp | undefined,
 ): Promise<Uint8Array> {
-  const buildBase = (): Bun.Image => applyOps(new Bun.Image(input, ctorOptions(options)), ops);
+  const buildBase = (): Bun.Image =>
+    applyOps(new Bun.Image(input, resolveFilesImageCtorOptions(options)), ops);
   try {
     return await applyFormat(buildBase(), formatOp).bytes();
   } catch (err) {
@@ -368,7 +396,7 @@ export function createFilesImagePipeline(
     },
     async metadata() {
       const input = await resolveSource();
-      const meta = await new Bun.Image(input, ctorOptions(options)).metadata();
+      const meta = await new Bun.Image(input, resolveFilesImageCtorOptions(options)).metadata();
       return { width: meta.width, height: meta.height, format: meta.format };
     },
     async bytes() {
@@ -376,7 +404,8 @@ export function createFilesImagePipeline(
     },
     async blob() {
       const input = await resolveSource();
-      const buildBase = (): Bun.Image => applyOps(new Bun.Image(input, ctorOptions(options)), ops);
+      const buildBase = (): Bun.Image =>
+        applyOps(new Bun.Image(input, resolveFilesImageCtorOptions(options)), ops);
       try {
         return await applyFormat(buildBase(), formatOp).blob();
       } catch (err) {
@@ -396,7 +425,7 @@ export function createFilesImagePipeline(
     },
     async placeholder() {
       const input = await resolveSource();
-      return new Bun.Image(input, ctorOptions(options)).placeholder();
+      return new Bun.Image(input, resolveFilesImageCtorOptions(options)).placeholder();
     },
     async put(outKey) {
       const encoded = await encodeBytes(await resolveSource(), options, ops, formatOp);
@@ -426,7 +455,7 @@ export async function putImageToBucket(
     maxPixels: opts?.maxPixels,
     autoOrient: opts?.autoOrient,
   };
-  const metaRaw = await new Bun.Image(input, ctorOptions(imageOpts)).metadata();
+  const metaRaw = await new Bun.Image(input, resolveFilesImageCtorOptions(imageOpts)).metadata();
   const meta: FilesImageMeta = {
     width: metaRaw.width,
     height: metaRaw.height,
@@ -458,7 +487,7 @@ export async function putImageToBucket(
 
   let placeholder: string | undefined;
   if (opts?.placeholder) {
-    placeholder = await new Bun.Image(input, ctorOptions(imageOpts)).placeholder();
+    placeholder = await new Bun.Image(input, resolveFilesImageCtorOptions(imageOpts)).placeholder();
   }
 
   return { key, meta, variants, placeholder };
