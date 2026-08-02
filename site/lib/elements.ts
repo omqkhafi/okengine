@@ -58,7 +58,7 @@ export const ELEMENTS: ReadonlyArray<{
     name: "Store",
     symbol: "St",
     essence: "data at rest",
-    description: "SQL, KV, files, and search index as one store surface.",
+    description: "SQL, KV, files with image transforms, and search — one surface.",
     replaces: "database · cache · KV · file storage · search index",
     href: "/docs/elements/store",
     icon: Database,
@@ -172,6 +172,7 @@ export const PORTS: ReadonlyArray<{
   { port: "6530", surface: "App", detail: "Your flows, served from the Manifest." },
   { port: "6533", surface: "Console", detail: "Panels, traces, and the effect graph." },
   { port: "6535", surface: "MCP", detail: "The same Manifest, for agents." },
+  { port: "6536", surface: "Docs MCP", detail: "Read-only docs search for agents." },
 ];
 
 /** Separator the §5 `replaces` lists use between concerns. */

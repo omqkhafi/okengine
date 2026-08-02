@@ -57,8 +57,8 @@ const FACETS: ReadonlyArray<{
     icon: FolderOpen,
     declare: "store.files(name)",
     kind: "Blob bucket",
-    verbs: ["put", "get", "delete", "list(prefix?)"],
-    forData: "Uploads, exports, attachments",
+    verbs: ["put", "get", "delete", "list", "image", "putImage"],
+    forData: "Uploads, exports, attachments, image variants",
   },
   {
     id: "index",

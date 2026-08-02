@@ -11,6 +11,9 @@
  * The scheduler reads the effective state from the Store, not the code.
  */
 
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+
 import type { ClockDecl } from "./declare.ts";
 
 /** Cron lifecycle status in `oke_crons`. */
@@ -223,6 +226,109 @@ export function createMemoryCronStore(seed?: readonly CronRow[]): CronStore {
           leaderInstanceId: instanceId,
           leaderLeaseUntil: now + leaseMs,
         });
+        return true;
+      });
+    },
+  };
+}
+
+/** On-disk shape for {@link createFileCronStore}. */
+interface FileCronSnapshot {
+  readonly rows: CronRow[];
+}
+
+/**
+ * File-backed cron store for multi-process leader election / chaos tests.
+ *
+ * Every mutation runs under an exclusive lock directory next to `path` so
+ * two OS processes sharing the same file cannot both win a lease race.
+ * Does not cache rows across calls (each op re-reads disk).
+ *
+ * @param path - JSON snapshot path (`{ rows: CronRow[] }`)
+ */
+export function createFileCronStore(path: string): CronStore {
+  const lockDir = `${path}.lock`;
+
+  async function withFileLock<T>(fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; attempt < 2_000; attempt++) {
+      try {
+        await mkdir(lockDir);
+        break;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== "EEXIST") throw err;
+        await Bun.sleep(2);
+        if (attempt === 1_999) {
+          throw new Error(`createFileCronStore: lock timeout on ${lockDir}`);
+        }
+      }
+    }
+    try {
+      return await fn();
+    } finally {
+      await rm(lockDir, { recursive: true, force: true });
+    }
+  }
+
+  async function loadUnlocked(): Promise<Map<string, CronRow>> {
+    const map = new Map<string, CronRow>();
+    const file = Bun.file(path);
+    if (!(await file.exists())) return map;
+    const text = await file.text();
+    if (!text.trim()) return map;
+    const snap = JSON.parse(text) as FileCronSnapshot;
+    for (const r of snap.rows ?? []) {
+      map.set(r.name, structuredClone(r));
+    }
+    return map;
+  }
+
+  async function flushUnlocked(map: Map<string, CronRow>): Promise<void> {
+    await mkdir(dirname(path), { recursive: true });
+    const tmp = join(dirname(path), `.${Bun.hash(path).toString(16)}.tmp`);
+    const body = JSON.stringify({ rows: [...map.values()] } satisfies FileCronSnapshot, null, 2);
+    await writeFile(tmp, body, "utf8");
+    await rename(tmp, path);
+  }
+
+  return {
+    async get(name) {
+      return withFileLock(async () => {
+        const map = await loadUnlocked();
+        const r = map.get(name);
+        return r ? structuredClone(r) : undefined;
+      });
+    },
+    async put(row) {
+      await withFileLock(async () => {
+        const map = await loadUnlocked();
+        map.set(row.name, structuredClone(row));
+        await flushUnlocked(map);
+      });
+    },
+    async list() {
+      return withFileLock(async () => {
+        const map = await loadUnlocked();
+        return [...map.values()].map((r) => structuredClone(r));
+      });
+    },
+    async acquireLease(name, instanceId, now, leaseMs) {
+      return withFileLock(async () => {
+        const map = await loadUnlocked();
+        const row = map.get(name);
+        if (!row) return false;
+        const held =
+          row.leaderLeaseUntil !== undefined &&
+          row.leaderLeaseUntil > now &&
+          row.leaderInstanceId !== undefined &&
+          row.leaderInstanceId !== instanceId;
+        if (held) return false;
+        map.set(name, {
+          ...row,
+          leaderInstanceId: instanceId,
+          leaderLeaseUntil: now + leaseMs,
+        });
+        await flushUnlocked(map);
         return true;
       });
     },

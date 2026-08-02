@@ -44,8 +44,7 @@ Producers never touch a broker client — they call `fx.emit`:
 do: async (input, fx) => {
   await fx.store(db).insert(orders).values({ id: input.id /* … */ });
   await fx.emit(orderPlaced, { orderId: input.id, total: input.total });
-  // With the postgres driver this enrols in the same transaction as the insert —
-  // the message is only ever sent if the row is committed.
+  // fx.emit commits the signal outbox when the call resolves (postgres → oke_signal_messages).
 };
 ```
 
@@ -62,7 +61,7 @@ export const sendConfirmation = on(
   flow({
     in: z.object({ orderId: z.string(), total: z.number() }),
     do: async (input, fx) => {
-      await fx.channel(email).send(/* … */);
+      await fx.send(orderConfirmed, { to: "user-1", data: input });
     },
   }),
 );
@@ -91,6 +90,97 @@ The declaration is identical in shape for all three — switching physics later 
 | `deadLetter`  | boolean                           | `true`           | Preserve exhausted messages in the DLQ (`once`)                                                   |
 | `optional`    | boolean                           | `false`          | Allow emitting while nobody subscribes (skip the orphan check)                                    |
 
+## One order, three modes
+
+One placed order can need all three physics at once — pick a signal per job, not one signal stretched across modes:
+
+| Signal          | Mode        | Job                                                         |
+| --------------- | ----------- | ----------------------------------------------------------- |
+| `order-placed`  | `once`      | Fulfillment job — competing workers, retries, DLQ           |
+| `order-changed` | `broadcast` | Fan-out — cache invalidation **and** customer notification  |
+| `order-status`  | `live`      | Status feed — retained history a late subscriber can replay |
+
+```typescript title="src/signals.ts"
+import { signal } from "okengine";
+import { z } from "zod";
+
+export const orderPlaced = signal("order-placed", {
+  schema: z.object({ orderId: z.string(), total: z.number() }),
+  delivery: "once",
+  retries: 2,
+  deadLetter: true,
+});
+
+export const orderChanged = signal("order-changed", {
+  schema: z.object({ orderId: z.string(), kind: z.literal("placed") }),
+  delivery: "broadcast",
+});
+
+export const orderStatus = signal("order-status", {
+  schema: z.object({
+    orderId: z.string(),
+    status: z.enum(["placed", "fulfilling", "shipped"]),
+  }),
+  delivery: "live",
+  optional: true, // clients may not be connected yet
+});
+```
+
+`once` — two fulfillment workers compete; **exactly one** claims each message (at-least-once; make the handler idempotent):
+
+```typescript title="src/flows/fulfillment/on-order.ts"
+on(
+  orderPlaced,
+  flow({
+    name: "fulfillment.onOrder",
+    do: async ({ orderId }, fx) => {
+      await fx.emit(orderChanged, { orderId, kind: "placed" });
+      await fx.emit(orderStatus, { orderId, status: "fulfilling" });
+      await fx.emit(orderStatus, { orderId, status: "shipped" });
+    },
+  }),
+);
+```
+
+`broadcast` — every subscriber gets its own copy of the same domain event:
+
+```typescript title="src/flows/orders/side-effects.ts"
+on(
+  orderChanged,
+  flow({
+    name: "cache.onOrderChanged",
+    do: async ({ orderId }, fx) => {
+      /* invalidate order:{orderId} */
+    },
+  }),
+);
+
+on(
+  orderChanged,
+  flow({
+    name: "notify.onOrderChanged",
+    do: async ({ orderId }, fx) => {
+      await fx.send(orderConfirmed, { to: "user-1", data: { orderId } });
+    },
+  }),
+);
+```
+
+`live` — retain status updates and replay the **full history** to a late `bus.live()` subscriber (tracking UI, ops feed).
+
+Today that subscription is a **server-side** bus API. `createClient` does not yet expose SSE / WebSocket / `client.live` — see [Client](/docs/reference/client#signal-and-live-queries).
+
+```typescript
+await fx.emit(orderStatus, { orderId, status: "placed" });
+
+// Late subscriber (server / test harness) receives placed → fulfilling → shipped.
+const unsub = await bus.live("order-status", (payload) => {
+  /* push to UI */
+});
+```
+
+**Why separate signals:** delivery is fixed per declaration. Competing work stays on `once`; fan-out stays on `broadcast`; the client-visible timeline stays on `live`. Switching a word later is cheap; mixing physics on one name is not.
+
 ## When delivery fails
 
 `once` signals retry automatically. Every attempt keeps a **typed failure reason**, and the full attempt history survives into the DLQ — so when a message lands there you see _why_ each attempt failed, not just that it did.
@@ -117,6 +207,12 @@ Committed `once` messages survive process death. A claim sets `lockedBy` and a v
 
 `live` retains every delivered message and replays the **full history** to a late `bus.live()` subscriber. There is no TTL or max-count window on that retention today (the Console payload monitor shows only the newest 50 for display).
 
+<Callout title="Client subscription is not shipped yet">
+  `delivery: "live"` means the **driver** retains and replays. `createClient` has no SSE / WebSocket
+  / `client.live` yet — poll an HTTP Flow or use `bus.live()` server-side. See [Client · Signal and
+  live queries](/docs/reference/client#signal-and-live-queries).
+</Callout>
+
 ## Orphaned signal config
 
 When a signal disappears from code, reconciliation marks its config row `orphaned` — it is never deleted. Pending and DLQ messages for that name stay in storage. Drain and replay require an active declaration again: restore the `signal(…)` (and a consumer), then replay from the Console or bus.
@@ -129,14 +225,14 @@ drivers: {
 },
 ```
 
-| Driver     | Runs as                          | Best for                                                                  |
-| ---------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `memory`   | in-process                       | Local loop + tests — zero infrastructure                                  |
-| `postgres` | your existing Postgres container | Default for docker/prod — emits join your DB transaction (outbox pattern) |
-| `redis`    | Redis container                  | Explicit alternative when throughput outgrows Postgres                    |
-| `nats`     | NATS container                   | High-throughput fan-out                                                   |
+| Driver     | Runs as                          | Best for                                                             |
+| ---------- | -------------------------------- | -------------------------------------------------------------------- |
+| `memory`   | in-process                       | Local loop + tests — zero infrastructure                             |
+| `postgres` | your existing Postgres container | Default for docker/prod — durable outbox table `oke_signal_messages` |
+| `redis`    | Redis container                  | Explicit alternative when throughput outgrows Postgres               |
+| `nats`     | NATS container                   | High-throughput fan-out                                              |
 
-`postgres` is the default outside local dev for a reason: `fx.emit` enrols in the caller's transaction, so "write row + emit event" commits or rolls back **atomically** — the classic dual-write bug is designed out.
+`postgres` keeps committed emits in `oke_signal_messages`. `fx.emit` finishes that outbox write when the call resolves; consumers claim with `FOR UPDATE SKIP LOCKED` and lazy lease reclaim. Pairing an arbitrary Store insert with emit inside **one** shared SQL transaction is not what `fx.emit` does today — keep consumers idempotent (at-least-once).
 
 ## Troubleshooting
 
@@ -158,7 +254,7 @@ Ask: _how many consumers should process each message?_ One → `once`. All of th
 </Accordion>
 <Accordion title="My emit happened but the row didn't (or vice versa)">
 
-That is the dual-write problem, and it means the signal driver is not `postgres`. With the `postgres` driver the emit joins your SQL transaction; with `redis` / `nats` an outbox relay keeps the guarantee, but `postgres` is the only mode where atomicity is literal.
+`fx.emit` commits the signal outbox when it resolves; it does not wrap your Store insert. Treat delivery as at-least-once and make the consumer idempotent (or check the row before acting). Prefer `postgres` when you want a durable outbox table rather than in-process memory.
 
 </Accordion>
 <Accordion title="The same once message ran twice">

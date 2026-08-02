@@ -89,13 +89,13 @@ Both are triggers consumed with the same `on(trigger, flow)` — the flow undern
 
 ### `clock()` options
 
-| Option        | Type    | Default | Meaning                                                      |
-| ------------- | ------- | ------- | ------------------------------------------------------------ |
-| `cron`        | string  | —       | Cron expression `m h dom mon dow` (this or `every` required) |
-| `every`       | string  | —       | Fixed interval: `"30s"` · `"10m"` · `"1h"` · `"7d"`          |
-| `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                            |
-| `overridable` | boolean | `false` | Allow the Console to edit / pause the schedule               |
-| `description` | string  | —       | Human title in the Console (falls back to the clock name)    |
+| Option        | Type    | Default | Meaning                                                        |
+| ------------- | ------- | ------- | -------------------------------------------------------------- |
+| `cron`        | string  | —       | Cron expression `m h dom mon dow` (this or `every` required)   |
+| `every`       | string  | —       | Fixed interval: `"30s"` · `"10m"` · `"1h"` · `"7d"`            |
+| `timezone`    | string  | `"UTC"` | IANA timezone for cron evaluation                              |
+| `overridable` | boolean | `false` | Allow the Console to **edit** the schedule (pause is separate) |
+| `description` | string  | —       | Human title in the Console (falls back to the clock name)      |
 
 ## Sleeping inside a flow
 
@@ -103,14 +103,28 @@ Both are triggers consumed with the same `on(trigger, flow)` — the flow undern
 
 In a non-durable flow the same call resolves immediately, so code reads identically in tests.
 
+Completed journal steps never re-run on resume — a process killed mid-flow continues at the next unfinished step.
+
 ## What the runtime guarantees
 
-| Guarantee          | What it means                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------- |
-| Leader election    | With several replicas, only one instance fires each cron tick                               |
-| Catch-up `"one"`   | A schedule missed during downtime fires **once**, not once per missed tick                  |
-| Reconciled at boot | Named clocks are written into the store (`oke_crons`) — the scheduler reads state, not code |
-| DST-aware          | Ambiguous local times around DST transitions are detected and handled                       |
+| Guarantee          | What it means                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| Leader election    | Instances that share one CronStore fire a given tick once (lease TTL, default 30s)                 |
+| Catch-up `"one"`   | Health counts every missed slot; the runtime still fires **once** when overdue — not once per miss |
+| Reconciled at boot | Named clocks land in `oke_crons`; the scheduler reads the Store, not the source                    |
+| DST detection      | Ambiguous local times get a Console warning — schedules are not rewritten or blocked               |
+
+**Leader election needs a shared store.** The default in-memory CronStore is per process. Multi-replica exclusivity only holds when every instance opens the same durable CronStore (file-backed store is available for that; a Postgres cron driver is not wired yet).
+
+**Catch-up example:** an hourly clock down for five hours reports `missedRuns: 5` and `catchUp: "one"`, then a single tick runs the handler once.
+
+## DST warnings (detect only)
+
+Simple daily crons (`M H * * *`) in a DST-observing zone can hit a **gap** (spring forward — local time skipped) or an **overlap** (fall back — local time occurs twice).
+
+Detection attaches `dstAmbiguity` on the cron row and the Console shows it. `oke doctor` does not check DST. The scheduler does not rewrite the expression.
+
+**Consequence:** fall-back days can list two civil instants an hour apart. The default leader lease (30s) is shorter than that gap, so a lease alone is not a “fire once on overlap” policy. Prefer UTC, or a wall time outside the transition window, when double-fire would hurt.
 
 ## Per-environment drivers
 
@@ -120,17 +134,19 @@ drivers: {
 },
 ```
 
-| Driver     | Behavior                                                            |
-| ---------- | ------------------------------------------------------------------- |
-| `memory`   | In-process timers — fast local loop, lost on exit                   |
-| `postgres` | Schedules and wakes persisted in your Postgres — survives restarts  |
-| `frozen`   | Deterministic test clock — time advances only when the test says so |
+| Driver     | Behavior                                                              |
+| ---------- | --------------------------------------------------------------------- |
+| `memory`   | In-process CronStore + timers — single process; lost on exit          |
+| `frozen`   | Deterministic test clock — time advances only when the test says so   |
+| `postgres` | Accepted in config — **not implemented yet** (boot still uses memory) |
 
 `frozen` is why the no-`Date.now()` rule pays off: tests inject time travel through `fx.clock` and every flow obeys it automatically.
 
 ## Operating schedules from the Console
 
-The Console (`:6533` → Clock) lists every named clock with a four-number health view — drift, past-due, next run, and which replica holds the leader lease. From there you can **pause**, **edit the schedule**, or **wake early** — but only for clocks declared with `overridable: true`. A non-overridable clock rejects edits with `ScheduleNotOverridableError`, so a mistyped production change cannot silently reshape your cadence.
+The Console (`:6533` → Clock) lists every named clock with health — drift, overdue, missed runs + catch-up `"one"`, and which replica holds the leader lease.
+
+From there you can **pause** any cron, **wake early** a sleeping durable run, or **edit the schedule** when `overridable: true`. Edit on a locked clock throws `ScheduleNotOverridableError` (`clock "…" is not overridable`).
 
 ## Troubleshooting
 
@@ -142,17 +158,22 @@ Replace it with `fx.clock.now()`. Direct time calls bypass the injected clock, s
 </Accordion>
 <Accordion title="The server was down and the cron didn't catch up">
 
-That is by design: catch-up policy is `"one"` — the schedule fires a single time after downtime, never a storm of one-run-per-missed-tick. If you genuinely need backfill, trigger the flow from the Console.
+That is by design: catch-up policy is `"one"` — the schedule fires a single time after downtime, never a storm of one-run-per-missed-tick. Health still shows how many slots were missed. If you genuinely need backfill, trigger the flow from the Console.
 
 </Accordion>
 <Accordion title="Console won't let me edit a schedule">
 
-The clock was declared without `overridable: true`. Add it and redeploy — the restriction is deliberate, so only schedules you marked as operator-tunable can drift from code.
+The clock was declared without `overridable: true`. Add it and redeploy — the restriction is deliberate, so only schedules you marked as operator-tunable can drift from code. Pause does not require `overridable`.
 
 </Accordion>
 <Accordion title="How do I run something once, later — not recurring?">
 
 Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the work, in a `durable: true` flow. The sleep survives restarts, so "remind me in 7 days" is one line, not a cron row.
+
+</Accordion>
+<Accordion title="Two replicas both ran my cron">
+
+They are not sharing one CronStore. In-memory leases are per process. Point every replica at the same durable cron store, or run a single scheduler instance until the Postgres clock driver ships.
 
 </Accordion>
 </Accordions>

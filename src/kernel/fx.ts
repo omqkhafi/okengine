@@ -892,7 +892,28 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         });
       }
 
-      // KV / files / index — thin gated wrappers preserving driver methods.
+      if (decl.facet === "files") {
+        const ref = decl.ref;
+        return runtime.openFilesFx(
+          decl as Extract<StoreDecl, { facet: "files" }>,
+          {
+            effects: options.effects ?? {},
+            revealPii: options.revealPii,
+          },
+          {
+            gate: gated,
+            refuseDryRunWrite: () => {
+              if (isDryRun()) {
+                throw new DryRunWriteIsolationError(
+                  `Driver-backed store "${ref}" cannot isolate writes during dry-run; dry-run refused rather than risk a double-write.`,
+                );
+              }
+            },
+          },
+        );
+      }
+
+      // KV / index — thin gated wrappers preserving driver methods.
       const baseRef = decl.ref;
       return new Proxy({} as StoreHandle, {
         get(_t, prop) {

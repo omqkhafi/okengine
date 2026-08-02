@@ -29,6 +29,7 @@ export {
   reconcileClocks,
   effectiveSchedule,
   createMemoryCronStore,
+  createFileCronStore,
   type CronRow,
   type CronStatus,
   type CronStore,

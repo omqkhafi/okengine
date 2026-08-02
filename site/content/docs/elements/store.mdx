@@ -104,6 +104,38 @@ export const embeddings = store.index("docs", {
 });
 ```
 
+## Files images — `image` / `putImage`
+
+Blob CRUD stays `put` / `get` / `delete` / `list`. For photos, use Bun's built-in
+`Bun.Image` pipeline on the same handle (requires Bun `>=1.3.14`).
+
+```typescript
+const meta = await fx.store(uploads).image(key).metadata();
+// → { width, height, format }
+
+await fx
+  .store(uploads)
+  .image(key)
+  .resize(400, 400, { fit: "inside" })
+  .webp({ quality: 80 })
+  .put(`thumbs/${key}.webp`);
+
+const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
+  variants: {
+    thumb: { resize: [128, 128, { fit: "inside" }], webp: { quality: 80 } },
+    medium: { resize: [800], webp: { quality: 85 } },
+  },
+  placeholder: true, // ThumbHash LQIP data URL
+});
+// variants: photos/x.thumb.webp, photos/x.medium.webp
+```
+
+| Call                                                                    | Effect                        | Notes                                                                                                                                                             |
+| ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `image(key\|bytes).metadata()` / `bytes()` / `blob()` / `placeholder()` | `read` when source is a key   | Chain `resize` · `rotate` · `flip` · `flop` · `modulate`, then `jpeg` / `png` / `webp` (portable); `heic` / `avif` fall back to WebP when the OS codec is missing |
+| `image(…).put(outKey)`                                                  | `read` + `write` (key source) | Persist the encoded result                                                                                                                                        |
+| `putImage(key, data, opts?)`                                            | `write`                       | Original + named variants; keys are `{stem}.{variant}.{ext}`                                                                                                      |
+
 ## CRUD without boilerplate — `store.resource`
 
 Five conventional endpoints (list, create, get, update, remove) expand from one declaration. Each is an ordinary Flow underneath — same contracts, same `fx`:

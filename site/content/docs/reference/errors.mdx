@@ -38,7 +38,7 @@ string. Custom app codes stay message-less until registered.
 | `1005` | undeclared ask    | Flow asks a prompt not in `effects.asks`         | Add it to the flow's `effects.asks`             |
 | `1006` | undeclared secret | Flow reads a secret not in `effects.secrets`     | Add it to the flow's `effects.secrets`          |
 | `1007` | undeclared call   | Flow calls a flow not in `effects.calls`         | Add it to the flow's `effects.calls`            |
-| `1042` | orphan emit       | Emitted signal has no subscriber                 | Add `on(signal, …)` or declare `optional: true` |
+| `1042` | orphan emit       | Emit with zero subscribers and `optional` false  | Add `on(signal, …)` or declare `optional: true` |
 | `1101` | schema missing    | Domain table absent in docker/prod — no auto-DDL | Run `oke db migrate` against this environment   |
 
 <Callout title="Effects are usually inferred">

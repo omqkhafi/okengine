@@ -21,7 +21,7 @@ the PR or an issue — do not invent behaviour.
 
 ## What a PR needs to pass
 
-One local pre-push gate from the repo root (Bun `>=1.3`):
+One local pre-push gate from the repo root (Bun `>=1.3.14`):
 
 ```bash
 bun run ci

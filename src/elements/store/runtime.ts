@@ -42,6 +42,18 @@ import type {
   SqlStoreDecl,
   StoreDecl,
 } from "./declare.ts";
+import { createGatedFilesStoreHandle, type GatedFilesFxBridge } from "./files-fx.ts";
+import {
+  createFilesImagePipeline,
+  putImageToBucket,
+  type FilesImageOptions,
+  type FilesImagePipeline,
+  type PutImageOptions,
+  type PutImageResult,
+} from "./files-image.ts";
+
+export type { GatedFilesFxBridge } from "./files-fx.ts";
+export { createGatedFilesStoreHandle } from "./files-fx.ts";
 
 /** Driver bundle wired into a runtime. */
 export interface StoreDriverBundle {
@@ -126,6 +138,21 @@ export interface FilesStoreFxHandle {
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<boolean>;
   list(prefix?: string): Promise<string[]>;
+  /**
+   * Chainable Bun.Image pipeline over a stored key or raw bytes.
+   *
+   * @param source - Object key or image bytes
+   * @param options - Decode guards (`maxPixels`, `autoOrient`)
+   */
+  image(source: string | Uint8Array, options?: FilesImageOptions): FilesImagePipeline;
+  /**
+   * Put an original image and optional named variants / LQIP.
+   *
+   * @param key - Object key for the original
+   * @param data - Image bytes (or UTF-8 string, same as {@link put})
+   * @param opts - Variants / placeholder / decode guards
+   */
+  putImage(key: string, data: Uint8Array | string, opts?: PutImageOptions): Promise<PutImageResult>;
 }
 
 /** Vector index handle on `fx.store`. */
@@ -198,6 +225,20 @@ export interface StoreRuntime {
   ): string[];
   /** Close all open connections. */
   close(): Promise<void>;
+  /**
+   * Capability-gated files handle for `fx.store` (CRUD + image pipeline).
+   *
+   * Lives on the runtime so the kernel edge profile does not pull Bun.Image.
+   *
+   * @param decl - Files store declaration
+   * @param ctx - Effects + reveal policy for {@link open}
+   * @param bridge - fx gate + dry-run hooks
+   */
+  openFilesFx(
+    decl: FilesStoreDecl,
+    ctx: StoreInvokeContext,
+    bridge: GatedFilesFxBridge,
+  ): FilesStoreFxHandle;
 }
 
 /**
@@ -347,6 +388,10 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       });
       fileBuckets.set(decl.name, bucket);
     }
+    const access = {
+      get: (key: string) => bucket!.get(key),
+      put: (key: string, data: Uint8Array | string) => bucket!.put(key, data),
+    };
     return {
       ref: `files:${decl.name}`,
       driverId: bucket.driverId,
@@ -354,6 +399,8 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       get: (key) => bucket!.get(key),
       delete: (key) => bucket!.delete(key),
       list: (prefix) => bucket!.list(prefix),
+      image: (source, imageOpts) => createFilesImagePipeline(access, source, imageOpts),
+      putImage: (key, data, putOpts) => putImageToBucket(access, key, data, putOpts),
     };
   }
 
@@ -447,6 +494,19 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       kvNs.clear();
       fileBuckets.clear();
       indexes.clear();
+    },
+    openFilesFx(decl, ctx, bridge) {
+      const cache: { handle?: FilesStoreFxHandle } = {};
+      return createGatedFilesStoreHandle(
+        decl,
+        async () => {
+          if (!cache.handle) {
+            cache.handle = (await runtime.open(decl, ctx)) as FilesStoreFxHandle;
+          }
+          return cache.handle;
+        },
+        bridge,
+      );
     },
   };
 

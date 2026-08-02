@@ -1,5 +1,5 @@
 /**
- * Three dev surfaces — app, Console, MCP. Original okengine section
+ * Four dev surfaces — app, Console, MCP, docs MCP. Original okengine section
  * (README / `docs/spec/console.md`); the mnemonic is O·K·E = 6·5·3.
  * Cards settle on scroll with a pointer spotlight and a live heartbeat.
  */
@@ -47,7 +47,7 @@ export function Surfaces(): ReactNode {
       />
       <MotionConfig reducedMotion="never">
         <motion.ul
-          className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border @min-[32rem]:grid-cols-3"
+          className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-fd-border bg-fd-border @min-[28rem]:grid-cols-2 @min-[48rem]:grid-cols-4"
           variants={list}
           initial={reduced ? false : "hidden"}
           whileInView={reduced ? undefined : "show"}

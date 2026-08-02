@@ -42,7 +42,7 @@ drivers: {
 | `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
 | `store.index`      | env driver map | `memory` · `pgvector` · `libsql` · `meilisearch`                             |
 | `signal`           | env driver map | `memory` · `postgres` · `redis` · `nats`                                     |
-| `clock`            | env driver map | `memory` · `postgres` · `frozen`                                             |
+| `clock`            | env driver map | `memory` · `frozen` · `postgres` (id accepted; store not wired yet)          |
 | `vault`            | env driver map | `dotenv` · `openbao` · `memory`                                              |
 | `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr`                                       |
 | `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |

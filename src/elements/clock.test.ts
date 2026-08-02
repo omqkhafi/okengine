@@ -3,8 +3,12 @@
  * - durable flow killed mid-execution resumes at the failed step
  * - a 7-day sleep survives a restart
  * - three instances run a cron once (leader election)
+ * - catch-up `"one"` after multi-slot downtime
+ * - DST gap/overlap detect-only; overlap civil physics
+ * - overridable edit accept / reject
  * - reconciliation marks a removed cron orphaned without deleting it
- * - DST ambiguity detected from expression + zone
+ *
+ * Multi-process / SIGKILL proofs live in `clock/chaos.test.ts`.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -20,10 +24,14 @@ import {
   createMemoryCronStore,
   createTestClockRuntime,
   createTimeTravel,
+  cronHealth,
   detectDstAmbiguity,
+  editSchedule,
+  nextOccurrences,
   parseDurationMs,
   reconcileClocks,
   runDurable,
+  ScheduleNotOverridableError,
   tryAcquireLease,
 } from "./clock.ts";
 
@@ -323,6 +331,41 @@ describe("reconciliation", () => {
   });
 });
 
+describe("catch-up policy one", () => {
+  test("5h downtime on hourly clock: one fire, missedRuns reflects the gap", async () => {
+    const store = createMemoryCronStore();
+    const rt = createTestClockRuntime(0, {
+      store,
+      instanceId: "catchup",
+      leaseMs: 60_000,
+    });
+    rt.register(clock("hourly", { every: "1h" }));
+    await rt.reconcile();
+    await store.put({
+      ...(await store.get("hourly"))!,
+      lastRunAt: 0,
+    });
+
+    rt.advance("5h");
+    const before = cronHealth((await store.get("hourly"))!, rt.now());
+    expect(before.overdue).toBe(true);
+    expect(before.missedRuns).toBe(5);
+    expect(before.catchUp).toBe("one");
+
+    const fired: number[] = [];
+    rt.onCron("hourly", () => {
+      fired.push(rt.now());
+    });
+    const { ran } = await rt.tick();
+    expect(ran).toEqual(["hourly"]);
+    expect(fired).toHaveLength(1);
+
+    // Not five catch-up runs — and not silently zero.
+    await rt.tick();
+    expect(fired).toHaveLength(1);
+  });
+});
+
 describe("DST ambiguity", () => {
   test("detected from expression plus zone", () => {
     // 02:00 America/New_York sits in the spring-forward gap / fall-back overlap.
@@ -340,7 +383,17 @@ describe("DST ambiguity", () => {
     expect(detectDstAmbiguity("0 12 * * *", "America/New_York", Date.UTC(2026, 0, 1))).toBeNull();
   });
 
-  test("reconcile attaches dstAmbiguity on the store row", async () => {
+  test("gap vs overlap kinds are distinct for US transitions", () => {
+    // 2026-03-08 spring forward → 02:00 skipped (gap).
+    const gap = detectDstAmbiguity("0 2 * * *", "America/New_York", Date.UTC(2026, 2, 1));
+    expect(gap?.kind).toBe("gap");
+
+    // 2026-11-01 fall back → 01:30 occurs twice (overlap).
+    const overlap = detectDstAmbiguity("30 1 * * *", "America/New_York", Date.UTC(2026, 10, 1));
+    expect(overlap?.kind).toBe("overlap");
+  });
+
+  test("reconcile attaches dstAmbiguity on the store row (passive warning)", async () => {
     const store = createMemoryCronStore();
     const rt = createTestClockRuntime(Date.UTC(2026, 0, 1), {
       store,
@@ -352,9 +405,118 @@ describe("DST ambiguity", () => {
         timezone: "America/New_York",
       }),
     );
+    // Detection never throws — warn-only, no schedule rewrite.
     await rt.reconcile();
     const row = await store.get("nightly");
     expect(row?.dstAmbiguity).toBeDefined();
     expect(row?.dstAmbiguity?.localTime).toBe("02:00");
+    expect(row?.status).toBe("active");
+    expect(row?.effectiveCron).toBe("0 2 * * *");
+  });
+
+  test("doctor does not enforce or surface DST (detection is Console-only)", async () => {
+    const doctorSrc = await Bun.file(new URL("../cli/doctor.ts", import.meta.url)).text();
+    expect(doctorSrc.toLowerCase()).not.toContain("dst");
+    expect(doctorSrc).not.toMatch(/detectDstAmbiguity/);
+  });
+
+  test("overlap day: two civil instants; lease does not span the gap; stub isDue avoids walk", async () => {
+    // US fall-back 2026-11-01: 01:30 local occurs twice (~1h apart in UTC).
+    const from = Date.UTC(2026, 10, 1, 0, 0, 0);
+    const until = Date.UTC(2026, 10, 2, 0, 0, 0);
+    const fires = nextOccurrences(
+      {
+        name: "ambig",
+        effectiveCron: "30 1 * * *",
+        timezone: "America/New_York",
+        overridable: false,
+        status: "active",
+      },
+      from,
+      until,
+    );
+    expect(fires.length).toBe(2);
+    expect(fires[1]! - fires[0]!).toBe(3_600_000);
+
+    // Stub isDue (nextRunAt unset after first fire): does not walk civil fires →
+    // advancing across the overlap gap does not double-fire.
+    const store = createMemoryCronStore();
+    const rt = createTestClockRuntime(0, {
+      store,
+      instanceId: "dst-fire",
+      leaseMs: 1_000,
+    });
+    rt.register(
+      clock("ambig", {
+        cron: "30 1 * * *",
+        timezone: "America/New_York",
+      }),
+    );
+    await rt.reconcile();
+    const ran: number[] = [];
+    rt.onCron("ambig", () => {
+      ran.push(rt.now());
+    });
+    expect((await rt.tick()).ran).toEqual(["ambig"]);
+    rt.advance(3_600_000);
+    expect((await rt.tick()).ran).toEqual([]);
+    expect(ran).toHaveLength(1);
+
+    // Lease TTL << 1h overlap gap: if nextRunAt is driven to the second civil
+    // instant, a second fire CAN occur. Leader lease is not a DST policy.
+    const store2 = createMemoryCronStore();
+    const rt2 = createTestClockRuntime(fires[0]! - 1, {
+      store: store2,
+      instanceId: "dst-risk",
+      leaseMs: 1_000,
+    });
+    rt2.register(
+      clock("ambig2", {
+        cron: "30 1 * * *",
+        timezone: "America/New_York",
+      }),
+    );
+    await rt2.reconcile();
+    await store2.put({
+      ...(await store2.get("ambig2"))!,
+      nextRunAt: fires[0],
+    });
+    const ran2: number[] = [];
+    rt2.onCron("ambig2", () => {
+      ran2.push(rt2.now());
+    });
+    rt2.advance(2);
+    expect((await rt2.tick()).ran).toEqual(["ambig2"]);
+    rt2.advance(fires[1]! - rt2.now());
+    await store2.put({
+      ...(await store2.get("ambig2"))!,
+      nextRunAt: fires[1],
+    });
+    expect((await rt2.tick()).ran).toEqual(["ambig2"]);
+    expect(ran2).toHaveLength(2);
+  });
+});
+
+describe("overridable Console edit", () => {
+  test("editSchedule accepts overridable and rejects locked clocks", async () => {
+    const store = createMemoryCronStore();
+    await reconcileClocks(
+      [
+        clock("tunable", { every: "1h", overridable: true }),
+        clock("locked", { cron: "0 2 * * *", overridable: false }),
+      ],
+      store,
+    );
+
+    const edited = await editSchedule(store, { name: "tunable", every: "5m" });
+    expect(edited.effectiveEvery).toBe("5m");
+    expect(edited.overrideEvery).toBe("5m");
+
+    await expect(editSchedule(store, { name: "locked", cron: "0 3 * * *" })).rejects.toBeInstanceOf(
+      ScheduleNotOverridableError,
+    );
+    await expect(editSchedule(store, { name: "locked", cron: "0 3 * * *" })).rejects.toThrow(
+      /not overridable/,
+    );
   });
 });

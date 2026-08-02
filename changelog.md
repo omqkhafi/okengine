@@ -12,28 +12,53 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `fx.store(files).image(key\|bytes)` — Bun.Image pipeline (resize / rotate /
+  flip / modulate → jpeg/png/webp, plus heic/avif with WebP fallback) with
+  `metadata` / `bytes` / `blob` / `placeholder` / `put` terminals; and
+  `putImage(key, data, { variants, placeholder })` that writes the original
+  plus `{stem}.{variant}.{ext}` derivatives and optional ThumbHash LQIP.
+  Requires Bun `>=1.3.14`.
 - Signal `once` visibility leases (`leaseExpiresAt`, default 30s) with **lazy
   reclaim at claim time** — expired `inflight` rows are taken by the next
   consumer query (memory + postgres); no background sweeper. Chaos proof:
   SIGKILL after claim still redelivers after the lease expires.
+- `createFileCronStore` — file-backed CronStore with process-safe lease CAS
+  for multi-instance Clock leader election (chaos-proven with two OS
+  processes).
+- Clock chaos harness: two processes share one store and fire a schedule
+  once; SIGKILL mid-lease takeover measured (~120ms at `leaseMs=120`);
+  SIGKILL mid durable step resumes without re-running completed steps.
 
 ### ♻️ Changed
 
+- Engine requirement bumped to Bun `>=1.3.14` (root + `create-oke`) for
+  `Bun.Image` on `store.files`.
+- Homepage Store card blurb mentions image transforms on the files facet.
 - Signal docs and delivery cards state real physics: **at-least-once** (not
   exactly-once), `retries` means dead-letter when `attempts > retries`,
   `live` replays full retained history (unbounded), and slow handlers that
   outlive `leaseMs` can double-deliver without a crash (no heartbeat yet).
+- Signal docs: one coherent order-lifecycle example covering `once` /
+  `broadcast` / `live` together (fulfillment + fan-out + status feed), with
+  an explicit note that `createClient` does not yet subscribe to `live`.
 - Orphan signal config stays recoverable by re-declaring; pending/DLQ rows
   are not deleted when a signal disappears from code.
-- Root `README.md` badges match sently’s `outline` style (no forced
-  dark/zinc mode), drop empty / broken / duplicate shields (types,
-  GitHub license/release/stars, second npm), remove Charts section;
-  MIT via npm license.
+- Root `README.md` redesigned for scan + first success: sently-style
+  `outline` badges, starter health Flow + typed client (matches
+  create-oke / Basic usage), ten-export vocabulary, eight-element
+  table, Next links into the handbook; Charts and broken/duplicate
+  shields removed.
+- Clock docs match proven physics: catch-up `"one"` (health counts gaps,
+  runtime fires once), DST is Console warn-only (not doctor / not rewritten),
+  leader election requires a shared CronStore, `overridable` gates **edit**
+  only, and `postgres` clock driver is config-accepted but not wired yet.
 
 ### 🐛 Fixed
 
 - Emitting a non-`optional` signal with zero subscribers now throws
   **OKE1042** (previously silent success despite docs claiming a loud fail).
+- Surfaces strip and install docs now include docs MCP on **:6536** alongside
+  app / Console / MCP (the fourth `oke dev` port was missing from the cards).
 
 ## v0.6.1 — 2026-08-01
 

@@ -122,3 +122,25 @@ export type {
 
 export { fileKeyWarnings, contentAddressedKey, projectFileKeys } from "./store/files-policy.ts";
 export type { FileKeyWarning } from "./store/files-policy.ts";
+
+export {
+  createFilesImagePipeline,
+  putImageToBucket,
+  variantObjectKey,
+} from "./store/files-image.ts";
+export type {
+  FilesImageMeta,
+  FilesImageOptions,
+  FilesImageResizeOptions,
+  FilesImageModulateOptions,
+  FilesImageJpegOptions,
+  FilesImagePngOptions,
+  FilesImageWebpOptions,
+  FilesImageQualityOptions,
+  FilesImageFormat,
+  FilesImagePipeline,
+  FilesImageBucketAccess,
+  ImageVariantSpec,
+  PutImageOptions,
+  PutImageResult,
+} from "./store/files-image.ts";

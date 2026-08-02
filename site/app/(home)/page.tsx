@@ -203,9 +203,9 @@ export default function HomePage() {
       <Band label="console">
         <div className="flex flex-col gap-6">
           <Reveal>
-            <BandHeading title="Three surfaces come up together">
-              <code className="text-fd-foreground">oke dev</code> starts your app, the Console, and
-              the MCP endpoint from the same Manifest. Mnemonic: O·K·E = 6·5·3.
+            <BandHeading title="Four surfaces come up together">
+              <code className="text-fd-foreground">oke dev</code> starts your app, the Console,
+              runtime MCP, and docs MCP. Mnemonic: O·K·E = 6·5·3.
             </BandHeading>
           </Reveal>
           <Surfaces />
