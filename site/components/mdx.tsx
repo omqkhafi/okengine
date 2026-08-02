@@ -17,7 +17,12 @@ import { ClockSchedules } from "@/components/docs/elements/clock-schedules";
 import { FlowTriggers } from "@/components/docs/elements/flow-triggers";
 import { GatePipeline } from "@/components/docs/elements/gate-pipeline";
 import { SignalDelivery } from "@/components/docs/elements/signal-delivery";
-import { StoreFacets } from "@/components/docs/elements/store-facets";
+import { StoreFacetMark, StoreFacets } from "@/components/docs/elements/store-facets";
+import {
+  StoreFilesVariants,
+  StoreIndexModes,
+  StoreKvTtl,
+} from "@/components/docs/elements/store-physics";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
 import { Features } from "@/components/docs/features";
 import { FlowShape } from "@/components/docs/flow-shape";
@@ -31,7 +36,8 @@ import { Vocabulary } from "@/components/landing/vocabulary";
  * (Features, CollapseDiagram, ManifestPipeline, Surfaces, Vocabulary, plus
  * custom FlowShape / DevModes / ClientLoop / DriftBoard / CollapseBoard) and
  * per-element visuals
- * (FlowTriggers, SignalDelivery, StoreFacets, ClockSchedules, GatePipeline,
+ * (FlowTriggers, SignalDelivery, StoreFacets, StoreFacetMark, StoreKvTtl,
+ * StoreFilesVariants, StoreIndexModes, ClockSchedules, GatePipeline,
  * VaultResolution, ChannelPhysics, AiGuardrails).
  *
  * @param components - Extra overrides from the page renderer
@@ -65,6 +71,10 @@ export function getMDXComponents(components?: MDXComponents) {
     FlowTriggers,
     SignalDelivery,
     StoreFacets,
+    StoreFacetMark,
+    StoreKvTtl,
+    StoreFilesVariants,
+    StoreIndexModes,
     ClockSchedules,
     GatePipeline,
     VaultResolution,

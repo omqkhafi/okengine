@@ -11,7 +11,7 @@ import { DOCS_CONTENT_DIR, stripYamlFrontmatter } from "./markdown-source";
 const MAX_CONSECUTIVE = 3;
 
 const STRUCTURAL =
-  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|FlowTriggers|SignalDelivery|StoreFacets|ClockSchedules|GatePipeline|VaultResolution|ChannelPhysics|AiGuardrails|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
+  /^(<(Cards|Card|Callout|Tabs|Tab|TypeTable|Features|CollapseDiagram|ManifestPipeline|Surfaces|Vocabulary|FlowShape|DevModes|ClientLoop|DriftBoard|CollapseBoard|FlowTriggers|SignalDelivery|StoreFacets|StoreFacetMark|StoreKvTtl|StoreFilesVariants|StoreIndexModes|ClockSchedules|GatePipeline|VaultResolution|ChannelPhysics|AiGuardrails|Steps|Step|Accordions?)\b|```|#{1,6} |\||\w+="|[/]?>$)/;
 
 /**
  * Whether a non-empty line counts as a plain prose paragraph line.

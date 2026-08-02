@@ -1,18 +1,31 @@
 ---
 title: "Store"
-description: "Data at rest — SQL tables, KV cache, file blobs, and vector search, declared once and swapped per environment by driver."
+description: "Data at rest behind one handle and four independent facets — sql · kv · files · index — swapped per environment by driver."
 icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Store is where your app's **data at rest** lives. It covers four kinds of storage — relational tables, key-value cache, file blobs, and vector search — behind one declaration style. Your flow code never changes between SQLite on your laptop and Postgres in production; only the driver does.
+Store is one handle, four independent facets — **sql · kv · files · index**. Each has its own
+shape; nothing forces you to use more than one. Flow code stays the same across environments;
+only the driver changes.
 
 <Callout title="The one rule">
   Drivers are named after **protocols**, not vendors (`postgres`, `redis`, `s3` — never `neon` or
   `minio`). Vendor choice lives in the `images` map of `oke.config.ts`.
 </Callout>
 
-## Quick start
+<StoreFacets />
+
+Every facet accepts optional `description` — a human title in the Console (falls back to the store
+name).
+
+## SQL
+
+<StoreFacetMark facet="sql" />
+
+The relational facet: tables, schema, and typed single-table sessions through `fx.store`.
+
+### Quick start
 
 <Steps>
 
@@ -86,60 +99,7 @@ export const createNote = on(
 
 </Steps>
 
-## The four facets
-
-Pick the facet that matches the physics of your data. Each declaration is one line; the runtime handle shows what flows can do with it.
-
-<StoreFacets />
-
-Every facet accepts optional `description` — a human title in the Console
-(falls back to the store name). `store.index` also takes `dims`.
-
-```typescript
-export const cache = store.kv("sessions", { description: "Session cache" });
-export const uploads = store.files("attachments");
-export const embeddings = store.index("docs", {
-  dims: 1536,
-  description: "Document embeddings",
-});
-```
-
-## Files images — `image` / `putImage`
-
-Blob CRUD stays `put` / `get` / `delete` / `list`. For photos, use Bun's built-in
-`Bun.Image` pipeline on the same handle (requires Bun `>=1.3.14`).
-
-```typescript
-const meta = await fx.store(uploads).image(key).metadata();
-// → { width, height, format }
-
-await fx
-  .store(uploads)
-  .image(key)
-  .resize(400, 400, { fit: "inside" })
-  .webp({ quality: 80 })
-  .put(`thumbs/${key}.webp`);
-
-const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
-  variants: {
-    thumb: { resize: [128, 128, { fit: "inside" }], webp: { quality: 80 } },
-    medium: { resize: [800], webp: { quality: 85 } },
-  },
-  placeholder: true, // ThumbHash LQIP data URL
-});
-// variants: photos/x.thumb.webp, photos/x.medium.webp
-```
-
-| Call                                                                    | Effect                        | Notes                                                                                                                                                             |
-| ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `image(key\|bytes).metadata()` / `bytes()` / `blob()` / `placeholder()` | `read` when source is a key   | Chain `resize` · `rotate` · `flip` · `flop` · `modulate`, then `jpeg` / `png` / `webp` (portable); `heic` / `avif` fall back to WebP when the OS codec is missing |
-| `image(…).put(outKey)`                                                  | `read` + `write` (key source) | Persist the encoded result                                                                                                                                        |
-| `putImage(key, data, opts?)`                                            | `write`                       | Original + named variants; keys are `{stem}.{variant}.{ext}`                                                                                                      |
-
-`maxPixels` defaults to **16 MP** (`4096×4096`) — always on unless you raise it
-or pass `maxPixels: false`.
-
-## CRUD without boilerplate — `store.resource`
+### CRUD without boilerplate — `store.resource`
 
 Five conventional endpoints (list, create, get, update, remove) expand from one declaration. Each is an ordinary Flow underneath — same contracts, same `fx`:
 
@@ -174,7 +134,31 @@ The list endpoint's URL is the whole query language:
 
 Responses follow the Stripe-style envelope: `{ data, meta: { nextCursor, hasNextPage }, error }`. `create` answers **201**, `remove` answers **204**, and a missing row is a typed `NotFound` — never a crash.
 
-## Querying by hand
+#### An admin table
+
+```typescript
+list: { mode: "offset", count: "exact", limit: 20 },
+```
+
+**Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` to fill `meta.total`. On a huge table that count is the real cost — set `count: "none"` to return only `meta.offset`.
+
+#### An infinite feed
+
+```typescript
+list: { cursor: [notes.createdAt, notes.id], direction: "desc", limit: 20, maxLimit: 100 },
+```
+
+**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
+
+#### A public, restricted endpoint
+
+```typescript
+list: { mode: "offset", filter: "none", limit: 20 },
+```
+
+**Consequence:** a request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
+
+### Querying by hand
 
 When `store.resource` is too conventional, `fx.store(db)` is the full single-table session:
 
@@ -200,7 +184,7 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
   table shows up explicitly in the Manifest's `reads` / `writes` — powering caching and PII masking.
 </Callout>
 
-## Schema — declare once, generate per dialect
+### Schema — declare once, generate per dialect
 
 The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle for the active dialect (`sqliteTable` locally, `pgTable` in docker/prod) into `src/schema.generated.ts`.
 
@@ -214,7 +198,7 @@ The recommended path: declare tables ORM-agnostically, then let `oke db` emit re
 | `.describe("…")`                             | human title in the Console (falls back to key)  |
 | `.references(() => col, { onDelete })`       | foreign key                                     |
 
-### Foreign keys and relations
+#### Foreign keys and relations
 
 Declare FKs on fields, and relation metadata once per schema:
 
@@ -240,7 +224,7 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
   There is no separate API and no `.through()` — the junction is an ordinary table.
 </Callout>
 
-### Syncing the schema
+#### Syncing the schema
 
 | Command           | When                                                           |
 | ----------------- | -------------------------------------------------------------- |
@@ -256,30 +240,17 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
   extending an app-owned table with plugin columns is not supported in v1.
 </Callout>
 
-## Per-environment drivers
+### Per-environment SQL drivers
 
 Same flow code, different backends — configured once in `oke.config.ts`:
 
-```typescript title="oke.config.ts"
-drivers: {
-  store: {
-    sql:   { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
-    kv:    { local: "memory", docker: "redis",    test: "memory", prod: "redis" },
-    files: { local: "fs",     docker: "s3",       test: "memory", prod: "s3" },
-  },
-},
-```
+| Facet | Local    | Docker / prod | Runs as                                 |
+| ----- | -------- | ------------- | --------------------------------------- |
+| `sql` | `sqlite` | `postgres`    | file on disk → container + named volume |
 
-| Facet   | Local    | Docker / prod | Runs as                                 |
-| ------- | -------- | ------------- | --------------------------------------- |
-| `sql`   | `sqlite` | `postgres`    | file on disk → container + named volume |
-| `kv`    | `memory` | `redis`       | in-process → container                  |
-| `files` | `fs`     | `s3`          | project folder → RustFS container       |
-| `index` | `memory` | `pgvector`    | in-process → pgvector image             |
+Defaults: `sqlite` locally, `postgres` in docker/prod, `memory` in test. Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
 
-Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
-
-### Opt-in SQL drivers
+#### Opt-in SQL drivers
 
 Two more `store.sql` drivers cover specific parity needs. Both are optional peers — `bun add` them yourself; neither changes the `sqlite` local default.
 
@@ -293,33 +264,357 @@ Two more `store.sql` drivers cover specific parity needs. Both are optional peer
   Choose it for dialect/pgvector parity with prod — never as a faster local default.
 </Callout>
 
-A SQL-backed index shares the sql facet's already-open connection, so configure the pair together:
+SQL-backed index drivers (`pgvector`, `libsql`) share this facet's connection — see [Advanced — composing facets together](#advanced--composing-facets-together).
+
+## KV
+
+<StoreFacetMark facet="kv" />
+
+The key-value facet: short-lived cache and session data behind `fx.store`. One namespace per
+declaration; drivers swap `memory` ↔ `redis` per environment.
+
+### Quick start
+
+<Steps>
+
+<Step>
+### Declare a namespace
+
+```typescript
+import { store } from "okengine";
+
+export const sessions = store.kv("sessions", { description: "Session cache" });
+// ref → kv:sessions
+```
+
+</Step>
+
+<Step>
+### Read and write in a Flow
+
+```typescript
+do: async ({ userId, data }, fx) => {
+  const kv = fx.store(sessions);
+  await kv.set(`user:${userId}`, data, "30m");
+  return await kv.get(`user:${userId}`);
+},
+```
+
+</Step>
+
+</Steps>
+
+### Handle API
+
+| Call                    | Effect  | Returns    | Notes                                     |
+| ----------------------- | ------- | ---------- | ----------------------------------------- |
+| `get(key)`              | `read`  | `unknown`  | Missing keys resolve per driver           |
+| `set(key, value, ttl?)` | `write` | `void`     | Values should be JSON-serializable        |
+| `delete(key)`           | `write` | `boolean`  | Whether a key was removed                 |
+| `list(prefix?)`         | `read`  | `string[]` | Prefix filter; powers the Console browser |
+
+### TTL
+
+Optional third argument on `set` is a duration string: `(\d+)(ms|s|m|h|d)` — e.g. `"30m"`, `"1h"`,
+`"5000ms"`. Same call — opposite physics under each driver:
+
+<StoreKvTtl />
+
+**Consequence:** a TTL you rely on in prod does nothing under the local `memory` driver. Test expiry
+against `redis` (docker) when lifetime matters.
+
+### Examples — what follows from each choice
+
+#### A session with expiry
+
+```typescript
+await fx.store(sessions).set(`sess:${token}`, { userId }, "7d");
+```
+
+**Consequence:** under `redis`, the key vanishes after seven days without a sweeper Flow. Under
+`memory`, it lives until process exit or an explicit `delete`.
+
+#### Browse by prefix
+
+```typescript
+const keys = await fx.store(sessions).list("sess:");
+```
+
+**Consequence:** `list` is how the [Console · Store](/docs/console/store) browser enumerates a
+namespace. Prefer stable key prefixes (`user:`, `sess:`) so both your Flows and the Console stay
+readable.
+
+### Per-environment KV drivers
 
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    sql: { local: "libsql" },
-    index: { local: "libsql" },
+    kv: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
   },
+},
+images: {
+  "store.kv": "redis:8-alpine",
 },
 ```
 
+| Facet | Local    | Docker / prod | Runs as                |
+| ----- | -------- | ------------- | ---------------------- |
+| `kv`  | `memory` | `redis`       | in-process → container |
+
+| Variable           | When                             |
+| ------------------ | -------------------------------- |
+| `REDIS_URL`        | Required for the `redis` driver  |
+| `OKE_STORE_KV_URL` | Override if `REDIS_URL` is unset |
+| `OKE_KV_DRIVER`    | Force a driver id (docker)       |
+
+Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
+
+<Callout title="Dry-run refuses KV writes">
+  `set` and `delete` throw `DryRunWriteIsolationError` during dry-run — the runtime will not risk a
+  double-write against a shared Redis. Reads (`get` / `list`) still run.
+</Callout>
+
+## Files
+
+<StoreFacetMark facet="files" />
+
+The blob facet: opaque objects (`Uint8Array` or string) on the same handle as the optional image
+pipeline. Drivers swap `fs` ↔ `s3` (plus `memory` for tests).
+
+### Quick start
+
+<Steps>
+
+<Step>
+### Declare a bucket
+
+```typescript
+import { store } from "okengine";
+
+export const uploads = store.files("attachments", {
+  description: "User uploads",
+});
+// ref → files:attachments
+```
+
+</Step>
+
+<Step>
+### Put and get in a Flow
+
+```typescript
+do: async ({ key, body }, fx) => {
+  const files = fx.store(uploads);
+  await files.put(key, body);
+  return await files.get(key); // Uint8Array | null
+},
+```
+
+</Step>
+
+</Steps>
+
+### Blob CRUD — `put` / `get` / `delete` / `list`
+
+| Call             | Effect  | Returns              | Notes                                |
+| ---------------- | ------- | -------------------- | ------------------------------------ |
+| `put(key, data)` | `write` | `void`               | `data` is `Uint8Array` or `string`   |
+| `get(key)`       | `read`  | `Uint8Array \| null` | Missing key → `null`                 |
+| `delete(key)`    | `write` | `boolean`            | Whether an object was removed        |
+| `list(prefix?)`  | `read`  | `string[]`           | Prefix filter; Console browse source |
+
+```typescript
+const files = fx.store(uploads);
+await files.put("docs/readme.txt", "hello");
+const bytes = await files.get("docs/readme.txt");
+const keys = await files.list("docs/");
+await files.delete("docs/readme.txt");
+```
+
+### Keys
+
+Keys are opaque strings the driver stores as-is. Prefer path-like prefixes (`photos/`, `exports/`).
+
+| Helper / rule               | Meaning                                                                  |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `contentAddressedKey(data)` | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly) |
+| Leading `/` or `..`         | Rejected by the `fs` driver (`Invalid object key`)                       |
+| Non-ASCII keys              | Console warns `non_ascii_key` — may break S3 signed URLs                 |
+
+### Per-environment Files drivers
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
+  },
+},
+images: {
+  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+},
+```
+
+| Facet   | Local | Docker / prod | Runs as                           |
+| ------- | ----- | ------------- | --------------------------------- |
+| `files` | `fs`  | `s3`          | project folder → RustFS container |
+
+| Variable                      | When                                   |
+| ----------------------------- | -------------------------------------- |
+| `S3_BUCKET`                   | Required bucket for the `s3` driver    |
+| `OKE_STORE_FILES_DB`          | Override bucket name                   |
+| `S3_ENDPOINT` · keys · region | S3-compatible endpoint and credentials |
+| `OKE_FILES_DRIVER`            | Force a driver id (docker)             |
+
+`memory` is the test default. Local `fs` writes under a temp root when no binding `root` is set.
+
+<Callout title="Console can browse, not edit bytes">
+  The [Console · Store](/docs/console/store) lists keys and can delete them. Direct edit is **KV +
+  SQL only** — blob bodies are not patched from the Console.
+</Callout>
+
+### Images — `image` / `putImage`
+
+For photos, use Bun's built-in `Bun.Image` pipeline on the same handle (requires Bun `>=1.3.14`).
+`putImage` is one write that fans into several keys:
+
+<StoreFilesVariants />
+
+```typescript
+const meta = await fx.store(uploads).image(key).metadata();
+// → { width, height, format }
+
+await fx
+  .store(uploads)
+  .image(key)
+  .resize(400, 400, { fit: "inside" })
+  .webp({ quality: 80 })
+  .put(`thumbs/${key}.webp`);
+
+const result = await fx.store(uploads).putImage("photos/x.jpg", bytes, {
+  variants: {
+    thumb: { resize: [128, 128, { fit: "inside" }], webp: { quality: 80 } },
+    medium: { resize: [800], webp: { quality: 85 } },
+  },
+  placeholder: true, // ThumbHash LQIP data URL
+});
+// variants: photos/x.thumb.webp, photos/x.medium.webp
+```
+
+| Call                                                                    | Effect                        | Notes                                                                                                                                                             |
+| ----------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `image(key\|bytes).metadata()` / `bytes()` / `blob()` / `placeholder()` | `read` when source is a key   | Chain `resize` · `rotate` · `flip` · `flop` · `modulate`, then `jpeg` / `png` / `webp` (portable); `heic` / `avif` fall back to WebP when the OS codec is missing |
+| `image(…).put(outKey)`                                                  | `read` + `write` (key source) | Persist the encoded result                                                                                                                                        |
+| `putImage(key, data, opts?)`                                            | `write`                       | Original + named variants; keys are `{stem}.{variant}.{ext}`                                                                                                      |
+
+#### Image options
+
+| Option        | Default                 | Meaning                                              |
+| ------------- | ----------------------- | ---------------------------------------------------- |
+| `maxPixels`   | **16 MP** (`4096×4096`) | Decode ceiling — raise it or pass `false` to opt out |
+| `autoOrient`  | `true`                  | Apply JPEG EXIF orientation before transforms        |
+| `variants`    | —                       | Named `{ resize?, jpeg\|png\|webp\|… }` specs        |
+| `placeholder` | —                       | When `true`, return a ThumbHash LQIP data URL        |
+
+`putImage` returns `{ key, meta, variants, placeholder? }` — `variants` maps name → object key.
+
+## Index
+
+<StoreFacetMark facet="index" />
+
+The search / similarity facet: vector ANN and opt-in full-text, both behind `store.index`. The
+handle is a **discriminated union** on `driverId` — vector methods and text methods never mix.
+
+### Quick start
+
+<Steps>
+
+<Step>
+### Declare a vector index
+
+```typescript
+import { store } from "okengine";
+
+export const embeddings = store.index("docs", {
+  dims: 1536,
+  description: "Document embeddings",
+});
+// ref → index:docs
+```
+
+`dims` defaults to `3` at open if omitted — set it to match your embedder.
+
+</Step>
+
+<Step>
+### Upsert and search in a Flow
+
+```typescript
+do: async ({ id, vector, query }, fx) => {
+  const idx = fx.store(embeddings);
+  await idx.upsert(id, vector, { title: "Intro" });
+  return await idx.search(query, 5);
+  // → [{ id, score, meta? }, …]  score = cosine similarity
+},
+```
+
+</Step>
+
+</Steps>
+
+### Handle API — vector vs text
+
+One declaration shape — two search physics. The handle is a **discriminated union** on `driverId`:
+
+<StoreIndexModes />
+
+| Call (both)  | Effect  | Returns       |
+| ------------ | ------- | ------------- |
+| `upsert(…)`  | `write` | `void`        |
+| `search(…)`  | `read`  | hits / result |
+| `delete(id)` | `write` | `boolean`     |
+
+TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at
+runtime.
+
+### Vector ANN
+
 | `store.index` id | Shares connection from     | Real ANN via                         |
 | ---------------- | -------------------------- | ------------------------------------ |
-| `memory`         | — (in-process, default)    | —                                    |
+| `memory`         | — (in-process, default)    | Full scan cosine                     |
 | `pgvector`       | `postgres` or `pglite` sql | HNSW + `cosineDistance`              |
 | `libsql`         | `libsql` sql               | `libsql_vector_idx` + `vector_top_k` |
 
-**Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing `vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to `memory`.
+**Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing
+`vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to
+`memory`. A vector whose length ≠ `dims` throws `vector dims X !== index dims Y`.
+
+Pair SQL + index under [Advanced — composing facets together](#advanced--composing-facets-together).
 
 ### Full-text search — `meilisearch` (opt-in)
 
-`meilisearch` is a fourth `store.index` backend, opt-in only — `memory` stays the default. It is a genuinely different capability from the vector ANN drivers: typo-tolerant, faceted full-text relevance, not cosine similarity. The two models are kept apart by a **discriminated union** on `driverId`, so TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at runtime:
+`meilisearch` is a fourth `store.index` backend, opt-in only — `memory` stays the default when
+`drivers.store.index` is unset. Typo-tolerant, faceted full-text relevance — not cosine similarity.
 
-| `driverId`                       | `upsert`              | `search`                                 | `score` means               |
-| -------------------------------- | --------------------- | ---------------------------------------- | --------------------------- |
-| `memory` / `pgvector` / `libsql` | `(id, vector, meta?)` | `search(vector, topK?)` → `IndexHit[]`   | cosine similarity           |
-| `meilisearch`                    | `(id, document)`      | `search(q, opts?)` → `{ hits, facets? }` | relevance (`_rankingScore`) |
+```typescript
+export const kb = store.index("kb", { description: "Help articles" });
+
+do: async ({ id, doc, q }, fx) => {
+  const idx = fx.store(kb); // driverId: "meilisearch"
+  await idx.upsert(id, { id, ...doc });
+  return await idx.search(q, {
+    topK: 10,
+    filter: "category = guides",
+    facets: ["category"],
+  });
+  // → { hits, facetDistribution? }
+},
+```
+
+| Search option | Meaning                                          |
+| ------------- | ------------------------------------------------ |
+| `topK`        | Max hits (Meilisearch `limit`, default 10)       |
+| `filter`      | Filter expression — attribute must be filterable |
+| `facets`      | Attributes to aggregate into `facetDistribution` |
 
 ```typescript title="oke.config.ts"
 drivers: {
@@ -338,35 +633,67 @@ images: {
 - **Not for vectors:** `ai.embed` / `fx.search` stay vector-only; pointing an embed `into` a meilisearch index fails loud (embeddings don't apply).
 - **Alpine caveat:** the raw glibc binary fails on Alpine/musl _hosts_; the official image is musl-clean. Install the binary for your platform (e.g. Homebrew / install script), or use `--docker`.
 
-## Privacy built in
+### Per-environment Index drivers
+
+Unlike KV/Files, an unset `drivers.store.index` map stays **`memory` in every environment** — there is no docker fallback to `pgvector`. Opt in explicitly:
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    sql: { local: "libsql", docker: "postgres", prod: "postgres" },
+    index: { local: "libsql", docker: "pgvector", prod: "pgvector" },
+  },
+},
+```
+
+| Variable              | When                                              |
+| --------------------- | ------------------------------------------------- |
+| `OKE_INDEX_DRIVER`    | Force a driver id                                 |
+| `OKE_STORE_INDEX_URL` | Required for `meilisearch`                        |
+| `OKE_STORE_INDEX_KEY` | Meilisearch API key (`MEILI_MASTER_KEY` fallback) |
+
+### With AI embeddings
+
+`ai.embed` writes into a vector `store.index`; Flows search it with `fx.search` (or
+`fx.store(index).search`). See [AI](/docs/elements/ai) — this path is vector-only and will not
+target meilisearch.
+
+## Advanced — composing facets together
+
+Facets are independent declarations. A Flow may touch several in one `do` — for example store a files key on a SQL row, or `upsert` into an index after a SQL write. There is no special sync API: `store.resource` `search:` is SQL substring match, not meilisearch.
+
+One real coupling: a SQL-backed index shares the sql facet's already-open connection, so configure the pair together:
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    sql: { local: "libsql" },
+    index: { local: "libsql" },
+  },
+},
+```
+
+Same idea for `pgvector` with `postgres` or `pglite`. The full per-environment map looks like this:
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    sql:   { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
+    kv:    { local: "memory", docker: "redis",    test: "memory", prod: "redis" },
+    files: { local: "fs",     docker: "s3",       test: "memory", prod: "s3" },
+  },
+},
+```
+
+Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
+
+## Advanced — with other elements
 
 Columns tagged `.pii()` or `.sensitive()` are masked at the store boundary — flows, logs, and the Console see a mask, not the value. Revealing cleartext PII requires an explicit `pii:reveal` gate on the flow, so access is a permission, not a convention.
 
-## Examples — what follows from each choice
-
-### An admin table
-
-```typescript
-list: { mode: "offset", count: "exact", limit: 20 },
-```
-
-**Consequence:** `count: "exact"` (the offset default) runs `COUNT(*)` to fill `meta.total`. On a huge table that count is the real cost — set `count: "none"` to return only `meta.offset`.
-
-### An infinite feed
-
-```typescript
-list: { cursor: [notes.createdAt, notes.id], direction: "desc", limit: 20, maxLimit: 100 },
-```
-
-**Consequence:** keyset (cursor) paging is the default when `cursor` columns are set — pages stay stable while new rows are inserted, where offset pages would shift and show duplicates.
-
-### A public, restricted endpoint
-
-```typescript
-list: { mode: "offset", filter: "none", limit: 20 },
-```
-
-**Consequence:** a request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
+Optional `description` on a store (and `.describe("…")` on fields) becomes the human title in the
+[Console · Store](/docs/console/store) browser. Single-table `reads` / `writes` in the Manifest
+power cache invalidation and that same PII masking — see the Callout under [Querying by hand](#querying-by-hand).
 
 ## Troubleshooting
 
@@ -391,13 +718,37 @@ You are on offset paging. Switch `list` to keyset by setting `cursor` columns wi
 `count: "exact"` runs `COUNT(*)` per page. Set `count: "none"` in the `list` options to skip it, or use keyset mode where totals are rarely needed.
 
 </Accordion>
+<Accordion title="KV TTL never expires locally">
+
+The local default is `memory`, which ignores TTL on `set`. Run against `redis` (`oke dev --docker` or `drivers.store.kv.local: "redis"` with `REDIS_URL`) when you need real expiry.
+
+</Accordion>
+<Accordion title="oke boot: redis / meilisearch / S3 URL missing">
+
+Driver-backed facets fail boot when their URL is absent — Redis needs `REDIS_URL`, meilisearch needs `OKE_STORE_INDEX_URL`, S3 needs `S3_BUCKET`. Docker mode expects `oke dev -d` to write these into the compose env.
+
+</Accordion>
+<Accordion title="vector dims X !== index dims Y">
+
+The vector length must match `store.index(…, { dims })` (runtime default `3` if unset). Align `dims` with your embedder, or fix the vector you pass to `upsert` / `search`.
+
+</Accordion>
+<Accordion title="Index stays on memory in docker">
+
+Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` in docker — it stays `memory`. Set the map explicitly (and pair SQL for `pgvector` / `libsql`).
+
+</Accordion>
 </Accordions>
 
 ## Learn more
 
 - [Flow](/docs/elements/flow) — the `fx.store` session inside `do`
+- [AI](/docs/elements/ai) — `ai.embed` into a vector `store.index`, searched via `fx.search`
+- [Gate](/docs/elements/gate) — `pii:reveal` and other permissions on flows
 - [Console · Store](/docs/console/store) — browse data, cache keys, PII masking
 - [CLI Reference](/docs/reference/cli) — `oke db push` · `generate` · `migrate`
+- [Configuration](/docs/reference/configuration) — `drivers.store` maps and `images` pins
+- [Environment variables](/docs/reference/environment-variables) — Redis · S3 · meilisearch URLs
 
 ## Next
 

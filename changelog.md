@@ -32,6 +32,23 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Store docs reorganized around **four facets, one handle** (`sql` · `kv` ·
+  `files` · `index`) with separate Advanced sections for cross-facet and
+  cross-element composition; KV + basic Files CRUD examples added from the
+  real runtime API; meilisearch and image pipeline re-homed under Index and
+  Files.
+- Store docs visuals match Flow/Signal quality: ambient physics demos per
+  facet (SQL op cycle, KV TTL expire, Files put→get, Index search fan-out)
+  on `StoreFacets` and each section `StoreFacetMark`.
+- Store docs: KV / Files / Index sections expanded to SQL-level depth
+  (Quick start Steps, handle tables, drivers/env, examples, image options,
+  meilisearch search opts, AI cross-link, facet Troubleshooting).
+- Store docs physics visuals: `StoreKvTtl` (redis vs memory TTL),
+  `StoreFilesVariants` (putImage fan-out), `StoreIndexModes` (vector vs
+  meilisearch) — ambient demos for claims tables under-teach.
+- Agent skill `oke-docs-visuals` — element-docs micro-interaction standard
+  (FlowTriggers/SignalDelivery quality bar, wire checklist, RevealItem `as`
+  constraints); linked from `oke-docs`.
 - Engine requirement bumped to Bun `>=1.3.14` (root + `create-oke`) for
   `Bun.Image` on `store.files`.
 - Homepage Store card blurb mentions image transforms on the files facet.

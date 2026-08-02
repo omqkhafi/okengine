@@ -16,18 +16,18 @@ flow({
 
 ## Stores
 
-| Signature                                                           | Records      | Returns                                                                                           |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
-| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | rows (`where` · `orderBy` · `limit` · `offset` chainable)                                         |
-| `fx.store(sqlDecl).insert(t).values(v)`                             | `write`      | `Promise<void>`                                                                                   |
-| `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                                                                   |
-| `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                                                                   |
-| `fx.store(sqlDecl).findById(t, id)`                                 | `read`       | row \| undefined                                                                                  |
-| `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write | per op                                                                                            |
-| `fx.store(files).put / get / delete / list(prefix?)`                | read / write | per op                                                                                            |
-| `fx.store(files).image(key\|bytes).…`                               | read / write | Bun.Image chain; terminals gate (see [Store](/docs/elements/store#files-images--image--putimage)) |
-| `fx.store(files).putImage(key, data, opts?)`                        | `write`      | original + variants (+ optional LQIP)                                                             |
-| `fx.store(index).upsert / search(vector, topK?) / delete`           | read / write | per op                                                                                            |
+| Signature                                                           | Records      | Returns                                                                                     |
+| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `fx.store(sqlDecl).select().from(t)…`                               | `read`       | rows (`where` · `orderBy` · `limit` · `offset` chainable)                                   |
+| `fx.store(sqlDecl).insert(t).values(v)`                             | `write`      | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).update(t).set(v).where(…)`                       | `write`      | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).delete(t).where(…)`                              | `write`      | `Promise<void>`                                                                             |
+| `fx.store(sqlDecl).findById(t, id)`                                 | `read`       | row \| undefined                                                                            |
+| `fx.store(kv).get / set(key, value, ttl?) / delete / list(prefix?)` | read / write | per op                                                                                      |
+| `fx.store(files).put / get / delete / list(prefix?)`                | read / write | per op                                                                                      |
+| `fx.store(files).image(key\|bytes).…`                               | read / write | Bun.Image chain; terminals gate (see [Store](/docs/elements/store#images--image--putimage)) |
+| `fx.store(files).putImage(key, data, opts?)`                        | `write`      | original + variants (+ optional LQIP)                                                       |
+| `fx.store(index).upsert / search(vector, topK?) / delete`           | read / write | per op                                                                                      |
 
 See [Store](/docs/elements/store) for the query-builder surface.
 
