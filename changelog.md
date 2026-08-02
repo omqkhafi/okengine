@@ -25,6 +25,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   outlive `leaseMs` can double-deliver without a crash (no heartbeat yet).
 - Orphan signal config stays recoverable by re-declaring; pending/DLQ rows
   are not deleted when a signal disappears from code.
+- Root `README.md` badges match sently’s `outline` style (no forced
+  dark/zinc mode), drop empty / broken / duplicate shields (types,
+  GitHub license/release/stars, second npm), remove Charts section;
+  MIT via npm license.
 
 ### 🐛 Fixed
 

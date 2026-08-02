@@ -13,66 +13,12 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/okengine">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="npm" src="https://shieldcn.dev/npm/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://jsr.io/@omqkhafi/okengine">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="JSR" src="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://www.npmjs.com/package/create-oke">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/create-oke.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="create-oke" src="https://shieldcn.dev/npm/create-oke.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://www.npmjs.com/package/okengine">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/npm/types/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="types" src="https://shieldcn.dev/npm/types/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/license/omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="MIT" src="https://shieldcn.dev/github/license/omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://bun.sh">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Bun-%3E%3D1.3.svg?logo=bun&variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="Bun >=1.3" src="https://shieldcn.dev/badge/Bun-%3E%3D1.3.svg?logo=bun&variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://github.com/omqkhafi/okengine/releases">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/release/omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="release" src="https://shieldcn.dev/github/release/omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://github.com/omqkhafi/okengine/stargazers">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="stars" src="https://shieldcn.dev/github/stars/omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://github.com/omqkhafi/okengine/actions">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="CI" src="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
-  <a href="https://github.com/omqkhafi/okengine/commits">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?variant=outline&mode=dark&size=sm&theme=zinc&font=geist" />
-      <img alt="last commit" src="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?variant=outline&mode=light&size=sm&theme=zinc&font=geist" />
-    </picture>
-  </a>
+  <a href="https://www.npmjs.com/package/okengine"><img alt="npm" src="https://shieldcn.dev/npm/okengine.svg?size=sm&variant=outline" /></a>
+  <a href="https://jsr.io/@omqkhafi/okengine"><img alt="JSR" src="https://shieldcn.dev/jsr/@omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
+  <a href="https://opensource.org/licenses/MIT"><img alt="MIT" src="https://shieldcn.dev/npm/license/okengine.svg?size=sm&variant=outline" /></a>
+  <a href="https://bun.sh"><img alt="Bun >=1.3" src="https://shieldcn.dev/badge/Bun-%3E%3D1.3.svg?logo=bun&size=sm&variant=outline" /></a>
+  <a href="https://github.com/omqkhafi/okengine/actions"><img alt="CI" src="https://shieldcn.dev/github/ci/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
+  <a href="https://github.com/omqkhafi/okengine/commits"><img alt="last commit" src="https://shieldcn.dev/github/last-commit/omqkhafi/okengine.svg?size=sm&variant=outline" /></a>
 </p>
 
 <p align="center">
@@ -170,72 +116,6 @@ export const remove = mounted.remove;
 ```
 
 Full walkthrough: [Basic usage](https://oke.omqkhafi.dev/docs/get-started/basic-usage).
-
-## Charts
-
-<p align="center">
-  <a href="https://github.com/omqkhafi/okengine/issues">
-    <picture>
-      <source
-        media="(prefers-color-scheme: dark)"
-        srcset="https://shieldcn.dev/chart/github/issues/omqkhafi/okengine.svg?theme=zinc&font=geist&mode=dark"
-      />
-      <img
-        alt="GitHub issues over time"
-        src="https://shieldcn.dev/chart/github/issues/omqkhafi/okengine.svg?theme=zinc&font=geist&mode=light"
-        width="750"
-      />
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/omqkhafi">
-    <picture>
-      <source
-        media="(prefers-color-scheme: dark)"
-        srcset="https://shieldcn.dev/chart/github/commits/omqkhafi.svg?theme=zinc&font=geist&mode=dark"
-      />
-      <img
-        alt="Lifetime commit history"
-        src="https://shieldcn.dev/chart/github/commits/omqkhafi.svg?theme=zinc&font=geist&mode=light"
-        width="750"
-      />
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/okengine">
-    <picture>
-      <source
-        media="(prefers-color-scheme: dark)"
-        srcset="https://shieldcn.dev/chart/npm/okengine.svg?theme=zinc&font=geist&mode=dark"
-      />
-      <img
-        alt="okengine npm downloads"
-        src="https://shieldcn.dev/chart/npm/okengine.svg?theme=zinc&font=geist&mode=light"
-        width="750"
-      />
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/create-oke">
-    <picture>
-      <source
-        media="(prefers-color-scheme: dark)"
-        srcset="https://shieldcn.dev/chart/npm/create-oke.svg?theme=zinc&font=geist&mode=dark"
-      />
-      <img
-        alt="create-oke npm downloads"
-        src="https://shieldcn.dev/chart/npm/create-oke.svg?theme=zinc&font=geist&mode=light"
-        width="750"
-      />
-    </picture>
-  </a>
-</p>
 
 ## Documentation
 
