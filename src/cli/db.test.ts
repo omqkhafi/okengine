@@ -3,7 +3,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { Database } from "bun:sqlite";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
@@ -12,6 +13,54 @@ import { dbCli, emitAbstractSchemaPrestep, runDb, runGenerate, runPush } from ".
 /** Repo public entry — absolute import so temp apps need no install. */
 const OKE_INDEX = resolve(import.meta.dir, "../index.ts");
 const CONFIG_MOD = resolve(import.meta.dir, "../config/index.ts");
+const DB_MOD = resolve(import.meta.dir, "./db.ts");
+
+/**
+ * Run `oke db generate|migrate` in a fresh Bun process.
+ *
+ * drizzle-kit's in-process `generate` caches the schema module — a second
+ * generate in the same process after rewriting the schema file returns
+ * `no_changes`. Real CLI invocations are one process each; the adversarial
+ * multi-migration test must match that.
+ *
+ * Temp projects live under {@link import.meta.dir} so `bunx drizzle-kit`
+ * (migrate's default) walks up to the repo `node_modules`.
+ */
+async function runDbFresh(
+  sub: "generate" | "migrate",
+  cwd: string,
+): Promise<{ readonly code: number; readonly out: string }> {
+  const proc = Bun.spawn(
+    [
+      "bun",
+      "-e",
+      `import { runDb } from ${JSON.stringify(DB_MOD)};
+const cwd = ${JSON.stringify(cwd)};
+const prev = process.cwd();
+process.chdir(cwd);
+try {
+  process.exit(await runDb(${JSON.stringify(sub)}, { cwd, skipEmit: true }));
+} finally {
+  process.chdir(prev);
+}
+`,
+    ],
+    { cwd, stdout: "pipe", stderr: "pipe", env: process.env as Record<string, string> },
+  );
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { code, out: `${stdout}${stderr}` };
+}
+
+async function migrationFolders(drizzleDir: string): Promise<string[]> {
+  return (await readdir(drizzleDir, { withFileTypes: true }))
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+}
 
 describe("oke db", () => {
   test("help lists subcommands", async () => {
@@ -186,4 +235,143 @@ export const app = oke({ name: "plugin-only" }).plug(
     expect(generated).toContain('sqliteTable("metrics_daily"');
     expect(generated).toContain('integer("hits")');
   });
+});
+
+describe("oke db multi-migration catch-up", () => {
+  /**
+   * Real drizzle-kit generate/migrate through `oke db` — proves multi-file
+   * versioned migrations and that re-migrate / environment lag only apply
+   * previously-unapplied files (drizzle-kit `__drizzle_migrations` history).
+   * The CLI wrapper must not interfere with that bookkeeping.
+   */
+  test("second migrate skips applied files; lag DB catches up with only the new one", async () => {
+    const dir = await mkdtemp(join(import.meta.dir, ".tmp-db-mig-"));
+    try {
+      await mkdir(join(dir, "src"), { recursive: true });
+      await writeFile(
+        join(dir, "src", "schema.ts"),
+        `import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+export const notes = sqliteTable("notes", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+});
+`,
+      );
+      await writeFile(
+        join(dir, "drizzle.config.ts"),
+        `import { defineConfig } from "drizzle-kit";
+export default defineConfig({
+  dialect: "sqlite",
+  schema: "./src/schema.ts",
+  out: "./drizzle",
+  dbCredentials: { url: "file:./app.db" },
+});
+`,
+      );
+
+      const gen1 = await runDbFresh("generate", dir);
+      expect(gen1.code).toBe(EXIT_OK);
+      expect(gen1.out).toMatch(/oke db generate: wrote /);
+      const migsAfterFirst = await migrationFolders(join(dir, "drizzle"));
+      expect(migsAfterFirst.length).toBe(1);
+      const initialMig = migsAfterFirst[0];
+      expect(initialMig).toBeDefined();
+      if (initialMig === undefined) throw new Error("expected initial migration folder");
+
+      const mig1 = await runDbFresh("migrate", dir);
+      expect(mig1.code).toBe(EXIT_OK);
+      expect(mig1.out).toContain("oke db migrate: applied");
+
+      let db = new Database(join(dir, "app.db"));
+      expect(
+        db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='notes'").get(),
+      ).toBeTruthy();
+      let history = db.query("SELECT name FROM __drizzle_migrations ORDER BY id").all() as Array<{
+        name: string;
+      }>;
+      expect(history.map((r) => r.name)).toEqual([initialMig]);
+      db.close();
+
+      await writeFile(
+        join(dir, "src", "schema.ts"),
+        `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+export const notes = sqliteTable("notes", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  pinned: integer("pinned").notNull().default(0),
+});
+`,
+      );
+      // Distinct timestamp folder names (drizzle-kit uses YYYYMMDDHHmmss).
+      await Bun.sleep(1100);
+
+      const gen2 = await runDbFresh("generate", dir);
+      expect(gen2.code).toBe(EXIT_OK);
+      expect(gen2.out).toMatch(/oke db generate: wrote /);
+      const migs = await migrationFolders(join(dir, "drizzle"));
+      expect(migs.length).toBe(2);
+      const firstMig = migs[0];
+      const secondMig = migs[1];
+      expect(firstMig).toBeDefined();
+      expect(secondMig).toBeDefined();
+      if (firstMig === undefined || secondMig === undefined) {
+        throw new Error("expected two migration folders");
+      }
+      expect(firstMig).toBe(initialMig);
+
+      const mig2 = await runDbFresh("migrate", dir);
+      expect(mig2.code).toBe(EXIT_OK);
+
+      db = new Database(join(dir, "app.db"));
+      history = db.query("SELECT name FROM __drizzle_migrations ORDER BY id").all() as Array<{
+        name: string;
+      }>;
+      expect(history.map((r) => r.name)).toEqual([firstMig, secondMig]);
+      const cols = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
+      expect(cols.map((c) => c.name)).toContain("pinned");
+      db.close();
+
+      // Idempotent re-migrate: history unchanged, no error.
+      const migNoop = await runDbFresh("migrate", dir);
+      expect(migNoop.code).toBe(EXIT_OK);
+      db = new Database(join(dir, "app.db"));
+      const historyNoop = db
+        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
+        .all() as Array<{ name: string }>;
+      expect(historyNoop.map((r) => r.name)).toEqual([firstMig, secondMig]);
+      db.close();
+
+      // Staging/prod lag: fresh DB with only the first migration applied,
+      // then both files present — catch up applies only the second.
+      await rm(join(dir, "app.db"), { force: true });
+      const stash = join(dir, "_stash_second");
+      await rm(stash, { recursive: true, force: true });
+      await rename(join(dir, "drizzle", secondMig), stash);
+
+      const lagFirst = await runDbFresh("migrate", dir);
+      expect(lagFirst.code).toBe(EXIT_OK);
+      db = new Database(join(dir, "app.db"));
+      const lagHist1 = db
+        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
+        .all() as Array<{ name: string }>;
+      expect(lagHist1.map((r) => r.name)).toEqual([firstMig]);
+      const lagCols1 = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
+      expect(lagCols1.map((c) => c.name)).not.toContain("pinned");
+      db.close();
+
+      await rename(stash, join(dir, "drizzle", secondMig));
+      const lagCatchUp = await runDbFresh("migrate", dir);
+      expect(lagCatchUp.code).toBe(EXIT_OK);
+      db = new Database(join(dir, "app.db"));
+      const lagHist2 = db
+        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
+        .all() as Array<{ name: string }>;
+      expect(lagHist2.map((r) => r.name)).toEqual([firstMig, secondMig]);
+      const lagCols2 = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
+      expect(lagCols2.map((c) => c.name)).toContain("pinned");
+      db.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
 });

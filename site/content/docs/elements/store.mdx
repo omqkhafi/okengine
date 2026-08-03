@@ -239,6 +239,18 @@ not when emit rewrites `schema.generated.ts`.
 Opt out with `--no-db-push` or `db: { autoPush: false }`. Docker/prod **never**
 auto-apply DDL; a missing table fails as **OKE1101** (`oke db migrate`).
 
+#### Multiple environments
+
+Local can `oke db push` freely — safe to wipe and regenerate.
+
+Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
+`oke db migrate` applies only unrecorded files in order — behind DBs catch up.
+
+| Environment    | Sync                                                           |
+| -------------- | -------------------------------------------------------------- |
+| Local          | `oke db push` (or auto-push from `oke dev`)                    |
+| Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
+
 <Callout title="Escape hatch">
   Hand-written Drizzle in `src/schema.ts` stays supported — if there is nothing to emit, the emit
   step is skipped and your file is used as-is. Plugins may contribute **whole new tables**;

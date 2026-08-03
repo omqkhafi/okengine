@@ -67,3 +67,6 @@ blob-report/
 
 # Local agent / implementation reports (never commit)
 reports/
+
+# Ephemeral CLI integration fixtures (e.g. src/cli/.tmp-db-mig-*)
+.tmp-db-mig-*/

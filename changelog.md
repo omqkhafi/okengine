@@ -10,6 +10,14 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- Store docs: short **Multiple environments** note under SQL schema sync —
+  local `push` vs staging/prod versioned `drizzle/` + `migrate` catch-up.
+- `oke db` adversarial test: multi-file `generate` + re-`migrate` skips
+  applied migrations; simulated env lag applies only the pending file
+  (drizzle-kit `__drizzle_migrations` history through the CLI wrapper).
+
 ## v0.7.0 — 2026-08-02
 
 ### ✨ Added
