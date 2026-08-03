@@ -65,6 +65,9 @@ export {
   now,
   defineTable,
   field,
+  defineSeed,
+  normalizeSeedFns,
+  resolveSeedCategory,
   createStoreRuntime,
   type StoreDecl,
   type StoreRuntime,
@@ -72,6 +75,12 @@ export {
   type TableHandle,
   type SchemaTableDecl,
   type SchemaColumnDecl,
+  type SeedDef,
+  type SeedFn,
+  type SeedFns,
+  type SeedCategory,
+  type UpsertResult,
+  type UpsertStatus,
 } from "./elements/store.ts";
 
 export {

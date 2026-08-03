@@ -9,6 +9,9 @@
 
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { JournalSuspend } from "./journal-suspend.ts";
+
+export { JournalSuspend, isJournalSuspend } from "./journal-suspend.ts";
 
 /** Status of a durable run. */
 export type JournalRunStatus = "running" | "sleeping" | "completed" | "failed";
@@ -55,26 +58,6 @@ export interface JournalRun {
   output?: unknown;
   readonly createdAt: number;
   updatedAt: number;
-}
-
-/**
- * Thrown inside a durable body when a sleep has not yet elapsed.
- * The runner catches this and parks the run as `sleeping`.
- */
-export class JournalSuspend extends Error {
-  readonly wakeAt: number;
-  readonly label: string;
-
-  /**
-   * @param label - Sleep label
-   * @param wakeAt - Absolute wake epoch-ms
-   */
-  constructor(label: string, wakeAt: number) {
-    super(`journal suspend: sleep "${label}" until ${wakeAt}`);
-    this.name = "JournalSuspend";
-    this.label = label;
-    this.wakeAt = wakeAt;
-  }
 }
 
 /** Persistence backend for journal runs. */
@@ -374,15 +357,6 @@ export function createJournal(options: CreateJournalOptions): Journal {
       return openSession(run);
     },
   };
-}
-
-/**
- * True when `err` is a {@link JournalSuspend}.
- *
- * @param err - Unknown
- */
-export function isJournalSuspend(err: unknown): err is JournalSuspend {
-  return err instanceof JournalSuspend;
 }
 
 function cloneRun(run: JournalRun): JournalRun {

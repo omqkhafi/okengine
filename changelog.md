@@ -12,6 +12,25 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `defineSeed({ essential, dev, prod })` + `oke db seed` — explicit seed
+  runs (never at boot). `essential` every env; `dev` on `local`/`docker`;
+  `prod` on `prod` only. Docker/prod print the DB target and require typing
+  the env name (`--force` skips). create-oke standard + advanced ship real
+  `src/seed/` (welcome note + sample notes).
+- `fx.store(db).upsert(table, matchOn, values, options?)` — insert when no
+  match; existing rows untouched unless `{ onExisting: "update" }`.
+- Store docs **Seeding** section (categories, upsert, confirm, migration
+  boundary) and CLI reference for `oke db seed`.
+- `<StoreSeeding />` teaching figure — env→block lighting + upsert outcomes
+  under Store docs Seeding.
+
+### ♻️ Changed
+
+- Split `JournalSuspend` / `isJournalSuspend` into `journal-suspend.ts` so
+  the kernel edge profile (retry filter) no longer pulls Node journal
+  persistence into the browser bundle (~15.01 kB → ~13.4 kB gzip).
+- Store Seeding docs: full env matrix, simple vs complex file forms, upsert
+  outcome table, CLI flags, seed-vs-migrate Callout.
 - Store docs: short **Multiple environments** note under SQL schema sync —
   local `push` vs staging/prod versioned `drizzle/` + `migrate` catch-up.
 - `oke db` adversarial test: multi-file `generate` + re-`migrate` skips

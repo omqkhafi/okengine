@@ -28,6 +28,8 @@ oke schema generate              # core + plugin stubs → schema/oke.ts   (--ch
 oke db push                      # domain schema.ts → live local DB (dev; drizzle-kit)
 oke db generate                  # versioned SQL under drizzle/ (review)
 oke db migrate                   # apply migrations (explicit; never auto in prod)
+oke db seed                      # defineSeed (essential + env category); never at boot
+oke db seed --env prod --force   # CI: skip docker/prod confirmation prompt
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 

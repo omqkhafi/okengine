@@ -238,6 +238,21 @@ export interface SqlStoreHandle {
    */
   exists(table: TableHandle | unknown, idOrWhere: string | WhereMap): Promise<boolean>;
   /**
+   * Insert when no row matches `matchOn`; never touches an existing match
+   * unless `options.onExisting` is `"update"`.
+   *
+   * @param table - Table
+   * @param matchOn - Equality map or Drizzle condition identifying the row
+   * @param values - Row values for insert (and optional update)
+   * @param options - Per-call opt-in to update an existing match
+   */
+  upsert(
+    table: TableHandle | unknown,
+    matchOn: WhereMap | unknown,
+    values: SqlRow,
+    options?: { readonly onExisting?: "update" },
+  ): Promise<UpsertResult>;
+  /**
    * Atomically add `by` to `column` on the PK row.
    *
    * @param table - Table
@@ -274,6 +289,14 @@ export interface SqlStoreHandle {
    * @param table - Table handle
    */
   ensureTable(table: TableHandle): Promise<void>;
+}
+
+/** Outcome of {@link SqlStoreHandle.upsert}. */
+export type UpsertStatus = "upserted" | "changed" | "already-existed";
+
+/** Result envelope for {@link SqlStoreHandle.upsert}. */
+export interface UpsertResult {
+  readonly status: UpsertStatus;
 }
 
 /** Options for {@link SqlStoreHandle.page}. */
@@ -615,6 +638,38 @@ export function createSqlStoreHandle(
         compiled.params,
       );
       return rows.length > 0;
+    },
+
+    async upsert(table, matchOn, values, upsertOptions) {
+      await ensureFromMeta(table);
+      const name = resolveTableName(table);
+      const compiled = compileTableWhere(table, matchOn);
+      if (!compiled.clause) {
+        throw new Error("upsert() requires at least one matchOn predicate");
+      }
+      const found = await query(
+        `SELECT 1 AS "ok" FROM ${quoteIdent(name)} WHERE ${compiled.clause} LIMIT 1`,
+        compiled.params,
+      );
+      if (found.length === 0) {
+        const prepared = prepareInsertRow(table, values);
+        const cols = Object.keys(prepared);
+        const placeholders = cols.map(() => "?").join(", ");
+        const colList = cols.map(quoteIdent).join(", ");
+        const params = cols.map((c) => prepared[c]);
+        await exec(`INSERT INTO ${quoteIdent(name)} (${colList}) VALUES (${placeholders})`, params);
+        return { status: "upserted" as const };
+      }
+      if (upsertOptions?.onExisting !== "update") {
+        return { status: "already-existed" as const };
+      }
+      const prepared = prepareUpdateRow(table, values);
+      const setEntries = Object.entries(prepared);
+      if (setEntries.length === 0) return { status: "changed" as const };
+      const setSql = setEntries.map(([col]) => `${quoteIdent(col)} = ?`).join(", ");
+      const params = [...setEntries.map(([, v]) => v), ...compiled.params];
+      await exec(`UPDATE ${quoteIdent(name)} SET ${setSql} WHERE ${compiled.clause}`, params);
+      return { status: "changed" as const };
     },
 
     async increment(table, idValue, column, by = 1) {

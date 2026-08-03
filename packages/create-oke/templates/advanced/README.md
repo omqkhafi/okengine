@@ -7,6 +7,7 @@ Docker-ready [okengine](https://oke.omqkhafi.dev) **Notes** starter — same dom
 bun install
 oke mode docker   # seeded by create-oke recommended path
 oke dev
+oke db seed       # essential welcome note + local/docker sample notes
 ```
 
 | Surface | URL |
@@ -25,6 +26,12 @@ oke dev
 
 Configure AI with `oke ai setup` or `create-oke --ai` (writes `src/ai.ts` + `drivers.ai`).
 Without AI, summarize returns a local excerpt (`via: "fallback"`).
+
+## Layout extras
+
+| Path | Role |
+| ---- | ---- |
+| `src/seed/` | `oke db seed` — essential + dev sample notes |
 
 ## Drivers
 

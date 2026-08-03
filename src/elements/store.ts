@@ -91,6 +91,9 @@ export type {
   ResolvedListConfig,
 } from "./store/resource.ts";
 
+export { defineSeed, normalizeSeedFns, resolveSeedCategory } from "./store/seed.ts";
+export type { SeedCategory, SeedDef, SeedFn, SeedFns } from "./store/seed.ts";
+
 export { createSqlStoreHandle, resolvePkColumn } from "./store/sql-session.ts";
 export type {
   SqlStoreHandle,
@@ -102,6 +105,8 @@ export type {
   InsertValuesBuilder,
   SqlSessionOptions,
   SqlPageOptions,
+  UpsertResult,
+  UpsertStatus,
   WhereMap,
 } from "./store/sql-session.ts";
 

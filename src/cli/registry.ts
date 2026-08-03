@@ -202,7 +202,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "db",
-    summary: "domain schema — push · generate · migrate",
+    summary: "domain schema — push · generate · migrate · seed",
     subcommands: [
       {
         name: "push",
@@ -214,6 +214,12 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             takesValue: true,
             valueName: "path",
             summary: "drizzle.config.ts path",
+          },
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (local|docker|test|prod)",
           },
           HELP,
         ],
@@ -229,6 +235,12 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             valueName: "path",
             summary: "drizzle.config.ts path",
           },
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (local|docker|test|prod)",
+          },
           HELP,
         ],
       },
@@ -243,6 +255,30 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             valueName: "path",
             summary: "drizzle.config.ts path",
           },
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (local|docker|test|prod)",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "seed",
+        summary: "Run defineSeed (essential + env category); never at boot",
+        flags: [
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (local|docker|test|prod)",
+          },
+          {
+            long: "--force",
+            summary: "Skip docker/prod confirmation prompt",
+          },
+          ENTRY,
           HELP,
         ],
       },

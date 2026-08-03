@@ -251,6 +251,125 @@ Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
 | Local          | `oke db push` (or auto-push from `oke dev`)                    |
 | Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
 
+#### Seeding
+
+`oke db seed` loads `defineSeed` from `src/seed/index.ts` — **never at boot**.
+Seed proves existence (bootstrap rows); it does not correct schema-adjacent data over time.
+
+<StoreSeeding />
+
+| env      | `essential` | `dev` | `prod` |
+| -------- | ----------- | ----- | ------ |
+| `local`  | yes         | yes   | no     |
+| `docker` | yes         | yes   | no     |
+| `test`   | yes         | no    | no     |
+| `prod`   | yes         | no    | yes    |
+
+`docker` is a laptop profile with prod-shaped drivers — still development, so `dev` runs.
+Outside `test`, exactly one of `dev` / `prod` runs with `essential`.
+
+**Simple form** — everything inline:
+
+```ts
+import { defineSeed, type Fx } from "okengine";
+import { db } from "../core";
+import { notes } from "../schema.decl";
+
+export default defineSeed({
+  essential: async (fx: Fx) => {
+    await fx
+      .store(db)
+      .upsert(
+        notes,
+        { id: "welcome" },
+        { id: "welcome", title: "Welcome", body: "…", createdAt: 1 },
+      );
+  },
+  dev: async (fx: Fx) => {
+    await fx
+      .store(db)
+      .upsert(
+        notes,
+        { id: "sample-ideas" },
+        { id: "sample-ideas", title: "Ideas", body: "…", createdAt: 2 },
+      );
+  },
+  // prod: async (fx) => { /* e.g. register a real external webhook URL */ },
+});
+```
+
+**Complex form** — one function per file, compose with arrays (order = run order):
+
+```ts
+import { defineSeed } from "okengine";
+import { seedWelcome } from "./essential/welcome";
+import { seedSamples } from "./dev/samples";
+import { seedWebhook } from "./prod/webhook";
+
+export default defineSeed({
+  essential: [seedWelcome],
+  dev: [seedSamples],
+  prod: [seedWebhook],
+});
+```
+
+| `upsert` outcome  | When                                       |
+| ----------------- | ------------------------------------------ |
+| `upserted`        | no row matched `matchOn` — insert          |
+| `already-existed` | match found; default leaves it alone       |
+| `changed`         | match found and `{ onExisting: "update" }` |
+
+Default upsert is **insert-if-missing**. Pass `{ onExisting: "update" }` only when this
+call should also rewrite other columns on a match — opt-in per call, never global.
+
+```ts
+// Safe bootstrap — second seed run leaves the row alone
+await fx.store(db).upsert(
+  notes,
+  { id: "welcome" },
+  {
+    id: "welcome",
+    title: "Welcome",
+    body: "Your Notes API is ready.",
+    createdAt: 1,
+  },
+);
+
+// Refresh copy on every seed — match stays; title/body are rewritten
+await fx.store(db).upsert(
+  notes,
+  { id: "welcome" },
+  {
+    id: "welcome",
+    title: "Welcome (updated)",
+    body: "New bootstrap copy.",
+    createdAt: 1,
+  },
+  { onExisting: "update" },
+);
+```
+
+**Consequence:** default keeps operator edits safe across re-seeds; `onExisting: "update"`
+is for seed-owned rows you intentionally overwrite. Schema-wide data fixes still belong in
+migrations, not seed.
+
+| Env               | Confirm                                               |
+| ----------------- | ----------------------------------------------------- |
+| `local` / `test`  | none                                                  |
+| `docker` / `prod` | print DB target; type the env name (`--force` for CI) |
+
+```bash
+oke db seed                 # resolve env like other oke db commands (.oke/mode)
+oke db seed --env docker    # explicit override
+oke db seed --env prod --force
+```
+
+<Callout title="Seed vs migrate">
+  Permanent reference-data corrections go through `oke db generate` → `migrate`, not repeated seed.
+  Optional `drizzle-seed` may be used inside a `dev` function body only — never as the seed system
+  backbone.
+</Callout>
+
 <Callout title="Escape hatch">
   Hand-written Drizzle in `src/schema.ts` stays supported — if there is nothing to emit, the emit
   step is skipped and your file is used as-is. Plugins may contribute **whole new tables**;

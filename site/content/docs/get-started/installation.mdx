@@ -60,17 +60,18 @@ bunx create-oke@latest my-app --yes
 ```
 
 Two Notes starters: **standard** (local-first) and **advanced** (docker-ready +
-files/digest/AI). On a TTY: pick a template, then **recommended defaults**,
-**customize** (choose **local** or **docker** first, walk that side’s facets,
-optionally customize the other; saved to `~/.oke/create-defaults.json`), or
-**reuse** when saved settings match that template. The project-name step rejects
-a path that already exists and is not empty.
+files/digest/AI).
 
-Non-TTY / `--yes` stay scriptable. Default pins: local SQLite · Docker/prod
-Postgres. `--sql postgres` pins SQL envs; `--ai` runs the AI model wizard
-**before** install. Scaffold writes `.oke/mode` from the primary side
-(recommended: standard → `local`, advanced → `docker`) so the first `oke dev`
-skips the mode prompt unless you delete that file or pass `--local` / `--docker`.
+On a TTY: pick a template, then **recommended defaults**, **customize** (local
+or docker first; saved to `~/.oke/create-defaults.json`), or **reuse** matching
+saved settings. Project name rejects a non-empty existing path.
+
+Non-TTY / `--yes` stay scriptable. Defaults: local SQLite · Docker/prod Postgres.
+`--sql postgres` pins SQL; `--ai` runs the model wizard before install.
+
+Scaffold writes `.oke/mode` (standard → `local`, advanced → `docker`) so the
+first `oke dev` skips the mode prompt unless you delete it or pass `--local` /
+`--docker`.
 
 </Step>
 
@@ -86,11 +87,12 @@ Four ports come up together (mnemonic: **O·K·E = 6·5·3**):
 
 <Surfaces />
 
-Open `http://localhost:6533`. On first boot, claim the Console with the
-**claim code** printed once in the `oke dev` log, then create the first
-operator. Password policy matches Gate auth: **≥ 12 characters, with a letter
-and a number.** After that, if the Console lists your flows, the install
-worked — **derived, not configured.**
+Open `http://localhost:6533`. Claim the Console with the **claim code** printed
+once in the `oke dev` log, then create the first operator.
+
+Password policy matches Gate auth: **≥ 12 characters, with a letter and a
+number.** If the Console lists your flows, the install worked — **derived, not
+configured.**
 
 </Step>
 

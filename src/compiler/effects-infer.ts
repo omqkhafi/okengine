@@ -114,6 +114,7 @@ const TABLE_ARG_METHODS = new Set([
   "findById",
   "exists",
   "update",
+  "upsert",
   "increment",
   "delete",
 ]);

@@ -14,7 +14,7 @@ import {
   linkAbort,
   withAbortSignal,
 } from "./abort-scope.ts";
-import { isJournalSuspend } from "./journal.ts";
+import { isJournalSuspend } from "./journal-suspend.ts";
 
 /** A unit of work started under an abort scope. */
 export type FxThunk<T> = () => T | Promise<T>;

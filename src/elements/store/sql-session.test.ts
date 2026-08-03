@@ -56,6 +56,7 @@ describe("SqlStoreHandle — no relational query surface (path b)", () => {
         "findById",
         "delete",
         "exists",
+        "upsert",
         "increment",
         "raw",
         "count",
@@ -130,6 +131,44 @@ describe("SqlStoreHandle — orderBy / limit select chain", () => {
 
     const rows = await handle.select().from(posts).where(like(posts.title, "A%"));
     expect(rows.map((r) => r.id)).toEqual(["p1"]);
+    await conn.close();
+  });
+});
+
+describe("SqlStoreHandle — upsert", () => {
+  test("default inserts once then already-existed without touching the row", async () => {
+    const { handle, conn } = await openHandle();
+    const first = await handle.upsert(
+      posts,
+      { id: "welcome" },
+      { id: "welcome", title: "Hello", createdAt: 1 },
+    );
+    expect(first.status).toBe("upserted");
+
+    const second = await handle.upsert(
+      posts,
+      { id: "welcome" },
+      { id: "welcome", title: "Changed", createdAt: 2 },
+    );
+    expect(second.status).toBe("already-existed");
+
+    const row = await handle.findById(posts, "welcome");
+    expect(row).toEqual({ id: "welcome", title: "Hello", createdAt: 1 });
+    await conn.close();
+  });
+
+  test("onExisting update changes matched columns", async () => {
+    const { handle, conn } = await openHandle();
+    await handle.upsert(posts, { id: "n1" }, { id: "n1", title: "one", createdAt: 10 });
+    const updated = await handle.upsert(
+      posts,
+      { id: "n1" },
+      { id: "n1", title: "two", createdAt: 20 },
+      { onExisting: "update" },
+    );
+    expect(updated.status).toBe("changed");
+    const row = await handle.findById(posts, "n1");
+    expect(row).toEqual({ id: "n1", title: "two", createdAt: 20 });
     await conn.close();
   });
 });

@@ -7,8 +7,18 @@ import { Database } from "bun:sqlite";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
-import { dbCli, emitAbstractSchemaPrestep, runDb, runGenerate, runPush } from "./db.ts";
+import { createFx } from "../kernel/fx.ts";
+import { defineSeed, type SeedFn } from "../elements/store/seed.ts";
+import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
+import {
+  dbCli,
+  emitAbstractSchemaPrestep,
+  executeSeedDef,
+  runDb,
+  runGenerate,
+  runPush,
+  runSeed,
+} from "./db.ts";
 
 /** Repo public entry — absolute import so temp apps need no install. */
 const OKE_INDEX = resolve(import.meta.dir, "../index.ts");
@@ -75,6 +85,7 @@ describe("oke db", () => {
       expect(lines.join("\n")).toContain("push");
       expect(lines.join("\n")).toContain("generate");
       expect(lines.join("\n")).toContain("migrate");
+      expect(lines.join("\n")).toContain("seed");
       expect(lines.join("\n")).toContain("oke schema generate");
     } finally {
       console.log = orig;
@@ -374,4 +385,143 @@ export const notes = sqliteTable("notes", {
       await rm(dir, { recursive: true, force: true });
     }
   }, 120_000);
+});
+
+describe("oke db seed", () => {
+  function trackingDef(order: string[]) {
+    const a: SeedFn = async function a() {
+      order.push("a");
+    };
+    const b: SeedFn = async function b() {
+      order.push("b");
+    };
+    const dev: SeedFn = async function seedDev() {
+      order.push("dev");
+    };
+    const prod: SeedFn = async function seedProd() {
+      order.push("prod");
+    };
+    return defineSeed({
+      essential: [a, b],
+      dev,
+      prod,
+    });
+  }
+
+  async function seedWith(
+    env: "local" | "docker" | "test" | "prod",
+    extras: Parameters<typeof runSeed>[0] = {},
+  ) {
+    const order: string[] = [];
+    const out: string[] = [];
+    const code = await runSeed({
+      env,
+      seedDef: trackingDef(order),
+      createFx: async () => ({
+        fx: createFx({ flow: "oke.db.seed.test" }),
+        stop: async () => {},
+      }),
+      write: (t) => out.push(t),
+      force: true,
+      ...extras,
+    });
+    return { code, order, out: out.join("") };
+  }
+
+  test("essential array order is execution order", async () => {
+    const { code, order, out } = await seedWith("local");
+    expect(code).toBe(EXIT_OK);
+    expect(order.slice(0, 2)).toEqual(["a", "b"]);
+    expect(out).toContain("oke db seed: essential a");
+    expect(out).toContain("oke db seed: ok");
+  });
+
+  test("local runs essential + dev, never prod", async () => {
+    const { order } = await seedWith("local");
+    expect(order).toEqual(["a", "b", "dev"]);
+  });
+
+  test("docker runs essential + dev, never prod", async () => {
+    const { order } = await seedWith("docker");
+    expect(order).toEqual(["a", "b", "dev"]);
+  });
+
+  test("prod runs essential + prod, never dev", async () => {
+    const { order } = await seedWith("prod");
+    expect(order).toEqual(["a", "b", "prod"]);
+  });
+
+  test("test runs essential only", async () => {
+    const { order, out } = await seedWith("test");
+    expect(order).toEqual(["a", "b"]);
+    expect(out).toContain("essential only");
+  });
+
+  test("prod without --force requires confirmEnv", async () => {
+    const out: string[] = [];
+    let asked = false;
+    const code = await runSeed({
+      env: "prod",
+      force: false,
+      stdinIsTTY: true,
+      seedDef: defineSeed({ essential: async () => {} }),
+      createFx: async () => ({
+        fx: createFx({ flow: "oke.db.seed.test" }),
+        stop: async () => {},
+      }),
+      confirmEnv: async () => {
+        asked = true;
+        return false;
+      },
+      write: (t) => out.push(t),
+    });
+    expect(asked).toBe(true);
+    expect(code).toBe(EXIT_USAGE);
+    expect(out.join("")).toContain("cancelled");
+  });
+
+  test("prod with --force skips confirm", async () => {
+    let asked = false;
+    const { code } = await seedWith("prod", {
+      force: true,
+      confirmEnv: async () => {
+        asked = true;
+        return false;
+      },
+    });
+    expect(asked).toBe(false);
+    expect(code).toBe(EXIT_OK);
+  });
+
+  test("docker confirm proceeds when confirmEnv returns true", async () => {
+    const out: string[] = [];
+    const order: string[] = [];
+    const code = await runSeed({
+      env: "docker",
+      force: false,
+      stdinIsTTY: true,
+      seedDef: trackingDef(order),
+      createFx: async () => ({
+        fx: createFx({ flow: "oke.db.seed.test" }),
+        stop: async () => {},
+      }),
+      confirmEnv: async (env, target) => {
+        expect(env).toBe("docker");
+        expect(target.length).toBeGreaterThan(0);
+        return true;
+      },
+      write: (t) => out.push(t),
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(order).toEqual(["a", "b", "dev"]);
+    expect(out.join("")).toContain("oke db seed:");
+  });
+
+  test("executeSeedDef is the category source of truth", async () => {
+    const order: string[] = [];
+    const out: string[] = [];
+    const fx = createFx({ flow: "x" });
+    await executeSeedDef(trackingDef(order), "prod", fx, (t) => out.push(t));
+    expect(order).toEqual(["a", "b", "prod"]);
+  });
 });

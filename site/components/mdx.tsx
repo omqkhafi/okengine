@@ -28,6 +28,7 @@ import {
   StoreIndexModes,
   StoreKvTtl,
 } from "@/components/docs/elements/store-physics";
+import { StoreSeeding } from "@/components/docs/elements/store-seeding";
 import { VaultRedacted } from "@/components/docs/elements/vault-redacted";
 import { VaultResolution } from "@/components/docs/elements/vault-resolution";
 import { Features } from "@/components/docs/features";
@@ -44,7 +45,7 @@ import { Vocabulary } from "@/components/landing/vocabulary";
  * per-element visuals
  * (FlowTriggers, FlowDurable, SignalDelivery, SignalOnceLease,
  * SignalLiveReplay, StoreFacets, StoreFacetMark, StoreKvTtl,
- * StoreFilesVariants, StoreIndexModes, ClockSchedules, ClockCatchUp,
+ * StoreFilesVariants, StoreIndexModes, StoreSeeding, ClockSchedules, ClockCatchUp,
  * ClockSleep, GatePipeline, VaultResolution, VaultRedacted, ChannelPhysics,
  * AiBlocks, AiGuardrails, AiPiiEgress).
  *
@@ -86,6 +87,7 @@ export function getMDXComponents(components?: MDXComponents) {
     StoreKvTtl,
     StoreFilesVariants,
     StoreIndexModes,
+    StoreSeeding,
     ClockSchedules,
     ClockCatchUp,
     ClockSleep,

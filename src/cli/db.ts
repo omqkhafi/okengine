@@ -1,5 +1,6 @@
 /**
- * `oke db push|generate|migrate` — domain schema sync via drizzle-kit.
+ * `oke db push|generate|migrate|seed` — domain schema sync via drizzle-kit,
+ * plus explicit seed runs.
  *
  * Distinct from `oke schema generate` (core/plugin stub tables).
  * When abstract decls exist (`src/schema.decl.ts`), emits Drizzle first —
@@ -15,10 +16,23 @@ import {
 import { loadPluginTablesFromAppEntry } from "../elements/store/load-plugin-tables.ts";
 import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../config/index.ts";
 import type { TableContribution } from "../kernel/plugin.ts";
+import { runSeed, type SeedOptions } from "./db-seed.ts";
 import { resolveDrizzleKitEnv } from "./drizzle-env.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import { loadOkeConfig } from "./load-config.ts";
+
+export {
+  executeSeedDef,
+  formatSeedTarget,
+  isSeedDef,
+  loadSeedDef,
+  redactConnectionTarget,
+  runSeed,
+  runSeedFns,
+  type SeedOptions,
+  type SeedTally,
+} from "./db-seed.ts";
 
 /**
  * Apply a drizzle-kit env overlay to `process.env` for the in-process SDK,
@@ -67,7 +81,7 @@ export async function withDrizzleKitEnv<T>(
 }
 
 /** Subcommands under `oke db`. */
-export type DbSubcommand = "push" | "generate" | "migrate";
+export type DbSubcommand = "push" | "generate" | "migrate" | "seed";
 
 /** Options for {@link runDb}. */
 export interface DbOptions {
@@ -104,6 +118,15 @@ export interface DbOptions {
   readonly pluginTables?: readonly TableContribution[];
   /** Override app entry path for plugin-table discovery. */
   readonly entry?: string;
+  /** Skip docker/prod confirm for seed (`--force`). */
+  readonly force?: boolean;
+  /** Seed module path override. */
+  readonly seedPath?: string;
+  /** Seed-only injectables forwarded to {@link runSeed}. */
+  readonly seedDef?: SeedOptions["seedDef"];
+  readonly createFx?: SeedOptions["createFx"];
+  readonly confirmEnv?: SeedOptions["confirmEnv"];
+  readonly stdinIsTTY?: boolean;
 }
 
 /** Minimal drizzle-kit envelope we handle. */
@@ -135,7 +158,7 @@ export async function resolveDrizzleConfigPath(
 /**
  * Run `oke db <subcommand>`.
  *
- * @param sub - push | generate | migrate
+ * @param sub - push | generate | migrate | seed
  * @param options - Paths / injectables
  */
 export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise<number> {
@@ -143,6 +166,22 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
   const cwd = options.cwd ?? process.cwd();
   const loaded = await loadOkeConfig(cwd).catch(() => null);
   const env = options.env ?? (await resolveDevSqlEnv(cwd));
+
+  if (sub === "seed") {
+    return runSeed({
+      cwd,
+      write,
+      env,
+      force: options.force,
+      seedPath: options.seedPath,
+      entry: options.entry,
+      seedDef: options.seedDef,
+      createFx: options.createFx,
+      confirmEnv: options.confirmEnv,
+      stdinIsTTY: options.stdinIsTTY,
+    });
+  }
+
   if (!options.skipEmit) {
     await emitAbstractSchemaPrestep(cwd, loaded?.config, write, env, {
       pluginTables: options.pluginTables,
@@ -399,16 +438,16 @@ export async function detectDbDrift(options: DbOptions = {}): Promise<{
 }
 
 /**
- * CLI entry: parse `oke db <push|generate|migrate> [--config path]`.
+ * CLI entry: parse `oke db <push|generate|migrate|seed> […]`.
  *
  * @param args - Args after `db`
  */
 export async function dbCli(args: readonly string[]): Promise<number> {
   const sub = args[0];
   if (!sub || sub === "--help" || sub === "-h") {
-    console.log(`oke db push|generate|migrate [--config|-c drizzle.config.ts]
+    console.log(`oke db push|generate|migrate|seed [--config|-c] [--env name] [--force]
 
-Domain schema sync via drizzle-kit.
+Domain schema sync via drizzle-kit, plus explicit seed.
 When src/schema.decl.ts and/or a plugged app entry exists, emits
 schema.generated.ts from store.schema.table + live plugin .table()
 contributions — then runs drizzle-kit.
@@ -418,24 +457,52 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
   push       Apply schema to the live local DB (dev; no migration files)
   generate   Write versioned SQL under drizzle/ for review
   migrate    Apply generated migrations (explicit; never automatic in prod)
+  seed       Run defineSeed (essential + env category); never at boot
+
+  --env      Override config env (local|docker|test|prod)
+  --force    Skip docker/prod confirmation prompt (CI)
+  --entry    App entry for seed boot / plugin table discovery
 `);
     return sub ? EXIT_OK : EXIT_USAGE;
   }
-  if (sub !== "push" && sub !== "generate" && sub !== "migrate") {
+  if (sub !== "push" && sub !== "generate" && sub !== "migrate" && sub !== "seed") {
     console.error(`oke db: unknown subcommand "${sub}"`);
     return EXIT_USAGE;
   }
 
   let config: string | undefined;
+  let env: ConfigEnv | undefined;
+  let force = false;
+  let entry: string | undefined;
   for (let i = 1; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--config" || a === "-c") config = args[++i];
+    else if (a === "--env") {
+      const value = args[++i];
+      const parsed = parseConfigEnv(value);
+      if (!parsed) {
+        console.error(`oke db: invalid --env ${JSON.stringify(value)} (local|docker|test|prod)`);
+        return EXIT_USAGE;
+      }
+      env = parsed;
+    } else if (a === "--force") force = true;
+    else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--help" || a === "-h") {
       return dbCli(["--help"]);
+    } else if (a.startsWith("-")) {
+      console.error(`oke db ${sub}: unknown flag ${a}`);
+      return EXIT_USAGE;
     }
   }
 
-  return runDb(sub, { config });
+  return runDb(sub, { config, env, force, entry });
+}
+
+function parseConfigEnv(value: string | undefined): ConfigEnv | undefined {
+  if (value === "local" || value === "docker" || value === "test" || value === "prod") {
+    return value;
+  }
+  return undefined;
 }
 
 function reportKitResult(verb: string, result: DbKitResult, write: (text: string) => void): number {

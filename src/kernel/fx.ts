@@ -837,6 +837,13 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           return h.exists(table, idOrWhere);
         });
       },
+      upsert(table, matchOn, values, upsertOptions) {
+        return gated("write", ref, async () => {
+          refuseDryRunWrite();
+          const h = await ensure();
+          return h.upsert(table, matchOn, values, upsertOptions);
+        });
+      },
       increment(table, id, column, by) {
         return gated("write", ref, async () => {
           refuseDryRunWrite();

@@ -6,6 +6,7 @@ named Flows, Store, Signal → email, and Vault.
 ```bash
 bun install
 oke dev
+oke db seed   # essential welcome note + local/docker sample notes
 ```
 
 | Surface | URL |
@@ -32,6 +33,7 @@ never anonymous `flow_1`.
 | Path | Role |
 | ---- | ---- |
 | `src/schema.decl.ts` | `notes` table |
+| `src/seed/` | `oke db seed` — essential + dev sample notes |
 | `src/flows/notes/` | list · create · get · archive · onCreated |
 | `src/flows/main/` | root · health |
 | `src/channels.ts` | `note-created` email template |
