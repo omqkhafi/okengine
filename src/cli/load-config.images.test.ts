@@ -48,6 +48,17 @@ describe("defaultImagesFromConfig", () => {
     });
   });
 
+  test("journal postgres alone pulls store.sql image", () => {
+    const images = defaultImagesFromConfig({
+      drivers: {
+        journal: { prod: "postgres" },
+      },
+    });
+    expect(images).toEqual({
+      "store.sql": "postgres:18-alpine",
+    });
+  });
+
   test("returns empty when no container drivers", () => {
     expect(defaultImagesFromConfig({})).toEqual({});
     expect(

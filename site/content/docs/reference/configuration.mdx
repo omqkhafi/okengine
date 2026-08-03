@@ -27,6 +27,7 @@ drivers: {
   },
   signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
   clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
+  journal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
   vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
   channel: {
     email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
@@ -43,6 +44,7 @@ drivers: {
 | `store.index`      | env driver map | `memory` · `pgvector` · `libsql` · `meilisearch`                             |
 | `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind  |
 | `clock`            | env driver map | `memory` · `postgres` · `file` · `frozen`                                    |
+| `journal`          | env driver map | `memory` · `file` · `postgres`                                               |
 | `vault`            | env driver map | `env` · `openbao` · `memory` · `managed`                                     |
 | `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`                      |
 | `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |

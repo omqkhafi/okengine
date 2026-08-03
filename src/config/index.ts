@@ -73,6 +73,8 @@ export interface DriversConfig {
   readonly store?: StoreDriversConfig;
   readonly signal?: EnvDriverMap;
   readonly clock?: EnvDriverMap;
+  /** Durable-run journal: `memory` · `file` · `postgres`. */
+  readonly journal?: EnvDriverMap;
   readonly vault?: EnvDriverMap;
   readonly channel?: ChannelDriversConfig;
   readonly ai?: EnvDriverMap;
@@ -283,6 +285,7 @@ export function normalizeDriversConfig(
     ...(store !== undefined ? { store } : {}),
     signal: normalizeEnvDriverMap(drivers.signal as RawEnvDriverMap),
     clock: normalizeEnvDriverMap(drivers.clock as RawEnvDriverMap),
+    journal: normalizeEnvDriverMap(drivers.journal as RawEnvDriverMap),
     vault: normalizeEnvDriverMap(drivers.vault as RawEnvDriverMap),
     ...(channel !== undefined ? { channel } : {}),
     ai: normalizeEnvDriverMap(drivers.ai as RawEnvDriverMap),
@@ -333,6 +336,7 @@ export function fillDriversDockerFromProd(
     ...(store !== undefined ? { store } : {}),
     signal: fillDockerFromProd(drivers.signal),
     clock: fillDockerFromProd(drivers.clock),
+    journal: fillDockerFromProd(drivers.journal),
     vault: fillDockerFromProd(drivers.vault),
     ...(channel !== undefined ? { channel } : {}),
     ai: fillDockerFromProd(drivers.ai),

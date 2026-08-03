@@ -228,7 +228,9 @@ export const chargeOrder = flow({
 
 **Consequence:** completed steps replay from the journal — on resume, `create-intent` does not re-run, so the card is not charged twice.
 
-**Crash recovery needs a shared journal.** Today's durable journal is in-process memory only, with no boot-time recovery scan. The replay guarantee is proven for the same process only — not after a real crash/restart, and not across load-balanced instances.
+**Crash recovery needs a shared journal.** Set `drivers.journal: "postgres"` (the docker/prod template default) and every run persists in `oke_journal_runs` under a per-run lease: boot scans for orphaned `running` / due `sleeping` runs and resumes them, and the lease lets exactly one instance execute a run at a time. The default `memory` journal is per process — replay holds for that process only.
+
+Replay is **at-least-once** for a step whose body never persisted (crash mid-step, lease overrun): that step re-runs on reclaim, so keep step bodies short or internally idempotent. A client transport retry starts a _new_ run with a fresh `runId` — request-level idempotency is an application concern, not the journal's.
 
 For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow({ retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
 

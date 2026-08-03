@@ -73,7 +73,7 @@ export const sendDaily = on(
 ```typescript
 do: async (input, fx) => {
   const now = fx.clock.now(); // epoch-ms, injectable
-  await fx.clock.sleep("wait-for-payment", "7d"); // durable — survives restarts
+  await fx.clock.sleep("wait-for-payment", "7d"); // durable — survives restarts on a shared journal
 };
 ```
 
@@ -103,13 +103,13 @@ difference.
 <ClockSleep />
 
 `fx.clock.sleep(label, duration)` is a **durable** sleep: in a `durable: true` flow the wake time is
-journaled, so the flow resumes after restarts and deploys instead of losing its place. The `label`
-names the step in the journal — it is what the Console shows when you inspect a sleeping run.
+journaled — with a shared journal (`drivers.journal: "postgres"`) the flow resumes after restarts and
+deploys; the `memory` default resumes within the same process only. The `label` names the step — the Console shows it on sleeping runs.
 
 In a non-durable flow the same call resolves immediately, so code reads identically in tests.
 
-Completed journal steps never re-run on resume — a process killed mid-flow continues at the next
-unfinished step.
+Completed journal steps never re-run on resume — with a shared journal, a process killed mid-flow is
+reclaimed after its lease expires and continues at the next unfinished step.
 
 ## What the runtime guarantees
 
@@ -180,7 +180,7 @@ The clock was declared without `overridable: true`. Add it and redeploy — the 
 </Accordion>
 <Accordion title="How do I run something once, later — not recurring?">
 
-Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the work, in a `durable: true` flow. The sleep survives restarts, so "remind me in 7 days" is one line, not a cron row.
+Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the work, in a `durable: true` flow. The sleep survives restarts on a shared journal, so "remind me in 7 days" is one line, not a cron row.
 
 </Accordion>
 <Accordion title="Two replicas both ran my cron">

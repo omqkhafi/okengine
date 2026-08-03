@@ -115,6 +115,15 @@ export {
 } from "./clock-postgres.ts";
 
 export {
+  createPostgresJournalStore,
+  createPostgresJournalFake,
+  type PostgresJournalSql,
+  type PostgresJournalStore,
+  type CreatePostgresJournalStoreOptions,
+  type BunJournalClient,
+} from "./journal-postgres.ts";
+
+export {
   redisSignalDriver,
   openRedisSignal,
   createSignalRedisFake,

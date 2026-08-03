@@ -71,9 +71,14 @@ import {
 import {
   createJournal,
   createMemoryJournalStore,
+  hasJournalLease,
+  isJournalLeaseBusy,
   isJournalSuspend,
+  JOURNAL_DEFAULT_LEASE_MS,
   type JournalSession,
+  type JournalStore,
 } from "./journal.ts";
+import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
   applyPrincipal,
@@ -190,6 +195,8 @@ export interface OkeOptions {
   readonly startScheduler?: boolean;
   /** Scheduler tick period ms (default 1000). Forwarded to boot. */
   readonly schedulerIntervalMs?: number;
+  /** Durable-run lease duration ms (default 30_000). Forwarded to boot. */
+  readonly journalLeaseMs?: number;
 }
 
 /** Payload for a CDC invocation. */
@@ -579,12 +586,36 @@ export function oke(options: OkeOptions): OkeApp {
   } else {
     setActiveGateAuthContext(undefined);
   }
-  const journalStore = createMemoryJournalStore();
+  // Fallback journal for pre-boot / `autoBoot: false` unit tests. A booted
+  // app replaces this with the bound `drivers.journal` store (postgres etc.).
+  const fallbackJournalStore = createMemoryJournalStore();
+  const fallbackJournalInstanceId = `app-${crypto.randomUUID()}`;
   const sleepingRuns = new Map<
     string,
     { readonly flow: AnyFlowDef; readonly input: unknown; readonly wakeAt: number }
   >();
+  // Same-process mutual exclusion per runId. The lease coordinates across
+  // processes, but same-holder renew cannot distinguish two overlapping
+  // sessions inside one process (boot orphan scan vs. scheduler tick).
+  const inflightRuns = new Set<string>();
   const EMPTY_CAPABILITIES: ReadonlyMap<string, CapabilityToken> = new Map();
+
+  /** Active journal: the boot-bound store once available, else the fallback. */
+  function activeJournal(): {
+    readonly store: JournalStore;
+    readonly instanceId: string;
+    readonly leaseMs: number;
+  } {
+    const bound: JournalRuntime | undefined = bootResult?.journal;
+    if (bound) {
+      return { store: bound.store, instanceId: bound.instanceId, leaseMs: bound.leaseMs };
+    }
+    return {
+      store: fallbackJournalStore,
+      instanceId: fallbackJournalInstanceId,
+      leaseMs: JOURNAL_DEFAULT_LEASE_MS,
+    };
+  }
 
   async function handleCronFire(name: string): Promise<void> {
     await app.dispatchEvery(name);
@@ -598,6 +629,84 @@ export function oke(options: OkeOptions): OkeApp {
 
   async function handleSignalFire(name: string, payload: unknown): Promise<void> {
     await app.dispatchSignal(name, payload);
+  }
+
+  async function handleDurableResume(): Promise<void> {
+    await app.resumeDurable();
+  }
+
+  /** Element runtimes handed to durable resumes (same bag as cron dispatch). */
+  function durableResumeFx() {
+    return {
+      storeRuntime: bootResult?.store,
+      signalRuntime: bootResult?.signal,
+      vaultRuntime: bootResult?.vault,
+      channelRuntime: bootResult?.channel,
+      aiRuntime: bootResult?.ai,
+    };
+  }
+
+  /**
+   * Resume one persisted run under its lease. A lost lease race is the
+   * coordination win — another live instance owns the run, so skip quietly.
+   */
+  /** Runs whose undeclared flow was already logged (sweep ticks must not spam). */
+  const warnedOrphanRuns = new Set<string>();
+
+  async function resumeDurableRun(
+    runId: string,
+    flowName: string,
+    input: unknown,
+    now: () => number,
+  ): Promise<void> {
+    // The lease only coordinates across processes — within one process,
+    // overlapping callers (orphan scan vs. scheduler tick) would both pass
+    // same-holder lease renewal and run two sessions for one runId.
+    if (inflightRuns.has(runId)) return;
+    inflightRuns.add(runId);
+    try {
+      const flowDef = flowsByName.get(flowName);
+      if (!flowDef) {
+        if (!warnedOrphanRuns.has(runId)) {
+          warnedOrphanRuns.add(runId);
+          console.warn(`oke: durable run "${runId}": undeclared flow "${flowName}" — skipped`);
+        }
+        return;
+      }
+      const { store, instanceId, leaseMs } = activeJournal();
+      try {
+        await runDurable({
+          flow: flowDef,
+          input,
+          journalStore: store,
+          runId,
+          ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
+          now,
+          fx: durableResumeFx(),
+        });
+      } catch (err) {
+        if (isJournalLeaseBusy(err)) return;
+        throw err;
+      }
+    } finally {
+      inflightRuns.delete(runId);
+    }
+  }
+
+  /** Boot-time orphan scan — `running`/`sleeping` runs with no live lease. */
+  async function resumeOrphanedDurableRuns(): Promise<void> {
+    const { store } = activeJournal();
+    if (!hasJournalLease(store)) return;
+    const now = () => bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
+    const orphans = await store.listOrphans(now());
+    for (const orphan of orphans) {
+      // Future sleeps are claimed by the scheduler tick when they come due —
+      // the shared store is the schedule, no in-process seeding needed.
+      if (orphan.status === "sleeping" && orphan.wakeAt !== undefined && orphan.wakeAt > now()) {
+        continue;
+      }
+      await resumeDurableRun(orphan.id, orphan.flow, orphan.input, now);
+    }
   }
 
   async function doBoot(overrides?: Partial<BootOptions>): Promise<BootResult> {
@@ -716,13 +825,23 @@ export function oke(options: OkeOptions): OkeApp {
       instanceId: overrides?.instanceId,
       startScheduler: overrides?.startScheduler ?? options.startScheduler,
       schedulerIntervalMs: overrides?.schedulerIntervalMs ?? options.schedulerIntervalMs,
+      journalLeaseMs: overrides?.journalLeaseMs ?? options.journalLeaseMs,
       bindings: adopted,
       flows: [...flowsByName.values()],
       onCronFire: overrides?.onCronFire ?? handleCronFire,
       onSignal: overrides?.onSignal ?? handleSignalFire,
+      onDurableResume: overrides?.onDurableResume ?? handleDurableResume,
     };
     const result = await bootApplication(merged);
     bootResult = result;
+    // Boot-time orphan discovery: resume/schedule any `running` / `sleeping`
+    // run left without a live lease by a crashed (or previous) instance.
+    // Fire-and-forget — boot must not block serving on a long resume.
+    if (result.journal && hasJournalLease(result.journal.store)) {
+      void resumeOrphanedDurableRuns().catch((err) => {
+        console.error("oke: durable orphan scan failed", err);
+      });
+    }
     // Prefer the booted clock for access-token expiry checks.
     if (authBinding) {
       authBinding = createAppAuthBinding({
@@ -908,8 +1027,16 @@ export function oke(options: OkeOptions): OkeApp {
       capability = booted.capabilities.get(flowDef.name);
 
       if (flowDef.durable) {
-        const journal = createJournal({ store: journalStore, now });
+        const { store, instanceId, leaseMs } = activeJournal();
+        const journal = createJournal({
+          store,
+          now,
+          // Hold the run lease for the request's lifetime — a crash mid-run
+          // leaves an expired lease another instance can reclaim and resume.
+          ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
+        });
         journalSession = await journal.start(flowDef.name, input);
+        inflightRuns.add(journalSession.runId);
       }
     }
 
@@ -998,25 +1125,34 @@ export function oke(options: OkeOptions): OkeApp {
       // HTTP flows serialize before `onResponse` so the last stage can see
       // and replace the final response (plugin header/middleware surfaces).
       trigger.kind === "http" ? encodeExecuteResult : undefined,
-    );
+    ).catch((err: unknown) => {
+      // Park suspensions are already absorbed above; a real pipeline failure
+      // still leaves the run lease to expire for cross-process reclaim, but
+      // must not pin the runId in this process's in-flight guard forever.
+      if (journalSession) inflightRuns.delete(journalSession.runId);
+      throw err;
+    });
 
     const endedAt = now();
 
     if (journalSession) {
+      inflightRuns.delete(journalSession.runId);
       const sleeping = ctx.state.sleeping as
         | { readonly wakeAt: number; readonly label: string; readonly runId: string }
         | undefined;
-      if (sleeping) {
+      // Lease-capable stores make the shared row the wake schedule; the
+      // in-process map is only for custom stores without the lease surface.
+      if (sleeping && !hasJournalLease(activeJournal().store)) {
         sleepingRuns.set(sleeping.runId, {
           flow: flowDef,
           input: ctx.input,
           wakeAt: sleeping.wakeAt,
         });
-      } else if (result.failure) {
+      } else if (!sleeping && result.failure) {
         await journalSession.commit("failed", {
           error: result.failure.error.code,
         });
-      } else {
+      } else if (!sleeping) {
         await journalSession.commit("completed", { output: result.output });
       }
     }
@@ -1074,6 +1210,7 @@ export function oke(options: OkeOptions): OkeApp {
         channel: bootResult.channel,
         ai: bootResult.ai,
         runs: bootResult.runs,
+        ...(bootResult.journal ? { journal: bootResult.journal } : {}),
       };
     },
     get capabilities() {
@@ -1099,22 +1236,36 @@ export function oke(options: OkeOptions): OkeApp {
     },
     async resumeDurable(now) {
       const t = now ?? bootResult?.clock?.now() ?? options.fx?.now?.() ?? Date.now();
+      const { store, instanceId, leaseMs } = activeJournal();
+      if (hasJournalLease(store)) {
+        // Shared store is the wake schedule — claim due sleeps across all
+        // instances (SKIP LOCKED; exactly one claimant wins a raced claim).
+        for (;;) {
+          const due = await store.claimDueSleep(instanceId, t, leaseMs);
+          if (!due) break;
+          sleepingRuns.delete(due.id);
+          await resumeDurableRun(due.id, due.flow, due.input, () => t);
+        }
+        // Crash sweep: the boot orphan scan is once-only, so each tick also
+        // reclaims `running` runs whose holder's lease has expired (same
+        // takeover physics as Clock: lease expiry + next tick).
+        for (const orphan of await store.listOrphans(t)) {
+          if (orphan.status !== "running") continue;
+          await resumeDurableRun(orphan.id, orphan.flow, orphan.input, () => t);
+        }
+        return;
+      }
+      // Custom store without the lease surface — in-process sleepers only.
       for (const [runId, sleeper] of [...sleepingRuns.entries()]) {
         if (t < sleeper.wakeAt) continue;
         sleepingRuns.delete(runId);
         const result = await runDurable({
           flow: sleeper.flow,
           input: sleeper.input,
-          journalStore,
+          journalStore: store,
           runId,
           now: () => t,
-          fx: {
-            storeRuntime: bootResult?.store,
-            signalRuntime: bootResult?.signal,
-            vaultRuntime: bootResult?.vault,
-            channelRuntime: bootResult?.channel,
-            aiRuntime: bootResult?.ai,
-          },
+          fx: durableResumeFx(),
         });
         if (result.status === "sleeping") {
           sleepingRuns.set(runId, {

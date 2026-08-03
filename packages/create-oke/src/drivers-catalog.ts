@@ -2,7 +2,8 @@
  * Boot-implemented driver choices offered by the create-oke customize wizard.
  *
  * Never lists ids that fail loud at boot (signal postgres/nats,
- * ai bedrock/vertex). Clock `postgres` is real (SKIP LOCKED CronStore).
+ * ai bedrock/vertex). Clock + journal `postgres` are real (SKIP LOCKED
+ * CronStore / durable-run journal).
  */
 
 import type { CreateDefaults, CreateProfile, EnvDriverPins } from "./create-defaults.ts";
@@ -83,6 +84,12 @@ export const CLOCK_CHOICES: readonly DriverChoice[] = [
   { value: "file", label: "file" },
   { value: "postgres", label: "postgres" },
   { value: "frozen", label: "frozen" },
+];
+
+export const JOURNAL_CHOICES: readonly DriverChoice[] = [
+  { value: "memory", label: "memory" },
+  { value: "file", label: "file" },
+  { value: "postgres", label: "postgres" },
 ];
 
 export const VAULT_CHOICES: readonly DriverChoice[] = [

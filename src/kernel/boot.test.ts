@@ -117,8 +117,10 @@ describe("boot — lazy element needs", () => {
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
       // Rebased after fx.sendOtp/verifyOtp on the shared fx surface (~50.1 kB
-      // gzip). Clock/channel drivers stay lazy-bound; still far below eager bind.
-      expect(total).toBeLessThan(51_000);
+      // gzip), then again after the durable-journal lease surface (SKIP LOCKED
+      // claim/release/orphan-scan on journal.ts + app.ts wiring, ~51.2 kB).
+      // Clock/channel/journal drivers stay lazy-bound; far below eager bind.
+      expect(total).toBeLessThan(51_500);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

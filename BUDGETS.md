@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.7.0 · measured 2026-08-03T20:35:32.752Z_
+_okengine v0.7.0 · measured 2026-08-03T21:25:43.857Z_
 
 Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -13,23 +13,23 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | Kernel (edge profile) | 13.63 kB  | 15.00 kB  |
 | Client runtime        | 1.70 kB   | 3.00 kB   |
 | Console initial load  | 86.32 kB  | 300.00 kB |
-| Cold start on Bun     | 39.775 ms | 75.000 ms |
-| p99 routing overhead  | 0.001 ms  | 1.000 ms  |
+| Cold start on Bun     | 66.102 ms | 75.000 ms |
+| p99 routing overhead  | 0.002 ms  | 1.000 ms  |
 
 ## Exports
 
 |              | Measured | Ceiling  |
 | ------------ | -------- | -------- |
-| okengine     | 67.14 kB | 68.48 kB |
+| okengine     | 68.47 kB | 69.84 kB |
 | ai           | 7.15 kB  | 7.40 kB  |
 | auth         | 15.83 kB | 16.15 kB |
 | channel      | 5.22 kB  | 5.47 kB  |
 | client       | 1.83 kB  | 2.08 kB  |
 | client-react | 7.82 kB  | 8.07 kB  |
 | client/auth  | 573 B    | 829 B    |
-| clock        | 13.79 kB | 14.07 kB |
-| config       | 890 B    | 1.12 kB  |
-| console      | 87.78 kB | 89.53 kB |
+| clock        | 14.05 kB | 14.34 kB |
+| config       | 901 B    | 1.13 kB  |
+| console      | 89.19 kB | 90.98 kB |
 | gate         | 6.16 kB  | 6.41 kB  |
 | mcp          | 9.46 kB  | 9.71 kB  |
 | plugins      | 18.73 kB | 19.10 kB |
@@ -78,7 +78,7 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 54.11 kB | 55.19 kB |
+| drivers              | 55.62 kB | 56.74 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 896 B    | 1.13 kB  |
 | ai-ollama            | 1.97 kB  | 2.22 kB  |
@@ -98,6 +98,7 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | clock-postgres       | 2.45 kB  | 2.70 kB  |
 | drizzle-dialect      | 326 B    | 582 B    |
 | fs                   | 701 B    | 957 B    |
+| journal-postgres     | 2.86 kB  | 3.11 kB  |
 | kv-lua               | 1.01 kB  | 1.26 kB  |
 | libsql               | 7.34 kB  | 7.59 kB  |
 | meilisearch          | 1.38 kB  | 1.63 kB  |

@@ -56,12 +56,58 @@ export interface JournalRun {
   wakeAt?: number;
   error?: string;
   output?: unknown;
+  /** Lease holder instance id (run-level coordination — Signal/Clock physics). */
+  lockedBy?: string;
+  /** Lease expiry epoch-ms; a crashed holder's run is reclaimable after this. */
+  leaseExpiresAt?: number;
   readonly createdAt: number;
   updatedAt: number;
 }
 
+/**
+ * Run-level lease coordination — same SKIP LOCKED + lazy-reclaim physics as
+ * Signal's message claims and Clock's tick claims. No sweeper, no fencing
+ * token: at-least-once after lease expiry, journal replay keeps completed
+ * steps from re-running.
+ */
+export interface JournalLeaseStore {
+  /**
+   * Acquire / renew / reclaim a run lease. Claimable when unlocked, held by
+   * the same instance, or expired.
+   *
+   * @param runId - Run id
+   * @param instanceId - Claimant instance
+   * @param now - Epoch-ms
+   * @param leaseMs - Lease duration
+   */
+  acquireLease(runId: string, instanceId: string, now: number, leaseMs: number): Promise<boolean>;
+  /**
+   * Release a lease held by `instanceId` (no-op for other holders).
+   *
+   * @param runId - Run id
+   * @param instanceId - Holder instance
+   */
+  releaseLease(runId: string, instanceId: string): Promise<void>;
+  /**
+   * Atomically claim the next due sleep (`status=sleeping`, `wakeAt<=now`, no
+   * live lease) and return it — `undefined` when none is claimable.
+   *
+   * @param instanceId - Claimant instance
+   * @param now - Epoch-ms
+   * @param leaseMs - Lease duration
+   */
+  claimDueSleep(instanceId: string, now: number, leaseMs: number): Promise<JournalRun | undefined>;
+  /**
+   * Boot-time orphan discovery: `running` / `sleeping` runs with no live lease
+   * (crashed holder or never claimed). Rows are never deleted.
+   *
+   * @param now - Epoch-ms
+   */
+  listOrphans(now: number): Promise<readonly JournalRun[]>;
+}
+
 /** Persistence backend for journal runs. */
-export interface JournalStore {
+export interface JournalStore extends Partial<JournalLeaseStore> {
   /**
    * Load a run by id.
    *
@@ -78,12 +124,107 @@ export interface JournalStore {
   list(): Promise<readonly JournalRun[]>;
 }
 
+/** Default run lease — matches Signal's claim lease. */
+export const JOURNAL_DEFAULT_LEASE_MS = 30_000;
+
+/**
+ * Narrow a store to its lease-coordination surface (present on the built-in
+ * memory / file / postgres stores; absent on custom minimal stores).
+ *
+ * @param store - Journal store
+ */
+export function hasJournalLease(store: JournalStore): store is JournalStore & JournalLeaseStore {
+  return (
+    typeof store.acquireLease === "function" &&
+    typeof store.releaseLease === "function" &&
+    typeof store.claimDueSleep === "function" &&
+    typeof store.listOrphans === "function"
+  );
+}
+
+/** Thrown when a run resume loses the lease race to another live instance. */
+export class JournalLeaseBusy extends Error {
+  readonly runId: string;
+  constructor(runId: string) {
+    super(`journal: run "${runId}" is leased by another instance`);
+    this.name = "JournalLeaseBusy";
+    this.runId = runId;
+  }
+}
+
+/** Type guard for {@link JournalLeaseBusy}. */
+export function isJournalLeaseBusy(err: unknown): err is JournalLeaseBusy {
+  return err instanceof JournalLeaseBusy;
+}
+
+/** Live lease = a holder with an unexpired expiry. */
+function hasLiveLease(run: JournalRun, now: number): boolean {
+  return run.lockedBy !== undefined && run.leaseExpiresAt !== undefined && run.leaseExpiresAt > now;
+}
+
+/** Claimable when unlocked, same-holder, or without a live lease. */
+function claimable(run: JournalRun, instanceId: string, now: number): boolean {
+  if (run.lockedBy === undefined) return true;
+  if (run.lockedBy === instanceId) return true;
+  return !hasLiveLease(run, now);
+}
+
+/** Lease methods shared by the memory + file stores (single-writer maps). */
+function leaseMethods(
+  load: () => Promise<Map<string, JournalRun>>,
+  flush?: (map: Map<string, JournalRun>) => Promise<void>,
+): JournalLeaseStore {
+  return {
+    async acquireLease(runId, instanceId, now, leaseMs) {
+      const map = await load();
+      const run = map.get(runId);
+      if (!run || !claimable(run, instanceId, now)) return false;
+      run.lockedBy = instanceId;
+      run.leaseExpiresAt = now + leaseMs;
+      await flush?.(map);
+      return true;
+    },
+    async releaseLease(runId, instanceId) {
+      const map = await load();
+      const run = map.get(runId);
+      if (!run || run.lockedBy !== instanceId) return;
+      delete run.lockedBy;
+      delete run.leaseExpiresAt;
+      await flush?.(map);
+    },
+    async claimDueSleep(instanceId, now, leaseMs) {
+      const map = await load();
+      const due = [...map.values()]
+        .filter(
+          (r) =>
+            r.status === "sleeping" &&
+            r.wakeAt !== undefined &&
+            r.wakeAt <= now &&
+            claimable(r, instanceId, now),
+        )
+        .sort((a, b) => (a.wakeAt ?? 0) - (b.wakeAt ?? 0))[0];
+      if (!due) return undefined;
+      due.lockedBy = instanceId;
+      due.leaseExpiresAt = now + leaseMs;
+      await flush?.(map);
+      return cloneRun(due);
+    },
+    async listOrphans(now) {
+      const map = await load();
+      return [...map.values()]
+        .filter((r) => (r.status === "running" || r.status === "sleeping") && !hasLiveLease(r, now))
+        .map(cloneRun);
+    },
+  };
+}
+
 /** In-memory journal store. */
 export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalStore {
   const runs = new Map<string, JournalRun>();
   for (const r of seed ?? []) {
     runs.set(r.id, cloneRun(r));
   }
+  const load = async (): Promise<Map<string, JournalRun>> => runs;
   return {
     async get(runId) {
       const r = runs.get(runId);
@@ -95,6 +236,7 @@ export function createMemoryJournalStore(seed?: readonly JournalRun[]): JournalS
     async list() {
       return [...runs.values()].map(cloneRun);
     },
+    ...leaseMethods(load),
   };
 }
 
@@ -139,7 +281,17 @@ export function createFileJournalStore(path: string): JournalStore {
       const map = await load();
       return [...map.values()].map(cloneRun);
     },
+    // Single-host file: leases coordinate same-machine processes only.
+    ...leaseMethods(load, flush),
   };
+}
+
+/** Run-level lease holder for {@link CreateJournalOptions.lease}. */
+export interface JournalLeaseOptions {
+  /** This instance's id (lease holder). */
+  readonly instanceId: string;
+  /** Lease duration ms (default {@link JOURNAL_DEFAULT_LEASE_MS}). */
+  readonly leaseMs?: number;
 }
 
 /** Options for {@link createJournal}. */
@@ -150,6 +302,13 @@ export interface CreateJournalOptions {
   readonly now?: () => number;
   /** Id factory (defaults to UUID). */
   readonly id?: () => string;
+  /**
+   * Run-level lease (when the store supports it). `start` inserts with the
+   * lease held; `resume` claims the run or throws {@link JournalLeaseBusy};
+   * every persist renews; parking a sleep and terminal commits release so a
+   * sleeping/finished run never holds a 30s lock.
+   */
+  readonly lease?: JournalLeaseOptions;
 }
 
 /**
@@ -223,14 +382,29 @@ export interface Journal {
 export function createJournal(options: CreateJournalOptions): Journal {
   const now = options.now ?? (() => Date.now());
   const newId = options.id ?? (() => crypto.randomUUID());
+  const lease = options.lease;
+  const coordinated = lease !== undefined && hasJournalLease(options.store);
 
-  function openSession(run: JournalRun): JournalSession {
+  function openSession(run: JournalRun, leased: boolean): JournalSession {
     /** Next entry index to consume on replay. */
     let cursor = 0;
+    let leaseHeld = leased;
 
     async function persist(): Promise<void> {
       run.updatedAt = now();
+      // Natural heartbeat — a live holder renews on every journal write.
+      if (leaseHeld && lease) {
+        run.lockedBy = lease.instanceId;
+        run.leaseExpiresAt = now() + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
+      }
       await options.store.put(cloneRun(run));
+    }
+
+    /** Parking / terminal states must not hold a short lease across days. */
+    function releaseLeaseLocally(): void {
+      leaseHeld = false;
+      delete run.lockedBy;
+      delete run.leaseExpiresAt;
     }
 
     return {
@@ -265,6 +439,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
             if (now() < e.wakeAt) {
               run.status = "sleeping";
               run.wakeAt = e.wakeAt;
+              releaseLeaseLocally();
               await persist();
               throw new JournalSuspend(label, e.wakeAt);
             }
@@ -284,6 +459,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
         if (now() < wakeAt) {
           run.status = "sleeping";
           run.wakeAt = wakeAt;
+          releaseLeaseLocally();
           await persist();
           throw new JournalSuspend(label, wakeAt);
         }
@@ -324,6 +500,7 @@ export function createJournal(options: CreateJournalOptions): Journal {
         if (patch?.error !== undefined) run.error = patch.error;
         if (status === "completed" || status === "failed") {
           delete run.wakeAt;
+          releaseLeaseLocally();
         }
         await persist();
       },
@@ -343,18 +520,42 @@ export function createJournal(options: CreateJournalOptions): Journal {
         createdAt: t,
         updatedAt: t,
       };
+      if (coordinated && lease) {
+        // Fresh id — insert already holding the lease (no claim race).
+        run.lockedBy = lease.instanceId;
+        run.leaseExpiresAt = t + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
+      }
       await options.store.put(cloneRun(run));
-      return openSession(run);
+      return openSession(run, coordinated);
     },
     async resume(runId) {
+      if (coordinated && lease) {
+        const t = now();
+        const claimed = await options.store.acquireLease!(
+          runId,
+          lease.instanceId,
+          t,
+          lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS,
+        );
+        if (!claimed) {
+          throw new JournalLeaseBusy(runId);
+        }
+      }
       const run = await options.store.get(runId);
       if (!run) {
+        if (coordinated && lease) {
+          await options.store.releaseLease!(runId, lease.instanceId);
+        }
         throw new Error(`journal: run "${runId}" not found`);
       }
       // Leave status intact — the durable runner parks or continues.
       run.updatedAt = now();
+      if (coordinated && lease) {
+        run.lockedBy = lease.instanceId;
+        run.leaseExpiresAt = now() + (lease.leaseMs ?? JOURNAL_DEFAULT_LEASE_MS);
+      }
       await options.store.put(cloneRun(run));
-      return openSession(run);
+      return openSession(run, coordinated);
     },
   };
 }

@@ -15,6 +15,7 @@ import { gate } from "../../elements/gate.ts";
 import { signal } from "../../elements/signal.ts";
 import { vault } from "../../elements/vault.ts";
 import { buildVaultBootChain } from "../../elements/vault/boot-chain.ts";
+import { flow } from "../flow.ts";
 import { bootApplication } from "../boot.ts";
 
 describe("boot binders honour drivers.* config", () => {
@@ -150,6 +151,95 @@ describe("boot binders honour drivers.* config", () => {
       if (prevStore !== undefined) process.env.OKE_STORE_SQL_URL = prevStore;
       else delete process.env.OKE_STORE_SQL_URL;
     }
+  });
+
+  test("journal: durable flow binds memory journal by default", async () => {
+    const result = await bootApplication({
+      env: "local",
+      startScheduler: false,
+      flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+    });
+    try {
+      expect(result.journal?.driverId).toBe("memory");
+      expect(typeof result.journal?.instanceId).toBe("string");
+      expect(result.journal?.leaseMs).toBeGreaterThan(0);
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("journal: no durable flow → no journal runtime", async () => {
+    const result = await bootApplication({
+      env: "local",
+      startScheduler: false,
+      flows: [flow({ name: "plain", do: () => ({ ok: true }) })],
+    });
+    try {
+      expect(result.journal).toBeUndefined();
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("journal: drivers.journal file binds file store", async () => {
+    tmp = await mkdtemp(join(tmpdir(), "oke-journal-file-"));
+    process.chdir(tmp);
+    const result = await bootApplication({
+      env: "local",
+      startScheduler: false,
+      flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+      config: {
+        drivers: {
+          journal: { local: "file", docker: "postgres", test: "memory", prod: "postgres" },
+        },
+      },
+    });
+    try {
+      expect(result.journal?.driverId).toBe("file");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("journal: drivers.journal postgres fails without DATABASE_URL", async () => {
+    const prevDb = process.env.DATABASE_URL;
+    const prevStore = process.env.OKE_STORE_SQL_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.OKE_STORE_SQL_URL;
+    try {
+      await expect(
+        bootApplication({
+          env: "local",
+          startScheduler: false,
+          flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+          config: {
+            drivers: {
+              journal: { local: "postgres" },
+            },
+          },
+        }),
+      ).rejects.toThrow(/journal driver "postgres" needs DATABASE_URL/);
+    } finally {
+      if (prevDb !== undefined) process.env.DATABASE_URL = prevDb;
+      else delete process.env.DATABASE_URL;
+      if (prevStore !== undefined) process.env.OKE_STORE_SQL_URL = prevStore;
+      else delete process.env.OKE_STORE_SQL_URL;
+    }
+  });
+
+  test("journal: unknown driver fails loud", async () => {
+    await expect(
+      bootApplication({
+        env: "local",
+        startScheduler: false,
+        flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+        config: {
+          drivers: {
+            journal: { local: "neon" },
+          },
+        },
+      }),
+    ).rejects.toThrow(/unknown journal driver "neon"/);
   });
 
   test("gate: drivers.store.kv redis opens redis-backed oke:gates", async () => {

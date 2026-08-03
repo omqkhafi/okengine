@@ -48,14 +48,17 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
   const kv = dockerOrProdId(config.drivers?.store?.kv);
   const signal = dockerOrProdId(config.drivers?.signal);
   const clock = dockerOrProdId(config.drivers?.clock);
+  const journal = dockerOrProdId(config.drivers?.journal);
 
   // SQL-consuming facets pull a SQL image. Signal postgres still needs a
-  // LISTEN/NOTIFY client (not Bun.SQL); clock postgres is a real CronStore.
+  // LISTEN/NOTIFY client (not Bun.SQL); clock + journal postgres are real
+  // SKIP LOCKED stores (CronStore / durable-run journal).
   const needsSql =
     sql === "postgres" ||
     sql === "pgvector" ||
     index === "pgvector" ||
     clock === "postgres" ||
+    journal === "postgres" ||
     (config.drivers?.prod ?? []).some((p) => p === "postgres" || p === "pgvector");
 
   if (needsSql) {

@@ -5,7 +5,9 @@
  * 1. Vault     — resolve every declared secret (list all gaps at once)
  * 2. Store     — bind drivers per environment; open connections
  * 3. Signals   — register declarations; start consumers
- * 4. Clocks    — reconcile into the Store; start scheduler (leader election)
+ * 4. Clocks    — reconcile into the Store
+ * 4b. Journal  — bind the durable-run store (SKIP LOCKED + lease when shared)
+ * 4c. Scheduler — tick clocks + resume due durable runs (leader election)
  * 5. Channel   — bind channel runtime
  * 6. AI        — bind AI runtime
  * 7. Runs      — open the runs store
@@ -33,6 +35,7 @@ import type {
   VaultRuntime,
   VaultSecretDecl,
 } from "../elements/vault.ts";
+import type { JournalRuntime } from "./boot-bind/journal.ts";
 import type { CreateRunsRuntimeOptions, RunsRuntime } from "../runs/index.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import type { AnyFlowDef } from "./flow.ts";
@@ -48,6 +51,8 @@ export interface ElementRuntimes {
   readonly channel?: ChannelRuntime;
   readonly ai?: AiRuntime;
   readonly runs?: RunsRuntime;
+  /** Pre-bound durable-run journal (skips driver resolution). */
+  readonly journal?: JournalRuntime;
 }
 
 /** Declarations + options consumed by {@link bootApplication}. */
@@ -112,6 +117,13 @@ export interface BootOptions {
    * @param payload - Payload
    */
   readonly onSignal?: (signal: string, payload: unknown) => void | Promise<void>;
+  /**
+   * Resume due durable runs — called on every scheduler tick when any flow
+   * declares `durable: true` (claimDueSleep on the shared journal store).
+   */
+  readonly onDurableResume?: () => void | Promise<void>;
+  /** Durable-run lease duration ms (default 30_000 — matches Signal claims). */
+  readonly journalLeaseMs?: number;
   /** Injectable clock for test / frozen harnesses. */
   readonly now?: () => number;
   /**
@@ -144,6 +156,8 @@ export interface BootResult {
   readonly channel?: ChannelRuntime;
   readonly ai?: AiRuntime;
   readonly runs?: RunsRuntime;
+  /** Durable-run journal (present when any flow declares `durable: true`). */
+  readonly journal?: JournalRuntime;
   /** Per-flow capability tokens minted from declared effects. */
   readonly capabilities: ReadonlyMap<string, CapabilityToken>;
   /** Stop the background scheduler (if started). */
@@ -162,6 +176,8 @@ export interface ElementNeeds {
   readonly channel: boolean;
   readonly ai: boolean;
   readonly runs: boolean;
+  /** Durable-run journal — any flow with `durable: true`. */
+  readonly journal: boolean;
 }
 
 /**
@@ -182,9 +198,11 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   let channel = pre.channel !== undefined || options.channel !== undefined;
   let ai = pre.ai !== undefined || options.ai !== undefined;
   let runs = pre.runs !== undefined || options.runs !== undefined;
+  let journal = pre.journal !== undefined;
 
   const considerFlow = (f: AnyFlowDef): void => {
     const e = f.effects;
+    if (f.durable === true) journal = true;
     if ((e?.reads?.length ?? 0) > 0 || (e?.writes?.length ?? 0) > 0) {
       store = true;
     }
@@ -216,7 +234,7 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
     signal = true;
   }
 
-  return { vault, store, signal, clock, gate, channel, ai, runs };
+  return { vault, store, signal, clock, gate, channel, ai, runs, journal };
 }
 
 /**
@@ -272,6 +290,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   type StoreBind = typeof import("./boot-bind/store.ts");
   type SignalBind = typeof import("./boot-bind/signal.ts");
   type ClockBind = typeof import("./boot-bind/clock.ts");
+  type JournalBind = typeof import("./boot-bind/journal.ts");
   type GateBind = typeof import("./boot-bind/gate.ts");
   type ChannelBind = typeof import("./boot-bind/channel.ts");
   type AiBind = typeof import("./boot-bind/ai.ts");
@@ -280,6 +299,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   let storeBind: StoreBind | undefined;
   let signalBind: SignalBind | undefined;
   let clockBind: ClockBind | undefined;
+  let journalBind: JournalBind | undefined;
   let gateBind: GateBind | undefined;
   let channelBind: ChannelBind | undefined;
   let aiBind: AiBind | undefined;
@@ -303,6 +323,13 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     binderLoads.push(
       loadBind<ClockBind>("clock").then((m) => {
         clockBind = m;
+      }),
+    );
+  }
+  if (needs.journal && !pre.journal) {
+    binderLoads.push(
+      loadBind<JournalBind>("journal").then((m) => {
+        journalBind = m;
       }),
     );
   }
@@ -364,21 +391,31 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     }
   }
 
-  // 4. Clocks + optional scheduler
+  // 4. Clocks
   let clock = pre.clock;
-  let schedulerTimer: ReturnType<typeof setInterval> | undefined;
   if (needs.clock) {
     const bound = await clockBind!.bindClock(options, env, now, clock);
     clock = bound.clock;
-    const startScheduler = options.startScheduler ?? env !== "test";
-    if (startScheduler) {
-      const period = options.schedulerIntervalMs ?? 1000;
-      const clockRt = clock;
-      schedulerTimer = setInterval(() => {
-        void clockRt.tick();
-      }, period);
-      schedulerTimer.unref?.();
-    }
+  }
+
+  // 4b. Journal — durable-run store (shared + leased when a driver is bound).
+  let journal = pre.journal;
+  if (needs.journal && !journal) {
+    journal = (await journalBind!.bindJournal(options, env)).journal;
+  }
+
+  // 4c. Scheduler — one timer drives clock ticks and durable-run resume.
+  let schedulerTimer: ReturnType<typeof setInterval> | undefined;
+  const startScheduler = options.startScheduler ?? env !== "test";
+  if (startScheduler && (clock !== undefined || journal !== undefined)) {
+    const period = options.schedulerIntervalMs ?? 1000;
+    const clockRt = clock;
+    const durableResume = options.onDurableResume;
+    schedulerTimer = setInterval(() => {
+      if (clockRt) void clockRt.tick();
+      if (journal && durableResume) void durableResume();
+    }, period);
+    schedulerTimer.unref?.();
   }
 
   // Gate (before AI)
@@ -427,6 +464,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     channel,
     ai,
     runs,
+    journal,
     capabilities,
     stopScheduler() {
       if (schedulerTimer !== undefined) {
@@ -442,6 +480,8 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       await signal?.close();
       await vault?.close();
       await runs?.flush();
+      const journalStore = journal?.store as { close?: () => Promise<void> } | undefined;
+      await journalStore?.close?.();
     },
   };
 }

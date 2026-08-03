@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-03T20:35:32.752Z",
+  "measuredAt": "2026-08-03T21:25:43.857Z",
   "version": "0.7.0",
   "budgets": [
     {
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 39.775,
+      "value": 66.102,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -45,7 +45,7 @@
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0.001,
+      "value": 0.002,
       "limit": 1,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 68750,
-      "limit": 70125,
+      "value": 70117,
+      "limit": 71520,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 14123,
-      "limit": 14406,
+      "value": 14392,
+      "limit": 14680,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -135,8 +135,8 @@
     {
       "id": "export:./config",
       "label": "config",
-      "value": 890,
-      "limit": 1146,
+      "value": 901,
+      "limit": 1157,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 89883,
-      "limit": 91681,
+      "value": 91334,
+      "limit": 93161,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -215,8 +215,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 11322,
-      "limit": 11578,
+      "value": 11321,
+      "limit": 11577,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -365,8 +365,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 55404,
-      "limit": 56513,
+      "value": 56959,
+      "limit": 58099,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -557,6 +557,16 @@
       "label": "fs",
       "value": 701,
       "limit": 957,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
+      "id": "export:./drivers/journal-postgres",
+      "label": "journal-postgres",
+      "value": 2931,
+      "limit": 3187,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

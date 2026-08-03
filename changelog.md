@@ -43,12 +43,40 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   per-medium flags `OKE_SMS_LIVE=1` / `OKE_EMAIL_LIVE=1` **plus** the real
   credentials; credential presence alone never sends. Skips are always
   visible.
+- Postgres durable journal (`drivers.journal: "postgres"`) — durable-flow
+  runs persist in `oke_journal_runs` with `locked_by` / `lease_expires_at`,
+  reusing the Signal/Clock `FOR UPDATE SKIP LOCKED` + lazy lease reclaim
+  pattern. `memory` (default) and `file` stay for local / single-host.
+- Boot-time orphan discovery — a booted app scans the shared journal for
+  `running` / due `sleeping` runs without a live lease and resumes them, no
+  caller-supplied `runId`; the scheduler tick also claims due sleeps and
+  sweeps expired-lease orphans from the shared store.
+- Run-level lease coordination — every start / resume / wake acquires the
+  run lease first (renewed on each journal persist, released on park /
+  complete / fail), so two instances never execute the same run under a
+  live lease; an in-process in-flight guard stops overlapping sessions
+  (orphan scan vs. scheduler tick) inside one instance.
+- Durable-journal chaos proofs across OS processes — SIGKILL mid-run with
+  survivor takeover (completed `fx.step` never re-runs) and a two-process
+  race on one due sleep (exactly one executes), gated on
+  `OKE_TEST_POSTGRES_URL`.
 
 ### ♻️ Changed
 
-- Flow docs: durable-journal boundary — today's journal is in-process memory
-  only (no boot-time recovery); replay is proven for the same process only,
-  not after a real crash/restart or across load-balanced instances.
+- Booted apps bind `drivers.journal` from config instead of a hardcoded
+  in-memory store. `postgres` without `DATABASE_URL` / `OKE_STORE_SQL_URL`
+  fails loud at boot; the postgres journal pulls the `store.sql` docker
+  image like clock does.
+- Template / create-oke: standard + advanced gain `drivers.journal` —
+  `memory` for local/test, `postgres` for docker/prod.
+- `JournalStore` gains an optional lease surface — `JournalLeaseStore`
+  (`acquireLease` / `releaseLease` / `claimDueSleep` / `listOrphans`),
+  `hasJournalLease`, `JournalLeaseBusy`, and `JOURNAL_DEFAULT_LEASE_MS`
+  (30s) are exported; memory and file stores implement it too.
+- Flow / Clock docs: durable crash-recovery claims are now scoped to a
+  shared journal — `postgres` resumes after restarts and across instances;
+  the `memory` journal remains same-process only. At-least-once for
+  in-flight steps and the client-retry boundary are documented.
 - Template / create-oke docker+prod clock default: `file` → `postgres` now
   that the real CronStore exists (`file` still valid for local/single-host).
 - `sently` 1.0.0 → 1.2.0 — Taqnyat OTP helpers (`sendOtp` / `verifyOtp`)
@@ -70,6 +98,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### 🐛 Fixed
 
+- Durable three-layer gap closed: with a shared journal, restarts no longer
+  lose every durable run, crashed runs resume via the boot orphan scan, and
+  the same run can no longer execute on two instances concurrently under a
+  live lease.
 - `fx.store(db).upsert` through real `oke()` → `createTestApp` → `app.fetch()`
   (regression test); SQL `StoreDecl` without a store runtime no longer
   silently returns a stub that made `.upsert` look like “not a function”.

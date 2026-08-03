@@ -13,6 +13,7 @@ import {
   createJournal,
   isJournalSuspend,
   type Journal,
+  type JournalLeaseOptions,
   type JournalSession,
   type JournalStore,
 } from "../../kernel/journal.ts";
@@ -45,6 +46,11 @@ export interface RunDurableOptions {
   readonly journalStore: JournalStore;
   /** Resume an existing run id (crash recovery). */
   readonly runId?: string;
+  /**
+   * Run-level lease (SKIP LOCKED + lazy reclaim when the store supports it).
+   * Resume throws `JournalLeaseBusy` when another live instance holds the run.
+   */
+  readonly lease?: JournalLeaseOptions;
   /** Injectable clock. */
   readonly now?: () => number;
   /** Extra fx options (secrets, store runtime, …). */
@@ -63,6 +69,7 @@ export async function runDurable<O = unknown>(
   const journal: Journal = createJournal({
     store: options.journalStore,
     now,
+    ...(options.lease ? { lease: options.lease } : {}),
   });
 
   if (options.runId) {
