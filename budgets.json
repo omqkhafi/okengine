@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-08-02T13:46:41.635Z",
-  "version": "0.6.1",
+  "measuredAt": "2026-08-03T20:35:32.752Z",
+  "version": "0.7.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 15358,
+      "value": 13955,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 37.269,
+      "value": 39.775,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 68008,
-      "limit": 69369,
+      "value": 68750,
+      "limit": 70125,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -85,8 +85,8 @@
     {
       "id": "export:./channel",
       "label": "channel",
-      "value": 5127,
-      "limit": 5383,
+      "value": 5343,
+      "limit": 5599,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 13853,
-      "limit": 14131,
+      "value": 14123,
+      "limit": 14406,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 89168,
-      "limit": 90952,
+      "value": 89883,
+      "limit": 91681,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 18992,
-      "limit": 19372,
+      "value": 19175,
+      "limit": 19559,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -205,8 +205,8 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 17105,
-      "limit": 17448,
+      "value": 17395,
+      "limit": 17743,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -215,8 +215,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 11103,
-      "limit": 11359,
+      "value": 11322,
+      "limit": 11578,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -275,8 +275,8 @@
     {
       "id": "export:./plugins/phoneNumber",
       "label": "phoneNumber",
-      "value": 8670,
-      "limit": 8926,
+      "value": 8885,
+      "limit": 9141,
       "unit": "bytes",
       "gate": "regression",
       "group": "plugins",
@@ -365,8 +365,8 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 53603,
-      "limit": 54676,
+      "value": 55404,
+      "limit": 56513,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
@@ -493,6 +493,16 @@
       "ok": true
     },
     {
+      "id": "export:./drivers/channel-taqnyat-mail",
+      "label": "channel-taqnyat-mail",
+      "value": 430,
+      "limit": 686,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
       "id": "export:./drivers/channel-unifonic",
       "label": "channel-unifonic",
       "value": 756,
@@ -517,6 +527,16 @@
       "label": "channel-webpush",
       "value": 947,
       "limit": 1203,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
+      "id": "export:./drivers/clock-postgres",
+      "label": "clock-postgres",
+      "value": 2508,
+      "limit": 2764,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

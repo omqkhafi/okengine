@@ -235,6 +235,36 @@ export interface FxSendOptions {
   readonly acceptLanguage?: string;
 }
 
+/** Options for {@link Fx.sendOtp} (provider-managed SMS OTP). */
+export interface FxSendOtpOptions {
+  /** Recipient phone number (E.164). */
+  readonly to: string;
+  /** Unique id for this verification flow (required again on verify). */
+  readonly requestId: string;
+  /** Message language (`en` or `ar`). */
+  readonly lang?: "en" | "ar";
+  /** Optional note appended to the OTP SMS. */
+  readonly note?: string;
+  /** Sender id override. */
+  readonly from?: string;
+}
+
+/** Options for {@link Fx.verifyOtp}. */
+export interface FxVerifyOtpOptions {
+  /** Recipient phone number (same as send). */
+  readonly to: string;
+  /** Same {@link FxSendOtpOptions.requestId} used when sending. */
+  readonly requestId: string;
+  /** OTP code the user entered. */
+  readonly code: string;
+  /** Message language (`en` or `ar`). */
+  readonly lang?: "en" | "ar";
+  /** Sender id override. */
+  readonly from?: string;
+  /** Optional note. */
+  readonly note?: string;
+}
+
 /** Options for {@link Fx.ask}. */
 export interface FxAskOptions {
   readonly via?: readonly NamedRef[];
@@ -339,6 +369,22 @@ export interface Fx {
    * @param opts - Recipient / data
    */
   send(template: NamedRef, opts?: FxSendOptions): Promise<{ ok: true }>;
+  /**
+   * Send a provider-managed SMS OTP (records `send` on `sms-otp`).
+   *
+   * Vendor extra (Taqnyat Verify API) — requires a bound SMS driver that
+   * supports provider-managed OTP. Dry-run records would-have-fired without
+   * contacting the provider.
+   *
+   * @param opts - Recipient + requestId (+ lang / note / from)
+   */
+  sendOtp(opts: FxSendOtpOptions): Promise<{ ok: true }>;
+  /**
+   * Verify a provider-managed SMS OTP code (records `send` on `sms-otp`).
+   *
+   * @param opts - Recipient + requestId + code (+ lang / note / from)
+   */
+  verifyOtp(opts: FxVerifyOtpOptions): Promise<{ ok: true }>;
   /**
    * Ask an AI prompt (records `ask`). Stub returns `{}`.
    *
@@ -1121,6 +1167,49 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           });
           return { ok: result.ok as true };
         }
+        return { ok: true as const };
+      });
+    },
+    sendOtp(opts) {
+      return gated("send", "sms-otp", async () => {
+        if (isDryRun()) {
+          recordWouldHaveFired("send", "sms-otp");
+          return { ok: true as const };
+        }
+        if (!options.channelRuntime) {
+          throw new Error(
+            "fx.sendOtp needs a bound Channel — declare channel and set drivers.channel.sms (e.g. taqnyat)",
+          );
+        }
+        await options.channelRuntime.sendOtp({
+          to: opts.to,
+          requestId: opts.requestId,
+          ...(opts.lang ? { lang: opts.lang } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+          ...(opts.from ? { from: opts.from } : {}),
+        });
+        return { ok: true as const };
+      });
+    },
+    verifyOtp(opts) {
+      return gated("send", "sms-otp", async () => {
+        if (isDryRun()) {
+          recordWouldHaveFired("send", "sms-otp");
+          return { ok: true as const };
+        }
+        if (!options.channelRuntime) {
+          throw new Error(
+            "fx.verifyOtp needs a bound Channel — declare channel and set drivers.channel.sms (e.g. taqnyat)",
+          );
+        }
+        await options.channelRuntime.verifyOtp({
+          to: opts.to,
+          requestId: opts.requestId,
+          code: opts.code,
+          ...(opts.lang ? { lang: opts.lang } : {}),
+          ...(opts.from ? { from: opts.from } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+        });
         return { ok: true as const };
       });
     },

@@ -9,6 +9,7 @@ import { openResendChannel } from "../../drivers/channel-resend.ts";
 import { openSmtpChannel } from "../../drivers/channel-smtp.ts";
 import { openSndrChannel } from "../../drivers/channel-sndr.ts";
 import { openTaqnyatChannel } from "../../drivers/channel-taqnyat.ts";
+import { openTaqnyatMailChannel } from "../../drivers/channel-taqnyat-mail.ts";
 import { openUnifonicChannel } from "../../drivers/channel-unifonic.ts";
 import type { ChannelDriver, ChannelOpenOptions } from "../../drivers/channel-types.ts";
 import { createChannelRuntime, type ChannelRuntime } from "../../elements/channel.ts";
@@ -51,6 +52,7 @@ function emailDriverFor(options: BootOptions, env: ConfigEnv, docker: boolean): 
   if (id === "smtp") return openSmtpChannel(smtpOptionsFromEnv(docker));
   if (id === "resend") return openResendChannel(resendOptionsFromEnv());
   if (id === "sndr") return openSndrChannel(sndrOptionsFromEnv());
+  if (id === "taqnyat-mail") return openTaqnyatMailChannel(taqnyatMailOptionsFromEnv());
   throw new Error(`oke boot: unknown email channel driver "${id}"`);
 }
 
@@ -148,6 +150,17 @@ export function taqnyatOptionsFromEnv(): ChannelOpenOptions {
   }
   if (!sender) throw new Error("oke boot: taqnyat channel needs TAQNYAT_SENDER");
   return { bearerToken, sender };
+}
+
+/**
+ * Resolve Taqnyat Email options from env.
+ */
+export function taqnyatMailOptionsFromEnv(): ChannelOpenOptions {
+  const bearerToken = process.env.TAQNYAT_MAIL_TOKEN?.trim();
+  const campaignName = process.env.TAQNYAT_CAMPAIGN?.trim();
+  if (!bearerToken) throw new Error("oke boot: taqnyat-mail channel needs TAQNYAT_MAIL_TOKEN");
+  if (!campaignName) throw new Error("oke boot: taqnyat-mail channel needs TAQNYAT_CAMPAIGN");
+  return { bearerToken, campaignName };
 }
 
 /**

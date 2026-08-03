@@ -73,7 +73,7 @@
     "ajv-formats": "^3.0.1",
     "intl-messageformat": "^11.2.13",
     "oxc-parser": "^0.142.0",
-    "sently": "1.0.0"
+    "sently": "1.2.0"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",

@@ -86,6 +86,48 @@ const { data } = await api.auth.verifyMagicLink({ token });
 **Consequence:** the plugin contributes the `auth-magic-link` Channel template and EN/AR
 catalog bodies (`{{link}}`, `{{token}}`). Override copy by merging your own catalog at boot.
 
+## Delivery drivers
+
+| `drivers.channel.email` | Delivery                                                          |
+| ----------------------- | ----------------------------------------------------------------- |
+| `console`               | Dev inbox (local/test default)                                    |
+| `smtp`                  | Any SMTP host — Mailpit under `oke dev --docker` (docker default) |
+| `resend` / `sndr`       | Hosted email APIs                                                 |
+| `taqnyat-mail`          | Taqnyat Mail API (additive option)                                |
+
+### Taqnyat Mail
+
+```typescript title="oke.config.ts"
+export default {
+  drivers: {
+    channel: {
+      email: { local: "console", docker: "smtp", test: "console", prod: "taqnyat-mail" },
+    },
+  },
+};
+```
+
+| Env                  | Meaning                                          |
+| -------------------- | ------------------------------------------------ |
+| `TAQNYAT_MAIL_TOKEN` | Taqnyat bearer token enabled for Email           |
+| `TAQNYAT_CAMPAIGN`   | Campaign name required by Taqnyat `mailSend.php` |
+
+The plugin needs no change — delivery stays Channel-mediated via `fx.send`. SMTP/Mailpit
+remains the default docker path; `taqnyat-mail` is strictly additive.
+
+## Live tests (opt-in)
+
+The Taqnyat live suite sends real email and burns real quota, so it is double-gated: it runs
+only when `OKE_EMAIL_LIVE=1` **and** the real credentials (`TAQNYAT_MAIL_TOKEN`,
+`TAQNYAT_CAMPAIGN`, plus `OKE_TEST_TAQNYAT_MAIL`) are all present.
+
+Credentials alone never send; without the flag the suite skips visibly — never a silent pass.
+
+```bash
+OKE_EMAIL_LIVE=1 TAQNYAT_MAIL_TOKEN=… TAQNYAT_CAMPAIGN=auth \
+  OKE_TEST_TAQNYAT_MAIL=you@example.com bun test src/plugins
+```
+
 ## Troubleshooting
 
 <Accordions>

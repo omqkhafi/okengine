@@ -1,8 +1,8 @@
 /**
  * Boot-implemented driver choices offered by the create-oke customize wizard.
  *
- * Never lists ids that fail loud at boot (signal postgres/nats, clock postgres,
- * ai bedrock/vertex).
+ * Never lists ids that fail loud at boot (signal postgres/nats,
+ * ai bedrock/vertex). Clock `postgres` is real (SKIP LOCKED CronStore).
  */
 
 import type { CreateDefaults, CreateProfile, EnvDriverPins } from "./create-defaults.ts";
@@ -20,7 +20,7 @@ export const TEMPLATE_DOCKER_PROD = {
   kv: "redis",
   files: "s3",
   signal: "redis",
-  clock: "file",
+  clock: "postgres",
   vault: "openbao",
   email: "smtp",
 } as const;
@@ -81,6 +81,7 @@ export const SIGNAL_CHOICES: readonly DriverChoice[] = [
 export const CLOCK_CHOICES: readonly DriverChoice[] = [
   { value: "memory", label: "memory" },
   { value: "file", label: "file" },
+  { value: "postgres", label: "postgres" },
   { value: "frozen", label: "frozen" },
 ];
 
@@ -96,6 +97,7 @@ export const EMAIL_CHOICES: readonly DriverChoice[] = [
   { value: "smtp", label: "smtp" },
   { value: "resend", label: "resend" },
   { value: "sndr", label: "sndr" },
+  { value: "taqnyat-mail", label: "taqnyat-mail" },
 ];
 
 /** AI menu providers → protocol driver. */

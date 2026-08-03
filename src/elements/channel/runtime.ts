@@ -11,7 +11,12 @@ import type {
   ChannelAttempt,
   ChannelDriver,
   ChannelMessage,
+  ChannelOtpSendOptions,
+  ChannelOtpSendResult,
+  ChannelOtpVerifyOptions,
+  ChannelOtpVerifyResult,
   ChannelSendResult,
+  SmsOtpTransport,
 } from "../../drivers/channel-types.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
 import type { ConsentStore } from "./consent.ts";
@@ -85,6 +90,8 @@ export interface ChannelRuntime {
   readonly suppression: SuppressionStore;
   readonly receipts: ReceiptLedger;
   readonly costs: MediumCosts;
+  /** Bound driver chain (email + SMS + …). */
+  readonly drivers: readonly ChannelDriver[];
   /**
    * Send a template through the driver chain.
    *
@@ -92,6 +99,22 @@ export interface ChannelRuntime {
    * @param options - Recipient / data / locale / via
    */
   send(template: string, options: ChannelSendOptions): Promise<ChannelSendResult>;
+  /**
+   * Send a provider-managed OTP via the bound Taqnyat SMS driver.
+   *
+   * Vendor extra (Taqnyat Verify API) — only valid when the configured SMS
+   * driver supports it. Throws loudly when no SMS driver is bound or the
+   * bound driver does not support provider-managed OTP.
+   *
+   * @param options - Recipient + requestId (+ lang / note / from)
+   */
+  sendOtp(options: ChannelOtpSendOptions): Promise<ChannelOtpSendResult>;
+  /**
+   * Verify a provider-managed OTP code via the bound Taqnyat SMS driver.
+   *
+   * @param options - Recipient + requestId + code (+ lang / note / from)
+   */
+  verifyOtp(options: ChannelOtpVerifyOptions): Promise<ChannelOtpVerifyResult>;
   /**
    * Ingest a post-send provider outcome (bounce / complaint / …).
    * Hard bounce auto-adds suppression. Console projects the ledger — never
@@ -391,11 +414,39 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     return "provider-error";
   }
 
+  function otpSmsDriver(): { driver: ChannelDriver; otp: SmsOtpTransport } {
+    const sms = drivers.filter((d) => d.smsTransport);
+    if (sms.length === 0) {
+      throw new Error(
+        "channel: no SMS driver bound — bind drivers.channel.sms (e.g. taqnyat) to send provider OTP",
+      );
+    }
+    for (const d of sms) {
+      const t = d.smsTransport as Partial<SmsOtpTransport> | undefined;
+      if (t && typeof t.sendOtp === "function" && typeof t.verifyOtp === "function") {
+        return { driver: d, otp: t as SmsOtpTransport };
+      }
+    }
+    const id = sms[0]?.id ?? "unknown";
+    throw new Error(
+      `channel: SMS driver "${id}" does not support provider-managed OTP; use exposeDevOtp locally or set drivers.channel.sms to "taqnyat"`,
+    );
+  }
+
   return {
     templates,
     suppression,
     receipts,
     costs,
+    drivers,
+    async sendOtp(opts) {
+      const { otp } = otpSmsDriver();
+      return otp.sendOtp(opts);
+    },
+    async verifyOtp(opts) {
+      const { otp } = otpSmsDriver();
+      return otp.verifyOtp(opts);
+    },
     ingestOutcome(input) {
       const at = input.at ?? now();
       const existing = receipts.byMessageId(input.messageId);

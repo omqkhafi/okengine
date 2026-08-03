@@ -141,6 +141,12 @@ describe("fx — wholesale swap", () => {
       async send() {
         return { ok: true };
       },
+      async sendOtp() {
+        return { ok: true };
+      },
+      async verifyOtp() {
+        return { ok: true };
+      },
       async ask() {
         return {};
       },

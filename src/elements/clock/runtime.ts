@@ -44,9 +44,9 @@ export interface CreateClockRuntimeOptions {
 export interface ClockRuntime {
   /**
    * Effective driver id selected at construction
-   * (`memory` · `file` · `frozen`).
+   * (`memory` · `file` · `postgres` · `frozen`).
    */
-  readonly driverId: "memory" | "file" | "frozen";
+  readonly driverId: "memory" | "file" | "postgres" | "frozen";
   /** Instance id used for leases. */
   readonly instanceId: string;
   /** Cron store the scheduler reads. */
@@ -116,7 +116,9 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
     ? "frozen"
     : store.kind === "file"
       ? "file"
-      : "memory";
+      : store.kind === "postgres"
+        ? "postgres"
+        : "memory";
 
   async function fire(name: string): Promise<boolean> {
     const row = await store.get(name);

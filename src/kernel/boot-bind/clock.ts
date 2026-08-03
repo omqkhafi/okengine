@@ -13,6 +13,7 @@ import {
   type ClockDecl,
   type ClockRuntime,
 } from "../../elements/clock.ts";
+import { createPostgresCronStore } from "../../drivers/clock-postgres.ts";
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import type { BootOptions } from "../boot.ts";
 
@@ -40,8 +41,7 @@ export function resolveClockDriverId(options: BootOptions, env: ConfigEnv): stri
 /**
  * Construct / adopt a Clock runtime, register decls, reconcile.
  *
- * Supported ids: `frozen` · `memory` · `file`. `postgres` (and any other id)
- * fail loud — there is no postgres CronStore.
+ * Supported ids: `frozen` · `memory` · `file` · `postgres`.
  *
  * @param options - Boot options
  * @param env - Active environment
@@ -76,12 +76,23 @@ export async function bindClock(
       store: createFileCronStore(path),
     });
   } else if (clockDriver === "postgres") {
-    throw new Error(
-      'oke boot: clock driver "postgres" is not implemented — use "memory", "file", or "frozen"',
-    );
+    const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
+    if (!url) {
+      throw new Error(
+        env === "docker"
+          ? 'oke boot: clock driver "postgres" needs DATABASE_URL (did `oke dev -d` write docker/.env.docker?)'
+          : 'oke boot: clock driver "postgres" needs DATABASE_URL',
+      );
+    }
+    const store = await createPostgresCronStore({ url });
+    clock = createClockRuntime({
+      instanceId: options.instanceId,
+      now,
+      store,
+    });
   } else {
     throw new Error(
-      `oke boot: unknown clock driver "${clockDriver}" (expected memory · file · frozen)`,
+      `oke boot: unknown clock driver "${clockDriver}" (expected memory · file · postgres · frozen)`,
     );
   }
 

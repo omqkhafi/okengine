@@ -13,14 +13,14 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 
 ## SQL store
 
-| Variable            | Used for                                             | Default when unset              |
-| ------------------- | ---------------------------------------------------- | ------------------------------- |
-| `DATABASE_URL`      | Postgres connection (`postgres` driver, drizzle-kit) | `postgres://localhost:5432/oke` |
-| `OKE_STORE_SQL_URL` | Explicit SQL URL override                            | —                               |
-| `OKE_SQLITE_URL`    | SQLite file path (`sqlite` driver)                   | `.oke/app.sqlite`               |
-| `OKE_LIBSQL_URL`    | libSQL URL or file path (`libsql` driver)            | `.oke/app.libsql`               |
-| `OKE_PGLITE_URL`    | PGlite data dir or `memory://` (`pglite` driver)     | `.oke/pgdata`                   |
-| `OKE_SQL_DRIVER`    | Force the sql driver id at boot                      | config map                      |
+| Variable            | Used for                                                            | Default when unset              |
+| ------------------- | ------------------------------------------------------------------- | ------------------------------- |
+| `DATABASE_URL`      | Postgres connection (`postgres` store + clock drivers, drizzle-kit) | `postgres://localhost:5432/oke` |
+| `OKE_STORE_SQL_URL` | Explicit SQL URL override                                           | —                               |
+| `OKE_SQLITE_URL`    | SQLite file path (`sqlite` driver)                                  | `.oke/app.sqlite`               |
+| `OKE_LIBSQL_URL`    | libSQL URL or file path (`libsql` driver)                           | `.oke/app.libsql`               |
+| `OKE_PGLITE_URL`    | PGlite data dir or `memory://` (`pglite` driver)                    | `.oke/pgdata`                   |
+| `OKE_SQL_DRIVER`    | Force the sql driver id at boot                                     | config map                      |
 
 ## Index store
 
@@ -74,6 +74,8 @@ Read when `drivers.channel.email` resolves to that driver id.
 | `RESEND_API_KEY`        | `resend` API key                                 |
 | `SNDR_API_KEY`          | `sndr` API key                                   |
 | `SNDR_BASE_URL`         | Optional SNDR API origin (default `api.sndr.sh`) |
+| `TAQNYAT_MAIL_TOKEN`    | `taqnyat-mail` bearer token (Email-enabled)      |
+| `TAQNYAT_CAMPAIGN`      | `taqnyat-mail` campaign name                     |
 
 ## Channel (SMS) — boot binder
 
@@ -93,6 +95,16 @@ Read when `drivers.channel.sms` resolves to that driver id (`console` opens noth
 
 WhatsApp (`wa-cloud`) and push (`webpush` / `fcm`) are not opened from env at
 boot — pass them on `BootOptions.channel.drivers` with their open options.
+
+## Live test gates (opt-in)
+
+Provider-quota-burning live suites are double-gated: the medium flag **plus** that
+provider's real credentials — credentials alone never send.
+
+| Variable         | Used for                                                  |
+| ---------------- | --------------------------------------------------------- |
+| `OKE_SMS_LIVE`   | `=1` allows live SMS provider tests (e.g. Taqnyat OTP)    |
+| `OKE_EMAIL_LIVE` | `=1` allows live email provider tests (e.g. Taqnyat Mail) |
 
 ## AI providers
 

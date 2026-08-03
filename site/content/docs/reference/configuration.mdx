@@ -26,7 +26,7 @@ drivers: {
     files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
   },
   signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
-  clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
+  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
   vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
   channel: {
     email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
@@ -42,9 +42,9 @@ drivers: {
 | `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
 | `store.index`      | env driver map | `memory` · `pgvector` · `libsql` · `meilisearch`                             |
 | `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind  |
-| `clock`            | env driver map | `memory` · `file` · `frozen`                                                 |
+| `clock`            | env driver map | `memory` · `postgres` · `file` · `frozen`                                    |
 | `vault`            | env driver map | `env` · `openbao` · `memory` · `managed`                                     |
-| `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr`                                       |
+| `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`                      |
 | `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |
 | `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                       |
 | `channel.push`     | env driver map | `console` · `webpush` · `fcm`                                                |

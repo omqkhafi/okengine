@@ -7,6 +7,7 @@ import { openFcmChannel } from "./channel-fcm.ts";
 import { openMsegatChannel } from "./channel-msegat.ts";
 import { openSndrChannel } from "./channel-sndr.ts";
 import { openTaqnyatChannel } from "./channel-taqnyat.ts";
+import { openTaqnyatMailChannel } from "./channel-taqnyat-mail.ts";
 import { openUnifonicChannel } from "./channel-unifonic.ts";
 import { openWaCloudChannel } from "./channel-wa-cloud.ts";
 import { openWebPushChannel } from "./channel-webpush.ts";
@@ -24,6 +25,13 @@ describe("sently channel drivers", () => {
     const d = openTaqnyatChannel({ bearerToken: "t", sender: "Brand" });
     expect(d.id).toBe("taqnyat");
     expect(d.channel?.mediums).toContain("sms");
+  });
+
+  test("taqnyat-mail requires bearer + campaignName", () => {
+    expect(() => openTaqnyatMailChannel({ bearerToken: "t" })).toThrow("campaignName");
+    const d = openTaqnyatMailChannel({ bearerToken: "t", campaignName: "auth" });
+    expect(d.id).toBe("taqnyat-mail");
+    expect(d.transport?.provider).toBe("taqnyat-mail");
   });
 
   test("msegat requires userName + apiKey + sender", () => {

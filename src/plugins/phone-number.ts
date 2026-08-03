@@ -64,22 +64,57 @@ export function phoneNumber(opts: PhoneNumberOptions = {}): PluginDef {
     name: "auth.requestPhoneOtp",
     unit: "auth",
     plane: "user",
-    in: z.object({ phone: z.string().min(8) }),
+    in: z.object({
+      phone: z.string().min(8),
+      /** OTP message language for the Taqnyat Verify path. */
+      lang: z.enum(["en", "ar"]).optional(),
+    }),
     out: z.object({
       ok: z.literal(true),
       devOtp: z.string().optional(),
     }),
     errors: { AuthFailed, AuthRateLimited },
-    do: async (input) => {
+    effects: { sends: ["auth-phone-otp", "sms-otp"] },
+    do: async (input, fx) => {
       const phone = input.phone.trim();
       if (!E164.test(phone)) return fail("AuthFailed", { reason: "invalid_phone" });
-      const otp = generateOtp(6);
       const now = runtime.now();
       for (const row of verifications.rows.values()) {
         if (row.identifier === `phone-otp:${phone}` && row.consumedAt === null) {
           row.consumedAt = now;
         }
       }
+
+      // Provider-managed OTP (Taqnyat Verify) when a Taqnyat SMS driver is
+      // bound via Channel. Throws loudly for unsupported SMS drivers; returns
+      // undefined only when no SMS driver is bound (local/dev path).
+      const requestId = crypto.randomUUID();
+      const provider = await fx
+        .sendOtp({
+          to: phone,
+          requestId,
+          ...(input.lang ? { lang: input.lang } : {}),
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("no SMS driver bound")) return undefined;
+          throw err;
+        });
+
+      if (provider) {
+        putVerification(verifications, {
+          id: crypto.randomUUID(),
+          identifier: `phone-otp:${phone}`,
+          value: `taqnyat:${requestId}`,
+          expiresAt: now + ttlMs,
+          createdAt: now,
+          consumedAt: null,
+          attempts: 0,
+        });
+        return { ok: true as const };
+      }
+
+      const otp = generateOtp(6);
       putVerification(verifications, {
         id: crypto.randomUUID(),
         identifier: `phone-otp:${phone}`,
@@ -103,10 +138,13 @@ export function phoneNumber(opts: PhoneNumberOptions = {}): PluginDef {
     in: z.object({
       phone: z.string().min(8),
       otp: z.string().min(4).max(8),
+      /** OTP message language for the Taqnyat Verify path. */
+      lang: z.enum(["en", "ar"]).optional(),
     }),
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },
-    do: async (input) => {
+    effects: { sends: ["sms-otp"] },
+    do: async (input, fx) => {
       const phone = input.phone.trim();
       if (!E164.test(phone)) return fail("AuthFailed", { reason: "invalid_phone" });
       const now = runtime.now();
@@ -116,13 +154,32 @@ export function phoneNumber(opts: PhoneNumberOptions = {}): PluginDef {
         row.consumedAt = now;
         return fail("AuthFailed", { reason: "invalid_credentials" });
       }
-      const hash = await hashChallenge(input.otp.trim());
-      if (hash !== row.value) {
-        row.attempts += 1;
-        if (row.attempts >= MAX_ATTEMPTS) row.consumedAt = now;
-        return fail("AuthFailed", { reason: "invalid_credentials" });
+
+      if (row.value.startsWith("taqnyat:")) {
+        const requestId = row.value.slice("taqnyat:".length);
+        try {
+          await fx.verifyOtp({
+            to: phone,
+            requestId,
+            code: input.otp.trim(),
+            ...(input.lang ? { lang: input.lang } : {}),
+          });
+        } catch {
+          row.attempts += 1;
+          if (row.attempts >= MAX_ATTEMPTS) row.consumedAt = now;
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        row.consumedAt = now;
+      } else {
+        const hash = await hashChallenge(input.otp.trim());
+        if (hash !== row.value) {
+          row.attempts += 1;
+          if (row.attempts >= MAX_ATTEMPTS) row.consumedAt = now;
+          return fail("AuthFailed", { reason: "invalid_credentials" });
+        }
+        row.consumedAt = now;
       }
-      row.consumedAt = now;
+
       let userId = phones.byPhone.get(phone);
       if (!userId) {
         userId = crypto.randomUUID();

@@ -12,6 +12,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- Postgres Clock CronStore (`drivers.clock: "postgres"`) — multi-host leader
+  election via the same `FOR UPDATE SKIP LOCKED` + lazy lease reclaim pattern
+  as Signal `once` delivery. Table `oke_crons` holds schedule rows with
+  `locked_by` / `lease_expires_at`. Chaos-proven across OS processes against
+  a real Postgres (`OKE_TEST_POSTGRES_URL`). `file` remains for local /
+  single-host shared volumes.
 - `defineSeed({ essential, dev, prod })` + `oke db seed` — explicit seed
   runs (never at boot). `essential` every env; `dev` on `local`/`docker`;
   `prod` on `prod` only. Docker/prod print the DB target and require typing
@@ -23,9 +29,31 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   boundary) and CLI reference for `oke db seed`.
 - `<StoreSeeding />` teaching figure — env→block lighting + upsert outcomes
   under Store docs Seeding.
+- Phone-number OTP delivery via Taqnyat Verify — `fx.sendOtp` / `fx.verifyOtp`
+  on Channel; when `drivers.channel.sms` is `taqnyat`, `phoneNumber()` uses
+  Taqnyat's provider-managed Verify API (no self-generated code). Non-Taqnyat
+  SMS drivers fail loudly; no SMS driver keeps the local hashed path +
+  `exposeDevOtp`.
+- `taqnyat-mail` Channel email driver (additive) — magic-link and every
+  `channel.email` template can deliver through Taqnyat Mail
+  (`TAQNYAT_MAIL_TOKEN` + `TAQNYAT_CAMPAIGN`); SMTP/Mailpit stays the docker
+  default.
+- Opt-in Taqnyat live test suite — real `sendOtp` (success code `5`) and
+  real Taqnyat Mail magic-link sends, double-gated behind the global
+  per-medium flags `OKE_SMS_LIVE=1` / `OKE_EMAIL_LIVE=1` **plus** the real
+  credentials; credential presence alone never sends. Skips are always
+  visible.
 
 ### ♻️ Changed
 
+- Flow docs: durable-journal boundary — today's journal is in-process memory
+  only (no boot-time recovery); replay is proven for the same process only,
+  not after a real crash/restart or across load-balanced instances.
+- Template / create-oke docker+prod clock default: `file` → `postgres` now
+  that the real CronStore exists (`file` still valid for local/single-host).
+- `sently` 1.0.0 → 1.2.0 — Taqnyat OTP helpers (`sendOtp` / `verifyOtp`)
+  unchanged in shape; 1.1/1.2 add vendor extras + the opt-in live-suite
+  pattern mirrored by OKE's new live tests.
 - Split `JournalSuspend` / `isJournalSuspend` into `journal-suspend.ts` so
   the kernel edge profile (retry filter) no longer pulls Node journal
   persistence into the browser bundle (~15.01 kB → ~13.4 kB gzip).
@@ -89,7 +117,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   processes).
 - Clock chaos harness: two processes share one store and fire a schedule
   once; SIGKILL mid-lease takeover measured (~120ms at `leaseMs=120`);
-  SIGKILL mid durable step resumes without re-running completed steps.
+  SIGKILL mid durable step resumes without re-running completed steps
+  (file-backed journal in the chaos harness — not the in-process memory
+  journal used by a booted app).
 
 ### ♻️ Changed
 

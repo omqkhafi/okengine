@@ -58,6 +58,74 @@ export interface WhatsAppTransport {
   close?(): Promise<void>;
 }
 
+/**
+ * Provider-managed OTP vendor extra on an SMS transport (Taqnyat Verify).
+ * Kept off the base {@link SmsTransport} surface — only transports that expose
+ * these methods support Channel provider OTP.
+ */
+export interface SmsOtpTransport {
+  sendOtp(options: ChannelOtpSendOptions): Promise<ChannelOtpSendResult>;
+  verifyOtp(options: ChannelOtpVerifyOptions): Promise<ChannelOtpVerifyResult>;
+}
+
+/** Options for {@link SmsOtpTransport.sendOtp} (Taqnyat Verify). */
+export interface ChannelOtpSendOptions {
+  /** Recipient phone number (E.164). */
+  readonly to: string;
+  /** Unique id for this verification flow (required again on verify). */
+  readonly requestId: string;
+  /** Message language (`en` or `ar`). */
+  readonly lang?: "en" | "ar";
+  /** Optional note appended to the OTP SMS. */
+  readonly note?: string;
+  /** Sender id override. */
+  readonly from?: string;
+}
+
+/** Result of a successful provider OTP send. */
+export interface ChannelOtpSendResult {
+  /** Echo of the {@link ChannelOtpSendOptions.requestId}. */
+  readonly requestId: string;
+  /** Recipient as passed in. */
+  readonly to: string;
+  /** Provider status code (`5` = code sent). */
+  readonly code: number;
+  /** Raw response body text. */
+  readonly response: string;
+  /** Provider identifier. */
+  readonly provider: string;
+}
+
+/** Options for {@link SmsOtpTransport.verifyOtp}. */
+export interface ChannelOtpVerifyOptions {
+  /** Recipient phone number (same as send). */
+  readonly to: string;
+  /** Same {@link ChannelOtpSendOptions.requestId} used when sending. */
+  readonly requestId: string;
+  /** OTP code the user entered. */
+  readonly code: string;
+  /** Message language (`en` or `ar`). */
+  readonly lang?: "en" | "ar";
+  /** Sender id override. */
+  readonly from?: string;
+  /** Optional note. */
+  readonly note?: string;
+}
+
+/** Result of a successful provider OTP check (failures throw). */
+export interface ChannelOtpVerifyResult {
+  /** Always `true` when the call resolves. */
+  readonly ok: true;
+  /** Provider status code (`10` = completed; `13`/`19` = already verified). */
+  readonly code: number;
+  /** Provider message when present. */
+  readonly message: string;
+  /** Raw response body text. */
+  readonly response: string;
+  /** Provider identifier. */
+  readonly provider: string;
+}
+
 /** Sently-compatible push transport (structural). */
 export interface PushTransport {
   readonly provider?: string;
@@ -79,6 +147,7 @@ export type ChannelDriverId =
   | "resend"
   | "sndr"
   | "taqnyat"
+  | "taqnyat-mail"
   | "msegat"
   | "unifonic"
   | "wa-cloud"
@@ -183,6 +252,8 @@ export interface ChannelOpenOptions {
   readonly vapidPublicKey?: string;
   readonly vapidPrivateKey?: string;
   readonly vapidSubject?: string;
+  /** Taqnyat Email campaign name (required by `mailSend.php`). */
+  readonly campaignName?: string;
   /** Injected fetch for HTTP drivers. */
   readonly fetch?: typeof globalThis.fetch;
   /** Dev inbox sink for console driver. */

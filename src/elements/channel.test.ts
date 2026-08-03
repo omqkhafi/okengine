@@ -10,6 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MailOptions, SendResult, Transport } from "sently";
 import { createChannelInbox, openConsoleChannel, type ChannelDriver } from "../drivers/index.ts";
+import type { SmsOtpTransport, SmsTransport } from "../drivers/channel-types.ts";
 import { channel, createChannelRuntime, createConsentStore, FallbackTransport } from "./channel.ts";
 
 /** Create a sently-compatible transport that always fails. */
@@ -205,5 +206,75 @@ describe("console driver", () => {
     expect(inbox.entries).toHaveLength(1);
     expect(inbox.entries[0]!.medium).toBe("sms");
     expect(inbox.entries[0]!.text).toBe("code 1234");
+  });
+});
+
+describe("provider-managed OTP (Taqnyat Verify)", () => {
+  function taqnyatSmsDriver(): ChannelDriver {
+    const otpTransport: SmsTransport & SmsOtpTransport = {
+      provider: "taqnyat-sms",
+      async send() {
+        return { messageId: "m", to: "", status: "sent", response: "" };
+      },
+      async sendOtp(opts) {
+        return {
+          requestId: opts.requestId,
+          to: opts.to,
+          code: 5,
+          response: "sent",
+          provider: "taqnyat-sms",
+        };
+      },
+      async verifyOtp(opts) {
+        return {
+          ok: true as const,
+          code: opts.code === "0000" ? 13 : 10,
+          message: "verified",
+          response: "ok",
+          provider: "taqnyat-sms",
+        };
+      },
+    };
+    return { id: "taqnyat", smsTransport: otpTransport };
+  }
+
+  test("sendOtp / verifyOtp dispatch to the taqnyat smsTransport", async () => {
+    const runtime = createChannelRuntime({ drivers: [taqnyatSmsDriver()] });
+    const sent = await runtime.sendOtp({ to: "+966500000000", requestId: "r1", lang: "en" });
+    expect(sent.code).toBe(5);
+    expect(sent.requestId).toBe("r1");
+    const verified = await runtime.verifyOtp({
+      to: "+966500000000",
+      requestId: "r1",
+      code: "6240",
+    });
+    expect(verified.ok).toBe(true);
+    expect(verified.code).toBe(10);
+  });
+
+  test("throws loudly when no SMS driver is bound", async () => {
+    const runtime = createChannelRuntime({});
+    await expect(runtime.sendOtp({ to: "+966500000000", requestId: "r1" })).rejects.toThrow(
+      "no SMS driver bound",
+    );
+  });
+
+  test("throws loudly naming the driver when SMS driver lacks OTP support", async () => {
+    const twilioLike: ChannelDriver = {
+      id: "msegat",
+      smsTransport: {
+        provider: "msegat",
+        async send() {
+          return { messageId: "m", to: "", status: "sent", response: "" };
+        },
+      },
+    };
+    const runtime = createChannelRuntime({ drivers: [twilioLike] });
+    await expect(runtime.sendOtp({ to: "+966500000000", requestId: "r1" })).rejects.toThrow(
+      /SMS driver "msegat" does not support provider-managed OTP/,
+    );
+    await expect(
+      runtime.verifyOtp({ to: "+966500000000", requestId: "r1", code: "1234" }),
+    ).rejects.toThrow(/does not support provider-managed OTP/);
   });
 });

@@ -126,19 +126,30 @@ describe("boot binders honour drivers.* config", () => {
     }
   });
 
-  test("clock: drivers.clock postgres fails loud", async () => {
-    await expect(
-      bootApplication({
-        env: "local",
-        startScheduler: false,
-        clocks: [clock("tick", { every: "1h" })],
-        config: {
-          drivers: {
-            clock: { local: "postgres" },
+  test("clock: drivers.clock postgres fails without DATABASE_URL", async () => {
+    const prevDb = process.env.DATABASE_URL;
+    const prevStore = process.env.OKE_STORE_SQL_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.OKE_STORE_SQL_URL;
+    try {
+      await expect(
+        bootApplication({
+          env: "local",
+          startScheduler: false,
+          clocks: [clock("tick", { every: "1h" })],
+          config: {
+            drivers: {
+              clock: { local: "postgres" },
+            },
           },
-        },
-      }),
-    ).rejects.toThrow(/clock driver "postgres" is not implemented/);
+        }),
+      ).rejects.toThrow(/clock driver "postgres" needs DATABASE_URL/);
+    } finally {
+      if (prevDb !== undefined) process.env.DATABASE_URL = prevDb;
+      else delete process.env.DATABASE_URL;
+      if (prevStore !== undefined) process.env.OKE_STORE_SQL_URL = prevStore;
+      else delete process.env.OKE_STORE_SQL_URL;
+    }
   });
 
   test("gate: drivers.store.kv redis opens redis-backed oke:gates", async () => {

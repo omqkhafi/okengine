@@ -10,6 +10,7 @@ import {
   resolveSmsDriverId,
   smtpOptionsFromEnv,
   sndrOptionsFromEnv,
+  taqnyatMailOptionsFromEnv,
   taqnyatOptionsFromEnv,
   unifonicOptionsFromEnv,
 } from "./channel.ts";
@@ -24,6 +25,8 @@ const previous = {
   sndrBase: process.env.SNDR_BASE_URL,
   taqBearer: process.env.TAQNYAT_BEARER_TOKEN,
   taqSender: process.env.TAQNYAT_SENDER,
+  taqMailToken: process.env.TAQNYAT_MAIL_TOKEN,
+  taqCampaign: process.env.TAQNYAT_CAMPAIGN,
   msegatUser: process.env.MSEGAT_USERNAME,
   msegatKey: process.env.MSEGAT_API_KEY,
   msegatSender: process.env.MSEGAT_SENDER,
@@ -41,6 +44,8 @@ afterEach(() => {
   restoreEnv("SNDR_BASE_URL", previous.sndrBase);
   restoreEnv("TAQNYAT_BEARER_TOKEN", previous.taqBearer);
   restoreEnv("TAQNYAT_SENDER", previous.taqSender);
+  restoreEnv("TAQNYAT_MAIL_TOKEN", previous.taqMailToken);
+  restoreEnv("TAQNYAT_CAMPAIGN", previous.taqCampaign);
   restoreEnv("MSEGAT_USERNAME", previous.msegatUser);
   restoreEnv("MSEGAT_API_KEY", previous.msegatKey);
   restoreEnv("MSEGAT_SENDER", previous.msegatSender);
@@ -116,6 +121,17 @@ describe("bindChannel driver resolution", () => {
     process.env.UNIFONIC_APPSID = "sid";
     process.env.UNIFONIC_SENDER = "Brand";
     expect(unifonicOptionsFromEnv()).toEqual({ appSid: "sid", sender: "Brand" });
+  });
+
+  test("taqnyat-mail env helper", () => {
+    process.env.TAQNYAT_MAIL_TOKEN = "bearer-mail";
+    process.env.TAQNYAT_CAMPAIGN = "auth";
+    expect(taqnyatMailOptionsFromEnv()).toEqual({
+      bearerToken: "bearer-mail",
+      campaignName: "auth",
+    });
+    delete process.env.TAQNYAT_CAMPAIGN;
+    expect(() => taqnyatMailOptionsFromEnv()).toThrow("TAQNYAT_CAMPAIGN");
   });
 });
 

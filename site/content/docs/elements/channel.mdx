@@ -132,22 +132,33 @@ images: {
 },
 ```
 
-| Driver     | Medium   | Behavior                                                            |
-| ---------- | -------- | ------------------------------------------------------------------- |
-| `console`  | any      | Captures into a readable inbox — local + tests                      |
-| `smtp`     | email    | Real SMTP — Mailpit in docker, your provider in prod                |
-| `resend`   | email    | Resend HTTP API (`RESEND_API_KEY`)                                  |
-| `sndr`     | email    | SNDR HTTP API (`SNDR_API_KEY`)                                      |
-| `taqnyat`  | sms      | Taqnyat SMS (`TAQNYAT_BEARER_TOKEN` + `TAQNYAT_SENDER`)             |
-| `msegat`   | sms      | Msegat SMS (`MSEGAT_USERNAME` + `MSEGAT_API_KEY` + `MSEGAT_SENDER`) |
-| `unifonic` | sms      | Unifonic el.cloud SMS (`UNIFONIC_APPSID`)                           |
-| `wa-cloud` | whatsapp | Meta WhatsApp Cloud API                                             |
-| `webpush`  | push     | Web Push + VAPID (`createPushSender` → `WebPushTransport`)          |
-| `fcm`      | push     | Firebase Cloud Messaging HTTP v1                                    |
+| Driver         | Medium   | Behavior                                                            |
+| -------------- | -------- | ------------------------------------------------------------------- |
+| `console`      | any      | Captures into a readable inbox — local + tests                      |
+| `smtp`         | email    | Real SMTP — Mailpit in docker, your provider in prod                |
+| `resend`       | email    | Resend HTTP API (`RESEND_API_KEY`)                                  |
+| `sndr`         | email    | SNDR HTTP API (`SNDR_API_KEY`)                                      |
+| `taqnyat-mail` | email    | Taqnyat Mail API (`TAQNYAT_MAIL_TOKEN` + `TAQNYAT_CAMPAIGN`)        |
+| `taqnyat`      | sms      | Taqnyat SMS (`TAQNYAT_BEARER_TOKEN` + `TAQNYAT_SENDER`)             |
+| `msegat`       | sms      | Msegat SMS (`MSEGAT_USERNAME` + `MSEGAT_API_KEY` + `MSEGAT_SENDER`) |
+| `unifonic`     | sms      | Unifonic el.cloud SMS (`UNIFONIC_APPSID`)                           |
+| `wa-cloud`     | whatsapp | Meta WhatsApp Cloud API                                             |
+| `webpush`      | push     | Web Push + VAPID (`createPushSender` → `WebPushTransport`)          |
+| `fcm`          | push     | Firebase Cloud Messaging HTTP v1                                    |
 
 Email fallback uses ordered email transports; SMS with multiple SMS drivers uses
 the same failover path. Credentials for boot-opened drivers are listed under
 [Environment Variables](/docs/reference/environment-variables).
+
+### Provider-managed OTP
+
+Flows can also send a provider-generated SMS code with `fx.sendOtp({ to, requestId, lang? })`
+and check it with `fx.verifyOtp({ to, requestId, code })` — Taqnyat's Verify API. Both are
+capability-gated `send` effects and dry-run safe.
+
+They dispatch only when the bound SMS driver supports Verify (`taqnyat`); any other SMS
+driver fails loudly instead of silently falling back to a self-generated code. The
+[Phone number](/docs/plugins/phone-number) plugin uses this path automatically.
 
 `webpush` needs VAPID keys — open it yourself and include it in
 `BootOptions.channel.drivers` (boot does not open push from env):

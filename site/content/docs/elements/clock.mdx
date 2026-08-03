@@ -123,8 +123,8 @@ unfinished step.
 | DST detection      | Ambiguous local times get a Console warning — schedules are not rewritten or blocked               |
 
 **Leader election needs a shared store.** The default in-memory CronStore is per process. Multi-replica
-exclusivity only holds when every instance opens the same durable CronStore (file-backed store is
-available for that; a Postgres cron driver is not wired yet).
+exclusivity holds when every instance opens the same durable CronStore — `postgres` (SKIP LOCKED +
+lease reclaim, docker/prod default) or `file` (shared volume, single-host / local).
 
 **Catch-up example:** an hourly clock down for five hours reports `missedRuns: 5` and
 `catchUp: "one"`, then a single tick runs the handler once.
@@ -141,15 +141,16 @@ Detection attaches `dstAmbiguity` on the cron row and the Console shows it. `oke
 
 ```typescript title="oke.config.ts"
 drivers: {
-  clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
+  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
 },
 ```
 
-| Driver   | Behavior                                                                                 |
-| -------- | ---------------------------------------------------------------------------------------- |
-| `memory` | In-process CronStore + timers — single process; lost on exit                             |
-| `file`   | On-disk CronStore (`.oke/crons.json`) — multi-process leader election on a shared volume |
-| `frozen` | Deterministic test clock — time advances only when the test says so                      |
+| Driver     | Behavior                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| `memory`   | In-process CronStore + timers — single process; lost on exit                                   |
+| `postgres` | Postgres CronStore (`oke_crons`) — multi-host leader election via SKIP LOCKED + lease reclaim  |
+| `file`     | On-disk CronStore (`.oke/crons.json`) — multi-process on a shared volume (local / single-host) |
+| `frozen`   | Deterministic test clock — time advances only when the test says so                            |
 
 `frozen` is why the no-`Date.now()` rule pays off: tests inject time travel through `fx.clock` and every flow obeys it automatically.
 
@@ -184,7 +185,8 @@ Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the wor
 </Accordion>
 <Accordion title="Two replicas both ran my cron">
 
-They are not sharing one CronStore. In-memory leases are per process. Point every replica at the same durable cron store, or run a single scheduler instance until the Postgres clock driver ships.
+They are not sharing one CronStore. In-memory leases are per process. Point every replica at the same
+`postgres` CronStore (`DATABASE_URL`), or use `file` on a shared volume for single-host multi-process.
 
 </Accordion>
 </Accordions>

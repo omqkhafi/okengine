@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.6.1 · measured 2026-08-02T13:46:41.635Z_
+_okengine v0.7.0 · measured 2026-08-03T20:35:32.752Z_
 
 Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,33 +10,33 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                       | Measured  | Limit     |
 | --------------------- | --------- | --------- |
-| Kernel (edge profile) | 15.00 kB  | 15.00 kB  |
+| Kernel (edge profile) | 13.63 kB  | 15.00 kB  |
 | Client runtime        | 1.70 kB   | 3.00 kB   |
 | Console initial load  | 86.32 kB  | 300.00 kB |
-| Cold start on Bun     | 37.269 ms | 75.000 ms |
+| Cold start on Bun     | 39.775 ms | 75.000 ms |
 | p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
 |              | Measured | Ceiling  |
 | ------------ | -------- | -------- |
-| okengine     | 66.41 kB | 67.74 kB |
+| okengine     | 67.14 kB | 68.48 kB |
 | ai           | 7.15 kB  | 7.40 kB  |
 | auth         | 15.83 kB | 16.15 kB |
-| channel      | 5.01 kB  | 5.26 kB  |
+| channel      | 5.22 kB  | 5.47 kB  |
 | client       | 1.83 kB  | 2.08 kB  |
 | client-react | 7.82 kB  | 8.07 kB  |
 | client/auth  | 573 B    | 829 B    |
-| clock        | 13.53 kB | 13.80 kB |
+| clock        | 13.79 kB | 14.07 kB |
 | config       | 890 B    | 1.12 kB  |
-| console      | 87.08 kB | 88.82 kB |
+| console      | 87.78 kB | 89.53 kB |
 | gate         | 6.16 kB  | 6.41 kB  |
 | mcp          | 9.46 kB  | 9.71 kB  |
-| plugins      | 18.55 kB | 18.92 kB |
+| plugins      | 18.73 kB | 19.10 kB |
 | runs         | 6.15 kB  | 6.40 kB  |
 | signal       | 905 B    | 1.13 kB  |
-| store        | 16.70 kB | 17.04 kB |
-| test         | 10.84 kB | 11.09 kB |
+| store        | 16.99 kB | 17.33 kB |
+| test         | 11.06 kB | 11.31 kB |
 | vault        | 2.44 kB  | 2.69 kB  |
 
 ## Plugins
@@ -49,7 +49,7 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | anonymous   | 5.46 kB  | 5.71 kB  |
 | magicLink   | 9.15 kB  | 9.40 kB  |
 | emailOtp    | 9.09 kB  | 9.34 kB  |
-| phoneNumber | 8.47 kB  | 8.72 kB  |
+| phoneNumber | 8.68 kB  | 8.93 kB  |
 | twoFactor   | 9.05 kB  | 9.30 kB  |
 | passkey     | 9.36 kB  | 9.61 kB  |
 
@@ -78,7 +78,7 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                      | Measured | Ceiling  |
 | -------------------- | -------- | -------- |
-| drivers              | 52.35 kB | 53.39 kB |
+| drivers              | 54.11 kB | 55.19 kB |
 | ai-anthropic         | 972 B    | 1.20 kB  |
 | ai-mock              | 896 B    | 1.13 kB  |
 | ai-ollama            | 1.97 kB  | 2.22 kB  |
@@ -91,9 +91,11 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | channel-smtp         | 455 B    | 711 B    |
 | channel-sndr         | 375 B    | 631 B    |
 | channel-taqnyat      | 737 B    | 993 B    |
+| channel-taqnyat-mail | 430 B    | 686 B    |
 | channel-unifonic     | 756 B    | 1012 B   |
 | channel-wa-cloud     | 800 B    | 1.03 kB  |
 | channel-webpush      | 947 B    | 1.17 kB  |
+| clock-postgres       | 2.45 kB  | 2.70 kB  |
 | drizzle-dialect      | 326 B    | 582 B    |
 | fs                   | 701 B    | 957 B    |
 | kv-lua               | 1.01 kB  | 1.26 kB  |

@@ -219,14 +219,16 @@ export const chargeOrder = flow({
       stripe(fx.vault(stripeKey).reveal()).create(orderId),
     );
 
-    await fx.clock.sleep("verify-window", "2m"); // survives restart and deploy
+    await fx.clock.sleep("verify-window", "2m"); // journals wakeAt in a durable flow
 
     return fx.step("confirm", () => stripe(fx.vault(stripeKey).reveal()).confirm(intent));
   },
 });
 ```
 
-**Consequence:** kill the process between the two steps and the run **resumes at `confirm`** — completed steps replay from the journal, so the card is not charged twice. This is verified by the engine's own test suite: after resume, `create-intent` has run exactly once.
+**Consequence:** completed steps replay from the journal — on resume, `create-intent` does not re-run, so the card is not charged twice.
+
+**Crash recovery needs a shared journal.** Today's durable journal is in-process memory only, with no boot-time recovery scan. The replay guarantee is proven for the same process only — not after a real crash/restart, and not across load-balanced instances.
 
 For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow({ retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
 

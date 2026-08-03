@@ -52,8 +52,8 @@ export interface CronRow {
 
 /** Store surface for reconciled crons. */
 export interface CronStore {
-  /** Backing kind when known (`memory` · `file`). */
-  readonly kind?: "memory" | "file";
+  /** Backing kind when known (`memory` · `file` · `postgres`). */
+  readonly kind?: "memory" | "file" | "postgres";
   /**
    * @param name - Cron name
    */

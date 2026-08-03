@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 50 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 51 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -116,9 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after AI stream/tool-loop + fx.t/i18n on the shared fx surface
-      // (~49.5 kB gzip). Still far below an eager full-element bind.
-      expect(total).toBeLessThan(50_000);
+      // Rebased after fx.sendOtp/verifyOtp on the shared fx surface (~50.1 kB
+      // gzip). Clock/channel drivers stay lazy-bound; still far below eager bind.
+      expect(total).toBeLessThan(51_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

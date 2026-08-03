@@ -34,9 +34,9 @@ export default defineConfig({
     },
     clock: {
       local: "memory",
-      docker: "file",
+      docker: "postgres",
       test: "frozen",
-      prod: "file",
+      prod: "postgres",
     },
     vault: {
       local: "env",

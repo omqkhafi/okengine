@@ -2,7 +2,7 @@
  * Clock element — time.
  *
  * Physics: cron · delay · timeout · durable sleep · TTL.
- * Drivers (protocol-named): `memory` · `postgres`.
+ * Drivers (protocol-named): `memory` · `postgres` · `file` · `frozen`.
  *
  * Durability lives on the Flow (`durable: true`); the journal records every
  * `fx` call. Crons leader-elect; schedules are reconciled into the Store at

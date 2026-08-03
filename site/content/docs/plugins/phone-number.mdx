@@ -1,16 +1,18 @@
 ---
 title: "Phone number"
-description: "Official plugin — E.164 phone OTP request and verify under /auth."
+description: "Official plugin — E.164 phone OTP request and verify under /auth, with provider-managed delivery via Taqnyat Verify."
 icon: "Smartphone"
 source: "docs/spec/unified-theory.md"
 ---
 
-`phoneNumber()` signs people in with a phone number in E.164 form (`+15551234567`). Codes are
-6 digits, hashed, 10 minutes, 5 attempts — same security shape as email OTP.
+`phoneNumber()` signs people in with a phone number in E.164 form (`+15551234567`). Delivery
+has two shapes: provider-managed OTP through Taqnyat Verify when an SMS driver is bound, or a
+local hashed code (10 minutes, 5 attempts) you deliver yourself.
 
 <Callout title="The one rule">
-  Enable `gate.auth`, then `.plug(phoneNumber())`. Reject non-E.164 numbers. SMS Channel delivery is
-  not wired yet — use `exposeDevOtp` locally. Prefer stronger methods when phone is the only factor.
+  Enable `gate.auth`, then `.plug(phoneNumber())`. For real SMS set `drivers.channel.sms` to
+  `taqnyat` — the plugin uses Taqnyat's Verify API, never a self-generated code. Use `exposeDevOtp`
+  only when no SMS driver is bound.
 </Callout>
 
 ## Quick start
@@ -40,7 +42,8 @@ export const app = oke({
 const { data, error } = await api.auth.requestPhoneOtp({ phone: "+15551234567" });
 ```
 
-`POST /auth/phone/request`. Invalid E.164 → `AuthFailed` / `invalid_phone`.
+`POST /auth/phone/request`. Invalid E.164 → `AuthFailed` / `invalid_phone`. Optional `lang:
+"en" | "ar"` picks the OTP message language on the Taqnyat path.
 
 </Step>
 
@@ -60,16 +63,51 @@ const { data } = await api.auth.verifyPhoneOtp({
 
 </Steps>
 
+## Delivery
+
+| Bound SMS driver     | Request behavior                                           | Verify behavior                |
+| -------------------- | ---------------------------------------------------------- | ------------------------------ |
+| `taqnyat`            | Taqnyat Verify `sendOtp` (provider generates the code)     | Taqnyat Verify `verifyOtp`     |
+| none                 | Local 6-digit code, hashed at rest (`exposeDevOtp` for DX) | Local hash compare, 5 attempts |
+| any other SMS driver | Fails loudly — provider-managed OTP unsupported            | —                              |
+
+**Consequence:** the request response never contains `devOtp` on the Taqnyat path — the code
+exists only inside the SMS Taqnyat sends.
+
+### Taqnyat Verify
+
+```typescript title="oke.config.ts"
+export default {
+  drivers: {
+    channel: {
+      sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
+    },
+  },
+};
+```
+
+| Env                    | Meaning                                      |
+| ---------------------- | -------------------------------------------- |
+| `TAQNYAT_BEARER_TOKEN` | Taqnyat bearer token (`TAQNYAT_TOKEN` alias) |
+| `TAQNYAT_SENDER`       | Pre-approved sender id                       |
+
+Request stores a provider challenge (`taqnyat:<requestId>`, 10m TTL, 5 attempts) and calls
+`fx.sendOtp`; verify replays the same `requestId` with the code through `fx.verifyOtp`. Both
+are capability-gated `send` effects — dry-run records them without contacting Taqnyat.
+
+An SMS driver without Verify support (for example a generic SMS sender) makes the request fail
+with a clear error: use `exposeDevOtp` locally or switch `drivers.channel.sms` to `taqnyat`.
+
 ## Options
 
-| Option          | Type                | Default  | Meaning                                 |
-| --------------- | ------------------- | -------- | --------------------------------------- |
-| `secret`        | `string`            | active\* | HMAC secret (\*from `gate.auth`)        |
-| `sessions`      | `SessionStore`      | active\* | Session store                           |
-| `ttlMs`         | `number`            | 10m      | Challenge lifetime                      |
-| `exposeDevOtp`  | `boolean`           | `false`  | Include raw OTP in the request response |
-| `phones`        | `PhoneStore`        | new      | Phone → userId map                      |
-| `verifications` | `VerificationStore` | new      | Challenge store                         |
+| Option          | Type                | Default  | Meaning                                                   |
+| --------------- | ------------------- | -------- | --------------------------------------------------------- |
+| `secret`        | `string`            | active\* | HMAC secret (\*from `gate.auth`)                          |
+| `sessions`      | `SessionStore`      | active\* | Session store                                             |
+| `ttlMs`         | `number`            | 10m      | Challenge lifetime                                        |
+| `exposeDevOtp`  | `boolean`           | `false`  | Include raw OTP in the request response (local path only) |
+| `phones`        | `PhoneStore`        | new      | Phone → userId map                                        |
+| `verifications` | `VerificationStore` | new      | Challenge store                                           |
 
 ## Surfaces
 
@@ -80,6 +118,21 @@ const { data } = await api.auth.verifyPhoneOtp({
 
 E.164 pattern: `^\+[1-9]\d{7,14}$`.
 
+## Live tests (opt-in)
+
+The Taqnyat live suite sends real SMS and burns real quota, so it is double-gated: it runs only when
+`OKE_SMS_LIVE=1` **and** the real credentials (`TAQNYAT_TOKEN`, `TAQNYAT_SENDER`, plus
+`OKE_TEST_TAQNYAT_PHONE` — `TAQNYAT_TO` also accepted) are all present. Credentials alone never send.
+
+The suite sends exactly one SMS and never asks for the code.
+
+```bash
+OKE_SMS_LIVE=1 TAQNYAT_TOKEN=… TAQNYAT_SENDER=YourBrand \
+  OKE_TEST_TAQNYAT_PHONE=+9665xxxxxxxx bun test src/plugins
+```
+
+Without the flag the suite skips visibly — never a silent pass.
+
 ## Troubleshooting
 
 <Accordions>
@@ -89,9 +142,17 @@ Number must start with `+` and a non-zero country digit, then 7–14 more digits
 dashes.
 
 </Accordion>
+<Accordion title="SMS driver does not support provider-managed OTP">
+
+The configured `drivers.channel.sms` driver has no Verify API. Either switch to `taqnyat` or
+remove the SMS driver so the local hashed path (`exposeDevOtp`) is used.
+
+</Accordion>
 <Accordion title="No SMS arrived">
 
-v1 does not send SMS. Use `exposeDevOtp` in local/test, or deliver via your own Channel Flow.
+On the local path no SMS is sent by design — use `exposeDevOtp`, or bind `taqnyat` with valid
+`TAQNYAT_*` credentials. On the Taqnyat path check the sender id is pre-approved and the
+number is E.164.
 
 </Accordion>
 </Accordions>
@@ -99,8 +160,8 @@ v1 does not send SMS. Use `exposeDevOtp` in local/test, or deliver via your own 
 ## Learn more
 
 - [Email OTP](/docs/plugins/email-otp) — email variant of the same OTP rules
-- [Gate](/docs/elements/gate) — `gate.auth`
-- [Channel](/docs/elements/channel) — when you wire SMS yourself
+- [Magic link](/docs/plugins/magic-link) — one-time email link sign-in
+- [Channel](/docs/elements/channel) — SMS / email drivers and delivery
 
 ## Next
 
