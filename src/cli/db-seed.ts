@@ -206,6 +206,11 @@ export async function bootSeedFx(
   }
   await app.boot({ env, startScheduler: false, config: config ?? undefined });
   const storeRuntime = app.elements?.store ?? app.bootResult?.store;
+  if (!storeRuntime) {
+    throw new Error(
+      "oke db seed: app booted without a store runtime — ensure stores are registered on the app (e.g. Object.assign(app.$options, { stores: [db] }))",
+    );
+  }
   const fx = createFx({
     flow: "oke.db.seed",
     storeRuntime,

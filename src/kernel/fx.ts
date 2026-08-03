@@ -11,7 +11,14 @@
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
 import type {
+  FilesStoreDecl,
+  FilesStoreFxHandle,
+  IndexStoreDecl,
+  IndexStoreFxHandle,
+  KvStoreDecl,
+  KvStoreFxHandle,
   SelectOrderBuilder,
+  SqlStoreDecl,
   StoreDecl,
   StoreHandle,
   StoreRuntime,
@@ -286,10 +293,15 @@ export interface Fx {
    * Open a store handle for `ref` (capability checked on each op).
    *
    * When a {@link CreateFxOptions.storeRuntime} is bound and `ref` is a
-   * registered store declaration, returns the driver-backed handle.
+   * facet declaration, returns the driver-backed handle for that facet.
+   * String / `{ ref }` forms return the in-memory stub (tests).
    *
    * @param ref - Store resource ref, named handle, or store declaration
    */
+  store(ref: SqlStoreDecl): SqlStoreHandle;
+  store(ref: KvStoreDecl): KvStoreFxHandle;
+  store(ref: FilesStoreDecl): FilesStoreFxHandle;
+  store(ref: IndexStoreDecl): IndexStoreFxHandle;
   store(ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl): FxStoreHandle;
   /**
    * Emit a signal (records `emit`).
@@ -879,10 +891,25 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     } as SqlStoreHandle;
   }
 
+  function storeHandle(ref: SqlStoreDecl): SqlStoreHandle;
+  function storeHandle(ref: KvStoreDecl): KvStoreFxHandle;
+  function storeHandle(ref: FilesStoreDecl): FilesStoreFxHandle;
+  function storeHandle(ref: IndexStoreDecl): IndexStoreFxHandle;
+  function storeHandle(ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl): FxStoreHandle;
   function storeHandle(ref: NamedRef | { readonly ref: ResourceRef } | StoreDecl): FxStoreHandle {
     const runtime = options.storeRuntime;
-    if (runtime && typeof ref === "object" && ref !== null && "facet" in ref) {
+    if (typeof ref === "object" && ref !== null && "facet" in ref) {
       const decl = ref;
+      // SQL physics cannot run on the in-memory stub (insert(table).values ≠ stub insert(row)).
+      // Without a runtime, fail loudly — never return a stub missing upsert/select/….
+      if (!runtime) {
+        if (decl.facet === "sql") {
+          throw new Error(
+            `fx.store("${decl.ref}"): no store runtime — boot the app (stores / flow effects) before using SQL handles`,
+          );
+        }
+        return stubStoreHandle(decl.ref);
+      }
       const cache: { handle?: StoreHandle } = {};
       const open = async () => {
         if (!cache.handle) {
@@ -1037,9 +1064,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   };
 
   const fx: Fx = {
-    store(ref) {
-      return storeHandle(ref);
-    },
+    store: storeHandle,
     emit(signal, payload, emitOptions) {
       const name = resolveName(signal);
       return gated("emit", name, async () => {

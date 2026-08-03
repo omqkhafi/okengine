@@ -29,6 +29,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Split `JournalSuspend` / `isJournalSuspend` into `journal-suspend.ts` so
   the kernel edge profile (retry filter) no longer pulls Node journal
   persistence into the browser bundle (~15.01 kB → ~13.4 kB gzip).
+- `fx.store(sqlDecl)` typed as `SqlStoreHandle` (facet overloads) so
+  `.upsert` / `.insert` / `.select` typecheck; SQL decls without a store
+  runtime throw instead of a stub missing those methods.
 - Store Seeding docs: full env matrix, simple vs complex file forms, upsert
   outcome table, CLI flags, seed-vs-migrate Callout.
 - Store docs: short **Multiple environments** note under SQL schema sync —
@@ -36,6 +39,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `oke db` adversarial test: multi-file `generate` + re-`migrate` skips
   applied migrations; simulated env lag applies only the pending file
   (drizzle-kit `__drizzle_migrations` history through the CLI wrapper).
+
+### 🐛 Fixed
+
+- `fx.store(db).upsert` through real `oke()` → `createTestApp` → `app.fetch()`
+  (regression test); SQL `StoreDecl` without a store runtime no longer
+  silently returns a stub that made `.upsert` look like “not a function”.
 
 ## v0.7.0 — 2026-08-02
 
