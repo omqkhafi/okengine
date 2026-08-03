@@ -1,6 +1,6 @@
 {
   "name": "create-oke",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
   "license": "MIT",
   "repository": {

@@ -70,3 +70,6 @@ reports/
 
 # Ephemeral CLI integration fixtures (e.g. src/cli/.tmp-db-mig-*)
 .tmp-db-mig-*/
+
+# Local Taqnyat scratch script (never commit)
+src/plugins/__taqnyat-final.ts

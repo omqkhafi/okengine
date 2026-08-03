@@ -10,6 +10,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.8.0 — 2026-08-04
+
 ### ✨ Added
 
 - Postgres Clock CronStore (`drivers.clock: "postgres"`) — multi-host leader
