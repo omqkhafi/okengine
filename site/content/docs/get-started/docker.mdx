@@ -1,0 +1,171 @@
+---
+title: Docker
+description: Deploy with plain docker compose — opt-in Caddy or Traefik for TLS termination and routing when you scale without an orchestrator.
+icon: Package
+source: README.md
+---
+
+Plain `docker compose` is the gap between `oke dev --docker` (infra only) and
+[Kubernetes](/docs/get-started/kubernetes) / [Docker Swarm](/docs/get-started/docker-swarm).
+Pin an opt-in `images.proxy` when you need HTTPS at the edge — nothing is forced.
+
+<Callout title="The one rule">
+  Leave the no-proxy default until you need TLS or horizontal scale. Then pick **Caddy** (simplest
+  automatic HTTPS) or **Traefik** (label auto-discovery for `docker compose up --scale app=N`).
+  Never mount the raw Docker socket into Traefik.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Derive compose (no proxy yet)
+
+```bash
+oke docker --prod
+```
+
+Writes `Dockerfile`, `compose.yml`, per-role layers, and `compose.prod.yml`.
+App still publishes port `6530` — same as today.
+
+</Step>
+
+<Step>
+### Opt in to a proxy (pick one)
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "postgres:18-alpine",
+  // …
+  proxy: "caddy:2-alpine", // or "traefik:v3.3"
+},
+```
+
+Re-run `oke docker --prod`. The edge publishes `80`/`443`; `app` stays on the
+internal network (so `--scale app=N` does not fight a host port bind).
+
+</Step>
+
+<Step>
+### Set the public host and bring the stack up
+
+```bash
+# docker/.env.docker (preserved on regeneration)
+OKE_PROXY_HOST=app.example.com
+OKE_PROXY_ACME_EMAIL=admin@example.com
+```
+
+```bash
+cd docker
+docker compose -f compose.yml -f compose.store.sql.yml \
+  -f compose.proxy.yml -f compose.prod.yml up -d --scale app=2
+```
+
+Pass every `-f` file `oke docker` listed. Point DNS at the host. Set
+`allowedHosts` on serve to your public hostname
+([Security](/docs/reference/security)).
+
+</Step>
+
+</Steps>
+
+## Which proxy?
+
+| Choice                       | Best for                                                   | How routing works                                                  |
+| ---------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Caddy** (`caddy:2-alpine`) | hello / minimal / standard — single instance, simplest TLS | Generated `Caddyfile` → `reverse_proxy app:6530`; automatic HTTPS  |
+| **Traefik** (`traefik:v3.3`) | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| _(omit `images.proxy`)_      | Local / private networks                                   | App publishes `6530` — **default, unchanged**                      |
+
+**Consequence:** Caddy is the recommended default when you just need a certificate.
+Choose Traefik when `docker compose up --scale app=N` is the deployment shape.
+
+## Caddy
+
+Emits `docker/Caddyfile`:
+
+```text
+{$OKE_PROXY_HOST:localhost} {
+	reverse_proxy app:6530
+}
+```
+
+`localhost` gets local TLS; a public `OKE_PROXY_HOST` gets Let's Encrypt.
+Override via `compose.override.yml` — oke regenerates on `oke docker`.
+
+## Traefik
+
+Generated `compose.proxy.yml` labels `app` (`traefik.enable`, Host from
+`OKE_PROXY_HOST`, Let's Encrypt, `loadbalancer.server.port=6530`).
+Scaled replicas need no label edits.
+
+### Docker socket (security)
+
+Mounting `/var/run/docker.sock` into a public edge container is a
+container-escape risk — [Traefik documents this](https://doc.traefik.io/traefik/reference/install-configuration/providers/docker/)
+and recommends a filtered proxy.
+
+OKE **never** mounts the socket into Traefik. A companion
+`tecnativa/docker-socket-proxy` exposes only `CONTAINERS` / `EVENTS` /
+`PING` / `VERSION` / `NETWORKS` on the internal `oke` network.
+
+Traefik uses `--providers.docker.endpoint=tcp://socket-proxy:2375`.
+Do not publish `2375` on the host.
+
+## Orchestrator equivalents
+
+| Surface                                        | Edge / ingress                                   |
+| ---------------------------------------------- | ------------------------------------------------ |
+| Plain Docker (this page)                       | Opt-in Caddy or Traefik (`images.proxy`)         |
+| [Docker Swarm](/docs/get-started/docker-swarm) | Swarm routing mesh + optional same proxy recipes |
+| [Kubernetes](/docs/get-started/kubernetes)     | Ingress / Gateway API (cluster-native)           |
+
+Shared multi-instance rules (Postgres/Redis/S3, `/_/ready`, SIGTERM) stay on
+the [Kubernetes](/docs/get-started/kubernetes) page — unchanged by the proxy.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="compose up --scale app=N fails with port already allocated">
+
+You still have `6530:6530` on `app`. Confirm `images.proxy` is set and
+`compose.proxy.yml` is in the `-f` list so derivation omitted the host bind.
+
+</Accordion>
+<Accordion title="Let's Encrypt challenge fails">
+
+`OKE_PROXY_HOST` must be a public DNS name pointing at this host; ports `80`/`443`
+reachable. Set `OKE_PROXY_ACME_EMAIL`. For localhost-only smoke tests, prefer Caddy.
+
+</Accordion>
+<Accordion title="Traefik starts but never routes to app">
+
+Confirm app labels are present (`traefik.enable=true`) in `compose.proxy.yml`,
+containers share the `oke` network, and `socket-proxy` is healthy. Traefik must
+not mount `docker.sock` itself.
+
+</Accordion>
+<Accordion title="Host header rejected (403)">
+
+Serve validates `Host`. Add your public hostname to `allowedHosts`
+([Security](/docs/reference/security)).
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Docker Swarm](/docs/get-started/docker-swarm) — `docker stack deploy` on the same files
+- [Kubernetes](/docs/get-started/kubernetes) — Deployment, probes, multi-instance limits
+- [CLI](/docs/reference/cli) — `oke docker`, `oke docker --prod`
+- [Configuration](/docs/reference/configuration) — `images` pins
+- [Security](/docs/reference/security) — `allowedHosts` behind a reverse proxy
+
+## Next
+
+<Cards>
+  <Card title="Docker Swarm" href="/docs/get-started/docker-swarm" />
+  <Card title="Kubernetes" href="/docs/get-started/kubernetes" />
+  <Card title="Installation" href="/docs/get-started/installation" />
+</Cards>

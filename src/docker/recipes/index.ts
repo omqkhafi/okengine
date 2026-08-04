@@ -3,6 +3,7 @@
  */
 
 import type { ImageRecipe } from "../types.ts";
+import { caddy } from "./caddy.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
 import { ollama } from "./ollama.ts";
@@ -11,6 +12,7 @@ import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
+import { traefik } from "./traefik.ts";
 
 /** Default recipe catalogue. */
 export const builtinRecipes: readonly ImageRecipe[] = [
@@ -22,9 +24,11 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   openbao,
   meilisearch,
   ollama,
+  caddy,
+  traefik,
 ];
 
-export { mailpit, meilisearch, ollama, openbao, pgdog, postgres, redis, rustfs };
+export { caddy, mailpit, meilisearch, ollama, openbao, pgdog, postgres, redis, rustfs, traefik };
 
 /**
  * Resolve the recipe for an image reference.

@@ -81,6 +81,9 @@ images: {
   "channel.email": "axllent/mailpit:v1.22.3",
   vault: "openbao/openbao:2.6.1",
   ai: "ollama/ollama:latest",
+  // opt-in TLS edge — omit for the default (app publishes 6530):
+  // proxy: "caddy:2-alpine",   // simplest automatic HTTPS
+  // proxy: "traefik:v3.3",     // label auto-discovery for --scale app=N
 },
 ```
 
@@ -89,6 +92,9 @@ When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog
 [Store · Multiple environments](/docs/elements/store#multiple-environments).
 
 For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3.5:9b` — a balanced local-dev starting point; override freely; on Apple Silicon prefer `qwen3.5:9b-mlx`) and writes `OKE_AI_URL`.
+
+For `proxy`, pin **either** Caddy or Traefik — never both. Opt-in only; see
+[Docker](/docs/get-started/docker).
 
 ## i18n
 

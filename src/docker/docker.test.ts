@@ -9,9 +9,11 @@ import { join } from "node:path";
 import {
   COMPOSE_OVERRIDE,
   assertNoCredentialsInYaml,
+  buildCaddyfile,
   buildPgDogToml,
   buildPgDogUsersToml,
   builtinRecipes,
+  caddy,
   deriveInfrastructure,
   emitDockerfile,
   formatStackEnv,
@@ -20,6 +22,10 @@ import {
   recipeFor,
   redis,
   resolveStack,
+  SOCKET_PROXY_IMAGE,
+  SOCKET_PROXY_SERVICE,
+  traefik,
+  traefikAppLabels,
   writeDerivedFiles,
   type ImageRecipe,
   type ServiceSpec,
@@ -147,6 +153,56 @@ describe("image recipes", () => {
     expect(exportLines.length).toBeLessThanOrEqual(15);
   });
 
+  test("caddy matches official images and emits a Caddyfile reverse_proxy", () => {
+    expect(recipeFor("caddy:2-alpine").id).toBe("caddy");
+    expect(caddy.match("library/caddy:2")).toBe(true);
+    const spec: ServiceSpec = {
+      role: "proxy",
+      serviceName: "proxy",
+      image: "caddy:2-alpine",
+      port: 80,
+      hostPort: 80,
+      credentials: { user: "oke", password: "unused-proxy", database: "oke" },
+    };
+    const applied = caddy.apply(spec);
+    expect(applied.extraPorts).toEqual([{ host: 443, container: 443 }]);
+    expect(applied.volumes).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
+    expect(applied.volumes).toContain("proxy-data:/data");
+    const file = buildCaddyfile();
+    expect(file).toContain("{$OKE_PROXY_HOST:localhost}");
+    expect(file).toContain("reverse_proxy app:6530");
+    expect(caddy.url(spec, { host: "app.example.com", port: 443, ...spec.credentials })).toBe(
+      "https://app.example.com",
+    );
+  });
+
+  test("traefik matches official images, labels app, and uses socket-proxy", () => {
+    expect(recipeFor("traefik:v3.3").id).toBe("traefik");
+    expect(traefik.match("traefik:v3.1")).toBe(true);
+    const applied = traefik.apply({
+      role: "proxy",
+      serviceName: "proxy",
+      image: "traefik:v3.3",
+      port: 80,
+      hostPort: 80,
+      credentials: { user: "oke", password: "unused-proxy", database: "oke" },
+    });
+    expect(applied.extraPorts).toEqual([{ host: 443, container: 443 }]);
+    expect(String(applied.command)).toContain("--providers.docker=true");
+    expect(String(applied.command)).toContain(`tcp://${SOCKET_PROXY_SERVICE}:2375`);
+    expect(String(applied.command)).not.toContain("docker.sock");
+    expect(applied.volumes?.some((v) => v.includes("docker.sock"))).toBeFalsy();
+    expect(applied.dependsOn?.[SOCKET_PROXY_SERVICE]?.condition).toBe("service_started");
+    const socket = applied.services?.[SOCKET_PROXY_SERVICE] as Record<string, unknown>;
+    expect(socket.image).toBe(SOCKET_PROXY_IMAGE);
+    expect(socket.volumes).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
+    const labels = (applied.services?.app as { labels: Record<string, string> }).labels;
+    expect(labels).toEqual(traefikAppLabels());
+    expect(labels["traefik.enable"]).toBe("true");
+    expect(labels["traefik.http.services.app.loadbalancer.server.port"]).toBe("6530");
+    expect(labels["traefik.http.routers.app.rule"]).toContain("OKE_PROXY_HOST");
+  });
+
   test("recipe.url builds a connection string without env-var names in the kernel", () => {
     const spec: ServiceSpec = {
       role: "store.sql",
@@ -230,6 +286,7 @@ describe("deriveInfrastructure", () => {
     const baseYml = result.files.find((f) => f.path === "compose.yml")!.content;
     expect(baseYml).toContain('context: ".."');
     expect(baseYml).toContain("app:");
+    expect(baseYml).toContain("oke-skyport:latest");
 
     for (const f of result.files) {
       assertNoCredentialsInYaml(f.content, Object.values(fixedCreds));
@@ -264,6 +321,12 @@ describe("deriveInfrastructure", () => {
     expect(result.composeFiles.at(-1)).toBe(COMPOSE_OVERRIDE);
     const prod = result.files.find((f) => f.path === "compose.prod.yml")!.content;
     expect(prod).toContain("replicas");
+    expect(prod).toContain("/_/ready");
+    expect(prod).toContain("update_config");
+    expect(prod).toContain("restart_policy");
+    expect(prod).toContain("stop_grace_period");
+    expect(prod).toContain("start-first");
+    expect(prod).toContain("on-failure");
   });
 
   test("when postgres + pgdog are both pinned, DATABASE_URL points at PgDog", () => {
@@ -479,5 +542,79 @@ describe("deriveInfrastructure", () => {
     expect(mail.extraPorts).toEqual([{ hostPort: 21_000 + n, containerPort: 8025 }]);
     expect(files.hostPort).toBe(18_000 + n);
     expect(files.extraPorts).toEqual([{ hostPort: 19_000 + n, containerPort: 9001 }]);
+  });
+
+  test("opt-in caddy proxy emits Caddyfile and unpublishes app ports", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        proxy: "caddy:2-alpine",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      app: "skyport",
+    });
+    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    expect(base).toContain("app:");
+    expect(base).not.toContain("6530:6530");
+    expect(base).not.toContain("proxy:");
+    expect(base).toContain("store-sql");
+    expect(base).not.toMatch(/depends_on:[\s\S]*proxy/);
+
+    const proxyYml = result.files.find((f) => f.path === "compose.proxy.yml")!.content;
+    expect(proxyYml).toContain("caddy:2-alpine");
+    expect(proxyYml).toContain("80:80");
+    expect(proxyYml).toContain("443:443");
+    expect(proxyYml).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
+
+    const caddyfile = result.files.find((f) => f.path === "Caddyfile")!.content;
+    expect(caddyfile).toContain("reverse_proxy app:6530");
+    expect(result.stackEnv.OKE_PROXY_URL).toBe("https://127.0.0.1");
+    expect(formatStackEnv(result.stackEnv)).toContain("# ── proxy — TLS terminator");
+    expect(formatStackEnv(result.stackEnv)).toContain("# OKE_PROXY_HOST=localhost");
+  });
+
+  test("opt-in traefik proxy labels app and mounts socket only on socket-proxy", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        proxy: "traefik:v3.3",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      app: "skyport",
+      prod: true,
+    });
+    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    expect(base).not.toContain("6530:6530");
+
+    const proxyYml = result.files.find((f) => f.path === "compose.proxy.yml")!.content;
+    expect(proxyYml).toContain("traefik:v3.3");
+    expect(proxyYml).toContain(SOCKET_PROXY_IMAGE);
+    expect(proxyYml).toContain(SOCKET_PROXY_SERVICE);
+    expect(proxyYml).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
+    expect(proxyYml).toContain("tcp://socket-proxy:2375");
+    expect(proxyYml).toContain("traefik.enable");
+    expect(proxyYml).toContain("traefik.http.routers.app.rule");
+    expect(proxyYml).toContain("loadbalancer.server.port");
+    // Raw socket must not be on the Traefik service itself.
+    const traefikBlock = proxyYml.split("socket-proxy:")[0]!;
+    expect(traefikBlock).toContain("traefik:v3.3");
+    expect(traefikBlock).not.toContain("docker.sock");
+
+    expect(result.files.some((f) => f.path === "Caddyfile")).toBe(false);
+    expect(result.stackEnv.OKE_PROXY_URL).toBe("https://127.0.0.1");
+    expect(result.composeFiles).toContain("compose.proxy.yml");
+    expect(result.composeFiles).toContain("compose.prod.yml");
+  });
+
+  test("without proxy role, app still publishes 6530 (default unchanged)", () => {
+    const result = deriveInfrastructure({
+      images: { "store.sql": "postgres:16" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      app: "skyport",
+    });
+    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    expect(base).toContain("6530:6530");
+    expect(result.files.some((f) => f.path === "compose.proxy.yml")).toBe(false);
+    expect(result.stackEnv.OKE_PROXY_URL).toBeUndefined();
   });
 });

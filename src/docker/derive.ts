@@ -11,9 +11,11 @@ import {
   formatStackEnv,
 } from "./compose.ts";
 import { emitDockerfile } from "./dockerfile.ts";
+import { buildCaddyfile } from "./recipes/caddy.ts";
 import { buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
+import { APP_PORT } from "../runtime/types.ts";
 
 /**
  * Derive infrastructure files from normalised image pins.
@@ -44,7 +46,12 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     content: emitDockerfile({ appPort: normalised.appPort }),
   };
   // Always emit Dockerfile for deploy; stack-only runs ignore it.
-  const files = [dockerfile, ...composeFilesContent, ...pgdogConfigFiles(specs)];
+  const files = [
+    dockerfile,
+    ...composeFilesContent,
+    ...pgdogConfigFiles(specs),
+    ...proxyConfigFiles(specs, normalised.appPort),
+  ];
 
   for (const f of files) {
     if (f.path.endsWith(".yml") || f.path === "Dockerfile") {
@@ -92,6 +99,27 @@ function pgdogConfigFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
       }),
     },
   ];
+}
+
+/**
+ * Emit proxy companion configs when `images.proxy` is pinned.
+ *
+ * Caddy gets a generated `Caddyfile`. Traefik configures via Docker labels
+ * (no companion file).
+ *
+ * @param specs - Normalised services
+ * @param appPort - App listen port (default 6530)
+ */
+function proxyConfigFiles(
+  specs: DeriveResult["specs"],
+  appPort: number | undefined,
+): GeneratedFile[] {
+  const proxy = specs.find((s) => s.role === "proxy");
+  if (!proxy) return [];
+  if (/caddy/i.test(proxy.image)) {
+    return [{ path: "Caddyfile", content: buildCaddyfile({ appPort: appPort ?? APP_PORT }) }];
+  }
+  return [];
 }
 
 /**

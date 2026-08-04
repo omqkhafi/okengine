@@ -329,7 +329,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
       {
         long: "--prod",
         short: "-p",
-        summary: "Prod overlays (healthchecks, limits, replicas)",
+        summary: "Prod overlays (app /_/ready healthcheck, deploy, limits)",
       },
       OUT,
       CONFIG,

@@ -37,6 +37,17 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Kubernetes guidance — plain **Deployment** (never StatefulSet), probes,
   shared drivers, and honest multi-instance known limits
   (`site/content/docs/get-started/kubernetes.mdx`).
+- Docker Swarm guidance — `docker stack deploy` on the generated compose
+  layers; `compose.prod.yml` app `HEALTHCHECK` → `GET /_/ready`,
+  `deploy.update_config` / `restart_policy`, `stop_grace_period: 30s`;
+  `compose.yml` emits `app.image` for Swarm (ignores `build`)
+  (`site/content/docs/get-started/docker-swarm.mdx`).
+- Opt-in Docker proxy recipes — `images.proxy` with **Caddy** (automatic
+  HTTPS via generated `Caddyfile`) or **Traefik** (Docker-label
+  auto-discovery for `docker compose up --scale app=N`). Default remains
+  no proxy (app publishes `6530`). Traefik mounts the Engine API only
+  through `tecnativa/docker-socket-proxy` (never raw `docker.sock` on the
+  edge). Docs: `site/content/docs/get-started/docker.mdx`.
 - Horizontal multi-process integration test — two OS processes sharing live
   Postgres + Redis prove Clock-once, durable takeover, shared Gate rates,
   and mid-scenario SIGKILL absorption together (`OKE_TEST_POSTGRES_URL` +

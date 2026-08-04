@@ -64,6 +64,8 @@ export interface RecipeApplyResult {
   readonly healthcheck?: ComposeHealthcheck;
   readonly volumes?: readonly string[];
   readonly user?: string;
+  /** Labels on this recipe's own compose service. */
+  readonly labels?: Readonly<Record<string, string>>;
   /** Additional published ports (e.g. Mailpit UI, RustFS console). */
   readonly extraPorts?: readonly RecipeExtraPort[];
   /**
@@ -71,6 +73,12 @@ export interface RecipeApplyResult {
    * Keys are compose service names (`store-sql`), not role keys.
    */
   readonly dependsOn?: Readonly<Record<string, { readonly condition: string }>>;
+  /**
+   * Extra `services` entries merged into this role's compose layer —
+   * companions (e.g. Docker socket proxy) or overlays on peers
+   * (e.g. Traefik routing labels on `app`).
+   */
+  readonly services?: Readonly<Record<string, Record<string, unknown>>>;
 }
 
 /**

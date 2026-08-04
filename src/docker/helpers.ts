@@ -44,6 +44,7 @@ export function defaultHostPort(role: string, containerPort: number): number {
   if (role === "store.kv") return 6379;
   if (role === "signal") return 4222;
   if (role === "pgdog") return 6432;
+  if (role === "proxy") return 80;
   return containerPort;
 }
 

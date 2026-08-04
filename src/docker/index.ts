@@ -38,6 +38,7 @@ export { credEnv, envPrefix, serviceNameFor } from "./helpers.ts";
 export { generateCredentials } from "./credentials.ts";
 export {
   builtinRecipes,
+  caddy,
   mailpit,
   meilisearch,
   ollama,
@@ -47,8 +48,11 @@ export {
   recipeFor,
   redis,
   rustfs,
+  traefik,
 } from "./recipes/index.ts";
+export { CADDY_APP_SERVICE, buildCaddyfile } from "./recipes/caddy.ts";
 export { PGDOG_BACKEND_SERVICE, buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
+export { SOCKET_PROXY_IMAGE, SOCKET_PROXY_SERVICE, traefikAppLabels } from "./recipes/traefik.ts";
 export {
   formatStackPreview,
   resolveExtraPorts,

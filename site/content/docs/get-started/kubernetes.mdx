@@ -60,6 +60,12 @@ On `SIGTERM` / `SIGINT`, `installGracefulShutdown` (wired by `oke dev`’s app r
 
 Signal message leases have no proactive release today — survivors reclaim after the visibility TTL (default 30s). Set `terminationGracePeriodSeconds` above your longest lease TTL (Clock / Journal / Signal, typically ≥ 30s) so the release path can finish.
 
+## Ingress (TLS / routing)
+
+Use cluster-native **Ingress** or Gateway API for HTTPS.
+Compose `images.proxy` recipes are for plain Docker / Swarm — see
+[Docker · Which proxy?](/docs/get-started/docker#which-proxy).
+
 ## Known multi-instance limits
 
 Be honest about what is still process-local:
@@ -96,6 +102,8 @@ Check readiness: `/_/ready` stays `503` with `reason: "orphan_scan"` until the d
 
 ## Learn more
 
+- [Docker](/docs/get-started/docker) — plain compose + opt-in Caddy / Traefik (non-K8s)
+- [Docker Swarm](/docs/get-started/docker-swarm) — `docker stack deploy`
 - [Store](/docs/elements/store) — facets and drivers
 - [Clock](/docs/elements/clock) — shared CronStore / leader election
 - [Flow](/docs/elements/flow) — durable journal
@@ -106,7 +114,7 @@ Check readiness: `/_/ready` stays `503` with `reason: "orphan_scan"` until the d
 ## Next
 
 <Cards>
+  <Card title="Docker" href="/docs/get-started/docker" />
+  <Card title="Docker Swarm" href="/docs/get-started/docker-swarm" />
   <Card title="Installation" href="/docs/get-started/installation" />
-  <Card title="Store" href="/docs/elements/store" />
-  <Card title="Flow" href="/docs/elements/flow" />
 </Cards>

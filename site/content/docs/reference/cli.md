@@ -34,7 +34,8 @@ oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
 oke docker                       # docker/Dockerfile + docker/compose.<role>.yml · …
-oke docker --prod                # healthchecks, volumes, limits, secret refs, deploy.replicas
+                                 # opt-in images.proxy → Caddyfile (caddy) or Traefik labels + socket-proxy
+oke docker --prod                # app HEALTHCHECK (/_/ready), deploy (replicas · update · restart), limits, secrets
 oke docker clean                 # TTY: pick oke-dev-* stacks → down -v (containers, networks, volumes)
 oke docker clean --yes           # non-TTY: current project stack only
 oke docker clean --all --yes     # non-TTY: every oke-dev-* stack on this machine

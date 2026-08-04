@@ -59,6 +59,7 @@ export function hostPortForInstance(
   if (role === "vault") return 22_000 + n;
   if (role === "ai") return 23_000 + n;
   if (role === "pgdog") return 24_000 + n;
+  if (role === "proxy") return 25_000 + n;
   return defaultHostPort(role, containerPort) + n;
 }
 
@@ -80,6 +81,7 @@ export function extraHostPortForInstance(
   const n = instancePortOffset(instanceId);
   if (role === "store.files") return 19_000 + n;
   if (role === "channel.email") return 21_000 + n;
+  if (role === "proxy") return 26_000 + n;
   return hostPort + n;
 }
 
@@ -124,6 +126,8 @@ export const STACK_CONTROL_KEYS = [
   "MP_SMTP_AUTH_ACCEPT_ANY",
   "MP_SMTP_AUTH_ALLOW_INSECURE",
   "OKE_AI_MODEL",
+  "OKE_PROXY_HOST",
+  "OKE_PROXY_ACME_EMAIL",
 ] as const;
 
 /**

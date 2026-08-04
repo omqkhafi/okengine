@@ -92,16 +92,23 @@ export function emitComposeLayers(
     networks: { oke: { driver: "bridge" } },
   };
   if (includeApp) {
+    // `image` + `build`: local compose builds and tags; Swarm stack deploy
+    // ignores `build` and pulls/uses the pre-built tag.
+    // When an opt-in `proxy` role is present, the edge publishes 80/443 —
+    // leave `app` unpublished so `docker compose up --scale app=N` works.
+    const hasProxy = specs.some((s) => s.role === "proxy");
+    const backendDeps = specs.filter((s) => s.role !== "proxy");
     base.services = {
       app: {
+        image: `oke-${app}:latest`,
         build: {
           context: paths.buildContext,
           dockerfile: paths.dockerfile,
         },
-        ports: [`${appPort}:${appPort}`],
+        ...(hasProxy ? {} : { ports: [`${appPort}:${appPort}`] }),
         env_file: [paths.envFile],
         depends_on: Object.fromEntries(
-          specs.map((s) => [s.serviceName, { condition: "service_healthy" }]),
+          backendDeps.map((s) => [s.serviceName, { condition: "service_healthy" }]),
         ),
         networks: ["oke"],
       },
@@ -134,11 +141,19 @@ export function emitComposeLayers(
     if (applied.healthcheck) service.healthcheck = applied.healthcheck;
     if (applied.volumes) service.volumes = applied.volumes;
     if (applied.user) service.user = applied.user;
-    if (applied.dependsOn) service.depends_on = applied.dependsOn;
+    if (applied.labels) service.labels = applied.labels;
+    if (applied.dependsOn) {
+      const deps = { ...applied.dependsOn };
+      if (!includeApp) delete deps.app;
+      if (Object.keys(deps).length > 0) service.depends_on = deps;
+    }
 
-    const namedVolumes = namedVolumeDecls(applied.volumes);
+    const namedVolumes = namedVolumeDecls([
+      ...(applied.volumes ?? []),
+      ...extraServiceVolumes(applied.services),
+    ]);
     const doc: Record<string, unknown> = {
-      services: { [spec.serviceName]: service },
+      services: { [spec.serviceName]: service, ...applied.services },
       networks: { oke: { external: false } },
     };
     if (Object.keys(namedVolumes).length > 0) {
@@ -148,13 +163,43 @@ export function emitComposeLayers(
     files.push({ path, content: `${toYaml(doc)}\n` });
   }
 
-  // Layer 3 — prod overlay
+  // Layer 3 — prod overlay (Swarm-aware deploy + app readiness healthcheck)
   if (options.prod) {
     const prodServices: Record<string, unknown> = {};
     if (includeApp) {
       prodServices.app = {
+        // Single Docker HEALTHCHECK — Swarm has no separate readiness/liveness.
+        // Prefer kernel readiness so the routing mesh and rolling updates wait
+        // out booting / orphan_scan (see GET /_/ready). App GET /health stays
+        // for external monitors only.
+        healthcheck: {
+          test: [
+            "CMD",
+            "bun",
+            "-e",
+            `fetch("http://127.0.0.1:${appPort}/_/ready").then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))`,
+          ],
+          interval: "10s",
+          timeout: "3s",
+          retries: 3,
+          start_period: "60s",
+        },
+        // Match installGracefulShutdown lease release window (≥ Signal TTL).
+        stop_grace_period: "30s",
         deploy: {
           replicas: 1,
+          update_config: {
+            parallelism: 1,
+            delay: "10s",
+            failure_action: "rollback",
+            order: "start-first",
+          },
+          restart_policy: {
+            condition: "on-failure",
+            delay: "5s",
+            max_attempts: 3,
+            window: "120s",
+          },
           resources: {
             limits: { cpus: "1.0", memory: "512M" },
           },
@@ -273,6 +318,10 @@ export function buildStackEnv(
       // Ollama: standalone HTTP URL; model is a stack control (OKE_AI_MODEL).
       env[`${prefix}_URL`] = url;
       env.OKE_AI_URL = url;
+    } else if (spec.role === "proxy") {
+      // Edge TLS terminator — host is the public URL, not a driver DSN.
+      env[`${prefix}_URL`] = url;
+      env.OKE_PROXY_URL = url;
     } else {
       env[`${prefix}_USER`] = spec.credentials.user;
       env[`${prefix}_PASSWORD`] = spec.credentials.password;
@@ -313,6 +362,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   signal: "signal — message bus",
   vault: "vault — OpenBao",
   ai: "ai — Ollama (local models)",
+  proxy: "proxy — TLS terminator (Caddy / Traefik)",
 };
 
 /** Friendly aliases emitted beside their role block. */
@@ -342,6 +392,7 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ALLOW_INSECURE",
   ],
   ai: ["OKE_AI_URL", "OKE_AI_MODEL"],
+  proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
 };
 
 /** Optional controls documented in `.env.docker` and preserved on regeneration. */
@@ -358,6 +409,7 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   ],
   // qwen3.5:9b is a balanced local-dev starting point — override freely.
   ai: ["OKE_AI_MODEL=qwen3.5:9b"],
+  proxy: ["OKE_PROXY_HOST=localhost", "OKE_PROXY_ACME_EMAIL=admin@example.com"],
 };
 
 /**
@@ -375,6 +427,9 @@ function roleFromEnvKey(key: string): string | undefined {
   if (key === "PGDATA" || key === "POSTGRES_INITDB_ARGS") return "store.sql";
   if (key.startsWith("OKE_STORE_KV_MAXMEMORY")) return "store.kv";
   if (key === "OKE_AI_URL" || key === "OKE_AI_MODEL" || key === "OLLAMA_HOST") return "ai";
+  if (key === "OKE_PROXY_URL" || key === "OKE_PROXY_HOST" || key === "OKE_PROXY_ACME_EMAIL") {
+    return "proxy";
+  }
   return undefined;
 }
 
@@ -478,6 +533,25 @@ function namedVolumeDecls(
     if (v.startsWith(".") || v.startsWith("/") || v.startsWith("~")) continue;
     const name = v.split(":")[0];
     if (name) out[name] = {};
+  }
+  return out;
+}
+
+/**
+ * Volume mounts declared on companion services from {@link RecipeApplyResult.services}.
+ *
+ * @param services - Extra compose service fragments
+ */
+function extraServiceVolumes(
+  services: Readonly<Record<string, Record<string, unknown>>> | undefined,
+): string[] {
+  const out: string[] = [];
+  for (const svc of Object.values(services ?? {})) {
+    const vols = svc.volumes;
+    if (!Array.isArray(vols)) continue;
+    for (const v of vols) {
+      if (typeof v === "string") out.push(v);
+    }
   }
   return out;
 }
