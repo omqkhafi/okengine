@@ -152,15 +152,18 @@ Email fallback uses ordered email transports; SMS with multiple SMS drivers uses
 the same failover path. Credentials for boot-opened drivers are listed under
 [Environment Variables](/docs/reference/environment-variables).
 
-### Provider-managed OTP
+### Provider OTP (`fx.sendOtp` / `fx.verifyOtp`)
 
-Flows can also send a provider-generated SMS code with `fx.sendOtp({ to, requestId, lang? })`
+Flows can send a provider-generated SMS code with `fx.sendOtp({ to, requestId, lang? })`
 and check it with `fx.verifyOtp({ to, requestId, code })` — Taqnyat's Verify API. Both are
-capability-gated `send` effects and dry-run safe.
+capability-gated `send` effects and dry-run safe. No `.plug()` required.
 
 They dispatch only when the bound SMS driver supports Verify (`taqnyat`); any other SMS
-driver fails loudly instead of silently falling back to a self-generated code. The
-[OTP](/docs/plugins/otp) Tier 1 uses this path automatically.
+driver fails loudly instead of silently falling back to a self-generated code.
+
+[OTP](/docs/plugins/otp) in provider mode is the full auth feature built on this same
+path (routes, sessions, rates). Custom shape? Call `fx.sendOtp` / `fx.verifyOtp` in
+your own flow — skipping the plugin does not drop the provider connection.
 
 `webpush` needs VAPID keys — open it yourself and include it in
 `BootOptions.channel.drivers` (boot does not open push from env):

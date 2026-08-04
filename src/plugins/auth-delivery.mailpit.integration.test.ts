@@ -290,7 +290,7 @@ describe("auth delivery — Mailpit integration", () => {
           config: {
             drivers: { channel: { email: { test: "smtp" } } },
           },
-        }).plug(otp({ tier: 2, channels: ["email"], exposeDevOtp: true }));
+        }).plug(otp({ mode: "app", channels: ["email"], exposeDevOtp: true }));
         await app.boot({ env: "test" });
 
         const res = await app.fetch(jsonPost("/auth/otp/request", { email }));

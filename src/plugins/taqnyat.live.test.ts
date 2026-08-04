@@ -1,5 +1,5 @@
 /**
- * Real Taqnyat end-to-end: otp({ tier: 1 }) via Verify API + magic-link via Taqnyat Mail.
+ * Real Taqnyat end-to-end: otp({ mode: "provider" }) via Verify API + magic-link via Taqnyat Mail.
  *
  * Double-gated — runs ONLY when BOTH:
  *   1. The global per-medium opt-in flag is set explicitly
@@ -82,7 +82,7 @@ if (!LIVE_MAIL) {
 const liveSms = LIVE_SMS ? test : test.skip;
 const liveMail = LIVE_MAIL ? test : test.skip;
 
-describe("taqnyat live — provider-managed OTP (Taqnyat Verify)", () => {
+describe("taqnyat live — provider OTP (Taqnyat Verify)", () => {
   liveSms(
     "phone OTP request → real sendOtp → Taqnyat success code 5",
     async () => {
@@ -94,7 +94,7 @@ describe("taqnyat live — provider-managed OTP (Taqnyat Verify)", () => {
         config: {
           drivers: { channel: { sms: { test: "taqnyat" } } },
         },
-      }).plug(otp({ tier: 1 }));
+      }).plug(otp({ mode: "provider" }));
       await app.boot({ env: "test" });
 
       // Wrap the live transport so the plugin's single real send also proves

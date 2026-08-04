@@ -31,7 +31,7 @@ function authApp() {
     .plug(username())
     .plug(anonymous())
     .plug(magicLink({ exposeDevToken: true }))
-    .plug(otp({ tier: 2, channels: ["email"], exposeDevOtp: true }));
+    .plug(otp({ mode: "app", channels: ["email"], exposeDevOtp: true }));
 }
 
 describe("auth method plugins", () => {

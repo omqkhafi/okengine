@@ -1,5 +1,5 @@
 /**
- * Fail-loud capability checks for the otp() plugin (Tier 1 / Tier 2).
+ * Fail-loud capability checks for the otp() plugin (provider / app mode).
  */
 
 import type { ChannelDriver, SmsOtpTransport } from "../drivers/channel-types.ts";
@@ -8,12 +8,12 @@ import type { OtpChannel } from "./verification.ts";
 /** Config snapshot stored on the otp plugin for boot-time assertion. */
 export interface OtpPluginConfig {
   readonly method: "otp";
-  readonly tier: 1 | 2;
+  readonly mode: "provider" | "app";
   readonly channels?: readonly OtpChannel[];
 }
 
 /**
- * Whether an SMS transport exposes provider-managed OTP (structural).
+ * Whether an SMS transport exposes provider OTP via Verify (structural).
  *
  * @param t - Candidate transport
  */
@@ -58,38 +58,38 @@ export function driverCoversMedium(drivers: readonly ChannelDriver[], medium: Ot
 }
 
 /**
- * Assert Tier 1: a Verify-capable SMS driver must be bound.
+ * Assert provider mode: a Verify-capable SMS driver must be bound.
  *
  * @param drivers - Bound channel drivers
  */
-export function assertOtpTier1Capability(drivers: readonly ChannelDriver[]): void {
+export function assertOtpProviderModeCapability(drivers: readonly ChannelDriver[]): void {
   if (findOtpSmsDriver(drivers)) return;
   const sms = drivers.filter((d) => d.smsTransport);
   if (sms.length === 0) {
     throw new Error(
-      'otp({ tier: 1 }): no SMS driver with sendOtp/verifyOtp bound — set drivers.channel.sms to a Verify-capable driver (e.g. "taqnyat"), or switch to otp({ tier: 2, channels: [...] })',
+      'otp({ mode: "provider" }): no SMS driver with sendOtp/verifyOtp bound — set drivers.channel.sms to a Verify-capable driver (e.g. "taqnyat"), or switch to otp({ mode: "app", channels: [...] })',
     );
   }
   const id = sms[0]?.id ?? "unknown";
   throw new Error(
-    `otp({ tier: 1 }): SMS driver "${id}" does not support provider-managed OTP — bind a Verify-capable driver (e.g. taqnyat), or switch to otp({ tier: 2, channels: [...] })`,
+    `otp({ mode: "provider" }): SMS driver "${id}" does not support provider OTP — bind a Verify-capable driver (e.g. taqnyat), or switch to otp({ mode: "app", channels: [...] })`,
   );
 }
 
 /**
- * Assert Tier 2: every declared channel has a deliverable driver.
+ * Assert app mode: every declared channel has a deliverable driver.
  *
  * @param drivers - Bound channel drivers
  * @param channels - Declared channel order
  */
-export function assertOtpTier2Channels(
+export function assertOtpAppModeChannels(
   drivers: readonly ChannelDriver[],
   channels: readonly OtpChannel[],
 ): void {
   for (const ch of channels) {
     if (!driverCoversMedium(drivers, ch)) {
       throw new Error(
-        `otp({ tier: 2 }): no channel driver covers "${ch}" — configure drivers.channel.${ch === "email" ? "email" : ch === "sms" ? "sms" : "whatsapp"}`,
+        `otp({ mode: "app" }): no channel driver covers "${ch}" — configure drivers.channel.${ch === "email" ? "email" : ch === "sms" ? "sms" : "whatsapp"}`,
       );
     }
   }
@@ -108,12 +108,12 @@ export function assertOtpPluginCapability(
   if (!config || typeof config !== "object") return;
   const c = config as Partial<OtpPluginConfig>;
   if (c.method !== "otp") return;
-  if (c.tier === 1) {
-    assertOtpTier1Capability(drivers);
+  if (c.mode === "provider") {
+    assertOtpProviderModeCapability(drivers);
     return;
   }
-  if (c.tier === 2) {
+  if (c.mode === "app") {
     const channels = c.channels ?? [];
-    assertOtpTier2Channels(drivers, channels);
+    assertOtpAppModeChannels(drivers, channels);
   }
 }

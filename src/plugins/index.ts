@@ -30,9 +30,9 @@ export {
   otpEmailTemplate,
   otpSmsTemplate,
   otpWhatsappTemplate,
+  type OtpAppModeOptions,
   type OtpOptions,
-  type OtpTier1Options,
-  type OtpTier2Options,
+  type OtpProviderModeOptions,
   type PhoneStore,
 } from "./otp.ts";
 export {

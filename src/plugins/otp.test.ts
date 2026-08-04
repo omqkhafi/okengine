@@ -1,5 +1,5 @@
 /**
- * otp() plugin — plug-time fail-loud, Tier 2 resend / sealed lifetime, Tier 1 boot.
+ * otp() plugin — plug-time fail-loud, app-mode resend / sealed lifetime, provider-mode boot.
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -71,44 +71,46 @@ function mockOtpSmsDriver(): ChannelDriver {
 }
 
 describe("otp() plug-time fail-loud", () => {
-  test("missing tier throws", () => {
-    expect(() => otp({} as never)).toThrow(/tier is required/);
+  test("missing mode throws", () => {
+    expect(() => otp({} as never)).toThrow(/mode is required/);
   });
 
-  test("tier 1 with channels throws", () => {
-    expect(() => otp({ tier: 1, channels: ["sms"] } as never)).toThrow(/channels are forbidden/);
+  test('mode "provider" with channels throws', () => {
+    expect(() => otp({ mode: "provider", channels: ["sms"] } as never)).toThrow(
+      /channels are forbidden/,
+    );
   });
 
-  test("tier 1 with exposeDevOtp throws", () => {
-    expect(() => otp({ tier: 1, exposeDevOtp: true } as never)).toThrow(
+  test('mode "provider" with exposeDevOtp throws', () => {
+    expect(() => otp({ mode: "provider", exposeDevOtp: true } as never)).toThrow(
       /exposeDevOtp is forbidden/,
     );
   });
 
-  test("tier 2 without channels throws", () => {
-    expect(() => otp({ tier: 2 } as never)).toThrow(/channels is required/);
+  test('mode "app" without channels throws', () => {
+    expect(() => otp({ mode: "app" } as never)).toThrow(/channels is required/);
   });
 });
 
-describe("otp() Tier 1 boot", () => {
+describe("otp() provider mode boot", () => {
   test("fails loud without Verify-capable SMS driver", async () => {
     const app = oke({
-      name: `otp-t1-${crypto.randomUUID()}`,
+      name: `otp-provider-${crypto.randomUUID()}`,
       env: "test",
       registry: "ignore",
       gate: { auth: { secret: SECRET } },
-    }).plug(otp({ tier: 1 }));
-    await expect(app.boot({ env: "test" })).rejects.toThrow(/tier: 1/);
+    }).plug(otp({ mode: "provider" }));
+    await expect(app.boot({ env: "test" })).rejects.toThrow(/mode: "provider"/);
   });
 
   test("boots when Verify-capable SMS driver is bound", async () => {
     const app = oke({
-      name: `otp-t1-ok-${crypto.randomUUID()}`,
+      name: `otp-provider-ok-${crypto.randomUUID()}`,
       env: "test",
       registry: "ignore",
       gate: { auth: { secret: SECRET } },
       channel: { drivers: [mockOtpSmsDriver()] },
-    }).plug(otp({ tier: 1 }));
+    }).plug(otp({ mode: "provider" }));
     await app.boot({ env: "test" });
     const res = await app.fetch(jsonPost("/auth/otp/request", { phone: "+15551234567" }));
     expect(res.status).toBe(200);
@@ -120,12 +122,12 @@ describe("otp() Tier 1 boot", () => {
   });
 });
 
-describe("otp() Tier 2 resend + sealed lifetime", () => {
+describe("otp() app mode resend + sealed lifetime", () => {
   test("cross-channel resend keeps same code; cooldown then verify wipes seal", async () => {
     let now = 1_000_000;
     const verifications: VerificationStore = createVerificationStore();
     const app = oke({
-      name: `otp-t2-${crypto.randomUUID()}`,
+      name: `otp-app-${crypto.randomUUID()}`,
       env: "test",
       registry: "ignore",
       gate: { auth: { secret: SECRET } },
@@ -133,7 +135,7 @@ describe("otp() Tier 2 resend + sealed lifetime", () => {
       fx: { now: () => now },
     }).plug(
       otp({
-        tier: 2,
+        mode: "app",
         channels: ["sms", "email"],
         exposeDevOtp: true,
         resendCooldownMs: 60_000,
@@ -209,7 +211,7 @@ describe("otp() Tier 2 resend + sealed lifetime", () => {
       fx: { now: () => now },
     }).plug(
       otp({
-        tier: 2,
+        mode: "app",
         channels: ["email"],
         exposeDevOtp: true,
         ttlMs: 1_000,

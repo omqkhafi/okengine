@@ -10,6 +10,18 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.9.1 — 2026-08-04
+
+### ♻️ Changed
+
+- `otp()` option rename (pre-1.0, no compat shim): `tier: 1 | 2` →
+  `mode: "provider" | "app"`. Plug-time / boot-time errors, plugin config
+  snapshot, and docs use the new names. Docs also state that the two modes
+  cannot both be active (same fixed `/auth/otp/*` routes — combine with a
+  different plugin such as `magicLink()` instead), and clarify that
+  `fx.sendOtp` / `fx.verifyOtp` are raw Channel capabilities (no `.plug()`)
+  while `otp()` in provider mode is the full auth feature on top of them.
+
 ## v0.9.0 — 2026-08-04
 
 ### ✨ Added

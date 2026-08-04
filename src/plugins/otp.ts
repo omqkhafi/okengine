@@ -1,6 +1,6 @@
 /**
- * Unified OTP Gate auth method plugin — Tier 1 (provider-owned) or Tier 2
- * (app-owned multi-channel). Replaces emailOtp() + phoneNumber().
+ * Unified OTP Gate auth method plugin — provider mode (Verify) or app mode
+ * (multi-channel). Replaces emailOtp() + phoneNumber().
  */
 
 import { constantTimeEqual } from "../auth/constant-time.ts";
@@ -66,20 +66,20 @@ interface OtpBaseOptions extends AuthMethodOptions {
   readonly identities?: IdentityStore;
 }
 
-/** Tier 1 — provider-owned OTP via fx.sendOtp / fx.verifyOtp. */
-export interface OtpTier1Options extends OtpBaseOptions {
-  readonly tier: 1;
-  /** Forbidden on Tier 1 — fail loud if set. */
+/** Provider mode — provider-owned OTP via fx.sendOtp / fx.verifyOtp. */
+export interface OtpProviderModeOptions extends OtpBaseOptions {
+  readonly mode: "provider";
+  /** Forbidden in provider mode — fail loud if set. */
   readonly channels?: never;
-  /** Forbidden on Tier 1 — code never exists server-side. */
+  /** Forbidden in provider mode — code never exists server-side. */
   readonly exposeDevOtp?: never;
   readonly resendCooldownMs?: never;
   readonly from?: never;
 }
 
-/** Tier 2 — app-owned OTP with multi-channel delivery. */
-export interface OtpTier2Options extends OtpBaseOptions {
-  readonly tier: 2;
+/** App mode — app-owned OTP with multi-channel delivery. */
+export interface OtpAppModeOptions extends OtpBaseOptions {
+  readonly mode: "app";
   /** Build-time preferred channel order (required). */
   readonly channels: readonly OtpChannel[];
   readonly resendCooldownMs?: number;
@@ -87,24 +87,24 @@ export interface OtpTier2Options extends OtpBaseOptions {
   readonly from?: string;
 }
 
-/** Options for {@link otp}. `tier` is mandatory — no auto-detect. */
-export type OtpOptions = OtpTier1Options | OtpTier2Options;
+/** Options for {@link otp}. `mode` is mandatory — no auto-detect. */
+export type OtpOptions = OtpProviderModeOptions | OtpAppModeOptions;
 
-/** Email OTP template (Tier 2). */
+/** Email OTP template (app mode). */
 export const otpEmailTemplate = channel.email({ from: DEFAULT_FROM }).template("auth-otp-email", {
   description: "OTP sign-in code (email)",
   schema: z.object({ email: z.string(), otp: z.string() }),
   locales: ["en", "ar"],
 });
 
-/** SMS OTP template (Tier 2 — plain message, not provider Verify). */
+/** SMS OTP template (app mode — plain message, not provider Verify). */
 export const otpSmsTemplate = channel.sms().template("auth-otp-sms", {
   description: "OTP sign-in code (SMS)",
   schema: z.object({ phone: z.string(), otp: z.string() }),
   locales: ["en", "ar"],
 });
 
-/** WhatsApp OTP template (Tier 2). */
+/** WhatsApp OTP template (app mode). */
 export const otpWhatsappTemplate = channel.whatsapp().template("auth-otp-whatsapp", {
   description: "OTP sign-in code (WhatsApp)",
   schema: z.object({ phone: z.string(), otp: z.string() }),
@@ -136,18 +136,20 @@ export const otpCatalog = {
 } as const;
 
 function assertOtpOptions(opts: OtpOptions): void {
-  if (opts.tier !== 1 && opts.tier !== 2) {
-    throw new Error("otp(): tier is required — set tier: 1 or tier: 2 (no auto-detect)");
+  if (opts.mode !== "provider" && opts.mode !== "app") {
+    throw new Error(
+      'otp(): mode is required — set mode: "provider" or mode: "app" (no auto-detect)',
+    );
   }
-  if (opts.tier === 1) {
+  if (opts.mode === "provider") {
     if ("channels" in opts && opts.channels !== undefined) {
       throw new Error(
-        "otp({ tier: 1 }): channels are forbidden — provider-owned OTP cannot resend via a different channel; use tier: 2 for multi-channel",
+        'otp({ mode: "provider" }): channels are forbidden — provider-owned OTP cannot resend via a different channel; use mode: "app" for multi-channel',
       );
     }
     if ("exposeDevOtp" in opts && (opts as { exposeDevOtp?: boolean }).exposeDevOtp === true) {
       throw new Error(
-        "otp({ tier: 1 }): exposeDevOtp is forbidden — the code never exists server-side",
+        'otp({ mode: "provider" }): exposeDevOtp is forbidden — the code never exists server-side',
       );
     }
     return;
@@ -155,12 +157,12 @@ function assertOtpOptions(opts: OtpOptions): void {
   const channels = opts.channels;
   if (!channels || channels.length === 0) {
     throw new Error(
-      'otp({ tier: 2 }): channels is required — declare at least one of "sms" | "whatsapp" | "email"',
+      'otp({ mode: "app" }): channels is required — declare at least one of "sms" | "whatsapp" | "email"',
     );
   }
   for (const ch of channels) {
     if (!(OTP_CHANNELS as readonly string[]).includes(ch)) {
-      throw new Error(`otp({ tier: 2 }): unknown channel "${String(ch)}"`);
+      throw new Error(`otp({ mode: "app" }): unknown channel "${String(ch)}"`);
     }
   }
 }
@@ -186,9 +188,9 @@ function pickRequestChannel(
 }
 
 /**
- * Unified OTP request + verify (+ Tier-2 resend).
+ * Unified OTP request + verify (+ app-mode resend).
  *
- * @param opts - Must include `tier: 1` or `tier: 2`
+ * @param opts - Must include `mode: "provider"` or `mode: "app"`
  */
 export function otp(opts: OtpOptions): PluginDef {
   assertOtpOptions(opts);
@@ -200,12 +202,12 @@ export function otp(opts: OtpOptions): PluginDef {
   const verifications = opts.verifications ?? createVerificationStore();
   const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
   const resendCooldownMs =
-    opts.tier === 2
+    opts.mode === "app"
       ? (opts.resendCooldownMs ?? DEFAULT_RESEND_COOLDOWN_MS)
       : DEFAULT_RESEND_COOLDOWN_MS;
-  const channels = opts.tier === 2 ? opts.channels : ([] as const);
-  const exposeDevOtp = opts.tier === 2 && opts.exposeDevOtp === true;
-  const from = opts.tier === 2 ? opts.from : undefined;
+  const channels = opts.mode === "app" ? opts.channels : ([] as const);
+  const exposeDevOtp = opts.mode === "app" && opts.exposeDevOtp === true;
+  const from = opts.mode === "app" ? opts.from : undefined;
 
   const emailTmpl =
     from !== undefined
@@ -223,9 +225,9 @@ export function otp(opts: OtpOptions): PluginDef {
   } as const;
 
   const configSnapshot: OtpPluginConfig =
-    opts.tier === 1
-      ? { method: "otp", tier: 1 }
-      : { method: "otp", tier: 2, channels: [...channels] };
+    opts.mode === "provider"
+      ? { method: "otp", mode: "provider" }
+      : { method: "otp", mode: "app", channels: [...channels] };
 
   const requestOut = z.object({
     ok: z.literal(true),
@@ -233,7 +235,7 @@ export function otp(opts: OtpOptions): PluginDef {
     channel: z.enum(["sms", "whatsapp", "email"]).optional(),
   });
 
-  if (opts.tier === 1) {
+  if (opts.mode === "provider") {
     const request = flow({
       name: "auth.requestOtp",
       unit: "auth",
@@ -270,7 +272,7 @@ export function otp(opts: OtpOptions): PluginDef {
           phone,
           sealedOtp: null,
         });
-        // Tier 1: resend-via-different-channel is impossible — provider owns the code.
+        // Provider mode: resend-via-different-channel is impossible — provider owns the code.
         return { ok: true as const, channel: "sms" as const };
       },
     });
@@ -344,7 +346,7 @@ export function otp(opts: OtpOptions): PluginDef {
       .binding(bindPublicAuth("/otp/verify", verify, "otp"));
   }
 
-  // ── Tier 2 ────────────────────────────────────────────────────────────
+  // ── App mode ───────────────────────────────────────────────────────────
   const request = flow({
     name: "auth.requestOtp",
     unit: "auth",

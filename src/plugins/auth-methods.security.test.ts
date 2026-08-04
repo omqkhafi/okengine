@@ -50,7 +50,7 @@ function fullAuthApp() {
     .plug(username())
     .plug(anonymous())
     .plug(magicLink({ exposeDevToken: true }))
-    .plug(otp({ tier: 2, channels: ["email", "sms"], exposeDevOtp: true }))
+    .plug(otp({ mode: "app", channels: ["email", "sms"], exposeDevOtp: true }))
     .plug(twoFactor())
     .plug(passkey({ origins: ["http://localhost"] }));
 }
@@ -418,7 +418,7 @@ describe("auth methods — anonymous non-escalation", () => {
 });
 
 describe("auth methods — channel delivery", () => {
-  test("magic uses fx.send; otp Tier 2 uses fx.deliverOtp; exposeDev* stays off by default", async () => {
+  test("magic uses fx.send; otp app mode uses fx.deliverOtp; exposeDev* stays off by default", async () => {
     resetBindings();
     resetFlowSeq();
     const app = oke({
@@ -428,7 +428,7 @@ describe("auth methods — channel delivery", () => {
       gate: { auth: { secret: SECRET, emailAndPassword: { enabled: true } } },
     })
       .plug(magicLink())
-      .plug(otp({ tier: 2, channels: ["email", "sms"] }));
+      .plug(otp({ mode: "app", channels: ["email", "sms"] }));
     await app.boot({ env: "test" });
 
     const ml = await app.fetch(jsonPost("/auth/magic-link/request", { email: "x@example.com" }));

@@ -844,7 +844,7 @@ export function oke(options: OkeOptions): OkeApp {
     };
     const result = await bootApplication(merged);
     bootResult = result;
-    // otp() Tier 1 / Tier 2 capability — fail loud at boot, never silent downgrade.
+    // otp() provider / app mode capability — fail loud at boot, never silent downgrade.
     if (result.channel) {
       const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");
       for (const entry of pluginRegistry.installed) {
