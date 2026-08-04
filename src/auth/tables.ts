@@ -121,6 +121,10 @@ export interface SessionRow {
   expiresAt: number;
   /** Last activity epoch-ms (idle timeout). Updated on refresh / access touch. */
   lastActiveAt: number;
+  /** Access-token scopes — survives refresh / process restart with the session row. */
+  scopes: string[];
+  /** Audience stamped at issue (`oke-console` · `oke-mcp` · `oke-app`). */
+  audience?: string;
 }
 
 /** Refresh token (hashed at rest); rotation with reuse detection. */

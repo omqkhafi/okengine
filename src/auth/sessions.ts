@@ -130,11 +130,10 @@ export async function issueSession(
     createdAt: t,
     expiresAt: t + absoluteCap,
     lastActiveAt: t,
+    scopes: [...principal.scopes],
+    ...(crypto.audience !== undefined ? { audience: crypto.audience } : {}),
   };
   store.sessions.set(sessionId, session);
-  if (crypto.audience !== undefined) {
-    sessionAudiences.set(sessionId, crypto.audience);
-  }
 
   const refreshRaw = `rt_${cryptoRandomId()}`;
   const refreshRow: RefreshTokenRow = {
@@ -223,20 +222,15 @@ export async function rotateRefresh(
   };
   store.refresh.set(newRefresh.id, newRefresh);
 
-  // Recover scopes from the previous access path — stored on session via
-  // a side map would be ideal; for builtin we re-sign with empty and let
-  // callers pass scopes through verify. We keep scopes on a claim cache:
-  const priorScopes = sessionScopes.get(session.id) ?? [];
-  const priorAud = sessionAudiences.get(session.id);
   const accessExpiresAt = t + accessTtl;
   const accessToken = await signAccess(crypto.secret, {
     sub: session.principalId,
     plane: session.plane,
     sid: session.id,
-    scopes: priorScopes,
+    scopes: session.scopes,
     iat: t,
     exp: accessExpiresAt,
-    ...(priorAud !== undefined ? { aud: priorAud } : {}),
+    ...(session.audience !== undefined ? { aud: session.audience } : {}),
   });
 
   return {
@@ -247,34 +241,44 @@ export async function rotateRefresh(
   };
 }
 
-/** Session id → scopes (access-token material). */
-const sessionScopes = new Map<string, string[]>();
-
-/** Session id → audience stamped at issue time. */
-const sessionAudiences = new Map<string, string>();
-
 /**
  * Remember scopes for refresh rotation (call after {@link issueSession}).
+ * Scopes live on the session row — shared with any store hydrate/persist path.
  *
+ * @param store - Session store
  * @param sessionId - Session id
  * @param scopes - Scopes
  */
-export function bindSessionScopes(sessionId: string, scopes: Iterable<string>): void {
-  sessionScopes.set(sessionId, [...scopes]);
+export function bindSessionScopes(
+  store: SessionStore,
+  sessionId: string,
+  scopes: Iterable<string>,
+): void {
+  const session = store.sessions.get(sessionId);
+  if (!session) return;
+  // Mutate in place — SessionRow is a store-owned mutable row.
+  (session as { scopes: string[] }).scopes = [...scopes];
 }
 
 /**
  * Remember audience for refresh rotation (call after {@link issueSession}).
  *
+ * @param store - Session store
  * @param sessionId - Session id
  * @param audience - Audience claim
  */
-export function bindSessionAudience(sessionId: string, audience: string): void {
-  sessionAudiences.set(sessionId, audience);
+export function bindSessionAudience(
+  store: SessionStore,
+  sessionId: string,
+  audience: string,
+): void {
+  const session = store.sessions.get(sessionId);
+  if (!session) return;
+  (session as { audience?: string }).audience = audience;
 }
 
 /**
- * Issue a session and bind scopes for later rotation.
+ * Issue a session with scopes (and optional audience) on the session row.
  *
  * @param store - Session store
  * @param crypto - Crypto
@@ -289,12 +293,7 @@ export async function issueSessionWithScopes(
     readonly scopes: Iterable<string>;
   },
 ): Promise<IssuedSession> {
-  const issued = await issueSession(store, crypto, principal);
-  bindSessionScopes(issued.session.id, principal.scopes);
-  if (crypto.audience !== undefined) {
-    bindSessionAudience(issued.session.id, crypto.audience);
-  }
-  return issued;
+  return issueSession(store, crypto, principal);
 }
 
 /**

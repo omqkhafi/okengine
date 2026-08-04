@@ -1,0 +1,112 @@
+---
+title: Kubernetes
+description: Run an OKE app as a plain Deployment — process-stateless, shared Postgres/Redis/S3, readiness probes, and graceful SIGTERM.
+icon: Container
+source: README.md
+---
+
+OKE apps are safe to run as more than one replica when shared drivers back Clock, Journal, Gate, and Store. The process itself holds no sticky identity — use a **Deployment**, never a StatefulSet.
+
+<Callout title="The one rule">
+  Treat every replica as replaceable. Put durable state in Postgres / Redis / S3 (or equivalent
+  protocol drivers), probe `GET /_/ready` for readiness and your app `GET /health` for liveness, and
+  give pods enough `terminationGracePeriodSeconds` for lease release on SIGTERM.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Deploy as a Deployment
+
+Use a plain Kubernetes **Deployment** (or compatible replica set). Do **not** use a StatefulSet — there is no per-pod volume identity, ordered startup, or sticky network id to preserve. Scale with `replicas: N`.
+
+</Step>
+
+<Step>
+### Share backing services
+
+Pin docker/prod drivers to shared stores:
+
+| Concern                       | Driver                       | Shared backend                  |
+| ----------------------------- | ---------------------------- | ------------------------------- |
+| SQL / durable journal / clock | `postgres`                   | Postgres (optionally via PgDog) |
+| Gate rate counters            | `redis` (`drivers.store.kv`) | Redis / Valkey                  |
+| Files                         | `s3`                         | S3-compatible object store      |
+| Signal                        | see known limits below       | —                               |
+
+</Step>
+
+<Step>
+### Probe readiness and liveness
+
+- **Readiness:** `GET /_/ready` — returns `200 { ready: true }` only after boot and the durable orphan scan finish. While booting or scanning orphans it returns `503 { ready: false, reason: "booting" | "orphan_scan" }`.
+- **Liveness:** app-authored `GET /health` (create-oke ships one) — cheap “process is alive,” not orphan-scan aware.
+
+Wire `readinessProbe` to `/_/ready` and `livenessProbe` to `/health`.
+
+</Step>
+
+</Steps>
+
+## Graceful shutdown
+
+On `SIGTERM` / `SIGINT`, `installGracefulShutdown` (wired by `oke dev`’s app runner; call it next to `createBunRuntime().serve` in custom entries):
+
+1. Stops accepting new connections
+2. Releases **Clock** cron leases and **Journal** run leases held by this instance (existing `releaseLease` APIs — no new mechanism)
+3. Closes element runtimes and exits
+
+Signal message leases have no proactive release today — survivors reclaim after the visibility TTL (default 30s). Set `terminationGracePeriodSeconds` above your longest lease TTL (Clock / Journal / Signal, typically ≥ 30s) so the release path can finish.
+
+## Known multi-instance limits
+
+Be honest about what is still process-local:
+
+| Surface                                  | Multi-instance today                                                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Clock (`postgres` / shared `file`)       | Shared leader election                                                                                     |
+| Journal (`postgres` / shared `file`)     | Shared durable runs + orphan resume                                                                        |
+| Gate rates (`drivers.store.kv: redis`)   | Shared counters                                                                                            |
+| Store SQL / KV redis / files `s3`        | Shared                                                                                                     |
+| Store files `fs`                         | **Per-instance filesystem** — boot warns; use `s3` when scaled                                             |
+| Signal `redis`                           | Emit relays to Redis; **consume / `live` / `drain` are process-local outbox** until Streams consume ships  |
+| Channel suppression / consent / receipts | **Default stores are process-local** — opt-out on replica A is invisible to B until a durable driver ships |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Pods pass liveness but get no traffic after deploy">
+
+Check readiness: `/_/ready` stays `503` with `reason: "orphan_scan"` until the durable orphan resume finishes. A long resume delays Ready; that is intentional so traffic does not hit a pod mid-takeover.
+
+</Accordion>
+<Accordion title="Rate limits look twice as high after scaling to 2">
+
+`drivers.store.kv` must be `redis` with `REDIS_URL` set. A missing URL now **fails boot** (no silent memory fallback). Declaring `memory` for local is fine; docker/prod should stay on redis.
+
+</Accordion>
+<Accordion title="Files uploaded on pod A are missing on pod B">
+
+`drivers.store.files: "fs"` is single-host. Switch docker/prod to `s3` (create-oke templates already do).
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Store](/docs/elements/store) — facets and drivers
+- [Clock](/docs/elements/clock) — shared CronStore / leader election
+- [Flow](/docs/elements/flow) — durable journal
+- [Signal](/docs/elements/signal) — delivery modes and redis honesty
+- [Channel](/docs/elements/channel) — suppression process-local limit
+- [CLI](/docs/reference/cli) — `oke docker --prod`, `oke start`
+
+## Next
+
+<Cards>
+  <Card title="Installation" href="/docs/get-started/installation" />
+  <Card title="Store" href="/docs/elements/store" />
+  <Card title="Flow" href="/docs/elements/flow" />
+</Cards>

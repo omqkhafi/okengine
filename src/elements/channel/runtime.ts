@@ -142,15 +142,33 @@ export interface ChannelRuntime {
  *
  * @param options - Templates + drivers + catalog
  */
+let channelProcessLocalWarned = false;
+
+/** Test helper — reset the one-shot Channel process-local warn. */
+export function resetChannelProcessLocalWarnForTests(): void {
+  channelProcessLocalWarned = false;
+}
+
 export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}): ChannelRuntime {
   const templates = new Map<string, ChannelTemplateDecl>();
   for (const t of options.templates ?? []) {
     templates.set(t.name, t);
   }
+  const usingDefaultSuppression = options.suppression === undefined;
+  const usingDefaultReceipts = options.receipts === undefined;
   const suppression =
     options.suppression ??
     createSuppressionStore(options.consent ? { consent: options.consent } : {});
   const receipts = options.receipts ?? createReceiptLedger();
+  if ((usingDefaultSuppression || usingDefaultReceipts) && !channelProcessLocalWarned) {
+    channelProcessLocalWarned = true;
+    console.warn(
+      "oke boot: Channel suppression/consent/receipts default to process-local memory — " +
+        "opt-out, bounce, and receipt state on one instance is invisible to others. " +
+        "Inject shared stores for multi-instance, or run a single Channel consumer, until a " +
+        "durable driver ships.",
+    );
+  }
   const costs = options.costs ?? { ...DEFAULT_MEDIUM_COSTS };
   const catalog = options.catalog ?? {};
   const defaultLocale = options.defaultLocale ?? "en";

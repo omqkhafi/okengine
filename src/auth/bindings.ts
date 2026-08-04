@@ -32,7 +32,7 @@ import {
   type SessionCrypto,
   type SessionStore,
 } from "./sessions.ts";
-import { touchRateLimit, type LoginAttemptBag, createLoginAttemptBag } from "./rate.ts";
+import { type LoginAttemptBag, createLoginAttemptBag } from "./rate.ts";
 
 /** Built-in policy: verified user session (for `/auth/me` and step-up surfaces). */
 export const AUTH_SESSION_GATE: PolicyGateDecl = gate.policy(
@@ -297,17 +297,8 @@ export function createAuthHttpBindings(
       out: SessionTokensOut,
       errors: { AuthFailed, AuthRateLimited },
       do: async (input) => {
-        const key = input.email.trim().toLowerCase();
-        let bag = loginAttempts.get(key);
-        if (!bag) {
-          bag = [];
-          loginAttempts.set(key, bag);
-        }
-        if (touchRateLimit(bag, ctx.now()) === "rate_limited") {
-          return fail("AuthRateLimited", {
-            reason: "rate_limited",
-          });
-        }
+        // Rate limit is Gate KV (`signInRate` on the binding) — shared across
+        // instances when `drivers.store.kv` is redis. No process-local email bag.
         const user = await authenticateUser(identities, input.email, input.password);
         // Enumeration hygiene: identical failure for unknown email / bad password.
         if (!user) return fail("AuthFailed", { reason: "invalid_credentials" });

@@ -29,6 +29,27 @@ import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runt
  * @param now - Clock
  * @param docker - Prefer compose URLs when opening postgres/redis
  */
+let filesFsWarned = false;
+
+/** Test helper — reset the one-shot `fs` multi-instance warn. */
+export function resetFilesFsWarnForTests(): void {
+  filesFsWarned = false;
+}
+
+/**
+ * Warn once when `drivers.store.files` is `fs` — per-process (or per-pod)
+ * filesystem visibility under horizontal scale.
+ */
+function warnFilesFsMultiInstance(): void {
+  if (filesFsWarned) return;
+  filesFsWarned = true;
+  console.warn(
+    'oke boot: drivers.store.files "fs" is single-host — each instance sees its own ' +
+      "filesystem (temp root when unbound). For horizontal scale use drivers.store.files s3 " +
+      "(or an explicitly shared volume root, still single-host semantics).",
+  );
+}
+
 export function bindStore(
   options: BootOptions,
   env: ConfigEnv,
@@ -39,6 +60,7 @@ export function bindStore(
   const kvId = resolveKvDriverId(options, env, docker);
   const filesId = resolveFilesDriverId(options, env, docker);
   const indexId = resolveIndexDriverId(options, env, docker);
+  if (filesId === "fs") warnFilesFsMultiInstance();
   const sqlUrl = sqlUrlFor(sqlId, docker);
   const kvUrl = kvUrlFor(kvId, docker);
   const filesRoot = filesRootFor(filesId);

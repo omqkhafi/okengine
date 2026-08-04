@@ -28,6 +28,19 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   Taqnyat WhatsApp `sendWithFailover` when bound).
 - `taqnyat-whatsapp` Channel driver + `drivers.channel.whatsapp` boot bind
   (`wa-cloud` also wired).
+- `GET /_/ready` — kernel readiness (`booting` → `orphan_scan` → `ready`)
+  distinct from app `GET /health` liveness; `503` until the durable orphan
+  scan finishes.
+- `installGracefulShutdown` / `releaseInstanceLeases` — SIGTERM/SIGINT
+  releases Clock + Journal leases held by this instance (reuses existing
+  `releaseLease`), then drains the server. Wired on `oke dev`’s app runner.
+- Kubernetes guidance — plain **Deployment** (never StatefulSet), probes,
+  shared drivers, and honest multi-instance known limits
+  (`site/content/docs/get-started/kubernetes.mdx`).
+- Horizontal multi-process integration test — two OS processes sharing live
+  Postgres + Redis prove Clock-once, durable takeover, shared Gate rates,
+  and mid-scenario SIGKILL absorption together (`OKE_TEST_POSTGRES_URL` +
+  `OKE_TEST_REDIS_URL` / `REDIS_URL`; visible skip when unset).
 
 ### 🔥 Removed
 
@@ -39,6 +52,22 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `sently` → `1.2.1` — Taqnyat Verify OTP live-verified end-to-end
   (`sendOtp` → handset code → `verifyOtp`); transport reads `Data.result`
   from live `returnJson` envelopes (fixes false `code 1` on success).
+- Gate `drivers.store.kv: redis` without `REDIS_URL` / inject **fails loud**
+  (no soft-fallback to memory that silently doubles rate budgets).
+- Signal `redis` docs + boot warn: emit relays to Redis; consume / `live` /
+  `drain` remain process-local outbox until Streams consume ships.
+- Channel docs + boot warn: default suppression / consent / receipts are
+  process-local until a durable driver ships (deferred epic — documented,
+  not silent).
+- Store `files: "fs"` boot warn — single-host; horizontal scale needs `s3`.
+
+### 🐛 Fixed
+
+- Session scopes / audience live on the session row (and Console SQLite
+  hydrate/persist) — refresh no longer loses them across process restart
+  via module-level Maps.
+- App-plane sign-in rate limit relies on shared Gate KV only (removed the
+  process-local email attempt bag that bypassed redis rates).
 
 ## v0.8.0 — 2026-08-04
 

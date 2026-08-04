@@ -617,6 +617,8 @@ images: {
 
 `memory` is the test default. Local `fs` writes under a temp root when no binding `root` is set.
 
+**Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for docker/prod (create-oke templates already do).
+
 <Callout title="Console can browse, not edit bytes">
   The [Console · Store](/docs/console/store) lists keys and can delete them. Direct edit is **KV +
   SQL only** — blob bodies are not patched from the Console.

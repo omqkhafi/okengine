@@ -231,6 +231,42 @@ describe("hybrid sessions", () => {
       SessionError,
     );
   });
+
+  test("scopes and audience survive on the session row across store instances", async () => {
+    const store = createSessionStore();
+    let now = 2_000_000;
+    const crypto = {
+      secret: "test-secret",
+      now: () => now,
+      audience: "oke-app",
+    };
+    const issued = await issueSessionWithScopes(store, crypto, {
+      id: "user-2",
+      plane: "user",
+      scopes: ["notes:write", "notes:read"],
+    });
+    expect(issued.session.scopes).toEqual(["notes:write", "notes:read"]);
+    expect(issued.session.audience).toBe("oke-app");
+
+    // Simulate process restart: copy rows into a fresh SessionStore (no module Maps).
+    const restored = createSessionStore();
+    for (const [id, row] of store.sessions) {
+      restored.sessions.set(id, { ...row, scopes: [...row.scopes] });
+    }
+    for (const [id, row] of store.refresh) {
+      restored.refresh.set(id, { ...row });
+    }
+
+    now += 1_000;
+    const rotated = await rotateRefresh(restored, crypto, issued.refreshToken);
+    const { verifyAccess } = await import("./sessions.ts");
+    const claims = await verifyAccess(restored, crypto.secret, rotated.accessToken, {
+      now: () => now,
+      audience: "oke-app",
+    });
+    expect(claims.scopes).toEqual(["notes:write", "notes:read"]);
+    expect(claims.aud).toBe("oke-app");
+  });
 });
 
 describe("operator plane", () => {

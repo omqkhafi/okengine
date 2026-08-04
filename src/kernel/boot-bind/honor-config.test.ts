@@ -263,6 +263,24 @@ describe("boot binders honour drivers.* config", () => {
     }
   });
 
+  test("gate: drivers.store.kv redis without REDIS_URL fails loud (never soft memory)", async () => {
+    delete process.env.REDIS_URL;
+    delete process.env.OKE_STORE_KV_URL;
+    await expect(
+      bootApplication({
+        env: "local",
+        gates: [gate.rate({ max: 10, per: "1m" })],
+        config: {
+          drivers: {
+            store: {
+              kv: { local: "redis", docker: "redis", prod: "redis" },
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow(/gate redis kv needs REDIS_URL/);
+  });
+
   test("gate: drivers.store.kv memory keeps memory oke:gates", async () => {
     const result = await bootApplication({
       env: "local",

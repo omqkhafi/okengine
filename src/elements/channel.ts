@@ -20,7 +20,7 @@ export type {
   ChannelTemplateOptions,
 } from "./channel/declare.ts";
 
-export { createChannelRuntime } from "./channel/runtime.ts";
+export { createChannelRuntime, resetChannelProcessLocalWarnForTests } from "./channel/runtime.ts";
 export type {
   ChannelRuntime,
   ChannelSendOptions,

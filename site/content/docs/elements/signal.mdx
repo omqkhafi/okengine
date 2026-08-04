@@ -245,14 +245,16 @@ drivers: {
 },
 ```
 
-| Driver     | Runs as        | Boot today                                                                |
-| ---------- | -------------- | ------------------------------------------------------------------------- |
-| `memory`   | in-process     | Local loop + tests — zero infrastructure                                  |
-| `redis`    | Redis / Valkey | Default for docker/prod — Streams + pub/sub via `Bun.redis`               |
-| `postgres` | Postgres       | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds |
-| `nats`     | NATS           | Driver exists; boot **fails loud** until a production NATS client binds   |
+| Driver     | Runs as        | Boot today                                                                  |
+| ---------- | -------------- | --------------------------------------------------------------------------- |
+| `memory`   | in-process     | Local loop + tests — zero infrastructure                                    |
+| `redis`    | Redis / Valkey | Boot-bound — **emit relay** via Streams / pub/sub; consume is process-local |
+| `postgres` | Postgres       | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds   |
+| `nats`     | NATS           | Driver exists; boot **fails loud** until a production NATS client binds     |
 
-`redis` is the honestly boot-bound durable path today. Pairing an arbitrary Store insert with emit inside **one** shared SQL transaction is not what `fx.emit` does — keep consumers idempotent (at-least-once).
+**Known limit:** `redis` relays emits to Redis, but `once` / `broadcast` / `live` **consume, `live` replay, and `drain` still use a process-local outbox** today. Competing consumers across replicas do not share that outbox until Redis Streams consume ships. Boot prints a one-shot warning when `drivers.signal` is `redis`. Prefer a single consumer instance (or a shared durable outbox path in tests) for multi-process `once` until then.
+
+Pairing an arbitrary Store insert with emit inside **one** shared SQL transaction is not what `fx.emit` does — keep consumers idempotent (at-least-once).
 
 ## Troubleshooting
 
@@ -279,7 +281,7 @@ Ask: _how many consumers should process each message?_ One → `once`. All of th
 </Accordion>
 <Accordion title="My emit happened but the row didn't (or vice versa)">
 
-`fx.emit` commits the signal outbox when it resolves; it does not wrap your Store insert. Treat delivery as at-least-once and make the consumer idempotent (or check the row before acting). Prefer `redis` (or a future LISTEN-capable postgres bind) when you want durable delivery rather than in-process memory.
+`fx.emit` commits the signal outbox when it resolves; it does not wrap your Store insert. Treat delivery as at-least-once and make the consumer idempotent (or check the row before acting). Remember: `redis` today is an emit relay with a process-local consume outbox — not multi-instance competing consumers yet.
 
 </Accordion>
 <Accordion title="The same once message ran twice">

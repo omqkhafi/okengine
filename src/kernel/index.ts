@@ -8,8 +8,16 @@ export {
   type ExecuteResult,
   type OkeApp,
   type OkeOptions,
+  type ReadyState,
   type UnitHooks,
 } from "./app.ts";
+
+export {
+  installGracefulShutdown,
+  releaseInstanceLeases,
+  type GracefulShutdownApp,
+  type InstallGracefulShutdownOptions,
+} from "./graceful-shutdown.ts";
 
 export {
   bootApplication,

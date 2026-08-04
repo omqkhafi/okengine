@@ -78,6 +78,7 @@ import {
   type JournalSession,
   type JournalStore,
 } from "./journal.ts";
+import { releaseInstanceLeases } from "./graceful-shutdown.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
@@ -199,6 +200,9 @@ export interface OkeOptions {
   readonly journalLeaseMs?: number;
 }
 
+/** Readiness probe state — see `GET /_/ready`. */
+export type ReadyState = "booting" | "orphan_scan" | "ready";
+
 /** Payload for a CDC invocation. */
 export interface CdcPayload {
   readonly before: Record<string, unknown> | null;
@@ -257,6 +261,11 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
   readonly plugins: PluginRegistry;
   /** Whether {@link OkeApp.boot} has completed. */
   readonly booted: boolean;
+  /**
+   * Readiness for probes — `booting` until boot returns, `orphan_scan` while
+   * the durable orphan resume runs, then `ready`. See `GET /_/ready`.
+   */
+  readonly readyState: ReadyState;
   /** Result of {@link OkeApp.boot} (element runtimes, capabilities). */
   readonly bootResult: BootResult | undefined;
   /**
@@ -565,6 +574,7 @@ export function oke(options: OkeOptions): OkeApp {
   // --- boot (vault → store → signal → clock → channel → AI → runs → caps) ---
   let bootResult: BootResult | undefined;
   let bootPromise: Promise<BootResult> | undefined;
+  let readyState: ReadyState = "booting";
   let bootEnv: BootOptions["env"] = options.env ?? "local";
   let authBinding: AppAuthBinding | undefined =
     gateConfig.auth !== undefined
@@ -845,11 +855,18 @@ export function oke(options: OkeOptions): OkeApp {
     }
     // Boot-time orphan discovery: resume/schedule any `running` / `sleeping`
     // run left without a live lease by a crashed (or previous) instance.
-    // Fire-and-forget — boot must not block serving on a long resume.
+    // Does not block boot return — readiness stays `orphan_scan` until done.
     if (result.journal && hasJournalLease(result.journal.store)) {
-      void resumeOrphanedDurableRuns().catch((err) => {
-        console.error("oke: durable orphan scan failed", err);
-      });
+      readyState = "orphan_scan";
+      void resumeOrphanedDurableRuns()
+        .catch((err) => {
+          console.error("oke: durable orphan scan failed", err);
+        })
+        .finally(() => {
+          if (bootResult === result) readyState = "ready";
+        });
+    } else {
+      readyState = "ready";
     }
     // Prefer the booted clock for access-token expiry checks.
     if (authBinding) {
@@ -1205,6 +1222,9 @@ export function oke(options: OkeOptions): OkeApp {
     get booted() {
       return bootResult !== undefined;
     },
+    get readyState() {
+      return readyState;
+    },
     get bootResult() {
       return bootResult;
     },
@@ -1236,9 +1256,18 @@ export function oke(options: OkeOptions): OkeApp {
     async stop() {
       if (!bootResult) return;
       bootResult.stopScheduler();
+      // Proactive lease release so survivors need not wait for TTL reclaim.
+      await releaseInstanceLeases({
+        bootResult: {
+          clock: bootResult.clock,
+          journal: bootResult.journal,
+        },
+        stop: async () => {},
+      });
       await bootResult.close();
       bootResult = undefined;
       bootPromise = undefined;
+      readyState = "booting";
     },
     get authBinding() {
       return authBinding;
@@ -1355,6 +1384,24 @@ export function oke(options: OkeOptions): OkeApp {
         }
         return response;
       };
+
+      // Kernel readiness — distinct from app-authored GET /health (liveness).
+      if (method === "GET" && url.pathname === "/_/ready") {
+        if (readyState === "ready") {
+          return respond(
+            new Response(JSON.stringify({ ready: true }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+          );
+        }
+        return respond(
+          new Response(JSON.stringify({ ready: false, reason: readyState }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
 
       if (method === "GET" && url.pathname === "/_oke/client.json") {
         return respond(

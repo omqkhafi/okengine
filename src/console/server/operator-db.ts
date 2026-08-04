@@ -158,7 +158,9 @@ export function migrateOperatorSchema(db: Database): void {
       revoked_at INTEGER,
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
-      last_active_at INTEGER
+      last_active_at INTEGER,
+      scopes TEXT NOT NULL DEFAULT '[]',
+      audience TEXT
     );
     CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.refreshTokens} (
       id TEXT PRIMARY KEY NOT NULL,
@@ -170,20 +172,28 @@ export function migrateOperatorSchema(db: Database): void {
       revoked_at INTEGER
     );
   `);
-  ensureSessionLastActiveColumn(db);
+  ensureSessionColumns(db);
 }
 
 /**
- * Add `last_active_at` when opening an older console.sqlite that predates idle TTL.
+ * Add session columns when opening an older console.sqlite.
  *
  * @param db - Open database
  */
-function ensureSessionLastActiveColumn(db: Database): void {
+function ensureSessionColumns(db: Database): void {
   const cols = db.query(`PRAGMA table_info(${AUTH_TABLES.sessions})`).all() as Array<{
     name: string;
   }>;
-  if (cols.some((c) => c.name === "last_active_at")) return;
-  db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN last_active_at INTEGER`);
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has("last_active_at")) {
+    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN last_active_at INTEGER`);
+  }
+  if (!names.has("scopes")) {
+    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN scopes TEXT NOT NULL DEFAULT '[]'`);
+  }
+  if (!names.has("audience")) {
+    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN audience TEXT`);
+  }
 }
 
 /**
@@ -196,7 +206,7 @@ export function loadSessionStore(db: Database): SessionStore {
 
   const sessionRows = db
     .query(
-      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at
+      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience
        FROM ${AUTH_TABLES.sessions}`,
     )
     .all() as Array<{
@@ -208,9 +218,20 @@ export function loadSessionStore(db: Database): SessionStore {
     created_at: number;
     expires_at: number;
     last_active_at: number | null;
+    scopes: string | null;
+    audience: string | null;
   }>;
 
   for (const row of sessionRows) {
+    let scopes: string[] = [];
+    if (row.scopes) {
+      try {
+        const parsed = JSON.parse(row.scopes) as unknown;
+        if (Array.isArray(parsed)) scopes = parsed.map(String);
+      } catch {
+        scopes = [];
+      }
+    }
     const session: SessionRow = {
       id: row.id,
       plane: row.plane,
@@ -220,6 +241,8 @@ export function loadSessionStore(db: Database): SessionStore {
       createdAt: row.created_at,
       expiresAt: row.expires_at,
       lastActiveAt: row.last_active_at ?? row.created_at,
+      scopes,
+      ...(row.audience ? { audience: row.audience } : {}),
     };
     store.sessions.set(session.id, session);
   }
@@ -267,8 +290,8 @@ export function persistSessions(db: Database, store: SessionStore): void {
 
   const insertSession = db.query(
     `INSERT INTO ${AUTH_TABLES.sessions}
-      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at)
-     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires, $lastActive)`,
+      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience)
+     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires, $lastActive, $scopes, $audience)`,
   );
   for (const session of store.sessions.values()) {
     insertSession.run({
@@ -280,6 +303,8 @@ export function persistSessions(db: Database, store: SessionStore): void {
       $created: session.createdAt,
       $expires: session.expiresAt,
       $lastActive: session.lastActiveAt,
+      $scopes: JSON.stringify(session.scopes ?? []),
+      $audience: session.audience ?? null,
     });
   }
 

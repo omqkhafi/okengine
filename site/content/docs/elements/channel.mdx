@@ -85,6 +85,8 @@ Locally the `console` driver captures mail into an inbox instead of sending; in 
 
 Opt-out is first-class: a subject who opted out of a medium is **suppressed** — the send resolves without contacting the provider, and the receipt status is `suppressed/opted-out`. You never hand-roll "did they unsubscribe?" checks.
 
+**Known limit:** default suppression, consent, and receipt stores are **process-local memory**. Opt-out / hard-bounce / receipt on replica A is invisible to replica B. Boot prints a one-shot warning when those defaults are used. Inject shared stores for multi-instance, or run a single Channel consumer, until a durable driver ships.
+
 ### Locale resolves, then the catalog
 
 `fx.send` picks a locale: explicit `locale` → `profileLocale` → first

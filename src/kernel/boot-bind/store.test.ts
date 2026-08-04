@@ -3,8 +3,11 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { files } from "../../elements/store.ts";
 import {
+  bindStore,
   indexDriverFor,
+  resetFilesFsWarnForTests,
   resolveFilesDriverId,
   resolveIndexDriverId,
   resolveKvDriverId,
@@ -74,6 +77,85 @@ describe("bindStore driver resolution", () => {
     expect(resolveSqlDriverId({}, "docker", true)).toBe("postgres");
     expect(resolveKvDriverId({}, "docker", true)).toBe("redis");
     expect(resolveFilesDriverId({}, "docker", true)).toBe("s3");
+  });
+});
+
+describe("bindStore files fs multi-instance warn", () => {
+  afterEach(() => {
+    resetFilesFsWarnForTests();
+  });
+
+  test("warns once when files driver is fs", () => {
+    const warnings: string[] = [];
+    const prev = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      const uploads = files("uploads");
+      bindStore(
+        {
+          stores: [uploads],
+          config: {
+            drivers: {
+              store: {
+                files: { local: "fs", docker: "s3", prod: "s3" },
+              },
+            },
+          },
+        },
+        "local",
+        () => Date.now(),
+        false,
+      );
+      bindStore(
+        {
+          stores: [uploads],
+          config: {
+            drivers: {
+              store: {
+                files: { local: "fs", docker: "s3", prod: "s3" },
+              },
+            },
+          },
+        },
+        "local",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes('drivers.store.files "fs"'))).toBe(true);
+      expect(warnings.filter((w) => w.includes('drivers.store.files "fs"'))).toHaveLength(1);
+    } finally {
+      console.warn = prev;
+    }
+  });
+
+  test("does not warn for memory or s3 files", () => {
+    const warnings: string[] = [];
+    const prev = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      bindStore(
+        {
+          stores: [files("uploads")],
+          config: {
+            drivers: {
+              store: {
+                files: { local: "memory", docker: "s3", prod: "s3" },
+              },
+            },
+          },
+        },
+        "local",
+        () => Date.now(),
+        false,
+      );
+      expect(warnings.some((w) => w.includes('drivers.store.files "fs"'))).toBe(false);
+    } finally {
+      console.warn = prev;
+    }
   });
 });
 

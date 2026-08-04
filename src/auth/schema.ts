@@ -73,6 +73,8 @@ export const AUTH_MODEL_DEFAULT_FIELDS: Readonly<
     createdAt: "created_at",
     expiresAt: "expires_at",
     lastActiveAt: "last_active_at",
+    scopes: "scopes",
+    audience: "audience",
   },
   refreshToken: {
     id: "id",
@@ -186,6 +188,7 @@ const CORE_SQL_TYPES: Readonly<Record<string, AuthColumnSqlType>> = {
   value: "TEXT",
   description: "TEXT",
   scopes: "TEXT",
+  audience: "TEXT",
   lastUsedAt: "INTEGER",
 };
 

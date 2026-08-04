@@ -33,15 +33,14 @@ export function resolveGateKvDriverId(
   return docker ? "redis" : "memory";
 }
 
-function kvUrlFor(docker: boolean): string | undefined {
+function kvUrlFor(docker: boolean): string {
   const url = process.env.REDIS_URL ?? process.env.OKE_STORE_KV_URL ?? undefined;
   if (!url) {
-    if (docker) {
-      throw new Error(
-        "oke boot: gate redis kv needs REDIS_URL (did `oke dev -d` write docker/.env.docker?)",
-      );
-    }
-    return undefined;
+    throw new Error(
+      docker
+        ? "oke boot: gate redis kv needs REDIS_URL (did `oke dev -d` write docker/.env.docker?)"
+        : "oke boot: gate redis kv needs REDIS_URL — declare drivers.store.kv memory for local, or set REDIS_URL",
+    );
   }
   return url;
 }
@@ -65,19 +64,15 @@ export async function bindGate(
 
   let kvNs;
   if (kvId === "redis") {
+    // Fail loud when redis is configured without URL/inject — never soft-fallback
+    // to memory (that silently doubles rate budgets under horizontal scale).
     const url = injected ? undefined : kvUrlFor(docker);
-    if (!injected && url === undefined) {
-      // Local without REDIS_URL — soft-fallback to memory (same as missing redis for store would fail;
-      // gate rates should not brick local apps that only declared policy gates).
-      kvNs = await memoryDrivers.kv.open({ name: GATE_KV_NAMESPACE, nowMs: now });
-    } else {
-      kvNs = await redisDriver.open({
-        name: GATE_KV_NAMESPACE,
-        ...(url !== undefined ? { url } : {}),
-        ...(injected !== undefined ? { client: injected } : {}),
-        nowMs: now,
-      });
-    }
+    kvNs = await redisDriver.open({
+      name: GATE_KV_NAMESPACE,
+      ...(url !== undefined ? { url } : {}),
+      ...(injected !== undefined ? { client: injected } : {}),
+      nowMs: now,
+    });
   } else {
     kvNs = await memoryDrivers.kv.open({ name: GATE_KV_NAMESPACE, nowMs: now });
   }

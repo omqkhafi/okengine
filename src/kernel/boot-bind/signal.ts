@@ -29,6 +29,25 @@ function redisUrlFor(docker: boolean): string | undefined {
   return url;
 }
 
+let signalRedisWarned = false;
+
+/** One-shot: redis Signal is emit-relay + process-local outbox consume today. */
+function warnSignalRedisProcessLocal(): void {
+  if (signalRedisWarned) return;
+  signalRedisWarned = true;
+  console.warn(
+    "oke boot: drivers.signal redis — emit relays to Redis, but consume/live/drain use a " +
+      "process-local outbox (not multi-instance competing consumers). Prefer a shared durable " +
+      "outbox path for multi-process tests, or a single consumer instance, until Redis Streams " +
+      "consume ships.",
+  );
+}
+
+/** Test helper — reset the one-shot redis Signal warn. */
+export function resetSignalRedisWarnForTests(): void {
+  signalRedisWarned = false;
+}
+
 /**
  * Construct a Signal runtime, register decls / binding names, start the bus.
  *
@@ -59,6 +78,7 @@ export async function bindSignal(
       break;
     case "redis": {
       const redis = injectedRedis ?? createBunSignalRedisClient(redisUrlFor(docker));
+      warnSignalRedisProcessLocal();
       signal = createSignalRuntime({
         driver: redisSignalDriver,
         now,

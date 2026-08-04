@@ -17,6 +17,7 @@
 
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { installGracefulShutdown, type GracefulShutdownApp } from "../kernel/graceful-shutdown.ts";
 import { createBunRuntime } from "../runtime/bun.ts";
 import { APP_PORT, type FetchApp } from "../runtime/types.ts";
 import { clearTerminalScreen, formatAppReadyLine, formatDevHero } from "../term.ts";
@@ -33,6 +34,8 @@ type DevRunnerGlobals = typeof globalThis & {
 /** App entry shape — FetchApp plus boot before serve. */
 type BootableApp = FetchApp & {
   boot(): Promise<unknown>;
+  stop(): Promise<void>;
+  readonly bootResult?: GracefulShutdownApp["bootResult"];
 };
 
 const entry = Bun.env["OKE_ENTRY"];
@@ -68,6 +71,7 @@ const handle = createBunRuntime().serve(mod.app, {
   hostname,
   id: DEV_APP_SERVE_ID,
 });
+installGracefulShutdown({ app: mod.app, handle });
 
 const appUrl = `http://${formatHostForUrl(hostname)}:${handle.port}`;
 const g = globalThis as DevRunnerGlobals;
