@@ -7,6 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  COMPOSE_ALL,
   COMPOSE_OVERRIDE,
   assertNoCredentialsInYaml,
   buildCaddyfile,
@@ -15,6 +16,7 @@ import {
   builtinRecipes,
   caddy,
   deriveInfrastructure,
+  dragonfly,
   emitDockerfile,
   formatStackEnv,
   pgdog,
@@ -26,10 +28,28 @@ import {
   SOCKET_PROXY_SERVICE,
   traefik,
   traefikAppLabels,
+  valkey,
   writeDerivedFiles,
   type ImageRecipe,
   type ServiceSpec,
 } from "./index.ts";
+
+/** Service keys under a top-level `services:` mapping (2-space indent). */
+function serviceNamesFromComposeYaml(yml: string): Set<string> {
+  const names = new Set<string>();
+  let inServices = false;
+  for (const line of yml.split("\n")) {
+    if (line === "services:") {
+      inServices = true;
+      continue;
+    }
+    if (!inServices) continue;
+    if (/^[A-Za-z]/.test(line)) break;
+    const m = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (m?.[1]) names.add(m[1]);
+  }
+  return names;
+}
 
 const fixedCreds = {
   "store.sql": {
@@ -47,9 +67,89 @@ const fixedCreds = {
 describe("image recipes", () => {
   test("postgres and redis match vendor images by protocol", () => {
     expect(recipeFor("pgvector/pgvector:pg17").id).toBe("postgres");
-    expect(recipeFor("valkey/valkey:8-alpine").id).toBe("redis");
     expect(postgres.match("postgres:16")).toBe(true);
     expect(redis.match("redis:7")).toBe(true);
+    expect(redis.match("redis:8-alpine")).toBe(true);
+    expect(redis.match("valkey/valkey:8-alpine")).toBe(false);
+  });
+
+  test("valkey matches the official image, keeps redis:// URL, uses valkey-server", () => {
+    const image = "valkey/valkey:8-alpine";
+    expect(recipeFor(image).id).toBe("valkey");
+    expect(valkey.match(image)).toBe(true);
+    expect(redis.match(image)).toBe(false);
+    const spec: ServiceSpec = {
+      role: "store.kv",
+      serviceName: "store-kv",
+      image,
+      port: 6379,
+      hostPort: 6379,
+      credentials: fixedCreds["store.kv"],
+    };
+    const applied = recipeFor(spec.image).apply(spec);
+    expect(String(applied.command)).toContain("exec valkey-server");
+    expect(String(applied.command)).toContain("$$OKE_STORE_KV_PASSWORD");
+    expect(applied.healthcheck?.test[1]).toBe("valkey-cli");
+    const url = recipeFor(spec.image).url(spec, {
+      host: "127.0.0.1",
+      port: 6379,
+      user: "oke",
+      password: fixedCreds["store.kv"].password,
+      database: "oke",
+    });
+    expect(url).toBe(
+      `redis://:${encodeURIComponent(fixedCreds["store.kv"].password)}@127.0.0.1:6379`,
+    );
+
+    const derived = deriveInfrastructure({
+      images: { "store.kv": image },
+      credentials: { "store.kv": fixedCreds["store.kv"] },
+    });
+    const kvYml = derived.files.find((f) => f.path === "compose.store.kv.yml")?.content ?? "";
+    expect(kvYml).toContain(image);
+    expect(kvYml).toContain("valkey-server");
+    expect(derived.stackEnv.REDIS_URL).toContain("redis://");
+  });
+
+  test("dragonfly matches the official image, keeps redis:// URL, distinct from redis recipe", () => {
+    const image = "docker.dragonflydb.io/dragonflydb/dragonfly";
+    expect(recipeFor(image).id).toBe("dragonfly");
+    expect(dragonfly.match(image)).toBe(true);
+    expect(redis.match(image)).toBe(false);
+    const spec: ServiceSpec = {
+      role: "store.kv",
+      serviceName: "store-kv",
+      image,
+      port: 6379,
+      hostPort: 6379,
+      credentials: fixedCreds["store.kv"],
+    };
+    const applied = recipeFor(spec.image).apply(spec);
+    expect(String(applied.command)).toContain("exec dragonfly");
+    expect(String(applied.command)).toContain("$$OKE_STORE_KV_PASSWORD");
+    expect(applied.ulimits?.memlock).toBe(-1);
+    expect(applied.environment?.HEALTHCHECK_PORT).toBe("6379");
+    expect(applied.healthcheck?.test).toEqual(["CMD", "/usr/local/bin/healthcheck.sh"]);
+    const url = recipeFor(spec.image).url(spec, {
+      host: "127.0.0.1",
+      port: 6379,
+      user: "oke",
+      password: fixedCreds["store.kv"].password,
+      database: "oke",
+    });
+    expect(url).toBe(
+      `redis://:${encodeURIComponent(fixedCreds["store.kv"].password)}@127.0.0.1:6379`,
+    );
+
+    const derived = deriveInfrastructure({
+      images: { "store.kv": image },
+      credentials: { "store.kv": fixedCreds["store.kv"] },
+    });
+    const kvYml = derived.files.find((f) => f.path === "compose.store.kv.yml")?.content ?? "";
+    expect(kvYml).toContain(image);
+    expect(kvYml).toContain("memlock");
+    expect(kvYml).toContain("HEALTHCHECK_PORT");
+    expect(derived.stackEnv.REDIS_URL).toContain("redis://");
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {
@@ -267,6 +367,7 @@ describe("deriveInfrastructure", () => {
     expect(paths).toContain("compose.yml");
     expect(paths).toContain("compose.store.sql.yml");
     expect(paths).toContain("compose.store.kv.yml");
+    expect(paths).toContain(COMPOSE_ALL);
     expect(paths).not.toContain(COMPOSE_OVERRIDE);
 
     expect(result.composeFiles).toEqual([
@@ -275,6 +376,7 @@ describe("deriveInfrastructure", () => {
       "compose.store.sql.yml",
       COMPOSE_OVERRIDE,
     ]);
+    expect(result.composeFiles).not.toContain(COMPOSE_ALL);
 
     const sqlYml = result.files.find((f) => f.path === "compose.store.sql.yml")!.content;
     expect(sqlYml).toContain("pgvector/pgvector:pg17");
@@ -616,5 +718,52 @@ describe("deriveInfrastructure", () => {
     expect(base).toContain("6530:6530");
     expect(result.files.some((f) => f.path === "compose.proxy.yml")).toBe(false);
     expect(result.stackEnv.OKE_PROXY_URL).toBeUndefined();
+  });
+
+  test("compose.all.yml merges every service from separate layer files", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        "store.kv": "redis:8-alpine",
+        proxy: "traefik:v3.3",
+      },
+      credentials: {
+        "store.sql": fixedCreds["store.sql"],
+        "store.kv": fixedCreds["store.kv"],
+      },
+      app: "skyport",
+      prod: true,
+    });
+
+    const allFile = result.files.find((f) => f.path === COMPOSE_ALL);
+    expect(allFile).toBeDefined();
+    const allYml = allFile!.content;
+    const allServices = serviceNamesFromComposeYaml(allYml);
+
+    const expected = new Set<string>();
+    for (const f of result.files) {
+      if (f.path === COMPOSE_ALL) continue;
+      if (f.path !== "compose.yml" && !/^compose\..+\.yml$/.test(f.path)) continue;
+      for (const name of serviceNamesFromComposeYaml(f.content)) {
+        expected.add(name);
+      }
+    }
+
+    expect(expected.size).toBeGreaterThan(0);
+    for (const name of expected) {
+      expect(allServices.has(name)).toBe(true);
+    }
+    // Companion + role services survive the merge (not dropped).
+    expect(allServices.has("app")).toBe(true);
+    expect(allServices.has("store-sql")).toBe(true);
+    expect(allServices.has("store-kv")).toBe(true);
+    expect(allServices.has("proxy")).toBe(true);
+    expect(allServices.has(SOCKET_PROXY_SERVICE)).toBe(true);
+    // Prod overlay fields land on app in the merged document.
+    expect(allYml).toContain("/_/ready");
+    expect(allYml).toContain("stop_grace_period");
+    expect(allYml).toContain("update_config");
+    // Still not in the layered `-f` list.
+    expect(result.composeFiles).not.toContain(COMPOSE_ALL);
   });
 });

@@ -77,6 +77,8 @@ images: {
   "store.sql": "postgres:18",
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
   "store.kv": "redis:8",
+  // or: "valkey/valkey:8-alpine"
+  // or: "docker.dragonflydb.io/dragonflydb/dragonfly"
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",
   vault: "openbao/openbao:2.6.1",
@@ -91,10 +93,13 @@ When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog
 (`6432`) — wire-protocol transparent to Bun.SQL / Drizzle. See
 [Store · Multiple environments](/docs/elements/store#multiple-environments).
 
+For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays
+`redis`, same `REDIS_URL`. Image table + licenses: [Store · KV](/docs/elements/store#kv).
+
 For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3.5:9b` — a balanced local-dev starting point; override freely; on Apple Silicon prefer `qwen3.5:9b-mlx`) and writes `OKE_AI_URL`.
 
 For `proxy`, pin **either** Caddy or Traefik — never both. Opt-in only; see
-[Docker](/docs/get-started/docker).
+[Reverse proxy](/docs/deployment/reverse-proxy).
 
 ## i18n
 

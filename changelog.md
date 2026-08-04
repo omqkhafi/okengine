@@ -10,8 +10,19 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.9.0 — 2026-08-04
+
 ### ✨ Added
 
+- Redis-protocol `store.kv` image recipes — Redis (default), Valkey
+  (`valkey/valkey`), and Dragonfly (`docker.dragonflydb.io/dragonflydb/dragonfly`).
+  Driver id stays `redis`; pin via `images["store.kv"]`. Docs list each
+  license in one line (RSAL/SSPL/AGPL · BSD-3 · BSL) and note that
+  service-resale clauses only matter if you offer that datastore as a
+  service — not for typical self-hosting.
+- `compose.all.yml` — fully merged compose (layers 1–3) emitted alongside the
+  existing per-role files; for Swarm `docker stack deploy -c compose.all.yml`
+  and anyone who prefers one file. Layered `-f` order unchanged.
 - PgDog as the default docker/prod SQL connection pooler — sits in front of
   Postgres (`images.pgdog`), transaction pooling, `DATABASE_URL` → `:6432`
   when both are pinned. Caps `N × pool` vs Postgres `max_connections` at the
@@ -36,18 +47,22 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   `releaseLease`), then drains the server. Wired on `oke dev`’s app runner.
 - Kubernetes guidance — plain **Deployment** (never StatefulSet), probes,
   shared drivers, and honest multi-instance known limits
-  (`site/content/docs/get-started/kubernetes.mdx`).
+  (`site/content/docs/deployment/kubernetes.mdx`).
 - Docker Swarm guidance — `docker stack deploy` on the generated compose
   layers; `compose.prod.yml` app `HEALTHCHECK` → `GET /_/ready`,
   `deploy.update_config` / `restart_policy`, `stop_grace_period: 30s`;
   `compose.yml` emits `app.image` for Swarm (ignores `build`)
-  (`site/content/docs/get-started/docker-swarm.mdx`).
+  (`site/content/docs/deployment/docker-swarm.mdx`).
 - Opt-in Docker proxy recipes — `images.proxy` with **Caddy** (automatic
   HTTPS via generated `Caddyfile`) or **Traefik** (Docker-label
   auto-discovery for `docker compose up --scale app=N`). Default remains
   no proxy (app publishes `6530`). Traefik mounts the Engine API only
   through `tecnativa/docker-socket-proxy` (never raw `docker.sock` on the
-  edge). Docs: `site/content/docs/get-started/docker.mdx`.
+  edge). Docs: `site/content/docs/deployment/reverse-proxy.mdx`.
+- Deployment docs section — `site/content/docs/deployment/` (compose vs
+  Swarm vs Kubernetes decision hub + self-contained path pages for Docker /
+  Swarm / Kubernetes: PgDog, SIGTERM, readiness, Signal/Channel honesty,
+  reverse-proxy option in full on each).
 - Horizontal multi-process integration test — two OS processes sharing live
   Postgres + Redis prove Clock-once, durable takeover, shared Gate rates,
   and mid-scenario SIGKILL absorption together (`OKE_TEST_POSTGRES_URL` +
@@ -60,6 +75,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Deployment docs promoted to a top-level sidebar section
+  (`site/content/docs/deployment/`) — peer of Elements / Console / Reference;
+  Get Started is first-five-minutes only again.
 - `sently` → `1.2.1` — Taqnyat Verify OTP live-verified end-to-end
   (`sendOtp` → handset code → `verifyOtp`); transport reads `Data.result`
   from live `returnJson` envelopes (fixes false `code 1` on success).

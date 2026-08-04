@@ -15,6 +15,7 @@ export type {
   ImageRecipe,
   RecipeApplyResult,
   RecipeExtraPort,
+  RecipeUlimit,
   ServiceCredentials,
   ServiceEndpoint,
   ServiceSpec,
@@ -23,11 +24,13 @@ export type {
 export { DEFAULT_DOCKER_DIR } from "./types.ts";
 
 export {
+  COMPOSE_ALL,
   COMPOSE_OVERRIDE,
   assertNoCredentialsInYaml,
   buildSpecs,
   buildStackEnv,
   composePathRefs,
+  deepMergeCompose,
   emitComposeLayers,
   formatStackEnv,
 } from "./compose.ts";
@@ -39,6 +42,7 @@ export { generateCredentials } from "./credentials.ts";
 export {
   builtinRecipes,
   caddy,
+  dragonfly,
   mailpit,
   meilisearch,
   ollama,
@@ -49,6 +53,7 @@ export {
   redis,
   rustfs,
   traefik,
+  valkey,
 } from "./recipes/index.ts";
 export { CADDY_APP_SERVICE, buildCaddyfile } from "./recipes/caddy.ts";
 export { PGDOG_BACKEND_SERVICE, buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";

@@ -5,6 +5,10 @@
  * 2. `compose.<role>.yml`     — per-role services (generated)
  * 3. `compose.prod.yml`       — prod overlays (generated when `--prod`)
  * 4. `compose.override.yml`   — user-owned; oke never writes it
+ *
+ * Also emits {@link COMPOSE_ALL} — layers 1–3 deep-merged into one file
+ * (for Swarm `stack deploy -c` and single-file preferrers). Not part of the
+ * `-f` merge order; never includes layer 4.
  */
 
 import { defaultHostPort, envPrefix, serviceNameFor, toYaml } from "./helpers.ts";
@@ -23,6 +27,12 @@ import { APP_PORT } from "../runtime/types.ts";
 
 /** Canonical layer-4 filename — never written by derivation. */
 export const COMPOSE_OVERRIDE = "compose.override.yml";
+
+/**
+ * Fully merged compose (layers 1–3) — additive single-file alternative.
+ * Does not replace or shadow the base {@code compose.yml} layer.
+ */
+export const COMPOSE_ALL = "compose.all.yml";
 
 /**
  * Relative path refs for compose files living under {@link DeriveOptions.composeDir}.
@@ -85,6 +95,8 @@ export function emitComposeLayers(
   const includeApp = options.includeApp !== false;
   const paths = composePathRefs(options.composeDir ?? DEFAULT_DOCKER_DIR);
   const files: GeneratedFile[] = [];
+  /** Layers 1–3 as objects — same merge Compose would apply via `-f` order. */
+  const mergeLayers: Record<string, unknown>[] = [];
 
   // Layer 1 — project name + network (+ optional app for deploy / oke docker)
   const base: Record<string, unknown> = {
@@ -114,6 +126,7 @@ export function emitComposeLayers(
       },
     };
   }
+  mergeLayers.push(base);
   files.push({ path: "compose.yml", content: `${toYaml(base)}\n` });
 
   // Layer 2 — per-role
@@ -141,6 +154,7 @@ export function emitComposeLayers(
     if (applied.healthcheck) service.healthcheck = applied.healthcheck;
     if (applied.volumes) service.volumes = applied.volumes;
     if (applied.user) service.user = applied.user;
+    if (applied.ulimits) service.ulimits = applied.ulimits;
     if (applied.labels) service.labels = applied.labels;
     if (applied.dependsOn) {
       const deps = { ...applied.dependsOn };
@@ -159,6 +173,7 @@ export function emitComposeLayers(
     if (Object.keys(namedVolumes).length > 0) {
       doc.volumes = namedVolumes;
     }
+    mergeLayers.push(doc);
     const path = `compose.${spec.role}.yml`;
     files.push({ path, content: `${toYaml(doc)}\n` });
   }
@@ -217,11 +232,20 @@ export function emitComposeLayers(
         secrets: secretNames(spec),
       };
     }
+    const prodDoc = { services: prodServices };
+    mergeLayers.push(prodDoc);
     files.push({
       path: "compose.prod.yml",
-      content: `${toYaml({ services: prodServices })}\n`,
+      content: `${toYaml(prodDoc)}\n`,
     });
   }
+
+  // Additive single-file merge of layers 1–3 (not in `-f` order; no layer 4).
+  const merged = mergeLayers.reduce<Record<string, unknown>>(
+    (acc, layer) => deepMergeCompose(acc, layer),
+    {},
+  );
+  files.push({ path: COMPOSE_ALL, content: `${toYaml(merged)}\n` });
 
   // Layer 4 — never written. Document merge order only.
   const composeFiles = [
@@ -232,6 +256,33 @@ export function emitComposeLayers(
   ];
 
   return { files, composeFiles };
+}
+
+/**
+ * Deep-merge compose documents the way Docker Compose merges `-f` overlays:
+ * maps recurse; sequences and scalars from the later document replace earlier.
+ *
+ * @param base - Earlier layer
+ * @param overlay - Later layer
+ */
+export function deepMergeCompose(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const prev = out[key];
+    if (isPlainObject(prev) && isPlainObject(value)) {
+      out[key] = deepMergeCompose(prev, value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**

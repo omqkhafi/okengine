@@ -33,9 +33,9 @@ oke db seed --env prod --force   # CI: skip docker/prod confirmation prompt
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # docker/Dockerfile + docker/compose.<role>.yml · …
+oke docker                       # docker/Dockerfile + compose.yml + compose.<role>.yml + compose.all.yml · …
                                  # opt-in images.proxy → Caddyfile (caddy) or Traefik labels + socket-proxy
-oke docker --prod                # app HEALTHCHECK (/_/ready), deploy (replicas · update · restart), limits, secrets
+oke docker --prod                # + compose.prod.yml (HEALTHCHECK /_/ready, deploy, limits); folded into compose.all.yml
 oke docker clean                 # TTY: pick oke-dev-* stacks → down -v (containers, networks, volumes)
 oke docker clean --yes           # non-TTY: current project stack only
 oke docker clean --all --yes     # non-TTY: every oke-dev-* stack on this machine

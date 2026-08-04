@@ -1,5 +1,14 @@
 {
   "title": "Documentation",
   "icon": "BookOpen",
-  "pages": ["index", "get-started", "elements", "plugins", "console", "reference", "ai"]
+  "pages": [
+    "index",
+    "get-started",
+    "elements",
+    "plugins",
+    "console",
+    "deployment",
+    "reference",
+    "ai"
+  ]
 }

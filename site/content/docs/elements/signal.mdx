@@ -245,12 +245,12 @@ drivers: {
 },
 ```
 
-| Driver     | Runs as        | Boot today                                                                  |
-| ---------- | -------------- | --------------------------------------------------------------------------- |
-| `memory`   | in-process     | Local loop + tests — zero infrastructure                                    |
-| `redis`    | Redis / Valkey | Boot-bound — **emit relay** via Streams / pub/sub; consume is process-local |
-| `postgres` | Postgres       | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds   |
-| `nats`     | NATS           | Driver exists; boot **fails loud** until a production NATS client binds     |
+| Driver     | Runs as                              | Boot today                                                                  |
+| ---------- | ------------------------------------ | --------------------------------------------------------------------------- |
+| `memory`   | in-process                           | Local loop + tests — zero infrastructure                                    |
+| `redis`    | Redis / Valkey / Dragonfly image pin | Boot-bound — **emit relay** via Streams / pub/sub; consume is process-local |
+| `postgres` | Postgres                             | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds   |
+| `nats`     | NATS                                 | Driver exists; boot **fails loud** until a production NATS client binds     |
 
 **Known limit:** `redis` relays emits to Redis, but `once` / `broadcast` / `live` **consume, `live` replay, and `drain` still use a process-local outbox** today. Competing consumers across replicas do not share that outbox until Redis Streams consume ships. Boot prints a one-shot warning when `drivers.signal` is `redis`. Prefer a single consumer instance (or a shared durable outbox path in tests) for multi-process `once` until then.
 

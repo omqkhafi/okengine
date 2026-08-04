@@ -1,0 +1,5 @@
+{
+  "title": "Deployment",
+  "icon": "Server",
+  "pages": ["index", "docker", "docker-swarm", "kubernetes", "reverse-proxy"]
+}

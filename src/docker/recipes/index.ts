@@ -4,6 +4,7 @@
 
 import type { ImageRecipe } from "../types.ts";
 import { caddy } from "./caddy.ts";
+import { dragonfly } from "./dragonfly.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
 import { ollama } from "./ollama.ts";
@@ -13,11 +14,14 @@ import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
 import { traefik } from "./traefik.ts";
+import { valkey } from "./valkey.ts";
 
-/** Default recipe catalogue. */
+/** Default recipe catalogue — more specific image matches before protocol peers. */
 export const builtinRecipes: readonly ImageRecipe[] = [
   postgres,
   pgdog,
+  dragonfly,
+  valkey,
   redis,
   mailpit,
   rustfs,
@@ -28,7 +32,20 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   traefik,
 ];
 
-export { caddy, mailpit, meilisearch, ollama, openbao, pgdog, postgres, redis, rustfs, traefik };
+export {
+  caddy,
+  dragonfly,
+  mailpit,
+  meilisearch,
+  ollama,
+  openbao,
+  pgdog,
+  postgres,
+  redis,
+  rustfs,
+  traefik,
+  valkey,
+};
 
 /**
  * Resolve the recipe for an image reference.

@@ -1,14 +1,5 @@
 {
   "title": "Get Started",
   "icon": "Rocket",
-  "pages": [
-    "index",
-    "introduction",
-    "why",
-    "installation",
-    "basic-usage",
-    "docker",
-    "kubernetes",
-    "docker-swarm"
-  ]
+  "pages": ["index", "introduction", "why", "installation", "basic-usage"]
 }

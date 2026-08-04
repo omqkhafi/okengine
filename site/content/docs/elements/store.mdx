@@ -504,6 +504,8 @@ drivers: {
 },
 images: {
   "store.kv": "redis:8-alpine",
+  // or: "valkey/valkey:8-alpine"
+  // or: "docker.dragonflydb.io/dragonflydb/dragonfly"
 },
 ```
 
@@ -518,6 +520,22 @@ images: {
 | `OKE_KV_DRIVER`    | Force a driver id (docker)       |
 
 Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
+
+Driver id stays `redis` for every image below — same `REDIS_URL`, zero Flow changes.
+Redis is the default because it is the most mature and battle-tested; Valkey and
+Dragonfly are equally legitimate opt-in pins.
+
+| Image         | Pin                                           | Why pick it                       | License                                                                                                                                           |
+| ------------- | --------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Redis**     | `redis:8-alpine` (default)                    | Most mature / battle-tested       | RSALv2 / SSPLv1 / AGPLv3 (Redis ≥8) — service limits under RSAL/SSPL apply if you offer Redis as a managed service to third parties               |
+| **Valkey**    | `valkey/valkey:8-alpine`                      | BSD fork (Linux Foundation)       | BSD-3-Clause — permissive; no managed-service restriction                                                                                         |
+| **Dragonfly** | `docker.dragonflydb.io/dragonflydb/dragonfly` | Multi-threaded Redis-wire runtime | BSL 1.1 (converts to Apache 2.0 on a published change date) — free for self-hosting; restricts offering Dragonfly as a commercial managed service |
+
+<Callout title="Licenses bite managed-service resellers — read this once" type="warn">
+  RSAL, SSPL, and BSL service restrictions apply when you offer that specific datastore **as a
+  service** to third parties — not when you run it for your own app. Pick for your situation; OKE
+  does not pick a “safer” default for you.
+</Callout>
 
 <Callout title="Dry-run refuses KV writes">
   `set` and `delete` throw `DryRunWriteIsolationError` during dry-run — the runtime will not risk a

@@ -56,6 +56,9 @@ export interface RecipeExtraPort {
   readonly container: number;
 }
 
+/** Compose `ulimits` value — soft/hard object or a single limit. */
+export type RecipeUlimit = number | { readonly soft?: number; readonly hard?: number };
+
 /** Image-specific compose fragment from {@link ImageRecipe.apply}. */
 export interface RecipeApplyResult {
   readonly environment?: Readonly<Record<string, string>>;
@@ -64,6 +67,8 @@ export interface RecipeApplyResult {
   readonly healthcheck?: ComposeHealthcheck;
   readonly volumes?: readonly string[];
   readonly user?: string;
+  /** Compose `ulimits` (e.g. Dragonfly `memlock: -1`). */
+  readonly ulimits?: Readonly<Record<string, RecipeUlimit>>;
   /** Labels on this recipe's own compose service. */
   readonly labels?: Readonly<Record<string, string>>;
   /** Additional published ports (e.g. Mailpit UI, RustFS console). */

@@ -1,15 +1,18 @@
 /**
- * Redis-protocol image recipe (Redis · Valkey · Dragonfly · KeyDB).
+ * Redis image recipe — default `store.kv` pin (`redis:*`).
+ *
+ * Valkey and Dragonfly are separate recipes — same `redis` driver /
+ * `redis://` URL, different binaries. Pin via `images["store.kv"]`.
  */
 
 import { credEnv } from "../helpers.ts";
 import type { ImageRecipe } from "../types.ts";
 
-/** Redis-protocol servers. */
+/** Redis Open Source — Redis protocol on 6379. */
 export const redis: ImageRecipe = {
   id: "redis",
   port: 6379,
-  match: (i) => /redis|valkey|dragonfly|keydb/i.test(i),
+  match: (i) => /(?:^|\/)redis(?:[:@/]|$)/i.test(i) || /keydb/i.test(i),
   apply: (s) => ({
     command: [
       "sh",
