@@ -158,7 +158,7 @@ capability-gated `send` effects and dry-run safe.
 
 They dispatch only when the bound SMS driver supports Verify (`taqnyat`); any other SMS
 driver fails loudly instead of silently falling back to a self-generated code. The
-[Phone number](/docs/plugins/phone-number) plugin uses this path automatically.
+[OTP](/docs/plugins/otp) Tier 1 uses this path automatically.
 
 `webpush` needs VAPID keys — open it yourself and include it in
 `BootOptions.channel.drivers` (boot does not open push from env):

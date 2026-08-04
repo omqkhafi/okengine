@@ -75,6 +75,7 @@ Container image pins keyed by element role — vendor choice lives here, never i
 ```typescript
 images: {
   "store.sql": "postgres:18",
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
   "store.kv": "redis:8",
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",
@@ -82,6 +83,10 @@ images: {
   ai: "ollama/ollama:latest",
 },
 ```
+
+When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog
+(`6432`) — wire-protocol transparent to Bun.SQL / Drizzle. See
+[Store · Multiple environments](/docs/elements/store#multiple-environments).
 
 For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3.5:9b` — a balanced local-dev starting point; override freely; on Apple Silicon prefer `qwen3.5:9b-mlx`) and writes `OKE_AI_URL`.
 

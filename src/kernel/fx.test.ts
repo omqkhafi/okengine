@@ -147,6 +147,9 @@ describe("fx — wholesale swap", () => {
       async verifyOtp() {
         return { ok: true };
       },
+      async deliverOtp(opts) {
+        return { ok: true as const, channel: opts.only ?? opts.channels[0] ?? "email" };
+      },
       async ask() {
         return {};
       },

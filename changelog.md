@@ -10,6 +10,36 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- PgDog as the default docker/prod SQL connection pooler — sits in front of
+  Postgres (`images.pgdog`), transaction pooling, `DATABASE_URL` → `:6432`
+  when both are pinned. Caps `N × pool` vs Postgres `max_connections` at the
+  infrastructure layer (no in-process pool throttling). Read-replica routing
+  (`BEGIN READ ONLY` → replica, failover on promotion) documented as
+  readiness; not configured this round.
+- `otp()` plugin — unified multi-channel OTP replacing `emailOtp()` /
+  `phoneNumber()`. Explicit `tier: 1` (provider Verify via unchanged
+  `fx.sendOtp`/`fx.verifyOtp`) or `tier: 2` (app-owned codes over declared
+  `channels`: SMS / WhatsApp / email). Tier 2 adds channel-neutral resend
+  (`POST /auth/otp/resend`, 60s cooldown), sealed OTP copy (HKDF
+  `oke-otp-seal-v1` + AES-GCM, wiped with challenge TTL), and
+  `fx.deliverOtp` (sently `FallbackTransport` cross-medium failover;
+  Taqnyat WhatsApp `sendWithFailover` when bound).
+- `taqnyat-whatsapp` Channel driver + `drivers.channel.whatsapp` boot bind
+  (`wa-cloud` also wired).
+
+### 🔥 Removed
+
+- `emailOtp()` and `phoneNumber()` plugins — use `otp({ tier, … })` instead
+  (pre-1.0; no compat shims).
+
+### ♻️ Changed
+
+- `sently` → `1.2.1` — Taqnyat Verify OTP live-verified end-to-end
+  (`sendOtp` → handset code → `verifyOtp`); transport reads `Data.result`
+  from live `returnJson` envelopes (fixes false `code 1` on success).
+
 ## v0.8.0 — 2026-08-04
 
 ### ✨ Added

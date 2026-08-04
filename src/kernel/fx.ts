@@ -265,6 +265,20 @@ export interface FxVerifyOtpOptions {
   readonly note?: string;
 }
 
+/** Options for {@link Fx.deliverOtp} (Tier-2 multi-channel delivery). */
+export interface FxDeliverOtpOptions {
+  /** Preferred channel order. */
+  readonly channels: readonly ("sms" | "whatsapp" | "email")[];
+  /** Template name per medium. */
+  readonly templates: Readonly<Partial<Record<"sms" | "whatsapp" | "email", string>>>;
+  readonly email?: string;
+  readonly phone?: string;
+  readonly data: Readonly<Record<string, unknown>>;
+  readonly locale?: string;
+  /** Explicit single-channel resend — no cross-medium failover. */
+  readonly only?: "sms" | "whatsapp" | "email";
+}
+
 /** Options for {@link Fx.ask}. */
 export interface FxAskOptions {
   readonly via?: readonly NamedRef[];
@@ -385,6 +399,18 @@ export interface Fx {
    * @param opts - Recipient + requestId + code (+ lang / note / from)
    */
   verifyOtp(opts: FxVerifyOtpOptions): Promise<{ ok: true }>;
+  /**
+   * Deliver an app-owned OTP across declared channels (records `send` on `auth-otp`).
+   *
+   * Tier-2 only — uses Channel `deliverOtp` (sently FallbackTransport). Pass
+   * `only` for explicit user resend (single channel, no cross-medium failover).
+   *
+   * @param opts - Channels, templates, addresses, OTP data
+   */
+  deliverOtp(opts: FxDeliverOtpOptions): Promise<{
+    ok: true;
+    channel: "sms" | "whatsapp" | "email";
+  }>;
   /**
    * Ask an AI prompt (records `ask`). Stub returns `{}`.
    *
@@ -1211,6 +1237,29 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           ...(opts.note ? { note: opts.note } : {}),
         });
         return { ok: true as const };
+      });
+    },
+    deliverOtp(opts) {
+      return gated("send", "auth-otp", async () => {
+        if (isDryRun()) {
+          recordWouldHaveFired("send", "auth-otp");
+          return { ok: true as const, channel: opts.only ?? opts.channels[0] ?? "email" };
+        }
+        if (!options.channelRuntime) {
+          throw new Error(
+            "fx.deliverOtp needs a bound Channel — declare channel templates and drivers for the configured media",
+          );
+        }
+        const result = await options.channelRuntime.deliverOtp({
+          channels: opts.channels,
+          templates: opts.templates,
+          ...(opts.email ? { email: opts.email } : {}),
+          ...(opts.phone ? { phone: opts.phone } : {}),
+          data: opts.data,
+          ...(opts.locale ? { locale: opts.locale } : {}),
+          ...(opts.only ? { only: opts.only } : {}),
+        });
+        return { ok: true as const, channel: result.channel };
       });
     },
     ask(prompt, input, opts) {

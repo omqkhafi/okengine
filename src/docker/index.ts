@@ -42,11 +42,13 @@ export {
   meilisearch,
   ollama,
   openbao,
+  pgdog,
   postgres,
   recipeFor,
   redis,
   rustfs,
 } from "./recipes/index.ts";
+export { PGDOG_BACKEND_SERVICE, buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
 export {
   formatStackPreview,
   resolveExtraPorts,

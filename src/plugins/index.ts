@@ -15,8 +15,6 @@ export {
   type ConfigSourceOptions,
 } from "./config-source.ts";
 export { cors, type CorsOptions } from "./cors.ts";
-export { csrf, type CsrfOptions } from "./csrf.ts";
-export { emailOtp, emailOtpCatalog, emailOtpTemplate, type EmailOtpOptions } from "./email-otp.ts";
 export { ipAllowlist, type IpAllowlistOptions } from "./ip-allowlist.ts";
 export {
   magicLink,
@@ -25,6 +23,18 @@ export {
   type MagicLinkOptions,
 } from "./magic-link.ts";
 export { maintenanceMode, type MaintenanceModeOptions } from "./maintenance-mode.ts";
+export {
+  createPhoneStore,
+  otp,
+  otpCatalog,
+  otpEmailTemplate,
+  otpSmsTemplate,
+  otpWhatsappTemplate,
+  type OtpOptions,
+  type OtpTier1Options,
+  type OtpTier2Options,
+  type PhoneStore,
+} from "./otp.ts";
 export {
   createPasskeyStore,
   passkey,
@@ -40,12 +50,6 @@ export {
   verifyWebAuthnCeremony,
   type WebAuthnVerifyOptions,
 } from "./passkey-webauthn.ts";
-export {
-  createPhoneStore,
-  phoneNumber,
-  type PhoneNumberOptions,
-  type PhoneStore,
-} from "./phone-number.ts";
 export {
   defaultCspDirectives,
   headers,

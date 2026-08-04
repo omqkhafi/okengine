@@ -12,11 +12,10 @@ import { oke } from "../kernel/app.ts";
 import { resetFlowSeq } from "../kernel/flow.ts";
 import { resetBindings } from "../kernel/on.ts";
 import { anonymous } from "./anonymous.ts";
-import { emailOtp } from "./email-otp.ts";
 import { magicLink } from "./magic-link.ts";
+import { otp } from "./otp.ts";
 import { passkey } from "./passkey.ts";
 import { b64urlEncode, buildAuthenticatorData, signWebAuthnAssertion } from "./passkey-webauthn.ts";
-import { phoneNumber } from "./phone-number.ts";
 import { twoFactor, verifyTotp, createTwoFactorStore } from "./two-factor.ts";
 import { username } from "./username.ts";
 
@@ -51,8 +50,7 @@ function fullAuthApp() {
     .plug(username())
     .plug(anonymous())
     .plug(magicLink({ exposeDevToken: true }))
-    .plug(emailOtp({ exposeDevOtp: true }))
-    .plug(phoneNumber({ exposeDevOtp: true }))
+    .plug(otp({ tier: 2, channels: ["email", "sms"], exposeDevOtp: true }))
     .plug(twoFactor())
     .plug(passkey({ origins: ["http://localhost"] }));
 }
@@ -141,8 +139,7 @@ describe("auth methods — rate limiting / enumeration", () => {
 
     const paths: Array<{ path: string; body: unknown }> = [
       { path: "/auth/magic-link/request", body: { email: "r@example.com" } },
-      { path: "/auth/email-otp/request", body: { email: "r@example.com" } },
-      { path: "/auth/phone/request", body: { phone: "+15551234567" } },
+      { path: "/auth/otp/request", body: { email: "r@example.com" } },
       { path: "/auth/passkey/authenticate/options", body: {} },
     ];
 
@@ -225,14 +222,14 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
     const app = fullAuthApp();
     await app.boot({ env: "test" });
 
-    const req = await app.fetch(jsonPost("/auth/email-otp/request", { email: "otp@example.com" }));
+    const req = await app.fetch(jsonPost("/auth/otp/request", { email: "otp@example.com" }));
     const { data } = (await req.json()) as { data: { devOtp: string } };
     const first = await app.fetch(
-      jsonPost("/auth/email-otp/verify", { email: "otp@example.com", otp: data.devOtp }),
+      jsonPost("/auth/otp/verify", { email: "otp@example.com", otp: data.devOtp }),
     );
     expect(first.status).toBe(200);
     const reuse = await app.fetch(
-      jsonPost("/auth/email-otp/verify", { email: "otp@example.com", otp: data.devOtp }),
+      jsonPost("/auth/otp/verify", { email: "otp@example.com", otp: data.devOtp }),
     );
     expect((await readError(reuse)).reason).toBe("invalid_credentials");
 
@@ -243,14 +240,14 @@ describe("auth methods — single-use OTP / token / backup codes", () => {
     const app = fullAuthApp();
     await app.boot({ env: "test" });
 
-    const req = await app.fetch(jsonPost("/auth/phone/request", { phone: "+15559876543" }));
+    const req = await app.fetch(jsonPost("/auth/otp/request", { phone: "+15559876543" }));
     const { data } = (await req.json()) as { data: { devOtp: string } };
     const first = await app.fetch(
-      jsonPost("/auth/phone/verify", { phone: "+15559876543", otp: data.devOtp }),
+      jsonPost("/auth/otp/verify", { phone: "+15559876543", otp: data.devOtp }),
     );
     expect(first.status).toBe(200);
     const reuse = await app.fetch(
-      jsonPost("/auth/phone/verify", { phone: "+15559876543", otp: data.devOtp }),
+      jsonPost("/auth/otp/verify", { phone: "+15559876543", otp: data.devOtp }),
     );
     expect((await readError(reuse)).reason).toBe("invalid_credentials");
 
@@ -421,7 +418,7 @@ describe("auth methods — anonymous non-escalation", () => {
 });
 
 describe("auth methods — channel delivery", () => {
-  test("magic / email-otp send via fx.send; phone uses fx.sendOtp (Taqnyat Verify); exposeDev* stays off by default", async () => {
+  test("magic uses fx.send; otp Tier 2 uses fx.deliverOtp; exposeDev* stays off by default", async () => {
     resetBindings();
     resetFlowSeq();
     const app = oke({
@@ -431,8 +428,7 @@ describe("auth methods — channel delivery", () => {
       gate: { auth: { secret: SECRET, emailAndPassword: { enabled: true } } },
     })
       .plug(magicLink())
-      .plug(emailOtp())
-      .plug(phoneNumber());
+      .plug(otp({ tier: 2, channels: ["email", "sms"] }));
     await app.boot({ env: "test" });
 
     const ml = await app.fetch(jsonPost("/auth/magic-link/request", { email: "x@example.com" }));
@@ -440,30 +436,24 @@ describe("auth methods — channel delivery", () => {
     expect(mlBody.data.ok).toBe(true);
     expect(mlBody.data.devToken).toBeUndefined();
 
-    const otp = await app.fetch(jsonPost("/auth/email-otp/request", { email: "x@example.com" }));
-    const otpBody = (await otp.json()) as { data: Record<string, unknown> };
+    const otpRes = await app.fetch(jsonPost("/auth/otp/request", { email: "x@example.com" }));
+    const otpBody = (await otpRes.json()) as { data: Record<string, unknown> };
     expect(otpBody.data.ok).toBe(true);
     expect(otpBody.data.devOtp).toBeUndefined();
 
-    // No SMS driver in test env → local hashed path; never exposeDevOtp by default.
-    const phone = await app.fetch(jsonPost("/auth/phone/request", { phone: "+15551112222" }));
+    const phone = await app.fetch(jsonPost("/auth/otp/request", { phone: "+15551112222" }));
     const phoneBody = (await phone.json()) as { data: Record<string, unknown> };
     expect(phoneBody.data.ok).toBe(true);
     expect(phoneBody.data.devOtp).toBeUndefined();
 
     const magicSrc = await Bun.file(new URL("./magic-link.ts", import.meta.url)).text();
-    const emailSrc = await Bun.file(new URL("./email-otp.ts", import.meta.url)).text();
-    const phoneSrc = await Bun.file(new URL("./phone-number.ts", import.meta.url)).text();
+    const otpSrc = await Bun.file(new URL("./otp.ts", import.meta.url)).text();
     expect(magicSrc).toMatch(/fx\.send\(/);
     expect(magicSrc).toMatch(/channel\./);
-    expect(emailSrc).toMatch(/fx\.send\(/);
-    expect(emailSrc).toMatch(/channel\./);
-    // Phone OTP is provider-managed via Taqnyat Verify through fx — never a
-    // raw transport import or a generic fx.send template. Regexes tolerate
-    // formatter line wraps between `fx` and the method name.
-    expect(phoneSrc).toMatch(/fx\s*\.\s*sendOtp/);
-    expect(phoneSrc).toMatch(/fx\s*\.\s*verifyOtp/);
-    expect(phoneSrc).not.toMatch(/taqnyat-sms|sently\/transports/);
+    expect(otpSrc).toMatch(/fx\s*\.\s*deliverOtp/);
+    expect(otpSrc).toMatch(/fx\s*\.\s*sendOtp/);
+    expect(otpSrc).toMatch(/fx\s*\.\s*verifyOtp/);
+    expect(otpSrc).not.toMatch(/taqnyat-sms|sently\/transports/);
 
     await app.stop();
   });

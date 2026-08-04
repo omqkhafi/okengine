@@ -66,6 +66,11 @@ export interface RecipeApplyResult {
   readonly user?: string;
   /** Additional published ports (e.g. Mailpit UI, RustFS console). */
   readonly extraPorts?: readonly RecipeExtraPort[];
+  /**
+   * Compose `depends_on` (e.g. pooler waits for Postgres).
+   * Keys are compose service names (`store-sql`), not role keys.
+   */
+  readonly dependsOn?: Readonly<Record<string, { readonly condition: string }>>;
 }
 
 /**

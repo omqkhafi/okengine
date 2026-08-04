@@ -134,6 +134,7 @@ export function emitComposeLayers(
     if (applied.healthcheck) service.healthcheck = applied.healthcheck;
     if (applied.volumes) service.volumes = applied.volumes;
     if (applied.user) service.user = applied.user;
+    if (applied.dependsOn) service.depends_on = applied.dependsOn;
 
     const namedVolumes = namedVolumeDecls(applied.volumes);
     const doc: Record<string, unknown> = {
@@ -227,6 +228,19 @@ export function buildStackEnv(
       env[`${prefix}_DB`] = spec.credentials.database;
       env[`${prefix}_URL`] = url;
       env.DATABASE_URL = url;
+    } else if (spec.role === "pgdog") {
+      // URL uses store.sql credentials (same user/db the pooler proxies).
+      const sql = specs.find((s) => s.role === "store.sql");
+      const creds = sql?.credentials ?? spec.credentials;
+      const poolUrl = recipe.url(spec, {
+        host,
+        port: spec.hostPort,
+        user: creds.user,
+        password: creds.password,
+        database: creds.database,
+      });
+      env[`${prefix}_URL`] = poolUrl;
+      env.OKE_PGDOG_URL = poolUrl;
     } else if (spec.role === "store.kv") {
       env[`${prefix}_PASSWORD`] = spec.credentials.password;
       env[`${prefix}_URL`] = url;
@@ -266,6 +280,21 @@ export function buildStackEnv(
       env[`${prefix}_URL`] = url;
     }
   }
+  // When PgDog sits in front of Postgres, apps talk to the pooler — wire-protocol
+  // transparent; zero application changes (Bun.SQL / Drizzle / any Postgres client).
+  const sqlSpec = specs.find((s) => s.role === "store.sql");
+  const pgdogSpec = specs.find((s) => s.role === "pgdog");
+  if (sqlSpec && pgdogSpec) {
+    const poolRecipe = recipeFor(pgdogSpec.image, recipes);
+    env.DATABASE_URL = poolRecipe.url(pgdogSpec, {
+      host,
+      port: pgdogSpec.hostPort,
+      user: sqlSpec.credentials.user,
+      password: sqlSpec.credentials.password,
+      database: sqlSpec.credentials.database,
+    });
+  }
+
   for (const key of STACK_CONTROL_KEYS) {
     const value = controls[key];
     if (value !== undefined) env[key] = value;
@@ -276,6 +305,7 @@ export function buildStackEnv(
 /** Friendly section titles for known compose roles. */
 const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "store.sql": "store.sql — Postgres",
+  pgdog: "pgdog — connection pooler (in front of Postgres)",
   "store.kv": "store.kv — Redis",
   "store.files": "store.files — object storage (S3)",
   "store.index": "store.index — search index",
@@ -288,6 +318,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
 /** Friendly aliases emitted beside their role block. */
 const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "store.sql": ["DATABASE_URL", "PGDATA", "POSTGRES_INITDB_ARGS"],
+  pgdog: ["OKE_PGDOG_URL"],
   "store.kv": ["REDIS_URL", "OKE_STORE_KV_MAXMEMORY", "OKE_STORE_KV_MAXMEMORY_POLICY"],
   "store.files": [
     "S3_ACCESS_KEY_ID",

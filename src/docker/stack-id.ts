@@ -58,6 +58,7 @@ export function hostPortForInstance(
   if (role === "channel.email") return 20_000 + n;
   if (role === "vault") return 22_000 + n;
   if (role === "ai") return 23_000 + n;
+  if (role === "pgdog") return 24_000 + n;
   return defaultHostPort(role, containerPort) + n;
 }
 

@@ -2,7 +2,8 @@
  * Channel element — reaching humans.
  *
  * Physics: email · SMS · WhatsApp · push.
- * Drivers: `console` · `smtp` · `resend` · `sndr` · `taqnyat` · `msegat` · `unifonic` · `wa-cloud` · `fcm` · `webpush`.
+ * Drivers: `console` · `smtp` · `resend` · `sndr` · `taqnyat` · `taqnyat-mail` ·
+ * `taqnyat-whatsapp` · `msegat` · `unifonic` · `wa-cloud` · `fcm` · `webpush`.
  *
  * Transport interface is identical to sently's so its transports run unchanged.
  * MIME, attachments, retry, and the unified error hierarchy come from sently.
@@ -26,6 +27,15 @@ export type {
   CreateChannelRuntimeOptions,
   TemplateCatalog,
 } from "./channel/runtime.ts";
+
+export {
+  deliverOtpAcrossChannels,
+  shouldFallbackOtpMedium,
+  addressForChannel,
+  type DeliverOtpOptions,
+  type DeliverOtpResult,
+  type OtpTemplateMap,
+} from "./channel/otp-delivery.ts";
 
 export { createConsentStore, type ConsentStore, type OptOut } from "./channel/consent.ts";
 

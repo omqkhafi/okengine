@@ -8,9 +8,9 @@
 
 import {
   createIdentityStore,
+  ensureUserByEmail,
   normalizeEmail,
   type IdentityStore,
-  type UserIdentityRow,
 } from "../auth/identity.ts";
 import { issueSessionWithScopes } from "../auth/sessions.ts";
 import {
@@ -198,26 +198,4 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     .channelCatalog(magicLinkCatalog)
     .binding(bindPublicAuth("/magic-link/request", request, "otp"))
     .binding(bindPublicAuth("/magic-link/verify", verify, "otp"));
-}
-
-function ensureUserByEmail(store: IdentityStore, email: string, now: number): UserIdentityRow {
-  const existingId = store.byEmail.get(email);
-  if (existingId) {
-    const existing = store.users.get(existingId);
-    if (existing) return existing;
-  }
-  const id = crypto.randomUUID();
-  const user: UserIdentityRow = {
-    id,
-    email,
-    name: email.split("@")[0] || "user",
-    emailVerified: true,
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-    extra: {},
-  };
-  store.users.set(id, user);
-  store.byEmail.set(email, id);
-  return user;
 }

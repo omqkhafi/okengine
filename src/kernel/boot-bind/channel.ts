@@ -10,7 +10,9 @@ import { openSmtpChannel } from "../../drivers/channel-smtp.ts";
 import { openSndrChannel } from "../../drivers/channel-sndr.ts";
 import { openTaqnyatChannel } from "../../drivers/channel-taqnyat.ts";
 import { openTaqnyatMailChannel } from "../../drivers/channel-taqnyat-mail.ts";
+import { openTaqnyatWhatsAppChannel } from "../../drivers/channel-taqnyat-whatsapp.ts";
 import { openUnifonicChannel } from "../../drivers/channel-unifonic.ts";
+import { openWaCloudChannel } from "../../drivers/channel-wa-cloud.ts";
 import type { ChannelDriver, ChannelOpenOptions } from "../../drivers/channel-types.ts";
 import { createChannelRuntime, type ChannelRuntime } from "../../elements/channel.ts";
 import type { BootOptions } from "../boot.ts";
@@ -43,6 +45,8 @@ function defaultDrivers(options: BootOptions, env: ConfigEnv, docker: boolean): 
   const drivers: ChannelDriver[] = [emailDriverFor(options, env, docker)];
   const sms = smsDriverFor(options, env);
   if (sms) drivers.push(sms);
+  const whatsapp = whatsappDriverFor(options, env);
+  if (whatsapp) drivers.push(whatsapp);
   return drivers;
 }
 
@@ -90,6 +94,53 @@ export function resolveEmailDriverId(
  */
 export function resolveSmsDriverId(options: BootOptions, env: ConfigEnv): string | undefined {
   return resolveDriverId(options.config?.drivers?.channel?.sms, env);
+}
+
+/**
+ * Resolve the configured WhatsApp driver for one environment.
+ *
+ * @param options - Boot options
+ * @param env - Active environment
+ */
+export function resolveWhatsappDriverId(options: BootOptions, env: ConfigEnv): string | undefined {
+  return resolveDriverId(options.config?.drivers?.channel?.whatsapp, env);
+}
+
+function whatsappDriverFor(options: BootOptions, env: ConfigEnv): ChannelDriver | undefined {
+  const id = resolveWhatsappDriverId(options, env);
+  if (!id || id === "console") return undefined;
+  if (id === "taqnyat-whatsapp") return openTaqnyatWhatsAppChannel(taqnyatWhatsAppOptionsFromEnv());
+  if (id === "wa-cloud") return openWaCloudChannel(waCloudOptionsFromEnv());
+  throw new Error(`oke boot: unknown whatsapp channel driver "${id}"`);
+}
+
+/**
+ * Resolve Taqnyat WhatsApp options from env.
+ */
+export function taqnyatWhatsAppOptionsFromEnv(): ChannelOpenOptions {
+  const bearerToken =
+    process.env.TAQNYAT_WHATSAPP_TOKEN?.trim() ??
+    process.env.TAQNYAT_BEARER_TOKEN?.trim() ??
+    process.env.TAQNYAT_TOKEN?.trim();
+  if (!bearerToken) {
+    throw new Error(
+      "oke boot: taqnyat-whatsapp channel needs TAQNYAT_WHATSAPP_TOKEN (or TAQNYAT_BEARER_TOKEN)",
+    );
+  }
+  return { bearerToken };
+}
+
+/**
+ * Resolve WhatsApp Cloud API options from env.
+ */
+export function waCloudOptionsFromEnv(): ChannelOpenOptions {
+  const token = process.env.WHATSAPP_TOKEN?.trim() ?? process.env.WA_CLOUD_TOKEN?.trim();
+  const from =
+    process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() ?? process.env.WA_CLOUD_PHONE_NUMBER_ID?.trim();
+  if (!token || !from) {
+    throw new Error("oke boot: wa-cloud channel needs WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID");
+  }
+  return { token, from };
 }
 
 /**

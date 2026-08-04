@@ -11,7 +11,7 @@
         "ajv-formats": "^3.0.1",
         "intl-messageformat": "^11.2.13",
         "oxc-parser": "^0.142.0",
-        "sently": "1.2.0",
+        "sently": "1.2.1",
       },
       "devDependencies": {
         "@base-ui/react": "^1.6.0",
@@ -76,7 +76,7 @@
     },
     "packages/create-oke": {
       "name": "create-oke",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "bin": {
         "create-oke": "src/index.ts",
       },
@@ -90,7 +90,7 @@
     },
     "site": {
       "name": "site",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@base-ui/react": "^1.6.0",
         "@fumadocs/base-ui": "^16.14.0",
@@ -1520,7 +1520,7 @@
 
     "semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 
-    "sently": ["sently@1.2.0", "", { "peerDependencies": { "@react-email/render": ">=0.0.9", "react": ">=18.0.0" }, "optionalPeers": ["@react-email/render", "react"] }, "sha512-yYbBG+qncdxS7hEBEKUVYXxat0Mnd8kXEa44uwxMJwgMeAVuK7op5zZ+zaqwHjIsasJCidO8z6oyGEq4i+0ZlA=="],
+    "sently": ["sently@1.2.1", "", { "peerDependencies": { "@react-email/render": ">=0.0.9", "react": ">=18.0.0" }, "optionalPeers": ["@react-email/render", "react"] }, "sha512-/znES/Y2ZePWqlwKFiT+6Ypz1llBakhYtucyY1GQLNe/nv6RjjLSoIUbiy0BX50fkS2PC+gXRMBR7vzVmzemzg=="],
 
     "seroval": ["seroval@1.5.6", "", {}, "sha512-rVQVWjjSvlINzaQPZH5JFqsqEsIWdTxY3iJZCnTL/5gQbXIRooVZKI60tVCkOVfzcRPejboxO2t0P89dg5mQaA=="],
 

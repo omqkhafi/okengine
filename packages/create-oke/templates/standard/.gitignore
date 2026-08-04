@@ -17,6 +17,8 @@ out/
 /docker/compose.yml
 /docker/compose.*.yml
 !/docker/compose.override.yml
+/docker/pgdog.toml
+/docker/users.toml
 
 # logs & coverage
 logs/

@@ -217,6 +217,7 @@ export function aiDriverForProvider(provider: string): string {
 /** Default image pins keyed by role (standard template). */
 export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
   "store.kv": "redis:8-alpine",
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",

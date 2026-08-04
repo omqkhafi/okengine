@@ -834,6 +834,15 @@ export function oke(options: OkeOptions): OkeApp {
     };
     const result = await bootApplication(merged);
     bootResult = result;
+    // otp() Tier 1 / Tier 2 capability — fail loud at boot, never silent downgrade.
+    if (result.channel) {
+      const { assertOtpPluginCapability } = await import("../auth/otp-capability.ts");
+      for (const entry of pluginRegistry.installed) {
+        if (entry.plugin.name === "otp") {
+          assertOtpPluginCapability(entry.plugin.configSnapshot, result.channel.drivers);
+        }
+      }
+    }
     // Boot-time orphan discovery: resume/schedule any `running` / `sleeping`
     // run left without a live lease by a crashed (or previous) instance.
     // Fire-and-forget — boot must not block serving on a long resume.

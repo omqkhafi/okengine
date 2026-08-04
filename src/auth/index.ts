@@ -69,10 +69,14 @@ export {
   createVerificationStore,
   putVerification,
   findActiveVerification,
+  consumeVerification,
+  invalidateVerifications,
+  wipeSealedOtp,
   hashChallenge,
   generateOtp,
   type VerificationStore,
   type VerificationRow,
+  type OtpChannel,
 } from "./verification.ts";
 
 export { constantTimeEqual } from "./constant-time.ts";
@@ -83,6 +87,7 @@ export {
   authenticateUser,
   getUserById,
   normalizeEmail,
+  ensureUserByEmail,
   IdentityError,
   type IdentityStore,
   type UserIdentityRow,

@@ -286,7 +286,7 @@ ${close}}`;
 const IMAGE_ENV_COLUMNS = new Set(["local", "docker", "test", "prod"]);
 
 /** Known compose role keys written into `images`. */
-const IMAGE_ROLE_KEY = /^(?:store\.(?:sql|kv|files|index)|channel\.email|vault|ai)$/;
+const IMAGE_ROLE_KEY = /^(?:store\.(?:sql|kv|files|index)|channel\.email|vault|ai|pgdog)$/;
 
 /**
  * Keep `images` in sync with chosen docker drivers.
@@ -312,6 +312,7 @@ function syncImages(source: string, defaults: CreateDefaults): string {
     d.store.sql.prod === "pgvector"
   ) {
     pin("store.sql", DEFAULT_IMAGES["store.sql"]!);
+    pin("pgdog", DEFAULT_IMAGES.pgdog!);
   }
   if (d.store.kv.docker === "redis" || d.signal.docker === "redis") {
     pin("store.kv", DEFAULT_IMAGES["store.kv"]!);

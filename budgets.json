@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-08-03T21:25:43.857Z",
-  "version": "0.7.0",
+  "measuredAt": "2026-08-04T14:14:49.366Z",
+  "version": "0.8.0",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 13955,
+      "value": 14099,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 66.102,
+      "value": 58.309,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -45,7 +45,7 @@
     {
       "id": "routingP99Ms",
       "label": "p99 routing overhead",
-      "value": 0.002,
+      "value": 0.001,
       "limit": 1,
       "unit": "ms",
       "gate": "absolute",
@@ -55,8 +55,8 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 70117,
-      "limit": 71520,
+      "value": 71888,
+      "limit": 73326,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -75,8 +75,8 @@
     {
       "id": "export:./auth",
       "label": "auth",
-      "value": 16214,
-      "limit": 16539,
+      "value": 16374,
+      "limit": 17046,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -85,8 +85,8 @@
     {
       "id": "export:./channel",
       "label": "channel",
-      "value": 5343,
-      "limit": 5599,
+      "value": 6380,
+      "limit": 6638,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -125,8 +125,8 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 14392,
-      "limit": 14680,
+      "value": 14542,
+      "limit": 14833,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -145,8 +145,8 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 91334,
-      "limit": 93161,
+      "value": 93155,
+      "limit": 95023,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -175,8 +175,8 @@
     {
       "id": "export:./plugins",
       "label": "plugins",
-      "value": 19175,
-      "limit": 19559,
+      "value": 20257,
+      "limit": 20663,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -215,8 +215,8 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 11321,
-      "limit": 11577,
+      "value": 12294,
+      "limit": 12550,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
@@ -255,7 +255,7 @@
     {
       "id": "export:./plugins/magicLink",
       "label": "magicLink",
-      "value": 9367,
+      "value": 9369,
       "limit": 9623,
       "unit": "bytes",
       "gate": "regression",
@@ -263,20 +263,10 @@
       "ok": true
     },
     {
-      "id": "export:./plugins/emailOtp",
-      "label": "emailOtp",
-      "value": 9311,
-      "limit": 9567,
-      "unit": "bytes",
-      "gate": "regression",
-      "group": "plugins",
-      "ok": true
-    },
-    {
-      "id": "export:./plugins/phoneNumber",
-      "label": "phoneNumber",
-      "value": 8885,
-      "limit": 9141,
+      "id": "export:./plugins/otp",
+      "label": "otp",
+      "value": 11093,
+      "limit": 11348,
       "unit": "bytes",
       "gate": "regression",
       "group": "plugins",
@@ -295,8 +285,8 @@
     {
       "id": "export:./plugins/passkey",
       "label": "passkey",
-      "value": 9589,
-      "limit": 9845,
+      "value": 9590,
+      "limit": 9846,
       "unit": "bytes",
       "gate": "regression",
       "group": "plugins",
@@ -497,6 +487,16 @@
       "label": "channel-taqnyat-mail",
       "value": 430,
       "limit": 686,
+      "unit": "bytes",
+      "gate": "regression",
+      "group": "drivers",
+      "ok": true
+    },
+    {
+      "id": "export:./drivers/channel-taqnyat-whatsapp",
+      "label": "channel-taqnyat-whatsapp",
+      "value": 829,
+      "limit": 1085,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",

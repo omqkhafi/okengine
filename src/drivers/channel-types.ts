@@ -148,6 +148,7 @@ export type ChannelDriverId =
   | "sndr"
   | "taqnyat"
   | "taqnyat-mail"
+  | "taqnyat-whatsapp"
   | "msegat"
   | "unifonic"
   | "wa-cloud"

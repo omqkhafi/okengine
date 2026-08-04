@@ -11,14 +11,15 @@ import {
   formatStackEnv,
 } from "./compose.ts";
 import { emitDockerfile } from "./dockerfile.ts";
+import { buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
 
 /**
  * Derive infrastructure files from normalised image pins.
  *
- * Credentials land only in the returned `stackEnv` (for `.env.docker`);
- * generated YAML never contains cleartext secrets. Layer 4
+ * Credentials land only in the returned `stackEnv` (for `.env.docker`) and
+ * in `users.toml` when PgDog is present — never in generated YAML. Layer 4
  * (`compose.override.yml`) is listed in `composeFiles` but never written.
  *
  * @param options - Images / app / prod flag
@@ -43,7 +44,7 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     content: emitDockerfile({ appPort: normalised.appPort }),
   };
   // Always emit Dockerfile for deploy; stack-only runs ignore it.
-  const files = [dockerfile, ...composeFilesContent];
+  const files = [dockerfile, ...composeFilesContent, ...pgdogConfigFiles(specs)];
 
   for (const f of files) {
     if (f.path.endsWith(".yml") || f.path === "Dockerfile") {
@@ -63,6 +64,34 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   );
 
   return { specs, files, stackEnv, composeFiles };
+}
+
+/**
+ * Emit PgDog TOML configs when both `pgdog` and `store.sql` are in the stack.
+ *
+ * `pgdog.toml` has no secrets; `users.toml` mirrors store.sql credentials
+ * (same trust boundary as `.env.docker` — do not commit).
+ *
+ * @param specs - Normalised services
+ */
+function pgdogConfigFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
+  const sql = specs.find((s) => s.role === "store.sql");
+  const pooler = specs.find((s) => s.role === "pgdog");
+  if (!sql || !pooler) return [];
+  return [
+    {
+      path: "pgdog.toml",
+      content: buildPgDogToml({ database: sql.credentials.database }),
+    },
+    {
+      path: "users.toml",
+      content: buildPgDogUsersToml({
+        user: sql.credentials.user,
+        password: sql.credentials.password,
+        database: sql.credentials.database,
+      }),
+    },
+  ];
 }
 
 /**

@@ -9,6 +9,7 @@ import type { Manifest } from "../manifest/types.ts";
 /** Default image pins when `images` is omitted but prod drivers need containers. */
 const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
+const DEFAULT_PGDOG_IMAGE = "ghcr.io/pgdogdev/pgdog:v0.1.51";
 const DEFAULT_KV_IMAGE = "redis:8-alpine";
 const DEFAULT_VAULT_IMAGE = "openbao/openbao:2.6.1";
 
@@ -64,6 +65,8 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
   if (needsSql) {
     out["store.sql"] =
       sql === "pgvector" || index === "pgvector" ? DEFAULT_PGVECTOR_IMAGE : DEFAULT_SQL_IMAGE;
+    // PgDog in front of Postgres — caps real server connections under horizontal scale.
+    out.pgdog = DEFAULT_PGDOG_IMAGE;
   }
 
   const needsKv =

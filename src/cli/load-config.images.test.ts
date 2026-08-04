@@ -21,6 +21,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
       "store.kv": "redis:8-alpine",
     });
   });
@@ -35,6 +36,7 @@ describe("defaultImagesFromConfig", () => {
       },
     });
     expect(images["store.sql"]).toBe("pgvector/pgvector:pg17");
+    expect(images.pgdog).toBe("ghcr.io/pgdogdev/pgdog:v0.1.51");
   });
 
   test("clock postgres alone pulls store.sql image", () => {
@@ -45,6 +47,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
     });
   });
 
@@ -56,6 +59,7 @@ describe("defaultImagesFromConfig", () => {
     });
     expect(images).toEqual({
       "store.sql": "postgres:18-alpine",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
     });
   });
 

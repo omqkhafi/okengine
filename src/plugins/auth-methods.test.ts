@@ -7,8 +7,8 @@ import { oke } from "../kernel/app.ts";
 import { resetFlowSeq } from "../kernel/flow.ts";
 import { resetBindings } from "../kernel/on.ts";
 import { anonymous } from "./anonymous.ts";
-import { emailOtp } from "./email-otp.ts";
 import { magicLink } from "./magic-link.ts";
+import { otp } from "./otp.ts";
 import { username } from "./username.ts";
 
 afterEach(() => {
@@ -31,7 +31,7 @@ function authApp() {
     .plug(username())
     .plug(anonymous())
     .plug(magicLink({ exposeDevToken: true }))
-    .plug(emailOtp({ exposeDevOtp: true }));
+    .plug(otp({ tier: 2, channels: ["email"], exposeDevOtp: true }));
 }
 
 describe("auth method plugins", () => {
@@ -42,8 +42,9 @@ describe("auth method plugins", () => {
     expect(app.router.match("POST", "/auth/sign-in/anonymous")).toBeTruthy();
     expect(app.router.match("POST", "/auth/magic-link/request")).toBeTruthy();
     expect(app.router.match("POST", "/auth/magic-link/verify")).toBeTruthy();
-    expect(app.router.match("POST", "/auth/email-otp/request")).toBeTruthy();
-    expect(app.router.match("POST", "/auth/email-otp/verify")).toBeTruthy();
+    expect(app.router.match("POST", "/auth/otp/request")).toBeTruthy();
+    expect(app.router.match("POST", "/auth/otp/verify")).toBeTruthy();
+    expect(app.router.match("POST", "/auth/otp/resend")).toBeTruthy();
     await app.boot({ env: "test" });
     await app.stop();
   });
@@ -147,7 +148,7 @@ describe("auth method plugins", () => {
     await app.boot({ env: "test" });
 
     const req = await app.fetch(
-      new Request("http://localhost/auth/email-otp/request", {
+      new Request("http://localhost/auth/otp/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: "otp@example.com" }),
@@ -158,7 +159,7 @@ describe("auth method plugins", () => {
     expect(requested.data.devOtp).toMatch(/^\d{6}$/);
 
     const verify = await app.fetch(
-      new Request("http://localhost/auth/email-otp/verify", {
+      new Request("http://localhost/auth/otp/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

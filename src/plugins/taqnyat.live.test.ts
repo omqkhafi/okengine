@@ -1,5 +1,5 @@
 /**
- * Real Taqnyat end-to-end: phoneNumber OTP via Verify API + magic-link via Taqnyat Mail.
+ * Real Taqnyat end-to-end: otp({ tier: 1 }) via Verify API + magic-link via Taqnyat Mail.
  *
  * Double-gated — runs ONLY when BOTH:
  *   1. The global per-medium opt-in flag is set explicitly
@@ -34,7 +34,7 @@ import { oke } from "../kernel/app.ts";
 import { resetFlowSeq } from "../kernel/flow.ts";
 import { resetBindings } from "../kernel/on.ts";
 import { magicLink } from "./magic-link.ts";
-import { phoneNumber } from "./phone-number.ts";
+import { otp } from "./otp.ts";
 
 const SECRET = "test-secret-at-least-16";
 
@@ -94,7 +94,7 @@ describe("taqnyat live — provider-managed OTP (Taqnyat Verify)", () => {
         config: {
           drivers: { channel: { sms: { test: "taqnyat" } } },
         },
-      }).plug(phoneNumber());
+      }).plug(otp({ tier: 1 }));
       await app.boot({ env: "test" });
 
       // Wrap the live transport so the plugin's single real send also proves
@@ -117,9 +117,7 @@ describe("taqnyat live — provider-managed OTP (Taqnyat Verify)", () => {
         return result;
       };
 
-      const res = await app.fetch(
-        jsonPost("/auth/phone/request", { phone: SMS_PHONE, lang: "en" }),
-      );
+      const res = await app.fetch(jsonPost("/auth/otp/request", { phone: SMS_PHONE, lang: "en" }));
       const body = (await res.json()) as { data?: { ok: true }; error?: { message?: string } };
       if (res.status !== 200) {
         console.log("taqnyat sendOtp response", res.status, body);

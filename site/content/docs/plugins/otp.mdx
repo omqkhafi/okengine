@@ -1,0 +1,202 @@
+---
+title: "OTP"
+description: "Official plugin — one-time codes over SMS, WhatsApp, or email under /auth, with explicit Tier 1 or Tier 2 delivery."
+icon: "KeyRound"
+source: "docs/spec/unified-theory.md"
+---
+
+`otp()` signs people in with a one-time code. You must set `tier` — there is no
+auto-detect. Tier 1 is provider-owned SMS Verify; Tier 2 is app-owned delivery
+across the channels you declare.
+
+<Callout title="The one rule">
+  Enable `gate.auth`, then `.plug(otp({ tier: 1 }))` or
+  `.plug(otp({ tier: 2, channels: [...] }))`. Never omit `tier`. Never log raw
+  OTPs.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Plug Tier 2 (multi-channel)
+
+```typescript title="src/app.ts"
+import { oke } from "okengine";
+import { otp } from "okengine/plugins";
+
+export const app = oke({
+  name: "shop",
+  env: "local",
+  gate: { auth: {} },
+}).plug(
+  otp({
+    tier: 2,
+    channels: ["sms", "whatsapp", "email"],
+    exposeDevOtp: true, // local DX only
+  }),
+);
+```
+
+</Step>
+
+<Step>
+### Request a code
+
+```typescript
+const { data } = await api.auth.requestOtp({
+  phone: "+15551234567",
+  email: "ali@example.com",
+});
+```
+
+`POST /auth/otp/request`. Prior active challenges for that principal are
+invalidated. Delivery follows `channels` order for addresses you pass.
+
+</Step>
+
+<Step>
+### Resend on another channel (Tier 2 only)
+
+```typescript
+const { data } = await api.auth.resendOtp({
+  phone: "+15551234567",
+  email: "ali@example.com",
+  channel: "email",
+});
+```
+
+Same code, same TTL. Default cooldown is 60 seconds. Tier 1 has no resend
+surface — the provider owns the code.
+
+</Step>
+
+<Step>
+### Verify
+
+```typescript
+const { data } = await api.auth.verifyOtp({
+  phone: "+15551234567",
+  otp,
+});
+```
+
+`POST /auth/otp/verify` — five failed attempts consume the challenge.
+
+</Step>
+
+</Steps>
+
+## Tiers
+
+|                      | Tier 1                        | Tier 2                                        |
+| -------------------- | ----------------------------- | --------------------------------------------- |
+| Config               | `otp({ tier: 1 })`            | `otp({ tier: 2, channels: [...] })`           |
+| Who owns the code    | Provider (Verify API)         | Your app                                      |
+| Delivery             | `fx.sendOtp` / `fx.verifyOtp` | `fx.deliverOtp` (Channel templates)           |
+| Channels             | SMS only                      | `sms` · `whatsapp` · `email` (declared order) |
+| Resend other channel | Impossible                    | `POST /auth/otp/resend`                       |
+| `exposeDevOtp`       | Forbidden                     | Optional (default off)                        |
+
+<Callout type="warn" title="Tier 1 limitation">
+  Resend-via-different-channel is impossible on Tier 1 — the code value is never visible to OKE. Use
+  Tier 2 when you need SMS → email fallback for the same code.
+</Callout>
+
+### Tier 1 setup
+
+```typescript title="oke.config.ts"
+export default {
+  drivers: {
+    channel: {
+      sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
+    },
+  },
+};
+```
+
+Boot fails loudly if no SMS driver exposes `sendOtp` / `verifyOtp`. Switch to
+Tier 2, or bind a Verify-capable driver (for example `taqnyat`).
+
+### Tier 2 delivery
+
+| Concern         | Behavior                                                                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Storage         | SHA-256 hash for verify + sealed AES-GCM copy (HKDF `oke-otp-seal-v1`) for redelivery                                       |
+| Seal lifetime   | Wiped on verify, lockout, or TTL expiry — never left after the challenge dies                                               |
+| Challenge TTL   | Default 10 minutes (`ttlMs`)                                                                                                |
+| Resend cooldown | Default 60 seconds (`resendCooldownMs`) — separate from TTL                                                                 |
+| Auto failover   | On real provider send errors, sently `FallbackTransport` walks remaining media; Taqnyat WhatsApp may use `sendWithFailover` |
+| User resend     | Explicit `resend` with `channel` — not automatic                                                                            |
+
+Templates: `auth-otp-email`, `auth-otp-sms`, `auth-otp-whatsapp` (EN/AR,
+`{{otp}}`). SMS here is a plain message — not Taqnyat Verify.
+
+## Options
+
+| Option             | Type                             | Default                    | Meaning                           |
+| ------------------ | -------------------------------- | -------------------------- | --------------------------------- |
+| `tier`             | `1 \| 2`                         | required                   | Delivery mechanism — no auto      |
+| `channels`         | `("sms"\|"whatsapp"\|"email")[]` | required on Tier 2         | Build-time preferred order        |
+| `ttlMs`            | `number`                         | 10m                        | Challenge lifetime                |
+| `resendCooldownMs` | `number`                         | 60s                        | Tier 2 resend spacing             |
+| `exposeDevOtp`     | `boolean`                        | `false`                    | Tier 2 only — raw OTP in response |
+| `from`             | `string`                         | `OKE <no-reply@oke.local>` | Email template From               |
+| `secret`           | `string`                         | active\*                   | Auth secret (\*from `gate.auth`)  |
+| `sessions`         | `SessionStore`                   | active\*                   | Session store                     |
+| `identities`       | `IdentityStore`                  | new                        | Email → user                      |
+| `phones`           | `PhoneStore`                     | new                        | Phone → user                      |
+| `verifications`    | `VerificationStore`              | new                        | Challenge store                   |
+
+## Surfaces
+
+| Flow              | Path                     | Gate                     | Tier   |
+| ----------------- | ------------------------ | ------------------------ | ------ |
+| `auth.requestOtp` | `POST /auth/otp/request` | `gate.public` + otp rate | 1 + 2  |
+| `auth.verifyOtp`  | `POST /auth/otp/verify`  | `gate.public` + otp rate | 1 + 2  |
+| `auth.resendOtp`  | `POST /auth/otp/resend`  | `gate.public` + otp rate | 2 only |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title='otp(): tier is required'>
+
+You omitted `tier`. Set `tier: 1` or `tier: 2` explicitly — OKE never infers
+which mechanism you meant.
+
+</Accordion>
+<Accordion title="Boot fails on Tier 1">
+
+No Verify-capable SMS driver is bound. Set `drivers.channel.sms` to `taqnyat`
+(or another driver with `sendOtp`/`verifyOtp`), or switch to
+`otp({ tier: 2, channels: [...] })`.
+
+</Accordion>
+<Accordion title="resend_cooldown">
+
+Wait for `resendCooldownMs` (default 60s). The challenge TTL is unchanged —
+only delivery is rate-limited.
+
+</Accordion>
+<Accordion title="No email / SMS with the code (Tier 2)">
+
+In `local` / `test` the `console` driver captures messages. Use
+`exposeDevOtp: true` for unit tests without a real provider.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Magic link](/docs/plugins/magic-link) — link instead of a code
+- [Channel](/docs/elements/channel) — `fx.send`, drivers, Mailpit
+- [Gate](/docs/elements/gate) — `gate.auth`
+
+## Next
+
+<Cards>
+  <Card title="Magic link" description="Email link sign-in." href="/docs/plugins/magic-link" />
+  <Card title="Two-factor" description="TOTP second factor." href="/docs/plugins/two-factor" />
+  <Card title="Channel" description="Delivery drivers and Mailpit." href="/docs/elements/channel" />
+</Cards>

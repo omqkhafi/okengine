@@ -7,6 +7,7 @@ import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
 import { ollama } from "./ollama.ts";
 import { openbao } from "./openbao.ts";
+import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
@@ -14,6 +15,7 @@ import { rustfs } from "./rustfs.ts";
 /** Default recipe catalogue. */
 export const builtinRecipes: readonly ImageRecipe[] = [
   postgres,
+  pgdog,
   redis,
   mailpit,
   rustfs,
@@ -22,7 +24,7 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   ollama,
 ];
 
-export { mailpit, meilisearch, ollama, openbao, postgres, redis, rustfs };
+export { mailpit, meilisearch, ollama, openbao, pgdog, postgres, redis, rustfs };
 
 /**
  * Resolve the recipe for an image reference.

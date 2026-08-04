@@ -43,6 +43,7 @@ export function defaultHostPort(role: string, containerPort: number): number {
   if (role === "store.sql") return 5432;
   if (role === "store.kv") return 6379;
   if (role === "signal") return 4222;
+  if (role === "pgdog") return 6432;
   return containerPort;
 }
 

@@ -251,6 +251,20 @@ Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
 | Local          | `oke db push` (or auto-push from `oke dev`)                    |
 | Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
 
+<Callout title="Connection pooling is infrastructure, not app code" type="info">
+  Bun.SQL defaults to **10** connections per process — fine per instance. Scale out and `N × pool`
+  can exceed Postgres `max_connections`. docker/prod puts **PgDog** in front; `DATABASE_URL` → port
+  `6432`. No app code changes.
+</Callout>
+
+**Why PgDog (not PgBouncer as the default).** Transaction pooling fixes the
+math; naive poolers can leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`)
+across clients. PgDog re-applies those under transaction mode (PgBouncer is fine — not shipped).
+
+**Read replicas later, zero app changes.** Add `role = "replica"` in
+`pgdog.toml` later: `BEGIN READ ONLY` → replica, failover on promotion.
+Not wired this round — readiness only.
+
 #### Seeding
 
 `oke db seed` loads `defineSeed` from `src/seed/index.ts` — **never at boot**.

@@ -9,10 +9,13 @@ import { join } from "node:path";
 import {
   COMPOSE_OVERRIDE,
   assertNoCredentialsInYaml,
+  buildPgDogToml,
+  buildPgDogUsersToml,
   builtinRecipes,
   deriveInfrastructure,
   emitDockerfile,
   formatStackEnv,
+  pgdog,
   postgres,
   recipeFor,
   redis,
@@ -41,6 +44,46 @@ describe("image recipes", () => {
     expect(recipeFor("valkey/valkey:8-alpine").id).toBe("redis");
     expect(postgres.match("postgres:16")).toBe(true);
     expect(redis.match("redis:7")).toBe(true);
+  });
+
+  test("pgdog matches the official image and waits on store-sql", () => {
+    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.51").id).toBe("pgdog");
+    expect(pgdog.match("ghcr.io/pgdogdev/pgdog:main")).toBe(true);
+    const applied = pgdog.apply({
+      role: "pgdog",
+      serviceName: "pgdog",
+      image: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      port: 6432,
+      hostPort: 6432,
+      credentials: fixedCreds["store.sql"],
+    });
+    expect(applied.dependsOn?.["store-sql"]?.condition).toBe("service_healthy");
+    expect(applied.volumes).toContain("./pgdog.toml:/pgdog/pgdog.toml:ro");
+    expect(applied.volumes).toContain("./users.toml:/pgdog/users.toml:ro");
+    expect(applied.healthcheck?.test.join(" ")).toContain("pg_isready");
+  });
+
+  test("pgdog.toml + users.toml match upstream config shape", () => {
+    const pgdogToml = buildPgDogToml({ database: "oke", postgresHost: "store-sql" });
+    expect(pgdogToml).toContain("[general]");
+    expect(pgdogToml).toContain('host = "0.0.0.0"');
+    expect(pgdogToml).toContain("port = 6432");
+    expect(pgdogToml).toContain('pooler_mode = "transaction"');
+    expect(pgdogToml).toContain("[[databases]]");
+    expect(pgdogToml).toContain('name = "oke"');
+    expect(pgdogToml).toContain('host = "store-sql"');
+    expect(pgdogToml).toContain("port = 5432");
+    expect(pgdogToml).toContain('database_name = "oke"');
+
+    const usersToml = buildPgDogUsersToml({
+      user: "oke",
+      password: "s3cret-sql-password-xyz",
+      database: "oke",
+    });
+    expect(usersToml).toContain("[[users]]");
+    expect(usersToml).toContain('name = "oke"');
+    expect(usersToml).toContain('password = "s3cret-sql-password-xyz"');
+    expect(usersToml).toContain('database = "oke"');
   });
 
   test("meilisearch matches the official image and emits a http URL", () => {
@@ -221,6 +264,50 @@ describe("deriveInfrastructure", () => {
     expect(result.composeFiles.at(-1)).toBe(COMPOSE_OVERRIDE);
     const prod = result.files.find((f) => f.path === "compose.prod.yml")!.content;
     expect(prod).toContain("replicas");
+  });
+
+  test("when postgres + pgdog are both pinned, DATABASE_URL points at PgDog", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:18-alpine",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      prod: true,
+      app: "skyport",
+    });
+
+    expect(result.stackEnv.DATABASE_URL).toContain(":6432/");
+    expect(result.stackEnv.DATABASE_URL).toContain("postgres://oke:");
+    expect(result.stackEnv.DATABASE_URL).toContain("/oke");
+    expect(result.stackEnv.OKE_PGDOG_URL).toBe(result.stackEnv.DATABASE_URL);
+    // Direct Postgres URL stays on the role key for ops / escape hatch.
+    expect(result.stackEnv.OKE_STORE_SQL_URL).toContain(":5432/");
+
+    const pgdogYml = result.files.find((f) => f.path === "compose.pgdog.yml")!.content;
+    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.51");
+    expect(pgdogYml).toContain("store-sql");
+    expect(pgdogYml).toContain("service_healthy");
+    expect(pgdogYml).not.toContain(fixedCreds["store.sql"].password);
+
+    const pgdogToml = result.files.find((f) => f.path === "pgdog.toml")!.content;
+    expect(pgdogToml).toContain('pooler_mode = "transaction"');
+    expect(pgdogToml).toContain('host = "store-sql"');
+    expect(pgdogToml).not.toContain(fixedCreds["store.sql"].password);
+
+    const usersToml = result.files.find((f) => f.path === "users.toml")!.content;
+    expect(usersToml).toContain('password = "s3cret-sql-password-xyz"');
+    expect(usersToml).toContain('database = "oke"');
+  });
+
+  test("postgres alone keeps DATABASE_URL on 5432 (no pooler)", () => {
+    const result = deriveInfrastructure({
+      images: { "store.sql": "postgres:18-alpine" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    expect(result.stackEnv.DATABASE_URL).toContain(":5432/");
+    expect(result.stackEnv.OKE_PGDOG_URL).toBeUndefined();
+    expect(result.files.some((f) => f.path === "pgdog.toml")).toBe(false);
   });
 
   test("Dockerfile CMD is oke start", () => {

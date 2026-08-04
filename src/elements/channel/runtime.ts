@@ -32,6 +32,11 @@ import {
   type ReceiptLedger,
 } from "./receipts.ts";
 import { createSuppressionStore, type SuppressionStore } from "./suppression.ts";
+import {
+  deliverOtpAcrossChannels,
+  type DeliverOtpOptions,
+  type DeliverOtpResult,
+} from "./otp-delivery.ts";
 
 /** Locale catalog: template → locale → rendered body. */
 export type TemplateCatalog = Readonly<
@@ -115,6 +120,13 @@ export interface ChannelRuntime {
    * @param options - Recipient + requestId + code (+ lang / note / from)
    */
   verifyOtp(options: ChannelOtpVerifyOptions): Promise<ChannelOtpVerifyResult>;
+  /**
+   * Tier-2 OTP delivery across declared channels (sently FallbackTransport).
+   * Pass `only` for explicit single-channel resend (no cross-medium failover).
+   *
+   * @param options - Channels, templates, addresses, OTP data
+   */
+  deliverOtp(options: DeliverOtpOptions): Promise<DeliverOtpResult>;
   /**
    * Ingest a post-send provider outcome (bounce / complaint / …).
    * Hard bounce auto-adds suppression. Console projects the ledger — never
@@ -433,6 +445,124 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     );
   }
 
+  async function sendTemplate(
+    template: string,
+    opts: ChannelSendOptions,
+  ): Promise<ChannelSendResult> {
+    const decl = templates.get(template);
+    if (!decl) {
+      throw new Error(`channel: unknown template "${template}"`);
+    }
+    const medium = decl.medium;
+    const checkMedium: ChannelMedium = medium === "any" ? "email" : medium;
+
+    const suppressed = suppression.isSuppressed(opts.to, checkMedium);
+    if (suppressed.suppressed) {
+      const status: DeliveryStatus =
+        suppressed.reason === "opted-out" ? "suppressed/opted-out" : "suppressed/prior-bounce";
+      const resolved = resolveLocale({
+        locale: opts.locale,
+        profileLocale: opts.profileLocale,
+        acceptLanguage: opts.acceptLanguage,
+        defaultLocale,
+      });
+      const receipt: DeliveryReceipt = {
+        id: crypto.randomUUID(),
+        template,
+        to: opts.to,
+        medium,
+        locale: resolved.locale,
+        localeChain: resolved.chain,
+        status,
+        attempts: [],
+        at: now(),
+        error: suppressed.reason === "opted-out" ? "opted out" : "prior hard bounce",
+      };
+      receipts.record(receipt);
+      return {
+        ok: false,
+        messageId: receipt.id,
+        driverId: "suppression",
+        attempts: [],
+      };
+    }
+
+    const resolved = resolveLocale({
+      locale: opts.locale,
+      profileLocale: opts.profileLocale,
+      acceptLanguage: opts.acceptLanguage,
+      defaultLocale,
+    });
+    const locale = resolved.locale;
+    const localeChain: readonly LocaleChainStep[] = resolved.chain;
+    const body = resolveBody(template, locale, opts.data ?? {});
+    const chain = driversFor(medium, opts.via);
+
+    let result: ChannelSendResult;
+    let attempts: ChannelAttempt[];
+
+    if (medium === "email" || (medium === "any" && chain.some((d) => d.transport))) {
+      const from = decl.from ?? "oke@localhost";
+      const sendResult = await sendViaEmailChain(chain, {
+        from,
+        to: opts.to,
+        subject: opts.subject ?? body.subject ?? template,
+        text: body.text,
+        html: body.html,
+        template,
+        data: opts.data ? { ...opts.data } : undefined,
+      });
+      result = sendResult.result;
+      attempts = sendResult.attempts;
+    } else {
+      const sendResult = await sendViaChannelChain(chain, {
+        medium: medium === "any" ? "sms" : medium,
+        to: opts.to,
+        from: decl.from,
+        subject: opts.subject ?? body.subject,
+        text: body.text,
+        html: body.html,
+        data: opts.data,
+        locale,
+        template,
+        pushSubscription: opts.pushSubscription,
+      });
+      result = sendResult.result;
+      attempts = sendResult.attempts;
+    }
+
+    let status: DeliveryStatus;
+    if (result.ok) {
+      status = attempts.filter((a) => !a.ok).length > 0 ? "fallback" : "sent";
+    } else {
+      status = classifySendFailure(attempts);
+    }
+
+    receipts.record({
+      id: crypto.randomUUID(),
+      template,
+      to: opts.to,
+      medium,
+      locale,
+      localeChain,
+      status,
+      messageId: result.messageId,
+      driverId: result.driverId,
+      attempts,
+      at: now(),
+      ...(result.ok
+        ? {}
+        : {
+            error: attempts
+              .map((a) => a.error)
+              .filter(Boolean)
+              .join("; "),
+          }),
+    });
+
+    return { ...result, attempts };
+  }
+
   return {
     templates,
     suppression,
@@ -446,6 +576,9 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
     async verifyOtp(opts) {
       const { otp } = otpSmsDriver();
       return otp.verifyOtp(opts);
+    },
+    async deliverOtp(opts) {
+      return deliverOtpAcrossChannels(drivers, sendTemplate, opts, now);
     },
     ingestOutcome(input) {
       const at = input.at ?? now();
@@ -481,119 +614,6 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       receipts.record(receipt);
       return receipt;
     },
-    async send(template, opts) {
-      const decl = templates.get(template);
-      if (!decl) {
-        throw new Error(`channel: unknown template "${template}"`);
-      }
-      const medium = decl.medium;
-      const checkMedium: ChannelMedium = medium === "any" ? "email" : medium;
-
-      const suppressed = suppression.isSuppressed(opts.to, checkMedium);
-      if (suppressed.suppressed) {
-        const status: DeliveryStatus =
-          suppressed.reason === "opted-out" ? "suppressed/opted-out" : "suppressed/prior-bounce";
-        const resolved = resolveLocale({
-          locale: opts.locale,
-          profileLocale: opts.profileLocale,
-          acceptLanguage: opts.acceptLanguage,
-          defaultLocale,
-        });
-        const receipt: DeliveryReceipt = {
-          id: crypto.randomUUID(),
-          template,
-          to: opts.to,
-          medium,
-          locale: resolved.locale,
-          localeChain: resolved.chain,
-          status,
-          attempts: [],
-          at: now(),
-          error: suppressed.reason === "opted-out" ? "opted out" : "prior hard bounce",
-        };
-        receipts.record(receipt);
-        return {
-          ok: false,
-          messageId: receipt.id,
-          driverId: "suppression",
-          attempts: [],
-        };
-      }
-
-      const resolved = resolveLocale({
-        locale: opts.locale,
-        profileLocale: opts.profileLocale,
-        acceptLanguage: opts.acceptLanguage,
-        defaultLocale,
-      });
-      const locale = resolved.locale;
-      const localeChain: readonly LocaleChainStep[] = resolved.chain;
-      const body = resolveBody(template, locale, opts.data ?? {});
-      const chain = driversFor(medium, opts.via);
-
-      let result: ChannelSendResult;
-      let attempts: ChannelAttempt[];
-
-      if (medium === "email" || (medium === "any" && chain.some((d) => d.transport))) {
-        const from = decl.from ?? "oke@localhost";
-        const sendResult = await sendViaEmailChain(chain, {
-          from,
-          to: opts.to,
-          subject: opts.subject ?? body.subject ?? template,
-          text: body.text,
-          html: body.html,
-          template,
-          data: opts.data ? { ...opts.data } : undefined,
-        });
-        result = sendResult.result;
-        attempts = sendResult.attempts;
-      } else {
-        const sendResult = await sendViaChannelChain(chain, {
-          medium: medium === "any" ? "sms" : medium,
-          to: opts.to,
-          from: decl.from,
-          subject: opts.subject ?? body.subject,
-          text: body.text,
-          html: body.html,
-          data: opts.data,
-          locale,
-          template,
-          pushSubscription: opts.pushSubscription,
-        });
-        result = sendResult.result;
-        attempts = sendResult.attempts;
-      }
-
-      let status: DeliveryStatus;
-      if (result.ok) {
-        status = attempts.filter((a) => !a.ok).length > 0 ? "fallback" : "sent";
-      } else {
-        status = classifySendFailure(attempts);
-      }
-
-      receipts.record({
-        id: crypto.randomUUID(),
-        template,
-        to: opts.to,
-        medium,
-        locale,
-        localeChain,
-        status,
-        messageId: result.messageId,
-        driverId: result.driverId,
-        attempts,
-        at: now(),
-        ...(result.ok
-          ? {}
-          : {
-              error: attempts
-                .map((a) => a.error)
-                .filter(Boolean)
-                .join("; "),
-            }),
-      });
-
-      return { ...result, attempts };
-    },
+    send: sendTemplate,
   };
 }

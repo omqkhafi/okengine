@@ -78,6 +78,39 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
+ * Find or create a user row keyed by email (magic-link / OTP sign-in).
+ *
+ * @param store - Identity store
+ * @param email - Normalized email
+ * @param now - Clock
+ */
+export function ensureUserByEmail(
+  store: IdentityStore,
+  email: string,
+  now: number,
+): UserIdentityRow {
+  const existingId = store.byEmail.get(email);
+  if (existingId) {
+    const existing = store.users.get(existingId);
+    if (existing) return existing;
+  }
+  const id = crypto.randomUUID();
+  const user: UserIdentityRow = {
+    id,
+    email,
+    name: email.split("@")[0] || "user",
+    emailVerified: true,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+    extra: {},
+  };
+  store.users.set(id, user);
+  store.byEmail.set(email, id);
+  return user;
+}
+
+/**
  * Create a user with a credential account (provider `credential`).
  *
  * @param store - Identity store

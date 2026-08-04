@@ -2,6 +2,9 @@
  * Shared verification / challenge store for magic-link, OTP, phone, etc.
  */
 
+/** Delivery channel for Tier-2 OTP challenges. */
+export type OtpChannel = "sms" | "whatsapp" | "email";
+
 /** One pending challenge. */
 export interface VerificationRow {
   id: string;
@@ -11,6 +14,19 @@ export interface VerificationRow {
   createdAt: number;
   consumedAt: number | null;
   attempts: number;
+  /**
+   * Tier-2 sealed OTP (AES-GCM via HKDF `oke-otp-seal-v1`).
+   * Wiped on consume / expire — never left after TTL.
+   */
+  sealedOtp?: string | null;
+  /** Last successful delivery time (resend cooldown). */
+  lastDeliveredAt?: number;
+  /** Last channel used for delivery. */
+  lastChannel?: OtpChannel;
+  /** Email address captured at request (channel-neutral challenge). */
+  email?: string | null;
+  /** E.164 phone captured at request. */
+  phone?: string | null;
 }
 
 /** In-memory verification store. */
@@ -26,6 +42,15 @@ export function createVerificationStore(): VerificationStore {
 }
 
 /**
+ * Wipe the sealed OTP copy (and clear the field). Safe to call repeatedly.
+ *
+ * @param row - Challenge row
+ */
+export function wipeSealedOtp(row: VerificationRow): void {
+  row.sealedOtp = null;
+}
+
+/**
  * Store a challenge (hashed value recommended by callers).
  *
  * @param store - Store
@@ -37,6 +62,7 @@ export function putVerification(store: VerificationStore, row: VerificationRow):
 
 /**
  * Find a non-consumed, non-expired challenge by identifier.
+ * Expired active rows have their sealed OTP wiped before being skipped.
  *
  * @param store - Store
  * @param identifier - Email / phone / username key
@@ -50,10 +76,44 @@ export function findActiveVerification(
   for (const row of store.rows.values()) {
     if (row.identifier !== identifier) continue;
     if (row.consumedAt !== null) continue;
-    if (row.expiresAt <= now) continue;
+    if (row.expiresAt <= now) {
+      wipeSealedOtp(row);
+      continue;
+    }
     return row;
   }
   return undefined;
+}
+
+/**
+ * Consume a challenge: set `consumedAt`, wipe sealed OTP.
+ *
+ * @param row - Active challenge
+ * @param now - Clock
+ */
+export function consumeVerification(row: VerificationRow, now: number): void {
+  row.consumedAt = now;
+  wipeSealedOtp(row);
+}
+
+/**
+ * Invalidate every non-consumed challenge for an identifier (fresh request).
+ * Wipes sealed copies on the invalidated rows.
+ *
+ * @param store - Store
+ * @param identifier - Challenge key
+ * @param now - Clock
+ */
+export function invalidateVerifications(
+  store: VerificationStore,
+  identifier: string,
+  now: number,
+): void {
+  for (const row of store.rows.values()) {
+    if (row.identifier === identifier && row.consumedAt === null) {
+      consumeVerification(row, now);
+    }
+  }
 }
 
 /**

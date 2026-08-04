@@ -14,7 +14,7 @@ import { deriveInfrastructure, writeDerivedFiles } from "../docker/index.ts";
 import { oke } from "../kernel/app.ts";
 import { resetFlowSeq } from "../kernel/flow.ts";
 import { resetBindings } from "../kernel/on.ts";
-import { emailOtp } from "./email-otp.ts";
+import { otp } from "./otp.ts";
 import { magicLink } from "./magic-link.ts";
 
 const SECRET = "test-secret-at-least-16";
@@ -290,21 +290,21 @@ describe("auth delivery — Mailpit integration", () => {
           config: {
             drivers: { channel: { email: { test: "smtp" } } },
           },
-        }).plug(emailOtp({ exposeDevOtp: true }));
+        }).plug(otp({ tier: 2, channels: ["email"], exposeDevOtp: true }));
         await app.boot({ env: "test" });
 
-        const res = await app.fetch(jsonPost("/auth/email-otp/request", { email }));
+        const res = await app.fetch(jsonPost("/auth/otp/request", { email }));
         expect(res.status).toBe(200);
         const body = (await res.json()) as { data: { ok: true; devOtp?: string } };
         expect(body.data.ok).toBe(true);
         expect(body.data.devOtp).toMatch(/^\d{6}$/);
-        const otp = body.data.devOtp!;
+        const code = body.data.devOtp!;
 
         const msg = await waitForMessage(uiUrl, email);
         expect(msg.Subject).toBe("Your sign-in code");
         const text = msg.Text ?? "";
         const html = msg.HTML ?? "";
-        expect(text.includes(otp) || html.includes(otp)).toBe(true);
+        expect(text.includes(code) || html.includes(code)).toBe(true);
 
         await app.stop();
       } finally {
