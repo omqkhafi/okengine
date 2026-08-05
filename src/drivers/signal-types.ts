@@ -40,6 +40,11 @@ export interface SignalEmitOptions {
    * Omit for pure competing-consumer behavior (no ordering guarantee).
    */
   readonly key?: string;
+  /**
+   * Producer WideEvent / run id for Console trace chains.
+   * Set automatically by `fx.emit` when the emitter has a run id.
+   */
+  readonly parentRunId?: string;
 }
 
 /** A durable signal message. */
@@ -49,6 +54,11 @@ export interface SignalMessage {
   readonly payload: unknown;
   /** Optional ordering key from {@link SignalEmitOptions.key}. */
   readonly key?: string;
+  /**
+   * Producer run id when the emit originated from a Flow execution.
+   * Consuming Runs record this as {@link import("../runs/types.ts").WideEvent.parentId}.
+   */
+  readonly parentRunId?: string;
   readonly delivery: SignalDelivery;
   readonly attempts: number;
   readonly failures: readonly SignalFailureReason[];

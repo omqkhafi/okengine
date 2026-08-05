@@ -40,6 +40,12 @@ export type ChannelMedium = "email" | "sms" | "whatsapp" | "push" | "any";
 /** Resource ref: `sql:table`, `kv:namespace`, `files:bucket`, `index:name`. */
 export type ResourceRef = `${StoreFacet}:${string}`;
 
+/**
+ * Observability read capability for `fx.runs` — not a store facet.
+ * Declare on `effects.reads` (never `writes`).
+ */
+export type RunsResourceRef = "runs";
+
 /** Signal name reference. */
 export type SignalRef = string;
 
@@ -68,8 +74,8 @@ export type JsonSchema = string | Record<string, unknown>;
  * `sends` / `asks` are irreversible (asks also nondeterministic + cost).
  */
 export interface Effects {
-  /** Store reads. */
-  reads?: ResourceRef[];
+  /** Store reads, plus optional `"runs"` for `fx.runs`. */
+  reads?: Array<ResourceRef | RunsResourceRef>;
   /** Store writes. */
   writes?: ResourceRef[];
   /** Emitted signals. */

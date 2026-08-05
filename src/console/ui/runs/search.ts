@@ -20,6 +20,11 @@ export const RunsSearchSchema = z.object({
   durMin: z.coerce.number().optional(),
   /** Duration brush upper bound (ms). */
   durMax: z.coerce.number().optional(),
+  /**
+   * Lookback window: duration (`1h`, `5m`, `24h`) or epoch-ms lower bound.
+   * Filters the population by `startedAt`.
+   */
+  since: z.string().optional(),
 });
 
 /** Parsed, typed Runs search state. */
@@ -48,7 +53,18 @@ export function serializeRunsSearch(search: RunsSearch): Record<string, string |
   if (search.run) out.run = search.run;
   if (search.durMin !== undefined) out.durMin = search.durMin;
   if (search.durMax !== undefined) out.durMax = search.durMax;
+  if (search.since) out.since = search.since;
   return out;
+}
+
+/**
+ * Set or clear the lookback window (`1h`, `5m`, …).
+ *
+ * @param prev - Current search
+ * @param since - Window string or null to clear
+ */
+export function setSince(prev: RunsSearch, since: string | null): RunsSearch {
+  return { ...prev, since: since ?? undefined };
 }
 
 /**

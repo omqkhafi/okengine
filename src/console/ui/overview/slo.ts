@@ -1,10 +1,11 @@
 /**
  * SLO burn rates from declared Manifest objectives + real Runs (console §9.16).
  *
- * Burn rate = current error rate ÷ tolerable rate. Thresholds come only from
- * Manifest `slo.availability` — never invented here.
+ * Availability burn = current error rate ÷ tolerable rate.
+ * Latency breaches use Manifest `slo.latency.p95` / `p99` against window P95/P99.
  */
 
+import { parseLatencyMs } from "../../../runs/window.ts";
 import type { Journey, Manifest, Slo } from "../../../manifest/types.ts";
 import type { RunRecord } from "../runs/types.ts";
 import type { SloBurn } from "./types.ts";
@@ -29,6 +30,7 @@ export interface DeclaredSlo {
   readonly availability: string;
   readonly tolerableErrorRate: number;
   readonly flowIds: readonly string[];
+  readonly latencyP95Ms: number | null;
 }
 
 /**
@@ -67,6 +69,7 @@ export function declaredSlos(manifest: Manifest | null): readonly DeclaredSlo[] 
       availability,
       tolerableErrorRate: tolerable,
       flowIds: [name],
+      latencyP95Ms: parseLatencyMs(slo?.latency?.p95 ?? undefined),
     });
   }
 
@@ -82,6 +85,7 @@ export function declaredSlos(manifest: Manifest | null): readonly DeclaredSlo[] 
       availability,
       tolerableErrorRate: tolerable,
       flowIds: journeyFlowIds(journey),
+      latencyP95Ms: parseLatencyMs(journey.slo?.latency?.p95 ?? undefined),
     });
   }
 
@@ -138,6 +142,10 @@ function burnForObjective(obj: DeclaredSlo, runs: readonly RunRecord[], now: num
 
   const lastBurnAt = lastBurnTimestamp(runs, obj.flowIds, obj.tolerableErrorRate, now);
   const ceremonial = lastBurnAt == null || now - lastBurnAt >= CEREMONIAL_LOOKBACK_MS;
+  const latencyP95Ms = shortLatencyP95(runs, obj.flowIds, now - BURN_SHORT_WINDOW_MS, now);
+  const latencyP95ThresholdMs = obj.latencyP95Ms;
+  const latencyBreached =
+    latencyP95ThresholdMs != null && short.total > 0 && latencyP95Ms > latencyP95ThresholdMs;
 
   return {
     id: obj.id,
@@ -153,7 +161,27 @@ function burnForObjective(obj: DeclaredSlo, runs: readonly RunRecord[], now: num
     lastBurnAt,
     sampleCount: short.total,
     errorCount: short.errors,
+    latencyP95Ms,
+    latencyP95ThresholdMs,
+    latencyBreached,
   };
+}
+
+function shortLatencyP95(
+  runs: readonly RunRecord[],
+  flowIds: readonly string[],
+  from: number,
+  to: number,
+): number {
+  const set = new Set(flowIds);
+  const durations = runs
+    .filter((r) => r.startedAt >= from && r.startedAt <= to && (set.size === 0 || set.has(r.flow)))
+    .map((r) => r.durationMs)
+    .sort((a, b) => a - b);
+  if (durations.length === 0) return 0;
+  if (durations.length === 1) return durations[0]!;
+  const idx = Math.min(durations.length - 1, Math.max(0, Math.ceil(0.95 * durations.length) - 1));
+  return durations[idx]!;
 }
 
 function windowStats(
@@ -206,7 +234,7 @@ function journeyFlowIds(journey: Journey): readonly string[] {
   return flows.map((f) => (typeof f === "string" ? f : String(f)));
 }
 
-/** @internal — exported for tests that assert latency SLO presence is ignored for burn. */
+/** @internal — availability must be declared for Overview burn rows. */
 export function sloHasAvailability(slo: Slo | undefined): boolean {
   return typeof slo?.availability === "string" && slo.availability.length > 0;
 }

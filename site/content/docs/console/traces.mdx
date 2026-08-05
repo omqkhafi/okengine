@@ -26,6 +26,10 @@ Answers: **one timeline across http → store → signal → durable steps**
   />
 </Cards>
 
+Chains use `WideEvent.parentId`: producers stamp it on `fx.emit` / `fx.call`;
+consumers record it on their run. Per-effect timing comes from the ledger
+(`timestamp` + `duration`) — not a second instrumentation API.
+
 ## Catalog
 
 <Cards>

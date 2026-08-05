@@ -71,14 +71,15 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 
 ## Anatomy of a Flow
 
-| Part     | Role                                                            |
-| -------- | --------------------------------------------------------------- |
-| trigger  | What starts the flow — `http`, a signal, `every`, a row change  |
-| `in`     | Input contract — validated before `do` runs; bad input is a 422 |
-| `out`    | Output contract — the return value is checked against it        |
-| `errors` | Typed failures — **returned** with `fx.fail`, never thrown      |
-| `retry`  | Optional whole-`do` backoff on thrown errors (same journal)     |
-| `do`     | The work — every read, write, emit, and call goes through `fx`  |
+| Part         | Role                                                            |
+| ------------ | --------------------------------------------------------------- |
+| trigger      | What starts the flow — `http`, a signal, `every`, a row change  |
+| `in`         | Input contract — validated before `do` runs; bad input is a 422 |
+| `out`        | Output contract — the return value is checked against it        |
+| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown      |
+| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)     |
+| `do`         | The work — every read, write, emit, and call goes through `fx`  |
+| `compensate` | Durable only — undo phase after terminal failure (same journal) |
 
 Failures are values, not exceptions:
 
@@ -234,6 +235,34 @@ Replay is **at-least-once** for a step whose body never persisted (crash mid-ste
 
 For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow({ retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
 
+After a **terminal** failure (`fx.fail` or exhausted retries / uncaught throw), optional
+`compensate` runs under the same journal. Undo work must use **new** step names
+(`undo:…`) — never rewind forward steps:
+
+```typescript
+export const chargeOrder = flow({
+  durable: true,
+  in: OrderRef,
+  out: z.boolean(),
+  do: async ({ orderId }, fx) => {
+    await fx.step("reserve", () => reserve(orderId));
+    await fx.step("charge", () => charge(orderId));
+    return true;
+  },
+  compensate: async ({ input, completedSteps }, fx) => {
+    if (completedSteps.includes("charge")) {
+      await fx.step("undo:charge", () => refund(input.orderId));
+    }
+    if (completedSteps.includes("reserve")) {
+      await fx.step("undo:reserve", () => release(input.orderId));
+    }
+  },
+});
+```
+
+Thrown errors on the durable execute path commit the journal as `failed` (and land on Runs).
+`JournalSuspend` (sleep) is park, not failure — compensate does not run.
+
 ## Composition is just calls
 
 Wiring is values flowing between flows — declared in code, never configured in a dashboard:
@@ -267,6 +296,11 @@ Use `fx.all` (or `fx.race`) with thunks. The first rejection aborts siblings thr
 <Accordion title="Durable flow retried a completed charge">
 
 Put `fx.retry` **inside** `fx.step`, not around it. Completed steps replay from the journal and never re-run. `flow({ retry })` is for coarse whole-body retries on the same session.
+
+</Accordion>
+<Accordion title="When does compensate run?">
+
+Only after terminal failure for that journal attempt — not on sleep, not mid-retry, not on success. Undo bodies must be idempotent (`undo:*` steps resume like any other step). Irreversible effects (`send` / `ask`) need developer-declared undos or an explicit no-op.
 
 </Accordion>
 <Accordion title="How do I share logic between flows — a private function?">

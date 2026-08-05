@@ -53,7 +53,7 @@ export function tier1KeysForReads(
   effects: Effects,
   dimsByResource?: Readonly<Record<string, readonly string[]>>,
 ): string[] {
-  const reads = effects.reads ?? [];
+  const reads = (effects.reads ?? []).filter((r): r is ResourceRef => r !== "runs");
   return reads.map((resource) => computedCacheKey(resource, dimsByResource?.[resource]));
 }
 

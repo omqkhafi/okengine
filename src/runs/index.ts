@@ -68,5 +68,21 @@ export {
 
 export { privacyErase, type PrivacyEraseOptions, type PrivacyEraseResult } from "./privacy.ts";
 
+export {
+  evaluateSloBreaches,
+  parseLatencyMs,
+  percentile,
+  windowStatsForFlow,
+  type RunWindowStats,
+  type SloBreach,
+} from "./window.ts";
+
+export {
+  exportRunMetrics,
+  wideEventToOtlpMetrics,
+  type OtlpMetricsSink,
+  type OtlpRunMetric,
+} from "./export-otlp.ts";
+
 export { createRunsPostgresFake } from "./drivers/postgres.ts";
 export { createRunsClickHouseFake } from "./drivers/clickhouse.ts";

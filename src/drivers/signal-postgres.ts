@@ -44,6 +44,7 @@ interface MsgRow {
   locked_by: string | null;
   lease_expires_at: number | null;
   delivered_to: string;
+  parent_run_id: string | null;
 }
 
 /** Minimal SQL + listen surface for the postgres signal driver. */
@@ -113,6 +114,7 @@ export function createPostgresSignalFake(options?: {
         ...m,
         ordering_key: m.ordering_key ?? null,
         lease_expires_at: m.lease_expires_at ?? null,
+        parent_run_id: m.parent_run_id ?? null,
       })),
       writes: new Map(snap.writes),
     };
@@ -304,6 +306,10 @@ export function createPostgresSignalFake(options?: {
               ? null
               : Number(row.lease_expires_at),
           delivered_to: String(row.delivered_to ?? "[]"),
+          parent_run_id:
+            row.parent_run_id === undefined || row.parent_run_id === null
+              ? null
+              : String(row.parent_run_id),
         });
         return { changes: 1 };
       }
@@ -409,7 +415,8 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
     status TEXT,
     locked_by TEXT,
     lease_expires_at BIGINT,
-    delivered_to TEXT
+    delivered_to TEXT,
+    parent_run_id TEXT
   )`);
   // Existing tables created before leases / keys: add columns in place.
   try {
@@ -424,6 +431,11 @@ async function ensureSchema(sql: PostgresSignalSql): Promise<void> {
   } catch {
     /* fake / older engines without IF NOT EXISTS — ignore */
   }
+  try {
+    await sql.exec(`ALTER TABLE oke_signal_messages ADD COLUMN IF NOT EXISTS parent_run_id TEXT`);
+  } catch {
+    /* fake / older engines without IF NOT EXISTS — ignore */
+  }
   await sql.exec(`CREATE TABLE IF NOT EXISTS oke_signal_writes (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -435,11 +447,16 @@ function rowToMessage(row: Record<string, unknown>): SignalMessage {
     row.ordering_key === undefined || row.ordering_key === null || row.ordering_key === ""
       ? undefined
       : String(row.ordering_key);
+  const parentRunId =
+    row.parent_run_id === undefined || row.parent_run_id === null || row.parent_run_id === ""
+      ? undefined
+      : String(row.parent_run_id);
   return {
     id: String(row.id),
     signal: String(row.signal),
     payload: JSON.parse(String(row.payload)),
     ...(key !== undefined ? { key } : {}),
+    ...(parentRunId !== undefined ? { parentRunId } : {}),
     delivery: row.delivery as SignalDelivery,
     attempts: Number(row.attempts),
     failures: JSON.parse(String(row.failures ?? "[]")) as SignalFailureReason[],
@@ -554,8 +571,12 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
     const t = now();
     const orderingKey =
       typeof options?.key === "string" && options.key.length > 0 ? options.key : null;
+    const parentRunId =
+      typeof options?.parentRunId === "string" && options.parentRunId.length > 0
+        ? options.parentRunId
+        : null;
     await tx.exec(
-      `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO oke_signal_messages (id, signal, payload, ordering_key, delivery, attempts, failures, created_at, available_at, status, locked_by, lease_expires_at, delivered_to, parent_run_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
         signal,
@@ -570,6 +591,7 @@ export async function openPostgresSignal(options: SignalOpenOptions): Promise<Si
         null,
         null,
         "[]",
+        parentRunId,
       ],
     );
   }

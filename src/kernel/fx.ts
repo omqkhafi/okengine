@@ -52,8 +52,19 @@ import {
 import { maskRedactedDeep, Redacted } from "./redacted.ts";
 import type { JournalSession } from "./journal.ts";
 import type { RunTelemetry } from "./run-telemetry.ts";
+import type { RunsRuntime } from "../runs/runtime.ts";
+import type { RunsRow, WideEvent } from "../runs/types.ts";
+import {
+  evaluateSloBreaches,
+  windowStatsForFlow,
+  type RunWindowStats,
+  type SloBreach,
+} from "../runs/window.ts";
 import { translate, type MessageCatalogs } from "../i18n/messages.ts";
 import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
+
+/** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
+export const RUNS_RESOURCE = "runs";
 
 export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
@@ -328,6 +339,45 @@ export interface FxJson {
 }
 
 /**
+ * Flow-facing read door to the Runs wide-event store.
+ *
+ * Declare `effects: { reads: ["runs"] }`. Powers native SLO checkers
+ * (Clock + Channel) without a parallel `fx.metric` API.
+ */
+export interface FxRuns {
+  /**
+   * Run SQL against the Runs store (`FROM runs` for files/memory).
+   *
+   * @param sql - Driver SQL
+   */
+  query(sql: string): Promise<RunsRow[]>;
+  /** Materialise all visible wide events (small stores / tests). */
+  all(): Promise<WideEvent[]>;
+  /**
+   * Rolling P95 / success-rate stats for one flow over a window.
+   *
+   * @param flow - Flow name
+   * @param windowMs - Lookback window (default 5 minutes)
+   */
+  window(flow: string, windowMs?: number): Promise<RunWindowStats>;
+  /**
+   * Evaluate Manifest-style SLO thresholds against a rolling window.
+   *
+   * @param flow - Flow name
+   * @param slo - Availability / latency thresholds
+   * @param windowMs - Lookback window (default 5 minutes)
+   */
+  checkSlo(
+    flow: string,
+    slo: {
+      readonly availability?: string;
+      readonly latency?: { readonly p95?: string; readonly p99?: string };
+    },
+    windowMs?: number,
+  ): Promise<readonly SloBreach[]>;
+}
+
+/**
  * The `fx` context object — v1 surface.
  *
  * Implementations must be plain objects so tests can replace `fx` wholesale.
@@ -362,6 +412,11 @@ export interface Fx {
    * @param input - Input payload
    */
   call(flow: NamedRef, input?: unknown): Promise<unknown>;
+  /**
+   * Query the Runs wide-event store (records `read` on `"runs"`).
+   * Requires a bound runs runtime and `effects.reads` including `"runs"`.
+   */
+  readonly runs: FxRuns;
   /** Clock surface. */
   readonly clock: FxClock;
   /**
@@ -590,6 +645,11 @@ export interface CreateFxOptions {
    */
   readonly signalRuntime?: SignalRuntime;
   /**
+   * Optional runs runtime. When set, `fx.runs` queries wide events for
+   * native SLO checkers (Clock + Channel alerting).
+   */
+  readonly runsRuntime?: RunsRuntime;
+  /**
    * Optional vault runtime. When set, `fx.vault` reads through it and
    * `fx.log` redacts loaded secret values automatically.
    */
@@ -610,6 +670,11 @@ export interface CreateFxOptions {
    * with zero flow instrumentation.
    */
   readonly runTelemetry?: RunTelemetry;
+  /**
+   * This invocation's WideEvent / run id. Stamped onto `fx.emit` messages
+   * as `parentRunId` so consuming Flows can join the trace chain.
+   */
+  readonly runId?: string;
   /** Reveal PII through the store runtime (requires `pii:reveal` upstream). */
   readonly revealPii?: boolean;
   /**
@@ -1135,13 +1200,58 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
   };
 
+  const runsSurface: FxRuns = {
+    query(sql) {
+      return gated("read", RUNS_RESOURCE, async () => {
+        if (!options.runsRuntime) {
+          throw new Error("fx.runs.query requires a bound runs runtime (oke({ runs }))");
+        }
+        return options.runsRuntime.query(sql);
+      });
+    },
+    all() {
+      return gated("read", RUNS_RESOURCE, async () => {
+        if (!options.runsRuntime) {
+          throw new Error("fx.runs.all requires a bound runs runtime (oke({ runs }))");
+        }
+        return options.runsRuntime.all();
+      });
+    },
+    async window(flowName, windowMs = 5 * 60_000) {
+      return gated("read", RUNS_RESOURCE, async () => {
+        if (!options.runsRuntime) {
+          throw new Error("fx.runs.window requires a bound runs runtime (oke({ runs }))");
+        }
+        const events = await options.runsRuntime.all();
+        return windowStatsForFlow(events, flowName, now(), windowMs);
+      });
+    },
+    async checkSlo(flowName, slo, windowMs = 5 * 60_000) {
+      return gated("read", RUNS_RESOURCE, async () => {
+        if (!options.runsRuntime) {
+          throw new Error("fx.runs.checkSlo requires a bound runs runtime (oke({ runs }))");
+        }
+        const events = await options.runsRuntime.all();
+        const stats = windowStatsForFlow(events, flowName, now(), windowMs);
+        return evaluateSloBreaches(stats, slo);
+      });
+    },
+  };
+
   const fx: Fx = {
     store: storeHandle,
+    runs: runsSurface,
     emit(signal, payload, emitOptions) {
       const name = resolveName(signal);
       return gated("emit", name, async () => {
         if (options.signalRuntime) {
-          await options.signalRuntime.emit(name, payload, emitOptions);
+          const merged: SignalEmitOptions = {
+            ...emitOptions,
+            ...(options.runId !== undefined && emitOptions?.parentRunId === undefined
+              ? { parentRunId: options.runId }
+              : {}),
+          };
+          await options.signalRuntime.emit(name, payload, merged);
         }
       });
     },

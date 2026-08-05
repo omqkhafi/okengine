@@ -33,9 +33,42 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 ## Signals
 
-| Signature                             | Records | Notes                                                                                                                                           |
-| ------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fx.emit(signal, payload?, { key? })` | `emit`  | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; throws **OKE1042** (orphan) or **OKE1043** (schema) |
+| Signature                             | Records | Notes                                                                                                                                                                                                     |
+| ------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fx.emit(signal, payload?, { key? })` | `emit`  | Commits the signal outbox when the call resolves; optional `key` serializes `once` per key; stamps producer run id as `parentRunId` for trace chains; throws **OKE1042** (orphan) or **OKE1043** (schema) |
+
+## Runs (observability read)
+
+Declare `effects: { reads: ["runs"] }`. Powers native SLO checkers (Clock + Channel) without a parallel metrics API.
+
+| Signature                                | Records       | Returns                                       |
+| ---------------------------------------- | ------------- | --------------------------------------------- |
+| `fx.runs.query(sql)`                     | `read` `runs` | SQL rows (`FROM runs` on files/memory)        |
+| `fx.runs.all()`                          | `read` `runs` | All wide events                               |
+| `fx.runs.window(flow, windowMs?)`        | `read` `runs` | Rolling P50/P95/P99 + error rate (default 5m) |
+| `fx.runs.checkSlo(flow, slo, windowMs?)` | `read` `runs` | Availability / latency breaches               |
+
+```typescript
+on(
+  every("5m"),
+  flow({
+    name: "ops.slo-check",
+    effects: { reads: ["runs"], sends: ["slo-alert"] },
+    do: async (_, fx) => {
+      const breaches = await fx.runs.checkSlo(
+        "checkout.create",
+        { availability: "99.9%", latency: { p95: "200ms" } },
+        5 * 60_000,
+      );
+      if (breaches.length === 0) return;
+      await fx.send(sloAlert, {
+        to: "oncall@example.com",
+        data: { flow: "checkout.create", count: breaches.length },
+      });
+    },
+  }),
+);
+```
 
 ## Flows
 
@@ -228,7 +261,8 @@ must log who started the call chain.
 
 <Callout title="No fx.metric">
   Investigated and declined. [Runs](/docs/console/runs) already own per-invocation observability as
-  wide events; a parallel counter/gauge API would be a second instrumentation path without a sink.
+  wide events. Native alerting is `fx.runs` + Clock + Channel — not a second counter/gauge API.
+  Optional OTLP export for existing Grafana/Datadog stacks is additive and never required.
 </Callout>
 
 ## Learn more

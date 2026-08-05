@@ -120,6 +120,20 @@ describe("fx — wholesale swap", () => {
       store() {
         throw new Error("store must not be used");
       },
+      runs: {
+        query: async () => {
+          throw new Error("runs must not be used");
+        },
+        all: async () => {
+          throw new Error("runs must not be used");
+        },
+        window: async () => {
+          throw new Error("runs must not be used");
+        },
+        checkSlo: async () => {
+          throw new Error("runs must not be used");
+        },
+      },
       async emit(signal) {
         calls.push(`emit:${typeof signal === "string" ? signal : signal.name}`);
       },

@@ -473,7 +473,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     },
     putTier1(effects, value, dimsByResource) {
       const keys = tier1KeysForReads(effects, dimsByResource);
-      const resources = effects.reads ?? [];
+      const resources = (effects.reads ?? []).filter((r): r is ResourceRef => r !== "runs");
       for (const key of keys) {
         cache.set({
           tier: 1,

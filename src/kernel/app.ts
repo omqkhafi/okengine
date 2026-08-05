@@ -59,7 +59,9 @@ import {
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
+import { fail, type FlowFailure } from "./errors.ts";
 import {
+  isFlowFailure,
   mergeHooks,
   runPipeline,
   type HookFn,
@@ -359,6 +361,10 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
       readonly operator?: FxOperator;
       /** Pre-resolved principal (either plane). */
       readonly principal?: ResolvedPrincipal;
+      /** Parent WideEvent id when this execution was caused by another. */
+      readonly parentId?: string;
+      /** Explicit run / WideEvent id (defaults to a new UUID). */
+      readonly runId?: string;
     },
   ): Promise<ExecuteResult>;
   /**
@@ -381,8 +387,13 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
    *
    * @param signal - Signal name or handle
    * @param payload - Payload
+   * @param meta - Optional envelope from the bus (producer run id)
    */
-  dispatchSignal(signal: NamedRef, payload?: unknown): Promise<ExecuteResult[]>;
+  dispatchSignal(
+    signal: NamedRef,
+    payload?: unknown,
+    meta?: { readonly parentRunId?: string; readonly messageId?: string },
+  ): Promise<ExecuteResult[]>;
   /**
    * Invoke all flows bound to an `every` interval.
    *
@@ -637,8 +648,12 @@ export function oke(options: OkeOptions): OkeApp {
     }
   }
 
-  async function handleSignalFire(name: string, payload: unknown): Promise<void> {
-    await app.dispatchSignal(name, payload);
+  async function handleSignalFire(
+    name: string,
+    payload: unknown,
+    meta?: { readonly parentRunId?: string; readonly messageId?: string },
+  ): Promise<void> {
+    await app.dispatchSignal(name, payload, meta);
   }
 
   async function handleDurableResume(): Promise<void> {
@@ -918,6 +933,10 @@ export function oke(options: OkeOptions): OkeApp {
       readonly originPrincipal?: FxPrincipal;
       /** Explicit locale override for {@link Fx.t} / channel sends. */
       readonly locale?: string;
+      /** Parent WideEvent id when this execution was caused by another. */
+      readonly parentId?: string;
+      /** Explicit run / WideEvent id (defaults to a new UUID). */
+      readonly runId?: string;
     },
   ): Promise<ExecuteResult> {
     registerFlow(flowDef);
@@ -957,6 +976,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly principal?: ResolvedPrincipal;
       readonly originPrincipal?: FxPrincipal;
       readonly locale?: string;
+      readonly parentId?: string;
+      readonly runId?: string;
     };
     readonly resolvedLocale: string;
     readonly defaultLocale: string;
@@ -991,6 +1012,15 @@ export function oke(options: OkeOptions): OkeApp {
     const now = options.fx?.now ?? booted?.clock?.now ?? (() => Date.now());
     const startedAt = now();
     const telemetry = createRunTelemetry();
+    const inboundId =
+      extras?.request?.headers.get("x-request-id")?.trim() ||
+      extras?.request?.headers.get("x-correlation-id")?.trim() ||
+      undefined;
+    const runId =
+      extras?.runId ??
+      (inboundId && inboundId.length > 0 ? inboundId : undefined) ??
+      crypto.randomUUID();
+    const parentId = extras?.parentId;
 
     // Element pipeline wiring only kicks in once booted — `autoBoot: false`
     // keeps intentional pre-boot unit tests ungated (no elements either).
@@ -1057,6 +1087,7 @@ export function oke(options: OkeOptions): OkeApp {
         const journal = createJournal({
           store,
           now,
+          id: () => runId,
           // Hold the run lease for the request's lifetime — a crash mid-run
           // leaves an expired lease another instance can reclaim and resume.
           ...(hasJournalLease(store) ? { lease: { instanceId, leaseMs } } : {}),
@@ -1071,6 +1102,7 @@ export function oke(options: OkeOptions): OkeApp {
       flow: flowDef.name,
       effects: flowDef.effects,
       runTelemetry: telemetry,
+      runId,
       now,
       i18n: {
         locale: resolvedLocale,
@@ -1090,6 +1122,7 @@ export function oke(options: OkeOptions): OkeApp {
             aiRuntime: booted.ai,
           }
         : {}),
+      runsRuntime: booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined),
       ...(journalSession ? { journal: journalSession, durable: true } : {}),
       callHandler: async (name, callInput) => {
         const target = flowsByName.get(name);
@@ -1103,6 +1136,7 @@ export function oke(options: OkeOptions): OkeApp {
           {
             originPrincipal: freezePrincipal(fx.principal),
             locale: resolvedLocale,
+            parentId: runId,
           },
         );
         if (inner.failure) return inner.failure;
@@ -1174,10 +1208,32 @@ export function oke(options: OkeOptions): OkeApp {
           input: ctx.input,
           wakeAt: sleeping.wakeAt,
         });
-      } else if (!sleeping && result.failure) {
-        await journalSession.commit("failed", {
-          error: result.failure.error.code,
-        });
+      } else if (!sleeping && isTerminalFailure(result)) {
+        const terminalErr = result.failure ?? result.ctx.error;
+        if (flowDef.compensate) {
+          try {
+            const completedSteps = journalSession.run.entries
+              .filter((e) => e.kind === "step")
+              .map((e) => e.name);
+            await flowDef.compensate(
+              {
+                input: ctx.input as never,
+                error: terminalErr,
+                completedSteps,
+              },
+              fx,
+            );
+          } catch (compErr) {
+            await journalSession.commit("failed", {
+              error: `compensate:${failureCodeOf(compErr)}`,
+            });
+          }
+        }
+        if (journalSession.run.status === "running") {
+          await journalSession.commit("failed", {
+            error: failureCodeOf(terminalErr),
+          });
+        }
       } else if (!sleeping) {
         await journalSession.commit("completed", { output: result.output });
       }
@@ -1187,6 +1243,10 @@ export function oke(options: OkeOptions): OkeApp {
       booted?.runs ?? (isRunsRuntimeLike(options.runs) ? options.runs : undefined);
     if (runsRuntime) {
       const archiveCleartext = archiveFromInput(ctx.input, options.archiveInputFields);
+      const replayInput = redactArchivedFields(ctx.input, options.archiveInputFields);
+      const recordFailure =
+        result.failure ??
+        (isTerminalFailure(result) ? failureFromUnknown(result.ctx.error) : undefined);
       await runsRuntime.record(
         {
           flow: flowDef,
@@ -1196,7 +1256,10 @@ export function oke(options: OkeOptions): OkeApp {
           telemetry,
           startedAt,
           endedAt,
-          failure: result.failure,
+          failure: recordFailure,
+          id: runId,
+          input: replayInput,
+          ...(parentId !== undefined ? { parentId } : {}),
         },
         archiveCleartext,
       );
@@ -1480,12 +1543,16 @@ export function oke(options: OkeOptions): OkeApp {
 
       return respond(encodeExecuteResult(result));
     },
-    async dispatchSignal(signal, payload) {
+    async dispatchSignal(signal, payload, meta) {
       const name = resolveName(signal);
       const results: ExecuteResult[] = [];
       for (const b of adopted) {
         if (b.trigger.kind === "signal" && b.trigger.name === name) {
-          results.push(await execute(b.flow, payload, b.trigger as SignalAsTrigger));
+          results.push(
+            await execute(b.flow, payload, b.trigger as SignalAsTrigger, {
+              ...(meta?.parentRunId !== undefined ? { parentId: meta.parentRunId } : {}),
+            }),
+          );
         }
       }
       return results;
@@ -1555,6 +1622,26 @@ function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
   );
 }
 
+/** True when the pipeline ended in a terminal failure (not sleep park). */
+function isTerminalFailure(result: PipelineResult): boolean {
+  if (result.failure) return true;
+  return result.ctx.error !== undefined && !isJournalSuspend(result.ctx.error);
+}
+
+/** Machine-readable code for journal / Runs failure fields. */
+function failureCodeOf(err: unknown): string {
+  if (isFlowFailure(err)) return err.error.code;
+  if (err instanceof Error && err.name && err.name !== "Error") return err.name;
+  if (err instanceof Error && err.message) return err.message.slice(0, 120);
+  return "Error";
+}
+
+/** Coerce a thrown value into a FlowFailure for Runs wide events. */
+function failureFromUnknown(err: unknown): FlowFailure {
+  if (isFlowFailure(err)) return err;
+  return fail(failureCodeOf(err), {});
+}
+
 /**
  * Pull personal fields from validated input for crypto-shred archival.
  *
@@ -1574,6 +1661,26 @@ function archiveFromInput(
     if (typeof v === "string" && v.length > 0) out[name] = v;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Clone input with archived personal fields replaced by shred markers so the
+ * replay snapshot never retains cleartext for those keys.
+ *
+ * @param input - Validated flow input
+ * @param fields - Property names that go to {@link archiveFromInput}
+ */
+function redactArchivedFields(input: unknown, fields: readonly string[] | undefined): unknown {
+  if (input === undefined) return undefined;
+  if (!fields || fields.length === 0) return input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const obj = { ...(input as Record<string, unknown>) };
+  for (const name of fields) {
+    if (typeof obj[name] === "string" && (obj[name] as string).length > 0) {
+      obj[name] = "[archived]";
+    }
+  }
+  return obj;
 }
 
 /**

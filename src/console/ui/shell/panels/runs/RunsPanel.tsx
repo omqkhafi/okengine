@@ -13,18 +13,22 @@ import {
   discoverDimensions,
   durationHistogram,
   durationRangeOf,
+  errorPatterns,
   explainDurationOutliers,
   filterRuns,
+  filterRunsSince,
   formatDurationMs,
   groupByDimension,
   normalizeRange,
   openRun,
   parseDimensionQuery,
+  parseSinceWindowMs,
   removeClause,
   rowToRun,
   serializeRunsSearch,
   setDurationRange,
   setGroup,
+  setSince,
   setWhere,
   rootIdOf,
   shouldOfferTracesLink,
@@ -63,13 +67,26 @@ export function RunsPanel() {
 
   const allRuns = runsQuery.data ?? [];
   const query = dimensionQueryOf(search);
-  const filtered = useMemo(() => filterRuns(allRuns, query), [allRuns, query]);
+  const sinceParam = search.since ?? "1h";
+  const windowMs = parseSinceWindowMs(sinceParam === "" ? undefined : sinceParam);
+  const sinceMs =
+    windowMs === undefined
+      ? undefined
+      : /^\d+$/.test(sinceParam.trim())
+        ? windowMs
+        : Date.now() - windowMs;
+  const windowed = useMemo(() => filterRunsSince(allRuns, sinceMs), [allRuns, sinceMs]);
+  const filtered = useMemo(() => filterRuns(windowed, query), [windowed, query]);
   const range = durationRangeOf(search);
   const buckets = useMemo(() => durationHistogram(filtered), [filtered]);
   const maxBucket = Math.max(1, ...buckets.map((b) => b.count));
   const groups = useMemo(
     () => (search.group ? groupByDimension(filtered, search.group) : []),
     [filtered, search.group],
+  );
+  const patterns = useMemo(
+    () => errorPatterns(windowed, Date.now(), windowMs ?? 60 * 60 * 1000),
+    [windowed, windowMs],
   );
   const findings = useMemo(
     () => (range ? explainDurationOutliers(filtered, range) : []),
@@ -89,6 +106,23 @@ export function RunsPanel() {
           </p>
         </div>
         <QueryBuilder search={search} dimensions={dimensions} onChange={setSearch} />
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-[var(--oke-muted)]">Since</span>
+          <select
+            aria-label="Lookback window"
+            className="min-h-8 border border-[var(--oke-line)] bg-transparent px-2 text-sm"
+            value={sinceParam}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearch(setSince(search, v === "" ? "" : v));
+            }}
+          >
+            <option value="5m">Last 5m</option>
+            <option value="1h">Last 1h</option>
+            <option value="24h">Last 24h</option>
+            <option value="">All time</option>
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-[var(--oke-muted)]">Group by</span>
           <select
@@ -161,6 +195,43 @@ export function RunsPanel() {
               )}
             </section>
           ) : null}
+
+          <section aria-label="Error patterns" className="mb-8">
+            <h2 className="mb-2 text-sm font-medium">Error patterns</h2>
+            <p className="mb-3 text-xs text-[var(--oke-muted)]">
+              Failed runs in the selected window, grouped by error code.
+            </p>
+            {patterns.length === 0 ? (
+              <p className="text-sm text-[var(--oke-muted)]">No errors in this window.</p>
+            ) : (
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--oke-line)] text-[var(--oke-muted)]">
+                    <th scope="col" className="py-2 pr-3 font-medium">
+                      Error
+                    </th>
+                    <th scope="col" className="py-2 pr-3 font-medium">
+                      Count
+                    </th>
+                    <th scope="col" className="py-2 font-medium">
+                      p99
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--oke-line)]">
+                  {patterns.map((p) => (
+                    <tr key={p.key}>
+                      <td className="py-2 pr-3 font-mono text-xs text-[var(--oke-danger)]">
+                        {p.key}
+                      </td>
+                      <td className="py-2 pr-3">{p.count}</td>
+                      <td className="py-2">{formatDurationMs(p.p99DurationMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
 
           {search.group ? (
             <section aria-label="Group aggregates" className="mb-8">

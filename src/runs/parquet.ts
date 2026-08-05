@@ -42,6 +42,7 @@ export function wideEventToRow(event: WideEvent): ParquetRow {
     build_version: event.buildVersion ?? null,
     error_code: event.error?.code ?? null,
     error_message: event.error?.message ?? null,
+    input: event.input === undefined ? null : JSON.stringify(event.input),
     effects: JSON.stringify(event.effects),
     logs: JSON.stringify(event.logs),
     duration_ms: event.durationMs,
@@ -103,6 +104,14 @@ export function rowToWideEvent(row: Record<string, unknown>): WideEvent {
             ...(row.error_message != null ? { message: String(row.error_message) } : {}),
           }
         : null,
+    ...(row.input != null && row.input !== ""
+      ? {
+          input:
+            typeof row.input === "string"
+              ? (JSON.parse(row.input) as unknown)
+              : (row.input as unknown),
+        }
+      : {}),
     effects: parseJsonArray(row.effects) as WideEvent["effects"],
     logs: parseJsonArray(row.logs) as WideEvent["logs"],
     durationMs: Number(row.duration_ms ?? 0),

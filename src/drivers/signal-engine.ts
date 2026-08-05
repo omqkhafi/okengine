@@ -39,6 +39,8 @@ interface MutMessage {
   payload: unknown;
   /** Optional per-key ordering token (`once` serialization). */
   key: string | null;
+  /** Producer run id for trace parent/child joins. */
+  parentRunId: string | null;
   delivery: SignalDelivery;
   attempts: number;
   failures: SignalFailureReason[];
@@ -163,6 +165,7 @@ export async function createSignalEngine(
       messages = snap.messages.map((m) => ({
         ...m,
         key: m.key ?? null,
+        parentRunId: m.parentRunId ?? null,
         lockedBy: m.lockedBy,
         leaseExpiresAt: m.leaseExpiresAt ?? null,
         deliveredTo: new Set(m.deliveredTo),
@@ -179,6 +182,7 @@ export async function createSignalEngine(
         signal: m.signal,
         payload: m.payload,
         key: m.key,
+        parentRunId: m.parentRunId,
         delivery: m.delivery,
         attempts: m.attempts,
         failures: m.failures,
@@ -230,11 +234,16 @@ export async function createSignalEngine(
     const value = await validateSignalEmitPayload(name, decl, payload);
     const t = now();
     const key = typeof options?.key === "string" && options.key.length > 0 ? options.key : null;
+    const parentRunId =
+      typeof options?.parentRunId === "string" && options.parentRunId.length > 0
+        ? options.parentRunId
+        : null;
     stagedMessages.push({
       id: crypto.randomUUID(),
       signal: name,
       payload: value,
       key,
+      parentRunId,
       delivery: decl.delivery,
       attempts: 0,
       failures: [],
@@ -332,6 +341,7 @@ export async function createSignalEngine(
       signal: m.signal,
       payload: m.payload,
       ...(m.key !== null ? { key: m.key } : {}),
+      ...(m.parentRunId !== null ? { parentRunId: m.parentRunId } : {}),
       delivery: m.delivery,
       attempts: m.attempts,
       failures: [...m.failures],

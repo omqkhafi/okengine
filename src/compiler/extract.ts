@@ -22,6 +22,7 @@ import type {
   Journey,
   Manifest,
   RateStrategy,
+  ResourceRef,
   SecretContract,
   Signal,
   SignalDelivery,
@@ -1333,9 +1334,8 @@ function registerResourceMount(
   const resource = baseName ? scope.resources.get(baseName) : undefined;
 
   const unit = resource?.unit;
-  const storeRef = resource?.storeRef as Effects["reads"] extends readonly (infer R)[] | undefined
-    ? R
-    : never;
+  const storeRef: ResourceRef | undefined =
+    resource?.storeRef !== undefined ? (resource.storeRef as ResourceRef) : undefined;
   const effects: Effects | undefined = storeRef
     ? { reads: [storeRef], writes: [storeRef] }
     : undefined;

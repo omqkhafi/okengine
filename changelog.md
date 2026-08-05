@@ -10,6 +10,37 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- Trace continuity — each execution allocates a stable run id (aligned with
+  the durable journal when present); `fx.emit` stamps `parentRunId` on
+  Signal messages; consumers and `fx.call` children record
+  `WideEvent.parentId` so Console Traces join Flow → Signal → Flow chains.
+- `oke replay --request-id <id>` — re-invoke a past Flow locally from a
+  Runs WideEvent (defaults to dry-run when the ledger has `send`/`ask`).
+- `WideEvent.input` — validated input snapshot persisted for replay
+  (archived personal fields redacted to `[archived]`).
+- `fx.runs` — capability-gated Runs read (`effects.reads: ["runs"]`) with
+  `query` / `all` / `window` / `checkSlo` for native P95 + availability
+  checkers over Clock + Channel (no `fx.metric`).
+- Optional OTLP-shaped metric mapping (`wideEventToOtlpMetrics`) for teams
+  with an existing observability stack — additive, never required.
+- Console Runs — lookback window (`since`) + Error patterns table
+  (error code counts in the selected window).
+- Flow-level `compensate` on durable flows — runs after terminal failure
+  under the same journal; undo work must use distinct `fx.step("undo:…")`
+  names so completed forwards never re-run.
+
+### ♻️ Changed
+
+- Overview SLO burn also evaluates Manifest `slo.latency.p95` (availability
+  burn unchanged).
+
+### 🐛 Fixed
+
+- Durable execute path: thrown errors now commit the journal as `failed`
+  (and record on Runs) instead of incorrectly marking `completed`.
+
 ## v0.9.1 — 2026-08-04
 
 ### ♻️ Changed

@@ -57,6 +57,12 @@ export interface SloBurn {
   readonly lastBurnAt: number | null;
   readonly sampleCount: number;
   readonly errorCount: number;
+  /** Observed p95 latency ms in the short window (0 when empty). */
+  readonly latencyP95Ms: number;
+  /** Declared p95 threshold ms when Manifest sets `slo.latency.p95`. */
+  readonly latencyP95ThresholdMs: number | null;
+  /** True when observed p95 exceeds the declared threshold. */
+  readonly latencyBreached: boolean;
 }
 
 /** Cost budget in the same visual model as the error budget. */

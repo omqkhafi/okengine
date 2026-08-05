@@ -73,6 +73,20 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
    * (`oke doctor --diff` / CI gate).
    */
   readonly breaking?: boolean;
+  /**
+   * Compensation phase after terminal failure on a durable flow.
+   * Runs under the same journal session before `commit("failed")`.
+   * Bodies must use distinct `fx.step("undo:…")` names — never reuse
+   * forward step names. Never called on retryable attempts or sleep park.
+   */
+  readonly compensate?: (
+    ctx: {
+      readonly input: I;
+      readonly error: unknown;
+      readonly completedSteps: readonly string[];
+    },
+    fx: import("./fx.ts").Fx,
+  ) => unknown | Promise<unknown>;
   /** The behavior. */
   readonly do: FlowHandler<I, O>;
 }
@@ -165,6 +179,20 @@ export interface FlowDef<
   readonly plane: FlowPlane | undefined;
   /** Intentional contract-break acknowledgement for Manifest Diff. */
   readonly breaking: boolean;
+  /**
+   * Optional compensation phase after terminal durable failure.
+   * See {@link FlowOptions.compensate}.
+   */
+  readonly compensate:
+    | ((
+        ctx: {
+          readonly input: I;
+          readonly error: unknown;
+          readonly completedSteps: readonly string[];
+        },
+        fx: import("./fx.ts").Fx,
+      ) => unknown | Promise<unknown>)
+    | undefined;
   /** Handler body. */
   readonly do: FlowHandler<I, O>;
   /** Triggers bound via {@link on} (zero or more). */
@@ -236,6 +264,16 @@ export function flow<Opts extends FlowOptions<any, any, any>>(
     slo: options.slo,
     plane: options.plane,
     breaking: options.breaking ?? false,
+    compensate: options.compensate as
+      | ((
+          ctx: {
+            readonly input: InferFlowIn<Opts>;
+            readonly error: unknown;
+            readonly completedSteps: readonly string[];
+          },
+          fx: import("./fx.ts").Fx,
+        ) => unknown | Promise<unknown>)
+      | undefined,
     do: options.do as FlowHandler<InferFlowIn<Opts>, InferFlowOut<Opts>>,
     triggers,
     $trigger: undefined,

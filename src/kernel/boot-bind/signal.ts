@@ -129,7 +129,10 @@ export async function bindSignal(
       if (seen.has(name)) continue;
       seen.add(name);
       await bus.subscribe(name, `oke:${name}`, async (msg) => {
-        await handler(name, msg.payload);
+        await handler(name, msg.payload, {
+          ...(msg.parentRunId !== undefined ? { parentRunId: msg.parentRunId } : {}),
+          messageId: msg.id,
+        });
       });
     }
   }

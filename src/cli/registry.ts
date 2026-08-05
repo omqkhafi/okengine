@@ -467,6 +467,30 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     ],
   },
   {
+    name: "replay",
+    summary: "re-invoke a past Flow from a Runs WideEvent",
+    leaf: true,
+    flags: [
+      {
+        long: "--request-id",
+        short: "-r",
+        takesValue: true,
+        valueName: "id",
+        summary: "WideEvent / run id to replay",
+      },
+      ENTRY,
+      {
+        long: "--dry-run",
+        summary: "Stub irreversible effects (send / ask)",
+      },
+      {
+        long: "--live",
+        summary: "Allow live re-execution of send / ask effects",
+      },
+      HELP,
+    ],
+  },
+  {
     name: "privacy",
     summary: "crypto-shred subject data",
     subcommands: [

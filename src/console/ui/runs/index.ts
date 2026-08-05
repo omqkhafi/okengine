@@ -5,6 +5,13 @@
  * without mounting the full SPA.
  */
 
+export {
+  ERROR_WINDOW_1H_MS,
+  errorPatterns,
+  failedRunsInWindow,
+  filterRunsSince,
+  parseSinceWindowMs,
+} from "./errors.ts";
 export { explainDurationOutliers, type OutlierFinding } from "./explain.ts";
 export { RUNS_CHAIN_FIXTURE, RUNS_FIXTURE_T0, runsOutlierFixture } from "./fixture.ts";
 export { discoverDimensions, groupByDimension } from "./group.ts";
@@ -38,6 +45,7 @@ export {
   serializeRunsSearch,
   setDurationRange,
   setGroup,
+  setSince,
   setWhere,
   type RunsSearch,
 } from "./search.ts";

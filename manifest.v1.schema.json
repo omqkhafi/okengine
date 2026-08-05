@@ -139,7 +139,15 @@
       "properties": {
         "reads": {
           "type": "array",
-          "items": { "$ref": "#/$defs/ResourceRef" },
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/ResourceRef" },
+              {
+                "const": "runs",
+                "description": "Runs wide-event store via fx.runs (observability read)."
+              }
+            ]
+          },
           "uniqueItems": true
         },
         "writes": {

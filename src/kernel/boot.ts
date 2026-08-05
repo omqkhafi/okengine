@@ -115,8 +115,13 @@ export interface BootOptions {
    *
    * @param signal - Signal name
    * @param payload - Payload
+   * @param meta - Optional envelope (producer run id for trace chains)
    */
-  readonly onSignal?: (signal: string, payload: unknown) => void | Promise<void>;
+  readonly onSignal?: (
+    signal: string,
+    payload: unknown,
+    meta?: { readonly parentRunId?: string; readonly messageId?: string },
+  ) => void | Promise<void>;
   /**
    * Resume due durable runs — called on every scheduler tick when any flow
    * declares `durable: true` (claimDueSleep on the shared journal store).

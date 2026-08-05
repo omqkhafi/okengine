@@ -19,6 +19,7 @@ import { imagesCli } from "./images.ts";
 import { modeCli } from "./mode.ts";
 import { privacyEraseCli } from "./privacy-erase.ts";
 import { formatOkeHelp } from "./registry.ts";
+import { replayCli } from "./replay.ts";
 import { schemaCli } from "./schema.ts";
 import { stackCli } from "./stack.ts";
 import { startCli } from "./start.ts";
@@ -86,6 +87,10 @@ if (cmd === "ai") {
 
 if (cmd === "branch") {
   process.exit(await branchCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "replay") {
+  process.exit(await replayCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "privacy" && sub === "erase") {

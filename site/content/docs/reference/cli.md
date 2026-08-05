@@ -45,9 +45,14 @@ oke build --target edge          # < 15 kB kernel profile
 oke eval                         # run prompt eval sets; fails CI on regression
 oke ai setup                     # configure AI driver + models (TTY wizard or flags)
 oke branch prod --at "yesterday" # fork journaled state into a sandbox
+oke replay --request-id <id>     # re-invoke a past Flow from a Runs WideEvent (dry-run if send/ask)
 oke privacy erase --subject <id> # crypto-shredding: deletes the key, not the terabytes
 oke upgrade                      # run codemods for a breaking change, print the diff
 ```
+
+`oke replay` loads a Runs WideEvent by id and re-enters the Flow with stored
+input. Defaults to dry-run when the ledger has `send` / `ask` (pass `--live`
+to override). Needs a build that persisted `WideEvent.input`.
 
 In development, app, Console, MCP, and docs MCP prefer the canonical ports and move upward
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
@@ -115,7 +120,10 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 | `--diff`             |       | `doctor`                                       |
 | `--json`             | `-j`  | `doctor`, `stack`, `images list`, `gates list` |
 | `--manifest`         | `-m`  | most Manifest readers                          |
-| `--entry`            | `-e`  | `dev`, `start`, `build`                        |
+| `--entry`            | `-e`  | `dev`, `start`, `build`, `replay`              |
+| `--request-id`       | `-r`  | `replay`                                       |
+| `--dry-run`          |       | `replay`                                       |
+| `--live`             |       | `replay`                                       |
 | `--out` / `--outdir` | `-o`  | writers                                        |
 | `--subject`          | `-s`  | `privacy erase`                                |
 | `--before`           | `-b`  | `doctor --diff`                                |

@@ -69,6 +69,11 @@ export interface WideEvent {
   readonly buildVersion?: string;
   /** Typed error when the flow failed. */
   readonly error?: RunError | null;
+  /**
+   * Validated flow input snapshot for local replay (`oke replay`).
+   * Declared personal fields may be crypto-shredded into {@link archived}.
+   */
+  readonly input?: unknown;
   /** Effect ledger snapshot. */
   readonly effects: readonly EffectEntry[];
   /**
