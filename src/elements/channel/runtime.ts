@@ -34,6 +34,7 @@ import {
 import { createSuppressionStore, type SuppressionStore } from "./suppression.ts";
 import {
   deliverOtpAcrossChannels,
+  shouldFallbackOtpMedium,
   type DeliverOtpOptions,
   type DeliverOtpResult,
 } from "./otp-delivery.ts";
@@ -233,6 +234,8 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
 
     const recorded: FallbackAttempt[] = [];
     const fallback = new FallbackTransport(transports, {
+      // Same permanent-vs-provider distinction as OTP cross-medium failover.
+      shouldFallback: shouldFallbackOtpMedium,
       onFallback(failedIndex, error) {
         const provider =
           transports[failedIndex]?.provider ?? chain[failedIndex]?.id ?? `driver-${failedIndex}`;
@@ -287,6 +290,16 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
           });
         }
       }
+      // Permanent client errors abort failover by rethrowing the original error
+      // (no FallbackError.attempts / onFallback) — still record the failed try.
+      if (attempts.length === 0) {
+        attempts.push({
+          driverId: transports[0]?.provider ?? chain[0]?.id ?? "email",
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          at: now(),
+        });
+      }
       return {
         result: {
           ok: false,
@@ -318,6 +331,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
       options.retry ? new RetryTransport(transport) : transport,
     );
     const fallback = new FallbackTransport(transports, {
+      shouldFallback: shouldFallbackOtpMedium,
       onFallback(failedIndex, error) {
         const provider =
           transports[failedIndex]?.provider ?? sms[failedIndex]?.driver.id ?? `sms-${failedIndex}`;
@@ -375,6 +389,14 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
             at: now(),
           });
         }
+      }
+      if (attempts.length === 0) {
+        attempts.push({
+          driverId: transports[0]?.provider ?? sms[0]?.driver.id ?? "sms",
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          at: now(),
+        });
       }
       return {
         result: {

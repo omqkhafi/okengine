@@ -73,8 +73,11 @@ type MediumSendResult = {
 };
 
 /**
- * Whether an error should advance to the next medium (provider outage),
- * not permanent client mistakes (invalid address).
+ * Whether an error should advance to the next transport / medium
+ * (provider outage), not permanent client mistakes (invalid address).
+ *
+ * Shared by OTP cross-medium delivery and same-medium email/SMS
+ * {@link FallbackTransport} chains on the Channel runtime.
  *
  * @param error - Thrown error
  */

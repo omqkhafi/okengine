@@ -141,6 +141,7 @@ export {
   channel,
   createChannelRuntime,
   createConsentStore,
+  createSuppressionStore,
   createReceiptLedger,
   type ChannelTemplateDecl,
   type ChannelRuntime,

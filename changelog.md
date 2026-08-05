@@ -30,16 +30,30 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - Flow-level `compensate` on durable flows — runs after terminal failure
   under the same journal; undo work must use distinct `fx.step("undo:…")`
   names so completed forwards never re-run.
+- Channel adversarial proofs — hard-bounce auto-suppression (transport never
+  called on the next send), receipt ledger status progression, injectable
+  suppression/consent/receipts escape hatch, Arabic `{{field}}` catalog
+  round-trip, and WhatsApp template-vs-text characterization (24h session
+  window documented as a Known gap — not enforced).
+- `createSuppressionStore` re-exported from the `okengine` root (alongside
+  consent / receipts) for the documented multi-instance injection recipe.
 
 ### ♻️ Changed
 
 - Overview SLO burn also evaluates Manifest `slo.latency.p95` (availability
   burn unchanged).
+- Channel docs — suppression / hard bounce, shared-store injection,
+  permanent-error no-failover, receipt statuses, Arabic catalog keys, and
+  WhatsApp session/template Known gap.
 
 ### 🐛 Fixed
 
 - Durable execute path: thrown errors now commit the journal as `failed`
   (and record on Runs) instead of incorrectly marking `completed`.
+- Channel email/SMS `FallbackTransport` now reuses `shouldFallbackOtpMedium`
+  so permanent client errors (invalid address) do not advance the chain —
+  matching OTP cross-medium failover (sently’s default only checked HTTP
+  400/401/403 and SMTP auth).
 
 ## v0.9.1 — 2026-08-04
 

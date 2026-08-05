@@ -81,11 +81,42 @@ Locally the `console` driver captures mail into an inbox instead of sending; in 
 
 <ChannelPhysics />
 
-### Consent is checked before sending
+### Consent and hard-bounce suppression
 
-Opt-out is first-class: a subject who opted out of a medium is **suppressed** — the send resolves without contacting the provider, and the receipt status is `suppressed/opted-out`. You never hand-roll "did they unsubscribe?" checks.
+Opt-out is first-class: a subject who opted out of a medium is **suppressed** — the send resolves without contacting the provider, and the receipt status is `suppressed/opted-out`.
 
-**Known limit:** default suppression, consent, and receipt stores are **process-local memory**. Opt-out / hard-bounce / receipt on replica A is invisible to replica B. Boot prints a one-shot warning when those defaults are used. Inject shared stores for multi-instance, or run a single Channel consumer, until a durable driver ships.
+Hard bounces are protective too. After a provider outcome of `hard-bounce` is ingested, the address is auto-added to suppression; the **next** send to that address is blocked before any transport runs (`suppressed/prior-bounce`). Soft bounces and complaints do **not** auto-suppress.
+
+```typescript
+// After a provider webhook (or Console ingest):
+runtime.ingestOutcome({
+  messageId,
+  state: "hard-bounce",
+  to: user.email,
+  medium: "email",
+});
+// Next fx.send / runtime.send to that address → ok: false, driverId: "suppression"
+```
+
+**Known limit:** default suppression, consent, and receipt stores are **process-local memory**. Opt-out / hard-bounce / receipt on replica A is invisible to replica B. Boot prints a one-shot warning when those defaults are used.
+
+### Inject shared stores (multi-instance workaround)
+
+Until a durable driver ships, inject your own stores that implement the same surfaces — boot skips the process-local warn when both `suppression` and `receipts` are provided:
+
+```typescript
+import { createConsentStore, createReceiptLedger, createSuppressionStore } from "okengine";
+
+const consent = createConsentStore(); // or a wrapper over shared storage
+const suppression = createSuppressionStore({ consent });
+const receipts = createReceiptLedger();
+
+await app.boot({
+  channel: { suppression, receipts /* templates, catalog, drivers… */ },
+});
+```
+
+`consent` alone is wrapped into the default suppression store when `suppression` is omitted. Prefer passing `suppression` when you share bounce + opt-out state.
 
 ### Locale resolves, then the catalog
 
@@ -96,6 +127,20 @@ that exact key, else the default locale, else `en`.
 Locales come from `oke.config.ts` `i18n`. Catalog bodies use `{{field}}` — not
 ICU ([i18n](/docs/reference/i18n) / `fx.t` owns flow copy). Pass `locale` /
 `profileLocale` / `acceptLanguage` on `fx.send`, or omit them for `fx.locale`.
+
+```typescript
+// Catalog (template → locale → body)
+{
+  "order-confirmed": {
+    en: { subject: "Order {{orderId}}", text: "Hello {{name}}" },
+    ar: { subject: "طلب {{orderId}}", text: "مرحبًا {{name}}" },
+  },
+}
+// locale: "ar" + data { name: "علي", orderId: "ORD-42" }
+// → subject "طلب ORD-42", text "مرحبًا علي"
+```
+
+**Consequence:** `Accept-Language: ar-SA` does **not** match a catalog key named `ar`. Provide both keys, or send `locale: "ar"`.
 
 ### Fallback chains are same-medium
 
@@ -108,12 +153,42 @@ await fx.send(orderConfirmed, {
   data: { name, orderId, total },
   via: ["smtp", "resend"],
 });
-// smtp fails → resend tried → receipt status "fallback" with both attempts
+// smtp provider-error → resend tried → receipt status "fallback"
 ```
 
-### Receipts for everything
+Permanent client errors do **not** advance the chain (invalid address, HTTP
+400/401/403) — the same distinction OTP cross-medium delivery uses. A provider
+timeout or 5xx does failover.
 
-Each send records its attempts — driver, ok/error, timestamp, message id — so "did the user actually get it?" is a Console query, not a guess. In a dry run, the kernel records a would-have-fired send and never opens a provider — no Channel receipt is written.
+### Receipt ledger
+
+Each send records attempts — driver, ok/error, timestamp, message id — so "did
+the user get it?" is a Console query. Dry run: kernel records a would-have-fired
+send and never opens a provider — no Channel receipt.
+
+| Status                            | Meaning                                       |
+| --------------------------------- | --------------------------------------------- |
+| `sent`                            | Delivered on the first successful driver      |
+| `fallback`                        | Earlier drivers failed; a later one succeeded |
+| `suppressed/opted-out`            | Consent blocked the send (no provider call)   |
+| `suppressed/prior-bounce`         | Prior hard bounce blocked the send            |
+| `blocked/invalid-address`         | Permanent client error (no useful failover)   |
+| `hard-bounce` / `soft-bounce` / … | Post-send outcomes via `ingestOutcome`        |
+
+### WhatsApp: template vs session (Known gap)
+
+WhatsApp Business allows free-form ("session") messages only inside a
+customer-initiated **24h** window; outside that window you must send a
+pre-approved **template**.
+
+OKE drivers choose payload shape by whether a template name is present on the
+message (`template` / `data.template` → template API; otherwise free text).
+
+There is **no** session-window clock or gate on the Channel runtime today.
+Sending free-form outside the window risks provider rejection or account
+action — handle that yourself until a real design ships.
+
+OTP WhatsApp paths often send free text via provider failover.
 
 ## Per-environment drivers
 
@@ -188,12 +263,22 @@ Nothing _should_ arrive — the `console` driver captures mail instead of sendin
 </Accordion>
 <Accordion title="A user says they stopped receiving messages">
 
-Check consent first: if they opted out, sends to them are suppressed by design. The Console shows the suppression on the receipt — it is a delivered-as-intended outcome, not a bug.
+Check consent first: if they opted out, sends to them are suppressed by design. After a hard bounce, later sends are `suppressed/prior-bounce` without contacting the provider. The Console shows the suppression on the receipt — it is a delivered-as-intended outcome, not a bug.
+
+</Accordion>
+<Accordion title="Opt-out on replica A, still sending on replica B">
+
+Default stores are process-local. Inject shared `suppression` + `receipts` on boot (see above), or run a single Channel consumer, until a durable driver ships.
+
+</Accordion>
+<Accordion title="Primary failed with invalid address and didn't try secondary">
+
+By design. Permanent client errors (invalid address, HTTP 400/401/403) do not failover — every provider would reject the same address. Provider outages and 5xx do advance the chain.
 
 </Accordion>
 <Accordion title="The Arabic version didn't render">
 
-The send still succeeds: the body falls back to your default locale, then `en`, when the catalog misses that exact key. Check that an Arabic entry exists under the same tag you send (`ar` vs `ar-SA`) and that the template lists it in `locales`.
+The send still succeeds: the body falls back to your default locale, then `en`, when the catalog misses that exact key. Check that an Arabic entry exists under the same tag you send (`ar` vs `ar-SA`) and that the template lists it in `locales`. Catalog interpolation is `{{field}}` only — ICU plurals live in [i18n](/docs/reference/i18n).
 
 </Accordion>
 <Accordion title="How do I ingest SNDR / Unifonic delivery webhooks?">
@@ -209,7 +294,9 @@ import {
 
 Verify the signature when the provider sends one, parse the body, then call
 `ingestOutcome` on your channel runtime with the bounce/complaint fields.
-Console reads the receipt ledger — never raw webhook JSON.
+
+Hard bounce auto-adds suppression. Console reads the receipt ledger — never
+raw webhook JSON.
 
 </Accordion>
 <Accordion title="How do I know which driver finally delivered?">
@@ -242,6 +329,7 @@ Confirm a visible OS notification titled `okengine webpush interop`.
 - [Console · Channels](/docs/console/channels) — receipts, attempts, suppression
 - [Environment Variables](/docs/reference/environment-variables) — Channel boot credentials
 - [Configuration](/docs/reference/configuration) — `drivers.channel.*` maps
+- [i18n](/docs/reference/i18n) — ICU / `fx.t` vs Channel `{{field}}` catalogs
 - [Signal](/docs/elements/signal) — machine-to-machine messaging, the other side of the line
 
 ## Next
