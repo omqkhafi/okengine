@@ -18,7 +18,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `supabase` Docker image recipe — matches `supabase/postgres` ahead of the
   generic Postgres recipe (env + healthcheck + URL); Postgres-protocol and
   extension bundle only — not Auth / Storage / Realtime / Studio.
-- Docs **Images** (`/docs/images`) — pin compose recipes already wired into
+- Docs **Recipes** (`/docs/images`) — pin compose recipes already wired into
   `oke docker` (Postgres, PgDog, Supabase Postgres, Redis / Valkey /
   Dragonfly, Caddy, Traefik); vendor choice stays in `images[…]`.
 - Docs **Providers** (`/docs/providers`) — managed SQL / Redis connection
@@ -53,7 +53,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
-- Docs sidebar — Images and Providers pages use monochrome brand marks
+- Docs sidebar — Recipes and Providers pages use monochrome brand marks
   (Postgres, Redis, Neon, Supabase, Caddy, Traefik, cloud vendors, PgDog paw
   from pgdog.dev, …) instead of generic Lucide placeholders.
 - Homepage stack strip — Built with / Works with sit in a two-column grid

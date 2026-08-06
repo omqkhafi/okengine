@@ -1,5 +1,5 @@
 /**
- * Monochrome brand marks for docs sidebar (Images + Providers).
+ * Monochrome brand marks for docs sidebar (Recipes + Providers).
  * Paths from simple-icons (CC0 code) or official/public brand SVGs; rendered
  * with fill="currentColor" so they inherit sidebar ink.
  */

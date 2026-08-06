@@ -1,6 +1,6 @@
 /**
  * Docs sidebar icons — Lucide for product surfaces, monochrome brand marks for
- * Images + Providers pages (fill inherits sidebar ink).
+ * Recipes + Providers pages (fill inherits sidebar ink).
  */
 
 import type { LoaderPlugin } from "fumadocs-core/source";
@@ -110,7 +110,7 @@ const FOLDER_PATHS: Readonly<Record<string, string>> = {
   Elements: "/docs/elements",
   Console: "/docs/console",
   Deployment: "/docs/deployment",
-  Images: "/docs/images",
+  Recipes: "/docs/images",
   Providers: "/docs/providers",
   Reference: "/docs/reference",
   Plugins: "/docs/plugins",
