@@ -55,7 +55,7 @@ A direct `node:` import (or any other side-channel I/O) in element or flow code 
 
 | Port     | Surface              |
 | -------- | -------------------- |
-| **6530** | App                  |
+| **6530** | Backend              |
 | **6533** | Console              |
 | **6535** | MCP                  |
 | **6536** | Docs MCP (read-only) |

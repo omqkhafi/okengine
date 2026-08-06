@@ -108,7 +108,7 @@ export function defaultsBranchOptions(
   const options: DefaultsBranchOption[] = [
     {
       value: "recommended",
-      label: "★  Yes, use recommended defaults",
+      label: "Yes, use recommended defaults",
       hint:
         template === "advanced"
           ? "Notes · docker-ready pins · .oke/mode docker"
@@ -118,13 +118,13 @@ export function defaultsBranchOptions(
   if (hasPreviousForTemplate) {
     options.push({
       value: "reuse",
-      label: "↻  No, reuse previous settings",
+      label: "No, reuse previous settings",
       hint: `~/.oke/create-defaults.json (${template})`,
     });
   }
   options.push({
     value: "customize",
-    label: "◆  No, customize settings",
+    label: "No, customize settings",
     hint:
       template === "standard"
         ? "local|docker · SQL · optional AI"
@@ -355,7 +355,8 @@ Template:
 ${templateLines}
 
 On a TTY: pick standard|advanced, then recommended defaults, customize
-(local or docker first; optional other side; saved to ~/.oke/create-defaults.json),
+(local or docker first; store.index with none; AI setup Recommended /
+Customize / Off; optional other side; saved to ~/.oke/create-defaults.json),
 or reuse when saved for that template. Non-TTY / --yes stay zero-prompt.
 `;
 }
@@ -512,7 +513,7 @@ export async function askInteractiveAnswers(
     message: "Starter template",
     options: TEMPLATES.map((id) => ({
       value: id,
-      label: id === "standard" ? "★  standard" : "◆  advanced",
+      label: id === "standard" ? "standard" : "advanced",
       hint: TEMPLATE_PURPOSES[id],
     })),
     initialValue: partial.template ?? DEFAULT_TEMPLATE,
@@ -814,23 +815,25 @@ async function runScaffold(
     }
 
     if (runPostScaffold && install) {
-      const installSpun = interactive ? spinner() : undefined;
-      installSpun?.start("Installing dependencies…");
-      const installOk = await runCommand(["bun", "install"], targetDir);
+      // Inherit bun's progress — a silent spinner feels stuck on cold caches.
+      if (interactive) log.step("Installing dependencies…");
+      const installOk = await runCommand(["bun", "install"], targetDir, {
+        inherit: interactive,
+      });
       if (!installOk) {
-        installSpun?.stop("Install failed.");
+        if (interactive) log.error("Install failed.");
         cleanup();
         console.error("create-oke: bun install failed");
         return 1;
       }
-      installSpun?.stop("Installed.");
+      if (interactive) log.success("Installed.");
     }
 
     const message = nextStepsText(result);
     if (interactive) {
       note(
         [
-          `App      http://127.0.0.1:6530`,
+          `Backend  http://127.0.0.1:6530`,
           `Console  http://127.0.0.1:6533`,
           `MCP      http://127.0.0.1:6535`,
           `Docs     ${docsUrl("/docs")}`,

@@ -13,6 +13,8 @@ export type AiSetupApplyInput = {
   readonly visionModel?: string | null;
   readonly embedModel?: string | null;
   readonly apiKeyEnv?: string;
+  /** When set with {@link apiKeyEnv}, writes the token into `.env.local`. */
+  readonly apiKey?: string;
 };
 
 /** Options for {@link applyAiSetup}. */
@@ -68,8 +70,9 @@ export function applyAiSetup(
   if (input.visionModel) env = upsertEnv(env, "OKE_AI_VISION_MODEL", input.visionModel);
   if (input.embedModel) env = upsertEnv(env, "OKE_AI_EMBED_MODEL", input.embedModel);
   if (input.apiKeyEnv) {
-    // Ensure the key name is present (value left blank for the user)
-    if (!new RegExp(`^${input.apiKeyEnv}=`, "m").test(env)) {
+    if (input.apiKey !== undefined && input.apiKey.length > 0) {
+      env = upsertEnv(env, input.apiKeyEnv, input.apiKey);
+    } else if (!new RegExp(`^${input.apiKeyEnv}=`, "m").test(env)) {
       env = `${env.trimEnd()}\n${input.apiKeyEnv}=\n`;
     }
   }

@@ -68,6 +68,7 @@ export const FILES_CHOICES: readonly DriverChoice[] = [
 ];
 
 export const INDEX_CHOICES: readonly DriverChoice[] = [
+  { value: "none", label: "none" },
   { value: "memory", label: "memory" },
   { value: "pgvector", label: "pgvector" },
   { value: "libsql", label: "libsql" },
@@ -99,24 +100,26 @@ export const VAULT_CHOICES: readonly DriverChoice[] = [
   { value: "memory", label: "memory" },
 ];
 
+/** Email driver ids for `drivers.channel.email` (SMS/WhatsApp/push are other mediums). */
 export const EMAIL_CHOICES: readonly DriverChoice[] = [
   { value: "console", label: "console" },
   { value: "smtp", label: "smtp" },
   { value: "resend", label: "resend" },
   { value: "sndr", label: "sndr" },
-  { value: "taqnyat-mail", label: "taqnyat-mail" },
+  /** Protocol id is `taqnyat-mail`; menu label stays short in the email facet. */
+  { value: "taqnyat-mail", label: "taqnyat" },
 ];
 
 /** AI menu providers → protocol driver. */
 export const AI_PROVIDERS = [
-  { value: "ollama", label: "◎  Ollama (Local)", driver: "ollama" },
-  { value: "openai", label: "◈  OpenAI", driver: "openai-compatible" },
-  { value: "anthropic", label: "◉  Anthropic", driver: "anthropic" },
-  { value: "gemini", label: "◇  Gemini", driver: "openai-compatible" },
-  { value: "lmstudio", label: "▣  LM Studio", driver: "openai-compatible" },
-  { value: "openrouter", label: "⇄  OpenRouter", driver: "openai-compatible" },
-  { value: "custom", label: "⋯  Custom OpenAI Compatible", driver: "openai-compatible" },
-  { value: "mock", label: "◌  Mock (dev only)", driver: "mock" },
+  { value: "ollama", label: "Ollama (Local)", driver: "ollama" },
+  { value: "openai", label: "OpenAI", driver: "openai-compatible" },
+  { value: "anthropic", label: "Anthropic", driver: "anthropic" },
+  { value: "gemini", label: "Gemini", driver: "openai-compatible" },
+  { value: "lmstudio", label: "LM Studio", driver: "openai-compatible" },
+  { value: "openrouter", label: "OpenRouter", driver: "openai-compatible" },
+  { value: "custom", label: "Custom OpenAI Compatible", driver: "openai-compatible" },
+  { value: "mock", label: "Mock (dev only)", driver: "mock" },
 ] as const;
 
 export type AiProviderId = (typeof AI_PROVIDERS)[number]["value"];
@@ -187,7 +190,6 @@ export type CustomizeFacetId =
   | "sql"
   | "kv"
   | "files"
-  | "enableIndex"
   | "index"
   | "signal"
   | "clock"
@@ -201,7 +203,7 @@ export type CustomizeFacetId =
  */
 export function customizeFacetsFor(template: TemplateId): readonly CustomizeFacetId[] {
   if (template === "standard") return ["sql"];
-  return ["sql", "kv", "files", "enableIndex", "index", "signal", "clock", "vault", "email"];
+  return ["sql", "kv", "files", "index", "signal", "clock", "vault", "email"];
 }
 
 /**

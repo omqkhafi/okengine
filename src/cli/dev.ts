@@ -485,17 +485,21 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           await Bun.write(envPath, next);
         }
 
-        // Ollama: pull the configured model via the container's own HTTP API on
+        // Ollama: ensure the configured model via the container's own HTTP API on
         // its exposed host port — never a host `ollama` CLI (that may talk to a
-        // separately installed daemon on the default port).
+        // separately installed daemon on the default port). Skip pull when the
+        // container already lists the model.
         const aiSpec = derived.specs.find((s) => s.role === "ai");
         if (aiSpec) {
           const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
           const model =
             stackEnv!.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "qwen3.5:9b";
           const url = `http://127.0.0.1:${aiSpec.hostPort}`;
-          write(`oke: pulling ${model} into Ollama at ${url}…\n`);
-          await ensureOllamaModel({ url, model });
+          await ensureOllamaModel({
+            url,
+            model,
+            onStatus: (line) => write(`${line}\n`),
+          });
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -965,11 +969,11 @@ async function startAppHot(
     OKE_HOSTNAME: hostname,
     OKE_READY_PATH: readyPath,
     OKE_DEV_REQUEST_LOG: "1",
-    OKE_DEV_SURFACE: "App",
+    OKE_DEV_SURFACE: "Backend",
   };
 
   // `--no-clear-screen`: Bun must not wipe the hero; the runner clears only
-  // request logs on soft reload and reprints App / Console / MCP URLs.
+  // request logs on soft reload and reprints Backend / Console / MCP URLs.
   const proc = Bun.spawn(["bun", "--hot", "--no-clear-screen", runner], {
     cwd,
     env,

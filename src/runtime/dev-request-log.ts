@@ -1,5 +1,5 @@
 /**
- * Dev-only request lines for `oke dev` (App / Console / MCP).
+ * Dev-only request lines for `oke dev` (Backend / Console / MCP).
  *
  * Gated by `OKE_DEV_REQUEST_LOG=1`. Surfaces share one TTY; label + color
  * keep streams readable without a multiplexer.
@@ -18,22 +18,22 @@ export function shouldLogDevRequests(): boolean {
 }
 
 /**
- * Active surface for this async context, or `OKE_DEV_SURFACE`, or `App`.
+ * Active surface for this async context, or `OKE_DEV_SURFACE`, or `Backend`.
  */
 export function currentDevSurface(): DevLogSurface {
   const fromAls = surfaceAls.getStore();
   if (fromAls) return fromAls;
   const fromEnv = process.env.OKE_DEV_SURFACE;
-  if (fromEnv === "App" || fromEnv === "Console" || fromEnv === "MCP") {
+  if (fromEnv === "Backend" || fromEnv === "Console" || fromEnv === "MCP") {
     return fromEnv;
   }
-  return "App";
+  return "Backend";
 }
 
 /**
  * Run a handler tagged with a surface (Console wrap around `app.fetch`).
  *
- * @param surface - App · Console · MCP
+ * @param surface - Backend · Console · MCP
  * @param fn - Async work
  */
 export function runWithDevSurface<T>(

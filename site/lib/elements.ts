@@ -169,7 +169,7 @@ export const PORTS: ReadonlyArray<{
   readonly surface: string;
   readonly detail: string;
 }> = [
-  { port: "6530", surface: "App", detail: "Your flows, served from the Manifest." },
+  { port: "6530", surface: "Backend", detail: "Your flows, served from the Manifest." },
   { port: "6533", surface: "Console", detail: "Panels, traces, and the effect graph." },
   { port: "6535", surface: "MCP", detail: "The same Manifest, for agents." },
   { port: "6536", surface: "Docs MCP", detail: "Read-only docs search for agents." },

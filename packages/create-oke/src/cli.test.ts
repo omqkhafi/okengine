@@ -200,7 +200,7 @@ describe("wizard ← Back", () => {
     const base = [{ value: "memory", label: "memory" }];
     expect(withBackOption(base, false)).toEqual(base);
     const withBack = withBackOption(base, true);
-    expect(withBack.at(-1)).toEqual({ value: WIZARD_BACK, label: "←  Back" });
+    expect(withBack.at(-1)).toEqual({ value: WIZARD_BACK, label: "Back" });
     expect(WIZARD_BACK).toBe("__back__");
   });
 });

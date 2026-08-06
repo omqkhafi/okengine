@@ -12,7 +12,7 @@ oke db seed   # essential welcome note + local/docker sample notes
 
 | Surface | URL |
 | ------- | --- |
-| App | http://127.0.0.1:6530 |
+| Backend | http://127.0.0.1:6530 |
 | Console | http://127.0.0.1:6533 |
 | MCP | http://127.0.0.1:6535 |
 

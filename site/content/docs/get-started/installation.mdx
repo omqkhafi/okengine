@@ -64,8 +64,10 @@ files/digest/AI). Both ship a minimal GitHub Actions workflow (typecheck +
 `bun test` on push/PR) so the first push has working CI.
 
 On a TTY: pick a template, then **recommended defaults**, **customize** (local
-or docker first; saved to `~/.oke/create-defaults.json`), or **reuse** matching
-saved settings. Project name rejects a non-empty existing path.
+or docker first; `store.index` as a normal facet with `none`; **AI setup** =
+Recommended / Customize / Off; saved to `~/.oke/create-defaults.json`), or
+**reuse** matching saved settings. Project name rejects a non-empty existing
+path.
 
 Non-TTY / `--yes` stay scriptable. Defaults: local SQLite · Docker/prod Postgres.
 `--sql postgres` pins SQL; `--ai` runs the model wizard before install.

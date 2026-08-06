@@ -1,76 +1,90 @@
 /**
- * Smart Ollama recommendation scoring + RAM tier rules.
+ * Smart Ollama recommendation — RAM tiers (no needs quiz).
  */
 
 import { describe, expect, test } from "bun:test";
-import { recommendChatModel } from "./catalog.ts";
+import { modelsForTier, recommendChatModel, recommendForTier } from "./catalog.ts";
 import {
   fittingChatModels,
-  formatMachineSummary,
+  formatModelRow,
+  formatOllamaBanner,
   isTightFit,
   modelFitsComfortably,
   modelFitsOnMachine,
   recommendChatForNeeds,
-  type AiNeeds,
+  suggestTierForRam,
+  usableRamGb,
 } from "./recommend.ts";
-
-const balanced: AiNeeds = {
-  useCase: "balanced",
-  priority: "balanced",
-  wantVision: false,
-};
 
 describe("modelFitsOnMachine", () => {
   test("catalog ramGb is machine tier, not download size", () => {
-    expect(modelFitsOnMachine({ id: "x", label: "x", hint: "", role: "chat", ramGb: 16 }, 24)).toBe(
-      true,
-    );
-    expect(modelFitsOnMachine({ id: "x", label: "x", hint: "", role: "chat", ramGb: 32 }, 24)).toBe(
-      false,
-    );
+    expect(
+      modelFitsOnMachine(
+        {
+          id: "x",
+          label: "x",
+          hint: "",
+          role: "chat",
+          ramGb: 16,
+          tier: "balanced",
+          modalities: ["text"],
+        },
+        24,
+      ),
+    ).toBe(true);
+    expect(
+      modelFitsOnMachine(
+        {
+          id: "x",
+          label: "x",
+          hint: "",
+          role: "chat",
+          ramGb: 32,
+          tier: "smart",
+          modalities: ["text"],
+        },
+        24,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("tiers", () => {
+  test("each tier exposes up to 10 models", () => {
+    for (const tier of ["ultra-fast", "fast", "balanced", "smart"] as const) {
+      expect(modelsForTier(tier).length).toBeGreaterThan(0);
+      expect(modelsForTier(tier).length).toBeLessThanOrEqual(10);
+    }
+  });
+
+  test("suggestTierForRam maps fit budget", () => {
+    expect(suggestTierForRam(4)).toBe("ultra-fast");
+    expect(suggestTierForRam(8)).toBe("fast");
+    expect(suggestTierForRam(16)).toBe("balanced");
+    expect(suggestTierForRam(32)).toBe("smart");
+  });
+
+  test("recommendForTier returns a model in that tier", () => {
+    const pick = recommendForTier("fast", 16);
+    expect(pick.tier).toBe("fast");
   });
 });
 
 describe("recommendChatForNeeds", () => {
-  test("8GB → entry-level only", () => {
-    const pick = recommendChatForNeeds(8, balanced);
-    expect(pick.id).toBe("gemma4:e4b");
+  test("8GB → ultra-fast or fast entry", () => {
+    const pick = recommendChatForNeeds(8);
     expect(pick.ramGb).toBeLessThanOrEqual(8);
   });
 
-  test("16GB → never recommends 27b / 32GB-class", () => {
-    const pick = recommendChatForNeeds(16, { ...balanced, useCase: "coding", priority: "quality" });
+  test("16GB → never recommends 32GB-class", () => {
+    const pick = recommendChatForNeeds(16);
     expect(pick.ramGb).toBeLessThanOrEqual(16);
     expect(pick.id).not.toBe("qwen3.5:27b");
   });
 
-  test("24GB does not treat full RAM as model size", () => {
-    const pick = recommendChatForNeeds(24, balanced);
-    // Must leave headroom — not a fictional "24GB model"
-    expect(pick.ramGb).toBeLessThan(24);
-    expect(pick.ramGb).toBeLessThanOrEqual(16);
-    const summary = formatMachineSummary(24, pick);
-    expect(summary).toContain("Your machine: ~24GB");
-    expect(summary).toContain(`${pick.ramGb}GB-class`);
-    expect(summary).not.toMatch(/download a 24GB/i);
-  });
-
-  test("coding preference leans Qwen when it fits", () => {
-    const pick = recommendChatForNeeds(24, {
-      useCase: "coding",
-      priority: "balanced",
-      wantVision: false,
-    });
-    expect(pick.id.startsWith("qwen")).toBe(true);
-  });
-
-  test("reasoning preference leans DeepSeek when it fits", () => {
-    const pick = recommendChatForNeeds(16, {
-      useCase: "reasoning",
-      priority: "balanced",
-      wantVision: false,
-    });
-    expect(pick.id).toContain("deepseek");
+  test("24GB leaves headroom", () => {
+    const pick = recommendChatForNeeds(24);
+    expect(pick.ramGb).toBeLessThanOrEqual(usableRamGb(24));
   });
 });
 
@@ -92,9 +106,35 @@ describe("comfortable vs tight", () => {
 
 describe("recommendChatModel", () => {
   test("respects tiers with headroom preference", () => {
-    expect(recommendChatModel(8).id).toBe("gemma4:e4b");
+    expect(recommendChatModel(8).ramGb).toBeLessThanOrEqual(8);
     expect(recommendChatModel(16).ramGb).toBeLessThanOrEqual(16);
     expect(recommendChatModel(24).ramGb).toBeLessThanOrEqual(16);
-    expect(recommendChatModel(null).recommended).toBe(true);
+  });
+});
+
+describe("formatOllamaBanner", () => {
+  test("shows OS · CPU · RAM · Fit RAM · detected — no comfortable list", () => {
+    const text = formatOllamaBanner({ osName: "macOS", cpuCount: 10, ramGb: 24 }, ["gemma4:e4b"]);
+    expect(text).toContain("OS macOS  ·  CPU 10  ·  RAM ~24GB RAM");
+    expect(text).toContain("Fit RAM ~20GB RAM");
+    expect(text).toContain("Detected local models");
+    expect(text).toContain("gemma4:e4b");
+    expect(text).not.toContain("Fits comfortably");
+    expect(text).toContain("Tiers  ·  Ultra Fast");
+  });
+});
+
+describe("formatModelRow", () => {
+  test("equal spacing between name · RAM · modalities", () => {
+    const row = formatModelRow({
+      id: "x",
+      label: "Gemma 4 4B",
+      hint: "",
+      role: "chat",
+      ramGb: 8,
+      tier: "fast",
+      modalities: ["text", "code"],
+    });
+    expect(row).toBe("Gemma 4 4B  ·  ≈8GB  ·  text  ·  code");
   });
 });

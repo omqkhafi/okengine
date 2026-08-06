@@ -350,8 +350,8 @@ describe("image recipes", () => {
       }
       if (url.endsWith("/api/pull") && method === "POST") {
         expect(body).toContain('"model":"qwen3.5:9b"');
-        expect(body).toContain('"stream":false');
-        return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+        expect(body).toContain('"stream":true');
+        return new Response(`${JSON.stringify({ status: "success" })}\n`, { status: 200 });
       }
       return new Response("unexpected", { status: 500 });
     };
@@ -369,9 +369,36 @@ describe("image recipes", () => {
     ).toBe(true);
     const pull = calls.find((c) => c.url === "http://127.0.0.1:11434/api/pull");
     expect(pull?.method).toBe("POST");
-    expect(pull?.body).toBe(JSON.stringify({ model: "qwen3.5:9b", stream: false }));
+    expect(pull?.body).toBe(JSON.stringify({ model: "qwen3.5:9b", stream: true }));
     // No host-side `ollama` binary assumption — only HTTP to the given URL.
     expect(calls.every((c) => c.url.startsWith("http://127.0.0.1:11434/"))).toBe(true);
+  });
+
+  test("ensureOllamaModel skips pull when /api/tags already lists the model", async () => {
+    const calls: string[] = [];
+    const statuses: string[] = [];
+    const fetchFn: OllamaFetch = async (input, init) => {
+      const url = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      calls.push(`${method} ${url}`);
+      if (url.endsWith("/api/tags")) {
+        return new Response(JSON.stringify({ models: [{ name: "gemma4:e4b" }] }), {
+          status: 200,
+        });
+      }
+      return new Response("should not pull", { status: 500 });
+    };
+
+    await ensureOllamaModel({
+      url: "http://127.0.0.1:23100",
+      model: "gemma4:e4b",
+      fetch: fetchFn,
+      readyTimeoutMs: 2_000,
+      onStatus: (line) => statuses.push(line),
+    });
+
+    expect(calls.some((c) => c.includes("/api/pull"))).toBe(false);
+    expect(statuses.some((s) => /already has gemma4:e4b/.test(s))).toBe(true);
   });
 
   test("ensureOllamaModel fails loud when the container API never becomes ready", async () => {

@@ -61,6 +61,23 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- `oke dev` request logs and ready line label the :6530 surface as **Backend**
+  (was **App**); Console / MCP labels unchanged.
+- `create-oke` customize: drop the **Enable store.index?** yes/no gate — walk
+  `store.index` like other facets (`none` · memory · pgvector · libsql ·
+  meilisearch; docker recommends meilisearch). **AI setup** is Recommended
+  (Ollama defaults) · Customize · Off (replacing unclear Configure AI? Yes/No).
+  Email menu labels `taqnyat-mail` as `taqnyat` (driver id unchanged). Install
+  shows `bun install` progress instead of a silent spinner. Wizard labels drop
+  decorative icons. `oke ai setup` / create-oke AI: no use-case quiz; Ollama
+  banner shows OS · CPU · RAM · Fit RAM · detected · tiers; pick via
+  Select model tiers (Ultra Fast / Fast / Balanced / Smart) or Manual model;
+  cloud asks for an API token then Select/Manual (≤10 curated). Embed pulls
+  without a prompt. **AI Provider — docker → Back** returns to the previous
+  provider step (no longer continues into model setup).
+- Ollama docker ensure: skip `/api/pull` when the container's `/api/tags`
+  already lists the model (host `ollama` weights are a different server);
+  stream pull progress instead of hanging on a silent `stream:false` body.
 - Docs section path **Recipes** moves from `/docs/images` → `/docs/recipes`
   (folder, sidebar, and cross-links).
 - Ollama recipe serves only; `oke dev -d` / `oke ai setup` pull

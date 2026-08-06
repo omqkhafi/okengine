@@ -4,6 +4,8 @@
  * Never shells out to a host `ollama` CLI — that talks to whichever server wins
  * on the default local port (often a separately installed host daemon), so the
  * model can land outside the recipe container.
+ *
+ * Skips `/api/pull` when the model is already listed on `/api/tags`.
  */
 
 /** Fetch contract (injectable for tests) — call signature only, not Bun's `preconnect`. */
@@ -20,6 +22,8 @@ export interface EnsureOllamaModelOptions {
   readonly readyTimeoutMs?: number;
   /** Overall pull deadline (ms). Default 20 minutes. */
   readonly pullTimeoutMs?: number;
+  /** Progress / status lines (e.g. `oke: …`). */
+  readonly onStatus?: (line: string) => void;
 }
 
 /** Fail-loud pull / readiness error. */
@@ -40,7 +44,55 @@ export function normalizeOllamaPullUrl(url: string): string {
 }
 
 /**
- * Wait until `GET /api/tags` succeeds, then `POST /api/pull` for `model`.
+ * Whether an installed tag covers the requested model id.
+ *
+ * @param want - Requested id (e.g. `gemma4:e4b`)
+ * @param installed - Names from `/api/tags`
+ */
+export function ollamaTagsInclude(want: string, installed: readonly string[]): boolean {
+  const id = want.trim();
+  if (!id) return false;
+  const base = id.split(":")[0] ?? id;
+  return installed.some((name) => {
+    if (name === id) return true;
+    if (name.startsWith(`${id}-`)) return true;
+    if (name.startsWith(`${base}:`) && id.startsWith(`${base}:`)) {
+      const instTag = name.slice(base.length + 1);
+      const wantTag = id.slice(base.length + 1);
+      return (
+        instTag === wantTag ||
+        instTag.startsWith(`${wantTag}-`) ||
+        wantTag.startsWith(instTag) ||
+        (instTag === "latest" && wantTag === "latest")
+      );
+    }
+    // bare name matches `name:latest`
+    if (name === `${id}:latest` || id === `${name}:latest`) return true;
+    return false;
+  });
+}
+
+/**
+ * Parse model names from an `/api/tags` JSON body.
+ *
+ * @param json - Parsed response
+ */
+export function parseOllamaTagsNames(json: unknown): string[] {
+  if (!json || typeof json !== "object") return [];
+  const models = (json as { models?: unknown }).models;
+  if (!Array.isArray(models)) return [];
+  return models
+    .map((m) =>
+      m && typeof m === "object" && typeof (m as { name?: unknown }).name === "string"
+        ? (m as { name: string }).name
+        : null,
+    )
+    .filter((n): n is string => typeof n === "string" && n.length > 0);
+}
+
+/**
+ * Wait until `GET /api/tags` succeeds; skip pull when the model is already
+ * present; otherwise `POST /api/pull` with streaming progress.
  *
  * @param opts - Target URL + model (+ optional injectable fetch)
  */
@@ -48,15 +100,16 @@ export async function ensureOllamaModel(opts: EnsureOllamaModelOptions): Promise
   const fetchFn = opts.fetch ?? globalThis.fetch;
   const base = normalizeOllamaPullUrl(opts.url);
   const model = opts.model.trim();
+  const status = opts.onStatus ?? (() => {});
   if (!model) throw new OllamaPullError("ollama pull: model id is empty");
 
   const readyDeadline = Date.now() + (opts.readyTimeoutMs ?? 90_000);
-  let ready = false;
+  let tagsBody: unknown = null;
   while (Date.now() < readyDeadline) {
     try {
       const res = await fetchFn(`${base}/api/tags`, { method: "GET" });
       if (res.ok) {
-        ready = true;
+        tagsBody = await res.json().catch(() => null);
         break;
       }
     } catch {
@@ -64,9 +117,17 @@ export async function ensureOllamaModel(opts: EnsureOllamaModelOptions): Promise
     }
     await Bun.sleep(500);
   }
-  if (!ready) {
+  if (tagsBody === null) {
     throw new OllamaPullError(`ollama pull: unreachable at ${base}/api/tags`);
   }
+
+  const installed = parseOllamaTagsNames(tagsBody);
+  if (ollamaTagsInclude(model, installed)) {
+    status(`oke: Ollama already has ${model} at ${base} — skip pull`);
+    return;
+  }
+
+  status(`oke: pulling ${model} into Ollama at ${base}…`);
 
   const pullDeadline = Date.now() + (opts.pullTimeoutMs ?? 20 * 60_000);
   const controller = new AbortController();
@@ -75,7 +136,7 @@ export async function ensureOllamaModel(opts: EnsureOllamaModelOptions): Promise
     const res = await fetchFn(`${base}/api/pull`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model, stream: false }),
+      body: JSON.stringify({ model, stream: true }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -84,14 +145,88 @@ export async function ensureOllamaModel(opts: EnsureOllamaModelOptions): Promise
         `ollama pull: POST ${base}/api/pull → ${res.status}${text ? ` ${text.slice(0, 200)}` : ""}`,
       );
     }
-    // Non-streaming response is a single JSON object; streaming would be NDJSON.
-    // Consume the body so the connection completes even if the server streams.
-    await res.arrayBuffer();
+    await consumeOllamaPullStream(res, status);
   } catch (err) {
     if (err instanceof OllamaPullError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     throw new OllamaPullError(`ollama pull: POST ${base}/api/pull failed — ${msg}`);
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Read NDJSON pull progress; surface concise status updates.
+ *
+ * @param res - Streaming pull response
+ * @param status - Status writer
+ */
+async function consumeOllamaPullStream(
+  res: Response,
+  status: (line: string) => void,
+): Promise<void> {
+  // Non-body responses (mocked tests) — treat as complete.
+  if (!res.body) {
+    await res.arrayBuffer().catch(() => undefined);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const state: PullStreamState = { lastStatus: "", lastPct: -1 };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      handlePullLine(line, status, state);
+    }
+  }
+  buf += decoder.decode();
+  if (buf.trim()) {
+    handlePullLine(buf, status, state);
+  }
+}
+
+type PullStreamState = { lastStatus: string; lastPct: number };
+
+function handlePullLine(
+  line: string,
+  status: (line: string) => void,
+  state: PullStreamState,
+): void {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  let row: {
+    status?: string;
+    error?: string;
+    completed?: number;
+    total?: number;
+  };
+  try {
+    row = JSON.parse(trimmed) as typeof row;
+  } catch {
+    return;
+  }
+  if (row.error) {
+    throw new OllamaPullError(`ollama pull: ${row.error}`);
+  }
+  const st = row.status?.trim() ?? "";
+  if (typeof row.completed === "number" && typeof row.total === "number" && row.total > 0) {
+    const pct = Math.min(100, Math.floor((100 * row.completed) / row.total));
+    if (pct !== state.lastPct && (pct === 100 || pct - state.lastPct >= 5)) {
+      state.lastPct = pct;
+      status(`oke: Ollama pull ${pct}%${st ? ` (${st})` : ""}`);
+    }
+    return;
+  }
+  if (st && st !== state.lastStatus) {
+    state.lastStatus = st;
+    if (/^pulling\s+[a-f0-9]{12}/i.test(st)) return;
+    status(`oke: Ollama ${st}`);
   }
 }

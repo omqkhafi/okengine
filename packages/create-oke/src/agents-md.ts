@@ -67,7 +67,7 @@ are inferred from what a Flow touches through it.
 
 | Port | Surface |
 |---|---|
-| **6530** | App |
+| **6530** | Backend |
 | **6533** | Console |
 | **6535** | MCP |
 

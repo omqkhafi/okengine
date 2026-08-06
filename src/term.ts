@@ -175,14 +175,14 @@ export function formatServiceLine(
 }
 
 /**
- * App child ready line (`bun --hot` soft reload).
+ * Backend child ready line (`bun --hot` soft reload).
  *
- * @param url - App base URL
+ * @param url - Backend base URL
  * @param color - Color on/off
  */
 export function formatAppReadyLine(url: string, color: boolean = termColorEnabled()): string {
   const s = termStyle(color);
-  return `${s.green}●${s.reset}  ${s.dim}App${s.reset}      ${s.cyan}${url}${s.reset}\n`;
+  return `${s.green}●${s.reset}  ${s.dim}${"Backend".padEnd(7)}${s.reset}  ${s.cyan}${url}${s.reset}\n`;
 }
 
 /**
@@ -256,7 +256,7 @@ export type StackSummaryService = {
 };
 
 /** Surfaces that emit request lines during `oke dev`. */
-export type DevLogSurface = "App" | "Console" | "MCP";
+export type DevLogSurface = "Backend" | "Console" | "MCP";
 
 /**
  * Local calendar date `YYYY-MM-DD` (no time).
@@ -286,7 +286,7 @@ export function formatDevLogTime(at: Date = new Date()): string {
  * One HTTP/RPC request line for the `oke dev` TTY.
  *
  * @example
- * `●  App      GET  /health                 main.health            12ms  200  2026-07-26  03:11:42`
+ * `●  Backend GET  /health                 main.health            12ms  200  2026-07-26  03:11:42`
  *
  * @param options - Surface, method, path, flow, timing, status
  */
@@ -308,7 +308,7 @@ export function formatRequestLine(options: {
   const date = formatDevLogDate(at);
   const time = formatDevLogTime(at);
   const surfaceColor =
-    options.surface === "App" ? s.green : options.surface === "Console" ? s.magenta : s.cyan;
+    options.surface === "Backend" ? s.green : options.surface === "Console" ? s.magenta : s.cyan;
   const statusColor = options.status >= 500 ? s.red : options.status >= 400 ? s.yellow : s.green;
   const methodRaw = options.method.toUpperCase();
   const methodColor =

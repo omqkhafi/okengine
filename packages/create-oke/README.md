@@ -18,7 +18,7 @@ On a TTY, create-oke opens a Clack wizard:
    user-global `~/.oke/create-defaults.json`) · **Reuse previous settings**
    (only when saved settings exist for the selected template).
    The project-name step rejects a path that already exists and is not empty.
-   Customize steps include **← Back**. Scaffold writes `.oke/mode` from the
+   Customize steps include **Back**. Scaffold writes `.oke/mode` from the
    primary side (recommended: standard → `local`, advanced → `docker`).
 4. Install dependencies and start `oke dev`?
 

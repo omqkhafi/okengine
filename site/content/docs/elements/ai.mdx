@@ -176,13 +176,15 @@ oke ai setup --provider ollama --yes
 
 Writes `drivers.ai`, `.env.local`, and `src/ai.ts`.
 
-Ollama: short quiz (use case · speed/quality · vision) → detect installed models
-→ picks that fit your **machine tier** (~4GB OS/IDE headroom). Labels say
-**≈16GB-class**, not “download 16GB” — pull size is usually much smaller than RAM.
+Ollama: machine banner (OS · CPU · RAM · Fit RAM · detected models · tiers) →
+**Select model** (Ultra Fast / Fast / Balanced / Smart → Use recommended or
+Select manually ≤10 with modalities) or **Manual model**. Embed defaults to
+`nomic-embed-text` (auto-pull when missing — no download prompt). Cloud:
+API token → Select model (≤10) or Manual model.
 
-Cloud: short chat list + **Other…** for any model id. **← Back** returns a step.
-`create-oke` runs the same model wizard **before** install when you enable AI
-(customize or `--ai`). Standalone `oke ai setup` remains for existing apps.
+`create-oke` customize offers **AI setup** (Recommended Ollama · Customize ·
+Off) before install; `--ai` forces the full model wizard. Standalone
+`oke ai setup` remains for existing apps.
 
 ### Local Ollama
 

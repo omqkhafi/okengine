@@ -1,16 +1,15 @@
 /**
- * Shared Clack select helpers with optional ← Back.
+ * Shared Clack select helpers with optional Back.
  */
 
 import { isCancel, select } from "@clack/prompts";
 
-/** Sentinel — go back one wizard step (shown as "← Back" in selects). */
+/** Sentinel — go back one wizard step (shown as "Back" in selects). */
 export const WIZARD_BACK = "__back__" as const;
-/** {@link WIZARD_BACK} type alias. */
 export type WizardBack = typeof WIZARD_BACK;
 
 /**
- * Append "← Back" when allowed — pure helper for tests + {@link selectWithBack}.
+ * Append "Back" when allowed — pure helper for tests + {@link selectWithBack}.
  *
  * @param options - Choices
  * @param allowBack - Whether to append Back
@@ -20,11 +19,11 @@ export function withBackOption(
   allowBack: boolean,
 ): readonly { value: string; label: string; hint?: string }[] {
   if (!allowBack) return options;
-  return [...options, { value: WIZARD_BACK, label: "←  Back" }];
+  return [...options, { value: WIZARD_BACK, label: "Back" }];
 }
 
 /**
- * Select with an optional trailing "← Back" option.
+ * Select with an optional trailing "Back" option.
  *
  * @param message - Prompt
  * @param options - Choices (without back)

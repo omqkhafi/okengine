@@ -65,7 +65,7 @@ describe("term", () => {
     expect(formatAppReadyLine("http://127.0.0.1:6530", false)).toContain("http://127.0.0.1:6530");
   });
 
-  test("formatDevHero keeps App Console MCP URLs", () => {
+  test("formatDevHero keeps Backend Console MCP URLs", () => {
     const out = formatDevHero({
       appUrl: "http://127.0.0.1:6530",
       consoleUrl: "http://127.0.0.1:6533",
@@ -78,7 +78,7 @@ describe("term", () => {
     });
     expect(out).toContain("oke dev");
     expect(out).toContain("██");
-    expect(out).toContain("App");
+    expect(out).toContain("Backend");
     expect(out).toContain("Console");
     expect(out).toContain("MCP");
     expect(out).toContain("http://127.0.0.1:6530");
@@ -109,7 +109,7 @@ describe("term", () => {
   test("formatRequestLine shows date, time, surface, flow, ms, status", () => {
     const at = new Date(2026, 6, 26, 3, 11, 42);
     const out = formatRequestLine({
-      surface: "App",
+      surface: "Backend",
       method: "GET",
       path: "/health",
       flow: "main.health",
@@ -120,7 +120,7 @@ describe("term", () => {
     });
     expect(out).toContain("2026-07-26");
     expect(out).toContain("03:11:42");
-    expect(out).toContain("App");
+    expect(out).toContain("Backend");
     expect(out).toContain("200");
     expect(out).not.toMatch(/\u001b\[/);
   });

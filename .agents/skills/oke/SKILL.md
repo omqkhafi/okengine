@@ -12,7 +12,7 @@ Quick reminders (details live in `AGENTS.md`):
 - Every backend behavior is a Flow: `on(Trigger) → Effects`
 - Ten exports: `on`, `flow`, `signal`, `store`, `clock`, `gate`, `vault`, `channel`, `ai`, `plugin`
 - All world access goes through `fx`
-- Ports: app `6530` · Console `6533` · app MCP `6535` · docs MCP `6536`
+- Ports: Backend `6530` · Console `6533` · app MCP `6535` · docs MCP `6536`
 
 Machine-readable docs:
 

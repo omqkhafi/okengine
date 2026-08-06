@@ -49,9 +49,10 @@ Container sets `OLLAMA_HOST=0.0.0.0:11434` so the API listens on all interfaces.
 <Step>
 ### Boot pulls against the container API
 
-After compose is healthy, `oke dev -d` calls `POST {OKE_AI_URL}/api/pull` with
-`${OKE_AI_MODEL:-qwen3.5:9b}` (`stream: false`). That hits the **mapped host port**
-of this recipe — not whatever else might listen on `:11434`.
+After compose is healthy, `oke dev -d` checks `GET {OKE_AI_URL}/api/tags` for
+`${OKE_AI_MODEL:-qwen3.5:9b}`. If the model is already listed, pull is skipped.
+Otherwise it streams `POST /api/pull` with progress. That hits the **mapped host
+port** of this recipe — not whatever else might listen on `:11434`.
 
 </Step>
 
@@ -59,8 +60,8 @@ of this recipe — not whatever else might listen on `:11434`.
 
 <Callout type="warn" title="Host `ollama` CLI is unrelated">
   A host `ollama pull` / `ollama run` often talks to a separately installed daemon on the default
-  port — models land **outside** this container. Trust boot `POST /api/pull` against `OKE_AI_URL`
-  (or curl that URL yourself).
+  port — models land **outside** this container. Trust boot ensure against `OKE_AI_URL` (or curl
+  that URL yourself).
 </Callout>
 
 ## Required env
@@ -93,9 +94,10 @@ drivers (`anthropic`, `openai-compatible`, `bedrock`, `vertex`) stay separate.
 PII egress rules treat `ollama` as local (no third-party egress) — see
 [AI · PII](/docs/elements/ai).
 
-Cold pulls can take minutes; the boot step waits on `/api/pull` before the app
-continues. GPU passthrough is **not** configured — CPU inference is the default
-compose shape.
+Cold pulls can take minutes with streamed progress; boot skips `/api/pull` when
+`/api/tags` already lists the model. Host `ollama list` does not count — only
+the container at `OKE_AI_URL`. GPU passthrough is **not** configured — CPU
+inference is the default compose shape.
 
 ## What the recipe configures
 

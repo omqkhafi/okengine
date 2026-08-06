@@ -27,8 +27,11 @@ import {
   type DriverChoice,
 } from "./drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./ai-setup/apply.ts";
+import { detectTotalRamGb } from "./ai-setup/detect-ollama.ts";
+import { recommendForRole } from "./ai-setup/catalog.ts";
 import { aiPrefWithModels } from "./ai-setup/from-pref.ts";
 import { askAiSetup } from "./ai-setup/prompts.ts";
+import { recommendChatForNeeds } from "./ai-setup/recommend.ts";
 import type { TemplateId } from "./templates.ts";
 import { WIZARD_BACK, selectWithBack, type WizardBack } from "./wizard-select.ts";
 
@@ -43,12 +46,12 @@ export type SidePins = {
   sql?: string;
   kv?: string;
   files?: string;
+  /** Driver id, or `"none"` / unset for no store.index. */
   index?: string | null;
   signal?: string;
   clock?: string;
   vault?: string;
   email?: string;
-  enableIndex?: boolean;
 };
 
 /**
@@ -60,6 +63,15 @@ export type SidePins = {
  */
 export function pinsFromSides(local: string, docker: string, test: string): EnvDriverPins {
   return { local, docker, test, prod: docker };
+}
+
+/**
+ * Whether a side pin enables store.index.
+ *
+ * @param value - Picked driver or none
+ */
+function indexEnabled(value: string | null | undefined): value is string {
+  return typeof value === "string" && value !== "none";
 }
 
 /**
@@ -92,17 +104,13 @@ export function assembleDriverDefaults(
     dockerSrc.files ?? TEMPLATE_DOCKER_PROD.files,
     TEMPLATE_TEST.files,
   );
-  const enableIndex = Boolean(
-    (side === "local" ? picked.enableIndex : other?.enableIndex) ||
-    (side === "docker" ? picked.enableIndex : other?.enableIndex),
-  );
   const indexLocal = localSrc.index;
   const indexDocker = dockerSrc.index;
   const index =
-    enableIndex || indexLocal != null || indexDocker != null
+    indexEnabled(indexLocal) || indexEnabled(indexDocker)
       ? pinsFromSides(
-          typeof indexLocal === "string" ? indexLocal : "memory",
-          typeof indexDocker === "string" ? indexDocker : "meilisearch",
+          indexEnabled(indexLocal) ? indexLocal : "memory",
+          indexEnabled(indexDocker) ? indexDocker : "meilisearch",
           "memory",
         )
       : null;
@@ -136,6 +144,22 @@ export function assembleDriverDefaults(
 }
 
 /**
+ * Balanced Ollama defaults for "AI setup → Recommended" (no quiz).
+ */
+export function recommendedAiApply(): AiSetupApplyInput {
+  const ramGb = detectTotalRamGb();
+  const chat = recommendChatForNeeds(ramGb);
+  const embed = recommendForRole("embed");
+  return {
+    driver: "ollama",
+    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434",
+    chatModel: chat.id,
+    visionModel: null,
+    embedModel: embed.id,
+  };
+}
+
+/**
  * Customize drivers for one template.
  *
  * @param template - Starter id (filters facets)
@@ -148,12 +172,12 @@ export async function askCustomizeFlow(
     [
       {
         value: "local",
-        label: "◻  Local",
+        label: "Local",
         hint: "oke mode local — sqlite / memory / fs …",
       },
       {
         value: "docker",
-        label: "▣  Docker",
+        label: "Docker",
         hint: "oke mode docker — postgres / redis / s3 …",
       },
     ],
@@ -197,44 +221,80 @@ export async function askCustomizeFlow(
   let aiPref: CreateDefaults["ai"] = { enabled: false, provider: null, driver: null };
   let aiApply: AiSetupApplyInput | null = null;
 
-  const wantAi = await selectWithBack(
-    "Configure AI?",
-    [
-      { value: "yes", label: "✓  Yes" },
-      { value: "no", label: "✗  No" },
-    ],
-    "no",
-    { allowBack: true },
-  );
-  if (wantAi === null) return null;
-  if (wantAi !== WIZARD_BACK && wantAi === "yes") {
-    const options = AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label }));
-    const localProviderValue = await selectWithBack(
-      alsoOther || primary === "local" ? "AI Provider — local" : "AI Provider",
-      options,
-      "ollama",
+  aiSetup: for (;;) {
+    const aiSetup = await selectWithBack(
+      "AI setup",
+      [
+        {
+          value: "recommended",
+          label: "Recommended",
+          hint: "Ollama · balanced defaults for this machine",
+        },
+        {
+          value: "customize",
+          label: "Customize",
+          hint: "pick provider & models",
+        },
+        {
+          value: "off",
+          label: "Off",
+          hint: "no AI drivers",
+        },
+      ],
+      "recommended",
       { allowBack: true },
     );
-    if (localProviderValue === null) return null;
-    if (localProviderValue !== WIZARD_BACK) {
+    if (aiSetup === null) return null;
+    if (aiSetup === WIZARD_BACK) {
+      // Back from AI → leave AI off (same as Off) and finish customize.
+      break;
+    }
+    if (aiSetup === "off") break;
+    if (aiSetup === "recommended") {
+      aiPins =
+        primary === "local" && !alsoOther
+          ? pinsLocalOnly("ollama", "ollama", "mock")
+          : pinsDockerReady("ollama", "ollama", "mock");
+      aiApply = recommendedAiApply();
+      aiPref = aiPrefWithModels(
+        {
+          enabled: true,
+          provider: "ollama",
+          driver: "ollama",
+        },
+        aiApply,
+      );
+      break;
+    }
+
+    // customize — local provider, optional docker provider, then model wizard
+    const options = AI_PROVIDERS.map((p) => ({ value: p.value, label: p.label }));
+    providers: for (;;) {
+      const askDockerAi = primary === "docker" || alsoOther;
+      const localProviderValue = await selectWithBack(
+        askDockerAi || primary === "local" ? "AI Provider — local" : "AI Provider",
+        options,
+        "ollama",
+        { allowBack: true },
+      );
+      if (localProviderValue === null) return null;
+      if (localProviderValue === WIZARD_BACK) continue aiSetup;
+
       const localProvider = localProviderValue as AiProviderId;
       const localDriver = aiDriverForProvider(localProvider);
       let dockerDriver = localDriver === "mock" ? "mock" : localDriver;
 
-      if (primary === "docker" || alsoOther) {
+      if (askDockerAi) {
         const dockerProviderValue = await selectWithBack(
           "AI Provider — docker",
           options,
           "ollama",
-          {
-            allowBack: true,
-          },
+          { allowBack: true },
         );
         if (dockerProviderValue === null) return null;
-        if (dockerProviderValue !== WIZARD_BACK) {
-          dockerDriver = aiDriverForProvider(dockerProviderValue);
-          if (dockerDriver === "mock") dockerDriver = "mock";
-        }
+        if (dockerProviderValue === WIZARD_BACK) continue providers;
+        dockerDriver = aiDriverForProvider(dockerProviderValue);
+        if (dockerDriver === "mock") dockerDriver = "mock";
       }
 
       aiPins =
@@ -263,6 +323,7 @@ export async function askCustomizeFlow(
         },
         aiApply,
       );
+      break aiSetup;
     }
   }
 
@@ -288,17 +349,11 @@ async function walkFacetsForSide(
   let i = 0;
   while (i < facets.length) {
     const facet = facets[i]!;
-    if (facet === "index" && !out.enableIndex) {
-      out.index = null;
-      i++;
-      continue;
-    }
     const result = await askOneFacet(facet, side, out);
     if (result === null) return null;
     if (result === WIZARD_BACK) {
       if (i === 0) return WIZARD_BACK;
       i--;
-      while (i > 0 && facets[i] === "index" && !out.enableIndex) i--;
       continue;
     }
     i++;
@@ -343,27 +398,11 @@ async function askOneFacet(
       state.files = v;
       return true;
     }
-    case "enableIndex": {
-      const value = await selectWithBack(
-        `Enable store.index (search)? — ${suffix}`,
-        [
-          { value: "yes", label: "✓  Yes" },
-          { value: "no", label: "✗  No" },
-        ],
-        state.enableIndex ? "yes" : "no",
-        { allowBack: true },
-      );
-      if (value === null) return null;
-      if (value === WIZARD_BACK) return WIZARD_BACK;
-      state.enableIndex = value === "yes";
-      if (!state.enableIndex) state.index = null;
-      return true;
-    }
     case "index": {
       const v = await askSideChoice(
         `store.index — ${suffix}`,
         INDEX_CHOICES,
-        side === "local" ? "memory" : "meilisearch",
+        side === "local" ? "none" : "meilisearch",
       );
       if (v === null || v === WIZARD_BACK) return v;
       state.index = v;

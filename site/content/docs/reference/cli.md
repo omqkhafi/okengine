@@ -71,9 +71,11 @@ bunx create-oke@latest my-app --no-ai
 
 On a TTY: pick **standard** or **advanced**, then recommended defaults or
 customize. Customize asks **local** or **docker** first, walks facets for that
-side only, then whether to customize the other (defaults if no). Writes
-user-global `~/.oke/create-defaults.json` (reuse only when `template` matches).
-Scaffold writes `.oke/mode` from the primary side. Non-TTY / `--yes` / explicit
+side only (including `store.index` with a `none` opt-out — no separate enable
+prompt), then whether to customize the other (defaults if no). **AI setup**
+offers Recommended (Ollama) · Customize · Off. Writes user-global
+`~/.oke/create-defaults.json` (reuse only when `template` matches). Scaffold
+writes `.oke/mode` from the primary side. Non-TTY / `--yes` / explicit
 `--template` never prompt.
 
 ### Additional commands
@@ -85,7 +87,7 @@ oke stack --json                 # -j
 oke images list                  # recipe · image · tag · digest · size (--json|-j)
 oke gates list                   # Module:Action catalogue (--json|-j)
 oke ai setup --provider ollama --yes   # non-interactive AI config
-# TTY Ollama: needs quiz → RAM-tier panel → recommend / installed / manual (+ ← Back)
+# TTY Ollama: banner → Select model (tier) / Manual · cloud: API token → model
 ```
 
 ### Shell completion

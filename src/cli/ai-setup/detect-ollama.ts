@@ -138,6 +138,13 @@ export async function detectOllama(
   };
 }
 
+/** Detected host hardware for the Ollama banner. */
+export type MachineInfo = {
+  readonly osName: string;
+  readonly cpuCount: number | null;
+  readonly ramGb: number | null;
+};
+
 /**
  * Best-effort total system RAM in GB.
  */
@@ -163,4 +170,44 @@ export function detectTotalRamGb(): number | null {
     // ignore
   }
   return null;
+}
+
+/**
+ * Best-effort OS name · CPU count · RAM for the Ollama banner.
+ */
+export function detectMachineInfo(): MachineInfo {
+  const osName =
+    process.platform === "darwin"
+      ? "macOS"
+      : process.platform === "linux"
+        ? "Linux"
+        : process.platform === "win32"
+          ? "Windows"
+          : process.platform;
+
+  let cpuCount: number | null = null;
+  try {
+    if (process.platform === "darwin") {
+      const proc = Bun.spawnSync(["sysctl", "-n", "hw.ncpu"], { stdout: "pipe" });
+      if (proc.exitCode === 0) {
+        const n = Number(proc.stdout.toString().trim());
+        if (Number.isFinite(n) && n > 0) cpuCount = n;
+      }
+    } else if (typeof navigator !== "undefined" && "hardwareConcurrency" in navigator) {
+      const n = Number(navigator.hardwareConcurrency);
+      if (Number.isFinite(n) && n > 0) cpuCount = n;
+    }
+  } catch {
+    // ignore
+  }
+  if (cpuCount === null) {
+    try {
+      const n = (process as { availableParallelism?: () => number }).availableParallelism?.();
+      if (typeof n === "number" && Number.isFinite(n) && n > 0) cpuCount = n;
+    } catch {
+      // ignore
+    }
+  }
+
+  return { osName, cpuCount, ramGb: detectTotalRamGb() };
 }

@@ -3,8 +3,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { TEMPLATE_DOCKER_PROD, TEMPLATE_LOCAL, customizeFacetsFor } from "./drivers-catalog.ts";
-import { assembleDriverDefaults, pinsFromSides } from "./customize-flow.ts";
+import {
+  EMAIL_CHOICES,
+  INDEX_CHOICES,
+  TEMPLATE_DOCKER_PROD,
+  TEMPLATE_LOCAL,
+  customizeFacetsFor,
+} from "./drivers-catalog.ts";
+import { assembleDriverDefaults, pinsFromSides, recommendedAiApply } from "./customize-flow.ts";
 
 describe("customizeFacetsFor", () => {
   test("standard is lean (sql only)", () => {
@@ -16,13 +22,40 @@ describe("customizeFacetsFor", () => {
       "sql",
       "kv",
       "files",
-      "enableIndex",
       "index",
       "signal",
       "clock",
       "vault",
       "email",
     ]);
+  });
+});
+
+describe("catalog labels", () => {
+  test("store.index offers none before drivers", () => {
+    expect(INDEX_CHOICES.map((c) => c.value)).toEqual([
+      "none",
+      "memory",
+      "pgvector",
+      "libsql",
+      "meilisearch",
+    ]);
+  });
+
+  test("channel.email labels taqnyat-mail as taqnyat", () => {
+    const row = EMAIL_CHOICES.find((c) => c.value === "taqnyat-mail");
+    expect(row?.label).toBe("taqnyat");
+  });
+});
+
+describe("recommendedAiApply", () => {
+  test("returns ollama with chat + embed models", () => {
+    const apply = recommendedAiApply();
+    expect(apply.driver).toBe("ollama");
+    expect(typeof apply.chatModel).toBe("string");
+    expect(apply.chatModel!.length).toBeGreaterThan(0);
+    expect(typeof apply.embedModel).toBe("string");
+    expect(apply.visionModel).toBeNull();
   });
 });
 
@@ -38,7 +71,7 @@ describe("pinsFromSides", () => {
 });
 
 describe("assembleDriverDefaults", () => {
-  test("primary docker + decline other → local pins === template defaults", () => {
+  test("primary docker + skip other → local pins === template defaults", () => {
     const drivers = assembleDriverDefaults(
       "docker",
       { sql: "libsql", kv: "redis", files: "s3", signal: "nats" },
@@ -61,17 +94,13 @@ describe("assembleDriverDefaults", () => {
     expect(drivers.store.kv.docker).toBe(TEMPLATE_DOCKER_PROD.kv);
   });
 
-  test("index stays null unless enableIndex", () => {
-    const drivers = assembleDriverDefaults("local", { sql: "sqlite" }, null);
-    expect(drivers.store.index).toBeNull();
+  test("index stays null for none / unset", () => {
+    expect(assembleDriverDefaults("local", { sql: "sqlite" }, null).store.index).toBeNull();
+    expect(assembleDriverDefaults("docker", { index: "none" }, null).store.index).toBeNull();
   });
 
-  test("enableIndex on primary fills both columns", () => {
-    const drivers = assembleDriverDefaults(
-      "docker",
-      { enableIndex: true, index: "meilisearch" },
-      null,
-    );
+  test("index driver on primary fills both columns", () => {
+    const drivers = assembleDriverDefaults("docker", { index: "meilisearch" }, null);
     expect(drivers.store.index).toEqual({
       local: "memory",
       docker: "meilisearch",

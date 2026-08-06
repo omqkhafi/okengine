@@ -42,6 +42,8 @@ export { generateCredentials } from "./credentials.ts";
 export {
   ensureOllamaModel,
   normalizeOllamaPullUrl,
+  ollamaTagsInclude,
+  parseOllamaTagsNames,
   OllamaPullError,
   type EnsureOllamaModelOptions,
   type OllamaFetch,

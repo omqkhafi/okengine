@@ -13,13 +13,14 @@ import { parseAiSetupArgs } from "./index.ts";
 
 describe("catalog", () => {
   test("recommendChatModel respects RAM tiers", () => {
-    expect(recommendChatModel(8).id).toBe("gemma4:e4b");
+    expect(recommendChatModel(8).ramGb).toBeLessThanOrEqual(8);
     expect(recommendChatModel(16).ramGb).toBeLessThanOrEqual(16);
     expect(recommendChatModel(null).recommended).toBe(true);
   });
 
   test("cloud providers ship short curated chat lists + recommended", () => {
     expect(cloudChatModels("openai").length).toBeGreaterThan(0);
+    expect(cloudChatModels("openai").length).toBeLessThanOrEqual(10);
     expect(cloudChatModels("anthropic").some((m) => m.recommended)).toBe(true);
     expect(recommendCloudChat("openai")).toBe("gpt-4o-mini");
     expect(recommendCloudChat("anthropic")).toContain("claude");
@@ -68,6 +69,11 @@ describe("apply", () => {
   test("upsertEnv uncomment / set", () => {
     const env = `# OKE_AI_DRIVER=mock\nOKE_AI_URL=http://x\n`;
     expect(upsertEnv(env, "OKE_AI_DRIVER", "ollama")).toContain("OKE_AI_DRIVER=ollama");
+  });
+
+  test("upsertEnv writes API token when provided", () => {
+    const env = `# OKE_AI_DRIVER=mock\n`;
+    expect(upsertEnv(env, "OPENAI_API_KEY", "sk-test")).toContain("OPENAI_API_KEY=sk-test");
   });
 
   test("renderAiTs includes vision + embed", () => {
