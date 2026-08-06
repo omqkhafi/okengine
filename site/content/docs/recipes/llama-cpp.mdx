@@ -30,7 +30,8 @@ images: {
 },
 ```
 
-Or `oke ai setup --provider llama-cpp --yes`.
+Or `oke ai setup --provider llama-cpp` (TTY: banner → Ultra Fast / Fast /
+Balanced / Smart → curated Docker Hub `ai/` pick) / `--yes` for `smollm2`.
 
 </Step>
 
@@ -117,8 +118,8 @@ interfaces). `OKE_AI_URL` must include `/v1`.
 <Accordion title="Model fails to load / slow first boot">
 
 First start downloads the curated `ai/` model into the named volume. Prefer
-small ids like `smollm2` for smoke tests. Do not mount random GGUF files from
-the internet.
+`oke ai setup` tiers (Ultra Fast → `smollm2`) for smoke tests. Do not mount
+random GGUF files from the internet.
 
 </Accordion>
 </Accordions>

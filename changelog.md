@@ -77,8 +77,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   Email menu labels `taqnyat-mail` as `taqnyat` (driver id unchanged). Install
   shows `bun install` progress instead of a silent spinner. Wizard labels drop
   decorative icons. `oke ai setup` / create-oke AI: llama.cpp · Ollama · vLLM ·
-  SGLang · cloud; Ollama banner still shows OS · CPU · RAM · Fit RAM · detected ·
-  tiers. **AI Provider — docker → Back** returns to the previous provider step.
+  SGLang · cloud; llama.cpp and Ollama share the banner → tier → recommended /
+  manual shape (Docker Hub `ai/` catalog vs Ollama library + detect).
+  **AI Provider — docker → Back** returns to the previous provider step.
 
 - Ollama docker ensure: skip `/api/pull` when the container's `/api/tags`
   already lists the model (host `ollama` weights are a different server);

@@ -14,7 +14,7 @@ export type ModelTier = "ultra-fast" | "fast" | "balanced" | "smart";
 /** Capability tags shown in manual model lists. */
 export type ModelModality = "text" | "vision" | "code" | "reasoning";
 
-/** One curated Ollama model entry. */
+/** One curated local model entry (Ollama tag or Docker Hub `ai/` id). */
 export type CatalogModel = {
   readonly id: string;
   readonly label: string;
@@ -766,4 +766,210 @@ export function cloudChatModels(provider: string): readonly CloudModel[] {
 export function recommendCloudChat(provider: string): string {
   const list = cloudChatModels(provider);
   return list.find((m) => m.recommended)?.id ?? list[0]?.id ?? "gpt-4o-mini";
+}
+
+/**
+ * Curated Docker Hub `ai/` chat models for llama.cpp (`LLAMA_ARG_DOCKER_REPO`).
+ * Ids omit the `ai/` org prefix (llama.cpp default). ≤10 per tier for manual pick.
+ */
+export const LLAMA_CPP_CHAT_MODELS: readonly CatalogModel[] = [
+  // Ultra Fast (~1–2GB)
+  {
+    id: "smollm2",
+    label: "SmolLM2",
+    hint: "Default · lightest",
+    role: "chat",
+    recommended: true,
+    ramGb: 1,
+    tier: "ultra-fast",
+    modalities: ["text"],
+  },
+  {
+    id: "smollm2:135M-Q4_K_M",
+    label: "SmolLM2 135M",
+    hint: "Tiny smoke test",
+    role: "chat",
+    ramGb: 1,
+    tier: "ultra-fast",
+    modalities: ["text"],
+  },
+  {
+    id: "gemma3:270m",
+    label: "Gemma 3 270M",
+    hint: "Google tiny",
+    role: "chat",
+    ramGb: 1,
+    tier: "ultra-fast",
+    modalities: ["text"],
+  },
+  {
+    id: "qwen3:0.6B-Q4_K_M",
+    label: "Qwen3 0.6B",
+    hint: "Small coding",
+    role: "chat",
+    ramGb: 2,
+    tier: "ultra-fast",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "llama3.2:1B-Q4_0",
+    label: "Llama 3.2 1B",
+    hint: "Meta tiny",
+    role: "chat",
+    ramGb: 2,
+    tier: "ultra-fast",
+    modalities: ["text"],
+  },
+  // Fast (~4–8GB)
+  {
+    id: "llama3.2",
+    label: "Llama 3.2 3B",
+    hint: "Balanced local chat",
+    role: "chat",
+    recommended: true,
+    ramGb: 4,
+    tier: "fast",
+    modalities: ["text"],
+  },
+  {
+    id: "qwen2.5:3B-Q4_K_M",
+    label: "Qwen2.5 3B",
+    hint: "Coding",
+    role: "chat",
+    ramGb: 4,
+    tier: "fast",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "qwen3:4B-UD-Q4_K_XL",
+    label: "Qwen3 4B",
+    hint: "Coding · agents",
+    role: "chat",
+    ramGb: 6,
+    tier: "fast",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "gemma3:4b",
+    label: "Gemma 3 4B",
+    hint: "Reasoning",
+    role: "chat",
+    ramGb: 8,
+    tier: "fast",
+    modalities: ["text", "reasoning"],
+  },
+  {
+    id: "gemma4:e2b-q4_K_M",
+    label: "Gemma 4 E2B",
+    hint: "Compact multimodal",
+    role: "chat",
+    ramGb: 8,
+    tier: "fast",
+    modalities: ["text", "vision"],
+  },
+  // Balanced (~8–16GB)
+  {
+    id: "qwen3:8B-Q4_K_M",
+    label: "Qwen3 8B",
+    hint: "Coding · agents",
+    role: "chat",
+    recommended: true,
+    ramGb: 12,
+    tier: "balanced",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "mistral",
+    label: "Mistral 7B",
+    hint: "General + code",
+    role: "chat",
+    ramGb: 12,
+    tier: "balanced",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "deepseek-r1-distill-llama:8B-Q4_K_M",
+    label: "DeepSeek R1 8B",
+    hint: "Reasoning distill",
+    role: "chat",
+    ramGb: 12,
+    tier: "balanced",
+    modalities: ["text", "reasoning"],
+  },
+  {
+    id: "qwen2.5:7B-Q4_K_M",
+    label: "Qwen2.5 7B",
+    hint: "Coding",
+    role: "chat",
+    ramGb: 12,
+    tier: "balanced",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "gemma4:e4b",
+    label: "Gemma 4 E4B",
+    hint: "Multimodal",
+    role: "chat",
+    ramGb: 16,
+    tier: "balanced",
+    modalities: ["text", "vision", "reasoning"],
+  },
+  // Smart (~24–32GB)
+  {
+    id: "phi4",
+    label: "Phi-4 14B",
+    hint: "Reasoning",
+    role: "chat",
+    recommended: true,
+    ramGb: 24,
+    tier: "smart",
+    modalities: ["text", "reasoning", "code"],
+  },
+  {
+    id: "qwen3:30B-A3B-Q4_K_M",
+    label: "Qwen3 30B-A3B",
+    hint: "MoE · coding",
+    role: "chat",
+    ramGb: 24,
+    tier: "smart",
+    modalities: ["text", "code"],
+  },
+  {
+    id: "gemma3:27b",
+    label: "Gemma 3 27B",
+    hint: "Large reasoning",
+    role: "chat",
+    ramGb: 32,
+    tier: "smart",
+    modalities: ["text", "reasoning"],
+  },
+];
+
+/**
+ * llama.cpp chat models in a tier (≤10 for manual pick).
+ *
+ * @param tier - Speed / quality tier
+ */
+export function llamaCppModelsForTier(tier: ModelTier): readonly CatalogModel[] {
+  return LLAMA_CPP_CHAT_MODELS.filter((m) => m.tier === tier).slice(0, 10);
+}
+
+/**
+ * Recommended Docker Hub `ai/` model for a tier (RAM-aware).
+ *
+ * @param tier - Selected tier
+ * @param totalRamGb - Prefer models that fit when RAM is known
+ */
+export function recommendLlamaCppForTier(
+  tier: ModelTier,
+  totalRamGb: number | null = null,
+): CatalogModel {
+  const list = llamaCppModelsForTier(tier);
+  const headroom = 4;
+  const fits =
+    totalRamGb !== null && Number.isFinite(totalRamGb)
+      ? list.filter((m) => m.ramGb + headroom <= totalRamGb || m.ramGb <= totalRamGb)
+      : list;
+  const pool = fits.length > 0 ? fits : list;
+  return pool.find((m) => m.recommended) ?? pool[pool.length - 1] ?? list[0]!;
 }

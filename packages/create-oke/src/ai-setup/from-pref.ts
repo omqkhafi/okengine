@@ -3,6 +3,7 @@
  */
 
 import type { CreateAiPref } from "../create-defaults.ts";
+import { LLAMA_CPP_IMAGE } from "../drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
 
 /**
@@ -70,7 +71,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       chatModel: "smollm2",
       visionModel: null,
       embedModel: null,
-      image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+      image: LLAMA_CPP_IMAGE,
     };
   }
   if (provider === "ollama") {

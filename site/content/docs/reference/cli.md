@@ -88,7 +88,7 @@ oke images list                  # recipe · image · tag · digest · size (--j
 oke gates list                   # Module:Action catalogue (--json|-j)
 oke ai setup --provider llama-cpp --yes  # default local AI
 oke ai setup --provider ollama --yes     # fully supported alternative
-# TTY: llama.cpp / Ollama / vLLM / SGLang / cloud → model
+# TTY: llama.cpp / Ollama → banner · tiers · manual; vLLM / SGLang / cloud → model
 ```
 
 ### Shell completion

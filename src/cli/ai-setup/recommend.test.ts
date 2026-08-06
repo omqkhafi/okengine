@@ -3,9 +3,16 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { modelsForTier, recommendChatModel, recommendForTier } from "./catalog.ts";
+import {
+  llamaCppModelsForTier,
+  modelsForTier,
+  recommendChatModel,
+  recommendForTier,
+  recommendLlamaCppForTier,
+} from "./catalog.ts";
 import {
   fittingChatModels,
+  formatLlamaCppBanner,
   formatModelRow,
   formatOllamaBanner,
   isTightFit,
@@ -120,6 +127,31 @@ describe("formatOllamaBanner", () => {
     expect(text).toContain("Detected local models");
     expect(text).toContain("gemma4:e4b");
     expect(text).not.toContain("Fits comfortably");
+    expect(text).toContain("Tiers  ·  Ultra Fast");
+  });
+});
+
+describe("llama.cpp catalog", () => {
+  test("each tier exposes up to 10 Docker Hub ai/ models", () => {
+    for (const tier of ["ultra-fast", "fast", "balanced", "smart"] as const) {
+      const list = llamaCppModelsForTier(tier);
+      expect(list.length).toBeGreaterThan(0);
+      expect(list.length).toBeLessThanOrEqual(10);
+      expect(list.every((m) => !m.id.startsWith("ai/"))).toBe(true);
+    }
+  });
+
+  test("recommendLlamaCppForTier returns a model in that tier", () => {
+    expect(recommendLlamaCppForTier("ultra-fast", 8).id).toBe("smollm2");
+    expect(recommendLlamaCppForTier("fast", 16).tier).toBe("fast");
+  });
+
+  test("formatLlamaCppBanner shows Docker Hub ai/ source — not Ollama detect", () => {
+    const text = formatLlamaCppBanner({ osName: "macOS", cpuCount: 10, ramGb: 24 });
+    expect(text).toContain("OS macOS  ·  CPU 10  ·  RAM ~24GB RAM");
+    expect(text).toContain("Fit RAM ~20GB RAM");
+    expect(text).toContain("Docker Hub ai/");
+    expect(text).not.toContain("Detected local models");
     expect(text).toContain("Tiers  ·  Ultra Fast");
   });
 });

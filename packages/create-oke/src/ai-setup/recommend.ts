@@ -112,6 +112,30 @@ export function recommendChatForNeeds(totalRamGb: number | null): CatalogModel {
 }
 
 /**
+ * Shared hardware lines for local AI banners.
+ *
+ * @param machine - Detected hardware
+ */
+function formatMachineBannerLines(machine: {
+  readonly osName: string;
+  readonly cpuCount: number | null;
+  readonly ramGb: number | null;
+}): readonly string[] {
+  const ram =
+    machine.ramGb !== null && Number.isFinite(machine.ramGb)
+      ? `~${machine.ramGb}GB RAM`
+      : "RAM unknown";
+  const cpu =
+    machine.cpuCount !== null && Number.isFinite(machine.cpuCount) ? String(machine.cpuCount) : "?";
+  const fit =
+    machine.ramGb !== null && Number.isFinite(machine.ramGb)
+      ? `~${usableRamGb(machine.ramGb)}GB RAM`
+      : "unknown";
+  const sep = "  ·  ";
+  return [[`OS ${machine.osName}`, `CPU ${cpu}`, `RAM ${ram}`].join(sep), `Fit RAM ${fit}`];
+}
+
+/**
  * Ollama banner lines — OS · CPU · RAM · fit · detected · tiers.
  *
  * @param machine - Detected hardware
@@ -125,24 +149,34 @@ export function formatOllamaBanner(
   },
   detectedIds: readonly string[],
 ): string {
-  const ram =
-    machine.ramGb !== null && Number.isFinite(machine.ramGb)
-      ? `~${machine.ramGb}GB RAM`
-      : "RAM unknown";
-  const cpu =
-    machine.cpuCount !== null && Number.isFinite(machine.cpuCount) ? String(machine.cpuCount) : "?";
-  const fit =
-    machine.ramGb !== null && Number.isFinite(machine.ramGb)
-      ? `~${usableRamGb(machine.ramGb)}GB RAM`
-      : "unknown";
-
   const sep = "  ·  ";
   const lines = [
-    [`OS ${machine.osName}`, `CPU ${cpu}`, `RAM ${ram}`].join(sep),
-    `Fit RAM ${fit}`,
+    ...formatMachineBannerLines(machine),
     "",
     "Detected local models",
     ...(detectedIds.length > 0 ? detectedIds.map((id) => id) : ["(none detected)"]),
+    "",
+    `Tiers${sep}${MODEL_TIERS.map((t) => t.label).join(sep)}`,
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * llama.cpp banner — OS · CPU · RAM · fit · Docker Hub `ai/` source · tiers.
+ *
+ * @param machine - Detected hardware
+ */
+export function formatLlamaCppBanner(machine: {
+  readonly osName: string;
+  readonly cpuCount: number | null;
+  readonly ramGb: number | null;
+}): string {
+  const sep = "  ·  ";
+  const lines = [
+    ...formatMachineBannerLines(machine),
+    "",
+    "Model source",
+    "Docker Hub ai/ (curated) — pulled on first container start",
     "",
     `Tiers${sep}${MODEL_TIERS.map((t) => t.label).join(sep)}`,
   ];

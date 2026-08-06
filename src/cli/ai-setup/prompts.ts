@@ -7,14 +7,17 @@ import {
   CLOUD_PROVIDERS,
   MODEL_TIERS,
   cloudChatModels,
+  llamaCppModelsForTier,
   modelsForTier,
   recommendCloudChat,
   recommendForRole,
   recommendForTier,
+  recommendLlamaCppForTier,
   type CatalogModel,
   type ModelTier,
 } from "./catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
+import { LLAMA_CPP_IMAGE } from "../../docker/recipes/llama-cpp.ts";
 import {
   detectMachineInfo,
   detectOllama,
@@ -22,7 +25,12 @@ import {
   isInstalled,
   type OllamaDetectResult,
 } from "./detect-ollama.ts";
-import { formatModelRow, formatOllamaBanner, suggestTierForRam } from "./recommend.ts";
+import {
+  formatLlamaCppBanner,
+  formatModelRow,
+  formatOllamaBanner,
+  suggestTierForRam,
+} from "./recommend.ts";
 
 /** Provider menu value. */
 export type AiSetupProvider =
@@ -65,7 +73,7 @@ export async function askAiSetup(
         {
           value: "llama-cpp",
           label: "llama.cpp (Local)",
-          hint: "default · lightest footprint · OpenAI-compatible",
+          hint: "default · Docker Hub ai/ · recommend for your RAM",
         },
         {
           value: "ollama",
@@ -95,7 +103,9 @@ export async function askAiSetup(
   }
 
   if (provider === "llama-cpp") {
-    return askLlamaCppPath();
+    return askLlamaCppPath({
+      ramGb: options.ramGb === undefined ? detectTotalRamGb() : options.ramGb,
+    });
   }
   if (provider === "ollama") {
     return askOllamaPath({
@@ -111,26 +121,120 @@ export async function askAiSetup(
 }
 
 /**
- * llama.cpp path — curated Docker Hub `ai/` model id (docker-repo).
+ * llama.cpp path — banner → Select model (tier) / Manual (Docker Hub `ai/`).
+ *
+ * @param options - RAM override
  */
-async function askLlamaCppPath(): Promise<AiSetupApplyInput | null> {
-  const model = await text({
-    message: "Docker Hub ai/ model id",
-    placeholder: "smollm2",
-    initialValue: "smollm2",
-    validate: (v) => {
-      if (!v?.trim()) return "Model id required";
-      return undefined;
-    },
-  });
-  if (isCancel(model)) return null;
+async function askLlamaCppPath(options: {
+  readonly ramGb: number | null;
+}): Promise<AiSetupApplyInput | null> {
+  const machine = detectMachineInfo();
+  const ramGb = options.ramGb ?? machine.ramGb;
+  note(formatLlamaCppBanner({ ...machine, ramGb }), "llama.cpp");
+
+  mode: for (;;) {
+    const mode = await selectWithBack(
+      "How do you want to pick models?",
+      [
+        {
+          value: "select",
+          label: "Select model",
+          hint: "Ultra Fast  ·  Fast  ·  Balanced  ·  Smart",
+        },
+        {
+          value: "manual",
+          label: "Manual model",
+          hint: "type any Docker Hub ai/ model id",
+        },
+      ],
+      "select",
+      false,
+    );
+    if (mode === null) return null;
+
+    if (mode === "manual") {
+      const id = await askOtherModelId("smollm2");
+      if (id === null) return null;
+      return finishLlamaCpp(id);
+    }
+
+    tier: for (;;) {
+      const tierPick = await selectWithBack(
+        "Select model",
+        MODEL_TIERS.map((t) => ({
+          value: t.value,
+          label: t.label,
+          hint: t.hint,
+        })),
+        suggestTierForRam(ramGb),
+        true,
+      );
+      if (tierPick === null) return null;
+      if (tierPick === BACK) continue mode;
+
+      const tier = tierPick as ModelTier;
+      const recommended = recommendLlamaCppForTier(tier, ramGb);
+
+      how: for (;;) {
+        const how = await selectWithBack(
+          MODEL_TIERS.find((t) => t.value === tier)?.label ?? tier,
+          [
+            {
+              value: "recommended",
+              label: "Use recommended",
+              hint: formatModelRow(recommended),
+            },
+            {
+              value: "manual",
+              label: "Select manually",
+              hint: "up to 10 models in this tier",
+            },
+          ],
+          "recommended",
+          true,
+        );
+        if (how === null) return null;
+        if (how === BACK) continue tier;
+
+        if (how === "recommended") {
+          return finishLlamaCpp(recommended.id, recommended);
+        }
+
+        const list = llamaCppModelsForTier(tier);
+        const picked = await selectWithBack(
+          "Select model",
+          list.map((m) => ({
+            value: m.id,
+            label: formatModelRow(m),
+            hint: m.hint,
+          })),
+          recommended.id,
+          true,
+        );
+        if (picked === null) return null;
+        if (picked === BACK) continue how;
+        const model = list.find((m) => m.id === picked);
+        return finishLlamaCpp(picked, model);
+      }
+    }
+  }
+}
+
+/**
+ * Build apply input for llama.cpp — OpenAI-compatible + curated image pin.
+ *
+ * @param chatId - Docker Hub `ai/` model id (org prefix optional)
+ * @param catalog - Optional catalog row (modalities)
+ */
+function finishLlamaCpp(chatId: string, catalog?: CatalogModel): AiSetupApplyInput {
+  const id = chatId.replace(/^ai\//, "");
   return {
     driver: "openai-compatible",
     baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-    chatModel: String(model).trim(),
-    visionModel: null,
+    chatModel: id,
+    visionModel: catalog?.modalities.includes("vision") ? id : null,
     embedModel: null,
-    image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+    image: LLAMA_CPP_IMAGE,
   };
 }
 
