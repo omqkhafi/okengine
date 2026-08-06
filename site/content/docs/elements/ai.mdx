@@ -171,67 +171,83 @@ There is deliberately **no production default**: `prod` must name a driver, whic
 
 ```bash title="Terminal"
 oke ai setup
+oke ai setup --provider llama-cpp --yes
 oke ai setup --provider ollama --yes
 ```
 
-Writes `drivers.ai`, `.env.local`, and `src/ai.ts`.
+Writes `drivers.ai`, `.env.local`, and `src/core/ai.ts`.
 
-Ollama: machine banner (OS · CPU · RAM · Fit RAM · detected models · tiers) →
-**Select model** (Ultra Fast / Fast / Balanced / Smart → Use recommended or
-Select manually ≤10 with modalities) or **Manual model**. Embed defaults to
-`nomic-embed-text` (auto-pull when missing — no download prompt). Cloud:
-API token → Select model (≤10) or Manual model.
+**Recommended** defaults to llama.cpp (lightest local footprint). Customize
+offers llama.cpp · Ollama · vLLM · SGLang · cloud providers. Ollama path:
+machine banner → model tier / manual. Cloud: API token → model.
 
-`create-oke` customize offers **AI setup** (Recommended Ollama · Customize ·
-Off) before install; `--ai` forces the full model wizard. Standalone
-`oke ai setup` remains for existing apps.
+`create-oke` customize offers **AI setup** (Recommended llama.cpp · Customize ·
+Off) before install; `--ai` forces the full model wizard.
 
-### Local Ollama
+### Local inference (decision matrix)
 
-`ollama` is a local-model driver — any pulled model works. Pin `drivers.ai`;
-optionally pin `images.ai` for compose. Native `complete`, `stream`, and
-`embed` (`POST /api/embeddings`) — no OpenAI shim required for local RAG.
+| Workload                         | Image recipe / driver                                      |
+| -------------------------------- | ---------------------------------------------------------- |
+| Single-user / dev (default)      | [llama.cpp](/docs/recipes/llama-cpp) + `openai-compatible` |
+| Local library UX                 | [Ollama](/docs/recipes/ollama) + `ollama`                  |
+| Multi-user GPU concurrency       | [vLLM](/docs/recipes/vllm) + `openai-compatible`           |
+| Structured / agent GPU workloads | [SGLang](/docs/recipes/sglang) + `openai-compatible`       |
+| Managed cloud                    | `anthropic` / `openai-compatible` / … (no `images.ai`)     |
+
+All local recipes **loopback-publish only**, pin explicit tags (never
+`latest`), and require curated model sources — never arbitrary untrusted GGUF
+(2026 GGUF-parser CVEs).
+
+### Default local: llama.cpp
 
 ```typescript title="oke.config.ts"
 import { defineConfig } from "okengine/config";
 
 export default defineConfig({
   drivers: {
-    ai: { local: "ollama", docker: "ollama", prod: "anthropic" },
+    ai: { local: "openai-compatible", docker: "openai-compatible", prod: "anthropic" },
   },
   images: {
-    ai: "ollama/ollama:latest",
+    ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // ≥ b8146; never :latest
   },
 });
 ```
 
-```typescript title="src/ai.ts"
+```typescript title="src/core/ai.ts"
 export const smart = ai.model("smart", {
-  provider: "ollama",
-  model: "qwen3.5:9b", // balanced local-dev starting point — override freely
+  provider: "openai-compatible",
+  model: process.env.OKE_AI_MODEL ?? "smollm2", // Docker Hub ai/ id
 });
 ```
 
-- **Model:** set on `ai.model(…, { model })` or `OKE_AI_MODEL`. `qwen3.5:9b` ([Ollama library](https://ollama.com/library/qwen3.5); same as `qwen3.5:latest`) is a reasonable balanced starting point for local dev — not the only option. On Apple Silicon, prefer `qwen3.5:9b-mlx` for the MLX build.
-- **URL:** default `http://127.0.0.1:11434`. Override with `OKE_AI_URL` or `OLLAMA_HOST` (bare `host:port` is fine).
-- **Docker:** the image recipe pulls the configured model and writes `OKE_AI_URL` into `docker/.env.docker`.
-- **Fail-loud:** unreachable or unhealthy Ollama throws `OllamaUnavailableError` — never a silent mock fallback.
-- **PII:** `ollama` counts as on-premise for the build-time egress check (same as `mock`).
+- **URL:** `http://127.0.0.1:8080/v1` (recipe writes `OKE_AI_URL`).
+- **Model:** curated Docker Hub [`ai/`](https://hub.docker.com/u/ai) id via `OKE_AI_MODEL`.
+- **PII:** local OpenAI-compatible endpoints count as on-premise when they are not third-party cloud.
+
+### Ollama (fully supported alternative)
+
+Native `ollama` driver — `complete`, `stream`, `embed` without an OpenAI shim.
+Pin `ollama/ollama:0.32.6` or newer (≥ **0.17.1**). See
+[Ollama recipe](/docs/recipes/ollama).
 
 ### OpenAI-compatible endpoints (one driver)
 
-`openai-compatible` is the shared chat/completions client — OpenAI, Groq, Together, OpenRouter, vLLM, LM Studio, and Ollama’s `/v1` shim. You do **not** get a separate driver per vendor; only `baseUrl`, `apiKey`, `model`, and optional `headers` change.
+`openai-compatible` is the shared chat/completions client — OpenAI, Groq,
+Together, OpenRouter, llama.cpp, vLLM, SGLang, LM Studio, and Ollama’s `/v1`
+shim. Only `baseUrl`, `apiKey`, `model`, and optional `headers` change.
 
-| Target             | Typical `baseUrl`                     | Key                                                         |
-| ------------------ | ------------------------------------- | ----------------------------------------------------------- |
-| OpenAI             | `https://api.openai.com/v1` (default) | required (`OPENAI_API_KEY`)                                 |
-| Groq               | `https://api.groq.com/openai/v1`      | required                                                    |
-| Together           | `https://api.together.xyz/v1`         | required                                                    |
-| OpenRouter         | `https://openrouter.ai/api/v1`        | required; optional `HTTP-Referer` / `X-Title` via `headers` |
-| LM Studio / local  | e.g. `http://127.0.0.1:1234/v1`       | optional                                                    |
-| Ollama OpenAI shim | `http://127.0.0.1:11434/v1`           | optional                                                    |
+| Target              | Typical `baseUrl`                     | Key                                                         |
+| ------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| OpenAI              | `https://api.openai.com/v1` (default) | required (`OPENAI_API_KEY`)                                 |
+| llama.cpp (default) | `http://127.0.0.1:8080/v1`            | optional                                                    |
+| vLLM / SGLang       | `http://127.0.0.1:8000/v1` / `:30000` | optional                                                    |
+| Groq                | `https://api.groq.com/openai/v1`      | required                                                    |
+| Together            | `https://api.together.xyz/v1`         | required                                                    |
+| OpenRouter          | `https://openrouter.ai/api/v1`        | required; optional `HTTP-Referer` / `X-Title` via `headers` |
+| LM Studio / local   | e.g. `http://127.0.0.1:1234/v1`       | optional                                                    |
+| Ollama OpenAI shim  | `http://127.0.0.1:11434/v1`           | optional                                                    |
 
-Prefer the native `ollama` driver for local Ollama (`/api/chat`). Point `openai-compatible` at Ollama `/v1` only when you need the OpenAI wire shape.
+Prefer the native `ollama` driver for local Ollama (`/api/chat`).
 
 **Consequence:** a missing key against the default OpenAI cloud base fails at open; a custom `baseUrl` may omit the key. HTTP errors always throw — never a silent mock fallback.
 

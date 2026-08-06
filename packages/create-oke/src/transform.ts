@@ -14,7 +14,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CreateDefaults, EnvDriverPins } from "./create-defaults.ts";
-import { DEFAULT_IMAGES } from "./drivers-catalog.ts";
+import {
+  DEFAULT_IMAGES,
+  LLAMA_CPP_IMAGE,
+  OLLAMA_IMAGE,
+  SGLANG_IMAGE,
+  VLLM_IMAGE,
+} from "./drivers-catalog.ts";
 import { packageRoot } from "./templates.ts";
 
 /** SQL store drivers selectable at scaffold time. */
@@ -329,11 +335,35 @@ function syncImages(source: string, defaults: CreateDefaults): string {
   if (d.store.index?.docker === "meilisearch") {
     pin("store.index", DEFAULT_IMAGES["store.index"]!);
   }
-  if (d.ai && (d.ai.docker === "ollama" || d.ai.local === "ollama")) {
-    pin("ai", DEFAULT_IMAGES.ai!);
+  if (
+    d.ai &&
+    (d.ai.docker === "ollama" ||
+      d.ai.local === "ollama" ||
+      d.ai.docker === "openai-compatible" ||
+      d.ai.local === "openai-compatible")
+  ) {
+    pin("ai", aiImageForDefaults(defaults));
   }
 
   return replaceImagesBlock(source, images);
+}
+
+/**
+ * Resolve `images.ai` from create-defaults provider / driver pins.
+ *
+ * @param defaults - Create answers
+ */
+function aiImageForDefaults(defaults: CreateDefaults): string {
+  const provider = defaults.ai.provider;
+  if (provider === "ollama" || defaults.drivers.ai?.local === "ollama") {
+    return OLLAMA_IMAGE;
+  }
+  if (provider === "vllm") return VLLM_IMAGE;
+  if (provider === "sglang") return SGLANG_IMAGE;
+  if (provider === "llama-cpp" || defaults.drivers.ai?.local === "openai-compatible") {
+    return LLAMA_CPP_IMAGE;
+  }
+  return DEFAULT_IMAGES.ai!;
 }
 
 /**

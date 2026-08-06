@@ -26,7 +26,10 @@ import { formatModelRow, formatOllamaBanner, suggestTierForRam } from "./recomme
 
 /** Provider menu value. */
 export type AiSetupProvider =
+  | "llama-cpp"
   | "ollama"
+  | "vllm"
+  | "sglang"
   | "openai"
   | "anthropic"
   | "gemini"
@@ -60,9 +63,24 @@ export async function askAiSetup(
       message: "AI Provider",
       options: [
         {
+          value: "llama-cpp",
+          label: "llama.cpp (Local)",
+          hint: "default · lightest footprint · OpenAI-compatible",
+        },
+        {
           value: "ollama",
           label: "Ollama (Local)",
           hint: "detect models · recommend for your RAM",
+        },
+        {
+          value: "vllm",
+          label: "vLLM (self-hosted GPU)",
+          hint: "multi-user / production concurrency",
+        },
+        {
+          value: "sglang",
+          label: "SGLang (self-hosted GPU)",
+          hint: "structured / agent workloads",
         },
         { value: "openai", label: "OpenAI" },
         { value: "anthropic", label: "Anthropic" },
@@ -76,14 +94,75 @@ export async function askAiSetup(
     provider = String(value) as AiSetupProvider;
   }
 
+  if (provider === "llama-cpp") {
+    return askLlamaCppPath();
+  }
   if (provider === "ollama") {
     return askOllamaPath({
       detect: options.detect ?? detectOllama,
       ramGb: options.ramGb === undefined ? detectTotalRamGb() : options.ramGb,
     });
   }
+  if (provider === "vllm" || provider === "sglang") {
+    return askSelfHostedGpuPath(provider);
+  }
 
   return askCloudPath(provider);
+}
+
+/**
+ * llama.cpp path — curated Docker Hub `ai/` model id (docker-repo).
+ */
+async function askLlamaCppPath(): Promise<AiSetupApplyInput | null> {
+  const model = await text({
+    message: "Docker Hub ai/ model id",
+    placeholder: "smollm2",
+    initialValue: "smollm2",
+    validate: (v) => {
+      if (!v?.trim()) return "Model id required";
+      return undefined;
+    },
+  });
+  if (isCancel(model)) return null;
+  return {
+    driver: "openai-compatible",
+    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
+    chatModel: String(model).trim(),
+    visionModel: null,
+    embedModel: null,
+    image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+  };
+}
+
+/**
+ * vLLM / SGLang — Hugging Face model path for self-hosted GPU inference.
+ *
+ * @param provider - vllm | sglang
+ */
+async function askSelfHostedGpuPath(
+  provider: "vllm" | "sglang",
+): Promise<AiSetupApplyInput | null> {
+  const port = provider === "vllm" ? 8000 : 30000;
+  const image =
+    provider === "vllm" ? "vllm/vllm-openai:v0.26.0" : "lmsysorg/sglang:v0.5.16-runtime";
+  const model = await text({
+    message: "Hugging Face model id",
+    placeholder: "Qwen/Qwen3-0.6B",
+    initialValue: "Qwen/Qwen3-0.6B",
+    validate: (v) => {
+      if (!v?.trim()) return "Model id required";
+      return undefined;
+    },
+  });
+  if (isCancel(model)) return null;
+  return {
+    driver: "openai-compatible",
+    baseUrl: process.env.OKE_AI_URL ?? `http://127.0.0.1:${port}/v1`,
+    chatModel: String(model).trim(),
+    visionModel: null,
+    embedModel: null,
+    image,
+  };
 }
 
 /**

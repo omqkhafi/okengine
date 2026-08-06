@@ -1,17 +1,17 @@
 ---
 title: "Ollama"
-description: "Local AI model server — OKE_AI_URL, OKE_AI_MODEL, /root/.ollama volume; boot pulls via the container HTTP API."
+description: "Fully supported local AI alternative — OKE_AI_URL, pinned ≥ 0.17.1, loopback-only publish, library models only."
 icon: "Bot"
 source: "docs/spec/unified-theory.md"
 ---
 
-Ollama serves local models over HTTP on port `11434`. Pin `images.ai` and set
-`drivers.ai` to `ollama` where you want local inference — there is **no** production
-default for AI; prod must declare a driver.
+Ollama remains a **fully supported** local model server (not deprecated). The
+default local pin is [llama.cpp](/docs/recipes/llama-cpp); choose Ollama when you
+want its library pull UX. Pin `images.ai` and set `drivers.ai` to `ollama`.
 
 <Callout title="The one rule">
-  Name the model (`OKE_AI_MODEL` or `oke ai setup`). On `oke dev -d`, OKE POSTs `/api/pull` to
-  **this container's** exposed URL — never a host `ollama` CLI.
+  Pin ≥ `0.17.1` (never `latest`), publish only on loopback, and load models only from Ollama’s
+  library — never arbitrary untrusted GGUF via `/api/create`.
 </Callout>
 
 ## Quick start
@@ -26,11 +26,11 @@ drivers: {
   ai: { local: "ollama", docker: "ollama", test: "mock" }, // prod: set deliberately
 },
 images: {
-  ai: "ollama/ollama:latest",
+  ai: "ollama/ollama:0.32.6", // never :latest — floor 0.17.1 (CVE-2026-7482)
 },
 ```
 
-Or run `oke ai setup --provider ollama --yes` to wire driver, env, and `src/ai.ts`.
+Or run `oke ai setup --provider ollama --yes`.
 
 </Step>
 
@@ -42,26 +42,36 @@ OKE_AI_URL=http://127.0.0.1:11434
 OKE_AI_MODEL=qwen3.5:9b
 ```
 
-Container sets `OLLAMA_HOST=0.0.0.0:11434` so the API listens on all interfaces.
+Host publish is `127.0.0.1:11434:11434`. Inside the container
+`OLLAMA_HOST=0.0.0.0:11434` so Docker networking works.
 
 </Step>
 
 <Step>
 ### Boot pulls against the container API
 
-After compose is healthy, `oke dev -d` checks `GET {OKE_AI_URL}/api/tags` for
-`${OKE_AI_MODEL:-qwen3.5:9b}`. If the model is already listed, pull is skipped.
-Otherwise it streams `POST /api/pull` with progress. That hits the **mapped host
-port** of this recipe — not whatever else might listen on `:11434`.
+After compose is healthy, `oke dev -d` POSTs `/api/pull` to **this container’s**
+loopback URL when the recipe is Ollama — never a host `ollama` CLI.
 
 </Step>
 
 </Steps>
 
+## Security (hard requirements)
+
+| Control        | Requirement                                                                |
+| -------------- | -------------------------------------------------------------------------- |
+| Host publish   | `127.0.0.1:11434:11434` only — never `0.0.0.0`                             |
+| Image pin      | Explicit tag ≥ **0.17.1** (CVE-2026-7482); never `latest`                  |
+| Model source   | [Ollama library](https://ollama.com/library) only                          |
+| Untrusted GGUF | **Forbidden** — `/api/create` with crafted files is the CVE-2026-7482 path |
+
+Ollama and llama.cpp share GGUF-parser risk; Ollama also has its own Go loader
+CVE. Network exposure of `:11434` turns that into a remote attack.
+
 <Callout type="warn" title="Host `ollama` CLI is unrelated">
-  A host `ollama pull` / `ollama run` often talks to a separately installed daemon on the default
-  port — models land **outside** this container. Trust boot ensure against `OKE_AI_URL` (or curl
-  that URL yourself).
+  A host `ollama pull` often talks to a separately installed daemon. Trust boot ensure against
+  `OKE_AI_URL`.
 </Callout>
 
 ## Required env
@@ -73,41 +83,30 @@ port** of this recipe — not whatever else might listen on `:11434`.
 | `OLLAMA_HOST`                                | Set by recipe     | `0.0.0.0:11434` inside the container                               |
 | `OKE_AI_VISION_MODEL` / `OKE_AI_EMBED_MODEL` | Optional          | Written by `oke ai setup` for logical models                       |
 
-On Apple Silicon hosts running Ollama **outside** Docker, `qwen3.5:9b-mlx` is a
-common override — set `OKE_AI_MODEL` accordingly (that path is not this recipe).
-
 ## Data and backup
 
 | Volume    | Path            | What it stores                         |
 | --------- | --------------- | -------------------------------------- |
 | `ai-data` | `/root/.ollama` | Pulled model weights + Ollama metadata |
 
-**Backup means:** preserve `ai-data` so you do not re-download multi-GB models after
-every recreate. Deleting the volume forces another full `/api/pull` on next boot
-(slow, bandwidth-heavy). Keep `OKE_AI_MODEL` in env — choice is not volume-only.
-
 ## Production note
 
-Local Ollama is for docker/dev (and air-gapped prod you deliberately choose). Cloud AI
-drivers (`anthropic`, `openai-compatible`, `bedrock`, `vertex`) stay separate.
+Local Ollama is for docker/dev (and air-gapped prod you deliberately choose).
+For multi-user GPU self-hosting see [vLLM](/docs/recipes/vllm) /
+[SGLang](/docs/recipes/sglang). Cloud drivers stay separate.
 
-PII egress rules treat `ollama` as local (no third-party egress) — see
-[AI · PII](/docs/elements/ai).
-
-Cold pulls can take minutes with streamed progress; boot skips `/api/pull` when
-`/api/tags` already lists the model. Host `ollama list` does not count — only
-the container at `OKE_AI_URL`. GPU passthrough is **not** configured — CPU
-inference is the default compose shape.
+PII egress rules treat `ollama` as local — see [AI · PII](/docs/elements/ai).
 
 ## What the recipe configures
 
-| Field          | Value                                                |
-| -------------- | ---------------------------------------------------- |
-| Container port | `11434`                                              |
-| Entrypoint     | Image default (`ollama serve`)                       |
-| Healthcheck    | `ollama list`, every 5s, 24 retries, 10s start       |
-| Connection URL | `http://host:11434`                                  |
-| Model pull     | Host-side `POST /api/pull` to that URL after healthy |
+| Field          | Value                                          |
+| -------------- | ---------------------------------------------- |
+| Container port | `11434`                                        |
+| Host publish   | `127.0.0.1:11434:11434`                        |
+| Entrypoint     | Image default (`ollama serve`)                 |
+| Healthcheck    | `ollama list`, every 5s, 24 retries, 10s start |
+| Connection URL | `http://host:11434`                            |
+| Model pull     | Host-side `POST /api/pull` after healthy       |
 
 ## Troubleshooting
 
@@ -122,22 +121,21 @@ in one pass.
 <Accordion title="Model missing / I already ran ollama pull on the host">
 
 The host CLI likely filled a **different** Ollama. Check `GET $OKE_AI_URL/api/tags`,
-then recreate with `oke dev -d` or `curl -X POST "$OKE_AI_URL/api/pull" -d '{"model":"…","stream":false}'`.
-`OllamaUnavailableError` wraps HTTP errors from `/api/chat` and `/api/tags`.
+then recreate with `oke dev -d`.
 
 </Accordion>
 </Accordions>
 
 ## Learn more
 
+- [llama.cpp](/docs/recipes/llama-cpp) — default local AI
 - [AI](/docs/elements/ai) — `fx.ask`, prompts, evals
 - [CLI · oke ai setup](/docs/reference/cli) — non-interactive provider wiring
-- [Environment variables](/docs/reference/environment-variables) — `OKE_AI_*`
 
 ## Next
 
 <Cards>
+  <Card title="llama.cpp" description="Default local AI." href="/docs/recipes/llama-cpp" />
   <Card title="Meilisearch" description="Full-text index peer." href="/docs/recipes/meilisearch" />
-  <Card title="OpenBao" description="Secrets for docker/prod." href="/docs/recipes/openbao" />
   <Card title="AI" description="Prompts, models, guardrails." href="/docs/elements/ai" />
 </Cards>

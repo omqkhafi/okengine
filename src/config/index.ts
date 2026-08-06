@@ -155,13 +155,13 @@ export interface DbConfig {
   /**
    * Abstract schema declare module (`store.schema.table` exports).
    * When present, `oke db` emits Drizzle into {@link generated} before sync.
-   * Default `"src/schema.decl.ts"` (emit skipped if the file is absent).
+   * Default `"src/db/schema.decl.ts"` (legacy `"src/schema.decl.ts"` still resolved).
    */
   readonly declare?: string;
   /**
    * Generated Drizzle schema path written from abstract decls.
-   * Default `"src/schema.generated.ts"`. Point `drizzle.config.ts` `schema`
-   * at this file when using the abstract path.
+   * Default `"src/db/schema.generated.ts"` (legacy `"src/schema.generated.ts"`).
+   * Point `drizzle.config.ts` `schema` at this file when using the abstract path.
    */
   readonly generated?: string;
   /**

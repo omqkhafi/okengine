@@ -1,0 +1,15 @@
+{
+  "files.exclude": {
+    "**/dist": true,
+    "**/.next": true,
+    "**/.turbo": true,
+    "**/bun.lock": true,
+    "**/node_modules": true,
+    "**/next-env.d.ts": true,
+    "**/worker-configuration.d.ts": true
+  },
+  "editor.formatOnSave": true,
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

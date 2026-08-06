@@ -49,12 +49,13 @@ describe("catalog labels", () => {
 });
 
 describe("recommendedAiApply", () => {
-  test("returns ollama with chat + embed models", () => {
+  test("returns llama.cpp (openai-compatible) with curated ai/ model", () => {
     const apply = recommendedAiApply();
-    expect(apply.driver).toBe("ollama");
-    expect(typeof apply.chatModel).toBe("string");
-    expect(apply.chatModel!.length).toBeGreaterThan(0);
-    expect(typeof apply.embedModel).toBe("string");
+    expect(apply.driver).toBe("openai-compatible");
+    expect(apply.chatModel).toBe("smollm2");
+    expect(apply.baseUrl).toContain("8080");
+    expect(apply.image).toContain("llama.cpp");
+    expect(apply.image).not.toContain("latest");
     expect(apply.visionModel).toBeNull();
   });
 });

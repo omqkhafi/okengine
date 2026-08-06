@@ -7,13 +7,12 @@ Scaffold, not a finished product: keep the Flows you want, replace the rest.
 ```bash
 bun install
 oke mode docker   # seeded by create-oke recommended path
-oke dev
-oke db seed       # essential welcome note + local/docker sample notes
+oke dev           # auto db push; asks once whether to seed
 ```
 
 | Surface | URL |
 | ------- | --- |
-| Backend | http://127.0.0.1:6530 |
+| App | http://127.0.0.1:6530 |
 | Console | http://127.0.0.1:6533 |
 | MCP | http://127.0.0.1:6535 |
 
@@ -25,7 +24,7 @@ oke db seed       # essential welcome note + local/docker sample notes
 | POST | `/notes/:id/summarize` | `notes.summarize` — `fx.ask` when AI is configured |
 | clock | `every("1d")` | `notes.digest` — active note count |
 
-Configure AI with `oke ai setup` or `create-oke --ai` (writes `src/ai.ts` + `drivers.ai`).
+Configure AI with `oke ai setup` or `create-oke --ai` (writes `src/core/ai.ts` + `drivers.ai`).
 Without AI, summarize returns a local excerpt (`via: "fallback"`).
 
 ## Included vs you build
@@ -41,7 +40,8 @@ Without AI, summarize returns a local excerpt (`via: "fallback"`).
 
 | Path | Role |
 | ---- | ---- |
-| `src/seed/` | `oke db seed` — essential + dev sample notes |
+| `src/core/` | `store` (db + files) · gates · vault · channels |
+| `src/db/` | schema · seed · migrations |
 | `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
 
 ## Drivers

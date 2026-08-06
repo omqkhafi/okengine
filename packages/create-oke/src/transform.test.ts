@@ -76,6 +76,7 @@ describe("upsertAiDrivers", () => {
   });
 
   test("applyCreateAnswers with ai pins keeps top-level drivers.ai", () => {
+    const llamaPins = pinsDockerReady("openai-compatible", "openai-compatible", "mock");
     const next = applyCreateAnswers(
       templateConfig(),
       toCreateDefaults({
@@ -92,13 +93,14 @@ describe("upsertAiDrivers", () => {
           clock: pinsLocalOnly("memory", "file", "frozen"),
           vault: pinsLocalOnly("env", "openbao", "memory"),
           channel: { email: pinsLocalOnly("console", "smtp", "console") },
-          ai: ollamaPins,
+          ai: llamaPins,
         },
-        ai: { enabled: true, provider: "ollama", driver: "ollama" },
+        ai: { enabled: true, provider: "llama-cpp", driver: "openai-compatible" },
       }),
     );
     expect(next).toMatch(/^ {4}ai:\s*\{/m);
-    expect(next).toContain('ai: "ollama/ollama:latest"');
+    expect(next).toContain('local: "openai-compatible"');
+    expect(next).toContain('ai: "ghcr.io/ggml-org/llama.cpp:server-b10290"');
     const channel = next.match(/^ {4}channel:\s*\{[\s\S]*?\n {4}\},?\n/m)?.[0] ?? "";
     expect(channel).not.toContain("ai:");
   });

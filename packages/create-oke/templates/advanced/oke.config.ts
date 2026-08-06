@@ -5,6 +5,10 @@ import { defineConfig } from "okengine/config";
  * Recommended create path seeds `.oke/mode` as docker.
  */
 export default defineConfig({
+  db: {
+    declare: "src/db/schema.decl.ts",
+    generated: "src/db/schema.generated.ts",
+  },
   drivers: {
     store: {
       sql: {
@@ -66,7 +70,7 @@ export default defineConfig({
         prod: "smtp",
       },
     },
-    // Opt in: create-oke --ai / oke ai setup writes drivers.ai + src/ai.ts
+    // Opt in: create-oke --ai / oke ai setup writes drivers.ai + src/core/ai.ts
   },
   images: {
     "store.sql": "postgres:18-alpine",
@@ -76,7 +80,7 @@ export default defineConfig({
     "channel.email": "axllent/mailpit:v1.22.3",
     vault: "openbao/openbao:2.6.1",
     // "store.index": "getmeili/meilisearch:v1.37",
-    // ai: "ollama/ollama:latest",
+    // ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // or ollama/ollama:0.32.6
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

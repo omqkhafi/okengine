@@ -56,6 +56,12 @@ export interface RecipeExtraPort {
   readonly container: number;
 }
 
+/**
+ * Host bind for published ports — AI inference recipes set `127.0.0.1` so the
+ * raw API never lands on `0.0.0.0` (LAN/WAN). Omit for Docker's default bind.
+ */
+export type RecipePublishBind = "127.0.0.1";
+
 /** Compose `ulimits` value — soft/hard object or a single limit. */
 export type RecipeUlimit = number | { readonly soft?: number; readonly hard?: number };
 
@@ -73,6 +79,15 @@ export interface RecipeApplyResult {
   readonly labels?: Readonly<Record<string, string>>;
   /** Additional published ports (e.g. Mailpit UI, RustFS console). */
   readonly extraPorts?: readonly RecipeExtraPort[];
+  /**
+   * Host interface for published ports. AI recipes use `127.0.0.1` — never
+   * omit this for inference servers (raw API must not bind `0.0.0.0`).
+   */
+  readonly publishBind?: RecipePublishBind;
+  /** Compose `ipc` (e.g. vLLM `host` for shared-memory workers). */
+  readonly ipc?: string;
+  /** Compose `deploy` (e.g. GPU device reservations for vLLM / SGLang). */
+  readonly deploy?: Readonly<Record<string, unknown>>;
   /**
    * Compose `depends_on` (e.g. pooler waits for Postgres).
    * Keys are compose service names (`store-sql`), not role keys.

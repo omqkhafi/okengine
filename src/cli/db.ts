@@ -3,7 +3,7 @@
  * plus explicit seed runs.
  *
  * Distinct from `oke schema generate` (core/plugin stub tables).
- * When abstract decls exist (`src/schema.decl.ts`), emits Drizzle first —
+ * When abstract decls exist (`src/db/schema.decl.ts`), emits Drizzle first —
  * not a third schema CLI.
  */
 
@@ -448,7 +448,7 @@ export async function dbCli(args: readonly string[]): Promise<number> {
     console.log(`oke db push|generate|migrate|seed [--config|-c] [--env name] [--force]
 
 Domain schema sync via drizzle-kit, plus explicit seed.
-When src/schema.decl.ts and/or a plugged app entry exists, emits
+When src/db/schema.decl.ts and/or a plugged app entry exists, emits
 schema.generated.ts from store.schema.table + live plugin .table()
 contributions — then runs drizzle-kit.
 Hand-written src/schema.ts remains supported (emit skipped if nothing to emit).

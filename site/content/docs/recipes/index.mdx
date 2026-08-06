@@ -10,7 +10,7 @@ and get env, healthcheck, and a connection URL for free.
 
 <Callout title="The one rule">
   Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol ids
-  (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `ollama`, …).
+  (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `openai-compatible`, `ollama`, …).
 </Callout>
 
 ## SQL
@@ -90,10 +90,40 @@ Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N
     description="Full-text store.index on :7700."
     href="/docs/recipes/meilisearch"
   />
+</Cards>
+
+## AI (local / self-hosted)
+
+Default local pin is **llama.cpp**. Ollama stays fully supported. vLLM / SGLang
+are production-tier self-host options — most apps still use a managed provider.
+
+| Workload                         | Recipe                                         |
+| -------------------------------- | ---------------------------------------------- |
+| Single-user / dev (lightest)     | [llama.cpp](/docs/recipes/llama-cpp) (default) |
+| Local library UX                 | [Ollama](/docs/recipes/ollama)                 |
+| Multi-user GPU concurrency       | [vLLM](/docs/recipes/vllm)                     |
+| Structured / agent GPU workloads | [SGLang](/docs/recipes/sglang)                 |
+| Managed cloud                    | Anthropic / OpenAI / … (no `images.ai`)        |
+
+All four recipes **loopback-publish only** and pin explicit tags (never
+`latest`). Load models from curated registries — never arbitrary untrusted GGUF.
+
+<Cards>
+  <Card
+    title="llama.cpp"
+    description="Default local AI — OpenAI /v1, lightest footprint."
+    href="/docs/recipes/llama-cpp"
+  />
   <Card
     title="Ollama"
-    description="Local models — /root/.ollama volume."
+    description="Fully supported alternative — library pull UX."
     href="/docs/recipes/ollama"
+  />
+  <Card title="vLLM" description="Self-hosted multi-user GPU serving." href="/docs/recipes/vllm" />
+  <Card
+    title="SGLang"
+    description="Self-hosted structured / agent GPU serving."
+    href="/docs/recipes/sglang"
   />
 </Cards>
 

@@ -1,12 +1,12 @@
 import { defineSeed, type Fx } from "okengine";
-import { db } from "../core";
+import { db } from "../../core";
 import { notes } from "../schema.decl";
 
 /**
  * Seed data — run explicitly with `oke db seed` (never at boot).
  *
  * Categories: `essential` (every env) · `dev` (local|docker) · `prod` (prod only).
- * For multi-file composition (`src/seed/essential/*.ts` + arrays here), see
+ * For multi-file composition (`src/db/seed/essential/*.ts` + arrays here), see
  * Store docs → Seeding.
  */
 

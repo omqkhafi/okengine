@@ -155,7 +155,7 @@ export type ScaffoldCallArgs = {
   readonly agentsMd: boolean;
   readonly sqlDriver: SqlDriverId;
   readonly createDefaults?: CreateDefaults;
-  /** Apply `src/ai.ts` + `.env.local` after scaffold (before install). */
+  /** Apply `src/core/ai.ts` + `.env.local` after scaffold (before install). */
   readonly aiApply?: AiSetupApplyInput | null;
 };
 
@@ -399,7 +399,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     source: sourceFromArgs(args),
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriver,
-    aiApply: args.ai === "force" ? nonInteractiveAiApply("ollama") : null,
+    aiApply: args.ai === "force" ? nonInteractiveAiApply("llama-cpp") : null,
   };
 }
 
@@ -605,7 +605,7 @@ export async function askInteractiveAnswers(
 }
 
 /**
- * Provider passed to `oke ai setup` — prefer Ollama when either env uses it.
+ * Provider passed to `oke ai setup` — prefer native Ollama when either env uses it.
  *
  * @param localProvider - Menu id chosen for local
  * @param pins - Resolved driver pins
@@ -613,9 +613,11 @@ export async function askInteractiveAnswers(
 export function aiSetupProviderFor(localProvider: string, pins: EnvDriverPins): string {
   if (localProvider === "ollama" || pins.local === "ollama") return "ollama";
   if (pins.docker === "ollama") return "ollama";
+  if (localProvider === "llama-cpp") return "llama-cpp";
+  if (localProvider === "vllm" || localProvider === "sglang") return localProvider;
   if (localProvider === "mock") {
     if (pins.docker === "anthropic") return "anthropic";
-    if (pins.docker === "openai-compatible") return "openai";
+    if (pins.docker === "openai-compatible") return "llama-cpp";
   }
   return localProvider;
 }
@@ -799,7 +801,7 @@ async function runScaffold(
     });
     if (spun) spun.stop("Scaffolded.");
 
-    // Models were chosen in the wizard — write env + src/ai.ts before install
+    // Models were chosen in the wizard — write env + src/core/ai.ts before install
     // so `--no-install` still gets a complete AI project. Preserve per-env
     // `drivers.ai` pins from customize; flatten only when pins were never written.
     if (runPostScaffold && aiApply) {

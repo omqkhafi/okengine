@@ -63,6 +63,16 @@ export function aiPrefWithModels(
  * @param provider - Menu id
  */
 export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
+  if (provider === "llama-cpp") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
+      chatModel: "smollm2",
+      visionModel: null,
+      embedModel: null,
+      image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+    };
+  }
   if (provider === "ollama") {
     return {
       driver: "ollama",
@@ -70,6 +80,27 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       chatModel: "gemma4:e4b",
       visionModel: "qwen3-vl:4b",
       embedModel: "nomic-embed-text",
+      image: "ollama/ollama:0.32.6",
+    };
+  }
+  if (provider === "vllm") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
+      chatModel: "Qwen/Qwen3-0.6B",
+      visionModel: null,
+      embedModel: null,
+      image: "vllm/vllm-openai:v0.26.0",
+    };
+  }
+  if (provider === "sglang") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
+      chatModel: "Qwen/Qwen3-0.6B",
+      visionModel: null,
+      embedModel: null,
+      image: "lmsysorg/sglang:v0.5.16-runtime",
     };
   }
   if (provider === "anthropic") {

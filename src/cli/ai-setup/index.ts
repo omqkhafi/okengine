@@ -100,11 +100,12 @@ export function aiSetupHelp(): string {
 
 Usage:
   oke ai setup
+  oke ai setup --provider llama-cpp --yes
   oke ai setup --provider ollama --yes
   oke ai setup --provider anthropic --chat claude-sonnet-4-20250514 --yes
 
 Options:
-  --provider <id>   ollama | openai | anthropic | gemini | lmstudio | openrouter | custom
+  --provider <id>   llama-cpp | ollama | vllm | sglang | openai | anthropic | gemini | lmstudio | openrouter | custom
   --chat <model>    Chat model id
   --vision <model>  Vision model id (ollama)
   --embed <model>   Embedding model id (ollama)
@@ -197,6 +198,16 @@ export async function runAiSetup(args: AiSetupCliArgs): Promise<number> {
  */
 function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
   const provider = args.provider!;
+  if (provider === "llama-cpp") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
+      chatModel: args.chat ?? "smollm2",
+      visionModel: null,
+      embedModel: null,
+      image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+    };
+  }
   if (provider === "ollama") {
     return {
       driver: "ollama",
@@ -204,6 +215,27 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       chatModel: args.chat ?? "gemma4:e4b",
       visionModel: args.vision === undefined ? "qwen3-vl:4b" : args.vision || null,
       embedModel: args.embed ?? "nomic-embed-text",
+      image: "ollama/ollama:0.32.6",
+    };
+  }
+  if (provider === "vllm") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8000/v1",
+      chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
+      visionModel: null,
+      embedModel: null,
+      image: "vllm/vllm-openai:v0.26.0",
+    };
+  }
+  if (provider === "sglang") {
+    return {
+      driver: "openai-compatible",
+      baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:30000/v1",
+      chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
+      visionModel: null,
+      embedModel: null,
+      image: "lmsysorg/sglang:v0.5.16-runtime",
     };
   }
   if (provider === "anthropic") {

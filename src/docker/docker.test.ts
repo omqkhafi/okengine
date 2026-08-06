@@ -34,7 +34,16 @@ import {
   writeDerivedFiles,
   yugabyte,
   ensureOllamaModel,
+  llamaCpp,
+  LLAMA_CPP_IMAGE,
+  LLAMA_CPP_MIN_SAFE_BUILD,
   OllamaPullError,
+  OLLAMA_IMAGE,
+  OLLAMA_MIN_SAFE_VERSION,
+  sglang,
+  SGLANG_IMAGE,
+  vllm,
+  VLLM_IMAGE,
   type ImageRecipe,
   type OllamaFetch,
   type ServiceSpec,
@@ -311,11 +320,13 @@ describe("image recipes", () => {
   });
 
   test("ollama matches the official image, serves on 11434, emits http URL", () => {
-    expect(recipeFor("ollama/ollama:latest").id).toBe("ollama");
+    expect(recipeFor(OLLAMA_IMAGE).id).toBe("ollama");
+    expect(OLLAMA_IMAGE).not.toContain("latest");
+    expect(OLLAMA_MIN_SAFE_VERSION).toBe("0.17.1");
     const spec: ServiceSpec = {
       role: "ai",
       serviceName: "ai",
-      image: "ollama/ollama:latest",
+      image: OLLAMA_IMAGE,
       port: 11434,
       hostPort: 11434,
       credentials: { user: "oke", password: "unused", database: "oke" },
@@ -323,6 +334,7 @@ describe("image recipes", () => {
     const applied = recipeFor(spec.image).apply(spec);
     expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3.5:9b}");
     expect(applied.environment?.OLLAMA_HOST).toBe("0.0.0.0:11434");
+    expect(applied.publishBind).toBe("127.0.0.1");
     expect(applied.volumes).toContain("ai-data:/root/.ollama");
     expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
     // Pull is host-side via ensureOllamaModel — never a boot `ollama pull` CLI.
@@ -336,6 +348,69 @@ describe("image recipes", () => {
       database: "oke",
     });
     expect(url).toBe("http://127.0.0.1:11434");
+  });
+
+  test("llama-cpp is the default local AI recipe — OpenAI /v1, loopback publish, pinned ≥ b8146", () => {
+    expect(recipeFor(LLAMA_CPP_IMAGE).id).toBe("llama-cpp");
+    expect(LLAMA_CPP_IMAGE).not.toContain("latest");
+    const build = Number(/server-b(\d+)/.exec(LLAMA_CPP_IMAGE)?.[1]);
+    expect(build).toBeGreaterThanOrEqual(LLAMA_CPP_MIN_SAFE_BUILD);
+    const spec: ServiceSpec = {
+      role: "ai",
+      serviceName: "ai",
+      image: LLAMA_CPP_IMAGE,
+      port: 8080,
+      hostPort: 8080,
+      credentials: { user: "oke", password: "unused", database: "oke" },
+    };
+    const applied = llamaCpp.apply(spec);
+    expect(applied.publishBind).toBe("127.0.0.1");
+    expect(applied.environment?.LLAMA_ARG_HOST).toBe("0.0.0.0");
+    expect(applied.environment?.LLAMA_ARG_DOCKER_REPO).toContain("smollm2");
+    expect(applied.extraPorts).toBeUndefined();
+    expect(llamaCpp.url(spec, { host: "127.0.0.1", port: 8080, ...spec.credentials })).toBe(
+      "http://127.0.0.1:8080/v1",
+    );
+  });
+
+  test("vllm recipe is GPU-aware, OpenAI /v1, loopback publish, never latest", () => {
+    expect(recipeFor(VLLM_IMAGE).id).toBe("vllm");
+    expect(VLLM_IMAGE).not.toContain("latest");
+    const spec: ServiceSpec = {
+      role: "ai",
+      serviceName: "ai",
+      image: VLLM_IMAGE,
+      port: 8000,
+      hostPort: 8000,
+      credentials: { user: "oke", password: "unused", database: "oke" },
+    };
+    const applied = vllm.apply(spec);
+    expect(applied.publishBind).toBe("127.0.0.1");
+    expect(applied.ipc).toBe("host");
+    expect(JSON.stringify(applied.deploy)).toContain("nvidia");
+    expect(vllm.url(spec, { host: "127.0.0.1", port: 8000, ...spec.credentials })).toBe(
+      "http://127.0.0.1:8000/v1",
+    );
+  });
+
+  test("sglang recipe is GPU-aware, OpenAI /v1, loopback publish, never latest", () => {
+    expect(recipeFor(SGLANG_IMAGE).id).toBe("sglang");
+    expect(SGLANG_IMAGE).not.toContain("latest");
+    const spec: ServiceSpec = {
+      role: "ai",
+      serviceName: "ai",
+      image: SGLANG_IMAGE,
+      port: 30000,
+      hostPort: 30000,
+      credentials: { user: "oke", password: "unused", database: "oke" },
+    };
+    const applied = sglang.apply(spec);
+    expect(applied.publishBind).toBe("127.0.0.1");
+    expect(applied.ipc).toBe("host");
+    expect(JSON.stringify(applied.deploy)).toContain("nvidia");
+    expect(sglang.url(spec, { host: "127.0.0.1", port: 30000, ...spec.credentials })).toBe(
+      "http://127.0.0.1:30000/v1",
+    );
   });
 
   test("ensureOllamaModel POSTs /api/pull to the container base URL (not a host CLI)", async () => {
@@ -690,18 +765,45 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.DATABASE_URL).toBeUndefined();
   });
 
-  test("ai ollama emits OKE_AI_URL and documents the default model control", () => {
+  test("ai ollama emits OKE_AI_URL, loopback publish, and never binds 0.0.0.0 on the host", () => {
     const result = deriveInfrastructure({
-      images: { ai: "ollama/ollama:latest" },
+      images: { ai: OLLAMA_IMAGE },
       app: "skyport",
     });
     const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
-    expect(yml).toContain("ollama/ollama:latest");
+    expect(yml).toContain(OLLAMA_IMAGE);
     expect(yml).toContain("OKE_AI_MODEL");
     expect(yml).toContain("qwen3.5:9b");
+    expect(yml).toContain("127.0.0.1:11434:11434");
+    expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?11434:11434"?/);
     expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434");
     const envText = formatStackEnv(result.stackEnv);
-    expect(envText).toContain("# ── ai — Ollama");
+    expect(envText).toContain("# ── ai — local inference");
+  });
+
+  test("ai llama-cpp (default) emits /v1 URL and loopback-only publish", () => {
+    const result = deriveInfrastructure({
+      images: { ai: LLAMA_CPP_IMAGE },
+      app: "skyport",
+    });
+    const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
+    expect(yml).toContain(LLAMA_CPP_IMAGE);
+    expect(yml).toContain("127.0.0.1:8080:8080");
+    expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?8080:8080"?/);
+    expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:8080/v1");
+  });
+
+  test("ai vllm and sglang emit loopback publish + GPU deploy", () => {
+    for (const [image, port, path] of [
+      [VLLM_IMAGE, 8000, "compose.ai.yml"],
+      [SGLANG_IMAGE, 30000, "compose.ai.yml"],
+    ] as const) {
+      const result = deriveInfrastructure({ images: { ai: image }, app: "skyport" });
+      const yml = result.files.find((f) => f.path === path)!.content;
+      expect(yml).toContain(`127.0.0.1:${port}:${port}`);
+      expect(yml).toContain("nvidia");
+      expect(result.stackEnv.OKE_AI_URL).toBe(`http://127.0.0.1:${port}/v1`);
+    }
   });
 
   test("emits protocol-specific env keys plus optional control notes", () => {

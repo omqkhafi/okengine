@@ -5,6 +5,10 @@ import { defineConfig } from "okengine/config";
  * Docker/prod pins stay ready when you switch `oke mode docker`.
  */
 export default defineConfig({
+  db: {
+    declare: "src/db/schema.decl.ts",
+    generated: "src/db/schema.generated.ts",
+  },
   drivers: {
     store: {
       sql: {

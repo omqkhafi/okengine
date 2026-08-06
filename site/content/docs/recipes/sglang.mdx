@@ -1,0 +1,105 @@
+---
+title: "SGLang"
+description: "Production-tier self-hosted inference for structured and agent workloads on GPU."
+icon: "Cpu"
+source: "docs/spec/unified-theory.md"
+---
+
+SGLang is for **structured generation and agent-heavy workloads on real GPU
+hardware** when you self-host inference. Prefer a managed provider for most
+production apps. For general multi-user serving, prefer [vLLM](/docs/recipes/vllm).
+
+<Callout title="The one rule">
+  Pin an explicit runtime tag (never `latest`), publish only on loopback, and pick SGLang only when
+  structured / agent throughput is the reason you self-host.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin driver + image
+
+```typescript title="oke.config.ts"
+drivers: {
+  ai: { docker: "openai-compatible", prod: "openai-compatible", test: "mock" },
+},
+images: {
+  ai: "lmsysorg/sglang:v0.5.16-runtime", // never :latest
+},
+```
+
+Or `oke ai setup --provider sglang --yes`.
+
+</Step>
+
+<Step>
+### Env + GPU
+
+```bash title="docker/.env.docker"
+OKE_AI_URL=http://127.0.0.1:30000/v1
+OKE_AI_MODEL=Qwen/Qwen3-0.6B
+```
+
+Same NVIDIA reservation pattern as vLLM (`ipc: host` + device reservation).
+
+</Step>
+
+<Step>
+### Decision matrix
+
+| Workload                         | Recipe                                                                           |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| Single-user / dev                | [llama.cpp](/docs/recipes/llama-cpp) (default) or [Ollama](/docs/recipes/ollama) |
+| Multi-user GPU serving           | [vLLM](/docs/recipes/vllm)                                                       |
+| Structured / agent GPU workloads | **SGLang** (this recipe)                                                         |
+| Managed cloud                    | Anthropic / OpenAI / …                                                           |
+
+</Step>
+
+</Steps>
+
+## Security
+
+| Control      | Requirement                                    |
+| ------------ | ---------------------------------------------- |
+| Host publish | `127.0.0.1:30000:30000` only — never `0.0.0.0` |
+| Image pin    | Explicit version tag — never `latest`          |
+| Model source | Trusted Hugging Face repos / your own weights  |
+
+## What the recipe configures
+
+| Field          | Value                                                 |
+| -------------- | ----------------------------------------------------- |
+| Container port | `30000`                                               |
+| Host publish   | `127.0.0.1:30000:30000`                               |
+| `ipc`          | `host`                                                |
+| GPU            | `deploy.resources.reservations.devices` (nvidia, all) |
+| Healthcheck    | `GET /health`, long start period for model load       |
+| Connection URL | `http://host:30000/v1`                                |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="GPU not visible / container exits">
+
+Install the NVIDIA Container Toolkit. Without a GPU, use
+[llama.cpp](/docs/recipes/llama-cpp) for local smoke tests.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [vLLM](/docs/recipes/vllm) — general production GPU serving
+- [llama.cpp](/docs/recipes/llama-cpp) — default local AI
+- [AI](/docs/elements/ai) — drivers and `fx.ask`
+
+## Next
+
+<Cards>
+  <Card title="vLLM" description="General multi-user GPU serving." href="/docs/recipes/vllm" />
+  <Card title="llama.cpp" description="Default local AI." href="/docs/recipes/llama-cpp" />
+  <Card title="AI" description="Prompts and guardrails." href="/docs/elements/ai" />
+</Cards>

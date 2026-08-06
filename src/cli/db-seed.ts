@@ -38,7 +38,7 @@ export interface SeedOptions {
   readonly env?: ConfigEnv;
   /** Skip interactive confirm (`--force`). */
   readonly force?: boolean;
-  /** Override seed module path (default `src/seed/index.ts`). */
+  /** Override seed module path (default `src/db/seed/index.ts`). */
   readonly seedPath?: string;
   /** Override app entry for boot. */
   readonly entry?: string;
@@ -158,14 +158,35 @@ export async function executeSeedDef(
   }
 }
 
+/** Default seed module (create-oke `src/db` layout). */
+export const DEFAULT_SEED_REL = "src/db/seed/index.ts";
+
+/** Legacy seed module path. */
+export const LEGACY_SEED_REL = "src/seed/index.ts";
+
 /**
- * Load `src/seed/index.ts` (or override) and return its SeedDef.
+ * Resolve the seed module path (explicit → new default → legacy).
+ *
+ * @param cwd - Project root
+ * @param seedPath - Optional override
+ */
+export async function resolveSeedModulePath(cwd: string, seedPath?: string): Promise<string> {
+  if (seedPath) return resolve(cwd, seedPath);
+  for (const rel of [DEFAULT_SEED_REL, LEGACY_SEED_REL]) {
+    const abs = resolve(cwd, rel);
+    if (await Bun.file(abs).exists()) return abs;
+  }
+  return resolve(cwd, DEFAULT_SEED_REL);
+}
+
+/**
+ * Load `src/db/seed/index.ts` (or legacy / override) and return its SeedDef.
  *
  * @param cwd - Project root
  * @param seedPath - Relative or absolute path
  */
 export async function loadSeedDef(cwd: string, seedPath?: string): Promise<SeedDef> {
-  const abs = resolve(cwd, seedPath ?? "src/seed/index.ts");
+  const abs = await resolveSeedModulePath(cwd, seedPath);
   if (!(await Bun.file(abs).exists())) {
     throw new Error(`oke db seed: no seed module at ${abs}`);
   }

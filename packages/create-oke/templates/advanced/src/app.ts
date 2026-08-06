@@ -1,7 +1,4 @@
-import { db, files } from "./core";
-import "./gates";
-import "./vault";
-import "./channels";
+import { db, files, noteCreatedMail, webhookSecret } from "./core";
 import "./locales/en";
 import "./locales/ar";
 
@@ -9,8 +6,6 @@ import { oke } from "okengine";
 import * as main from "./flows/main";
 import * as notes from "./flows/notes";
 import { noteCreated } from "./flows/notes/signals";
-import { noteCreatedMail } from "./channels";
-import { webhookSecret } from "./vault";
 
 export const app = oke({
   name: "notes",

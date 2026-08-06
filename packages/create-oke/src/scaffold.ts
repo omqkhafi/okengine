@@ -175,7 +175,7 @@ export function scaffold(options: ScaffoldOptions): ScaffoldResult {
 /**
  * For postgres, pin `store.sql` local/docker/prod in `oke.config.ts`.
  *
- * The default template ships abstract `src/schema.decl.ts` — dialect is
+ * The default template ships abstract `src/db/schema.decl.ts` — dialect is
  * emitted from the active `store.sql` driver, so there is no hand-written
  * `sqliteTable`/`pgTable` source to rewrite. `sqlite` keeps the template
  * dual-mode config (`local: sqlite` · `docker`/`prod: postgres`) untouched.

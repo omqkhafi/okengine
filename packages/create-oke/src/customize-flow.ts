@@ -18,6 +18,10 @@ import {
   TEMPLATE_TEST,
   VAULT_CHOICES,
   AI_PROVIDERS,
+  LLAMA_CPP_IMAGE,
+  OLLAMA_IMAGE,
+  SGLANG_IMAGE,
+  VLLM_IMAGE,
   aiDriverForProvider,
   customizeFacetsFor,
   pinsDockerReady,
@@ -27,11 +31,8 @@ import {
   type DriverChoice,
 } from "./drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./ai-setup/apply.ts";
-import { detectTotalRamGb } from "./ai-setup/detect-ollama.ts";
-import { recommendForRole } from "./ai-setup/catalog.ts";
 import { aiPrefWithModels } from "./ai-setup/from-pref.ts";
 import { askAiSetup } from "./ai-setup/prompts.ts";
-import { recommendChatForNeeds } from "./ai-setup/recommend.ts";
 import type { TemplateId } from "./templates.ts";
 import { WIZARD_BACK, selectWithBack, type WizardBack } from "./wizard-select.ts";
 
@@ -144,19 +145,52 @@ export function assembleDriverDefaults(
 }
 
 /**
- * Balanced Ollama defaults for "AI setup → Recommended" (no quiz).
+ * Balanced llama.cpp defaults for "AI setup → Recommended" (no quiz).
+ * Lightest local footprint; curated Docker Hub `ai/` model via docker-repo.
  */
 export function recommendedAiApply(): AiSetupApplyInput {
-  const ramGb = detectTotalRamGb();
-  const chat = recommendChatForNeeds(ramGb);
-  const embed = recommendForRole("embed");
   return {
-    driver: "ollama",
-    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:11434",
-    chatModel: chat.id,
+    driver: "openai-compatible",
+    baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
+    chatModel: "smollm2",
     visionModel: null,
-    embedModel: embed.id,
+    embedModel: null,
+    image: LLAMA_CPP_IMAGE,
   };
+}
+
+/**
+ * Attach the compose image pin for a local/self-hosted AI provider menu id.
+ *
+ * @param input - Apply input from prompts
+ * @param provider - Menu provider id
+ */
+export function withLocalAiImage(input: AiSetupApplyInput, provider: string): AiSetupApplyInput {
+  if (provider === "llama-cpp") {
+    return {
+      ...input,
+      image: LLAMA_CPP_IMAGE,
+      baseUrl: input.baseUrl ?? "http://127.0.0.1:8080/v1",
+    };
+  }
+  if (provider === "ollama") {
+    return { ...input, image: OLLAMA_IMAGE };
+  }
+  if (provider === "vllm") {
+    return {
+      ...input,
+      image: VLLM_IMAGE,
+      baseUrl: input.baseUrl ?? "http://127.0.0.1:8000/v1",
+    };
+  }
+  if (provider === "sglang") {
+    return {
+      ...input,
+      image: SGLANG_IMAGE,
+      baseUrl: input.baseUrl ?? "http://127.0.0.1:30000/v1",
+    };
+  }
+  return input;
 }
 
 /**
@@ -228,7 +262,7 @@ export async function askCustomizeFlow(
         {
           value: "recommended",
           label: "Recommended",
-          hint: "Ollama · balanced defaults for this machine",
+          hint: "llama.cpp · lightest local footprint",
         },
         {
           value: "customize",
@@ -253,14 +287,14 @@ export async function askCustomizeFlow(
     if (aiSetup === "recommended") {
       aiPins =
         primary === "local" && !alsoOther
-          ? pinsLocalOnly("ollama", "ollama", "mock")
-          : pinsDockerReady("ollama", "ollama", "mock");
+          ? pinsLocalOnly("openai-compatible", "openai-compatible", "mock")
+          : pinsDockerReady("openai-compatible", "openai-compatible", "mock");
       aiApply = recommendedAiApply();
       aiPref = aiPrefWithModels(
         {
           enabled: true,
-          provider: "ollama",
-          driver: "ollama",
+          provider: "llama-cpp",
+          driver: "openai-compatible",
         },
         aiApply,
       );
@@ -274,7 +308,7 @@ export async function askCustomizeFlow(
       const localProviderValue = await selectWithBack(
         askDockerAi || primary === "local" ? "AI Provider — local" : "AI Provider",
         options,
-        "ollama",
+        "llama-cpp",
         { allowBack: true },
       );
       if (localProviderValue === null) return null;
@@ -283,17 +317,19 @@ export async function askCustomizeFlow(
       const localProvider = localProviderValue as AiProviderId;
       const localDriver = aiDriverForProvider(localProvider);
       let dockerDriver = localDriver === "mock" ? "mock" : localDriver;
+      let dockerProvider: AiProviderId = localProvider;
 
       if (askDockerAi) {
         const dockerProviderValue = await selectWithBack(
           "AI Provider — docker",
           options,
-          "ollama",
+          "llama-cpp",
           { allowBack: true },
         );
         if (dockerProviderValue === null) return null;
         if (dockerProviderValue === WIZARD_BACK) continue providers;
-        dockerDriver = aiDriverForProvider(dockerProviderValue);
+        dockerProvider = dockerProviderValue as AiProviderId;
+        dockerDriver = aiDriverForProvider(dockerProvider);
         if (dockerDriver === "mock") dockerDriver = "mock";
       }
 
@@ -310,7 +346,7 @@ export async function askCustomizeFlow(
       if (setupProvider !== "mock") {
         const picked = await askAiSetup({ provider: setupProvider });
         if (picked === null) return null;
-        aiApply = picked;
+        aiApply = withLocalAiImage(picked, askDockerAi ? dockerProvider : localProvider);
       } else {
         aiApply = { driver: "mock" };
       }

@@ -1,9 +1,10 @@
 /**
- * Write AI driver config, env, and `src/ai.ts` for `oke ai setup`.
+ * Write AI driver config, env, and `src/core/ai.ts` for `oke ai setup`.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { OLLAMA_IMAGE } from "../drivers-catalog.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
@@ -15,6 +16,8 @@ export type AiSetupApplyInput = {
   readonly apiKeyEnv?: string;
   /** When set with {@link apiKeyEnv}, writes the token into `.env.local`. */
   readonly apiKey?: string;
+  /** Optional `images.ai` pin (llama.cpp / Ollama / vLLM / SGLang). */
+  readonly image?: string;
 };
 
 /** Options for {@link applyAiSetup}. */
@@ -51,8 +54,10 @@ export function applyAiSetup(
   if (updateDrivers) {
     let config = readFileSync(configPath, "utf8");
     config = upsertAiDrivers(config, input.driver);
-    if (input.driver === "ollama") {
-      config = upsertImage(config, "ai", "ollama/ollama:latest");
+    if (input.image) {
+      config = upsertImage(config, "ai", input.image);
+    } else if (input.driver === "ollama") {
+      config = upsertImage(config, "ai", OLLAMA_IMAGE);
     }
     writeFileSync(configPath, config, "utf8");
   }
@@ -78,7 +83,7 @@ export function applyAiSetup(
   }
   writeFileSync(envPath, env.endsWith("\n") ? env : `${env}\n`, "utf8");
 
-  const aiTsPath = join(cwd, "src", "ai.ts");
+  const aiTsPath = join(cwd, "src", "core", "ai.ts");
   mkdirSync(dirname(aiTsPath), { recursive: true });
   writeFileSync(aiTsPath, renderAiTs(input), "utf8");
   ensureAiImported(cwd);
@@ -200,18 +205,28 @@ export function renderAiTs(input: AiSetupApplyInput): string {
 }
 
 /**
- * Ensure `src/app.ts` (or `src/core.ts`) imports `./ai`.
+ * Ensure `src/app.ts` or `src/core/index.ts` imports `./core/ai` / `./ai`.
  *
  * @param cwd - Project root
  */
 function ensureAiImported(cwd: string): void {
-  for (const rel of ["src/app.ts", "src/core.ts"]) {
+  const candidates: ReadonlyArray<{ readonly rel: string; readonly importLine: string }> = [
+    { rel: "src/app.ts", importLine: `import "./core/ai";\n` },
+    { rel: "src/core/index.ts", importLine: `import "./ai";\n` },
+    // Legacy layout
+    { rel: "src/core.ts", importLine: `import "./ai";\n` },
+  ];
+  for (const { rel, importLine } of candidates) {
     const path = join(cwd, rel);
     if (!existsSync(path)) continue;
     const src = readFileSync(path, "utf8");
-    if (/from\s+["']\.\/ai["']/.test(src) || /import\s+["']\.\/ai["']/.test(src)) return;
-    const next = `import "./ai";\n${src}`;
-    writeFileSync(path, next, "utf8");
+    if (
+      /from\s+["']\.\/(?:core\/)?ai["']/.test(src) ||
+      /import\s+["']\.\/(?:core\/)?ai["']/.test(src)
+    ) {
+      return;
+    }
+    writeFileSync(path, `${importLine}${src}`, "utf8");
     return;
   }
 }

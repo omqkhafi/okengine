@@ -110,9 +110,24 @@ export const EMAIL_CHOICES: readonly DriverChoice[] = [
   { value: "taqnyat-mail", label: "taqnyat" },
 ];
 
+/**
+ * Pinned local-inference images — must match `src/docker/recipes/*` pins.
+ * Never `latest` (GGUF-parser CVE floors: llama.cpp ≥ b8146, Ollama ≥ 0.17.1).
+ */
+export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10290";
+/** @see LLAMA_CPP_IMAGE */
+export const OLLAMA_IMAGE = "ollama/ollama:0.32.6";
+/** @see LLAMA_CPP_IMAGE */
+export const VLLM_IMAGE = "vllm/vllm-openai:v0.26.0";
+/** @see LLAMA_CPP_IMAGE */
+export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.16-runtime";
+
 /** AI menu providers → protocol driver. */
 export const AI_PROVIDERS = [
+  { value: "llama-cpp", label: "llama.cpp (Local)", driver: "openai-compatible" },
   { value: "ollama", label: "Ollama (Local)", driver: "ollama" },
+  { value: "vllm", label: "vLLM (self-hosted GPU)", driver: "openai-compatible" },
+  { value: "sglang", label: "SGLang (self-hosted GPU)", driver: "openai-compatible" },
   { value: "openai", label: "OpenAI", driver: "openai-compatible" },
   { value: "anthropic", label: "Anthropic", driver: "anthropic" },
   { value: "gemini", label: "Gemini", driver: "openai-compatible" },
@@ -225,5 +240,5 @@ export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "channel.email": "axllent/mailpit:v1.22.3",
   vault: "openbao/openbao:2.6.1",
   "store.index": "getmeili/meilisearch:v1.37",
-  ai: "ollama/ollama:latest",
+  ai: LLAMA_CPP_IMAGE,
 };

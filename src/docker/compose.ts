@@ -133,13 +133,14 @@ export function emitComposeLayers(
   for (const spec of specs) {
     const recipe = recipeFor(spec.image, recipes);
     const applied = recipe.apply(spec);
+    const bindPrefix = applied.publishBind ? `${applied.publishBind}:` : "";
     const ports = [
-      `${spec.hostPort}:${spec.port}`,
+      `${bindPrefix}${spec.hostPort}:${spec.port}`,
       ...(applied.extraPorts ?? []).map((p) => {
         const hostPort = options.instanceId
           ? extraHostPortForInstance(spec.role, p.host, options.instanceId)
           : p.host;
-        return `${hostPort}:${p.container}`;
+        return `${bindPrefix}${hostPort}:${p.container}`;
       }),
     ];
     const service: Record<string, unknown> = {
@@ -156,6 +157,8 @@ export function emitComposeLayers(
     if (applied.user) service.user = applied.user;
     if (applied.ulimits) service.ulimits = applied.ulimits;
     if (applied.labels) service.labels = applied.labels;
+    if (applied.ipc) service.ipc = applied.ipc;
+    if (applied.deploy) service.deploy = applied.deploy;
     if (applied.dependsOn) {
       const deps = { ...applied.dependsOn };
       if (!includeApp) delete deps.app;
@@ -357,9 +360,14 @@ export function buildStackEnv(
       env.SMTP_PORT = String(spec.hostPort);
       if (uiHost !== undefined) env.MAILPIT_UI_URL = `http://${host}:${uiHost}`;
     } else if (spec.role === "vault") {
-      // Token is minted by the bootstrap — never a generated password here.
+      // Token is minted by OpenBao bootstrap and preserved via stack controls —
+      // never a generated password here.
       env[`${prefix}_URL`] = url;
       env.OKE_VAULT_URL = url;
+      if (controls.OKE_VAULT_TOKEN) {
+        env.OKE_VAULT_TOKEN = controls.OKE_VAULT_TOKEN;
+        env.OKE_VAULT_MOUNT = controls.OKE_VAULT_MOUNT ?? "secret";
+      }
     } else if (spec.role === "store.index") {
       // Meilisearch: standalone HTTP URL + the generated master key.
       env[`${prefix}_URL`] = url;
@@ -412,7 +420,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
   vault: "vault — OpenBao",
-  ai: "ai — Ollama (local models)",
+  ai: "ai — local inference (llama.cpp / Ollama / vLLM / SGLang)",
   proxy: "proxy — TLS terminator (Caddy / Traefik)",
 };
 
@@ -444,6 +452,8 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   ],
   ai: ["OKE_AI_URL", "OKE_AI_MODEL"],
   proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
+  vault: ["OKE_VAULT_TOKEN", "OKE_VAULT_MOUNT"],
+  "store.index": ["OKE_STORE_INDEX_KEY"],
 };
 
 /** Optional controls documented in `.env.docker` and preserved on regeneration. */
@@ -458,8 +468,8 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY=1",
     "MP_SMTP_AUTH_ALLOW_INSECURE=1",
   ],
-  // qwen3.5:9b is a balanced local-dev starting point — override freely.
-  ai: ["OKE_AI_MODEL=qwen3.5:9b"],
+  // Curated Docker Hub `ai/` model id for llama.cpp; Ollama tags differ.
+  ai: ["OKE_AI_MODEL=smollm2"],
   proxy: ["OKE_PROXY_HOST=localhost", "OKE_PROXY_ACME_EMAIL=admin@example.com"],
 };
 
@@ -481,6 +491,10 @@ function roleFromEnvKey(key: string): string | undefined {
   if (key === "OKE_PROXY_URL" || key === "OKE_PROXY_HOST" || key === "OKE_PROXY_ACME_EMAIL") {
     return "proxy";
   }
+  if (key === "OKE_VAULT_TOKEN" || key === "OKE_VAULT_MOUNT" || key === "OKE_VAULT_URL") {
+    return "vault";
+  }
+  if (key === "OKE_STORE_INDEX_KEY" || key === "OKE_STORE_INDEX_URL") return "store.index";
   return undefined;
 }
 

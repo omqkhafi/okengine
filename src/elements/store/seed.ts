@@ -30,7 +30,7 @@ export interface SeedDef {
 export type SeedCategory = "dev" | "prod";
 
 /**
- * Freeze a seed declaration for `src/seed/index.ts` default export.
+ * Freeze a seed declaration for `src/db/seed/index.ts` default export.
  *
  * @param def - Essential / dev / prod function bags
  */

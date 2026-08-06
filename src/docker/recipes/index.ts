@@ -6,6 +6,7 @@ import type { ImageRecipe } from "../types.ts";
 import { caddy } from "./caddy.ts";
 import { cockroach } from "./cockroach.ts";
 import { dragonfly } from "./dragonfly.ts";
+import { llamaCpp } from "./llama-cpp.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
 import { ollama } from "./ollama.ts";
@@ -14,10 +15,12 @@ import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
+import { sglang } from "./sglang.ts";
 import { supabase } from "./supabase.ts";
 import { timescale } from "./timescale.ts";
 import { traefik } from "./traefik.ts";
 import { valkey } from "./valkey.ts";
+import { vllm } from "./vllm.ts";
 import { yugabyte } from "./yugabyte.ts";
 
 /** Default recipe catalogue — more specific image matches before protocol peers. */
@@ -35,6 +38,9 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   rustfs,
   openbao,
   meilisearch,
+  llamaCpp,
+  vllm,
+  sglang,
   ollama,
   caddy,
   traefik,
@@ -44,6 +50,7 @@ export {
   caddy,
   cockroach,
   dragonfly,
+  llamaCpp,
   mailpit,
   meilisearch,
   ollama,
@@ -52,12 +59,19 @@ export {
   postgres,
   redis,
   rustfs,
+  sglang,
   supabase,
   timescale,
   traefik,
   valkey,
+  vllm,
   yugabyte,
 };
+
+export { LLAMA_CPP_IMAGE, LLAMA_CPP_MIN_SAFE_BUILD } from "./llama-cpp.ts";
+export { OLLAMA_IMAGE, OLLAMA_MIN_SAFE_VERSION } from "./ollama.ts";
+export { SGLANG_IMAGE } from "./sglang.ts";
+export { VLLM_IMAGE } from "./vllm.ts";
 
 /**
  * Resolve the recipe for an image reference.

@@ -592,17 +592,20 @@ describe("scaffold structure", () => {
         source: { kind: "template", id: "standard" },
       });
       for (const path of [
-        "src/gates.ts",
-        "src/vault.ts",
-        "src/channels.ts",
+        "src/core/gates.ts",
+        "src/core/vault.ts",
+        "src/core/channels.ts",
+        "src/core/store.ts",
+        "src/core/index.ts",
         "src/locales/en.ts",
         "src/locales/ar.ts",
         "src/flows/main/shapes.ts",
         "src/flows/main/signals.ts",
         "src/flows/notes/index.ts",
-        "src/core.ts",
-        "src/schema.decl.ts",
+        "src/db/schema.decl.ts",
+        "src/db/seed/index.ts",
         "src/app.ts",
+        ".vscode/settings.json",
       ]) {
         expect(result.files).toContain(path);
       }
@@ -630,7 +633,7 @@ describe("scaffold structure", () => {
       });
       expect(result.sqlDriver).toBe("postgres");
       // Abstract decl is dialect-agnostic — emit picks pgTable at sync time.
-      const decl = readFileSync(join(result.targetDir, "src/schema.decl.ts"), "utf8");
+      const decl = readFileSync(join(result.targetDir, "src/db/schema.decl.ts"), "utf8");
       expect(decl).toContain("store.schema.table(");
       expect(decl).not.toContain("sqliteTable");
       expect(decl).not.toContain("pgTable");

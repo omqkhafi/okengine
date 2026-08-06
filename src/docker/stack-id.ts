@@ -103,7 +103,9 @@ export function parseStackCredentials(
       map.get(`${prefix}_USER`) ?? (role === "store.files" ? map.get("S3_ACCESS_KEY_ID") : "oke");
     const password =
       map.get(`${prefix}_PASSWORD`) ??
-      (role === "store.files" ? map.get("S3_SECRET_ACCESS_KEY") : undefined);
+      (role === "store.files" ? map.get("S3_SECRET_ACCESS_KEY") : undefined) ??
+      // Meilisearch master key is written as OKE_STORE_INDEX_KEY (not *_PASSWORD).
+      (role === "store.index" ? map.get("OKE_STORE_INDEX_KEY") : undefined);
     const database = map.get(`${prefix}_DB`) ?? "oke";
     if (user && password && database) {
       out[role] = { user, password, database };
@@ -128,6 +130,9 @@ export const STACK_CONTROL_KEYS = [
   "OKE_AI_MODEL",
   "OKE_PROXY_HOST",
   "OKE_PROXY_ACME_EMAIL",
+  // OpenBao app token — minted by bootstrap, must survive `writeDerivedFiles`.
+  "OKE_VAULT_TOKEN",
+  "OKE_VAULT_MOUNT",
 ] as const;
 
 /**
@@ -170,19 +175,36 @@ export async function loadExistingStackCredentials(
 /**
  * Load optional controls from `docker/.env.docker` when present.
  *
+ * Falls back to `.oke/openbao/app.token` for `OKE_VAULT_TOKEN` when the env
+ * file was regenerated without the bootstrap overlay (per-project token).
+ *
  * @param cwd - Project root
  */
 export async function loadExistingStackControls(
   cwd: string,
 ): Promise<Readonly<Record<string, string>> | undefined> {
   const candidates = [resolve(cwd, DEFAULT_DOCKER_DIR, ".env.docker"), resolve(cwd, ".env.docker")];
+  let controls: Record<string, string> = {};
   for (const path of candidates) {
     const file = Bun.file(path);
     if (!(await file.exists())) continue;
-    const controls = parseStackControls(await file.text());
-    if (Object.keys(controls).length > 0) return controls;
+    controls = parseStackControls(await file.text());
+    break;
   }
-  return undefined;
+  if (!controls.OKE_VAULT_TOKEN) {
+    const tokenFile = Bun.file(resolve(cwd, ".oke", "openbao", "app.token"));
+    if (await tokenFile.exists()) {
+      const token = (await tokenFile.text()).trim();
+      if (token) {
+        controls = {
+          ...controls,
+          OKE_VAULT_TOKEN: token,
+          OKE_VAULT_MOUNT: controls.OKE_VAULT_MOUNT ?? "secret",
+        };
+      }
+    }
+  }
+  return Object.keys(controls).length > 0 ? controls : undefined;
 }
 
 function parseDotenv(text: string): Map<string, string> {

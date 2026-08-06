@@ -12,6 +12,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `llama-cpp`, `vllm`, and `sglang` Docker image recipes for local / self-hosted
+  inference — OpenAI-compatible endpoints, loopback-only host publish, pinned
+  tags (never `latest`); docs decision matrix under Recipes → AI.
 - `cockroach`, `yugabyte`, and `timescale` Docker image recipes for self-hosted
   `store.sql` (driver id stays `postgres`) — Cockroach on 26257 with
   `COCKROACH_*` + DB Console `:8080`, Yugabyte YSQL on 5433 with `YSQL_*`,
@@ -61,20 +64,22 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Default local AI is **llama.cpp** (`ghcr.io/ggml-org/llama.cpp:server-b10290`,
+  driver `openai-compatible`) — lightest footprint; create-oke Recommended and
+  `oke ai setup --provider llama-cpp` follow. Ollama stays a fully supported
+  alternative (`ollama/ollama:0.32.6`, never `latest`).
 - `oke dev` request logs and ready line label the :6530 surface as **Backend**
   (was **App**); Console / MCP labels unchanged.
 - `create-oke` customize: drop the **Enable store.index?** yes/no gate — walk
   `store.index` like other facets (`none` · memory · pgvector · libsql ·
   meilisearch; docker recommends meilisearch). **AI setup** is Recommended
-  (Ollama defaults) · Customize · Off (replacing unclear Configure AI? Yes/No).
+  (llama.cpp defaults) · Customize · Off (replacing unclear Configure AI? Yes/No).
   Email menu labels `taqnyat-mail` as `taqnyat` (driver id unchanged). Install
   shows `bun install` progress instead of a silent spinner. Wizard labels drop
-  decorative icons. `oke ai setup` / create-oke AI: no use-case quiz; Ollama
-  banner shows OS · CPU · RAM · Fit RAM · detected · tiers; pick via
-  Select model tiers (Ultra Fast / Fast / Balanced / Smart) or Manual model;
-  cloud asks for an API token then Select/Manual (≤10 curated). Embed pulls
-  without a prompt. **AI Provider — docker → Back** returns to the previous
-  provider step (no longer continues into model setup).
+  decorative icons. `oke ai setup` / create-oke AI: llama.cpp · Ollama · vLLM ·
+  SGLang · cloud; Ollama banner still shows OS · CPU · RAM · Fit RAM · detected ·
+  tiers. **AI Provider — docker → Back** returns to the previous provider step.
+
 - Ollama docker ensure: skip `/api/pull` when the container's `/api/tags`
   already lists the model (host `ollama` weights are a different server);
   stream pull progress instead of hanging on a silent `stream:false` body.
@@ -110,6 +115,13 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   permanent-error no-failover, receipt statuses, Arabic catalog keys, and
   WhatsApp session/template Known gap.
 
+### 🔒 Security
+
+- Local AI recipes (llama.cpp + Ollama + vLLM + SGLang) publish inference ports
+  on `127.0.0.1` only — never `0.0.0.0` — and pin patched floors (llama.cpp ≥
+  b8146, Ollama ≥ 0.17.1). Docs require curated model sources (Docker Hub `ai/`,
+  Ollama library); warn against arbitrary untrusted GGUF.
+
 ### 🔥 Removed
 
 - create-oke package-level integration suite (`packages/create-oke/tests`) and
@@ -118,6 +130,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### 🐛 Fixed
 
+- create-oke templates (and the framework pin) use exact `drizzle-orm` /
+  `drizzle-kit` `1.0.0-rc.4` (npm `rc` tag) — caret `^1.0.0-rc.4` was
+  resolving mismatched channel builds (`…-fb12281` / `…-ca0f029`) and
+  triggering Bun’s incorrect peer dependency warning on install.
 - Ollama docker model download no longer depends on a host `ollama` CLI —
   boot/`oke ai setup` POST `/api/pull` to the container URL so a native host
   daemon cannot silently receive the weights.

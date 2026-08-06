@@ -22,6 +22,10 @@
     "mailpit",
     "openbao",
     "meilisearch",
-    "ollama"
+    "---AI---",
+    "llama-cpp",
+    "ollama",
+    "vllm",
+    "sglang"
   ]
 }

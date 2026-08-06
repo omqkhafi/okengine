@@ -242,7 +242,7 @@ export const app = oke({ name: "plugin-only" }).plug(
     const emitted = await emitAbstractSchemaPrestep(dir, loaded.config, () => {}, "local");
     expect(emitted).toBe(true);
 
-    const generated = await readFile(join(dir, "src", "schema.generated.ts"), "utf8");
+    const generated = await readFile(join(dir, "src", "db", "schema.generated.ts"), "utf8");
     expect(generated).toContain('sqliteTable("metrics_daily"');
     expect(generated).toContain('integer("hits")');
   });

@@ -19,6 +19,7 @@ import {
   stackAppSlug,
   stackInstanceId,
   writeDerivedFiles,
+  formatStackEnv,
   type DeriveOptions,
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
@@ -476,30 +477,29 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           });
           Object.assign(stackEnv!, openbaoStackEnv(boot));
           Object.assign(dockerStarted.env, openbaoStackEnv(boot));
+          // Rewrite .env.docker with the full stack env (including token) so a
+          // later ensureDockerStack / writeDerivedFiles does not drop it.
           const envPath = resolve(dockerOut, ".env.docker");
-          const current = await Bun.file(envPath).text();
-          const tokenLine = `OKE_VAULT_TOKEN=${boot.appToken}`;
-          const next = /OKE_VAULT_TOKEN=.*/.test(current)
-            ? current.replace(/OKE_VAULT_TOKEN=.*/, tokenLine)
-            : `${current.trimEnd()}\nOKE_VAULT_TOKEN=${boot.appToken}\nOKE_VAULT_MOUNT=secret\n`;
-          await Bun.write(envPath, next);
+          await Bun.write(envPath, formatStackEnv(stackEnv!));
         }
 
-        // Ollama: ensure the configured model via the container's own HTTP API on
-        // its exposed host port — never a host `ollama` CLI (that may talk to a
-        // separately installed daemon on the default port). Skip pull when the
-        // container already lists the model.
+        // Ollama only: ensure the configured model via the container HTTP API on
+        // its loopback-published host port — never a host `ollama` CLI. llama.cpp /
+        // vLLM / SGLang load models via their own image args (Docker Hub `ai/`, HF).
         const aiSpec = derived.specs.find((s) => s.role === "ai");
         if (aiSpec) {
-          const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
-          const model =
-            stackEnv!.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "qwen3.5:9b";
-          const url = `http://127.0.0.1:${aiSpec.hostPort}`;
-          await ensureOllamaModel({
-            url,
-            model,
-            onStatus: (line) => write(`${line}\n`),
-          });
+          const { recipeFor } = await import("../docker/recipes/index.ts");
+          if (recipeFor(aiSpec.image).id === "ollama") {
+            const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
+            const model =
+              stackEnv!.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "qwen3.5:9b";
+            const url = `http://127.0.0.1:${aiSpec.hostPort}`;
+            await ensureOllamaModel({
+              url,
+              model,
+              onStatus: (line) => write(`${line}\n`),
+            });
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -594,6 +594,15 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           `oke db push (${mode} · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
         ),
       );
+      if (result.code === 0) {
+        const { maybeAskSeed } = await import("./ask-seed.ts");
+        await maybeAskSeed({
+          cwd,
+          env: mode,
+          write,
+          stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+        });
+      }
     } catch (err) {
       write(
         formatStatusLine(

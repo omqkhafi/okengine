@@ -6,8 +6,7 @@ product — every Flow and table here is real wiring you keep or replace.
 
 ```bash
 bun install
-oke dev
-oke db seed   # essential welcome note + local/docker sample notes
+oke dev           # auto db push; asks once whether to seed
 ```
 
 | Surface | URL |
@@ -43,12 +42,12 @@ never anonymous `flow_1`.
 
 | Path | Role |
 | ---- | ---- |
-| `src/schema.decl.ts` | `notes` table |
-| `src/seed/` | `oke db seed` — essential + dev sample notes |
+| `src/core/` | stores · gates · vault · channels (barrel `index.ts`) |
+| `src/db/schema.decl.ts` | `notes` table |
+| `src/db/seed/` | `oke db seed` — essential + dev sample notes |
+| `src/db/migrations/` | versioned drizzle migrations |
 | `src/flows/notes/` | list · create · get · archive · onCreated |
 | `src/flows/main/` | root · health |
-| `src/channels.ts` | `note-created` email template |
-| `src/vault.ts` | `APP_WEBHOOK_SECRET` |
 | `oke.config.ts` | local sqlite · docker postgres (+ redis/s3/openbao/smtp) |
 | `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
 
@@ -57,4 +56,4 @@ Switch mode anytime: `oke mode docker` then `oke dev` (or `oke dev --docker`).
 ## AI
 
 Not baked into this starter. Re-run create-oke with `--ai`, or `oke ai setup`, to
-add `drivers.ai` + `src/ai.ts`.
+add `drivers.ai` + `src/core/ai.ts`.

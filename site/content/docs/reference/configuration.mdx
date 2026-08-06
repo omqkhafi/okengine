@@ -82,7 +82,7 @@ images: {
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",
   vault: "openbao/openbao:2.6.1",
-  ai: "ollama/ollama:latest",
+  ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // default; or ollama/ollama:0.32.6
   // opt-in TLS edge — omit for the default (app publishes 6530):
   // proxy: "caddy:2-alpine",   // simplest automatic HTTPS
   // proxy: "traefik:v3.3",     // label auto-discovery for --scale app=N
@@ -96,7 +96,9 @@ When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog
 For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays
 `redis`, same `REDIS_URL`. Image table + licenses: [Store · KV](/docs/elements/store#kv).
 
-For `ai`, the Ollama recipe pulls `OKE_AI_MODEL` (default `qwen3.5:9b` — a balanced local-dev starting point; override freely; on Apple Silicon prefer `qwen3.5:9b-mlx`) and writes `OKE_AI_URL`.
+For `ai`, default is [llama.cpp](/docs/recipes/llama-cpp) (`OKE_AI_URL` →
+`/v1`, curated Docker Hub `ai/` model). Ollama / vLLM / SGLang are explicit
+alternatives — see [Recipes · AI](/docs/recipes#ai-local--self-hosted).
 
 For `proxy`, pin **either** Caddy or Traefik — never both. Opt-in only; see
 [Reverse proxy](/docs/deployment/reverse-proxy).
