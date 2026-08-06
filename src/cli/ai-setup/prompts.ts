@@ -214,7 +214,7 @@ async function askOllamaPath(options: {
           );
           if (doPull === null) return null;
           if (doPull === BACK) continue;
-          if (doPull === "yes") await pullModels(pull);
+          if (doPull === "yes") await pullModels(pull, detected.baseUrl);
         }
         return {
           driver: "ollama",
@@ -402,7 +402,7 @@ async function askManualOllama(
       );
       if (doPull === null) return null;
       if (doPull === BACK) continue;
-      if (doPull === "yes") await pullModels(needed);
+      if (doPull === "yes") await pullModels(needed, detected.baseUrl);
     }
 
     return {
@@ -629,21 +629,21 @@ async function pickModel(
 }
 
 /**
- * Run `ollama pull` for each model with a spinner-friendly console log.
+ * Pull each model via the Ollama HTTP API (`POST /api/pull`) — never a host
+ * `ollama` CLI (that may hit a different local installation than the URL).
  *
  * @param models - Model ids
+ * @param baseUrl - Ollama server base URL
  */
-async function pullModels(models: readonly string[]): Promise<void> {
+async function pullModels(models: readonly string[], baseUrl: string): Promise<void> {
+  const { ensureOllamaModel } = await import("../../docker/ollama-pull.ts");
   for (const id of models) {
-    console.log(`ollama pull ${id}…`);
-    const proc = Bun.spawn(["ollama", "pull", id], {
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "inherit",
-    });
-    const code = await proc.exited;
-    if (code !== 0) {
-      console.error(`oke ai setup: ollama pull ${id} failed (continuing)`);
+    console.log(`ollama: pulling ${id} via ${baseUrl}/api/pull…`);
+    try {
+      await ensureOllamaModel({ url: baseUrl, model: id });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`oke ai setup: pull ${id} failed (continuing) — ${msg}`);
     }
   }
 }

@@ -248,7 +248,7 @@ The one you declared. There is no fallback or guess — if `prod` has no AI driv
 </Accordion>
 <Accordion title="oke boot: ollama driver needs OKE_AI_URL">
 
-Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers and that you have pulled the model you named (`ollama pull qwen3.5:9b`, or `qwen3.5:9b-mlx` on Apple Silicon, or your `OKE_AI_MODEL`). Prefer `oke ai setup` to wire driver, env, and `src/ai.ts` in one pass.
+Docker mode expects `OKE_AI_URL` from `docker/.env.docker` (written when `images.ai` is pinned). Locally, the default is `http://127.0.0.1:11434`. If asks fail with `OllamaUnavailableError`, confirm the server answers at that URL and that the model is listed under `GET /api/tags` (boot pulls via `POST /api/pull` against the container — do not rely on a host `ollama pull`, which may talk to a different install). Prefer `oke ai setup` to wire driver, env, and `src/ai.ts` in one pass.
 
 </Accordion>
 <Accordion title="A prompt edit made answers worse — how do I catch that pre-merge?">

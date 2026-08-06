@@ -66,7 +66,7 @@ the extension ships in this image.
 | `DATABASE_URL`           | App connection (`postgres://…:5432/…`)    |
 | `PGDATA`                 | Default `/var/lib/postgresql/data/pgdata` |
 
-Identical credential contract to [Postgres](/docs/images/postgres) — only the image
+Identical credential contract to [Postgres](/docs/recipes/postgres) — only the image
 (and its extension bundle) differs.
 
 ## Data and backup
@@ -87,7 +87,7 @@ Want managed Supabase (Auth / Storage / Realtime included)? Use the
 image and the cloud project as if they were the same deployment.
 
 For self-hosted production, prefer a pinned tag (not `latest`) and the same
-shared-store guidance as [Postgres](/docs/images/postgres#production-note). Free-tier
+shared-store guidance as [Postgres](/docs/recipes/postgres#production-note). Free-tier
 cloud pausing does not apply to this Docker image — you own uptime.
 
 ## What the recipe configures
@@ -121,7 +121,7 @@ own Vault / Store · files / Signal for those concerns.
 ## Learn more
 
 - [Supabase (provider)](/docs/providers/supabase) — managed cloud alternative
-- [Postgres](/docs/images/postgres) — generic recipe this one takes precedence over
+- [Postgres](/docs/recipes/postgres) — generic recipe this one takes precedence over
 - [Store · Index](/docs/elements/store#index) — `pgvector`-backed vector search
 
 ## Next
@@ -135,11 +135,11 @@ own Vault / Store · files / Signal for those concerns.
   <Card
     title="PgDog"
     description="Add pooling in front of this recipe too."
-    href="/docs/images/pgdog"
+    href="/docs/recipes/pgdog"
   />
   <Card
     title="Postgres"
     description="The plain image this specializes."
-    href="/docs/images/postgres"
+    href="/docs/recipes/postgres"
   />
 </Cards>

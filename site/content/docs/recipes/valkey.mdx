@@ -61,7 +61,7 @@ Same knobs as Redis: `OKE_STORE_KV_MAXMEMORY`, `OKE_STORE_KV_MAXMEMORY_POLICY`.
 
 ## Data and backup
 
-No named volume in the recipe — same ephemeral default as [Redis](/docs/images/redis).
+No named volume in the recipe — same ephemeral default as [Redis](/docs/recipes/redis).
 **Backup means:** do not assume durability until you add a volume + persistence config;
 treat the default as a shared cache rebuilt from durable stores.
 
@@ -105,7 +105,7 @@ explicitly.
 ## Learn more
 
 - [Store · KV](/docs/elements/store#kv) — full Redis-protocol image license table
-- [Redis](/docs/images/redis) · [Dragonfly](/docs/images/dragonfly) — the other two peers
+- [Redis](/docs/recipes/redis) · [Dragonfly](/docs/recipes/dragonfly) — the other two peers
 - [DigitalOcean Managed Caching](/docs/providers/digitalocean-caching) — managed Valkey
 
 ## Next
@@ -114,8 +114,8 @@ explicitly.
   <Card
     title="Dragonfly"
     description="Multi-threaded Redis-wire peer."
-    href="/docs/images/dragonfly"
+    href="/docs/recipes/dragonfly"
   />
-  <Card title="Redis" description="The mature default." href="/docs/images/redis" />
+  <Card title="Redis" description="The mature default." href="/docs/recipes/redis" />
   <Card title="Upstash" description="Managed alternative." href="/docs/providers/upstash" />
 </Cards>

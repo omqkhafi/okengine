@@ -26,7 +26,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `supabase` Docker image recipe — matches `supabase/postgres` ahead of the
   generic Postgres recipe (env + healthcheck + URL); Postgres-protocol and
   extension bundle only — not Auth / Storage / Realtime / Studio.
-- Docs **Recipes** (`/docs/images`) — pin compose recipes already wired into
+- Docs **Recipes** (`/docs/recipes`) — pin compose recipes already wired into
   `oke docker` (Postgres, PgDog, Supabase Postgres, Redis / Valkey /
   Dragonfly, Caddy, Traefik); vendor choice stays in `images[…]`.
 - Docs **Providers** (`/docs/providers`) — managed SQL / Redis connection
@@ -61,6 +61,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Docs section path **Recipes** moves from `/docs/images` → `/docs/recipes`
+  (folder, sidebar, and cross-links).
+- Ollama recipe serves only; `oke dev -d` / `oke ai setup` pull
+  `${OKE_AI_MODEL}` with `POST /api/pull` against the container's exposed
+  `OKE_AI_URL` — never a host `ollama` CLI (which may hit a different local
+  install).
 - Recipes sidebar — Supabase recipe title drops “(Docker)”; Timescale, RustFS,
   Mailpit, OpenBao, Meilisearch, and Ollama use monochrome brand marks instead
   of Lucide placeholders.
@@ -95,6 +101,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### 🐛 Fixed
 
+- Ollama docker model download no longer depends on a host `ollama` CLI —
+  boot/`oke ai setup` POST `/api/pull` to the container URL so a native host
+  daemon cannot silently receive the weights.
 - Durable execute path: thrown errors now commit the journal as `failed`
   (and record on Runs) instead of incorrectly marking `completed`.
 - Channel email/SMS `FallbackTransport` now reuses `shouldFallbackOtpMedium`

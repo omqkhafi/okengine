@@ -8,7 +8,7 @@
     "plugins",
     "console",
     "deployment",
-    "images",
+    "recipes",
     "providers",
     "reference",
     "ai"

@@ -40,6 +40,13 @@ export { emitDockerfile } from "./dockerfile.ts";
 export { credEnv, envPrefix, serviceNameFor } from "./helpers.ts";
 export { generateCredentials } from "./credentials.ts";
 export {
+  ensureOllamaModel,
+  normalizeOllamaPullUrl,
+  OllamaPullError,
+  type EnsureOllamaModelOptions,
+  type OllamaFetch,
+} from "./ollama-pull.ts";
+export {
   builtinRecipes,
   caddy,
   cockroach,

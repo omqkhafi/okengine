@@ -52,7 +52,7 @@ echo "$DATABASE_URL"
 ```
 
 When PgDog is pinned, `DATABASE_URL` points at `:6432` instead — see
-[PgDog](/docs/images/pgdog).
+[PgDog](/docs/recipes/pgdog).
 
 </Step>
 
@@ -88,7 +88,7 @@ For multi-replica apps, keep SQL on a shared Postgres — Clock CronStore and du
 journal need one backend. See [Clock](/docs/elements/clock#what-the-runtime-guarantees) ·
 [Docker](/docs/deployment/docker#share-backing-services).
 
-Scale out with [PgDog](/docs/images/pgdog) so `N × Bun.SQL pool` does not exhaust
+Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exhaust
 `max_connections`. Do not also stack a managed provider's pooler on the same URL.
 
 ## What the recipe configures
@@ -122,7 +122,7 @@ Postgres refusing auth.
 
 ## Learn more
 
-- [PgDog](/docs/images/pgdog) — transaction pooling in front of this recipe
+- [PgDog](/docs/recipes/pgdog) — transaction pooling in front of this recipe
 - [Store · SQL](/docs/elements/store#sql) — schema push / generate / migrate
 - [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
 - [Neon](/docs/providers/neon) · [Supabase](/docs/providers/supabase) — managed alternatives
@@ -130,7 +130,7 @@ Postgres refusing auth.
 ## Next
 
 <Cards>
-  <Card title="PgDog" description="Add pooling in front of Postgres." href="/docs/images/pgdog" />
+  <Card title="PgDog" description="Add pooling in front of Postgres." href="/docs/recipes/pgdog" />
   <Card title="Neon" description="A managed alternative." href="/docs/providers/neon" />
-  <Card title="Redis" description="The default store.kv image." href="/docs/images/redis" />
+  <Card title="Redis" description="The default store.kv image." href="/docs/recipes/redis" />
 </Cards>

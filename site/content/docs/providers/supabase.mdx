@@ -47,7 +47,7 @@ DATABASE_URL=postgres://postgres.[ref]:…@aws-0-[region].pooler.supabase.com:65
 | Direct                     | `db.[ref].supabase.co:5432` | Migrations, `pg_dump`, replication             |
 | Dedicated PgBouncer (paid) | `db.[ref].supabase.co:6543` | High-performance pooled traffic on paid tiers  |
 
-**Do not stack** [PgDog](/docs/images/pgdog) on top of Supavisor. Transaction mode does
+**Do not stack** [PgDog](/docs/recipes/pgdog) on top of Supavisor. Transaction mode does
 not support prepared statements — turn them off in the client if you see related errors.
 
 **IPv6 gotcha:** Direct (and dedicated pooler) are IPv6 unless you buy the IPv4 add-on.
@@ -96,7 +96,7 @@ traffic above the pause threshold. Dashboard page views alone may not count.
 
 ## Learn more
 
-- [Supabase recipe](/docs/images/supabase-docker) — Postgres image only, no platform
+- [Supabase recipe](/docs/recipes/supabase-docker) — Postgres image only, no platform
 - [Store · Index](/docs/elements/store#index) — `pgvector`
 - [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`
 
@@ -106,7 +106,7 @@ traffic above the pause threshold. Dashboard page views alone may not count.
   <Card
     title="Supabase (image)"
     description="Run just the Postgres image."
-    href="/docs/images/supabase-docker"
+    href="/docs/recipes/supabase-docker"
   />
   <Card title="Neon" description="Serverless alternative." href="/docs/providers/neon" />
   <Card

@@ -214,7 +214,7 @@ async function askOllamaPath(options: {
           );
           if (doPull === null) return null;
           if (doPull === BACK) continue;
-          if (doPull === "yes") await pullModels(pull);
+          if (doPull === "yes") await pullModels(pull, detected.baseUrl);
         }
         return {
           driver: "ollama",
@@ -402,7 +402,7 @@ async function askManualOllama(
       );
       if (doPull === null) return null;
       if (doPull === BACK) continue;
-      if (doPull === "yes") await pullModels(needed);
+      if (doPull === "yes") await pullModels(needed, detected.baseUrl);
     }
 
     return {
@@ -629,21 +629,36 @@ async function pickModel(
 }
 
 /**
- * Run `ollama pull` for each model with a spinner-friendly console log.
+ * Pull each model via the Ollama HTTP API (`POST /api/pull`) — never a host
+ * `ollama` CLI (that may hit a different local installation than the URL).
  *
  * @param models - Model ids
+ * @param baseUrl - Ollama server base URL
  */
-async function pullModels(models: readonly string[]): Promise<void> {
+async function pullModels(models: readonly string[], baseUrl: string): Promise<void> {
+  const base = baseUrl.replace(/\/+$/, "");
   for (const id of models) {
-    console.log(`ollama pull ${id}…`);
-    const proc = Bun.spawn(["ollama", "pull", id], {
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "inherit",
-    });
-    const code = await proc.exited;
-    if (code !== 0) {
-      console.error(`oke ai setup: ollama pull ${id} failed (continuing)`);
+    console.log(`ollama: pulling ${id} via ${base}/api/pull…`);
+    try {
+      const tags = await fetch(`${base}/api/tags`);
+      if (!tags.ok) {
+        throw new Error(`GET ${base}/api/tags → ${tags.status}`);
+      }
+      const res = await fetch(`${base}/api/pull`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: id, stream: false }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `POST ${base}/api/pull → ${res.status}${text ? ` ${text.slice(0, 120)}` : ""}`,
+        );
+      }
+      await res.arrayBuffer();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`oke ai setup: pull ${id} failed (continuing) — ${msg}`);
     }
   }
 }

@@ -33,7 +33,10 @@ import {
   valkey,
   writeDerivedFiles,
   yugabyte,
+  ensureOllamaModel,
+  OllamaPullError,
   type ImageRecipe,
+  type OllamaFetch,
   type ServiceSpec,
 } from "./index.ts";
 
@@ -307,7 +310,7 @@ describe("image recipes", () => {
     expect(url).toBe("http://127.0.0.1:7700");
   });
 
-  test("ollama matches the official image, pulls configured model, emits http URL", () => {
+  test("ollama matches the official image, serves on 11434, emits http URL", () => {
     expect(recipeFor("ollama/ollama:latest").id).toBe("ollama");
     const spec: ServiceSpec = {
       role: "ai",
@@ -319,13 +322,12 @@ describe("image recipes", () => {
     };
     const applied = recipeFor(spec.image).apply(spec);
     expect(applied.environment?.OKE_AI_MODEL).toBe("${OKE_AI_MODEL:-qwen3.5:9b}");
+    expect(applied.environment?.OLLAMA_HOST).toBe("0.0.0.0:11434");
     expect(applied.volumes).toContain("ai-data:/root/.ollama");
     expect(applied.healthcheck?.test.join(" ")).toContain("ollama list");
-    expect(String(applied.command)).toContain("ollama pull");
-    // Compose must see `$$` so `$pid` / `$i` are not treated as project env.
-    expect(String(applied.command)).toContain("pid=$$!");
-    expect(String(applied.command)).toContain("wait $$pid");
-    expect(String(applied.command)).not.toMatch(/(?<!\$)\$pid\b/);
+    // Pull is host-side via ensureOllamaModel — never a boot `ollama pull` CLI.
+    expect(applied.command).toBeUndefined();
+    expect(applied.entrypoint).toBeUndefined();
     const url = recipeFor(spec.image).url(spec, {
       host: "127.0.0.1",
       port: 11434,
@@ -334,6 +336,56 @@ describe("image recipes", () => {
       database: "oke",
     });
     expect(url).toBe("http://127.0.0.1:11434");
+  });
+
+  test("ensureOllamaModel POSTs /api/pull to the container base URL (not a host CLI)", async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchFn: OllamaFetch = async (input, init) => {
+      const url = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      const body = typeof init?.body === "string" ? init.body : undefined;
+      calls.push({ url, method, ...(body !== undefined ? { body } : {}) });
+      if (url.endsWith("/api/tags") && method === "GET") {
+        return new Response(JSON.stringify({ models: [] }), { status: 200 });
+      }
+      if (url.endsWith("/api/pull") && method === "POST") {
+        expect(body).toContain('"model":"qwen3.5:9b"');
+        expect(body).toContain('"stream":false');
+        return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+      }
+      return new Response("unexpected", { status: 500 });
+    };
+
+    await ensureOllamaModel({
+      url: "http://127.0.0.1:11434",
+      model: "qwen3.5:9b",
+      fetch: fetchFn,
+      readyTimeoutMs: 2_000,
+      pullTimeoutMs: 5_000,
+    });
+
+    expect(
+      calls.some((c) => c.url === "http://127.0.0.1:11434/api/tags" && c.method === "GET"),
+    ).toBe(true);
+    const pull = calls.find((c) => c.url === "http://127.0.0.1:11434/api/pull");
+    expect(pull?.method).toBe("POST");
+    expect(pull?.body).toBe(JSON.stringify({ model: "qwen3.5:9b", stream: false }));
+    // No host-side `ollama` binary assumption — only HTTP to the given URL.
+    expect(calls.every((c) => c.url.startsWith("http://127.0.0.1:11434/"))).toBe(true);
+  });
+
+  test("ensureOllamaModel fails loud when the container API never becomes ready", async () => {
+    const fetchFn: OllamaFetch = async () => {
+      throw new Error("connection refused");
+    };
+    await expect(
+      ensureOllamaModel({
+        url: "http://127.0.0.1:59999",
+        model: "qwen3.5:9b",
+        fetch: fetchFn,
+        readyTimeoutMs: 800,
+      }),
+    ).rejects.toBeInstanceOf(OllamaPullError);
   });
 
   test("a new image recipe is ≤15 lines", async () => {

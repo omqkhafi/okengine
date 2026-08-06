@@ -151,16 +151,21 @@ export async function runAiSetup(args: AiSetupCliArgs): Promise<number> {
   if (input === null) return 1;
 
   if (args.pull && input.driver === "ollama" && (args.yes || !tty) && args.chat) {
-    // Non-interactive pull of requested models
+    // Non-interactive pull via the server HTTP API (never a host `ollama` CLI).
+    const { ensureOllamaModel } = await import("../../docker/ollama-pull.ts");
+    const baseUrl =
+      input.baseUrl?.trim() || process.env.OKE_AI_URL?.trim() || "http://127.0.0.1:11434";
     const toPull = [input.chatModel, input.visionModel, input.embedModel].filter(
       (m): m is string => typeof m === "string" && m.length > 0,
     );
     for (const id of toPull) {
-      const proc = Bun.spawn(["ollama", "pull", id], {
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      await proc.exited;
+      console.log(`oke ai setup: pulling ${id} via ${baseUrl}/api/pull…`);
+      try {
+        await ensureOllamaModel({ url: baseUrl, model: id });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`oke ai setup: pull ${id} failed (continuing) — ${msg}`);
+      }
     }
   }
 

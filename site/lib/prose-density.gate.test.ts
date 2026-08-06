@@ -75,14 +75,14 @@ function maxConsecutivePlain(body: string): number {
 }
 
 describe("docs prose density", () => {
-  test(`index + get-started + elements + console + deployment + images + providers + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
+  test(`index + get-started + elements + console + deployment + recipes + providers + reference + plugins + ai MDX ≤ ${MAX_CONSECUTIVE} consecutive plain paragraphs`, async () => {
     const files = [
       join(DOCS_CONTENT_DIR, "index.mdx"),
       ...(await listMdx("get-started")),
       ...(await listMdx("elements")),
       ...(await listMdx("console")),
       ...(await listMdx("deployment")),
-      ...(await listMdx("images")),
+      ...(await listMdx("recipes")),
       ...(await listMdx("providers")),
       ...(await listMdx("reference")),
       ...(await listMdx("plugins")),

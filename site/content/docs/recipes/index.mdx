@@ -19,27 +19,27 @@ and get env, healthcheck, and a connection URL for free.
   <Card
     title="Postgres"
     description="Default store.sql — POSTGRES_*, PGDATA, DATABASE_URL."
-    href="/docs/images/postgres"
+    href="/docs/recipes/postgres"
   />
   <Card
     title="Supabase"
     description="supabase/postgres extension bundle only."
-    href="/docs/images/supabase-docker"
+    href="/docs/recipes/supabase-docker"
   />
   <Card
     title="CockroachDB"
     description="Self-hosted single-node — port 26257, COCKROACH_*."
-    href="/docs/images/cockroachdb"
+    href="/docs/recipes/cockroachdb"
   />
   <Card
     title="YugabyteDB"
     description="Self-hosted YSQL — port 5433, YSQL_*."
-    href="/docs/images/yugabytedb"
+    href="/docs/recipes/yugabytedb"
   />
   <Card
     title="Timescale"
     description="Postgres + hypertables — same POSTGRES_* contract."
-    href="/docs/images/timescale"
+    href="/docs/recipes/timescale"
   />
 </Cards>
 
@@ -51,13 +51,13 @@ Driver id stays `redis` for every image below.
   <Card
     title="Redis"
     description="Default store.kv — requirepass + maxmemory."
-    href="/docs/images/redis"
+    href="/docs/recipes/redis"
   />
-  <Card title="Valkey" description="BSD-licensed Redis-wire fork." href="/docs/images/valkey" />
+  <Card title="Valkey" description="BSD-licensed Redis-wire fork." href="/docs/recipes/valkey" />
   <Card
     title="Dragonfly"
     description="Multi-threaded Redis-wire runtime."
-    href="/docs/images/dragonfly"
+    href="/docs/recipes/dragonfly"
   />
 </Cards>
 
@@ -66,34 +66,34 @@ Driver id stays `redis` for every image below.
 Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N`.
 
 <Cards>
-  <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/images/caddy" />
+  <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/recipes/caddy" />
   <Card
     title="Traefik"
     description="Docker-label discovery + socket-proxy."
-    href="/docs/images/traefik"
+    href="/docs/recipes/traefik"
   />
 </Cards>
 
 ## Services
 
 <Cards>
-  <Card title="PgDog" description="Transaction pooler on :6432." href="/docs/images/pgdog" />
+  <Card title="PgDog" description="Transaction pooler on :6432." href="/docs/recipes/pgdog" />
   <Card
     title="RustFS"
     description="S3-compatible store.files — /data volume."
-    href="/docs/images/rustfs"
+    href="/docs/recipes/rustfs"
   />
-  <Card title="Mailpit" description="SMTP catcher — UI on :8025." href="/docs/images/mailpit" />
-  <Card title="OpenBao" description="Raft vault — unseal key SPOF." href="/docs/images/openbao" />
+  <Card title="Mailpit" description="SMTP catcher — UI on :8025." href="/docs/recipes/mailpit" />
+  <Card title="OpenBao" description="Raft vault — unseal key SPOF." href="/docs/recipes/openbao" />
   <Card
     title="Meilisearch"
     description="Full-text store.index on :7700."
-    href="/docs/images/meilisearch"
+    href="/docs/recipes/meilisearch"
   />
   <Card
     title="Ollama"
     description="Local models — /root/.ollama volume."
-    href="/docs/images/ollama"
+    href="/docs/recipes/ollama"
   />
 </Cards>
 
@@ -109,7 +109,7 @@ Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N
   <Card
     title="Postgres"
     description="Start with the default SQL recipe."
-    href="/docs/images/postgres"
+    href="/docs/recipes/postgres"
   />
   <Card title="Providers" description="Managed cloud alternatives." href="/docs/providers" />
   <Card title="Deployment" description="Compose, Swarm, or Kubernetes." href="/docs/deployment" />

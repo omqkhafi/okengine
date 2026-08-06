@@ -41,7 +41,7 @@ No `images["store.sql"]` pin — Neon runs the server.
 | App / serverless / Drizzle runtime                            | **Pooled** (`-pooler`)    | PgBouncer transaction mode; up to 10k client connections |
 | `oke db migrate` / `pg_dump` / logical replication / `LISTEN` | **Direct** (no `-pooler`) | Session features break under transaction pooling         |
 
-Do **not** also put [PgDog](/docs/images/pgdog) in front of Neon — one pooler only.
+Do **not** also put [PgDog](/docs/recipes/pgdog) in front of Neon — one pooler only.
 
 **Consequence:** seeding or migrations through the pooled URL often fail with prepared-statement
 errors; switch those jobs to the direct URL.
@@ -94,9 +94,9 @@ privileges only.
 
 ## Learn more
 
-- [Postgres (image)](/docs/images/postgres) — self-hosted peer
+- [Postgres (image)](/docs/recipes/postgres) — self-hosted peer
 - [Store · Index](/docs/elements/store#index) — `pgvector` usage
-- [PgDog](/docs/images/pgdog) — when you self-host pooling instead
+- [PgDog](/docs/recipes/pgdog) — when you self-host pooling instead
 
 ## Next
 
@@ -111,5 +111,5 @@ privileges only.
     description="Distributed SQL alternative."
     href="/docs/providers/cockroachdb"
   />
-  <Card title="PgDog" description="Self-hosted pooler comparison." href="/docs/images/pgdog" />
+  <Card title="PgDog" description="Self-hosted pooler comparison." href="/docs/recipes/pgdog" />
 </Cards>

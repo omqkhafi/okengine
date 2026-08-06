@@ -484,6 +484,19 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             : `${current.trimEnd()}\nOKE_VAULT_TOKEN=${boot.appToken}\nOKE_VAULT_MOUNT=secret\n`;
           await Bun.write(envPath, next);
         }
+
+        // Ollama: pull the configured model via the container's own HTTP API on
+        // its exposed host port — never a host `ollama` CLI (that may talk to a
+        // separately installed daemon on the default port).
+        const aiSpec = derived.specs.find((s) => s.role === "ai");
+        if (aiSpec) {
+          const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
+          const model =
+            stackEnv!.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "qwen3.5:9b";
+          const url = `http://127.0.0.1:${aiSpec.hostPort}`;
+          write(`oke: pulling ${model} into Ollama at ${url}…\n`);
+          await ensureOllamaModel({ url, model });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(msg);

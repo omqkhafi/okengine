@@ -1,6 +1,6 @@
 ---
 title: "Ollama"
-description: "Local AI model server — OKE_AI_URL, OKE_AI_MODEL, /root/.ollama volume, boot pull of the configured model."
+description: "Local AI model server — OKE_AI_URL, OKE_AI_MODEL, /root/.ollama volume; boot pulls via the container HTTP API."
 icon: "Bot"
 source: "docs/spec/unified-theory.md"
 ---
@@ -10,8 +10,8 @@ Ollama serves local models over HTTP on port `11434`. Pin `images.ai` and set
 default for AI; prod must declare a driver.
 
 <Callout title="The one rule">
-  Name the model explicitly (`OKE_AI_MODEL` or `oke ai setup`). The recipe pulls
-  `${OKE_AI_MODEL:-qwen3.5:9b}` on boot and keeps `ollama serve` in the foreground.
+  Name the model (`OKE_AI_MODEL` or `oke ai setup`). On `oke dev -d`, OKE POSTs `/api/pull` to
+  **this container's** exposed URL — never a host `ollama` CLI.
 </Callout>
 
 ## Quick start
@@ -42,21 +42,26 @@ OKE_AI_URL=http://127.0.0.1:11434
 OKE_AI_MODEL=qwen3.5:9b
 ```
 
-Container also sets `OLLAMA_HOST=0.0.0.0:11434` so the API listens on all interfaces
-inside the network.
+Container sets `OLLAMA_HOST=0.0.0.0:11434` so the API listens on all interfaces.
 
 </Step>
 
 <Step>
-### First boot pulls the model
+### Boot pulls against the container API
 
-The entrypoint runs `ollama serve`, waits until `ollama list` works, then
-`ollama pull "$OKE_AI_MODEL"`. Healthcheck allows a long start (`retries: 60`,
-`start_period: 20s`) because pulls are large.
+After compose is healthy, `oke dev -d` calls `POST {OKE_AI_URL}/api/pull` with
+`${OKE_AI_MODEL:-qwen3.5:9b}` (`stream: false`). That hits the **mapped host port**
+of this recipe — not whatever else might listen on `:11434`.
 
 </Step>
 
 </Steps>
+
+<Callout type="warn" title="Host `ollama` CLI is unrelated">
+  A host `ollama pull` / `ollama run` often talks to a separately installed daemon on the default
+  port — models land **outside** this container. Trust boot `POST /api/pull` against `OKE_AI_URL`
+  (or curl that URL yourself).
+</Callout>
 
 ## Required env
 
@@ -67,8 +72,8 @@ The entrypoint runs `ollama serve`, waits until `ollama list` works, then
 | `OLLAMA_HOST`                                | Set by recipe     | `0.0.0.0:11434` inside the container                               |
 | `OKE_AI_VISION_MODEL` / `OKE_AI_EMBED_MODEL` | Optional          | Written by `oke ai setup` for logical models                       |
 
-On Apple Silicon hosts running Ollama outside Docker, `qwen3.5:9b-mlx` is a common
-override — set `OKE_AI_MODEL` accordingly.
+On Apple Silicon hosts running Ollama **outside** Docker, `qwen3.5:9b-mlx` is a
+common override — set `OKE_AI_MODEL` accordingly (that path is not this recipe).
 
 ## Data and backup
 
@@ -77,8 +82,8 @@ override — set `OKE_AI_MODEL` accordingly.
 | `ai-data` | `/root/.ollama` | Pulled model weights + Ollama metadata |
 
 **Backup means:** preserve `ai-data` so you do not re-download multi-GB models after
-every recreate. Deleting the volume forces another full `ollama pull` on next boot (slow,
-bandwidth-heavy). Model choice is not in the volume alone — keep `OKE_AI_MODEL` in env.
+every recreate. Deleting the volume forces another full `/api/pull` on next boot
+(slow, bandwidth-heavy). Keep `OKE_AI_MODEL` in env — choice is not volume-only.
 
 ## Production note
 
@@ -88,18 +93,19 @@ drivers (`anthropic`, `openai-compatible`, `bedrock`, `vertex`) stay separate.
 PII egress rules treat `ollama` as local (no third-party egress) — see
 [AI · PII](/docs/elements/ai).
 
-First request after a cold pull can take minutes; size the healthcheck/start_period
-accordingly. GPU passthrough is **not** configured by this recipe — CPU inference is the
-default compose shape.
+Cold pulls can take minutes; the boot step waits on `/api/pull` before the app
+continues. GPU passthrough is **not** configured — CPU inference is the default
+compose shape.
 
 ## What the recipe configures
 
-| Field          | Value                                                 |
-| -------------- | ----------------------------------------------------- |
-| Container port | `11434`                                               |
-| Entrypoint     | `/bin/sh -c` boot script (serve → pull → wait)        |
-| Healthcheck    | `ollama list`, every 5s, 60 retries, 20s start period |
-| Connection URL | `http://host:11434`                                   |
+| Field          | Value                                                |
+| -------------- | ---------------------------------------------------- |
+| Container port | `11434`                                              |
+| Entrypoint     | Image default (`ollama serve`)                       |
+| Healthcheck    | `ollama list`, every 5s, 24 retries, 10s start       |
+| Connection URL | `http://host:11434`                                  |
+| Model pull     | Host-side `POST /api/pull` to that URL after healthy |
 
 ## Troubleshooting
 
@@ -111,10 +117,10 @@ Locally the default is `http://127.0.0.1:11434`. Prefer `oke ai setup` to wire e
 in one pass.
 
 </Accordion>
-<Accordion title="ollama: unreachable at … / model not found">
+<Accordion title="Model missing / I already ran ollama pull on the host">
 
-Server not ready yet, or `OKE_AI_MODEL` was never pulled. Watch logs for the boot
-`ollama pull` line; override the model and recreate so the entrypoint pulls the new tag.
+The host CLI likely filled a **different** Ollama. Check `GET $OKE_AI_URL/api/tags`,
+then recreate with `oke dev -d` or `curl -X POST "$OKE_AI_URL/api/pull" -d '{"model":"…","stream":false}'`.
 `OllamaUnavailableError` wraps HTTP errors from `/api/chat` and `/api/tags`.
 
 </Accordion>
@@ -129,7 +135,7 @@ Server not ready yet, or `OKE_AI_MODEL` was never pulled. Watch logs for the boo
 ## Next
 
 <Cards>
-  <Card title="Meilisearch" description="Full-text index peer." href="/docs/images/meilisearch" />
-  <Card title="OpenBao" description="Secrets for docker/prod." href="/docs/images/openbao" />
+  <Card title="Meilisearch" description="Full-text index peer." href="/docs/recipes/meilisearch" />
+  <Card title="OpenBao" description="Secrets for docker/prod." href="/docs/recipes/openbao" />
   <Card title="AI" description="Prompts, models, guardrails." href="/docs/elements/ai" />
 </Cards>

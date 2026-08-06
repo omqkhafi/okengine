@@ -78,7 +78,7 @@ add an explicit volume + `SAVE`/`BGSAVE` policy before you rely on durability.
 <Callout title="License note" type="warn">
   Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis itself as
   a managed service to third parties — running it for your own app is unaffected. Prefer
-  [Valkey](/docs/images/valkey) when the managed-service restriction matters.
+  [Valkey](/docs/recipes/valkey) when the managed-service restriction matters.
 </Callout>
 
 Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an in-process
@@ -114,13 +114,13 @@ Format must be `redis://:PASSWORD@host:6379` (colon before the password, empty u
 ## Learn more
 
 - [Store · KV](/docs/elements/store#kv) — TTL physics, per-driver behavior, license table
-- [Valkey](/docs/images/valkey) · [Dragonfly](/docs/images/dragonfly) — Redis-wire peers
+- [Valkey](/docs/recipes/valkey) · [Dragonfly](/docs/recipes/dragonfly) — Redis-wire peers
 - [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` precedence
 
 ## Next
 
 <Cards>
-  <Card title="Valkey" description="Permissive-licensed alternative." href="/docs/images/valkey" />
+  <Card title="Valkey" description="Permissive-licensed alternative." href="/docs/recipes/valkey" />
   <Card title="Redis Cloud" description="Managed Redis." href="/docs/providers/redis-cloud" />
   <Card
     title="Upstash"

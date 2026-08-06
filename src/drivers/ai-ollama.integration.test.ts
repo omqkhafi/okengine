@@ -3,8 +3,8 @@
  *
  * Opt-in (never auto-pull a multi-GB model in ordinary `bun test`):
  * 1. `OKE_TEST_OLLAMA_URL` — point at any reachable Ollama
- * 2. `OKE_TEST_OLLAMA_DOCKER=1` — start `ollama/ollama` via the recipe and pull
- *    `qwen3.5:9b` (slow first run)
+ * 2. `OKE_TEST_OLLAMA_DOCKER=1` — start `ollama/ollama` via the recipe; host-side
+ *    `ensureOllamaModel` POSTs `/api/pull` for `qwen3.5:9b` (slow first run)
  *
  * Without one of those, the suite skips with a visible reason (never an empty pass).
  * A local daemon on :11434 is not enough — set `OKE_TEST_OLLAMA_URL` explicitly.
@@ -123,8 +123,11 @@ async function resolveLiveUrl(): Promise<{ url: string; model: string }> {
     await rm(dir, { recursive: true, force: true });
   };
 
-  // Model pull can take a long time on first run.
-  await waitForOllama(url, 20 * 60_000, true);
+  // Serve must answer before we POST /api/pull (same path as `oke dev -d`).
+  await waitForOllama(url, 120_000, false);
+  const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
+  await ensureOllamaModel({ url, model: OLLAMA_DEFAULT_MODEL });
+  await waitForOllama(url, 60_000, true);
   return { url, model: OLLAMA_DEFAULT_MODEL };
 }
 

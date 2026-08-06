@@ -38,7 +38,7 @@ TLS is mandatory — `redis://` without TLS fails.
 | Eviction    | Plan max size / eviction; serverless still has quotas                       |
 | Consistency | Global replication options are product-specific — confirm region in Details |
 
-Do not put [PgDog](/docs/images/pgdog)-style thinking on Redis: there is no separate
+Do not put [PgDog](/docs/recipes/pgdog)-style thinking on Redis: there is no separate
 “pooled hostname” toggle. Connection count pressure shows up as Upstash plan limits /
 timeouts, not a Neon-style `-pooler` suffix.
 
@@ -70,7 +70,7 @@ Password missing from the URL. ioredis-style URLs need the colon before the pass
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis)
+- [Redis (image)](/docs/recipes/redis)
 - [Redis Cloud](/docs/providers/redis-cloud) — fixed-instance alternative
 - [Store · KV](/docs/elements/store#kv)
 

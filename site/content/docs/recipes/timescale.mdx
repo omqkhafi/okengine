@@ -36,7 +36,7 @@ images: {
 oke dev --docker
 ```
 
-Same credential contract as [Postgres](/docs/images/postgres):
+Same credential contract as [Postgres](/docs/recipes/postgres):
 `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from `OKE_STORE_SQL_*`.
 
 </Step>
@@ -79,7 +79,7 @@ Same backup story as plain Postgres: `pg_dump` / volume backup of
 
 Pin a concrete tag (image + Postgres major). For multi-replica apps, keep one
 shared SQL backend — see
-[Postgres · Production note](/docs/images/postgres#production-note).
+[Postgres · Production note](/docs/recipes/postgres#production-note).
 
 Managed time-series hosts still use `DATABASE_URL` and
 `drivers.store.sql: "postgres"`.
@@ -112,18 +112,18 @@ host.
 
 ## Learn more
 
-- [Postgres](/docs/images/postgres) — generic recipe this specialises
+- [Postgres](/docs/recipes/postgres) — generic recipe this specialises
 - [Store · SQL](/docs/elements/store#sql) — schema workflows
 - [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`
 
 ## Next
 
 <Cards>
-  <Card title="Postgres" description="Plain Postgres recipe." href="/docs/images/postgres" />
+  <Card title="Postgres" description="Plain Postgres recipe." href="/docs/recipes/postgres" />
   <Card
     title="Supabase"
     description="Postgres + extension bundle."
-    href="/docs/images/supabase-docker"
+    href="/docs/recipes/supabase-docker"
   />
-  <Card title="PgDog" description="Transaction pooling in front." href="/docs/images/pgdog" />
+  <Card title="PgDog" description="Transaction pooling in front." href="/docs/recipes/pgdog" />
 </Cards>
