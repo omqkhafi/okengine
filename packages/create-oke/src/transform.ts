@@ -5,7 +5,8 @@
  * Exactly:
  * 1. `package.json` `"name"` → the user-provided project name
  * 2. `package.json` `"okengine": "file:../.."` → an installable reference
- *    (absolute `file:<okengine-root>` in the monorepo; registry version otherwise)
+ *    (staged `file:~/.oke/create-oke/okengine` in the monorepo — not the
+ *    workspace root; registry version otherwise)
  * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
  * 4. Optional `--sql` / wizard choice → Drizzle dialect + `store.sql` pins
@@ -21,6 +22,7 @@ import {
   SGLANG_IMAGE,
   VLLM_IMAGE,
 } from "./drivers-catalog.ts";
+import { materializeLocalOkengineDependency } from "./local-okengine.ts";
 import { packageRoot } from "./templates.ts";
 
 /** SQL store drivers selectable at scaffold time. */
@@ -55,13 +57,15 @@ export type ScaffoldPackageJson = {
 /**
  * Resolve the `okengine` dependency string written into the scaffolded package.json.
  *
- * - Monorepo / local: `file:<absolute-okengine-root>` (installable; not `file:../..`)
+ * - Monorepo / local: staged publish-shaped `file:` package (no workspaces /
+ *   no monorepo `devDependencies` — those pull drizzle-zod and trip Bun’s RC
+ *   peer check)
  * - Published create-oke: the version of this package (kept in lockstep with okengine)
  *
  * @param localOkengineRoot - Absolute path when available
  */
 export function resolveOkengineDependency(localOkengineRoot: string | null): string {
-  if (localOkengineRoot) return `file:${localOkengineRoot}`;
+  if (localOkengineRoot) return materializeLocalOkengineDependency(localOkengineRoot);
   const pkgPath = join(packageRoot(), "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version: string };
   return pkg.version;

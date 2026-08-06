@@ -132,8 +132,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 - create-oke templates (and the framework pin) use exact `drizzle-orm` /
   `drizzle-kit` `1.0.0-rc.4` (npm `rc` tag) — caret `^1.0.0-rc.4` was
-  resolving mismatched channel builds (`…-fb12281` / `…-ca0f029`) and
-  triggering Bun’s incorrect peer dependency warning on install.
+  resolving mismatched channel builds (`…-fb12281` / `…-ca0f029`).
+- Local / monorepo create-oke no longer `file:`-links the workspace root —
+  it stages a publish-shaped package under `~/.oke/create-oke/okengine`
+  (production deps only). Linking the root installed Console
+  `devDependencies` (including `drizzle-zod`), and Bun warned that RC
+  `drizzle-orm` failed `drizzle-zod`’s `>=0.36` peer.
 - Ollama docker model download no longer depends on a host `ollama` CLI —
   boot/`oke ai setup` POST `/api/pull` to the container URL so a native host
   daemon cannot silently receive the weights.
