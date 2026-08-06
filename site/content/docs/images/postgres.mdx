@@ -1,44 +1,131 @@
 ---
 title: "Postgres"
-description: "The default store.sql image recipe — env, healthcheck, and connection URL for plain Postgres in Docker."
+description: "Default store.sql image — POSTGRES_* env, PGDATA path, and when DATABASE_URL points at PgDog instead."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-Postgres is the default `store.sql` image in docker and prod. `oke docker` matches any image
-whose reference contains `postgres`, `pgvector`, or `timescale`, and derives the compose service
-for you — no recipe code to write for the common case.
+Postgres is the default `store.sql` image in docker and prod. `oke docker` matches any
+image whose reference contains `postgres`, `pgvector`, or `timescale`, then derives the
+compose service — env, healthcheck, and connection URL.
 
 <Callout title="The one rule">
-  The driver id stays `postgres` no matter which Postgres-wire image you pin — vendor choice lives
-  in `images["store.sql"]`, not in `drivers.store.sql`.
+  The driver id stays `postgres` no matter which Postgres-wire image you pin — vendor
+  choice lives in `images["store.sql"]`, not in `drivers.store.sql`.
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
 
 ```typescript title="oke.config.ts"
 images: {
-  "store.sql": "postgres:16-alpine", // any Postgres / pgvector / Timescale image
+  "store.sql": "postgres:18-alpine", // any Postgres / pgvector / Timescale image
 },
 ```
 
+</Step>
+
+<Step>
+### Bring the stack up
+
+```bash
+oke dev --docker
+```
+
+`oke docker` writes `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` into
+`docker/.env.docker` as `${OKE_STORE_SQL_USER}` / `${OKE_STORE_SQL_PASSWORD}` /
+`${OKE_STORE_SQL_DB}` refs — never literal secrets in compose YAML.
+
+</Step>
+
+<Step>
+### Connect
+
+```bash
+# App reads this (also accepts OKE_STORE_SQL_URL)
+echo "$DATABASE_URL"
+# postgres://oke:…@127.0.0.1:5432/oke
+```
+
+When PgDog is pinned, `DATABASE_URL` points at `:6432` instead — see
+[PgDog](/docs/images/pgdog).
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Who sets it | Meaning |
+| -------- | ----------- | ------- |
+| `OKE_STORE_SQL_USER` | `oke docker` → compose | Injected as `POSTGRES_USER` |
+| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | Injected as `POSTGRES_PASSWORD` |
+| `OKE_STORE_SQL_DB` | `oke docker` → compose | Injected as `POSTGRES_DB` |
+| `DATABASE_URL` | stack env for the app | What Bun.SQL / Drizzle actually open |
+| `PGDATA` | stack default | `/var/lib/postgresql/data/pgdata` |
+| `POSTGRES_INITDB_ARGS` | stack default | `--data-checksums` |
+
+## Data and backup
+
+| Path | What lives there |
+| ---- | ---------------- |
+| `$PGDATA` (`/var/lib/postgresql/data/pgdata`) | Cluster data directory |
+| Image `VOLUME` `/var/lib/postgresql/data` | Official image mount — Docker attaches a volume here |
+
+The recipe does **not** declare a named compose volume. Persistence rides the image's
+`VOLUME` (anonymous unless you add a named mount in `compose.override.yml`).
+
+**Backup means:** `pg_dump` / `pg_dumpall`, or a Docker volume backup of
+`/var/lib/postgresql/data`. Losing that volume loses the cluster.
+
+## Production note
+
+For multi-replica apps, keep SQL on a shared Postgres — Clock CronStore and durable
+journal need one backend. See [Clock](/docs/elements/clock#what-the-runtime-guarantees) ·
+[Docker](/docs/deployment/docker#share-backing-services).
+
+Scale out with [PgDog](/docs/images/pgdog) so `N × Bun.SQL pool` does not exhaust
+`max_connections`. Do not also stack a managed provider's pooler on the same URL.
+
 ## What the recipe configures
 
-| Field          | Value                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------ |
-| Container port | `5432`                                                                                                       |
-| Environment    | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` — credential refs, never literal secrets in compose YAML |
-| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries                                                         |
-| Connection URL | `postgres://user:pass@host:5432/db`                                                                          |
+| Field | Value |
+| ----- | ----- |
+| Container port | `5432` |
+| Healthcheck | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
+| Connection URL | `postgres://user:pass@host:5432/db` |
 
-`DATABASE_URL` is what the app actually reads (`OKE_STORE_SQL_URL` also works). When PgDog is in
-the stack, `DATABASE_URL` points at the pooler instead — see [PgDog](/docs/images/pgdog).
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: postgres driver needs DATABASE_URL">
+
+The `postgres` driver fails boot when neither `DATABASE_URL` nor `OKE_STORE_SQL_URL` is
+set. Re-run `oke dev --docker` so the stack writes `docker/.env.docker`, or export
+`DATABASE_URL` yourself when pointing at a managed host.
+
+</Accordion>
+<Accordion title="pg_isready fails / store-sql unhealthy">
+
+Wrong `POSTGRES_USER` or the container is still initializing. Check
+`docker compose … logs store-sql` for `database system is ready to accept connections`.
+
+Credential refs must resolve in `.env.docker` — empty `${OKE_STORE_SQL_PASSWORD}` leaves
+Postgres refusing auth.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [PgDog](/docs/images/pgdog) — connection pooling in front of this recipe
-- [Docker](/docs/deployment/docker) — full compose derivation and reverse proxy
-- [Store · SQL](/docs/elements/store#sql) — the facet this backs, schema push/generate/migrate
-- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` and overrides
+- [PgDog](/docs/images/pgdog) — transaction pooling in front of this recipe
+- [Store · SQL](/docs/elements/store#sql) — schema push / generate / migrate
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
+- [Neon](/docs/providers/neon) · [Supabase](/docs/providers/supabase) — managed alternatives
 
 ## Next
 

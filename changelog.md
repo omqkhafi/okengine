@@ -12,6 +12,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- Docs **Recipes** pages for the five recipes that had zero coverage —
+  Mailpit, Meilisearch, Ollama, OpenBao, RustFS — env names, volume paths,
+  production notes, and real failure modes.
 - create-oke templates ship `.github/workflows/ci.yml` (typecheck + `bun test`
   on push/PR), `tsconfig.json`, and a `typecheck` script — working CI on first
   push.
@@ -53,6 +56,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Docs **Recipes** + **Providers** rewritten to a concrete acceptance bar —
+  exact env / dashboard click-paths, volume backup meaning, production
+  hardening, and one real failure mode per page (no interchangeable prose).
 - Docs sidebar — Recipes and Providers pages use monochrome brand marks
   (Postgres, Redis, Neon, Supabase, Caddy, Traefik, cloud vendors, PgDog paw
   from pgdog.dev, …) instead of generic Lucide placeholders.

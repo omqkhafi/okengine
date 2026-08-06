@@ -1,47 +1,81 @@
 ---
 title: "Azure Cache for Redis"
-description: "Azure-managed Redis — standard protocol over TLS by default. Connect with REDIS_URL, driver stays redis."
+description: "Azure-managed Redis — Access keys blade, TLS port 6380 vs 6379, Basic tier no SLA."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Azure Cache for Redis is Microsoft's managed Redis offering, spanning tiers from a shared Basic
-instance up to Enterprise clusters. TLS is on by default for new caches.
+Azure Cache for Redis spans Basic → Enterprise. New caches expect TLS.
+`drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Same `redis` driver — `REDIS_URL` points at the cache's non-SSL or SSL port; use the SSL port with
-  `rediss://` unless you've explicitly disabled TLS for the instance.
+  Build `rediss://` from **Overview** hostname + **Access keys** primary key + SSL port
+  **6380**. Do not use 6379 unless you explicitly allowed non-TLS.
 </Callout>
 
-## Connect
+## Find credentials (current portal)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://:accesskey@my-cache.redis.cache.windows.net:6380
+1. Azure Portal → your **Azure Cache for Redis** resource.
+2. **Overview** → copy **Host name** (`….redis.cache.windows.net`).
+3. **Settings → Authentication** → **Access keys** tab (or **Overview → Show access
+   keys**) → copy **Primary** key.
+4. Ports: Overview link next to **Ports**, or docs defaults — **6380** TLS, **6379**
+   non-TLS (disabled by default on new caches).
+5. Enterprise tiers may use port **10000** — check Overview for that SKU.
+
+```bash title="process env"
+REDIS_URL=rediss://:PRIMARY_KEY@my-cache.redis.cache.windows.net:6380
 ```
 
-Azure publishes the non-TLS port at `6379` and the TLS port at `6380` on the same host — the
-"Access keys" panel gives both the primary key and the ready-made connection string.
+Azure's “connection string” blade often shows StackExchange-style
+`host:6380,password=…,ssl=True` — translate that to `rediss://:password@host:6380` for
+oke.
 
-## Feature highlights
+## Production guidance
 
-| Feature | Notes                                                                                 |
-| ------- | ------------------------------------------------------------------------------------- |
-| Tiers   | Basic (no SLA) → Standard (replicated) → Premium/Enterprise (clustering, persistence) |
-| Auth    | Access-key auth by default; Microsoft Entra ID auth available on newer tiers          |
-| TLS     | Default-on for new caches — plan around `rediss://` unless you opt out                |
+| Tier | Notes |
+| ---- | ----- |
+| Basic | Shared, **no SLA** — not for production |
+| Standard | Replicated |
+| Premium / Enterprise | Clustering, persistence, VNet |
+
+Non-TLS: **Settings → Advanced settings → Allow access only via SSL = No** — avoid in
+production. Entra ID auth exists on newer tiers; oke's URL driver expects access-key
+auth in `REDIS_URL`.
+
+## Real gotcha — port 6380 vs 6379
+
+Using `redis://…:6379` against a TLS-only cache fails. New caches disable non-TLS;
+always start from **6380** + `rediss://` unless you intentionally opened 6379.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection reset / SSL errors on 6379">
+
+TLS-only cache. Switch to port **6380** and `rediss://`. Confirm Advanced settings still
+require SSL.
+
+</Accordion>
+<Accordion title="WRONGPASS invalid username-password pair">
+
+Primary key rotated or secondary key pasted by mistake. Re-copy **Primary** from
+**Authentication → Access keys** and update `REDIS_URL` (empty username, key as
+password).
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis) — the driver this provider backs
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Redis (image)](/docs/images/redis)
+- [ElastiCache](/docs/providers/elasticache) · [Memorystore](/docs/providers/memorystore)
+- [Store · KV](/docs/elements/store#kv)
 
 ## Next
 
 <Cards>
   <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
   <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
-  <Card
-    title="CockroachDB"
-    description="A managed SQL-side pair."
-    href="/docs/providers/cockroachdb"
-  />
+  <Card title="CockroachDB" description="Managed SQL-side pair." href="/docs/providers/cockroachdb" />
 </Cards>

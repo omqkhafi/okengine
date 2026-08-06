@@ -1,54 +1,83 @@
 ---
 title: "Upstash"
-description: "Serverless Redis with a standard Redis-protocol TCP endpoint — separate from its REST API. Connect with REDIS_URL, driver stays redis."
+description: "Serverless Redis — Details tab TCP endpoint vs REST URL/token; oke needs rediss:// only."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Upstash publishes **two** ways to reach the same database: a standard Redis-protocol TCP endpoint
-(port 6379, works with any Redis client unmodified) and a separate HTTP/REST API built for
-edge runtimes where raw TCP isn't available.
+Upstash exposes the **same database** two ways: Redis protocol over TLS (TCP) and a
+separate HTTP REST API. oke's `redis` driver speaks **TCP only**.
 
 <Callout title="The one rule">
-  oke's `redis` driver speaks the wire protocol — use Upstash's **TCP endpoint** and a `rediss://`
-  URL, not the REST API. The REST API is a different transport with its own client library and isn't
-  what `fx.store` calls.
+  From the database **Details** / **Connect** panel, copy the **Redis** / TCP connection
+  (`rediss://…`), never `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://default:password@usw1-example-12345.upstash.io:6379
+1. Open [console.upstash.com](https://console.upstash.com) → **Redis** → your database.
+2. On the database page (**Details**):
+   - **Endpoint**, **Port**, **Password** (token) for TCP clients
+   - Ready-made `redis-cli` / `rediss://` snippets under **Connect** / **Redis**
+3. Ignore the **REST** tab values (`UPSTASH_REDIS_REST_URL`,
+   `UPSTASH_REDIS_REST_TOKEN`) for oke — those are for `@upstash/redis` / HTTP only.
+
+```bash title="process env"
+REDIS_URL=rediss://default:PASSWORD@usw1-example-12345.upstash.io:6379
 ```
 
-The database's dashboard shows both a `redis://` connection string (for TCP clients) and a
-separate `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` pair (for the REST API) — only the
-first one applies here.
+TLS is mandatory — `redis://` without TLS fails.
 
-## Feature highlights
+## Production guidance
 
-| Feature      | Notes                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------- |
-| TCP endpoint | Standard RESP over TLS, port `6379` — ioredis / node-redis / redis-py work unmodified |
-| REST API     | A separate HTTP transport for edge runtimes without TCP — not used by oke's driver    |
-| Pricing      | Per-request pricing model rather than a fixed instance size                           |
+| Topic | Guidance |
+| ----- | -------- |
+| Transport | TCP `rediss://` for Bun / long-running servers |
+| REST | Edge/serverless SDKs only — **not** wired to `fx.store` |
+| Pricing | Per-request — watch command fan-out in hot KV paths |
+| Eviction | Plan max size / eviction; serverless still has quotas |
+| Consistency | Global replication options are product-specific — confirm region in Details |
+
+Do not put [PgDog](/docs/images/pgdog)-style thinking on Redis: there is no separate
+“pooled hostname” toggle. Connection count pressure shows up as Upstash plan limits /
+timeouts, not a Neon-style `-pooler` suffix.
+
+When debugging, open **Details** and confirm you are reading the **Redis** column, not
+the REST env var block that sits beside it on the same page.
+
+## Real gotcha — REST token ≠ Redis password
+
+Using `UPSTASH_REDIS_REST_TOKEN` inside a `rediss://` URL (or the reverse) yields
+`WRONGPASS` / `NOAUTH`. REST token and TCP password are different credentials on the
+same console page — copy from the **Redis/TCP** section.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="WRONGPASS invalid or missing auth token">
+
+Often a REST token pasted into a TCP client. Re-copy **Password** from Details for
+Redis protocol, build `rediss://:PASSWORD@ENDPOINT:PORT`.
+
+</Accordion>
+<Accordion title="NOAUTH Authentication required">
+
+Password missing from the URL. ioredis-style URLs need the colon before the password:
+`rediss://:PASSWORD@host:port`.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis) — the driver this provider backs
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Redis (image)](/docs/images/redis)
+- [Redis Cloud](/docs/providers/redis-cloud) — fixed-instance alternative
+- [Store · KV](/docs/elements/store#kv)
 
 ## Next
 
 <Cards>
-  <Card
-    title="Redis Cloud"
-    description="Fixed-instance alternative."
-    href="/docs/providers/redis-cloud"
-  />
-  <Card
-    title="Dragonfly Cloud"
-    description="Another serverless-friendly option."
-    href="/docs/providers/dragonfly-cloud"
-  />
-  <Card title="Neon" description="A managed SQL-side pair." href="/docs/providers/neon" />
+  <Card title="Redis Cloud" description="Fixed-instance alternative." href="/docs/providers/redis-cloud" />
+  <Card title="Dragonfly Cloud" description="Another managed option." href="/docs/providers/dragonfly-cloud" />
+  <Card title="Neon" description="Managed SQL-side pair." href="/docs/providers/neon" />
 </Cards>

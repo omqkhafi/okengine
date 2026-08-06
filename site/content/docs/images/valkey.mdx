@@ -1,19 +1,24 @@
 ---
 title: "Valkey"
-description: "BSD-licensed Redis-wire fork — same store.kv driver, opt-in image pin, no managed-service restriction."
+description: "BSD-licensed Redis-wire fork — same redis driver, OKE_STORE_KV_PASSWORD, valkey-server command."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Valkey is the Linux Foundation's BSD-3-Clause fork of Redis, forked after Redis's 2024 license
-change. It speaks the same wire protocol, so it slots behind the same `redis` driver with zero
-Flow changes — pin the image and nothing else moves.
+Valkey is the Linux Foundation's BSD-3-Clause fork of Redis, forked after Redis's 2024
+license change. Same wire protocol — pin the image and nothing in Flow code moves.
 
 <Callout title="The one rule">
-  Driver id stays `redis` — Valkey is an image choice, not a driver. `REDIS_URL` and every KV call
-  through `fx.store` work exactly as they do against Redis.
+  Driver id stays `redis`. Valkey is an image choice, not a driver. `REDIS_URL` and every
+  KV call through `fx.store` work exactly as they do against Redis.
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
 
 ```typescript title="oke.config.ts"
 images: {
@@ -21,26 +26,87 @@ images: {
 },
 ```
 
+</Step>
+
+<Step>
+### Same password contract as Redis
+
+```bash
+OKE_STORE_KV_PASSWORD=…
+REDIS_URL=redis://:…@127.0.0.1:6379
+```
+
+Command becomes `valkey-server --requirepass "$OKE_STORE_KV_PASSWORD" …` — healthcheck
+uses `valkey-cli`.
+
+</Step>
+
+<Step>
+### Optional memory caps
+
+Same knobs as Redis: `OKE_STORE_KV_MAXMEMORY`, `OKE_STORE_KV_MAXMEMORY_POLICY`.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` for `valkey-server` |
+| `REDIS_URL` | **Yes** (app) | Still `redis://` scheme — protocol name, not vendor |
+| `OKE_STORE_KV_MAXMEMORY` | Optional | Memory cap |
+| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional | Eviction policy |
+
+## Data and backup
+
+No named volume in the recipe — same ephemeral default as [Redis](/docs/images/redis).
+**Backup means:** do not assume durability until you add a volume + persistence config;
+treat the default as a shared cache rebuilt from durable stores.
+
+## Production note
+
+Choose Valkey when RSAL/SSPL managed-service terms on Redis ≥8 matter to your legal
+posture — BSD-3-Clause carries no such restriction. Feature parity with Redis 7/8 stays
+close since the fork tracks upstream.
+
+DigitalOcean's managed product moved onto Valkey after Aiven stepped back from Redis —
+see [DigitalOcean Managed Caching](/docs/providers/digitalocean-caching).
+
 ## What the recipe configures
 
-| Field          | Value                                                              |
-| -------------- | ------------------------------------------------------------------ |
-| Container port | `6379`                                                             |
-| Command        | `valkey-server --requirepass … --maxmemory … --maxmemory-policy …` |
-| Healthcheck    | `valkey-cli -a <password> ping`, every 5s, 10 retries              |
-| Connection URL | `redis://:pass@host:6379` — same scheme as Redis                   |
-| License        | BSD-3-Clause — permissive, no managed-service restriction          |
+| Field | Value |
+| ----- | ----- |
+| Container port | `6379` |
+| Command | `valkey-server --requirepass … --maxmemory … --maxmemory-policy …` |
+| Healthcheck | `valkey-cli -a <password> ping`, every 5s, 10 retries |
+| Connection URL | `redis://:pass@host:6379` |
+| License | BSD-3-Clause |
 
-## Why pick it
+## Troubleshooting
 
-Choose Valkey over Redis when the RSAL/SSPL managed-service terms matter to your situation — BSD
-carries no such restriction. Feature parity with Redis 7/8 stays close since the fork tracks
-upstream Redis development.
+<Accordions>
+<Accordion title="oke boot: redis driver needs REDIS_URL">
+
+Same loud failure as Redis — the driver id is still `redis`. Export `REDIS_URL` or let
+`oke dev --docker` write it.
+
+</Accordion>
+<Accordion title="Healthcheck uses redis-cli and fails">
+
+You still have the Redis recipe matched (image ref contains `redis`). Valkey images must
+match `/valkey/i` so the healthcheck binary is `valkey-cli`. Pin `valkey/valkey:…`
+explicitly.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
 - [Store · KV](/docs/elements/store#kv) — full Redis-protocol image license table
 - [Redis](/docs/images/redis) · [Dragonfly](/docs/images/dragonfly) — the other two peers
+- [DigitalOcean Managed Caching](/docs/providers/digitalocean-caching) — managed Valkey
 
 ## Next
 

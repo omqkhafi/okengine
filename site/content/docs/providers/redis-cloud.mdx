@@ -1,52 +1,85 @@
 ---
 title: "Redis Cloud"
-description: "Redis Ltd.'s own managed offering — standard Redis protocol over TLS. Connect with REDIS_URL, driver stays redis."
+description: "Redis Ltd. managed Redis — Configuration tab endpoints, Connect wizard, rediss://, dynamic vs static endpoints."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Redis Cloud is Redis Ltd.'s first-party managed service — the same Redis you'd self-host, run and
-patched for you. It's a plain TCP endpoint, no separate REST layer.
+Redis Cloud is Redis Ltd.'s first-party managed service — RESP over TCP/TLS, no separate
+REST layer. `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Same `redis` driver, same `REDIS_URL` shape as a Redis image. Use `rediss://` (double `s`) for the
-  TLS-required endpoint Redis Cloud publishes by default.
+  Use `rediss://` (double **s**) with the endpoint from **Configuration** or the
+  **Connect** wizard. Prefer **dynamic** endpoints when both are offered.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://default:password@redis-12345.c1.region.cloud.redislabs.com:12345
+1. Open Redis Cloud → your **database**.
+2. Open the **Configuration** tab:
+   - **Essentials:** endpoint under **Access**
+   - **Pro:** endpoint under **General** (expand **Dynamic endpoints** if shown)
+3. Credentials:
+   - **Essentials:** **Default user → Configure** → eye icon for password (`default`)
+   - **Pro:** **Security** section on Configuration → eye icon for default user password
+4. Or click **Connect** → connection wizard → copy the ready-made client / `redis-cli`
+   snippet (fills host, port, user, password).
+
+```bash title="process env"
+REDIS_URL=rediss://default:PASSWORD@redis-12345.c1.region.cloud.redislabs.com:12345
+# or dynamic: …@horse-battery-staple-12345.db.redis.io:…
 ```
 
-Redis Cloud assigns a random high port per database — copy it from the database's connection
-panel rather than assuming `6379`.
+Port is a **per-database high port**, not always `6379` — copy it from the panel.
 
-## Feature highlights
+## Production guidance
 
-| Feature  | Notes                                                                                                                 |
-| -------- | --------------------------------------------------------------------------------------------------------------------- |
-| Protocol | Standard Redis (RESP) over TCP, TLS by default                                                                        |
-| Modules  | Optional RediSearch / RedisJSON etc. — outside what oke's `redis` driver uses                                         |
-| License  | Managed service under Redis Ltd.'s own terms — the RSAL/SSPL self-host restriction doesn't apply to you as a customer |
+| Topic | Guidance |
+| ----- | -------- |
+| TLS | Public endpoints expect TLS → `rediss://` |
+| Endpoint type | **Dynamic** (`*.db.redis.io`) can be redirected later; static `redis-….c…` cannot |
+| Private | Pro private endpoint needs VPC peering / PrivateLink / PSC first |
+| Modules | RediSearch / RedisJSON optional — unused by oke's KV driver |
+| Port | Per-database high port from Configuration — never assume `6379` |
+
+Essentials vs Pro panels differ (Access vs General), but **Connect** always opens the
+wizard with a filled client snippet — prefer that when the Configuration layout feels
+unfamiliar after a UI refresh.
+
+## Real gotcha — dynamic vs static
+
+Apps hard-coded to a **static** `redis-….c…` host cannot follow a later “redirect
+dynamic endpoint” migration. Copy the **dynamic** endpoint from Configuration when both
+exist so you can repoint without code changes.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="NOAUTH / WRONGPASS">
+
+Password not in the URL, or default user disabled under RBAC. Format:
+`rediss://default:PASSWORD@host:port`. If default user is off, use a data-access role
+username/password from Access Control.
+
+</Accordion>
+<Accordion title="Connection timeout to public endpoint">
+
+Pro databases can block public endpoints. Use the private endpoint after peering, or
+re-enable public access in security settings.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis) — the driver this provider backs
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
-- [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` precedence
+- [Redis (image)](/docs/images/redis) — self-hosted peer
+- [Store · KV](/docs/elements/store#kv) — TTL physics
+- [Upstash](/docs/providers/upstash) — serverless alternative
 
 ## Next
 
 <Cards>
-  <Card
-    title="Upstash"
-    description="Serverless-friendly alternative."
-    href="/docs/providers/upstash"
-  />
-  <Card
-    title="ElastiCache"
-    description="AWS-native alternative."
-    href="/docs/providers/elasticache"
-  />
-  <Card title="Neon" description="A managed SQL-side pair." href="/docs/providers/neon" />
+  <Card title="Upstash" description="Serverless-friendly alternative." href="/docs/providers/upstash" />
+  <Card title="ElastiCache" description="AWS-native alternative." href="/docs/providers/elasticache" />
+  <Card title="Neon" description="Managed SQL-side pair." href="/docs/providers/neon" />
 </Cards>

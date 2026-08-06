@@ -1,48 +1,76 @@
 ---
 title: "CockroachDB"
-description: "Distributed SQL, Postgres wire-compatible. Connect with DATABASE_URL; source-available CockroachDB Software License, not open source."
+description: "Distributed SQL — Cloud Connect dialog, verify-full + CA cert, CSL license, port 26257."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-CockroachDB is a distributed SQL database that speaks the Postgres wire protocol closely enough
-that `drivers.store.sql` still just says `postgres` — no new driver, no schema-syntax changes for
-the common case.
+CockroachDB speaks Postgres wire closely enough that `drivers.store.sql` stays
+`postgres`. Multi-region and distributed transactions are Cockroach's concern beneath
+that protocol.
 
 <Callout title="The one rule">
-  Same `postgres` driver, same `DATABASE_URL` shape. Multi-region and distributed-transaction
-  behavior is CockroachDB's own concern beneath the wire protocol oke talks.
+  Use the Cloud Console **Connect** dialog and keep `sslmode=verify-full` with the
+  downloaded CA — `sslmode=require` alone is rejected for secure clusters.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-DATABASE_URL=postgres://user:password@free-tier.gcp-region.cockroachlabs.cloud:26257/defaultdb?sslmode=verify-full
+1. Open [CockroachDB Cloud](https://cockroachlabs.cloud) → your **cluster**.
+2. Click **Connect** (cluster overview / top right).
+3. Open the **Connection string** tab (or **General connection string**).
+4. Expand **Download CA Cert** — run the provided command so `root.crt` lands in the
+   default Postgres cert directory (or note the path).
+5. Copy the `postgresql://…` string; paste the password when prompted (shown once for
+   new SQL users — reset under **SQL Users** if lost).
+
+```bash title="process env"
+DATABASE_URL=postgresql://user:password@….cockroachlabs.cloud:26257/defaultdb?sslmode=verify-full&sslrootcert=/path/to/root.crt
 ```
 
-CockroachDB requires `sslmode=verify-full` (or a supplied CA cert) — plain `sslmode=require`
-without certificate verification is rejected.
+Default SQL port is **26257**, not 5432.
 
-## License
+## Production guidance
 
-<Callout title="Not open source since November 2024" type="warn">
-  CockroachDB Core (the free, open-source edition) was discontinued. The database now ships under
-  the proprietary **CockroachDB Software License** — free for organizations under $10M annual
-  revenue with community support; paid tiers add dedicated support.
-</Callout>
+| Topic | Guidance |
+| ----- | -------- |
+| TLS | `verify-full` + `sslrootcert` — required for Cloud |
+| Pooling | Prefer Cockroach's guidance / built-in limits; do not assume Neon-style `-pooler` hosts |
+| Regions | Configure survivability in the Console — opaque to the `postgres` driver |
 
-## Feature highlights
+CockroachDB Software License (since Nov 2024): Core open-source discontinued; free for
+orgs under $10M ARR with community support; paid tiers add dedicated support. Not OSI
+open source.
 
-| Feature         | Notes                                                               |
-| --------------- | ------------------------------------------------------------------- |
-| Distributed SQL | Horizontal scale-out with automatic sharding and rebalancing        |
-| Multi-region    | Survivability zones configured per table/database                   |
-| Wire protocol   | Postgres-compatible — most `pg` clients and Drizzle work unmodified |
+## Real gotcha — CA cert path
+
+Copying the connection string without downloading the CA yields TLS verify failures
+even when the password is correct. The Connect dialog's download command and
+`sslrootcert=` must agree on the same file path in the environment that runs the app.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="certificate verify failed / SSL connection error">
+
+Missing or wrong `sslrootcert`. Re-download from **Connect → Download CA Cert**, point
+`sslrootcert` at that file, keep `sslmode=verify-full`. Using `require` without verify
+is not accepted for Cloud's default secure posture.
+
+</Accordion>
+<Accordion title="password authentication failed for user">
+
+Password is shown once at user creation. Reset under the cluster **SQL Users** page,
+then update `DATABASE_URL`.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [YugabyteDB](/docs/providers/yugabytedb) — Apache 2.0 distributed-SQL alternative
-- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
-- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate
+- [YugabyteDB](/docs/providers/yugabytedb) — Apache 2.0 distributed alternative
+- [Postgres (image)](/docs/images/postgres) — driver this backs
+- [Store · SQL](/docs/elements/store#sql) — schema workflows
 
 ## Next
 
@@ -52,6 +80,6 @@ without certificate verification is rejected.
     description="Apache-2.0 licensed alternative."
     href="/docs/providers/yugabytedb"
   />
-  <Card title="Neon" description="Serverless, single-region option." href="/docs/providers/neon" />
-  <Card title="PgDog" description="Image pooling comparison." href="/docs/images/pgdog" />
+  <Card title="Neon" description="Serverless single-region option." href="/docs/providers/neon" />
+  <Card title="PgDog" description="Self-hosted pooling." href="/docs/images/pgdog" />
 </Cards>

@@ -1,18 +1,25 @@
 ---
 title: "Traefik"
-description: "Docker-label auto-discovery reverse proxy — opt-in via images.proxy, for scaled app replicas."
+description: "Docker-label auto-discovery proxy — OKE_PROXY_HOST, OKE_PROXY_ACME_EMAIL, socket-proxy, ACME volume."
 icon: "Lock"
+source: "docs/spec/unified-theory.md"
 ---
 
-Traefik discovers `app` replicas from Docker labels instead of a static upstream target, so
-`docker compose up --scale app=N` load-balances automatically without reconfiguring anything.
+Traefik discovers `app` replicas from Docker labels instead of a static upstream, so
+`docker compose up --scale app=N` load-balances without reconfiguring the proxy.
 
 <Callout title="The one rule">
-  Traefik never mounts the raw Docker socket. A filtered `tecnativa/docker-socket-proxy` companion
-  exposes only containers/events/ping/version/networks on the internal compose network.
+  Traefik never mounts the raw Docker socket. A filtered `tecnativa/docker-socket-proxy`
+  companion exposes only containers / events / ping / version / networks on the internal
+  compose network.
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the proxy
 
 ```typescript title="oke.config.ts"
 images: {
@@ -20,42 +27,104 @@ images: {
 },
 ```
 
+</Step>
+
+<Step>
+### Hostname + ACME email
+
 ```bash title="docker/.env.docker"
 OKE_PROXY_HOST=app.example.com
 OKE_PROXY_ACME_EMAIL=admin@example.com
 ```
 
+`OKE_PROXY_ACME_EMAIL` defaults to `admin@example.com` if unset — set a real mailbox
+before production ACME.
+
+</Step>
+
+<Step>
+### Scale the app
+
+```bash
+docker compose … up -d --scale app=3
+```
+
+App labels: `traefik.http.routers.app.rule=Host(...)`, TLS cert resolver `letsencrypt`,
+load-balancer port `6530`.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `OKE_PROXY_HOST` | **Yes** (production) | Host rule + ACME identity; default `localhost` |
+| `OKE_PROXY_ACME_EMAIL` | **Yes** (production) | Let's Encrypt account email |
+| `allowedHosts` (config) | Production | Must include the public hostname |
+
+## Data and backup
+
+| Volume | Path | What it stores |
+| ------ | ---- | -------------- |
+| `proxy-letsencrypt` | `/letsencrypt` | `acme.json` — certificates + ACME account |
+| Socket proxy only | `/var/run/docker.sock:ro` | **Only** the `socket-proxy` companion mounts this |
+
+**Backup means:** preserve the `proxy-letsencrypt` volume (especially `acme.json`). Losing
+it forces re-issuance and can hit Let's Encrypt rate limits. The socket-proxy has no
+durable state.
+
+## Production note
+
+Security posture is intentional: Traefik talks to `tcp://socket-proxy:2375` with a
+filtered API (`CONTAINERS`, `EVENTS`, `PING`, `VERSION`, `NETWORKS` only). Never mount
+raw `docker.sock` on Traefik — see [Reverse proxy](/docs/deployment/reverse-proxy).
+
+HTTP entrypoint redirects to `websecure`. For a single instance with no scale plans,
+[Caddy](/docs/images/caddy) is simpler (no labels, no companion).
+
 ## What the recipe configures
 
-| Field          | Value                                                                                |
-| -------------- | ------------------------------------------------------------------------------------ |
-| Ports          | `80` and `443` published; `app` stays internal, discovered via Docker labels         |
-| Providers      | `--providers.docker` pointed at the socket-proxy companion, `exposedbydefault=false` |
-| TLS            | Let's Encrypt via HTTP-01 challenge, storage at `/letsencrypt/acme.json`             |
-| Companion      | `socket-proxy` service — the only container touching `docker.sock`, read-only        |
-| App labels     | `traefik.http.routers.app.rule=Host(...)`, TLS cert resolver, load-balancer port     |
-| Connection URL | `https://<host>`                                                                     |
+| Field | Value |
+| ----- | ----- |
+| Ports | `80` + `443` |
+| Providers | Docker via socket-proxy, `exposedbydefault=false` |
+| Companion | `tecnativa/docker-socket-proxy:v0.5.0` |
+| Healthcheck | `traefik healthcheck --ping`, every 10s, 5 retries |
 
-## When to pick Caddy instead
+## Troubleshooting
 
-If you're running a single instance and never plan to `--scale`, [Caddy](/docs/images/caddy)'s
-static `Caddyfile` is simpler to reason about — no label wiring, no socket-proxy companion.
+<Accordions>
+<Accordion title="404 / no backend — Traefik cannot see app">
+
+Usually `socket-proxy` is down, or `app` lacks Traefik labels. Confirm
+`depends_on: socket-proxy` and that `compose.proxy.yml` merged the app labels.
+
+Logs showing Docker provider connection errors point at the socket-proxy, not Traefik
+config syntax.
+
+</Accordion>
+<Accordion title="ACME email rejected / rate limited">
+
+Replace the default `admin@example.com` with a real `OKE_PROXY_ACME_EMAIL`. If you wiped
+`proxy-letsencrypt`, you may be rate-limited — restore `acme.json` from backup instead of
+re-issuing repeatedly.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Reverse proxy](/docs/deployment/reverse-proxy) — full Docker-socket-proxy security rationale
-- [Docker](/docs/deployment/docker#reverse-proxy) — where the proxy fits in the compose layer order
-- [Security](/docs/reference/security) — `allowedHosts` must include your public hostname
+- [Reverse proxy](/docs/deployment/reverse-proxy) — Docker-socket-proxy security rationale
+- [Docker · Reverse proxy](/docs/deployment/docker#reverse-proxy) — compose layer order
+- [Security](/docs/reference/security) — `allowedHosts`
 
 ## Next
 
 <Cards>
   <Card title="Caddy" description="Single-instance alternative." href="/docs/images/caddy" />
-  <Card
-    title="PgDog"
-    description="Pool Postgres behind the same stack."
-    href="/docs/images/pgdog"
-  />
+  <Card title="PgDog" description="Pool Postgres behind the same stack." href="/docs/images/pgdog" />
   <Card
     title="Redis Cloud"
     description="A managed backing store."

@@ -1,47 +1,77 @@
 ---
 title: "YugabyteDB"
-description: "Distributed SQL, Postgres wire-compatible (YSQL), Apache 2.0 core. Connect with DATABASE_URL, driver stays postgres."
+description: "Distributed SQL (YSQL) — Connect → Application, port 5433, CA cert, YSQL vs YCQL."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-YugabyteDB is a distributed SQL database with a Postgres-compatible query layer, YSQL. YSQL speaks
-the same wire protocol as plain Postgres, so `drivers.store.sql` still says `postgres`.
+YugabyteDB Aeon exposes a Postgres-compatible query layer (**YSQL**). That is the only
+API oke's `postgres` driver targets — not YCQL.
 
 <Callout title="The one rule">
-  Connect through YSQL, not YugabyteDB's other API surfaces (YCQL). YSQL is the Postgres-wire layer
-  oke's `postgres` driver targets — same `DATABASE_URL` shape as any other Postgres target.
+  In **Connect → Connect to your Application**, choose **YSQL** and download the CA
+  cert. Port **5433** is the YSQL default — not Postgres's 5432.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-DATABASE_URL=postgres://user:password@region.aws.ybdb.io:5433/yugabyte?sslmode=require
+1. YugabyteDB Aeon → **Clusters** → select the cluster.
+2. Click **Connect**.
+3. Click **Connect to your Application**.
+4. Click **Download CA Cert** and install it where the app can read it.
+5. Select API **YSQL** (not YCQL).
+6. Pick address mode: **Private Address** / **Private Service Endpoint** if VPC-peered;
+   **Public Address** only if **Settings → Network Access → Public Access** is enabled
+   (not recommended for production).
+7. Copy **Connection String** (or Parameters) into `DATABASE_URL`.
+
+```bash title="process env"
+DATABASE_URL=postgresql://admin:…@….aws.yugabyte.cloud:5433/yugabyte?ssl=true&sslmode=verify-full&sslrootcert=/path/to/root.crt
 ```
 
-YSQL defaults to port `5433`, not Postgres's `5432` — confirm the port from your cluster's
-connection panel.
+Also add your app's IPs (or peered VPC) to the cluster **IP allow list** before
+connecting.
 
-## License
+## Production guidance
 
-<Callout title="Apache 2.0 core">
-  YugabyteDB's core — including once-enterprise-only features like distributed backups and read
-  replicas — is Apache 2.0. Only the separate `-managed` build artifacts for Yugabyte's own service
-  carry a different license; self-hosted binaries stay Apache 2.0.
-</Callout>
+| Topic | Guidance |
+| ----- | -------- |
+| API | **YSQL only** — YCQL is Cassandra-wire, useless to `postgres` |
+| TLS | `sslmode=verify-full` + downloaded CA |
+| Network | Prefer private / PSE; public access is an explicit opt-in |
+| License | Core is **Apache 2.0** (including once-enterprise features in the core build) |
 
-## Feature highlights
+No Neon-style pooled hostname toggle — connection limits and load balancing are
+cluster/VPC topology concerns. Smart drivers want a peered VPC; otherwise they probe
+unreachable nodes first and add latency.
 
-| Feature         | Notes                                                                     |
-| --------------- | ------------------------------------------------------------------------- |
-| Distributed SQL | Horizontal scale-out, automatic sharding, multi-region replication        |
-| YSQL            | Postgres-wire compatible API — the one oke's `postgres` driver targets    |
-| YCQL            | A separate Cassandra-style API — not wire-compatible, not applicable here |
+## Real gotcha — wrong API tab
+
+Copying **YCQL** parameters (port **9042**) into `DATABASE_URL` fails immediately —
+different protocol. Always confirm the Connect dialog shows **YSQL** and port **5433**.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection timed out / could not connect to server">
+
+IP allow list or Public Access. Add the client IP under network settings, or use the
+private address from a peered VPC. Public hostname stays dark until Public Access is on.
+
+</Accordion>
+<Accordion title="SSL error with verify-full">
+
+CA not downloaded or `sslrootcert` path wrong. Re-run **Download CA Cert** from the
+Connect dialog and point the URI at that file.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [CockroachDB](/docs/providers/cockroachdb) — the license comparison point
-- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
-- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate
+- [CockroachDB](/docs/providers/cockroachdb) — license / feature comparison
+- [Postgres (image)](/docs/images/postgres) — driver this backs
+- [Store · SQL](/docs/elements/store#sql) — schema workflows
 
 ## Next
 
@@ -51,14 +81,10 @@ connection panel.
     description="Compare licensing and features."
     href="/docs/providers/cockroachdb"
   />
-  <Card
-    title="Supabase"
-    description="A managed single-node option."
-    href="/docs/providers/supabase"
-  />
+  <Card title="Supabase" description="Managed single-node option." href="/docs/providers/supabase" />
   <Card
     title="Redis Cloud"
-    description="A managed Redis-side pair."
+    description="Managed Redis-side pair."
     href="/docs/providers/redis-cloud"
   />
 </Cards>

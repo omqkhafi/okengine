@@ -1,19 +1,26 @@
 ---
 title: "Redis"
-description: "The default store.kv image recipe — password auth, memory policy, and connection URL for plain Redis in Docker."
+description: "Default store.kv image — OKE_STORE_KV_PASSWORD, maxmemory policy, ephemeral data, REDIS_URL."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Redis is the default `store.kv` image in docker and prod — the most mature, most battle-tested
-option. `oke docker` matches any image reference containing `redis` or `keydb` and derives the
-compose service for you.
+Redis is the default `store.kv` image in docker and prod. `oke docker` matches image
+references containing `redis` or `keydb` and derives a password-required server — no
+unauthenticated instance.
 
 <Callout title="The one rule">
-  The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a managed
-  provider. Vendor choice lives in `images["store.kv"]`, never in `drivers.store.kv`.
+  The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a
+  managed provider. Vendor choice lives in `images["store.kv"]`, never in
+  `drivers.store.kv`.
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
 
 ```typescript title="oke.config.ts"
 images: {
@@ -21,28 +28,95 @@ images: {
 },
 ```
 
-## What the recipe configures
+</Step>
 
-| Field          | Value                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| Container port | `6379`                                                                                          |
-| Command        | `redis-server --requirepass … --maxmemory … --maxmemory-policy …` — no unauthenticated instance |
-| Healthcheck    | `redis-cli -a <password> ping`, every 5s, 10 retries                                            |
-| Connection URL | `redis://:pass@host:6379`                                                                       |
+<Step>
+### Required password
 
-`REDIS_URL` is what the app reads (`OKE_STORE_KV_URL` also works). Missing it fails boot loudly —
-`oke boot: redis driver needs REDIS_URL` — never a silent fallback to `memory`.
+```bash title="docker/.env.docker (written by oke docker)"
+OKE_STORE_KV_PASSWORD=…
+REDIS_URL=redis://:…@127.0.0.1:6379
+```
+
+The recipe runs:
+
+`redis-server --requirepass "$OKE_STORE_KV_PASSWORD" --maxmemory … --maxmemory-policy …`
+
+</Step>
+
+<Step>
+### Optional memory caps
+
+| Variable | Default in recipe | Meaning |
+| -------- | ----------------- | ------- |
+| `OKE_STORE_KV_MAXMEMORY` | `0` (unlimited) in command; stack often sets `256mb` | Max RSS |
+| `OKE_STORE_KV_MAXMEMORY_POLICY` | `noeviction` in command; stack often sets `allkeys-lru` | Eviction |
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` — empty password is not a valid production posture |
+| `REDIS_URL` | **Yes** (app) | What the `redis` driver opens (`OKE_STORE_KV_URL` also works) |
+| `OKE_STORE_KV_MAXMEMORY` | Optional | Cap memory |
+| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional | Eviction when at cap |
+
+## Data and backup
+
+The Redis recipe declares **no named volume**. Process memory is the source of truth;
+a container recreate loses keys unless you add persistence yourself
+(`compose.override.yml` + Redis AOF/RDB).
+
+**Backup means (default recipe):** treat KV as a cache — rebuild from SQL / files, or
+add an explicit volume + `SAVE`/`BGSAVE` policy before you rely on durability.
+
+## Production note
 
 <Callout title="License note" type="warn">
-  Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis itself as
-  a managed service to third parties — running it for your own app is unaffected.
+  Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis
+  itself as a managed service to third parties — running it for your own app is unaffected.
+  Prefer [Valkey](/docs/images/valkey) when the managed-service restriction matters.
 </Callout>
+
+Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an in-process
+`memory` driver is per instance. Same shared-store idea as
+[Clock](/docs/elements/clock#what-the-runtime-guarantees) for cron exclusivity.
+
+## What the recipe configures
+
+| Field | Value |
+| ----- | ----- |
+| Container port | `6379` |
+| Healthcheck | `redis-cli -a <password> ping`, every 5s, 10 retries |
+| Connection URL | `redis://:pass@host:6379` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: redis driver needs REDIS_URL">
+
+Missing `REDIS_URL` fails boot loudly — never a silent fallback to `memory`. Re-run
+`oke dev --docker` or export `REDIS_URL` when using a managed host. In docker mode the
+message asks whether `oke dev -d` wrote `docker/.env.docker`.
+
+</Accordion>
+<Accordion title="NOAUTH Authentication required">
+
+`REDIS_URL` is missing the password, or it does not match `OKE_STORE_KV_PASSWORD`.
+Format must be `redis://:PASSWORD@host:6379` (colon before the password, empty username).
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
 - [Store · KV](/docs/elements/store#kv) — TTL physics, per-driver behavior, license table
 - [Valkey](/docs/images/valkey) · [Dragonfly](/docs/images/dragonfly) — Redis-wire peers
-- [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` and overrides
+- [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` precedence
 
 ## Next
 
