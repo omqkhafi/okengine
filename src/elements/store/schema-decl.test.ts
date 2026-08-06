@@ -39,6 +39,8 @@ describe("store.schema.table + field.*", () => {
     expect(notes.columns.createdAt.sqlType).toBe("integer");
     expect(notes.columns.id.defaultFnKind).toBe("id");
     expect(notes.columns.createdAt.defaultFnKind).toBe("now");
+    expect(typeof notes.id.getSQL).toBe("function");
+    expect(() => notes.id.getSQL()).toThrow(/type bridge/);
   });
 
   test("PII masks via declaration path without Drizzle metadata", async () => {

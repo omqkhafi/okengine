@@ -536,6 +536,8 @@ describe("scaffold structure", () => {
         );
         expect(result.files).toContain(".gitignore");
         expect(result.files).toContain("README.md");
+        expect(result.files).toContain(".github/workflows/ci.yml");
+        expect(result.files).toContain("tsconfig.json");
         expect(result.sqlDriver).toBe("sqlite");
         expect(readFileSync(join(result.targetDir, "AGENTS.md"), "utf8")).toMatch(
           /one law|on\(Trigger\)/i,
@@ -544,13 +546,37 @@ describe("scaffold structure", () => {
         expect(readme).toMatch(/oke dev/);
         expect(readme).toMatch(new RegExp(`Notes \\(${id}\\)`, "i"));
         expect(readme).toMatch(/notes\.(create|attach|digest)|main\.health/);
+        expect(readme).toMatch(/scaffold|Included vs you build/i);
+        expect(readme).toMatch(/\.github\/workflows\/ci\.yml/);
         expect(readFileSync(join(result.targetDir, ".gitignore"), "utf8")).toMatch(/node_modules/);
+        const ciYml = readFileSync(join(result.targetDir, ".github/workflows/ci.yml"), "utf8");
+        expect(() => Bun.YAML.parse(ciYml)).not.toThrow();
+        const ci = Bun.YAML.parse(ciYml) as {
+          name?: string;
+          on?: unknown;
+          jobs?: { check?: { steps?: unknown[] } };
+        };
+        expect(ci.name).toBe("CI");
+        expect(ci.on).toBeTruthy();
+        expect(ci.jobs?.check).toBeTruthy();
+        expect(ciYml).toMatch(/bun run typecheck/);
+        expect(ciYml).toMatch(/bun test/);
+        const appTs = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
+        expect(appTs).not.toMatch(/Object\.assign/);
+        expect(appTs).not.toMatch(/env:\s*["']test["']/);
+        expect(appTs).toMatch(/stores:\s*\[/);
+        expect(appTs).toMatch(/oke\(\{[\s\S]*stores:/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string };
+          scripts: { typecheck?: string; test?: string };
+          devDependencies: { typescript?: string };
         };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
+        expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
+        expect(pkg.scripts.test).toBe("bun test");
+        expect(pkg.devDependencies.typescript).toBeTruthy();
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

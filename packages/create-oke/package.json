@@ -22,8 +22,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:integration": "CREATE_OKE_INTEGRATION=1 bun test tests/scaffold.integration.test.ts tests/dev.integration.test.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0"

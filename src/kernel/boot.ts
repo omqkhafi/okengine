@@ -262,8 +262,8 @@ async function loadBind<T>(name: string): Promise<T> {
 export async function bootApplication(input: BootOptions = {}): Promise<BootResult> {
   const docker =
     input.docker === true || (input.docker !== false && process.env.OKE_DOCKER === "1");
-  // `-d` always selects the `docker` driver profile — not a mix of test/local +
-  // prod store overrides (templates often pin `env: "test"` for harnesses).
+  // `-d` always selects the `docker` driver profile — not a mix of local/test +
+  // prod store overrides when `$options.env` is unset.
   const env: ConfigEnv = docker ? "docker" : (input.env ?? "local");
   let config = input.config;
   if (config === undefined) {

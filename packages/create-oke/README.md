@@ -50,7 +50,8 @@ model selection runs in the wizard **before** `bun install` (writes `.env.local`
 
 Store-bearing scaffolds ship `drizzle.config.ts` and `.env.example`. Local
 `oke dev` auto-runs `oke db push` on schema change; use `oke mode docker` /
-`oke dev --docker` for compose infra.
+`oke dev --docker` for compose infra. Both templates include
+`.github/workflows/ci.yml` (typecheck + `bun test` on push/PR).
 
 Every scaffold writes an `AGENTS.md` so coding agents know the OKE contract
 (`--no-agents-md` to skip).

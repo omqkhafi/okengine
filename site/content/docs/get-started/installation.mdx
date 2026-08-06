@@ -60,7 +60,8 @@ bunx create-oke@latest my-app --yes
 ```
 
 Two Notes starters: **standard** (local-first) and **advanced** (docker-ready +
-files/digest/AI).
+files/digest/AI). Both ship a minimal GitHub Actions workflow (typecheck +
+`bun test` on push/PR) so the first push has working CI.
 
 On a TTY: pick a template, then **recommended defaults**, **customize** (local
 or docker first; saved to `~/.oke/create-defaults.json`), or **reuse** matching

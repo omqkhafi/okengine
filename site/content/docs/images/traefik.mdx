@@ -1,0 +1,64 @@
+---
+title: "Traefik"
+description: "Docker-label auto-discovery reverse proxy — opt-in via images.proxy, for scaled app replicas."
+icon: "Lock"
+---
+
+Traefik discovers `app` replicas from Docker labels instead of a static upstream target, so
+`docker compose up --scale app=N` load-balances automatically without reconfiguring anything.
+
+<Callout title="The one rule">
+  Traefik never mounts the raw Docker socket. A filtered `tecnativa/docker-socket-proxy` companion
+  exposes only containers/events/ping/version/networks on the internal compose network.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  proxy: "traefik:v3.3",
+},
+```
+
+```bash title="docker/.env.docker"
+OKE_PROXY_HOST=app.example.com
+OKE_PROXY_ACME_EMAIL=admin@example.com
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                                |
+| -------------- | ------------------------------------------------------------------------------------ |
+| Ports          | `80` and `443` published; `app` stays internal, discovered via Docker labels         |
+| Providers      | `--providers.docker` pointed at the socket-proxy companion, `exposedbydefault=false` |
+| TLS            | Let's Encrypt via HTTP-01 challenge, storage at `/letsencrypt/acme.json`             |
+| Companion      | `socket-proxy` service — the only container touching `docker.sock`, read-only        |
+| App labels     | `traefik.http.routers.app.rule=Host(...)`, TLS cert resolver, load-balancer port     |
+| Connection URL | `https://<host>`                                                                     |
+
+## When to pick Caddy instead
+
+If you're running a single instance and never plan to `--scale`, [Caddy](/docs/images/caddy)'s
+static `Caddyfile` is simpler to reason about — no label wiring, no socket-proxy companion.
+
+## Learn more
+
+- [Reverse proxy](/docs/deployment/reverse-proxy) — full Docker-socket-proxy security rationale
+- [Docker](/docs/deployment/docker#reverse-proxy) — where the proxy fits in the compose layer order
+- [Security](/docs/reference/security) — `allowedHosts` must include your public hostname
+
+## Next
+
+<Cards>
+  <Card title="Caddy" description="Single-instance alternative." href="/docs/images/caddy" />
+  <Card
+    title="PgDog"
+    description="Pool Postgres behind the same stack."
+    href="/docs/images/pgdog"
+  />
+  <Card
+    title="Redis Cloud"
+    description="A managed backing store."
+    href="/docs/providers/redis-cloud"
+  />
+</Cards>

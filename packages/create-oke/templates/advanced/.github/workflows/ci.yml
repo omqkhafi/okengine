@@ -1,0 +1,24 @@
+# Minimal CI for an okengine app — typecheck + test on every push/PR.
+# Expand later (lint, docker, deploy); keep this green from day one.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun test

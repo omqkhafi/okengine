@@ -1,0 +1,53 @@
+---
+title: "DigitalOcean Managed Caching"
+description: "DigitalOcean's Valkey-backed caching service — the Aiven-powered Redis offering it replaced. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+DigitalOcean's managed Redis was powered by Aiven behind the scenes. When Aiven stepped back from
+offering Redis (following Redis's 2024 license change), DigitalOcean rebranded the product to
+**Managed Caching** and moved it onto **Valkey** — the wire protocol is unchanged.
+
+<Callout title="The one rule">
+  `drivers.store.kv` stays `redis` regardless — Valkey speaks the same protocol. If you have an
+  older DigitalOcean cluster still labeled "Managed Redis," check its version: new clusters are
+  Valkey-only.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://default:password@db-valkey-nyc1-12345-do-user-1234567-0.db.ondigitalocean.com:25061
+```
+
+DigitalOcean's managed databases publish a random high port (shown in the cluster's "Connection
+Details" panel) — TLS is required, no plaintext option.
+
+## Feature highlights
+
+| Feature | Notes                                                                                                           |
+| ------- | --------------------------------------------------------------------------------------------------------------- |
+| Engine  | Valkey (current) — older "Managed Redis" clusters are capped and unsupported past Redis 7.2                     |
+| TLS     | Required — no unencrypted connection option                                                                     |
+| Scope   | The standalone Upstash-on-DigitalOcean marketplace listing is a separate, deprecated product — not this service |
+
+## Learn more
+
+- [Valkey (image)](/docs/images/valkey) — the driver this provider backs
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card
+    title="Dragonfly Cloud"
+    description="Another managed alternative."
+    href="/docs/providers/dragonfly-cloud"
+  />
+  <Card
+    title="Redis Cloud"
+    description="Vendor-native alternative."
+    href="/docs/providers/redis-cloud"
+  />
+  <Card title="Caddy" description="A local proxy pairing." href="/docs/images/caddy" />
+</Cards>

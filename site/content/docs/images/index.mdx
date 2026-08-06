@@ -1,0 +1,74 @@
+---
+title: "Images"
+description: "Docker recipes already shipped in oke docker — Postgres, PgDog, Supabase, Redis, Valkey, Dragonfly, Caddy, Traefik."
+icon: "Container"
+---
+
+Every recipe below is already wired into `oke docker` — pin an image in `oke.config.ts` and get
+env, healthcheck, and a connection URL for free, no recipe code to write yourself.
+
+<Callout title="The one rule">
+  Vendor choice lives in `images["store.sql"]` / `images["store.kv"]` / `images.proxy` — never in
+  `drivers.store.sql` / `drivers.store.kv`, which only ever say `postgres` or `redis`.
+</Callout>
+
+## SQL
+
+<Cards>
+  <Card
+    title="Postgres"
+    description="The default `store.sql` image."
+    href="/docs/images/postgres"
+  />
+  <Card title="PgDog" description="Postgres transaction pooler." href="/docs/images/pgdog" />
+  <Card
+    title="Supabase (Docker)"
+    description="Local `supabase/postgres` image."
+    href="/docs/images/supabase-docker"
+  />
+</Cards>
+
+## Redis
+
+Driver id stays `redis` for every image below — vendor choice only changes the pin.
+
+<Cards>
+  <Card title="Redis" description="The default `store.kv` image." href="/docs/images/redis" />
+  <Card title="Valkey" description="BSD-licensed Redis-wire fork." href="/docs/images/valkey" />
+  <Card
+    title="Dragonfly"
+    description="Multi-threaded Redis-wire runtime."
+    href="/docs/images/dragonfly"
+  />
+</Cards>
+
+## Proxy
+
+Opt-in via `images.proxy` — leave it unset until you need HTTPS at the edge or `--scale app=N`.
+
+<Cards>
+  <Card title="Caddy" description="Automatic-HTTPS reverse proxy." href="/docs/images/caddy" />
+  <Card
+    title="Traefik"
+    description="Docker-label auto-discovery proxy."
+    href="/docs/images/traefik"
+  />
+</Cards>
+
+## Learn more
+
+- [Providers](/docs/providers) — managed cloud alternatives to these recipes
+- [Docker](/docs/deployment/docker) — full compose derivation, PgDog pooling, reverse proxy
+- [Store](/docs/elements/store) — the `sql` / `kv` facets these drivers back
+
+## Next
+
+<Cards>
+  <Card
+    title="Postgres"
+    description="Start with the default SQL recipe."
+    href="/docs/images/postgres"
+  />
+  <Card title="Providers" description="Managed cloud alternatives." href="/docs/providers" />
+  <Card title="Deployment" description="Compose, Swarm, or Kubernetes." href="/docs/deployment" />
+</Cards>

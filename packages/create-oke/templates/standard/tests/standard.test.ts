@@ -13,33 +13,36 @@ afterAll(async () => {
 });
 
 test("boots — health flow is named main.health", async () => {
-  const { data, error } = await t.api.main.health({});
+  const { data, error } = await t.api.main!.health!({});
   expect(error).toBeNull();
   expect(data).toEqual({ ok: true });
 });
 
 test("notes create → list → archive", async () => {
-  const created = await t.api.notes.create({
+  const created = await t.api.notes!.create!({
     title: "Hello",
     body: "World from the standard starter",
   });
   expect(created.error).toBeNull();
-  expect(created.data?.title).toBe("Hello");
-  expect(created.data?.id).toBeTruthy();
+  const row = created.data as { id: string; title: string };
+  expect(row.title).toBe("Hello");
+  expect(row.id).toBeTruthy();
 
   await t.signals.drain();
   expect(t.channels.sent().some((s) => s.template === "note-created")).toBe(true);
 
-  const listed = await t.api.notes.list({});
+  const listed = await t.api.notes!.list!({});
   expect(listed.error).toBeNull();
-  expect(listed.data?.notes.some((n) => n.id === created.data!.id)).toBe(true);
+  const notes = (listed.data as { notes: { id: string }[] }).notes;
+  expect(notes.some((n) => n.id === row.id)).toBe(true);
 
-  const archived = await t.api.notes.archive({ id: created.data!.id });
+  const archived = await t.api.notes!.archive!({ id: row.id });
   expect(archived.error).toBeNull();
-  expect(archived.data?.archivedAt).toBeTypeOf("number");
+  expect((archived.data as { archivedAt: number }).archivedAt).toBeTypeOf("number");
 
-  const after = await t.api.notes.list({});
-  expect(after.data?.notes.some((n) => n.id === created.data!.id)).toBe(false);
+  const after = await t.api.notes!.list!({});
+  const afterNotes = (after.data as { notes: { id: string }[] }).notes;
+  expect(afterNotes.some((n) => n.id === row.id)).toBe(false);
 });
 
 /** Flag-free `app.fetch` must auto-boot. */

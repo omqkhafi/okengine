@@ -15,6 +15,23 @@ export function credEnv(spec: ServiceSpec, field: "USER" | "PASSWORD" | "DB"): s
   return `\${${key}}`;
 }
 
+/** Postgres-protocol env shape (`POSTGRES_*`) — shared by postgres / supabase recipes. */
+export function postgresEnv(s: ServiceSpec): Record<string, string> {
+  return {
+    POSTGRES_USER: credEnv(s, "USER"),
+    POSTGRES_PASSWORD: credEnv(s, "PASSWORD"),
+    POSTGRES_DB: credEnv(s, "DB"),
+  };
+}
+
+/** Postgres-protocol healthcheck — shared by postgres / supabase recipes. */
+export const postgresHealth = {
+  test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"],
+  interval: "5s",
+  timeout: "3s",
+  retries: 10,
+} as const;
+
 /**
  * Compose service name for a role (`store.sql` → `store-sql`).
  *

@@ -208,7 +208,7 @@ export async function bootSeedFx(
   const storeRuntime = app.elements?.store ?? app.bootResult?.store;
   if (!storeRuntime) {
     throw new Error(
-      "oke db seed: app booted without a store runtime — ensure stores are registered on the app (e.g. Object.assign(app.$options, { stores: [db] }))",
+      "oke db seed: app booted without a store runtime — ensure stores are registered on the app (e.g. oke({ name, stores: [db] }))",
     );
   }
   const fx = createFx({

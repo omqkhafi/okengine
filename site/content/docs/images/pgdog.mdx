@@ -1,0 +1,60 @@
+---
+title: "PgDog"
+description: "Postgres wire-protocol connection pooler — transaction pooling in front of any store.sql image."
+icon: "Package"
+---
+
+Bun.SQL defaults to **10** connections per process. Scale to several app instances and
+`N × pool` can exceed Postgres `max_connections`. PgDog sits in front of `store.sql` as a
+transaction-pooling proxy — same wire protocol, no app code changes.
+
+<Callout title="The one rule">
+  Pin `pgdog` alongside `store.sql` and `DATABASE_URL` automatically points at the pooler on `:6432`
+  instead of Postgres directly — Bun.SQL and Drizzle see no difference.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "postgres:16-alpine",
+  "pgdog": "pgdog:latest",
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| Container port | `6432`                                                                                              |
+| Pooling mode   | `transaction` — set explicitly (also PgDog's own upstream default)                                  |
+| Config files   | Generated `pgdog.toml` (listen + one primary database) and `users.toml` (client/server credentials) |
+| `dependsOn`    | Waits for `store.sql`'s healthcheck before starting                                                 |
+| Connection URL | `postgres://user:pass@host:6432/db` — identical scheme to plain Postgres                            |
+
+## Why PgDog, not PgBouncer
+
+Naive poolers can leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`) across clients under
+transaction mode. PgDog re-applies that state per transaction, so pooling stays correct without
+downgrading to session mode.
+
+Read-replica routing (`BEGIN READ ONLY` → replica) is documented readiness in PgDog itself — not
+wired into the generated stack yet.
+
+## Learn more
+
+- [Docker](/docs/deployment/docker#pgdog-pooling) — the `-f` compose layer order that includes PgDog
+- [Postgres](/docs/images/postgres) — the backend PgDog pools
+- [Store · SQL](/docs/elements/store#sql) — "Connection pooling is infrastructure, not app code"
+
+## Next
+
+<Cards>
+  <Card title="Postgres" description="The backend PgDog fronts." href="/docs/images/postgres" />
+  <Card
+    title="Supabase (Docker)"
+    description="Also Postgres wire — same pooler applies."
+    href="/docs/images/supabase-docker"
+  />
+  <Card title="Caddy" description="TLS at the edge, once you need it." href="/docs/images/caddy" />
+</Cards>

@@ -1,0 +1,51 @@
+---
+title: "Google Cloud Memorystore"
+description: "GCP-managed Redis or Valkey — standard protocol over TLS. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+Memorystore is Google Cloud's managed caching service, with separate Redis-compatible and Valkey
+offerings — both plain Redis-wire endpoints inside your VPC.
+
+<Callout title="The one rule">
+  Same `redis` driver either way. Memorystore instances are VPC-internal by default — reachable from
+  Cloud Run / GKE / Compute Engine in the same network, not from the open internet.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://:password@10.0.0.3:6379
+```
+
+The host is a private IP inside your VPC (shown on the instance's "Details" page) — a Serverless
+VPC Access connector or equivalent is needed for Cloud Run to reach it.
+
+## Feature highlights
+
+| Feature       | Notes                                                               |
+| ------------- | ------------------------------------------------------------------- |
+| Engine choice | Redis-compatible tier or a separate Valkey tier                     |
+| Networking    | Private-IP-only by default — no public endpoint option              |
+| TLS           | In-transit encryption is an explicit instance flag, not the default |
+
+## Learn more
+
+- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey) — the two engines this maps to
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
+  <Card
+    title="Azure Cache for Redis"
+    description="Azure's equivalent."
+    href="/docs/providers/azure-redis"
+  />
+  <Card
+    title="Dragonfly Cloud"
+    description="Vendor-neutral managed option."
+    href="/docs/providers/dragonfly-cloud"
+  />
+</Cards>

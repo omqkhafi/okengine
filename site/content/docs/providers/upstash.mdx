@@ -1,0 +1,54 @@
+---
+title: "Upstash"
+description: "Serverless Redis with a standard Redis-protocol TCP endpoint — separate from its REST API. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+Upstash publishes **two** ways to reach the same database: a standard Redis-protocol TCP endpoint
+(port 6379, works with any Redis client unmodified) and a separate HTTP/REST API built for
+edge runtimes where raw TCP isn't available.
+
+<Callout title="The one rule">
+  oke's `redis` driver speaks the wire protocol — use Upstash's **TCP endpoint** and a `rediss://`
+  URL, not the REST API. The REST API is a different transport with its own client library and isn't
+  what `fx.store` calls.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://default:password@usw1-example-12345.upstash.io:6379
+```
+
+The database's dashboard shows both a `redis://` connection string (for TCP clients) and a
+separate `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` pair (for the REST API) — only the
+first one applies here.
+
+## Feature highlights
+
+| Feature      | Notes                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------- |
+| TCP endpoint | Standard RESP over TLS, port `6379` — ioredis / node-redis / redis-py work unmodified |
+| REST API     | A separate HTTP transport for edge runtimes without TCP — not used by oke's driver    |
+| Pricing      | Per-request pricing model rather than a fixed instance size                           |
+
+## Learn more
+
+- [Redis (image)](/docs/images/redis) — the driver this provider backs
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card
+    title="Redis Cloud"
+    description="Fixed-instance alternative."
+    href="/docs/providers/redis-cloud"
+  />
+  <Card
+    title="Dragonfly Cloud"
+    description="Another serverless-friendly option."
+    href="/docs/providers/dragonfly-cloud"
+  />
+  <Card title="Neon" description="A managed SQL-side pair." href="/docs/providers/neon" />
+</Cards>

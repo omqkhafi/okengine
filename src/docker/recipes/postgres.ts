@@ -2,21 +2,8 @@
  * Postgres / pgvector / Timescale image recipe (≤15 lines of recipe body).
  */
 
-import { credEnv } from "../helpers.ts";
-import type { ImageRecipe, ServiceSpec } from "../types.ts";
-
-const postgresEnv = (s: ServiceSpec) => ({
-  POSTGRES_USER: credEnv(s, "USER"),
-  POSTGRES_PASSWORD: credEnv(s, "PASSWORD"),
-  POSTGRES_DB: credEnv(s, "DB"),
-});
-
-const postgresHealth = {
-  test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"],
-  interval: "5s",
-  timeout: "3s",
-  retries: 10,
-};
+import { postgresEnv, postgresHealth } from "../helpers.ts";
+import type { ImageRecipe } from "../types.ts";
 
 /** Postgres-protocol servers (Postgres · Neon · Supabase · pgvector · Timescale). */
 export const postgres: ImageRecipe = {

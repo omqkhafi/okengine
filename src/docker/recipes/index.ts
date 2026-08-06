@@ -13,11 +13,13 @@ import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
+import { supabase } from "./supabase.ts";
 import { traefik } from "./traefik.ts";
 import { valkey } from "./valkey.ts";
 
 /** Default recipe catalogue — more specific image matches before protocol peers. */
 export const builtinRecipes: readonly ImageRecipe[] = [
+  supabase,
   postgres,
   pgdog,
   dragonfly,
@@ -43,6 +45,7 @@ export {
   postgres,
   redis,
   rustfs,
+  supabase,
   traefik,
   valkey,
 };

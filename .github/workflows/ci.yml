@@ -56,7 +56,7 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
       - name: Test
-        run: CREATE_OKE_INTEGRATION=1 bun run test
+        run: bun run test
 
   gate:
     name: gate

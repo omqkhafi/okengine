@@ -1,0 +1,56 @@
+---
+title: "Dragonfly Cloud"
+description: "Managed Dragonfly — Redis-compatible connection URI over TLS by default. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+Dragonfly Cloud is Dragonfly's own managed offering — the same multi-threaded engine as the
+[image recipe](/docs/images/dragonfly), with a public TLS endpoint and passkey auth
+generated for you.
+
+<Callout title="The one rule">
+  Same `redis` driver as any other Redis-wire target — Dragonfly Cloud's connection URI already uses
+  the `redis://` (or `rediss://`) scheme, no translation needed.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://default:passkey@xxxxx.dragonflydb.cloud:6385
+```
+
+Copy the ready-made "Redis-compatible Connection URI" from the data store's drawer in the
+Dragonfly Cloud console — public endpoints ship with TLS and an auto-generated passkey by default.
+
+## Feature highlights
+
+| Feature    | Notes                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| Protocol   | Redis-compatible (RESP), same client libraries as Redis                   |
+| Auth       | Auto-generated passkey plus a Redis-compatible ACL system                 |
+| Networking | Public endpoint by default; private networking recommended for production |
+
+## Learn more
+
+- [Dragonfly (image)](/docs/images/dragonfly) — the driver this provider backs
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card
+    title="Upstash"
+    description="Another serverless-friendly option."
+    href="/docs/providers/upstash"
+  />
+  <Card
+    title="Redis Cloud"
+    description="Vendor-native alternative."
+    href="/docs/providers/redis-cloud"
+  />
+  <Card
+    title="YugabyteDB"
+    description="A managed SQL-side pair."
+    href="/docs/providers/yugabytedb"
+  />
+</Cards>

@@ -21,6 +21,7 @@ import { ManifestPipeline } from "@/components/landing/manifest-pipeline";
 import { ProofStrip } from "@/components/landing/proof-strip";
 import { Reveal } from "@/components/landing/reveal";
 import { Surfaces } from "@/components/landing/surfaces";
+import { BuiltWithStrip, WorksWithStrip } from "@/components/landing/trust-strip";
 import { Vocabulary } from "@/components/landing/vocabulary";
 import { POSITIONING } from "@/lib/elements";
 import { loadStarterFlowSnippet } from "@/lib/starter-flow";
@@ -86,6 +87,27 @@ export default function HomePage() {
           <Reveal delay={0.05} className="border-t border-fd-border pt-8 lg:pt-10">
             <ProofStrip />
           </Reveal>
+        </div>
+      </Band>
+
+      <Band label="stack">
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
+          <div className="flex min-w-0 flex-col gap-3">
+            <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+              Built with
+            </span>
+            <Reveal>
+              <BuiltWithStrip />
+            </Reveal>
+          </div>
+          <div className="flex min-w-0 flex-col gap-3 border-t border-fd-border pt-8 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+            <span className="font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
+              Works with
+            </span>
+            <Reveal delay={0.05}>
+              <WorksWithStrip />
+            </Reveal>
+          </div>
         </div>
       </Band>
 

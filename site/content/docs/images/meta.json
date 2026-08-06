@@ -1,0 +1,18 @@
+{
+  "title": "Images",
+  "icon": "Container",
+  "pages": [
+    "index",
+    "---SQL---",
+    "postgres",
+    "pgdog",
+    "supabase-docker",
+    "---Redis---",
+    "redis",
+    "valkey",
+    "dragonfly",
+    "---Proxy---",
+    "caddy",
+    "traefik"
+  ]
+}

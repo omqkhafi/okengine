@@ -27,15 +27,15 @@ One local pre-push gate from the repo root (Bun `>=1.3.14`):
 bun run ci
 ```
 
-| Check     | What it runs                        | Enforces                                                                                             |
-| --------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Format    | `bun run fmt:check`                 | oxfmt                                                                                                |
-| Lint      | `bun run lint`                      | oxlint                                                                                               |
-| Typecheck | `bun run typecheck`                 | root + create-oke `tsc --noEmit`                                                                     |
-| Tests     | `CREATE_OKE_INTEGRATION=1 bun test` | Behaviour + create-oke scaffold integration                                                          |
-| Budgets   | `bun run budgets -- --dry-run`      | AGENTS caps + export regressions                                                                     |
-| Gate      | `bun run gate`                      | Doc staleness, removed-driver, error registry, codemods, publish pack/JSR dry-run (`PUBLISH_GATE=1`) |
-| Site      | `bun run site:build`                | Docs site Next build                                                                                 |
+| Check     | What it runs                   | Enforces                                                                                             |
+| --------- | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Format    | `bun run fmt:check`            | oxfmt                                                                                                |
+| Lint      | `bun run lint`                 | oxlint                                                                                               |
+| Typecheck | `bun run typecheck`            | root + create-oke `tsc --noEmit`                                                                     |
+| Tests     | `bun test`                     | Behaviour + create-oke unit tests                                                                    |
+| Budgets   | `bun run budgets -- --dry-run` | AGENTS caps + export regressions                                                                     |
+| Gate      | `bun run gate`                 | Doc staleness, removed-driver, error registry, codemods, publish pack/JSR dry-run (`PUBLISH_GATE=1`) |
+| Site      | `bun run site:build`           | Docs site Next build                                                                                 |
 
 Tag-push CI runs these checks as **parallel jobs** (without `budgets`, which stays local-only), then publishes when the `ci` aggregator succeeds.
 

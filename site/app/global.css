@@ -243,6 +243,36 @@
   opacity: 1;
 }
 
+/*
+ * Trust-strip marquees. Track holds two back-to-back copies (second
+ * aria-hidden); animating exactly -50% loops seamlessly. Edge mask fades
+ * the clipped ends. Desktop only — strips render a plain wrapped row below
+ * `lg`. Hover or prefers-reduced-motion pauses / disables the track.
+ */
+.oke-marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+@keyframes oke-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.oke-marquee-track {
+  animation: oke-marquee 28s linear infinite;
+}
+
+.oke-marquee-track-reverse {
+  animation-direction: reverse;
+  animation-duration: 32s;
+}
+
+.oke-marquee-track:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oke-seam-trace {
     animation: none;
@@ -278,6 +308,10 @@
 
   .sently-spotlight::after {
     transition: none;
+  }
+
+  .oke-marquee-track {
+    animation: none;
   }
 }
 

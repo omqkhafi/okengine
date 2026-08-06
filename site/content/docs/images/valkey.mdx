@@ -1,0 +1,55 @@
+---
+title: "Valkey"
+description: "BSD-licensed Redis-wire fork — same store.kv driver, opt-in image pin, no managed-service restriction."
+icon: "Zap"
+---
+
+Valkey is the Linux Foundation's BSD-3-Clause fork of Redis, forked after Redis's 2024 license
+change. It speaks the same wire protocol, so it slots behind the same `redis` driver with zero
+Flow changes — pin the image and nothing else moves.
+
+<Callout title="The one rule">
+  Driver id stays `redis` — Valkey is an image choice, not a driver. `REDIS_URL` and every KV call
+  through `fx.store` work exactly as they do against Redis.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.kv": "valkey/valkey:8-alpine",
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                              |
+| -------------- | ------------------------------------------------------------------ |
+| Container port | `6379`                                                             |
+| Command        | `valkey-server --requirepass … --maxmemory … --maxmemory-policy …` |
+| Healthcheck    | `valkey-cli -a <password> ping`, every 5s, 10 retries              |
+| Connection URL | `redis://:pass@host:6379` — same scheme as Redis                   |
+| License        | BSD-3-Clause — permissive, no managed-service restriction          |
+
+## Why pick it
+
+Choose Valkey over Redis when the RSAL/SSPL managed-service terms matter to your situation — BSD
+carries no such restriction. Feature parity with Redis 7/8 stays close since the fork tracks
+upstream Redis development.
+
+## Learn more
+
+- [Store · KV](/docs/elements/store#kv) — full Redis-protocol image license table
+- [Redis](/docs/images/redis) · [Dragonfly](/docs/images/dragonfly) — the other two peers
+
+## Next
+
+<Cards>
+  <Card
+    title="Dragonfly"
+    description="Multi-threaded Redis-wire peer."
+    href="/docs/images/dragonfly"
+  />
+  <Card title="Redis" description="The mature default." href="/docs/images/redis" />
+  <Card title="Upstash" description="Managed alternative." href="/docs/providers/upstash" />
+</Cards>

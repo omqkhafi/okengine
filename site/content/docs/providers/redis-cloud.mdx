@@ -1,0 +1,52 @@
+---
+title: "Redis Cloud"
+description: "Redis Ltd.'s own managed offering — standard Redis protocol over TLS. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+Redis Cloud is Redis Ltd.'s first-party managed service — the same Redis you'd self-host, run and
+patched for you. It's a plain TCP endpoint, no separate REST layer.
+
+<Callout title="The one rule">
+  Same `redis` driver, same `REDIS_URL` shape as a Redis image. Use `rediss://` (double `s`) for the
+  TLS-required endpoint Redis Cloud publishes by default.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://default:password@redis-12345.c1.region.cloud.redislabs.com:12345
+```
+
+Redis Cloud assigns a random high port per database — copy it from the database's connection
+panel rather than assuming `6379`.
+
+## Feature highlights
+
+| Feature  | Notes                                                                                                                 |
+| -------- | --------------------------------------------------------------------------------------------------------------------- |
+| Protocol | Standard Redis (RESP) over TCP, TLS by default                                                                        |
+| Modules  | Optional RediSearch / RedisJSON etc. — outside what oke's `redis` driver uses                                         |
+| License  | Managed service under Redis Ltd.'s own terms — the RSAL/SSPL self-host restriction doesn't apply to you as a customer |
+
+## Learn more
+
+- [Redis (image)](/docs/images/redis) — the driver this provider backs
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` precedence
+
+## Next
+
+<Cards>
+  <Card
+    title="Upstash"
+    description="Serverless-friendly alternative."
+    href="/docs/providers/upstash"
+  />
+  <Card
+    title="ElastiCache"
+    description="AWS-native alternative."
+    href="/docs/providers/elasticache"
+  />
+  <Card title="Neon" description="A managed SQL-side pair." href="/docs/providers/neon" />
+</Cards>

@@ -1,0 +1,68 @@
+---
+title: "Supabase (Docker)"
+description: "Run supabase/postgres as store.sql — Postgres plus Supabase's bundled extensions, without the rest of the Supabase platform."
+icon: "Database"
+---
+
+Supabase publishes `supabase/postgres` — plain Postgres with a bundled extension set (`pgvector`,
+`pg_graphql`, `pg_cron`, `wrappers`, and more) baked in.
+
+`oke docker` matches that image ahead of the generic Postgres recipe, so pinning it is enough — no
+other Supabase services run.
+
+<Callout title="Not the full Supabase platform">
+  Supabase's own guide also brings up GoTrue, PostgREST, Kong, Realtime, Storage, and Studio.
+
+oke doesn't need that layer — auth, files, and realtime delivery are already covered by
+[Vault](/docs/elements/vault), [Store · files](/docs/elements/store#files), and
+[Signal](/docs/elements/signal). This recipe covers Postgres plus its extension bundle only.
+
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "supabase/postgres:15.8.1.049", // pin a real tag from Supabase's registry
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| Match          | Image reference contains `supabase/postgres`, checked before the generic `postgres` recipe |
+| Container port | `5432`                                                                                     |
+| Environment    | Same `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` shape as plain Postgres         |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries                                       |
+| Connection URL | `postgres://user:pass@host:5432/db`                                                        |
+
+`store.index("…", { dims })` against `pgvector` works unmodified — the extension ships in the
+image, same as it would if you installed `pgvector` yourself on a plain Postgres image. See
+[Store · Index](/docs/elements/store#index) for `store.index` usage.
+
+## Learn more
+
+- [Supabase](/docs/providers/supabase) — the managed cloud alternative to this recipe
+- [Postgres](/docs/images/postgres) — the generic recipe this one takes precedence over
+- [Store · Index](/docs/elements/store#index) — `pgvector`-backed vector search
+
+## Next
+
+<Cards>
+  <Card
+    title="Supabase"
+    description="Managed cloud, same wire protocol."
+    href="/docs/providers/supabase"
+  />
+  <Card
+    title="PgDog"
+    description="Add pooling in front of this recipe too."
+    href="/docs/images/pgdog"
+  />
+  <Card
+    title="Postgres"
+    description="The plain image this specializes."
+    href="/docs/images/postgres"
+  />
+</Cards>

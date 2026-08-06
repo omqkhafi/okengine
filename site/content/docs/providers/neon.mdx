@@ -1,0 +1,57 @@
+---
+title: "Neon"
+description: "Serverless Postgres — branching, scale-to-zero, pgvector on every plan. Connect with DATABASE_URL, driver stays postgres."
+icon: "Database"
+---
+
+Neon is a serverless Postgres provider — storage and compute are separated, so a branch of your
+database is a cheap metadata operation rather than a full copy, and idle compute scales to zero.
+
+<Callout title="The one rule">
+  Neon speaks plain Postgres wire protocol. `drivers.store.sql` stays `postgres`; only
+  `DATABASE_URL` changes.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+DATABASE_URL=postgres://user:password@ep-xxxx.region.aws.neon.tech/dbname?sslmode=require
+```
+
+No `images["store.sql"]` pin is needed — you're not running the container, Neon is.
+
+## Feature highlights
+
+| Feature       | Notes                                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Branching     | Instant, copy-on-write branches of a database — cheap dev/preview environments                                               |
+| Scale-to-zero | Idle compute suspends automatically; first query after idle pays a cold-start                                                |
+| `pgvector`    | Available on every plan, no add-on — `CREATE EXTENSION vector;`                                                              |
+| Pooling       | Neon's own connection pooler is separate from [PgDog](/docs/images/pgdog) — don't stack both in front of the same connection |
+
+<Callout title="pgvector for store.index">
+  With `pgvector` enabled, `store.index("…", {dims})` against a `pgvector` driver works exactly as
+  it would against a Postgres image — see [Store · Index](/docs/elements/store#index).
+</Callout>
+
+## Learn more
+
+- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
+- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate against any Postgres target
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
+
+## Next
+
+<Cards>
+  <Card
+    title="Supabase"
+    description="Another managed Postgres option."
+    href="/docs/providers/supabase"
+  />
+  <Card
+    title="CockroachDB"
+    description="Distributed SQL alternative."
+    href="/docs/providers/cockroachdb"
+  />
+  <Card title="PgDog" description="Image pooling comparison." href="/docs/images/pgdog" />
+</Cards>

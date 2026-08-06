@@ -34,6 +34,10 @@ export interface ColumnReference {
 /**
  * Finalized column declaration — also satisfies {@link ColumnDef} so
  * {@link classificationsFromTable} / runtime masking work without Drizzle.
+ *
+ * `getSQL` is a structural bridge so drizzle-orm operators (`eq`, `isNull`, …)
+ * accept abstract columns in TypeScript. OKE’s SQL compiler never calls it —
+ * it reads {@link SchemaColumnDecl.sqlName} / metadata directly.
  */
 export interface SchemaColumnDecl extends ColumnDef {
   /** JS object key (e.g. `createdAt`). */
@@ -57,6 +61,12 @@ export interface SchemaColumnDecl extends ColumnDef {
   readonly references?: ColumnReference;
   /** Optional human description for Console / docs (falls back to the JS key). */
   readonly description?: string;
+  /**
+   * Drizzle `SQLWrapper` structural match — never invoked at runtime.
+   *
+   * @returns never (throws if called)
+   */
+  getSQL(): never;
 }
 
 /** Table from {@link store.schema.table} — extends {@link TableHandle}. */
@@ -171,6 +181,11 @@ function createBuilder(state: FieldState): FieldBuilder {
         ...(state.classification ? { classification: state.classification } : {}),
         ...(state.description !== undefined ? { description: state.description } : {}),
         ...(state.references ? { references: state.references } : {}),
+        getSQL(): never {
+          throw new Error(
+            `SchemaColumnDecl.getSQL("${sqlName}") is a type bridge — OKE compiles columns directly`,
+          );
+        },
       };
     },
   };

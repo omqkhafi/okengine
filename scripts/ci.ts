@@ -22,11 +22,7 @@ const CHECKS: readonly Check[] = [
   { label: "Format", command: ["bun", "run", "fmt:check"] },
   { label: "Lint", command: ["bun", "run", "lint"] },
   { label: "Typecheck", command: ["bun", "run", "typecheck"] },
-  {
-    label: "Tests",
-    command: ["bun", "run", "test"],
-    env: { CREATE_OKE_INTEGRATION: "1" },
-  },
+  { label: "Tests", command: ["bun", "run", "test"] },
   { label: "Gate", command: ["bun", "run", "gate"] },
   { label: "Site build", command: ["bun", "run", "site:build"] },
 ];

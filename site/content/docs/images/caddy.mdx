@@ -1,0 +1,62 @@
+---
+title: "Caddy"
+description: "Automatic-HTTPS reverse proxy for a single-instance compose stack — opt-in via images.proxy."
+icon: "Lock"
+---
+
+Caddy is the simplest TLS path — automatic HTTPS from a generated `Caddyfile`, no certificate
+management by hand. It's the right choice for a single app instance without `--scale`.
+
+<Callout title="The one rule">
+  Leave `images.proxy` unset until you need HTTPS at the edge or `--scale app=N`. Once set, `app`
+  stops publishing its host port directly — Caddy (or Traefik) does.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  proxy: "caddy:2-alpine",
+},
+```
+
+```bash title="docker/.env.docker"
+OKE_PROXY_HOST=app.example.com
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| Ports          | `80` and `443` published; `app` stays internal on the compose network  |
+| Generated file | `Caddyfile` — `{$OKE_PROXY_HOST:localhost} { reverse_proxy app:6530 }` |
+| Volumes        | Named volumes for Caddy's own `/data` (certificates) and `/config`     |
+| Healthcheck    | `caddy version`, every 10s, 5 retries                                  |
+| Connection URL | `https://<host>`                                                       |
+
+`OKE_PROXY_HOST` unset defaults to `localhost` — Caddy issues a local TLS cert instead of
+requesting one from Let's Encrypt.
+
+## When to pick Traefik instead
+
+Caddy has no service-discovery story for multiple `app` replicas. Once you run
+`docker compose up --scale app=N`, switch to [Traefik](/docs/images/traefik) — it discovers
+replicas from Docker labels instead of a static `reverse_proxy` target.
+
+## Learn more
+
+- [Reverse proxy](/docs/deployment/reverse-proxy) — full Caddy vs Traefik rationale
+- [Docker](/docs/deployment/docker#reverse-proxy) — where the proxy fits in the compose layer order
+- [Security](/docs/reference/security) — `allowedHosts` must include your public hostname
+
+## Next
+
+<Cards>
+  <Card title="Traefik" description="Multi-replica alternative." href="/docs/images/traefik" />
+  <Card
+    title="PgDog"
+    description="Pool Postgres behind the same stack."
+    href="/docs/images/pgdog"
+  />
+  <Card title="Redis" description="The default store.kv image." href="/docs/images/redis" />
+</Cards>

@@ -1,0 +1,49 @@
+---
+title: "Postgres"
+description: "The default store.sql image recipe — env, healthcheck, and connection URL for plain Postgres in Docker."
+icon: "Database"
+---
+
+Postgres is the default `store.sql` image in docker and prod. `oke docker` matches any image
+whose reference contains `postgres`, `pgvector`, or `timescale`, and derives the compose service
+for you — no recipe code to write for the common case.
+
+<Callout title="The one rule">
+  The driver id stays `postgres` no matter which Postgres-wire image you pin — vendor choice lives
+  in `images["store.sql"]`, not in `drivers.store.sql`.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "postgres:16-alpine", // any Postgres / pgvector / Timescale image
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| Container port | `5432`                                                                                                       |
+| Environment    | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` — credential refs, never literal secrets in compose YAML |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries                                                         |
+| Connection URL | `postgres://user:pass@host:5432/db`                                                                          |
+
+`DATABASE_URL` is what the app actually reads (`OKE_STORE_SQL_URL` also works). When PgDog is in
+the stack, `DATABASE_URL` points at the pooler instead — see [PgDog](/docs/images/pgdog).
+
+## Learn more
+
+- [PgDog](/docs/images/pgdog) — connection pooling in front of this recipe
+- [Docker](/docs/deployment/docker) — full compose derivation and reverse proxy
+- [Store · SQL](/docs/elements/store#sql) — the facet this backs, schema push/generate/migrate
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` and overrides
+
+## Next
+
+<Cards>
+  <Card title="PgDog" description="Add pooling in front of Postgres." href="/docs/images/pgdog" />
+  <Card title="Neon" description="A managed alternative." href="/docs/providers/neon" />
+  <Card title="Redis" description="The default store.kv image." href="/docs/images/redis" />
+</Cards>

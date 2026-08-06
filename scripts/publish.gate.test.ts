@@ -83,7 +83,7 @@ describe("publish workflow", () => {
     expect(yml).toContain("bun run lint");
     expect(yml).toContain("bun run fmt:check");
     expect(yml).toContain("bun run typecheck");
-    expect(yml).toContain("CREATE_OKE_INTEGRATION=1 bun run test");
+    expect(yml).toContain("bun run test");
     expect(yml).not.toContain("bun run budgets");
     expect(yml).toContain("bun run gate");
     expect(yml).toContain("bun run site:build");

@@ -1,0 +1,51 @@
+---
+title: "Amazon ElastiCache"
+description: "AWS-managed Redis or Valkey — standard protocol over TLS. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+ElastiCache is AWS's managed caching service — since 2024 it offers both a Redis OSS-compatible
+engine and a Valkey engine, both speaking the same wire protocol.
+
+<Callout title="The one rule">
+  Same `redis` driver either way. Use `rediss://` for the in-transit-encrypted endpoint — AWS calls
+  this "encryption in transit," off by default on older clusters, on by default for new ones.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://:password@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com:6379
+```
+
+Find the endpoint on the cluster's "Primary Endpoint" field in the ElastiCache console — replica
+reader endpoints exist separately for read scaling, not used by oke's single-connection driver.
+
+## Feature highlights
+
+| Feature       | Notes                                                                             |
+| ------------- | --------------------------------------------------------------------------------- |
+| Engine choice | Redis OSS-compatible or Valkey — pick per cluster, same wire protocol             |
+| Networking    | Lives inside a VPC — reachable from your app only if network-peered or co-located |
+| Auth          | Optional AUTH token or IAM-based auth, layered on top of the TCP endpoint         |
+
+## Learn more
+
+- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey) — the two engines this maps to
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
+  <Card
+    title="Azure Cache for Redis"
+    description="Azure's equivalent."
+    href="/docs/providers/azure-redis"
+  />
+  <Card
+    title="Redis Cloud"
+    description="Vendor-neutral managed option."
+    href="/docs/providers/redis-cloud"
+  />
+</Cards>

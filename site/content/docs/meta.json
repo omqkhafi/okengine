@@ -8,6 +8,8 @@
     "plugins",
     "console",
     "deployment",
+    "images",
+    "providers",
     "reference",
     "ai"
   ]

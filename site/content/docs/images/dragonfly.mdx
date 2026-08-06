@@ -1,0 +1,57 @@
+---
+title: "Dragonfly"
+description: "Multi-threaded Redis-wire runtime — same store.kv driver, opt-in image pin, BSL 1.1 license."
+icon: "Zap"
+---
+
+Dragonfly is a multi-threaded, memory-efficient reimplementation of the Redis protocol — same
+`redis://` wire format, different engine underneath. It slots behind the same `redis` driver with
+zero Flow changes.
+
+<Callout title="The one rule">
+  Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store` behaves
+  identically to Redis or Valkey.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.kv": "docker.dragonflydb.io/dragonflydb/dragonfly",
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                         |
+| -------------- | ----------------------------------------------------------------------------- |
+| Container port | `6379`                                                                        |
+| Command        | `dragonfly --requirepass … --maxmemory …`                                     |
+| `ulimits`      | `memlock: -1` — Dragonfly needs unlocked memory for its shared-nothing design |
+| Healthcheck    | container's own `/usr/local/bin/healthcheck.sh`, every 5s, 10 retries         |
+| Connection URL | `redis://:pass@host:6379` — same scheme as Redis                              |
+| License        | BSL 1.1 — converts to Apache 2.0 on a published change date per release       |
+
+## Why pick it
+
+Multi-threaded architecture makes better use of multi-core hosts than single-threaded Redis under
+heavy concurrent load. Free for self-hosting; the BSL terms restrict offering Dragonfly itself as
+a commercial managed service to third parties — running it for your own app is unaffected.
+
+## Learn more
+
+- [Store · KV](/docs/elements/store#kv) — full Redis-protocol image license table
+- [Dragonfly Cloud](/docs/providers/dragonfly-cloud) — the managed equivalent
+- [Redis](/docs/images/redis) · [Valkey](/docs/images/valkey) — the other two peers
+
+## Next
+
+<Cards>
+  <Card
+    title="Dragonfly Cloud"
+    description="Managed Dragonfly."
+    href="/docs/providers/dragonfly-cloud"
+  />
+  <Card title="Valkey" description="Permissive-licensed peer." href="/docs/images/valkey" />
+  <Card title="PgDog" description="Pooling for the SQL side." href="/docs/images/pgdog" />
+</Cards>

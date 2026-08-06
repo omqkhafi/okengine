@@ -1,0 +1,64 @@
+---
+title: "YugabyteDB"
+description: "Distributed SQL, Postgres wire-compatible (YSQL), Apache 2.0 core. Connect with DATABASE_URL, driver stays postgres."
+icon: "Database"
+---
+
+YugabyteDB is a distributed SQL database with a Postgres-compatible query layer, YSQL. YSQL speaks
+the same wire protocol as plain Postgres, so `drivers.store.sql` still says `postgres`.
+
+<Callout title="The one rule">
+  Connect through YSQL, not YugabyteDB's other API surfaces (YCQL). YSQL is the Postgres-wire layer
+  oke's `postgres` driver targets — same `DATABASE_URL` shape as any other Postgres target.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+DATABASE_URL=postgres://user:password@region.aws.ybdb.io:5433/yugabyte?sslmode=require
+```
+
+YSQL defaults to port `5433`, not Postgres's `5432` — confirm the port from your cluster's
+connection panel.
+
+## License
+
+<Callout title="Apache 2.0 core">
+  YugabyteDB's core — including once-enterprise-only features like distributed backups and read
+  replicas — is Apache 2.0. Only the separate `-managed` build artifacts for Yugabyte's own service
+  carry a different license; self-hosted binaries stay Apache 2.0.
+</Callout>
+
+## Feature highlights
+
+| Feature         | Notes                                                                     |
+| --------------- | ------------------------------------------------------------------------- |
+| Distributed SQL | Horizontal scale-out, automatic sharding, multi-region replication        |
+| YSQL            | Postgres-wire compatible API — the one oke's `postgres` driver targets    |
+| YCQL            | A separate Cassandra-style API — not wire-compatible, not applicable here |
+
+## Learn more
+
+- [CockroachDB](/docs/providers/cockroachdb) — the license comparison point
+- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
+- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate
+
+## Next
+
+<Cards>
+  <Card
+    title="CockroachDB"
+    description="Compare licensing and features."
+    href="/docs/providers/cockroachdb"
+  />
+  <Card
+    title="Supabase"
+    description="A managed single-node option."
+    href="/docs/providers/supabase"
+  />
+  <Card
+    title="Redis Cloud"
+    description="A managed Redis-side pair."
+    href="/docs/providers/redis-cloud"
+  />
+</Cards>

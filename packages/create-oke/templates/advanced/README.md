@@ -2,6 +2,7 @@
 
 Docker-ready [okengine](https://oke.omqkhafi.dev) **Notes** starter — same domain as
 `standard`, plus files attach, a daily digest clock, and an AI summarize stub.
+Scaffold, not a finished product: keep the Flows you want, replace the rest.
 
 ```bash
 bun install
@@ -27,11 +28,21 @@ oke db seed       # essential welcome note + local/docker sample notes
 Configure AI with `oke ai setup` or `create-oke --ai` (writes `src/ai.ts` + `drivers.ai`).
 Without AI, summarize returns a local excerpt (`via: "fallback"`).
 
+## Included vs you build
+
+| Ships ready | You still own |
+| ----------- | ------------- |
+| standard Notes surface + attach / digest / summarize | your domain beyond notes |
+| files Store pin + digest Clock | production file policy and schedules |
+| AI summarize stub (fallback without AI) | real prompts / models via `oke ai setup` |
+| `.github/workflows/ci.yml` (typecheck + test) | lint, docker, deploy when you need them |
+
 ## Layout extras
 
 | Path | Role |
 | ---- | ---- |
 | `src/seed/` | `oke db seed` — essential + dev sample notes |
+| `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
 
 ## Drivers
 

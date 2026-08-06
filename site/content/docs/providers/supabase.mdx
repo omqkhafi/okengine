@@ -1,0 +1,53 @@
+---
+title: "Supabase"
+description: "Managed Postgres platform — pgvector on every plan. Connect with DATABASE_URL, driver stays postgres; prefer self-hosting for Postgres-only."
+icon: "Database"
+---
+
+Supabase's managed offering wraps Postgres with its own Auth, Storage, Realtime, and auto-generated
+API layer. oke only needs the Postgres connection underneath — the wire protocol is identical to
+plain Postgres.
+
+<Callout title="The one rule">
+  `drivers.store.sql` stays `postgres`. Everything above the database — Auth, Storage, Realtime — is
+  Supabase's own layer, separate from oke's Vault / Store · files / Signal elements.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+DATABASE_URL=postgres://postgres.xxxxx:password@aws-0-region.pooler.supabase.com:5432/postgres
+```
+
+Supabase's own connection pooler (Supavisor) is already in front of that endpoint by default —
+don't also stack [PgDog](/docs/images/pgdog) on the same connection.
+
+## Feature highlights
+
+| Feature      | Notes                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `pgvector`   | Available on every plan, no add-on — enable from the dashboard's Extensions panel                                 |
+| Pooling      | Supavisor (transaction / session mode) built in — pick transaction mode for the same semantics as PgDog           |
+| Docker image | Want just the Postgres image, without Auth/Storage/Realtime? See [Supabase (image)](/docs/images/supabase-docker) |
+
+## Learn more
+
+- [Supabase (image)](/docs/images/supabase-docker) — run `supabase/postgres` yourself instead
+- [Store · Index](/docs/elements/store#index) — `pgvector`-backed vector search
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
+
+## Next
+
+<Cards>
+  <Card
+    title="Supabase (image)"
+    description="Run just the Postgres image."
+    href="/docs/images/supabase-docker"
+  />
+  <Card title="Neon" description="Another managed Postgres option." href="/docs/providers/neon" />
+  <Card
+    title="YugabyteDB"
+    description="Apache-2.0 distributed alternative."
+    href="/docs/providers/yugabytedb"
+  />
+</Cards>

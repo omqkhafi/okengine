@@ -1,0 +1,20 @@
+{
+  "title": "Providers",
+  "icon": "Cloud",
+  "pages": [
+    "index",
+    "---SQL providers---",
+    "neon",
+    "supabase",
+    "cockroachdb",
+    "yugabytedb",
+    "---Redis providers---",
+    "redis-cloud",
+    "elasticache",
+    "memorystore",
+    "azure-redis",
+    "upstash",
+    "dragonfly-cloud",
+    "digitalocean-caching"
+  ]
+}

@@ -1,0 +1,97 @@
+---
+title: "Providers"
+description: "Managed cloud SQL and Redis providers that slot behind oke's postgres and redis drivers — connection recipes, feature highlights, and license notes."
+icon: "Cloud"
+---
+
+Every provider below speaks a protocol oke already has a driver for — Postgres wire or Redis wire.
+Hand the connection string to that driver and nothing else changes; no new driver id, no Flow
+code changes.
+
+<Callout title="The one rule">
+  Vendor choice lives in a connection URL (`DATABASE_URL` / `REDIS_URL`) — never in
+  `drivers.store.sql` / `drivers.store.kv`, which only ever say `postgres` or `redis`.
+</Callout>
+
+## SQL providers
+
+Managed Postgres-wire databases — set `DATABASE_URL`, `drivers.store.sql` stays `postgres`.
+
+<Cards>
+  <Card
+    title="Neon"
+    description="Serverless, branching, scale-to-zero."
+    href="/docs/providers/neon"
+  />
+  <Card title="Supabase" description="Managed Postgres platform." href="/docs/providers/supabase" />
+  <Card
+    title="CockroachDB"
+    description="Distributed SQL, multi-region."
+    href="/docs/providers/cockroachdb"
+  />
+  <Card
+    title="YugabyteDB"
+    description="Distributed SQL, Postgres-wire (YSQL)."
+    href="/docs/providers/yugabytedb"
+  />
+</Cards>
+
+## Redis providers
+
+Managed Redis-wire caches — set `REDIS_URL`, `drivers.store.kv` stays `redis`.
+
+<Cards>
+  <Card
+    title="Redis Cloud"
+    description="Redis Ltd.'s own managed offering."
+    href="/docs/providers/redis-cloud"
+  />
+  <Card
+    title="Amazon ElastiCache"
+    description="AWS-managed Redis / Valkey."
+    href="/docs/providers/elasticache"
+  />
+  <Card
+    title="Google Memorystore"
+    description="GCP-managed Redis / Valkey."
+    href="/docs/providers/memorystore"
+  />
+  <Card
+    title="Azure Cache for Redis"
+    description="Azure-managed Redis."
+    href="/docs/providers/azure-redis"
+  />
+  <Card
+    title="Upstash"
+    description="Serverless Redis, standard TCP endpoint."
+    href="/docs/providers/upstash"
+  />
+  <Card
+    title="Dragonfly Cloud"
+    description="Managed Dragonfly."
+    href="/docs/providers/dragonfly-cloud"
+  />
+  <Card
+    title="DigitalOcean Managed Caching"
+    description="Valkey-backed, formerly Aiven Redis."
+    href="/docs/providers/digitalocean-caching"
+  />
+</Cards>
+
+## Learn more
+
+- [Images](/docs/images) — run the same protocols yourself with a shipped Docker recipe
+- [Store](/docs/elements/store) — the `sql` / `kv` facets these drivers back
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`, `REDIS_URL`, and overrides
+
+## Next
+
+<Cards>
+  <Card
+    title="Neon"
+    description="Start with a serverless SQL option."
+    href="/docs/providers/neon"
+  />
+  <Card title="Images" description="Run the same protocols yourself." href="/docs/images" />
+  <Card title="Store" description="The facets these drivers back." href="/docs/elements/store" />
+</Cards>

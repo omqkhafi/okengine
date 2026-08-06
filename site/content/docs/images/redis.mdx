@@ -1,0 +1,57 @@
+---
+title: "Redis"
+description: "The default store.kv image recipe — password auth, memory policy, and connection URL for plain Redis in Docker."
+icon: "Zap"
+---
+
+Redis is the default `store.kv` image in docker and prod — the most mature, most battle-tested
+option. `oke docker` matches any image reference containing `redis` or `keydb` and derives the
+compose service for you.
+
+<Callout title="The one rule">
+  The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a managed
+  provider. Vendor choice lives in `images["store.kv"]`, never in `drivers.store.kv`.
+</Callout>
+
+## Pin it
+
+```typescript title="oke.config.ts"
+images: {
+  "store.kv": "redis:8-alpine",
+},
+```
+
+## What the recipe configures
+
+| Field          | Value                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Container port | `6379`                                                                                          |
+| Command        | `redis-server --requirepass … --maxmemory … --maxmemory-policy …` — no unauthenticated instance |
+| Healthcheck    | `redis-cli -a <password> ping`, every 5s, 10 retries                                            |
+| Connection URL | `redis://:pass@host:6379`                                                                       |
+
+`REDIS_URL` is what the app reads (`OKE_STORE_KV_URL` also works). Missing it fails boot loudly —
+`oke boot: redis driver needs REDIS_URL` — never a silent fallback to `memory`.
+
+<Callout title="License note" type="warn">
+  Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis itself as
+  a managed service to third parties — running it for your own app is unaffected.
+</Callout>
+
+## Learn more
+
+- [Store · KV](/docs/elements/store#kv) — TTL physics, per-driver behavior, license table
+- [Valkey](/docs/images/valkey) · [Dragonfly](/docs/images/dragonfly) — Redis-wire peers
+- [Environment variables](/docs/reference/environment-variables) — `REDIS_URL` and overrides
+
+## Next
+
+<Cards>
+  <Card title="Valkey" description="Permissive-licensed alternative." href="/docs/images/valkey" />
+  <Card title="Redis Cloud" description="Managed Redis." href="/docs/providers/redis-cloud" />
+  <Card
+    title="Upstash"
+    description="Serverless Redis-protocol option."
+    href="/docs/providers/upstash"
+  />
+</Cards>

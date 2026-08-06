@@ -1,0 +1,57 @@
+---
+title: "CockroachDB"
+description: "Distributed SQL, Postgres wire-compatible. Connect with DATABASE_URL; source-available CockroachDB Software License, not open source."
+icon: "Database"
+---
+
+CockroachDB is a distributed SQL database that speaks the Postgres wire protocol closely enough
+that `drivers.store.sql` still just says `postgres` — no new driver, no schema-syntax changes for
+the common case.
+
+<Callout title="The one rule">
+  Same `postgres` driver, same `DATABASE_URL` shape. Multi-region and distributed-transaction
+  behavior is CockroachDB's own concern beneath the wire protocol oke talks.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+DATABASE_URL=postgres://user:password@free-tier.gcp-region.cockroachlabs.cloud:26257/defaultdb?sslmode=verify-full
+```
+
+CockroachDB requires `sslmode=verify-full` (or a supplied CA cert) — plain `sslmode=require`
+without certificate verification is rejected.
+
+## License
+
+<Callout title="Not open source since November 2024" type="warn">
+  CockroachDB Core (the free, open-source edition) was discontinued. The database now ships under
+  the proprietary **CockroachDB Software License** — free for organizations under $10M annual
+  revenue with community support; paid tiers add dedicated support.
+</Callout>
+
+## Feature highlights
+
+| Feature         | Notes                                                               |
+| --------------- | ------------------------------------------------------------------- |
+| Distributed SQL | Horizontal scale-out with automatic sharding and rebalancing        |
+| Multi-region    | Survivability zones configured per table/database                   |
+| Wire protocol   | Postgres-compatible — most `pg` clients and Drizzle work unmodified |
+
+## Learn more
+
+- [YugabyteDB](/docs/providers/yugabytedb) — Apache 2.0 distributed-SQL alternative
+- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
+- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate
+
+## Next
+
+<Cards>
+  <Card
+    title="YugabyteDB"
+    description="Apache-2.0 licensed alternative."
+    href="/docs/providers/yugabytedb"
+  />
+  <Card title="Neon" description="Serverless, single-region option." href="/docs/providers/neon" />
+  <Card title="PgDog" description="Image pooling comparison." href="/docs/images/pgdog" />
+</Cards>

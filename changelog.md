@@ -12,6 +12,19 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- create-oke templates ship `.github/workflows/ci.yml` (typecheck + `bun test`
+  on push/PR), `tsconfig.json`, and a `typecheck` script — working CI on first
+  push.
+- `supabase` Docker image recipe — matches `supabase/postgres` ahead of the
+  generic Postgres recipe (env + healthcheck + URL); Postgres-protocol and
+  extension bundle only — not Auth / Storage / Realtime / Studio.
+- Docs **Images** (`/docs/images`) — pin compose recipes already wired into
+  `oke docker` (Postgres, PgDog, Supabase Postgres, Redis / Valkey /
+  Dragonfly, Caddy, Traefik); vendor choice stays in `images[…]`.
+- Docs **Providers** (`/docs/providers`) — managed SQL / Redis connection
+  guides (Neon, Supabase, CockroachDB, YugabyteDB, Redis Cloud, ElastiCache,
+  Memorystore, Azure Cache, Upstash, Dragonfly Cloud, DigitalOcean Caching);
+  driver ids stay `postgres` / `redis`.
 - Trace continuity — each execution allocates a stable run id (aligned with
   the durable journal when present); `fx.emit` stamps `parentRunId` on
   Signal messages; consumers and `fx.call` children record
@@ -40,11 +53,31 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Docs sidebar — Images and Providers pages use monochrome brand marks
+  (Postgres, Redis, Neon, Supabase, Caddy, Traefik, cloud vendors, PgDog paw
+  from pgdog.dev, …) instead of generic Lucide placeholders.
+- Homepage stack strip — Built with / Works with sit in a two-column grid
+  under Stack; each column is a desktop marquee ticker (opposite directions,
+  static wrap below `lg` / reduced motion); every listed name carries a
+  brand mark.
+- create-oke templates: fold `stores` into the initial `oke({ … })` call and
+  drop the post-construction `Object.assign(app.$options, …)` block (including
+  the leftover `env: "test"` pin). READMEs spell out scaffold vs what you
+  still build.
+- `SchemaColumnDecl` exposes a `getSQL()` type bridge so drizzle-orm operators
+  (`eq`, `isNull`, …) typecheck against abstract schema columns — matching the
+  documented `fx.store` query style.
 - Overview SLO burn also evaluates Manifest `slo.latency.p95` (availability
   burn unchanged).
 - Channel docs — suppression / hard bounce, shared-store injection,
   permanent-error no-failover, receipt statuses, Arabic catalog keys, and
   WhatsApp session/template Known gap.
+
+### 🔥 Removed
+
+- create-oke package-level integration suite (`packages/create-oke/tests`) and
+  the `CREATE_OKE_INTEGRATION` / `test:integration` gate — unit tests under
+  `packages/create-oke/src` remain.
 
 ### 🐛 Fixed
 

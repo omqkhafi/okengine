@@ -68,10 +68,14 @@ Adopted modules become namespaces on the client:
 import { oke } from "okengine";
 import * as main from "./flows/main";
 import * as notes from "./flows/notes";
+import { db } from "./core";
 
-export const app = oke({ name: "notes" }).adopt({ main, notes });
+export const app = oke({ name: "notes", stores: [db] }).adopt({ main, notes });
 export type App = typeof app;
 ```
+
+The scaffolded `src/app.ts` also registers secrets, signals, and channel
+templates in the same `oke({ … })` call — no post-construction mutation.
 
 ```typescript title="client"
 import { createClient } from "okengine/client";

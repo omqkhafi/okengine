@@ -1,0 +1,47 @@
+---
+title: "Azure Cache for Redis"
+description: "Azure-managed Redis — standard protocol over TLS by default. Connect with REDIS_URL, driver stays redis."
+icon: "Zap"
+---
+
+Azure Cache for Redis is Microsoft's managed Redis offering, spanning tiers from a shared Basic
+instance up to Enterprise clusters. TLS is on by default for new caches.
+
+<Callout title="The one rule">
+  Same `redis` driver — `REDIS_URL` points at the cache's non-SSL or SSL port; use the SSL port with
+  `rediss://` unless you've explicitly disabled TLS for the instance.
+</Callout>
+
+## Connect
+
+```bash title="docker/.env.docker or your process env"
+REDIS_URL=rediss://:accesskey@my-cache.redis.cache.windows.net:6380
+```
+
+Azure publishes the non-TLS port at `6379` and the TLS port at `6380` on the same host — the
+"Access keys" panel gives both the primary key and the ready-made connection string.
+
+## Feature highlights
+
+| Feature | Notes                                                                                 |
+| ------- | ------------------------------------------------------------------------------------- |
+| Tiers   | Basic (no SLA) → Standard (replicated) → Premium/Enterprise (clustering, persistence) |
+| Auth    | Access-key auth by default; Microsoft Entra ID auth available on newer tiers          |
+| TLS     | Default-on for new caches — plan around `rediss://` unless you opt out                |
+
+## Learn more
+
+- [Redis (image)](/docs/images/redis) — the driver this provider backs
+- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+
+## Next
+
+<Cards>
+  <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
+  <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
+  <Card
+    title="CockroachDB"
+    description="A managed SQL-side pair."
+    href="/docs/providers/cockroachdb"
+  />
+</Cards>

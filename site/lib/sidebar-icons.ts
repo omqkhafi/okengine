@@ -1,6 +1,12 @@
+/**
+ * Docs sidebar icons — Lucide for product surfaces, monochrome brand marks for
+ * Images + Providers pages (fill inherits sidebar ink).
+ */
+
 import type { LoaderPlugin } from "fumadocs-core/source";
-import { createElement, type ReactNode } from "react";
 import { icons, type LucideIcon } from "lucide-react";
+import { createElement, type ReactNode } from "react";
+import { BRAND_MARKS, type BrandMarkId } from "@/components/chrome/brand-marks";
 
 /**
  * Lucide icon names keyed by docs URL path (better-auth sidebar-content pattern).
@@ -44,6 +50,8 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/deployment/docker-swarm": "Ship",
   "/docs/deployment/kubernetes": "Container",
   "/docs/deployment/reverse-proxy": "Globe",
+  "/docs/images": "Container",
+  "/docs/providers": "Cloud",
   "/docs/reference": "BookMarked",
   "/docs/reference/plugins": "Puzzle",
   "/docs/reference/cli": "Terminal",
@@ -72,6 +80,29 @@ const PATH_ICONS: Readonly<Record<string, keyof typeof icons>> = {
   "/docs/reference/errors": "CircleAlert",
 };
 
+/** Docs path → monochrome brand mark id. */
+const PATH_BRANDS: Readonly<Record<string, BrandMarkId>> = {
+  "/docs/images/postgres": "postgresql",
+  "/docs/images/pgdog": "pgdog",
+  "/docs/images/supabase-docker": "supabase",
+  "/docs/images/redis": "redis",
+  "/docs/images/valkey": "valkey",
+  "/docs/images/dragonfly": "dragonfly",
+  "/docs/images/caddy": "caddy",
+  "/docs/images/traefik": "traefik",
+  "/docs/providers/neon": "neon",
+  "/docs/providers/supabase": "supabase",
+  "/docs/providers/cockroachdb": "cockroachdb",
+  "/docs/providers/yugabytedb": "yugabytedb",
+  "/docs/providers/redis-cloud": "redis",
+  "/docs/providers/elasticache": "aws",
+  "/docs/providers/memorystore": "googlecloud",
+  "/docs/providers/azure-redis": "azure",
+  "/docs/providers/upstash": "upstash",
+  "/docs/providers/dragonfly-cloud": "dragonfly",
+  "/docs/providers/digitalocean-caching": "digitalocean",
+};
+
 /** Folder display name → docs path for icon lookup. */
 const FOLDER_PATHS: Readonly<Record<string, string>> = {
   Documentation: "/docs",
@@ -79,18 +110,27 @@ const FOLDER_PATHS: Readonly<Record<string, string>> = {
   Elements: "/docs/elements",
   Console: "/docs/console",
   Deployment: "/docs/deployment",
+  Images: "/docs/images",
+  Providers: "/docs/providers",
   Reference: "/docs/reference",
   Plugins: "/docs/plugins",
   "AI Resources": "/docs/ai",
 };
 
 /**
- * Resolve a Lucide icon element for a docs path.
+ * Resolve a sidebar icon for a docs path — brand mark first, then Lucide.
  *
  * @param path - Absolute docs URL path
  */
 function iconForPath(path: string | undefined): ReactNode {
   if (!path) return undefined;
+
+  const brandId = PATH_BRANDS[path];
+  if (brandId) {
+    const Mark = BRAND_MARKS[brandId];
+    return createElement(Mark, { className: "size-4 shrink-0" });
+  }
+
   const name = PATH_ICONS[path];
   if (!name) return undefined;
   const Icon = icons[name] as LucideIcon | undefined;
@@ -99,9 +139,9 @@ function iconForPath(path: string | undefined): ReactNode {
 }
 
 /**
- * Loader plugin that attaches Lucide icons to the page tree (folder + page).
- * Frontmatter icons alone are not always wired into the tree in Fumadocs MDX;
- * this mirrors better-auth's explicit sidebar icon map.
+ * Loader plugin that attaches Lucide / brand icons to the page tree
+ * (folder + page). Frontmatter icons alone are not always wired into the tree
+ * in Fumadocs MDX; this mirrors better-auth's explicit sidebar icon map.
  */
 export function sidebarIconsPlugin(): LoaderPlugin {
   return {

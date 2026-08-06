@@ -14,17 +14,10 @@ import { webhookSecret } from "./vault";
 
 export const app = oke({
   name: "notes",
+  stores: [db, files],
   secrets: [webhookSecret],
   signals: [noteCreated],
   channel: { templates: [noteCreatedMail] },
 }).adopt({ main, notes });
 
 export type App = typeof app;
-
-Object.assign(app.$options, {
-  env: "test",
-  stores: [db, files],
-  secrets: [webhookSecret],
-  signals: [noteCreated],
-  channel: { templates: [noteCreatedMail] },
-});
