@@ -40,6 +40,11 @@ Port is a **per-database high port**, not always `6379` — copy it from the pan
 | Endpoint type | **Dynamic** (`*.db.redis.io`) can be redirected later; static `redis-….c…` cannot |
 | Private | Pro private endpoint needs VPC peering / PrivateLink / PSC first |
 | Modules | RediSearch / RedisJSON optional — unused by oke's KV driver |
+| Port | Per-database high port from Configuration — never assume `6379` |
+
+Essentials vs Pro panels differ (Access vs General), but **Connect** always opens the
+wizard with a filled client snippet — prefer that when the Configuration layout feels
+unfamiliar after a UI refresh.
 
 ## Real gotcha — dynamic vs static
 

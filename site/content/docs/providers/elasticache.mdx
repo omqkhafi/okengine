@@ -41,6 +41,10 @@ REDIS_URL=rediss://:AUTH_TOKEN@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com
 | Engine | Redis OSS **or** Valkey — same `redis` driver |
 | Cluster mode | Prefer **disabled** + Primary Endpoint for oke's URL-shaped client |
 | Transit encryption | When enabled, scheme must be `rediss://` |
+| AUTH | Set at create/rotate — ElastiCache does not show a Redis-Cloud-style “eye” password |
+
+Reader endpoints exist for read scaling; oke's single `REDIS_URL` should target the
+**Primary Endpoint** so writes and Gate/Signal counters hit the primary.
 
 ## Real gotcha — Redis OSS version cap
 

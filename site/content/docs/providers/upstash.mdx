@@ -36,6 +36,14 @@ TLS is mandatory — `redis://` without TLS fails.
 | REST | Edge/serverless SDKs only — **not** wired to `fx.store` |
 | Pricing | Per-request — watch command fan-out in hot KV paths |
 | Eviction | Plan max size / eviction; serverless still has quotas |
+| Consistency | Global replication options are product-specific — confirm region in Details |
+
+Do not put [PgDog](/docs/images/pgdog)-style thinking on Redis: there is no separate
+“pooled hostname” toggle. Connection count pressure shows up as Upstash plan limits /
+timeouts, not a Neon-style `-pooler` suffix.
+
+When debugging, open **Details** and confirm you are reading the **Redis** column, not
+the REST env var block that sits beside it on the same page.
 
 ## Real gotcha — REST token ≠ Redis password
 

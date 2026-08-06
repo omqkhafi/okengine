@@ -38,6 +38,12 @@ Smoke-check: `redis-cli -u "$REDIS_URL" PING`.
 | Private network | Recommended for production (peering) — passkey still required on public |
 | HA | Enable high availability in the data store settings before you need failover |
 | Driver | Same `redis` driver as self-hosted Dragonfly |
+| Port | Drawer URI often uses **6385** (not 6379) — copy the URI wholesale |
+
+Self-hosting comparison: the [Dragonfly image](/docs/images/dragonfly) needs
+`OKE_STORE_KV_PASSWORD` + `memlock`; Cloud replaces that with the drawer passkey.
+
+Do not reuse a self-hosted `REDIS_URL` without `rediss://` when the drawer shows TLS.
 
 ## Real gotcha — connecting before Active
 
