@@ -12,7 +12,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
-- Docs **Images** pages for the five recipes that had zero coverage —
+- Docs **Recipes** pages for the five recipes that had zero coverage —
   Mailpit, Meilisearch, Ollama, OpenBao, RustFS — env names, volume paths,
   production notes, and real failure modes.
 - create-oke templates ship `.github/workflows/ci.yml` (typecheck + `bun test`
@@ -21,7 +21,7 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 - `supabase` Docker image recipe — matches `supabase/postgres` ahead of the
   generic Postgres recipe (env + healthcheck + URL); Postgres-protocol and
   extension bundle only — not Auth / Storage / Realtime / Studio.
-- Docs **Images** (`/docs/images`) — pin compose recipes already wired into
+- Docs **Recipes** (`/docs/images`) — pin compose recipes already wired into
   `oke docker` (Postgres, PgDog, Supabase Postgres, Redis / Valkey /
   Dragonfly, Caddy, Traefik); vendor choice stays in `images[…]`.
 - Docs **Providers** (`/docs/providers`) — managed SQL / Redis connection
@@ -56,10 +56,10 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
-- Docs **Images** + **Providers** rewritten to a concrete acceptance bar —
+- Docs **Recipes** + **Providers** rewritten to a concrete acceptance bar —
   exact env / dashboard click-paths, volume backup meaning, production
   hardening, and one real failure mode per page (no interchangeable prose).
-- Docs sidebar — Images and Providers pages use monochrome brand marks
+- Docs sidebar — Recipes and Providers pages use monochrome brand marks
   (Postgres, Redis, Neon, Supabase, Caddy, Traefik, cloud vendors, PgDog paw
   from pgdog.dev, …) instead of generic Lucide placeholders.
 - Homepage stack strip — Built with / Works with sit in a two-column grid
