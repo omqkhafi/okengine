@@ -1,25 +1,26 @@
 ---
 title: "Supabase (Docker)"
-description: "Run supabase/postgres as store.sql — Postgres plus Supabase's bundled extensions, without the rest of the Supabase platform."
+description: "Pin supabase/postgres as store.sql — extension bundle (pgvector, …) without Auth, Storage, Realtime, or Studio."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-Supabase publishes `supabase/postgres` — plain Postgres with a bundled extension set (`pgvector`,
-`pg_graphql`, `pg_cron`, `wrappers`, and more) baked in.
-
-`oke docker` matches that image ahead of the generic Postgres recipe, so pinning it is enough — no
-other Supabase services run.
+Supabase publishes `supabase/postgres` — plain Postgres with a bundled extension set
+(`pgvector`, `pg_graphql`, `pg_cron`, `wrappers`, and more). `oke docker` matches that
+image ahead of the generic Postgres recipe.
 
 <Callout title="Not the full Supabase platform">
-  Supabase's own guide also brings up GoTrue, PostgREST, Kong, Realtime, Storage, and Studio.
-
-oke doesn't need that layer — auth, files, and realtime delivery are already covered by
-[Vault](/docs/elements/vault), [Store · files](/docs/elements/store#files), and
-[Signal](/docs/elements/signal). This recipe covers Postgres plus its extension bundle only.
-
+  This recipe does **not** start GoTrue, PostgREST, Kong, Realtime, Storage, or Studio.
+  Auth, files, and realtime delivery are already covered by [Vault](/docs/elements/vault),
+  [Store · files](/docs/elements/store#files), and [Signal](/docs/elements/signal).
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
 
 ```typescript title="oke.config.ts"
 images: {
@@ -27,24 +28,100 @@ images: {
 },
 ```
 
+</Step>
+
+<Step>
+### Same env shape as Postgres
+
+`oke docker` injects the same `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
+refs from `OKE_STORE_SQL_*`. Driver id stays `postgres`.
+
+</Step>
+
+<Step>
+### Use pgvector when you need it
+
+```typescript
+drivers: {
+  store: {
+    index: { local: "memory", docker: "pgvector", prod: "pgvector" },
+  },
+},
+```
+
+`CREATE EXTENSION IF NOT EXISTS vector` runs when the `pgvector` index driver opens —
+the extension ships in this image.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Meaning |
+| -------- | ------- |
+| `OKE_STORE_SQL_USER` | → `POSTGRES_USER` |
+| `OKE_STORE_SQL_PASSWORD` | → `POSTGRES_PASSWORD` |
+| `OKE_STORE_SQL_DB` | → `POSTGRES_DB` |
+| `DATABASE_URL` | App connection (`postgres://…:5432/…`) |
+| `PGDATA` | Default `/var/lib/postgresql/data/pgdata` |
+
+Identical credential contract to [Postgres](/docs/images/postgres) — only the image
+(and its extension bundle) differs.
+
+## Data and backup
+
+| Path | What lives there |
+| ---- | ---------------- |
+| `$PGDATA` | Cluster data, including extension catalogs |
+| Image `VOLUME` `/var/lib/postgresql/data` | Persistence mount |
+
+Same backup story as plain Postgres: `pg_dump` or volume backup of
+`/var/lib/postgresql/data`. Losing that volume loses tables **and** which extensions
+were created.
+
+## Production note
+
+Want managed Supabase (Auth / Storage / Realtime included)? Use the
+[Supabase provider](/docs/providers/supabase) and set `DATABASE_URL` — do not run this
+image and the cloud project as if they were the same deployment.
+
+For self-hosted production, prefer a pinned tag (not `latest`) and the same
+shared-store guidance as [Postgres](/docs/images/postgres#production-note). Free-tier
+cloud pausing does not apply to this Docker image — you own uptime.
+
 ## What the recipe configures
 
-| Field          | Value                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| Match          | Image reference contains `supabase/postgres`, checked before the generic `postgres` recipe |
-| Container port | `5432`                                                                                     |
-| Environment    | Same `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` shape as plain Postgres         |
-| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries                                       |
-| Connection URL | `postgres://user:pass@host:5432/db`                                                        |
+| Field | Value |
+| ----- | ----- |
+| Match | `supabase/postgres` before generic `postgres` |
+| Container port | `5432` |
+| Healthcheck | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
+| Connection URL | `postgres://user:pass@host:5432/db` |
 
-`store.index("…", { dims })` against `pgvector` works unmodified — the extension ships in the
-image, same as it would if you installed `pgvector` yourself on a plain Postgres image. See
-[Store · Index](/docs/elements/store#index) for `store.index` usage.
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Extension \"vector\" is not available">
+
+You pinned a plain `postgres:` image, not `supabase/postgres`, or the tag predates the
+bundle. Confirm the image reference contains `supabase/postgres`, then re-derive.
+With the right image, `CREATE EXTENSION vector` succeeds without a separate install.
+
+</Accordion>
+<Accordion title="Looking for Studio / the REST API">
+
+Those services are not part of this recipe. Use the
+[managed Supabase provider](/docs/providers/supabase) for the full platform, or oke's
+own Vault / Store · files / Signal for those concerns.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Supabase](/docs/providers/supabase) — the managed cloud alternative to this recipe
-- [Postgres](/docs/images/postgres) — the generic recipe this one takes precedence over
+- [Supabase (provider)](/docs/providers/supabase) — managed cloud alternative
+- [Postgres](/docs/images/postgres) — generic recipe this one takes precedence over
 - [Store · Index](/docs/elements/store#index) — `pgvector`-backed vector search
 
 ## Next

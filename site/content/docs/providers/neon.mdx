@@ -1,57 +1,108 @@
 ---
 title: "Neon"
-description: "Serverless Postgres — branching, scale-to-zero, pgvector on every plan. Connect with DATABASE_URL, driver stays postgres."
+description: "Serverless Postgres — Connect widget, pooled vs direct, scale-to-zero cold start, neon_superuser for pgvector."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-Neon is a serverless Postgres provider — storage and compute are separated, so a branch of your
-database is a cheap metadata operation rather than a full copy, and idle compute scales to zero.
+Neon separates storage from compute: branches are cheap copy-on-write metadata, and idle
+compute scales to zero. Wire protocol is plain Postgres — `drivers.store.sql` stays
+`postgres`.
 
 <Callout title="The one rule">
-  Neon speaks plain Postgres wire protocol. `drivers.store.sql` stays `postgres`; only
-  `DATABASE_URL` changes.
+  Copy the connection string from Neon's **Connect** widget. Prefer the pooled hostname
+  for app traffic and the direct hostname for migrations — never invent the `-pooler`
+  suffix by hand.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-DATABASE_URL=postgres://user:password@ep-xxxx.region.aws.neon.tech/dbname?sslmode=require
+1. Open [console.neon.tech](https://console.neon.tech) → your **project**.
+2. On the **Project Dashboard**, click **Connect**.
+3. In **Connect to your database**, pick **Branch**, **Compute**, **Database**, and
+   **Role**.
+4. Toggle **Connection pooling** **on** for the pooled string (hostname gains `-pooler`),
+   or **off** for the direct string.
+5. Copy the connection string into `DATABASE_URL` (add `?sslmode=require` if missing).
+
+```bash title="process env"
+# Runtime (pooled) — ep-….…-pooler.…neon.tech
+DATABASE_URL=postgresql://neondb_owner:…@ep-xxxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+
+# Migrations / pg_dump / LISTEN — same host without -pooler
+# OKE_STORE_SQL_URL=postgresql://neondb_owner:…@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require
 ```
 
-No `images["store.sql"]` pin is needed — you're not running the container, Neon is.
+No `images["store.sql"]` pin — Neon runs the server.
 
-## Feature highlights
+## Pooled vs direct
 
-| Feature       | Notes                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Branching     | Instant, copy-on-write branches of a database — cheap dev/preview environments                                               |
-| Scale-to-zero | Idle compute suspends automatically; first query after idle pays a cold-start                                                |
-| `pgvector`    | Available on every plan, no add-on — `CREATE EXTENSION vector;`                                                              |
-| Pooling       | Neon's own connection pooler is separate from [PgDog](/docs/images/pgdog) — don't stack both in front of the same connection |
+| Use | Which string | Why |
+| --- | ------------ | --- |
+| App / serverless / Drizzle runtime | **Pooled** (`-pooler`) | PgBouncer transaction mode; up to 10k client connections |
+| `oke db migrate` / `pg_dump` / logical replication / `LISTEN` | **Direct** (no `-pooler`) | Session features break under transaction pooling |
 
-<Callout title="pgvector for store.index">
-  With `pgvector` enabled, `store.index("…", {dims})` against a `pgvector` driver works exactly as
-  it would against a Postgres image — see [Store · Index](/docs/elements/store#index).
-</Callout>
+Do **not** also put [PgDog](/docs/images/pgdog) in front of Neon — one pooler only.
+
+**Consequence:** seeding or migrations through the pooled URL often fail with prepared-statement
+errors; switch those jobs to the direct URL.
+
+## pgvector and roles
+
+`CREATE EXTENSION vector;` works on every plan — no add-on. Roles created in the Neon
+Console / CLI / API get `neon_superuser` membership and can install supported extensions.
+
+Roles you create only with raw SQL (`CREATE ROLE`) do **not** get `neon_superuser` — they
+hit permission errors on extension install. Create app roles in the Console (or grant
+deliberately) when you need `pgvector` setup from that role.
+
+## Free tier / production limits
+
+| Limit | Free plan |
+| ----- | --------- |
+| Scale to zero | After **5 min** idle — **cannot disable** |
+| Compute | **100 CU-hours** / project / month |
+| Storage | **0.5 GB** / project |
+| Autoscaling | Up to 2 CU |
+
+Hitting CU-hours or storage **suspends compute** until the next billing period or an
+upgrade. Always-on production needs Launch/Scale with scale-to-zero disabled.
+
+## Real gotcha — cold start
+
+After scale-to-zero, the first query pays a wake-up (hundreds of ms to a few seconds).
+Health checks that expect sub-100ms on an idle Free project will flap. Paid plans can
+disable scale-to-zero; Free cannot.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="remaining connection slots are reserved / pooler wait timeout">
+
+Too many **direct** connections, or pooler server pool exhausted for your compute size.
+Move runtime traffic to the `-pooler` hostname; keep a small number of direct admin
+sessions. Neon reserves connections for the superuser account on each compute size.
+
+</Accordion>
+<Accordion title="permission denied to create extension \"vector\"">
+
+The role is not a Console-created / `neon_superuser` member. Re-run as `neondb_owner` (or
+another Console role), or grant appropriately — raw SQL roles start with public-schema
+privileges only.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Postgres (image)](/docs/images/postgres) — the driver this provider backs
-- [Store · SQL](/docs/elements/store#sql) — schema push/generate/migrate against any Postgres target
-- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
+- [Postgres (image)](/docs/images/postgres) — self-hosted peer
+- [Store · Index](/docs/elements/store#index) — `pgvector` usage
+- [PgDog](/docs/images/pgdog) — when you self-host pooling instead
 
 ## Next
 
 <Cards>
-  <Card
-    title="Supabase"
-    description="Another managed Postgres option."
-    href="/docs/providers/supabase"
-  />
-  <Card
-    title="CockroachDB"
-    description="Distributed SQL alternative."
-    href="/docs/providers/cockroachdb"
-  />
-  <Card title="PgDog" description="Image pooling comparison." href="/docs/images/pgdog" />
+  <Card title="Supabase" description="Another managed Postgres option." href="/docs/providers/supabase" />
+  <Card title="CockroachDB" description="Distributed SQL alternative." href="/docs/providers/cockroachdb" />
+  <Card title="PgDog" description="Self-hosted pooler comparison." href="/docs/images/pgdog" />
 </Cards>

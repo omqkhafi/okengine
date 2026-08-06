@@ -1,0 +1,128 @@
+---
+title: "Mailpit"
+description: "Local SMTP catcher for channel.email — SMTP_URL on :1025, UI on :8025, MAILPIT_UI_URL."
+icon: "Mail"
+source: "docs/spec/unified-theory.md"
+---
+
+Mailpit is the docker-mode email catcher — every message the `smtp` channel driver sends
+lands in a web UI instead of a real inbox. Pin it as `images["channel.email"]` when
+`drivers.channel.email.docker` is `smtp`.
+
+<Callout title="The one rule">
+  Docker ≈ prod for the **SMTP protocol** — same `SMTP_URL` shape. Mailpit is not a
+  production MTA; swap the image / URL for a real relay when you leave local docker.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image (templates already do)
+
+```typescript title="oke.config.ts"
+drivers: {
+  channel: {
+    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+  },
+},
+images: {
+  "channel.email": "axllent/mailpit:v1.22.3",
+},
+```
+
+</Step>
+
+<Step>
+### Connect the smtp driver
+
+```bash title="docker/.env.docker (written by oke docker)"
+SMTP_URL=smtp://127.0.0.1:1025
+MAILPIT_UI_URL=http://127.0.0.1:8025
+```
+
+No `SMTP_USER` / `SMTP_PASSWORD` required for Mailpit's open local listener.
+
+</Step>
+
+<Step>
+### Send and inspect
+
+Trigger any flow that uses `fx.email` / channel email. Open `MAILPIT_UI_URL` (port
+**8025**) to read the caught message — subject, body, headers.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `SMTP_URL` | **Yes** (app, smtp driver) | `smtp://host:1025` — boot fails without it |
+| `OKE_CHANNEL_EMAIL_URL` | Alternative | Same role as `SMTP_URL` |
+| `MAILPIT_UI_URL` | Written by stack | Browser UI — not read by the smtp driver |
+| `SMTP_USER` / `SMTP_PASSWORD` | No for Mailpit | Used when pointing `SMTP_URL` at an authenticated relay |
+
+## Data and backup
+
+Mailpit declares **no volume**. Caught messages live in container memory/disk for that
+instance only.
+
+**Backup means:** nothing durable to back up — this is a catcher. For forensic copies,
+export from the UI before recreate. Production mail never uses this image as the store of
+record.
+
+## Production note
+
+Templates set `prod: "smtp"` but still pin Mailpit in `images` for docker. In real prod,
+point `SMTP_URL` at your provider and set `SMTP_USER` / `SMTP_PASSWORD` as needed.
+
+Leaving Mailpit reachable on a public host exposes an open relay UI — bind to the compose
+network only.
+
+Healthcheck probes `http://127.0.0.1:8025/api/v1/info` — UI down ⇒ service unhealthy even
+if SMTP still accepts mail.
+
+## What the recipe configures
+
+| Field | Value |
+| ----- | ----- |
+| SMTP port | `1025` (published) |
+| Extra port | `8025` → UI |
+| Healthcheck | `wget` against `/api/v1/info`, every 5s, 10 retries |
+| Connection URL | `smtp://host:1025` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: smtp driver needs SMTP_URL">
+
+The smtp binder refuses to start without `SMTP_URL` (or `OKE_CHANNEL_EMAIL_URL`). In
+docker mode the error asks whether `oke dev -d` wrote `docker/.env.docker`. Also rejects
+non-`smtp://` schemes: `oke boot: SMTP_URL must use smtp://`.
+
+</Accordion>
+<Accordion title="Messages send but UI is empty">
+
+Wrong UI port, or you opened a different instance's Mailpit. Confirm `MAILPIT_UI_URL`
+matches the published `8025` mapping for **this** compose project (instance-id offsets
+shift the host port).
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Channel](/docs/elements/channel) — email delivery physics
+- [Environment variables](/docs/reference/environment-variables) — `SMTP_*` map
+- [Configuration](/docs/reference/configuration) — default `channel.email` image pin
+
+## Next
+
+<Cards>
+  <Card title="RustFS" description="S3-compatible files for the same stack." href="/docs/images/rustfs" />
+  <Card title="OpenBao" description="Vault recipe for docker/prod secrets." href="/docs/images/openbao" />
+  <Card title="Channel" description="How fx.email reaches humans." href="/docs/elements/channel" />
+</Cards>

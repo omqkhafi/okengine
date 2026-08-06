@@ -1,19 +1,25 @@
 ---
 title: "Dragonfly"
-description: "Multi-threaded Redis-wire runtime — same store.kv driver, opt-in image pin, BSL 1.1 license."
+description: "Multi-threaded Redis-wire runtime — OKE_STORE_KV_PASSWORD, memlock ulimit, no maxmemory-policy flag."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Dragonfly is a multi-threaded, memory-efficient reimplementation of the Redis protocol — same
-`redis://` wire format, different engine underneath. It slots behind the same `redis` driver with
+Dragonfly is a multi-threaded, memory-efficient reimplementation of the Redis protocol —
+same `redis://` wire format, different engine. Slots behind the same `redis` driver with
 zero Flow changes.
 
 <Callout title="The one rule">
-  Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store` behaves
-  identically to Redis or Valkey.
+  Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store`
+  behaves identically to Redis or Valkey at the protocol layer.
 </Callout>
 
-## Pin it
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
 
 ```typescript title="oke.config.ts"
 images: {
@@ -21,22 +27,84 @@ images: {
 },
 ```
 
+</Step>
+
+<Step>
+### Password + memory
+
+```bash
+OKE_STORE_KV_PASSWORD=…
+OKE_STORE_KV_MAXMEMORY=256mb   # optional; recipe passes --maxmemory
+REDIS_URL=redis://:…@127.0.0.1:6379
+```
+
+Command: `dragonfly --requirepass "$OKE_STORE_KV_PASSWORD" --maxmemory "…"`.
+
+Unlike Redis/Valkey, this recipe does **not** pass `--maxmemory-policy` — Dragonfly's
+own defaults apply.
+
+</Step>
+
+<Step>
+### memlock ulimit
+
+The recipe sets `ulimits.memlock: -1` — required for Dragonfly's shared-nothing design.
+If the host forbids unlimited memlock, the container may fail to start.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` |
+| `REDIS_URL` | **Yes** (app) | `redis://` URL for the driver |
+| `OKE_STORE_KV_MAXMEMORY` | Optional | `--maxmemory` (default `0` in the command template) |
+| `HEALTHCHECK_PORT` | Set by recipe | `6379` — used by the image's healthcheck script |
+
+## Data and backup
+
+No named volume — ephemeral by default, same as Redis/Valkey. **Backup means:** do not
+treat this container as durable storage until you add a volume and Dragonfly persistence
+settings; rebuild from SQL/files, or use [Dragonfly Cloud](/docs/providers/dragonfly-cloud).
+
+## Production note
+
+BSL 1.1 — converts to Apache 2.0 on a published change date per release. Free for
+self-hosting; the BSL terms restrict offering Dragonfly itself as a commercial managed
+service to third parties — running it for your own app is unaffected.
+
+Multi-threaded architecture makes better use of multi-core hosts than single-threaded
+Redis under heavy concurrent load. For a managed endpoint with TLS + passkey, see
+[Dragonfly Cloud](/docs/providers/dragonfly-cloud).
+
 ## What the recipe configures
 
-| Field          | Value                                                                         |
-| -------------- | ----------------------------------------------------------------------------- |
-| Container port | `6379`                                                                        |
-| Command        | `dragonfly --requirepass … --maxmemory …`                                     |
-| `ulimits`      | `memlock: -1` — Dragonfly needs unlocked memory for its shared-nothing design |
-| Healthcheck    | container's own `/usr/local/bin/healthcheck.sh`, every 5s, 10 retries         |
-| Connection URL | `redis://:pass@host:6379` — same scheme as Redis                              |
-| License        | BSL 1.1 — converts to Apache 2.0 on a published change date per release       |
+| Field | Value |
+| ----- | ----- |
+| Container port | `6379` |
+| `ulimits` | `memlock: -1` |
+| Healthcheck | `/usr/local/bin/healthcheck.sh`, every 5s, 10 retries |
+| Connection URL | `redis://:pass@host:6379` |
 
-## Why pick it
+## Troubleshooting
 
-Multi-threaded architecture makes better use of multi-core hosts than single-threaded Redis under
-heavy concurrent load. Free for self-hosting; the BSL terms restrict offering Dragonfly itself as
-a commercial managed service to third parties — running it for your own app is unaffected.
+<Accordions>
+<Accordion title="Container exits — cannot lock memory / memlock">
+
+Host `ulimit -l` is too low. The recipe requests unlimited memlock. Raise the Docker
+daemon / systemd limit, or run on a host that allows `memlock: -1`.
+
+</Accordion>
+<Accordion title="oke boot: redis driver needs REDIS_URL">
+
+Same driver failure as Redis — export `REDIS_URL` or let docker mode write it. Wrong
+password yields Redis-protocol `NOAUTH` / `WRONGPASS` from the server.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 

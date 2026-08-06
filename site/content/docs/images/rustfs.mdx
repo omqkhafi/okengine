@@ -1,0 +1,144 @@
+---
+title: "RustFS"
+description: "S3-compatible object store — S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY, /data volume, console on :9001."
+icon: "HardDrive"
+source: "docs/spec/unified-theory.md"
+---
+
+RustFS is the default docker `store.files` image — an Apache-2.0 S3-compatible object
+store (MinIO alternative). Driver id stays `s3`; Bun binds `Bun.S3Client` against the
+endpoint.
+
+<Callout title="The one rule">
+  Protocol name is `s3` — vendor choice is the image pin (`rustfs/rustfs:…`) plus
+  `S3_ENDPOINT`. Never invent a `rustfs` driver id.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin driver + image (templates already do)
+
+```typescript title="oke.config.ts"
+drivers: {
+  store: {
+    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
+  },
+},
+images: {
+  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+},
+```
+
+</Step>
+
+<Step>
+### Credentials and endpoint
+
+```bash title="docker/.env.docker (written by oke docker)"
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+S3_BUCKET=oke
+S3_ENDPOINT=http://127.0.0.1:9000
+S3_URL=http://…@127.0.0.1:9000/oke
+S3_REGION=us-east-1
+S3_CONSOLE_URL=http://127.0.0.1:9001
+```
+
+Recipe maps:
+
+- `RUSTFS_ACCESS_KEY=${S3_ACCESS_KEY_ID}`
+- `RUSTFS_SECRET_KEY=${S3_SECRET_ACCESS_KEY}`
+- `RUSTFS_CONSOLE_ENABLE=true`
+- `RUSTFS_ADDRESS=:9000`
+- command: `/data`
+
+</Step>
+
+<Step>
+### Put an object
+
+Any flow using `fx.store` files (`put` / `get`) against the `s3` driver talks to this
+endpoint. Open `S3_CONSOLE_URL` for a browser console on port **9001**.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `S3_ACCESS_KEY_ID` | **Yes** | Access key → `RUSTFS_ACCESS_KEY` |
+| `S3_SECRET_ACCESS_KEY` | **Yes** | Secret key → `RUSTFS_SECRET_KEY` |
+| `S3_BUCKET` | **Yes** (app) | Bucket name the driver opens |
+| `S3_ENDPOINT` | **Yes** (non-AWS) | Origin `http://host:9000` |
+| `S3_REGION` | Optional | Default `us-east-1` in stack env |
+| `S3_SESSION_TOKEN` | Optional | Temporary creds |
+| `S3_CONSOLE_URL` | Written by stack | UI on `:9001` — not required by the driver |
+| `S3_URL` | Written by stack | Credentialed URL form |
+
+## Data and backup
+
+| Volume | Path | What it stores |
+| ------ | ---- | -------------- |
+| `store-files-data` | `/data` | Object bytes + RustFS metadata |
+
+**Backup means:** snapshot that named volume (or `aws s3 sync` against the API).
+Deleting the volume deletes every object.
+
+Credentials live in `.env.docker`, not in `/data` — rotate keys without wiping objects.
+Losing both volume and keys means full restore from backup only.
+
+## Production note
+
+For cloud prod, point the same `s3` driver at real S3 / R2 / GCS interop by changing
+`S3_ENDPOINT` + keys — keep the driver id. Self-hosted RustFS on a single node is a
+durability SPOF: put the `/data` volume on reliable disks and back it up.
+
+Do not publish `:9000` / `:9001` on the public internet without TLS and network policy —
+the recipe enables the console for local ops.
+
+## What the recipe configures
+
+| Field | Value |
+| ----- | ----- |
+| API port | `9000` |
+| Extra port | `9001` → console |
+| Healthcheck | `curl -f http://127.0.0.1:9000/health`, every 5s, 12 retries, 10s start |
+| Connection URL | `http://user:pass@host:9000/bucket` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: redis / meilisearch / S3 URL missing — S3_BUCKET">
+
+Files on the `s3` driver need `S3_BUCKET` (or `OKE_STORE_FILES_DB`). Without it the
+facet cannot open. Re-run `oke dev --docker` so stack env fills `S3_*`, or export them
+for a managed bucket.
+
+</Accordion>
+<Accordion title="Access Denied / signature errors against :9000">
+
+`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` do not match `RUSTFS_*` inside the
+container, or `S3_ENDPOINT` points at the wrong host/port. Align `.env.docker` with the
+running service; confirm health at `/health` before debugging client signatures.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Store · Files](/docs/elements/store#files) — facet API and drivers
+- [Environment variables](/docs/reference/environment-variables) — full `S3_*` map
+- [Installation](/docs/get-started/installation) — docker env cheat sheet
+
+## Next
+
+<Cards>
+  <Card title="Mailpit" description="SMTP catcher for the same stack." href="/docs/images/mailpit" />
+  <Card title="OpenBao" description="Vault for secrets." href="/docs/images/openbao" />
+  <Card title="Store" description="Files facet details." href="/docs/elements/store" />
+</Cards>

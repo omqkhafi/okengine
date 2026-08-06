@@ -1,15 +1,16 @@
 ---
 title: "Images"
-description: "Docker recipes already shipped in oke docker — Postgres, PgDog, Supabase, Redis, Valkey, Dragonfly, Caddy, Traefik."
+description: "Docker recipes already shipped in oke docker — SQL, Redis-wire, proxy, files, email, vault, search, and local AI."
 icon: "Container"
+source: "docs/spec/unified-theory.md"
 ---
 
-Every recipe below is already wired into `oke docker` — pin an image in `oke.config.ts` and get
-env, healthcheck, and a connection URL for free, no recipe code to write yourself.
+Every recipe below is already wired into `oke docker` — pin an image in `oke.config.ts`
+and get env, healthcheck, and a connection URL for free.
 
 <Callout title="The one rule">
-  Vendor choice lives in `images["store.sql"]` / `images["store.kv"]` / `images.proxy` — never in
-  `drivers.store.sql` / `drivers.store.kv`, which only ever say `postgres` or `redis`.
+  Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol
+  ids (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `ollama`, …).
 </Callout>
 
 ## SQL
@@ -17,23 +18,27 @@ env, healthcheck, and a connection URL for free, no recipe code to write yoursel
 <Cards>
   <Card
     title="Postgres"
-    description="The default `store.sql` image."
+    description="Default store.sql — POSTGRES_*, PGDATA, DATABASE_URL."
     href="/docs/images/postgres"
   />
-  <Card title="PgDog" description="Postgres transaction pooler." href="/docs/images/pgdog" />
+  <Card
+    title="PgDog"
+    description="Transaction pooler on :6432."
+    href="/docs/images/pgdog"
+  />
   <Card
     title="Supabase (Docker)"
-    description="Local `supabase/postgres` image."
+    description="supabase/postgres extension bundle only."
     href="/docs/images/supabase-docker"
   />
 </Cards>
 
-## Redis
+## Redis-wire
 
-Driver id stays `redis` for every image below — vendor choice only changes the pin.
+Driver id stays `redis` for every image below.
 
 <Cards>
-  <Card title="Redis" description="The default `store.kv` image." href="/docs/images/redis" />
+  <Card title="Redis" description="Default store.kv — requirepass + maxmemory." href="/docs/images/redis" />
   <Card title="Valkey" description="BSD-licensed Redis-wire fork." href="/docs/images/valkey" />
   <Card
     title="Dragonfly"
@@ -42,24 +47,54 @@ Driver id stays `redis` for every image below — vendor choice only changes the
   />
 </Cards>
 
-## Proxy
-
-Opt-in via `images.proxy` — leave it unset until you need HTTPS at the edge or `--scale app=N`.
+## Files · email · vault · search · AI
 
 <Cards>
-  <Card title="Caddy" description="Automatic-HTTPS reverse proxy." href="/docs/images/caddy" />
+  <Card
+    title="RustFS"
+    description="S3-compatible store.files — /data volume."
+    href="/docs/images/rustfs"
+  />
+  <Card
+    title="Mailpit"
+    description="SMTP catcher — UI on :8025."
+    href="/docs/images/mailpit"
+  />
+  <Card
+    title="OpenBao"
+    description="Raft vault — unseal key SPOF."
+    href="/docs/images/openbao"
+  />
+  <Card
+    title="Meilisearch"
+    description="Full-text store.index on :7700."
+    href="/docs/images/meilisearch"
+  />
+  <Card
+    title="Ollama"
+    description="Local models — /root/.ollama volume."
+    href="/docs/images/ollama"
+  />
+</Cards>
+
+## Proxy
+
+Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N`.
+
+<Cards>
+  <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/images/caddy" />
   <Card
     title="Traefik"
-    description="Docker-label auto-discovery proxy."
+    description="Docker-label discovery + socket-proxy."
     href="/docs/images/traefik"
   />
 </Cards>
 
 ## Learn more
 
-- [Providers](/docs/providers) — managed cloud alternatives to these recipes
-- [Docker](/docs/deployment/docker) — full compose derivation, PgDog pooling, reverse proxy
-- [Store](/docs/elements/store) — the `sql` / `kv` facets these drivers back
+- [Providers](/docs/providers) — managed cloud alternatives
+- [Docker](/docs/deployment/docker) — compose derivation, PgDog, reverse proxy
+- [Store](/docs/elements/store) — `sql` / `kv` / `files` / `index` facets
 
 ## Next
 

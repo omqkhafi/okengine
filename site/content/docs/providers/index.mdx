@@ -1,12 +1,12 @@
 ---
 title: "Providers"
-description: "Managed cloud SQL and Redis providers that slot behind oke's postgres and redis drivers — connection recipes, feature highlights, and license notes."
+description: "Managed cloud SQL and Redis providers behind oke's postgres and redis drivers — dashboard click-paths, pooling, and gotchas."
 icon: "Cloud"
+source: "docs/spec/unified-theory.md"
 ---
 
-Every provider below speaks a protocol oke already has a driver for — Postgres wire or Redis wire.
-Hand the connection string to that driver and nothing else changes; no new driver id, no Flow
-code changes.
+Every provider below speaks a protocol oke already drives — Postgres wire or Redis wire.
+Hand the connection string to that driver; no new driver id, no Flow code changes.
 
 <Callout title="The one rule">
   Vendor choice lives in a connection URL (`DATABASE_URL` / `REDIS_URL`) — never in
@@ -15,83 +15,83 @@ code changes.
 
 ## SQL providers
 
-Managed Postgres-wire databases — set `DATABASE_URL`, `drivers.store.sql` stays `postgres`.
+Managed Postgres-wire databases — set `DATABASE_URL`, driver stays `postgres`.
 
 <Cards>
   <Card
     title="Neon"
-    description="Serverless, branching, scale-to-zero."
+    description="Connect widget · pooled vs direct · cold start."
     href="/docs/providers/neon"
   />
-  <Card title="Supabase" description="Managed Postgres platform." href="/docs/providers/supabase" />
+  <Card
+    title="Supabase"
+    description="Connect modes · :6543 vs :5432 · free pause."
+    href="/docs/providers/supabase"
+  />
   <Card
     title="CockroachDB"
-    description="Distributed SQL, multi-region."
+    description="Connect dialog · verify-full · CA cert."
     href="/docs/providers/cockroachdb"
   />
   <Card
     title="YugabyteDB"
-    description="Distributed SQL, Postgres-wire (YSQL)."
+    description="YSQL on :5433 · Connect → Application."
     href="/docs/providers/yugabytedb"
   />
 </Cards>
 
 ## Redis providers
 
-Managed Redis-wire caches — set `REDIS_URL`, `drivers.store.kv` stays `redis`.
+Managed Redis-wire caches — set `REDIS_URL`, driver stays `redis`.
 
 <Cards>
   <Card
     title="Redis Cloud"
-    description="Redis Ltd.'s own managed offering."
+    description="Configuration tab · Connect wizard · rediss://"
     href="/docs/providers/redis-cloud"
   />
   <Card
     title="Amazon ElastiCache"
-    description="AWS-managed Redis / Valkey."
+    description="Primary Endpoint · Redis OSS ≤7.1."
     href="/docs/providers/elasticache"
   />
   <Card
     title="Google Memorystore"
-    description="GCP-managed Redis / Valkey."
+    description="Primary Endpoint IP · TLS on 6378."
     href="/docs/providers/memorystore"
   />
   <Card
     title="Azure Cache for Redis"
-    description="Azure-managed Redis."
+    description="Access keys · TLS port 6380."
     href="/docs/providers/azure-redis"
   />
   <Card
     title="Upstash"
-    description="Serverless Redis, standard TCP endpoint."
+    description="TCP rediss:// — not REST tokens."
     href="/docs/providers/upstash"
   />
   <Card
     title="Dragonfly Cloud"
-    description="Managed Dragonfly."
+    description="Data store drawer · Connection URI."
     href="/docs/providers/dragonfly-cloud"
   />
   <Card
     title="DigitalOcean Managed Caching"
-    description="Valkey-backed, formerly Aiven Redis."
+    description="Connection Details · trusted sources."
     href="/docs/providers/digitalocean-caching"
   />
 </Cards>
 
 ## Learn more
 
-- [Images](/docs/images) — run the same protocols yourself with a shipped Docker recipe
-- [Store](/docs/elements/store) — the `sql` / `kv` facets these drivers back
-- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`, `REDIS_URL`, and overrides
+- [Images](/docs/images) — self-hosted recipes for the same protocols
+- [Store](/docs/elements/store) — `sql` / `kv` facets
+- [Environment variables](/docs/reference/environment-variables) — URL precedence
 
 ## Next
 
 <Cards>
-  <Card
-    title="Neon"
-    description="Start with a serverless SQL option."
-    href="/docs/providers/neon"
-  />
+  <Card title="Neon" description="Start with a serverless SQL option." href="/docs/providers/neon" />
   <Card title="Images" description="Run the same protocols yourself." href="/docs/images" />
   <Card title="Store" description="The facets these drivers back." href="/docs/elements/store" />
 </Cards>

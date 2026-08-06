@@ -1,0 +1,135 @@
+---
+title: "Ollama"
+description: "Local AI model server — OKE_AI_URL, OKE_AI_MODEL, /root/.ollama volume, boot pull of the configured model."
+icon: "Bot"
+source: "docs/spec/unified-theory.md"
+---
+
+Ollama serves local models over HTTP on port `11434`. Pin `images.ai` and set
+`drivers.ai` to `ollama` where you want local inference — there is **no** production
+default for AI; prod must declare a driver.
+
+<Callout title="The one rule">
+  Name the model explicitly (`OKE_AI_MODEL` or `oke ai setup`). The recipe pulls
+  `${OKE_AI_MODEL:-qwen3.5:9b}` on boot and keeps `ollama serve` in the foreground.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin driver + image
+
+```typescript title="oke.config.ts"
+drivers: {
+  ai: { local: "ollama", docker: "ollama", test: "mock" }, // prod: set deliberately
+},
+images: {
+  ai: "ollama/ollama:latest",
+},
+```
+
+Or run `oke ai setup --provider ollama --yes` to wire driver, env, and `src/ai.ts`.
+
+</Step>
+
+<Step>
+### Env written by the stack
+
+```bash title="docker/.env.docker"
+OKE_AI_URL=http://127.0.0.1:11434
+OKE_AI_MODEL=qwen3.5:9b
+```
+
+Container also sets `OLLAMA_HOST=0.0.0.0:11434` so the API listens on all interfaces
+inside the network.
+
+</Step>
+
+<Step>
+### First boot pulls the model
+
+The entrypoint runs `ollama serve`, waits until `ollama list` works, then
+`ollama pull "$OKE_AI_MODEL"`. Healthcheck allows a long start (`retries: 60`,
+`start_period: 20s`) because pulls are large.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable | Required? | Meaning |
+| -------- | --------- | ------- |
+| `OKE_AI_URL` | **Yes** in docker | Base URL — `oke boot: ollama driver needs OKE_AI_URL` when missing |
+| `OKE_AI_MODEL` | Recommended | Model tag to pull/serve (default `qwen3.5:9b`) |
+| `OLLAMA_HOST` | Set by recipe | `0.0.0.0:11434` inside the container |
+| `OKE_AI_VISION_MODEL` / `OKE_AI_EMBED_MODEL` | Optional | Written by `oke ai setup` for logical models |
+
+On Apple Silicon hosts running Ollama outside Docker, `qwen3.5:9b-mlx` is a common
+override — set `OKE_AI_MODEL` accordingly.
+
+## Data and backup
+
+| Volume | Path | What it stores |
+| ------ | ---- | -------------- |
+| `ai-data` | `/root/.ollama` | Pulled model weights + Ollama metadata |
+
+**Backup means:** preserve `ai-data` so you do not re-download multi-GB models after
+every recreate. Deleting the volume forces another full `ollama pull` on next boot (slow,
+bandwidth-heavy). Model choice is not in the volume alone — keep `OKE_AI_MODEL` in env.
+
+## Production note
+
+Local Ollama is for docker/dev (and air-gapped prod you deliberately choose). Cloud AI
+drivers (`anthropic`, `openai-compatible`, `bedrock`, `vertex`) stay separate.
+
+PII egress rules treat `ollama` as local (no third-party egress) — see
+[AI · PII](/docs/elements/ai).
+
+First request after a cold pull can take minutes; size the healthcheck/start_period
+accordingly. GPU passthrough is **not** configured by this recipe — CPU inference is the
+default compose shape.
+
+## What the recipe configures
+
+| Field | Value |
+| ----- | ----- |
+| Container port | `11434` |
+| Entrypoint | `/bin/sh -c` boot script (serve → pull → wait) |
+| Healthcheck | `ollama list`, every 5s, 60 retries, 20s start period |
+| Connection URL | `http://host:11434` |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: ollama driver needs OKE_AI_URL">
+
+Docker mode expects `OKE_AI_URL` from `docker/.env.docker` when `images.ai` is pinned.
+Locally the default is `http://127.0.0.1:11434`. Prefer `oke ai setup` to wire everything
+in one pass.
+
+</Accordion>
+<Accordion title="ollama: unreachable at … / model not found">
+
+Server not ready yet, or `OKE_AI_MODEL` was never pulled. Watch logs for the boot
+`ollama pull` line; override the model and recreate so the entrypoint pulls the new tag.
+`OllamaUnavailableError` wraps HTTP errors from `/api/chat` and `/api/tags`.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [AI](/docs/elements/ai) — `fx.ask`, prompts, evals
+- [CLI · oke ai setup](/docs/reference/cli) — non-interactive provider wiring
+- [Environment variables](/docs/reference/environment-variables) — `OKE_AI_*`
+
+## Next
+
+<Cards>
+  <Card title="Meilisearch" description="Full-text index peer." href="/docs/images/meilisearch" />
+  <Card title="OpenBao" description="Secrets for docker/prod." href="/docs/images/openbao" />
+  <Card title="AI" description="Prompts, models, guardrails." href="/docs/elements/ai" />
+</Cards>

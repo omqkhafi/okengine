@@ -1,51 +1,81 @@
 ---
 title: "Google Cloud Memorystore"
-description: "GCP-managed Redis or Valkey — standard protocol over TLS. Connect with REDIS_URL, driver stays redis."
+description: "GCP-managed Redis/Valkey — Instance details Primary Endpoint, AUTH string, TLS on 6378, VPC-only."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-Memorystore is Google Cloud's managed caching service, with separate Redis-compatible and Valkey
-offerings — both plain Redis-wire endpoints inside your VPC.
+Memorystore for Redis (and the Valkey offering) is private-IP only inside your VPC.
+`drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Same `redis` driver either way. Memorystore instances are VPC-internal by default — reachable from
-  Cloud Run / GKE / Compute Engine in the same network, not from the open internet.
+  Open the instance → **Connections** for **Primary Endpoint** + port; **Security** for
+  the AUTH string. There is no public hostname to paste.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://:password@10.0.0.3:6379
+1. Google Cloud Console → **Memorystore** → **Redis** (or Valkey) → click **Instance ID**.
+2. **Connections** section → copy **Primary Endpoint** (private IP) and **Port**
+   (usually `6379`).
+3. If AUTH is enabled: **Security** section → **AUTH string** (or
+   `gcloud redis instances get-auth-string INSTANCE --region=REGION`).
+4. If **in-transit encryption** is on: download the **TLS server certificate** from the
+   instance page; clients use port **6378** with that CA (not plain 6379).
+
+```bash title="process env"
+# AUTH on, transit encryption off (common default)
+REDIS_URL=redis://:AUTH_STRING@10.0.0.3:6379
+
+# Transit encryption on → port 6378 + rediss:// + CA configured in the client
+# REDIS_URL=rediss://:AUTH_STRING@10.0.0.3:6378
 ```
 
-The host is a private IP inside your VPC (shown on the instance's "Details" page) — a Serverless
-VPC Access connector or equivalent is needed for Cloud Run to reach it.
+Cloud Run / Cloud Functions need a **Serverless VPC Access** connector on the same
+network.
 
-## Feature highlights
+## Production guidance
 
-| Feature       | Notes                                                               |
-| ------------- | ------------------------------------------------------------------- |
-| Engine choice | Redis-compatible tier or a separate Valkey tier                     |
-| Networking    | Private-IP-only by default — no public endpoint option              |
-| TLS           | In-transit encryption is an explicit instance flag, not the default |
+| Topic | Guidance |
+| ----- | -------- |
+| Networking | Private IP only — never a public endpoint option |
+| AUTH | Optional but recommended; string is on the instance Security panel |
+| TLS | **Not** default — enable in-transit encryption explicitly; port becomes **6378** |
+| Tiers | Basic vs Standard (replica) — pick before you need HA |
+
+## Real gotcha — TLS port flip
+
+Enabling in-transit encryption changes the client port to **6378** and requires the
+server CA. Leaving `REDIS_URL` on `:6379` after enabling TLS looks like a mysterious
+timeout — update port and scheme together.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection refused / timeout from Cloud Run">
+
+Missing Serverless VPC Access connector, or connector on the wrong VPC. Memorystore is
+unreachable from the public internet by design.
+
+</Accordion>
+<Accordion title="NOAUTH Authentication required">
+
+AUTH enabled but password omitted from `REDIS_URL`. Copy the AUTH string from
+**Security** and use `redis://:AUTH@ip:port`.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey) — the two engines this maps to
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey)
+- [ElastiCache](/docs/providers/elasticache) — AWS equivalent
+- [Store · KV](/docs/elements/store#kv)
 
 ## Next
 
 <Cards>
   <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
-  <Card
-    title="Azure Cache for Redis"
-    description="Azure's equivalent."
-    href="/docs/providers/azure-redis"
-  />
-  <Card
-    title="Dragonfly Cloud"
-    description="Vendor-neutral managed option."
-    href="/docs/providers/dragonfly-cloud"
-  />
+  <Card title="Azure Cache for Redis" description="Azure's equivalent." href="/docs/providers/azure-redis" />
+  <Card title="Dragonfly Cloud" description="Public TLS endpoint option." href="/docs/providers/dragonfly-cloud" />
 </Cards>

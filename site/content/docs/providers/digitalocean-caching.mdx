@@ -1,53 +1,81 @@
 ---
 title: "DigitalOcean Managed Caching"
-description: "DigitalOcean's Valkey-backed caching service — the Aiven-powered Redis offering it replaced. Connect with REDIS_URL, driver stays redis."
+description: "Valkey-backed DO Databases — Overview Connection Details, trusted sources, TLS-required high port."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-DigitalOcean's managed Redis was powered by Aiven behind the scenes. When Aiven stepped back from
-offering Redis (following Redis's 2024 license change), DigitalOcean rebranded the product to
-**Managed Caching** and moved it onto **Valkey** — the wire protocol is unchanged.
+DigitalOcean's managed Redis offering moved to **Valkey** (Managed Caching) after Aiven
+stepped back from Redis. Wire protocol unchanged — `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  `drivers.store.kv` stays `redis` regardless — Valkey speaks the same protocol. If you have an
-  older DigitalOcean cluster still labeled "Managed Redis," check its version: new clusters are
-  Valkey-only.
+  Databases → cluster → **Overview → Connection Details**. Copy the
+  `rediss://` URI (public or private). Add the client to **Trusted Sources** or you get
+  connection refused.
 </Callout>
 
-## Connect
+## Find credentials (current control panel)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://default:password@db-valkey-nyc1-12345-do-user-1234567-0.db.ondigitalocean.com:25061
+1. [cloud.digitalocean.com/databases](https://cloud.digitalocean.com/databases) → click
+   the **Valkey / Caching** cluster.
+2. **Overview** → **Connection Details**:
+   - Toggle **Public network** vs **Private network** (VPC)
+   - Copy host, port, user, password, or the assembled connection string
+3. Password is hidden until you reveal/copy it in that panel.
+4. **Network Access** / trusted sources: add app Droplet, App Platform app, or VPC CIDR
+   (from Overview **VPC Network**) before connecting.
+
+```bash title="process env"
+REDIS_URL=rediss://default:PASSWORD@db-valkey-nyc1-….db.ondigitalocean.com:25061
 ```
 
-DigitalOcean's managed databases publish a random high port (shown in the cluster's "Connection
-Details" panel) — TLS is required, no plaintext option.
+Port is a **random high port** from Connection Details — not `6379`. TLS is required;
+there is no plaintext option.
 
-## Feature highlights
+## Production guidance
 
-| Feature | Notes                                                                                                           |
-| ------- | --------------------------------------------------------------------------------------------------------------- |
-| Engine  | Valkey (current) — older "Managed Redis" clusters are capped and unsupported past Redis 7.2                     |
-| TLS     | Required — no unencrypted connection option                                                                     |
-| Scope   | The standalone Upstash-on-DigitalOcean marketplace listing is a separate, deprecated product — not this service |
+| Topic | Guidance |
+| ----- | -------- |
+| Engine | **Valkey** on new clusters; older “Managed Redis” capped / unsupported past Redis 7.2 |
+| TLS | Always — use `rediss://` |
+| Trusted sources | Hard firewall — missing entry ⇒ refused even with correct password |
+| VPC | Prefer private connection string + VPC CIDR as a single trusted source |
+
+Standalone **Upstash-on-DigitalOcean marketplace** listings are a different, deprecated
+product — not this Databases service.
+
+## Real gotcha — trusted sources
+
+Correct `REDIS_URL` from a laptop not in Trusted Sources fails with connection refused.
+Add your IP (or use a Droplet already allowed / VPC CIDR) under **Network Access**.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection refused (hostname)">
+
+Wrong port, or client IP not in trusted sources. Re-copy port from **Connection
+Details**; add the client under **Network Access → Trusted Sources**.
+
+</Accordion>
+<Accordion title="Connection refused (IP) on private hostname">
+
+Private URL used from outside the VPC. Switch to **Public network** details (and allow
+your IP), or run the app on a Droplet in the same VPC with the private URI.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Valkey (image)](/docs/images/valkey) — the driver this provider backs
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Valkey (image)](/docs/images/valkey) — self-hosted peer
+- [Store · KV](/docs/elements/store#kv)
+- [Dragonfly Cloud](/docs/providers/dragonfly-cloud) — alternative managed KV
 
 ## Next
 
 <Cards>
-  <Card
-    title="Dragonfly Cloud"
-    description="Another managed alternative."
-    href="/docs/providers/dragonfly-cloud"
-  />
-  <Card
-    title="Redis Cloud"
-    description="Vendor-native alternative."
-    href="/docs/providers/redis-cloud"
-  />
-  <Card title="Caddy" description="A local proxy pairing." href="/docs/images/caddy" />
+  <Card title="Dragonfly Cloud" description="Another managed alternative." href="/docs/providers/dragonfly-cloud" />
+  <Card title="Redis Cloud" description="Vendor-native alternative." href="/docs/providers/redis-cloud" />
+  <Card title="Caddy" description="Local proxy pairing." href="/docs/images/caddy" />
 </Cards>

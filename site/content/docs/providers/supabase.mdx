@@ -1,40 +1,104 @@
 ---
 title: "Supabase"
-description: "Managed Postgres platform — pgvector on every plan. Connect with DATABASE_URL, driver stays postgres; prefer self-hosting for Postgres-only."
+description: "Managed Postgres — Connect button modes, transaction :6543 vs direct :5432, IPv6, free-tier pause."
 icon: "Database"
+source: "docs/spec/unified-theory.md"
 ---
 
-Supabase's managed offering wraps Postgres with its own Auth, Storage, Realtime, and auto-generated
-API layer. oke only needs the Postgres connection underneath — the wire protocol is identical to
-plain Postgres.
+Supabase wraps Postgres with Auth, Storage, Realtime, and generated APIs. oke only needs
+the Postgres connection underneath — `drivers.store.sql` stays `postgres`.
 
 <Callout title="The one rule">
-  `drivers.store.sql` stays `postgres`. Everything above the database — Auth, Storage, Realtime — is
-  Supabase's own layer, separate from oke's Vault / Store · files / Signal elements.
+  Use the dashboard **Connect** button and pick the mode that matches your runtime —
+  Transaction pooler for serverless, Direct for migrations. Do not guess ports.
 </Callout>
 
-## Connect
+## Find credentials (current dashboard)
 
-```bash title="docker/.env.docker or your process env"
-DATABASE_URL=postgres://postgres.xxxxx:password@aws-0-region.pooler.supabase.com:5432/postgres
+1. Open your project in [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Click **Connect** in the project top bar
+   (`?showConnect=true` on the project URL).
+3. Choose a method:
+   - **Transaction pooler** — `aws-[region].pooler.supabase.com:6543` (Supavisor
+     transaction mode)
+   - **Session pooler** — same host, port **5432** (IPv4-friendly persistent clients)
+   - **Direct connection** — `db.[project-ref].supabase.co:5432`
+4. Copy the URI; substitute the database password from **Project Settings → Database**
+   if the string still shows a placeholder.
+
+Alternate path: **Project Settings → Database** → connection string / connection info
+panels (same values as Connect).
+
+```bash title="process env"
+# Serverless / many short-lived clients
+DATABASE_URL=postgres://postgres.[ref]:…@aws-0-[region].pooler.supabase.com:6543/postgres
+
+# Migrations / pg_dump / long session features
+# Direct (IPv6 by default on Free unless IPv4 add-on):
+# DATABASE_URL=postgres://postgres:…@db.[ref].supabase.co:5432/postgres
 ```
 
-Supabase's own connection pooler (Supavisor) is already in front of that endpoint by default —
-don't also stack [PgDog](/docs/images/pgdog) on the same connection.
+## Pooled vs direct
 
-## Feature highlights
+| Mode | Host:port | Best for |
+| ---- | --------- | -------- |
+| Transaction (Supavisor) | `…pooler.supabase.com:6543` | Serverless / edge — default app `DATABASE_URL` |
+| Session (Supavisor) | `…pooler.supabase.com:5432` | Persistent backends on **IPv4-only** networks |
+| Direct | `db.[ref].supabase.co:5432` | Migrations, `pg_dump`, replication |
+| Dedicated PgBouncer (paid) | `db.[ref].supabase.co:6543` | High-performance pooled traffic on paid tiers |
 
-| Feature      | Notes                                                                                                             |
-| ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `pgvector`   | Available on every plan, no add-on — enable from the dashboard's Extensions panel                                 |
-| Pooling      | Supavisor (transaction / session mode) built in — pick transaction mode for the same semantics as PgDog           |
-| Docker image | Want just the Postgres image, without Auth/Storage/Realtime? See [Supabase (image)](/docs/images/supabase-docker) |
+**Do not stack** [PgDog](/docs/images/pgdog) on top of Supavisor. Transaction mode does
+not support prepared statements — turn them off in the client if you see related errors.
+
+**IPv6 gotcha:** Direct (and dedicated pooler) are IPv6 unless you buy the IPv4 add-on.
+IPv4-only app hosts must use the shared pooler hostnames.
+
+## pgvector
+
+Available on every plan. Enable from the dashboard **Database → Extensions** (or
+`CREATE EXTENSION vector;`). Same `store.index` + `pgvector` driver path as self-hosted
+Postgres.
+
+## Free tier — breaks real production
+
+| Limit | Free |
+| ----- | ---- |
+| Inactivity pause | **7 days** without enough DB activity → project paused |
+| Active projects | **2** |
+| DB size | **500 MB** |
+| Restore window after pause | Finite (platform retention) |
+
+Paused projects wake slowly and will fail uptime checks. Paid plans do not auto-pause.
+Do not run user-facing production on Free.
+
+## Real gotcha — Connect port mix-ups
+
+Since Feb 2025, **6543 is transaction-only** on the shared pooler; session mode is
+**5432** on the pooler host. An old snippet that assumed “6543 = session” will break
+session features or auth in subtle ways — re-copy from **Connect** today.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection refused / timeout to db.[ref].supabase.co">
+
+Often IPv4 client → IPv6-only direct endpoint. Switch `DATABASE_URL` to the **Session**
+or **Transaction** pooler host (`pooler.supabase.com`), or enable the IPv4 add-on.
+
+</Accordion>
+<Accordion title="Project paused after a quiet week">
+
+Free-tier inactivity pause. Restore from the dashboard, then upgrade or keep real DB
+traffic above the pause threshold. Dashboard page views alone may not count.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Supabase (image)](/docs/images/supabase-docker) — run `supabase/postgres` yourself instead
-- [Store · Index](/docs/elements/store#index) — `pgvector`-backed vector search
-- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL` precedence
+- [Supabase (Docker)](/docs/images/supabase-docker) — Postgres image only, no platform
+- [Store · Index](/docs/elements/store#index) — `pgvector`
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`
 
 ## Next
 
@@ -44,10 +108,10 @@ don't also stack [PgDog](/docs/images/pgdog) on the same connection.
     description="Run just the Postgres image."
     href="/docs/images/supabase-docker"
   />
-  <Card title="Neon" description="Another managed Postgres option." href="/docs/providers/neon" />
+  <Card title="Neon" description="Serverless alternative." href="/docs/providers/neon" />
   <Card
     title="YugabyteDB"
-    description="Apache-2.0 distributed alternative."
+    description="Distributed Apache-2.0 option."
     href="/docs/providers/yugabytedb"
   />
 </Cards>

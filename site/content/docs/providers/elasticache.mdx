@@ -1,51 +1,80 @@
 ---
 title: "Amazon ElastiCache"
-description: "AWS-managed Redis or Valkey — standard protocol over TLS. Connect with REDIS_URL, driver stays redis."
+description: "AWS-managed Redis OSS or Valkey — Primary Endpoint, AUTH token, Redis OSS capped at 7.1, VPC-only."
 icon: "Zap"
+source: "docs/spec/unified-theory.md"
 ---
 
-ElastiCache is AWS's managed caching service — since 2024 it offers both a Redis OSS-compatible
-engine and a Valkey engine, both speaking the same wire protocol.
+ElastiCache runs Redis OSS-compatible or Valkey engines inside your VPC. Both speak the
+same wire protocol — `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Same `redis` driver either way. Use `rediss://` for the in-transit-encrypted endpoint — AWS calls
-  this "encryption in transit," off by default on older clusters, on by default for new ones.
+  Copy the **Primary Endpoint** (cluster mode disabled) from the ElastiCache console —
+  not a replica reader endpoint. Use `rediss://` when encryption in transit is on.
 </Callout>
 
-## Connect
+## Find credentials (current console)
 
-```bash title="docker/.env.docker or your process env"
-REDIS_URL=rediss://:password@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com:6379
+1. AWS Console → **ElastiCache** → **Valkey caches** or **Redis OSS caches**.
+2. Click the **cluster name** (not only the radio button).
+3. On the cluster detail page, copy:
+   - **Primary Endpoint** (+ port, usually `6379`) for cluster-mode **disabled**
+   - **Configuration Endpoint** for cluster-mode **enabled** (needs a cluster-aware
+     client — oke's single-URL driver expects non-cluster / primary)
+4. Auth: cluster **Connectivity** / **Auth token** (or Secrets Manager reference) —
+   set at creation or rotation; there is no “password eye” identical to Redis Cloud.
+5. Build `REDIS_URL` yourself:
+
+```bash title="process env"
+# Encryption in transit ON (default on many new clusters)
+REDIS_URL=rediss://:AUTH_TOKEN@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com:6379
+
+# Transit encryption OFF
+# REDIS_URL=redis://:AUTH_TOKEN@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com:6379
 ```
 
-Find the endpoint on the cluster's "Primary Endpoint" field in the ElastiCache console — replica
-reader endpoints exist separately for read scaling, not used by oke's single-connection driver.
+## Production guidance
 
-## Feature highlights
+| Topic | Guidance |
+| ----- | -------- |
+| Networking | **VPC-only** — app must share VPC, peering, or PrivateLink; no public hostname |
+| Engine | Redis OSS **or** Valkey — same `redis` driver |
+| Cluster mode | Prefer **disabled** + Primary Endpoint for oke's URL-shaped client |
+| Transit encryption | When enabled, scheme must be `rediss://` |
 
-| Feature       | Notes                                                                             |
-| ------------- | --------------------------------------------------------------------------------- |
-| Engine choice | Redis OSS-compatible or Valkey — pick per cluster, same wire protocol             |
-| Networking    | Lives inside a VPC — reachable from your app only if network-peered or co-located |
-| Auth          | Optional AUTH token or IAM-based auth, layered on top of the TCP endpoint         |
+## Real gotcha — Redis OSS version cap
+
+ElastiCache **Redis OSS tops out at 7.1**. Versions **7.2+ are Valkey-only**. You can
+in-place upgrade Redis OSS → Valkey 7.2; planning a “Redis 7.2” engine on ElastiCache
+is a category error — pick Valkey or stay ≤7.1 on Redis OSS.
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="Connection timed out from laptop / CI">
+
+Expected — no public endpoint. Run the app in the VPC (ECS/EKS/EC2) or use a bastion /
+VPN. Security groups must allow the app SG → cache port.
+
+</Accordion>
+<Accordion title="WRONGPASS / NOAUTH after enabling AUTH">
+
+Token not embedded in `REDIS_URL`, or still using `redis://` against a TLS-required
+endpoint. Match scheme to **Encryption in-transit**, put the token after `rediss://:`.
+
+</Accordion>
+</Accordions>
 
 ## Learn more
 
-- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey) — the two engines this maps to
-- [Store · KV](/docs/elements/store#kv) — TTL physics and the KV handle API
+- [Redis (image)](/docs/images/redis) · [Valkey (image)](/docs/images/valkey)
+- [Memorystore](/docs/providers/memorystore) — GCP equivalent
+- [Store · KV](/docs/elements/store#kv)
 
 ## Next
 
 <Cards>
   <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
-  <Card
-    title="Azure Cache for Redis"
-    description="Azure's equivalent."
-    href="/docs/providers/azure-redis"
-  />
-  <Card
-    title="Redis Cloud"
-    description="Vendor-neutral managed option."
-    href="/docs/providers/redis-cloud"
-  />
+  <Card title="Azure Cache for Redis" description="Azure's equivalent." href="/docs/providers/azure-redis" />
+  <Card title="Redis Cloud" description="Vendor-neutral managed option." href="/docs/providers/redis-cloud" />
 </Cards>
