@@ -7,18 +7,18 @@
     "postgres",
     "pgdog",
     "supabase-docker",
-    "---Redis-wire---",
+    "---KV---",
     "redis",
     "valkey",
     "dragonfly",
-    "---Files · email · vault · search · AI---",
+    "---Proxy---",
+    "caddy",
+    "traefik",
+    "---Services---",
     "rustfs",
     "mailpit",
     "openbao",
     "meilisearch",
-    "ollama",
-    "---Proxy---",
-    "caddy",
-    "traefik"
+    "ollama"
   ]
 }

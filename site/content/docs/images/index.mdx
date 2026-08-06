@@ -1,6 +1,6 @@
 ---
 title: "Recipes"
-description: "Docker recipes already shipped in oke docker — SQL, Redis-wire, proxy, files, email, vault, search, and local AI."
+description: "Docker recipes already shipped in oke docker — SQL, KV, proxy, and services for files, email, vault, search, and local AI."
 icon: "Container"
 source: "docs/spec/unified-theory.md"
 ---
@@ -33,7 +33,7 @@ and get env, healthcheck, and a connection URL for free.
   />
 </Cards>
 
-## Redis-wire
+## KV
 
 Driver id stays `redis` for every image below.
 
@@ -47,7 +47,20 @@ Driver id stays `redis` for every image below.
   />
 </Cards>
 
-## Files · email · vault · search · AI
+## Proxy
+
+Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N`.
+
+<Cards>
+  <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/images/caddy" />
+  <Card
+    title="Traefik"
+    description="Docker-label discovery + socket-proxy."
+    href="/docs/images/traefik"
+  />
+</Cards>
+
+## Services
 
 <Cards>
   <Card
@@ -74,19 +87,6 @@ Driver id stays `redis` for every image below.
     title="Ollama"
     description="Local models — /root/.ollama volume."
     href="/docs/images/ollama"
-  />
-</Cards>
-
-## Proxy
-
-Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N`.
-
-<Cards>
-  <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/images/caddy" />
-  <Card
-    title="Traefik"
-    description="Docker-label discovery + socket-proxy."
-    href="/docs/images/traefik"
   />
 </Cards>
 

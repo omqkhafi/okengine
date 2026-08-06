@@ -93,6 +93,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   so permanent client errors (invalid address) do not advance the chain —
   matching OTP cross-medium failover (sently’s default only checked HTTP
   400/401/403 and SMTP auth).
+- Docs Neon + Supabase Postgres recipe Accordion titles — quote `"vector"`
+  with single-quoted attributes so MDX compiles (escaped `\"` broke the
+  site build).
 
 ## v0.9.1 — 2026-08-04
 
