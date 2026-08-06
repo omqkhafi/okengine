@@ -9,8 +9,8 @@ Memorystore for Redis (and the Valkey offering) is private-IP only inside your V
 `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Open the instance → **Connections** for **Primary Endpoint** + port; **Security** for
-  the AUTH string. There is no public hostname to paste.
+  Open the instance → **Connections** for **Primary Endpoint** + port; **Security** for the AUTH
+  string. There is no public hostname to paste.
 </Callout>
 
 ## Find credentials (current console)
@@ -36,12 +36,12 @@ network.
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| Networking | Private IP only — never a public endpoint option |
-| AUTH | Optional but recommended; string is on the instance Security panel |
-| TLS | **Not** default — enable in-transit encryption explicitly; port becomes **6378** |
-| Tiers | Basic vs Standard (replica) — pick before you need HA |
+| Topic      | Guidance                                                                         |
+| ---------- | -------------------------------------------------------------------------------- |
+| Networking | Private IP only — never a public endpoint option                                 |
+| AUTH       | Optional but recommended; string is on the instance Security panel               |
+| TLS        | **Not** default — enable in-transit encryption explicitly; port becomes **6378** |
+| Tiers      | Basic vs Standard (replica) — pick before you need HA                            |
 
 ## Real gotcha — TLS port flip
 
@@ -76,6 +76,14 @@ AUTH enabled but password omitted from `REDIS_URL`. Copy the AUTH string from
 
 <Cards>
   <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
-  <Card title="Azure Cache for Redis" description="Azure's equivalent." href="/docs/providers/azure-redis" />
-  <Card title="Dragonfly Cloud" description="Public TLS endpoint option." href="/docs/providers/dragonfly-cloud" />
+  <Card
+    title="Azure Cache for Redis"
+    description="Azure's equivalent."
+    href="/docs/providers/azure-redis"
+  />
+  <Card
+    title="Dragonfly Cloud"
+    description="Public TLS endpoint option."
+    href="/docs/providers/dragonfly-cloud"
+  />
 </Cards>

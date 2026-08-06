@@ -9,8 +9,8 @@ YugabyteDB Aeon exposes a Postgres-compatible query layer (**YSQL**). That is th
 API oke's `postgres` driver targets — not YCQL.
 
 <Callout title="The one rule">
-  In **Connect → Connect to your Application**, choose **YSQL** and download the CA
-  cert. Port **5433** is the YSQL default — not Postgres's 5432.
+  In **Connect → Connect to your Application**, choose **YSQL** and download the CA cert. Port
+  **5433** is the YSQL default — not Postgres's 5432.
 </Callout>
 
 ## Find credentials (current console)
@@ -34,11 +34,11 @@ connecting.
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| API | **YSQL only** — YCQL is Cassandra-wire, useless to `postgres` |
-| TLS | `sslmode=verify-full` + downloaded CA |
-| Network | Prefer private / PSE; public access is an explicit opt-in |
+| Topic   | Guidance                                                                      |
+| ------- | ----------------------------------------------------------------------------- |
+| API     | **YSQL only** — YCQL is Cassandra-wire, useless to `postgres`                 |
+| TLS     | `sslmode=verify-full` + downloaded CA                                         |
+| Network | Prefer private / PSE; public access is an explicit opt-in                     |
 | License | Core is **Apache 2.0** (including once-enterprise features in the core build) |
 
 No Neon-style pooled hostname toggle — connection limits and load balancing are
@@ -70,6 +70,7 @@ Connect dialog and point the URI at that file.
 ## Learn more
 
 - [CockroachDB](/docs/providers/cockroachdb) — license / feature comparison
+- [YugabyteDB (self-hosted)](/docs/images/yugabytedb) — single-node Docker recipe
 - [Postgres (image)](/docs/images/postgres) — driver this backs
 - [Store · SQL](/docs/elements/store#sql) — schema workflows
 
@@ -81,7 +82,11 @@ Connect dialog and point the URI at that file.
     description="Compare licensing and features."
     href="/docs/providers/cockroachdb"
   />
-  <Card title="Supabase" description="Managed single-node option." href="/docs/providers/supabase" />
+  <Card
+    title="Supabase"
+    description="Managed single-node option."
+    href="/docs/providers/supabase"
+  />
   <Card
     title="Redis Cloud"
     description="Managed Redis-side pair."

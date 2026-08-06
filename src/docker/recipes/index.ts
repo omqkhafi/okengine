@@ -4,6 +4,7 @@
 
 import type { ImageRecipe } from "../types.ts";
 import { caddy } from "./caddy.ts";
+import { cockroach } from "./cockroach.ts";
 import { dragonfly } from "./dragonfly.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
@@ -14,11 +15,16 @@ import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
 import { supabase } from "./supabase.ts";
+import { timescale } from "./timescale.ts";
 import { traefik } from "./traefik.ts";
 import { valkey } from "./valkey.ts";
+import { yugabyte } from "./yugabyte.ts";
 
 /** Default recipe catalogue — more specific image matches before protocol peers. */
 export const builtinRecipes: readonly ImageRecipe[] = [
+  cockroach,
+  yugabyte,
+  timescale,
   supabase,
   postgres,
   pgdog,
@@ -36,6 +42,7 @@ export const builtinRecipes: readonly ImageRecipe[] = [
 
 export {
   caddy,
+  cockroach,
   dragonfly,
   mailpit,
   meilisearch,
@@ -46,8 +53,10 @@ export {
   redis,
   rustfs,
   supabase,
+  timescale,
   traefik,
   valkey,
+  yugabyte,
 };
 
 /**

@@ -10,8 +10,8 @@ CockroachDB speaks Postgres wire closely enough that `drivers.store.sql` stays
 that protocol.
 
 <Callout title="The one rule">
-  Use the Cloud Console **Connect** dialog and keep `sslmode=verify-full` with the
-  downloaded CA — `sslmode=require` alone is rejected for secure clusters.
+  Use the Cloud Console **Connect** dialog and keep `sslmode=verify-full` with the downloaded CA —
+  `sslmode=require` alone is rejected for secure clusters.
 </Callout>
 
 ## Find credentials (current console)
@@ -32,11 +32,11 @@ Default SQL port is **26257**, not 5432.
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| TLS | `verify-full` + `sslrootcert` — required for Cloud |
+| Topic   | Guidance                                                                                |
+| ------- | --------------------------------------------------------------------------------------- |
+| TLS     | `verify-full` + `sslrootcert` — required for Cloud                                      |
 | Pooling | Prefer Cockroach's guidance / built-in limits; do not assume Neon-style `-pooler` hosts |
-| Regions | Configure survivability in the Console — opaque to the `postgres` driver |
+| Regions | Configure survivability in the Console — opaque to the `postgres` driver                |
 
 CockroachDB Software License (since Nov 2024): Core open-source discontinued; free for
 orgs under $10M ARR with community support; paid tiers add dedicated support. Not OSI
@@ -69,6 +69,7 @@ then update `DATABASE_URL`.
 ## Learn more
 
 - [YugabyteDB](/docs/providers/yugabytedb) — Apache 2.0 distributed alternative
+- [CockroachDB (self-hosted)](/docs/images/cockroachdb) — single-node Docker recipe
 - [Postgres (image)](/docs/images/postgres) — driver this backs
 - [Store · SQL](/docs/elements/store#sql) — schema workflows
 

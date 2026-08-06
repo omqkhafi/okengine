@@ -1,6 +1,6 @@
 ---
 title: "Recipes"
-description: "Docker recipes already shipped in oke docker — SQL, KV, proxy, and services for files, email, vault, search, and local AI."
+description: "Docker recipes already shipped in oke docker — SQL (including Cockroach, Yugabyte, Timescale), KV, proxy, and services."
 icon: "Container"
 source: "docs/spec/unified-theory.md"
 ---
@@ -9,8 +9,8 @@ Every recipe below is already wired into `oke docker` — pin an image in `oke.c
 and get env, healthcheck, and a connection URL for free.
 
 <Callout title="The one rule">
-  Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol
-  ids (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `ollama`, …).
+  Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol ids
+  (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `ollama`, …).
 </Callout>
 
 ## SQL
@@ -22,14 +22,24 @@ and get env, healthcheck, and a connection URL for free.
     href="/docs/images/postgres"
   />
   <Card
-    title="PgDog"
-    description="Transaction pooler on :6432."
-    href="/docs/images/pgdog"
-  />
-  <Card
-    title="Supabase (Docker)"
+    title="Supabase"
     description="supabase/postgres extension bundle only."
     href="/docs/images/supabase-docker"
+  />
+  <Card
+    title="CockroachDB"
+    description="Self-hosted single-node — port 26257, COCKROACH_*."
+    href="/docs/images/cockroachdb"
+  />
+  <Card
+    title="YugabyteDB"
+    description="Self-hosted YSQL — port 5433, YSQL_*."
+    href="/docs/images/yugabytedb"
+  />
+  <Card
+    title="Timescale"
+    description="Postgres + hypertables — same POSTGRES_* contract."
+    href="/docs/images/timescale"
   />
 </Cards>
 
@@ -38,7 +48,11 @@ and get env, healthcheck, and a connection URL for free.
 Driver id stays `redis` for every image below.
 
 <Cards>
-  <Card title="Redis" description="Default store.kv — requirepass + maxmemory." href="/docs/images/redis" />
+  <Card
+    title="Redis"
+    description="Default store.kv — requirepass + maxmemory."
+    href="/docs/images/redis"
+  />
   <Card title="Valkey" description="BSD-licensed Redis-wire fork." href="/docs/images/valkey" />
   <Card
     title="Dragonfly"
@@ -63,21 +77,14 @@ Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N
 ## Services
 
 <Cards>
+  <Card title="PgDog" description="Transaction pooler on :6432." href="/docs/images/pgdog" />
   <Card
     title="RustFS"
     description="S3-compatible store.files — /data volume."
     href="/docs/images/rustfs"
   />
-  <Card
-    title="Mailpit"
-    description="SMTP catcher — UI on :8025."
-    href="/docs/images/mailpit"
-  />
-  <Card
-    title="OpenBao"
-    description="Raft vault — unseal key SPOF."
-    href="/docs/images/openbao"
-  />
+  <Card title="Mailpit" description="SMTP catcher — UI on :8025." href="/docs/images/mailpit" />
+  <Card title="OpenBao" description="Raft vault — unseal key SPOF." href="/docs/images/openbao" />
   <Card
     title="Meilisearch"
     description="Full-text store.index on :7700."

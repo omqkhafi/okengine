@@ -88,7 +88,10 @@ function pgdogConfigFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
   return [
     {
       path: "pgdog.toml",
-      content: buildPgDogToml({ database: sql.credentials.database }),
+      content: buildPgDogToml({
+        database: sql.credentials.database,
+        postgresPort: sql.port,
+      }),
     },
     {
       path: "users.toml",

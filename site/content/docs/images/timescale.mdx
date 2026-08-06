@@ -1,0 +1,129 @@
+---
+title: "Timescale"
+description: "Self-hosted TimescaleDB — same POSTGRES_* contract as Postgres, hypertables included, driver stays postgres."
+icon: "Database"
+source: "docs/spec/unified-theory.md"
+---
+
+TimescaleDB is Postgres plus hypertables and time-series tooling. Pin a
+`timescale/timescaledb` image as `store.sql` and `oke docker` uses the Timescale
+recipe — same `POSTGRES_*` contract as plain Postgres. Driver id stays `postgres`.
+
+<Callout title="The one rule">
+  The driver id stays `postgres` — vendor choice lives in `images["store.sql"]`. Create the
+  `timescaledb` extension in SQL when you need hypertables; the image ships it.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "timescale/timescaledb:latest-pg17", // pin a real tag
+},
+```
+
+</Step>
+
+<Step>
+### Bring the stack up
+
+```bash
+oke dev --docker
+```
+
+Same credential contract as [Postgres](/docs/images/postgres):
+`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` from `OKE_STORE_SQL_*`.
+
+</Step>
+
+<Step>
+### Enable the extension when you need it
+
+```sql
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+```
+
+Then create hypertables with Timescale's usual DDL — Flows still talk through
+`fx.store` / Drizzle like any other Postgres.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable                 | Who sets it            | Meaning                           |
+| ------------------------ | ---------------------- | --------------------------------- |
+| `OKE_STORE_SQL_USER`     | `oke docker` → compose | → `POSTGRES_USER`                 |
+| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | → `POSTGRES_PASSWORD`             |
+| `OKE_STORE_SQL_DB`       | `oke docker` → compose | → `POSTGRES_DB`                   |
+| `DATABASE_URL`           | stack env for the app  | `postgres://…:5432/…`             |
+| `PGDATA`                 | stack default          | `/var/lib/postgresql/data/pgdata` |
+
+## Data and backup
+
+| Path                                      | What lives there                           |
+| ----------------------------------------- | ------------------------------------------ |
+| `$PGDATA`                                 | Cluster data, including Timescale catalogs |
+| Image `VOLUME` `/var/lib/postgresql/data` | Persistence mount                          |
+
+Same backup story as plain Postgres: `pg_dump` / volume backup of
+`/var/lib/postgresql/data`. Losing that volume loses tables and extension state.
+
+## Production note
+
+Pin a concrete tag (image + Postgres major). For multi-replica apps, keep one
+shared SQL backend — see
+[Postgres · Production note](/docs/images/postgres#production-note).
+
+Managed time-series hosts still use `DATABASE_URL` and
+`drivers.store.sql: "postgres"`.
+
+## What the recipe configures
+
+| Field          | Value                                   |
+| -------------- | --------------------------------------- |
+| Match          | `timescale` ahead of generic `postgres` |
+| Container port | `5432`                                  |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`          |
+| Connection URL | `postgres://user:pass@host:5432/db`     |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title='extension "timescaledb" is not available'>
+
+You pinned a plain `postgres:` image. Confirm the reference contains `timescale`,
+re-derive, then `CREATE EXTENSION timescaledb`.
+
+</Accordion>
+<Accordion title="oke boot: postgres driver needs DATABASE_URL">
+
+Same as Postgres — re-run `oke dev --docker` or export `DATABASE_URL` for a remote
+host.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [Postgres](/docs/images/postgres) — generic recipe this specialises
+- [Store · SQL](/docs/elements/store#sql) — schema workflows
+- [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`
+
+## Next
+
+<Cards>
+  <Card title="Postgres" description="Plain Postgres recipe." href="/docs/images/postgres" />
+  <Card
+    title="Supabase"
+    description="Postgres + extension bundle."
+    href="/docs/images/supabase-docker"
+  />
+  <Card title="PgDog" description="Transaction pooling in front." href="/docs/images/pgdog" />
+</Cards>

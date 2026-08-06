@@ -1,0 +1,135 @@
+---
+title: "YugabyteDB"
+description: "Self-hosted single-node YSQL — YSQL_* env, port 5433, driver stays postgres."
+icon: "Database"
+source: "docs/spec/unified-theory.md"
+---
+
+YugabyteDB's **YSQL** API speaks Postgres wire. Pin `yugabytedb/yugabyte` as
+`store.sql` and `oke docker` derives a single-node `yugabyted` service —
+credentials, healthcheck, and `DATABASE_URL`. Driver id stays `postgres`.
+
+<Callout title="The one rule">
+  Use the YSQL API only — never treat YCQL as `store.sql`. Vendor choice lives in
+  `images["store.sql"]`; host maps `:5432` → container `:5433`.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "yugabytedb/yugabyte:2025.1.0.0-b100", // pin a real tag
+},
+```
+
+</Step>
+
+<Step>
+### Bring the stack up
+
+```bash
+oke dev --docker
+```
+
+`oke docker` injects `YSQL_USER` / `YSQL_PASSWORD` / `YSQL_DB` from `OKE_STORE_SQL_*`
+(password presence turns authentication on), runs
+`bin/yugabyted start --background=false`, and publishes YSQL on host `:5432`.
+
+</Step>
+
+<Step>
+### Connect
+
+```bash
+echo "$DATABASE_URL"
+# postgres://oke:…@127.0.0.1:5432/oke
+```
+
+First healthy state is slower than plain Postgres — the healthcheck allows a long
+start period.
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable                 | Who sets it            | Meaning                          |
+| ------------------------ | ---------------------- | -------------------------------- |
+| `OKE_STORE_SQL_USER`     | `oke docker` → compose | → `YSQL_USER`                    |
+| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | → `YSQL_PASSWORD` (enables auth) |
+| `OKE_STORE_SQL_DB`       | `oke docker` → compose | → `YSQL_DB`                      |
+| `DATABASE_URL`           | stack env for the app  | Host `:5432` → container `:5433` |
+
+## Data and backup
+
+| Path                     | What lives there                                     |
+| ------------------------ | ---------------------------------------------------- |
+| `/home/yugabyte/yb_data` | Named volume `store-sql-data` — `yugabyted` base dir |
+
+**Backup means:** volume backup of `store-sql-data`, or Yugabyte's backup tooling.
+Losing that volume loses the universe data.
+
+## Production note
+
+Single-node `yugabyted` is for local and small self-hosted use. For managed Aeon
+clusters, use the [YugabyteDB provider](/docs/providers/yugabytedb). Pin a concrete
+tag; the image is large and cold-start is slower than Postgres.
+
+## What the recipe configures
+
+| Field          | Value                                                 |
+| -------------- | ----------------------------------------------------- |
+| Container port | `5433` (host publishes `5432`)                        |
+| Command        | `bin/yugabyted start --base_dir=… --background=false` |
+| Healthcheck    | `ysqlsh … SELECT 1` (90s `start_period`)              |
+| Connection URL | `postgres://user:pass@host:5432/db`                   |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="store-sql unhealthy for a long time">
+
+Yugabyte cold-start is slow. Wait through the healthcheck `start_period`, then read
+`docker compose … logs store-sql`.
+
+macOS AirPlay on `:7000` can conflict with Yugabyte's master UI — stop AirPlay
+Receiver or remap that port in `compose.override.yml` if you need the UI.
+
+</Accordion>
+<Accordion title="password authentication failed">
+
+`YSQL_PASSWORD` must match `DATABASE_URL`. Regenerate `docker/.env.docker` with
+`oke dev --docker`. Auth is off only when `YSQL_PASSWORD` is unset — this recipe
+always sets it.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [YugabyteDB (provider)](/docs/providers/yugabytedb) — managed Aeon Connect flow
+- [CockroachDB](/docs/images/cockroachdb) — self-hosted distributed peer
+- [Postgres](/docs/images/postgres) — default SQL recipe
+- [Store · SQL](/docs/elements/store#sql) — schema workflows
+
+## Next
+
+<Cards>
+  <Card
+    title="YugabyteDB Aeon"
+    description="Managed cloud alternative."
+    href="/docs/providers/yugabytedb"
+  />
+  <Card
+    title="CockroachDB"
+    description="Self-hosted Cockroach recipe."
+    href="/docs/images/cockroachdb"
+  />
+  <Card title="Postgres" description="The default store.sql image." href="/docs/images/postgres" />
+</Cards>

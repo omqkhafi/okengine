@@ -5,13 +5,13 @@ icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Postgres is the default `store.sql` image in docker and prod. `oke docker` matches any
-image whose reference contains `postgres`, `pgvector`, or `timescale`, then derives the
-compose service — env, healthcheck, and connection URL.
+Postgres is the default `store.sql` image in docker and prod. `oke docker` matches
+any image whose reference contains `postgres` or `pgvector` (after more specific
+recipes), then derives env, healthcheck, and connection URL.
 
 <Callout title="The one rule">
-  The driver id stays `postgres` no matter which Postgres-wire image you pin — vendor
-  choice lives in `images["store.sql"]`, not in `drivers.store.sql`.
+  The driver id stays `postgres` no matter which Postgres-wire image you pin — vendor choice lives
+  in `images["store.sql"]`, not in `drivers.store.sql`.
 </Callout>
 
 ## Quick start
@@ -23,7 +23,7 @@ compose service — env, healthcheck, and connection URL.
 
 ```typescript title="oke.config.ts"
 images: {
-  "store.sql": "postgres:18-alpine", // any Postgres / pgvector / Timescale image
+  "store.sql": "postgres:18-alpine", // any Postgres / pgvector image
 },
 ```
 
@@ -60,21 +60,21 @@ When PgDog is pinned, `DATABASE_URL` points at `:6432` instead — see
 
 ## Required env
 
-| Variable | Who sets it | Meaning |
-| -------- | ----------- | ------- |
-| `OKE_STORE_SQL_USER` | `oke docker` → compose | Injected as `POSTGRES_USER` |
-| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | Injected as `POSTGRES_PASSWORD` |
-| `OKE_STORE_SQL_DB` | `oke docker` → compose | Injected as `POSTGRES_DB` |
-| `DATABASE_URL` | stack env for the app | What Bun.SQL / Drizzle actually open |
-| `PGDATA` | stack default | `/var/lib/postgresql/data/pgdata` |
-| `POSTGRES_INITDB_ARGS` | stack default | `--data-checksums` |
+| Variable                 | Who sets it            | Meaning                              |
+| ------------------------ | ---------------------- | ------------------------------------ |
+| `OKE_STORE_SQL_USER`     | `oke docker` → compose | Injected as `POSTGRES_USER`          |
+| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | Injected as `POSTGRES_PASSWORD`      |
+| `OKE_STORE_SQL_DB`       | `oke docker` → compose | Injected as `POSTGRES_DB`            |
+| `DATABASE_URL`           | stack env for the app  | What Bun.SQL / Drizzle actually open |
+| `PGDATA`                 | stack default          | `/var/lib/postgresql/data/pgdata`    |
+| `POSTGRES_INITDB_ARGS`   | stack default          | `--data-checksums`                   |
 
 ## Data and backup
 
-| Path | What lives there |
-| ---- | ---------------- |
-| `$PGDATA` (`/var/lib/postgresql/data/pgdata`) | Cluster data directory |
-| Image `VOLUME` `/var/lib/postgresql/data` | Official image mount — Docker attaches a volume here |
+| Path                                          | What lives there                                     |
+| --------------------------------------------- | ---------------------------------------------------- |
+| `$PGDATA` (`/var/lib/postgresql/data/pgdata`) | Cluster data directory                               |
+| Image `VOLUME` `/var/lib/postgresql/data`     | Official image mount — Docker attaches a volume here |
 
 The recipe does **not** declare a named compose volume. Persistence rides the image's
 `VOLUME` (anonymous unless you add a named mount in `compose.override.yml`).
@@ -93,11 +93,11 @@ Scale out with [PgDog](/docs/images/pgdog) so `N × Bun.SQL pool` does not exhau
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `5432` |
-| Healthcheck | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
-| Connection URL | `postgres://user:pass@host:5432/db` |
+| Field          | Value                                                |
+| -------------- | ---------------------------------------------------- |
+| Container port | `5432`                                               |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
+| Connection URL | `postgres://user:pass@host:5432/db`                  |
 
 ## Troubleshooting
 

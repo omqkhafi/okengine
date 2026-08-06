@@ -10,8 +10,8 @@ same `redis://` wire format, different engine. Slots behind the same `redis` dri
 zero Flow changes.
 
 <Callout title="The one rule">
-  Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store`
-  behaves identically to Redis or Valkey at the protocol layer.
+  Driver id stays `redis`. Dragonfly is an image choice — every KV call through `fx.store` behaves
+  identically to Redis or Valkey at the protocol layer.
 </Callout>
 
 ## Quick start
@@ -57,12 +57,12 @@ If the host forbids unlimited memlock, the container may fail to start.
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` |
-| `REDIS_URL` | **Yes** (app) | `redis://` URL for the driver |
-| `OKE_STORE_KV_MAXMEMORY` | Optional | `--maxmemory` (default `0` in the command template) |
-| `HEALTHCHECK_PORT` | Set by recipe | `6379` — used by the image's healthcheck script |
+| Variable                 | Required?     | Meaning                                             |
+| ------------------------ | ------------- | --------------------------------------------------- |
+| `OKE_STORE_KV_PASSWORD`  | **Yes**       | `--requirepass`                                     |
+| `REDIS_URL`              | **Yes** (app) | `redis://` URL for the driver                       |
+| `OKE_STORE_KV_MAXMEMORY` | Optional      | `--maxmemory` (default `0` in the command template) |
+| `HEALTHCHECK_PORT`       | Set by recipe | `6379` — used by the image's healthcheck script     |
 
 ## Data and backup
 
@@ -82,12 +82,12 @@ Redis under heavy concurrent load. For a managed endpoint with TLS + passkey, se
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `6379` |
-| `ulimits` | `memlock: -1` |
-| Healthcheck | `/usr/local/bin/healthcheck.sh`, every 5s, 10 retries |
-| Connection URL | `redis://:pass@host:6379` |
+| Field          | Value                                                 |
+| -------------- | ----------------------------------------------------- |
+| Container port | `6379`                                                |
+| `ulimits`      | `memlock: -1`                                         |
+| Healthcheck    | `/usr/local/bin/healthcheck.sh`, every 5s, 10 retries |
+| Connection URL | `redis://:pass@host:6379`                             |
 
 ## Troubleshooting
 

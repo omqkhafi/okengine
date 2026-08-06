@@ -20,8 +20,11 @@ export const PGDOG_BACKEND_SERVICE = "store-sql";
 export function buildPgDogToml(opts: {
   readonly database: string;
   readonly postgresHost?: string;
+  /** Backend container port (`store-sql` recipe port; default 5432). */
+  readonly postgresPort?: number;
 }): string {
   const host = opts.postgresHost ?? PGDOG_BACKEND_SERVICE;
+  const port = opts.postgresPort ?? 5432;
   const db = opts.database;
   return [
     "[general]",
@@ -32,7 +35,7 @@ export function buildPgDogToml(opts: {
     "[[databases]]",
     `name = ${tomlString(db)}`,
     `host = ${tomlString(host)}`,
-    "port = 5432",
+    `port = ${port}`,
     `database_name = ${tomlString(db)}`,
     "",
   ].join("\n");

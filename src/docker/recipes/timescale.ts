@@ -1,15 +1,17 @@
 /**
- * Postgres / pgvector image recipe (≤15 lines of recipe body).
+ * TimescaleDB image recipe — Postgres + hypertables (same POSTGRES_* contract).
+ *
+ * Driver id stays `postgres`. Matched ahead of the generic Postgres recipe.
  */
 
 import { postgresEnv, postgresHealth } from "../helpers.ts";
 import type { ImageRecipe } from "../types.ts";
 
-/** Postgres-protocol servers (Postgres · pgvector). Timescale / Supabase match first. */
-export const postgres: ImageRecipe = {
-  id: "postgres",
+/** TimescaleDB — Postgres protocol on 5432. */
+export const timescale: ImageRecipe = {
+  id: "timescale",
   port: 5432,
-  match: (i) => /postgres|pgvector/i.test(i),
+  match: (i) => /timescale/i.test(i),
   apply: (s) => ({ environment: postgresEnv(s), healthcheck: postgresHealth }),
   url: (_s, c) =>
     `postgres://${c.user}:${encodeURIComponent(c.password)}@${c.host}:${c.port}/${c.database}`,

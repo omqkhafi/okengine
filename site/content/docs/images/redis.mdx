@@ -10,9 +10,8 @@ references containing `redis` or `keydb` and derives a password-required server 
 unauthenticated instance.
 
 <Callout title="The one rule">
-  The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a
-  managed provider. Vendor choice lives in `images["store.kv"]`, never in
-  `drivers.store.kv`.
+  The driver id stays `redis` for every Redis-wire image — Redis, Valkey, Dragonfly, or a managed
+  provider. Vendor choice lives in `images["store.kv"]`, never in `drivers.store.kv`.
 </Callout>
 
 ## Quick start
@@ -47,9 +46,9 @@ The recipe runs:
 <Step>
 ### Optional memory caps
 
-| Variable | Default in recipe | Meaning |
-| -------- | ----------------- | ------- |
-| `OKE_STORE_KV_MAXMEMORY` | `0` (unlimited) in command; stack often sets `256mb` | Max RSS |
+| Variable                        | Default in recipe                                       | Meaning  |
+| ------------------------------- | ------------------------------------------------------- | -------- |
+| `OKE_STORE_KV_MAXMEMORY`        | `0` (unlimited) in command; stack often sets `256mb`    | Max RSS  |
 | `OKE_STORE_KV_MAXMEMORY_POLICY` | `noeviction` in command; stack often sets `allkeys-lru` | Eviction |
 
 </Step>
@@ -58,12 +57,12 @@ The recipe runs:
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` — empty password is not a valid production posture |
-| `REDIS_URL` | **Yes** (app) | What the `redis` driver opens (`OKE_STORE_KV_URL` also works) |
-| `OKE_STORE_KV_MAXMEMORY` | Optional | Cap memory |
-| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional | Eviction when at cap |
+| Variable                        | Required?     | Meaning                                                            |
+| ------------------------------- | ------------- | ------------------------------------------------------------------ |
+| `OKE_STORE_KV_PASSWORD`         | **Yes**       | `--requirepass` — empty password is not a valid production posture |
+| `REDIS_URL`                     | **Yes** (app) | What the `redis` driver opens (`OKE_STORE_KV_URL` also works)      |
+| `OKE_STORE_KV_MAXMEMORY`        | Optional      | Cap memory                                                         |
+| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional      | Eviction when at cap                                               |
 
 ## Data and backup
 
@@ -77,9 +76,9 @@ add an explicit volume + `SAVE`/`BGSAVE` policy before you rely on durability.
 ## Production note
 
 <Callout title="License note" type="warn">
-  Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis
-  itself as a managed service to third parties — running it for your own app is unaffected.
-  Prefer [Valkey](/docs/images/valkey) when the managed-service restriction matters.
+  Redis ≥8 is dual-licensed RSALv2 / SSPLv1 / AGPLv3. Those terms restrict offering Redis itself as
+  a managed service to third parties — running it for your own app is unaffected. Prefer
+  [Valkey](/docs/images/valkey) when the managed-service restriction matters.
 </Callout>
 
 Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an in-process
@@ -88,11 +87,11 @@ Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an i
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `6379` |
-| Healthcheck | `redis-cli -a <password> ping`, every 5s, 10 retries |
-| Connection URL | `redis://:pass@host:6379` |
+| Field          | Value                                                |
+| -------------- | ---------------------------------------------------- |
+| Container port | `6379`                                               |
+| Healthcheck    | `redis-cli -a <password> ping`, every 5s, 10 retries |
+| Connection URL | `redis://:pass@host:6379`                            |
 
 ## Troubleshooting
 

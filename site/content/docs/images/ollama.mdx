@@ -60,20 +60,20 @@ The entrypoint runs `ollama serve`, waits until `ollama list` works, then
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_AI_URL` | **Yes** in docker | Base URL — `oke boot: ollama driver needs OKE_AI_URL` when missing |
-| `OKE_AI_MODEL` | Recommended | Model tag to pull/serve (default `qwen3.5:9b`) |
-| `OLLAMA_HOST` | Set by recipe | `0.0.0.0:11434` inside the container |
-| `OKE_AI_VISION_MODEL` / `OKE_AI_EMBED_MODEL` | Optional | Written by `oke ai setup` for logical models |
+| Variable                                     | Required?         | Meaning                                                            |
+| -------------------------------------------- | ----------------- | ------------------------------------------------------------------ |
+| `OKE_AI_URL`                                 | **Yes** in docker | Base URL — `oke boot: ollama driver needs OKE_AI_URL` when missing |
+| `OKE_AI_MODEL`                               | Recommended       | Model tag to pull/serve (default `qwen3.5:9b`)                     |
+| `OLLAMA_HOST`                                | Set by recipe     | `0.0.0.0:11434` inside the container                               |
+| `OKE_AI_VISION_MODEL` / `OKE_AI_EMBED_MODEL` | Optional          | Written by `oke ai setup` for logical models                       |
 
 On Apple Silicon hosts running Ollama outside Docker, `qwen3.5:9b-mlx` is a common
 override — set `OKE_AI_MODEL` accordingly.
 
 ## Data and backup
 
-| Volume | Path | What it stores |
-| ------ | ---- | -------------- |
+| Volume    | Path            | What it stores                         |
+| --------- | --------------- | -------------------------------------- |
 | `ai-data` | `/root/.ollama` | Pulled model weights + Ollama metadata |
 
 **Backup means:** preserve `ai-data` so you do not re-download multi-GB models after
@@ -94,12 +94,12 @@ default compose shape.
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `11434` |
-| Entrypoint | `/bin/sh -c` boot script (serve → pull → wait) |
-| Healthcheck | `ollama list`, every 5s, 60 retries, 20s start period |
-| Connection URL | `http://host:11434` |
+| Field          | Value                                                 |
+| -------------- | ----------------------------------------------------- |
+| Container port | `11434`                                               |
+| Entrypoint     | `/bin/sh -c` boot script (serve → pull → wait)        |
+| Healthcheck    | `ollama list`, every 5s, 60 retries, 20s start period |
+| Connection URL | `http://host:11434`                                   |
 
 ## Troubleshooting
 

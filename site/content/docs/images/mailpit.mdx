@@ -10,8 +10,8 @@ lands in a web UI instead of a real inbox. Pin it as `images["channel.email"]` w
 `drivers.channel.email.docker` is `smtp`.
 
 <Callout title="The one rule">
-  Docker ≈ prod for the **SMTP protocol** — same `SMTP_URL` shape. Mailpit is not a
-  production MTA; swap the image / URL for a real relay when you leave local docker.
+  Docker ≈ prod for the **SMTP protocol** — same `SMTP_URL` shape. Mailpit is not a production MTA;
+  swap the image / URL for a real relay when you leave local docker.
 </Callout>
 
 ## Quick start
@@ -58,12 +58,12 @@ Trigger any flow that uses `fx.email` / channel email. Open `MAILPIT_UI_URL` (po
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `SMTP_URL` | **Yes** (app, smtp driver) | `smtp://host:1025` — boot fails without it |
-| `OKE_CHANNEL_EMAIL_URL` | Alternative | Same role as `SMTP_URL` |
-| `MAILPIT_UI_URL` | Written by stack | Browser UI — not read by the smtp driver |
-| `SMTP_USER` / `SMTP_PASSWORD` | No for Mailpit | Used when pointing `SMTP_URL` at an authenticated relay |
+| Variable                      | Required?                  | Meaning                                                 |
+| ----------------------------- | -------------------------- | ------------------------------------------------------- |
+| `SMTP_URL`                    | **Yes** (app, smtp driver) | `smtp://host:1025` — boot fails without it              |
+| `OKE_CHANNEL_EMAIL_URL`       | Alternative                | Same role as `SMTP_URL`                                 |
+| `MAILPIT_UI_URL`              | Written by stack           | Browser UI — not read by the smtp driver                |
+| `SMTP_USER` / `SMTP_PASSWORD` | No for Mailpit             | Used when pointing `SMTP_URL` at an authenticated relay |
 
 ## Data and backup
 
@@ -87,12 +87,12 @@ if SMTP still accepts mail.
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| SMTP port | `1025` (published) |
-| Extra port | `8025` → UI |
-| Healthcheck | `wget` against `/api/v1/info`, every 5s, 10 retries |
-| Connection URL | `smtp://host:1025` |
+| Field          | Value                                               |
+| -------------- | --------------------------------------------------- |
+| SMTP port      | `1025` (published)                                  |
+| Extra port     | `8025` → UI                                         |
+| Healthcheck    | `wget` against `/api/v1/info`, every 5s, 10 retries |
+| Connection URL | `smtp://host:1025`                                  |
 
 ## Troubleshooting
 
@@ -122,7 +122,15 @@ shift the host port).
 ## Next
 
 <Cards>
-  <Card title="RustFS" description="S3-compatible files for the same stack." href="/docs/images/rustfs" />
-  <Card title="OpenBao" description="Vault recipe for docker/prod secrets." href="/docs/images/openbao" />
+  <Card
+    title="RustFS"
+    description="S3-compatible files for the same stack."
+    href="/docs/images/rustfs"
+  />
+  <Card
+    title="OpenBao"
+    description="Vault recipe for docker/prod secrets."
+    href="/docs/images/openbao"
+  />
   <Card title="Channel" description="How fx.email reaches humans." href="/docs/elements/channel" />
 </Cards>

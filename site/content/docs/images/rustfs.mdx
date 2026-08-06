@@ -10,8 +10,8 @@ store (MinIO alternative). Driver id stays `s3`; Bun binds `Bun.S3Client` agains
 endpoint.
 
 <Callout title="The one rule">
-  Protocol name is `s3` — vendor choice is the image pin (`rustfs/rustfs:…`) plus
-  `S3_ENDPOINT`. Never invent a `rustfs` driver id.
+  Protocol name is `s3` — vendor choice is the image pin (`rustfs/rustfs:…`) plus `S3_ENDPOINT`.
+  Never invent a `rustfs` driver id.
 </Callout>
 
 ## Quick start
@@ -69,21 +69,21 @@ endpoint. Open `S3_CONSOLE_URL` for a browser console on port **9001**.
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `S3_ACCESS_KEY_ID` | **Yes** | Access key → `RUSTFS_ACCESS_KEY` |
-| `S3_SECRET_ACCESS_KEY` | **Yes** | Secret key → `RUSTFS_SECRET_KEY` |
-| `S3_BUCKET` | **Yes** (app) | Bucket name the driver opens |
-| `S3_ENDPOINT` | **Yes** (non-AWS) | Origin `http://host:9000` |
-| `S3_REGION` | Optional | Default `us-east-1` in stack env |
-| `S3_SESSION_TOKEN` | Optional | Temporary creds |
-| `S3_CONSOLE_URL` | Written by stack | UI on `:9001` — not required by the driver |
-| `S3_URL` | Written by stack | Credentialed URL form |
+| Variable               | Required?         | Meaning                                    |
+| ---------------------- | ----------------- | ------------------------------------------ |
+| `S3_ACCESS_KEY_ID`     | **Yes**           | Access key → `RUSTFS_ACCESS_KEY`           |
+| `S3_SECRET_ACCESS_KEY` | **Yes**           | Secret key → `RUSTFS_SECRET_KEY`           |
+| `S3_BUCKET`            | **Yes** (app)     | Bucket name the driver opens               |
+| `S3_ENDPOINT`          | **Yes** (non-AWS) | Origin `http://host:9000`                  |
+| `S3_REGION`            | Optional          | Default `us-east-1` in stack env           |
+| `S3_SESSION_TOKEN`     | Optional          | Temporary creds                            |
+| `S3_CONSOLE_URL`       | Written by stack  | UI on `:9001` — not required by the driver |
+| `S3_URL`               | Written by stack  | Credentialed URL form                      |
 
 ## Data and backup
 
-| Volume | Path | What it stores |
-| ------ | ---- | -------------- |
+| Volume             | Path    | What it stores                 |
+| ------------------ | ------- | ------------------------------ |
 | `store-files-data` | `/data` | Object bytes + RustFS metadata |
 
 **Backup means:** snapshot that named volume (or `aws s3 sync` against the API).
@@ -103,12 +103,12 @@ the recipe enables the console for local ops.
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| API port | `9000` |
-| Extra port | `9001` → console |
-| Healthcheck | `curl -f http://127.0.0.1:9000/health`, every 5s, 12 retries, 10s start |
-| Connection URL | `http://user:pass@host:9000/bucket` |
+| Field          | Value                                                                   |
+| -------------- | ----------------------------------------------------------------------- |
+| API port       | `9000`                                                                  |
+| Extra port     | `9001` → console                                                        |
+| Healthcheck    | `curl -f http://127.0.0.1:9000/health`, every 5s, 12 retries, 10s start |
+| Connection URL | `http://user:pass@host:9000/bucket`                                     |
 
 ## Troubleshooting
 
@@ -138,7 +138,11 @@ running service; confirm health at `/health` before debugging client signatures.
 ## Next
 
 <Cards>
-  <Card title="Mailpit" description="SMTP catcher for the same stack." href="/docs/images/mailpit" />
+  <Card
+    title="Mailpit"
+    description="SMTP catcher for the same stack."
+    href="/docs/images/mailpit"
+  />
   <Card title="OpenBao" description="Vault for secrets." href="/docs/images/openbao" />
   <Card title="Store" description="Files facet details." href="/docs/elements/store" />
 </Cards>

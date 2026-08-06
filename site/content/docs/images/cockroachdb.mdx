@@ -1,0 +1,127 @@
+---
+title: "CockroachDB"
+description: "Self-hosted single-node Cockroach — COCKROACH_* env, port 26257, DB Console on :8080, driver stays postgres."
+icon: "Database"
+source: "docs/spec/unified-theory.md"
+---
+
+CockroachDB speaks Postgres wire closely enough that `drivers.store.sql` stays
+`postgres`. Pin `cockroachdb/cockroach` as `store.sql` and `oke docker` derives a
+single-node compose service — credentials, healthcheck, and `DATABASE_URL`.
+
+<Callout title="The one rule">
+  The driver id stays `postgres` — vendor choice lives in `images["store.sql"]`, not in
+  `drivers.store.sql`. Host maps `:5432` → container `:26257` so local apps keep the usual Postgres
+  port.
+</Callout>
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin the image
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "cockroachdb/cockroach:v25.2.0", // pin a real tag
+},
+```
+
+</Step>
+
+<Step>
+### Bring the stack up
+
+```bash
+oke dev --docker
+```
+
+`oke docker` injects `COCKROACH_USER` / `COCKROACH_PASSWORD` / `COCKROACH_DATABASE`
+from `OKE_STORE_SQL_*`, starts `start-single-node --accept-sql-without-tls`, and
+publishes SQL on host `:5432` plus the DB Console on `:8080`.
+
+</Step>
+
+<Step>
+### Connect
+
+```bash
+echo "$DATABASE_URL"
+# postgres://oke:…@127.0.0.1:5432/oke?sslmode=require
+```
+
+</Step>
+
+</Steps>
+
+## Required env
+
+| Variable                 | Who sets it            | Meaning                              |
+| ------------------------ | ---------------------- | ------------------------------------ |
+| `OKE_STORE_SQL_USER`     | `oke docker` → compose | → `COCKROACH_USER` (first boot only) |
+| `OKE_STORE_SQL_PASSWORD` | `oke docker` → compose | → `COCKROACH_PASSWORD`               |
+| `OKE_STORE_SQL_DB`       | `oke docker` → compose | → `COCKROACH_DATABASE`               |
+| `DATABASE_URL`           | stack env for the app  | Includes `sslmode=require`           |
+
+## Data and backup
+
+| Path                        | What lives there                              |
+| --------------------------- | --------------------------------------------- |
+| `/cockroach/cockroach-data` | Named volume `store-sql-data` — cluster store |
+
+**Backup means:** volume backup of `store-sql-data`, or Cockroach's backup tooling
+against a running node. Losing that volume loses the cluster.
+
+## Production note
+
+This recipe is a **single-node** cluster — fine for local and small self-hosted apps,
+not multi-region HA. For managed multi-region, use the
+[CockroachDB provider](/docs/providers/cockroachdb). Prefer a pinned tag, not `latest`.
+
+## What the recipe configures
+
+| Field          | Value                                        |
+| -------------- | -------------------------------------------- |
+| Container port | `26257` (host publishes `5432`)              |
+| Extra port     | `8080` — DB Console                          |
+| Command        | `start-single-node --accept-sql-without-tls` |
+| Healthcheck    | `GET /health?ready=1` on `:8080`             |
+| Connection URL | `postgres://…?sslmode=require`               |
+
+## Troubleshooting
+
+<Accordions>
+<Accordion title="oke boot: postgres driver needs DATABASE_URL">
+
+Re-run `oke dev --docker` so the stack writes `docker/.env.docker`, or export
+`DATABASE_URL` yourself when pointing at a remote Cockroach host.
+
+</Accordion>
+<Accordion title="store-sql unhealthy / healthcheck never ready">
+
+First boot can take longer than Postgres. Check
+`docker compose … logs store-sql` for SQL ready. Empty `${OKE_STORE_SQL_PASSWORD}`
+in `.env.docker` leaves the init user broken — regenerate the stack env.
+
+</Accordion>
+</Accordions>
+
+## Learn more
+
+- [CockroachDB (provider)](/docs/providers/cockroachdb) — managed Cloud Connect flow
+- [YugabyteDB](/docs/images/yugabytedb) — Apache-2.0 self-hosted alternative
+- [Postgres](/docs/images/postgres) — default SQL recipe
+- [Store · SQL](/docs/elements/store#sql) — schema push / generate / migrate
+
+## Next
+
+<Cards>
+  <Card
+    title="CockroachDB Cloud"
+    description="Managed multi-region alternative."
+    href="/docs/providers/cockroachdb"
+  />
+  <Card title="YugabyteDB" description="Self-hosted YSQL peer." href="/docs/images/yugabytedb" />
+  <Card title="Postgres" description="The default store.sql image." href="/docs/images/postgres" />
+</Cards>

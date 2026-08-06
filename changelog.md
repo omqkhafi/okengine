@@ -12,6 +12,11 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ✨ Added
 
+- `cockroach`, `yugabyte`, and `timescale` Docker image recipes for self-hosted
+  `store.sql` (driver id stays `postgres`) — Cockroach on 26257 with
+  `COCKROACH_*` + DB Console `:8080`, Yugabyte YSQL on 5433 with `YSQL_*`,
+  Timescale with the same `POSTGRES_*` contract as Postgres; docs pages under
+  Recipes → SQL.
 - Docs **Recipes** pages for the five recipes that had zero coverage —
   Mailpit, Meilisearch, Ollama, OpenBao, RustFS — env names, volume paths,
   production notes, and real failure modes.
@@ -56,6 +61,9 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### ♻️ Changed
 
+- Recipes sidebar — Supabase recipe title drops “(Docker)”; Timescale, RustFS,
+  Mailpit, OpenBao, Meilisearch, and Ollama use monochrome brand marks instead
+  of Lucide placeholders.
 - Docs **Recipes** + **Providers** rewritten to a concrete acceptance bar —
   exact env / dashboard click-paths, volume backup meaning, production
   hardening, and one real failure mode per page (no interchangeable prose).

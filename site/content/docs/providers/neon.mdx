@@ -10,9 +10,8 @@ compute scales to zero. Wire protocol is plain Postgres — `drivers.store.sql` 
 `postgres`.
 
 <Callout title="The one rule">
-  Copy the connection string from Neon's **Connect** widget. Prefer the pooled hostname
-  for app traffic and the direct hostname for migrations — never invent the `-pooler`
-  suffix by hand.
+  Copy the connection string from Neon's **Connect** widget. Prefer the pooled hostname for app
+  traffic and the direct hostname for migrations — never invent the `-pooler` suffix by hand.
 </Callout>
 
 ## Find credentials (current console)
@@ -37,10 +36,10 @@ No `images["store.sql"]` pin — Neon runs the server.
 
 ## Pooled vs direct
 
-| Use | Which string | Why |
-| --- | ------------ | --- |
-| App / serverless / Drizzle runtime | **Pooled** (`-pooler`) | PgBouncer transaction mode; up to 10k client connections |
-| `oke db migrate` / `pg_dump` / logical replication / `LISTEN` | **Direct** (no `-pooler`) | Session features break under transaction pooling |
+| Use                                                           | Which string              | Why                                                      |
+| ------------------------------------------------------------- | ------------------------- | -------------------------------------------------------- |
+| App / serverless / Drizzle runtime                            | **Pooled** (`-pooler`)    | PgBouncer transaction mode; up to 10k client connections |
+| `oke db migrate` / `pg_dump` / logical replication / `LISTEN` | **Direct** (no `-pooler`) | Session features break under transaction pooling         |
 
 Do **not** also put [PgDog](/docs/images/pgdog) in front of Neon — one pooler only.
 
@@ -58,12 +57,12 @@ deliberately) when you need `pgvector` setup from that role.
 
 ## Free tier / production limits
 
-| Limit | Free plan |
-| ----- | --------- |
+| Limit         | Free plan                                 |
+| ------------- | ----------------------------------------- |
 | Scale to zero | After **5 min** idle — **cannot disable** |
-| Compute | **100 CU-hours** / project / month |
-| Storage | **0.5 GB** / project |
-| Autoscaling | Up to 2 CU |
+| Compute       | **100 CU-hours** / project / month        |
+| Storage       | **0.5 GB** / project                      |
+| Autoscaling   | Up to 2 CU                                |
 
 Hitting CU-hours or storage **suspends compute** until the next billing period or an
 upgrade. Always-on production needs Launch/Scale with scale-to-zero disabled.
@@ -102,7 +101,15 @@ privileges only.
 ## Next
 
 <Cards>
-  <Card title="Supabase" description="Another managed Postgres option." href="/docs/providers/supabase" />
-  <Card title="CockroachDB" description="Distributed SQL alternative." href="/docs/providers/cockroachdb" />
+  <Card
+    title="Supabase"
+    description="Another managed Postgres option."
+    href="/docs/providers/supabase"
+  />
+  <Card
+    title="CockroachDB"
+    description="Distributed SQL alternative."
+    href="/docs/providers/cockroachdb"
+  />
   <Card title="PgDog" description="Self-hosted pooler comparison." href="/docs/images/pgdog" />
 </Cards>

@@ -15,6 +15,7 @@ import {
   buildPgDogUsersToml,
   builtinRecipes,
   caddy,
+  cockroach,
   deriveInfrastructure,
   dragonfly,
   emitDockerfile,
@@ -26,10 +27,12 @@ import {
   resolveStack,
   SOCKET_PROXY_IMAGE,
   SOCKET_PROXY_SERVICE,
+  timescale,
   traefik,
   traefikAppLabels,
   valkey,
   writeDerivedFiles,
+  yugabyte,
   type ImageRecipe,
   type ServiceSpec,
 } from "./index.ts";
@@ -150,6 +153,95 @@ describe("image recipes", () => {
     expect(kvYml).toContain("memlock");
     expect(kvYml).toContain("HEALTHCHECK_PORT");
     expect(derived.stackEnv.REDIS_URL).toContain("redis://");
+  });
+
+  test("cockroach matches official image, port 26257, COCKROACH_* env, sslmode=require URL", () => {
+    const image = "cockroachdb/cockroach:v25.2.0";
+    expect(recipeFor(image).id).toBe("cockroach");
+    expect(cockroach.match(image)).toBe(true);
+    expect(postgres.match(image)).toBe(false);
+    const spec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image,
+      port: 26257,
+      hostPort: 5432,
+      credentials: fixedCreds["store.sql"],
+    };
+    const applied = recipeFor(spec.image).apply(spec);
+    expect(applied.command).toEqual(["start-single-node", "--accept-sql-without-tls"]);
+    expect(applied.environment?.COCKROACH_USER).toBe("${OKE_STORE_SQL_USER}");
+    expect(applied.environment?.COCKROACH_PASSWORD).toBe("${OKE_STORE_SQL_PASSWORD}");
+    expect(applied.environment?.COCKROACH_DATABASE).toBe("${OKE_STORE_SQL_DB}");
+    expect(applied.extraPorts).toEqual([{ host: 8080, container: 8080 }]);
+    expect(applied.volumes?.[0]).toContain("/cockroach/cockroach-data");
+    const url = recipeFor(spec.image).url(spec, {
+      host: "127.0.0.1",
+      port: 5432,
+      ...fixedCreds["store.sql"],
+    });
+    expect(url).toContain("sslmode=require");
+    expect(url).toContain(":5432/");
+
+    const derived = deriveInfrastructure({
+      images: { "store.sql": image },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    expect(derived.specs[0]!.port).toBe(26257);
+    expect(derived.specs[0]!.hostPort).toBe(5432);
+    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    expect(sqlYml).toContain("26257");
+    expect(sqlYml).toContain("COCKROACH_");
+    expect(derived.stackEnv.DATABASE_URL).toContain("sslmode=require");
+  });
+
+  test("yugabyte matches official image, YSQL on 5433, YSQL_* env", () => {
+    const image = "yugabytedb/yugabyte:2025.1.0.0-b100";
+    expect(recipeFor(image).id).toBe("yugabyte");
+    expect(yugabyte.match(image)).toBe(true);
+    const spec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image,
+      port: 5433,
+      hostPort: 5432,
+      credentials: fixedCreds["store.sql"],
+    };
+    const applied = recipeFor(spec.image).apply(spec);
+    expect(String(applied.command)).toContain("yugabyted");
+    expect(applied.environment?.YSQL_USER).toBe("${OKE_STORE_SQL_USER}");
+    expect(applied.environment?.YSQL_PASSWORD).toBe("${OKE_STORE_SQL_PASSWORD}");
+    expect(applied.environment?.YSQL_DB).toBe("${OKE_STORE_SQL_DB}");
+    expect(applied.volumes?.[0]).toContain("/home/yugabyte/yb_data");
+    const url = recipeFor(spec.image).url(spec, {
+      host: "127.0.0.1",
+      port: 5432,
+      ...fixedCreds["store.sql"],
+    });
+    expect(url).toStartWith("postgres://oke:");
+
+    const derived = deriveInfrastructure({
+      images: { "store.sql": image },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    expect(derived.specs[0]!.port).toBe(5433);
+    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    expect(sqlYml).toContain("5433");
+    expect(sqlYml).toContain("YSQL_");
+  });
+
+  test("timescale matches ahead of generic postgres with the same POSTGRES_* contract", () => {
+    const image = "timescale/timescaledb:latest-pg17";
+    expect(recipeFor(image).id).toBe("timescale");
+    expect(timescale.match(image)).toBe(true);
+    expect(postgres.match(image)).toBe(false);
+    const derived = deriveInfrastructure({
+      images: { "store.sql": image },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    expect(sqlYml).toContain("POSTGRES_USER");
+    expect(derived.stackEnv.DATABASE_URL).toContain("postgres://");
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {

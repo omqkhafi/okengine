@@ -15,7 +15,7 @@ export function credEnv(spec: ServiceSpec, field: "USER" | "PASSWORD" | "DB"): s
   return `\${${key}}`;
 }
 
-/** Postgres-protocol env shape (`POSTGRES_*`) — shared by postgres / supabase recipes. */
+/** Postgres-protocol env shape (`POSTGRES_*`) — shared by postgres / supabase / timescale. */
 export function postgresEnv(s: ServiceSpec): Record<string, string> {
   return {
     POSTGRES_USER: credEnv(s, "USER"),
@@ -24,12 +24,51 @@ export function postgresEnv(s: ServiceSpec): Record<string, string> {
   };
 }
 
-/** Postgres-protocol healthcheck — shared by postgres / supabase recipes. */
+/** Postgres-protocol healthcheck — shared by postgres / supabase / timescale. */
 export const postgresHealth = {
   test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"],
   interval: "5s",
   timeout: "3s",
   retries: 10,
+} as const;
+
+/** CockroachDB single-node env (`COCKROACH_*`) — used only when the data dir is empty. */
+export function cockroachEnv(s: ServiceSpec): Record<string, string> {
+  return {
+    COCKROACH_USER: credEnv(s, "USER"),
+    COCKROACH_PASSWORD: credEnv(s, "PASSWORD"),
+    COCKROACH_DATABASE: credEnv(s, "DB"),
+  };
+}
+
+/** CockroachDB readiness — DB Console `/health?ready=1`. */
+export const cockroachHealth = {
+  test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health?ready=1 >/dev/null 2>&1 || exit 1"],
+  interval: "5s",
+  timeout: "5s",
+  retries: 20,
+  start_period: "15s",
+} as const;
+
+/** YugabyteDB YSQL env — `YSQL_PASSWORD` enables authentication automatically. */
+export function yugabyteEnv(s: ServiceSpec): Record<string, string> {
+  return {
+    YSQL_USER: credEnv(s, "USER"),
+    YSQL_PASSWORD: credEnv(s, "PASSWORD"),
+    YSQL_DB: credEnv(s, "DB"),
+  };
+}
+
+/** YugabyteDB YSQL readiness — cluster boot is slow; long `start_period`. */
+export const yugabyteHealth = {
+  test: [
+    "CMD-SHELL",
+    'PGPASSWORD="$$YSQL_PASSWORD" bin/ysqlsh -h 127.0.0.1 -p 5433 -U "$$YSQL_USER" -d "$$YSQL_DB" -c "SELECT 1" >/dev/null 2>&1 || exit 1',
+  ],
+  interval: "10s",
+  timeout: "10s",
+  retries: 30,
+  start_period: "90s",
 } as const;
 
 /**

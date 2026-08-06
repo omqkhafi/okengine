@@ -9,8 +9,8 @@ Azure Cache for Redis spans Basic → Enterprise. New caches expect TLS.
 `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Build `rediss://` from **Overview** hostname + **Access keys** primary key + SSL port
-  **6380**. Do not use 6379 unless you explicitly allowed non-TLS.
+  Build `rediss://` from **Overview** hostname + **Access keys** primary key + SSL port **6380**. Do
+  not use 6379 unless you explicitly allowed non-TLS.
 </Callout>
 
 ## Find credentials (current portal)
@@ -33,11 +33,11 @@ oke.
 
 ## Production guidance
 
-| Tier | Notes |
-| ---- | ----- |
-| Basic | Shared, **no SLA** — not for production |
-| Standard | Replicated |
-| Premium / Enterprise | Clustering, persistence, VNet |
+| Tier                 | Notes                                   |
+| -------------------- | --------------------------------------- |
+| Basic                | Shared, **no SLA** — not for production |
+| Standard             | Replicated                              |
+| Premium / Enterprise | Clustering, persistence, VNet           |
 
 Non-TLS: **Settings → Advanced settings → Allow access only via SSL = No** — avoid in
 production. Entra ID auth exists on newer tiers; oke's URL driver expects access-key
@@ -77,5 +77,9 @@ password).
 <Cards>
   <Card title="ElastiCache" description="AWS's equivalent." href="/docs/providers/elasticache" />
   <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
-  <Card title="CockroachDB" description="Managed SQL-side pair." href="/docs/providers/cockroachdb" />
+  <Card
+    title="CockroachDB"
+    description="Managed SQL-side pair."
+    href="/docs/providers/cockroachdb"
+  />
 </Cards>

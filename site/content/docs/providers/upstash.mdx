@@ -30,12 +30,12 @@ TLS is mandatory — `redis://` without TLS fails.
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| Transport | TCP `rediss://` for Bun / long-running servers |
-| REST | Edge/serverless SDKs only — **not** wired to `fx.store` |
-| Pricing | Per-request — watch command fan-out in hot KV paths |
-| Eviction | Plan max size / eviction; serverless still has quotas |
+| Topic       | Guidance                                                                    |
+| ----------- | --------------------------------------------------------------------------- |
+| Transport   | TCP `rediss://` for Bun / long-running servers                              |
+| REST        | Edge/serverless SDKs only — **not** wired to `fx.store`                     |
+| Pricing     | Per-request — watch command fan-out in hot KV paths                         |
+| Eviction    | Plan max size / eviction; serverless still has quotas                       |
 | Consistency | Global replication options are product-specific — confirm region in Details |
 
 Do not put [PgDog](/docs/images/pgdog)-style thinking on Redis: there is no separate
@@ -77,7 +77,15 @@ Password missing from the URL. ioredis-style URLs need the colon before the pass
 ## Next
 
 <Cards>
-  <Card title="Redis Cloud" description="Fixed-instance alternative." href="/docs/providers/redis-cloud" />
-  <Card title="Dragonfly Cloud" description="Another managed option." href="/docs/providers/dragonfly-cloud" />
+  <Card
+    title="Redis Cloud"
+    description="Fixed-instance alternative."
+    href="/docs/providers/redis-cloud"
+  />
+  <Card
+    title="Dragonfly Cloud"
+    description="Another managed option."
+    href="/docs/providers/dragonfly-cloud"
+  />
   <Card title="Neon" description="Managed SQL-side pair." href="/docs/providers/neon" />
 </Cards>

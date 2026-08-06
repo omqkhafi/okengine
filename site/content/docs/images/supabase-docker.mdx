@@ -1,5 +1,5 @@
 ---
-title: "Supabase (Docker)"
+title: "Supabase"
 description: "Pin supabase/postgres as store.sql — extension bundle (pgvector, …) without Auth, Storage, Realtime, or Studio."
 icon: "Database"
 source: "docs/spec/unified-theory.md"
@@ -10,9 +10,9 @@ Supabase publishes `supabase/postgres` — plain Postgres with a bundled extensi
 image ahead of the generic Postgres recipe.
 
 <Callout title="Not the full Supabase platform">
-  This recipe does **not** start GoTrue, PostgREST, Kong, Realtime, Storage, or Studio.
-  Auth, files, and realtime delivery are already covered by [Vault](/docs/elements/vault),
-  [Store · files](/docs/elements/store#files), and [Signal](/docs/elements/signal).
+  This recipe does **not** start GoTrue, PostgREST, Kong, Realtime, Storage, or Studio. Auth, files,
+  and realtime delivery are already covered by [Vault](/docs/elements/vault), [Store ·
+  files](/docs/elements/store#files), and [Signal](/docs/elements/signal).
 </Callout>
 
 ## Quick start
@@ -58,23 +58,23 @@ the extension ships in this image.
 
 ## Required env
 
-| Variable | Meaning |
-| -------- | ------- |
-| `OKE_STORE_SQL_USER` | → `POSTGRES_USER` |
-| `OKE_STORE_SQL_PASSWORD` | → `POSTGRES_PASSWORD` |
-| `OKE_STORE_SQL_DB` | → `POSTGRES_DB` |
-| `DATABASE_URL` | App connection (`postgres://…:5432/…`) |
-| `PGDATA` | Default `/var/lib/postgresql/data/pgdata` |
+| Variable                 | Meaning                                   |
+| ------------------------ | ----------------------------------------- |
+| `OKE_STORE_SQL_USER`     | → `POSTGRES_USER`                         |
+| `OKE_STORE_SQL_PASSWORD` | → `POSTGRES_PASSWORD`                     |
+| `OKE_STORE_SQL_DB`       | → `POSTGRES_DB`                           |
+| `DATABASE_URL`           | App connection (`postgres://…:5432/…`)    |
+| `PGDATA`                 | Default `/var/lib/postgresql/data/pgdata` |
 
 Identical credential contract to [Postgres](/docs/images/postgres) — only the image
 (and its extension bundle) differs.
 
 ## Data and backup
 
-| Path | What lives there |
-| ---- | ---------------- |
-| `$PGDATA` | Cluster data, including extension catalogs |
-| Image `VOLUME` `/var/lib/postgresql/data` | Persistence mount |
+| Path                                      | What lives there                           |
+| ----------------------------------------- | ------------------------------------------ |
+| `$PGDATA`                                 | Cluster data, including extension catalogs |
+| Image `VOLUME` `/var/lib/postgresql/data` | Persistence mount                          |
 
 Same backup story as plain Postgres: `pg_dump` or volume backup of
 `/var/lib/postgresql/data`. Losing that volume loses tables **and** which extensions
@@ -92,12 +92,12 @@ cloud pausing does not apply to this Docker image — you own uptime.
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Match | `supabase/postgres` before generic `postgres` |
-| Container port | `5432` |
-| Healthcheck | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
-| Connection URL | `postgres://user:pass@host:5432/db` |
+| Field          | Value                                                |
+| -------------- | ---------------------------------------------------- |
+| Match          | `supabase/postgres` before generic `postgres`        |
+| Container port | `5432`                                               |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
+| Connection URL | `postgres://user:pass@host:5432/db`                  |
 
 ## Troubleshooting
 

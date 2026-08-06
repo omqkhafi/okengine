@@ -9,8 +9,8 @@ ElastiCache runs Redis OSS-compatible or Valkey engines inside your VPC. Both sp
 same wire protocol — `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Copy the **Primary Endpoint** (cluster mode disabled) from the ElastiCache console —
-  not a replica reader endpoint. Use `rediss://` when encryption in transit is on.
+  Copy the **Primary Endpoint** (cluster mode disabled) from the ElastiCache console — not a replica
+  reader endpoint. Use `rediss://` when encryption in transit is on.
 </Callout>
 
 ## Find credentials (current console)
@@ -35,13 +35,13 @@ REDIS_URL=rediss://:AUTH_TOKEN@my-cluster.xxxxx.ng.0001.use1.cache.amazonaws.com
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| Networking | **VPC-only** — app must share VPC, peering, or PrivateLink; no public hostname |
-| Engine | Redis OSS **or** Valkey — same `redis` driver |
-| Cluster mode | Prefer **disabled** + Primary Endpoint for oke's URL-shaped client |
-| Transit encryption | When enabled, scheme must be `rediss://` |
-| AUTH | Set at create/rotate — ElastiCache does not show a Redis-Cloud-style “eye” password |
+| Topic              | Guidance                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| Networking         | **VPC-only** — app must share VPC, peering, or PrivateLink; no public hostname      |
+| Engine             | Redis OSS **or** Valkey — same `redis` driver                                       |
+| Cluster mode       | Prefer **disabled** + Primary Endpoint for oke's URL-shaped client                  |
+| Transit encryption | When enabled, scheme must be `rediss://`                                            |
+| AUTH               | Set at create/rotate — ElastiCache does not show a Redis-Cloud-style “eye” password |
 
 Reader endpoints exist for read scaling; oke's single `REDIS_URL` should target the
 **Primary Endpoint** so writes and Gate/Signal counters hit the primary.
@@ -79,6 +79,14 @@ endpoint. Match scheme to **Encryption in-transit**, put the token after `rediss
 
 <Cards>
   <Card title="Memorystore" description="GCP's equivalent." href="/docs/providers/memorystore" />
-  <Card title="Azure Cache for Redis" description="Azure's equivalent." href="/docs/providers/azure-redis" />
-  <Card title="Redis Cloud" description="Vendor-neutral managed option." href="/docs/providers/redis-cloud" />
+  <Card
+    title="Azure Cache for Redis"
+    description="Azure's equivalent."
+    href="/docs/providers/azure-redis"
+  />
+  <Card
+    title="Redis Cloud"
+    description="Vendor-neutral managed option."
+    href="/docs/providers/redis-cloud"
+  />
 </Cards>

@@ -10,8 +10,8 @@ HTTP. Pin `images["store.index"]` and set `drivers.store.index` to `meilisearch`
 you need it (index does **not** auto-promote in docker).
 
 <Callout title="The one rule">
-  Index stays `memory` in every environment until you set the driver map explicitly —
-  there is no silent docker fallback to Meilisearch or pgvector.
+  Index stays `memory` in every environment until you set the driver map explicitly — there is no
+  silent docker fallback to Meilisearch or pgvector.
 </Callout>
 
 ## Quick start
@@ -62,17 +62,17 @@ libsql). Writes wait on Meilisearch tasks before returning.
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_STORE_INDEX_URL` | **Yes** | Base URL — boot fails without it |
+| Variable              | Required?            | Meaning                                          |
+| --------------------- | -------------------- | ------------------------------------------------ |
+| `OKE_STORE_INDEX_URL` | **Yes**              | Base URL — boot fails without it                 |
 | `OKE_STORE_INDEX_KEY` | **Yes** (production) | Master/API key; falls back to `MEILI_MASTER_KEY` |
-| `MEILI_MASTER_KEY` | Alternate | Same secret, container-side name |
-| `OKE_MEILI_ENV` | Optional | Passed as `MEILI_ENV` (default `production`) |
+| `MEILI_MASTER_KEY`    | Alternate            | Same secret, container-side name                 |
+| `OKE_MEILI_ENV`       | Optional             | Passed as `MEILI_ENV` (default `production`)     |
 
 ## Data and backup
 
-| Volume | Path | What it stores |
-| ------ | ---- | -------------- |
+| Volume             | Path          | What it stores               |
+| ------------------ | ------------- | ---------------------------- |
 | `store-index-data` | `/meili_data` | Indexes, documents, settings |
 
 **Backup means:** snapshot/restore that named volume (or Meilisearch dumps). Recreating
@@ -92,11 +92,11 @@ Vector `ai.embed` into a meilisearch index fails loud — embeddings need `pgvec
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `7700` |
-| Healthcheck | `wget` against `/health`, every 5s, 12 retries |
-| Connection URL | `http://host:7700` |
+| Field          | Value                                          |
+| -------------- | ---------------------------------------------- |
+| Container port | `7700`                                         |
+| Healthcheck    | `wget` against `/health`, every 5s, 12 retries |
+| Connection URL | `http://host:7700`                             |
 
 ## Troubleshooting
 
@@ -125,7 +125,15 @@ surfaces as `meilisearch index: unreachable at <url> — …`.
 ## Next
 
 <Cards>
-  <Card title="Ollama" description="Local AI models for the same stack." href="/docs/images/ollama" />
-  <Card title="Postgres" description="pgvector alternative for embeddings." href="/docs/images/postgres" />
+  <Card
+    title="Ollama"
+    description="Local AI models for the same stack."
+    href="/docs/images/ollama"
+  />
+  <Card
+    title="Postgres"
+    description="pgvector alternative for embeddings."
+    href="/docs/images/postgres"
+  />
   <Card title="Store" description="Index facet API." href="/docs/elements/store" />
 </Cards>

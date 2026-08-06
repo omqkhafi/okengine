@@ -10,8 +10,8 @@ storage, **not** an in-memory `-dev` server. Templates pin
 `vault: "openbao/openbao:2.6.1"` and `drivers.vault.docker/prod: "openbao"`.
 
 <Callout title="The one rule">
-  Never run OpenBao `-dev` in docker/prod. Data belongs on the Raft volume; init + unseal
-  stay on the host under `.oke/openbao/`.
+  Never run OpenBao `-dev` in docker/prod. Data belongs on the Raft volume; init + unseal stay on
+  the host under `.oke/openbao/`.
 </Callout>
 
 ## Quick start
@@ -56,25 +56,25 @@ OKE_VAULT_MOUNT=secret   # KV v2 mount (default)
 
 ## Required env
 
-| Variable | Who holds it | Meaning |
-| -------- | ------------ | ------- |
-| `OKE_VAULT_URL` | App / stack | OpenBao base URL |
-| `OKE_VAULT_TOKEN` | App (`.env.docker`) | Least-privilege app token |
-| `OKE_VAULT_MOUNT` | Optional | KV v2 mount path (default `"secret"`) |
-| `BAO_LOCAL_CONFIG` | Container (recipe) | Listener + Raft JSON — set by the recipe |
+| Variable           | Who holds it        | Meaning                                  |
+| ------------------ | ------------------- | ---------------------------------------- |
+| `OKE_VAULT_URL`    | App / stack         | OpenBao base URL                         |
+| `OKE_VAULT_TOKEN`  | App (`.env.docker`) | Least-privilege app token                |
+| `OKE_VAULT_MOUNT`  | Optional            | KV v2 mount path (default `"secret"`)    |
+| `BAO_LOCAL_CONFIG` | Container (recipe)  | Listener + Raft JSON — set by the recipe |
 
 Host-only material (mode `0600`, gitignored) — **not** in compose YAML:
 
-| File | Holds |
-| ---- | ----- |
-| `.oke/openbao/unseal.key` | Single unseal share |
+| File                      | Holds                                    |
+| ------------------------- | ---------------------------------------- |
+| `.oke/openbao/unseal.key` | Single unseal share                      |
 | `.oke/openbao/root.token` | Root token (CLI policy sync / mint only) |
-| `.oke/openbao/app.token` | Same least-privilege token the app uses |
+| `.oke/openbao/app.token`  | Same least-privilege token the app uses  |
 
 ## Data and backup
 
-| Volume | Path | What it stores |
-| ------ | ---- | -------------- |
+| Volume       | Path            | What it stores               |
+| ------------ | --------------- | ---------------------------- |
 | `vault-data` | `/openbao/file` | Raft storage (node id `oke`) |
 
 Recipe note: Raft path is `/openbao/file` (the stock entrypoint chowns that directory).
@@ -88,9 +88,9 @@ Healthcheck hits `/v1/sys/init` — **200 even while sealed**; bootstrap owns un
 ## Production note
 
 <Callout title="Single point of failure — read this once" type="warn">
-  Back up `.oke/openbao/unseal.key` to a separate safe location. Losing it means losing
-  every secret permanently, with no recovery. Restated from
-  [Vault · OpenBao](/docs/elements/vault#openbao-in-docker-and-prod).
+  Back up `.oke/openbao/unseal.key` to a separate safe location. Losing it means losing every secret
+  permanently, with no recovery. Restated from [Vault ·
+  OpenBao](/docs/elements/vault#openbao-in-docker-and-prod).
 </Callout>
 
 Self-hosted single-node, Shamir 1-of-1, no cloud KMS — by design. If OpenBao is
@@ -99,12 +99,12 @@ never silently starts empty.
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `8200` |
-| Command | `server` (with `BAO_LOCAL_CONFIG`) |
-| TLS | Disabled on the listener for compose (`tls_disable: true`) — rely on network isolation |
-| Healthcheck | `wget` `/v1/sys/init`, every 5s, 12 retries |
+| Field          | Value                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------- |
+| Container port | `8200`                                                                                 |
+| Command        | `server` (with `BAO_LOCAL_CONFIG`)                                                     |
+| TLS            | Disabled on the listener for compose (`tls_disable: true`) — rely on network isolation |
+| Healthcheck    | `wget` `/v1/sys/init`, every 5s, 12 retries                                            |
 
 ## Troubleshooting
 

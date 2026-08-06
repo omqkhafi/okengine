@@ -9,8 +9,8 @@ Valkey is the Linux Foundation's BSD-3-Clause fork of Redis, forked after Redis'
 license change. Same wire protocol — pin the image and nothing in Flow code moves.
 
 <Callout title="The one rule">
-  Driver id stays `redis`. Valkey is an image choice, not a driver. `REDIS_URL` and every
-  KV call through `fx.store` work exactly as they do against Redis.
+  Driver id stays `redis`. Valkey is an image choice, not a driver. `REDIS_URL` and every KV call
+  through `fx.store` work exactly as they do against Redis.
 </Callout>
 
 ## Quick start
@@ -52,12 +52,12 @@ Same knobs as Redis: `OKE_STORE_KV_MAXMEMORY`, `OKE_STORE_KV_MAXMEMORY_POLICY`.
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_STORE_KV_PASSWORD` | **Yes** | `--requirepass` for `valkey-server` |
-| `REDIS_URL` | **Yes** (app) | Still `redis://` scheme — protocol name, not vendor |
-| `OKE_STORE_KV_MAXMEMORY` | Optional | Memory cap |
-| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional | Eviction policy |
+| Variable                        | Required?     | Meaning                                             |
+| ------------------------------- | ------------- | --------------------------------------------------- |
+| `OKE_STORE_KV_PASSWORD`         | **Yes**       | `--requirepass` for `valkey-server`                 |
+| `REDIS_URL`                     | **Yes** (app) | Still `redis://` scheme — protocol name, not vendor |
+| `OKE_STORE_KV_MAXMEMORY`        | Optional      | Memory cap                                          |
+| `OKE_STORE_KV_MAXMEMORY_POLICY` | Optional      | Eviction policy                                     |
 
 ## Data and backup
 
@@ -76,13 +76,13 @@ see [DigitalOcean Managed Caching](/docs/providers/digitalocean-caching).
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Container port | `6379` |
-| Command | `valkey-server --requirepass … --maxmemory … --maxmemory-policy …` |
-| Healthcheck | `valkey-cli -a <password> ping`, every 5s, 10 retries |
-| Connection URL | `redis://:pass@host:6379` |
-| License | BSD-3-Clause |
+| Field          | Value                                                              |
+| -------------- | ------------------------------------------------------------------ |
+| Container port | `6379`                                                             |
+| Command        | `valkey-server --requirepass … --maxmemory … --maxmemory-policy …` |
+| Healthcheck    | `valkey-cli -a <password> ping`, every 5s, 10 retries              |
+| Connection URL | `redis://:pass@host:6379`                                          |
+| License        | BSD-3-Clause                                                       |
 
 ## Troubleshooting
 

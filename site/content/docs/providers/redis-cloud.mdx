@@ -9,8 +9,8 @@ Redis Cloud is Redis Ltd.'s first-party managed service — RESP over TCP/TLS, n
 REST layer. `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Use `rediss://` (double **s**) with the endpoint from **Configuration** or the
-  **Connect** wizard. Prefer **dynamic** endpoints when both are offered.
+  Use `rediss://` (double **s**) with the endpoint from **Configuration** or the **Connect** wizard.
+  Prefer **dynamic** endpoints when both are offered.
 </Callout>
 
 ## Find credentials (current console)
@@ -34,13 +34,13 @@ Port is a **per-database high port**, not always `6379` — copy it from the pan
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| TLS | Public endpoints expect TLS → `rediss://` |
+| Topic         | Guidance                                                                          |
+| ------------- | --------------------------------------------------------------------------------- |
+| TLS           | Public endpoints expect TLS → `rediss://`                                         |
 | Endpoint type | **Dynamic** (`*.db.redis.io`) can be redirected later; static `redis-….c…` cannot |
-| Private | Pro private endpoint needs VPC peering / PrivateLink / PSC first |
-| Modules | RediSearch / RedisJSON optional — unused by oke's KV driver |
-| Port | Per-database high port from Configuration — never assume `6379` |
+| Private       | Pro private endpoint needs VPC peering / PrivateLink / PSC first                  |
+| Modules       | RediSearch / RedisJSON optional — unused by oke's KV driver                       |
+| Port          | Per-database high port from Configuration — never assume `6379`                   |
 
 Essentials vs Pro panels differ (Access vs General), but **Connect** always opens the
 wizard with a filled client snippet — prefer that when the Configuration layout feels
@@ -79,7 +79,15 @@ re-enable public access in security settings.
 ## Next
 
 <Cards>
-  <Card title="Upstash" description="Serverless-friendly alternative." href="/docs/providers/upstash" />
-  <Card title="ElastiCache" description="AWS-native alternative." href="/docs/providers/elasticache" />
+  <Card
+    title="Upstash"
+    description="Serverless-friendly alternative."
+    href="/docs/providers/upstash"
+  />
+  <Card
+    title="ElastiCache"
+    description="AWS-native alternative."
+    href="/docs/providers/elasticache"
+  />
   <Card title="Neon" description="Managed SQL-side pair." href="/docs/providers/neon" />
 </Cards>

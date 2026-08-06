@@ -42,6 +42,7 @@ export { generateCredentials } from "./credentials.ts";
 export {
   builtinRecipes,
   caddy,
+  cockroach,
   dragonfly,
   mailpit,
   meilisearch,
@@ -52,8 +53,10 @@ export {
   recipeFor,
   redis,
   rustfs,
+  timescale,
   traefik,
   valkey,
+  yugabyte,
 } from "./recipes/index.ts";
 export { CADDY_APP_SERVICE, buildCaddyfile } from "./recipes/caddy.ts";
 export { PGDOG_BACKEND_SERVICE, buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";

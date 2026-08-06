@@ -9,8 +9,8 @@ Caddy is the simplest TLS path — automatic HTTPS from a generated `Caddyfile`,
 certificate management by hand. Right choice for a single app instance without `--scale`.
 
 <Callout title="The one rule">
-  Leave `images.proxy` unset until you need HTTPS at the edge or `--scale app=N`. Once
-  set, `app` stops publishing its host port directly — Caddy (or Traefik) does.
+  Leave `images.proxy` unset until you need HTTPS at the edge or `--scale app=N`. Once set, `app`
+  stops publishing its host port directly — Caddy (or Traefik) does.
 </Callout>
 
 ## Quick start
@@ -54,21 +54,21 @@ Generated `Caddyfile`: `{$OKE_PROXY_HOST:localhost} { reverse_proxy app:6530 }`.
 
 ## Required env
 
-| Variable | Required? | Meaning |
-| -------- | --------- | ------- |
-| `OKE_PROXY_HOST` | Recommended | Public hostname for ACME; default `localhost` → local TLS only |
-| `allowedHosts` (config) | Production | Must include the public hostname — see [Security](/docs/reference/security) |
+| Variable                | Required?   | Meaning                                                                     |
+| ----------------------- | ----------- | --------------------------------------------------------------------------- |
+| `OKE_PROXY_HOST`        | Recommended | Public hostname for ACME; default `localhost` → local TLS only              |
+| `allowedHosts` (config) | Production  | Must include the public hostname — see [Security](/docs/reference/security) |
 
 Caddy has no separate ACME email env in this recipe (unlike Traefik's
 `OKE_PROXY_ACME_EMAIL`).
 
 ## Data and backup
 
-| Volume | Path | What it stores |
-| ------ | ---- | -------------- |
-| `proxy-data` | `/data` | ACME certificates, account keys |
-| `proxy-config` | `/config` | Caddy runtime config |
-| Bind mount | `./Caddyfile` → `/etc/caddy/Caddyfile:ro` | Generated site block |
+| Volume         | Path                                      | What it stores                  |
+| -------------- | ----------------------------------------- | ------------------------------- |
+| `proxy-data`   | `/data`                                   | ACME certificates, account keys |
+| `proxy-config` | `/config`                                 | Caddy runtime config            |
+| Bind mount     | `./Caddyfile` → `/etc/caddy/Caddyfile:ro` | Generated site block            |
 
 **Backup means:** preserve the `proxy-data` named volume (and ideally `proxy-config`) so
 Let's Encrypt rate limits and cert renewals survive recreates. Losing `/data` forces
@@ -85,11 +85,11 @@ Also set `allowedHosts` to your public hostname before exposing the edge — see
 
 ## What the recipe configures
 
-| Field | Value |
-| ----- | ----- |
-| Ports | `80` + `443` published; `app` stays internal |
-| Healthcheck | `caddy version`, every 10s, 5 retries |
-| Connection URL | `https://<host>` |
+| Field          | Value                                        |
+| -------------- | -------------------------------------------- |
+| Ports          | `80` + `443` published; `app` stays internal |
+| Healthcheck    | `caddy version`, every 10s, 5 retries        |
+| Connection URL | `https://<host>`                             |
 
 ## Troubleshooting
 
@@ -119,6 +119,10 @@ Expected with the local CA. Install Caddy's local root for that machine, or set 
 
 <Cards>
   <Card title="Traefik" description="Multi-replica alternative." href="/docs/images/traefik" />
-  <Card title="PgDog" description="Pool Postgres behind the same stack." href="/docs/images/pgdog" />
+  <Card
+    title="PgDog"
+    description="Pool Postgres behind the same stack."
+    href="/docs/images/pgdog"
+  />
   <Card title="Redis" description="The default store.kv image." href="/docs/images/redis" />
 </Cards>

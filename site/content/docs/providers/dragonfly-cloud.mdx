@@ -10,8 +10,8 @@ Dragonfly Cloud runs the same multi-threaded engine as the
 `drivers.store.kv` stays `redis`.
 
 <Callout title="The one rule">
-  Click the **data store row** to open the side drawer — copy the
-  **Redis-compatible Connection URI** (includes passkey). Paste it as `REDIS_URL`.
+  Click the **data store row** to open the side drawer — copy the **Redis-compatible Connection
+  URI** (includes passkey). Paste it as `REDIS_URL`.
 </Callout>
 
 ## Find credentials (current console)
@@ -32,13 +32,13 @@ Smoke-check: `redis-cli -u "$REDIS_URL" PING`.
 
 ## Production guidance
 
-| Topic | Guidance |
-| ----- | -------- |
-| Public network | TLS + passkey **on** by default — leave TLS enabled |
-| Private network | Recommended for production (peering) — passkey still required on public |
-| HA | Enable high availability in the data store settings before you need failover |
-| Driver | Same `redis` driver as self-hosted Dragonfly |
-| Port | Drawer URI often uses **6385** (not 6379) — copy the URI wholesale |
+| Topic           | Guidance                                                                     |
+| --------------- | ---------------------------------------------------------------------------- |
+| Public network  | TLS + passkey **on** by default — leave TLS enabled                          |
+| Private network | Recommended for production (peering) — passkey still required on public      |
+| HA              | Enable high availability in the data store settings before you need failover |
+| Driver          | Same `redis` driver as self-hosted Dragonfly                                 |
+| Port            | Drawer URI often uses **6385** (not 6379) — copy the URI wholesale           |
 
 Self-hosting comparison: the [Dragonfly image](/docs/images/dragonfly) needs
 `OKE_STORE_KV_PASSWORD` + `memlock`; Cloud replaces that with the drawer passkey.

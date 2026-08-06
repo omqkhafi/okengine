@@ -9,8 +9,8 @@ Supabase wraps Postgres with Auth, Storage, Realtime, and generated APIs. oke on
 the Postgres connection underneath — `drivers.store.sql` stays `postgres`.
 
 <Callout title="The one rule">
-  Use the dashboard **Connect** button and pick the mode that matches your runtime —
-  Transaction pooler for serverless, Direct for migrations. Do not guess ports.
+  Use the dashboard **Connect** button and pick the mode that matches your runtime — Transaction
+  pooler for serverless, Direct for migrations. Do not guess ports.
 </Callout>
 
 ## Find credentials (current dashboard)
@@ -40,12 +40,12 @@ DATABASE_URL=postgres://postgres.[ref]:…@aws-0-[region].pooler.supabase.com:65
 
 ## Pooled vs direct
 
-| Mode | Host:port | Best for |
-| ---- | --------- | -------- |
-| Transaction (Supavisor) | `…pooler.supabase.com:6543` | Serverless / edge — default app `DATABASE_URL` |
-| Session (Supavisor) | `…pooler.supabase.com:5432` | Persistent backends on **IPv4-only** networks |
-| Direct | `db.[ref].supabase.co:5432` | Migrations, `pg_dump`, replication |
-| Dedicated PgBouncer (paid) | `db.[ref].supabase.co:6543` | High-performance pooled traffic on paid tiers |
+| Mode                       | Host:port                   | Best for                                       |
+| -------------------------- | --------------------------- | ---------------------------------------------- |
+| Transaction (Supavisor)    | `…pooler.supabase.com:6543` | Serverless / edge — default app `DATABASE_URL` |
+| Session (Supavisor)        | `…pooler.supabase.com:5432` | Persistent backends on **IPv4-only** networks  |
+| Direct                     | `db.[ref].supabase.co:5432` | Migrations, `pg_dump`, replication             |
+| Dedicated PgBouncer (paid) | `db.[ref].supabase.co:6543` | High-performance pooled traffic on paid tiers  |
 
 **Do not stack** [PgDog](/docs/images/pgdog) on top of Supavisor. Transaction mode does
 not support prepared statements — turn them off in the client if you see related errors.
@@ -61,12 +61,12 @@ Postgres.
 
 ## Free tier — breaks real production
 
-| Limit | Free |
-| ----- | ---- |
-| Inactivity pause | **7 days** without enough DB activity → project paused |
-| Active projects | **2** |
-| DB size | **500 MB** |
-| Restore window after pause | Finite (platform retention) |
+| Limit                      | Free                                                   |
+| -------------------------- | ------------------------------------------------------ |
+| Inactivity pause           | **7 days** without enough DB activity → project paused |
+| Active projects            | **2**                                                  |
+| DB size                    | **500 MB**                                             |
+| Restore window after pause | Finite (platform retention)                            |
 
 Paused projects wake slowly and will fail uptime checks. Paid plans do not auto-pause.
 Do not run user-facing production on Free.
@@ -96,7 +96,7 @@ traffic above the pause threshold. Dashboard page views alone may not count.
 
 ## Learn more
 
-- [Supabase (Docker)](/docs/images/supabase-docker) — Postgres image only, no platform
+- [Supabase recipe](/docs/images/supabase-docker) — Postgres image only, no platform
 - [Store · Index](/docs/elements/store#index) — `pgvector`
 - [Environment variables](/docs/reference/environment-variables) — `DATABASE_URL`
 
