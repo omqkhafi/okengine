@@ -26,7 +26,7 @@ export interface DrizzleKitEnvContext {
  *
  * @param cwd - Project root
  */
-async function readComposeEnv(cwd: string): Promise<Map<string, string>> {
+export async function readComposeEnv(cwd: string): Promise<Map<string, string>> {
   const { path } = resolveComposeEnvPath(cwd);
   const file = Bun.file(path);
   if (!(await file.exists())) return new Map();
@@ -35,6 +35,27 @@ async function readComposeEnv(cwd: string): Promise<Map<string, string>> {
   } catch {
     return new Map();
   }
+}
+
+/**
+ * Fill unset `process.env` keys from compose `.env.docker` (never overwrites).
+ *
+ * SQL / Redis binders read `process.env` directly — Vault can resolve the
+ * same file, but `oke db seed` must hydrate env before `app.boot()`.
+ *
+ * @param cwd - Project root
+ * @returns Keys that were applied
+ */
+export async function applyComposeEnvToProcess(cwd: string): Promise<readonly string[]> {
+  const compose = await readComposeEnv(cwd);
+  const applied: string[] = [];
+  for (const [key, value] of compose) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+      applied.push(key);
+    }
+  }
+  return applied;
 }
 
 /**

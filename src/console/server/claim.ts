@@ -58,7 +58,9 @@ export function mintClaimCode(now: () => number = Date.now): ClaimCodeState {
  */
 export function printClaimCodeOnce(
   state: ClaimCodeState,
-  write: (line: string) => void = (line) => console.log(line),
+  write: (line: string) => void = (line) => {
+    process.stdout.write(line);
+  },
 ): void {
   if (state.printed) return;
   state.printed = true;

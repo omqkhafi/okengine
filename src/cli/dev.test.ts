@@ -652,37 +652,57 @@ describe("oke dev mode resolution", () => {
     let upCalls = 0;
     let stopCalls = 0;
     let stoppedFiles: readonly string[] | undefined;
-    const result = await runDev({
-      cwd: dir,
-      stdinIsTTY: false,
-      images: { "store.sql": "postgres:16-alpine" },
-      credentials: {
-        "store.sql": {
-          user: "oke",
-          password: "test-password-not-in-yaml",
-          database: "oke",
+    const prevDocker = process.env["OKE_DOCKER"];
+    const prevKv = process.env["OKE_KV_DRIVER"];
+    const env = process.env as Record<string, string | undefined>;
+    delete env["OKE_DOCKER"];
+    delete env["OKE_KV_DRIVER"];
+    try {
+      const result = await runDev({
+        cwd: dir,
+        stdinIsTTY: false,
+        images: { "store.sql": "postgres:16-alpine" },
+        credentials: {
+          "store.sql": {
+            user: "oke",
+            password: "test-password-not-in-yaml",
+            database: "oke",
+          },
         },
-      },
-      composeUp: async (files) => {
-        upCalls++;
-        expect(files.length).toBeGreaterThan(0);
-      },
-      composeStop: (files) => {
-        stopCalls++;
-        stoppedFiles = files;
-      },
-      startApp: async () => ({ stop() {} }),
-      serveConsole: async () => ({ stop() {} }),
-      regenClient: async () => {},
-      write: () => {},
-      keepAlive: false,
-    });
-    expect(result.code).toBe(0);
-    expect(upCalls).toBe(1);
-    expect(result.session).toBeDefined();
-    result.session!.stop();
-    expect(stopCalls).toBe(1);
-    expect(stoppedFiles?.length).toBeGreaterThan(0);
+        composeUp: async (files) => {
+          upCalls++;
+          expect(files.length).toBeGreaterThan(0);
+        },
+        composeHealth: async ({ onUpdate }) => {
+          onUpdate?.("store-sql", "ready");
+          return new Map([["store-sql", "ready"]]);
+        },
+        composeStop: (files) => {
+          stopCalls++;
+          stoppedFiles = files;
+        },
+        startApp: async () => ({ stop() {} }),
+        serveConsole: async () => ({ stop() {} }),
+        regenClient: async () => {},
+        write: () => {},
+        keepAlive: false,
+      });
+      expect(result.code).toBe(0);
+      expect(upCalls).toBe(1);
+      expect(result.session).toBeDefined();
+      expect(env["OKE_DOCKER"]).toBe("1");
+      expect(env["OKE_KV_DRIVER"]).toBe("redis");
+      result.session!.stop();
+      expect(stopCalls).toBe(1);
+      expect(stoppedFiles?.length).toBeGreaterThan(0);
+      expect(env["OKE_DOCKER"]).toBeUndefined();
+      expect(env["OKE_KV_DRIVER"]).toBeUndefined();
+    } finally {
+      if (prevDocker === undefined) delete env["OKE_DOCKER"];
+      else env["OKE_DOCKER"] = prevDocker;
+      if (prevKv === undefined) delete env["OKE_KV_DRIVER"];
+      else env["OKE_KV_DRIVER"] = prevKv;
+    }
   });
 
   test("saved docker + compose failure exits loudly (no silent downgrade)", async () => {

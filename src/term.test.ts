@@ -5,7 +5,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   formatAppReadyLine,
+  formatBootWarn,
   formatClaimNote,
+  formatCliChrome,
   formatDevBanner,
   formatDevHero,
   formatDevLogSeparator,
@@ -13,6 +15,11 @@ import {
   formatServiceLine,
   formatRequestLine,
   formatStackSummary,
+  countTermLines,
+  createAnchoredBoard,
+  createBootProgress,
+  createRewritableBlock,
+  formatStatusDot,
   formatStatusLine,
   termStyle,
 } from "./term.ts";
@@ -38,9 +45,10 @@ describe("term", () => {
       runtimeEnv: "local",
       system: "darwin 25.4.0 · bun 1.3.14",
       elements: [
-        { element: "flow", detail: "●" },
-        { element: "store", detail: "sql postgres · kv redis" },
-        { element: "signal", detail: "memory" },
+        { element: "flow", detail: "", status: "ready" },
+        { element: "store", detail: "sql postgres · kv redis", status: "ready" },
+        { element: "signal", detail: "memory", status: "ready" },
+        { element: "ai", detail: "openai-compatible · smollm2", status: "pending" },
       ],
     });
     expect(out).toContain("oke dev  v0.2.4");
@@ -53,9 +61,63 @@ describe("term", () => {
     expect(out).toContain("elements");
     expect(out).toContain("store");
     expect(out).toContain("postgres");
+    expect(out).toContain("● flow");
+    expect(out).toContain("● ai");
     expect(out).not.toContain("on(Trigger)");
     expect(out).not.toContain("O·K·E");
     expect(out).not.toMatch(/\u001b\[/);
+  });
+
+  test("formatStatusDot colors by status", () => {
+    const s = termStyle(true);
+    expect(formatStatusDot("ready", true)).toBe(`${s.green}●${s.reset}`);
+    expect(formatStatusDot("pending", true)).toBe(`${s.yellow}●${s.reset}`);
+    expect(formatStatusDot("error", true)).toBe(`${s.red}●${s.reset}`);
+    expect(formatStatusDot("idle", true)).toBe(`${s.dim}●${s.reset}`);
+    expect(formatStatusDot("ready", false)).toBe("●");
+  });
+
+  test("createRewritableBlock appends when disabled", () => {
+    let out = "";
+    const block = createRewritableBlock((t) => {
+      out += t;
+    }, false);
+    block.paint("a\nb\n");
+    block.paint("c\n");
+    expect(out).toBe("a\nb\nc\n");
+    expect(countTermLines("a\nb\n")).toBe(2);
+  });
+
+  test("createBootProgress replaces keyed rows then clears", () => {
+    let out = "";
+    const progress = createBootProgress((t) => {
+      out += t;
+    }, false);
+    progress.set("compose", "compose…\n");
+    progress.set("compose", "compose ok\n");
+    progress.set("vault", "vault ok\n");
+    // Non-TTY appends each set (including replacements).
+    expect(out).toContain("compose ok\n");
+    expect(out).toContain("vault ok\n");
+    progress.clear();
+    // clear is a no-op on the stream when rewrite is disabled
+    expect(out).toContain("vault ok\n");
+  });
+
+  test("createAnchoredBoard wrapWrite tracks below output", () => {
+    let out = "";
+    const board = createAnchoredBoard((t) => {
+      out += t;
+    }, false);
+    board.paint("board\n");
+    const w = board.wrapWrite((t) => {
+      out += t;
+    });
+    w("below\n");
+    board.paint("board2\n"); // non-TTY: no rewrite append
+    expect(out).toContain("board\n");
+    expect(out).toContain("below\n");
+    board.stop();
   });
 
   test("formatServiceLine / formatAppReadyLine include URL", () => {
@@ -73,7 +135,7 @@ describe("term", () => {
       profile: "local",
       runtimeEnv: "local",
       system: "darwin 25.4.0 · bun 1.3.14",
-      elements: [{ element: "flow", detail: "●" }],
+      elements: [{ element: "flow", detail: "", status: "ready" }],
       color: false,
     });
     expect(out).toContain("oke dev");
@@ -104,6 +166,23 @@ describe("term", () => {
 
   test("formatStatusLine keeps message", () => {
     expect(formatStatusLine("stack up (sql)", false)).toContain("stack up");
+  });
+
+  test("formatBootWarn wraps under Notice chrome", () => {
+    const out = formatBootWarn(
+      "oke boot: Channel suppression defaults to process-local memory for multi-instance",
+      false,
+    );
+    expect(out).toContain("Notice");
+    expect(out).toContain("process-local");
+    expect(out).not.toContain("oke boot:");
+  });
+
+  test("formatCliChrome routes boot and status lines", () => {
+    const out = formatCliChrome("oke db seed: ok\noke boot: hello world\n", false);
+    expect(out).toContain("oke db seed: ok");
+    expect(out).toContain("Notice");
+    expect(out).toContain("hello world");
   });
 
   test("formatRequestLine shows date, time, surface, flow, ms, status", () => {
@@ -144,14 +223,20 @@ describe("term", () => {
     const out = formatStackSummary({
       project: "oke-dev-a3f791",
       services: [
-        { label: "postgres", hostPort: 15975 },
-        { label: "redis", hostPort: 16975 },
+        { label: "postgres", hostPort: 15975, status: "ready" },
+        { label: "redis", hostPort: 16975, status: "ready" },
+        { label: "ai", hostPort: 23975, detail: "gemma4:e4b-q4_K_M", status: "pending" },
       ],
       appDrivers: ["postgres", "redis"],
       color: false,
     });
     expect(out).toContain("Docker");
     expect(out).toContain(":15975");
+    expect(out).toContain("gemma4:e4b-q4_K_M");
+    expect(out).toContain("● postgres");
+    expect(out).toContain("● ai");
+    // Blank │ row separates the Docker header from whatever sits above.
+    expect(out).toMatch(/│\n◇ {2}Docker/);
     expect(out).not.toMatch(/\u001b\[/);
   });
 });

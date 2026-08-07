@@ -9,6 +9,7 @@ import {
   type DriversConfig,
   type OkeConfig,
 } from "../config/index.ts";
+import type { DevStatus } from "../term.ts";
 
 /** How the process is running (local laptop → production). */
 export type DevRuntimeProfile = "local" | "docker" | "test" | "production";
@@ -21,6 +22,8 @@ export type HeroElementRow = {
   readonly element: string;
   /** Driver summary, or `—` when unbound. */
   readonly detail: string;
+  /** Status dot — ready / pending / error / idle. */
+  readonly status?: DevStatus;
 };
 
 /** Serializable hero payload (TTY + soft-reload env). */
@@ -148,6 +151,10 @@ export function resolveHeroElements(
     readonly docker: boolean;
     readonly sqlDriver?: string;
     readonly kvDriver?: string;
+    /** Configured model id (`OKE_AI_MODEL`) when known. */
+    readonly aiModel?: string;
+    /** AI readiness when known (model loading / ready). */
+    readonly aiStatus?: DevStatus;
     /** Which driver map column to read (default `local`). */
     readonly configEnv?: ConfigEnv;
   },
@@ -162,8 +169,13 @@ export function resolveHeroElements(
     resolveDriverId(drivers?.store?.kv, configEnv) ??
     (options.docker ? "redis" : "memory");
 
+  const aiDriver = resolveDriverId(drivers?.ai, configEnv);
+  const aiModel = options.aiModel?.trim();
+  const aiDetail = aiDriver && aiModel ? `${aiDriver} · ${aiModel}` : (aiDriver ?? "—");
+
   const byName: Record<string, string> = {
-    flow: "●",
+    // Status ● is rendered separately — flow has no driver id.
+    flow: "",
     signal: resolveDriverId(drivers?.signal, configEnv) ?? "—",
     store: storeDetail(drivers?.store, configEnv, {
       sql: options.sqlDriver,
@@ -173,13 +185,17 @@ export function resolveHeroElements(
     gate: gateKv,
     vault: resolveDriverId(drivers?.vault, configEnv) ?? "—",
     channel: channelDetail(drivers?.channel, configEnv),
-    ai: resolveDriverId(drivers?.ai, configEnv) ?? "—",
+    ai: aiDetail,
   };
 
-  return EIGHT_ELEMENTS.map((element) => ({
-    element,
-    detail: byName[element] ?? "—",
-  }));
+  return EIGHT_ELEMENTS.map((element) => {
+    const detail = byName[element] ?? "—";
+    const idle = detail === "—" || detail === "";
+    let status: DevStatus = idle && element !== "flow" ? "idle" : "ready";
+    if (element === "flow") status = "ready";
+    if (element === "ai" && options.aiStatus && !idle) status = options.aiStatus;
+    return { element, detail, status };
+  });
 }
 
 /**
@@ -192,6 +208,10 @@ export function buildDevHeroSnapshot(options: {
   readonly docker: boolean;
   readonly sqlDriver?: string;
   readonly kvDriver?: string;
+  /** Configured model id (`OKE_AI_MODEL`) when known. */
+  readonly aiModel?: string;
+  /** AI readiness when known (model loading / ready). */
+  readonly aiStatus?: DevStatus;
   readonly version?: string;
   readonly nodeEnv?: string;
 }): DevHeroSnapshot {
@@ -207,6 +227,8 @@ export function buildDevHeroSnapshot(options: {
       docker: options.docker,
       sqlDriver: options.sqlDriver,
       kvDriver: options.kvDriver,
+      aiModel: options.aiModel,
+      aiStatus: options.aiStatus,
     }),
     ...(options.version !== undefined ? { version: options.version } : {}),
   };

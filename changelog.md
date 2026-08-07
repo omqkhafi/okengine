@@ -10,8 +10,28 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.10.0 — 2026-08-07
+
 ### ✨ Added
 
+- `oke dev -d` keyboard controls (TTY): `?` help · `c` refresh (clear logs +
+  latest ●) · `q` quit · `l` list services · `u` up / `x` stop stack ·
+  `1`–`9` then `u`/`x`/`r` for one service. Compose/AI status updates the
+  board above Logs only — not a `redis stopped` / `starting` / `ready` spam.
+  Elements and Docker are spaced; `l` / `?` refresh chrome first so the
+  control panel is not interleaved with request logs.
+- `oke dev -d` surfaces AI model state: hero + Docker summary show
+  `OKE_AI_MODEL`, and a background poller prints phase changes
+  (`waiting` / `starting` / `loading` / `ready` / `error`) for llama.cpp,
+  vLLM, SGLang, and Ollama without blocking boot.
+- `oke dev` hero elements and Docker rows show a colored status ● —
+  green ready, yellow pending/loading, red error, dim idle (unbound).
+  Docker colors come from `compose ps` health; AI uses model phase (not
+  container healthy alone). Boot chrome prints immediately; compose / vault /
+  health / AI work streams in an ephemeral progress pane that clears before
+  the elements / Docker board. Compose health uses `ps -a` and keeps polling
+  for the session so ● turns red when a container is stopped (Docker Desktop
+  or crash); AI ● follows model phase while the AI container is up.
 - `llama-cpp`, `vllm`, and `sglang` Docker image recipes for local / self-hosted
   inference — OpenAI-compatible endpoints, loopback-only host publish, pinned
   tags (never `latest`); docs decision matrix under Recipes → AI.
@@ -78,7 +98,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   shows `bun install` progress instead of a silent spinner. Wizard labels drop
   decorative icons. `oke ai setup` / create-oke AI: llama.cpp · Ollama · vLLM ·
   SGLang · cloud; llama.cpp and Ollama share the banner → tier → recommended /
-  manual shape (Docker Hub `ai/` catalog vs Ollama library + detect).
+  manual shape (Docker Hub `ai/` catalog vs Ollama library + detect); llama.cpp
+  catalog shows up to 20 curated `ai/` models per tier.
   **AI Provider — docker → Back** returns to the previous provider step.
 
 - Ollama docker ensure: skip `/api/pull` when the container's `/api/tags`
@@ -131,6 +152,25 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ### 🐛 Fixed
 
+- llama.cpp recipe no longer uses router `--models-preset` / bare
+  `--docker-repo` (b10290+ leaves `/v1/models` stuck on `loading`). It emits
+  `docker/llama-entrypoint.py` that Hub-pulls the curated model (native
+  `llama download`, then CNCF `model.weight` fallback for tags like gemma4)
+  and serves single-model with `-m` + `--alias`.
+- `oke ai setup` / create-oke AI wizard write `OKE_AI_*` stack keys as
+  **comments** in `.env.local` (same opt-in pattern as other infra) so they
+  no longer shadow compose `OKE_AI_URL` from `docker/.env.docker`. Uncomment
+  only for a host-managed AI endpoint; API tokens still write active.
+- `docker/.env.docker` no longer duplicates `OKE_AI_URL` / `OKE_PGDOG_URL`
+  (role aliases were re-emitting keys already written as `${prefix}_URL`).
+- `oke dev` TTY matches create-oke Clack chrome: Docker summary sits under the
+  hero, compose stdout is quiet, db/seed lines use `│` status rows, boot
+  honesty prints once as a Notice box (Backend child suppressed), and seed in
+  docker mode hydrates `DATABASE_URL` from `docker/.env.docker` so the prompt
+  no longer fails with a garbled `%E2%80%A2` password redact.
+- `oke dev --docker` restores parent `process.env` on session stop (compose
+  URLs / `OKE_DOCKER` / driver overrides) so a stopped session cannot pollute
+  later boots or the test suite.
 - create-oke templates (and the framework pin) use exact `drizzle-orm` /
   `drizzle-kit` `1.0.0-rc.4` (npm `rc` tag) — caret `^1.0.0-rc.4` was
   resolving mismatched channel builds (`…-fb12281` / `…-ca0f029`).
@@ -139,6 +179,11 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
   (production deps only). Linking the root installed Console
   `devDependencies` (including `drizzle-zod`), and Bun warned that RC
   `drizzle-orm` failed `drizzle-zod`’s `>=0.36` peer.
+- Local create-oke stage **copies** `files` (not symlinks), folds peers into
+  stage `dependencies`, and runs `bun install` in `~/.oke/create-oke/okengine`.
+  Bun’s `file:` install drops directory symlinks and keeps `package.json`
+  pointed at the stage, so without this `okengine/config` / `zod` resolution
+  failed after scaffold.
 - Ollama docker model download no longer depends on a host `ollama` CLI —
   boot/`oke ai setup` POST `/api/pull` to the container URL so a native host
   daemon cannot silently receive the weights.

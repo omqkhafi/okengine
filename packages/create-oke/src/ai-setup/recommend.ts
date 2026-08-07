@@ -183,11 +183,38 @@ export function formatLlamaCppBanner(machine: {
   return lines.join("\n");
 }
 
+/** Model name column width (monospace CLI table). */
+const MODEL_COL_NAME = 26;
+/** RAM column width, right-aligned (`≈32GB`). */
+const MODEL_COL_RAM = 7;
+
 /**
- * One model row: name  ·  RAM  ·  modalities (equal spacing).
+ * Clip or pad a cell for aligned CLI columns.
+ *
+ * @param value - Cell text
+ * @param width - Fixed width
+ */
+function clipPad(value: string, width: number): string {
+  if (value.length === width) return value;
+  if (value.length < width) return value.padEnd(width);
+  return `${value.slice(0, Math.max(0, width - 1))}…`;
+}
+
+/**
+ * Column header for the model pick list (aligns with {@link formatModelRow}).
+ */
+export function formatModelTableHeader(): string {
+  return `${clipPad("Model", MODEL_COL_NAME)}  ${"RAM".padStart(MODEL_COL_RAM)}  Caps`;
+}
+
+/**
+ * One model row as aligned columns: Model | RAM | Caps.
  *
  * @param model - Catalog entry
  */
 export function formatModelRow(model: CatalogModel): string {
-  return [model.label, `≈${model.ramGb}GB`, model.modalities.join("  ·  ")].join("  ·  ");
+  const name = clipPad(model.label, MODEL_COL_NAME);
+  const ram = `≈${model.ramGb}GB`.padStart(MODEL_COL_RAM);
+  const caps = model.modalities.join(" · ");
+  return `${name}  ${ram}  ${caps}`;
 }

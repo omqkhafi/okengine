@@ -16,6 +16,7 @@ import { sqliteDriver } from "../../drivers/sqlite.ts";
 import type { FilesDriver, IndexDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
+import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runtime
 
 /**
@@ -43,7 +44,7 @@ export function resetFilesFsWarnForTests(): void {
 function warnFilesFsMultiInstance(): void {
   if (filesFsWarned) return;
   filesFsWarned = true;
-  console.warn(
+  emitBootWarn(
     'oke boot: drivers.store.files "fs" is single-host — each instance sees its own ' +
       "filesystem (temp root when unbound). For horizontal scale use drivers.store.files s3 " +
       "(or an explicitly shared volume root, still single-host semantics).",

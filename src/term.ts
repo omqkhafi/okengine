@@ -60,10 +60,56 @@ export function termStyle(color: boolean = termColorEnabled()): TermStyle {
   };
 }
 
+/**
+ * Readiness for hero / Docker status dots.
+ *
+ * - `ready` — green ●
+ * - `pending` — yellow ● (starting / loading)
+ * - `error` — red ●
+ * - `idle` — dim ● (unbound)
+ */
+export type DevStatus = "ready" | "pending" | "error" | "idle";
+
+/**
+ * Colored ● for {@link DevStatus}.
+ *
+ * @param status - Readiness
+ * @param color - Color on/off
+ */
+export function formatStatusDot(status: DevStatus, color: boolean = termColorEnabled()): string {
+  const s = termStyle(color);
+  switch (status) {
+    case "ready":
+      return `${s.green}●${s.reset}`;
+    case "pending":
+      return `${s.yellow}●${s.reset}`;
+    case "error":
+      return `${s.red}●${s.reset}`;
+    case "idle":
+      return `${s.dim}●${s.reset}`;
+  }
+}
+
+/**
+ * Map AI model phase → {@link DevStatus}.
+ *
+ * @param phase - Probe phase string
+ */
+export function devStatusFromAiPhase(
+  phase: "unreachable" | "starting" | "loading" | "ready" | "error" | string,
+): DevStatus {
+  if (phase === "ready") return "ready";
+  if (phase === "error") return "error";
+  if (phase === "unreachable" || phase === "starting" || phase === "loading") return "pending";
+  return "pending";
+}
+
 /** One eight-element row in the hero. */
 export type DevHeroElement = {
   readonly element: string;
   readonly detail: string;
+  /** Status dot (default: idle when detail is `—`, else ready). */
+  readonly status?: DevStatus;
 };
 
 /** Shared options for the `oke dev` hero / banner. */
@@ -124,10 +170,18 @@ export function formatDevHeroDetails(options: DevHeroMeta = {}): string {
   const elements = options.elements ?? [];
   if (elements.length > 0) {
     lines.push(`${bar}  ${s.dim}elements${s.reset}`);
+    const color = options.color ?? termColorEnabled();
     for (const row of elements) {
-      const idle = row.detail === "—";
-      const detail = idle ? `${s.dim}—${s.reset}` : `${s.cyan}${row.detail}${s.reset}`;
-      lines.push(`${bar}  ${s.dim}${row.element.padEnd(9)}${s.reset} ${detail}`);
+      const idle = row.detail === "—" || row.detail === "";
+      const status = row.status ?? (idle ? "idle" : "ready");
+      const dot = formatStatusDot(status, color);
+      const detail = idle
+        ? row.detail === ""
+          ? ""
+          : `${s.dim}—${s.reset}`
+        : `${s.cyan}${row.detail}${s.reset}`;
+      const detailPart = detail ? ` ${detail}` : "";
+      lines.push(`${bar}  ${dot} ${s.dim}${row.element.padEnd(9)}${s.reset}${detailPart}`);
     }
   }
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
@@ -152,9 +206,218 @@ export function formatDevBanner(options: DevHeroMeta = {}): string {
   if (options.watching !== false) {
     lines.push(`${bar}  ${s.dim}watching — client types regenerate on save${s.reset}`);
   }
-  lines.push(formatDevHeroDetails(options).trimEnd());
+  const details = formatDevHeroDetails(options).trimEnd();
+  if (details) lines.push(details);
   lines.push(bar);
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Count visual lines in a terminal string (trailing newline optional).
+ *
+ * @param text - Block text
+ */
+export function countTermLines(text: string): number {
+  if (text.length === 0) return 0;
+  const normalized = text.endsWith("\n") ? text.slice(0, -1) : text;
+  if (normalized.length === 0) return 0;
+  return normalized.split("\n").length;
+}
+
+/** Handle for a bottom-of-TTY block that can be repainted until frozen. */
+export type RewritableBlock = {
+  /** Paint / repaint the block (must still be the last output). */
+  readonly paint: (text: string) => void;
+  /** Erase the block in place (no-op when frozen or non-TTY). */
+  readonly clear: () => void;
+  /** Stop rewriting — further {@link paint} calls append instead. */
+  readonly freeze: () => void;
+  readonly frozen: () => boolean;
+};
+
+/**
+ * Erase `lineCount` lines above the cursor (cursor ends on the first cleared row).
+ *
+ * @param write - stdout writer
+ * @param lineCount - Rows to clear
+ */
+function eraseTermLines(write: (text: string) => void, lineCount: number): void {
+  if (lineCount <= 0) return;
+  write(`\x1b[${lineCount}A`);
+  for (let i = 0; i < lineCount; i++) {
+    write("\x1b[2K");
+    if (i < lineCount - 1) write("\x1b[1B");
+  }
+  if (lineCount > 1) write(`\x1b[${lineCount - 1}A`);
+}
+
+/**
+ * Bottom-anchored live block for hero elements / Docker summary.
+ *
+ * Repaints in place with ANSI cursor moves while at the bottom of the TTY.
+ * Call {@link RewritableBlock.freeze} before printing anything below it.
+ *
+ * @param write - stdout writer
+ * @param enabled - When false (non-TTY / tests), every paint appends
+ */
+export function createRewritableBlock(
+  write: (text: string) => void,
+  enabled: boolean = termColorEnabled() && process.stdout.isTTY === true,
+): RewritableBlock {
+  let lineCount = 0;
+  let frozen = false;
+  return {
+    paint(text: string) {
+      if (text.length === 0) {
+        this.clear();
+        return;
+      }
+      const body = text.endsWith("\n") ? text : `${text}\n`;
+      const nextLines = countTermLines(body);
+      if (!frozen && enabled && lineCount > 0) {
+        eraseTermLines(write, lineCount);
+      }
+      write(body);
+      if (!frozen && enabled) lineCount = nextLines;
+      else lineCount = 0;
+    },
+    clear() {
+      if (frozen) return;
+      if (enabled && lineCount > 0) eraseTermLines(write, lineCount);
+      lineCount = 0;
+    },
+    freeze() {
+      frozen = true;
+      lineCount = 0;
+    },
+    frozen: () => frozen,
+  };
+}
+
+/** Keyed ephemeral boot-progress lines (compose / vault / health / AI). */
+export type BootProgress = {
+  /** Set or replace a progress row by key, then repaint. */
+  readonly set: (key: string, line: string) => void;
+  /** Erase all progress rows (TTY) before the final board. */
+  readonly clear: () => void;
+};
+
+/**
+ * Live boot-progress pane — keyed rows replace in place, then {@link BootProgress.clear}.
+ *
+ * @param write - stdout writer
+ * @param enabled - TTY rewrite on/off
+ */
+export function createBootProgress(
+  write: (text: string) => void,
+  enabled: boolean = termColorEnabled() && process.stdout.isTTY === true,
+): BootProgress {
+  const block = createRewritableBlock(write, enabled);
+  const order: string[] = [];
+  const lines = new Map<string, string>();
+  const repaint = (): void => {
+    if (order.length === 0) {
+      block.clear();
+      return;
+    }
+    block.paint(order.map((key) => lines.get(key) ?? "").join(""));
+  };
+  return {
+    set(key: string, line: string) {
+      const body = line.endsWith("\n") ? line : `${line}\n`;
+      if (!lines.has(key)) order.push(key);
+      lines.set(key, body);
+      if (!enabled) {
+        write(body);
+        return;
+      }
+      repaint();
+    },
+    clear() {
+      order.length = 0;
+      lines.clear();
+      block.clear();
+    },
+  };
+}
+
+/** Live elements/Docker board that can rewrite after content is printed below. */
+export type AnchoredBoard = {
+  /** Paint or rewrite the board (same height preferred). */
+  readonly paint: (text: string) => void;
+  /** Wrap a writer so post-board output is tracked for cursor math. */
+  readonly wrapWrite: (inner: (text: string) => void) => (text: string) => void;
+  /**
+   * Forget board geometry (after a full-screen clear) so the next
+   * {@link paint} writes fresh at the cursor.
+   */
+  readonly reset: () => void;
+  /** Disable further in-place rewrites (session end). */
+  readonly stop: () => void;
+};
+
+/**
+ * Anchored status board — rewrites in place even after Backend / Logs lines.
+ *
+ * Uses saved cursor + line offsets. Soft-reload full-screen clears can desync;
+ * later paints then append instead.
+ *
+ * @param write - stdout writer
+ * @param enabled - TTY rewrite on/off
+ */
+export function createAnchoredBoard(
+  write: (text: string) => void,
+  enabled: boolean = termColorEnabled() && process.stdout.isTTY === true,
+): AnchoredBoard {
+  let boardLines = 0;
+  let belowLines = 0;
+  let stopped = false;
+  let lastBody = "";
+
+  return {
+    paint(text: string) {
+      if (stopped) return;
+      const body = text.endsWith("\n") ? text : `${text}\n`;
+      const nextLines = countTermLines(body);
+      if (!enabled) {
+        if (boardLines === 0) write(body);
+        boardLines = nextLines;
+        lastBody = body;
+        return;
+      }
+      if (boardLines === 0) {
+        write(body);
+        boardLines = nextLines;
+        lastBody = body;
+        return;
+      }
+      if (body === lastBody) return;
+      // Move to board start, replace rows, restore cursor.
+      write("\x1b[s");
+      write(`\x1b[${belowLines + boardLines}A`);
+      eraseTermLines(write, boardLines);
+      write(body);
+      boardLines = nextLines;
+      lastBody = body;
+      write("\x1b[u");
+    },
+    wrapWrite(inner: (text: string) => void) {
+      return (text: string) => {
+        if (!stopped && enabled && boardLines > 0) {
+          belowLines += countTermLines(text);
+        }
+        inner(text);
+      };
+    },
+    reset() {
+      boardLines = 0;
+      belowLines = 0;
+      lastBody = "";
+    },
+    stop() {
+      stopped = true;
+    },
+  };
 }
 
 /**
@@ -241,10 +504,87 @@ export function formatDevLogSeparator(color: boolean = termColorEnabled()): stri
  *
  * @param message - Status text
  * @param color - Color on/off
+ * @param status - Optional colored ● prefix
  */
-export function formatStatusLine(message: string, color: boolean = termColorEnabled()): string {
+export function formatStatusLine(
+  message: string,
+  color: boolean = termColorEnabled(),
+  status?: DevStatus,
+): string {
   const s = termStyle(color);
-  return `${s.dim}│${s.reset}  ${s.dim}${message}${s.reset}\n`;
+  const dot = status ? `${formatStatusDot(status, color)} ` : "";
+  return `${s.dim}│${s.reset}  ${dot}${s.dim}${message}${s.reset}\n`;
+}
+
+/**
+ * Wrap a long message to `width` columns (word-aware).
+ *
+ * @param text - Source text
+ * @param width - Max columns per line
+ */
+function wrapWords(text: string, width: number): string[] {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) return [];
+  const lines: string[] = [];
+  let cur = "";
+  for (const word of words) {
+    if (cur.length === 0) {
+      cur = word;
+      continue;
+    }
+    if (`${cur} ${word}`.length <= width) {
+      cur = `${cur} ${word}`;
+      continue;
+    }
+    lines.push(cur);
+    cur = word;
+  }
+  if (cur.length > 0) lines.push(cur);
+  return lines;
+}
+
+/**
+ * Boot honesty notice — Clack-like column under the `oke dev` hero.
+ *
+ * @param message - Body (with or without `oke boot:` prefix)
+ * @param color - Color on/off
+ */
+export function formatBootWarn(message: string, color: boolean = termColorEnabled()): string {
+  const s = termStyle(color);
+  const bar = `${s.dim}│${s.reset}`;
+  const body = message.replace(/^oke boot:\s*/i, "").trim();
+  const width = Math.max(40, Math.min(72, (process.stdout.columns ?? 80) - 6));
+  const wrapped = wrapWords(body, width);
+  const lines = [`${s.yellow}◇${s.reset}  ${s.dim}Notice${s.reset}`];
+  for (const line of wrapped) {
+    lines.push(`${bar}  ${s.dim}${line}${s.reset}`);
+  }
+  lines.push(bar);
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Route raw CLI / boot lines into hero chrome (`│  …` or Notice boxes).
+ *
+ * @param text - Chunk that may contain newlines
+ * @param color - Color on/off
+ */
+export function formatCliChrome(text: string, color: boolean = termColorEnabled()): string {
+  const parts = text.split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const line = parts[i]!;
+    const isLastEmpty = i === parts.length - 1 && line.length === 0;
+    if (isLastEmpty) continue;
+    const trimmed = line.trimEnd();
+    if (trimmed.length === 0) continue;
+    if (/^oke boot:/i.test(trimmed)) {
+      out.push(formatBootWarn(trimmed, color));
+      continue;
+    }
+    out.push(formatStatusLine(trimmed, color));
+  }
+  return out.join("");
 }
 
 /** One infra service row for {@link formatStackSummary}. */
@@ -253,6 +593,12 @@ export type StackSummaryService = {
   readonly label: string;
   /** Published host port. */
   readonly hostPort: number;
+  /** Optional trailing detail (e.g. AI model id). */
+  readonly detail?: string;
+  /** Status dot (default `pending` until probed). */
+  readonly status?: DevStatus;
+  /** Compose service name for health lookup (`ai`, `store-sql`). */
+  readonly serviceName?: string;
 };
 
 /** Surfaces that emit request lines during `oke dev`. */
@@ -356,15 +702,24 @@ export function formatStackSummary(options: {
   const s = termStyle(options.color ?? termColorEnabled());
   const bar = `${s.dim}│${s.reset}`;
   const pad = (label: string) => label.padEnd(8);
+  const color = options.color ?? termColorEnabled();
   const lines: string[] = [
+    `${s.dim}│${s.reset}`,
     `${s.green}◇${s.reset}  ${s.bold}Docker${s.reset}     ${s.cyan}${options.project}${s.reset}`,
   ];
   for (const svc of options.services) {
-    lines.push(`${bar}  ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}:${svc.hostPort}${s.reset}`);
+    const detail = svc.detail?.trim();
+    const status = svc.status ?? "pending";
+    const dot = formatStatusDot(status, color);
+    lines.push(
+      `${bar}  ${dot} ${s.dim}${pad(svc.label)}${s.reset}  ${s.cyan}:${svc.hostPort}${s.reset}` +
+        (detail ? `  ${s.dim}${detail}${s.reset}` : ""),
+    );
   }
   const drivers = options.appDrivers ?? [];
   const appDetail = drivers.length > 0 ? `host Bun · ${drivers.join(" + ")}` : "host Bun";
-  lines.push(`${bar}  ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`);
+  const appDot = formatStatusDot("ready", color);
+  lines.push(`${bar}  ${appDot} ${s.dim}${pad("app")}${s.reset}  ${s.dim}${appDetail}${s.reset}`);
   lines.push(bar);
   return `${lines.join("\n")}\n`;
 }

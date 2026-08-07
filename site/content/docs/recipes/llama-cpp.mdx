@@ -31,7 +31,8 @@ images: {
 ```
 
 Or `oke ai setup --provider llama-cpp` (TTY: banner → Ultra Fast / Fast /
-Balanced / Smart → curated Docker Hub `ai/` pick) / `--yes` for `smollm2`.
+Balanced / Smart → up to 20 curated Docker Hub `ai/` picks per tier) / `--yes`
+for `smollm2`.
 
 </Step>
 
@@ -43,7 +44,16 @@ OKE_AI_URL=http://127.0.0.1:8080/v1
 OKE_AI_MODEL=smollm2
 ```
 
-`OKE_AI_MODEL` is a Docker Hub `ai/<id>` model (via `LLAMA_ARG_DOCKER_REPO`).
+`OKE_AI_MODEL` is a Docker Hub `ai/<id>` model. The recipe writes
+`docker/llama-entrypoint.py`, which Hub-pulls into the cache volume (native
+`llama download -dr`, then a CNCF `model.weight` fallback for newer tags like
+gemma4), then starts `llama-server -m <gguf> --alias <id>` (single-model — not
+router `--models-preset` / bare `--docker-repo`, which hang on b10290+). Never
+set `LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` in the container env.
+
+`oke dev -d` shows the model id in the hero / Docker summary and polls
+`/v1/models` in the background until status is `ready` (first boot may take
+minutes while the Hub image downloads).
 
 </Step>
 
@@ -79,22 +89,20 @@ Postgres/Redis, stricter on the published interface because of GGUF CVE risk.
 
 ## Required env
 
-| Variable                   | Required?         | Meaning                                 |
-| -------------------------- | ----------------- | --------------------------------------- |
-| `OKE_AI_URL`               | **Yes** in docker | Base URL including `/v1`                |
-| `OKE_AI_MODEL`             | Recommended       | Docker Hub `ai/` id (default `smollm2`) |
-| `LLAMA_ARG_DOCKER_REPO`    | Set by recipe     | Same as `OKE_AI_MODEL`                  |
-| `LLAMA_ARG_HOST` / `_PORT` | Set by recipe     | `0.0.0.0` / `8080` inside the container |
+| Variable       | Required?         | Meaning                                 |
+| -------------- | ----------------- | --------------------------------------- |
+| `OKE_AI_URL`   | **Yes** in docker | Base URL including `/v1`                |
+| `OKE_AI_MODEL` | Recommended       | Docker Hub `ai/` id (default `smollm2`) |
 
 ## What the recipe configures
 
-| Field          | Value                                          |
-| -------------- | ---------------------------------------------- |
-| Container port | `8080`                                         |
-| Host publish   | `127.0.0.1:8080:8080`                          |
-| Healthcheck    | `GET /health`, every 5s, 24 retries, 30s start |
-| Connection URL | `http://host:8080/v1`                          |
-| Model load     | `LLAMA_ARG_DOCKER_REPO` → curated `ai/` image  |
+| Field          | Value                                                           |
+| -------------- | --------------------------------------------------------------- |
+| Container port | `8080`                                                          |
+| Host publish   | `127.0.0.1:8080:8080`                                           |
+| Healthcheck    | `GET /health`, every 5s, 24 retries, 900s start                 |
+| Connection URL | `http://host:8080/v1`                                           |
+| Model load     | `llama-entrypoint.py` → Hub pull (incl. CNCF weights) then `-m` |
 
 ## When to choose something else
 
@@ -117,9 +125,15 @@ interfaces). `OKE_AI_URL` must include `/v1`.
 </Accordion>
 <Accordion title="Model fails to load / slow first boot">
 
-First start downloads the curated `ai/` model into the named volume. Prefer
-`oke ai setup` tiers (Ultra Fast → `smollm2`) for smoke tests. Do not mount
-random GGUF files from the internet.
+First start Hub-pulls the curated `ai/` model into the named cache volume
+(see logs: `oke ai: ensuring…` / download %). Prefer `oke ai setup` tiers
+(Ultra Fast → `smollm2`) for smoke tests. Confirm `OKE_AI_MODEL` is active in
+`.env.local` / `docker/.env.docker`. Watch `oke dev` (`AI … — waiting…` →
+`ready`). If status stays `loading` forever on an old stack that still uses
+`--models-preset`, regenerate `docker/` and recreate AI. Newer Hub tags use
+CNCF weight layers — the entrypoint falls back when native `llama download`
+cannot find `vnd.docker.ai.gguf.v3`. Do not mount random GGUF files. Never put
+`LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` in the container env.
 
 </Accordion>
 </Accordions>

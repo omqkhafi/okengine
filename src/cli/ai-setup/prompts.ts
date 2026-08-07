@@ -28,6 +28,7 @@ import {
 import {
   formatLlamaCppBanner,
   formatModelRow,
+  formatModelTableHeader,
   formatOllamaBanner,
   suggestTierForRam,
 } from "./recommend.ts";
@@ -187,7 +188,7 @@ async function askLlamaCppPath(options: {
             {
               value: "manual",
               label: "Select manually",
-              hint: "up to 10 models in this tier",
+              hint: "up to 20 models in this tier",
             },
           ],
           "recommended",
@@ -201,8 +202,9 @@ async function askLlamaCppPath(options: {
         }
 
         const list = llamaCppModelsForTier(tier);
+        note(formatModelTableHeader(), "Select model");
         const picked = await selectWithBack(
-          "Select model",
+          "Pick a model",
           list.map((m) => ({
             value: m.id,
             label: formatModelRow(m),
@@ -357,8 +359,9 @@ async function askOllamaPath(options: {
         }
 
         const list = modelsForTier(tier);
+        note(formatModelTableHeader(), "Select model");
         const picked = await selectWithBack(
-          "Select model",
+          "Pick a model",
           list.map((m) => ({
             value: m.id,
             label: formatModelRow(m),

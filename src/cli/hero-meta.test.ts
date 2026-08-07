@@ -49,7 +49,8 @@ describe("hero-meta", () => {
       "ai",
     ]);
     expect(rows.find((r) => r.element === "store")?.detail).toContain("sqlite");
-    expect(rows.find((r) => r.element === "flow")?.detail).toBe("●");
+    expect(rows.find((r) => r.element === "flow")?.detail).toBe("");
+    expect(rows.find((r) => r.element === "flow")?.status).toBe("ready");
   });
 
   test("docker profile applies to every element", () => {
@@ -80,5 +81,16 @@ describe("hero-meta", () => {
     expect(snap.profile).toBe("docker");
     expect(snap.runtimeEnv).toBe("local");
     expect(decodeHeroSnapshot(encodeHeroSnapshot(snap))).toEqual(snap);
+  });
+
+  test("hero AI row includes configured model id", () => {
+    const snap = buildDevHeroSnapshot({
+      config: SAMPLE,
+      docker: true,
+      aiModel: "gemma4:e4b-q4_K_M",
+      nodeEnv: "development",
+    });
+    const ai = snap.elements.find((r) => r.element === "ai")?.detail ?? "";
+    expect(ai).toContain("gemma4:e4b-q4_K_M");
   });
 });

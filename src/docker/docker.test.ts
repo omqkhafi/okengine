@@ -365,8 +365,15 @@ describe("image recipes", () => {
     };
     const applied = llamaCpp.apply(spec);
     expect(applied.publishBind).toBe("127.0.0.1");
-    expect(applied.environment?.LLAMA_ARG_HOST).toBe("0.0.0.0");
-    expect(applied.environment?.LLAMA_ARG_DOCKER_REPO).toContain("smollm2");
+    // Never put docker-repo / models-preset / interpolated OKE_AI_MODEL in
+    // service environment — router children recurse / OOM; Compose ${} would
+    // also override env_file from an empty host shell.
+    expect(applied.environment?.LLAMA_ARG_MODELS_PRESET).toBeUndefined();
+    expect(applied.environment?.LLAMA_ARG_DOCKER_REPO).toBeUndefined();
+    expect(applied.environment?.OKE_AI_MODEL).toBeUndefined();
+    expect(applied.entrypoint).toEqual(["/usr/bin/python3", "/oke/llama-entrypoint.py"]);
+    expect(applied.command).toBeUndefined();
+    expect(applied.volumes?.some((v) => v.includes("llama-entrypoint.py"))).toBe(true);
     expect(applied.extraPorts).toBeUndefined();
     expect(llamaCpp.url(spec, { host: "127.0.0.1", port: 8080, ...spec.credentials })).toBe(
       "http://127.0.0.1:8080/v1",
@@ -779,18 +786,30 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:11434");
     const envText = formatStackEnv(result.stackEnv);
     expect(envText).toContain("# ── ai — local inference");
+    expect(envText.match(/^OKE_AI_URL=/gm)?.length).toBe(1);
   });
 
   test("ai llama-cpp (default) emits /v1 URL and loopback-only publish", () => {
     const result = deriveInfrastructure({
       images: { ai: LLAMA_CPP_IMAGE },
       app: "skyport",
+      controls: { OKE_AI_MODEL: "gemma4:e4b-q4_K_M" },
     });
     const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
     expect(yml).toContain(LLAMA_CPP_IMAGE);
     expect(yml).toContain("127.0.0.1:8080:8080");
+    expect(yml).toContain("llama-entrypoint.py");
+    expect(yml).toContain("/oke/llama-entrypoint.py");
     expect(yml).not.toMatch(/ports:\s*\n\s*-\s*"?8080:8080"?/);
     expect(result.stackEnv.OKE_AI_URL).toBe("http://127.0.0.1:8080/v1");
+    expect(result.stackEnv.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
+    const entry = result.files.find((f) => f.path === "llama-entrypoint.py")!.content;
+    expect(entry).toContain("llama download");
+    expect(entry).toContain("org.cncf.model.filepath");
+    expect(entry).toContain("CNCF / Hub registry pull");
+    expect(entry).toContain("llama-server");
+    expect(entry).toContain("--alias");
+    expect(yml).not.toContain("--models-preset");
   });
 
   test("ai vllm and sglang emit loopback publish + GPU deploy", () => {

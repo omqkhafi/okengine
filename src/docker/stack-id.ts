@@ -191,6 +191,18 @@ export async function loadExistingStackControls(
     controls = parseStackControls(await file.text());
     break;
   }
+  // create-oke / `oke ai setup` write the chosen model into `.env.local`.
+  // Seed it into stack controls on first docker boot so `LLAMA_ARG_DOCKER_REPO`
+  // is not stuck on the recipe default (`smollm2`).
+  if (!controls.OKE_AI_MODEL) {
+    const localEnv = Bun.file(resolve(cwd, ".env.local"));
+    if (await localEnv.exists()) {
+      const model = parseDotenv(await localEnv.text())
+        .get("OKE_AI_MODEL")
+        ?.trim();
+      if (model) controls = { ...controls, OKE_AI_MODEL: model };
+    }
+  }
   if (!controls.OKE_VAULT_TOKEN) {
     const tokenFile = Bun.file(resolve(cwd, ".oke", "openbao", "app.token"));
     if (await tokenFile.exists()) {

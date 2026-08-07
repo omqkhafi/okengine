@@ -50,7 +50,8 @@ Host publish is `127.0.0.1:11434:11434`. Inside the container
 <Step>
 ### Boot pulls against the container API
 
-After compose is healthy, `oke dev -d` POSTs `/api/pull` to **this container’s**
+After compose is healthy, `oke dev -d` shows `OKE_AI_MODEL` in the hero / Docker
+summary, POSTs `/api/pull` to **this container’s**
 loopback URL when the recipe is Ollama — never a host `ollama` CLI.
 
 </Step>

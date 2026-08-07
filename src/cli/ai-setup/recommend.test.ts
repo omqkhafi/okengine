@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  LLAMA_CPP_CHAT_MODELS,
   llamaCppModelsForTier,
   modelsForTier,
   recommendChatModel,
@@ -14,6 +15,7 @@ import {
   fittingChatModels,
   formatLlamaCppBanner,
   formatModelRow,
+  formatModelTableHeader,
   formatOllamaBanner,
   isTightFit,
   modelFitsComfortably,
@@ -132,18 +134,35 @@ describe("formatOllamaBanner", () => {
 });
 
 describe("llama.cpp catalog", () => {
-  test("each tier exposes up to 10 Docker Hub ai/ models", () => {
+  test("each tier has ≥10 curated Docker Hub ai/ models (UI shows up to 20)", () => {
     for (const tier of ["ultra-fast", "fast", "balanced", "smart"] as const) {
+      const all = LLAMA_CPP_CHAT_MODELS.filter((m) => m.tier === tier);
+      expect(all.length).toBeGreaterThanOrEqual(10);
       const list = llamaCppModelsForTier(tier);
-      expect(list.length).toBeGreaterThan(0);
-      expect(list.length).toBeLessThanOrEqual(10);
+      expect(list.length).toBeGreaterThanOrEqual(10);
+      expect(list.length).toBeLessThanOrEqual(20);
+      expect(list.length).toBe(Math.min(all.length, 20));
       expect(list.every((m) => !m.id.startsWith("ai/"))).toBe(true);
+      for (let i = 1; i < list.length; i++) {
+        expect(list[i]!.ramGb).toBeGreaterThanOrEqual(list[i - 1]!.ramGb);
+      }
     }
   });
 
   test("recommendLlamaCppForTier returns a model in that tier", () => {
     expect(recommendLlamaCppForTier("ultra-fast", 8).id).toBe("smollm2");
     expect(recommendLlamaCppForTier("fast", 16).tier).toBe("fast");
+  });
+
+  test("visible list surfaces Gemma 4 and Qwen", () => {
+    const ids = (tier: "fast" | "balanced" | "smart") =>
+      llamaCppModelsForTier(tier).map((m) => m.id);
+    expect(ids("fast").some((id) => id.startsWith("gemma4:"))).toBe(true);
+    expect(ids("fast").some((id) => id.startsWith("qwen"))).toBe(true);
+    expect(ids("balanced")).toContain("gemma4:e4b");
+    expect(ids("balanced").some((id) => id.startsWith("qwen3"))).toBe(true);
+    expect(ids("smart")).toContain("gemma4:31b");
+    expect(ids("smart").some((id) => id.startsWith("qwen"))).toBe(true);
   });
 
   test("formatLlamaCppBanner shows Docker Hub ai/ source — not Ollama detect", () => {
@@ -157,7 +176,7 @@ describe("llama.cpp catalog", () => {
 });
 
 describe("formatModelRow", () => {
-  test("equal spacing between name · RAM · modalities", () => {
+  test("aligned Model | RAM | Caps columns", () => {
     const row = formatModelRow({
       id: "x",
       label: "Gemma 4 4B",
@@ -167,6 +186,15 @@ describe("formatModelRow", () => {
       tier: "fast",
       modalities: ["text", "code"],
     });
-    expect(row).toBe("Gemma 4 4B  ·  ≈8GB  ·  text  ·  code");
+    const header = formatModelTableHeader();
+    expect(header.startsWith("Model")).toBe(true);
+    expect(header).toContain("RAM");
+    expect(header).toContain("Caps");
+    // Caps column starts at the same offset as the header.
+    expect(row.indexOf("text")).toBe(header.indexOf("Caps"));
+    expect(row).toContain("Gemma 4 4B");
+    expect(row).toContain("≈8GB");
+    expect(row).toContain("text · code");
+    expect(row).not.toContain("  ·  ≈");
   });
 });

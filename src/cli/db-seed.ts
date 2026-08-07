@@ -19,7 +19,7 @@ import {
 } from "../elements/store/load-plugin-tables.ts";
 import { createFx, type Fx } from "../kernel/fx.ts";
 import type { OkeApp } from "../kernel/app.ts";
-import { resolveDrizzleKitEnv } from "./drizzle-env.ts";
+import { applyComposeEnvToProcess, resolveDrizzleKitEnv } from "./drizzle-env.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
 import { loadOkeConfig } from "./load-config.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
@@ -77,13 +77,17 @@ export function isSeedDef(value: unknown): value is SeedDef {
 /**
  * Redact password from a connection URL for display.
  *
+ * Builds the string by hand — assigning unicode bullets to `URL.password`
+ * then calling `toString()` percent-encodes them (`%E2%80%A2`).
+ *
  * @param raw - Connection URL or file path
  */
 export function redactConnectionTarget(raw: string): string {
   try {
     const u = new URL(raw);
-    if (u.password) u.password = "••••";
-    return u.toString();
+    if (!u.password) return u.toString();
+    const auth = u.username ? `${u.username}:••••@` : "••••@";
+    return `${u.protocol}//${auth}${u.host}${u.pathname}${u.search}${u.hash}`;
   } catch {
     return raw;
   }
@@ -214,6 +218,10 @@ export async function bootSeedFx(
   entry?: string,
   config?: OkeConfig | null,
 ): Promise<{ readonly fx: Fx; readonly stop: () => Promise<void> }> {
+  if (env === "docker") {
+    await applyComposeEnvToProcess(cwd);
+    if (process.env.OKE_DOCKER === undefined) process.env.OKE_DOCKER = "1";
+  }
   const entryAbs = await resolveAppEntryForPluginTables(cwd, entry ?? config?.db?.entry);
   if (!entryAbs) {
     throw new Error(

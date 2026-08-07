@@ -279,11 +279,14 @@ export function upsertAiDrivers(source: string, pins: EnvDriverPins): string {
  * Format an env driver map literal.
  *
  * @param pins - Pins
- * @param indentLevel - Indent depth (2 spaces each)
+ * @param indentLevel - Indent of the map key (`signal` → 2, `sql`/`email` → 3;
+ *   two spaces each). Inner fields use `indentLevel + 1`; the closing `}`
+ *   aligns with the key. An off-by-one here made `email`'s `},` look like
+ *   `channel`'s close, so {@link upsertAiDrivers} nested `ai` under `channel`.
  */
 function formatEnvMap(pins: EnvDriverPins, indentLevel: number): string {
-  const pad = "  ".repeat(indentLevel);
-  const close = "  ".repeat(indentLevel - 1);
+  const pad = "  ".repeat(indentLevel + 1);
+  const close = "  ".repeat(indentLevel);
   return `{
 ${pad}local: "${pins.local}",
 ${pad}docker: "${pins.docker}",

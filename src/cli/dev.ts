@@ -26,15 +26,32 @@ import type { Manifest } from "../manifest/types.ts";
 import type { McpContext } from "../mcp/tools.ts";
 import { APP_PORT, CONSOLE_PORT, DOCS_MCP_PORT, MCP_PORT } from "../runtime/types.ts";
 import {
+  clearTerminalScreen,
+  createAnchoredBoard,
+  createBootProgress,
+  devStatusFromAiPhase,
+  formatAppReadyLine,
+  formatBootWarn,
+  formatCliChrome,
   formatDevBanner,
+  formatDevHeroDetails,
   formatDevLogSeparator,
   formatServiceLine,
   formatStackSummary,
   formatStatusLine,
+  type BootProgress,
+  type DevStatus,
+  type StackSummaryService,
 } from "../term.ts";
 import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
 import { askDevMode, type AskDevModeFn } from "./ask-dev-mode.ts";
+import {
+  controlServicesFromStack,
+  formatDevControlsHint,
+  startDevControls,
+  type DevComposeControlAction,
+} from "./dev-controls.ts";
 import {
   createDebouncedRunner,
   isDomainSchemaWatchPath,
@@ -42,7 +59,13 @@ import {
 } from "./db-auto-push.ts";
 import { resolveDrizzleConfigPath, runPush } from "./db.ts";
 import { readDevMode, shouldAskDevMode, writeDevMode, type DevMode } from "./dev-mode.ts";
-import { buildDevHeroSnapshot, encodeHeroSnapshot } from "./hero-meta.ts";
+import {
+  buildDevHeroSnapshot,
+  encodeHeroSnapshot,
+  formatHeroSystemLine,
+  resolveDevProfile,
+  resolveDevRuntimeEnv,
+} from "./hero-meta.ts";
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
@@ -200,6 +223,17 @@ export interface DevOptions {
     env: Readonly<Record<string, string>>,
   ) => void;
   /**
+   * Poll compose service health (injectable). Default: {@link watchComposeHealth}.
+   *
+   * @param options - Compose files, cwd, env, optional per-service updates
+   */
+  readonly composeHealth?: (options: {
+    readonly files: readonly string[];
+    readonly cwd: string;
+    readonly env: Record<string, string>;
+    readonly onUpdate?: (service: string, status: DevStatus) => void;
+  }) => Promise<Map<string, DevStatus>>;
+  /**
    * Regenerate client types (injectable).
    *
    * @param appUrl - App base URL
@@ -261,7 +295,21 @@ export interface DevResult {
  * @param options - Flags
  */
 export async function runDev(options: DevOptions = {}): Promise<DevResult> {
-  const write = options.write ?? ((t) => process.stdout.write(t));
+  /** Reassigned to {@link createAnchoredBoard} wrap after the status board paints. */
+  let write: (text: string) => void = options.write ?? ((t) => process.stdout.write(t));
+  const chromeWrite = (t: string) => write(formatCliChrome(t));
+  const previousWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    const msg = args.map(String).join(" ");
+    if (/^oke boot:/i.test(msg.trim())) {
+      write(formatBootWarn(msg.trim()));
+      return;
+    }
+    previousWarn.apply(console, args as Parameters<typeof console.warn>);
+  };
+  const restoreWarn = () => {
+    console.warn = previousWarn;
+  };
   const cwd = options.cwd ?? process.cwd();
   const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
   const preferredConsole = options.consolePort ?? CONSOLE_PORT;
@@ -302,6 +350,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   }
   if (!entry) {
     console.error("oke dev: no entry found (src/app.ts)");
+    restoreWarn();
     return { code: 1 };
   }
 
@@ -309,6 +358,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const explicitDocker = options.docker === true || Array.isArray(options.docker);
   if (explicitLocal && explicitDocker) {
     console.error("oke dev: use either --local or --docker, not both");
+    restoreWarn();
     return { code: 1 };
   }
 
@@ -332,6 +382,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const chosen = await ask();
     if (chosen === null) {
       console.error("oke dev: cancelled");
+      restoreWarn();
       return { code: 1 };
     }
     mode = chosen;
@@ -340,6 +391,28 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     // Non-TTY + unset: deterministic local — zero ask, zero docker, no save.
     mode = "local";
   }
+
+  // Paint chrome immediately so docker/vault work is never a blank 6s wait.
+  let okeVersion = "0.0.0";
+  try {
+    const pkg = (await Bun.file(resolve(import.meta.dir, "../../package.json")).json()) as {
+      version?: string;
+    };
+    if (typeof pkg.version === "string") okeVersion = pkg.version;
+  } catch {
+    // shipped binary may not sit next to package.json
+  }
+  const earlyProfile = resolveDevProfile({ docker: mode === "docker", nodeEnv: "development" });
+  write(
+    formatDevBanner({
+      profile: earlyProfile,
+      runtimeEnv: resolveDevRuntimeEnv(earlyProfile),
+      system: formatHeroSystemLine(),
+      version: okeVersion,
+    }),
+  );
+  /** Ephemeral compose/vault/health/AI lines — cleared before the final board. */
+  const bootProgress: BootProgress = createBootProgress(write);
 
   let stackRoles: string[] | null = null;
   let composeFiles: string[] | null = null;
@@ -352,6 +425,26 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   } | null = null;
   let stackSqlDriver = "postgres";
   let stackKvDriver = "redis";
+  /** Printed after the hero so Docker ports sit under the Starting column. */
+  let pendingStackSummary: {
+    readonly project: string;
+    readonly services: StackSummaryService[];
+    readonly appDrivers: readonly string[];
+  } | null = null;
+  /** Background AI model poller — cancelled in `stop()`. */
+  let stopAiModelWatch: (() => void) | null = null;
+  /** Session compose health poller — cancelled in `stop()`. */
+  let stopComposeHealthWatch: (() => void) | null = null;
+  /** Latest compose ps -a statuses (service name → ●). */
+  let liveComposeHealth = new Map<string, DevStatus>();
+  /** Start after hero/stack chrome so status lines land in the right place. */
+  let pendingAiModelWatch: {
+    readonly url: string;
+    readonly model: string;
+    readonly kind: "openai-compatible" | "ollama";
+  } | null = null;
+  /** Hero AI status dot (yellow while model loads). */
+  let heroAiStatus: DevStatus | undefined;
   let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null = null;
   try {
     loadedConfig = (await loadOkeConfig(cwd)).config;
@@ -372,6 +465,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         write(formatStatusLine(`meilisearch local server on ${meili.url}`));
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));
+        restoreWarn();
         return { code: 1 };
       }
     }
@@ -387,6 +481,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           images = resolveImages(loaded.config);
         } catch (err) {
           console.error(err instanceof Error ? err.message : String(err));
+          restoreWarn();
           return { code: 1 };
         }
       } else {
@@ -435,6 +530,44 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     );
     stackEnv = { ...derived.stackEnv };
 
+    const roleLabel = (role: string): string => {
+      if (role === "store.sql") return "postgres";
+      if (role === "store.kv") return "redis";
+      if (role === "store.files") return "files";
+      if (role === "channel.email") return "mail";
+      return role;
+    };
+    const extraLabel = (role: string, containerPort: number): string => {
+      if (role === "channel.email" && containerPort === 8025) return "mail-ui";
+      if (role === "store.files" && containerPort === 9001) return "files-ui";
+      return `${roleLabel(role)}+${containerPort}`;
+    };
+    const appDrivers = [
+      ...(stackRoles.includes("store.sql") ? [stackSqlDriver] : []),
+      ...(stackRoles.includes("store.kv") ? [stackKvDriver] : []),
+    ];
+    const stackAiModel =
+      stackEnv.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || undefined;
+    pendingStackSummary = {
+      project: `oke-${appSlug}`,
+      services: derived.specs.flatMap((spec) => [
+        {
+          label: roleLabel(spec.role),
+          hostPort: spec.hostPort,
+          serviceName: spec.serviceName,
+          status: "pending" as const,
+          ...(spec.role === "ai" && stackAiModel ? { detail: stackAiModel } : {}),
+        },
+        ...resolveExtraPorts(spec, { images, instanceId }).map((p) => ({
+          label: extraLabel(spec.role, p.containerPort),
+          hostPort: p.hostPort,
+          serviceName: spec.serviceName,
+          status: "pending" as const,
+        })),
+      ]),
+      appDrivers,
+    };
+
     if (!options.dryRun) {
       try {
         await writeDerivedFiles(derived, dockerOut, {
@@ -446,17 +579,26 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             const args = ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"];
             const proc = Bun.spawn(["docker", ...args], {
               cwd: dir,
-              stdout: "inherit",
-              stderr: "inherit",
+              stdout: "pipe",
+              stderr: "pipe",
               env: { ...process.env, ...stackEnv! },
             });
-            const code = await proc.exited;
+            const [stdout, stderr, code] = await Promise.all([
+              new Response(proc.stdout).text(),
+              new Response(proc.stderr).text(),
+              proc.exited,
+            ]);
             if (code !== 0) {
-              throw new Error(`oke dev --docker: docker compose exited ${code}`);
+              const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+              throw new Error(
+                `oke dev --docker: docker compose exited ${code}` + (detail ? `\n${detail}` : ""),
+              );
             }
           });
+        bootProgress.set("compose", formatStatusLine("docker compose up…", undefined, "pending"));
         // Compose files live under docker/; cwd for compose is that directory.
         await up(composeFiles, dockerOut);
+        bootProgress.set("compose", formatStatusLine("docker compose up", undefined, "ready"));
         // Remember for SIGINT / terminal close — `stop` keeps volumes (not `down -v`).
         dockerStarted = {
           files: composeFiles,
@@ -468,6 +610,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         // least-privilege app token to the app + Console (never root).
         const vaultSpec = derived.specs.find((s) => s.role === "vault");
         if (vaultSpec) {
+          bootProgress.set("vault", formatStatusLine("vault unseal…", undefined, "pending"));
           const { ensureOpenBao, openbaoStackEnv } = await import("./openbao-bootstrap.ts");
           const vaultNames = await tryLoadVaultSecretNames(cwd);
           const boot = await ensureOpenBao({
@@ -481,61 +624,135 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           // later ensureDockerStack / writeDerivedFiles does not drop it.
           const envPath = resolve(dockerOut, ".env.docker");
           await Bun.write(envPath, formatStackEnv(stackEnv!));
+          bootProgress.set("vault", formatStatusLine("vault ready", undefined, "ready"));
         }
 
-        // Ollama only: ensure the configured model via the container HTTP API on
-        // its loopback-published host port — never a host `ollama` CLI. llama.cpp /
-        // vLLM / SGLang load models via their own image args (Docker Hub `ai/`, HF).
+        // Stream compose health until infra is up (AI may stay pending — model load).
+        const aiServiceName = derived.specs.find((s) => s.role === "ai")?.serviceName;
+        const labelForService = (serviceName: string): string => {
+          const spec = derived.specs.find((s) => s.serviceName === serviceName);
+          return spec ? roleLabel(spec.role) : serviceName;
+        };
+        const onHealthUpdate = (service: string, status: DevStatus) => {
+          const label = labelForService(service);
+          const text =
+            status === "ready"
+              ? `${label} ready`
+              : status === "error"
+                ? `${label} unhealthy`
+                : `${label} starting…`;
+          bootProgress.set(`svc:${service}`, formatStatusLine(text, undefined, status));
+        };
+        const healthByService = options.composeHealth
+          ? await options.composeHealth({
+              files: composeFiles,
+              cwd: dockerOut,
+              env: dockerStarted.env,
+              onUpdate: onHealthUpdate,
+            })
+          : await (
+              await import("../docker/compose-health.ts")
+            ).watchComposeHealth({
+              files: composeFiles,
+              cwd: dockerOut,
+              env: dockerStarted.env,
+              timeoutMs: 20_000,
+              isDone: (map) => {
+                // Empty ps (compose just-created / injectable gap): do not spin 20s.
+                if (map.size === 0) return true;
+                return [...map.entries()].every(
+                  ([name, s]) => name === aiServiceName || s === "ready" || s === "error",
+                );
+              },
+              onUpdate: onHealthUpdate,
+            });
+        liveComposeHealth = healthByService;
+        if (pendingStackSummary) {
+          pendingStackSummary = {
+            ...pendingStackSummary,
+            services: pendingStackSummary.services.map((svc) => ({
+              ...svc,
+              status: svc.serviceName
+                ? (healthByService.get(svc.serviceName) ?? svc.status ?? "pending")
+                : (svc.status ?? "pending"),
+            })),
+          };
+        }
+
+        // AI model: Ollama pulls via HTTP (blocking with progress). OpenAI-compatible
+        // servers (llama.cpp / vLLM / SGLang) load in-container — poll readiness in
+        // the background. Never treat compose "healthy" as model-ready.
         const aiSpec = derived.specs.find((s) => s.role === "ai");
         if (aiSpec) {
           const { recipeFor } = await import("../docker/recipes/index.ts");
-          if (recipeFor(aiSpec.image).id === "ollama") {
+          const recipeId = recipeFor(aiSpec.image).id;
+          const model =
+            stackEnv!.OKE_AI_MODEL?.trim() ||
+            process.env.OKE_AI_MODEL?.trim() ||
+            (recipeId === "ollama" ? "qwen3.5:9b" : "smollm2");
+          const url = `http://127.0.0.1:${aiSpec.hostPort}`;
+          const paintAi = (status: DevStatus, detail?: string) => {
+            heroAiStatus = status;
+            if (!pendingStackSummary) return;
+            pendingStackSummary = {
+              ...pendingStackSummary,
+              services: pendingStackSummary.services.map((svc) =>
+                svc.serviceName === aiSpec.serviceName
+                  ? {
+                      ...svc,
+                      status,
+                      detail: detail ?? svc.detail,
+                    }
+                  : svc,
+              ),
+            };
+          };
+          if (recipeId === "ollama") {
+            bootProgress.set(
+              "ai-model",
+              formatStatusLine(`AI ${model} — ensuring…`, undefined, "pending"),
+            );
             const { ensureOllamaModel } = await import("../docker/ollama-pull.ts");
-            const model =
-              stackEnv!.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || "qwen3.5:9b";
-            const url = `http://127.0.0.1:${aiSpec.hostPort}`;
             await ensureOllamaModel({
               url,
               model,
-              onStatus: (line) => write(`${line}\n`),
+              onStatus: (line) =>
+                bootProgress.set("ai-model", formatStatusLine(line, undefined, "pending")),
             });
+            pendingAiModelWatch = { url, model, kind: "ollama" };
+            paintAi("ready", model);
+          } else if (recipeId === "llama-cpp" || recipeId === "vllm" || recipeId === "sglang") {
+            pendingAiModelWatch = {
+              url: `${url}/v1`,
+              model,
+              kind: "openai-compatible",
+            };
+            bootProgress.set(
+              "ai-model",
+              formatStatusLine(`AI ${model} — probing…`, undefined, "pending"),
+            );
+            const { probeAiModelStatus, formatAiModelStatusMessage } =
+              await import("../docker/ai-model-status.ts");
+            const snap = await probeAiModelStatus({
+              url: `${url}/v1`,
+              model,
+              kind: "openai-compatible",
+            });
+            const status = devStatusFromAiPhase(snap.phase);
+            paintAi(status, snap.phase === "ready" ? model : `${model} · ${snap.phase}`);
+            bootProgress.set(
+              "ai-model",
+              formatStatusLine(formatAiModelStatusMessage(snap), undefined, status),
+            );
           }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(msg);
         console.error("oke dev: docker mode failed — fix compose, or run `oke mode local`");
+        restoreWarn();
         return { code: 1 };
       }
-      const roleLabel = (role: string): string => {
-        if (role === "store.sql") return "postgres";
-        if (role === "store.kv") return "redis";
-        if (role === "store.files") return "files";
-        if (role === "channel.email") return "mail";
-        return role;
-      };
-      const extraLabel = (role: string, containerPort: number): string => {
-        if (role === "channel.email" && containerPort === 8025) return "mail-ui";
-        if (role === "store.files" && containerPort === 9001) return "files-ui";
-        return `${roleLabel(role)}+${containerPort}`;
-      };
-      const appDrivers = [
-        ...(stackRoles.includes("store.sql") ? [stackSqlDriver] : []),
-        ...(stackRoles.includes("store.kv") ? [stackKvDriver] : []),
-      ];
-      write(
-        formatStackSummary({
-          project: `oke-${appSlug}`,
-          services: derived.specs.flatMap((spec) => [
-            { label: roleLabel(spec.role), hostPort: spec.hostPort },
-            ...resolveExtraPorts(spec, { images, instanceId }).map((p) => ({
-              label: extraLabel(spec.role, p.containerPort),
-              hostPort: p.hostPort,
-            })),
-          ]),
-          appDrivers,
-        }),
-      );
     }
   }
 
@@ -550,36 +767,224 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     stackEnv,
   };
 
-  let okeVersion = "0.0.0";
-  try {
-    const pkg = (await Bun.file(resolve(import.meta.dir, "../../package.json")).json()) as {
-      version?: string;
-    };
-    if (typeof pkg.version === "string") okeVersion = pkg.version;
-  } catch {
-    // shipped binary may not sit next to package.json
+  const heroAiModel =
+    stackEnv?.OKE_AI_MODEL?.trim() || process.env.OKE_AI_MODEL?.trim() || undefined;
+  // OpenAI-compatible model load can outlive compose health — default AI ● to pending.
+  if (pendingAiModelWatch && heroAiStatus === undefined) {
+    heroAiStatus = "pending";
   }
-
   const heroSnapshot = buildDevHeroSnapshot({
     config: loadedConfig,
     docker: mode === "docker",
     sqlDriver: mode === "docker" ? stackSqlDriver : undefined,
     kvDriver: mode === "docker" ? stackKvDriver : undefined,
+    aiModel: heroAiModel,
+    aiStatus: heroAiStatus,
     version: okeVersion,
     nodeEnv: "development",
   });
+  const aiDriverLabel = (() => {
+    const detail = heroSnapshot.elements.find((r) => r.element === "ai")?.detail ?? "—";
+    if (detail === "—" || detail === "") return detail;
+    return detail.split(" · ")[0] ?? detail;
+  })();
 
-  write(
-    formatDevBanner({
-      profile: heroSnapshot.profile,
-      runtimeEnv: heroSnapshot.runtimeEnv,
-      system: heroSnapshot.system,
-      elements: heroSnapshot.elements,
-      version: okeVersion,
-    }),
-  );
+  const worstStatus = (statuses: readonly (DevStatus | undefined)[]): DevStatus | undefined => {
+    const present = statuses.filter((s): s is DevStatus => s !== undefined);
+    if (present.length === 0) return undefined;
+    if (present.includes("error")) return "error";
+    if (present.includes("pending")) return "pending";
+    if (present.includes("idle")) return "idle";
+    return "ready";
+  };
 
-  if (options.dryRun) return { code: 0, plan };
+  const elementStatusFromHealth = (
+    element: string,
+    aiStatus: DevStatus | undefined,
+  ): DevStatus | undefined => {
+    const h = liveComposeHealth;
+    if (h.size === 0) return element === "ai" ? aiStatus : undefined;
+    const one = (name: string) => h.get(name);
+    switch (element) {
+      case "ai": {
+        const container = one("ai");
+        if (container === "error") return "error";
+        return aiStatus ?? container;
+      }
+      case "vault":
+        return one("vault");
+      case "signal":
+      case "gate":
+        return one("store-kv");
+      case "channel":
+        return one("channel-email");
+      case "clock":
+        return one("store-sql");
+      case "store":
+        return worstStatus([
+          one("store-sql"),
+          one("store-kv"),
+          one("store-files"),
+          one("store-index"),
+        ]);
+      default:
+        return undefined;
+    }
+  };
+
+  const paintBootBoard = (aiStatus: DevStatus | undefined) => {
+    const aiSt = aiStatus ?? heroAiStatus;
+    const elements = heroSnapshot.elements.map((row) => {
+      const fromHealth = elementStatusFromHealth(row.element, aiSt);
+      const st =
+        fromHealth ?? row.status ?? (row.detail === "—" || row.detail === "" ? "idle" : "ready");
+      if (row.element !== "ai") {
+        return fromHealth ? { ...row, status: st } : row;
+      }
+      let detail = aiDriverLabel;
+      if (detail !== "—" && heroAiModel) {
+        const phase =
+          st === "ready" || st === "idle"
+            ? null
+            : st === "error"
+              ? liveComposeHealth.get("ai") === "error"
+                ? "stopped"
+                : "error"
+              : "loading";
+        detail = phase
+          ? `${aiDriverLabel} · ${heroAiModel} · ${phase}`
+          : `${aiDriverLabel} · ${heroAiModel}`;
+      }
+      return { ...row, status: st, detail };
+    });
+    const elementsBlock = formatDevHeroDetails({ elements });
+    const stackBlock = pendingStackSummary
+      ? formatStackSummary({
+          project: pendingStackSummary.project,
+          services: pendingStackSummary.services.map((svc) => {
+            const fromHealth = svc.serviceName ? liveComposeHealth.get(svc.serviceName) : undefined;
+            let status = fromHealth ?? svc.status ?? "pending";
+            let detail = svc.detail;
+            if (svc.serviceName === "ai") {
+              if (fromHealth === "error") {
+                status = "error";
+                detail = heroAiModel ? `${heroAiModel} · stopped` : "stopped";
+              } else if (aiSt !== undefined) {
+                status = aiSt === "ready" && fromHealth === "pending" ? "pending" : aiSt;
+                detail = !heroAiModel
+                  ? detail
+                  : status === "ready"
+                    ? heroAiModel
+                    : `${heroAiModel} · ${status === "error" ? "error" : "loading"}`;
+              }
+            }
+            return { ...svc, status, ...(detail !== undefined ? { detail } : {}) };
+          }),
+          appDrivers: pendingStackSummary.appDrivers,
+        })
+      : "";
+    // Breath between elements and Docker — they read as two panes, not one block.
+    const gap = elementsBlock && stackBlock ? "\n" : "";
+    return `${elementsBlock}${gap}${stackBlock}`;
+  };
+
+  // Drop ephemeral progress — final elements + Docker board replaces it.
+  bootProgress.clear();
+  const bootBoard = createAnchoredBoard(write);
+  bootBoard.paint(paintBootBoard(heroAiStatus));
+  // Track everything printed below so ● can rewrite in place for the session.
+  write = bootBoard.wrapWrite(write);
+
+  if (options.dryRun) {
+    bootBoard.stop();
+    restoreWarn();
+    return { code: 0, plan };
+  }
+
+  const repaintBoard = (aiStatus?: DevStatus): void => {
+    bootBoard.paint(paintBootBoard(aiStatus ?? heroAiStatus));
+  };
+
+  if (pendingAiModelWatch) {
+    const target = pendingAiModelWatch;
+    pendingAiModelWatch = null;
+    const { startAiModelWatch } = await import("../docker/ai-model-status.ts");
+    let resolveFirstAi: (() => void) | undefined;
+    const firstAiPaint = new Promise<void>((resolve) => {
+      resolveFirstAi = resolve;
+    });
+    let sawAiPaint = false;
+    stopAiModelWatch = startAiModelWatch({
+      url: target.url,
+      model: target.model,
+      kind: target.kind,
+      onStatus: (_line, status) => {
+        const st = devStatusFromAiPhase(status.phase);
+        // Container stopped wins over model-phase "loading".
+        if (liveComposeHealth.get("ai") === "error") {
+          heroAiStatus = "error";
+          repaintBoard("error");
+          if (!sawAiPaint) {
+            sawAiPaint = true;
+            resolveFirstAi?.();
+          }
+          return;
+        }
+        heroAiStatus = st;
+        // Status ● lives on the board above Logs — not in the log stream.
+        repaintBoard(st);
+        if (!sawAiPaint) {
+          sawAiPaint = true;
+          resolveFirstAi?.();
+        }
+      },
+    });
+    // Let the first probe repaint AI ● (yellow loading) before we print below.
+    await Promise.race([firstAiPaint, Bun.sleep(2_500)]);
+  }
+
+  // Live ● for the whole session — catch Docker Desktop stops / crashes.
+  // Updates the board only (no redis stopped / starting / ready log spam).
+  if (dockerStarted && composeFiles) {
+    const { startComposeHealthWatch } = await import("../docker/compose-health.ts");
+    const started = dockerStarted;
+    stopComposeHealthWatch = startComposeHealthWatch({
+      files: started.files,
+      cwd: started.cwd,
+      env: started.env,
+      intervalMs: 2_000,
+      onChange: (map) => {
+        liveComposeHealth = map;
+        if (map.get("ai") === "error") heroAiStatus = "error";
+        repaintBoard();
+      },
+    });
+  }
+
+  /** Snapshot keys we mutate so `stop()` can leave the parent shell clean. */
+  const processEnvSnapshot = new Map<string, string | undefined>();
+  const setProcessEnv = (key: string, value: string): void => {
+    if (!processEnvSnapshot.has(key)) processEnvSnapshot.set(key, process.env[key]);
+    process.env[key] = value;
+  };
+  const restoreProcessEnv = (): void => {
+    for (const [key, prev] of processEnvSnapshot) {
+      if (prev === undefined) delete process.env[key];
+      else process.env[key] = prev;
+    }
+    processEnvSnapshot.clear();
+  };
+
+  // Hydrate parent process.env so schema sync / seed / Console see compose URLs
+  // (Backend child gets the same overlay via `env` below). Restored on stop.
+  if (stackEnv) {
+    for (const [key, value] of Object.entries(stackEnv)) {
+      setProcessEnv(key, value);
+    }
+    setProcessEnv("OKE_DOCKER", "1");
+    setProcessEnv("OKE_SQL_DRIVER", stackSqlDriver);
+    setProcessEnv("OKE_KV_DRIVER", stackKvDriver);
+  }
 
   // One-shot schema sync for the session profile (both local and docker):
   // emits schema.generated.ts for the active dialect, then pushes via
@@ -588,7 +993,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   if (!options.noDbPush) {
     const { syncDevSchema } = await import("./dev-schema-sync.ts");
     try {
-      const result = await syncDevSchema(cwd, mode, { write });
+      const result = await syncDevSchema(cwd, mode, {
+        write: chromeWrite,
+        quietComposeReady: mode === "docker",
+      });
       write(
         formatStatusLine(
           `oke db push (${mode} · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
@@ -638,8 +1046,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         }
       : {}),
     ...(meili?.overlay ?? {}),
+    /** Backend child — parent Console owns process-local boot notices. */
+    OKE_SUPPRESS_BOOT_WARN: "1",
   };
-  process.env.OKE_DEV_REQUEST_LOG = "1";
+  setProcessEnv("OKE_DEV_REQUEST_LOG", "1");
 
   const startApp = options.startApp ?? ((entryPath, appEnv) => startAppHot(cwd, entryPath, appEnv));
 
@@ -805,6 +1215,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   }
 
   write(formatDevLogSeparator());
+  if (dockerStarted && (options.stdinIsTTY ?? process.stdin.isTTY)) {
+    write(formatDevControlsHint());
+  }
 
   const watchFs: DevWatchFn =
     options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
@@ -820,10 +1233,20 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
   });
 
+  let stopDevControls: (() => void) | null = null;
+
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    restoreWarn();
+    stopDevControls?.();
+    stopDevControls = null;
+    stopAiModelWatch?.();
+    stopAiModelWatch = null;
+    stopComposeHealthWatch?.();
+    stopComposeHealthWatch = null;
+    bootBoard.stop();
     autoPushRunner.cancel();
     watcher.close();
     meili?.stop();
@@ -840,8 +1263,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           const args = ["compose", ...files.flatMap((f) => ["-f", f]), "stop"];
           const result = Bun.spawnSync(["docker", ...args], {
             cwd: dir,
-            stdout: "inherit",
-            stderr: "inherit",
+            stdout: "pipe",
+            stderr: "pipe",
             env: { ...process.env, ...env },
           });
           if (result.exitCode !== 0) {
@@ -859,6 +1282,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
     process.off("SIGHUP", onSignal);
+    restoreProcessEnv();
   };
 
   const onSignal = () => {
@@ -891,6 +1315,97 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   };
 
   if (options.onReady) await options.onReady(session);
+
+  // Keyboard controls (docker + TTY): start/stop/restart services without leaving oke dev.
+  if (keepAlive && dockerStarted && (options.stdinIsTTY ?? process.stdin.isTTY)) {
+    const started = dockerStarted;
+    const syncComposeBoard = async (): Promise<void> => {
+      const { readComposeHealth } = await import("../docker/compose-health.ts");
+      liveComposeHealth = await readComposeHealth({
+        files: started.files,
+        cwd: started.cwd,
+        env: started.env,
+      });
+      if (liveComposeHealth.get("ai") === "error") heroAiStatus = "error";
+      repaintBoard();
+    };
+    const refreshChrome = async (): Promise<void> => {
+      await syncComposeBoard();
+      // Clear log noise; reprint head + latest ● board + surfaces + empty Logs.
+      write(clearTerminalScreen());
+      bootBoard.reset();
+      write(
+        formatDevBanner({
+          profile: earlyProfile,
+          runtimeEnv: resolveDevRuntimeEnv(earlyProfile),
+          system: formatHeroSystemLine(),
+          version: okeVersion,
+        }),
+      );
+      bootBoard.paint(paintBootBoard(heroAiStatus));
+      write(formatAppReadyLine(`http://127.0.0.1:${boundAppPort}`));
+      write(formatServiceLine("Console", `http://127.0.0.1:${boundConsolePort}`));
+      if (mcpServer) {
+        write(formatServiceLine("MCP", `http://127.0.0.1:${boundMcpPort}`));
+      }
+      if (docsMcpServer) {
+        write(formatServiceLine("Docs MCP", `http://127.0.0.1:${boundDocsMcpPort}`));
+      }
+      write(formatDevLogSeparator());
+      write(formatDevControlsHint());
+    };
+    const controls = startDevControls({
+      write,
+      isTTY: options.stdinIsTTY ?? process.stdin.isTTY,
+      onQuit: () => {
+        stop();
+        process.exit(0);
+      },
+      onRefresh: () => refreshChrome(),
+      // Refresh first so help/services never sit in the middle of request logs.
+      onShowPanel: async (body) => {
+        await refreshChrome();
+        write(body);
+      },
+      onComposeSettled: () => syncComposeBoard(),
+      services: () => controlServicesFromStack(pendingStackSummary?.services ?? []),
+      statusOf: (serviceName) => liveComposeHealth.get(serviceName),
+      composeAction: async (action: DevComposeControlAction, serviceNames) => {
+        const files = started.files;
+        const finalArgs =
+          action === "up" && serviceNames.length === 0
+            ? ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"]
+            : action === "up"
+              ? [
+                  "compose",
+                  ...files.flatMap((f) => ["-f", f]),
+                  "up",
+                  "-d",
+                  "--no-deps",
+                  ...serviceNames,
+                ]
+              : ["compose", ...files.flatMap((f) => ["-f", f]), action, ...serviceNames];
+        const proc = Bun.spawn(["docker", ...finalArgs], {
+          cwd: started.cwd,
+          stdout: "pipe",
+          stderr: "pipe",
+          env: { ...process.env, ...started.env },
+        });
+        const [stdout, stderr, code] = await Promise.all([
+          new Response(proc.stdout).text(),
+          new Response(proc.stderr).text(),
+          proc.exited,
+        ]);
+        if (code !== 0) {
+          const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+          throw new Error(
+            `docker compose ${action} exited ${code}` + (detail ? `\n${detail}` : ""),
+          );
+        }
+      },
+    });
+    stopDevControls = () => controls.stop();
+  }
 
   if (!keepAlive) {
     return { code: 0, plan: session.plan, session };

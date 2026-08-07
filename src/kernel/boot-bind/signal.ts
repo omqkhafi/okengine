@@ -7,6 +7,7 @@ import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { createBunSignalRedisClient, redisSignalDriver } from "../../drivers/signal-redis.ts";
 import type { SignalRedisClientLike } from "../../drivers/signal-types.ts";
 import { createSignalRuntime, type SignalRuntime } from "../../elements/signal.ts";
+import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import type { BootOptions } from "../boot.ts";
 
 /**
@@ -35,7 +36,7 @@ let signalRedisWarned = false;
 function warnSignalRedisProcessLocal(): void {
   if (signalRedisWarned) return;
   signalRedisWarned = true;
-  console.warn(
+  emitBootWarn(
     "oke boot: drivers.signal redis — emit relays to Redis, but consume/live/drain use a " +
       "process-local outbox (not multi-instance competing consumers). Prefer a shared durable " +
       "outbox path for multi-process tests, or a single consumer instance, until Redis Streams " +

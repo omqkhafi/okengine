@@ -68,7 +68,13 @@ export {
   yugabyte,
 };
 
-export { LLAMA_CPP_IMAGE, LLAMA_CPP_MIN_SAFE_BUILD } from "./llama-cpp.ts";
+export {
+  buildLlamaCppEntrypoint,
+  LLAMA_CPP_ENTRYPOINT_FILE,
+  LLAMA_CPP_ENTRYPOINT_MOUNT,
+  LLAMA_CPP_IMAGE,
+  LLAMA_CPP_MIN_SAFE_BUILD,
+} from "./llama-cpp.ts";
 export { OLLAMA_IMAGE, OLLAMA_MIN_SAFE_VERSION } from "./ollama.ts";
 export { SGLANG_IMAGE } from "./sglang.ts";
 export { VLLM_IMAGE } from "./vllm.ts";

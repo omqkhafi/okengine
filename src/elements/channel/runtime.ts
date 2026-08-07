@@ -19,6 +19,7 @@ import type {
   SmsOtpTransport,
 } from "../../drivers/channel-types.ts";
 import type { ChannelMedium } from "../../manifest/types.ts";
+import { emitBootWarn } from "../../runtime/boot-warn.ts";
 import type { ConsentStore } from "./consent.ts";
 import type { ChannelTemplateDecl } from "./declare.ts";
 import { DEFAULT_MEDIUM_COSTS, type MediumCosts } from "./costs.ts";
@@ -163,7 +164,7 @@ export function createChannelRuntime(options: CreateChannelRuntimeOptions = {}):
   const receipts = options.receipts ?? createReceiptLedger();
   if ((usingDefaultSuppression || usingDefaultReceipts) && !channelProcessLocalWarned) {
     channelProcessLocalWarned = true;
-    console.warn(
+    emitBootWarn(
       "oke boot: Channel suppression/consent/receipts default to process-local memory — " +
         "opt-out, bounce, and receipt state on one instance is invisible to others. " +
         "Inject shared stores for multi-instance, or run a single Channel consumer, until a " +

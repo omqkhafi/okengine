@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { localOkengineStageDir, materializeLocalOkengineDependency } from "./local-okengine.ts";
 import { resolveLocalOkengineRoot } from "./templates.ts";
@@ -25,17 +25,26 @@ describe("materializeLocalOkengineDependency", () => {
       devDependencies?: unknown;
       workspaces?: unknown;
       peerDependencies?: Record<string, string>;
+      exports?: Record<string, string>;
     };
     expect(pkg.name).toBe("okengine");
     expect(pkg.devDependencies).toBeUndefined();
     expect(pkg.workspaces).toBeUndefined();
+    expect(pkg.peerDependencies).toBeUndefined();
     expect(pkg.dependencies?.["oxc-parser"]).toBeDefined();
-    expect(pkg.peerDependencies?.["drizzle-orm"]).toBeDefined();
+    // Peers folded into dependencies so the out-of-tree stage can resolve them.
+    expect(pkg.dependencies?.["drizzle-orm"]).toBe("1.0.0-rc.4");
+    expect(pkg.dependencies?.["drizzle-kit"]).toBe("1.0.0-rc.4");
+    expect(pkg.dependencies?.["zod"]).toBeDefined();
+    expect(pkg.exports?.["./config"]).toBe("./src/config/index.ts");
 
+    // Real copies — Bun file: install drops directory symlinks.
     const src = join(stage, "src");
     expect(existsSync(src)).toBe(true);
-    expect(lstatSync(src).isSymbolicLink()).toBe(true);
-    expect(readlinkSync(src)).toBe(join(root, "src"));
+    expect(lstatSync(src).isSymbolicLink()).toBe(false);
+    expect(existsSync(join(stage, "src/config/index.ts"))).toBe(true);
+    expect(existsSync(join(stage, "node_modules", "zod"))).toBe(true);
+    expect(existsSync(join(stage, "node_modules", "drizzle-kit", "cli.mjs"))).toBe(true);
   });
 
   test("resolveOkengineDependency uses the staged file: path locally", () => {

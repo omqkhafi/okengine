@@ -12,6 +12,11 @@ import {
 } from "./compose.ts";
 import { emitDockerfile } from "./dockerfile.ts";
 import { buildCaddyfile } from "./recipes/caddy.ts";
+import {
+  buildLlamaCppEntrypoint,
+  LLAMA_CPP_ENTRYPOINT_FILE,
+  llamaCpp,
+} from "./recipes/llama-cpp.ts";
 import { buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
@@ -45,12 +50,21 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     path: "Dockerfile",
     content: emitDockerfile({ appPort: normalised.appPort }),
   };
+  const stackEnv = buildStackEnv(
+    specs,
+    normalised.recipes ?? [],
+    normalised.host ?? "127.0.0.1",
+    normalised.controls,
+    normalised.instanceId,
+  );
+
   // Always emit Dockerfile for deploy; stack-only runs ignore it.
   const files = [
     dockerfile,
     ...composeFilesContent,
     ...pgdogConfigFiles(specs),
     ...proxyConfigFiles(specs, normalised.appPort),
+    ...llamaCppEntrypointFiles(specs),
   ];
 
   for (const f of files) {
@@ -62,15 +76,24 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     }
   }
 
-  const stackEnv = buildStackEnv(
-    specs,
-    normalised.recipes ?? [],
-    normalised.host ?? "127.0.0.1",
-    normalised.controls,
-    normalised.instanceId,
-  );
-
   return { specs, files, stackEnv, composeFiles };
+}
+
+/**
+ * Emit `llama-entrypoint.sh` when the AI role is llama.cpp so first boot can
+ * Hub-pull then serve single-model (router `--docker-repo` hangs on b10290+).
+ *
+ * @param specs - Normalised services
+ */
+function llamaCppEntrypointFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
+  const ai = specs.find((s) => s.role === "ai");
+  if (!ai || !llamaCpp.match(ai.image)) return [];
+  return [
+    {
+      path: LLAMA_CPP_ENTRYPOINT_FILE,
+      content: buildLlamaCppEntrypoint(),
+    },
+  ];
 }
 
 /**

@@ -30,6 +30,11 @@ export interface DevSchemaSyncOptions {
   readonly pushFn?: (cwd: string, env: ConfigEnv) => Promise<number>;
   /** Derive docker infra without running compose (tests). */
   readonly dryRun?: boolean;
+  /**
+   * Skip the “compose env ready” line — `oke dev -d` already brought the
+   * stack up and prints {@link import("../term.ts").formatStackSummary}.
+   */
+  readonly quietComposeReady?: boolean;
 }
 
 /** Outcome of {@link syncDevSchema}. */
@@ -71,6 +76,7 @@ async function ensureDockerStack(
   cwd: string,
   config: OkeConfig,
   write: (text: string) => void,
+  quietComposeReady = false,
 ): Promise<void> {
   const images = resolveImages(config);
   if (Object.keys(images).length === 0) {
@@ -95,9 +101,11 @@ async function ensureDockerStack(
     host: "127.0.0.1",
   });
   await writeDerivedFiles(derived, resolve(cwd, DEFAULT_DOCKER_DIR), { writeStackEnv: true });
-  write(
-    "oke: docker compose env ready under docker/.env.docker (start containers with `oke dev -d` or docker compose up)\n",
-  );
+  if (!quietComposeReady) {
+    write(
+      "oke: docker compose env ready under docker/.env.docker (start containers with `oke dev -d` or docker compose up)\n",
+    );
+  }
 }
 
 /**
@@ -126,7 +134,7 @@ export async function syncDevSchema(
     if (!config) {
       throw new Error("docker mode: oke.config.ts not found");
     }
-    await ensureDockerStack(cwd, config, write);
+    await ensureDockerStack(cwd, config, write, options.quietComposeReady === true);
   }
 
   const push =

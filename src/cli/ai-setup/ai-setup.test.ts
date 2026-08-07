@@ -59,16 +59,27 @@ describe("apply", () => {
 });
 `;
     const next = upsertAiDrivers(src, "ollama");
-    expect(next).toMatch(/^ {4}ai:\s*\{/m);
-    expect(next).toContain('local: "ollama"');
-    const channel = next.match(/^ {4}channel:\s*\{[\s\S]*?\n {4}\},?\n/m)?.[0] ?? "";
-    expect(channel).toContain("email:");
-    expect(channel).not.toContain("ai:");
+    const body = next
+      .replace(/^import\s+[\s\S]*?from\s+["'][^"']+["'];?\s*/m, "")
+      .replace(/export\s+default\s+/, "return ");
+    const config = new Function("defineConfig", body)(<T>(c: T): T => c) as {
+      drivers?: { ai?: unknown; channel?: { ai?: unknown; email?: unknown } };
+    };
+    expect(config.drivers?.ai).toMatchObject({ local: "ollama", docker: "ollama" });
+    expect(config.drivers?.channel?.ai).toBeUndefined();
+    expect(config.drivers?.channel?.email).toBeDefined();
   });
 
   test("upsertEnv uncomment / set", () => {
     const env = `# OKE_AI_DRIVER=mock\nOKE_AI_URL=http://x\n`;
     expect(upsertEnv(env, "OKE_AI_DRIVER", "ollama")).toContain("OKE_AI_DRIVER=ollama");
+  });
+
+  test("upsertEnv comment keeps stack keys as overrides", () => {
+    const env = `# OKE_AI_DRIVER=mock\nOKE_AI_URL=http://x\n`;
+    const next = upsertEnv(env, "OKE_AI_URL", "http://127.0.0.1:8080/v1", { comment: true });
+    expect(next).toContain("# OKE_AI_URL=http://127.0.0.1:8080/v1");
+    expect(next).not.toMatch(/^OKE_AI_URL=/m);
   });
 
   test("upsertEnv writes API token when provided", () => {
@@ -127,8 +138,11 @@ export default defineConfig({
       expect(config).toContain('local: "ollama"');
       expect(config).toContain('ai: "ollama/ollama:0.32.6"');
       const env = readFileSync(join(dir, ".env.local"), "utf8");
-      expect(env).toContain("OKE_AI_DRIVER=ollama");
-      expect(env).toContain("OKE_AI_MODEL=gemma4:e4b");
+      expect(env).toContain("# OKE_AI_DRIVER=ollama");
+      expect(env).toMatch(/^OKE_AI_MODEL=gemma4:e4b$/m);
+      expect(env).not.toMatch(/^#\s*OKE_AI_MODEL=gemma4:e4b$/m);
+      expect(env).toContain("# OKE_AI_URL=http://127.0.0.1:11434");
+      expect(env).not.toMatch(/^OKE_AI_URL=/m);
       const aiTs = readFileSync(join(dir, "src", "core", "ai.ts"), "utf8");
       expect(aiTs).toContain("smart");
       const app = readFileSync(join(dir, "src", "app.ts"), "utf8");

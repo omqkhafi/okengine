@@ -11,8 +11,23 @@ import { resolveTemplateDir } from "./templates.ts";
 import { applyCreateAnswers, upsertAiDrivers } from "./transform.ts";
 import type { EnvDriverPins } from "./create-defaults.ts";
 
-function templateConfig(): string {
-  return readFileSync(join(resolveTemplateDir("standard"), "oke.config.ts"), "utf8");
+function templateConfig(id: "standard" | "advanced" = "advanced"): string {
+  return readFileSync(join(resolveTemplateDir(id), "oke.config.ts"), "utf8");
+}
+
+/** Evaluate `oke.config.ts` source via identity `defineConfig` (no okengine import). */
+function evalConfig(source: string): {
+  drivers?: {
+    ai?: unknown;
+    channel?: { ai?: unknown; email?: unknown };
+  };
+  images?: Record<string, string>;
+} {
+  const body = source
+    .replace(/^import\s+[\s\S]*?from\s+["'][^"']+["'];?\s*/m, "")
+    .replace(/export\s+default\s+/, "return ");
+  const defineConfig = <T>(c: T): T => c;
+  return new Function("defineConfig", body)(defineConfig) as ReturnType<typeof evalConfig>;
 }
 
 function defaultsWithIndex(indexLocal: string, indexDocker: string) {
@@ -67,41 +82,46 @@ describe("upsertAiDrivers", () => {
   };
 
   test("inserts drivers.ai as sibling of channel (not inside email)", () => {
-    const next = upsertAiDrivers(templateConfig(), ollamaPins);
-    expect(next).toMatch(/^ {4}ai:\s*\{/m);
-    expect(next).toContain('local: "ollama"');
-    const channel = next.match(/^ {4}channel:\s*\{[\s\S]*?\n {4}\},?\n/m)?.[0] ?? "";
-    expect(channel).toContain("email:");
-    expect(channel).not.toContain("ai:");
+    const next = upsertAiDrivers(templateConfig("advanced"), ollamaPins);
+    const config = evalConfig(next);
+    expect(config.drivers?.ai).toEqual(ollamaPins);
+    expect(config.drivers?.channel?.ai).toBeUndefined();
+    expect(config.drivers?.channel?.email).toBeDefined();
   });
 
   test("applyCreateAnswers with ai pins keeps top-level drivers.ai", () => {
     const llamaPins = pinsDockerReady("openai-compatible", "openai-compatible", "mock");
-    const next = applyCreateAnswers(
-      templateConfig(),
-      toCreateDefaults({
-        template: "advanced",
-        profile: "docker-ready",
-        drivers: {
-          store: {
-            sql: pinsDockerReady("libsql", "postgres", "memory"),
-            kv: pinsLocalOnly("memory", "redis", "memory"),
-            files: pinsLocalOnly("fs", "s3", "memory"),
-            index: null,
+    for (const id of ["standard", "advanced"] as const) {
+      const next = applyCreateAnswers(
+        templateConfig(id),
+        toCreateDefaults({
+          template: "advanced",
+          profile: "docker-ready",
+          drivers: {
+            store: {
+              sql: pinsDockerReady("libsql", "postgres", "memory"),
+              kv: pinsLocalOnly("memory", "redis", "memory"),
+              files: pinsLocalOnly("fs", "s3", "memory"),
+              index: null,
+            },
+            signal: pinsLocalOnly("memory", "redis", "memory"),
+            clock: pinsLocalOnly("memory", "file", "frozen"),
+            vault: pinsLocalOnly("env", "openbao", "memory"),
+            channel: { email: pinsLocalOnly("console", "smtp", "console") },
+            ai: llamaPins,
           },
-          signal: pinsLocalOnly("memory", "redis", "memory"),
-          clock: pinsLocalOnly("memory", "file", "frozen"),
-          vault: pinsLocalOnly("env", "openbao", "memory"),
-          channel: { email: pinsLocalOnly("console", "smtp", "console") },
-          ai: llamaPins,
-        },
-        ai: { enabled: true, provider: "llama-cpp", driver: "openai-compatible" },
-      }),
-    );
-    expect(next).toMatch(/^ {4}ai:\s*\{/m);
-    expect(next).toContain('local: "openai-compatible"');
-    expect(next).toContain('ai: "ghcr.io/ggml-org/llama.cpp:server-b10290"');
-    const channel = next.match(/^ {4}channel:\s*\{[\s\S]*?\n {4}\},?\n/m)?.[0] ?? "";
-    expect(channel).not.toContain("ai:");
+          ai: { enabled: true, provider: "llama-cpp", driver: "openai-compatible" },
+        }),
+      );
+      const config = evalConfig(next);
+      expect(config.drivers?.ai, id).toEqual({
+        local: "openai-compatible",
+        docker: "openai-compatible",
+        test: "mock",
+        prod: "openai-compatible",
+      });
+      expect(config.drivers?.channel?.ai, id).toBeUndefined();
+      expect(config.images?.ai, id).toBe("ghcr.io/ggml-org/llama.cpp:server-b10290");
+    }
   });
 });

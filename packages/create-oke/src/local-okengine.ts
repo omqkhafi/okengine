@@ -4,10 +4,16 @@
  * Linking the monorepo root pulls `workspaces` + `devDependencies` into the
  * scaffold (Console UI, drizzle-zod, …). Bun then warns that RC
  * `drizzle-orm` fails drizzle-zod’s `>=0.36` peer. Stage a publish-shaped
- * tree instead: production `dependencies` only, symlinked `files`.
+ * tree instead:
+ *
+ * 1. Copy `files` (Bun’s `file:` install drops directory symlinks).
+ * 2. Install dependencies **in the stage** — Bun keeps `package.json` as a
+ *    symlink into `~/.oke/...`, so the package root is outside the app and
+ *    resolution never sees the app’s `node_modules` (peers like `zod` must
+ *    live next to the stage too).
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -56,6 +62,21 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
     throw new Error(`create-oke: expected package name "okengine" at ${pkgPath}`);
   }
 
+  const deps = isStringRecord(raw["dependencies"]) ? { ...raw["dependencies"] } : {};
+  const peers = isStringRecord(raw["peerDependencies"]) ? raw["peerDependencies"] : {};
+  const pins = {
+    ...(isStringRecord(raw["devDependencies"]) ? raw["devDependencies"] : {}),
+    ...deps,
+  };
+  // Peers are provided by the app at publish time; for a file: stage whose
+  // package root sits outside the app, install them beside the stage too.
+  // Prefer monorepo pin versions over peer ranges (`>=1.0.0-rc.0` can resolve
+  // a broken drizzle-kit channel build without `drizzle-kit/cli`).
+  const stagePeers = Object.fromEntries(
+    Object.entries(peers).map(([name, range]) => [name, pins[name] ?? range]),
+  );
+  const stageDependencies = { ...deps, ...stagePeers };
+
   const consumer: ConsumerOkenginePackageJson = {
     name: "okengine",
     version: String(raw["version"] ?? "0.0.0"),
@@ -69,15 +90,7 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
       ? { sideEffects: raw["sideEffects"] as boolean | string[] }
       : {}),
     ...(raw["exports"] !== undefined ? { exports: raw["exports"] } : {}),
-    ...(isStringRecord(raw["dependencies"]) ? { dependencies: raw["dependencies"] } : {}),
-    ...(isStringRecord(raw["peerDependencies"])
-      ? { peerDependencies: raw["peerDependencies"] }
-      : {}),
-    ...(raw["peerDependenciesMeta"] !== undefined &&
-    typeof raw["peerDependenciesMeta"] === "object" &&
-    raw["peerDependenciesMeta"] !== null
-      ? { peerDependenciesMeta: raw["peerDependenciesMeta"] as Record<string, unknown> }
-      : {}),
+    ...(Object.keys(stageDependencies).length > 0 ? { dependencies: stageDependencies } : {}),
     ...(raw["engines"] !== undefined ? { engines: raw["engines"] } : {}),
   };
 
@@ -96,7 +109,20 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
     if (!existsSync(from)) continue;
     const to = join(stage, rel);
     mkdirSync(dirname(to), { recursive: true });
-    symlinkSync(from, to);
+    cpSync(from, to, { recursive: true, dereference: true });
+  }
+
+  const install = Bun.spawnSync({
+    cmd: ["bun", "install"],
+    cwd: stage,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (install.exitCode !== 0) {
+    const err = new TextDecoder().decode(install.stderr).trim();
+    throw new Error(
+      `create-oke: bun install failed in local okengine stage${err ? `\n${err}` : ""}`,
+    );
   }
 
   return `file:${stage}`;

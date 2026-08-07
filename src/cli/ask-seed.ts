@@ -5,6 +5,7 @@
 import { confirm, isCancel } from "@clack/prompts";
 import { resolve } from "node:path";
 import type { ConfigEnv } from "../config/index.ts";
+import { formatCliChrome } from "../term.ts";
 import { resolveSeedModulePath, runSeed } from "./db-seed.ts";
 
 /** Marker written after a successful prompted seed (skip re-ask). */
@@ -43,6 +44,7 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
   if (!(await Bun.file(seedPath).exists())) return;
 
   const write = options.write ?? ((t) => process.stdout.write(t));
+  const chromeWrite = (t: string) => write(formatCliChrome(t));
   const ok =
     options.confirmFn !== undefined
       ? await options.confirmFn()
@@ -56,7 +58,7 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
         })();
 
   if (!ok) {
-    write("oke db seed: skipped (run `oke db seed` later)\n");
+    chromeWrite("oke db seed: skipped (run `oke db seed` later)\n");
     return;
   }
 
@@ -66,7 +68,7 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
       runSeed({
         cwd: projectCwd,
         env,
-        write,
+        write: chromeWrite,
         force: true,
         stdinIsTTY: false,
       }));

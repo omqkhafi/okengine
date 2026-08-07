@@ -58,6 +58,31 @@ In development, app, Console, MCP, and docs MCP prefer the canonical ports and m
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
 each built-in service, preventing one service's offset port from overlapping another's.
 
+`oke dev` boot chrome prints immediately (wordmark + Starting + profile), then
+streams background work (compose up, vault, per-service health, AI probe) in a
+live progress pane — no blank multi-second wait. That pane clears before the
+elements + Docker board. Status ● is green ready · yellow pending/loading ·
+red error · dim idle. Compose health keeps polling (`docker compose ps -a`)
+so ● updates live if you stop a container; AI ● tracks model phase while the
+AI container is up. Boot does not wait for the model to become ready.
+
+On a TTY with `-d`, keyboard controls stay active under Logs. Status ● for
+compose/AI live on the board **above** Logs (not as log lines). Press `c` to
+clear the log pane and reprint the latest board. `l` / `?` also refresh first
+so the services/help panel is not mixed into request logs.
+
+| Key                          | Action                              |
+| ---------------------------- | ----------------------------------- |
+| `?`                          | help                                |
+| `c`                          | refresh — clear logs, show latest ● |
+| `q`                          | quit `oke dev`                      |
+| `l`                          | list docker services                |
+| `u` / `x`                    | compose up / stop (whole stack)     |
+| `1`–`9` then `u` / `x` / `r` | start / stop / restart one service  |
+
+Compose stays quiet unless it fails. Process-local boot notices print once under
+the hero (not once per process).
+
 ### create-oke
 
 ```bash

@@ -427,7 +427,8 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
 /** Friendly aliases emitted beside their role block. */
 const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   "store.sql": ["DATABASE_URL", "PGDATA", "POSTGRES_INITDB_ARGS"],
-  pgdog: ["OKE_PGDOG_URL"],
+  // OKE_PGDOG_URL is already emitted as `${prefix}_URL`.
+  pgdog: [],
   "store.kv": ["REDIS_URL", "OKE_STORE_KV_MAXMEMORY", "OKE_STORE_KV_MAXMEMORY_POLICY"],
   "store.files": [
     "S3_ACCESS_KEY_ID",
@@ -450,7 +451,8 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ACCEPT_ANY",
     "MP_SMTP_AUTH_ALLOW_INSECURE",
   ],
-  ai: ["OKE_AI_URL", "OKE_AI_MODEL"],
+  // OKE_AI_URL is already emitted as `${prefix}_URL` — do not alias it again.
+  ai: ["OKE_AI_MODEL"],
   proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
   vault: ["OKE_VAULT_TOKEN", "OKE_VAULT_MOUNT"],
   "store.index": ["OKE_STORE_INDEX_KEY"],

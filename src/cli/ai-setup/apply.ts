@@ -69,16 +69,24 @@ export function applyAiSetup(
     : existsSync(envExample)
       ? readFileSync(envExample, "utf8")
       : "";
-  env = upsertEnv(env, "OKE_AI_DRIVER", input.driver);
-  if (input.baseUrl) env = upsertEnv(env, "OKE_AI_URL", input.baseUrl);
+  // Driver / URL stay commented so docker mode can hydrate `OKE_AI_URL` from
+  // `docker/.env.docker` without being shadowed. The selected chat model is
+  // written active — `oke dev` seeds it into stack controls / `LLAMA_ARG_DOCKER_REPO`
+  // (commented-only left the compose default `smollm2` forever).
+  env = upsertEnv(env, "OKE_AI_DRIVER", input.driver, { comment: true });
+  if (input.baseUrl) env = upsertEnv(env, "OKE_AI_URL", input.baseUrl, { comment: true });
   if (input.chatModel) env = upsertEnv(env, "OKE_AI_MODEL", input.chatModel);
-  if (input.visionModel) env = upsertEnv(env, "OKE_AI_VISION_MODEL", input.visionModel);
-  if (input.embedModel) env = upsertEnv(env, "OKE_AI_EMBED_MODEL", input.embedModel);
+  if (input.visionModel) {
+    env = upsertEnv(env, "OKE_AI_VISION_MODEL", input.visionModel, { comment: true });
+  }
+  if (input.embedModel) {
+    env = upsertEnv(env, "OKE_AI_EMBED_MODEL", input.embedModel, { comment: true });
+  }
   if (input.apiKeyEnv) {
     if (input.apiKey !== undefined && input.apiKey.length > 0) {
       env = upsertEnv(env, input.apiKeyEnv, input.apiKey);
-    } else if (!new RegExp(`^${input.apiKeyEnv}=`, "m").test(env)) {
-      env = `${env.trimEnd()}\n${input.apiKeyEnv}=\n`;
+    } else if (!new RegExp(`^#?\\s*${input.apiKeyEnv}=`, "m").test(env)) {
+      env = `${env.trimEnd()}\n# ${input.apiKeyEnv}=\n`;
     }
   }
   writeFileSync(envPath, env.endsWith("\n") ? env : `${env}\n`, "utf8");
@@ -97,11 +105,11 @@ export function applyAiSetup(
  */
 export function upsertAiDrivers(source: string, driver: string): string {
   const block = `{
-    local: "${driver}",
-    docker: "${driver === "mock" ? "mock" : driver}",
-    test: "mock",
-    prod: "${driver === "mock" ? "mock" : driver}",
-  }`;
+      local: "${driver}",
+      docker: "${driver === "mock" ? "mock" : driver}",
+      test: "mock",
+      prod: "${driver === "mock" ? "mock" : driver}",
+    }`;
   // Top-level drivers.ai only (4-space indent) — never nest under channel.email.
   const aiRe = /^( {4})ai:\s*\{[\s\S]*?\n\1\}/m;
   if (aiRe.test(source)) {
@@ -139,13 +147,30 @@ export function upsertImage(source: string, key: string, image: string): string 
   return source.replace(imagesRe, `images: {${body}\n${line}\n  }`);
 }
 
+/** Options for {@link upsertEnv}. */
+export type UpsertEnvOptions = {
+  /**
+   * When true, write `# KEY=value` (opt-in override). Used for AI stack keys
+   * so they do not shadow `docker/.env.docker`.
+   */
+  readonly comment?: boolean;
+};
+
 /**
+ * Insert or replace a dotenv assignment (optionally commented).
+ *
  * @param env - dotenv text
  * @param key - Variable name
  * @param value - Value
+ * @param options - Comment vs active line
  */
-export function upsertEnv(env: string, key: string, value: string): string {
-  const line = `${key}=${value}`;
+export function upsertEnv(
+  env: string,
+  key: string,
+  value: string,
+  options: UpsertEnvOptions = {},
+): string {
+  const line = options.comment ? `# ${key}=${value}` : `${key}=${value}`;
   const re = new RegExp(`^#?\\s*${key}=.*$`, "m");
   if (re.test(env)) return env.replace(re, line);
   const aiSection = /(# ── AI[^\n]*\n)/;
