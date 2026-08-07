@@ -162,6 +162,18 @@ export interface OkeOptions {
   readonly docker?: BootOptions["docker"];
   /** Optional `oke.config.ts` document consumed at boot. */
   readonly config?: BootOptions["config"];
+  /**
+   * Compiled Manifest for flows with no hand-declared `effects` — highest
+   * priority source for the boot-time capability stamp (see
+   * {@link BootOptions.manifest}).
+   */
+  readonly manifest?: BootOptions["manifest"];
+  /**
+   * Project root for a lazy, best-effort effects extraction when a flow has
+   * no hand-declared `effects` and no {@link manifest} was given (see
+   * {@link BootOptions.rootDir}).
+   */
+  readonly rootDir?: BootOptions["rootDir"];
   /** Pre-built element runtimes (skip construction at boot when present). */
   readonly elements?: BootOptions["elements"];
   /** Vault create options (chain / allowDevFallbacks / secrets). */
@@ -827,6 +839,8 @@ export function oke(options: OkeOptions): OkeApp {
       env: bootEnv,
       docker: overrides?.docker ?? options.docker,
       config: overrides?.config ?? options.config,
+      manifest: overrides?.manifest ?? options.manifest,
+      rootDir: overrides?.rootDir ?? options.rootDir,
       elements: overrides?.elements ?? options.elements,
       secrets: [...baseSecrets, ...pluginSecrets],
       vault: overrides?.vault ?? options.vault,

@@ -51,6 +51,12 @@ const consoleUrl = Bun.env["OKE_DEV_HERO_CONSOLE"];
 const mcpUrl = Bun.env["OKE_DEV_HERO_MCP"];
 const heroMeta = decodeHeroSnapshot(Bun.env["OKE_DEV_HERO_META"]);
 
+// Signal to boot() where to lazily extract effects from when a flow has no
+// hand-declared `effects` — kernel/boot.ts's mintCapabilities() reads this
+// (explicit opt-in only; the kernel itself never defaults to cwd). `cwd` is
+// already the project root here (Bun.spawn's `cwd` option in dev.ts).
+process.env["OKE_ROOT_DIR"] ??= process.cwd();
+
 const absoluteEntry = resolve(entry);
 const mod = (await import(pathToFileURL(absoluteEntry).href)) as {
   app?: BootableApp;

@@ -143,6 +143,17 @@ export const OKE_ERRORS = {
     fix: 'Add "{resource}" to this flow\'s effects.calls.',
   },
   /**
+   * Flow has no declared `effects` and no Manifest-derived effects were
+   * available to stamp at boot (docker / prod — never a silent open token).
+   */
+  NO_EFFECTS_DECLARED: {
+    code: 1008,
+    cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.',
+    fix:
+      "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
+      "`rootDir` so effects can be derived. docker/prod refuse an open capability token.",
+  },
+  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */

@@ -17,7 +17,10 @@
  * Element runtimes are loaded via `new URL("./boot-bind/"+name+".ts", …)` so
  * unused binders stay out of the `oke()` bundle (semantic tree-shaking).
  * Vault still loads whenever secrets are declared and lists every gap in one
- * failure; capability minting uses flow effect refs only — no element modules.
+ * failure; capability minting uses flow effect refs only — no element modules,
+ * except a lazy `extractManifest` import when a flow has no hand-declared
+ * `effects` and neither {@link BootOptions.manifest} nor
+ * {@link BootOptions.rootDir} / `OKE_ROOT_DIR` are set to derive one.
  *
  * The scheduler reads the effective state from the Store after reconciliation,
  * never the code directly (console §5).
@@ -38,8 +41,11 @@ import type {
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import type { CreateRunsRuntimeOptions, RunsRuntime } from "../runs/index.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
+import { throwOke } from "./errors.ts";
 import type { AnyFlowDef } from "./flow.ts";
 import type { Binding } from "./on.ts";
+import type { Manifest } from "../manifest/types.ts";
+import { emitBootWarn } from "../runtime/boot-warn.ts";
 
 /** Pre-built or partially-built element runtimes. */
 export interface ElementRuntimes {
@@ -104,6 +110,21 @@ export interface BootOptions {
   readonly bindings?: readonly Binding[];
   /** Flows known to the app (for capability minting). */
   readonly flows?: readonly AnyFlowDef[];
+  /**
+   * Compiled Manifest to derive capability tokens from for flows with no
+   * hand-declared `effects` (highest priority — build tooling / bundler
+   * import, never a filesystem read the kernel performs itself).
+   */
+  readonly manifest?: Manifest;
+  /**
+   * Project root for a lazy, best-effort `extractManifest` when a flow has
+   * no hand-declared `effects` and no {@link manifest} was given. Explicit
+   * opt-in only — never defaults to `process.cwd()` — so the existing test
+   * suite (hundreds of boots against synthetic flows, not a real source
+   * tree) never pays extraction cost. Falls back to `OKE_ROOT_DIR` when
+   * unset (the CLI sets this for `oke dev` / `oke start`).
+   */
+  readonly rootDir?: string;
   /**
    * Dispatch a cron / every interval when the scheduler fires.
    *
@@ -457,8 +478,11 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     }
   }
 
-  // 8. Caps — effect refs only; no element modules.
-  const capabilities = mintCapabilities(options.flows ?? []);
+  // 8. Caps — effect refs only; no element modules (unless a lazy extract is needed).
+  const capabilities = await mintCapabilities(options.flows ?? [], env, {
+    manifest: options.manifest,
+    rootDir: options.rootDir,
+  });
 
   return {
     vault,
@@ -491,16 +515,90 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   };
 }
 
+/** Per-process guard so the "no effects" boot warning fires once, not per-flow. */
+let noEffectsWarned = false;
+
+/** Reset the once-per-process "no effects" warn latch (tests only). */
+export function resetNoEffectsWarnForTests(): void {
+  noEffectsWarned = false;
+}
+
 /**
- * Mint capability tokens from each flow's declared effects.
- * Tokens come from the Manifest / flow contract — never hand-passed sets.
+ * Best-effort AoT extraction from `rootDir` — mirrors the CLI's own lazy,
+ * defensive `extractManifest` use (`oke dev`'s `tryLoadProjectManifest`).
+ * Never throws: a broken or mid-edit source tree just means "no Manifest
+ * available," handled by the caller like any other missing Manifest.
+ *
+ * `new URL` (not a literal specifier) so `oxc-parser` / the whole compiler
+ * never enters the bundler graph for apps that never hit this path — same
+ * trick as {@link loadBind} for the element binders.
+ *
+ * @param rootDir - Project root to extract from
+ */
+async function tryAutoExtractManifest(rootDir: string): Promise<Manifest | undefined> {
+  try {
+    const url = new URL("../compiler/extract.ts", import.meta.url);
+    const { extractManifest } = (await import(url.href)) as typeof import("../compiler/extract.ts");
+    return await extractManifest({ rootDir });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Mint capability tokens from each flow's declared effects, falling back to
+ * a Manifest-derived stamp when a flow declares no `effects` of its own —
+ * an explicit {@link BootOptions.manifest}, or a lazy AoT extract from
+ * {@link BootOptions.rootDir} / `OKE_ROOT_DIR`.
+ *
+ * When neither is available: `local` / `test` stay open (today's dev-loop
+ * behavior, unbroken) with a once-per-process `oke boot:` warning; `docker`
+ * / `prod` fail loud (`OKE1008`) — docker mirrors prod's posture, never a
+ * silent open door in a deploy-shaped environment.
  *
  * @param flows - Adopted flows
+ * @param env - Resolved {@link ConfigEnv}
+ * @param options - Manifest / rootDir sources for the fallback stamp
  */
-export function mintCapabilities(flows: readonly AnyFlowDef[]): Map<string, CapabilityToken> {
+export async function mintCapabilities(
+  flows: readonly AnyFlowDef[],
+  env: ConfigEnv = "local",
+  options: { readonly manifest?: Manifest; readonly rootDir?: string } = {},
+): Promise<Map<string, CapabilityToken>> {
   const map = new Map<string, CapabilityToken>();
+
+  let manifest = options.manifest;
+  const needsManifest = manifest === undefined && flows.some((f) => f.effects === undefined);
+  if (needsManifest) {
+    const rootDir = options.rootDir ?? process.env["OKE_ROOT_DIR"];
+    if (rootDir) manifest = await tryAutoExtractManifest(rootDir);
+  }
+
   for (const f of flows) {
-    map.set(f.name, createCapabilityToken(f.name, f.effects));
+    if (f.effects !== undefined) {
+      map.set(f.name, createCapabilityToken(f.name, f.effects));
+      continue;
+    }
+
+    const stamped = manifest?.flows?.[f.name]?.effects;
+    if (stamped !== undefined) {
+      map.set(f.name, createCapabilityToken(f.name, stamped));
+      continue;
+    }
+
+    if (env === "docker" || env === "prod") {
+      throwOke("NO_EFFECTS_DECLARED", { flow: f.name });
+    }
+    if (!noEffectsWarned) {
+      noEffectsWarned = true;
+      emitBootWarn(
+        `oke boot: flow "${f.name}" (and possibly others) has no declared effects and no ` +
+          "Manifest-derived effects — running with an OPEN capability token (every access " +
+          "allowed, ledgered but not gated). Run `oke build`, or boot with `manifest` / " +
+          "`rootDir`, before deploying — docker/prod refuse to boot this way.",
+      );
+    }
+    map.set(f.name, createCapabilityToken(f.name, undefined));
   }
   return map;
 }

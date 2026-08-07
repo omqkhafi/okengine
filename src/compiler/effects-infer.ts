@@ -15,6 +15,7 @@ import type {
   TemplateRef,
   FlowRef,
 } from "../manifest/types.ts";
+import { sqlTableRef } from "../manifest/sql-resource.ts";
 
 /** Minimal ESTree-shaped nodes produced by oxc-parser. */
 export interface AstNode {
@@ -54,6 +55,7 @@ export interface InferBinding {
     | "template"
     | "flow"
     | "embed"
+    | "table"
     | "unknown";
   /** Resolved resource / name. */
   readonly ref: string;
@@ -103,9 +105,20 @@ const READ_METHODS = new Set([
   "findMany",
   "findFirst",
   "find",
+  "list",
 ]);
 
-const WRITE_METHODS = new Set(["insert", "set", "delete", "increment", "update", "upsert", "log"]);
+const WRITE_METHODS = new Set([
+  "insert",
+  "set",
+  "delete",
+  "increment",
+  "update",
+  "upsert",
+  "log",
+  "put",
+  "putImage",
+]);
 
 /** Methods whose first argument is a table / collection identifier. */
 const TABLE_ARG_METHODS = new Set([
@@ -203,7 +216,7 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
       // Skip incomplete chains (`select` before `.from`, `insert` before table) —
       // the sibling call that carries the table arg records the real resource.
       const leaf = resolved.methods[resolved.methods.length - 1]!;
-      const hasTable = tableFromStoreChain(call) !== undefined;
+      const hasTable = tableFromStoreChain(call, options.bindings) !== undefined;
       if (!hasTable && (leaf === "select" || leaf === "insert" || leaf === "update")) {
         continue;
       }
@@ -352,11 +365,14 @@ export function storeResourceFromCall(
   const storeBinding = resolveBinding(storeArg, bindings);
   const facet = storeBinding?.facet ?? "sql";
 
-  const table = tableFromStoreChain(call);
+  const table = tableFromStoreChain(call, bindings);
 
   if (table) {
     return {
-      resource: `${facet}:${table}` as ResourceRef,
+      // sql:<table> is the shared naming convention with the kernel's
+      // runtime capability gate (see ../manifest/sql-resource.ts) — table
+      // args only ever occur on sql-facet methods in practice.
+      resource: (facet === "sql" ? sqlTableRef(table) : `${facet}:${table}`) as ResourceRef,
       methods: chain.methods,
     };
   }
@@ -382,11 +398,21 @@ export function storeResourceFromCall(
 }
 
 /**
- * Walk an `fx.store(…).a().b(table)` chain and return the table identifier.
+ * Walk an `fx.store(…).a().b(table)` chain and return the declared table
+ * name — resolved through a registered `table` binding (the real string
+ * passed to `store.schema.table(name, …)`) when the argument is one, so a
+ * JS binding named differently from its declared table (`const notesTable
+ * = store.schema.table("notes", …)`) still resolves to `"notes"`, matching
+ * what the kernel reads off the live table object at call time. Falls back
+ * to the raw identifier text otherwise.
  *
  * @param call - Any call in the chain
+ * @param bindings - Scope bindings
  */
-function tableFromStoreChain(call: CallExpression): string | undefined {
+function tableFromStoreChain(
+  call: CallExpression,
+  bindings: ReadonlyMap<string, InferBinding>,
+): string | undefined {
   let current: AstNode | undefined = call;
   while (current && current.type === "CallExpression") {
     const c = current as CallExpression;
@@ -394,8 +420,11 @@ function tableFromStoreChain(call: CallExpression): string | undefined {
     if (!link || link.rootMethod !== "store") break;
     const leaf = link.methods[link.methods.length - 1]!;
     if (TABLE_ARG_METHODS.has(leaf)) {
-      const table = identifierName(c.arguments[0]);
-      if (table) return table;
+      const id = identifierName(c.arguments[0]);
+      if (id) {
+        const binding = bindings.get(id);
+        return binding?.kind === "table" ? binding.ref : id;
+      }
     }
     const callee = c.callee;
     if (callee.type === "MemberExpression") {

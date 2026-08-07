@@ -14,6 +14,7 @@ import type {
   AiModel,
   AiPrompt,
   Channel,
+  ChannelMedium,
   Clock,
   DeclaredColumn,
   Effects,
@@ -94,6 +95,8 @@ interface ProjectScope {
     string,
     { storeName: string; storeRef: string; unit?: string; breaking?: boolean }
   >;
+  /** Local binding name → medium, for `const x = channel.email(…)` binders. */
+  channelMediumBindings: Map<string, ChannelMedium>;
 }
 
 /**
@@ -123,6 +126,7 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     flows: {},
     flowExports: new Map(),
     resources: new Map(),
+    channelMediumBindings: new Map(),
   };
 
   const parsed = files.map((file) => {
@@ -329,7 +333,14 @@ function collectSchemaTable(call: CallExpression, program: AstNode, scope: Proje
   const entry = { name: tableName, columns };
   scope.schemaTables.set(tableName, entry);
   const bindingName = enclosingConstName(call, program);
-  if (bindingName) scope.schemaTables.set(bindingName, entry);
+  if (bindingName) {
+    scope.schemaTables.set(bindingName, entry);
+    // Declared table name, not the JS binding — resolved by
+    // tableFromStoreChain so `const notesTable = store.schema.table("notes",
+    // …)` still infers "sql:notes", matching what the kernel reads off the
+    // live table object (see ../manifest/sql-resource.ts).
+    scope.bindings.set(bindingName, { kind: "table", ref: tableName });
+  }
 }
 
 function attachSchemaOption(
@@ -584,6 +595,8 @@ function camelToSnakeKey(key: string): string {
     .toLowerCase();
 }
 
+const CHANNEL_MEDIUM_METHODS = new Set(["email", "sms", "whatsapp", "push"]);
+
 function visitDeclarationCall(call: CallExpression, program: AstNode, scope: ProjectScope): void {
   const callee = call.callee;
 
@@ -718,7 +731,17 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       }
     }
 
-    if (obj === "channel" && prop === "template") {
+    // channel.email(…) / .sms(…) / .whatsapp(…) / .push(…) — medium binder,
+    // usually held in a local const and called later as `mail.template(…)`.
+    if (obj === "channel" && prop && CHANNEL_MEDIUM_METHODS.has(prop)) {
+      const bindingName = enclosingConstName(call, program);
+      if (bindingName) {
+        scope.channelMediumBindings.set(bindingName, prop as ChannelMedium);
+      }
+    }
+
+    const boundMedium = obj ? scope.channelMediumBindings.get(obj) : undefined;
+    if ((obj === "channel" && prop === "template") || (prop === "template" && boundMedium)) {
       const templateName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (templateName) {
@@ -726,7 +749,9 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const locales = stringArrayProp(opts, "locales");
         const description = stringProp(opts, "description");
         scope.channels[templateName] = {
-          ...(medium ? { medium: medium as Channel["medium"] } : { medium: "email" }),
+          ...(medium
+            ? { medium: medium as Channel["medium"] }
+            : { medium: boundMedium ?? "email" }),
           ...(locales ? { locales } : {}),
           ...(description ? { description } : {}),
         };

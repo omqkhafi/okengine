@@ -234,6 +234,21 @@ export interface DevOptions {
     readonly onUpdate?: (service: string, status: DevStatus) => void;
   }) => Promise<Map<string, DevStatus>>;
   /**
+   * Injectable `docker compose ps` runner for live health polls
+   * ({@link startComposeHealthWatch} / keyboard refresh). Default: real
+   * `docker`. When {@link DevOptions.composeHealth} is set and this is
+   * omitted, live polls return empty (unit tests never shell out).
+   *
+   * @param args - Args after `docker` (e.g. `compose -f … ps -a …`)
+   * @param cwd - Compose directory
+   * @param env - Stack env merged into the process env
+   */
+  readonly composeHealthRun?: (
+    args: readonly string[],
+    cwd: string,
+    env: Record<string, string>,
+  ) => Promise<string>;
+  /**
    * Regenerate client types (injectable).
    *
    * @param appUrl - App base URL
@@ -298,6 +313,14 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   /** Reassigned to {@link createAnchoredBoard} wrap after the status board paints. */
   let write: (text: string) => void = options.write ?? ((t) => process.stdout.write(t));
   const chromeWrite = (t: string) => write(formatCliChrome(t));
+  /**
+   * `docker compose ps` runner for live / default health polls.
+   * Explicit inject wins; otherwise a `composeHealth` inject implies tests —
+   * never shell out to a real `docker` binary.
+   */
+  const composeHealthRun =
+    options.composeHealthRun ??
+    (options.composeHealth ? async (): Promise<string> => "[]" : undefined);
   const previousWarn = console.warn;
   console.warn = (...args: unknown[]) => {
     const msg = args.map(String).join(" ");
@@ -656,6 +679,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
               files: composeFiles,
               cwd: dockerOut,
               env: dockerStarted.env,
+              run: composeHealthRun,
               timeoutMs: 20_000,
               isDone: (map) => {
                 // Empty ps (compose just-created / injectable gap): do not spin 20s.
@@ -952,6 +976,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       files: started.files,
       cwd: started.cwd,
       env: started.env,
+      run: composeHealthRun,
       intervalMs: 2_000,
       onChange: (map) => {
         liveComposeHealth = map;
@@ -1325,6 +1350,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         files: started.files,
         cwd: started.cwd,
         env: started.env,
+        run: composeHealthRun,
       });
       if (liveComposeHealth.get("ai") === "error") heroAiStatus = "error";
       repaintBoard();

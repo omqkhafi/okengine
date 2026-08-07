@@ -10,6 +10,52 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+### ✨ Added
+
+- Boot-time effects stamping: a flow with no hand-declared `effects` can now
+  derive them from a compiled Manifest at boot — pass one explicitly
+  (`oke({ manifest })`) or point `oke({ rootDir })` / `OKE_ROOT_DIR` at a
+  source tree for a lazy `extractManifest` (never bundled into the edge
+  graph — same `new URL(...)` trick as the element binders). `oke dev` /
+  `oke start` set `OKE_ROOT_DIR` automatically; no template changes needed.
+
+### 🔒 Security
+
+- `docker` / `prod` boots now fail loud (`OKE1008`) when a flow has no
+  declared effects and no Manifest to derive them from, instead of silently
+  minting an open capability token (every access allowed, no gate at all).
+  Previously true in every environment, for every flow that omitted
+  `effects` — confirmed via real boot + `fetch()`, not assumption.
+  `local` / `test` keep the open-token fallback (once-per-process `oke
+boot:` warning) so the existing dev loop and test suite are unaffected.
+- The SQL capability gate (`fx.store(db).insert(table)` / `.select().from(table)`
+  / …) now resolves the exact table touched (`sql:<table>`) instead of only
+  the store-level ref (`sql:<store-name>`) — matching the AoT compiler's own
+  `sql:<table>` inference, which the boot-time stamping above now makes live
+  for the first time. Backward compatible: a flow that still declares the
+  older `effects: { writes: ["sql:<store-name>"] }` convention (every
+  existing template) keeps working unchanged — the gate tries the precise
+  table ref first, falls back to the store-level ref.
+
+### 🐛 Fixed
+
+- `oke dev` unit tests that inject `composeHealth` no longer shell out to a
+  real `docker` binary for the session-long health watch — `composeHealthRun`
+  is passed through to `startComposeHealthWatch` / `readComposeHealth`, and
+  injecting `composeHealth` without a run stubs live `ps` polls.
+- AoT effects inference: `fx.store(files).put(...)` / `.putImage(...)` are
+  now recognized as writes and `.list(...)` as a read (were silently dropped
+  from the inferred `effects`, files-store methods weren't in the
+  read/write method sets).
+- AoT effects inference: `fx.send(tpl, …)` now resolves through a local
+  channel medium binder (`const mail = channel.email(...); mail.template(...)`),
+  not just the literal `channel.template(...)` form — previously the send
+  effect recorded the local variable name instead of the template id.
+- AoT effects inference: a table argument now resolves through its
+  `store.schema.table(name, …)` declaration instead of the raw JS
+  identifier, so `const notesTable = store.schema.table("notes", …)` still
+  infers `sql:notes` rather than the (wrong) `sql:notesTable`.
+
 ## v0.10.0 — 2026-08-07
 
 ### ✨ Added

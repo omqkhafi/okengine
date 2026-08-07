@@ -55,7 +55,18 @@ export async function runStart(options: StartOptions = {}): Promise<number> {
   try {
     const entry = await resolveStartEntry(cwd, options.entry);
     const port = String(options.port ?? Number(Bun.env.PORT ?? APP_PORT));
-    const env = { ...process.env, NODE_ENV: "production", PORT: port } as Record<string, string>;
+    const env = {
+      ...process.env,
+      NODE_ENV: "production",
+      PORT: port,
+      // Signal to boot() where to lazily extract effects from when a flow
+      // has no hand-declared `effects` — kernel/boot.ts's mintCapabilities()
+      // reads this (explicit opt-in only). docker/prod hard-fail (OKE1008)
+      // rather than silently open when neither this nor an explicit
+      // `manifest` resolves anything — this just gives that resolution a
+      // real chance to succeed instead of failing every time.
+      OKE_ROOT_DIR: process.env["OKE_ROOT_DIR"] ?? cwd,
+    } as Record<string, string>;
     write(`oke start: ${entry} (port ${port})\n`);
     if (options.runEntry) {
       await options.runEntry(entry, env);

@@ -10,6 +10,7 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
+import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type {
   FilesStoreDecl,
   FilesStoreFxHandle,
@@ -852,6 +853,34 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         );
       }
     };
+    /**
+     * Gate a table-scoped SQL operation. Prefers the precise `sql:<table>`
+     * ref (matches what the compiler's AST inference derives from the same
+     * call site — {@link "../manifest/sql-resource.ts"}); falls back to the
+     * store-level ref when the table ref isn't declared — every flow that
+     * hand-declared the older `effects: { writes: ["sql:<store>"] }`
+     * convention (every existing template, `upsert-app.test.ts`, …) must
+     * keep working unchanged. Ledger / journal record whichever ref the
+     * capability check actually matched, not always the coarser one.
+     *
+     * @param kind - Effect kind
+     * @param table - Table argument passed to a `SqlStoreHandle` method
+     * @param body - Work to run under the gate
+     */
+    const gatedTable = <T>(
+      kind: Parameters<CapabilityToken["assert"]>[0],
+      table: unknown,
+      body: () => T | Promise<T>,
+    ): Promise<T> => {
+      const name = schemaTableName(table);
+      if (name !== undefined) {
+        const perTable = sqlTableRef(name);
+        if (perTable !== ref && capability.allows(kind, perTable)) {
+          return gated(kind, perTable, body);
+        }
+      }
+      return gated(kind, ref, body);
+    };
 
     return {
       ref,
@@ -870,7 +899,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
               limit?: number;
               offset?: number;
             }): Promise<SqlRow[]> =>
-              gated("read", ref, async () => {
+              gatedTable("read", table, async () => {
                 const h = await ensure();
                 const from = h.select(columns).from(table);
                 const filtered = plan.where === undefined ? from : from.where(plan.where);
@@ -920,14 +949,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return {
           values(row) {
             const runExecute = () =>
-              gated("write", ref, async () => {
+              gatedTable("write", table, async () => {
                 refuseDryRunWrite();
                 const h = await ensure();
                 await h.insert(table).values(row).execute();
               });
             return {
               returning() {
-                return gated("write", ref, async () => {
+                return gatedTable("write", table, async () => {
                   refuseDryRunWrite();
                   const h = await ensure();
                   return h.insert(table).values(row).returning();
@@ -946,7 +975,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
           set(row) {
             return {
               where(where) {
-                return gated("write", ref, async () => {
+                return gatedTable("write", table, async () => {
                   refuseDryRunWrite();
                   const h = await ensure();
                   return h.update(table).set(row).where(where);
@@ -957,14 +986,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         };
       },
       findById(table, id) {
-        return gated("read", ref, async () => {
+        return gatedTable("read", table, async () => {
           const h = await ensure();
           return h.findById(table, id);
         });
       },
       delete(table: Parameters<SqlStoreHandle["delete"]>[0], id?: string) {
         if (id !== undefined) {
-          return gated("write", ref, async () => {
+          return gatedTable("write", table, async () => {
             refuseDryRunWrite();
             const h = await ensure();
             return h.delete(table, id);
@@ -972,7 +1001,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         }
         return {
           where(where: unknown) {
-            return gated("write", ref, async () => {
+            return gatedTable("write", table, async () => {
               refuseDryRunWrite();
               const h = await ensure();
               return h.delete(table).where(where);
@@ -981,20 +1010,20 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         };
       },
       exists(table, idOrWhere) {
-        return gated("read", ref, async () => {
+        return gatedTable("read", table, async () => {
           const h = await ensure();
           return h.exists(table, idOrWhere);
         });
       },
       upsert(table, matchOn, values, upsertOptions) {
-        return gated("write", ref, async () => {
+        return gatedTable("write", table, async () => {
           refuseDryRunWrite();
           const h = await ensure();
           return h.upsert(table, matchOn, values, upsertOptions);
         });
       },
       increment(table, id, column, by) {
-        return gated("write", ref, async () => {
+        return gatedTable("write", table, async () => {
           refuseDryRunWrite();
           const h = await ensure();
           return h.increment(table, id, column, by);
@@ -1007,19 +1036,19 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         });
       },
       count(table, where) {
-        return gated("read", ref, async () => {
+        return gatedTable("read", table, async () => {
           const h = await ensure();
           return h.count(table, where);
         });
       },
       page(table, pageOptions) {
-        return gated("read", ref, async () => {
+        return gatedTable("read", table, async () => {
           const h = await ensure();
           return h.page(table, pageOptions);
         });
       },
       ensureTable(table) {
-        return gated("write", ref, async () => {
+        return gatedTable("write", table, async () => {
           refuseDryRunWrite();
           const h = await ensure();
           return h.ensureTable(table);

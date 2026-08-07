@@ -207,6 +207,21 @@ describe("oke start", () => {
     expect(code).toBe(0);
     expect(ran).toBe(entry);
   });
+
+  test("sets OKE_ROOT_DIR so boot() can lazily derive effects for undeclared flows", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-cli-start-rootdir-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    let seenRootDir: string | undefined;
+    const code = await runStart({
+      cwd: dir,
+      runEntry: async (_e, env) => {
+        seenRootDir = env.OKE_ROOT_DIR;
+      },
+      write: () => {},
+    });
+    expect(code).toBe(0);
+    expect(seenRootDir).toBe(dir);
+  });
 });
 
 describe("oke vault", () => {

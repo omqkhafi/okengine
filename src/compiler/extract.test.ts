@@ -344,3 +344,128 @@ export const remove = mounted.remove;
     expect(manifest.flows?.list?.breaking).toBe(true);
   });
 });
+
+describe("extractManifest — files-store write methods", () => {
+  test("fx.store(files).put(...) infers a write, unannotated", async () => {
+    const source = `
+import { on, flow, http, gate, store } from "okengine";
+
+export const files = store.files("uploads");
+
+export const attach = on(
+  http.post("/attach").gate(gate.public),
+  flow({
+    name: "notes.attach",
+    unit: "notes",
+    do: async (input, fx) => {
+      await fx.store(files).put("key", input.text);
+      return { ok: true };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/attach.ts": source });
+
+    expect(manifest.flows?.["notes.attach"]?.effects?.writes).toEqual(["files:uploads"]);
+  });
+
+  test("fx.store(files).putImage(...) infers a write, unannotated", async () => {
+    const source = `
+import { on, flow, http, gate, store } from "okengine";
+
+export const files = store.files("uploads");
+
+export const attach = on(
+  http.post("/attach").gate(gate.public),
+  flow({
+    name: "notes.attachImage",
+    unit: "notes",
+    do: async (input, fx) => {
+      await fx.store(files).putImage("key", input.bytes);
+      return { ok: true };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/attach.ts": source });
+
+    expect(manifest.flows?.["notes.attachImage"]?.effects?.writes).toEqual(["files:uploads"]);
+  });
+
+  test("fx.store(files).list(...) infers a read, unannotated", async () => {
+    const source = `
+import { on, flow, every, store } from "okengine";
+
+export const files = store.files("uploads");
+
+export const sweep = on(
+  every("1d"),
+  flow({
+    name: "notes.sweep",
+    unit: "notes",
+    do: async (_input, fx) => {
+      const keys = await fx.store(files).list();
+      return { count: keys.length };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/sweep.ts": source });
+
+    expect(manifest.flows?.["notes.sweep"]?.effects?.reads).toEqual(["files:uploads"]);
+  });
+});
+
+describe("extractManifest — channel medium binder aliasing", () => {
+  test("mail.template(...) resolves through `const mail = channel.email(...)`", async () => {
+    const source = `
+import { on, flow, http, gate, channel } from "okengine";
+
+const mail = channel.email({ from: "Notes <notes@localhost>" });
+
+export const noteCreatedMail = mail.template("note-created", {
+  locales: ["en", "ar"],
+});
+
+export const onCreated = on(
+  http.post("/hook").gate(gate.public),
+  flow({
+    name: "notes.onCreated",
+    unit: "notes",
+    do: async (payload, fx) => {
+      await fx.send(noteCreatedMail, { to: "you@localhost", data: payload });
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/notes.ts": source });
+
+    expect(manifest.flows?.["notes.onCreated"]?.effects?.sends).toEqual(["note-created"]);
+    expect(manifest.channels?.["note-created"]?.medium).toBe("email");
+  });
+
+  test("sms medium binder alias carries its medium (not defaulted to email)", async () => {
+    const source = `
+import { on, flow, http, gate, channel } from "okengine";
+
+const otp = channel.sms({});
+
+export const otpTemplate = otp.template("otp-code", {});
+
+export const send = on(
+  http.post("/otp").gate(gate.public),
+  flow({
+    name: "notes.sendOtp",
+    unit: "notes",
+    do: async (payload, fx) => {
+      await fx.send(otpTemplate, { to: "+10000000000", data: payload });
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/otp.ts": source });
+
+    expect(manifest.flows?.["notes.sendOtp"]?.effects?.sends).toEqual(["otp-code"]);
+    expect(manifest.channels?.["otp-code"]?.medium).toBe("sms");
+  });
+});

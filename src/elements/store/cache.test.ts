@@ -43,4 +43,32 @@ describe("tier-1 cache — exact per-resource invalidation (path b)", () => {
     expect(cache.invalidateFromEffects({ writes: ["sql:links"] }).keys).toEqual(keys);
     expect(cache.get(keys[0]!)).toBeUndefined();
   });
+
+  test("write to table A does not invalidate a cached read of table B in the same sql store", () => {
+    // Two tables under one `store.sql("app", …)` — the exact shape Direction
+    // B's per-table kernel resolution (fx.ts `gatedTable`) now produces:
+    // `sql:notes` / `sql:orders`, not the old coarse `sql:app` for both.
+    // This precision was already correct in cache.ts before Direction B —
+    // it simply never received per-table refs to prove it with. Confirmed
+    // here with the exact naming the kernel now emits.
+    const cache = createStoreCache();
+    const notesRead: Effects = { reads: ["sql:notes"] };
+    const keys = tier1KeysForReads(notesRead);
+
+    cache.set({
+      tier: 1,
+      key: keys[0]!,
+      value: [{ id: "n1" }],
+      resources: ["sql:notes"],
+      expiresAt: null,
+    });
+
+    // A write to "orders" — a different table, same store — must not touch it.
+    expect(cache.invalidateFromEffects({ writes: ["sql:orders"] }).keys).toEqual([]);
+    expect(cache.get(keys[0]!)).toBeDefined();
+
+    // A write to "notes" itself still invalidates.
+    expect(cache.invalidateFromEffects({ writes: ["sql:notes"] }).keys).toEqual(keys);
+    expect(cache.get(keys[0]!)).toBeUndefined();
+  });
 });
