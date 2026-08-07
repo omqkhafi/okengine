@@ -18,7 +18,7 @@ beforeEach(() => {
 
 describe("headers plugin", () => {
   test("sets the default trio on a successful response", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec" }).plug(headers());
 
     const res = await app.fetch(new Request("http://localhost/x"));
@@ -31,7 +31,7 @@ describe("headers plugin", () => {
   });
 
   test("helmet-parity defaults: agent cluster, dns prefetch, download, cross-domain, xss filter", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-parity" }).plug(headers());
 
     const res = await app.fetch(new Request("http://localhost/x"));
@@ -44,7 +44,7 @@ describe("headers plugin", () => {
   });
 
   test("each parity default can be switched off", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-off" }).plug(
       headers({
         originAgentCluster: false,
@@ -64,7 +64,7 @@ describe("headers plugin", () => {
   });
 
   test("dnsPrefetchControl allow, custom cross-domain policy, COEP stamps when configured", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-tuned" }).plug(
       headers({
         dnsPrefetchControl: { allow: true },
@@ -84,8 +84,7 @@ describe("headers plugin", () => {
     const poweredByApp = (options: Parameters<typeof headers>[0], name: string) => {
       on(
         http.get("/x"),
-        flow({
-          name: "x.get",
+        flow("x.get", {
           do: () =>
             new Response("{}", {
               headers: { "content-type": "application/json", "x-powered-by": "Express" },
@@ -111,7 +110,7 @@ describe("headers plugin", () => {
   });
 
   test("structured CSP merges over helmet's defaults, camelCase keys, report-only mode", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-csp-builder" }).plug(
       headers({
         contentSecurityPolicy: {
@@ -131,7 +130,7 @@ describe("headers plugin", () => {
   });
 
   test("structured CSP with useDefaults: false emits exactly the given directives", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-csp-bare" }).plug(
       headers({
         contentSecurityPolicy: { useDefaults: false, directives: { "default-src": ["'none'"] } },
@@ -151,7 +150,7 @@ describe("headers plugin", () => {
   test("headers land on failures too (onResponse runs after onError)", async () => {
     on(
       http.get("/deny"),
-      flow({ name: "x.deny", do: () => ({ ok: true }) }).hook("beforeHandle", () =>
+      flow("x.deny", { do: () => ({ ok: true }) }).hook("beforeHandle", () =>
         fail("Forbidden", {}),
       ),
     );
@@ -164,7 +163,7 @@ describe("headers plugin", () => {
   });
 
   test("adds CSP only when configured", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-csp" }).plug(
       headers({ contentSecurityPolicy: "default-src 'self'" }),
     );
@@ -175,7 +174,7 @@ describe("headers plugin", () => {
   });
 
   test("HSTS is off by default", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-hsts-off" }).plug(headers());
 
     const res = await app.fetch(new Request("http://localhost/x"));
@@ -184,7 +183,7 @@ describe("headers plugin", () => {
   });
 
   test("hsts: true stamps a one-year max-age", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-hsts-on" }).plug(headers({ hsts: true }));
 
     const res = await app.fetch(new Request("http://localhost/x"));
@@ -193,7 +192,7 @@ describe("headers plugin", () => {
   });
 
   test("hsts object tunes max-age, subdomains, preload", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-hsts-tuned" }).plug(
       headers({ hsts: { maxAge: 63072000, includeSubDomains: true, preload: true } }),
     );
@@ -206,7 +205,7 @@ describe("headers plugin", () => {
   });
 
   test("permissions-policy and cross-origin policies stamp when configured", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-extra" }).plug(
       headers({
         permissionsPolicy: "camera=(), microphone=()",
@@ -223,7 +222,7 @@ describe("headers plugin", () => {
   });
 
   test("an explicit app-set value wins by default", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "sec-keep" });
     app.hook("onResponse", (ctx) => {
       if (!ctx.response) return;

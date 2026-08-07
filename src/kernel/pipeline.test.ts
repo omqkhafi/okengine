@@ -72,8 +72,7 @@ describe("pipeline — Unauthorized for anonymous", () => {
 
     on(
       http.post("/orders").gate(member),
-      flow({
-        name: "orders.create",
+      flow("orders.create", {
         in: z.object({ sku: z.string() }),
         out: z.object({ id: z.string() }),
         do: (_input, fx) => ({ id: fx.id() }),
@@ -111,8 +110,7 @@ describe("pipeline — Unauthorized for anonymous", () => {
 
     on(
       http.post("/orders").gate(member, canOrder),
-      flow({
-        name: "orders.create2",
+      flow("orders.create2", {
         in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
@@ -150,8 +148,7 @@ describe("pipeline — evaluated gates on the run", () => {
 
     on(
       http.post("/orders").gate(member, canOrder),
-      flow({
-        name: "orders.create3",
+      flow("orders.create3", {
         in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),
@@ -203,8 +200,7 @@ describe("pipeline — Bearer cryptographic verification", () => {
 
     on(
       http.get("/secure").gate(member),
-      flow({
-        name: "secure.get",
+      flow("secure.get", {
         do: () => ({ ok: true }),
       }),
     );
@@ -242,8 +238,7 @@ describe("pipeline — Bearer cryptographic verification", () => {
 
     on(
       http.get("/secure").gate(member),
-      flow({
-        name: "secure.get2",
+      flow("secure.get2", {
         do: () => ({ ok: true }),
       }),
     );
@@ -313,8 +308,7 @@ describe("pipeline — Bearer cryptographic verification", () => {
 
     on(
       http.post("/orders").gate(member),
-      flow({
-        name: "orders.inject",
+      flow("orders.inject", {
         in: z.object({ sku: z.string() }),
         do: () => ({ ok: true }),
       }),

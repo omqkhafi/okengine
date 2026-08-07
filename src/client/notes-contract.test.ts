@@ -37,7 +37,7 @@ const NotFound = z.object({});
 
 const create = on(
   http.post("/notes"),
-  flow({
+  flow("notes.create", {
     in: NewNote,
     out: NoteId,
     do: (input) => ({ id: `n_${input.title}` }),
@@ -46,7 +46,7 @@ const create = on(
 
 const get = on(
   http.get("/notes/:id"),
-  flow({
+  flow("notes.get", {
     in: NoteId,
     out: Note,
     errors: { NotFound },
@@ -250,8 +250,7 @@ describe("Notes — typeof app carries contracts", () => {
   });
 
   test("untriggered adopted flow is RPC-only on the client", async () => {
-    const stats = flow({
-      name: "notes.stats",
+    const stats = flow("notes.stats", {
       in: NoteId,
       out: z.object({ clicks: z.number() }),
       do: () => ({ clicks: 7 }),

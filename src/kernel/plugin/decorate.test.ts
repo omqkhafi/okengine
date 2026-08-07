@@ -27,8 +27,7 @@ describe("plugin decorate — types and runtime", () => {
     let seen: unknown;
     on(
       http.get("/x"),
-      flow({
-        name: "x",
+      flow("x", {
         do: (_input, _fx) => {
           return { ok: true };
         },
@@ -75,9 +74,7 @@ describe("plugin decorate — types and runtime", () => {
 
     on(
       http.get("/orders"),
-      flow({
-        name: "orders.list",
-        unit: "orders",
+      flow("orders.list", {
         do: () => ({}),
       }).hook("beforeHandle", (ctx) => {
         seen.orders = ctx.decorations.flag;
@@ -85,9 +82,7 @@ describe("plugin decorate — types and runtime", () => {
     );
     on(
       http.get("/payments"),
-      flow({
-        name: "payments.list",
-        unit: "payments",
+      flow("payments.list", {
         do: () => ({}),
       }).hook("beforeHandle", (ctx) => {
         seen.payments = ctx.decorations.flag;

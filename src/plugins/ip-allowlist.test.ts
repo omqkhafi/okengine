@@ -25,7 +25,7 @@ function get(ip?: string): Request {
 
 describe("ipAllowlist plugin", () => {
   test("allow list: listed IPs pass, others get 403 Forbidden", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips" }).plug(ipAllowlist({ allow: ["203.0.113.7"] }));
 
     const ok = await app.fetch(get("203.0.113.7"));
@@ -39,7 +39,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("deny list: blocked IPs get 403 ip_denied, others pass", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips-deny" }).plug(
       ipAllowlist({ deny: ["198.51.100.9"] }),
     );
@@ -54,7 +54,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("deny wins over allow on overlap", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips-both" }).plug(
       ipAllowlist({ allow: ["203.0.113.7"], deny: ["203.0.113.7"] }),
     );
@@ -64,7 +64,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("XFF last hop is the client; a spoofed first hop cannot bypass allow", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips-xff" }).plug(
       ipAllowlist({ allow: ["203.0.113.7"] }),
     );
@@ -78,7 +78,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("spoofed first hop cannot bypass a deny rule", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips-xff-deny" }).plug(
       ipAllowlist({ deny: ["198.51.100.9"] }),
     );
@@ -92,7 +92,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("trustedProxyDepth selects the hop behind N trusted proxies", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     // Chain: spoofed, real-client, cdn-egress — depth 2 skips the nearest proxy hop.
     const app = oke({ autoBoot: false, name: "ips-depth" }).plug(
       ipAllowlist({ allow: ["203.0.113.7"], trustedProxyDepth: 2 }),
@@ -113,7 +113,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("missing header: denied when allow is set, permitted for deny-only", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const strict = oke({ autoBoot: false, name: "ips-missing-allow" }).plug(
       ipAllowlist({ allow: ["203.0.113.7"] }),
     );
@@ -123,7 +123,7 @@ describe("ipAllowlist plugin", () => {
 
     resetBindings();
     resetFlowSeq();
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
 
     const lax = oke({ autoBoot: false, name: "ips-missing-deny" }).plug(
       ipAllowlist({ deny: ["198.51.100.9"] }),
@@ -133,7 +133,7 @@ describe("ipAllowlist plugin", () => {
   });
 
   test("custom header name is honored", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "ips-custom" }).plug(
       ipAllowlist({ allow: ["203.0.113.7"], header: "x-real-ip" }),
     );

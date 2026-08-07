@@ -67,18 +67,18 @@ so ● updates live if you stop a container; AI ● tracks model phase while the
 AI container is up. Boot does not wait for the model to become ready.
 
 On a TTY with `-d`, keyboard controls stay active under Logs. Status ● for
-compose/AI live on the board **above** Logs (not as log lines). Press `c` to
-clear the log pane and reprint the latest board. `l` / `?` also refresh first
-so the services/help panel is not mixed into request logs.
+compose/AI live on the board **above** Logs (not as log lines) — it already
+lists every service, so refresh is enough to see the stack; there is no
+separate services panel. Press `r` to clear the log pane and reprint the
+latest board. `?` also refreshes first so the help panel is not mixed into
+request logs.
 
-| Key                          | Action                              |
-| ---------------------------- | ----------------------------------- |
-| `?`                          | help                                |
-| `c`                          | refresh — clear logs, show latest ● |
-| `q`                          | quit `oke dev`                      |
-| `l`                          | list docker services                |
-| `u` / `x`                    | compose up / stop (whole stack)     |
-| `1`–`9` then `u` / `x` / `r` | start / stop / restart one service  |
+| Key       | Action                              |
+| --------- | ----------------------------------- |
+| `?`       | help                                |
+| `r`       | refresh — clear logs, show latest ● |
+| `q`       | quit `oke dev`                      |
+| `u` / `x` | compose up / stop (whole stack)     |
 
 Compose stays quiet unless it fails. Process-local boot notices print once under
 the hero (not once per process).

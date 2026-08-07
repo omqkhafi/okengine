@@ -37,7 +37,7 @@ describe("acceptsGzip", () => {
 
 describe("compression plugin", () => {
   test("gzips a large JSON body when the client accepts gzip", async () => {
-    on(http.get("/big"), flow({ name: "big.get", do: bigPayload }));
+    on(http.get("/big"), flow("big.get", { do: bigPayload }));
     const app = oke({ autoBoot: false, name: "zip" }).plug(compression());
 
     const res = await app.fetch(
@@ -58,7 +58,7 @@ describe("compression plugin", () => {
   });
 
   test("passes through untouched without Accept-Encoding: gzip", async () => {
-    on(http.get("/big"), flow({ name: "big.get", do: bigPayload }));
+    on(http.get("/big"), flow("big.get", { do: bigPayload }));
     const app = oke({ autoBoot: false, name: "zip-plain" }).plug(compression());
 
     const res = await app.fetch(new Request("http://localhost/big"));
@@ -69,7 +69,7 @@ describe("compression plugin", () => {
   });
 
   test("skips bodies under minSize", async () => {
-    on(http.get("/small"), flow({ name: "small.get", do: () => ({ ok: true }) }));
+    on(http.get("/small"), flow("small.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "zip-small" }).plug(compression());
 
     const res = await app.fetch(
@@ -80,7 +80,7 @@ describe("compression plugin", () => {
   });
 
   test("minSize: 0 compresses even tiny bodies", async () => {
-    on(http.get("/small"), flow({ name: "small.get", do: () => ({ ok: true }) }));
+    on(http.get("/small"), flow("small.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "zip-zero" }).plug(compression({ minSize: 0 }));
 
     const res = await app.fetch(
@@ -93,8 +93,7 @@ describe("compression plugin", () => {
   test("skips non-matching content types and no-transform responses", async () => {
     on(
       http.get("/img"),
-      flow({
-        name: "img.get",
+      flow("img.get", {
         do: () =>
           new Response(new Uint8Array(4096), {
             headers: { "content-type": "image/png" },
@@ -103,8 +102,7 @@ describe("compression plugin", () => {
     );
     on(
       http.get("/nt"),
-      flow({
-        name: "nt.get",
+      flow("nt.get", {
         do: () =>
           Response.json(
             { data: bigPayload(), error: null },

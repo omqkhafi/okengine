@@ -59,9 +59,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
   const factors = opts.factors ?? createTwoFactorStore();
   const issuer = opts.issuer ?? "oke";
 
-  const enable = flow({
-    name: "auth.twoFactorEnable",
-    unit: "auth",
+  const enable = flow("auth.twoFactorEnable", {
     plane: "user",
     out: z.object({
       secret: z.string(),
@@ -91,9 +89,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const verify = flow({
-    name: "auth.twoFactorVerify",
-    unit: "auth",
+  const verify = flow("auth.twoFactorVerify", {
     plane: "user",
     in: z.object({
       userId: z.string().min(1),
@@ -127,9 +123,7 @@ export function twoFactor(opts: TwoFactorOptions = {}): PluginDef {
     },
   });
 
-  const disable = flow({
-    name: "auth.twoFactorDisable",
-    unit: "auth",
+  const disable = flow("auth.twoFactorDisable", {
     plane: "user",
     out: z.object({ ok: z.literal(true) }),
     errors: { AuthFailed },

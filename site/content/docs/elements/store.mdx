@@ -80,7 +80,7 @@ All data access goes through `fx.store(db)` — a typed session, one table at a 
 ```typescript title="src/flows/notes/create.ts"
 export const createNote = on(
   http.post("/notes"),
-  flow({
+  flow("notes.create", {
     in: z.object({ title: z.string(), body: z.string() }),
     out: z.object({ id: z.string() }),
     do: async (input, fx) => {

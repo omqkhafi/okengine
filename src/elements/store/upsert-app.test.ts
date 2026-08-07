@@ -46,8 +46,7 @@ describe("fx.store(db).upsert via app.fetch (real boot)", () => {
 
     const seed = on(
       http.post("/seed").gate(gate.public),
-      flow({
-        name: "notes.seed",
+      flow("notes.seed", {
         in: UpsertIn,
         out: UpsertOut,
         effects: { writes: ["sql:app"], reads: ["sql:app"] },

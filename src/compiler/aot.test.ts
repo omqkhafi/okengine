@@ -120,8 +120,7 @@ describe("typed error narrowing end-to-end", () => {
 
     on(
       http.post("/bookings").gate(gate.public),
-      flow({
-        name: "bookings.create",
+      flow("bookings.create", {
         in: Booking,
         out: z.object({ id: z.string() }),
         errors: { FlightFull },

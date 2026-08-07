@@ -128,6 +128,7 @@ export const STACK_CONTROL_KEYS = [
   "MP_SMTP_AUTH_ACCEPT_ANY",
   "MP_SMTP_AUTH_ALLOW_INSECURE",
   "OKE_AI_MODEL",
+  "OKE_AI_CTX_SIZE",
   "OKE_PROXY_HOST",
   "OKE_PROXY_ACME_EMAIL",
   // OpenBao app token — minted by bootstrap, must survive `writeDerivedFiles`.

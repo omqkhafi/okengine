@@ -59,9 +59,7 @@ describe("zero-instrumentation dimensions", () => {
 
     on(
       http.get("/book").gate(member),
-      flow({
-        name: "book.create",
-        unit: "bookings",
+      flow("bookings.create", {
         plane: "user",
         effects: { reads: ["sql:bookings"] },
         do: async (_input, fx) => {
@@ -92,7 +90,7 @@ describe("zero-instrumentation dimensions", () => {
     const events = await runs.all();
     expect(events.length).toBe(1);
     const e = events[0]!;
-    expect(e.flow).toBe("book.create");
+    expect(e.flow).toBe("bookings.create");
     expect(e.unit).toBe("bookings");
     expect(e.trigger).toBe("http");
     expect(e.plane).toBe("user");
@@ -103,7 +101,7 @@ describe("zero-instrumentation dimensions", () => {
     expect(e.buildVersion).toBe("1.2.3");
     expect(e.logs.length).toBe(1);
     expect(e.logs[0]!.message).toBe("booking started");
-    expect(e.dimensions.flow).toBe("book.create");
+    expect(e.dimensions.flow).toBe("bookings.create");
     expect(e.dimensions.tenant).toBe("org_a41");
     expect(e.dimensions.cache).toBe("hit");
 

@@ -74,7 +74,7 @@ import { z } from "zod";
 
 export const health = on(
   http.get("/health").gate(gate.public),
-  flow({
+  flow("health.check", {
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),
   }),

@@ -10,6 +10,97 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.10.2 — 2026-08-07
+
+### ✨ Added
+
+- `store.sql` / `store.files`, `vault.secret`, `signal()`, and channel medium
+  binders' `.template()` (`channel.email/sms/whatsapp/push().template()`) now
+  register into a shared boot-time registry — `oke({...})` auto-populates
+  `stores` / `secrets` / `signals` / `channel.templates` with zero explicit
+  arrays, draining under the same `registry: "consume" | "keep" | "ignore"`
+  switch that already governs `on()`'s trigger registry. Explicit arrays keep
+  working unchanged — additive, deduped by reference, never silently ignored.
+  `store.kv` / `store.index`, `vault.config`, and the medium-agnostic
+  `channel.template()` are intentionally not auto-registered.
+- `.adopt()` route wiring can now be generated instead of hand-listed: `oke
+build` / `oke dev` regenerate `src/flows/generated.ts` from every
+  `src/flows/<unit>/index.ts` folder (`export * as <unit> from
+"./<unit>/index.ts"`), so `app.ts` becomes `import * as routes from
+"./flows/generated"; oke({ name }).adopt(routes)`. A real file on disk, not
+  a virtual module — a virtual-module Bun plugin was investigated and
+  rejected: `Bun.plugin()`'s `onResolve` is never invoked for an
+  unresolvable specifier during a plain runtime `import()`, so `oke dev` and
+  `oke build` would have resolved it differently. Both templates ship a
+  committed `src/flows/generated.ts` stub so a fresh clone type-checks before
+  the first `oke dev` / `oke build` ever runs.
+
+### 🔒 Security
+
+- `docker` / `prod` boots now fail loud (`OKE1009`) when a `src/flows/<unit>`
+  folder exists on disk but adopted zero flows — a stale or hand-edited
+  `.adopt()` barrel, instead of a silently-incomplete route table. Opt-in via
+  `rootDir` / `OKE_ROOT_DIR` (same gate as the `OKE1008` Manifest fallback);
+  `local` / `test` warn once instead of failing, so the dev loop stays
+  unbroken.
+
+### ♻️ Changed
+
+- `flow()` now takes its name as the first positional argument —
+  `flow(name, options)` instead of `flow({ name, ...options })` — matching
+  the name-first convention already used by `signal(name, options)` and
+  `vault.secret(name, options?)` (pre-1.0; no compat shim, no dual-form
+  overload).
+- `flow()` no longer takes a `unit` option — `unit` is now derived from
+  `name`'s first dot segment (`"auth.refresh"` → unit `"auth"`), matching
+  every real call site, which always set both to the same value. Flows
+  with no dot in their name have no unit, same as before.
+- `create-oke`'s `advanced` / `standard` templates now scaffold `oke({ name:
+"notes" })` with no explicit `stores` / `secrets` / `signals` /
+  `channel.templates` arrays and no hand-written `.adopt({ main, notes })` —
+  both come from the auto-registries and the generated route barrel above.
+  Plugins are unaffected: `.plug()` stays fully explicit everywhere.
+
+### 🐛 Fixed
+
+- `oke dev`'s live keyboard controls dropped the `l` (list docker services)
+  key and its whole `1`-`9` select-then-`u`/`x`/`r` per-service subsystem —
+  `l` was the only way to discover which number mapped to which service, and
+  the persistent status board above Logs already lists every service with a
+  live status dot on every refresh, so the panel was a redundant duplicate.
+  Refresh is now bound to `r` (was `c`) — freed up by dropping per-service
+  restart, which was the only other thing bound to `r`.
+- `oke ai setup` now also updates `docker/.env.docker` directly when it
+  already exists. `OKE_AI_MODEL` is only ever seeded from `.env.local` into
+  the docker stack on its _first_ boot (later values there are treated as
+  durable, possibly hand-edited pins), so a second `oke ai setup` run —
+  picking a different model after the stack already exists — previously
+  wrote `.env.local` correctly but silently left the running docker profile
+  on the old model forever.
+- `oke dev --docker`'s llama.cpp entrypoint now passes an explicit
+  `--ctx-size` (default `4096`, override via `OKE_AI_CTX_SIZE`) to
+  `llama-server`. Left unset, `llama-server` defaults to the model's full
+  native training context (32K-256K+ for many current models) and allocates
+  the KV cache for that up front — often many times the model file's own
+  size — OOM-killing the container on start regardless of how much memory
+  Docker is given, even for small models.
+- `bootApplication` no longer lets the ambient `OKE_DOCKER=1` process flag
+  override an explicit `env` passed to `boot()` — only the `env`-unset
+  default path now falls back to `docker`. Previously any sub-app that
+  explicitly booted with `env: "local"` (e.g. the Console's own internal
+  app under `oke dev -d`) got silently promoted to `docker`, tripping the
+  `OKE1008` strict capability check on its own zero-effect flows.
+- `extractManifest` now always records a flow's `effects` (including an
+  empty `{}`), instead of omitting the key when a flow has no effects.
+  Previously a pure, zero-effect flow (e.g. a template's `main.root`) was
+  indistinguishable from "effects unknown," so `docker` / `prod` boots kept
+  refusing an open capability token even after a correct manifest
+  extraction confirmed there was nothing to declare.
+- `oke db seed` now passes `rootDir` when booting the app entry, so
+  `docker` / `prod` seeding can lazily derive a Manifest instead of
+  hard-failing `OKE1008` on a fresh scaffold that hasn't run `oke build`
+  yet.
+
 ## v0.10.1 — 2026-08-07
 
 ### ✨ Added

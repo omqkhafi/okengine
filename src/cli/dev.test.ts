@@ -398,13 +398,11 @@ async function writePingApp(dir: string, version: string): Promise<void> {
     join(dir, "src/flows/ping.ts"),
     `import { on, flow, http, gate } from ${JSON.stringify(OKE_INDEX)};
 
-export const ping = on(http.get("/ping").gate(gate.public), flow({
-  name: "ping",
+export const ping = on(http.get("/ping").gate(gate.public), flow("ping", {
   do: () => ({ version: ${JSON.stringify(version)} as const }),
 }));
 
-export const slow = on(http.get("/slow").gate(gate.public), flow({
-  name: "slow",
+export const slow = on(http.get("/slow").gate(gate.public), flow("slow", {
   do: async () => {
     const started = ${JSON.stringify(version)};
     await Bun.sleep(800);

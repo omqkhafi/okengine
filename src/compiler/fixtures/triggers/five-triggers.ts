@@ -16,8 +16,7 @@ export const linkClicked = signal("link-clicked", {
 // ① HTTP
 export const create = on(
   http.post("/orders"),
-  flow({
-    name: "triggers.http",
+  flow("triggers.http", {
     do: async (input, fx) => {
       await fx.store(db).insert(orders).values(input);
       return { ok: true };
@@ -28,8 +27,7 @@ export const create = on(
 // ② CLOCK / every
 on(
   every("10m"),
-  flow({
-    name: "triggers.every",
+  flow("triggers.every", {
     do: (_, fx) => fx.store(db).delete(links).where({ createdAt: 0 }),
   }),
 );
@@ -37,8 +35,7 @@ on(
 // ③ SIGNAL
 on(
   linkClicked,
-  flow({
-    name: "triggers.signal",
+  flow("triggers.signal", {
     do: async ({ code }, fx) => {
       const clicks = await fx.store(db).increment(links, code, "clicks");
       await fx.emit(linkClicked, { code, clicks });
@@ -49,8 +46,7 @@ on(
 // ④ CDC
 on(
   table("orders").changed("status"),
-  flow({
-    name: "triggers.cdc",
+  flow("triggers.cdc", {
     do: ({ before, after }, fx) => fx.store(db).insert(orders).values({ before, after }),
   }),
 );
@@ -58,8 +54,7 @@ on(
 // ⑤ INTERNAL / call-only
 export const stats = on(
   internal,
-  flow({
-    name: "triggers.internal",
+  flow("triggers.internal", {
     do: async ({ code }, fx) => {
       const [row] = await fx.store(db).select().from(links).where({ code });
       return row?.clicks ?? 0;

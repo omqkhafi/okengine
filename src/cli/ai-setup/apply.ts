@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { OLLAMA_IMAGE } from "../../docker/recipes/index.ts";
+import { DEFAULT_DOCKER_DIR } from "../../docker/types.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
@@ -90,6 +91,18 @@ export function applyAiSetup(
     }
   }
   writeFileSync(envPath, env.endsWith("\n") ? env : `${env}\n`, "utf8");
+
+  // `docker/.env.docker` is regenerated from `.env.local` only on its first
+  // boot (existing values there are treated as durable, possibly hand-edited
+  // pins — see stack-id.ts). Once it exists, a later `oke ai setup` run must
+  // update it directly, or the docker profile keeps the old model forever.
+  if (input.chatModel) {
+    const dockerEnvPath = join(cwd, DEFAULT_DOCKER_DIR, ".env.docker");
+    if (existsSync(dockerEnvPath)) {
+      const dockerEnv = readFileSync(dockerEnvPath, "utf8");
+      writeFileSync(dockerEnvPath, upsertEnv(dockerEnv, "OKE_AI_MODEL", input.chatModel), "utf8");
+    }
+  }
 
   const aiTsPath = join(cwd, "src", "core", "ai.ts");
   mkdirSync(dirname(aiTsPath), { recursive: true });

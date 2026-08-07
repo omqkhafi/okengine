@@ -5,6 +5,11 @@ peer = true
 # Project-wide discovery; pass a path (e.g. `bun test src/manifest`) to narrow.
 root = "."
 coverageSkipTestFiles = true
+# store/vault/signal/channel decl registries are shared process-wide across
+# every test file — reset them after each test so a bare `store.sql(...)` /
+# `vault.secret(...)` / `signal(...)` / `channel.*().template(...)` call in
+# one file never leaks into another file's default-registry `oke()`.
+preload = ["./src/test/reset-element-registries.ts"]
 # Playwright specs use @playwright/test — run via `bun run test:console:smoke`.
 # The bundled create-oke starter is not a workspace app.
 pathIgnorePatterns = ["tests/console/**", "packages/create-oke/templates/**", "site/**"]

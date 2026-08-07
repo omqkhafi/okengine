@@ -2,7 +2,7 @@
  * Boot-level proof: compiled/inferred effects reaching a REAL running app's
  * capability token — not an isolated compiler-only or kernel-only test.
  *
- * Before this file existed, `flow({...})` with no hand-declared `effects`
+ * Before this file existed, `flow(name, {...})` with no hand-declared `effects`
  * always minted an OPEN capability token (every access allowed, no gate at
  * all) in every environment, including `docker` / `prod` — `extractManifest`
  * inference only ever fed the static `manifest.oke.json` artifact (Console,
@@ -48,8 +48,7 @@ const CreateOut = z.object({ ok: z.boolean() });
 function buildUnannotatedCreateFlow(db: ReturnType<typeof store.sql>) {
   return on(
     http.post("/notes").gate(gate.public),
-    flow({
-      name: "notes.create",
+    flow("notes.create", {
       in: CreateIn,
       out: CreateOut,
       // Deliberately no `effects` — the "let the compiler infer it" case.
@@ -117,8 +116,7 @@ describe("boot-level: table-ref resolution stays backward compatible", () => {
     const db = store.sql("app", { schema: { notes } });
     const create = on(
       http.post("/notes").gate(gate.public),
-      flow({
-        name: "notes.create",
+      flow("notes.create", {
         in: CreateIn,
         out: CreateOut,
         // The convention every template/test predates Direction B with —
@@ -171,8 +169,7 @@ const db = {} as any;
 const notes = {} as any;
 export const create = on(
   http.post("/notes").gate(gate.public),
-  flow({
-    name: "notes.create",
+  flow("notes.create", {
     do: async (input, fx) => {
       await fx.store(db).insert(notes).values({ id: input.id, title: input.title, createdAt: 1 });
       return { ok: true };

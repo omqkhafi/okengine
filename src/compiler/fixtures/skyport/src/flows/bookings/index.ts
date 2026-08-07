@@ -15,8 +15,7 @@ void 0;
 
 export const create = on(
   http.post("/bookings").gate(member, canBook, fair),
-  flow({
-    name: "bookings.create",
+  flow("bookings.create", {
     in: BookingIn,
     out: BookingOut,
     errors: { FlightFull },
@@ -35,8 +34,7 @@ export const create = on(
 
 export const mine = on(
   http.get("/bookings").gate(member).live(),
-  flow({
-    name: "bookings.mine",
+  flow("bookings.mine", {
     live: true,
     do: (_, fx) =>
       fx
@@ -47,13 +45,11 @@ export const mine = on(
   }),
 );
 
-export const getBooking = flow({
-  name: "bookings.getBooking",
+export const getBooking = flow("bookings.getBooking", {
   do: ({ id }, fx) => fx.store(db).findById(bookings, id),
 });
 
-export const refundBooking = flow({
-  name: "bookings.refundBooking",
+export const refundBooking = flow("bookings.refundBooking", {
   do: async ({ id }, fx) => {
     await fx.store(db).update(bookings).set({ status: "refunded" }).where({ id });
     return fx.store(db).findById(bookings, id);

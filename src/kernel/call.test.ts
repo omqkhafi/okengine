@@ -11,15 +11,13 @@ beforeEach(() => {
 
 describe("fx.call — untriggered flows", () => {
   test("untriggered flow is callable via app.call and fx.call", async () => {
-    const stats = flow({
-      name: "links.stats",
+    const stats = flow("links.stats", {
       do: ({ code }: { code: string }) => ({ code, clicks: 7 }),
     });
 
     const parent = on(
       http.post("/run"),
-      flow({
-        name: "links.run",
+      flow("links.run", {
         effects: { calls: ["links.stats"] },
         do: async ({ code }: { code: string }, fx) => {
           const result = await fx.call("links.stats", { code });
@@ -54,8 +52,7 @@ describe("fx.call — untriggered flows", () => {
   });
 
   test("fx.call propagates fx.principal without filling fx.auth", async () => {
-    const audit = flow({
-      name: "audit.log",
+    const audit = flow("audit.log", {
       do: (_input: { event: string }, fx) => ({
         authUserId: fx.auth.userId,
         principalUserId: fx.principal.userId,
@@ -65,8 +62,7 @@ describe("fx.call — untriggered flows", () => {
 
     const act = on(
       http.post("/act"),
-      flow({
-        name: "act",
+      flow("act", {
         effects: { calls: ["audit.log"] },
         do: async (_input: Record<string, never>, fx) => {
           return fx.call("audit.log", { event: "act" });
@@ -99,8 +95,7 @@ describe("fx.call — untriggered flows", () => {
 
   test("http and signal invocations of the same flow execute identically", async () => {
     let runs = 0;
-    const work = flow({
-      name: "work",
+    const work = flow("work", {
       do: (input: { v: number }) => {
         runs += 1;
         return { out: input.v + 1 };

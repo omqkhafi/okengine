@@ -6,6 +6,7 @@
  */
 
 import type { SignalDelivery } from "../../manifest/types.ts";
+import { signalRegistry } from "../../kernel/element-registries.ts";
 
 /** Options for {@link signal}. */
 export interface SignalOptions {
@@ -55,6 +56,27 @@ export interface SignalDecl<T = unknown> {
 }
 
 /**
+ * `signal()` pushes into the shared {@link signalRegistry}
+ * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
+ * `signals` with zero explicit array — mirrors the {@link on} trigger-drain
+ * registry (`src/kernel/on.ts`).
+ *
+ * Snapshot of every signal declared since the last reset.
+ */
+export function listSignals(): readonly SignalDecl[] {
+  return signalRegistry.slice();
+}
+
+/**
+ * Clear the signal registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetSignals(): void {
+  signalRegistry.length = 0;
+}
+
+/**
  * Declare a signal. `delivery` is mandatory — omitting it is a type error.
  *
  * @param name - Signal name
@@ -68,7 +90,7 @@ export function signal<T = unknown>(name: string, options: SignalOptions): Signa
   ) {
     throw new TypeError(`signal("${name}"): delivery is mandatory (once | broadcast | live)`);
   }
-  return {
+  const decl: SignalDecl<T> = {
     name,
     delivery: options.delivery,
     ...(options.description !== undefined ? { description: options.description } : {}),
@@ -77,4 +99,6 @@ export function signal<T = unknown>(name: string, options: SignalOptions): Signa
     schema: options.schema,
     optional: options.optional ?? false,
   };
+  signalRegistry.push(decl as SignalDecl);
+  return decl;
 }

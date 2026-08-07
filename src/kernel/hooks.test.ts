@@ -40,7 +40,7 @@ describe("hooks — order and composition", () => {
       void fn(
         {
           trigger: { kind: "internal" },
-          flow: flow({ name: "x", do: () => undefined }),
+          flow: flow("x", { do: () => undefined }),
           input: undefined,
           params: {},
           state: {},
@@ -57,9 +57,7 @@ describe("hooks — order and composition", () => {
   test("pipeline fires stages in order around the handler", async () => {
     const order: string[] = [];
 
-    const f = flow({
-      name: "ordered",
-      unit: "links",
+    const f = flow("links.ordered", {
       do: () => {
         order.push("handler");
         return { ok: true };
@@ -119,8 +117,7 @@ describe("hooks — order and composition", () => {
 
     on(
       http.get("/sc"),
-      flow({
-        name: "sc",
+      flow("sc", {
         do: () => {
           order.push("handler");
           return { ok: true };
@@ -151,8 +148,7 @@ describe("hooks — order and composition", () => {
 
     on(
       http.get("/data"),
-      flow({
-        name: "data",
+      flow("data", {
         do: () => ({ ok: true }),
       }),
     );
@@ -184,8 +180,7 @@ describe("hooks — order and composition", () => {
 
     on(
       http.get("/fail"),
-      flow({
-        name: "fail-flow",
+      flow("fail-flow", {
         do: () => {
           order.push("handler");
         },

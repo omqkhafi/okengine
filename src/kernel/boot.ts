@@ -285,7 +285,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     input.docker === true || (input.docker !== false && process.env.OKE_DOCKER === "1");
   // `-d` always selects the `docker` driver profile — not a mix of local/test +
   // prod store overrides when `$options.env` is unset.
-  const env: ConfigEnv = docker ? "docker" : (input.env ?? "local");
+  const env: ConfigEnv = input.env ?? (docker ? "docker" : "local");
   let config = input.config;
   if (config === undefined) {
     try {
@@ -484,6 +484,11 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     rootDir: options.rootDir,
   });
 
+  // 9. `.adopt()` barrel freshness — opt-in only (same `rootDir` gate as
+  // capability minting above; never a filesystem read the kernel performs
+  // on its own).
+  await assertAdoptBarrelFresh(options.flows ?? [], env, options.rootDir);
+
   return {
     vault,
     store,
@@ -601,6 +606,81 @@ export async function mintCapabilities(
     map.set(f.name, createCapabilityToken(f.name, undefined));
   }
   return map;
+}
+
+/** Per-process guard so the stale-barrel boot warning fires once. */
+let staleAdoptBarrelWarned = false;
+
+/** Reset the once-per-process stale-barrel warn latch (tests only). */
+export function resetStaleAdoptBarrelWarnForTests(): void {
+  staleAdoptBarrelWarned = false;
+}
+
+/**
+ * Best-effort disk scan for `<rootDir>/src/flows/*` unit folders — mirrors
+ * {@link tryAutoExtractManifest}'s lazy, defensive, never-throws posture and
+ * the same `new URL` trick so the generator never enters the bundler graph
+ * for apps that never opt into `rootDir`.
+ *
+ * @param rootDir - Project root to scan
+ */
+async function tryListFlowsUnits(rootDir: string): Promise<readonly string[] | undefined> {
+  try {
+    const url = new URL("../compiler/generate-adopt.ts", import.meta.url);
+    const { generateAdoptBarrel } = (await import(
+      url.href
+    )) as typeof import("../compiler/generate-adopt.ts");
+    return (await generateAdoptBarrel({ rootDir })).units;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Confirm every `src/flows/<unit>` folder on disk actually reached this
+ * boot's adopted flows — the disk-file counterpart of a stale/missing
+ * generated `.adopt()` barrel (`src/flows/generated.ts`). A folder present
+ * on disk with zero adopted flows under that unit means the barrel wasn't
+ * regenerated (or was hand-edited) after the folder was added.
+ *
+ * Opt-in only via {@link BootOptions.rootDir} / `OKE_ROOT_DIR` (same gate as
+ * {@link mintCapabilities}'s Manifest fallback) — never a filesystem read
+ * the kernel performs on its own. `local` / `test` warn once per process;
+ * `docker` / `prod` fail loud (`OKE1009`) — same class as `NO_EFFECTS_DECLARED`,
+ * never a silently-incomplete route table in a deploy-shaped environment.
+ *
+ * @param flows - Adopted flows
+ * @param env - Resolved {@link ConfigEnv}
+ * @param rootDir - Explicit project root (falls back to `OKE_ROOT_DIR`)
+ */
+export async function assertAdoptBarrelFresh(
+  flows: readonly AnyFlowDef[],
+  env: ConfigEnv = "local",
+  rootDir?: string,
+): Promise<void> {
+  const dir = rootDir ?? process.env["OKE_ROOT_DIR"];
+  if (!dir) return;
+
+  const diskUnits = await tryListFlowsUnits(dir);
+  if (diskUnits === undefined || diskUnits.length === 0) return;
+
+  const adoptedUnits = new Set(
+    flows.map((f) => f.unit).filter((u): u is string => u !== undefined),
+  );
+  const missing = diskUnits.filter((u) => !adoptedUnits.has(u));
+  if (missing.length === 0) return;
+
+  if (env === "docker" || env === "prod") {
+    throwOke("ADOPT_BARREL_STALE", { unit: missing[0]! });
+  }
+  if (!staleAdoptBarrelWarned) {
+    staleAdoptBarrelWarned = true;
+    emitBootWarn(
+      `oke boot: src/flows/${missing[0]} exists on disk but adopted no flows — the ` +
+        '.adopt() barrel ("src/flows/generated.ts") is stale. Run `oke dev` or `oke build` ' +
+        "to regenerate it — docker/prod refuse to boot this way.",
+    );
+  }
 }
 
 function isRunsRuntime(value: RunsRuntime | CreateRunsRuntimeOptions): value is RunsRuntime {

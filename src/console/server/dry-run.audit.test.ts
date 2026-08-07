@@ -95,7 +95,7 @@ describe("console dry-run / preview audit", () => {
 
   test("Channels preview is locale template rendering, not dry-run mutation", async () => {
     const flows = await Bun.file(`${import.meta.dir}/flows.ts`).text();
-    const previewIdx = flows.indexOf('name: "console.channel.preview"');
+    const previewIdx = flows.indexOf('flow("console.channel.preview"');
     expect(previewIdx).toBeGreaterThan(0);
     const slice = flows.slice(previewIdx, previewIdx + 800);
     expect(slice).not.toContain("withDryRun");
@@ -104,7 +104,7 @@ describe("console dry-run / preview audit", () => {
 
   test("Traces dryRun is metadata / logging, not withDryRun execution", async () => {
     const flows = await Bun.file(`${import.meta.dir}/flows.ts`).text();
-    const idx = flows.indexOf('name: "console.traces.replay"');
+    const idx = flows.indexOf('flow("console.traces.replay"');
     expect(idx).toBeGreaterThan(0);
     const slice = flows.slice(idx, idx + 500);
     expect(slice).not.toContain("withDryRun");

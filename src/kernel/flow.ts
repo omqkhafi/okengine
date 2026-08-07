@@ -38,10 +38,6 @@ export type FlowHandler<I = unknown, O = unknown> = (
 
 /** Options for {@link flow}. */
 export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = FlowErrorMap> {
-  /** Optional stable name (used by `fx.call` and the Manifest). */
-  readonly name?: string;
-  /** Optional unit scope for unit-level hooks. */
-  readonly unit?: string;
   /** Input schema (Standard Schema when present). */
   readonly in?: SchemaInput;
   /** Output schema (Standard Schema when present). */
@@ -155,7 +151,7 @@ export interface FlowDef<
   readonly [triggerPhantom]?: T;
   /** Stable name (auto-assigned when omitted). */
   readonly name: string;
-  /** Optional unit scope. */
+  /** Unit scope — derived from `name`'s first dot segment (e.g. `"auth.refresh"` → `"auth"`). */
   readonly unit: string | undefined;
   /** Input schema. */
   readonly in: SchemaInput | undefined;
@@ -231,28 +227,30 @@ export interface FlowDef<
 /** Unique brand symbol for {@link FlowDef}. */
 export const flowBrand: unique symbol = Symbol("oke.flow");
 
-let flowSeq = 0;
-
 /**
  * Define a Flow — the one species of backend behavior.
  *
  * Input / output types are inferred from Standard Schema `in` / `out` when
  * present; otherwise from the `do` handler signature.
  *
+ * @param name - Stable name (used by `fx.call` and the Manifest)
  * @param options - Contract and handler
  */
 export function flow<Opts extends FlowOptions<any, any, any>>(
-  options: Opts,
+  name: string,
+  options: Opts & { readonly name?: never },
 ): FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> {
-  const name = options.name ?? `flow_${++flowSeq}`;
   const triggers: Trigger[] = [];
   const hooks: Partial<Record<HookStage, HookFn[]>> = {};
   const pendingPlugins: PluginDef[] = [];
 
+  const dot = name.indexOf(".");
+  const unit = dot > 0 ? name.slice(0, dot) : undefined;
+
   const def: FlowDef<InferFlowIn<Opts>, InferFlowOut<Opts>, InferFlowErrors<Opts>> = {
     [flowBrand]: true,
     name,
-    unit: options.unit,
+    unit,
     in: options.in,
     out: options.out,
     errors: (options.errors ?? undefined) as InferFlowErrors<Opts> | undefined,
@@ -316,10 +314,10 @@ export function isFlow(value: unknown): value is AnyFlowDef {
 }
 
 /**
- * Reset the auto-name sequence (tests only).
+ * No-op. `name` is a required positional argument now, so there is no
+ * auto-name sequence left to reset — kept so existing test `beforeEach`
+ * blocks don't need touching.
  *
  * @internal
  */
-export function resetFlowSeq(): void {
-  flowSeq = 0;
-}
+export function resetFlowSeq(): void {}

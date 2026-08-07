@@ -131,16 +131,13 @@ const storeRt = createStoreRuntime({
 });
 storeRt.register(db);
 
-const ping = flow({
-  name: "horizontal.ping",
+const ping = flow("horizontal.ping", {
   do: () => ({ ok: true as const, instanceId }),
 });
-const rate = flow({
-  name: "horizontal.rate",
+const rate = flow("horizontal.rate", {
   do: () => ({ ok: true as const, instanceId }),
 });
-const write = flow({
-  name: "horizontal.write",
+const write = flow("horizontal.write", {
   do: async (_input, fx) => {
     const id = crypto.randomUUID();
     await fx
@@ -155,15 +152,13 @@ const write = flow({
     return { id };
   },
 });
-const emit = flow({
-  name: "horizontal.emit",
+const emit = flow("horizontal.emit", {
   do: async (_input, fx) => {
     await fx.emit(SIG, { from: instanceId, at: Date.now() });
     return { emitted: true as const };
   },
 });
-const charge = flow({
-  name: "horizontal.charge",
+const charge = flow("horizontal.charge", {
   durable: true,
   do: async (_input, fx) => {
     await fx.step("create-intent", async () => {

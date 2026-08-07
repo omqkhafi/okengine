@@ -323,7 +323,7 @@ export function table(name: string, store?: string): TableHandle {
 
 /**
  * Explicit internal / call-only trigger.
- * Prefer an untriggered `flow({…})` when no trigger value is needed.
+ * Prefer an untriggered `flow(name, {…})` when no trigger value is needed.
  */
 export const internal: InternalTrigger = { kind: "internal" };
 

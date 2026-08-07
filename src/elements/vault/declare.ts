@@ -4,6 +4,8 @@
  * Physics: secrets · config · environment.
  */
 
+import { secretRegistry } from "../../kernel/element-registries.ts";
+
 /** Options for {@link vault} / {@link vault.secret} / {@link vault.config}. */
 export interface VaultSecretOptions {
   /** Human description shown in boot-gap listings. */
@@ -36,6 +38,30 @@ export interface VaultSecretDecl {
 }
 
 /**
+ * `vault.secret` (only) pushes into the shared {@link secretRegistry}
+ * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
+ * `secrets` with zero explicit array — mirrors the {@link on} trigger-drain
+ * registry (`src/kernel/on.ts`). `vault.config` is intentionally not
+ * auto-registered (out of scope).
+ */
+
+/**
+ * Snapshot of every `vault.secret` declared since the last reset.
+ */
+export function listSecrets(): readonly VaultSecretDecl[] {
+  return secretRegistry.slice();
+}
+
+/**
+ * Clear the vault-secret registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetSecrets(): void {
+  secretRegistry.length = 0;
+}
+
+/**
  * Declare a vault secret contract (fingerprinted — never revealed).
  *
  * @param name - Secret name
@@ -45,7 +71,7 @@ function declareSecret(name: string, options: VaultSecretOptions = {}): VaultSec
   if (!name) {
     throw new TypeError("vault.secret: name is required");
   }
-  return {
+  const decl: VaultSecretDecl = {
     kind: "secret",
     name,
     sensitive: options.sensitive ?? true,
@@ -54,6 +80,8 @@ function declareSecret(name: string, options: VaultSecretOptions = {}): VaultSec
     ...(options.schema !== undefined ? { schema: options.schema } : {}),
     ...(options.dev !== undefined ? { dev: options.dev } : {}),
   };
+  secretRegistry.push(decl);
+  return decl;
 }
 
 /**

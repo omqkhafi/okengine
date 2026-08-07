@@ -57,15 +57,13 @@ function rawHttp(port: number, payload: string): Promise<string> {
 function buildApp() {
   on(
     http.get("/ping").gate(gate.public),
-    flow({
-      name: "ping",
+    flow("ping", {
       do: () => ({ ok: true as const, n: 1 }),
     }),
   );
   on(
     http.get("/notes/:id").gate(gate.public),
-    flow({
-      name: "notes.get",
+    flow("notes.get", {
       do: ({ id }: { id: string }) => ({ id }),
     }),
   );

@@ -47,7 +47,6 @@ import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
 import { askDevMode, type AskDevModeFn } from "./ask-dev-mode.ts";
 import {
-  controlServicesFromStack,
   formatDevControlsHint,
   startDevControls,
   type DevComposeControlAction,
@@ -177,6 +176,17 @@ export interface DevOptions {
    * @param filename - Relative path from the watcher
    */
   readonly onDbAutoPush?: (filename: string) => void;
+  /**
+   * Injectable `.adopt()` barrel regeneration (tests). Default: real
+   * `generateAdoptBarrel` + write to `<cwd>/src/flows/generated.ts`. Runs
+   * once per `oke dev` session, before the entry is resolved/imported —
+   * a real file on disk, so `oke dev`'s runtime `import()` and `oke build`'s
+   * `Bun.build()` resolve it identically (unlike a virtual-module Bun
+   * plugin, which does not — see `compiler/generate-adopt.ts`).
+   *
+   * @param cwd - Project root
+   */
+  readonly syncAdoptBarrel?: (cwd: string) => Promise<readonly string[]>;
   /** Watch project source changes (injectable for tests). */
   readonly watchFs?: DevWatchFn;
   readonly images?: Readonly<Record<string, string>>;
@@ -334,6 +344,28 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     console.warn = previousWarn;
   };
   const cwd = options.cwd ?? process.cwd();
+
+  // One-shot `.adopt()` barrel regen for the session — real file on disk
+  // (`src/flows/generated.ts`), written before the entry is resolved/imported
+  // below so a freshly-added flows unit is adoptable without a hand edit.
+  // Best-effort like `syncDevSchema` below: a project with no `src/flows`
+  // yet (or a synthetic test tree) never blocks the dev session.
+  const syncAdoptBarrel =
+    options.syncAdoptBarrel ??
+    (async (root: string) => {
+      const { generateAdoptBarrel } = await import("../compiler/generate-adopt.ts");
+      const { mkdir, writeFile } = await import("node:fs/promises");
+      const { source, units } = await generateAdoptBarrel({ rootDir: root });
+      await mkdir(resolve(root, "src/flows"), { recursive: true });
+      await writeFile(resolve(root, "src/flows/generated.ts"), source);
+      return units;
+    });
+  try {
+    await syncAdoptBarrel(cwd);
+  } catch {
+    /* best-effort — boot-time assertAdoptBarrelFresh (rootDir opt-in) is the real gate */
+  }
+
   const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
   const preferredConsole = options.consolePort ?? CONSOLE_PORT;
   const preferredMcp = options.mcpPort ?? MCP_PORT;
@@ -1388,29 +1420,18 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         process.exit(0);
       },
       onRefresh: () => refreshChrome(),
-      // Refresh first so help/services never sit in the middle of request logs.
+      // Refresh first so help never sits in the middle of request logs.
       onShowPanel: async (body) => {
         await refreshChrome();
         write(body);
       },
       onComposeSettled: () => syncComposeBoard(),
-      services: () => controlServicesFromStack(pendingStackSummary?.services ?? []),
-      statusOf: (serviceName) => liveComposeHealth.get(serviceName),
-      composeAction: async (action: DevComposeControlAction, serviceNames) => {
+      composeAction: async (action: DevComposeControlAction) => {
         const files = started.files;
         const finalArgs =
-          action === "up" && serviceNames.length === 0
+          action === "up"
             ? ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"]
-            : action === "up"
-              ? [
-                  "compose",
-                  ...files.flatMap((f) => ["-f", f]),
-                  "up",
-                  "-d",
-                  "--no-deps",
-                  ...serviceNames,
-                ]
-              : ["compose", ...files.flatMap((f) => ["-f", f]), action, ...serviceNames];
+            : ["compose", ...files.flatMap((f) => ["-f", f]), action];
         const proc = Bun.spawn(["docker", ...finalArgs], {
           cwd: started.cwd,
           stdout: "pipe",

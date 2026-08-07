@@ -2,18 +2,46 @@
  * `oke build --target edge` — tree-shaken kernel profile.
  */
 
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 /** Options for {@link runBuild}. */
 export interface BuildOptions {
   readonly target?: "bun" | "node" | "edge";
   readonly entry?: string;
   readonly outdir?: string;
   readonly write?: (text: string) => void;
+  /** Project root for the `.adopt()` barrel sync (default `process.cwd()`). */
+  readonly rootDir?: string;
   /** Inject bun.build (tests). */
   readonly bundle?: (opts: {
     entry: string;
     outdir: string;
     target: "bun" | "node" | "browser";
   }) => Promise<{ success: boolean; logs: string }>;
+  /**
+   * Inject `.adopt()` barrel regeneration (tests). Default: real
+   * `generateAdoptBarrel` + write to `<rootDir>/src/flows/generated.ts`.
+   * Returns the unit names written, for the status line.
+   */
+  readonly syncAdoptBarrel?: (rootDir: string) => Promise<readonly string[]>;
+}
+
+/**
+ * Regenerate `src/flows/generated.ts` from every `src/flows/<unit>/index.ts`
+ * unit folder — pre-step for `oke build` (mirrors `oke db`'s `schema.generated.ts`
+ * pre-step). A real file on disk, not a virtual module: identical resolution
+ * under `oke dev`'s runtime `import()` and `oke build`'s `Bun.build()`
+ * (investigated — a virtual-module Bun plugin does not resolve consistently
+ * across those two paths).
+ *
+ * @param rootDir - Project root
+ */
+async function defaultSyncAdoptBarrel(rootDir: string): Promise<readonly string[]> {
+  const { generateAdoptBarrel } = await import("../compiler/generate-adopt.ts");
+  const { source, units } = await generateAdoptBarrel({ rootDir });
+  await writeFile(join(rootDir, "src/flows/generated.ts"), source);
+  return units;
 }
 
 /**
@@ -26,6 +54,7 @@ export async function runBuild(options: BuildOptions = {}): Promise<number> {
   const target = options.target ?? "bun";
   const entry = options.entry ?? "src/app.ts";
   const outdir = options.outdir ?? "dist";
+  const rootDir = options.rootDir ?? process.cwd();
   const bunTarget = target === "edge" ? "browser" : target === "node" ? "node" : "bun";
 
   const bundle =
@@ -43,8 +72,13 @@ export async function runBuild(options: BuildOptions = {}): Promise<number> {
         logs: result.logs.map((l) => String(l)).join("\n"),
       };
     });
+  const syncAdoptBarrel = options.syncAdoptBarrel ?? defaultSyncAdoptBarrel;
 
   try {
+    const units = await syncAdoptBarrel(rootDir);
+    write(
+      `oke build: .adopt() barrel → src/flows/generated.ts (${units.length} unit${units.length === 1 ? "" : "s"})\n`,
+    );
     const result = await bundle({ entry, outdir, target: bunTarget });
     if (!result.success) {
       console.error(result.logs || "oke build: failed");

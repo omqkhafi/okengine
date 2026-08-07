@@ -26,7 +26,7 @@ import { on, flow, every } from "okengine";
 
 export const purgeOld = on(
   every("1h"),
-  flow({
+  flow("links.purgeOld", {
     do: async (_, fx) => {
       const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
       await fx.store(db).delete(links).where(lt(links.createdAt, cutoff));
@@ -55,7 +55,7 @@ export const dailyReport = clock("daily-report", {
 ```typescript title="src/flows/reports/daily.ts"
 export const sendDaily = on(
   dailyReport,
-  flow({
+  flow("reports.sendDaily", {
     do: async (_, fx) => {
       /* … */
     },

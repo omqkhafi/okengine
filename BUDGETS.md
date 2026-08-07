@@ -2,7 +2,7 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.9.1 · measured 2026-08-05T06:28:02.070Z_
+_okengine v0.10.2 · measured 2026-08-07T19:47:08.160Z_
 
 Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).
 
@@ -10,34 +10,34 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |                       | Measured  | Limit     |
 | --------------------- | --------- | --------- |
-| Kernel (edge profile) | 14.45 kB  | 15.00 kB  |
+| Kernel (edge profile) | 14.80 kB  | 15.00 kB  |
 | Client runtime        | 1.70 kB   | 3.00 kB   |
 | Console initial load  | 86.33 kB  | 300.00 kB |
-| Cold start on Bun     | 37.072 ms | 75.000 ms |
-| p99 routing overhead  | 0.002 ms  | 1.000 ms  |
+| Cold start on Bun     | 36.925 ms | 75.000 ms |
+| p99 routing overhead  | 0.001 ms  | 1.000 ms  |
 
 ## Exports
 
-|              | Measured | Ceiling  |
-| ------------ | -------- | -------- |
-| okengine     | 71.81 kB | 73.25 kB |
-| ai           | 7.15 kB  | 7.40 kB  |
-| auth         | 15.86 kB | 16.17 kB |
-| channel      | 6.45 kB  | 6.70 kB  |
-| client       | 1.83 kB  | 2.08 kB  |
-| client-react | 7.82 kB  | 8.07 kB  |
-| client/auth  | 573 B    | 829 B    |
-| clock        | 14.86 kB | 15.16 kB |
-| config       | 901 B    | 1.13 kB  |
-| console      | 92.58 kB | 94.43 kB |
-| gate         | 6.18 kB  | 6.43 kB  |
-| mcp          | 9.40 kB  | 9.65 kB  |
-| plugins      | 19.75 kB | 20.15 kB |
-| runs         | 6.86 kB  | 7.11 kB  |
-| signal       | 905 B    | 1.13 kB  |
-| store        | 17.00 kB | 17.34 kB |
-| test         | 12.19 kB | 12.44 kB |
-| vault        | 2.44 kB  | 2.69 kB  |
+|                | Measured | Ceiling  |
+| -------------- | -------- | -------- |
+| okengine       | 73.17 kB | 73.25 kB |
+| ai             | 7.15 kB  | 7.40 kB  |
+| auth           | 15.82 kB | 16.17 kB |
+| channel        | 6.55 kB  | 6.70 kB  |
+| client         | 1.83 kB  | 2.08 kB  |
+| client-react   | 7.82 kB  | 8.07 kB  |
+| client/auth    | 573 B    | 829 B    |
+| clock **FAIL** | 15.22 kB | 15.16 kB |
+| config         | 901 B    | 1.13 kB  |
+| console        | 94.00 kB | 94.43 kB |
+| gate           | 6.18 kB  | 6.43 kB  |
+| mcp            | 9.40 kB  | 9.65 kB  |
+| plugins        | 19.82 kB | 20.15 kB |
+| runs           | 6.86 kB  | 7.11 kB  |
+| signal         | 919 B    | 1.13 kB  |
+| store          | 17.32 kB | 17.34 kB |
+| test           | 12.27 kB | 12.44 kB |
+| vault          | 2.46 kB  | 2.69 kB  |
 
 ## Plugins
 
@@ -45,39 +45,39 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 
 |           | Measured | Ceiling  |
 | --------- | -------- | -------- |
-| username  | 9.93 kB  | 10.18 kB |
+| username  | 9.92 kB  | 10.18 kB |
 | anonymous | 5.42 kB  | 5.67 kB  |
-| magicLink | 9.09 kB  | 9.34 kB  |
-| otp       | 10.80 kB | 11.05 kB |
-| twoFactor | 9.01 kB  | 9.26 kB  |
+| magicLink | 9.11 kB  | 9.34 kB  |
+| otp       | 10.82 kB | 11.05 kB |
+| twoFactor | 9.00 kB  | 9.26 kB  |
 | passkey   | 9.32 kB  | 9.57 kB  |
 
 ### Security
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| headers     | 2.26 kB  | 2.51 kB |
-| cors        | 2.10 kB  | 2.35 kB |
-| csrf        | 4.08 kB  | 4.33 kB |
-| ipAllowlist | 4.20 kB  | 4.45 kB |
+| headers     | 2.34 kB  | 2.51 kB |
+| cors        | 2.16 kB  | 2.35 kB |
+| csrf        | 4.16 kB  | 4.33 kB |
+| ipAllowlist | 4.26 kB  | 4.45 kB |
 
 ### Ops
 
 |                 | Measured | Ceiling |
 | --------------- | -------- | ------- |
-| maintenanceMode | 1.59 kB  | 1.84 kB |
+| maintenanceMode | 1.67 kB  | 1.84 kB |
 
 ### Perf
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
-| compression | 1.90 kB  | 2.15 kB |
+| compression | 1.97 kB  | 2.15 kB |
 
 ## Drivers
 
 |                          | Measured | Ceiling  |
 | ------------------------ | -------- | -------- |
-| drivers                  | 55.78 kB | 56.90 kB |
+| drivers                  | 56.02 kB | 56.90 kB |
 | ai-anthropic             | 972 B    | 1.20 kB  |
 | ai-mock                  | 896 B    | 1.13 kB  |
 | ai-ollama                | 1.97 kB  | 2.22 kB  |
@@ -109,11 +109,11 @@ Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regres
 | postgres                 | 1.38 kB  | 1.63 kB  |
 | redis                    | 2.00 kB  | 2.25 kB  |
 | s3                       | 958 B    | 1.19 kB  |
-| signal-engine            | 6.71 kB  | 6.96 kB  |
-| signal-memory            | 6.75 kB  | 7.00 kB  |
-| signal-nats              | 7.23 kB  | 7.48 kB  |
-| signal-postgres          | 8.89 kB  | 9.14 kB  |
-| signal-redis             | 7.85 kB  | 8.10 kB  |
+| signal-engine            | 6.95 kB  | 6.96 kB  |
+| signal-memory            | 6.99 kB  | 7.00 kB  |
+| signal-nats              | 7.47 kB  | 7.48 kB  |
+| signal-postgres          | 9.13 kB  | 9.14 kB  |
+| signal-redis             | 8.09 kB  | 8.10 kB  |
 | sqlite                   | 440 B    | 696 B    |
 | vault-dotenv-parse       | 562 B    | 818 B    |
 | vault-env                | 894 B    | 1.12 kB  |

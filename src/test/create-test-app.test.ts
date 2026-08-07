@@ -37,9 +37,7 @@ describe("createTestApp — four-applications surface", () => {
 
     on(
       http.post("/orders").gate(member),
-      flow({
-        name: "orders.create",
-        unit: "orders",
+      flow("orders.create", {
         in: z.object({ sku: z.string(), qty: z.number() }),
         out: z.object({ id: z.string() }),
         effects: { emits: ["order-placed"] },
@@ -53,8 +51,7 @@ describe("createTestApp — four-applications surface", () => {
 
     on(
       orderPlaced,
-      flow({
-        name: "orders.onPlaced",
+      flow("orders.onPlaced", {
         effects: { sends: ["order-confirmed"] },
         do: async ({ orderId }, fx) => {
           await fx.send(orderConfirmed, {
@@ -67,8 +64,7 @@ describe("createTestApp — four-applications surface", () => {
 
     on(
       every("1h"),
-      flow({
-        name: "orders.expire",
+      flow("orders.expire", {
         do: (_i, fx) => {
           fx.log.info("expire");
         },

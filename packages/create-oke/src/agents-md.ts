@@ -89,7 +89,7 @@ App \`:6530\` · Console \`:6533\` · MCP \`:6535\`.
 - ❌ Inventing a ninth “element” or a parallel handler stack beside Flows
 - ✅ New capability = new **driver** on an existing element, or a new Flow
 - ❌ Untyped HTTP handlers that skip \`on\` / \`flow\` / contracts
-- ✅ \`on(http.get("/…"), flow({ in, out, do }))\`
+- ✅ \`on(http.get("/…"), flow(name, { in, out, do }))\`
 
 ## Learn more
 

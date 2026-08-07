@@ -84,6 +84,12 @@ import { releaseInstanceLeases } from "./graceful-shutdown.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
+  channelTemplateRegistry,
+  secretRegistry,
+  signalRegistry,
+  storeRegistry,
+} from "./element-registries.ts";
+import {
   applyPrincipal,
   createElementPipelineHooks,
   type PrincipalBag,
@@ -443,6 +449,21 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
 }
 
 /**
+ * Concat two decl lists, skipping registry entries already present by
+ * reference (the same call-site object explicitly re-passed).
+ *
+ * @param explicit - Hand-passed decls (kept in order, always wins position)
+ * @param fromRegistry - Auto-drained decls to append
+ */
+function mergeUnique<T>(explicit: readonly T[] | undefined, fromRegistry: readonly T[]): T[] {
+  const out: T[] = [...(explicit ?? [])];
+  for (const item of fromRegistry) {
+    if (!out.includes(item)) out.push(item);
+  }
+  return out;
+}
+
+/**
  * Create an application. Adopts bindings registered via {@link on}.
  *
  * @param options - App name and router preset
@@ -455,6 +476,42 @@ export function oke(options: OkeOptions): OkeApp {
       ? [...(options.bindings ?? [])]
       : [...listBindings(), ...(options.bindings ?? [])];
   if (registry === "consume") resetBindings();
+
+  // Same registry mode drains store.sql/store.files, vault.secret, signal(),
+  // and channel.<medium>().template() — module-evaluation registries that
+  // mirror `on`'s trigger drain (`listBindings`/`resetBindings` above).
+  // Explicit `options.stores` / `secrets` / `signals` / `channel.templates`
+  // are additive, never silently ignored — deduped by reference so an
+  // explicitly-passed decl that is also in the registry is not doubled.
+  const registrySnapshot =
+    registry === "ignore"
+      ? { stores: [], secrets: [], signals: [], channelTemplates: [] }
+      : {
+          stores: storeRegistry.slice(),
+          secrets: secretRegistry.slice(),
+          signals: signalRegistry.slice(),
+          channelTemplates: channelTemplateRegistry.slice(),
+        };
+  if (registry === "consume") {
+    storeRegistry.length = 0;
+    secretRegistry.length = 0;
+    signalRegistry.length = 0;
+    channelTemplateRegistry.length = 0;
+  }
+  const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
+  const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
+  const effectiveSignals = mergeUnique(options.signals, registrySnapshot.signals);
+  // Stay `undefined` (never a defined-but-empty object) when neither an
+  // explicit `options.channel` nor a registered template exists — a defined
+  // object here would flip `resolveElementNeeds`'s `channel` need to `true`
+  // for every app, whether or not it uses channel at all.
+  const effectiveChannel: BootOptions["channel"] =
+    options.channel === undefined && registrySnapshot.channelTemplates.length === 0
+      ? undefined
+      : {
+          ...(options.channel ?? {}),
+          templates: mergeUnique(options.channel?.templates, registrySnapshot.channelTemplates),
+        };
 
   // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
   // before posture audit (same ensureBoot → doBoot path — never a side channel).
@@ -772,13 +829,13 @@ export function oke(options: OkeOptions): OkeApp {
       docker: overrides?.docker ?? options.docker,
       config: overrides?.config ?? options.config,
       elements: overrides?.elements ?? options.elements,
-      secrets: overrides?.secrets ?? options.secrets,
+      secrets: overrides?.secrets ?? effectiveSecrets,
       vault: overrides?.vault ?? options.vault,
       gates: [...baseGates, ...authGates],
-      signals: overrides?.signals ?? options.signals,
+      signals: overrides?.signals ?? effectiveSignals,
       clocks: overrides?.clocks ?? options.clocks,
-      stores: overrides?.stores ?? options.stores,
-      channel: overrides?.channel ?? options.channel,
+      stores: overrides?.stores ?? effectiveStores,
+      channel: overrides?.channel ?? effectiveChannel,
       ai: overrides?.ai ?? options.ai,
       runs: overrides?.runs ?? options.runs,
       bindings: adopted,
@@ -790,7 +847,7 @@ export function oke(options: OkeOptions): OkeApp {
         if (d.startsWith("driver:")) driverIds.push(d.slice("driver:".length));
       }
     }
-    const stores = overrides?.stores ?? options.stores ?? [];
+    const stores = overrides?.stores ?? effectiveStores;
     const available = buildAvailableNeedTokens({
       elements: {
         storeSql:
@@ -829,10 +886,10 @@ export function oke(options: OkeOptions): OkeApp {
     if (gateConfig.auth) available.add("auth");
     assertPluginNeeds(caps, { pluginNames, available });
 
-    const baseSecrets = overrides?.secrets ?? options.secrets ?? [];
-    const baseSignals = overrides?.signals ?? options.signals ?? [];
+    const baseSecrets = overrides?.secrets ?? effectiveSecrets;
+    const baseSignals = overrides?.signals ?? effectiveSignals;
     const baseClocks = overrides?.clocks ?? options.clocks ?? [];
-    const baseChannel = overrides?.channel ?? options.channel;
+    const baseChannel = overrides?.channel ?? effectiveChannel;
     const mergedCatalog = mergeTemplateCatalogs(baseChannel?.catalog, ...pluginChannelCatalogs);
 
     const merged: BootOptions = {
@@ -848,7 +905,7 @@ export function oke(options: OkeOptions): OkeApp {
       unguardedHttp,
       signals: [...baseSignals, ...pluginSignals],
       clocks: [...baseClocks, ...pluginClocks],
-      stores: overrides?.stores ?? options.stores,
+      stores: overrides?.stores ?? effectiveStores,
       channel: {
         ...(baseChannel ?? {}),
         templates: [...(baseChannel?.templates ?? []), ...pluginChannelTemplates],

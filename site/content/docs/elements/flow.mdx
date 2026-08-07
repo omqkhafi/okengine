@@ -28,7 +28,7 @@ import { z } from "zod";
 
 export const createOrder = on(
   http.post("/orders"),
-  flow({
+  flow("orders.create", {
     in: z.object({ sku: z.string(), qty: z.number().int().min(1) }),
     out: z.object({ id: z.string() }),
     errors: { OutOfStock: z.object({ left: z.number() }) },
@@ -106,7 +106,7 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
 ```typescript
 export const findOrder = on(
   http.get("/orders/:id").gate(member), // gates evaluate before do runs
-  flow({
+  flow("orders.find", {
     in: z.object({ id: z.string() }),
     out: Order,
     errors: { NotFound: z.object({}) },
@@ -124,7 +124,7 @@ await fx.emit(orderPlaced, { orderId: id }); // inside the producing flow
 
 on(
   orderPlaced,
-  flow({
+  flow("orders.sendReceipt", {
     do: async ({ orderId }, fx) => {
       /* … */
     },
@@ -139,7 +139,7 @@ on(
 ```typescript
 on(
   every("1h"),
-  flow({
+  flow("sessions.sweepExpired", {
     do: async (_, fx) => {
       const cutoff = fx.clock.now() - 30 * 24 * 60 * 60 * 1000;
       await fx.store(db).delete(sessions).where(lt(sessions.createdAt, cutoff));
@@ -155,7 +155,7 @@ CDC is built in; the flow receives `{ before, after }`:
 ```typescript
 on(
   db.table(orders).changed("status"),
-  flow({
+  flow("orders.reverify", {
     do: ({ before, after }, fx) => fx.log.info("status", { from: before.status, to: after.status }),
   }),
 );
@@ -166,7 +166,7 @@ on(
 Drop `on()` and it is still a real Flow — contracts, Manifest entry, everything. Other flows call it through `fx.call`:
 
 ```typescript
-export const getOrder = flow({
+export const getOrder = flow("orders.get", {
   in: OrderRef,
   out: Order,
   do: async ({ id }, fx) => {
@@ -211,7 +211,7 @@ Everything a flow may touch, on one object:
 Set `durable: true` and every `fx` call is journaled. Wrap side effects in `fx.step` and they never re-run on replay:
 
 ```typescript
-export const chargeOrder = flow({
+export const chargeOrder = flow("payments.chargeOrder", {
   durable: true, // every fx call below is journaled
   in: OrderRef,
   out: z.boolean(),
@@ -233,14 +233,14 @@ export const chargeOrder = flow({
 
 Replay is **at-least-once** for a step whose body never persisted (crash mid-step, lease overrun): that step re-runs on reclaim, so keep step bodies short or internally idempotent. A client transport retry starts a _new_ run with a fresh `runId` — request-level idempotency is an application concern, not the journal's.
 
-For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow({ retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
+For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow(name, { retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
 
 After a **terminal** failure (`fx.fail` or exhausted retries / uncaught throw), optional
 `compensate` runs under the same journal. Undo work must use **new** step names
 (`undo:…`) — never rewind forward steps:
 
 ```typescript
-export const chargeOrder = flow({
+export const chargeOrder = flow("payments.chargeOrder", {
   durable: true,
   in: OrderRef,
   out: z.boolean(),
@@ -295,7 +295,7 @@ Use `fx.all` (or `fx.race`) with thunks. The first rejection aborts siblings thr
 </Accordion>
 <Accordion title="Durable flow retried a completed charge">
 
-Put `fx.retry` **inside** `fx.step`, not around it. Completed steps replay from the journal and never re-run. `flow({ retry })` is for coarse whole-body retries on the same session.
+Put `fx.retry` **inside** `fx.step`, not around it. Completed steps replay from the journal and never re-run. `flow(name, { retry })` is for coarse whole-body retries on the same session.
 
 </Accordion>
 <Accordion title="When does compensate run?">

@@ -20,18 +20,14 @@ describe("plugin scoping — attachment point is the scope", () => {
   test("unit-scoped plugin hook does not fire for another unit's flows", async () => {
     const fired: string[] = [];
 
-    const ordersFlow = flow({
-      name: "orders.create",
-      unit: "orders",
+    const ordersFlow = flow("orders.create", {
       do: () => {
         fired.push("orders:handler");
         return { ok: true };
       },
     });
 
-    const paymentsFlow = flow({
-      name: "payments.charge",
-      unit: "payments",
+    const paymentsFlow = flow("payments.charge", {
       do: () => {
         fired.push("payments:handler");
         return { ok: true };
@@ -62,9 +58,7 @@ describe("plugin scoping — attachment point is the scope", () => {
 
     on(
       http.get("/a"),
-      flow({
-        name: "a",
-        unit: "alpha",
+      flow("alpha.a", {
         do: () => {
           fired.push("a");
           return {};
@@ -73,9 +67,7 @@ describe("plugin scoping — attachment point is the scope", () => {
     );
     on(
       http.get("/b"),
-      flow({
-        name: "b",
-        unit: "beta",
+      flow("beta.b", {
         do: () => {
           fired.push("b");
           return {};
@@ -98,8 +90,7 @@ describe("plugin scoping — attachment point is the scope", () => {
   test("flow-scoped plugin hook fires only for that flow", async () => {
     const fired: string[] = [];
 
-    const marked = flow({
-      name: "marked",
+    const marked = flow("marked", {
       do: () => {
         fired.push("marked");
         return {};
@@ -110,8 +101,7 @@ describe("plugin scoping — attachment point is the scope", () => {
       }),
     );
 
-    const plain = flow({
-      name: "plain",
+    const plain = flow("plain", {
       do: () => {
         fired.push("plain");
         return {};

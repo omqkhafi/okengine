@@ -66,7 +66,7 @@ import { member, canBook, fair } from "../../gates";
 
 export const health = on(
   http.get("/health").gate(gate.public),
-  flow({
+  flow("health.check", {
     out: HealthOut,
     do: () => ({ ok: true as const }),
   }),
@@ -74,7 +74,7 @@ export const health = on(
 
 export const shorten = on(
   http.post("/links").gate(member, canBook, fair),
-  flow({
+  flow("links.shorten", {
     in: NewLink,
     out: LinkCode,
     errors: { Taken },
@@ -174,8 +174,8 @@ Every HTTP trigger must carry a gate or `gate.public`. Omitting both fails boot 
 `GateBootError` — message starts with `gate boot failed —` and lists every gap.
 
 ```typescript
-on(http.get("/health").gate(gate.public), flow({/* … */}));
-on(http.post("/bookings").gate(member, canBook), flow({/* … */}));
+on(http.get("/health").gate(gate.public), flow("health.check", {/* … */}));
+on(http.post("/bookings").gate(member, canBook), flow("bookings.create", {/* … */}));
 ```
 
 **Consequence:** first `fetch` / `execute` auto-boots (`autoBoot` defaults to `true`).

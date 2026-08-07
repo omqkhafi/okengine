@@ -1674,9 +1674,7 @@ export function createConsoleBindings(state: ConsoleState): {
 }
 
 function createSetupStatus(state: ConsoleState) {
-  return flow({
-    name: "console.setup.status",
-    unit: "console",
+  return flow("console.setup.status", {
     plane: "operator",
     out: SetupStatusOut,
     do: () => ({
@@ -1687,9 +1685,7 @@ function createSetupStatus(state: ConsoleState) {
 }
 
 function createSetupClaim(state: ConsoleState) {
-  return flow({
-    name: "console.setup.claim",
-    unit: "console",
+  return flow("console.setup.claim", {
     plane: "operator",
     in: ClaimIn,
     out: SessionOut,
@@ -1738,9 +1734,7 @@ function createSetupClaim(state: ConsoleState) {
 }
 
 function createSessionLogin(state: ConsoleState) {
-  return flow({
-    name: "console.session.login",
-    unit: "console",
+  return flow("console.session.login", {
     plane: "operator",
     in: LoginIn,
     out: SessionOut,
@@ -1761,9 +1755,7 @@ function createSessionLogin(state: ConsoleState) {
 }
 
 function createSessionMe(state: ConsoleState) {
-  return flow({
-    name: "console.session.me",
-    unit: "console",
+  return flow("console.session.me", {
     plane: "operator",
     out: MeOut,
     errors: { AuthFailed },
@@ -1783,9 +1775,7 @@ function createSessionMe(state: ConsoleState) {
 }
 
 function createSessionLogout() {
-  return flow({
-    name: "console.session.logout",
-    unit: "console",
+  return flow("console.session.logout", {
     plane: "operator",
     out: z.object({ ok: z.literal(true) }),
     do: (_input, fx) => {
@@ -1798,9 +1788,7 @@ function createSessionLogout() {
 }
 
 function createManifestGet(state: ConsoleState) {
-  return flow({
-    name: "console.manifest.get",
-    unit: "console",
+  return flow("console.manifest.get", {
     plane: "operator",
     out: ManifestOut,
     errors: { AuthFailed },
@@ -1812,9 +1800,7 @@ function createManifestGet(state: ConsoleState) {
 }
 
 function createRunsList(state: ConsoleState) {
-  return flow({
-    name: "console.runs.list",
-    unit: "console",
+  return flow("console.runs.list", {
     plane: "operator",
     out: RunsListOut,
     errors: { AuthFailed },
@@ -1884,9 +1870,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
 }
 
 function createTracesReplay(state: ConsoleState) {
-  return flow({
-    name: "console.traces.replay",
-    unit: "console",
+  return flow("console.traces.replay", {
     plane: "operator",
     in: TracesReplayIn,
     out: TracesReplayOut,
@@ -1913,9 +1897,7 @@ function createTracesReplay(state: ConsoleState) {
 }
 
 function createSignalsList(state: ConsoleState) {
-  return flow({
-    name: "console.signals.list",
-    unit: "console",
+  return flow("console.signals.list", {
     plane: "operator",
     out: SignalsListOut,
     errors: { AuthFailed },
@@ -1928,9 +1910,7 @@ function createSignalsList(state: ConsoleState) {
 }
 
 function createSignalsReplay(state: ConsoleState) {
-  return flow({
-    name: "console.signals.replay",
-    unit: "console",
+  return flow("console.signals.replay", {
     plane: "operator",
     in: SignalsReplayIn,
     out: SignalsReplayOut,
@@ -1943,9 +1923,7 @@ function createSignalsReplay(state: ConsoleState) {
 }
 
 function createSignalsDryRunReplay(state: ConsoleState) {
-  return flow({
-    name: "console.signals.dryRunReplay",
-    unit: "console",
+  return flow("console.signals.dryRunReplay", {
     plane: "operator",
     in: SignalsReplayIn.omit({ dryRun: true }),
     out: SignalsReplayOut,
@@ -1958,9 +1936,7 @@ function createSignalsDryRunReplay(state: ConsoleState) {
 }
 
 function createSignalsDiscard(state: ConsoleState) {
-  return flow({
-    name: "console.signals.discard",
-    unit: "console",
+  return flow("console.signals.discard", {
     plane: "operator",
     in: SignalsDiscardIn,
     out: SignalsDiscardOut,
@@ -2102,9 +2078,7 @@ function dryRunSafety(row: {
 }
 
 function createActionPing(state: ConsoleState) {
-  return flow({
-    name: "console.action.ping",
-    unit: "console",
+  return flow("console.action.ping", {
     plane: "operator",
     in: ActionPingIn,
     out: ActionPingOut,
@@ -2121,9 +2095,7 @@ function createActionPing(state: ConsoleState) {
 }
 
 function createStructuralPropose(state: ConsoleState) {
-  return flow({
-    name: "console.structural.propose",
-    unit: "console",
+  return flow("console.structural.propose", {
     plane: "operator",
     in: StructuralIn,
     out: StructuralOut,
@@ -2149,9 +2121,7 @@ function createStructuralPropose(state: ConsoleState) {
 }
 
 function createFlowsIdentities(state: ConsoleState) {
-  return flow({
-    name: "console.flows.identities",
-    unit: "console",
+  return flow("console.flows.identities", {
     plane: "operator",
     out: IdentitiesOut,
     errors: { AuthFailed },
@@ -2171,9 +2141,7 @@ function createFlowsIdentities(state: ConsoleState) {
 }
 
 function createFlowsInvoke(state: ConsoleState) {
-  return flow({
-    name: "console.flows.invoke",
-    unit: "console",
+  return flow("console.flows.invoke", {
     plane: "operator",
     in: InvokeIn,
     out: InvokeOut,
@@ -2338,9 +2306,7 @@ function requireTenantIfDeclared(
 }
 
 function createStoreList(state: ConsoleState) {
-  return flow({
-    name: "console.store.list",
-    unit: "console",
+  return flow("console.store.list", {
     plane: "operator",
     out: StoreListOut,
     errors: { AuthFailed },
@@ -2352,9 +2318,7 @@ function createStoreList(state: ConsoleState) {
 }
 
 function createStoreQuery(state: ConsoleState) {
-  return flow({
-    name: "console.store.query",
-    unit: "console",
+  return flow("console.store.query", {
     plane: "operator",
     in: StoreQueryIn,
     out: StoreQueryOut,
@@ -2377,9 +2341,7 @@ function createStoreQuery(state: ConsoleState) {
 }
 
 function createStoreReveal(state: ConsoleState) {
-  return flow({
-    name: "console.store.reveal",
-    unit: "console",
+  return flow("console.store.reveal", {
     plane: "operator",
     in: StoreRevealIn,
     out: StoreRevealOut,
@@ -2415,9 +2377,7 @@ function createStoreReveal(state: ConsoleState) {
 }
 
 function createStoreEdit(state: ConsoleState) {
-  return flow({
-    name: "console.store.edit",
-    unit: "console",
+  return flow("console.store.edit", {
     plane: "operator",
     in: StoreEditIn,
     out: StoreEditOut,
@@ -2490,9 +2450,7 @@ function createStoreEdit(state: ConsoleState) {
 }
 
 function createStoreDelete(state: ConsoleState) {
-  return flow({
-    name: "console.store.delete",
-    unit: "console",
+  return flow("console.store.delete", {
     plane: "operator",
     in: StoreDeleteIn,
     out: StoreDeleteOut,
@@ -2532,9 +2490,7 @@ function createStoreDelete(state: ConsoleState) {
 }
 
 function createStorePurgeCache(state: ConsoleState) {
-  return flow({
-    name: "console.store.purgeCache",
-    unit: "console",
+  return flow("console.store.purgeCache", {
     plane: "operator",
     in: StorePurgeIn,
     out: StorePurgeOut,
@@ -2566,9 +2522,7 @@ function createStorePurgeCache(state: ConsoleState) {
 }
 
 function createStoreSql(state: ConsoleState) {
-  return flow({
-    name: "console.store.sql",
-    unit: "console",
+  return flow("console.store.sql", {
     plane: "operator",
     in: StoreSqlIn,
     out: StoreSqlOut,
@@ -2599,9 +2553,7 @@ function createStoreSql(state: ConsoleState) {
 }
 
 function createStorePreview(state: ConsoleState) {
-  return flow({
-    name: "console.store.preview",
-    unit: "console",
+  return flow("console.store.preview", {
     plane: "operator",
     in: StorePreviewIn,
     out: StorePreviewOut,
@@ -2651,9 +2603,7 @@ function createStorePreview(state: ConsoleState) {
 }
 
 function createVaultList(state: ConsoleState) {
-  return flow({
-    name: "console.vault.list",
-    unit: "console",
+  return flow("console.vault.list", {
     plane: "operator",
     out: VaultListOut,
     errors: { AuthFailed },
@@ -2665,9 +2615,7 @@ function createVaultList(state: ConsoleState) {
 }
 
 function createVaultSet(state: ConsoleState) {
-  return flow({
-    name: "console.vault.set",
-    unit: "console",
+  return flow("console.vault.set", {
     plane: "operator",
     in: VaultWriteIn,
     out: VaultWriteOut,
@@ -2713,9 +2661,7 @@ function createVaultSet(state: ConsoleState) {
 }
 
 function createVaultRotate(state: ConsoleState) {
-  return flow({
-    name: "console.vault.rotate",
-    unit: "console",
+  return flow("console.vault.rotate", {
     plane: "operator",
     in: VaultWriteIn,
     out: VaultWriteOut,
@@ -2774,9 +2720,7 @@ async function vaultNameKnown(state: ConsoleState, name: string): Promise<boolea
 }
 
 function createAiList(state: ConsoleState) {
-  return flow({
-    name: "console.ai.list",
-    unit: "console",
+  return flow("console.ai.list", {
     plane: "operator",
     out: AiListOut,
     errors: { AuthFailed },
@@ -2832,9 +2776,7 @@ function createAiList(state: ConsoleState) {
 }
 
 function createGatesList(state: ConsoleState) {
-  return flow({
-    name: "console.gates.list",
-    unit: "console",
+  return flow("console.gates.list", {
     plane: "operator",
     out: GatesListOut,
     errors: { AuthFailed },
@@ -2898,9 +2840,7 @@ function createGatesList(state: ConsoleState) {
 }
 
 function createDiffList(state: ConsoleState) {
-  return flow({
-    name: "console.diff.list",
-    unit: "console",
+  return flow("console.diff.list", {
     plane: "operator",
     out: DiffListOut,
     errors: { AuthFailed },
@@ -2932,9 +2872,7 @@ function createDiffList(state: ConsoleState) {
 }
 
 function createPluginsList(state: ConsoleState) {
-  return flow({
-    name: "console.plugin.list",
-    unit: "console",
+  return flow("console.plugin.list", {
     plane: "operator",
     out: PluginsListOut,
     errors: { AuthFailed },
@@ -2946,9 +2884,7 @@ function createPluginsList(state: ConsoleState) {
 }
 
 function createGatesSimulate(state: ConsoleState) {
-  return flow({
-    name: "console.gates.simulate",
-    unit: "console",
+  return flow("console.gates.simulate", {
     plane: "operator",
     in: GatesSimulateIn,
     out: GatesSimulateOut,
@@ -2982,9 +2918,7 @@ function createGatesSimulate(state: ConsoleState) {
 }
 
 function createGatesPowers(state: ConsoleState) {
-  return flow({
-    name: "console.gates.powers",
-    unit: "console",
+  return flow("console.gates.powers", {
     plane: "operator",
     in: GatesPowersIn,
     out: GatesPowersOut,
@@ -3015,9 +2949,7 @@ function actorScopesOf(state: ConsoleState, operatorId: string): string[] {
 }
 
 function createAccessList(state: ConsoleState) {
-  return flow({
-    name: "console.access.list",
-    unit: "console",
+  return flow("console.access.list", {
     plane: "operator",
     out: AccessListOut,
     errors: { AuthFailed },
@@ -3029,9 +2961,7 @@ function createAccessList(state: ConsoleState) {
 }
 
 function createAccessEffective(state: ConsoleState) {
-  return flow({
-    name: "console.access.effective",
-    unit: "console",
+  return flow("console.access.effective", {
     plane: "operator",
     in: AccessEffectiveIn,
     out: AccessEffectiveOut,
@@ -3056,9 +2986,7 @@ function createAccessEffective(state: ConsoleState) {
 }
 
 function createAccessKeyBlast(state: ConsoleState) {
-  return flow({
-    name: "console.access.keyBlast",
-    unit: "console",
+  return flow("console.access.keyBlast", {
     plane: "operator",
     in: AccessKeyBlastIn,
     out: AccessKeyBlastOut,
@@ -3074,9 +3002,7 @@ function createAccessKeyBlast(state: ConsoleState) {
 }
 
 function createAccessCreateKey(state: ConsoleState) {
-  return flow({
-    name: "console.access.createKey",
-    unit: "console",
+  return flow("console.access.createKey", {
     plane: "operator",
     in: AccessCreateKeyIn,
     out: AccessCreateKeyOut,
@@ -3110,9 +3036,7 @@ function createAccessCreateKey(state: ConsoleState) {
 }
 
 function createAccessRevokeKey(state: ConsoleState) {
-  return flow({
-    name: "console.access.revokeKey",
-    unit: "console",
+  return flow("console.access.revokeKey", {
     plane: "operator",
     in: AccessRevokeKeyIn,
     out: AccessRevokeKeyOut,
@@ -3142,9 +3066,7 @@ function createAccessRevokeKey(state: ConsoleState) {
 }
 
 function createAccessRotateKey(state: ConsoleState) {
-  return flow({
-    name: "console.access.rotateKey",
-    unit: "console",
+  return flow("console.access.rotateKey", {
     plane: "operator",
     in: AccessRotateKeyIn,
     out: AccessRotateKeyOut,
@@ -3177,9 +3099,7 @@ function createAccessRotateKey(state: ConsoleState) {
 }
 
 function createAccessSetRoleGrants(state: ConsoleState) {
-  return flow({
-    name: "console.access.setRoleGrants",
-    unit: "console",
+  return flow("console.access.setRoleGrants", {
     plane: "operator",
     in: AccessSetRoleGrantsIn,
     out: AccessSetRoleGrantsOut,
@@ -3208,9 +3128,7 @@ function createAccessSetRoleGrants(state: ConsoleState) {
 }
 
 function createClockList(state: ConsoleState) {
-  return flow({
-    name: "console.clock.list",
-    unit: "console",
+  return flow("console.clock.list", {
     plane: "operator",
     out: ClockListOut,
     errors: { AuthFailed },
@@ -3222,9 +3140,7 @@ function createClockList(state: ConsoleState) {
 }
 
 function createClockRunNow(state: ConsoleState) {
-  return flow({
-    name: "console.clock.runNow",
-    unit: "console",
+  return flow("console.clock.runNow", {
     plane: "operator",
     in: ClockRunNowIn,
     out: ClockRunNowOut,
@@ -3269,9 +3185,7 @@ function createClockRunNow(state: ConsoleState) {
 }
 
 function createClockPause(state: ConsoleState) {
-  return flow({
-    name: "console.clock.pause",
-    unit: "console",
+  return flow("console.clock.pause", {
     plane: "operator",
     in: ClockPauseIn,
     out: ClockPauseOut,
@@ -3301,9 +3215,7 @@ function createClockPause(state: ConsoleState) {
 }
 
 function createClockEditSchedule(state: ConsoleState) {
-  return flow({
-    name: "console.clock.editSchedule",
-    unit: "console",
+  return flow("console.clock.editSchedule", {
     plane: "operator",
     in: ClockEditIn,
     out: ClockEditOut,
@@ -3341,9 +3253,7 @@ function createClockEditSchedule(state: ConsoleState) {
 }
 
 function createClockWakeEarly(state: ConsoleState) {
-  return flow({
-    name: "console.clock.wakeEarly",
-    unit: "console",
+  return flow("console.clock.wakeEarly", {
     plane: "operator",
     in: ClockWakeEarlyIn,
     out: ClockWakeEarlyOut,
@@ -3375,9 +3285,7 @@ function createClockWakeEarly(state: ConsoleState) {
 }
 
 function createChannelsList(state: ConsoleState) {
-  return flow({
-    name: "console.channel.list",
-    unit: "console",
+  return flow("console.channel.list", {
     plane: "operator",
     out: ChannelsListOut,
     errors: { AuthFailed },
@@ -3389,9 +3297,7 @@ function createChannelsList(state: ConsoleState) {
 }
 
 function createChannelPreview(state: ConsoleState) {
-  return flow({
-    name: "console.channel.preview",
-    unit: "console",
+  return flow("console.channel.preview", {
     plane: "operator",
     in: ChannelPreviewIn,
     out: ChannelPreviewOut,
@@ -3411,9 +3317,7 @@ function createChannelPreview(state: ConsoleState) {
 }
 
 function createChannelVerifyAuth(state: ConsoleState) {
-  return flow({
-    name: "console.channel.verifyAuth",
-    unit: "console",
+  return flow("console.channel.verifyAuth", {
     plane: "operator",
     in: ChannelVerifyAuthIn,
     out: ChannelVerifyAuthOut,
@@ -3426,9 +3330,7 @@ function createChannelVerifyAuth(state: ConsoleState) {
 }
 
 function createChannelReveal(state: ConsoleState) {
-  return flow({
-    name: "console.channel.reveal",
-    unit: "console",
+  return flow("console.channel.reveal", {
     plane: "operator",
     in: ChannelRevealIn,
     out: ChannelRevealOut,
@@ -3454,9 +3356,7 @@ function createChannelReveal(state: ConsoleState) {
 }
 
 function createChannelSendTest(state: ConsoleState) {
-  return flow({
-    name: "console.channel.sendTest",
-    unit: "console",
+  return flow("console.channel.sendTest", {
     plane: "operator",
     in: ChannelSendTestIn,
     out: ChannelSendTestOut,

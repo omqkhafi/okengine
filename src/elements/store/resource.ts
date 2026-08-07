@@ -1,7 +1,7 @@
 /**
  * `store.resource(db, table, opts)` — a CRUD + list resource factory.
  *
- * Declarative sugar, never new physics: every op is an ordinary `flow({…})`
+ * Declarative sugar, never new physics: every op is an ordinary `flow(name, {…})`
  * whose body composes `fx.store(db)` (select/insert/update/findById/delete +
  * `page`/`count`) through the existing Drizzle-condition compiler. Wire
  * binding stays in `on(http.resource(path, resource.all()))` — the factory
@@ -649,8 +649,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     return { data, meta };
   }
 
-  const listFlow = flow({
-    name: "list",
+  const listFlow = flow("list", {
     unit,
     ...(breaking ? { breaking: true as const } : {}),
     // Loose record so the HTTP AoT infers `query` and lets every list URL
@@ -664,8 +663,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     },
   });
 
-  const createFlow = flow({
-    name: "create",
+  const createFlow = flow("create", {
     unit,
     ...(breaking ? { breaking: true as const } : {}),
     in: options.in as never,
@@ -682,8 +680,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     },
   });
 
-  const getFlow = flow({
-    name: "get",
+  const getFlow = flow("get", {
     unit,
     ...(breaking ? { breaking: true as const } : {}),
     errors,
@@ -709,8 +706,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       : patchSchema instanceof z.ZodObject
         ? patchSchema.extend({ [idKey]: z.string() })
         : patchSchema;
-  const updateFlow = flow({
-    name: "update",
+  const updateFlow = flow("update", {
     unit,
     ...(breaking ? { breaking: true as const } : {}),
     in: updateIn as never,
@@ -736,8 +732,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     },
   });
 
-  const removeFlow = flow({
-    name: "remove",
+  const removeFlow = flow("remove", {
     unit,
     ...(breaking ? { breaking: true as const } : {}),
     errors,

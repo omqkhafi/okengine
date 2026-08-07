@@ -1159,11 +1159,11 @@ function registerFlow(args: {
   scope: ProjectScope;
   exportName: string | undefined;
 }): void {
-  const opts = objectArg(args.flowCall.arguments[0]);
+  const opts = objectArg(args.flowCall.arguments[1]);
   if (!opts) return;
 
   const name =
-    stringProp(opts, "name") ??
+    stringArg(args.flowCall.arguments[0]) ??
     args.exportName ??
     `flow_${Object.keys(args.scope.flows).length + 1}`;
 
@@ -1232,7 +1232,7 @@ function registerFlow(args: {
   const errors = parseErrors(objectProp(opts, "errors"));
   if (errors) flow.errors = errors;
 
-  if (effects && Object.keys(effects).length > 0) flow.effects = effects;
+  if (effects) flow.effects = effects;
 
   const line = lineAt(args.file.source, args.flowCall.start ?? 0);
   flow.source = `${args.file.path}:${line}`;

@@ -157,7 +157,7 @@ describe("boot binders honour drivers.* config", () => {
     const result = await bootApplication({
       env: "local",
       startScheduler: false,
-      flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+      flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
     });
     try {
       expect(result.journal?.driverId).toBe("memory");
@@ -172,7 +172,7 @@ describe("boot binders honour drivers.* config", () => {
     const result = await bootApplication({
       env: "local",
       startScheduler: false,
-      flows: [flow({ name: "plain", do: () => ({ ok: true }) })],
+      flows: [flow("plain", { do: () => ({ ok: true }) })],
     });
     try {
       expect(result.journal).toBeUndefined();
@@ -187,7 +187,7 @@ describe("boot binders honour drivers.* config", () => {
     const result = await bootApplication({
       env: "local",
       startScheduler: false,
-      flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+      flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
       config: {
         drivers: {
           journal: { local: "file", docker: "postgres", test: "memory", prod: "postgres" },
@@ -211,7 +211,7 @@ describe("boot binders honour drivers.* config", () => {
         bootApplication({
           env: "local",
           startScheduler: false,
-          flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+          flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
           config: {
             drivers: {
               journal: { local: "postgres" },
@@ -232,7 +232,7 @@ describe("boot binders honour drivers.* config", () => {
       bootApplication({
         env: "local",
         startScheduler: false,
-        flows: [flow({ name: "charge", durable: true, do: () => ({ ok: true }) })],
+        flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
         config: {
           drivers: {
             journal: { local: "neon" },

@@ -1,8 +1,7 @@
 import { flow } from "okengine";
 import { stripeKey } from "../../vault.ts";
 
-export const chargeBooking = flow({
-  name: "payments.chargeBooking",
+export const chargeBooking = flow("payments.chargeBooking", {
   durable: true,
   do: async ({ orderId }, fx) => {
     // Journal only serializable step values — a Redacted is not journaled.

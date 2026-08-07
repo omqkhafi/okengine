@@ -218,8 +218,7 @@ describe("retry + durable journal", () => {
     let attempts = 0;
     let crash = true;
 
-    const f = flow({
-      name: "pay.retry",
+    const f = flow("pay.retry", {
       durable: true,
       do: async (_input, fx) => {
         const charged = await fx.step("charge", () =>
@@ -250,13 +249,12 @@ describe("retry + durable journal", () => {
     expect(attempts).toBe(1);
   });
 
-  test("flow({ retry }) reuses journal — completed steps do not re-run", async () => {
+  test("flow(name, { retry }) reuses journal — completed steps do not re-run", async () => {
     const journalStore = createMemoryJournalStore();
     const calls: string[] = [];
     let failOnce = true;
 
-    const f = flow({
-      name: "flow.retry",
+    const f = flow("flow.retry", {
       durable: true,
       retry: { retries: 2, delay: 0, jitter: false },
       do: async (_input, fx) => {

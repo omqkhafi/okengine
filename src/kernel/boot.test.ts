@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 54 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 54.3 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -120,8 +120,18 @@ describe("boot — lazy element needs", () => {
       // gzip), durable-journal lease surface (~51.2 kB), fx.deliverOtp +
       // unified otp() (~50.9 kB → 53 kB), then fx.runs / SLO window on the
       // shared surface (~53.3 kB → 54 kB cap). Clock/channel/journal drivers
-      // stay lazy-bound; far below eager bind.
-      expect(total).toBeLessThan(54_000);
+      // stay lazy-bound; far below eager bind. Rebased again for the
+      // store/vault/signal/channel auto-registry drain (`element-registries.ts`
+      // + the `oke()` merge/dedup logic) — every app now carries this
+      // regardless of which elements it uses, since the drain must run
+      // synchronously at construction (same isolation guarantee as the
+      // `on()` binding registry) and can't be deferred behind a lazy import
+      // (~54.0 kB → 54.3 kB cap). Rebased again for `assertAdoptBarrelFresh`
+      // + `tryListFlowsUnits` in `boot.ts` (`.adopt()` barrel staleness
+      // check, OKE1009) — part of the already-lazily-loaded boot graph, not
+      // the `oke()` construction path, but `Bun.build` still traces and
+      // sums the dynamic-import chunk (~54.3 kB → 54.7 kB cap).
+      expect(total).toBeLessThan(54_700);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -130,8 +140,7 @@ describe("boot — lazy element needs", () => {
 
 describe("boot — capabilities from Manifest effects", () => {
   test("tokens cover declared effects only", async () => {
-    const charge = flow({
-      name: "payments.charge",
+    const charge = flow("payments.charge", {
       effects: { secrets: ["STRIPE_KEY"], writes: ["sql:orders"] },
       do: () => ({ ok: true }),
     });
@@ -158,8 +167,7 @@ describe("boot — cron fires without manual dispatch", () => {
     let ran = 0;
     on(
       every("1h"),
-      flow({
-        name: "cleanup.expire",
+      flow("cleanup.expire", {
         do: () => {
           ran += 1;
         },
@@ -200,8 +208,7 @@ describe("boot — HTTP gate wiring on the default path", () => {
     resetFlowSeq();
     on(
       http.get("/ping"),
-      flow({
-        name: "ping",
+      flow("ping", {
         do: () => ({ ok: true }),
       }),
     );
@@ -217,8 +224,7 @@ describe("boot — HTTP gate wiring on the default path", () => {
     const { GateBootError } = await import("../elements/gate/boot.ts");
     on(
       http.get("/ping"),
-      flow({
-        name: "ping",
+      flow("ping", {
         do: () => ({ ok: true }),
       }),
     );
@@ -235,8 +241,7 @@ describe("boot — HTTP gate wiring on the default path", () => {
     const { gate } = await import("../elements/gate.ts");
     on(
       http.get("/ping").gate(gate.public),
-      flow({
-        name: "ping-public",
+      flow("ping-public", {
         do: () => ({ ok: true }),
       }),
     );
@@ -261,8 +266,7 @@ describe("boot — cron autostart via real timer loop", () => {
     let ran = 0;
     on(
       every("10m"),
-      flow({
-        name: "cleanup.autostart",
+      flow("cleanup.autostart", {
         do: () => {
           ran += 1;
         },

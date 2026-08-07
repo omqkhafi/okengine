@@ -1,65 +1,42 @@
 import { describe, expect, test } from "bun:test";
 import {
-  controlServicesFromStack,
   createDevControlDispatcher,
   formatDevControlsHelp,
   formatDevControlsHint,
-  formatDevControlsServiceList,
   parseDevControlKey,
 } from "./dev-controls.ts";
+
+const CTRL_C = String.fromCharCode(3);
 
 describe("dev-controls", () => {
   test("parseDevControlKey maps raw keys", () => {
     expect(parseDevControlKey("q")).toBe("q");
-    expect(parseDevControlKey("\u0003")).toBe("q");
     expect(parseDevControlKey("?")).toBe("?");
     expect(parseDevControlKey("h")).toBe("?");
-    expect(parseDevControlKey("c")).toBe("c");
-    expect(parseDevControlKey("l")).toBe("l");
+    expect(parseDevControlKey("r")).toBe("r");
     expect(parseDevControlKey("u")).toBe("u");
     expect(parseDevControlKey("x")).toBe("x");
-    expect(parseDevControlKey("r")).toBe("r");
-    expect(parseDevControlKey("3")).toBe("3");
-    expect(parseDevControlKey("\u001b")).toBe("esc");
+    expect(parseDevControlKey("c")).toBeNull();
+    expect(parseDevControlKey("l")).toBeNull();
+    expect(parseDevControlKey("3")).toBeNull();
+    expect(parseDevControlKey("")).toBeNull();
     expect(parseDevControlKey("z")).toBeNull();
+  });
+
+  test("parseDevControlKey maps Ctrl+C to quit", () => {
+    expect(parseDevControlKey(CTRL_C)).toBe("q");
   });
 
   test("format hint and help are scannable", () => {
     expect(formatDevControlsHint(false)).toContain("keys");
     expect(formatDevControlsHint(false)).toContain("refresh");
     expect(formatDevControlsHint(false)).toContain("quit");
-    expect(formatDevControlsHelp(false)).toContain("select service");
+    expect(formatDevControlsHint(false)).not.toContain("services");
     expect(formatDevControlsHelp(false)).toContain("refresh");
-    expect(formatDevControlsHelp(false)).not.toMatch(/\u001b\[/);
+    expect(formatDevControlsHelp(false)).not.toContain("select service");
   });
 
-  test("controlServicesFromStack dedupes by serviceName", () => {
-    const list = controlServicesFromStack([
-      { label: "ai", serviceName: "ai" },
-      { label: "mail", serviceName: "channel-email" },
-      { label: "mail-ui", serviceName: "channel-email" },
-      { label: "postgres", serviceName: "store-sql" },
-    ]);
-    expect(list.map((s) => s.serviceName)).toEqual(["ai", "channel-email", "store-sql"]);
-  });
-
-  test("formatDevControlsServiceList numbers rows", () => {
-    const out = formatDevControlsServiceList(
-      [
-        { label: "ai", serviceName: "ai" },
-        { label: "postgres", serviceName: "store-sql" },
-      ],
-      (name) => (name === "ai" ? "error" : "ready"),
-      false,
-      1,
-    );
-    expect(out).toContain("1");
-    expect(out).toContain("ai");
-    expect(out).toContain("postgres");
-    expect(out).toContain(">");
-  });
-
-  test("dispatcher select → stop → up stack → quit", async () => {
+  test("dispatcher up -> stop -> refresh -> help -> quit", async () => {
     const calls: string[] = [];
     let quit = false;
     let settled = 0;
@@ -79,29 +56,47 @@ describe("dev-controls", () => {
       onComposeSettled: () => {
         settled += 1;
       },
-      services: () => [
-        { label: "ai", serviceName: "ai" },
-        { label: "postgres", serviceName: "store-sql" },
-      ],
-      composeAction: async (action, names) => {
-        calls.push(`${action}:${names.join(",") || "*"}`);
+      composeAction: async (action) => {
+        calls.push(action);
       },
     });
-    d.handleKey("l");
-    await Bun.sleep(10);
-    d.handleKey("1");
-    d.handleKey("x");
-    await Bun.sleep(10);
     d.handleKey("u");
     await Bun.sleep(10);
-    d.handleKey("c");
+    d.handleKey("x");
+    await Bun.sleep(10);
+    d.handleKey("r");
+    await Bun.sleep(10);
+    d.handleKey("?");
     await Bun.sleep(10);
     d.handleKey("q");
-    expect(calls).toEqual(["stop:ai", "up:*"]);
+    expect(calls).toEqual(["up", "stop"]);
     expect(settled).toBe(2);
     expect(refreshed).toBe(1);
     expect(panels).toBe(1);
     expect(quit).toBe(true);
+    d.stop();
+  });
+
+  test("busy compose action ignores a concurrent key press", async () => {
+    let running = 0;
+    let maxConcurrent = 0;
+    const calls: string[] = [];
+    const d = createDevControlDispatcher({
+      write: () => {},
+      onQuit: () => {},
+      composeAction: async (action) => {
+        running += 1;
+        maxConcurrent = Math.max(maxConcurrent, running);
+        await Bun.sleep(20);
+        calls.push(action);
+        running -= 1;
+      },
+    });
+    d.handleKey("u");
+    d.handleKey("x");
+    await Bun.sleep(40);
+    expect(calls).toEqual(["up"]);
+    expect(maxConcurrent).toBe(1);
     d.stop();
   });
 });

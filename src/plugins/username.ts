@@ -319,9 +319,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
   resolveUsernamePolicy(usernamePolicy);
   const crypto = createBunCrypto();
 
-  const signUp = flow({
-    name: "auth.signUpUsername",
-    unit: "auth",
+  const signUp = flow("auth.signUpUsername", {
     plane: "user",
     in: UsernameIn,
     out: SessionTokensOut,
@@ -385,9 +383,7 @@ export function username(opts: UsernamePluginOptions = {}): PluginDef {
     },
   });
 
-  const signIn = flow({
-    name: "auth.signInUsername",
-    unit: "auth",
+  const signIn = flow("auth.signInUsername", {
     plane: "user",
     in: UsernameIn,
     out: SessionTokensOut,

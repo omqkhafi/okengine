@@ -11,8 +11,7 @@ beforeEach(() => {
 
 describe("flow — one species", () => {
   test("flow() returns a branded FlowDef", () => {
-    const f = flow({
-      name: "ping",
+    const f = flow("ping", {
       do: () => ({ ok: true }),
     });
     expect(isFlow(f)).toBe(true);
@@ -22,7 +21,7 @@ describe("flow — one species", () => {
   });
 
   test("on() returns the same flow object and records the trigger", () => {
-    const f = flow({ name: "create", do: () => 1 });
+    const f = flow("create", { do: () => 1 });
     const bound = on(http.post("/notes"), f);
     // Same runtime object; trigger stamp is type-only so identities differ at the type level.
     expect(bound as object).toBe(f);
@@ -33,8 +32,7 @@ describe("flow — one species", () => {
 
   test("the same flow object is reachable from HTTP and signal triggers", async () => {
     const calls: string[] = [];
-    const shared = flow({
-      name: "shared.work",
+    const shared = flow("shared.work", {
       do: (input: { n: number }) => {
         calls.push(`n=${input.n}`);
         return { n: input.n * 2 };
@@ -65,8 +63,7 @@ describe("five trigger kinds", () => {
 
     const httpFlow = on(
       http.get("/:code"),
-      flow({
-        name: "t.http",
+      flow("t.http", {
         do: ({ code }: { code: string }) => {
           seen.push(`http:${code}`);
           return { code };
@@ -76,8 +73,7 @@ describe("five trigger kinds", () => {
 
     on(
       every("1h"),
-      flow({
-        name: "t.every",
+      flow("t.every", {
         do: () => {
           seen.push("every");
         },
@@ -86,8 +82,7 @@ describe("five trigger kinds", () => {
 
     on(
       { name: "link-clicked", delivery: "once" },
-      flow({
-        name: "t.signal",
+      flow("t.signal", {
         do: ({ code }: { code: string }) => {
           seen.push(`signal:${code}`);
         },
@@ -96,8 +91,7 @@ describe("five trigger kinds", () => {
 
     on(
       table("orders").changed("status"),
-      flow({
-        name: "t.cdc",
+      flow("t.cdc", {
         do: (p: { before: { status: string }; after: { status: string } }) => {
           seen.push(`cdc:${p.before.status}->${p.after.status}`);
         },
@@ -106,8 +100,7 @@ describe("five trigger kinds", () => {
 
     on(
       internal,
-      flow({
-        name: "t.internal",
+      flow("t.internal", {
         do: () => {
           seen.push("internal");
           return { ok: true };

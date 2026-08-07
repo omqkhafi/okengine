@@ -452,7 +452,7 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ALLOW_INSECURE",
   ],
   // OKE_AI_URL is already emitted as `${prefix}_URL` — do not alias it again.
-  ai: ["OKE_AI_MODEL"],
+  ai: ["OKE_AI_MODEL", "OKE_AI_CTX_SIZE"],
   proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
   vault: ["OKE_VAULT_TOKEN", "OKE_VAULT_MOUNT"],
   "store.index": ["OKE_STORE_INDEX_KEY"],
@@ -471,7 +471,10 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
     "MP_SMTP_AUTH_ALLOW_INSECURE=1",
   ],
   // Curated Docker Hub `ai/` model id for llama.cpp; Ollama tags differ.
-  ai: ["OKE_AI_MODEL=smollm2"],
+  // OKE_AI_CTX_SIZE bounds the KV cache llama-server allocates at load —
+  // left at the model's full native context (often 32K-256K+), a small
+  // model's KV cache alone can OOM the container regardless of host RAM.
+  ai: ["OKE_AI_MODEL=smollm2", "OKE_AI_CTX_SIZE=4096"],
   proxy: ["OKE_PROXY_HOST=localhost", "OKE_PROXY_ACME_EMAIL=admin@example.com"],
 };
 
@@ -489,7 +492,14 @@ function roleFromEnvKey(key: string): string | undefined {
   }
   if (key === "PGDATA" || key === "POSTGRES_INITDB_ARGS") return "store.sql";
   if (key.startsWith("OKE_STORE_KV_MAXMEMORY")) return "store.kv";
-  if (key === "OKE_AI_URL" || key === "OKE_AI_MODEL" || key === "OLLAMA_HOST") return "ai";
+  if (
+    key === "OKE_AI_URL" ||
+    key === "OKE_AI_MODEL" ||
+    key === "OKE_AI_CTX_SIZE" ||
+    key === "OLLAMA_HOST"
+  ) {
+    return "ai";
+  }
   if (key === "OKE_PROXY_URL" || key === "OKE_PROXY_HOST" || key === "OKE_PROXY_ACME_EMAIL") {
     return "proxy";
   }

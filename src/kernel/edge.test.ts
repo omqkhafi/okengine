@@ -19,7 +19,7 @@ beforeEach(() => {
 
 describe("plugin edge handlers", () => {
   test("an edge handler answers an unmatched request; the flow still owns matched ones", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const edge = plugin("edge-test", { version: "0.0.1" }).edge((_request, info) => {
       if (info.method === "OPTIONS") {
         return new Response(null, { status: 204, headers: { "x-edge": "yes" } });

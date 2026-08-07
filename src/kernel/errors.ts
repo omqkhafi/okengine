@@ -154,6 +154,17 @@ export const OKE_ERRORS = {
       "`rootDir` so effects can be derived. docker/prod refuse an open capability token.",
   },
   /**
+   * A `src/flows/<unit>` folder exists on disk but no adopted flow carries
+   * that unit — the generated `.adopt()` barrel (`src/flows/generated.ts`)
+   * is stale or was hand-edited. docker/prod — never a silently-incomplete
+   * route table in a deploy-shaped environment.
+   */
+  ADOPT_BARREL_STALE: {
+    code: 1009,
+    cause: "src/flows/{unit} exists on disk but adopted no flows — the .adopt() barrel is stale.",
+    fix: "Run `oke dev` or `oke build` to regenerate `src/flows/generated.ts`.",
+  },
+  /**
    * Emit target has no subscriber (unified-theory §21).
    * Thrown at emit when `optional` is false and nobody is subscribed.
    */

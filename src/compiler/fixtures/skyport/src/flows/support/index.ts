@@ -6,8 +6,7 @@ import { tickets } from "../../schema.ts";
 
 export const createTicket = on(
   http.post("/tickets").gate(member),
-  flow({
-    name: "support.createTicket",
+  flow("support.createTicket", {
     pii: "masked",
     cost: { estimatePerCall: 0.011, budget: 0.02 },
     do: async (input, fx) => {

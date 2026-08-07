@@ -123,8 +123,7 @@ describe("extractManifest — performance", () => {
       parts.push(`
 export const flow_${i} = on(
   http.get("/f/${i}"),
-  flow({
-    name: "synth.flow_${i}",
+  flow("synth.flow_${i}", {
     do: async (input, fx) => {
       await fx.store(db).insert(items).values(input);
       const rows = await fx.store(db).select().from(items);
@@ -166,8 +165,7 @@ export const daily = { name: "daily" };
 
 export const listLinks = on(
   http.get("/links"),
-  flow({
-    name: "rel.root",
+  flow("rel.root", {
     do: async (_input, fx) => {
       return fx.store(db).select().from(links);
     },
@@ -178,8 +176,7 @@ export const listLinks = on(
 // relations, so the related table must NOT appear in effects.
 export const withDaily = on(
   http.get("/links/with-daily"),
-  flow({
-    name: "rel.with",
+  flow("rel.with", {
     do: async (_input, fx) => {
       return fx.store(db).findMany({ with: { daily: true } });
     },
@@ -354,9 +351,7 @@ export const files = store.files("uploads");
 
 export const attach = on(
   http.post("/attach").gate(gate.public),
-  flow({
-    name: "notes.attach",
-    unit: "notes",
+  flow("notes.attach", {
     do: async (input, fx) => {
       await fx.store(files).put("key", input.text);
       return { ok: true };
@@ -377,9 +372,7 @@ export const files = store.files("uploads");
 
 export const attach = on(
   http.post("/attach").gate(gate.public),
-  flow({
-    name: "notes.attachImage",
-    unit: "notes",
+  flow("notes.attachImage", {
     do: async (input, fx) => {
       await fx.store(files).putImage("key", input.bytes);
       return { ok: true };
@@ -400,9 +393,7 @@ export const files = store.files("uploads");
 
 export const sweep = on(
   every("1d"),
-  flow({
-    name: "notes.sweep",
-    unit: "notes",
+  flow("notes.sweep", {
     do: async (_input, fx) => {
       const keys = await fx.store(files).list();
       return { count: keys.length };
@@ -429,9 +420,7 @@ export const noteCreatedMail = mail.template("note-created", {
 
 export const onCreated = on(
   http.post("/hook").gate(gate.public),
-  flow({
-    name: "notes.onCreated",
-    unit: "notes",
+  flow("notes.onCreated", {
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, { to: "you@localhost", data: payload });
     },
@@ -454,9 +443,7 @@ export const otpTemplate = otp.template("otp-code", {});
 
 export const send = on(
   http.post("/otp").gate(gate.public),
-  flow({
-    name: "notes.sendOtp",
-    unit: "notes",
+  flow("notes.sendOtp", {
     do: async (payload, fx) => {
       await fx.send(otpTemplate, { to: "+10000000000", data: payload });
     },
@@ -467,5 +454,73 @@ export const send = on(
 
     expect(manifest.flows?.["notes.sendOtp"]?.effects?.sends).toEqual(["otp-code"]);
     expect(manifest.channels?.["otp-code"]?.medium).toBe("sms");
+  });
+});
+
+describe("extractManifest — flow(name, options) positional signature", () => {
+  test("bare flow(name, {...}) extracts name, in, out, effects", async () => {
+    const source = `
+import { flow } from "okengine";
+
+export const chargeOrder = flow("checkout.chargeOrder", {
+  in: ChargeIn,
+  out: ChargeOut,
+  effects: { reads: ["sql:orders"], writes: ["sql:orders"] },
+  do: async (input, fx) => {
+    return { ok: true };
+  },
+});
+`;
+    const manifest = await extractFromSources({ "src/flows/checkout.ts": source });
+
+    expect(manifest.flows?.["checkout.chargeOrder"]).toBeDefined();
+    expect(manifest.flows?.["checkout.chargeOrder"]?.in).toBeDefined();
+    expect(manifest.flows?.["checkout.chargeOrder"]?.out).toBeDefined();
+    expect(manifest.flows?.["checkout.chargeOrder"]?.effects?.reads).toEqual(["sql:orders"]);
+    expect(manifest.flows?.["checkout.chargeOrder"]?.effects?.writes).toEqual(["sql:orders"]);
+  });
+
+  test("on(trigger, flow(name, {...})) extracts the same shape as bare flow()", async () => {
+    const source = `
+import { on, http, flow } from "okengine";
+
+export const getOrder = on(
+  http.get("/orders/:id"),
+  flow("checkout.getOrder", {
+    out: OrderOut,
+    effects: { reads: ["sql:orders"] },
+    do: async (input, fx) => {
+      return { id: input.id };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/checkout.ts": source });
+
+    expect(manifest.flows?.["checkout.getOrder"]).toBeDefined();
+    expect(manifest.flows?.["checkout.getOrder"]?.trigger?.http?.method).toBe("GET");
+    expect(manifest.flows?.["checkout.getOrder"]?.out).toBeDefined();
+    expect(manifest.flows?.["checkout.getOrder"]?.effects?.reads).toEqual(["sql:orders"]);
+  });
+
+  test("a stray `name:` key inside the options object is ignored — the positional arg wins", async () => {
+    // Regression guard for the exact class of AST-shape assumption that broke
+    // silently before (channel-alias tracking, `.put()` inference): the
+    // compiler must read the flow's identity from the first positional
+    // argument, never from a `name` property on the options object, even
+    // when one happens to be present.
+    const source = `
+import { flow } from "okengine";
+
+export const decoy = flow("checkout.realName", {
+  name: "checkout.decoyName",
+  effects: { reads: ["sql:orders"] },
+  do: async () => ({ ok: true }),
+});
+`;
+    const manifest = await extractFromSources({ "src/flows/checkout.ts": source });
+
+    expect(manifest.flows?.["checkout.realName"]).toBeDefined();
+    expect(manifest.flows?.["checkout.decoyName"]).toBeUndefined();
   });
 });

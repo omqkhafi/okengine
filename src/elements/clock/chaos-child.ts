@@ -169,8 +169,7 @@ if (mode === "tick-loop") {
   }
 
   const journalStore = createFileJournalStore(join(journalPath));
-  const charge = flow({
-    name: "chaos.charge",
+  const charge = flow("chaos.charge", {
     durable: true,
     do: async (_input, fx) => {
       const intent = await fx.step("create-intent", async () => {
@@ -329,8 +328,7 @@ async function logHasStep(path: string, step: string, instanceId: string): Promi
 
 /** Durable charge flow: step 1 → block → step 2 (both logged). */
 function chargeFlow(instanceId: string, stepLogPath: string, blockMs: number): AnyFlowDef {
-  return flow({
-    name: "chaos.journal.charge",
+  return flow("chaos.journal.charge", {
     durable: true,
     do: async (_input, fx) => {
       const intent = await fx.step("create-intent", async () => {
@@ -349,8 +347,7 @@ function chargeFlow(instanceId: string, stepLogPath: string, blockMs: number): A
 
 /** Durable sleeper flow: step 1 → sleep → confirm (steps logged). */
 function sleeperFlow(instanceId: string, stepLogPath: string, wakeMs: number): AnyFlowDef {
-  return flow({
-    name: "chaos.journal.sleeper",
+  return flow("chaos.journal.sleeper", {
     durable: true,
     do: async (_input, fx) => {
       await fx.step("create-intent", async () => {

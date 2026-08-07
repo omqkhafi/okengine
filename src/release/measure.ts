@@ -302,7 +302,7 @@ const { flow } = await import(${JSON.stringify(paths.flow)});
 const { on, resetBindings } = await import(${JSON.stringify(paths.on)});
 const { http } = await import(${JSON.stringify(paths.http)});
 resetBindings();
-on(http.get("/ping"), flow({ name: "ping", do: () => ({ ok: true }) }));
+on(http.get("/ping"), flow("ping", { do: () => ({ ok: true }) }));
 const app = oke({ name: "cold-start" });
 const rt = createBunRuntime();
 const server = rt.serve(app, { port: 0, hostname: "127.0.0.1" });

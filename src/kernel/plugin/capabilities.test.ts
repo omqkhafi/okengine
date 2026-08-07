@@ -25,7 +25,7 @@ describe("plugin capability capture", () => {
       .table("audit_events")
       .driver("postgres")
       .image("store.sql", "postgres:16")
-      .flow(flow({ name: "audit.flush", do: () => undefined }))
+      .flow(flow("audit.flush", { do: () => undefined }))
       .client("audit", { subscribe: true });
 
     const { api, snapshot } = createRecordingApi({

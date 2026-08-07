@@ -48,8 +48,7 @@ describe("Provisions integration", () => {
       }),
     });
 
-    const chargeOrder = flow({
-      name: "payments.chargeOrder",
+    const chargeOrder = flow("payments.chargeOrder", {
       durable: true,
       in: z.object({ orderId: z.string() }),
       out: z.boolean(),
@@ -69,9 +68,7 @@ describe("Provisions integration", () => {
 
     on(
       http.post("/orders").gate(member, canOrder),
-      flow({
-        name: "orders.create",
-        unit: "orders",
+      flow("orders.create", {
         in: z.object({ sku: z.string(), qty: z.number() }),
         out: z.object({ id: z.string() }),
         effects: { emits: ["order-placed"], calls: ["payments.chargeOrder"] },
@@ -85,8 +82,7 @@ describe("Provisions integration", () => {
 
     on(
       orderPlaced,
-      flow({
-        name: "orders.onPlaced",
+      flow("orders.onPlaced", {
         effects: { calls: ["payments.chargeOrder"] },
         do: async ({ orderId }, fx) => {
           await fx.call(chargeOrder, { orderId });
@@ -96,8 +92,7 @@ describe("Provisions integration", () => {
 
     on(
       orderNews,
-      flow({
-        name: "notifications.onNews",
+      flow("notifications.onNews", {
         effects: { sends: ["order-confirmed"] },
         do: async ({ orderId, status }, fx) => {
           if (status !== "confirmed") return;

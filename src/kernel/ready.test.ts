@@ -33,8 +33,7 @@ describe("GET /_/ready", () => {
   test("orphan_scan then ready when durable journal is bound", async () => {
     const journalStore = createMemoryJournalStore();
     expect(hasJournalLease(journalStore)).toBe(true);
-    const charge = flow({
-      name: "charge",
+    const charge = flow("charge", {
       durable: true,
       do: () => ({ ok: true }),
     });

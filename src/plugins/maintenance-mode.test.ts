@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe("maintenanceMode plugin", () => {
   test("returns 503 with ServiceUnavailable envelope and Retry-After", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "maint" }).plug(maintenanceMode({ retryAfter: 120 }));
 
     const res = await app.fetch(new Request("http://localhost/x"));
@@ -35,7 +35,7 @@ describe("maintenanceMode plugin", () => {
   });
 
   test("enabled: false passes traffic through", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "maint-off" }).plug(
       maintenanceMode({ enabled: false }),
     );
@@ -46,8 +46,8 @@ describe("maintenanceMode plugin", () => {
   });
 
   test("allowPaths prefixes keep serving", async () => {
-    on(http.get("/health"), flow({ name: "health.get", do: () => ({ up: true }) }));
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/health"), flow("health.get", { do: () => ({ up: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "maint-allow" }).plug(
       maintenanceMode({ allowPaths: ["/health"] }),
     );
@@ -60,7 +60,7 @@ describe("maintenanceMode plugin", () => {
   });
 
   test("bypass header lets operators through (any non-empty value)", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "maint-bypass" }).plug(
       maintenanceMode({ bypassHeader: "x-ops-token" }),
     );
@@ -75,7 +75,7 @@ describe("maintenanceMode plugin", () => {
   });
 
   test("the 503 still flows through onResponse (other plugins stamp it)", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "maint-stamp" }).plug(maintenanceMode());
     app.hook("onResponse", (ctx) => {
       if (!ctx.response) return;

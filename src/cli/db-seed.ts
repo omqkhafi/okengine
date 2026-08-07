@@ -233,7 +233,7 @@ export async function bootSeedFx(
   if (!app) {
     throw new Error(`oke db seed: no oke() app export in ${entryAbs}`);
   }
-  await app.boot({ env, startScheduler: false, config: config ?? undefined });
+  await app.boot({ env, startScheduler: false, config: config ?? undefined, rootDir: cwd });
   const storeRuntime = app.elements?.store ?? app.bootResult?.store;
   if (!storeRuntime) {
     throw new Error(

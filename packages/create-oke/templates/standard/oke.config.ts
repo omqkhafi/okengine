@@ -42,7 +42,6 @@ export default defineConfig({
       test: "frozen",
       prod: "postgres",
     },
-    // Durable-flow journal (durable: true runs) — shared + leased in docker/prod.
     journal: {
       local: "memory",
       docker: "postgres",

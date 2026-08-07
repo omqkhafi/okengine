@@ -236,9 +236,7 @@ export function otp(opts: OtpOptions): PluginDef {
   });
 
   if (opts.mode === "provider") {
-    const request = flow({
-      name: "auth.requestOtp",
-      unit: "auth",
+    const request = flow("auth.requestOtp", {
       plane: "user",
       in: z.object({
         phone: z.string().min(8),
@@ -277,9 +275,7 @@ export function otp(opts: OtpOptions): PluginDef {
       },
     });
 
-    const verify = flow({
-      name: "auth.verifyOtp",
-      unit: "auth",
+    const verify = flow("auth.verifyOtp", {
       plane: "user",
       in: z.object({
         phone: z.string().min(8),
@@ -347,9 +343,7 @@ export function otp(opts: OtpOptions): PluginDef {
   }
 
   // ── App mode ───────────────────────────────────────────────────────────
-  const request = flow({
-    name: "auth.requestOtp",
-    unit: "auth",
+  const request = flow("auth.requestOtp", {
     plane: "user",
     in: z.object({
       email: z.string().min(3).optional(),
@@ -415,9 +409,7 @@ export function otp(opts: OtpOptions): PluginDef {
     },
   });
 
-  const resend = flow({
-    name: "auth.resendOtp",
-    unit: "auth",
+  const resend = flow("auth.resendOtp", {
     plane: "user",
     in: z.object({
       email: z.string().min(3).optional(),
@@ -486,9 +478,7 @@ export function otp(opts: OtpOptions): PluginDef {
     },
   });
 
-  const verify = flow({
-    name: "auth.verifyOtp",
-    unit: "auth",
+  const verify = flow("auth.verifyOtp", {
     plane: "user",
     in: z.object({
       email: z.string().min(3).optional(),

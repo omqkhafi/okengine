@@ -177,8 +177,7 @@ describe("cross-plane compile error", () => {
         path: "src/flows/console/store.ts",
         flow: "console.store.query",
         source: `
-          export const query = flow({
-            name: "console.store.query",
+          export const query = flow("console.store.query", {
             plane: "operator",
             do: (_i, fx) => fx.auth.userId,
           });

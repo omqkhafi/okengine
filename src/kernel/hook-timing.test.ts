@@ -27,7 +27,7 @@ describe("hook timing", () => {
     });
     const ctx: InvocationContext = {
       trigger: { kind: "internal" },
-      flow: flow({ name: "t", do: () => ({ ok: true }) }),
+      flow: flow("t", { do: () => ({ ok: true }) }),
       input: undefined,
       params: {},
       state: {},
@@ -56,7 +56,7 @@ describe("hook timing", () => {
     const hooks = registry.hooksAt("app", undefined, "x");
     const ctx: InvocationContext = {
       trigger: { kind: "internal" },
-      flow: flow({ name: "x", do: () => undefined }),
+      flow: flow("x", { do: () => undefined }),
       input: undefined,
       params: {},
       state: {},

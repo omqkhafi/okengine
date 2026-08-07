@@ -107,9 +107,7 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
         })
       : magicLinkTemplate;
 
-  const request = flow({
-    name: "auth.requestMagicLink",
-    unit: "auth",
+  const request = flow("auth.requestMagicLink", {
     plane: "user",
     in: z.object({ email: z.string().min(3) }),
     out: z.object({
@@ -144,9 +142,7 @@ export function magicLink(opts: MagicLinkOptions = {}): PluginDef {
     },
   });
 
-  const verify = flow({
-    name: "auth.verifyMagicLink",
-    unit: "auth",
+  const verify = flow("auth.verifyMagicLink", {
     plane: "user",
     in: z.object({ token: z.string().min(1) }),
     out: SessionTokensOut,

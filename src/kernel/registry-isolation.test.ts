@@ -21,11 +21,11 @@ afterEach(() => {
 
 describe("registry isolation", () => {
   test("consume (default): App B does not serve App A routes", async () => {
-    on(http.get("/a"), flow({ name: "app-a.ping", do: () => "a" }));
+    on(http.get("/a"), flow("app-a.ping", { do: () => "a" }));
     const appA = oke({ autoBoot: false, name: "app-a" });
 
     // No resetBindings() between the apps — the pre-fix leak scenario.
-    on(http.get("/b"), flow({ name: "app-b.ping", do: () => "b" }));
+    on(http.get("/b"), flow("app-b.ping", { do: () => "b" }));
     const appB = oke({ autoBoot: false, name: "app-b" });
 
     // Pre-fix this was 200: App B adopted App A's leftover binding.
@@ -45,7 +45,7 @@ describe("registry isolation", () => {
   });
 
   test("keep: today's behavior — registry survives construction", async () => {
-    on(http.get("/a"), flow({ name: "kept.ping", do: () => "a" }));
+    on(http.get("/a"), flow("kept.ping", { do: () => "a" }));
     oke({ autoBoot: false, name: "app-a", registry: "keep" });
     expect(listBindings()).toHaveLength(1);
 
@@ -54,11 +54,11 @@ describe("registry isolation", () => {
   });
 
   test("ignore: only options.bindings are served", async () => {
-    on(http.get("/stray"), flow({ name: "stray.ping", do: () => "stray" }));
+    on(http.get("/stray"), flow("stray.ping", { do: () => "stray" }));
 
     const onlyB: Binding = {
       trigger: http.get("/b"),
-      flow: flow({ name: "only-b.ping", do: () => "b" }),
+      flow: flow("only-b.ping", { do: () => "b" }),
     };
     const app = oke({ autoBoot: false, name: "app-b", registry: "ignore", bindings: [onlyB] });
 

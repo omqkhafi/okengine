@@ -23,9 +23,7 @@ import "./signals";
 /** List active (non-archived) notes, newest first. */
 export const list = on(
   http.get("/notes").gate(gate.public),
-  flow({
-    name: "notes.list",
-    unit: "notes",
+  flow("notes.list", {
     out: NoteListOut,
     effects: { reads: ["sql:app"] },
     do: async (_input, fx) => {
@@ -47,9 +45,7 @@ export const list = on(
 /** Create a note, emit `note-created`, touch vault. */
 export const create = on(
   http.post("/notes").gate(gate.public),
-  flow({
-    name: "notes.create",
-    unit: "notes",
+  flow("notes.create", {
     in: NoteCreateIn,
     out: NoteOut,
     effects: {
@@ -84,9 +80,7 @@ export const create = on(
 /** Fetch one note by id. */
 export const get = on(
   http.get("/notes/:id").gate(gate.public),
-  flow({
-    name: "notes.get",
-    unit: "notes",
+  flow("notes.get", {
     in: NoteIdIn,
     out: NoteOut,
     errors: { NotFound },
@@ -108,9 +102,7 @@ export const get = on(
 /** Soft-archive a note. */
 export const archive = on(
   http.post("/notes/:id/archive").gate(gate.public),
-  flow({
-    name: "notes.archive",
-    unit: "notes",
+  flow("notes.archive", {
     in: NoteIdIn,
     out: NoteOut,
     errors: { NotFound },
@@ -138,9 +130,7 @@ export const archive = on(
 /** On create → send the note-created email template. */
 export const onCreated = on(
   noteCreated,
-  flow({
-    name: "notes.onCreated",
-    unit: "notes",
+  flow("notes.onCreated", {
     effects: { sends: ["note-created"] },
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, {
@@ -154,9 +144,7 @@ export const onCreated = on(
 /** Store a text attachment next to a note (`files:uploads`). */
 export const attach = on(
   http.post("/notes/:id/attach").gate(gate.public),
-  flow({
-    name: "notes.attach",
-    unit: "notes",
+  flow("notes.attach", {
     in: NoteAttachIn,
     out: NoteAttachOut,
     errors: { NotFound },
@@ -174,9 +162,7 @@ export const attach = on(
 /** Daily count of active notes (frozen under test drivers). */
 export const digest = on(
   every("1d"),
-  flow({
-    name: "notes.digest",
-    unit: "notes",
+  flow("notes.digest", {
     out: NoteDigestOut,
     effects: { reads: ["sql:app"] },
     do: async (_input, fx) => {
@@ -192,9 +178,7 @@ export const digest = on(
  */
 export const summarize = on(
   http.post("/notes/:id/summarize").gate(gate.public),
-  flow({
-    name: "notes.summarize",
-    unit: "notes",
+  flow("notes.summarize", {
     in: NoteSummarizeIn,
     out: NoteSummarizeOut,
     errors: { NotFound },

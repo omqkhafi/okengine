@@ -58,7 +58,7 @@ A signal is a trigger like any other — the consumer is an ordinary Flow:
 ```typescript title="src/flows/orders/send-confirmation.ts"
 export const sendConfirmation = on(
   orderPlaced,
-  flow({
+  flow("orders.sendConfirmation", {
     in: z.object({ orderId: z.string(), total: z.number() }),
     do: async (input, fx) => {
       await fx.send(orderConfirmed, { to: "user-1", data: input });
@@ -131,8 +131,7 @@ export const orderStatus = signal("order-status", {
 ```typescript title="src/flows/fulfillment/on-order.ts"
 on(
   orderPlaced,
-  flow({
-    name: "fulfillment.onOrder",
+  flow("fulfillment.onOrder", {
     do: async ({ orderId }, fx) => {
       await fx.emit(orderChanged, { orderId, kind: "placed" });
       await fx.emit(orderStatus, { orderId, status: "fulfilling" });
@@ -147,8 +146,7 @@ on(
 ```typescript title="src/flows/orders/side-effects.ts"
 on(
   orderChanged,
-  flow({
-    name: "cache.onOrderChanged",
+  flow("cache.onOrderChanged", {
     do: async ({ orderId }, fx) => {
       /* invalidate order:{orderId} */
     },
@@ -157,8 +155,7 @@ on(
 
 on(
   orderChanged,
-  flow({
-    name: "notify.onOrderChanged",
+  flow("notify.onOrderChanged", {
     do: async ({ orderId }, fx) => {
       await fx.send(orderConfirmed, { to: "user-1", data: { orderId } });
     },

@@ -1,31 +1,17 @@
 /**
  * Keyboard controls for a live `oke dev` session (TTY raw mode).
  *
- * Keys: `?` help · `q` quit · `c` refresh · `l` list · `u` up all ·
- * `x` stop all · `1`–`9` select service then `u`/`x`/`r`.
+ * Keys: `?` help · `q` quit · `r` refresh · `u` up all · `x` stop all.
  *
- * Compose health / model phase update the status board above Logs — not
- * the log stream. `c` clears the TTY and reprints the latest board.
+ * Compose health / model phase update the status board above Logs — it
+ * already lists every service with a live ● status, so refresh alone is
+ * enough to see the stack; there is no separate services panel.
  */
 
-import {
-  formatStatusDot,
-  formatStatusLine,
-  termColorEnabled,
-  termStyle,
-  type DevStatus,
-} from "../term.ts";
+import { formatStatusLine, termColorEnabled, termStyle } from "../term.ts";
 
-/** One Docker service row addressable by a digit key. */
-export type DevControlService = {
-  /** Human label (`ai`, `postgres`). */
-  readonly label: string;
-  /** Compose service name (`ai`, `store-sql`). */
-  readonly serviceName: string;
-};
-
-/** Compose action against zero or more service names. */
-export type DevComposeControlAction = "up" | "stop" | "restart";
+/** Compose action against the whole stack. */
+export type DevComposeControlAction = "up" | "stop";
 
 /** Options for {@link startDevControls}. */
 export type StartDevControlsOptions = {
@@ -37,30 +23,22 @@ export type StartDevControlsOptions = {
    */
   readonly onRefresh?: () => void | Promise<void>;
   /**
-   * Show help / services in a clean pane (typically refresh chrome first so
-   * the panel is not interleaved with request logs).
+   * Show help in a clean pane (refreshes chrome first so the panel is not
+   * interleaved with request logs).
    *
    * @param body - Formatted panel text
    */
   readonly onShowPanel?: (body: string) => void | Promise<void>;
   /**
-   * After a compose up/stop/restart — sync health into the board (no log lines).
+   * After a compose up/stop — sync health into the board (no log lines).
    */
   readonly onComposeSettled?: () => void | Promise<void>;
-  /** Live service catalogue (unique compose services). */
-  readonly services: () => readonly DevControlService[];
   /**
-   * Run a compose control action.
+   * Run a compose control action against the whole stack.
    *
-   * @param action - up / stop / restart
-   * @param serviceNames - Empty → whole stack
+   * @param action - up / stop
    */
-  readonly composeAction: (
-    action: DevComposeControlAction,
-    serviceNames: readonly string[],
-  ) => Promise<void>;
-  /** Optional live ● status for list view. */
-  readonly statusOf?: (serviceName: string) => DevStatus | undefined;
+  readonly composeAction: (action: DevComposeControlAction) => Promise<void>;
   readonly stdin?: NodeJS.ReadStream;
   readonly isTTY?: boolean;
   readonly color?: boolean;
@@ -81,9 +59,8 @@ export function formatDevControlsHint(color: boolean = termColorEnabled()): stri
   return (
     `${s.dim}│${s.reset}  ${s.dim}keys${s.reset}  ` +
     `${s.cyan}?${s.reset} help · ` +
-    `${s.cyan}c${s.reset} refresh · ` +
+    `${s.cyan}r${s.reset} refresh · ` +
     `${s.cyan}q${s.reset} quit · ` +
-    `${s.cyan}l${s.reset} services · ` +
     `${s.cyan}u${s.reset} up · ` +
     `${s.cyan}x${s.reset} stop` +
     `\n`
@@ -104,61 +81,13 @@ export function formatDevControlsHelp(color: boolean = termColorEnabled()): stri
     "",
     `${s.green}◇${s.reset}  ${s.bold}Keys${s.reset}`,
     k("?", "help"),
-    k("c", "refresh — clear logs, show latest ●"),
+    k("r", "refresh — clear logs, show latest ●"),
     k("q", "quit oke dev"),
-    k("l", "list docker services"),
     k("u", "compose up -d (all)"),
     k("x", "compose stop (all)"),
-    k("1-9", "select service"),
-    k("… u", "start selected"),
-    k("… x", "stop selected"),
-    k("… r", "restart selected"),
-    k("esc", "clear selection"),
     bar,
     "",
   ].join("\n");
-}
-
-/**
- * Format a numbered service list for `l`.
- *
- * @param services - Catalogue
- * @param statusOf - Optional ● lookup
- * @param color - Color on/off
- * @param selected - Highlighted 1-based index
- */
-export function formatDevControlsServiceList(
-  services: readonly DevControlService[],
-  statusOf?: (serviceName: string) => DevStatus | undefined,
-  color: boolean = termColorEnabled(),
-  selected?: number,
-): string {
-  const s = termStyle(color);
-  const bar = `${s.dim}│${s.reset}`;
-  if (services.length === 0) {
-    return `${bar}  ${s.dim}no docker services${s.reset}\n`;
-  }
-  const lines = [
-    "",
-    `${s.green}◇${s.reset}  ${s.bold}Services${s.reset}  ${s.dim}1-9 then u/x/r${s.reset}`,
-  ];
-  const max = Math.min(9, services.length);
-  for (let i = 0; i < max; i++) {
-    const svc = services[i]!;
-    const st = statusOf?.(svc.serviceName) ?? "pending";
-    const dot = formatStatusDot(st, color);
-    const num = `${i + 1}`;
-    const mark = selected === i + 1 ? `${s.cyan}>${s.reset}` : " ";
-    lines.push(
-      `${bar}  ${mark}${s.cyan}${num}${s.reset}  ${dot}  ${svc.label.padEnd(12)}  ${s.dim}${svc.serviceName}${s.reset}`,
-    );
-  }
-  if (services.length > 9) {
-    lines.push(`${bar}  ${s.dim}… ${services.length - 9} more (first 9 only)${s.reset}`);
-  }
-  lines.push(bar);
-  lines.push("");
-  return `${lines.join("\n")}\n`;
 }
 
 /**
@@ -169,16 +98,12 @@ export function formatDevControlsServiceList(
 export function parseDevControlKey(chunk: string): string | null {
   if (chunk.length === 0) return null;
   if (chunk === "\u0003") return "q"; // Ctrl+C
-  if (chunk === "\u001b") return "esc";
   const ch = chunk[0]!;
   if (ch === "?" || ch === "h" || ch === "H") return "?";
-  if (ch === "c" || ch === "C") return "c";
   if (ch === "q" || ch === "Q") return "q";
-  if (ch === "l" || ch === "L") return "l";
+  if (ch === "r" || ch === "R") return "r";
   if (ch === "u" || ch === "U") return "u";
   if (ch === "x" || ch === "X") return "x";
-  if (ch === "r" || ch === "R") return "r";
-  if (ch >= "1" && ch <= "9") return ch;
   return null;
 }
 
@@ -191,23 +116,18 @@ export type DevControlDispatcher = {
 /**
  * Pure key dispatcher (no stdin) — used by tests and the TTY listener.
  *
- * @param opts - Quit / compose / services
+ * @param opts - Quit / compose actions
  */
 export function createDevControlDispatcher(opts: StartDevControlsOptions): DevControlDispatcher {
   const color = opts.color ?? termColorEnabled();
-  let selected: number | null = null;
   let busy = false;
   let stopped = false;
 
-  const runAction = async (
-    action: DevComposeControlAction,
-    serviceNames: readonly string[],
-    _label: string,
-  ): Promise<void> => {
+  const runAction = async (action: DevComposeControlAction): Promise<void> => {
     if (busy) return;
     busy = true;
     try {
-      await opts.composeAction(action, serviceNames);
+      await opts.composeAction(action);
       await opts.onComposeSettled?.();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -224,7 +144,7 @@ export function createDevControlDispatcher(opts: StartDevControlsOptions): DevCo
         opts.onQuit();
         return;
       }
-      if (key === "c") {
+      if (key === "r") {
         void Promise.resolve(opts.onRefresh?.()).catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
           opts.write(formatStatusLine(`refresh failed — ${msg}`, color, "error"));
@@ -236,58 +156,8 @@ export function createDevControlDispatcher(opts: StartDevControlsOptions): DevCo
         void Promise.resolve(opts.onShowPanel?.(body) ?? opts.write(body));
         return;
       }
-      if (key === "esc") {
-        selected = null;
-        return;
-      }
-      if (key === "l") {
-        const body = formatDevControlsServiceList(
-          opts.services(),
-          opts.statusOf,
-          color,
-          selected ?? undefined,
-        );
-        void Promise.resolve(opts.onShowPanel?.(body) ?? opts.write(body));
-        return;
-      }
-      if (key >= "1" && key <= "9") {
-        const n = Number(key);
-        const list = opts.services();
-        if (n < 1 || n > list.length || n > 9) {
-          opts.write(formatStatusLine(`no service ${n} — press l to list`, color, "pending"));
-          return;
-        }
-        selected = n;
-        const svc = list[n - 1]!;
-        opts.write(
-          formatStatusLine(
-            `selected ${n} ${svc.label} — u start · x stop · r restart · esc`,
-            color,
-            opts.statusOf?.(svc.serviceName) ?? "pending",
-          ),
-        );
-        return;
-      }
-      if (key === "u" || key === "x" || key === "r") {
-        const action: DevComposeControlAction =
-          key === "u" ? "up" : key === "x" ? "stop" : "restart";
-        if (selected !== null) {
-          const list = opts.services();
-          const svc = list[selected - 1];
-          if (!svc) {
-            selected = null;
-            opts.write(formatStatusLine("selection expired — press l", color, "pending"));
-            return;
-          }
-          selected = null;
-          void runAction(action, [svc.serviceName], svc.label);
-          return;
-        }
-        if (key === "r") {
-          opts.write(formatStatusLine("select a service first (l then 1-9)", color, "pending"));
-          return;
-        }
-        void runAction(action, [], "stack");
+      if (key === "u" || key === "x") {
+        void runAction(key === "u" ? "up" : "stop");
       }
     },
     stop() {
@@ -299,7 +169,7 @@ export function createDevControlDispatcher(opts: StartDevControlsOptions): DevCo
 /**
  * Start raw-mode keyboard controls. No-op when stdin is not a TTY.
  *
- * @param opts - Quit / compose / services
+ * @param opts - Quit / compose actions
  */
 export function startDevControls(opts: StartDevControlsOptions): DevControlsHandle {
   const stdin = opts.stdin ?? process.stdin;
@@ -332,23 +202,4 @@ export function startDevControls(opts: StartDevControlsOptions): DevControlsHand
       }
     },
   };
-}
-
-/**
- * Dedupe stack summary rows into control services (first label wins).
- *
- * @param rows - Stack summary services with compose names
- */
-export function controlServicesFromStack(
-  rows: readonly { readonly label: string; readonly serviceName?: string }[],
-): DevControlService[] {
-  const seen = new Set<string>();
-  const out: DevControlService[] = [];
-  for (const row of rows) {
-    const name = row.serviceName?.trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    out.push({ label: row.label, serviceName: name });
-  }
-  return out;
 }

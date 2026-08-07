@@ -30,9 +30,7 @@ export interface AnonymousPluginOptions extends AuthMethodOptions {
 export function anonymous(opts: AnonymousPluginOptions = {}): PluginDef {
   const runtime = createMethodRuntime(opts);
 
-  const signIn = flow({
-    name: "auth.signInAnonymous",
-    unit: "auth",
+  const signIn = flow("auth.signInAnonymous", {
     plane: "user",
     out: SessionTokensOut,
     errors: { AuthFailed, AuthRateLimited },

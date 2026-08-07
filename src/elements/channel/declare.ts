@@ -5,6 +5,7 @@
  */
 
 import type { ChannelMedium } from "../../manifest/types.ts";
+import { channelTemplateRegistry } from "../../kernel/element-registries.ts";
 
 /** Options for a medium binder (`channel.email`, …). */
 export interface ChannelMediumOptions {
@@ -50,6 +51,29 @@ export interface ChannelMediumBinder {
 }
 
 /**
+ * Medium binders' `.template()` (email / sms / whatsapp / push) push into
+ * the shared {@link channelTemplateRegistry} (`src/kernel/element-registries.ts`)
+ * so {@link oke} can auto-populate `channel.templates` with zero explicit
+ * array — mirrors the {@link on} trigger-drain registry
+ * (`src/kernel/on.ts`). The medium-agnostic `channel.template()` is
+ * intentionally not auto-registered (out of scope).
+ *
+ * Snapshot of every medium-binder template declared since the last reset.
+ */
+export function listChannelTemplates(): readonly ChannelTemplateDecl[] {
+  return channelTemplateRegistry.slice();
+}
+
+/**
+ * Clear the channel-template registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetChannelTemplates(): void {
+  channelTemplateRegistry.length = 0;
+}
+
+/**
  * Create a medium binder.
  *
  * @param medium - Medium id
@@ -64,7 +88,7 @@ function mediumBinder(
     medium,
     ...(from !== undefined ? { from } : {}),
     template(name, opts = {}) {
-      return {
+      const decl: ChannelTemplateDecl = {
         kind: "template",
         name,
         medium,
@@ -73,6 +97,8 @@ function mediumBinder(
         ...(opts.schema !== undefined ? { schema: opts.schema } : {}),
         ...(from !== undefined ? { from } : {}),
       };
+      channelTemplateRegistry.push(decl);
+      return decl;
     },
   };
 }

@@ -29,13 +29,12 @@ export default defineConfig({
         test: "memory",
         prod: "s3",
       },
-      // Opt in via create-oke customize or uncomment:
-      // index: {
-      //   local: "memory",
-      //   docker: "meilisearch",
-      //   test: "memory",
-      //   prod: "meilisearch",
-      // },
+      index: {
+        local: "memory",
+        docker: "meilisearch",
+        test: "memory",
+        prod: "meilisearch",
+      },
     },
     signal: {
       local: "memory",
@@ -49,7 +48,6 @@ export default defineConfig({
       test: "frozen",
       prod: "postgres",
     },
-    // Durable-flow journal (durable: true runs) — shared + leased in docker/prod.
     journal: {
       local: "memory",
       docker: "postgres",

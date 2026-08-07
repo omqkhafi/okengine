@@ -75,7 +75,7 @@ describe("plugin .needs() resolution", () => {
   test("boot fails when plugin needs missing peer plugin", async () => {
     resetBindings();
     resetFlowSeq();
-    on(http.get("/x").gate(gate.public), flow({ name: "x", do: () => ({ ok: true }) }));
+    on(http.get("/x").gate(gate.public), flow("x", { do: () => ({ ok: true }) }));
     const dependent = plugin("needs-auth", { version: "0.0.1" }).needs("auth");
     const app = oke({ name: "needs-boot", gate: { policies: [gate.public] } }).plug(dependent);
     await expect(app.boot({ env: "test" })).rejects.toThrow(PluginNeedsError);

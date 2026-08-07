@@ -261,8 +261,8 @@ describe("interactive branches", () => {
       expect(code).toBe(0);
       expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("docker");
       const notes = readFileSync(join(dir, "src", "flows", "notes", "index.ts"), "utf8");
-      expect(notes).toContain('name: "notes.digest"');
-      expect(notes).toContain('name: "notes.attach"');
+      expect(notes).toContain('flow("notes.digest"');
+      expect(notes).toContain('flow("notes.attach"');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -564,8 +564,10 @@ describe("scaffold structure", () => {
         const appTs = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
         expect(appTs).not.toMatch(/Object\.assign/);
         expect(appTs).not.toMatch(/env:\s*["']test["']/);
-        expect(appTs).toMatch(/stores:\s*\[/);
-        expect(appTs).toMatch(/oke\(\{[\s\S]*stores:/);
+        // stores/secrets/signals/channel.templates auto-register — the
+        // minimal `oke({ name: "notes" })` shape carries no explicit arrays.
+        expect(appTs).not.toMatch(/stores:\s*\[/);
+        expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']\s*\}\)/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string };
@@ -610,8 +612,8 @@ describe("scaffold structure", () => {
         expect(result.files).toContain(path);
       }
       const notes = readFileSync(join(result.targetDir, "src/flows/notes/index.ts"), "utf8");
-      expect(notes).toContain('name: "notes.create"');
-      expect(notes).not.toContain('name: "notes.digest"');
+      expect(notes).toContain('flow("notes.create"');
+      expect(notes).not.toContain('flow("notes.digest"');
       const all = result.files
         .filter((f) => f.endsWith(".ts") || f.endsWith(".md"))
         .map((f) => readFileSync(join(result.targetDir, f), "utf8"))

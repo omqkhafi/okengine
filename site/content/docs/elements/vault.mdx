@@ -62,7 +62,7 @@ Call `.reveal()` once at the boundary that needs the real credential:
 ```typescript title="src/flows/billing/charge.ts"
 export const charge = on(
   http.post("/charge"),
-  flow({
+  flow("billing.charge", {
     in: ChargeInput,
     out: z.object({ id: z.string() }),
     do: async (input, fx) => {

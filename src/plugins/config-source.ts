@@ -116,8 +116,7 @@ export function configSource<T extends object>(options: ConfigSourceOptions<T>):
       }
       if (options.db !== undefined) reads.push(options.db.store.ref);
 
-      return flow({
-        name: `${options.plugin}.config-sync`,
+      return flow(`${options.plugin}.config-sync`, {
         effects: { reads, writes },
         do: async (_input, fx) => {
           if (options.kv !== undefined) {

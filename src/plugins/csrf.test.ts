@@ -20,8 +20,8 @@ function mutating(headers: Record<string, string> = {}): Request {
 }
 
 function appWith(options: Parameters<typeof csrf>[0]) {
-  on(http.post("/transfer"), flow({ name: "transfer.create", do: () => ({ moved: true }) }));
-  on(http.get("/balance"), flow({ name: "balance.get", do: () => ({ balance: 5 }) }));
+  on(http.post("/transfer"), flow("transfer.create", { do: () => ({ moved: true }) }));
+  on(http.get("/balance"), flow("balance.get", { do: () => ({ balance: 5 }) }));
   return oke({ autoBoot: false, name: `csrf-${crypto.randomUUID()}` }).plug(csrf(options));
 }
 

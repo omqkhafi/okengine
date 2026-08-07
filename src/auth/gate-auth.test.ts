@@ -136,7 +136,7 @@ describe("gate.auth — autoBoot / posture", () => {
   });
 
   test(".needs(auth) satisfied by gate.auth without .plug(auth())", async () => {
-    on(http.get("/x").gate(AUTH_SESSION_GATE), flow({ name: "x", do: () => ({ ok: true }) }));
+    on(http.get("/x").gate(AUTH_SESSION_GATE), flow("x", { do: () => ({ ok: true }) }));
     const dependent = plugin("needs-auth", { version: "0.0.1" }).needs("auth");
     const app = oke({
       name: "needs-gate-auth",
@@ -309,7 +309,7 @@ describe("gate.auth — email Flows + security", () => {
   });
 
   test("missing gate on custom HTTP still GateBootError", async () => {
-    on(http.get("/open"), flow({ name: "open", do: () => ({ ok: true }) }));
+    on(http.get("/open"), flow("open", { do: () => ({ ok: true }) }));
     const app = oke({
       name: "gap",
       env: "local",

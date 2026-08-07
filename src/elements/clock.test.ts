@@ -67,8 +67,7 @@ describe("durable journal", () => {
     const tt = createTimeTravel(0);
     let crashAfterFirstStep = true;
 
-    const charge = flow({
-      name: "payments.charge",
+    const charge = flow("payments.charge", {
       durable: true,
       do: async (_input, fx) => {
         const intent = await fx.step("create-intent", () => {
@@ -118,8 +117,7 @@ describe("durable journal", () => {
     const tt = createTimeTravel(0);
 
     try {
-      const sleepy = flow({
-        name: "trial.wait",
+      const sleepy = flow("trial.wait", {
         durable: true,
         do: async (_input, fx) => {
           await fx.step("start", () => "begun");

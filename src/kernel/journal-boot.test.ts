@@ -73,8 +73,7 @@ async function waitFor(cond: () => Promise<boolean>, timeoutMs = 5_000): Promise
 
 /** Flow whose step 2 blocks once per execution; the test unblocks survivors. */
 function blockingFlow(step1Calls: string[], blockers: Array<() => void>): Binding {
-  const charge = flow({
-    name: "charge",
+  const charge = flow("charge", {
     durable: true,
     do: async (_input, fx) => {
       await fx.step("create-intent", () => {
@@ -96,8 +95,7 @@ function blockingFlow(step1Calls: string[], blockers: Array<() => void>): Bindin
 
 /** Flow that sleeps `wake`, then records one confirm execution. */
 function sleeperBinding(wake: string, confirms: string[]): Binding {
-  const sleeper = flow({
-    name: "sleeper",
+  const sleeper = flow("sleeper", {
     durable: true,
     do: async (_input, fx) => {
       await fx.step("create-intent", () => ({ id: "pi_1" }));

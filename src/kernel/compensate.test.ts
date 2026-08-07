@@ -24,8 +24,7 @@ describe("durable compensate", () => {
     const store = createMemoryJournalStore();
     const undos: string[] = [];
 
-    const pay = flow({
-      name: "pay.charge",
+    const pay = flow("pay.charge", {
       durable: true,
       do: async (_input: { amount: number }, fx) => {
         await fx.step("reserve", async () => "reserved");
@@ -72,8 +71,7 @@ describe("durable compensate", () => {
   test("compensate does not run on successful path", async () => {
     let compensated = 0;
     const store = createMemoryJournalStore();
-    const ok = flow({
-      name: "pay.ok",
+    const ok = flow("pay.ok", {
       durable: true,
       do: async (_input, fx) => {
         await fx.step("a", () => "done");
@@ -103,8 +101,7 @@ describe("durable compensate", () => {
     await runs.open();
     const store = createMemoryJournalStore();
 
-    const boom = flow({
-      name: "pay.boom",
+    const boom = flow("pay.boom", {
       durable: true,
       do: async () => {
         throw new Error("boom");

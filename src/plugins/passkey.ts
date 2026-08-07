@@ -87,9 +87,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
   const rpId = opts.rpId ?? "localhost";
   const origins = opts.origins ?? ["http://localhost", "https://localhost"];
 
-  const registerOptions = flow({
-    name: "auth.passkeyRegisterOptions",
-    unit: "auth",
+  const registerOptions = flow("auth.passkeyRegisterOptions", {
     plane: "user",
     out: z.object({
       challenge: z.string(),
@@ -115,9 +113,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const register = flow({
-    name: "auth.passkeyRegister",
-    unit: "auth",
+  const register = flow("auth.passkeyRegister", {
     plane: "user",
     in: CeremonyIn.extend({
       publicKey: z.string().min(1),
@@ -171,9 +167,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const authenticateOptions = flow({
-    name: "auth.passkeyAuthenticateOptions",
-    unit: "auth",
+  const authenticateOptions = flow("auth.passkeyAuthenticateOptions", {
     plane: "user",
     in: z.object({ email: z.string().optional() }),
     out: z.object({
@@ -199,9 +193,7 @@ export function passkey(opts: PasskeyOptions = {}): PluginDef {
     },
   });
 
-  const authenticate = flow({
-    name: "auth.passkeyAuthenticate",
-    unit: "auth",
+  const authenticate = flow("auth.passkeyAuthenticate", {
     plane: "user",
     in: CeremonyIn.extend({
       challenge: z.string().min(1),

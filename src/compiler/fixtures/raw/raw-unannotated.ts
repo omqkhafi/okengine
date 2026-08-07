@@ -5,8 +5,7 @@ import { on, flow, http } from "okengine";
  */
 export const escapeHatch = on(
   http.get("/raw"),
-  flow({
-    name: "raw.unannotated",
+  flow("raw.unannotated", {
     do: async (_, fx) => {
       return fx.raw("select 1");
     },
@@ -18,8 +17,7 @@ export const escapeHatch = on(
  */
 export const annotated = on(
   http.get("/raw-ok"),
-  flow({
-    name: "raw.annotated",
+  flow("raw.annotated", {
     effects: { reads: ["sql:orders"] },
     do: async (_, fx) => {
       return fx.raw("select * from orders");

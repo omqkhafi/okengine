@@ -17,8 +17,7 @@ describe("correlation — parentId across Flow → Signal → Flow", () => {
     const runs = createRunsRuntime({ driver: "memory" });
     await runs.open();
 
-    const producer = flow({
-      name: "orders.create",
+    const producer = flow("orders.create", {
       effects: { emits: ["corr-order-placed"] },
       do: async (input: { id: string }, fx) => {
         await fx.emit(orderPlaced, { id: input.id });
@@ -26,8 +25,7 @@ describe("correlation — parentId across Flow → Signal → Flow", () => {
       },
     });
 
-    const consumer = flow({
-      name: "orders.notify",
+    const consumer = flow("orders.notify", {
       do: async (_input: { id: string }) => ({ notified: true as const }),
     });
 
@@ -72,13 +70,11 @@ describe("correlation — parentId across Flow → Signal → Flow", () => {
     const runs = createRunsRuntime({ driver: "memory" });
     await runs.open();
 
-    const child = flow({
-      name: "inner.work",
+    const child = flow("inner.work", {
       do: () => ({ done: true as const }),
     });
 
-    const parent = flow({
-      name: "outer.work",
+    const parent = flow("outer.work", {
       effects: { calls: ["inner.work"] },
       do: async (_input, fx) => {
         await fx.call(child, {});

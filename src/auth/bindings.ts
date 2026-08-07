@@ -205,9 +205,7 @@ export function createAuthHttpBindings(
 
   const base = config.basePath;
 
-  const refresh = flow({
-    name: "auth.refresh",
-    unit: "auth",
+  const refresh = flow("auth.refresh", {
     plane: "user",
     in: RefreshIn,
     out: SessionTokensOut,
@@ -231,9 +229,7 @@ export function createAuthHttpBindings(
     },
   });
 
-  const revoke = flow({
-    name: "auth.revoke",
-    unit: "auth",
+  const revoke = flow("auth.revoke", {
     plane: "user",
     in: RevokeIn,
     out: z.object({ ok: z.literal(true) }),
@@ -252,9 +248,7 @@ export function createAuthHttpBindings(
     },
   });
 
-  const me = flow({
-    name: "auth.me",
-    unit: "auth",
+  const me = flow("auth.me", {
     plane: "user",
     out: MeOut,
     errors: { AuthFailed },
@@ -289,9 +283,7 @@ export function createAuthHttpBindings(
   ];
 
   if (config.emailAndPassword.enabled) {
-    const signInEmail = flow({
-      name: "auth.signInEmail",
-      unit: "auth",
+    const signInEmail = flow("auth.signInEmail", {
       plane: "user",
       in: EmailPasswordIn,
       out: SessionTokensOut,
@@ -319,9 +311,7 @@ export function createAuthHttpBindings(
       },
     });
 
-    const signUpEmail = flow({
-      name: "auth.signUpEmail",
-      unit: "auth",
+    const signUpEmail = flow("auth.signUpEmail", {
       plane: "user",
       in: EmailPasswordIn,
       out: SessionTokensOut,

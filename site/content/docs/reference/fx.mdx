@@ -7,7 +7,7 @@ icon: "Braces"
 `fx` is the second argument of every `do` — the single door to the world. This page is the whole surface; each entry notes the **effect it records**, which is what feeds the Manifest, caching, and capability checks.
 
 ```typescript
-flow({
+flow("orders.example", {
   do: async (input, fx) => {
     // everything below, on this one object
   },
@@ -51,8 +51,7 @@ Declare `effects: { reads: ["runs"] }`. Powers native SLO checkers (Clock + Chan
 ```typescript
 on(
   every("5m"),
-  flow({
-    name: "ops.slo-check",
+  flow("ops.slo-check", {
     effects: { reads: ["runs"], sends: ["slo-alert"] },
     do: async (_, fx) => {
       const breaches = await fx.runs.checkSlo(
@@ -133,7 +132,7 @@ const rows = await fx.using(
 );
 ```
 
-**Consequence:** put `fx.retry` inside `fx.step` on durable flows so a completed charge never re-runs on resume. Coarse whole-body retry is `flow({ retry: { … } })` on the same journal session.
+**Consequence:** put `fx.retry` inside `fx.step` on durable flows so a completed charge never re-runs on resume. Coarse whole-body retry is `flow(name, { retry: { … } })` on the same journal session.
 
 ## Channel
 

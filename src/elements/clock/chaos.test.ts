@@ -173,8 +173,7 @@ describe("chaos — SIGKILL durable mid-step", () => {
 
       const calls: string[] = [];
       const journalStore = createFileJournalStore(journalPath);
-      const charge = flow({
-        name: "chaos.charge",
+      const charge = flow("chaos.charge", {
         durable: true,
         do: async (_input, fx) => {
           const intent = await fx.step("create-intent", () => {

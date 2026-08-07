@@ -5,6 +5,7 @@
  */
 
 import type { ColumnClassification, ResourceRef, StoreFacet } from "../../manifest/types.ts";
+import { storeRegistry } from "../../kernel/element-registries.ts";
 import { resource } from "./resource.ts";
 import { schema } from "./schema-decl.ts";
 import { resolveTableName, type TableHandle } from "./table.ts";
@@ -115,6 +116,28 @@ export interface IndexStoreDecl extends StoreDeclBase {
 export type StoreDecl = SqlStoreDecl | KvStoreDecl | FilesStoreDecl | IndexStoreDecl;
 
 /**
+ * `store.sql` / `store.files` push into the shared {@link storeRegistry}
+ * (`src/kernel/element-registries.ts`) so {@link oke} can auto-populate
+ * `stores` with zero explicit array — mirrors the {@link on} trigger-drain
+ * registry (`src/kernel/on.ts`). `store.kv` / `store.index` are
+ * intentionally not auto-registered (out of scope).
+ *
+ * Snapshot of every `store.sql` / `store.files` declared since the last reset.
+ */
+export function listStores(): readonly StoreDecl[] {
+  return storeRegistry.slice();
+}
+
+/**
+ * Clear the store registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetStores(): void {
+  storeRegistry.length = 0;
+}
+
+/**
  * Declare a SQL store.
  *
  * @param name - Store name
@@ -140,6 +163,7 @@ export function sql(name: string, options: SqlStoreOptions = {}): SqlStoreDecl {
       };
     },
   };
+  storeRegistry.push(decl);
   return decl;
 }
 
@@ -165,12 +189,14 @@ export function kv(name: string, options: KvStoreOptions = {}): KvStoreDecl {
  * @param options - Options
  */
 export function files(name: string, options: FilesStoreOptions = {}): FilesStoreDecl {
-  return {
+  const decl: FilesStoreDecl = {
     facet: "files",
     name,
     ref: `files:${name}`,
     ...(options.description !== undefined ? { description: options.description } : {}),
   };
+  storeRegistry.push(decl);
+  return decl;
 }
 
 /**

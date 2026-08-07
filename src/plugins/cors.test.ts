@@ -28,7 +28,7 @@ function preflight(path = "/x", headers: Record<string, string> = {}): Request {
 
 describe("cors plugin — preflight", () => {
   test("answers preflight for a path bound to another method (edge)", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-pre" }).plug(
       cors({ origin: "https://app.example.com" }),
     );
@@ -42,7 +42,7 @@ describe("cors plugin — preflight", () => {
   });
 
   test("denied origins get a 204 without CORS headers — the browser blocks quietly", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-deny" }).plug(
       cors({ origin: "https://other.example.com" }),
     );
@@ -54,7 +54,7 @@ describe("cors plugin — preflight", () => {
   });
 
   test("no origin configured answers nothing — cross-origin closed by default", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-closed" }).plug(cors());
 
     const res = await app.fetch(preflight());
@@ -62,7 +62,7 @@ describe("cors plugin — preflight", () => {
   });
 
   test("a plain unmatched OPTIONS without preflight headers still 404s", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-404" }).plug(cors({ origin: "*" }));
 
     const res = await app.fetch(new Request("http://localhost/x", { method: "OPTIONS" }));
@@ -70,7 +70,7 @@ describe("cors plugin — preflight", () => {
   });
 
   test("reflects request headers by default, honors configured lists and maxAge", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-hdr" }).plug(
       cors({ origin: "*", maxAge: 600, allowedHeaders: ["x-custom"] }),
     );
@@ -91,7 +91,7 @@ describe("cors plugin — preflight", () => {
   });
 
   test("allowlist + credentials reflects only listed origins", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-cred" }).plug(
       cors({ origin: ["https://app.example.com", "https://admin.example.com"], credentials: true }),
     );
@@ -109,7 +109,7 @@ describe("cors plugin — preflight", () => {
 
 describe("cors plugin — actual requests", () => {
   test("allowed origins get allow-origin (+ exposed headers) on matched responses", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-actual" }).plug(
       cors({ origin: ["https://app.example.com"], exposedHeaders: ["x-total"] }),
     );
@@ -124,7 +124,7 @@ describe("cors plugin — actual requests", () => {
   });
 
   test("allowlist + credentials on matched responses reflects only listed origins", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-actual-cred" }).plug(
       cors({ origin: ["https://app.example.com"], credentials: true }),
     );
@@ -145,7 +145,7 @@ describe("cors plugin — actual requests", () => {
   });
 
   test("denied origins get no CORS headers on matched responses", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-actual-deny" }).plug(
       cors({ origin: "https://ok.example.com" }),
     );
@@ -159,7 +159,7 @@ describe("cors plugin — actual requests", () => {
   });
 
   test("requests without an Origin header are untouched", async () => {
-    on(http.get("/x"), flow({ name: "x.get", do: () => ({ ok: true }) }));
+    on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-no-origin" }).plug(cors({ origin: "*" }));
 
     const res = await app.fetch(new Request("http://localhost/x"));
