@@ -10,6 +10,8 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.10.1 — 2026-08-07
+
 ### ✨ Added
 
 - Boot-time effects stamping: a flow with no hand-declared `effects` can now
