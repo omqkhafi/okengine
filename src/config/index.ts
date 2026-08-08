@@ -81,8 +81,55 @@ export interface DriversConfig {
   readonly runs?: EnvDriverMap;
 }
 
-/** Image lock entries keyed by element role (`store.sql`, …). */
-export type ImagesConfig = Readonly<Record<string, string>>;
+/**
+ * Container image pins, nested the same way as {@link DriversConfig}:
+ * `store.*` / `channel.*` facets nest under their owning element; roles with
+ * no driver counterpart (`vault` picks a driver but pins its own image;
+ * `ai`, `pgdog`, `proxy` have no config-level element at all) stay flat.
+ *
+ * Always fully explicit — `images` has no hidden default merge. Omitted keys
+ * mean "no container for that role," never "inherit a default image."
+ */
+export interface ImagesConfig {
+  readonly store?: {
+    readonly sql?: string;
+    readonly kv?: string;
+    readonly files?: string;
+    readonly index?: string;
+  };
+  readonly channel?: {
+    readonly email?: string;
+  };
+  readonly vault?: string;
+  readonly ai?: string;
+  readonly pgdog?: string;
+  readonly proxy?: string;
+}
+
+/**
+ * Flatten {@link ImagesConfig} to the dotted-role `Record<string, string>`
+ * every internal consumer (compose role matching, credentials, env prefixes)
+ * has always kept working with — the nesting is a config-surface / type-safety
+ * concern only, not an internal representation change.
+ *
+ * @param images - Nested config-surface images (or `undefined`)
+ */
+export function flattenImagesConfig(
+  images: ImagesConfig | undefined,
+): Readonly<Record<string, string>> {
+  if (!images) return {};
+  const out: Record<string, string> = {};
+  if (images.store?.sql) out["store.sql"] = images.store.sql;
+  if (images.store?.kv) out["store.kv"] = images.store.kv;
+  if (images.store?.files) out["store.files"] = images.store.files;
+  if (images.store?.index) out["store.index"] = images.store.index;
+  if (images.channel?.email) out["channel.email"] = images.channel.email;
+  if (images.vault) out.vault = images.vault;
+  if (images.ai) out.ai = images.ai;
+  if (images.pgdog) out.pgdog = images.pgdog;
+  if (images.proxy) out.proxy = images.proxy;
+  return out;
+}
 
 /** i18n config. */
 export interface I18nConfig {
@@ -294,6 +341,32 @@ export function normalizeDriversConfig(
 }
 
 /**
+ * Merge a developer's partial {@link EnvDriverMap} onto the real default map
+ * for one specific driver — per environment key, never a whole-object
+ * replace. An unset key keeps that driver's own real default; it never
+ * inherits a sibling key's value (the old `docker → prod → local → test`
+ * cascade in {@link resolveDriverId} did that, which is exactly the bug this
+ * fixes — `{ local: "pglite" }` no longer leaks `pglite` into `docker`).
+ *
+ * Scoped strictly to the `{ local?, docker?, test?, prod? }` shape — not a
+ * generic deep merge, and never applied to a whole config object.
+ *
+ * @param override - Developer-supplied partial map (may be `undefined`)
+ * @param defaults - Real, already-established default map for this driver
+ */
+export function mergeEnvDriverMap(
+  override: EnvDriverMap | undefined,
+  defaults: EnvDriverMap,
+): EnvDriverMap {
+  return {
+    local: override?.local ?? defaults.local,
+    docker: override?.docker ?? defaults.docker,
+    test: override?.test ?? defaults.test,
+    prod: override?.prod ?? defaults.prod,
+  };
+}
+
+/**
  * Fill missing `docker` pins from `prod` (compose infra ≈ production protocols).
  *
  * @param map - Env → driver map
@@ -365,22 +438,39 @@ export function defineConfig(config: OkeConfig): OkeConfig {
 /**
  * Resolve a driver id for an env from an {@link EnvDriverMap}.
  *
- * `docker` falls back to `prod` then `local` so existing configs keep working
- * until an explicit `docker:` pin is added. Legacy keys are normalized first.
+ * With `defaults` given, the developer's map is merged onto it per-key via
+ * {@link mergeEnvDriverMap} and the active env's slot is read directly — a
+ * key the developer never set keeps that driver's real default, full stop.
+ * This is the path every driver map with an established default should use.
+ *
+ * Without `defaults` (legacy path — `store.index`, `channel.whatsapp` /
+ * `push`, `ai`, which have no single established default table): `docker`
+ * falls back to `prod` then `local` then `test` so existing configs keep
+ * working until an explicit `docker:` pin is added. Legacy `dev`/`stack`
+ * keys are normalized first either way.
  *
  * @param map - Env → driver map
  * @param env - Active environment
+ * @param defaults - Real default map for this specific driver (per-key merge)
  */
 export function resolveDriverId(
   map: EnvDriverMap | RawEnvDriverMap | undefined,
   env: ConfigEnv,
+  defaults?: EnvDriverMap,
 ): string | undefined {
+  const normalized = normalizeEnvDriverMap(map as RawEnvDriverMap);
+  if (defaults) {
+    const merged = mergeEnvDriverMap(normalized, defaults);
+    const ref = merged[env];
+    if (ref === undefined) return undefined;
+    return typeof ref === "string" ? ref : ref.driver;
+  }
   if (!map) return undefined;
-  const normalized = normalizeEnvDriverMap(map as RawEnvDriverMap) ?? map;
+  const resolved = normalized ?? map;
   const ref =
     env === "docker"
-      ? (normalized.docker ?? normalized.prod ?? normalized.local ?? normalized.test)
-      : (normalized[env] ?? normalized.local ?? normalized.test);
+      ? (resolved.docker ?? resolved.prod ?? resolved.local ?? resolved.test)
+      : (resolved[env] ?? resolved.local ?? resolved.test);
   if (ref === undefined) return undefined;
   return typeof ref === "string" ? ref : ref.driver;
 }

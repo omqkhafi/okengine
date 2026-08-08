@@ -3,6 +3,12 @@
  */
 
 import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import {
+  dockerFlagDefaults,
+  STORE_FILES_DEFAULTS,
+  STORE_KV_DEFAULTS,
+  STORE_SQL_DEFAULTS,
+} from "../../config/driver-defaults.ts";
 import { fsDriver } from "../../drivers/fs.ts";
 import { libsqlDriver, libsqlIndexDriver } from "../../drivers/libsql.ts";
 import { meilisearchDriver } from "../../drivers/meilisearch.ts";
@@ -138,9 +144,12 @@ function resolveAutoPush(options: BootOptions): boolean {
 export function resolveSqlDriverId(options: BootOptions, env: ConfigEnv, docker: boolean): string {
   const fromEnv = process.env.OKE_SQL_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
-  const resolved = resolveDriverId(options.config?.drivers?.store?.sql, env);
-  if (resolved) return resolved;
-  return docker ? "postgres" : "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(
+    options.config?.drivers?.store?.sql,
+    env,
+    dockerFlagDefaults(STORE_SQL_DEFAULTS, docker),
+  )!;
 }
 
 /**
@@ -151,9 +160,12 @@ export function resolveSqlDriverId(options: BootOptions, env: ConfigEnv, docker:
 export function resolveKvDriverId(options: BootOptions, env: ConfigEnv, docker: boolean): string {
   const fromEnv = process.env.OKE_KV_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
-  const resolved = resolveDriverId(options.config?.drivers?.store?.kv, env);
-  if (resolved) return resolved;
-  return docker ? "redis" : "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(
+    options.config?.drivers?.store?.kv,
+    env,
+    dockerFlagDefaults(STORE_KV_DEFAULTS, docker),
+  )!;
 }
 
 /**
@@ -168,9 +180,12 @@ export function resolveFilesDriverId(
 ): string {
   const fromEnv = process.env.OKE_FILES_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
-  const resolved = resolveDriverId(options.config?.drivers?.store?.files, env);
-  if (resolved) return resolved;
-  return docker ? "s3" : "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(
+    options.config?.drivers?.store?.files,
+    env,
+    dockerFlagDefaults(STORE_FILES_DEFAULTS, docker),
+  )!;
 }
 
 /**

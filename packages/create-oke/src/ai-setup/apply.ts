@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { OLLAMA_IMAGE } from "../drivers-catalog.ts";
+import { extractImages, findImagesBlock, replaceImagesBlock } from "../transform.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
@@ -127,24 +128,19 @@ export function upsertAiDrivers(source: string, driver: string): string {
 }
 
 /**
+ * Set one dotted role's image pin, preserving every other pin (including
+ * `store.*` / `channel.*` nesting) via {@link extractImages} /
+ * {@link replaceImagesBlock} — a parse/set/render round-trip rather than a
+ * single-line regex, so nested sub-objects are never corrupted.
+ *
  * @param source - Config source
- * @param key - Image role
+ * @param key - Image role (dotted for `store.*` / `channel.*`, flat otherwise)
  * @param image - Image ref
  */
 export function upsertImage(source: string, key: string, image: string): string {
-  const keyLit = key.includes(".") ? `"${key}"` : key;
-  const line = `    ${keyLit}: "${image}",`;
-  const imagesRe = /images:\s*\{([\s\S]*?)\n\s*\}/;
-  const m = imagesRe.exec(source);
-  if (!m) return source;
-  const body = m[1]!;
-  if (new RegExp(`${keyLit}\\s*:`).test(body) || new RegExp(`"${key}"\\s*:`).test(body)) {
-    return source.replace(
-      new RegExp(`(["']?${key.replace(".", "\\.")}["']?\\s*:\\s*)"[^"]*"`),
-      `$1"${image}"`,
-    );
-  }
-  return source.replace(imagesRe, `images: {${body}\n${line}\n  }`);
+  if (!findImagesBlock(source)) return source;
+  const images = { ...extractImages(source), [key]: image };
+  return replaceImagesBlock(source, images);
 }
 
 /** Options for {@link upsertEnv}. */

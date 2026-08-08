@@ -15,8 +15,10 @@ export default defineConfig({
     ai: { prod: { driver: "anthropic" } },
   },
   images: {
-    "store.sql": "pgvector/pgvector:pg17",
-    "store.kv": "valkey/valkey:8-alpine",
+    store: {
+      sql: "pgvector/pgvector:pg17",
+      kv: "valkey/valkey:8-alpine",
+    },
   },
   i18n: { locales: ["en", "ar"], default: "ar", dir: { ar: "rtl" } },
   tenancy: { isolation: "row" },

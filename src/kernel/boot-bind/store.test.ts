@@ -78,6 +78,25 @@ describe("bindStore driver resolution", () => {
     expect(resolveKvDriverId({}, "docker", true)).toBe("redis");
     expect(resolveFilesDriverId({}, "docker", true)).toBe("s3");
   });
+
+  test("pinning only `local` never leaks into docker/test/prod — each keeps its real default", () => {
+    const options = {
+      config: {
+        drivers: {
+          store: {
+            sql: { local: "pglite" },
+          },
+        },
+      },
+    };
+    expect(resolveSqlDriverId(options, "local", false)).toBe("pglite");
+    expect(resolveSqlDriverId(options, "docker", true)).toBe("postgres");
+    expect(resolveSqlDriverId(options, "test", false)).toBe("memory");
+    expect(resolveSqlDriverId(options, "prod", true)).toBe("postgres");
+    // kv / files are untouched by the sql-only override.
+    expect(resolveKvDriverId(options, "local", false)).toBe("memory");
+    expect(resolveKvDriverId(options, "docker", true)).toBe("redis");
+  });
 });
 
 describe("bindStore files fs multi-instance warn", () => {

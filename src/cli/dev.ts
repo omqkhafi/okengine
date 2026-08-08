@@ -178,11 +178,13 @@ export interface DevOptions {
   readonly onDbAutoPush?: (filename: string) => void;
   /**
    * Injectable `.adopt()` barrel regeneration (tests). Default: real
-   * `generateAdoptBarrel` + write to `<cwd>/src/flows/generated.ts`. Runs
-   * once per `oke dev` session, before the entry is resolved/imported —
-   * a real file on disk, so `oke dev`'s runtime `import()` and `oke build`'s
-   * `Bun.build()` resolve it identically (unlike a virtual-module Bun
-   * plugin, which does not — see `compiler/generate-adopt.ts`).
+   * `generateAdoptBarrel` + atomic write to `<cwd>/src/flows/generated.ts`
+   * (`generated.ts.tmp` → rename). Runs once per `oke dev` session, before
+   * the entry is resolved/imported — a real file on disk, so `oke dev`'s
+   * runtime `import()` and `oke build`'s `Bun.build()` resolve it
+   * identically (unlike a virtual-module Bun plugin, which does not — see
+   * `compiler/generate-adopt.ts`). Atomic so a concurrent import during
+   * `bun --hot` never sees a torn mid-write file.
    *
    * @param cwd - Project root
    */
@@ -346,18 +348,18 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const cwd = options.cwd ?? process.cwd();
 
   // One-shot `.adopt()` barrel regen for the session — real file on disk
-  // (`src/flows/generated.ts`), written before the entry is resolved/imported
-  // below so a freshly-added flows unit is adoptable without a hand edit.
-  // Best-effort like `syncDevSchema` below: a project with no `src/flows`
-  // yet (or a synthetic test tree) never blocks the dev session.
+  // (`src/flows/generated.ts`), written atomically (tmp → rename) before the
+  // entry is resolved/imported below so a freshly-added flows unit is
+  // adoptable without a hand edit. Best-effort like `syncDevSchema` below:
+  // a project with no `src/flows` yet (or a synthetic test tree) never
+  // blocks the dev session.
   const syncAdoptBarrel =
     options.syncAdoptBarrel ??
     (async (root: string) => {
-      const { generateAdoptBarrel } = await import("../compiler/generate-adopt.ts");
-      const { mkdir, writeFile } = await import("node:fs/promises");
+      const { generateAdoptBarrel, writeAdoptBarrel } =
+        await import("../compiler/generate-adopt.ts");
       const { source, units } = await generateAdoptBarrel({ rootDir: root });
-      await mkdir(resolve(root, "src/flows"), { recursive: true });
-      await writeFile(resolve(root, "src/flows/generated.ts"), source);
+      await writeAdoptBarrel(root, source);
       return units;
     });
   try {

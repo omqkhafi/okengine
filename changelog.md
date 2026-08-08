@@ -10,6 +10,43 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 ## Unreleased
 
+## v0.10.3 — 2026-08-08
+
+### ✨ Added
+
+- `drivers.<element>[.<facet>]` config can now pin just the environment keys
+  that differ from the real default, merged per-key instead of replacing the
+  whole map — `{ store: { sql: { local: "pglite" } } }` resolves to `{
+local: "pglite", docker: "postgres", test: "memory", prod: "postgres" }`,
+  every other driver map (`kv`, `files`, `signal`, `clock`, `journal`,
+  `vault`, `channel.email/sms`) staying fully at its real, untouched
+  default. The real defaults now live in one place,
+  `src/config/driver-defaults.ts`, and merge through a new
+  `mergeEnvDriverMap` helper scoped strictly to the `{ local?, docker?,
+test?, prod? }` shape (never a generic whole-config deep merge). Fixes a
+  leak in `resolveDriverId`'s old `docker → prod → local → test` cascade,
+  where pinning only `local` could bleed that value into `docker` / `prod`
+  instead of falling back to the real default.
+- `oke doctor` now prints the fully-resolved `drivers.*` config — every real
+  default plus every override, for all four env keys at once — so the
+  complete picture stays visible even when `oke.config.ts` only pins one
+  key. New `--env local|docker|test|prod` flag picks which env's active
+  driver id is highlighted (default: `docker` when `OKE_DOCKER=1`, else
+  `local`); also included under a `drivers` key in `--json` output.
+- `images` config is now nested the same way as `drivers` — `{ store: { sql,
+kv, files, index }, channel: { email }, vault, ai, pgdog, proxy }` —
+  instead of a flat `Record<string, string>` keyed by dotted role strings.
+  Closes a real type-safety gap: the old shape accepted any string key with
+  zero compile-time or boot-time catch (`"strore.sql"` silently did nothing).
+  Internal compose/Dockerfile derivation is unchanged — a new
+  `flattenImagesConfig()` in `okengine/config` flattens the nested shape back
+  to the dotted-role map `deriveInfrastructure()` / `buildSpecs()` /
+  credentials already worked with. `create-oke`'s scaffolder and both starter
+  templates now generate the nested form; `oke ai setup` and the customize
+  wizard's `images` codegen were rewritten to parse/emit it correctly
+  (brace-balanced, not the old first-`}`-closes-it regex, which broke on
+  nested sub-objects).
+
 ## v0.10.2 — 2026-08-07
 
 ### ✨ Added

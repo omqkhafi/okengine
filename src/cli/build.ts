@@ -2,9 +2,6 @@
  * `oke build --target edge` — tree-shaken kernel profile.
  */
 
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
-
 /** Options for {@link runBuild}. */
 export interface BuildOptions {
   readonly target?: "bun" | "node" | "edge";
@@ -21,8 +18,9 @@ export interface BuildOptions {
   }) => Promise<{ success: boolean; logs: string }>;
   /**
    * Inject `.adopt()` barrel regeneration (tests). Default: real
-   * `generateAdoptBarrel` + write to `<rootDir>/src/flows/generated.ts`.
-   * Returns the unit names written, for the status line.
+   * `generateAdoptBarrel` + atomic write to `<rootDir>/src/flows/generated.ts`
+   * (`generated.ts.tmp` → rename). Returns the unit names written, for the
+   * status line.
    */
   readonly syncAdoptBarrel?: (rootDir: string) => Promise<readonly string[]>;
 }
@@ -33,14 +31,15 @@ export interface BuildOptions {
  * pre-step). A real file on disk, not a virtual module: identical resolution
  * under `oke dev`'s runtime `import()` and `oke build`'s `Bun.build()`
  * (investigated — a virtual-module Bun plugin does not resolve consistently
- * across those two paths).
+ * across those two paths). Written atomically so a concurrent reader never
+ * sees a torn file.
  *
  * @param rootDir - Project root
  */
 async function defaultSyncAdoptBarrel(rootDir: string): Promise<readonly string[]> {
-  const { generateAdoptBarrel } = await import("../compiler/generate-adopt.ts");
+  const { generateAdoptBarrel, writeAdoptBarrel } = await import("../compiler/generate-adopt.ts");
   const { source, units } = await generateAdoptBarrel({ rootDir });
-  await writeFile(join(rootDir, "src/flows/generated.ts"), source);
+  await writeAdoptBarrel(rootDir, source);
   return units;
 }
 

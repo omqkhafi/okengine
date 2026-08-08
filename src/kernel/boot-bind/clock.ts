@@ -15,6 +15,7 @@ import {
 } from "../../elements/clock.ts";
 import { createPostgresCronStore } from "../../drivers/clock-postgres.ts";
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { CLOCK_DEFAULTS } from "../../config/driver-defaults.ts";
 import type { BootOptions } from "../boot.ts";
 
 /** Result of binding a clock runtime. */
@@ -33,9 +34,8 @@ export const DEFAULT_FILE_CRON_PATH = ".oke/crons.json";
  * @param env - Active environment
  */
 export function resolveClockDriverId(options: BootOptions, env: ConfigEnv): string {
-  const resolved = resolveDriverId(options.config?.drivers?.clock, env);
-  if (resolved) return resolved;
-  return env === "test" ? "frozen" : "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(options.config?.drivers?.clock, env, CLOCK_DEFAULTS)!;
 }
 
 /**

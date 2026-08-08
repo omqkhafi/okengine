@@ -21,7 +21,11 @@ function evalConfig(source: string): {
     ai?: unknown;
     channel?: { ai?: unknown; email?: unknown };
   };
-  images?: Record<string, string>;
+  images?: {
+    store?: Record<string, string>;
+    channel?: Record<string, string>;
+    ai?: string;
+  };
 } {
   const body = source
     .replace(/^import\s+[\s\S]*?from\s+["'][^"']+["'];?\s*/m, "")
@@ -60,7 +64,7 @@ describe("applyCreateAnswers images", () => {
     expect(next).not.toMatch(/images:\s*\{[^}]*\blocal:\s*"/s);
     expect(next).not.toMatch(/images:\s*\{[^}]*\bdocker:\s*"/s);
     expect(next).not.toMatch(/images:\s*\{[^}]*:\s*"libsql"/s);
-    expect(next).toContain('"store.sql": "postgres:18-alpine"');
+    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bsql: "postgres:18-alpine"/s);
   });
 
   test("index meilisearch pins store.index image without comment leakage", () => {
@@ -68,7 +72,7 @@ describe("applyCreateAnswers images", () => {
       templateConfig(),
       defaultsWithIndex("meilisearch", "meilisearch"),
     );
-    expect(next).toContain('"store.index": "getmeili/meilisearch:v1.37"');
+    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bindex: "getmeili\/meilisearch:v1.37"/s);
     expect(next).not.toMatch(/images:\s*\{[^}]*\btest:\s*"memory"/s);
   });
 });

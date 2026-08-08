@@ -3,6 +3,7 @@
  */
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { dockerFlagDefaults, STORE_KV_DEFAULTS } from "../../config/driver-defaults.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
 import { redisDriver } from "../../drivers/redis.ts";
 import type { KvClientLike } from "../../drivers/types.ts";
@@ -27,10 +28,12 @@ export function resolveGateKvDriverId(
   const fromEnv = process.env.OKE_KV_DRIVER?.trim();
   if (docker && fromEnv === "redis") return "redis";
   if (docker && fromEnv === "memory") return "memory";
-  const resolved = resolveDriverId(options.config?.drivers?.store?.kv, env);
-  if (resolved === "redis") return "redis";
-  if (resolved === "memory") return "memory";
-  return docker ? "redis" : "memory";
+  const resolved = resolveDriverId(
+    options.config?.drivers?.store?.kv,
+    env,
+    dockerFlagDefaults(STORE_KV_DEFAULTS, docker),
+  );
+  return resolved === "redis" ? "redis" : "memory";
 }
 
 function kvUrlFor(docker: boolean): string {

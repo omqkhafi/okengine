@@ -64,12 +64,16 @@ export default defineConfig({
     },
   },
   images: {
-    "store.sql": "postgres:18-alpine",
-    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
-    "store.kv": "redis:8-alpine",
-    "store.files": "rustfs/rustfs:1.0.0-beta.11",
-    "channel.email": "axllent/mailpit:v1.22.3",
+    store: {
+      sql: "postgres:18-alpine",
+      kv: "redis:8-alpine",
+      files: "rustfs/rustfs:1.0.0-beta.11",
+    },
+    channel: {
+      email: "axllent/mailpit:v1.22.3",
+    },
     vault: "openbao/openbao:2.6.1",
+    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

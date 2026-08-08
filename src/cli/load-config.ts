@@ -3,7 +3,7 @@
  */
 
 import { resolve } from "node:path";
-import type { DriverRef, OkeConfig } from "../config/index.ts";
+import { flattenImagesConfig, type DriverRef, type OkeConfig } from "../config/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 
 /** Default image pins when `images` is omitted but prod drivers need containers. */
@@ -145,7 +145,7 @@ export function resolveImages(
   config?: OkeConfig,
   manifest?: Manifest,
 ): Readonly<Record<string, string>> {
-  const explicit = config?.images ?? manifest?.images;
+  const explicit = config?.images ? flattenImagesConfig(config.images) : manifest?.images;
   if (explicit && Object.keys(explicit).length > 0) return explicit;
   if (config) return defaultImagesFromConfig(config);
   return {};

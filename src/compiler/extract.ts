@@ -1022,8 +1022,20 @@ function collectConfig(opts: AstNode | undefined, scope: ProjectScope): void {
   const images = objectProp(opts, "images");
   if (images) {
     const map: Record<string, string> = {};
+    // Nested like `drivers`: `store.*` / `channel.*` flatten to dotted keys;
+    // everything else (`vault`, `ai`, `pgdog`, `proxy`) is already flat.
+    for (const nestKey of ["store", "channel"] as const) {
+      const nested = objectProp(images, nestKey);
+      if (!nested || nested.type !== "ObjectExpression") continue;
+      for (const prop of objectProperties(nested)) {
+        const key = propKey(prop);
+        const val = stringArg((prop as AstNode & { value?: AstNode }).value);
+        if (key && val) map[`${nestKey}.${key}`] = val;
+      }
+    }
     for (const prop of objectProperties(images)) {
       const key = propKey(prop);
+      if (key === "store" || key === "channel") continue;
       const val = stringArg((prop as AstNode & { value?: AstNode }).value);
       if (key && val) map[key] = val;
     }

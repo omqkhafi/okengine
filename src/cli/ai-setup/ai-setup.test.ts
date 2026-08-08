@@ -117,7 +117,9 @@ export default defineConfig({
     },
   },
   images: {
-    "store.sql": "postgres:18-alpine",
+    store: {
+      sql: "postgres:18-alpine",
+    },
   },
 });
 `,

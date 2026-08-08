@@ -7,9 +7,14 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import {
+  ADOPT_BARREL_FILE,
+  generateAdoptBarrel,
+  writeAdoptBarrel,
+} from "../compiler/generate-adopt.ts";
 import type { Manifest } from "../manifest/types.ts";
 import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
@@ -542,6 +547,88 @@ describe("oke dev hot reload", () => {
     }
     expect(seen).toEqual({ data: { version: "v2" }, error: null });
   }, 60_000);
+});
+
+describe("oke dev syncAdoptBarrel atomic write", () => {
+  test("default path regenerates generated.ts and leaves no .tmp behind", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-adopt-atomic-"));
+    await mkdir(join(dir, "src/flows/notes"), { recursive: true });
+    await Bun.write(join(dir, "src/flows/notes/index.ts"), "export {};\n");
+    await Bun.write(join(dir, "src/app.ts"), "export {};\n");
+    await Bun.write(join(dir, "src/flows", ADOPT_BARREL_FILE), "// stale stub\n");
+
+    const { code } = await runDev({
+      cwd: dir,
+      dryRun: true,
+      stdinIsTTY: false,
+      write: () => {},
+    });
+    expect(code).toBe(0);
+
+    const barrelPath = join(dir, "src/flows", ADOPT_BARREL_FILE);
+    const text = await Bun.file(barrelPath).text();
+    expect(text).toContain('export * as notes from "./notes/index.ts";');
+    expect(text).not.toContain("stale stub");
+    expect(await Bun.file(`${barrelPath}.tmp`).exists()).toBe(false);
+    const leftovers = (await readdir(join(dir, "src/flows"))).filter((f) => f.includes(".tmp"));
+    expect(leftovers).toEqual([]);
+  });
+
+  test("writeAdoptBarrel uses temp then rename — concurrent readers never see a torn file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-adopt-race-"));
+    const flowsDir = join(dir, "src/flows");
+    await mkdir(flowsDir, { recursive: true });
+    const target = join(flowsDir, ADOPT_BARREL_FILE);
+
+    // Two complete, same-length payloads so a mid-write truncate would yield
+    // mixed or short content that fails both equality checks.
+    const markerA = "A";
+    const markerB = "B";
+    const body = (marker: string) => `// ${marker}\n` + `${marker.repeat(64)}\n`.repeat(2_000);
+    const payloadA = body(markerA);
+    const payloadB = body(markerB);
+    expect(payloadA.length).toBe(payloadB.length);
+    expect(payloadA).not.toBe(payloadB);
+
+    await writeAdoptBarrel(dir, payloadA);
+    expect(await Bun.file(target).text()).toBe(payloadA);
+
+    const reads: string[] = [];
+    let stop = false;
+    const reader = (async () => {
+      while (!stop) {
+        try {
+          reads.push(await Bun.file(target).text());
+        } catch {
+          // Target briefly missing only if rename races a delete — ignore.
+        }
+        // Yield so writers interleave; Bun.sleep(0) is enough on this loop.
+        await Bun.sleep(0);
+      }
+    })();
+
+    for (let i = 0; i < 80; i++) {
+      await writeAdoptBarrel(dir, i % 2 === 0 ? payloadB : payloadA);
+    }
+    stop = true;
+    await reader;
+
+    expect(reads.length).toBeGreaterThan(10);
+    for (const sample of reads) {
+      // Every observation is a complete prior or complete next payload —
+      // never a truncated prefix, never a mix of A/B markers.
+      const ok = sample === payloadA || sample === payloadB;
+      expect(ok).toBe(true);
+      expect(sample.length).toBe(payloadA.length);
+      expect(sample.includes(markerA) && sample.includes(markerB)).toBe(false);
+    }
+    expect(await Bun.file(`${target}.tmp`).exists()).toBe(false);
+
+    // Same helper the default `oke dev` path uses end-to-end.
+    const { source } = await generateAdoptBarrel({ rootDir: dir });
+    await writeAdoptBarrel(dir, source);
+    expect(await Bun.file(target).text()).toBe(source);
+  });
 });
 
 describe("oke dev mode resolution", () => {

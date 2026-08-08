@@ -298,8 +298,11 @@ ${close}}`;
 /** Env-column keys that must never appear under `images`. */
 const IMAGE_ENV_COLUMNS = new Set(["local", "docker", "test", "prod"]);
 
-/** Known compose role keys written into `images`. */
-const IMAGE_ROLE_KEY = /^(?:store\.(?:sql|kv|files|index)|channel\.email|vault|ai|pgdog)$/;
+/** Known compose role keys written into `images` (dotted, post-flatten). */
+const IMAGE_ROLE_KEY = /^(?:store\.(?:sql|kv|files|index)|channel\.email|vault|ai|pgdog|proxy)$/;
+
+/** `images` sub-object keys that nest role facets (mirrors `drivers` nesting). */
+const IMAGE_NEST_KEYS = ["store", "channel"] as const;
 
 /**
  * Keep `images` in sync with chosen docker drivers.
@@ -374,43 +377,111 @@ function aiImageForDefaults(defaults: CreateDefaults): string {
 }
 
 /**
- * Parse role→image pins from an `images` block.
+ * Locate the `images: { … }` block by brace depth (not the first `}`) so
+ * nested `store: { … }` / `channel: { … }` sub-blocks don't close the match
+ * early.
+ *
+ * @param source - Config source
+ */
+export function findImagesBlock(source: string): {
+  readonly start: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  readonly end: number;
+} | null {
+  const m = /images:\s*\{/.exec(source);
+  if (!m) return null;
+  const start = m.index;
+  const openIdx = start + m[0].length - 1;
+  let depth = 0;
+  for (let i = openIdx; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return { start, bodyStart: openIdx + 1, bodyEnd: i, end: i + 1 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse dotted role→image pins from an `images` block, flattening one level
+ * of `store` / `channel` nesting (mirrors {@link flattenImagesConfig} in
+ * `okengine/config`).
  *
  * Skips `//` comment lines and rejects env-column keys (`local`/`docker`/…).
  *
  * @param source - Config source
  */
-function extractImages(source: string): Record<string, string> {
-  const m = /images:\s*\{([\s\S]*?)\n\s*\},/.exec(source);
-  if (!m) return {};
+export function extractImages(source: string): Record<string, string> {
+  const block = findImagesBlock(source);
+  if (!block) return {};
   const out: Record<string, string> = {};
-  for (const line of m[1]!.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("//")) continue;
-    const hit = /["']?([\w.]+)["']?\s*:\s*"([^"]+)"/.exec(trimmed);
+  let context: (typeof IMAGE_NEST_KEYS)[number] | null = null;
+  for (const raw of source.slice(block.bodyStart, block.bodyEnd).split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const nestOpen = /^(store|channel):\s*\{\s*$/.exec(line);
+    if (nestOpen) {
+      context = nestOpen[1] as (typeof IMAGE_NEST_KEYS)[number];
+      continue;
+    }
+    if (line === "}," || line === "}") {
+      context = null;
+      continue;
+    }
+    const hit = /^["']?([\w.]+)["']?\s*:\s*"([^"]+)"/.exec(line);
     if (!hit) continue;
-    const key = hit[1]!;
-    if (IMAGE_ENV_COLUMNS.has(key) || !IMAGE_ROLE_KEY.test(key)) continue;
+    const rawKey = hit[1]!;
+    if (IMAGE_ENV_COLUMNS.has(rawKey)) continue;
+    const key = context ? `${context}.${rawKey}` : rawKey;
+    if (!IMAGE_ROLE_KEY.test(key)) continue;
     out[key] = hit[2]!;
   }
   return out;
 }
 
 /**
- * @param source - Config source
- * @param images - Role → image
+ * Render dotted role→image pins back into a nested `images: { … }` literal —
+ * `store.*` / `channel.*` under their sub-object, everything else flat.
+ *
+ * @param images - Dotted role → image
  */
-function replaceImagesBlock(source: string, images: Record<string, string>): string {
-  const lines = Object.entries(images).map(([k, v]) => {
-    const key = k.includes(".") ? `"${k}"` : k;
-    return `    ${key}: "${v}",`;
-  });
-  const block = `images: {\n${lines.join("\n")}\n  }`;
-  const re = /images:\s*\{[\s\S]*?\n\s*\}/;
-  if (!re.test(source)) {
+function formatImagesBlock(images: Record<string, string>): string {
+  const store: Array<[string, string]> = [];
+  const channel: Array<[string, string]> = [];
+  const flat: Array<[string, string]> = [];
+  for (const [key, value] of Object.entries(images)) {
+    if (key.startsWith("store.")) store.push([key.slice("store.".length), value]);
+    else if (key.startsWith("channel.")) channel.push([key.slice("channel.".length), value]);
+    else flat.push([key, value]);
+  }
+  const lines: string[] = [];
+  if (store.length > 0) {
+    lines.push("    store: {");
+    for (const [k, v] of store) lines.push(`      ${k}: "${v}",`);
+    lines.push("    },");
+  }
+  if (channel.length > 0) {
+    lines.push("    channel: {");
+    for (const [k, v] of channel) lines.push(`      ${k}: "${v}",`);
+    lines.push("    },");
+  }
+  for (const [k, v] of flat) lines.push(`    ${k}: "${v}",`);
+  return `images: {\n${lines.join("\n")}\n  }`;
+}
+
+/**
+ * @param source - Config source
+ * @param images - Dotted role → image
+ */
+export function replaceImagesBlock(source: string, images: Record<string, string>): string {
+  const block = findImagesBlock(source);
+  if (!block) {
     throw new Error("create-oke: oke.config.ts missing images block");
   }
-  return source.replace(re, block);
+  return `${source.slice(0, block.start)}${formatImagesBlock(images)}${source.slice(block.end)}`;
 }
 
 /**

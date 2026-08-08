@@ -3,11 +3,41 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { flattenImagesConfig } from "../config/index.ts";
 import {
   defaultImagesFromConfig,
   resolveImages,
   dockerDevDriverMismatches,
 } from "./load-config.ts";
+
+describe("flattenImagesConfig", () => {
+  test("flattens store/channel nesting to dotted keys; flat roles pass through", () => {
+    expect(
+      flattenImagesConfig({
+        store: { sql: "postgres:18-alpine", kv: "redis:8-alpine", files: "rustfs/rustfs:1.0.0" },
+        channel: { email: "axllent/mailpit:v1.22.3" },
+        vault: "openbao/openbao:2.6.1",
+        ai: "ollama/ollama:0.32.6",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+        proxy: "caddy:2-alpine",
+      }),
+    ).toEqual({
+      "store.sql": "postgres:18-alpine",
+      "store.kv": "redis:8-alpine",
+      "store.files": "rustfs/rustfs:1.0.0",
+      "channel.email": "axllent/mailpit:v1.22.3",
+      vault: "openbao/openbao:2.6.1",
+      ai: "ollama/ollama:0.32.6",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      proxy: "caddy:2-alpine",
+    });
+  });
+
+  test("undefined / empty input yields empty map", () => {
+    expect(flattenImagesConfig(undefined)).toEqual({});
+    expect(flattenImagesConfig({})).toEqual({});
+  });
+});
 
 describe("defaultImagesFromConfig", () => {
   test("maps postgres + redis prod drivers", () => {
@@ -82,7 +112,7 @@ describe("resolveImages", () => {
           kv: { prod: "redis" },
         },
       },
-      images: { "store.sql": "pgvector/pgvector:pg17" },
+      images: { store: { sql: "pgvector/pgvector:pg17" } },
     });
     expect(images).toEqual({ "store.sql": "pgvector/pgvector:pg17" });
   });

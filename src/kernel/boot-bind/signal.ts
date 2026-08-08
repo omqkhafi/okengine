@@ -3,6 +3,7 @@
  */
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { SIGNAL_DEFAULTS } from "../../config/driver-defaults.ts";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { createBunSignalRedisClient, redisSignalDriver } from "../../drivers/signal-redis.ts";
 import type { SignalRedisClientLike } from "../../drivers/signal-types.ts";
@@ -17,7 +18,8 @@ import type { BootOptions } from "../boot.ts";
  * @param env - Active environment
  */
 export function resolveSignalDriverId(options: BootOptions, env: ConfigEnv): string {
-  return resolveDriverId(options.config?.drivers?.signal, env) ?? "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(options.config?.drivers?.signal, env, SIGNAL_DEFAULTS)!;
 }
 
 function redisUrlFor(docker: boolean): string | undefined {

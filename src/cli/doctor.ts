@@ -3,16 +3,69 @@
  */
 
 import { resolve } from "node:path";
+import type { ConfigEnv, DriverRef, DriversConfig, EnvDriverMap } from "../config/index.ts";
+import { resolveEffectiveDrivers, type EffectiveDriversConfig } from "../config/driver-defaults.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
 import { hasFlag, wantsJson } from "./args.ts";
 import { checkManifestPiiAsks } from "./doctor-pii.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
-import { loadManifest } from "./load-config.ts";
+import { loadManifest, loadOkeConfig } from "./load-config.ts";
 import { isPortInUse } from "./ports.ts";
 import { schemaFingerprint, readSchemaFingerprint } from "./schema.ts";
 
 export { isPortInUse } from "./ports.ts";
+
+/**
+ * `label → merged EnvDriverMap` pairs, in the fixed order shown by
+ * {@link formatDriversSummary} / the `drivers` JSON key.
+ *
+ * @param drivers - Fully-resolved drivers config
+ */
+function flattenEffectiveDrivers(
+  drivers: EffectiveDriversConfig,
+): ReadonlyArray<readonly [string, EnvDriverMap]> {
+  return [
+    ["store.sql", drivers.store.sql],
+    ["store.kv", drivers.store.kv],
+    ["store.files", drivers.store.files],
+    ["signal", drivers.signal],
+    ["clock", drivers.clock],
+    ["journal", drivers.journal],
+    ["vault", drivers.vault],
+    ["channel.email", drivers.channel.email],
+    ["channel.sms", drivers.channel.sms],
+  ];
+}
+
+/**
+ * @param ref - Driver ref (string id, rich `{ driver }` object, or unset)
+ */
+function driverRefId(ref: DriverRef | undefined): string {
+  if (ref === undefined) return "—";
+  return typeof ref === "string" ? ref : ref.driver;
+}
+
+/**
+ * Render the fully-resolved drivers config as aligned text lines — every
+ * default plus every override, per env, for a developer whose own
+ * `oke.config.ts` only pins a handful of keys.
+ *
+ * @param drivers - Fully-resolved drivers config
+ * @param configEnv - Active env (marked in the active-driver column)
+ */
+function formatDriversSummary(drivers: EffectiveDriversConfig, configEnv: ConfigEnv): string {
+  const rows = flattenEffectiveDrivers(drivers);
+  const nameWidth = Math.max(...rows.map(([name]) => name.length));
+  const activeWidth = Math.max(...rows.map(([, map]) => driverRefId(map[configEnv]).length));
+  const lines = [`drivers (env=${configEnv}):`];
+  for (const [name, map] of rows) {
+    const active = driverRefId(map[configEnv]);
+    const full = `local=${driverRefId(map.local)} docker=${driverRefId(map.docker)} test=${driverRefId(map.test)} prod=${driverRefId(map.prod)}`;
+    lines.push(`  ${name.padEnd(nameWidth)}  ${active.padEnd(activeWidth)}  { ${full} }`);
+  }
+  return lines.join("\n");
+}
 
 /** One doctor finding. */
 export interface DoctorFinding {
@@ -55,6 +108,19 @@ export interface DoctorOptions {
   }>;
   /** Skip live DB drift probe (default false). */
   readonly skipDbDrift?: boolean;
+  /**
+   * Inject the `drivers` block directly (tests) — skips loading
+   * `oke.config.ts` from disk. When omitted, `oke doctor` best-effort loads
+   * `oke.config.ts` from {@link cwd}; a project without one just gets the
+   * real, untouched defaults in the drivers summary.
+   */
+  readonly driversConfig?: DriversConfig;
+  /**
+   * Active {@link ConfigEnv} for the drivers summary. Default: `docker` when
+   * `OKE_DOCKER=1` (via {@link env}), else `local` — the same resolution
+   * `oke boot` uses without an explicit `env`.
+   */
+  readonly configEnv?: ConfigEnv;
   readonly write?: (text: string) => void;
   /** Write hints / progress (defaults to stderr). */
   readonly writeErr?: (text: string) => void;
@@ -91,6 +157,20 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
 
   const env = options.env ?? ((k) => Bun.env[k] ?? process.env[k]);
   const secretNames = options.secrets ?? (manifest?.vault ? Object.keys(manifest.vault) : []);
+
+  // Fully-resolved `drivers.*` — real defaults + every override merged, so
+  // the picture is complete even when `oke.config.ts` only pins one key.
+  let driversConfig = options.driversConfig;
+  if (driversConfig === undefined) {
+    try {
+      driversConfig = (await loadOkeConfig(cwd)).config.drivers;
+    } catch {
+      // No oke.config.ts (or it failed to load) — show real defaults only.
+    }
+  }
+  const configEnv: ConfigEnv =
+    options.configEnv ?? (env("OKE_DOCKER") === "1" ? "docker" : "local");
+  const effectiveDrivers = resolveEffectiveDrivers(driversConfig);
 
   for (const name of secretNames) {
     const value = env(name);
@@ -177,7 +257,9 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   const code = ok ? EXIT_OK : EXIT_RUNTIME;
 
   if (json) {
-    write(`${JSON.stringify({ ok, findings }, null, 2)}\n`);
+    write(
+      `${JSON.stringify({ ok, findings, drivers: { env: configEnv, resolved: effectiveDrivers } }, null, 2)}\n`,
+    );
     if (!ok) {
       writeErr("Hint: fix error-severity findings, then re-run oke doctor.\n");
     }
@@ -186,6 +268,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
 
   if (findings.length === 0) {
     write("oke doctor: ok\n");
+    write(`${formatDriversSummary(effectiveDrivers, configEnv)}\n`);
     return { code: EXIT_OK, findings };
   }
 
@@ -193,6 +276,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   for (const f of findings) {
     write(`  [${f.severity}] ${f.code}: ${f.message}\n`);
   }
+  write(`${formatDriversSummary(effectiveDrivers, configEnv)}\n`);
   return { code, findings };
 }
 
@@ -208,16 +292,25 @@ export async function doctorCli(args: readonly string[]): Promise<number> {
   }
 
   let manifestPath: string | undefined;
+  let configEnv: ConfigEnv | undefined;
   const json = wantsJson(args);
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--manifest" || a === "-m") manifestPath = args[++i];
-    else if (a === "--help" || a === "-h") {
-      console.log(`oke doctor [--manifest|-m path] [--json|-j]
+    else if (a === "--env" || a === "-e") {
+      const value = args[++i];
+      if (value === "local" || value === "docker" || value === "test" || value === "prod") {
+        configEnv = value;
+      }
+    } else if (a === "--help" || a === "-h") {
+      console.log(`oke doctor [--manifest|-m path] [--env|-e local|docker|test|prod] [--json|-j]
 oke doctor --diff|-d [--before|-b <path> --after|-a <path>] [--base|-B <branch>]
 
 Verify secrets, ports, schema drift, and PII→model egress before serving.
+Also prints drivers.* fully resolved (every default + every override merged)
+for the active env, from oke.config.ts.
 
+--env   Env to resolve drivers for (default: docker when OKE_DOCKER=1, else local).
 --diff  CI gate: block undeclared contract breaks (Manifest Diff).
         Default baseline is git merge-base (main/master) vs the working
         tree; pass --before/--after for an explicit comparison.
@@ -227,6 +320,6 @@ Verify secrets, ports, schema drift, and PII→model egress before serving.
       return EXIT_OK;
     }
   }
-  const { code } = await runDoctor({ manifestPath, json });
+  const { code } = await runDoctor({ manifestPath, configEnv, json });
   return code;
 }

@@ -12,6 +12,7 @@ import {
 } from "../journal.ts";
 import { createPostgresJournalStore } from "../../drivers/journal-postgres.ts";
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { JOURNAL_DEFAULTS } from "../../config/driver-defaults.ts";
 import type { BootOptions } from "../boot.ts";
 
 /** Bound journal runtime — store + this instance's lease identity. */
@@ -37,9 +38,8 @@ export const DEFAULT_FILE_JOURNAL_PATH = ".oke/journal.json";
  * @param env - Active environment
  */
 export function resolveJournalDriverId(options: BootOptions, env: ConfigEnv): string {
-  const resolved = resolveDriverId(options.config?.drivers?.journal, env);
-  if (resolved) return resolved;
-  return "memory";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(options.config?.drivers?.journal, env, JOURNAL_DEFAULTS)!;
 }
 
 /**

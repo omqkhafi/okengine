@@ -3,6 +3,7 @@
  */
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
+import { VAULT_DEFAULTS } from "../../config/driver-defaults.ts";
 import { createVaultRuntime, type VaultRuntime } from "../../elements/vault.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "../../elements/vault/boot-chain.ts";
 import type { BootOptions } from "../boot.ts";
@@ -14,9 +15,8 @@ import type { BootOptions } from "../boot.ts";
  * @param env - Active environment
  */
 export function resolveVaultDriverId(options: BootOptions, env: ConfigEnv): string {
-  const resolved = resolveDriverId(options.config?.drivers?.vault, env);
-  if (resolved) return resolved;
-  return env === "test" ? "memory" : "env";
+  // Defaults cover every ConfigEnv key, so this is never undefined.
+  return resolveDriverId(options.config?.drivers?.vault, env, VAULT_DEFAULTS)!;
 }
 
 /**
