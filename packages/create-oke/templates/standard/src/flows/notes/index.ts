@@ -1,8 +1,8 @@
 import { on, flow, http, gate, fail } from "okengine";
 import { eq, isNull } from "drizzle-orm";
 
-import { db, noteCreatedMail, webhookSecret } from "../../core";
-import { notes } from "../../db/schema.decl";
+import { db, noteCreatedMail, webhookSecret } from "@/core";
+import { notes } from "@/db/schema.decl";
 import { NoteCreateIn, NoteIdIn, NoteListOut, NoteOut, NotFound } from "./shapes";
 import { noteCreated } from "./signals";
 

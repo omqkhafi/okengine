@@ -234,14 +234,7 @@ export default function HomePage() {
           <Reveal delay={0.05}>
             <p className="text-sm text-fd-muted-foreground">
               The Console is Manifest-derived — flows, contracts, effects, traces, and an
-              architecture diagram are already there.{" "}
-              <Link
-                href="/docs/console/overview"
-                className="text-fd-foreground underline decoration-fd-border underline-offset-4 transition-colors hover:decoration-fd-foreground"
-              >
-                Read the Console docs
-              </Link>
-              .
+              architecture diagram are already there.
             </p>
           </Reveal>
         </div>

@@ -490,9 +490,8 @@ await fx.store(sessions).set(`sess:${token}`, { userId }, "7d");
 const keys = await fx.store(sessions).list("sess:");
 ```
 
-**Consequence:** `list` is how the [Console · Store](/docs/console/store) browser enumerates a
-namespace. Prefer stable key prefixes (`user:`, `sess:`) so both your Flows and the Console stay
-readable.
+**Consequence:** `list` enumerates a namespace. Prefer stable key prefixes (`user:`, `sess:`) so
+your Flows and operator tools stay readable.
 
 ### Per-environment KV drivers
 
@@ -637,9 +636,9 @@ images: {
 
 **Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for docker/prod (create-oke templates already do).
 
-<Callout title="Console can browse, not edit bytes">
-  The [Console · Store](/docs/console/store) lists keys and can delete them. Direct edit is **KV +
-  SQL only** — blob bodies are not patched from the Console.
+<Callout title="Operator tools can browse, not edit bytes">
+  Operator tools can list keys and delete them. Direct edit is **KV + SQL only** — blob bodies are
+  not patched.
 </Callout>
 
 ### Images — `image` / `putImage`
@@ -861,9 +860,9 @@ Container images come from the `images` map — change the vendor by changing th
 
 Columns tagged `.pii()` or `.sensitive()` are masked at the store boundary — flows, logs, and the Console see a mask, not the value. Revealing cleartext PII requires an explicit `pii:reveal` gate on the flow, so access is a permission, not a convention.
 
-Optional `description` on a store (and `.describe("…")` on fields) becomes the human title in the
-[Console · Store](/docs/console/store) browser. Single-table `reads` / `writes` in the Manifest
-power cache invalidation and that same PII masking — see the Callout under [Querying by hand](#querying-by-hand).
+Optional `description` on a store (and `.describe("…")` on fields) becomes its human title in
+operator tools. Single-table `reads` / `writes` in the Manifest power cache invalidation and that
+same PII masking — see the Callout under [Querying by hand](#querying-by-hand).
 
 ## Troubleshooting
 
@@ -915,7 +914,6 @@ Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` 
 - [Flow](/docs/elements/flow) — the `fx.store` session inside `do`
 - [AI](/docs/elements/ai) — `ai.embed` into a vector `store.index`, searched via `fx.search`
 - [Gate](/docs/elements/gate) — `pii:reveal` and other permissions on flows
-- [Console · Store](/docs/console/store) — browse data, cache keys, PII masking
 - [CLI Reference](/docs/reference/cli) — `oke db push` · `generate` · `migrate`
 - [Configuration](/docs/reference/configuration) — `drivers.store` maps and `images` pins
 - [Environment variables](/docs/reference/environment-variables) — Redis · S3 · meilisearch URLs
@@ -928,10 +926,5 @@ Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` 
     title="Introduction"
     description="Eight elements overview."
     href="/docs/get-started/introduction"
-  />
-  <Card
-    title="Console"
-    description="Panels derived from the Manifest."
-    href="/docs/console/overview"
   />
 </Cards>

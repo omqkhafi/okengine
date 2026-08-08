@@ -6,7 +6,9 @@ it, so a release is only announced once it is written here.
 
 Upcoming work lives under `## Unreleased`. `bun run bump` promotes that
 section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
-`### ✨ Added` / `### ♻️ Changed` / `### 🐛 Fixed` group (also `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🔒 Security` when needed).
+`### ✨ Added` / `### 💥 Breaking Changes` / `### ♻️ Changed` / `### 🐛 Fixed`
+group (also `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🔒 Security` when
+needed).
 
 ## Unreleased
 
@@ -16,14 +18,12 @@ section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 
 - `drivers.<element>[.<facet>]` config can now pin just the environment keys
   that differ from the real default, merged per-key instead of replacing the
-  whole map — `{ store: { sql: { local: "pglite" } } }` resolves to `{
-local: "pglite", docker: "postgres", test: "memory", prod: "postgres" }`,
+  whole map — `{ store: { sql: { local: "pglite" } } }` resolves to `{ local: "pglite", docker: "postgres", test: "memory", prod: "postgres" }`,
   every other driver map (`kv`, `files`, `signal`, `clock`, `journal`,
   `vault`, `channel.email/sms`) staying fully at its real, untouched
   default. The real defaults now live in one place,
   `src/config/driver-defaults.ts`, and merge through a new
-  `mergeEnvDriverMap` helper scoped strictly to the `{ local?, docker?,
-test?, prod? }` shape (never a generic whole-config deep merge). Fixes a
+  `mergeEnvDriverMap` helper scoped strictly to the `{ local?, docker?, test?, prod? }` shape (never a generic whole-config deep merge). Fixes a
   leak in `resolveDriverId`'s old `docker → prod → local → test` cascade,
   where pinning only `local` could bleed that value into `docker` / `prod`
   instead of falling back to the real default.
@@ -33,11 +33,15 @@ test?, prod? }` shape (never a generic whole-config deep merge). Fixes a
   key. New `--env local|docker|test|prod` flag picks which env's active
   driver id is highlighted (default: `docker` when `OKE_DOCKER=1`, else
   `local`); also included under a `drivers` key in `--json` output.
-- `images` config is now nested the same way as `drivers` — `{ store: { sql,
-kv, files, index }, channel: { email }, vault, ai, pgdog, proxy }` —
-  instead of a flat `Record<string, string>` keyed by dotted role strings.
-  Closes a real type-safety gap: the old shape accepted any string key with
-  zero compile-time or boot-time catch (`"strore.sql"` silently did nothing).
+
+### 💥 Breaking Changes
+
+- `images` config is now nested the same way as `drivers` (pre-1.0; no
+  compat shim) — `{ store: { sql, kv, files, index }, channel: { email }, vault, ai, pgdog, proxy }` — instead of a flat `Record<string, string>`
+  keyed by dotted role strings. The old flat form no longer type-checks and
+  is not read back; every project pinning `images` must migrate. Closes a
+  real type-safety gap: the old shape accepted any string key with zero
+  compile-time or boot-time catch (`"strore.sql"` silently did nothing).
   Internal compose/Dockerfile derivation is unchanged — a new
   `flattenImagesConfig()` in `okengine/config` flattens the nested shape back
   to the dotted-role map `deriveInfrastructure()` / `buildSpecs()` /
@@ -46,6 +50,11 @@ kv, files, index }, channel: { email }, vault, ai, pgdog, proxy }` —
   wizard's `images` codegen were rewritten to parse/emit it correctly
   (brace-balanced, not the old first-`}`-closes-it regex, which broke on
   nested sub-objects).
+
+### 🔥 Removed
+
+- Removed the Console section from the documentation site, including its
+  navigation entry and links from related documentation pages.
 
 ## v0.10.2 — 2026-08-07
 
@@ -60,11 +69,8 @@ kv, files, index }, channel: { email }, vault, ai, pgdog, proxy }` —
   working unchanged — additive, deduped by reference, never silently ignored.
   `store.kv` / `store.index`, `vault.config`, and the medium-agnostic
   `channel.template()` are intentionally not auto-registered.
-- `.adopt()` route wiring can now be generated instead of hand-listed: `oke
-build` / `oke dev` regenerate `src/flows/generated.ts` from every
-  `src/flows/<unit>/index.ts` folder (`export * as <unit> from
-"./<unit>/index.ts"`), so `app.ts` becomes `import * as routes from
-"./flows/generated"; oke({ name }).adopt(routes)`. A real file on disk, not
+- `.adopt()` route wiring can now be generated instead of hand-listed: `oke build` / `oke dev` regenerate `src/flows/generated.ts` from every
+  `src/flows/<unit>/index.ts` folder (`export * as <unit> from "./<unit>/index.ts"`), so `app.ts` becomes `import * as routes from "./flows/generated"; oke({ name }).adopt(routes)`. A real file on disk, not
   a virtual module — a virtual-module Bun plugin was investigated and
   rejected: `Bun.plugin()`'s `onResolve` is never invoked for an
   unresolvable specifier during a plain runtime `import()`, so `oke dev` and
@@ -81,7 +87,7 @@ build` / `oke dev` regenerate `src/flows/generated.ts` from every
   `local` / `test` warn once instead of failing, so the dev loop stays
   unbroken.
 
-### ♻️ Changed
+### 💥 Breaking Changes
 
 - `flow()` now takes its name as the first positional argument —
   `flow(name, options)` instead of `flow({ name, ...options })` — matching
@@ -92,8 +98,10 @@ build` / `oke dev` regenerate `src/flows/generated.ts` from every
   `name`'s first dot segment (`"auth.refresh"` → unit `"auth"`), matching
   every real call site, which always set both to the same value. Flows
   with no dot in their name have no unit, same as before.
-- `create-oke`'s `advanced` / `standard` templates now scaffold `oke({ name:
-"notes" })` with no explicit `stores` / `secrets` / `signals` /
+
+### ♻️ Changed
+
+- `create-oke`'s `advanced` / `standard` templates now scaffold `oke({ name: "notes" })` with no explicit `stores` / `secrets` / `signals` /
   `channel.templates` arrays and no hand-written `.adopt({ main, notes })` —
   both come from the auto-registries and the generated route barrel above.
   Plugins are unaffected: `.plug()` stays fully explicit everywhere.
@@ -156,8 +164,7 @@ build` / `oke dev` regenerate `src/flows/generated.ts` from every
   minting an open capability token (every access allowed, no gate at all).
   Previously true in every environment, for every flow that omitted
   `effects` — confirmed via real boot + `fetch()`, not assumption.
-  `local` / `test` keep the open-token fallback (once-per-process `oke
-boot:` warning) so the existing dev loop and test suite are unaffected.
+  `local` / `test` keep the open-token fallback (once-per-process `oke boot:` warning) so the existing dev loop and test suite are unaffected.
 - The SQL capability gate (`fx.store(db).insert(table)` / `.select().from(table)`
   / …) now resolves the exact table touched (`sql:<table>`) instead of only
   the store-level ref (`sql:<store-name>`) — matching the AoT compiler's own
@@ -277,7 +284,6 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
   manual shape (Docker Hub `ai/` catalog vs Ollama library + detect); llama.cpp
   catalog shows up to 20 curated `ai/` models per tier.
   **AI Provider — docker → Back** returns to the previous provider step.
-
 - Ollama docker ensure: skip `/api/pull` when the container's `/api/tags`
   already lists the model (host `ollama` weights are a different server);
   stream pull progress instead of hanging on a silent `stream:false` body.
@@ -375,7 +381,7 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
 
 ## v0.9.1 — 2026-08-04
 
-### ♻️ Changed
+### 💥 Breaking Changes
 
 - `otp()` option rename (pre-1.0, no compat shim): `tier: 1 | 2` →
   `mode: "provider" | "app"`. Plug-time / boot-time errors, plugin config
@@ -443,7 +449,7 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
   and mid-scenario SIGKILL absorption together (`OKE_TEST_POSTGRES_URL` +
   `OKE_TEST_REDIS_URL` / `REDIS_URL`; visible skip when unset).
 
-### 🔥 Removed
+### 💥 Breaking Changes
 
 - `emailOtp()` and `phoneNumber()` plugins — use `otp({ tier, … })` instead
   (pre-1.0; no compat shims).
@@ -597,7 +603,6 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
   required for local RAG).
 - `create-oke --ai` / `--no-ai` — force or skip the AI model wizard (models
   selected before install).
-
 - `fx.store(files).image(key\|bytes)` — Bun.Image pipeline (resize / rotate /
   flip / modulate → jpeg/png/webp, plus heic/avif with WebP fallback) with
   `metadata` / `bytes` / `blob` / `placeholder` / `put` terminals; and
@@ -742,8 +747,8 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
 - `create-oke` / `oke ai setup` no longer nest `drivers.ai` inside
   `channel` — the banner showed `ai: —` even after picking Ollama. AI pins
   are written as a sibling of `channel` under `drivers`.
-- Console first-admin claim no longer returns an opaque **500 /
-  `TransportError`** for weak passwords. The form requires ≥ 12 characters
+- Console first-admin claim no longer returns an opaque **500 /**
+  `TransportError` for weak passwords. The form requires ≥ 12 characters
   (letter + number), policy failures return `ClaimFailed` with a clear
   message, the wizard shows that message (not the bare code), structured
   5xx envelopes survive the client transport, and `oke dev` request logs
@@ -843,8 +848,7 @@ boot:` warning) so the existing dev loop and test suite are unaffected.
 
 ### ✨ Added
 
-- AI tool-calling through the same path as `fx.call` — `fx.ask(prompt, input, {
-tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
+- AI tool-calling through the same path as `fx.call` — `fx.ask(prompt, input, { tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
   each tool is a Flow (capability, Manifest `calls`, Runs portal). No silent
   extra authority for the model.
 - Real `fx.stream` — Ollama NDJSON and `openai-compatible` SSE; cancellation
@@ -953,11 +957,14 @@ tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
 
 ## v0.5.1 — 2026-08-01
 
-### ♻️ Changed
+### 💥 Breaking Changes
 
 - Official plugin rename: `securityHeaders()` / `"security-headers"` →
   `headers()` / `"headers"` (options type `HeadersOptions`; config table
   `headers_config`). Docs page was already `/docs/plugins/headers`.
+
+### ♻️ Changed
+
 - Rebased the `plugins` export budget after passkey WebAuthn verify
   (13.21 kB → 13.84 kB), and refreshed the published budgets snapshot.
 - `site` joins the version lockstep (`bun run bump` updates
@@ -1344,7 +1351,7 @@ tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
 ### ♻️ Changed
 
 - Docs origin cut over from `okengine.vercel.app` to
-  [`oke.omqkhafi.dev`](https://oke.omqkhafi.dev). Error links, README,
+  `[oke.omqkhafi.dev](https://oke.omqkhafi.dev)`. Error links, README,
   scaffold next-steps, site `metadataBase`, and `llms.txt` examples now
   point at the custom domain.
 
@@ -1424,8 +1431,7 @@ tools: [flowRef, …] })` and `fx.run(agent)` share one model-driven tool loop;
   `?col=op.value` (`eq ne gt gte lt lte like ilike in is`) · `?or=(…)` /
   `?and=(…)` · `?order=col.desc` · `?select=id,title`. Every surface is
   whitelisted by a ColumnScope (`"all" | Column[] | "none"`).
-- `fx.json.ok` / `create` / `empty` / `with` — Stripe-style `{ data, meta,
-error }` envelope; `create` → 201, `empty` → 204, list pages attach
+- `fx.json.ok` / `create` / `empty` / `with` — Stripe-style `{ data, meta, error }` envelope; `create` → 201, `empty` → 204, list pages attach
   top-level `meta` (`nextCursor`, `hasNextPage`, …). `ClientResult` and the
   in-process test client expose `meta`.
 - `fx.store(db).page` / `.count`, fluent `.offset()`, and condition-compiler
@@ -1465,14 +1471,14 @@ error }` envelope; `create` → 201, `empty` → 204, list pages attach
   remains the escape hatch. Prompt 42 / OKE1101 / docker-prod never-auto-DDL
   unchanged.
 - Store foreign keys and relations: `field.*.references(() => table.col)` and
-  `store.schema.relations({ … }, (r) => …)` mirroring drizzle-orm@1.0.0-rc.4
+  `store.schema.relations({ … }, (r) => …)` mirroring [drizzle-orm@1.0.0-rc.4](mailto:drizzle-orm@1.0.0-rc.4)
   `defineRelations` (`r.one.*` / `r.many.*` + `from` / `to`). Same emitter
   pre-step writes FK chains + `defineRelations` into `schema.generated.ts`.
   Linkly’s `daily`→`links` relationship is the first real usage. Many-to-many
   is a junction table with two one/many relations — no separate API. Declared
   relations do not change Manifest `reads` (`fx.store` remains single-table).
 - Plugin `.table(name, columns?, options?)` accepts `field.*` column maps;
-  contributions merge into the same emitter. **`oke db` loads the live app
+  contributions merge into the same emitter. `oke db` **loads the live app
   entry** (`src/app.ts` / `db.entry`) and merges `app.plugins.tableContributions()`
   at push/generate/migrate time (and on `oke dev` auto-push). **Known v1
   limit:** plugins add whole tables only — no column injection into
@@ -1531,7 +1537,7 @@ error }` envelope; `create` → 201, `empty` → 204, list pages attach
   BUCKET (+ `S3_*` / `AWS_*` aliases and console `UI_URL`); Mailpit emits
   SMTP URL (+ `SMTP_URL`) and UI URL — no fake USER/PASSWORD/DB.
 
-### ♻️ Changed
+### 💥 Breaking Changes
 
 - `oke.config.ts` driver maps: `dev` → `local`, `stack` → `docker`. Boot uses
   `env: "local"` by default and `env: "docker"` under `OKE_DOCKER=1`.
@@ -1539,6 +1545,9 @@ error }` envelope; `create` → 201, `empty` → 204, list pages attach
   `.env.docker` still read). Soft-compat for `--stack`/`-s`, `OKE_STACK`,
   `.env.stack`, and `vault.fromStack` is removed — use `--docker`/`-d`,
   `OKE_DOCKER=1`, `docker/.env.docker`, and `vault.fromDocker`.
+
+### ♻️ Changed
+
 - Per-project docker stacks offset Mailpit UI (`8025`) and RustFS console
   (`9001`) host ports, so a second `oke dev -d` no longer fails with
   “port is already allocated”.

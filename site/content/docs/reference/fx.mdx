@@ -259,9 +259,9 @@ must log who started the call chain.
 ## Not on `fx`
 
 <Callout title="No fx.metric">
-  Investigated and declined. [Runs](/docs/console/runs) already own per-invocation observability as
-  wide events. Native alerting is `fx.runs` + Clock + Channel — not a second counter/gauge API.
-  Optional OTLP export for existing Grafana/Datadog stacks is additive and never required.
+  Investigated and declined. `fx.runs` already provides per-invocation observability as wide events.
+  Native alerting is `fx.runs` + Clock + Channel — not a second counter/gauge API. Optional OTLP
+  export for existing Grafana/Datadog stacks is additive and never required.
 </Callout>
 
 ## Learn more

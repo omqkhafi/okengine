@@ -34,13 +34,14 @@ Task:
 
 From the diff, list what a user or app author would notice. Map each item to:
 
-| Impact                                  | Changelog group | Docs?                       |
-| --------------------------------------- | --------------- | --------------------------- |
-| New capability / export / plugin / page | `Added`         | yes if public               |
-| Behavior or default change              | `Changed`       | yes if public               |
-| Removal                                 | `Removed`       | yes — delete/redirect links |
-| Bug fix                                 | `Fixed`         | only if docs lied           |
-| Security-relevant                       | `Security`      | yes                         |
+| Impact                                  | Changelog group    | Docs?                       |
+| --------------------------------------- | ------------------ | --------------------------- |
+| New capability / export / plugin / page | `Added`            | yes if public               |
+| Incompatible API, config, or behavior   | `Breaking Changes` | yes — include migration     |
+| Behavior or default change              | `Changed`          | yes if public               |
+| Removal                                 | `Removed`          | yes — delete/redirect links |
+| Bug fix                                 | `Fixed`            | only if docs lied           |
+| Security-relevant                       | `Security`         | yes                         |
 
 If documentation would invent an API the source does not support — **stop and ask** (`AGENTS.md`).
 
@@ -71,7 +72,7 @@ Site gate: the newest **versioned** release (`## v…`) must equal `package.json
 
 Rules:
 
-- Groups only when non-empty, in order: `### ✨ Added` · `### ♻️ Changed` · `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🐛 Fixed` · `### 🔒 Security`
+- Groups only when non-empty, in order: `### ✨ Added` · `### 💥 Breaking Changes` · `### ♻️ Changed` · `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🐛 Fixed` · `### 🔒 Security`
 - Bullets: user/product impact, not a file dump. Match existing voice (short, wrapped lines OK).
 - One idea per bullet.
 
