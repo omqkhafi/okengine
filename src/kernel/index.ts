@@ -136,6 +136,7 @@ export {
   type FxThunk,
   type JsonResult,
   type NamedRef,
+  type StepOptions,
 } from "./fx.ts";
 
 export {
@@ -177,10 +178,13 @@ export {
   createFileJournalStore,
   hasJournalLease,
   isJournalLeaseBusy,
+  isJournalRegistrationComplete,
   isJournalSuspend,
   JournalLeaseBusy,
+  JournalRegistrationComplete,
   JournalSuspend,
   JOURNAL_DEFAULT_LEASE_MS,
+  JOURNAL_UNDO_PREFIX,
   type Journal,
   type JournalEntry,
   type JournalLeaseOptions,
@@ -188,9 +192,19 @@ export {
   type JournalRun,
   type JournalRunStatus,
   type JournalSession,
+  type JournalStepOptions,
   type JournalStore,
+  type JournalUndoFrame,
   type CreateJournalOptions,
 } from "./journal.ts";
+
+export {
+  failureCodeOf,
+  forwardCompletedSteps,
+  rebindUndosFromDo,
+  runCompensationPhase,
+  type RunCompensationPhaseOptions,
+} from "./compensate.ts";
 
 export {
   AFTER_HANDLER_STAGES,

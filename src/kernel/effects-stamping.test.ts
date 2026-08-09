@@ -91,8 +91,22 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
     const create = buildUnannotatedCreateFlow(db);
     const app = oke({ name: "stamp-docker", gate: { policies: [gate.public] } }).adopt({ create });
 
+    const memoryDrivers = {
+      store: {
+        sql: { dev: "memory", prod: "memory" },
+        kv: { dev: "memory", prod: "memory" },
+      },
+      channel: { email: { dev: "console", prod: "console" } },
+    } as const;
     await expect(
-      app.boot({ env: "docker", stores: [db], unguardedHttp: "allow", startScheduler: false }),
+      app.boot({
+        env: "dev",
+        docker: true,
+        stores: [db],
+        unguardedHttp: "allow",
+        startScheduler: false,
+        config: { drivers: memoryDrivers },
+      }),
     ).rejects.toThrow(/OKE1008/);
   });
 
@@ -104,7 +118,18 @@ describe("boot-level: undeclared-effects flow, no manifest / rootDir", () => {
     const app = oke({ name: "stamp-prod", gate: { policies: [gate.public] } }).adopt({ create });
 
     await expect(
-      app.boot({ env: "prod", stores: [db], unguardedHttp: "allow", startScheduler: false }),
+      app.boot({
+        env: "prod",
+        stores: [db],
+        unguardedHttp: "allow",
+        startScheduler: false,
+        config: {
+          drivers: {
+            store: { sql: { prod: "memory" }, kv: { prod: "memory" } },
+            channel: { email: { prod: "console" } },
+          },
+        },
+      }),
     ).rejects.toThrow(/OKE1008/);
   });
 });

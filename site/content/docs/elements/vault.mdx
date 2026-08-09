@@ -55,7 +55,7 @@ oke vault set STRIPE_KEY sk_test_your_key_here
 <Step>
 ### Read it in a Flow
 
-Flows read secrets through `fx.vault` — never through `process.env`. `fx.vault` returns a
+Flows read secrets through `fx.vault.get` — never through `process.env`. It resolves to a
 `Redacted<string>`: printing, logging, or serializing it yields a placeholder, never the value.
 Call `.reveal()` once at the boundary that needs the real credential:
 
@@ -66,7 +66,7 @@ export const charge = on(
     in: ChargeInput,
     out: z.object({ id: z.string() }),
     do: async (input, fx) => {
-      const key = fx.vault(stripeKey); // Redacted — safe to pass to fx.log
+      const key = await fx.vault.get(stripeKey); // Redacted — safe to pass to fx.log
       const intent = await stripe(key.reveal()).create(input);
       return { id: intent.id };
     },
@@ -87,9 +87,9 @@ That's the whole loop: declare → set → read. Everything below is what OKE gu
 
 <VaultRedacted />
 
-Pass the wrapper freely — `fx.log`, `String()`, and `JSON.stringify` all yield
-`[redacted]`. Call `.reveal()` once at the provider boundary that needs the
-credential.
+Pass the wrapper freely — `fx.log`, `String()`, `JSON.stringify`, and
+`console.log` / `util.inspect` all yield `[redacted]` (or a `Redacted<…>` label).
+Call `.reveal()` once at the provider boundary that needs the credential.
 
 ## Two kinds of contracts
 
@@ -99,6 +99,20 @@ credential.
 | `vault.config("PUBLIC_APP_URL", …)` | no         | cleartext value  | Public URLs, feature flags  |
 
 `vault(name, …)` is shorthand for `vault.secret(name, …)`.
+
+### Plain environment variables
+
+`vault.env` reads `process.env` synchronously for values that need no contract — a port, a feature flag, a log level. It never joins the resolution chain, never gets a fingerprint, and never gets redacted.
+
+| Call                             | Returns               | On a missing value                     |
+| -------------------------------- | --------------------- | -------------------------------------- |
+| `vault.env("LOG_LEVEL")`         | `string \| undefined` | `undefined` (empty counts as missing)  |
+| `vault.env.required("REGION")`   | `string`              | Throws, and boot lists it as a gap     |
+| `vault.env.int("PORT", 3000)`    | `number`              | The default; throws when none is given |
+| `vault.env.bool("DEBUG", false)` | `boolean`             | The default; throws when none is given |
+| `vault.env.json("FLAGS")`        | `T \| undefined`      | `undefined`; throws on malformed JSON  |
+
+Every name passed to `vault.env.required` is registered, so boot reports missing variables in the same `VaultBootError` as missing secrets — before it opens a database connection.
 
 ### Contract options
 
@@ -110,9 +124,9 @@ credential.
 | `dev`         | string                | Local-only fallback when no source provides a value (never used in prod) |
 | `sensitive`   | boolean               | Override the default (`true` for secrets, `false` for config)            |
 
-### Zero-setup local fallback
+### Zero-setup Compose fallback
 
-`dev: vault.fromDocker("store.sql")` resolves the connection URL that `oke dev --docker` generated for that role — no manual copying of Postgres URLs:
+`dev: vault.fromDocker("store.sql")` resolves the connection URL that `oke dev` generated for that role — no manual copying of Postgres URLs:
 
 ```typescript
 export const dbUrl = vault.secret("DATABASE_URL", {
@@ -140,85 +154,82 @@ VaultBootError: 1 secret(s) missing:
 
 ## Setting and rotating values
 
-| Command                    | What it does                                                     |
-| -------------------------- | ---------------------------------------------------------------- |
-| `oke vault set NAME value` | Write a value (OpenBao API in docker mode, `.env.local` locally) |
-| `oke vault list`           | List names present in the active store                           |
-| `oke vault import <file>`  | Bulk-import names from a dotenv file                             |
+| Command                                            | What it does                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------- |
+| `oke vault set NAME value`                         | Write a value to the env file (`.env.local` by default)              |
+| `oke vault list`                                   | List names present in the active store                               |
+| `oke vault import <file>`                          | Bulk-import names from a dotenv file                                 |
+| `oke vault init`                                   | Initialize the built-in encrypted store (prints the master key once) |
+| `oke vault status` / `seal` / `unseal`             | Built-in seal lifecycle                                              |
+| `oke vault rotate <path>` / `rotate-master`        | Re-encrypt a secret, or rewrap every DEK under a new master          |
+| `oke vault audit` / `audit verify` / `audit purge` | Hash-chained audit (no secret values)                                |
+| `oke vault purge-expired [--dry-run] [--before]`   | Hard-delete secret rows past `expires_at` (operator cleanup)         |
+| `oke vault backup` / `restore`                     | Encrypted backup under a separate backup KEK                         |
 
-In docker mode, `oke vault set` writes straight to the running OpenBao — no git commit, no rebuild, no restart of the vault.
+Flows can write too, through the same capability gate as reads: `fx.vault.set(path, value, { ttlMs?, metadata? })`, `fx.vault.rotate(path, value)`, `fx.vault.delete(path)`, plus `fx.vault.list(prefix?)` and `fx.vault.status()`. These need the encrypted-at-rest backend (`drivers.vault = "vault"`) and throw without it; `fx.vault.get` works on every app.
 
 The **Console** (`:6533`) can also set and rotate values, but it is **write-only**: it shows a salted fingerprint (`sha256:…`) per secret, never the cleartext. When you rotate a key there, the panel shows the **blast radius** — which in-flight durable runs will wake up with the new value.
 
+<Callout title="Builtin master keys and expired rows">
+  Resolve the master key with `--key -` (stdin), `OKE_VAULT_MASTER_KEY`, or a hidden TTY prompt —
+  never put keys on argv in shared shells (history risk). Expired rows stay until `oke vault
+  purge-expired` (use `--dry-run` first, or schedule via cron).
+</Callout>
+
 <Callout title="Secrets never reach logs">
-  `fx.vault` returns `Redacted` — `fx.log` shows `[redacted]`. A revealed string that still reaches
-  a log is scrubbed by the boot redactor to `[redacted:secret]`. Traces and the Console get
+  `fx.vault.get` returns `Redacted` — `fx.log` shows `[redacted]`. A revealed string that still
+  reaches a log is scrubbed by the boot redactor to `[redacted:secret]`. Traces and the Console get
   fingerprints, never cleartext.
 </Callout>
 
 ## Per-environment drivers
 
-Which backend holds your values depends on the mode — configured once in `oke.config.ts`.
+Which backend holds your values depends on the environment — configured once in `oke.config.ts`.
 App boot and the Console share the same resolution-chain builder (`env` layers → backend):
 
 ```typescript title="oke.config.ts"
-vault: {
-  local: "env",      // .env.local — zero ceremony
-  docker: "openbao", // real vault in the compose stack
-  test: "memory",    // seeded map — deterministic tests
-  prod: "openbao",   // real vault in production
+drivers: {
+  vault: {
+    dev: "env", // process env / .env.local
+    test: "memory",
+    prod: "vault", // built-in encrypted store (Postgres you already run)
+  },
 },
 ```
 
-| Driver    | Backend         | Best for                                   |
-| --------- | --------------- | ------------------------------------------ |
-| `env`     | `.env.local`    | Local loop — no infra at all               |
-| `openbao` | OpenBao (KV v2) | Docker + prod — durable, access-controlled |
-| `memory`  | in-process map  | Tests                                      |
+Defaults are `env` / `memory` / `vault`. create-oke templates pin the built-in store for prod.
 
-Other drivers (`managed`) implement the same `VaultDriver` interface — adding one is a driver exercise, not an architecture change.
+| Driver    | Backend                                                             | Best for                           |
+| --------- | ------------------------------------------------------------------- | ---------------------------------- |
+| `env`     | process env                                                         | Local pins — no encryption at rest |
+| `vault`   | Postgres/PGlite envelope (AES-256-GCM)                              | Default prod — no extra container  |
+| `managed` | AWS Secrets Manager (`OKE_VAULT_PROVIDER`) or platform-injected env | Cloud SM / Fly / Railway / K8s     |
+| `memory`  | in-process map                                                      | Tests                              |
 
-## OpenBao in docker and prod
+### Threat model (honest)
 
-When you run `oke dev --docker` (or bring up a `--prod` stack), OKE runs a real OpenBao container with durable Raft storage — not an in-memory dev server.
+Built-in Vault protects a **database dump** (ciphertext + wrapped DEKs). It does **not** equal a separate process-isolated vault:
 
-<Steps>
+| Threat                                        | Built-in `vault`                   | Managed AWS SM / remote vault |
+| --------------------------------------------- | ---------------------------------- | ----------------------------- |
+| Postgres dump / backup leak                   | Protected (need master/KEK)        | Protected                     |
+| App RCE / memory dump                         | Game over (same process)           | Better if vault is isolated   |
+| Master key only in `.env` next to app secrets | Weak — use KMS auto-unseal in prod | Prefer non-exportable KEK     |
+| JS `Buffer.fill(0)` vs remote `mlock`         | Hygiene only — not claimed         | Stronger outside the app      |
 
-<Step>
-### First boot is automatic
+For production built-in stores, set `vault.encryption.masterKey` to a KMS source (optional peer `@aws-sdk/client-kms`) or use `managed` + AWS Secrets Manager. `oke doctor` warns when prod would take the master key from the environment.
 
-OKE initializes OpenBao (Shamir 1-of-1), unseals it, writes a least-privilege policy that covers **only your declared secrets**, and mints an app token bound to that policy. You never run raw `bao` commands.
+## Managed providers (official)
 
-</Step>
+Official managed provider: **AWS Secrets Manager** — set `drivers.vault` to `"managed"` and
+`OKE_VAULT_PROVIDER=aws-secrets-manager` (optional peer `@aws-sdk/client-secrets-manager`).
+Omit the provider when the platform already injects secrets as env vars.
 
-<Step>
-### Keys stay on the host
+## Community / plugin
 
-The unseal key and root token are written to `.oke/openbao/` (mode `0600`, gitignored) — never into `docker/.env.docker`, never into YAML. Only the least-privilege app token lands in `.env.docker` as `OKE_VAULT_TOKEN`.
-
-</Step>
-
-<Step>
-### Restarts just work
-
-On every later start OKE detects the sealed vault and unseals it with the host key. Secrets set before a container restart are still there after it — proven by an integration test, not assumed.
-
-</Step>
-
-</Steps>
-
-| File                      | Holds                     | Used by                          |
-| ------------------------- | ------------------------- | -------------------------------- |
-| `.oke/openbao/unseal.key` | The single unseal share   | `oke` (every start)              |
-| `.oke/openbao/root.token` | Root token                | `oke` (policy sync / token mint) |
-| `.oke/openbao/app.token`  | Least-privilege app token | the app + Console                |
-
-<Callout title="Single point of failure — read this once" type="warn">
-  Back up `.oke/openbao/unseal.key` to a separate safe location. Losing it means losing every secret
-  permanently, with no recovery.
-</Callout>
-
-This is by design: self-hosted single-node, Shamir 1-of-1, no cloud KMS. If OpenBao is initialized but the key is gone, boot fails with an explicit permanent-loss error — it never silently starts empty.
+OpenBao, HashiCorp Vault, Azure Key Vault, GCP Secret Manager, Doppler, and 1Password are not
+shipped in core. Implement a community adapter for the `managed` driver surface, or keep using
+built-in `vault` / `env`.
 
 ## Troubleshooting
 
@@ -228,18 +239,8 @@ This is by design: self-hosted single-node, Shamir 1-of-1, no cloud KMS. If Open
 A contract has no value in any layer of the chain. Fix by providing it in exactly one place:
 
 - locally: add `NAME=value` to `.env.local` (or run `oke vault set NAME value`)
-- docker mode: `oke vault set NAME value` writes to OpenBao directly
-- CI / hosting: set a real environment variable
-
-</Accordion>
-<Accordion title="OpenBao is sealed or unreachable in docker mode">
-
-Re-run `oke dev --docker` — the bootstrap unseals with the host key on every start. If it reports the vault is initialized but `.oke/openbao/unseal.key` is missing, restore the key from your backup; the error is explicit because starting empty would look like "no secrets" instead of data loss.
-
-</Accordion>
-<Accordion title="Where is the root token?">
-
-`.oke/openbao/root.token`, mode `0600`, gitignored. It exists only for `oke` to sync policies and mint app tokens — the running app never sees it.
+- built-in store: `oke vault init` then unseal, or set via Console (write-only)
+- CI / hosting: set a real environment variable (or AWS SM when `managed`)
 
 </Accordion>
 <Accordion title="How do I rotate a key safely?">
@@ -247,11 +248,29 @@ Re-run `oke dev --docker` — the bootstrap unseals with the host key on every s
 Set the new value (`oke vault set` or the Console). The Console's rotation view shows the blast radius — in-flight durable runs that will resume with the new value — before you commit. The `rotate: "90d"` hint on the contract drives the rotation-due signal.
 
 </Accordion>
+<Accordion title="How do I pass the builtin master key without shell history?">
+
+Prefer `oke vault unseal --key -` and pipe the key on stdin, or omit `--key` on a
+TTY and type it at the hidden prompt. Avoid `--key <base64>` on shared hosts.
+
+</Accordion>
+<Accordion title="Expired secrets still take space in Postgres">
+
+`expires_at` fails closed on read, but rows stay until you hard-delete them:
+
+```bash
+oke vault purge-expired --dry-run
+oke vault purge-expired
+```
+
+Schedule the live command with cron when you want automatic cleanup.
+
+</Accordion>
 </Accordions>
 
 ## Learn more
 
-- [Flow](/docs/elements/flow) — how `fx.vault` reads secrets inside `do`
+- [Flow](/docs/elements/flow) — how `fx.vault.get` reads secrets inside `do`
 - [CLI Reference](/docs/reference/cli) — `oke vault set` · `list` · `import`
 
 ## Next

@@ -1,9 +1,9 @@
 /**
  * Store seeding demo — env → seed blocks + upsert idempotency.
  *
- * Claim: essential always runs; local/docker light `dev`; prod lights `prod`;
- * test lights essential only (never both optional blocks). Upsert inserts once,
- * then already-existed unless onExisting:"update".
+ * Claim: essential always runs; ConfigEnv `dev` lights seed `dev`; `prod`
+ * lights seed `prod`; `test` lights essential only. Upsert inserts once, then
+ * already-existed unless onExisting:"update".
  *
  * Source: resolveSeedCategory + SqlStoreHandle.upsert.
  */
@@ -18,12 +18,12 @@ import { cn } from "@/lib/cn";
 const tone = CHIP_TONE.teal;
 const TICK_MS = 1100;
 
-const ENVS = ["local", "docker", "test", "prod"] as const;
+const ENVS = ["dev", "test", "prod"] as const;
 type SeedEnv = (typeof ENVS)[number];
 
 /** Mirrors `resolveSeedCategory` in store/seed.ts. */
 function categoryFor(env: SeedEnv): "dev" | "prod" | null {
-  if (env === "local" || env === "docker") return "dev";
+  if (env === "dev") return "dev";
   if (env === "prod") return "prod";
   return null;
 }
@@ -51,7 +51,7 @@ export function StoreSeeding() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="oke db seed: essential always runs; local and docker light the dev block; prod lights prod; test runs essential only. Upsert inserts once, then already-existed unless onExisting update."
+      aria-label="oke db seed: essential always runs; dev lights the dev block; prod lights prod; test runs essential only. Upsert inserts once, then already-existed unless onExisting update."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Seed blocks by env</p>
@@ -117,8 +117,8 @@ export function StoreSeeding() {
                 {block === "essential"
                   ? "Every env, always."
                   : block === "dev"
-                    ? "local · docker (dev profile, even with postgres)."
-                    : "prod only — real targets, never docker."}
+                    ? "ConfigEnv dev (Compose laptop)."
+                    : "prod only — real deploy targets."}
               </p>
               <code
                 className={cn(

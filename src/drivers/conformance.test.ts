@@ -12,27 +12,33 @@ import {
   runTextIndexConformance,
 } from "./conformance.ts";
 import { fsDriver } from "./fs.ts";
-import { libsqlDriver, libsqlIndexDriver } from "./libsql.ts";
 import { memoryFilesDriver, memoryIndexDriver, memoryKvDriver, memorySqlDriver } from "./memory.ts";
 import { meilisearchDriver } from "./meilisearch.ts";
 import { createMeilisearchFakeFetch } from "./meilisearch.test.ts";
-import { pgliteDriver } from "./pglite.ts";
+import { PGLITE_DEFAULT_DATADIR, pgliteDriver, resolvePgliteDataDir } from "./pglite.ts";
 import { pgvectorDriver } from "./pgvector.ts";
 import { createPostgresFakeClient, postgresDriver } from "./postgres.ts";
 import { createRedisFakeClient, redisDriver } from "./redis.ts";
 import { createS3FakeClient, s3Driver } from "./s3.ts";
-import { sqliteDriver } from "./sqlite.ts";
 
 describe("sql conformance", () => {
   test("memory", () => runSqlConformance(memorySqlDriver));
-  test("sqlite", () => runSqlConformance(sqliteDriver, { url: ":memory:" }));
-  test("libsql", () => runSqlConformance(libsqlDriver, { url: ":memory:" }));
   // pglite cold-starts WASM + extension load — slow disks / CI need > default 5s
   test("pglite", () => runSqlConformance(pgliteDriver, { url: "memory://" }), 15_000);
   test("postgres (fake Bun.SQL client)", () =>
     runSqlConformance(postgresDriver, {
       client: createPostgresFakeClient(),
     }));
+});
+
+describe("pglite dataDir resolution", () => {
+  test("memory:// stays in-process; :memory: persists under .oke/pgdata", () => {
+    expect(resolvePgliteDataDir("memory://")).toBe("memory");
+    expect(resolvePgliteDataDir("memory://suite")).toBe("memory");
+    expect(resolvePgliteDataDir(":memory:")).toBe(PGLITE_DEFAULT_DATADIR);
+    expect(resolvePgliteDataDir(undefined)).toBe(PGLITE_DEFAULT_DATADIR);
+    expect(resolvePgliteDataDir(".oke/custom")).toBe(".oke/custom");
+  });
 });
 
 describe("kv conformance", () => {
@@ -54,7 +60,6 @@ describe("files conformance", () => {
 describe("index conformance", () => {
   test("memory", () => runIndexConformance(memoryIndexDriver, { dims: 3 }));
   test("pgvector", () => runIndexConformance(pgvectorDriver, { dims: 3 }));
-  test("libsql", () => runIndexConformance(libsqlIndexDriver, { dims: 3 }));
 });
 
 describe("text index conformance", () => {
@@ -70,8 +75,6 @@ describe("protocol naming", () => {
   test("driver ids are protocols, never vendors", () => {
     const ids = [
       memorySqlDriver.id,
-      sqliteDriver.id,
-      libsqlDriver.id,
       pgliteDriver.id,
       postgresDriver.id,
       memoryKvDriver.id,
@@ -81,13 +84,10 @@ describe("protocol naming", () => {
       s3Driver.id,
       memoryIndexDriver.id,
       pgvectorDriver.id,
-      libsqlIndexDriver.id,
       meilisearchDriver.id,
     ];
     expect(ids).toEqual([
       "memory",
-      "sqlite",
-      "libsql",
       "pglite",
       "postgres",
       "memory",
@@ -97,7 +97,6 @@ describe("protocol naming", () => {
       "s3",
       "memory",
       "pgvector",
-      "libsql",
       "meilisearch",
     ]);
     for (const id of ids) {

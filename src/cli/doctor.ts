@@ -3,7 +3,13 @@
  */
 
 import { resolve } from "node:path";
-import type { ConfigEnv, DriverRef, DriversConfig, EnvDriverMap } from "../config/index.ts";
+import type {
+  ConfigEnv,
+  DriverRef,
+  DriversConfig,
+  EnvDriverMap,
+  VaultElementConfig,
+} from "../config/index.ts";
 import { resolveEffectiveDrivers, type EffectiveDriversConfig } from "../config/driver-defaults.ts";
 import type { Manifest } from "../manifest/types.ts";
 import { APP_PORT, CONSOLE_PORT, MCP_PORT } from "../runtime/types.ts";
@@ -61,7 +67,7 @@ function formatDriversSummary(drivers: EffectiveDriversConfig, configEnv: Config
   const lines = [`drivers (env=${configEnv}):`];
   for (const [name, map] of rows) {
     const active = driverRefId(map[configEnv]);
-    const full = `local=${driverRefId(map.local)} docker=${driverRefId(map.docker)} test=${driverRefId(map.test)} prod=${driverRefId(map.prod)}`;
+    const full = `dev=${driverRefId(map.dev)} test=${driverRefId(map.test)} prod=${driverRefId(map.prod)}`;
     lines.push(`  ${name.padEnd(nameWidth)}  ${active.padEnd(activeWidth)}  { ${full} }`);
   }
   return lines.join("\n");
@@ -76,7 +82,8 @@ export interface DoctorFinding {
     | "db_drift"
     | "tenancy"
     | "driver"
-    | "pii_ask";
+    | "pii_ask"
+    | "vault_master_key";
   readonly severity: "error" | "warn";
   readonly message: string;
 }
@@ -116,9 +123,13 @@ export interface DoctorOptions {
    */
   readonly driversConfig?: DriversConfig;
   /**
-   * Active {@link ConfigEnv} for the drivers summary. Default: `docker` when
-   * `OKE_DOCKER=1` (via {@link env}), else `local` — the same resolution
-   * `oke boot` uses without an explicit `env`.
+   * Inject the `vault` block directly (tests). When omitted, it is read
+   * from the same best-effort `oke.config.ts` load as {@link driversConfig}.
+   */
+  readonly vaultConfig?: VaultElementConfig;
+  /**
+   * Active {@link ConfigEnv} for the drivers summary. Default: `dev` when
+   * `OKE_DOCKER=1` (via {@link env}), else `test`.
    */
   readonly configEnv?: ConfigEnv;
   readonly write?: (text: string) => void;
@@ -161,15 +172,20 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
   // Fully-resolved `drivers.*` — real defaults + every override merged, so
   // the picture is complete even when `oke.config.ts` only pins one key.
   let driversConfig = options.driversConfig;
-  if (driversConfig === undefined) {
+  let vaultConfig = options.vaultConfig;
+  if (driversConfig === undefined || vaultConfig === undefined) {
     try {
-      driversConfig = (await loadOkeConfig(cwd)).config.drivers;
+      const loaded = (await loadOkeConfig(cwd)).config;
+      driversConfig ??= loaded.drivers;
+      vaultConfig ??= loaded.vault;
     } catch {
       // No oke.config.ts (or it failed to load) — show real defaults only.
     }
   }
+  // Match `bootApplication`: production NODE_ENV → prod; compose → dev; else test.
   const configEnv: ConfigEnv =
-    options.configEnv ?? (env("OKE_DOCKER") === "1" ? "docker" : "local");
+    options.configEnv ??
+    (env("NODE_ENV") === "production" ? "prod" : env("OKE_DOCKER") === "1" ? "dev" : "test");
   const effectiveDrivers = resolveEffectiveDrivers(driversConfig);
 
   for (const name of secretNames) {
@@ -182,6 +198,25 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
         message: description ? `missing secret ${name}: ${description}` : `missing secret ${name}`,
       });
     }
+  }
+
+  // An env-var master key is only as protected as the process environment:
+  // it lands in shell history, orchestrator manifests, and crash dumps.
+  const usesBuiltinVault =
+    vaultConfig !== undefined || driverRefId(effectiveDrivers.vault[configEnv]) === "vault";
+  if (
+    configEnv === "prod" &&
+    usesBuiltinVault &&
+    (vaultConfig?.encryption?.masterKey?.kind ?? "env") === "env"
+  ) {
+    findings.push({
+      code: "vault_master_key",
+      // Fail closed in prod: an env-sourced master key collapses envelope
+      // protection the moment DB + env are stolen together.
+      severity: "error",
+      message:
+        'vault master key comes from an environment variable in prod — set vault.encryption.masterKey = { kind: "kms", keyId } (or use managed aws-secrets-manager) so the key is never readable from the process environment',
+    });
   }
 
   const ports = options.ports ?? [APP_PORT, CONSOLE_PORT, MCP_PORT];
@@ -213,13 +248,13 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
         code: "schema_drift",
         severity: "error",
         message:
-          "core stub schema drift — run `oke schema generate` (schema/oke.ts; not domain migrations)",
+          "core stub schema drift — run `oke schema generate` (.oke/schema/oke.ts; not domain migrations)",
       });
     } else if (expected !== null && current === null) {
       findings.push({
         code: "schema_drift",
         severity: "error",
-        message: "schema/oke.ts missing — run `oke schema generate` (core/plugin stubs)",
+        message: ".oke/schema/oke.ts missing — run `oke schema generate` (core/plugin stubs)",
       });
     }
   }
@@ -237,7 +272,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
           severity: "error",
           message:
             drift.detail ??
-            "domain schema differs from the database — run `oke db generate` then `oke db migrate` (or `oke db push` in local)",
+            "domain schema differs from the database — run `oke db generate` then `oke db migrate` (or `oke db push` in dev)",
         });
       }
     }
@@ -299,18 +334,23 @@ export async function doctorCli(args: readonly string[]): Promise<number> {
     if (a === "--manifest" || a === "-m") manifestPath = args[++i];
     else if (a === "--env" || a === "-e") {
       const value = args[++i];
-      if (value === "local" || value === "docker" || value === "test" || value === "prod") {
+      if (value === "dev" || value === "test" || value === "prod") {
         configEnv = value;
+      } else if (value === "local") {
+        configEnv = "test";
+      } else if (value === "docker") {
+        configEnv = "dev";
       }
     } else if (a === "--help" || a === "-h") {
-      console.log(`oke doctor [--manifest|-m path] [--env|-e local|docker|test|prod] [--json|-j]
+      console.log(`oke doctor [--manifest|-m path] [--env|-e dev|test|prod] [--json|-j]
 oke doctor --diff|-d [--before|-b <path> --after|-a <path>] [--base|-B <branch>]
 
 Verify secrets, ports, schema drift, and PII→model egress before serving.
 Also prints drivers.* fully resolved (every default + every override merged)
 for the active env, from oke.config.ts.
 
---env   Env to resolve drivers for (default: docker when OKE_DOCKER=1, else local).
+--env   Env to resolve drivers for (default: prod when NODE_ENV=production,
+        dev when OKE_DOCKER=1 / \`oke dev\`, else test).
 --diff  CI gate: block undeclared contract breaks (Manifest Diff).
         Default baseline is git merge-base (main/master) vs the working
         tree; pass --before/--after for an explicit comparison.

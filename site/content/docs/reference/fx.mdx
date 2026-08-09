@@ -156,9 +156,16 @@ AI calls are nondeterministic: journaling is forced on and auto-cache disabled a
 
 ## Vault
 
-| Signature            | Records | Returns / notes                                                                           |
-| -------------------- | ------- | ----------------------------------------------------------------------------------------- |
-| `fx.vault(contract)` | `read`  | `Redacted<string>` — prints/logs as a placeholder; `.reveal()` at the credential boundary |
+| Signature                          | Records  | Returns / notes                                                                                    |
+| ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `fx.vault.get(contract)`           | `secret` | `Promise<Redacted<string>>` — prints/logs as a placeholder; `.reveal()` at the credential boundary |
+| `fx.vault.set(path, value, opts?)` | `secret` | `{ path, version }` — needs a bound Vault backend                                                  |
+| `fx.vault.rotate(path, value)`     | `secret` | `{ path, version }` — new version with a fresh data key                                            |
+| `fx.vault.delete(path)`            | `secret` | `boolean` — crypto-shreds the path                                                                 |
+| `fx.vault.list(prefix?)`           | —        | Secret paths, never values                                                                         |
+| `fx.vault.status()`                | —        | `{ sealed, initialized, backend }`                                                                 |
+
+`get` reads through the boot resolution chain. Everything else needs the encrypted-at-rest backend (`drivers.vault = "vault"`) and throws without it.
 
 ## Clock
 
@@ -205,7 +212,7 @@ Register catalogs with `defineLocale` before boot (nested trees → dot keys). A
 `Register` so keys autocomplete and typos fail at compile time:
 
 ```typescript
-import { defineLocale, defineMessages, type MessagesFor } from "okengine";
+import { defineLocale, defineMessages, type MessagesFor } from "okengine/i18n";
 
 export const en = defineMessages({
   greeting: "Hello, {name}",

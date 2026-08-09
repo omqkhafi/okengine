@@ -11,7 +11,7 @@ import { resolveAuthSchema } from "./schema.ts";
 import { emitSchemaSource, runSchemaGenerate } from "../cli/schema.ts";
 import { isSessionFresh, AUTH_SESSION_GATE } from "./bindings.ts";
 import { resolveGateAuth } from "./config.ts";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -60,8 +60,8 @@ describe("gate.auth — config", () => {
 
 describe("gate.auth — autoBoot / posture", () => {
   test("auth HTTP bindings are in adopted and fail posture without gates", async () => {
-    // Force a gap by constructing bindings then auditing with empty gates stripped —
-    // real materialization always attaches gate.public / auth.session.
+    // Auth HTTP Bindings materialize lazily in doBoot (keeps auth/zod off the
+    // cold graph for public-gate apps). Boot first, then inspect adopted.
     const app = oke({
       name: "auth-posture",
       env: "test",
@@ -74,6 +74,7 @@ describe("gate.auth — autoBoot / posture", () => {
         unguardedHttp: "deny",
       },
     });
+    await app.boot({ env: "test" });
     const authPaths = app.bindings
       .filter((b) => b.trigger.kind === "http")
       .map(
@@ -87,14 +88,13 @@ describe("gate.auth — autoBoot / posture", () => {
       if (b.trigger.kind !== "http") continue;
       expect((b.trigger as { gates: readonly unknown[] }).gates.length).toBeGreaterThan(0);
     }
-    await app.boot({ env: "test" });
     await app.stop();
   });
 
   test("bare oke gate.auth fetch goes through ensureBoot → doBoot", async () => {
     const app = oke({
       name: "auth-autoboot",
-      env: "local",
+      env: "test",
       registry: "ignore",
       gate: {
         auth: {
@@ -118,10 +118,10 @@ describe("gate.auth — autoBoot / posture", () => {
     await app.stop();
   });
 
-  test("auth routes are not registry flows[] alone — they are Bindings", () => {
+  test("auth routes are not registry flows[] alone — they are Bindings", async () => {
     const app = oke({
       name: "auth-bindings",
-      env: "local",
+      env: "test",
       registry: "ignore",
       gate: {
         auth: {
@@ -130,9 +130,11 @@ describe("gate.auth — autoBoot / posture", () => {
         },
       },
     });
+    await app.boot({ env: "test" });
     expect(app.bindings.length).toBeGreaterThan(0);
     expect(app.bindings.every((b) => b.flow && b.trigger)).toBe(true);
     expect(app.router.match("POST", "/auth/sign-in/email")).toBeTruthy();
+    await app.stop();
   });
 
   test(".needs(auth) satisfied by gate.auth without .plug(auth())", async () => {
@@ -312,14 +314,14 @@ describe("gate.auth — email Flows + security", () => {
     on(http.get("/open"), flow("open", { do: () => ({ ok: true }) }));
     const app = oke({
       name: "gap",
-      env: "local",
+      env: "test",
       gate: {
         auth: { secret: "test-secret-at-least-16", http: false },
         unguardedHttp: "deny",
       },
       startScheduler: false,
     });
-    await expect(app.boot({ env: "local", startScheduler: false })).rejects.toBeInstanceOf(
+    await expect(app.boot({ env: "test", startScheduler: false })).rejects.toBeInstanceOf(
       GateBootError,
     );
   });
@@ -341,7 +343,6 @@ describe("oke schema generate — auth columns", () => {
 
     const dir = await mkdtemp(join(tmpdir(), "oke-schema-"));
     try {
-      await mkdir(join(dir, "schema"), { recursive: true });
       const code = await runSchemaGenerate({
         cwd: dir,
         authSchema: {
@@ -353,6 +354,7 @@ describe("oke schema generate — auth columns", () => {
         write: () => {},
       });
       expect(code).toBe(0);
+      expect(await Bun.file(join(dir, ".oke/schema/oke.ts")).exists()).toBe(true);
       const checkOk = await runSchemaGenerate({
         cwd: dir,
         check: true,

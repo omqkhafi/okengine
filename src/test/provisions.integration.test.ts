@@ -54,7 +54,7 @@ describe("Provisions integration", () => {
       out: z.boolean(),
       effects: { secrets: ["STRIPE_KEY"], emits: ["order-news"] },
       do: async ({ orderId }, fx) => {
-        const key = fx.vault(stripeKey);
+        const key = await fx.vault.get(stripeKey);
         expect(key.reveal().startsWith("sk_")).toBe(true);
 
         await fx.step("create-intent", async () => ({ id: `pi_${orderId}` }));

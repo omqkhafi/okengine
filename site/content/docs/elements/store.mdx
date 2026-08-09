@@ -186,7 +186,7 @@ await fx.store(db).delete(notes).where(lt(notes.createdAt, cutoff));
 
 ### Schema — declare once, generate per dialect
 
-The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle for the active dialect (`sqliteTable` locally, `pgTable` in docker/prod) into `src/schema.generated.ts`.
+The recommended path: declare tables ORM-agnostically, then let `oke db` emit real Drizzle (`pgTable` for Postgres / PGLite) into `src/db/schema.drizzle.ts`.
 
 | Field API                                    | Meaning                                         |
 | -------------------------------------------- | ----------------------------------------------- |
@@ -232,28 +232,28 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
 | `oke db generate` | Write versioned SQL under `drizzle/` for review                |
 | `oke db migrate`  | Apply those files — human or CI, **never** at boot             |
 
-`oke dev` (local) auto-pushes when you save a schema _input_ (`schema.decl.ts`,
+`oke dev` auto-pushes when you save a schema _input_ (`schema.decl.ts`,
 hand-written `schema.ts`, `app.ts` for plugin tables, or `drizzle.config.ts`) —
-not when emit rewrites `schema.generated.ts`.
+not when emit rewrites `schema.drizzle.ts`.
 
-Opt out with `--no-db-push` or `db: { autoPush: false }`. Docker/prod **never**
-auto-apply DDL; a missing table fails as **OKE1101** (`oke db migrate`).
+Opt out with `--no-db-push` or `db: { autoPush: false }`. `prod` **never**
+auto-applies DDL; a missing table fails as **OKE1101** (`oke db migrate`).
 
 #### Multiple environments
 
-Local can `oke db push` freely — safe to wipe and regenerate.
+`dev` can `oke db push` freely — safe to wipe and regenerate.
 
 Staging/prod accumulate versioned SQL under `drizzle/` (`oke db generate`).
 `oke db migrate` applies only unrecorded files in order — behind DBs catch up.
 
 | Environment    | Sync                                                           |
 | -------------- | -------------------------------------------------------------- |
-| Local          | `oke db push` (or auto-push from `oke dev`)                    |
+| `dev`          | `oke db push` (or auto-push from `oke dev`)                    |
 | Staging / prod | `oke db generate` → review files → `oke db migrate` on that DB |
 
 <Callout title="Connection pooling is infrastructure, not app code" type="info">
   Bun.SQL defaults to **10** connections per process — fine per instance. Scale out and `N × pool`
-  can exceed Postgres `max_connections`. docker/prod puts **PgDog** in front; `DATABASE_URL` → port
+  can exceed Postgres `max_connections`. `dev`/`prod` put **PgDog** in front; `DATABASE_URL` → port
   `6432`. No app code changes.
 </Callout>
 
@@ -272,15 +272,13 @@ Seed proves existence (bootstrap rows); it does not correct schema-adjacent data
 
 <StoreSeeding />
 
-| env      | `essential` | `dev` | `prod` |
-| -------- | ----------- | ----- | ------ |
-| `local`  | yes         | yes   | no     |
-| `docker` | yes         | yes   | no     |
-| `test`   | yes         | no    | no     |
-| `prod`   | yes         | no    | yes    |
+| env    | `essential` | `dev` | `prod` |
+| ------ | ----------- | ----- | ------ |
+| `dev`  | yes         | yes   | no     |
+| `test` | yes         | no    | no     |
+| `prod` | yes         | no    | yes    |
 
-`docker` is a laptop profile with prod-shaped drivers — still development, so `dev` runs.
-Outside `test`, exactly one of `dev` / `prod` runs with `essential`.
+Outside `test`, exactly one of seed-category `dev` / `prod` runs with `essential`.
 
 **Simple form** — everything inline:
 
@@ -367,14 +365,14 @@ await fx.store(db).upsert(
 is for seed-owned rows you intentionally overwrite. Schema-wide data fixes still belong in
 migrations, not seed.
 
-| Env               | Confirm                                               |
-| ----------------- | ----------------------------------------------------- |
-| `local` / `test`  | none                                                  |
-| `docker` / `prod` | print DB target; type the env name (`--force` for CI) |
+| Env            | Confirm                                               |
+| -------------- | ----------------------------------------------------- |
+| `test`         | none                                                  |
+| `dev` / `prod` | print DB target; type the env name (`--force` for CI) |
 
 ```bash
-oke db seed                 # resolve env like other oke db commands (.oke/mode)
-oke db seed --env docker    # explicit override
+oke db seed                 # resolve env like other oke db commands
+oke db seed --env dev       # explicit override
 oke db seed --env prod --force
 ```
 
@@ -394,27 +392,25 @@ oke db seed --env prod --force
 
 Same flow code, different backends — configured once in `oke.config.ts`:
 
-| Facet | Local    | Docker / prod | Runs as                                 |
-| ----- | -------- | ------------- | --------------------------------------- |
-| `sql` | `sqlite` | `postgres`    | file on disk → container + named volume |
+| Facet | `dev` / `prod` | `test`   | Runs as                                       |
+| ----- | -------------- | -------- | --------------------------------------------- |
+| `sql` | `postgres`     | `pglite` | Compose / deploy Postgres → in-process PGLite |
 
-Defaults: `sqlite` locally, `postgres` in docker/prod, `memory` in test. Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
+Defaults: `postgres` for `dev`/`prod`, `pglite` for `test`. SQLite-family drivers (`sqlite`, `libsql`) are removed. Container images come from the `images` map — change the vendor by changing the pin, never the driver id.
 
 #### Opt-in SQL drivers
 
-Two more `store.sql` drivers cover specific parity needs. Both are optional peers — `bun add` them yourself; neither changes the `sqlite` local default.
+| Driver   | Install                                                  | Wire dialect | Choose for                                                |
+| -------- | -------------------------------------------------------- | ------------ | --------------------------------------------------------- |
+| `pglite` | `@electric-sql/pglite` + `@electric-sql/pglite-pgvector` | postgresql   | **required** for `store.sql.test`; also usable in-process |
 
-| Driver   | Install                                                  | Wire dialect | Choose for                                             |
-| -------- | -------------------------------------------------------- | ------------ | ------------------------------------------------------ |
-| `libsql` | `@libsql/client`                                         | sqlite       | local vector search without Docker (`index: "libsql"`) |
-| `pglite` | `@electric-sql/pglite` + `@electric-sql/pglite-pgvector` | postgresql   | the real Postgres dialect + pgvector, in-process       |
-
-<Callout title="PGlite is not a latency play">
-  PGlite pays a one-time ~1 s WASM init, and warm CRUD is roughly 15× slower than `bun:sqlite`.
-  Choose it for dialect/pgvector parity with prod — never as a faster local default.
+<Callout title="PGlite is the test SQL driver">
+  `defineConfig` requires `drivers.store.sql.test` to be `pglite` when set. Use `oke test` (sets
+  `OKE_PGLITE_URL=memory://`). Choose PGLite for Postgres correctness in tests — not as a Compose
+  substitute for `oke dev`.
 </Callout>
 
-SQL-backed index drivers (`pgvector`, `libsql`) share this facet's connection — see [Advanced — composing facets together](#advanced--composing-facets-together).
+SQL-backed index driver `pgvector` shares this facet's connection — see [Advanced — composing facets together](#advanced--composing-facets-together).
 
 ## KV
 
@@ -470,8 +466,8 @@ Optional third argument on `set` is a duration string: `(\d+)(ms|s|m|h|d)` — e
 
 <StoreKvTtl />
 
-**Consequence:** a TTL you rely on in prod does nothing under the local `memory` driver. Test expiry
-against `redis` (docker) when lifetime matters.
+**Consequence:** a TTL you rely on in prod does nothing under the `test` `memory` driver. Exercise
+expiry against `redis` under `oke dev` when lifetime matters.
 
 ### Examples — what follows from each choice
 
@@ -498,25 +494,25 @@ your Flows and operator tools stay readable.
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    kv: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
+    kv: { dev: "redis", test: "memory", prod: "redis" },
   },
 },
 images: {
-  "store.kv": "redis:8-alpine",
+  store: { kv: "redis:8-alpine" },
   // or: "valkey/valkey:8-alpine"
   // or: "docker.dragonflydb.io/dragonflydb/dragonfly"
 },
 ```
 
-| Facet | Local    | Docker / prod | Runs as                |
-| ----- | -------- | ------------- | ---------------------- |
-| `kv`  | `memory` | `redis`       | in-process → container |
+| Facet | `dev` / `prod` | `test`   | Runs as                |
+| ----- | -------------- | -------- | ---------------------- |
+| `kv`  | `redis`        | `memory` | container → in-process |
 
 | Variable           | When                             |
 | ------------------ | -------------------------------- |
 | `REDIS_URL`        | Required for the `redis` driver  |
 | `OKE_STORE_KV_URL` | Override if `REDIS_URL` is unset |
-| `OKE_KV_DRIVER`    | Force a driver id (docker)       |
+| `OKE_KV_DRIVER`    | Force a driver id                |
 
 Missing Redis URL fails boot loudly: `oke boot: redis driver needs REDIS_URL`.
 
@@ -613,28 +609,28 @@ Keys are opaque strings the driver stores as-is. Prefer path-like prefixes (`pho
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
+    files: { dev: "s3", test: "memory", prod: "s3" },
   },
 },
 images: {
-  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+  store: { files: "rustfs/rustfs:1.0.0-beta.11" },
 },
 ```
 
-| Facet   | Local | Docker / prod | Runs as                           |
-| ------- | ----- | ------------- | --------------------------------- |
-| `files` | `fs`  | `s3`          | project folder → RustFS container |
+| Facet   | `dev` / `prod` | `test`   | Runs as                  |
+| ------- | -------------- | -------- | ------------------------ |
+| `files` | `s3`           | `memory` | RustFS / S3 → in-process |
 
 | Variable                      | When                                   |
 | ----------------------------- | -------------------------------------- |
 | `S3_BUCKET`                   | Required bucket for the `s3` driver    |
 | `OKE_STORE_FILES_DB`          | Override bucket name                   |
 | `S3_ENDPOINT` · keys · region | S3-compatible endpoint and credentials |
-| `OKE_FILES_DRIVER`            | Force a driver id (docker)             |
+| `OKE_FILES_DRIVER`            | Force a driver id                      |
 
 `memory` is the test default. Local `fs` writes under a temp root when no binding `root` is set.
 
-**Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for docker/prod (create-oke templates already do).
+**Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for `dev`/`prod` (create-oke templates already do).
 
 <Callout title="Operator tools can browse, not edit bytes">
   Operator tools can list keys and delete them. Direct edit is **KV + SQL only** — blob bodies are
@@ -747,11 +743,10 @@ runtime.
 
 ### Vector ANN
 
-| `store.index` id | Shares connection from     | Real ANN via                         |
-| ---------------- | -------------------------- | ------------------------------------ |
-| `memory`         | — (in-process, default)    | Full scan cosine                     |
-| `pgvector`       | `postgres` or `pglite` sql | HNSW + `cosineDistance`              |
-| `libsql`         | `libsql` sql               | `libsql_vector_idx` + `vector_top_k` |
+| `store.index` id | Shares connection from     | Real ANN via            |
+| ---------------- | -------------------------- | ----------------------- |
+| `memory`         | — (in-process, default)    | Full scan cosine        |
+| `pgvector`       | `postgres` or `pglite` sql | HNSW + `cosineDistance` |
 
 **Consequence:** a configured SQL-backed index that cannot reach its engine — missing peer, missing
 `vector` extension, wrong sql driver — fails loudly at first use. It never silently falls back to
@@ -788,29 +783,27 @@ do: async ({ id, doc, q }, fx) => {
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    index: { local: "meilisearch", docker: "meilisearch", prod: "meilisearch" },
+    index: { dev: "meilisearch", test: "memory", prod: "meilisearch" },
   },
 },
 images: {
-  "store.index": "getmeili/meilisearch:v1.37",
+  store: { index: "getmeili/meilisearch:v1.37" },
 },
 ```
 
-- **Local mode** needs the `meilisearch` binary on `PATH` (a documented prerequisite, like Docker for `--docker` — OKE never auto-downloads binaries). `oke dev` spawns it with a generated master key persisted under `.oke/meilisearch/` (`0700`/`0600`).
-- **Docker / prod** uses the image recipe; the app gets `OKE_STORE_INDEX_URL` + `OKE_STORE_INDEX_KEY` from Compose — a standalone HTTP service, never the shared `sqlUrl`.
+- **`oke dev` / prod** use the image recipe; the app gets `OKE_STORE_INDEX_URL` + `OKE_STORE_INDEX_KEY` from Compose — a standalone HTTP service, never the shared `sqlUrl`.
 - **Fail-loud:** a configured meilisearch that is unreachable or unhealthy throws `MeilisearchUnavailableError` — never a silent memory fallback.
 - **Not for vectors:** `ai.embed` / `fx.search` stay vector-only; pointing an embed `into` a meilisearch index fails loud (embeddings don't apply).
-- **Alpine caveat:** the raw glibc binary fails on Alpine/musl _hosts_; the official image is musl-clean. Install the binary for your platform (e.g. Homebrew / install script), or use `--docker`.
 
 ### Per-environment Index drivers
 
-Unlike KV/Files, an unset `drivers.store.index` map stays **`memory` in every environment** — there is no docker fallback to `pgvector`. Opt in explicitly:
+Unlike KV/Files, an unset `drivers.store.index` map stays **`memory` in every environment** — there is no automatic fallback to `pgvector`. Opt in explicitly:
 
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    sql: { local: "libsql", docker: "postgres", prod: "postgres" },
-    index: { local: "libsql", docker: "pgvector", prod: "pgvector" },
+    sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+    index: { dev: "pgvector", test: "memory", prod: "pgvector" },
   },
 },
 ```
@@ -831,25 +824,25 @@ target meilisearch.
 
 Facets are independent declarations. A Flow may touch several in one `do` — for example store a files key on a SQL row, or `upsert` into an index after a SQL write. There is no special sync API: `store.resource` `search:` is SQL substring match, not meilisearch.
 
-One real coupling: a SQL-backed index shares the sql facet's already-open connection, so configure the pair together:
+One real coupling: `pgvector` shares the sql facet's already-open connection, so configure the pair together:
 
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    sql: { local: "libsql" },
-    index: { local: "libsql" },
+    sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+    index: { dev: "pgvector", test: "memory", prod: "pgvector" },
   },
 },
 ```
 
-Same idea for `pgvector` with `postgres` or `pglite`. The full per-environment map looks like this:
+The full per-environment map looks like this:
 
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    sql:   { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
-    kv:    { local: "memory", docker: "redis",    test: "memory", prod: "redis" },
-    files: { local: "fs",     docker: "s3",       test: "memory", prod: "s3" },
+    sql:   { dev: "postgres", test: "pglite", prod: "postgres" },
+    kv:    { dev: "redis",    test: "memory", prod: "redis" },
+    files: { dev: "s3",       test: "memory", prod: "s3" },
   },
 },
 ```
@@ -867,9 +860,9 @@ same PII masking — see the Callout under [Querying by hand](#querying-by-hand)
 ## Troubleshooting
 
 <Accordions>
-<Accordion title="OKE1101 — missing table in docker or prod">
+<Accordion title="OKE1101 — missing table in prod">
 
-Schema DDL never runs automatically outside local dev. Run `oke db push` against the target database for a dev-style sync, or `oke db generate` + `oke db migrate` for reviewed, versioned migrations.
+Schema DDL never runs automatically in `prod`. Under `oke dev`, `db.autoPush` (default `true`) runs `oke db push`. For production use `oke db generate` + `oke db migrate`.
 
 </Accordion>
 <Accordion title="I need a join — with: is not supported">
@@ -887,14 +880,14 @@ You are on offset paging. Switch `list` to keyset by setting `cursor` columns wi
 `count: "exact"` runs `COUNT(*)` per page. Set `count: "none"` in the `list` options to skip it, or use keyset mode where totals are rarely needed.
 
 </Accordion>
-<Accordion title="KV TTL never expires locally">
+<Accordion title="KV TTL never expires in tests">
 
-The local default is `memory`, which ignores TTL on `set`. Run against `redis` (`oke dev --docker` or `drivers.store.kv.local: "redis"` with `REDIS_URL`) when you need real expiry.
+The `test` default is `memory`, which ignores TTL on `set`. Under `oke dev`, KV is `redis` by default — use that when you need real expiry.
 
 </Accordion>
 <Accordion title="oke boot: redis / meilisearch / S3 URL missing">
 
-Driver-backed facets fail boot when their URL is absent — Redis needs `REDIS_URL`, meilisearch needs `OKE_STORE_INDEX_URL`, S3 needs `S3_BUCKET`. Docker mode expects `oke dev -d` to write these into the compose env.
+Driver-backed facets fail boot when their URL is absent — Redis needs `REDIS_URL`, meilisearch needs `OKE_STORE_INDEX_URL`, S3 needs `S3_BUCKET`. `oke dev` writes these into the Compose env.
 
 </Accordion>
 <Accordion title="vector dims X !== index dims Y">
@@ -902,9 +895,9 @@ Driver-backed facets fail boot when their URL is absent — Redis needs `REDIS_U
 The vector length must match `store.index(…, { dims })` (runtime default `3` if unset). Align `dims` with your embedder, or fix the vector you pass to `upsert` / `search`.
 
 </Accordion>
-<Accordion title="Index stays on memory in docker">
+<Accordion title="Index stays on memory under oke dev">
 
-Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` in docker — it stays `memory`. Set the map explicitly (and pair SQL for `pgvector` / `libsql`).
+Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` in `dev` — it stays `memory`. Set the map explicitly (and pair SQL for `pgvector`).
 
 </Accordion>
 </Accordions>

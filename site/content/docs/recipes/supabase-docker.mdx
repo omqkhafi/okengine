@@ -44,7 +44,7 @@ refs from `OKE_STORE_SQL_*`. Driver id stays `postgres`.
 ```typescript
 drivers: {
   store: {
-    index: { local: "memory", docker: "pgvector", prod: "pgvector" },
+    index: { test: "memory", prod: "pgvector" },
   },
 },
 ```

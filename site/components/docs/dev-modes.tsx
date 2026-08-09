@@ -1,8 +1,7 @@
 /**
- * Local vs docker mode visual for Installation.
+ * Docker-first `oke dev` vs PGLite `oke test` visual for Installation.
  *
- * Same app on host Bun; different driver profiles and where infra runs.
- * Container-aware so a narrow docs column stacks instead of crushing.
+ * Same app on host Bun; Compose for the edit loop, in-process PGLite for tests.
  */
 
 "use client";
@@ -18,35 +17,35 @@ const MODES: ReadonlyArray<{
   readonly bestFor: string;
 }> = [
   {
-    id: "local",
+    id: "dev",
     command: "oke dev",
-    title: "Local",
-    app: "Host Bun",
-    infra: ["SQLite (default)", "In-process KV / memory", "No Compose required"],
-    bestFor: "Fast edit loop; schema auto-push",
-  },
-  {
-    id: "docker",
-    command: "oke dev --docker",
-    title: "Docker",
+    title: "Dev",
     app: "Host Bun",
     infra: [
       "Postgres / Redis / S3 / SMTP in Compose",
       "Credentials under docker/",
       "Ports unique per project",
     ],
-    bestFor: "Prod-shaped infra while you stay on Bun",
+    bestFor: "Edit loop on prod-shaped infra",
+  },
+  {
+    id: "test",
+    command: "oke test",
+    title: "Test",
+    app: "Host Bun",
+    infra: ["PGLite (memory://)", "Memory / frozen drivers", "No Compose"],
+    bestFor: "Fast bun test with Postgres SQL semantics",
   },
 ];
 
 /**
- * Side-by-side local and docker profiles for `oke dev`.
+ * Side-by-side `oke dev` (Compose) and `oke test` (PGLite) postures.
  */
 export function DevModes() {
   return (
     <figure
       className="@container not-prose m-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Two oke dev modes: local runs the app on host Bun with SQLite and in-process stores; docker keeps the app on host Bun but starts Postgres, Redis, S3, and SMTP via Compose."
+      aria-label="Two postures: oke dev runs the app on host Bun with Postgres, Redis, S3, and SMTP via Compose; oke test uses PGLite and memory drivers without Compose."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-6">
         <p className="text-sm font-medium text-fd-foreground">Where infra runs</p>

@@ -1,0 +1,103 @@
+# ============================================================
+# .cursorrules — okengine
+# One law. Eight elements. Ten exports. One package. One manifest.
+# ============================================================
+
+# ---------- Runtime & Tooling ----------
+- okengine requires Bun &gt;=1.3.14. All code MUST be ESNext ESM modules (no CommonJS).
+- Use `bun test` for tests, `oxlint` for linting, `oxfmt` for formatting.
+- TypeScript strict mode is enforced: `noUnusedLocals`, `noUnusedParameters`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `erasableSyntaxOnly`.
+- Prefer `verbatimModuleSyntax: true` — use `import type` for type-only imports.
+- `allowImportingTsExtensions` is enabled; import `.ts` files directly without `.js` rewrite.
+
+# ---------- Core Philosophy ----------
+- Every backend behavior is a Flow: `on(Trigger) -&gt; Effects` via the `fx` surface.
+- The 8 elements are the ONLY vocabulary: flow, signal, store, clock, gate, vault, channel, ai.
+- Effects must be EXPLICITLY declared: reads, writes, emits, sends, asks, secrets, calls.
+- The Manifest is DERIVED from source — never hand-edit `manifest.v1.schema.json`.
+- Client, Console, and MCP are derived from the same Manifest — no separate codegen.
+
+# ---------- Imports & Public API ----------
+- The entire public API is 10 exports from `okengine`:
+  `on`, `flow`, `signal`, `store`, `clock`, `gate`, `vault`, `channel`, `ai`, `plugin`
+- World access goes through `fx` — effects are inferred.
+- Use `zod` for all runtime schema validation.
+- Use `drizzle-orm` for database operations; prefer `store.resource` for declarative CRUD.
+- Use `drizzle-zod` to bridge Drizzle schemas with Zod when needed.
+
+# ---------- Flow Patterns ----------
+- A Flow with no trigger is call-only (internal / private).
+- Triggers: `http`, `signal`, `cron`, `every`, `cdc`.
+- Effects `reads` / `writes` use ResourceRef format: `sql:table`, `kv:namespace`, `files:bucket`, `index:name`.
+- Effects `emits` reference Signal names; `sends` reference Template names; `asks` reference Prompt names.
+- Effects `secrets` reference SecretContract names (capabilities, never values).
+- Effects `calls` reference other Flow names for transitive composition.
+- Declare `plane: "user"` or `plane: "operator"` when applicable.
+- Use `durable: true` + named `steps` for long-running / retryable flows.
+
+# ---------- Store Patterns ----------
+- Store facets: `sql`, `kv`, `files`, `index`.
+- Prefer `store.resource` over hand-written Drizzle schemas for standard CRUD.
+- If hand-writing schema, place it in a `schema.ts` and use Drizzle's column builders.
+- Use `field.*` helpers (e.g., `field.text()`, `field.integer()`) when available.
+- Classify columns with `pii`, `sensitive`, and `retain` tags where applicable.
+
+# ---------- Gate Patterns ----------
+- Gate kinds: `policy` (auth/roles) or `rate` (throttling).
+- Rate strategies: `sliding-window-counter`, `fixed-window`, `sliding-log`, `token-bucket`, `leaky-bucket`.
+- Use `gate.public` for unauthenticated endpoints.
+- Reference gates in Flows via the `gates` array.
+
+# ---------- Signal Patterns ----------
+- Signal delivery physics are MANDATORY: `once`, `broadcast`, `live`.
+- Declare `retries`, `deadLetter`, and `schema` explicitly.
+
+# ---------- AI Patterns ----------
+- AI config lives under the `ai` element in the manifest.
+- Define `models`, `prompts`, and `agents` separately.
+- Prompts support `budget` (maxCostPerCall, maxCostPerRun), `evals`, and version pinning.
+- Agents declare `tools` (FlowRef array), `maxSteps`, and `model`.
+
+# ---------- Console UI (React + Vite + Tailwind) ----------
+- Console UI source lives in `src/console/ui/shell/` — separate from backend logic.
+- Console is a Vite SPA built with React, TailwindCSS v4, and CodeMirror.
+- Panels are lazy-loaded chunks named `panel-*` (e.g., `panel-flows`, `panel-store`).
+- Do NOT mix backend Flow logic with Console UI components.
+- Console runs on port `:6533`; dev server on `:6534`.
+
+# ---------- Drivers ----------
+- Drivers are protocol-named and keyed by environment in the manifest.
+- When adding a driver, register it properly in `src/drivers/` and update exports.
+- Supported drivers include SQL (pglite, libsql), KV, files, index, vault, channel, AI providers.
+
+# ---------- Database & Migrations ----------
+- Use `oke db push` for local dev schema sync (auto-pushes in `oke dev`).
+- Use `oke db generate` or `oke db migrate` for production migrations.
+- Drizzle Kit is the migration tool; config is in `drizzle.config.ts`.
+
+# ---------- Testing ----------
+- Use `bun test --pass-with-no-tests` as the default test runner.
+- Playwright is used for Console smoke tests (`tests/console/smoke.spec.ts`).
+- Budget tests exist for kernel, client, console, and runtime — respect them.
+- Fixtures for compiler tests live in `src/compiler/fixtures/` — excluded from tsconfig.
+
+# ---------- Monorepo Structure ----------
+- Workspaces: `packages/*` and `site`.
+- `packages/create-oke` is the scaffolding CLI.
+- `site` is the Next.js docs site — do NOT mix with framework source.
+- Keep changes scoped to the relevant workspace.
+
+# ---------- Code Style ----------
+- Prefer explicit types over inference for public API surfaces.
+- Use `const` assertions for literal unions where applicable.
+- Keep Flow definitions declarative and close to the `on()` call.
+- Avoid `any` — the project enforces strict TypeScript.
+- Use `oxlint` rules; do not introduce lint errors.
+
+# ---------- What NOT to do ----------
+- Do NOT import from `node_modules` paths directly — always use package names.
+- Do NOT hand-edit `manifest.v1.schema.json` — it is a derived artifact.
+- Do NOT use CommonJS (`require`, `module.exports`) anywhere.
+- Do NOT add implicit effects — every read, write, emit, send, ask, secret, or call must be declared.
+- Do NOT pollute the `okengine` public exports with internal utilities.
+- Do NOT modify `src/console/ui/dist/` — it is a build output.

@@ -177,7 +177,7 @@ describe("gate boot posture", () => {
   });
 
   test("unguardedHttp allow has no effect outside env === test", () => {
-    for (const env of ["local", "prod", "docker"] as const) {
+    for (const env of ["dev", "prod"] as const) {
       expect(() => assertHttpGatePosture(unguarded, { unguardedHttp: "allow", env })).toThrow(
         GateBootError,
       );

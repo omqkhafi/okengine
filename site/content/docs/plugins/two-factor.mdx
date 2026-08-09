@@ -27,7 +27,7 @@ import { twoFactor } from "okengine/plugins";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: { auth: {} },
 }).plug(twoFactor());
 ```

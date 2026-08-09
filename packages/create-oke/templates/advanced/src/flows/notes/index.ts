@@ -25,7 +25,6 @@ export const list = on(
   http.get("/notes").gate(gate.public),
   flow("notes.list", {
     out: NoteListOut,
-    effects: { reads: ["sql:app"] },
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(notes).where(isNull(notes.archivedAt));
       const sorted = [...rows].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
@@ -48,14 +47,9 @@ export const create = on(
   flow("notes.create", {
     in: NoteCreateIn,
     out: NoteOut,
-    effects: {
-      writes: ["sql:app"],
-      emits: ["note-created"],
-      secrets: ["APP_WEBHOOK_SECRET"],
-    },
     do: async (input, fx) => {
       // Prove Vault is wired (local: env/dev fallback).
-      fx.vault(webhookSecret);
+      await fx.vault.get(webhookSecret);
       const id = fx.id();
       const createdAt = fx.clock.now();
       await fx.store(db).insert(notes).values({
@@ -84,7 +78,6 @@ export const get = on(
     in: NoteIdIn,
     out: NoteOut,
     errors: { NotFound },
-    effects: { reads: ["sql:app"] },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -106,7 +99,6 @@ export const archive = on(
     in: NoteIdIn,
     out: NoteOut,
     errors: { NotFound },
-    effects: { reads: ["sql:app"], writes: ["sql:app"] },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -131,7 +123,6 @@ export const archive = on(
 export const onCreated = on(
   noteCreated,
   flow("notes.onCreated", {
-    effects: { sends: ["note-created"] },
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, {
         to: "you@localhost",
@@ -148,7 +139,6 @@ export const attach = on(
     in: NoteAttachIn,
     out: NoteAttachOut,
     errors: { NotFound },
-    effects: { reads: ["sql:app"], writes: ["files:uploads"] },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -164,7 +154,6 @@ export const digest = on(
   every("1d"),
   flow("notes.digest", {
     out: NoteDigestOut,
-    effects: { reads: ["sql:app"] },
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(notes).where(isNull(notes.archivedAt));
       return { active: rows.length, at: fx.clock.now() };
@@ -182,7 +171,6 @@ export const summarize = on(
     in: NoteSummarizeIn,
     out: NoteSummarizeOut,
     errors: { NotFound },
-    effects: { reads: ["sql:app"], asks: ["summarize-note"] },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });

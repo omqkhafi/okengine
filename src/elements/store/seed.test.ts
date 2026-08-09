@@ -19,8 +19,7 @@ describe("defineSeed / resolveSeedCategory", () => {
   });
 
   test("resolveSeedCategory matches the env matrix", () => {
-    expect(resolveSeedCategory("local")).toBe("dev");
-    expect(resolveSeedCategory("docker")).toBe("dev");
+    expect(resolveSeedCategory("dev")).toBe("dev");
     expect(resolveSeedCategory("prod")).toBe("prod");
     expect(resolveSeedCategory("test")).toBe(null);
   });

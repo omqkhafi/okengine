@@ -77,7 +77,6 @@ const PATH_BRANDS: Readonly<Record<string, BrandMarkId>> = {
   "/docs/recipes/timescale": "timescale",
   "/docs/recipes/rustfs": "rustfs",
   "/docs/recipes/mailpit": "mailpit",
-  "/docs/recipes/openbao": "openbao",
   "/docs/recipes/meilisearch": "meilisearch",
   "/docs/recipes/ollama": "ollama",
   "/docs/providers/neon": "neon",

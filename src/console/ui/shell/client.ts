@@ -484,6 +484,22 @@ interface ConsoleClient {
         sharedFingerprintEnvs: string[];
       }>;
       env: string;
+      backend: {
+        driverId: "env" | "vault" | "managed" | "memory";
+        builtin: boolean;
+        status: {
+          initialized: boolean;
+          sealed: boolean;
+          masterKeyPresent: boolean;
+          kekVersion: number;
+          secretCount: number;
+          sealCount: number;
+          lastSealedAt: number | null;
+          lastUnsealedAt: number | null;
+          rewrapTargetKekVersion: number | null;
+        } | null;
+        unavailable: string | null;
+      } | null;
     }>;
     vaultSet: (input: {
       name: string;

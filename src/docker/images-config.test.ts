@@ -77,11 +77,6 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       // flat roles — no driver counterpart in DriversConfig
       {
-        images: { vault: "openbao/openbao:2.6.1" },
-        role: "vault",
-        image: "openbao/openbao:2.6.1",
-      },
-      {
         images: { ai: "ghcr.io/ggml-org/llama.cpp:server-b10290" },
         role: "ai",
         image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
@@ -121,8 +116,8 @@ describe("ImagesConfig nesting — compose output parity", () => {
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
       "store.kv": "redis:8-alpine",
       "store.files": "rustfs/rustfs:1.0.0-beta.11",
+      "store.index": "getmeili/meilisearch:v1.37",
       "channel.email": "axllent/mailpit:v1.22.3",
-      vault: "openbao/openbao:2.6.1",
     };
 
     const nestedImages: ImagesConfig = {
@@ -130,9 +125,9 @@ describe("ImagesConfig nesting — compose output parity", () => {
         sql: "postgres:18-alpine",
         kv: "redis:8-alpine",
         files: "rustfs/rustfs:1.0.0-beta.11",
+        index: "getmeili/meilisearch:v1.37",
       },
       channel: { email: "axllent/mailpit:v1.22.3" },
-      vault: "openbao/openbao:2.6.1",
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
     };
 
@@ -144,8 +139,8 @@ describe("ImagesConfig nesting — compose output parity", () => {
       "store.sql": { user: "oke", password: "fixed-pw-sql", database: "oke" },
       "store.kv": { user: "oke", password: "fixed-pw-kv", database: "oke" },
       "store.files": { user: "oke", password: "fixed-pw-files", database: "oke" },
+      "store.index": { user: "oke", password: "fixed-pw-index", database: "oke" },
       "channel.email": { user: "oke", password: "fixed-pw-email", database: "oke" },
-      vault: { user: "oke", password: "fixed-pw-vault", database: "oke" },
       pgdog: { user: "oke", password: "fixed-pw-pgdog", database: "oke" },
     };
 

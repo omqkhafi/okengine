@@ -45,11 +45,11 @@ export {
   type GateRuntime,
 } from "./gate/runtime.ts";
 
+export { ALL_RATE_STRATEGIES, DEFAULT_RATE_STRATEGY } from "./gate/constants.ts";
+
 export {
   takeRate,
   luaForStrategy,
-  ALL_RATE_STRATEGIES,
-  DEFAULT_RATE_STRATEGY,
   RATE_STRATEGIES,
   type RateTakeResult,
   type TakeRateOptions,

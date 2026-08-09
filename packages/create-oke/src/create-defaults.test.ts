@@ -13,7 +13,7 @@ import {
   toCreateDefaults,
   writeCreateDefaults,
 } from "./create-defaults.ts";
-import { pinsLocalOnly, recommendedDefaults } from "./drivers-catalog.ts";
+import { pinsDockerReady, recommendedDefaults } from "./drivers-catalog.ts";
 
 describe("createDefaultsPath", () => {
   test("joins ~/.oke/create-defaults.json", () => {
@@ -26,19 +26,21 @@ describe("parseCreateDefaults", () => {
     expect(parseCreateDefaults(null)).toBeNull();
     expect(parseCreateDefaults({ version: 2 })).toBeNull();
     expect(parseCreateDefaults({ version: 1, profile: "nope" })).toBeNull();
+    expect(parseCreateDefaults({ version: 1, profile: "local-only" })).toBeNull();
   });
 
   test("accepts recommended shape", () => {
-    const d = recommendedDefaults("local-only", "standard");
+    const d = recommendedDefaults("docker-ready", "standard");
     const parsed = parseCreateDefaults(d);
-    expect(parsed?.profile).toBe("local-only");
+    expect(parsed?.profile).toBe("docker-ready");
     expect(parsed?.template).toBe("standard");
-    expect(parsed?.drivers.store.sql.local).toBe("sqlite");
+    expect(parsed?.drivers.store.sql.dev).toBe("postgres");
+    expect(parsed?.drivers.store.sql.test).toBe("pglite");
     expect(parsed?.ai.enabled).toBe(false);
   });
 
   test("older files without template default to standard", () => {
-    const d = recommendedDefaults("local-only", "standard");
+    const d = recommendedDefaults("docker-ready", "standard");
     const { template: _t, ...rest } = d;
     const parsed = parseCreateDefaults(rest);
     expect(parsed?.template).toBe("standard");
@@ -55,27 +57,31 @@ describe("read/write round-trip", () => {
         profile: "docker-ready",
         drivers: {
           store: {
-            sql: pinsLocalOnly("libsql", "postgres", "memory"),
-            kv: pinsLocalOnly("redis", "redis", "memory"),
-            files: pinsLocalOnly("fs", "s3", "memory"),
+            sql: pinsDockerReady("postgres", "pglite"),
+            kv: pinsDockerReady("redis", "memory"),
+            files: pinsDockerReady("s3", "memory"),
             index: null,
           },
-          signal: pinsLocalOnly("memory", "redis", "memory"),
-          clock: pinsLocalOnly("file", "file", "frozen"),
-          vault: pinsLocalOnly("env", "openbao", "memory"),
-          channel: { email: pinsLocalOnly("console", "smtp", "console") },
-          ai: pinsLocalOnly("ollama", "ollama", "mock"),
+          signal: pinsDockerReady("redis", "memory"),
+          clock: pinsDockerReady("file", "frozen"),
+          vault: pinsDockerReady("vault", "memory"),
+          channel: { email: pinsDockerReady("smtp", "console") },
+          ai: pinsDockerReady("ollama", "mock"),
         },
         ai: { enabled: true, provider: "ollama", driver: "ollama" },
+        locales: ["ar"],
+        pgdog: true,
       });
       writeCreateDefaults(original, path);
       const loaded = readCreateDefaults(path);
       expect(loaded).not.toBeNull();
       expect(loaded!.template).toBe("advanced");
-      expect(loaded!.drivers.store.sql.local).toBe("libsql");
-      expect(loaded!.drivers.ai?.local).toBe("ollama");
+      expect(loaded!.drivers.store.sql.dev).toBe("postgres");
+      expect(loaded!.drivers.ai?.dev).toBe("ollama");
       expect(loaded!.ai.provider).toBe("ollama");
       expect(loaded!.profile).toBe("docker-ready");
+      expect(loaded!.locales).toEqual(["ar"]);
+      expect(loaded!.pgdog).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createTestApp, type TestApp } from "okengine/test";
-import { app, type App } from "../src/app";
+import { app, type App } from "@/app";
 
 let t: TestApp<App>;
 

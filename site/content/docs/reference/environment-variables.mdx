@@ -4,7 +4,7 @@ description: "Every environment variable OKE reads — connection URLs, driver o
 icon: "Terminal"
 ---
 
-OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. In docker mode these are written for you into `docker/.env.docker`; this page is the full map.
+OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes these into `docker/.env.docker`; this page is the full map.
 
 <Callout title="Precedence">
   For anything with both an `OKE_*` variable and a conventional one (like `DATABASE_URL`), the
@@ -13,15 +13,15 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 
 ## SQL store
 
-| Variable            | Used for                                                                                                                                        | Default when unset              |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `DATABASE_URL`      | Postgres connection (`postgres` store / clock / journal drivers, drizzle-kit). When PgDog is in the stack, this points at the pooler (`:6432`). | `postgres://localhost:5432/oke` |
-| `OKE_STORE_SQL_URL` | Direct SQL URL (Postgres host, even when PgDog fronts the app)                                                                                  | —                               |
-| `OKE_PGDOG_URL`     | PgDog pooler URL (same value as `DATABASE_URL` when both are present)                                                                           | —                               |
-| `OKE_SQLITE_URL`    | SQLite file path (`sqlite` driver)                                                                                                              | `.oke/app.sqlite`               |
-| `OKE_LIBSQL_URL`    | libSQL URL or file path (`libsql` driver)                                                                                                       | `.oke/app.libsql`               |
-| `OKE_PGLITE_URL`    | PGlite data dir or `memory://` (`pglite` driver)                                                                                                | `.oke/pgdata`                   |
-| `OKE_SQL_DRIVER`    | Force the sql driver id at boot                                                                                                                 | config map                      |
+| Variable            | Used for                                                                                                                                                                                                                                                          | Default when unset                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `DATABASE_URL`      | Postgres connection (`postgres` store / clock / journal / Console operator plane, drizzle-kit). App tables stay in `public`; Console operators/sessions use schema `oke_console` on the same database. When PgDog is pinned, this points at the pooler (`:6432`). | `postgres://localhost:5432/oke`           |
+| `OKE_STORE_SQL_URL` | Direct SQL URL (Postgres host, even when PgDog fronts the app). Also used by Console when `DATABASE_URL` is unset.                                                                                                                                                | —                                         |
+| `OKE_PGDOG_URL`     | PgDog pooler URL (same value as `DATABASE_URL` when both are present)                                                                                                                                                                                             | —                                         |
+| `OKE_PGLITE_URL`    | PGlite data dir or `memory://` (`pglite` driver; required for `store.sql.test`)                                                                                                                                                                                   | `memory://` in `test`; else `.oke/pgdata` |
+| `OKE_SQL_DRIVER`    | Force the sql driver id at boot                                                                                                                                                                                                                                   | config map                                |
+
+`oke test` sets `OKE_PGLITE_URL=memory://` when unset. The `sqlite` driver and `OKE_SQLITE_URL` are removed.
 
 ## Index store
 
@@ -52,15 +52,19 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 | `OKE_STORE_FILES_DB`   | Explicit files location override | —                  |
 | `OKE_FILES_DRIVER`     | Force the files driver id        | config map         |
 
-## Vault (OpenBao)
+## Vault
 
-Written by the first-boot bootstrap; you normally only set these when pointing at an external vault.
+Built-in store uses `OKE_VAULT_MASTER_KEY` (or `--key` / stdin on CLI). Managed AWS Secrets Manager
+uses the provider + region vars below.
 
-| Variable          | Used for                    | Default when unset |
-| ----------------- | --------------------------- | ------------------ |
-| `OKE_VAULT_URL`   | OpenBao base URL            | —                  |
-| `OKE_VAULT_TOKEN` | App token (least-privilege) | —                  |
-| `OKE_VAULT_MOUNT` | KV v2 mount path            | `"secret"`         |
+| Variable               | Used for                                     | Default when unset    |
+| ---------------------- | -------------------------------------------- | --------------------- |
+| `OKE_VAULT_PROVIDER`   | Managed backend (`aws-secrets-manager`)      | — (platform-injected) |
+| `OKE_VAULT_REGION`     | Cloud region for AWS Secrets Manager         | —                     |
+| `OKE_VAULT_MOUNT`      | Secret-name prefix for AWS SM (`oke/prod/`)  | —                     |
+| `OKE_VAULT_MASTER_KEY` | Built-in vault master key (base64)           | —                     |
+| `OKE_VAULT_URL`        | Optional remote URL for community adapters   | —                     |
+| `OKE_VAULT_TOKEN`      | Optional remote token for community adapters | —                     |
 
 ## Channel (email) — boot binder
 
@@ -115,24 +119,28 @@ provider's real credentials — credentials alone never send.
 | `ANTHROPIC_MODEL`     | Model override for the anthropic driver                                                                 | —                                                                          |
 | `OPENAI_API_KEY`      | `openai-compatible` driver credential                                                                   | —                                                                          |
 | `OPENAI_BASE_URL`     | `openai-compatible` base URL                                                                            | OpenAI cloud                                                               |
-| `OKE_AI_DRIVER`       | Force the AI driver id (honoured in docker mode)                                                        | config map                                                                 |
+| `OKE_AI_DRIVER`       | Force the AI driver id (honoured under Compose / `oke dev`)                                             | config map                                                                 |
 | `OKE_AI_URL`          | Local / openai-compatible base URL                                                                      | `http://127.0.0.1:8080/v1` (llama.cpp) · `http://127.0.0.1:11434` (ollama) |
-| `OKE_AI_MODEL`        | Default model id — Docker Hub `ai/` for llama.cpp; Ollama library tag for ollama; HF id for vLLM/SGLang | `smollm2` (llama.cpp) / `qwen3.5:9b` (ollama)                              |
+| `OKE_AI_MODEL`        | Default model id — Docker Hub `ai/` for llama.cpp; Ollama library tag for ollama; HF id for vLLM/SGLang | `granite3.3:2b` (llama.cpp) / `qwen3.5:9b` (ollama)                        |
 | `OKE_AI_VISION_MODEL` | Vision model id written by `oke ai setup` (logical `ai.model("vision")`)                                | —                                                                          |
 | `OKE_AI_EMBED_MODEL`  | Embedding model id written by `oke ai setup`                                                            | —                                                                          |
 | `OLLAMA_HOST`         | Alternate Ollama host (`host:port` or URL) when `OKE_AI_URL` is unset                                   | —                                                                          |
 
 ## Framework behavior
 
-| Variable              | Used for                                                      |
-| --------------------- | ------------------------------------------------------------- |
-| `OKE_DOCKER`          | `"1"` marks docker mode (set by the CLI, not by you)          |
-| `OKE_DB_AUTO_PUSH`    | Overrides `db.autoPush` at boot                               |
-| `OKE_DRIZZLE_DIALECT` | `"sqlite"` \| `"postgresql"` for generated drizzle config     |
-| `OKE_DEV_REQUEST_LOG` | `"1"` logs requests during `oke dev` (set by the CLI)         |
-| `OKE_CONSOLE_SECRET`  | Console session secret — set explicitly in production         |
-| `PORT`                | App port in production containers (default `6530`)            |
-| `NODE_ENV`            | `"production"` switches the Console to its production posture |
+| Variable              | Used for                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `OKE_DOCKER`          | `"1"` marks Compose / `oke dev` posture (set by the CLI)                                   |
+| `OKE_DB_AUTO_PUSH`    | Overrides `db.autoPush` at boot                                                            |
+| `OKE_DRIZZLE_DIALECT` | `"postgresql"` for drizzle-kit overlays (templates hardcode it)                            |
+| `OKE_DEV_REQUEST_LOG` | `"1"` logs requests during `oke dev` (set by the CLI)                                      |
+| `OKE_CONSOLE_SECRET`  | Console session signing secret — set explicitly in production (else `.oke/console.secret`) |
+| `PORT`                | App port in production containers (default `6530`)                                         |
+| `NODE_ENV`            | `"production"` switches the Console to its production posture                              |
+
+Console operator rows are **not** stored in `.oke/console.sqlite`. With `DATABASE_URL` (or
+`OKE_STORE_SQL_URL`) they live in Postgres schema `oke_console`. Without a Postgres URL,
+Console uses PGlite under `.oke/console-pg` for local reopen durability.
 
 ## Learn more
 

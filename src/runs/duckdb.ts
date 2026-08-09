@@ -2,8 +2,9 @@
  * Thin DuckDB adapter — adopted via `@duckdb/node-api`, not reinvented.
  */
 
-import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import type { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 
+import { importOptionalPeer } from "../shared/optional-peer.ts";
 import type { RunsRow } from "./types.ts";
 
 /** DuckDB session — instance kept alive with the connection. */
@@ -18,7 +19,11 @@ export interface DuckSession {
 
 /** Open an in-memory DuckDB session. */
 export async function openDuckDB(): Promise<DuckSession> {
-  const instance = await DuckDBInstance.create(":memory:");
+  const mod = await importOptionalPeer<typeof import("@duckdb/node-api")>(
+    "@duckdb/node-api",
+    "Runs DuckDB / Parquet queries",
+  );
+  const instance = await mod.DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   return {
     instance,

@@ -1,12 +1,11 @@
 /**
- * Active SQL env resolution from `.oke/mode` / session overrides.
+ * Active SQL env resolution — Docker-first (`dev` default).
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeDevMode } from "./dev-mode.ts";
 import { resolveDevSqlEnv } from "./resolve-dev-sql-env.ts";
 
 const dirs: string[] = [];
@@ -22,27 +21,20 @@ async function tempDir(): Promise<string> {
 }
 
 describe("resolveDevSqlEnv", () => {
-  test("defaults to local when nothing set", async () => {
+  test("defaults to dev (Docker-first)", async () => {
     const dir = await tempDir();
-    expect(await resolveDevSqlEnv(dir)).toBe("local");
+    expect(await resolveDevSqlEnv(dir)).toBe("dev");
   });
 
   test("explicit env override wins", async () => {
     const dir = await tempDir();
-    await writeDevMode(dir, "local");
-    expect(await resolveDevSqlEnv(dir, { env: "docker" })).toBe("docker");
+    expect(await resolveDevSqlEnv(dir, { env: "test" })).toBe("test");
+    expect(await resolveDevSqlEnv(dir, { env: "dev" })).toBe("dev");
   });
 
-  test("session docker flag wins over saved mode", async () => {
+  test("docker flag is ignored (always dev unless env set)", async () => {
     const dir = await tempDir();
-    await writeDevMode(dir, "local");
-    expect(await resolveDevSqlEnv(dir, { docker: true })).toBe("docker");
-    expect(await resolveDevSqlEnv(dir, { docker: false })).toBe("local");
-  });
-
-  test("reads saved .oke/mode", async () => {
-    const dir = await tempDir();
-    await writeDevMode(dir, "docker");
-    expect(await resolveDevSqlEnv(dir)).toBe("docker");
+    expect(await resolveDevSqlEnv(dir, { docker: true })).toBe("dev");
+    expect(await resolveDevSqlEnv(dir, { docker: false })).toBe("dev");
   });
 });

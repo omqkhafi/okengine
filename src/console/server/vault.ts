@@ -6,8 +6,10 @@
  * rotation blast radius are derived — never reimplemented in the UI.
  */
 
-import type { ConfigEnv } from "../../config/index.ts";
-import { buildVaultBootChain } from "../../elements/vault/boot-chain.ts";
+import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../../config/index.ts";
+import { VAULT_DEFAULTS } from "../../config/driver-defaults.ts";
+import type { VaultDriverId } from "../../drivers/vault-types.ts";
+import { buildVaultBootChain, normalizeVaultDriverId } from "../../elements/vault/boot-chain.ts";
 import {
   createVaultRuntime,
   vault as declareVault,
@@ -16,6 +18,7 @@ import {
   type VaultRuntime,
   type VaultSecretDecl,
 } from "../../elements/vault.ts";
+import type { VaultStatus } from "../../elements/vault/types.ts";
 import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 
@@ -58,11 +61,11 @@ export interface ConsoleVaultRow {
   readonly winner: VaultResolutionSource | null;
   /** Full resolution chain for the current environment. */
   readonly resolution: readonly VaultResolutionStep[];
-  /** Flow ids that declare `fx.vault(name)` in Manifest effects. */
+  /** Flow ids that declare `fx.vault.get(name)` in Manifest effects. */
   readonly readers: readonly string[];
   /** In-flight durable runs that will wake holding a new key after rotate. */
   readonly blastRadius: ConsoleVaultBlastRadius;
-  /** Epoch-ms of last `fx.vault` / runtime read; `null` if never read. */
+  /** Epoch-ms of last `fx.vault.get` / runtime read; `null` if never read. */
   readonly lastReadAt: number | null;
   /**
    * When the current fingerprint equals another environment's — warning,
@@ -71,12 +74,63 @@ export interface ConsoleVaultRow {
   readonly sharedFingerprintEnvs: readonly VaultEnvLabel[];
 }
 
+/**
+ * Built-in Vault backend state, JSON-safe (dates become epoch-ms).
+ *
+ * Mirrors {@link VaultStatus} minus the resume cursor, which is an internal
+ * rewrap detail with no operator meaning.
+ */
+export interface ConsoleVaultBuiltinStatus {
+  /** Whether `oke vault init` has run against this backend. */
+  readonly initialized: boolean;
+  /**
+   * Whether the Console process can open secrets. The built-in store keeps
+   * the master key in memory per process, so this is `true` whenever
+   * `OKE_VAULT_MASTER_KEY` is absent — even if another process is unsealed.
+   */
+  readonly sealed: boolean;
+  /** Whether a master-key record exists in the backend. */
+  readonly masterKeyPresent: boolean;
+  /** KEK generation new writes are wrapped under. */
+  readonly kekVersion: number;
+  /** Live (non-deleted) secret paths. */
+  readonly secretCount: number;
+  /** Seals since initialization. */
+  readonly sealCount: number;
+  /** Epoch-ms of the last seal, or `null`. */
+  readonly lastSealedAt: number | null;
+  /** Epoch-ms of the last unseal, or `null`. */
+  readonly lastUnsealedAt: number | null;
+  /** KEK generation an in-flight master rotation is migrating toward. */
+  readonly rewrapTargetKekVersion: number | null;
+}
+
+/**
+ * Which backend terminates the resolution chain, and its state.
+ *
+ * Only the built-in `vault` driver has a seal lifecycle to report; every
+ * other driver surfaces its id alone so the operator still knows where the
+ * last layer reads from.
+ */
+export interface ConsoleVaultBackend {
+  /** `drivers.vault` id resolved for the current environment. */
+  readonly driverId: VaultDriverId;
+  /** Whether {@link driverId} is okengine's own encrypted-at-rest store. */
+  readonly builtin: boolean;
+  /** Backend status — `null` for non-builtin drivers or when unreachable. */
+  readonly status: ConsoleVaultBuiltinStatus | null;
+  /** Why {@link status} is missing for a builtin backend; `null` otherwise. */
+  readonly unavailable: string | null;
+}
+
 /** Options when projecting the vault list. */
 export interface ProjectVaultOptions {
   readonly manifest: Manifest | null;
   readonly runtime: VaultRuntime | null;
   /** Current process environment label. */
   readonly env?: VaultEnvLabel;
+  /** Backend badge from {@link probeVaultBackend}; `null` when unprobed. */
+  readonly backend?: ConsoleVaultBackend | null;
   /**
    * Optional peer-environment fingerprints (e.g. staging from a remote
    * probe). Never values — fingerprints only.
@@ -95,8 +149,9 @@ export interface ProjectVaultOptions {
 export async function projectVaultList(options: ProjectVaultOptions): Promise<{
   readonly secrets: readonly ConsoleVaultRow[];
   readonly env: VaultEnvLabel;
+  readonly backend: ConsoleVaultBackend | null;
 }> {
-  const env = options.env ?? "local";
+  const env = options.env ?? "dev";
   const now = options.now ?? (() => Date.now());
   const names = collectNames(options.manifest, options.runtime);
   const journalRuns = options.journal
@@ -150,7 +205,144 @@ export async function projectVaultList(options: ProjectVaultOptions): Promise<{
     });
   }
 
-  return { secrets, env };
+  return { secrets, env, backend: options.backend ?? null };
+}
+
+/**
+ * Environment variable holding the base64 master key. Mirrors the driver's
+ * own constant so the probe stays free of a static `drivers/` import.
+ */
+const VAULT_MASTER_KEY_ENV = "OKE_VAULT_MASTER_KEY";
+
+/**
+ * Resolve `drivers.vault` for an environment, falling back to the framework
+ * defaults (`env` in dev, `memory` in test, the built-in store in prod).
+ *
+ * @param config - Loaded `oke.config`, when available
+ * @param env - Active config environment
+ */
+export function resolveVaultDriverId(
+  config: OkeConfig | null | undefined,
+  env: ConfigEnv,
+): VaultDriverId {
+  const raw = resolveDriverId(config?.drivers?.vault, env, VAULT_DEFAULTS);
+  if (raw === undefined) return "env";
+  try {
+    return normalizeVaultDriverId(raw);
+  } catch {
+    // An unknown id is a boot concern; the Console still renders the list.
+    return "env";
+  }
+}
+
+/** Options for {@link probeVaultBackend}. */
+export interface ProbeVaultBackendOptions {
+  /** Loaded `oke.config` — supplies `drivers.vault`. */
+  readonly config?: OkeConfig | null;
+  /** Active config environment (default `dev`). */
+  readonly env?: ConfigEnv;
+  /** Process environment for SQL URL / master-key capability (default `process.env`). */
+  readonly processEnv?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Status source. Injected by tests; by default the built-in adapter is
+   * opened *sealed* over the configured SQL URL, so the probe never unseals
+   * and never writes an unseal audit row.
+   */
+  readonly loadStatus?: () => Promise<VaultStatus>;
+}
+
+/**
+ * Report which backend serves the terminal chain layer, plus its state when
+ * that backend is the built-in store.
+ *
+ * The Console never holds the master key on the operator's behalf: the probe
+ * reads backend facts only, and reports `sealed` from whether this process
+ * has `OKE_VAULT_MASTER_KEY` at all.
+ *
+ * @param options - Config / env / status source
+ */
+export async function probeVaultBackend(
+  options: ProbeVaultBackendOptions = {},
+): Promise<ConsoleVaultBackend> {
+  const env = options.env ?? "dev";
+  const driverId = resolveVaultDriverId(options.config, env);
+  if (driverId !== "vault") {
+    return { driverId, builtin: false, status: null, unavailable: null };
+  }
+
+  const processEnv = options.processEnv ?? process.env;
+  const keyHeld = (processEnv[VAULT_MASTER_KEY_ENV] ?? "").trim().length > 0;
+
+  const load = options.loadStatus ?? defaultBuiltinStatusLoader(processEnv);
+  if (!load) {
+    return {
+      driverId,
+      builtin: true,
+      status: null,
+      unavailable: "No SQL URL configured — set DATABASE_URL or OKE_STORE_SQL_URL",
+    };
+  }
+
+  try {
+    const status = await load();
+    return {
+      driverId,
+      builtin: true,
+      status: { ...toConsoleVaultStatus(status), sealed: !keyHeld },
+      unavailable: null,
+    };
+  } catch (error) {
+    // Uninitialized / unreachable is an ordinary operator state, not a crash.
+    return {
+      driverId,
+      builtin: true,
+      status: null,
+      unavailable: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Convert an adapter {@link VaultStatus} into the JSON-safe Console shape.
+ *
+ * @param status - Adapter status
+ */
+export function toConsoleVaultStatus(status: VaultStatus): ConsoleVaultBuiltinStatus {
+  return {
+    initialized: status.initialized,
+    sealed: status.sealed,
+    masterKeyPresent: status.masterKeyPresent,
+    kekVersion: status.kekVersion,
+    secretCount: status.secretCount,
+    sealCount: status.sealCount,
+    lastSealedAt: status.lastSealedAt?.getTime() ?? null,
+    lastUnsealedAt: status.lastUnsealedAt?.getTime() ?? null,
+    rewrapTargetKekVersion: status.rewrapTargetKekVersion ?? null,
+  };
+}
+
+/**
+ * Build the default status loader: open the built-in adapter sealed over the
+ * configured SQL URL. Returns `null` when no SQL is configured — spinning up
+ * a throwaway PGlite instance would report an empty vault that does not exist.
+ *
+ * @param processEnv - Environment supplying the SQL URL
+ */
+function defaultBuiltinStatusLoader(
+  processEnv: Readonly<Record<string, string | undefined>>,
+): (() => Promise<VaultStatus>) | null {
+  const url = processEnv.DATABASE_URL ?? processEnv.OKE_STORE_SQL_URL;
+  if (url === undefined || url.trim().length === 0) return null;
+  return async () => {
+    const { openBuiltinVaultAdapter } = await import("../../drivers/vault-builtin.ts");
+    // `masterKey: ""` keeps the adapter sealed — status needs no unseal.
+    const opened = await openBuiltinVaultAdapter({ url, env: processEnv, masterKey: "" });
+    try {
+      return await opened.adapter.status();
+    } finally {
+      await opened.close();
+    }
+  };
 }
 
 /** Input for set / rotate. */
@@ -206,6 +398,11 @@ export async function createManifestVaultRuntime(
     readonly allowDevFallbacks?: boolean;
     readonly seed?: Readonly<Record<string, string>>;
     readonly now?: () => number;
+    /**
+     * Backend driver for the terminal layer. Defaults to the built-in
+     * `vault` store when `drivers.vault` is not consulted.
+     */
+    readonly driverId?: VaultDriverId;
   } = {},
 ): Promise<VaultRuntime | null> {
   const entries = Object.entries(manifest.vault ?? {});
@@ -231,19 +428,18 @@ export async function createManifestVaultRuntime(
   });
 
   const seed = options.seed ?? {};
-  const env = options.env ?? "local";
-  // Auto-detect: prefer OpenBao when credentials exist; soft-fallback to memory
-  // (historical Console behaviour — never fail the Console for missing vault).
+  const env = options.env ?? "dev";
+  // Soft-fallback to memory when the backend is unreachable — the Console
+  // must never fail to list contracts because a vault is missing.
   const runtime = createVaultRuntime({
     secrets,
     allowDevFallbacks: options.allowDevFallbacks ?? env !== "prod",
     now: options.now,
     chain: buildVaultBootChain({
       cwd,
-      driverId: "openbao",
-      env,
+      driverId: options.driverId ?? "vault",
+      env: env === "dev" || env === "test" || env === "prod" ? env : "dev",
       seed,
-      missingOpenbao: "memory",
     }),
   });
   await runtime.boot();

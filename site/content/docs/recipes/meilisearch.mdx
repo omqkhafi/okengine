@@ -6,12 +6,12 @@ source: "docs/spec/unified-theory.md"
 ---
 
 Meilisearch backs the `meilisearch` index driver — typo-tolerant full-text search over
-HTTP. Pin `images["store.index"]` and set `drivers.store.index` to `meilisearch` where
-you need it (index does **not** auto-promote in docker).
+HTTP. Pin `images.store.index` and set `drivers.store.index` to `meilisearch` where
+you need it (index does **not** auto-promote under Compose).
 
 <Callout title="The one rule">
   Index stays `memory` in every environment until you set the driver map explicitly — there is no
-  silent docker fallback to Meilisearch or pgvector.
+  silent fallback to Meilisearch or pgvector.
 </Callout>
 
 ## Quick start
@@ -24,11 +24,11 @@ you need it (index does **not** auto-promote in docker).
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    index: { local: "memory", docker: "meilisearch", prod: "meilisearch" },
+    index: { dev: "meilisearch", test: "memory", prod: "meilisearch" },
   },
 },
 images: {
-  "store.index": "getmeili/meilisearch:v1.14",
+  store: { index: "getmeili/meilisearch:v1.14" },
 },
 ```
 
@@ -53,8 +53,8 @@ Recipe injects into the container:
 <Step>
 ### Search from a flow
 
-Use `store.index(…)` without `{ dims }` for full-text (vector dims select pgvector /
-libsql). Writes wait on Meilisearch tasks before returning.
+Use `store.index(…)` without `{ dims }` for full-text (vector dims select pgvector).
+Writes wait on Meilisearch tasks before returning.
 
 </Step>
 
@@ -87,8 +87,8 @@ Always set a non-empty `OKE_STORE_INDEX_KEY` when `MEILI_ENV=production` — Mei
 refuses insecure production mode without a master key. Prefer network isolation (compose
 network only) plus the key; do not publish `:7700` on the public internet without auth.
 
-Vector `ai.embed` into a meilisearch index fails loud — embeddings need `pgvector` /
-`libsql`, not FTS. See [Store · Index](/docs/elements/store#index).
+Vector `ai.embed` into a meilisearch index fails loud — embeddings need `pgvector`,
+not FTS. See [Store · Index](/docs/elements/store#index).
 
 ## What the recipe configures
 
@@ -103,7 +103,7 @@ Vector `ai.embed` into a meilisearch index fails loud — embeddings need `pgvec
 <Accordions>
 <Accordion title="oke boot: meilisearch index needs OKE_STORE_INDEX_URL">
 
-No silent memory fallback. Re-run `oke dev --docker` or export `OKE_STORE_INDEX_URL`.
+No silent memory fallback. Re-run `oke dev` or export `OKE_STORE_INDEX_URL`.
 Docker-mode wording asks whether `docker/.env.docker` was written.
 
 </Accordion>

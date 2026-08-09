@@ -1,13 +1,12 @@
 /**
- * Unit tests for local|docker customize assembly (no Clack prompts).
+ * Unit tests for Docker-first customize assembly (no Clack prompts).
  */
 
 import { describe, expect, test } from "bun:test";
 import {
   EMAIL_CHOICES,
   INDEX_CHOICES,
-  TEMPLATE_DOCKER_PROD,
-  TEMPLATE_LOCAL,
+  TEMPLATE_DEV,
   customizeFacetsFor,
 } from "./drivers-catalog.ts";
 import { assembleDriverDefaults, pinsFromSides, recommendedAiApply } from "./customize-flow.ts";
@@ -37,7 +36,6 @@ describe("catalog labels", () => {
       "none",
       "memory",
       "pgvector",
-      "libsql",
       "meilisearch",
     ]);
   });
@@ -52,7 +50,7 @@ describe("recommendedAiApply", () => {
   test("returns llama.cpp (openai-compatible) with curated ai/ model", () => {
     const apply = recommendedAiApply();
     expect(apply.driver).toBe("openai-compatible");
-    expect(apply.chatModel).toBe("smollm2");
+    expect(apply.chatModel).toBe("granite3.3:2b");
     expect(apply.baseUrl).toContain("8080");
     expect(apply.image).toContain("llama.cpp");
     expect(apply.image).not.toContain("latest");
@@ -61,50 +59,47 @@ describe("recommendedAiApply", () => {
 });
 
 describe("pinsFromSides", () => {
-  test("prod copies docker", () => {
-    expect(pinsFromSides("sqlite", "postgres", "memory")).toEqual({
-      local: "sqlite",
-      docker: "postgres",
-      test: "memory",
+  test("prod mirrors dev by default", () => {
+    expect(pinsFromSides("postgres", "pglite")).toEqual({
+      dev: "postgres",
+      test: "pglite",
       prod: "postgres",
     });
   });
 });
 
 describe("assembleDriverDefaults", () => {
-  test("primary docker + skip other → local pins === template defaults", () => {
-    const drivers = assembleDriverDefaults(
-      "docker",
-      { sql: "libsql", kv: "redis", files: "s3", signal: "nats" },
-      null,
-    );
-    expect(drivers.store.sql.docker).toBe("libsql");
-    expect(drivers.store.sql.local).toBe(TEMPLATE_LOCAL.sql);
-    expect(drivers.store.kv.local).toBe(TEMPLATE_LOCAL.kv);
-    expect(drivers.signal.local).toBe(TEMPLATE_LOCAL.signal);
-    expect(drivers.store.sql.prod).toBe("libsql");
+  test("picked sql + defaults for unpicked facets", () => {
+    const drivers = assembleDriverDefaults({
+      sql: "postgres",
+      kv: "redis",
+      files: "s3",
+      signal: "redis",
+    });
+    expect(drivers.store.sql.dev).toBe("postgres");
+    expect(drivers.store.sql.test).toBe("pglite");
+    expect(drivers.store.sql.prod).toBe("postgres");
+    expect(drivers.store.kv.dev).toBe("redis");
+    expect(drivers.signal.dev).toBe("redis");
+    expect(drivers.vault.dev).toBe(TEMPLATE_DEV.vault);
   });
 
-  test("primary local + customize docker → both sides set", () => {
-    const drivers = assembleDriverDefaults("local", { sql: "pglite" }, { sql: "postgres" });
-    expect(drivers.store.sql.local).toBe("pglite");
-    expect(drivers.store.sql.docker).toBe("postgres");
-    expect(drivers.store.sql.prod).toBe("postgres");
-    // Unpicked facets fall back to catalog defaults.
-    expect(drivers.store.kv.local).toBe(TEMPLATE_LOCAL.kv);
-    expect(drivers.store.kv.docker).toBe(TEMPLATE_DOCKER_PROD.kv);
+  test("empty pick → template Docker-first defaults", () => {
+    const drivers = assembleDriverDefaults({});
+    expect(drivers.store.sql.dev).toBe(TEMPLATE_DEV.sql);
+    expect(drivers.store.kv.dev).toBe(TEMPLATE_DEV.kv);
+    expect(drivers.store.sql.test).toBe("pglite");
   });
 
   test("index stays null for none / unset", () => {
-    expect(assembleDriverDefaults("local", { sql: "sqlite" }, null).store.index).toBeNull();
-    expect(assembleDriverDefaults("docker", { index: "none" }, null).store.index).toBeNull();
+    expect(assembleDriverDefaults({ sql: "postgres" }).store.index).toBeNull();
+    expect(assembleDriverDefaults({ index: "none" }).store.index).toBeNull();
   });
 
-  test("index driver on primary fills both columns", () => {
-    const drivers = assembleDriverDefaults("docker", { index: "meilisearch" }, null);
+  test("index driver fills both runtime columns", () => {
+    const drivers = assembleDriverDefaults({ index: "meilisearch" });
     expect(drivers.store.index).toEqual({
-      local: "memory",
-      docker: "meilisearch",
+      dev: "meilisearch",
       test: "memory",
       prod: "meilisearch",
     });

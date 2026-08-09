@@ -7,7 +7,7 @@ export const chargeBooking = flow("payments.chargeBooking", {
     // Journal only serializable step values — a Redacted is not journaled.
     const intent = await fx.step("create-intent", async () => ({
       id: `pi_${orderId}`,
-      key: fx.vault(stripeKey).reveal(),
+      key: (await fx.vault.get(stripeKey)).reveal(),
     }));
     await fx.clock.sleep("verify-window", "2m");
     return fx.step("confirm", () => intent);

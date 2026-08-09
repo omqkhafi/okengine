@@ -36,66 +36,65 @@ describe("bindStore driver resolution", () => {
     else process.env.OKE_INDEX_DRIVER = prev.index;
   });
 
-  test("local env keeps sqlite / memory from config", () => {
+  test("test env keeps pglite / memory / fs from config", () => {
     const options = {
       config: {
         drivers: {
           store: {
-            sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
-            kv: { local: "memory", docker: "redis", prod: "redis" },
-            files: { local: "fs", docker: "s3", prod: "s3" },
+            sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+            kv: { dev: "redis", test: "memory", prod: "redis" },
+            files: { dev: "s3", test: "fs", prod: "s3" },
           },
         },
       },
     };
-    expect(resolveSqlDriverId(options, "local", false)).toBe("sqlite");
-    expect(resolveKvDriverId(options, "local", false)).toBe("memory");
-    expect(resolveFilesDriverId(options, "local", false)).toBe("fs");
+    expect(resolveSqlDriverId(options, "test", false)).toBe("pglite");
+    expect(resolveKvDriverId(options, "test", false)).toBe("memory");
+    expect(resolveFilesDriverId(options, "test", false)).toBe("fs");
   });
 
-  test("docker env uses docker profile (falls back to prod)", () => {
+  test("dev env uses compose profile (falls back to prod)", () => {
     const options = {
       config: {
         drivers: {
           store: {
-            sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
-            kv: { local: "memory", prod: "redis" },
-            files: { local: "fs", prod: "s3" },
+            sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+            kv: { dev: "redis", test: "memory", prod: "redis" },
+            files: { dev: "s3", test: "fs", prod: "s3" },
           },
         },
       },
     };
-    expect(resolveSqlDriverId(options, "docker", true)).toBe("postgres");
-    expect(resolveKvDriverId(options, "docker", true)).toBe("redis");
-    expect(resolveFilesDriverId(options, "docker", true)).toBe("s3");
+    expect(resolveSqlDriverId(options, "dev", true)).toBe("postgres");
+    expect(resolveKvDriverId(options, "dev", true)).toBe("redis");
+    expect(resolveFilesDriverId(options, "dev", true)).toBe("s3");
   });
 
   test("docker mode honours OKE_*_DRIVER overrides", () => {
     process.env.OKE_SQL_DRIVER = "postgres";
     process.env.OKE_KV_DRIVER = "redis";
     process.env.OKE_FILES_DRIVER = "s3";
-    expect(resolveSqlDriverId({}, "docker", true)).toBe("postgres");
-    expect(resolveKvDriverId({}, "docker", true)).toBe("redis");
-    expect(resolveFilesDriverId({}, "docker", true)).toBe("s3");
+    expect(resolveSqlDriverId({}, "dev", true)).toBe("postgres");
+    expect(resolveKvDriverId({}, "dev", true)).toBe("redis");
+    expect(resolveFilesDriverId({}, "dev", true)).toBe("s3");
   });
 
-  test("pinning only `local` never leaks into docker/test/prod — each keeps its real default", () => {
+  test("pinning only `test` never leaks into dev/prod — each keeps its real default", () => {
     const options = {
       config: {
         drivers: {
           store: {
-            sql: { local: "pglite" },
+            sql: { test: "pglite" },
           },
         },
       },
     };
-    expect(resolveSqlDriverId(options, "local", false)).toBe("pglite");
-    expect(resolveSqlDriverId(options, "docker", true)).toBe("postgres");
-    expect(resolveSqlDriverId(options, "test", false)).toBe("memory");
+    expect(resolveSqlDriverId(options, "test", false)).toBe("pglite");
+    expect(resolveSqlDriverId(options, "dev", true)).toBe("postgres");
     expect(resolveSqlDriverId(options, "prod", true)).toBe("postgres");
     // kv / files are untouched by the sql-only override.
-    expect(resolveKvDriverId(options, "local", false)).toBe("memory");
-    expect(resolveKvDriverId(options, "docker", true)).toBe("redis");
+    expect(resolveKvDriverId(options, "test", false)).toBe("memory");
+    expect(resolveKvDriverId(options, "dev", true)).toBe("redis");
   });
 });
 
@@ -118,12 +117,12 @@ describe("bindStore files fs multi-instance warn", () => {
           config: {
             drivers: {
               store: {
-                files: { local: "fs", docker: "s3", prod: "s3" },
+                files: { dev: "s3", test: "fs", prod: "s3" },
               },
             },
           },
         },
-        "local",
+        "test",
         () => Date.now(),
         false,
       );
@@ -133,12 +132,12 @@ describe("bindStore files fs multi-instance warn", () => {
           config: {
             drivers: {
               store: {
-                files: { local: "fs", docker: "s3", prod: "s3" },
+                files: { dev: "s3", test: "fs", prod: "s3" },
               },
             },
           },
         },
-        "local",
+        "test",
         () => Date.now(),
         false,
       );
@@ -162,12 +161,12 @@ describe("bindStore files fs multi-instance warn", () => {
           config: {
             drivers: {
               store: {
-                files: { local: "memory", docker: "s3", prod: "s3" },
+                files: { dev: "s3", test: "memory", prod: "s3" },
               },
             },
           },
         },
-        "local",
+        "test",
         () => Date.now(),
         false,
       );
@@ -187,8 +186,8 @@ describe("bindStore index driver resolution", () => {
   });
 
   test("defaults to memory when no index driver is configured", () => {
-    expect(resolveIndexDriverId({}, "local", false)).toBe("memory");
-    expect(resolveIndexDriverId({}, "docker", true)).toBe("memory");
+    expect(resolveIndexDriverId({}, "test", false)).toBe("memory");
+    expect(resolveIndexDriverId({}, "dev", true)).toBe("memory");
     expect(indexDriverFor("memory").id).toBe("memory");
   });
 
@@ -197,37 +196,37 @@ describe("bindStore index driver resolution", () => {
       config: {
         drivers: {
           store: {
-            index: { local: "memory", docker: "pgvector", prod: "pgvector" },
+            index: { dev: "pgvector", test: "memory", prod: "pgvector" },
           },
         },
       },
     };
-    expect(resolveIndexDriverId(options, "local", false)).toBe("memory");
-    expect(resolveIndexDriverId(options, "docker", true)).toBe("pgvector");
+    expect(resolveIndexDriverId(options, "test", false)).toBe("memory");
+    expect(resolveIndexDriverId(options, "dev", true)).toBe("pgvector");
     expect(resolveIndexDriverId(options, "prod", false)).toBe("pgvector");
   });
 
-  test("libsql resolves from config", () => {
+  test("pgvector resolves from config", () => {
     const options = {
-      config: { drivers: { store: { index: { local: "libsql" } } } },
+      config: { drivers: { store: { index: { test: "pgvector" } } } },
     };
-    expect(resolveIndexDriverId(options, "local", false)).toBe("libsql");
-    expect(indexDriverFor("libsql").id).toBe("libsql");
+    expect(resolveIndexDriverId(options, "test", false)).toBe("pgvector");
+    expect(indexDriverFor("pgvector").id).toBe("pgvector");
   });
 
   test("meilisearch resolves from config as a fourth id", () => {
     const options = {
-      config: { drivers: { store: { index: { local: "meilisearch", docker: "meilisearch" } } } },
+      config: { drivers: { store: { index: { dev: "meilisearch", test: "meilisearch" } } } },
     };
-    expect(resolveIndexDriverId(options, "local", false)).toBe("meilisearch");
-    expect(resolveIndexDriverId(options, "docker", true)).toBe("meilisearch");
+    expect(resolveIndexDriverId(options, "test", false)).toBe("meilisearch");
+    expect(resolveIndexDriverId(options, "dev", true)).toBe("meilisearch");
     expect(indexDriverFor("meilisearch").id).toBe("meilisearch");
   });
 
   test("docker mode honours OKE_INDEX_DRIVER override", () => {
     process.env.OKE_INDEX_DRIVER = "pgvector";
-    expect(resolveIndexDriverId({}, "docker", true)).toBe("pgvector");
-    expect(resolveIndexDriverId({}, "local", false)).toBe("memory");
+    expect(resolveIndexDriverId({}, "dev", true)).toBe("pgvector");
+    expect(resolveIndexDriverId({}, "test", false)).toBe("memory");
   });
 
   test("indexDriverFor returns the configured driver and throws on unknown ids", () => {

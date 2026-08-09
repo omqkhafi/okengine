@@ -58,7 +58,7 @@ import {
   type SimulateGatesInput,
   type SimulateGatesResult,
 } from "./gates.ts";
-import type { ConsoleVaultRow, VaultWriteInput } from "./vault.ts";
+import type { ConsoleVaultBackend, ConsoleVaultRow, VaultWriteInput } from "./vault.ts";
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
 import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
 import type { ConsoleChannelPreview, ConsoleChannelsList, EmailAuthResult } from "./channels.ts";
@@ -67,6 +67,9 @@ import type { PluginRegistry } from "../../kernel/registry.ts";
 import type { ConsolePluginsList } from "./plugins.ts";
 import type { ConsoleDiffProjection } from "./diff.ts";
 import { loadConsolePanel, type ConsolePanelId } from "./panel-load.ts";
+
+/** How long a built-in Vault backend probe is reused across list polls. */
+const VAULT_BACKEND_TTL_MS = 15_000;
 
 /** User-plane identity row for the Flows invoke-as picker. */
 export interface ConsoleIdentity {
@@ -251,6 +254,7 @@ export interface ConsoleState {
   listVault: () => Promise<{
     readonly secrets: readonly ConsoleVaultRow[];
     readonly env: string;
+    readonly backend: ConsoleVaultBackend | null;
   }>;
   /** Set a vault value (write-only). */
   setVault: (
@@ -328,15 +332,15 @@ export interface ConsoleState {
   /** Whether first operator exists (wizard permanently closed). */
   get setupClosed(): boolean;
   /**
-   * Persist an operator after claim/create (SQLite under `.oke/`).
+   * Persist an operator after claim/create (`oke_console` schema).
    * No-op when persistence is disabled (tests / memory-only).
    */
-  persistOperator: (operatorId: string) => void;
+  persistOperator: (operatorId: string) => void | Promise<void>;
   /**
-   * Persist sessions after issue / revoke (SQLite under `.oke/`).
+   * Persist sessions after issue / revoke (`oke_console` schema).
    * No-op when persistence is disabled (tests / memory-only).
    */
-  persistSessions: () => void;
+  persistSessions: () => void | Promise<void>;
   /**
    * Per-email login attempt timestamps for credential-check rate limiting
    * (console §10.4 — same 5/60s strategy as setup-claim).
@@ -390,14 +394,14 @@ export interface CreateConsoleStateOptions {
   readonly okeConfig?: OkeConfig | null;
   /** Host plugin registry for scopes / capabilities. */
   readonly pluginRegistry?: PluginRegistry | null;
-  /** Pre-hydrated operator store (from `.oke/console.sqlite`). */
+  /** Pre-hydrated operator store (from `oke_console` / PGlite fallback). */
   readonly operators?: OperatorStore;
-  /** Pre-hydrated session store (from `.oke/console.sqlite`). */
+  /** Pre-hydrated session store (from `oke_console` / PGlite fallback). */
   readonly sessions?: SessionStore;
   /** Persist hook after claim/create. */
-  readonly persistOperator?: (operatorId: string) => void;
+  readonly persistOperator?: (operatorId: string) => void | Promise<void>;
   /** Persist hook after session issue / revoke. */
-  readonly persistSessions?: () => void;
+  readonly persistSessions?: () => void | Promise<void>;
 }
 
 /**
@@ -425,6 +429,23 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
   const markPanel = async <T>(id: ConsolePanelId): Promise<T> => {
     constructed.add(id);
     return loadConsolePanel<T>(id);
+  };
+
+  // The Vault panel polls; probing the built-in backend opens a SQL
+  // connection, so hold the answer for a beat rather than per refresh.
+  let backendMemo: { readonly at: number; readonly value: ConsoleVaultBackend | null } | null =
+    null;
+  const vaultBackend = async (
+    vault: typeof import("./vault.ts"),
+  ): Promise<ConsoleVaultBackend | null> => {
+    const at = state.now();
+    if (backendMemo && at - backendMemo.at < VAULT_BACKEND_TTL_MS) return backendMemo.value;
+    const value = await vault.probeVaultBackend({
+      config: state.okeConfig,
+      env: state.production ? "prod" : "dev",
+    });
+    backendMemo = { at, value };
+    return value;
   };
 
   const state: ConsoleState = {
@@ -733,6 +754,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         journal: state.journalStore,
         env: state.vaultEnv,
         now: state.now,
+        backend: await vaultBackend(vault),
       });
     },
     setVault: async (input) => {

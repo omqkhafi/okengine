@@ -4,13 +4,11 @@
 
 import { resolveDomainDdlMode, resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import {
-  dockerFlagDefaults,
   STORE_FILES_DEFAULTS,
   STORE_KV_DEFAULTS,
   STORE_SQL_DEFAULTS,
 } from "../../config/driver-defaults.ts";
 import { fsDriver } from "../../drivers/fs.ts";
-import { libsqlDriver, libsqlIndexDriver } from "../../drivers/libsql.ts";
 import { meilisearchDriver } from "../../drivers/meilisearch.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
 import { pgliteDriver } from "../../drivers/pglite.ts";
@@ -18,7 +16,6 @@ import { pgvectorDriver } from "../../drivers/pgvector.ts";
 import { postgresDriver } from "../../drivers/postgres.ts";
 import { redisDriver } from "../../drivers/redis.ts";
 import { s3Driver } from "../../drivers/s3.ts";
-import { sqliteDriver } from "../../drivers/sqlite.ts";
 import type { FilesDriver, IndexDriver, KvDriver, SqlDriver } from "../../drivers/types.ts";
 import { createStoreRuntime, type StoreRuntime } from "../../elements/store.ts";
 import type { StoreDecl } from "../../elements/store/declare.ts";
@@ -28,8 +25,8 @@ import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runt
 /**
  * Construct a Store runtime and register facet declarations.
  *
- * In docker mode (`env === "docker"` / `OKE_DOCKER=1`), SQL/KV resolve from the
- * `docker` driver map (falling back to `prod`) and URLs from `docker/.env.docker`.
+ * With compose infra (`OKE_DOCKER=1` / `oke dev`), SQL/KV URLs come from
+ * `docker/.env.docker`. `env: "test"` uses PGLite (`memory://` by default).
  *
  * @param options - Boot options
  * @param env - Active environment
@@ -68,7 +65,7 @@ export function bindStore(
   const filesId = resolveFilesDriverId(options, env, docker);
   const indexId = resolveIndexDriverId(options, env, docker);
   if (filesId === "fs") warnFilesFsMultiInstance();
-  const sqlUrl = sqlUrlFor(sqlId, docker);
+  const sqlUrl = sqlUrlFor(sqlId, docker, env);
   const kvUrl = kvUrlFor(kvId, docker);
   const filesRoot = filesRootFor(filesId);
 
@@ -145,11 +142,7 @@ export function resolveSqlDriverId(options: BootOptions, env: ConfigEnv, docker:
   const fromEnv = process.env.OKE_SQL_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
   // Defaults cover every ConfigEnv key, so this is never undefined.
-  return resolveDriverId(
-    options.config?.drivers?.store?.sql,
-    env,
-    dockerFlagDefaults(STORE_SQL_DEFAULTS, docker),
-  )!;
+  return resolveDriverId(options.config?.drivers?.store?.sql, env, STORE_SQL_DEFAULTS)!;
 }
 
 /**
@@ -161,11 +154,7 @@ export function resolveKvDriverId(options: BootOptions, env: ConfigEnv, docker: 
   const fromEnv = process.env.OKE_KV_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
   // Defaults cover every ConfigEnv key, so this is never undefined.
-  return resolveDriverId(
-    options.config?.drivers?.store?.kv,
-    env,
-    dockerFlagDefaults(STORE_KV_DEFAULTS, docker),
-  )!;
+  return resolveDriverId(options.config?.drivers?.store?.kv, env, STORE_KV_DEFAULTS)!;
 }
 
 /**
@@ -181,17 +170,13 @@ export function resolveFilesDriverId(
   const fromEnv = process.env.OKE_FILES_DRIVER?.trim();
   if (docker && fromEnv) return fromEnv;
   // Defaults cover every ConfigEnv key, so this is never undefined.
-  return resolveDriverId(
-    options.config?.drivers?.store?.files,
-    env,
-    dockerFlagDefaults(STORE_FILES_DEFAULTS, docker),
-  )!;
+  return resolveDriverId(options.config?.drivers?.store?.files, env, STORE_FILES_DEFAULTS)!;
 }
 
 /**
  * Index driver — same resolution chain as sql/kv/files. Defaults to `memory`;
- * a configured `pgvector` / `libsql` is honoured at real boot (and fails loud
- * if its SQL engine or peer is missing — never silently back to memory).
+ * a configured `pgvector` is honoured at real boot (and fails loud if its
+ * SQL engine or peer is missing — never silently back to memory).
  *
  * @param options - Boot options
  * @param env - Active env
@@ -213,10 +198,6 @@ function sqlDriverFor(id: string): SqlDriver {
   switch (id) {
     case "postgres":
       return postgresDriver;
-    case "sqlite":
-      return sqliteDriver;
-    case "libsql":
-      return libsqlDriver;
     case "pglite":
       return pgliteDriver;
     case "memory":
@@ -260,8 +241,6 @@ export function indexDriverFor(id: string): IndexDriver {
       return memoryDrivers.index;
     case "pgvector":
       return pgvectorDriver;
-    case "libsql":
-      return libsqlIndexDriver;
     case "meilisearch":
       return meilisearchDriver;
     default:
@@ -269,28 +248,24 @@ export function indexDriverFor(id: string): IndexDriver {
   }
 }
 
-function sqlUrlFor(sqlId: string, docker: boolean): string {
+function sqlUrlFor(sqlId: string, docker: boolean, env: ConfigEnv): string {
   if (sqlId === "postgres") {
     const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
     if (!url) {
       throw new Error(
         docker
-          ? "oke boot: postgres driver needs DATABASE_URL (did `oke dev -d` write docker/.env.docker?)"
+          ? "oke boot: postgres driver needs DATABASE_URL (did `oke dev` write docker/.env.docker?)"
           : "oke boot: postgres driver needs DATABASE_URL",
       );
     }
     return url;
   }
-  if (sqlId === "sqlite") {
-    return process.env.OKE_SQLITE_URL ?? ".oke/app.sqlite";
-  }
-  if (sqlId === "libsql") {
-    return process.env.OKE_LIBSQL_URL ?? ".oke/app.libsql";
-  }
   if (sqlId === "pglite") {
-    return process.env.OKE_PGLITE_URL ?? ".oke/pgdata";
+    return process.env.OKE_PGLITE_URL ?? (env === "test" ? "memory://" : ".oke/pgdata");
   }
-  return ":memory:";
+  // In-process `memory` SQL driver ignores URL; keep a non-path token so a
+  // mis-wired pglite connect never creates a literal `./:memory:` datadir.
+  return "memory://";
 }
 
 function kvUrlFor(kvId: string, docker: boolean): string | undefined {
@@ -299,7 +274,7 @@ function kvUrlFor(kvId: string, docker: boolean): string | undefined {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: redis driver needs REDIS_URL (did `oke dev -d` write docker/.env.docker?)"
+        ? "oke boot: redis driver needs REDIS_URL (did `oke dev` write docker/.env.docker?)"
         : "oke boot: redis driver needs REDIS_URL",
     );
   }
@@ -317,7 +292,7 @@ function indexUrlFor(docker: boolean): string {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: meilisearch index needs OKE_STORE_INDEX_URL (did `oke dev -d` write docker/.env.docker?)"
+        ? "oke boot: meilisearch index needs OKE_STORE_INDEX_URL (did `oke dev` write docker/.env.docker?)"
         : "oke boot: meilisearch index needs OKE_STORE_INDEX_URL",
     );
   }

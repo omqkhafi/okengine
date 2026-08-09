@@ -1,5 +1,5 @@
 /**
- * Write AI driver config, env, and `src/core/ai.ts` for `oke ai setup`.
+ * Write AI driver config, env, and AI models into `src/core.ts` for `oke ai setup`.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -70,13 +70,15 @@ export function applyAiSetup(
     : existsSync(envExample)
       ? readFileSync(envExample, "utf8")
       : "";
-  // Driver / URL stay commented so docker mode can hydrate `OKE_AI_URL` from
-  // `docker/.env.docker` without being shadowed. The selected chat model is
-  // written active — `oke dev` seeds it into stack controls / `LLAMA_ARG_DOCKER_REPO`
-  // (commented-only left the compose default `smollm2` forever).
+  // Driver / URL / model stay commented so docker mode can hydrate from
+  // `docker/.env.docker` without being shadowed. The chosen model is still
+  // written into `.env.local` as a hint (and into `.env.docker` when present);
+  // `loadExistingStackControls` seeds commented `OKE_AI_MODEL` on first boot.
   env = upsertEnv(env, "OKE_AI_DRIVER", input.driver, { comment: true });
   if (input.baseUrl) env = upsertEnv(env, "OKE_AI_URL", input.baseUrl, { comment: true });
-  if (input.chatModel) env = upsertEnv(env, "OKE_AI_MODEL", input.chatModel);
+  if (input.chatModel) {
+    env = upsertEnv(env, "OKE_AI_MODEL", input.chatModel, { comment: true });
+  }
   if (input.visionModel) {
     env = upsertEnv(env, "OKE_AI_VISION_MODEL", input.visionModel, { comment: true });
   }
@@ -104,10 +106,7 @@ export function applyAiSetup(
     }
   }
 
-  const aiTsPath = join(cwd, "src", "core", "ai.ts");
-  mkdirSync(dirname(aiTsPath), { recursive: true });
-  writeFileSync(aiTsPath, renderAiTs(input), "utf8");
-  ensureAiImported(cwd);
+  const aiTsPath = writeAiModels(cwd, input);
 
   return { configPath, envPath, aiTsPath };
 }
@@ -118,8 +117,7 @@ export function applyAiSetup(
  */
 export function upsertAiDrivers(source: string, driver: string): string {
   const block = `{
-      local: "${driver}",
-      docker: "${driver === "mock" ? "mock" : driver}",
+      dev: "${driver === "mock" ? "mock" : driver}",
       test: "mock",
       prod: "${driver === "mock" ? "mock" : driver}",
     }`;
@@ -243,15 +241,113 @@ export function renderAiTs(input: AiSetupApplyInput): string {
 }
 
 /**
- * Ensure `src/app.ts` or `src/core/index.ts` imports AI wiring.
+ * Write AI model declarations into `src/core.ts` (preferred) or legacy `src/core/ai.ts`.
+ *
+ * @param cwd - Project root
+ * @param input - Setup choices
+ * @returns Path written
+ */
+function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
+  const rendered = renderAiTs(input);
+  const coreTsPath = join(cwd, "src", "core.ts");
+  const legacyIndex = join(cwd, "src", "core", "index.ts");
+
+  // Folder layout still in the wild — keep writing a sidecar.
+  if (!existsSync(coreTsPath) && existsSync(legacyIndex)) {
+    const aiTsPath = join(cwd, "src", "core", "ai.ts");
+    mkdirSync(dirname(aiTsPath), { recursive: true });
+    writeFileSync(aiTsPath, rendered, "utf8");
+    ensureLegacyAiImported(cwd);
+    return aiTsPath;
+  }
+
+  mkdirSync(dirname(coreTsPath), { recursive: true });
+  if (existsSync(coreTsPath)) {
+    const existing = readFileSync(coreTsPath, "utf8");
+    if (hasAiModels(existing)) {
+      return coreTsPath;
+    }
+    writeFileSync(coreTsPath, mergeAiIntoCore(existing, rendered), "utf8");
+  } else {
+    writeFileSync(coreTsPath, rendered, "utf8");
+  }
+  ensureCoreImported(cwd);
+  return coreTsPath;
+}
+
+/**
+ * @param source - Existing TypeScript
+ */
+function hasAiModels(source: string): boolean {
+  return (
+    /\bai\.model\s*\(/.test(source) ||
+    /from\s+["']\.\/(?:core\/)?ai["']/.test(source) ||
+    /import\s+["']\.\/(?:core\/)?ai["']/.test(source)
+  );
+}
+
+/**
+ * Merge rendered AI module into an existing `src/core.ts`.
+ *
+ * @param existing - Current core.ts
+ * @param rendered - Output of {@link renderAiTs}
+ */
+export function mergeAiIntoCore(existing: string, rendered: string): string {
+  const body = rendered.replace(/^import\s*\{\s*ai\s*\}\s*from\s*["']okengine["'];\s*\n*/m, "");
+  const next = ensureNamedOkengineImport(existing, "ai");
+  return `${next.trimEnd()}\n\n${body.trimStart()}`;
+}
+
+/**
+ * Ensure a named binding is imported from `"okengine"`.
+ *
+ * @param source - Module source
+ * @param name - Binding to add
+ */
+export function ensureNamedOkengineImport(source: string, name: string): string {
+  const re = /import\s*\{([^}]*)\}\s*from\s*["']okengine["']\s*;/;
+  const m = re.exec(source);
+  if (!m) {
+    return `import { ${name} } from "okengine";\n${source}`;
+  }
+  const names = m[1]!
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (names.includes(name)) return source;
+  const sorted = [...names, name].sort((a, b) => a.localeCompare(b));
+  return source.replace(re, `import { ${sorted.join(", ")} } from "okengine";`);
+}
+
+/**
+ * Ensure `src/app.ts` loads `@/core` / `./core` so merged AI registers.
  *
  * @param cwd - Project root
  */
-function ensureAiImported(cwd: string): void {
+function ensureCoreImported(cwd: string): void {
+  const appPath = join(cwd, "src", "app.ts");
+  if (!existsSync(appPath)) return;
+  const src = readFileSync(appPath, "utf8");
+  if (
+    /from\s+["']@\/core["']/.test(src) ||
+    /import\s+["']@\/core["']/.test(src) ||
+    /from\s+["']\.\/core(?:\.ts)?["']/.test(src) ||
+    /import\s+["']\.\/core(?:\.ts)?["']/.test(src)
+  ) {
+    return;
+  }
+  writeFileSync(appPath, `import "@/core";\n${src}`, "utf8");
+}
+
+/**
+ * Legacy `src/core/*` layout — side-effect import the AI sidecar.
+ *
+ * @param cwd - Project root
+ */
+function ensureLegacyAiImported(cwd: string): void {
   const candidates: ReadonlyArray<{ readonly rel: string; readonly importLine: string }> = [
     { rel: "src/app.ts", importLine: `import "./core/ai";\n` },
     { rel: "src/core/index.ts", importLine: `import "./ai";\n` },
-    { rel: "src/core.ts", importLine: `import "./ai";\n` },
   ];
   for (const { rel, importLine } of candidates) {
     const path = join(cwd, rel);

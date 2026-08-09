@@ -40,8 +40,8 @@ export interface ServeConsoleOptions extends CreateConsoleAppOptions {
   /** Boot environment — use `"dev"` / `"prod"` so Bearer auth is production-like. */
   readonly env?: "dev" | "prod" | "test";
   /**
-   * Persist operators + secret under `.oke/` (default true).
-   * Set false for ephemeral test servers.
+   * Persist operators in Postgres `oke_console` (+ `.oke/console.secret`).
+   * Default true. Set false for ephemeral test servers.
    */
   readonly persist?: boolean;
 }
@@ -83,9 +83,18 @@ export async function serveConsole(
       : {}),
   });
 
-  // Console serve `"dev"` is the auth/session flavor — ConfigEnv uses `local`.
-  const env = options.env ?? "dev";
-  await handle.app.boot({ env: env === "dev" ? "local" : env });
+  // Console serve defaults to `test` drivers when compose isn't up; pass
+  // `env: "dev"` only with compose URLs (or memory overrides) available.
+  // Never inherit `OKE_DOCKER=1` from `oke dev` into capability minting —
+  // Console operator flows don't stamp Manifest effects, and docker+dev
+  // would otherwise hard-fail with OKE1008 on the first undeclared flow
+  // (`console.setup.status`). Compose URLs for Manifest panels bind via
+  // `bindManifest*` below, not this boot's driver map.
+  const env = options.env ?? "test";
+  await handle.app.boot({
+    env: env === "dev" || env === "test" || env === "prod" ? env : "test",
+    docker: false,
+  });
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
     if (!runs) return [];
@@ -182,7 +191,7 @@ export async function serveConsole(
     stop(closeActive = false) {
       server.stop(closeActive);
       void handle.app.stop();
-      persistence?.close();
+      void persistence?.close();
     },
   };
 }
@@ -195,7 +204,7 @@ export async function serveConsole(
 export async function startConsoleApp(
   options: CreateConsoleAppOptions & {
     readonly env?: "dev" | "prod" | "test";
-    /** Opt-in durable operators under `.oke/` (default false for unit tests). */
+    /** Opt-in durable operators in `oke_console` (default false for unit tests). */
     readonly persist?: boolean;
   } = {},
 ): Promise<ConsoleAppHandle> {

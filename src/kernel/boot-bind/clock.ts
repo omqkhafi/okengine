@@ -79,8 +79,8 @@ export async function bindClock(
     const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL ?? undefined;
     if (!url) {
       throw new Error(
-        env === "docker"
-          ? 'oke boot: clock driver "postgres" needs DATABASE_URL (did `oke dev -d` write docker/.env.docker?)'
+        env === "dev"
+          ? 'oke boot: clock driver "postgres" needs DATABASE_URL (did `oke dev` write docker/.env.docker?)'
           : 'oke boot: clock driver "postgres" needs DATABASE_URL',
       );
     }

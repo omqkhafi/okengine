@@ -81,7 +81,7 @@ export async function withDrizzleKitEnv<T>(
 }
 
 /** Subcommands under `oke db`. */
-export type DbSubcommand = "push" | "generate" | "migrate" | "seed";
+export type DbSubcommand = "push" | "generate" | "migrate" | "seed" | "studio";
 
 /** Options for {@link runDb}. */
 export interface DbOptions {
@@ -167,6 +167,10 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
   const loaded = await loadOkeConfig(cwd).catch(() => null);
   const env = options.env ?? (await resolveDevSqlEnv(cwd));
 
+  if (sub === "studio") {
+    return runStudio(cwd, options, write, env, loaded?.config ?? null);
+  }
+
   if (sub === "seed") {
     return runSeed({
       cwd,
@@ -208,7 +212,7 @@ export async function runDb(sub: DbSubcommand, options: DbOptions = {}): Promise
 }
 
 /**
- * Emit `schema.generated.ts` from abstract decls + live plugged plugin tables.
+ * Emit `schema.drizzle.ts` from abstract decls + live plugged plugin tables.
  *
  * @param cwd - Project root
  * @param config - Loaded oke config
@@ -220,12 +224,16 @@ export async function emitAbstractSchemaPrestep(
   cwd: string,
   config: OkeConfig | null | undefined,
   write: (text: string) => void = () => {},
-  env: ConfigEnv = "local",
+  env: ConfigEnv = "test",
   options: {
     readonly pluginTables?: readonly TableContribution[];
     readonly entry?: string;
   } = {},
 ): Promise<boolean> {
+  // System stubs (core / auth / Manifest stores) — separate from domain Drizzle.
+  // Re-run here so plugins added later refresh `.oke/schema/oke.ts` on db push.
+  await refreshSystemSchema(cwd, write);
+
   const driverId = resolveDriverId(config?.drivers?.store?.sql, env);
   const dialect: SqlDialect = dialectFromDriverId(driverId);
   const pluginTables =
@@ -243,6 +251,24 @@ export async function emitAbstractSchemaPrestep(
     write,
   });
   return result.emitted;
+}
+
+/**
+ * Quietly refresh `.oke/schema/oke.ts` (never fails the domain db path).
+ *
+ * @param cwd - Project root
+ * @param write - Optional log sink
+ */
+async function refreshSystemSchema(
+  cwd: string,
+  write: (text: string) => void = () => {},
+): Promise<void> {
+  try {
+    const { runSchemaGenerate } = await import("./schema.ts");
+    await runSchemaGenerate({ cwd, write: () => {} });
+  } catch (err) {
+    write(`oke schema generate: skipped — ${err instanceof Error ? err.message : String(err)}\n`);
+  }
 }
 
 /**
@@ -438,18 +464,58 @@ export async function detectDbDrift(options: DbOptions = {}): Promise<{
 }
 
 /**
- * CLI entry: parse `oke db <push|generate|migrate|seed> […]`.
+ * Open drizzle-kit Studio against the project config / env overlay.
+ *
+ * @param cwd - Project root
+ * @param options - Paths / injectables
+ * @param write - stdout writer
+ * @param env - Config env
+ * @param config - Loaded oke config
+ */
+export async function runStudio(
+  cwd: string,
+  options: DbOptions,
+  write: (text: string) => void = (t) => process.stdout.write(t),
+  env?: ConfigEnv,
+  config?: OkeConfig | null,
+): Promise<number> {
+  const activeEnv = env ?? (await resolveDevSqlEnv(cwd));
+  const loaded = config ?? (await loadOkeConfig(cwd).catch(() => null))?.config ?? null;
+  const configPath = await resolveDrizzleConfigPath(cwd, {
+    config: options.config,
+    loadedConfig: loaded,
+  });
+  if (!(await Bun.file(configPath).exists())) {
+    write(`oke db studio: missing ${configPath}\n`);
+    return EXIT_RUNTIME;
+  }
+  write(`oke db studio: opening drizzle-kit studio (${configPath})\n`);
+  return withDrizzleKitEnv(cwd, loaded, activeEnv, async () => {
+    const proc = Bun.spawn(["bunx", "drizzle-kit", "studio", "--config", configPath], {
+      cwd,
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "inherit",
+      env: process.env,
+    });
+    const code = await proc.exited;
+    return code === 0 ? EXIT_OK : EXIT_RUNTIME;
+  });
+}
+
+/**
+ * CLI entry: parse `oke db <push|generate|migrate|seed|studio> […]`.
  *
  * @param args - Args after `db`
  */
 export async function dbCli(args: readonly string[]): Promise<number> {
   const sub = args[0];
   if (!sub || sub === "--help" || sub === "-h") {
-    console.log(`oke db push|generate|migrate|seed [--config|-c] [--env name] [--force]
+    console.log(`oke db push|generate|migrate|seed|studio [--config|-c] [--env name] [--force]
 
 Domain schema sync via drizzle-kit, plus explicit seed.
 When src/db/schema.decl.ts and/or a plugged app entry exists, emits
-schema.generated.ts from store.schema.table + live plugin .table()
+schema.drizzle.ts from store.schema.table + live plugin .table()
 contributions — then runs drizzle-kit.
 Hand-written src/schema.ts remains supported (emit skipped if nothing to emit).
 Not the same as \`oke schema generate\` (core/plugin stub tables).
@@ -458,14 +524,21 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
   generate   Write versioned SQL under drizzle/ for review
   migrate    Apply generated migrations (explicit; never automatic in prod)
   seed       Run defineSeed (essential + env category); never at boot
+  studio     Open drizzle-kit Studio (long-running)
 
-  --env      Override config env (local|docker|test|prod)
+  --env      Override config env (dev|test|prod)
   --force    Skip docker/prod confirmation prompt (CI)
   --entry    App entry for seed boot / plugin table discovery
 `);
     return sub ? EXIT_OK : EXIT_USAGE;
   }
-  if (sub !== "push" && sub !== "generate" && sub !== "migrate" && sub !== "seed") {
+  if (
+    sub !== "push" &&
+    sub !== "generate" &&
+    sub !== "migrate" &&
+    sub !== "seed" &&
+    sub !== "studio"
+  ) {
     console.error(`oke db: unknown subcommand "${sub}"`);
     return EXIT_USAGE;
   }
@@ -481,7 +554,7 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
       const value = args[++i];
       const parsed = parseConfigEnv(value);
       if (!parsed) {
-        console.error(`oke db: invalid --env ${JSON.stringify(value)} (local|docker|test|prod)`);
+        console.error(`oke db: invalid --env ${JSON.stringify(value)} (dev|test|prod)`);
         return EXIT_USAGE;
       }
       env = parsed;
@@ -499,9 +572,10 @@ Not the same as \`oke schema generate\` (core/plugin stub tables).
 }
 
 function parseConfigEnv(value: string | undefined): ConfigEnv | undefined {
-  if (value === "local" || value === "docker" || value === "test" || value === "prod") {
-    return value;
-  }
+  if (value === "dev" || value === "test" || value === "prod") return value;
+  // Soft-compat for older CLI flags / docs.
+  if (value === "local") return "test";
+  if (value === "docker") return "dev";
   return undefined;
 }
 

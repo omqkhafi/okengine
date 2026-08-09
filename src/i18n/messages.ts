@@ -9,10 +9,57 @@
  * present; app keys override built-ins for the same locale/key.
  */
 
+import { createRequire } from "node:module";
 import { builtinAr } from "./catalogs/ar.ts";
 import { builtinEn } from "./catalogs/en.ts";
-import { formatMessage } from "./format.ts";
+import { interpolateSimple, needsIcuFormat } from "./interpolate-simple.ts";
 import type { MessageTree, MessageValues } from "./types.ts";
+
+const requireFormat = createRequire(import.meta.url);
+
+/** Cached FormatJS formatter (loaded on first ICU message). */
+let formatMessageFn:
+  | ((message: string, locale: string, values?: MessageValues) => string)
+  | undefined;
+let formatMessagePromise: Promise<typeof formatMessageFn> | undefined;
+
+/**
+ * Ensure FormatJS {@link formatMessage} is loaded (call from boot when catalogs exist).
+ */
+export async function preloadMessageFormat(): Promise<void> {
+  if (formatMessageFn) return;
+  formatMessagePromise ??= import("./format.ts").then((m) => {
+    formatMessageFn = m.formatMessage;
+    return formatMessageFn;
+  });
+  await formatMessagePromise;
+}
+
+/**
+ * Load FormatJS synchronously on the first ICU message (tests / pre-boot).
+ */
+function ensureFormatMessageSync(): NonNullable<typeof formatMessageFn> {
+  if (formatMessageFn) return formatMessageFn;
+  const mod = requireFormat("./format.ts") as {
+    formatMessage: NonNullable<typeof formatMessageFn>;
+  };
+  formatMessageFn = mod.formatMessage;
+  return formatMessageFn;
+}
+
+/**
+ * Format a resolved message — simple `{name}` on the cold path; ICU via FormatJS.
+ *
+ * @param message - Template
+ * @param locale - BCP 47 locale
+ * @param values - Interpolation values
+ */
+function formatResolved(message: string, locale: string, values?: MessageValues): string {
+  if (!needsIcuFormat(message)) {
+    return interpolateSimple(message, values);
+  }
+  return ensureFormatMessageSync()(message, locale, values);
+}
 
 export type { MessageTree, MessageValues } from "./types.ts";
 
@@ -62,7 +109,7 @@ export function defineMessages<const T extends MessageTree>(messages: T): T {
 /**
  * Register (or replace) messages for a locale.
  *
- * Side-effect import from `src/locales/<locale>.ts` before boot.
+ * Load locale modules before boot (starter: `core.ts` → `@/locales`).
  * Prefer `as const` / {@link defineMessages} on the default locale, then
  * `satisfies MessagesFor<typeof en>` on translations so keys stay aligned.
  *
@@ -134,10 +181,10 @@ export function translate(options: TranslateOptions): string {
   const { locale, defaultLocale, catalogs, key } = options;
   const values = options.values ?? options.params;
   const primary = catalogs[locale]?.[key];
-  if (primary !== undefined) return formatMessage(primary, locale, values);
+  if (primary !== undefined) return formatResolved(primary, locale, values);
   if (locale !== defaultLocale) {
     const fallback = catalogs[defaultLocale]?.[key];
-    if (fallback !== undefined) return formatMessage(fallback, defaultLocale, values);
+    if (fallback !== undefined) return formatResolved(fallback, defaultLocale, values);
   }
   if (values === undefined) return key;
   return `${key}:${JSON.stringify(values)}`;

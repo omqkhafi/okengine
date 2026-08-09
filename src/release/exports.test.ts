@@ -59,13 +59,15 @@ describe("export budget targets", () => {
 
   test("every non-glob package export and every driver module is covered", async () => {
     const pkg = (await Bun.file(join(ROOT, "package.json")).json()) as {
-      exports: Record<string, string>;
+      exports: Record<string, import("./exports.ts").PackageExportTarget>;
     };
+    const { resolveExportSourcePath } = await import("./exports.ts");
     const targets = await resolveExportBudgetTargets();
     const bySubpath = new Map(targets.map((t) => [t.subpath, t]));
 
-    for (const [subpath, entryRel] of Object.entries(pkg.exports)) {
+    for (const [subpath, entryTarget] of Object.entries(pkg.exports)) {
       if (subpath.endsWith("/*")) continue;
+      const entryRel = resolveExportSourcePath(entryTarget);
       const target = bySubpath.get(subpath);
       expect(target).toBeDefined();
       expect(target!.id).toBe(`export:${subpath}`);

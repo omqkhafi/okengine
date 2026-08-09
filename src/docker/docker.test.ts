@@ -7,8 +7,11 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  COMPOSE_ALL,
+  COMPOSE_BASE,
   COMPOSE_OVERRIDE,
+  DOCKER_COMPOSE,
+  DOCKER_COMPOSE_OVERRIDE,
+  DOCKER_STACK,
   assertNoCredentialsInYaml,
   buildCaddyfile,
   buildPgDogToml,
@@ -120,7 +123,7 @@ describe("image recipes", () => {
       images: { "store.kv": image },
       credentials: { "store.kv": fixedCreds["store.kv"] },
     });
-    const kvYml = derived.files.find((f) => f.path === "compose.store.kv.yml")?.content ?? "";
+    const kvYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(kvYml).toContain(image);
     expect(kvYml).toContain("valkey-server");
     expect(derived.stackEnv.REDIS_URL).toContain("redis://");
@@ -160,7 +163,7 @@ describe("image recipes", () => {
       images: { "store.kv": image },
       credentials: { "store.kv": fixedCreds["store.kv"] },
     });
-    const kvYml = derived.files.find((f) => f.path === "compose.store.kv.yml")?.content ?? "";
+    const kvYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(kvYml).toContain(image);
     expect(kvYml).toContain("memlock");
     expect(kvYml).toContain("HEALTHCHECK_PORT");
@@ -201,7 +204,7 @@ describe("image recipes", () => {
     });
     expect(derived.specs[0]!.port).toBe(26257);
     expect(derived.specs[0]!.hostPort).toBe(5432);
-    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    const sqlYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(sqlYml).toContain("26257");
     expect(sqlYml).toContain("COCKROACH_");
     expect(derived.stackEnv.DATABASE_URL).toContain("sslmode=require");
@@ -237,7 +240,7 @@ describe("image recipes", () => {
       credentials: { "store.sql": fixedCreds["store.sql"] },
     });
     expect(derived.specs[0]!.port).toBe(5433);
-    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    const sqlYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(sqlYml).toContain("5433");
     expect(sqlYml).toContain("YSQL_");
   });
@@ -251,7 +254,7 @@ describe("image recipes", () => {
       images: { "store.sql": image },
       credentials: { "store.sql": fixedCreds["store.sql"] },
     });
-    const sqlYml = derived.files.find((f) => f.path === "compose.store.sql.yml")?.content ?? "";
+    const sqlYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(sqlYml).toContain("POSTGRES_USER");
     expect(derived.stackEnv.DATABASE_URL).toContain("postgres://");
   });
@@ -268,8 +271,8 @@ describe("image recipes", () => {
       credentials: fixedCreds["store.sql"],
     });
     expect(applied.dependsOn?.["store-sql"]?.condition).toBe("service_healthy");
-    expect(applied.volumes).toContain("./pgdog.toml:/pgdog/pgdog.toml:ro");
-    expect(applied.volumes).toContain("./users.toml:/pgdog/users.toml:ro");
+    expect(applied.volumes).toContain("./pgdog/pgdog.toml:/pgdog/pgdog.toml:ro");
+    expect(applied.volumes).toContain("./pgdog/users.toml:/pgdog/users.toml:ro");
     expect(applied.healthcheck?.test.join(" ")).toContain("pg_isready");
   });
 
@@ -605,7 +608,7 @@ describe("image recipes", () => {
 });
 
 describe("deriveInfrastructure", () => {
-  test("emits Dockerfile + per-role compose + four-layer merge order", () => {
+  test("emits Dockerfile + single docker-compose.yml by default", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "pgvector/pgvector:pg17",
@@ -617,31 +620,24 @@ describe("deriveInfrastructure", () => {
 
     const paths = result.files.map((f) => f.path);
     expect(paths).toContain("Dockerfile");
-    expect(paths).toContain("compose.yml");
-    expect(paths).toContain("compose.store.sql.yml");
-    expect(paths).toContain("compose.store.kv.yml");
-    expect(paths).toContain(COMPOSE_ALL);
+    expect(paths).toContain(DOCKER_COMPOSE);
+    expect(paths).not.toContain(COMPOSE_BASE);
+    expect(paths).not.toContain("compose.store.sql.yml");
     expect(paths).not.toContain(COMPOSE_OVERRIDE);
+    expect(paths).not.toContain(DOCKER_COMPOSE_OVERRIDE);
 
-    expect(result.composeFiles).toEqual([
-      "compose.yml",
-      "compose.store.kv.yml",
-      "compose.store.sql.yml",
-      COMPOSE_OVERRIDE,
-    ]);
-    expect(result.composeFiles).not.toContain(COMPOSE_ALL);
+    expect(result.composeFiles).toEqual([DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE]);
 
-    const sqlYml = result.files.find((f) => f.path === "compose.store.sql.yml")!.content;
-    expect(sqlYml).toContain("pgvector/pgvector:pg17");
-    expect(sqlYml).toContain("POSTGRES_PASSWORD");
-    expect(sqlYml).toContain("${OKE_STORE_SQL_PASSWORD}");
-    expect(sqlYml).toContain(".env.docker");
-    expect(sqlYml).not.toContain(fixedCreds["store.sql"].password);
-
-    const baseYml = result.files.find((f) => f.path === "compose.yml")!.content;
-    expect(baseYml).toContain('context: ".."');
-    expect(baseYml).toContain("app:");
-    expect(baseYml).toContain("oke-skyport:latest");
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).toContain("pgvector/pgvector:pg17");
+    expect(yml).toContain("valkey/valkey:8-alpine");
+    expect(yml).toContain("POSTGRES_PASSWORD");
+    expect(yml).toContain("${OKE_STORE_SQL_PASSWORD}");
+    expect(yml).toContain(".env.docker");
+    expect(yml).not.toContain(fixedCreds["store.sql"].password);
+    expect(yml).toContain('context: ".."');
+    expect(yml).toContain("app:");
+    expect(yml).toContain("oke-skyport:latest");
 
     for (const f of result.files) {
       assertNoCredentialsInYaml(f.content, Object.values(fixedCreds));
@@ -651,6 +647,32 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_SQL_PASSWORD).toBe(fixedCreds["store.sql"].password);
   });
 
+  test("compose YAML spaces services and adds role comments", () => {
+    const result = deriveInfrastructure({
+      images: {
+        ai: "ghcr.io/ggml-org/llama.cpp:server",
+        "channel.email": "axllent/mailpit:v1.22.3",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+        "store.sql": "postgres:16",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      includeApp: false,
+      app: "dev",
+    });
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).toContain("# Generated by `oke docker`");
+    expect(yml).toContain("# ai — local inference");
+    expect(yml).toContain("# channel.email — Mailpit");
+    expect(yml).toContain("# pgdog — connection pooler");
+    expect(yml).toContain("# store.sql — Postgres");
+    // Blank line between adjacent service blocks (comment → key → … → blank → comment).
+    expect(yml).toMatch(/# ai —[^\n]+\n  ai:\n[\s\S]+\n\n  # channel\.email —/);
+    expect(yml).toMatch(/\nnetworks:\n[\s\S]+\n\nservices:\n/);
+    expect(serviceNamesFromComposeYaml(yml)).toEqual(
+      new Set(["ai", "channel-email", "pgdog", "store-sql"]),
+    );
+  });
+
   test("includeApp false omits app service (infra-only stack)", () => {
     const result = deriveInfrastructure({
       images: { "store.sql": "postgres:16" },
@@ -658,30 +680,75 @@ describe("deriveInfrastructure", () => {
       includeApp: false,
       app: "dev",
     });
-    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    const base = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(base).toContain("oke-dev");
     expect(base).toContain("networks:");
     expect(base).not.toContain("app:");
     expect(base).not.toContain("build:");
   });
 
-  test("prod overlay adds deploy.replicas and is layer 3", () => {
+  test("prod folds readiness + budgeted deploy into docker-compose.yml", () => {
     const result = deriveInfrastructure({
       images: { "store.sql": "postgres:16" },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       prod: true,
+      serverCpus: 4,
+      serverMemoryGb: 8,
     });
+    expect(result.files.some((f) => f.path === "compose.prod.yml")).toBe(false);
+    expect(result.composeFiles).toEqual([DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE]);
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).toContain("replicas");
+    expect(yml).toContain("/_/ready");
+    expect(yml).toContain("update_config");
+    expect(yml).toContain("restart_policy");
+    expect(yml).toContain("stop_grace_period");
+    expect(yml).toContain("start-first");
+    expect(yml).toContain("on-failure");
+    expect(yml).toContain("cpus:");
+    expect(yml).toContain("memory:");
+  });
+
+  test("layout split emits per-role files + compose.prod.yml", () => {
+    const result = deriveInfrastructure({
+      images: { "store.sql": "postgres:16" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      prod: true,
+      layout: "split",
+    });
+    expect(result.files.some((f) => f.path === COMPOSE_BASE)).toBe(true);
+    expect(result.files.some((f) => f.path === "compose.store.sql.yml")).toBe(true);
     expect(result.files.some((f) => f.path === "compose.prod.yml")).toBe(true);
-    expect(result.composeFiles).toContain("compose.prod.yml");
-    expect(result.composeFiles.at(-1)).toBe(COMPOSE_OVERRIDE);
+    expect(result.files.some((f) => f.path === DOCKER_COMPOSE)).toBe(false);
+    expect(result.composeFiles).toEqual([
+      COMPOSE_BASE,
+      "compose.store.sql.yml",
+      "compose.prod.yml",
+      COMPOSE_OVERRIDE,
+    ]);
     const prod = result.files.find((f) => f.path === "compose.prod.yml")!.content;
     expect(prod).toContain("replicas");
     expect(prod).toContain("/_/ready");
-    expect(prod).toContain("update_config");
-    expect(prod).toContain("restart_policy");
-    expect(prod).toContain("stop_grace_period");
-    expect(prod).toContain("start-first");
-    expect(prod).toContain("on-failure");
+    expect(prod).toContain("cpus:");
+  });
+
+  test("layout stack emits docker-stack.yml with overlay network", () => {
+    const result = deriveInfrastructure({
+      images: { "store.sql": "postgres:16" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      prod: true,
+      layout: "stack",
+      app: "skyport",
+    });
+    expect(result.files.map((f) => f.path)).toContain(DOCKER_STACK);
+    expect(result.files.some((f) => f.path === DOCKER_COMPOSE)).toBe(false);
+    expect(result.composeFiles).toEqual([DOCKER_STACK]);
+    const yml = result.files.find((f) => f.path === DOCKER_STACK)!.content;
+    expect(yml).toContain("overlay");
+    expect(yml).toContain("oke-skyport:latest");
+    expect(yml).not.toContain("build:");
+    expect(yml).toContain("/_/ready");
+    expect(yml).toContain("cpus:");
   });
 
   test("when postgres + pgdog are both pinned, DATABASE_URL points at PgDog", () => {
@@ -702,18 +769,18 @@ describe("deriveInfrastructure", () => {
     // Direct Postgres URL stays on the role key for ops / escape hatch.
     expect(result.stackEnv.OKE_STORE_SQL_URL).toContain(":5432/");
 
-    const pgdogYml = result.files.find((f) => f.path === "compose.pgdog.yml")!.content;
+    const pgdogYml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.51");
     expect(pgdogYml).toContain("store-sql");
     expect(pgdogYml).toContain("service_healthy");
     expect(pgdogYml).not.toContain(fixedCreds["store.sql"].password);
 
-    const pgdogToml = result.files.find((f) => f.path === "pgdog.toml")!.content;
+    const pgdogToml = result.files.find((f) => f.path === "pgdog/pgdog.toml")!.content;
     expect(pgdogToml).toContain('pooler_mode = "transaction"');
     expect(pgdogToml).toContain('host = "store-sql"');
     expect(pgdogToml).not.toContain(fixedCreds["store.sql"].password);
 
-    const usersToml = result.files.find((f) => f.path === "users.toml")!.content;
+    const usersToml = result.files.find((f) => f.path === "pgdog/users.toml")!.content;
     expect(usersToml).toContain('password = "s3cret-sql-password-xyz"');
     expect(usersToml).toContain('database = "oke"');
   });
@@ -725,7 +792,7 @@ describe("deriveInfrastructure", () => {
     });
     expect(result.stackEnv.DATABASE_URL).toContain(":5432/");
     expect(result.stackEnv.OKE_PGDOG_URL).toBeUndefined();
-    expect(result.files.some((f) => f.path === "pgdog.toml")).toBe(false);
+    expect(result.files.some((f) => f.path === "pgdog/pgdog.toml")).toBe(false);
   });
 
   test("Dockerfile CMD is oke start", () => {
@@ -746,7 +813,7 @@ describe("deriveInfrastructure", () => {
     });
     expect(written.some((p) => p.endsWith(COMPOSE_OVERRIDE))).toBe(false);
     expect(await Bun.file(join(dockerDir, ".env.docker")).exists()).toBe(true);
-    expect(await Bun.file(join(dockerDir, "compose.yml")).exists()).toBe(true);
+    expect(await Bun.file(join(dockerDir, DOCKER_COMPOSE)).exists()).toBe(true);
     const envText = await Bun.file(join(dockerDir, ".env.docker")).text();
     expect(envText).toContain("DATABASE_URL=");
     expect(envText).toContain("# docker/.env.docker — generated by");
@@ -762,7 +829,7 @@ describe("deriveInfrastructure", () => {
       },
       app: "skyport",
     });
-    const yml = result.files.find((f) => f.path === "compose.store.index.yml")!.content;
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).toContain("getmeili/meilisearch:v1.37");
     expect(yml).toContain("${OKE_STORE_INDEX_KEY}");
     expect(yml).toContain("meili_data");
@@ -777,7 +844,7 @@ describe("deriveInfrastructure", () => {
       images: { ai: OLLAMA_IMAGE },
       app: "skyport",
     });
-    const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).toContain(OLLAMA_IMAGE);
     expect(yml).toContain("OKE_AI_MODEL");
     expect(yml).toContain("qwen3.5:9b");
@@ -795,7 +862,7 @@ describe("deriveInfrastructure", () => {
       app: "skyport",
       controls: { OKE_AI_MODEL: "gemma4:e4b-q4_K_M" },
     });
-    const yml = result.files.find((f) => f.path === "compose.ai.yml")!.content;
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).toContain(LLAMA_CPP_IMAGE);
     expect(yml).toContain("127.0.0.1:8080:8080");
     expect(yml).toContain("llama-entrypoint.py");
@@ -814,8 +881,8 @@ describe("deriveInfrastructure", () => {
 
   test("ai vllm and sglang emit loopback publish + GPU deploy", () => {
     for (const [image, port, path] of [
-      [VLLM_IMAGE, 8000, "compose.ai.yml"],
-      [SGLANG_IMAGE, 30000, "compose.ai.yml"],
+      [VLLM_IMAGE, 8000, DOCKER_COMPOSE],
+      [SGLANG_IMAGE, 30000, DOCKER_COMPOSE],
     ] as const) {
       const result = deriveInfrastructure({ images: { ai: image }, app: "skyport" });
       const yml = result.files.find((f) => f.path === path)!.content;
@@ -947,18 +1014,18 @@ describe("deriveInfrastructure", () => {
       credentials: { "store.sql": fixedCreds["store.sql"] },
       app: "skyport",
     });
-    const base = result.files.find((f) => f.path === "compose.yml")!.content;
-    expect(base).toContain("app:");
-    expect(base).not.toContain("6530:6530");
-    expect(base).not.toContain("proxy:");
-    expect(base).toContain("store-sql");
-    expect(base).not.toMatch(/depends_on:[\s\S]*proxy/);
-
-    const proxyYml = result.files.find((f) => f.path === "compose.proxy.yml")!.content;
-    expect(proxyYml).toContain("caddy:2-alpine");
-    expect(proxyYml).toContain("80:80");
-    expect(proxyYml).toContain("443:443");
-    expect(proxyYml).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).toContain("app:");
+    expect(yml).not.toContain("6530:6530");
+    expect(yml).toContain("proxy:");
+    expect(yml).toContain("store-sql");
+    expect(yml).toContain("caddy:2-alpine");
+    expect(yml).toContain("80:80");
+    expect(yml).toContain("443:443");
+    expect(yml).toContain("./Caddyfile:/etc/caddy/Caddyfile:ro");
+    // App depends_on must not wait on the edge proxy.
+    const appBlock = yml.split("store-sql:")[0]!;
+    expect(appBlock).not.toMatch(/depends_on:[\s\S]*proxy/);
 
     const caddyfile = result.files.find((f) => f.path === "Caddyfile")!.content;
     expect(caddyfile).toContain("reverse_proxy app:6530");
@@ -977,27 +1044,24 @@ describe("deriveInfrastructure", () => {
       app: "skyport",
       prod: true,
     });
-    const base = result.files.find((f) => f.path === "compose.yml")!.content;
-    expect(base).not.toContain("6530:6530");
-
-    const proxyYml = result.files.find((f) => f.path === "compose.proxy.yml")!.content;
-    expect(proxyYml).toContain("traefik:v3.3");
-    expect(proxyYml).toContain(SOCKET_PROXY_IMAGE);
-    expect(proxyYml).toContain(SOCKET_PROXY_SERVICE);
-    expect(proxyYml).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
-    expect(proxyYml).toContain("tcp://socket-proxy:2375");
-    expect(proxyYml).toContain("traefik.enable");
-    expect(proxyYml).toContain("traefik.http.routers.app.rule");
-    expect(proxyYml).toContain("loadbalancer.server.port");
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).not.toContain("6530:6530");
+    expect(yml).toContain("traefik:v3.3");
+    expect(yml).toContain(SOCKET_PROXY_IMAGE);
+    expect(yml).toContain(SOCKET_PROXY_SERVICE);
+    expect(yml).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
+    expect(yml).toContain("tcp://socket-proxy:2375");
+    expect(yml).toContain("traefik.enable");
+    expect(yml).toContain("traefik.http.routers.app.rule");
+    expect(yml).toContain("loadbalancer.server.port");
     // Raw socket must not be on the Traefik service itself.
-    const traefikBlock = proxyYml.split("socket-proxy:")[0]!;
+    const traefikBlock = yml.split("socket-proxy:")[0]!;
     expect(traefikBlock).toContain("traefik:v3.3");
     expect(traefikBlock).not.toContain("docker.sock");
 
     expect(result.files.some((f) => f.path === "Caddyfile")).toBe(false);
     expect(result.stackEnv.OKE_PROXY_URL).toBe("https://127.0.0.1");
-    expect(result.composeFiles).toContain("compose.proxy.yml");
-    expect(result.composeFiles).toContain("compose.prod.yml");
+    expect(result.composeFiles).toEqual([DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE]);
   });
 
   test("without proxy role, app still publishes 6530 (default unchanged)", () => {
@@ -1006,13 +1070,13 @@ describe("deriveInfrastructure", () => {
       credentials: { "store.sql": fixedCreds["store.sql"] },
       app: "skyport",
     });
-    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    const base = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(base).toContain("6530:6530");
-    expect(result.files.some((f) => f.path === "compose.proxy.yml")).toBe(false);
+    expect(base).not.toContain("\n  proxy:");
     expect(result.stackEnv.OKE_PROXY_URL).toBeUndefined();
   });
 
-  test("compose.all.yml merges every service from separate layer files", () => {
+  test("docker-compose.yml includes every role + companion service when prod", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:16",
@@ -1027,35 +1091,17 @@ describe("deriveInfrastructure", () => {
       prod: true,
     });
 
-    const allFile = result.files.find((f) => f.path === COMPOSE_ALL);
-    expect(allFile).toBeDefined();
-    const allYml = allFile!.content;
-    const allServices = serviceNamesFromComposeYaml(allYml);
-
-    const expected = new Set<string>();
-    for (const f of result.files) {
-      if (f.path === COMPOSE_ALL) continue;
-      if (f.path !== "compose.yml" && !/^compose\..+\.yml$/.test(f.path)) continue;
-      for (const name of serviceNamesFromComposeYaml(f.content)) {
-        expected.add(name);
-      }
-    }
-
-    expect(expected.size).toBeGreaterThan(0);
-    for (const name of expected) {
-      expect(allServices.has(name)).toBe(true);
-    }
-    // Companion + role services survive the merge (not dropped).
-    expect(allServices.has("app")).toBe(true);
-    expect(allServices.has("store-sql")).toBe(true);
-    expect(allServices.has("store-kv")).toBe(true);
-    expect(allServices.has("proxy")).toBe(true);
-    expect(allServices.has(SOCKET_PROXY_SERVICE)).toBe(true);
-    // Prod overlay fields land on app in the merged document.
-    expect(allYml).toContain("/_/ready");
-    expect(allYml).toContain("stop_grace_period");
-    expect(allYml).toContain("update_config");
-    // Still not in the layered `-f` list.
-    expect(result.composeFiles).not.toContain(COMPOSE_ALL);
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    const services = serviceNamesFromComposeYaml(yml);
+    expect(services.has("app")).toBe(true);
+    expect(services.has("store-sql")).toBe(true);
+    expect(services.has("store-kv")).toBe(true);
+    expect(services.has("proxy")).toBe(true);
+    expect(services.has(SOCKET_PROXY_SERVICE)).toBe(true);
+    expect(yml).toContain("/_/ready");
+    expect(yml).toContain("stop_grace_period");
+    expect(yml).toContain("update_config");
+    expect(yml).toContain("cpus:");
+    expect(result.composeFiles).toEqual([DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE]);
   });
 });

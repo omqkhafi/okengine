@@ -20,9 +20,27 @@ export class Redacted<T> {
     this.#value = value;
   }
 
+  /**
+   * Construct a {@link Redacted} without calling `new`.
+   *
+   * @param value - Wrapped secret
+   */
+  static of<T>(value: T): Redacted<T> {
+    return new Redacted(value);
+  }
+
   /** The one explicit way to get the real value. */
   reveal(): T {
     return this.#value;
+  }
+
+  /**
+   * Transform the wrapped value without exposing it to callers.
+   *
+   * @param fn - Mapper over the cleartext
+   */
+  map<U>(fn: (value: T) => U): Redacted<U> {
+    return Redacted.of(fn(this.#value));
   }
 
   toString(): string {
@@ -33,13 +51,17 @@ export class Redacted<T> {
     return REDACTED_PLACEHOLDER;
   }
 
+  valueOf(): string {
+    return REDACTED_PLACEHOLDER;
+  }
+
   [Symbol.toPrimitive](): string {
     return REDACTED_PLACEHOLDER;
   }
 
-  /** `util.inspect` / `console.log` — never the real value. */
+  /** `util.inspect` / `console.log` / Bun — never the real value. */
   [Symbol.for("nodejs.util.inspect.custom")](): string {
-    return REDACTED_PLACEHOLDER;
+    return `Redacted<${typeof this.#value}>`;
   }
 }
 

@@ -131,9 +131,6 @@ export const STACK_CONTROL_KEYS = [
   "OKE_AI_CTX_SIZE",
   "OKE_PROXY_HOST",
   "OKE_PROXY_ACME_EMAIL",
-  // OpenBao app token — minted by bootstrap, must survive `writeDerivedFiles`.
-  "OKE_VAULT_TOKEN",
-  "OKE_VAULT_MOUNT",
 ] as const;
 
 /**
@@ -176,9 +173,6 @@ export async function loadExistingStackCredentials(
 /**
  * Load optional controls from `docker/.env.docker` when present.
  *
- * Falls back to `.oke/openbao/app.token` for `OKE_VAULT_TOKEN` when the env
- * file was regenerated without the bootstrap overlay (per-project token).
- *
  * @param cwd - Project root
  */
 export async function loadExistingStackControls(
@@ -192,29 +186,15 @@ export async function loadExistingStackControls(
     controls = parseStackControls(await file.text());
     break;
   }
-  // create-oke / `oke ai setup` write the chosen model into `.env.local`.
-  // Seed it into stack controls on first docker boot so `LLAMA_ARG_DOCKER_REPO`
-  // is not stuck on the recipe default (`smollm2`).
+  // create-oke / `oke ai setup` write the chosen model into `.env.local` as a
+  // commented hint (active would shadow `docker/.env.docker`). Seed active or
+  // commented `OKE_AI_MODEL` on first docker boot so `LLAMA_ARG_DOCKER_REPO`
+  // is not stuck on the recipe default (`granite3.3:2b`).
   if (!controls.OKE_AI_MODEL) {
     const localEnv = Bun.file(resolve(cwd, ".env.local"));
     if (await localEnv.exists()) {
-      const model = parseDotenv(await localEnv.text())
-        .get("OKE_AI_MODEL")
-        ?.trim();
+      const model = readEnvAssignment(await localEnv.text(), "OKE_AI_MODEL");
       if (model) controls = { ...controls, OKE_AI_MODEL: model };
-    }
-  }
-  if (!controls.OKE_VAULT_TOKEN) {
-    const tokenFile = Bun.file(resolve(cwd, ".oke", "openbao", "app.token"));
-    if (await tokenFile.exists()) {
-      const token = (await tokenFile.text()).trim();
-      if (token) {
-        controls = {
-          ...controls,
-          OKE_VAULT_TOKEN: token,
-          OKE_VAULT_MOUNT: controls.OKE_VAULT_MOUNT ?? "secret",
-        };
-      }
     }
   }
   return Object.keys(controls).length > 0 ? controls : undefined;
@@ -228,14 +208,44 @@ function parseDotenv(text: string): Map<string, string> {
     const eq = trimmed.indexOf("=");
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq);
-    let value = trimmed.slice(eq + 1);
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
+    const value = unquoteEnvValue(trimmed.slice(eq + 1));
     map.set(key, value);
   }
   return map;
+}
+
+/**
+ * Read `KEY=value` from dotenv text — active line wins; otherwise the last
+ * `# KEY=value` hint (create-oke / `oke ai setup` leave AI stack keys commented).
+ *
+ * @param text - Dotenv contents
+ * @param key - Variable name
+ */
+function readEnvAssignment(text: string, key: string): string | undefined {
+  const active = parseDotenv(text).get(key)?.trim();
+  if (active) return active;
+  let hinted: string | undefined;
+  const prefix = `# ${key}=`;
+  const altPrefix = `#${key}=`;
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith(prefix)) {
+      hinted = unquoteEnvValue(trimmed.slice(prefix.length));
+    } else if (trimmed.startsWith(altPrefix)) {
+      hinted = unquoteEnvValue(trimmed.slice(altPrefix.length));
+    }
+  }
+  const value = hinted?.trim();
+  return value || undefined;
+}
+
+function unquoteEnvValue(raw: string): string {
+  let value = raw;
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+  return value;
 }

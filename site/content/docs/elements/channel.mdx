@@ -54,7 +54,9 @@ do: async (input, fx) => {
 <Step>
 ### Read it in development
 
-Locally the `console` driver captures mail into an inbox instead of sending; in docker mode the stack runs **Mailpit**, a real SMTP catcher with a web UI — so you see the exact rendered message without ever touching a real mailbox.
+Under `oke test` the `console` driver captures mail into an inbox instead of sending; under `oke
+dev` Compose runs **Mailpit**, a real SMTP catcher with a web UI — so you see the exact rendered
+message without ever touching a real mailbox.
 
 </Step>
 
@@ -199,20 +201,20 @@ push drivers are passed via `BootOptions.channel.drivers` when you need them.
 ```typescript title="oke.config.ts"
 drivers: {
   channel: {
-    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+    email: { dev: "smtp", test: "console", prod: "smtp" },
     // optional — omit until you need SMS at boot
-    sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
+    sms: { test: "console", prod: "taqnyat" },
   },
 },
 images: {
-  "channel.email": "axllent/mailpit:v1.22.3",
+  channel: { email: "axllent/mailpit:v1.22.3" },
 },
 ```
 
 | Driver         | Medium   | Behavior                                                            |
 | -------------- | -------- | ------------------------------------------------------------------- |
-| `console`      | any      | Captures into a readable inbox — local + tests                      |
-| `smtp`         | email    | Real SMTP — Mailpit in docker, your provider in prod                |
+| `console`      | any      | Captures into a readable inbox — tests                              |
+| `smtp`         | email    | Real SMTP — Mailpit under `oke dev`, your provider in prod          |
 | `resend`       | email    | Resend HTTP API (`RESEND_API_KEY`)                                  |
 | `sndr`         | email    | SNDR HTTP API (`SNDR_API_KEY`)                                      |
 | `taqnyat-mail` | email    | Taqnyat Mail API (`TAQNYAT_MAIL_TOKEN` + `TAQNYAT_CAMPAIGN`)        |
@@ -258,7 +260,7 @@ openWebPushChannel({
 <Accordions>
 <Accordion title="I sent an email in dev but nothing arrived">
 
-Nothing _should_ arrive — the `console` driver captures mail instead of sending. Read the dev inbox, or run `oke dev --docker` and open Mailpit's web UI to see the rendered message.
+Nothing _should_ arrive — the `console` driver captures mail instead of sending. Read the dev inbox, or run `oke dev` and open Mailpit's web UI to see the rendered message.
 
 </Accordion>
 <Accordion title="A user says they stopped receiving messages">

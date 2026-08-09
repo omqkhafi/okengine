@@ -50,8 +50,8 @@ model selection runs in the wizard **before** `bun install` (writes `.env.local`
 
 Store-bearing scaffolds ship `drizzle.config.ts` and `.env.example`. Local
 `oke dev` auto-runs `oke db push` on schema change and asks once whether to
-seed; use `oke mode docker` / `oke dev --docker` for compose infra (OpenBao
-tokens and stack passwords are generated and preserved per project). Both
+seed; compose stack passwords are generated and preserved per project
+(built-in vault needs no extra container). Both
 templates include `.github/workflows/ci.yml` (typecheck + `bun test` on push/PR).
 
 Every scaffold writes an `AGENTS.md` so coding agents know the OKE contract

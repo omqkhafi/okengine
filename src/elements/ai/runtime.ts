@@ -717,7 +717,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       }
       if (index.driverId === "meilisearch") {
         throw new Error(
-          `ai: embed into "${decl.into}" needs a vector index (memory/pgvector/libsql) — ` +
+          `ai: embed into "${decl.into}" needs a vector index (memory/pgvector) — ` +
             `"${index.driverId}" is full-text; embeddings don't apply`,
         );
       }

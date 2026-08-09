@@ -39,7 +39,7 @@ const BUILD_EXTERNALS = [
 ] as const;
 
 /** Heavy optional / peer packages — not counted in export:* gzip samples. */
-const EXPORT_BUILD_EXTERNALS = [
+export const EXPORT_BUILD_EXTERNALS = [
   ...BUILD_EXTERNALS,
   "sently",
   "sently/*",
@@ -48,8 +48,6 @@ const EXPORT_BUILD_EXTERNALS = [
   "ajv-formats",
   "oxc-parser",
   "zod",
-  "@libsql/client",
-  "@libsql/*",
   "@electric-sql/pglite",
   "@electric-sql/*",
 ] as const;
@@ -150,6 +148,80 @@ export async function measureEntryGzipBytes(
     external: [...external],
   });
   return gzipBuildOutputs(result, label);
+}
+
+/**
+ * Raw (uncompressed) minified JS bytes for one entry.
+ *
+ * @param entry - Absolute path to the TypeScript entry
+ * @param label - Error context
+ * @param external - Packages left external (not inlined)
+ */
+export async function measureEntryRawBytes(
+  entry: string,
+  label = entry,
+  external: readonly string[] = BUILD_EXTERNALS,
+): Promise<number> {
+  const result = await Bun.build({
+    entrypoints: [entry],
+    minify: true,
+    target: "bun",
+    format: "esm",
+    external: [...external],
+  });
+  if (!result.success) {
+    throw new Error(`${label} build failed:\n${result.logs.map(String).join("\n")}`);
+  }
+  let total = 0;
+  for (const artifact of result.outputs) {
+    const path = artifact.path;
+    if (path && !/\.(m?js|cjs)$/.test(path) && artifact.kind === "asset") continue;
+    const raw = await artifact.arrayBuffer();
+    total += raw.byteLength;
+  }
+  if (total <= 0) throw new Error(`${label} build produced no JS output`);
+  return total;
+}
+
+/** HTTP-ping app budget sample (raw + gzip, with/without export externals). */
+export interface HttpPingBudgetSample {
+  readonly gzipWithExternals: number;
+  readonly rawWithExternals: number;
+  readonly gzipWithoutExternals: number;
+  readonly rawWithoutExternals: number;
+}
+
+/**
+ * Measure a minimal HTTP ping app via `okengine/http`.
+ */
+export async function measureHttpPingAppBytes(): Promise<HttpPingBudgetSample> {
+  const dir = await mkdtemp(join(tmpdir(), "oke-http-ping-budget-"));
+  const anchor = join(dir, "anchor.ts");
+  const httpEntry = resolve(ROOT, "src/http.ts");
+  await Bun.write(
+    anchor,
+    `import { on, flow, http, gate, oke, createBunRuntime } from ${JSON.stringify(httpEntry)};\n` +
+      `on(http.get("/").gate(gate.public), flow("ping", { do: () => "Hi" }));\n` +
+      `export const app = oke({ name: "ping" });\n` +
+      `export const rt = createBunRuntime;\n`,
+  );
+  try {
+    const [gzipWithExternals, rawWithExternals, gzipWithoutExternals, rawWithoutExternals] =
+      await Promise.all([
+        measureEntryGzipBytes(anchor, "http-ping", EXPORT_BUILD_EXTERNALS),
+        measureEntryRawBytes(anchor, "http-ping", EXPORT_BUILD_EXTERNALS),
+        measureEntryGzipBytes(anchor, "http-ping-deps", BUILD_EXTERNALS),
+        measureEntryRawBytes(anchor, "http-ping-deps", BUILD_EXTERNALS),
+      ]);
+    return {
+      gzipWithExternals,
+      rawWithExternals,
+      gzipWithoutExternals,
+      rawWithoutExternals,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -287,22 +359,13 @@ export async function measureConsoleBundleBreakdown(
  * (FS / module-cache warmup), median of the remaining six.
  */
 async function measureColdStartMedianMsOnce(): Promise<number> {
-  const paths = {
-    bun: `${import.meta.dir}/../runtime/bun.ts`,
-    app: `${import.meta.dir}/../kernel/app.ts`,
-    flow: `${import.meta.dir}/../kernel/flow.ts`,
-    on: `${import.meta.dir}/../kernel/on.ts`,
-    http: `${import.meta.dir}/../kernel/triggers.ts`,
-  };
+  const httpEntry = `${import.meta.dir}/../http.ts`;
   const probe = `
 const t0 = performance.now();
-const { createBunRuntime } = await import(${JSON.stringify(paths.bun)});
-const { oke } = await import(${JSON.stringify(paths.app)});
-const { flow } = await import(${JSON.stringify(paths.flow)});
-const { on, resetBindings } = await import(${JSON.stringify(paths.on)});
-const { http } = await import(${JSON.stringify(paths.http)});
+const { createBunRuntime, oke, on, flow, http, gate } = await import(${JSON.stringify(httpEntry)});
+const { resetBindings } = await import(${JSON.stringify(`${import.meta.dir}/../kernel/on.ts`)});
 resetBindings();
-on(http.get("/ping"), flow("ping", { do: () => ({ ok: true }) }));
+on(http.get("/ping").gate(gate.public), flow("ping", { do: () => ({ ok: true }) }));
 const app = oke({ name: "cold-start" });
 const rt = createBunRuntime();
 const server = rt.serve(app, { port: 0, hostname: "127.0.0.1" });
@@ -429,11 +492,13 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
   // Cold start alone first — parallel gzip work contends for CPU on CI and
   // falsely inflates the wall-clock probe.
   const coldStartMedianMs = await measureColdStartMedianMs();
-  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes] = await Promise.all([
-    measureKernelEdgeGzipBytes(),
-    measureClientGzipBytes(),
-    measureConsoleInitialGzipBytes(),
-  ]);
+  const [kernelEdgeGzipBytes, clientGzipBytes, consoleInitialGzipBytes, httpPing] =
+    await Promise.all([
+      measureKernelEdgeGzipBytes(),
+      measureClientGzipBytes(),
+      measureConsoleInitialGzipBytes(),
+      measureHttpPingAppBytes(),
+    ]);
   const routingP99Ms = measureRoutingP99Ms();
 
   const budgets: BudgetSample[] = [
@@ -481,6 +546,20 @@ export async function measureAllBudgets(): Promise<BudgetsSnapshot> {
       "ms",
       "absolute",
       "core",
+    ),
+    regressionSample(
+      "httpPingGzipBytes",
+      "HTTP ping app (gzip, externals)",
+      "core",
+      httpPing.gzipWithExternals,
+      previous,
+    ),
+    regressionSample(
+      "httpPingRawBytes",
+      "HTTP ping app (raw, externals)",
+      "core",
+      httpPing.rawWithExternals,
+      previous,
     ),
   ];
 
@@ -561,7 +640,7 @@ export function formatBudgetsMarkdown(snapshot: BudgetsSnapshot): string {
     "",
     `_okengine v${snapshot.version} · measured ${snapshot.measuredAt}_`,
     "",
-    "Core rows are absolute AGENTS caps. Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`).",
+    "Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.",
   ];
   const order: readonly BudgetGroup[] = ["core", "exports", "plugins", "drivers"];
   for (const group of order) {

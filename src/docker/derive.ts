@@ -2,11 +2,14 @@
  * Derive Dockerfile + compose files from config image pins.
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   assertNoCredentialsInYaml,
   buildSpecs,
   buildStackEnv,
+  COMPOSE_OVERRIDE,
+  DOCKER_COMPOSE_OVERRIDE,
   emitComposeLayers,
   formatStackEnv,
 } from "./compose.ts";
@@ -17,7 +20,7 @@ import {
   LLAMA_CPP_ENTRYPOINT_FILE,
   llamaCpp,
 } from "./recipes/llama-cpp.ts";
-import { buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
+import { buildPgDogToml, buildPgDogUsersToml, PGDOG_CONFIG_DIR } from "./recipes/pgdog.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { APP_PORT } from "../runtime/types.ts";
@@ -26,10 +29,10 @@ import { APP_PORT } from "../runtime/types.ts";
  * Derive infrastructure files from normalised image pins.
  *
  * Credentials land only in the returned `stackEnv` (for `.env.docker`) and
- * in `users.toml` when PgDog is present — never in generated YAML. Layer 4
- * (`compose.override.yml`) is listed in `composeFiles` but never written.
+ * in `pgdog/users.toml` when PgDog is present — never in generated YAML.
+ * User-owned overrides are listed in `composeFiles` but never written.
  *
- * @param options - Images / app / prod flag
+ * @param options - Images / app / prod / layout flags
  */
 export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   if (!options.images || Object.keys(options.images).length === 0) {
@@ -42,6 +45,7 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     ...options,
     composeDir: options.composeDir ?? DEFAULT_DOCKER_DIR,
     includeApp: options.includeApp !== false,
+    layout: options.layout ?? "single",
   };
 
   const specs = buildSpecs(normalised);
@@ -99,8 +103,8 @@ function llamaCppEntrypointFiles(specs: DeriveResult["specs"]): GeneratedFile[] 
 /**
  * Emit PgDog TOML configs when both `pgdog` and `store.sql` are in the stack.
  *
- * `pgdog.toml` has no secrets; `users.toml` mirrors store.sql credentials
- * (same trust boundary as `.env.docker` — do not commit).
+ * `pgdog/pgdog.toml` has no secrets; `pgdog/users.toml` mirrors store.sql
+ * credentials (same trust boundary as `.env.docker` — do not commit).
  *
  * @param specs - Normalised services
  */
@@ -110,14 +114,14 @@ function pgdogConfigFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
   if (!sql || !pooler) return [];
   return [
     {
-      path: "pgdog.toml",
+      path: `${PGDOG_CONFIG_DIR}/pgdog.toml`,
       content: buildPgDogToml({
         database: sql.credentials.database,
         postgresPort: sql.port,
       }),
     },
     {
-      path: "users.toml",
+      path: `${PGDOG_CONFIG_DIR}/users.toml`,
       content: buildPgDogUsersToml({
         user: sql.credentials.user,
         password: sql.credentials.password,
@@ -149,8 +153,9 @@ function proxyConfigFiles(
 }
 
 /**
- * Write derived files to disk. Never writes `compose.override.yml` or
- * credential values into YAML. Optionally writes `docker/.env.docker`.
+ * Write derived files to disk. Never writes user overrides or credential
+ * values into YAML. Prunes stale generated compose / PgDog artefacts from a
+ * previous layout. Optionally writes `docker/.env.docker`.
  *
  * @param result - Derive result
  * @param outDir - Destination for Dockerfile / compose (usually `docker/`)
@@ -166,8 +171,11 @@ export async function writeDerivedFiles(
   const written: string[] = [];
   const root = outDir.replace(/\/$/, "");
   mkdirSync(root, { recursive: true });
+  const keep = new Set(result.files.map((f) => f.path));
+  pruneStaleGenerated(root, keep);
   for (const file of result.files) {
-    const path = `${root}/${file.path}`;
+    const path = join(root, file.path);
+    mkdirSync(dirname(path), { recursive: true });
     await Bun.write(path, file.content);
     written.push(path);
   }
@@ -177,4 +185,90 @@ export async function writeDerivedFiles(
     written.push(envPath);
   }
   return written;
+}
+
+/** Generated compose / companion paths safe to delete when absent from a derive. */
+const PRUNE_ROOT_FILES = new Set([
+  "Dockerfile",
+  "docker-compose.yml",
+  "docker-stack.yml",
+  "compose.yml",
+  "compose.all.yml",
+  "compose.prod.yml",
+  "Caddyfile",
+  LLAMA_CPP_ENTRYPOINT_FILE,
+  "pgdog.toml",
+  "users.toml",
+]);
+
+/**
+ * Remove previously generated artefacts that the current layout no longer emits.
+ * Never touches user overrides or `.env.docker`.
+ *
+ * @param root - Compose directory
+ * @param keep - Relative paths that will be rewritten
+ */
+function pruneStaleGenerated(root: string, keep: ReadonlySet<string>): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(root);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    if (name === COMPOSE_OVERRIDE || name === DOCKER_COMPOSE_OVERRIDE) continue;
+    if (name === ".env.docker") continue;
+    const abs = join(root, name);
+    let st: ReturnType<typeof statSync>;
+    try {
+      st = statSync(abs);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) {
+      if (name === PGDOG_CONFIG_DIR) {
+        prunePgDogDir(abs, keep);
+      }
+      continue;
+    }
+    if (!st.isFile()) continue;
+    const rel = name;
+    if (keep.has(rel)) continue;
+    if (PRUNE_ROOT_FILES.has(name) || /^compose\..+\.yml$/.test(name)) {
+      try {
+        unlinkSync(abs);
+      } catch {
+        // best-effort
+      }
+    }
+  }
+}
+
+/**
+ * Drop legacy / unused files under `pgdog/`.
+ *
+ * @param dir - Absolute `pgdog/` path
+ * @param keep - Relative keep set (`pgdog/…`)
+ */
+function prunePgDogDir(dir: string, keep: ReadonlySet<string>): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    const rel = `${PGDOG_CONFIG_DIR}/${name}`;
+    if (keep.has(rel)) continue;
+    try {
+      unlinkSync(join(dir, name));
+    } catch {
+      // best-effort
+    }
+  }
+  try {
+    if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // best-effort
+  }
 }

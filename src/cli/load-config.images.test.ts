@@ -14,9 +14,13 @@ describe("flattenImagesConfig", () => {
   test("flattens store/channel nesting to dotted keys; flat roles pass through", () => {
     expect(
       flattenImagesConfig({
-        store: { sql: "postgres:18-alpine", kv: "redis:8-alpine", files: "rustfs/rustfs:1.0.0" },
+        store: {
+          sql: "postgres:18-alpine",
+          kv: "redis:8-alpine",
+          files: "rustfs/rustfs:1.0.0",
+          index: "getmeili/meilisearch:v1.37",
+        },
         channel: { email: "axllent/mailpit:v1.22.3" },
-        vault: "openbao/openbao:2.6.1",
         ai: "ollama/ollama:0.32.6",
         pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
         proxy: "caddy:2-alpine",
@@ -25,8 +29,8 @@ describe("flattenImagesConfig", () => {
       "store.sql": "postgres:18-alpine",
       "store.kv": "redis:8-alpine",
       "store.files": "rustfs/rustfs:1.0.0",
+      "store.index": "getmeili/meilisearch:v1.37",
       "channel.email": "axllent/mailpit:v1.22.3",
-      vault: "openbao/openbao:2.6.1",
       ai: "ollama/ollama:0.32.6",
       pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
       proxy: "caddy:2-alpine",
@@ -97,7 +101,7 @@ describe("defaultImagesFromConfig", () => {
     expect(defaultImagesFromConfig({})).toEqual({});
     expect(
       defaultImagesFromConfig({
-        drivers: { store: { sql: { prod: "sqlite" } } },
+        drivers: { store: { sql: { prod: "memory" } } },
       }),
     ).toEqual({});
   });
@@ -132,20 +136,20 @@ describe("resolveImages", () => {
 });
 
 describe("dockerDevDriverMismatches", () => {
-  test("flags docker/prod sqlite/memory when containers are up", () => {
+  test("flags dev pglite/memory when containers are up", () => {
     const mismatches = dockerDevDriverMismatches(
       {
         drivers: {
           store: {
-            sql: { local: "sqlite", docker: "sqlite", prod: "sqlite" },
-            kv: { local: "memory", docker: "memory", prod: "memory" },
+            sql: { dev: "pglite", test: "pglite", prod: "postgres" },
+            kv: { test: "memory", dev: "memory", prod: "memory" },
           },
         },
       },
       ["store.sql", "store.kv"],
     );
     expect(mismatches).toEqual([
-      { label: "sql", using: "sqlite", container: "postgres" },
+      { label: "sql", using: "pglite", container: "postgres" },
       { label: "kv", using: "memory", container: "redis" },
     ]);
   });
@@ -155,8 +159,8 @@ describe("dockerDevDriverMismatches", () => {
       {
         drivers: {
           store: {
-            sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
-            kv: { local: "memory", docker: "redis", prod: "redis" },
+            sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+            kv: { dev: "redis", test: "memory", prod: "redis" },
           },
         },
       },
@@ -170,8 +174,8 @@ describe("dockerDevDriverMismatches", () => {
       {
         drivers: {
           store: {
-            sql: { local: "sqlite", prod: "postgres" },
-            kv: { local: "memory", prod: "redis" },
+            sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+            kv: { dev: "redis", test: "memory", prod: "redis" },
           },
         },
       },

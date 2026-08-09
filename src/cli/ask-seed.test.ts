@@ -17,7 +17,7 @@ describe("maybeAskSeed", () => {
       let seeded = false;
       await maybeAskSeed({
         cwd: dir,
-        env: "local",
+        env: "test",
         stdinIsTTY: false,
         confirmFn: async () => true,
         seedFn: async () => {
@@ -39,7 +39,7 @@ describe("maybeAskSeed", () => {
       let calls = 0;
       await maybeAskSeed({
         cwd: dir,
-        env: "local",
+        env: "test",
         stdinIsTTY: true,
         confirmFn: async () => true,
         seedFn: async () => {
@@ -52,7 +52,7 @@ describe("maybeAskSeed", () => {
 
       await maybeAskSeed({
         cwd: dir,
-        env: "local",
+        env: "test",
         stdinIsTTY: true,
         confirmFn: async () => true,
         seedFn: async () => {

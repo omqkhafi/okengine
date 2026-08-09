@@ -1,5 +1,5 @@
 /**
- * Shared local↔docker schema sync pipeline for `oke mode` and `oke dev`
+ * Shared schema sync pipeline for `oke dev` / `oke db`
  * one-shot start. Ensures artefacts, emits for the active dialect, then
  * pushes via drizzle-kit. Data planes stay isolated — no row copying.
  */
@@ -24,7 +24,7 @@ import { loadOkeConfig, resolveImages } from "./load-config.ts";
 export interface DevSchemaSyncOptions {
   /** Write output (default: stdout). */
   readonly write?: (text: string) => void;
-  /** Skip emitting `schema.generated.ts` (tests). */
+  /** Skip emitting `schema.drizzle.ts` (tests). */
   readonly skipEmit?: boolean;
   /** Injectable push (tests). Default: `runDb("push", ...)`. */
   readonly pushFn?: (cwd: string, env: ConfigEnv) => Promise<number>;
@@ -40,7 +40,7 @@ export interface DevSchemaSyncOptions {
 /** Outcome of {@link syncDevSchema}. */
 export interface DevSchemaSyncResult {
   readonly env: ConfigEnv;
-  readonly dialect: "sqlite" | "postgresql";
+  readonly dialect: "postgresql";
   readonly pushed: boolean;
   readonly code: number;
 }
@@ -54,11 +54,11 @@ export interface DevSchemaSyncResult {
 export function sqlDialectForEnv(
   config: OkeConfig | null | undefined,
   env: ConfigEnv,
-): { readonly driverId: string; readonly dialect: "sqlite" | "postgresql" } {
-  const driverId = resolveDriverId(config?.drivers?.store?.sql, env) ?? "sqlite";
-  if (driverId !== "sqlite" && driverId !== "postgres") {
+): { readonly driverId: string; readonly dialect: "postgresql" } {
+  const driverId = resolveDriverId(config?.drivers?.store?.sql, env) ?? "postgres";
+  if (driverId !== "postgres" && driverId !== "pglite") {
     throw new Error(
-      `store.sql driver "${driverId}" is not supported by drizzle-kit (sqlite | postgres)`,
+      `store.sql driver "${driverId}" is not supported by drizzle-kit (postgres | pglite)`,
     );
   }
   return { driverId, dialect: drizzleDialectFromSqlDriver(driverId) };
@@ -103,7 +103,7 @@ async function ensureDockerStack(
   await writeDerivedFiles(derived, resolve(cwd, DEFAULT_DOCKER_DIR), { writeStackEnv: true });
   if (!quietComposeReady) {
     write(
-      "oke: docker compose env ready under docker/.env.docker (start containers with `oke dev -d` or docker compose up)\n",
+      "oke: docker compose env ready under docker/.env.docker (start containers with `oke dev` or docker compose up)\n",
     );
   }
 }
@@ -114,7 +114,7 @@ async function ensureDockerStack(
  * exists (writes `docker/.env.docker`) before pushing to the live DB.
  *
  * @param cwd - Project root
- * @param env - Target env (`local` | `docker`)
+ * @param env - Target {@link ConfigEnv} (`dev` for compose, `test` for laptop)
  * @param options - Injectables
  */
 export async function syncDevSchema(
@@ -130,7 +130,7 @@ export async function syncDevSchema(
 
   const { dialect } = sqlDialectForEnv(config, env);
 
-  if (env === "docker") {
+  if (env === "dev") {
     if (!config) {
       throw new Error("docker mode: oke.config.ts not found");
     }

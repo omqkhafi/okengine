@@ -5,13 +5,13 @@ icon: "Mail"
 source: "docs/spec/unified-theory.md"
 ---
 
-Mailpit is the docker-mode email catcher — every message the `smtp` channel driver sends
-lands in a web UI instead of a real inbox. Pin it as `images["channel.email"]` when
-`drivers.channel.email.docker` is `smtp`.
+Mailpit is the `oke dev` email catcher — every message the `smtp` channel driver sends
+lands in a web UI instead of a real inbox. Pin it as `images.channel.email` when
+`drivers.channel.email.dev` is `smtp`.
 
 <Callout title="The one rule">
-  Docker ≈ prod for the **SMTP protocol** — same `SMTP_URL` shape. Mailpit is not a production MTA;
-  swap the image / URL for a real relay when you leave local docker.
+  `dev` ≈ `prod` for the **SMTP protocol** — same `SMTP_URL` shape. Mailpit is not a production MTA;
+  swap the image / URL for a real relay in production.
 </Callout>
 
 ## Quick start
@@ -24,11 +24,11 @@ lands in a web UI instead of a real inbox. Pin it as `images["channel.email"]` w
 ```typescript title="oke.config.ts"
 drivers: {
   channel: {
-    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
+    email: { dev: "smtp", test: "console", prod: "smtp" },
   },
 },
 images: {
-  "channel.email": "axllent/mailpit:v1.22.3",
+  channel: { email: "axllent/mailpit:v1.22.3" },
 },
 ```
 
@@ -100,7 +100,7 @@ if SMTP still accepts mail.
 <Accordion title="oke boot: smtp driver needs SMTP_URL">
 
 The smtp binder refuses to start without `SMTP_URL` (or `OKE_CHANNEL_EMAIL_URL`). In
-docker mode the error asks whether `oke dev -d` wrote `docker/.env.docker`. Also rejects
+under `oke dev` the error asks whether Compose wrote `docker/.env.docker`. Also rejects
 non-`smtp://` schemes: `oke boot: SMTP_URL must use smtp://`.
 
 </Accordion>
@@ -128,9 +128,9 @@ shift the host port).
     href="/docs/recipes/rustfs"
   />
   <Card
-    title="OpenBao"
-    description="Vault recipe for docker/prod secrets."
-    href="/docs/recipes/openbao"
+    title="Vault"
+    description="Secrets and built-in encrypted store."
+    href="/docs/elements/vault"
   />
   <Card title="Channel" description="How fx.email reaches humans." href="/docs/elements/channel" />
 </Cards>

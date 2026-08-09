@@ -1,6 +1,6 @@
 /**
  * `oke dev` — watch · hot reload · Console :6533 · MCP :6535 · client types on save.
- * Mode: `local` (in-memory) or `docker` (compose infra + host Bun).
+ * Always starts Docker Compose infra and runs the app on host Bun.
  */
 
 import { watch } from "node:fs";
@@ -19,7 +19,6 @@ import {
   stackAppSlug,
   stackInstanceId,
   writeDerivedFiles,
-  formatStackEnv,
   type DeriveOptions,
 } from "../docker/index.ts";
 import type { Manifest } from "../manifest/types.ts";
@@ -45,19 +44,13 @@ import {
 } from "../term.ts";
 import { clientAdd } from "./client-add.ts";
 import { resolveDriverId } from "../config/index.ts";
-import { askDevMode, type AskDevModeFn } from "./ask-dev-mode.ts";
-import {
-  formatDevControlsHint,
-  startDevControls,
-  type DevComposeControlAction,
-} from "./dev-controls.ts";
+import type { DevComposeControlAction } from "./dev-controls.ts";
 import {
   createDebouncedRunner,
   isDomainSchemaWatchPath,
   resolveDevAutoPush,
 } from "./db-auto-push.ts";
 import { resolveDrizzleConfigPath, runPush } from "./db.ts";
-import { readDevMode, shouldAskDevMode, writeDevMode, type DevMode } from "./dev-mode.ts";
 import {
   buildDevHeroSnapshot,
   encodeHeroSnapshot,
@@ -68,6 +61,7 @@ import {
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
+import { clearDevSessionLock, writeDevSessionLock } from "./dev-session-lock.ts";
 
 /** Max wait for the `bun --hot` app child to bind a port. */
 const APP_READY_TIMEOUT_MS = 30_000;
@@ -153,12 +147,10 @@ export interface DevOptions {
   readonly cwd?: string;
   readonly entry?: string;
   /**
-   * Session-only mode override. `true` / role list → docker; `false` → local.
-   * When unset, resolve from `.oke/mode` / TTY ask / non-TTY default `local`.
+   * Optional compose role filter. `true` / unset → all roles from images;
+   * a string list → only those roles.
    */
   readonly docker?: boolean | readonly string[];
-  /** Force local for this session only (never writes `.oke/mode`). */
-  readonly local?: boolean;
   /**
    * Opt out of auto `oke db push` on schema change for this session.
    * Also set via `--no-db-push`.
@@ -287,13 +279,15 @@ export interface DevOptions {
    */
   readonly startApp?: (entry: string, env: Record<string, string>) => Promise<DevAppHandle>;
   /**
-   * Injectable mode prompt (tests). Default: {@link askDevMode}.
-   */
-  readonly ask?: AskDevModeFn;
-  /**
    * Override stdin TTY detection (tests). Default: `process.stdin.isTTY`.
    */
   readonly stdinIsTTY?: boolean;
+  /**
+   * Probe Docker daemon availability (injectable). Default: `docker info`.
+   * Skipped on {@link dryRun}; when {@link composeUp} is injected and this is
+   * omitted, the probe is a no-op (unit tests never shell out).
+   */
+  readonly assertDocker?: () => Promise<void>;
 }
 
 /** Result of a dry-run / prepared / live-but-detached dev session. */
@@ -411,42 +405,16 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     return { code: 1 };
   }
 
-  const explicitLocal = options.local === true;
-  const explicitDocker = options.docker === true || Array.isArray(options.docker);
-  if (explicitLocal && explicitDocker) {
-    console.error("oke dev: use either --local or --docker, not both");
-    restoreWarn();
-    return { code: 1 };
-  }
-
-  const savedMode = await readDevMode(cwd);
-  const explicit = explicitLocal || explicitDocker;
-  let mode: DevMode;
-  if (explicitLocal) {
-    mode = "local";
-  } else if (explicitDocker) {
-    mode = "docker";
-  } else if (savedMode !== null) {
-    mode = savedMode;
-  } else if (
-    shouldAskDevMode({
-      saved: savedMode,
-      explicit,
-      stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
-    })
-  ) {
-    const ask = options.ask ?? askDevMode;
-    const chosen = await ask();
-    if (chosen === null) {
-      console.error("oke dev: cancelled");
+  // Fail fast when the Docker daemon is down (skip on dryRun / injected compose).
+  if (!options.dryRun) {
+    const probe = options.assertDocker ?? (options.composeUp ? async () => {} : assertDockerDaemon);
+    try {
+      await probe();
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
       restoreWarn();
       return { code: 1 };
     }
-    mode = chosen;
-    await writeDevMode(cwd, mode);
-  } else {
-    // Non-TTY + unset: deterministic local — zero ask, zero docker, no save.
-    mode = "local";
   }
 
   // Paint chrome immediately so docker/vault work is never a blank 6s wait.
@@ -459,7 +427,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   } catch {
     // shipped binary may not sit next to package.json
   }
-  const earlyProfile = resolveDevProfile({ docker: mode === "docker", nodeEnv: "development" });
+  const earlyProfile = resolveDevProfile({ docker: true, nodeEnv: "development" });
   write(
     formatDevBanner({
       profile: earlyProfile,
@@ -509,26 +477,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     loadedConfig = null;
   }
 
-  // Local mode + a configured `meilisearch` store.index: bring the server up
-  // as a fourth local process (binary on PATH — a documented prerequisite,
-  // like Docker for --docker). Docker mode instead relies on the recipe.
-  let meili: import("./meilisearch-local.ts").LocalMeilisearchHandle | null = null;
-  if (mode === "local") {
-    const indexId = resolveDriverId(loadedConfig?.drivers?.store?.index, "local") ?? "memory";
-    if (indexId === "meilisearch") {
-      try {
-        const { startLocalMeilisearch } = await import("./meilisearch-local.ts");
-        meili = await startLocalMeilisearch({ cwd });
-        write(formatStatusLine(`meilisearch local server on ${meili.url}`));
-      } catch (err) {
-        console.error(err instanceof Error ? err.message : String(err));
-        restoreWarn();
-        return { code: 1 };
-      }
-    }
-  }
-
-  if (mode === "docker") {
+  {
     let images = options.images;
     if (!images) {
       if (!loadedConfig) {
@@ -573,6 +522,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       images,
       app: appSlug,
       prod: false,
+      layout: "single",
       includeApp: false,
       composeDir,
       instanceId,
@@ -580,11 +530,15 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       ...(controls ? { controls } : {}),
       host: "127.0.0.1",
     });
-    // Layer 4 is user-owned — include only if the file already exists.
-    const existingOverride = await Bun.file(resolve(dockerOut, "compose.override.yml")).exists();
-    composeFiles = derived.composeFiles.filter(
-      (f) => f !== "compose.override.yml" || existingOverride,
-    );
+    // User-owned overrides — include only if the file already exists.
+    composeFiles = [];
+    for (const f of derived.composeFiles) {
+      if (f === "compose.override.yml" || f === "docker-compose.override.yml") {
+        if (await Bun.file(resolve(dockerOut, f)).exists()) composeFiles.push(f);
+        continue;
+      }
+      composeFiles.push(f);
+    }
     stackEnv = { ...derived.stackEnv };
 
     const roleLabel = (role: string): string => {
@@ -648,7 +602,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
             if (code !== 0) {
               const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
               throw new Error(
-                `oke dev --docker: docker compose exited ${code}` + (detail ? `\n${detail}` : ""),
+                `oke dev: docker compose exited ${code}` + (detail ? `\n${detail}` : ""),
               );
             }
           });
@@ -662,27 +616,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           cwd: dockerOut,
           env: { ...stackEnv! },
         };
-
-        // Real OpenBao vault: init once / unseal every start, then expose the
-        // least-privilege app token to the app + Console (never root).
-        const vaultSpec = derived.specs.find((s) => s.role === "vault");
-        if (vaultSpec) {
-          bootProgress.set("vault", formatStatusLine("vault unseal…", undefined, "pending"));
-          const { ensureOpenBao, openbaoStackEnv } = await import("./openbao-bootstrap.ts");
-          const vaultNames = await tryLoadVaultSecretNames(cwd);
-          const boot = await ensureOpenBao({
-            cwd,
-            url: `http://127.0.0.1:${vaultSpec.hostPort}`,
-            names: vaultNames,
-          });
-          Object.assign(stackEnv!, openbaoStackEnv(boot));
-          Object.assign(dockerStarted.env, openbaoStackEnv(boot));
-          // Rewrite .env.docker with the full stack env (including token) so a
-          // later ensureDockerStack / writeDerivedFiles does not drop it.
-          const envPath = resolve(dockerOut, ".env.docker");
-          await Bun.write(envPath, formatStackEnv(stackEnv!));
-          bootProgress.set("vault", formatStatusLine("vault ready", undefined, "ready"));
-        }
 
         // Stream compose health until infra is up (AI may stay pending — model load).
         const aiServiceName = derived.specs.find((s) => s.role === "ai")?.serviceName;
@@ -747,7 +680,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           const model =
             stackEnv!.OKE_AI_MODEL?.trim() ||
             process.env.OKE_AI_MODEL?.trim() ||
-            (recipeId === "ollama" ? "qwen3.5:9b" : "smollm2");
+            (recipeId === "ollama" ? "qwen3.5:9b" : "granite3.3:2b");
           const url = `http://127.0.0.1:${aiSpec.hostPort}`;
           const paintAi = (status: DevStatus, detail?: string) => {
             heroAiStatus = status;
@@ -807,7 +740,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(msg);
-        console.error("oke dev: docker mode failed — fix compose, or run `oke mode local`");
+        console.error("oke dev: Docker Compose failed — fix compose and retry");
         restoreWarn();
         return { code: 1 };
       }
@@ -833,9 +766,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   }
   const heroSnapshot = buildDevHeroSnapshot({
     config: loadedConfig,
-    docker: mode === "docker",
-    sqlDriver: mode === "docker" ? stackSqlDriver : undefined,
-    kvDriver: mode === "docker" ? stackKvDriver : undefined,
+    docker: true,
+    sqlDriver: stackSqlDriver,
+    kvDriver: stackKvDriver,
     aiModel: heroAiModel,
     aiStatus: heroAiStatus,
     version: okeVersion,
@@ -950,7 +883,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   bootProgress.clear();
   const bootBoard = createAnchoredBoard(write);
   bootBoard.paint(paintBootBoard(heroAiStatus));
-  // Track everything printed below so ● can rewrite in place for the session.
+  // Track lines printed below the board so live ● repaints stay anchored.
   write = bootBoard.wrapWrite(write);
 
   if (options.dryRun) {
@@ -1045,27 +978,26 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     setProcessEnv("OKE_KV_DRIVER", stackKvDriver);
   }
 
-  // One-shot schema sync for the session profile (both local and docker):
-  // emits schema.generated.ts for the active dialect, then pushes via
-  // drizzle-kit. Data planes stay isolated — session flags never rewrite
-  // `.oke/mode`. Watch auto-push below remains local-only.
+  // One-shot schema sync for the compose (`dev`) profile: emits
+  // schema.drizzle.ts for the active dialect, then pushes via drizzle-kit.
   if (!options.noDbPush) {
     const { syncDevSchema } = await import("./dev-schema-sync.ts");
+    const configEnv = "dev" as const;
     try {
-      const result = await syncDevSchema(cwd, mode, {
+      const result = await syncDevSchema(cwd, configEnv, {
         write: chromeWrite,
-        quietComposeReady: mode === "docker",
+        quietComposeReady: true,
       });
       write(
         formatStatusLine(
-          `oke db push (${mode} · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
+          `oke db push (dev · ${result.dialect}) ${result.code === 0 ? "ok" : "failed"}`,
         ),
       );
       if (result.code === 0) {
         const { maybeAskSeed } = await import("./ask-seed.ts");
         await maybeAskSeed({
           cwd,
-          env: mode,
+          env: configEnv,
           write,
           stdinIsTTY: options.stdinIsTTY ?? process.stdin.isTTY,
         });
@@ -1073,7 +1005,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     } catch (err) {
       write(
         formatStatusLine(
-          `oke db push (${mode}) skipped — ${err instanceof Error ? err.message : String(err)}`,
+          `oke db push (dev) skipped — ${err instanceof Error ? err.message : String(err)}`,
         ),
       );
     }
@@ -1104,7 +1036,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           OKE_KV_DRIVER: stackKvDriver,
         }
       : {}),
-    ...(meili?.overlay ?? {}),
     /** Backend child — parent Console owns process-local boot notices. */
     OKE_SUPPRESS_BOOT_WARN: "1",
   };
@@ -1252,7 +1183,10 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     options.dbPush ??
     (async (projectCwd: string) => {
       const configPath = await resolveDrizzleConfigPath(projectCwd);
-      return runPush(configPath, (t) => write(t), { cwd: projectCwd, env: mode });
+      return runPush(configPath, (t) => write(t), {
+        cwd: projectCwd,
+        env: "dev",
+      });
     });
 
   let lastSchemaFilename = "";
@@ -1274,9 +1208,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   }
 
   write(formatDevLogSeparator());
-  if (dockerStarted && (options.stdinIsTTY ?? process.stdin.isTTY)) {
-    write(formatDevControlsHint());
-  }
 
   const watchFs: DevWatchFn =
     options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
@@ -1308,11 +1239,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     bootBoard.stop();
     autoPushRunner.cancel();
     watcher.close();
-    meili?.stop();
     app.stop();
     consoleServer.stop();
     mcpServer?.stop();
     docsMcpServer?.stop();
+    void clearDevSessionLock(cwd);
     if (dockerStarted) {
       const started = dockerStarted;
       dockerStarted = null;
@@ -1373,9 +1304,22 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     consoleState,
   };
 
+  // Record ownership so a later `oke` TUI can attach without spawning a second stack.
+  await writeDevSessionLock(cwd, {
+    pid: process.pid,
+    ports: {
+      app: boundAppPort,
+      console: boundConsolePort,
+      mcp: boundMcpPort,
+      docsMcp: boundDocsMcpPort,
+    },
+    startedAt: new Date().toISOString(),
+    cwd,
+  });
+
   if (options.onReady) await options.onReady(session);
 
-  // Keyboard controls (docker + TTY): start/stop/restart services without leaving oke dev.
+  // Keyboard controls (docker + TTY): Ink replaces raw-mode stdin.
   if (keepAlive && dockerStarted && (options.stdinIsTTY ?? process.stdin.isTTY)) {
     const started = dockerStarted;
     const syncComposeBoard = async (): Promise<void> => {
@@ -1391,7 +1335,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     };
     const refreshChrome = async (): Promise<void> => {
       await syncComposeBoard();
-      // Clear log noise; reprint head + latest ● board + surfaces + empty Logs.
       write(clearTerminalScreen());
       bootBoard.reset();
       write(
@@ -1412,48 +1355,49 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         write(formatServiceLine("Docs MCP", `http://127.0.0.1:${boundDocsMcpPort}`));
       }
       write(formatDevLogSeparator());
-      write(formatDevControlsHint());
     };
-    const controls = startDevControls({
-      write,
-      isTTY: options.stdinIsTTY ?? process.stdin.isTTY,
-      onQuit: () => {
-        stop();
-        process.exit(0);
-      },
-      onRefresh: () => refreshChrome(),
-      // Refresh first so help never sits in the middle of request logs.
-      onShowPanel: async (body) => {
-        await refreshChrome();
-        write(body);
-      },
-      onComposeSettled: () => syncComposeBoard(),
-      composeAction: async (action: DevComposeControlAction) => {
-        const files = started.files;
-        const finalArgs =
-          action === "up"
-            ? ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"]
-            : ["compose", ...files.flatMap((f) => ["-f", f]), action];
-        const proc = Bun.spawn(["docker", ...finalArgs], {
-          cwd: started.cwd,
-          stdout: "pipe",
-          stderr: "pipe",
-          env: { ...process.env, ...started.env },
-        });
-        const [stdout, stderr, code] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-          proc.exited,
-        ]);
-        if (code !== 0) {
-          const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
-          throw new Error(
-            `docker compose ${action} exited ${code}` + (detail ? `\n${detail}` : ""),
-          );
-        }
-      },
-    });
-    stopDevControls = () => controls.stop();
+    const composeAction = async (action: DevComposeControlAction): Promise<void> => {
+      const files = started.files;
+      const finalArgs =
+        action === "up"
+          ? ["compose", ...files.flatMap((f) => ["-f", f]), "up", "-d"]
+          : ["compose", ...files.flatMap((f) => ["-f", f]), action];
+      const proc = Bun.spawn(["docker", ...finalArgs], {
+        cwd: started.cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, ...started.env },
+      });
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      if (code !== 0) {
+        const detail = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n");
+        throw new Error(`docker compose ${action} exited ${code}` + (detail ? `\n${detail}` : ""));
+      }
+      await syncComposeBoard();
+    };
+
+    try {
+      const { launchDevLiveControls } = await import("./tui/DevLive.tsx");
+      await launchDevLiveControls({
+        onRefresh: () => refreshChrome(),
+        onComposeUp: () => composeAction("up"),
+        onComposeStop: () => composeAction("stop"),
+        onQuit: () => {
+          stop();
+          process.exit(0);
+        },
+      });
+      // Esc / unmount without q — still tear down.
+      stop();
+    } catch {
+      // Ink optional — fall back to keep-alive without keyboard chrome.
+      await new Promise(() => {});
+    }
+    return { code: 0, plan: session.plan, session };
   }
 
   if (!keepAlive) {
@@ -1463,21 +1407,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   // Keep the process alive.
   await new Promise(() => {});
   return { code: 0, plan: session.plan, session };
-}
-
-/**
- * Declared vault secret names from the project Manifest (policy scope).
- *
- * @param cwd - Project root
- */
-async function tryLoadVaultSecretNames(cwd: string): Promise<readonly string[]> {
-  try {
-    const { extractManifest } = await import("../compiler/extract.ts");
-    const manifest = await extractManifest({ rootDir: cwd });
-    return Object.keys(manifest.vault ?? {});
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -1611,20 +1540,34 @@ async function waitForAppReady(
 }
 
 /**
- * CLI entry for `oke dev [--local|-l] [--docker|-d [roles]]`.
+ * Probe `docker info` — throws a clear error when the daemon is unavailable.
+ */
+async function assertDockerDaemon(): Promise<void> {
+  const proc = Bun.spawn(["docker", "info"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  if (code === 0) return;
+  const detail = stderr.trim();
+  throw new Error(
+    "oke dev: Docker daemon unavailable — start Docker Desktop (or the Docker daemon) and retry" +
+      (detail ? `\n${detail}` : ""),
+  );
+}
+
+/**
+ * CLI entry for `oke dev [-d [roles]]`.
  *
  * @param args - Args after `dev`
  */
 export async function devCli(args: readonly string[]): Promise<number> {
   let docker: boolean | string[] | undefined;
-  let local = false;
   let noDbPush = false;
   let entry: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === "--local" || a === "-l") {
-      local = true;
-    } else if (a === "--docker" || a === "-d") {
+    if (a === "--docker" || a === "-d") {
       const next = args[i + 1];
       if (next && !next.startsWith("-") && /^[\w.,]+$/.test(next)) {
         docker = next
@@ -1639,23 +1582,26 @@ export async function devCli(args: readonly string[]): Promise<number> {
       noDbPush = true;
     } else if (a === "--entry" || a === "-e") entry = args[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke dev [--local|-l] [--docker|-d [roles]] [--no-db-push] [--entry|-e src/app.ts]
+      console.log(`oke dev [-d [roles]] [--no-db-push] [--entry|-e src/app.ts]
 
 Watch · hot reload · Console :6533 · app :6530 · MCP :6535
-Regenerates client types on every save.
-Local mode auto-runs \`oke db push\` when schema.ts changes (opt out: --no-db-push).
+Always starts Docker Compose under docker/ and runs the app on host Bun
+with compose store drivers (Postgres/Redis). Regenerates client types on
+every save. Auto-runs \`oke db push\` when schema.ts changes (opt out:
+--no-db-push).
 
-Bare \`oke dev\` uses .oke/mode (one-time prompt on a TTY; non-TTY → local).
---local / --docker override for this session only (never write .oke/mode).
---docker boots infra under docker/ and runs the app on host Bun with prod
-store drivers (Postgres/Redis). Partial roles: -d store.sql,store.kv.
-Change the saved default with \`oke mode local|docker\`.
+Optional \`-d\` / \`--docker\` filters which compose roles to start
+(e.g. \`-d store.sql,store.kv\`). Requires a running Docker daemon.
+Use \`oke test\` for PGLite / in-memory test posture (no Compose).
 `);
       return 0;
+    } else if (a === "--local" || a === "-l") {
+      console.error("oke dev: --local was removed — `oke dev` always uses Docker Compose");
+      console.error("Use `oke test` for PGLite test posture.");
+      return 1;
     }
   }
   const { code } = await runDev({
-    ...(local ? { local: true } : {}),
     ...(docker === undefined ? {} : { docker }),
     ...(noDbPush ? { noDbPush: true } : {}),
     entry,

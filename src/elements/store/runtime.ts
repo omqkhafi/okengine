@@ -158,7 +158,7 @@ export interface FilesStoreFxHandle {
 /** Vector index handle on `fx.store`. */
 export interface VectorIndexStoreFxHandle {
   readonly ref: `index:${string}`;
-  readonly driverId: "memory" | "pgvector" | "libsql";
+  readonly driverId: "memory" | "pgvector";
   upsert(id: string, vector: readonly number[], meta?: Record<string, unknown>): Promise<void>;
   search(
     vector: readonly number[],
@@ -290,7 +290,10 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
   async function openSql(decl: SqlStoreDecl, ctx: StoreInvokeContext): Promise<SqlStoreHandle> {
     const binding = options.sql?.[decl.name] ?? {
       name: decl.name,
-      primary: { url: ":memory:" },
+      // PGlite / postgres-shaped drivers persist under `.oke/`; the in-process
+      // `memory` SQL driver ignores `url`. Never use SQLite's `:memory:` here —
+      // PGlite treats that string as a filesystem path and creates `./:memory:`.
+      primary: { url: ".oke/pgdata" },
     };
     const target = resolveSqlTarget(binding, ctx.effects);
     const driver = options.drivers.sql;
@@ -327,7 +330,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
 
   /** SQL-backed index drivers borrow the sql facet's connection. */
   async function sqlConnForIndex(
-    driver: VectorIndexDriver & { id: "pgvector" | "libsql" },
+    driver: VectorIndexDriver & { id: "pgvector" },
     url: string | undefined,
   ): Promise<SqlConnection> {
     const sqlDriver = options.drivers.sql;
@@ -336,16 +339,10 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
         `oke store: index driver "${driver.id}" needs a configured sql driver to share its connection`,
       );
     }
-    const compatible =
-      driver.id === "pgvector"
-        ? sqlDriver.id === "postgres" || sqlDriver.id === "pglite"
-        : sqlDriver.id === "libsql";
-    if (!compatible) {
+    if (sqlDriver.id !== "postgres" && sqlDriver.id !== "pglite") {
       throw new Error(
-        `oke store: index driver "${driver.id}" cannot share sql driver "${sqlDriver.id}" — ` +
-          (driver.id === "pgvector"
-            ? `pgvector needs store.sql on "postgres" or "pglite"`
-            : `libsql index needs store.sql on "libsql"`),
+        `oke store: index driver "pgvector" cannot share sql driver "${sqlDriver.id}" — ` +
+          `pgvector needs store.sql on "postgres" or "pglite"`,
       );
     }
     return sharedSqlConn(sqlDriver, "primary", { url });

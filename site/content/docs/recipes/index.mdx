@@ -10,7 +10,7 @@ and get env, healthcheck, and a connection URL for free.
 
 <Callout title="The one rule">
   Vendor choice lives in `images[…]` — never in `drivers.*`, which only ever say protocol ids
-  (`postgres`, `redis`, `s3`, `smtp`, `openbao`, `meilisearch`, `openai-compatible`, `ollama`, …).
+  (`postgres`, `redis`, `s3`, `smtp`, `meilisearch`, `openai-compatible`, `ollama`, …).
 </Callout>
 
 ## SQL
@@ -84,7 +84,6 @@ Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N
     href="/docs/recipes/rustfs"
   />
   <Card title="Mailpit" description="SMTP catcher — UI on :8025." href="/docs/recipes/mailpit" />
-  <Card title="OpenBao" description="Raft vault — unseal key SPOF." href="/docs/recipes/openbao" />
   <Card
     title="Meilisearch"
     description="Full-text store.index on :7700."

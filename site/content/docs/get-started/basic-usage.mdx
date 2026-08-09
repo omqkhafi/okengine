@@ -39,7 +39,7 @@ digest Clock, and an AI summarize stub.
 The standard starter already exports a named health Flow:
 
 ```typescript title="flows/main"
-import { on, flow, http, gate } from "okengine";
+import { on, flow, http, gate } from "okengine/http";
 import { z } from "zod";
 
 export const health = on(
@@ -63,17 +63,17 @@ same Manifest.
 Adopted modules become namespaces on the client:
 
 ```typescript title="app"
-import { oke } from "okengine";
-import * as main from "./flows/main";
-import * as notes from "./flows/notes";
-import { db } from "./core";
+import "@/core";
 
-export const app = oke({ name: "notes", stores: [db] }).adopt({ main, notes });
+import { oke } from "okengine/http";
+import * as routes from "@/flows/generated";
+
+export const app = oke({ name: "notes" }).adopt(routes);
 export type App = typeof app;
 ```
 
-The scaffolded `src/app.ts` also registers secrets, signals, and channel
-templates in the same `oke({ … })` call — no post-construction mutation.
+`import "@/core"` loads stores, secrets, channels, and message catalogs
+(via `locales/index.ts`) so they auto-register before `oke()`.
 
 ```typescript title="client"
 import { createClient } from "okengine/client";

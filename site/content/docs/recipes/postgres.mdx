@@ -5,7 +5,7 @@ icon: "Database"
 source: "docs/spec/unified-theory.md"
 ---
 
-Postgres is the default `store.sql` image in docker and prod. `oke docker` matches
+Postgres is the default `store.sql` image in `dev` and `prod`. `oke docker` matches
 any image whose reference contains `postgres` or `pgvector` (after more specific
 recipes), then derives env, healthcheck, and connection URL.
 
@@ -33,7 +33,7 @@ images: {
 ### Bring the stack up
 
 ```bash
-oke dev --docker
+oke dev
 ```
 
 `oke docker` writes `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` into
@@ -105,7 +105,7 @@ Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exha
 <Accordion title="oke boot: postgres driver needs DATABASE_URL">
 
 The `postgres` driver fails boot when neither `DATABASE_URL` nor `OKE_STORE_SQL_URL` is
-set. Re-run `oke dev --docker` so the stack writes `docker/.env.docker`, or export
+set. Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
 `DATABASE_URL` yourself when pointing at a managed host.
 
 </Accordion>

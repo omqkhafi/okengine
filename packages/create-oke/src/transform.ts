@@ -9,7 +9,7 @@
  *    workspace root; registry version otherwise)
  * 3. Drop monorepo-only files that import paths outside the source tree
  *    (today: `tests/docker.test.ts`)
- * 4. Optional `--sql` / wizard choice → Drizzle dialect + `store.sql` pins
+ * 4. Optional `--sql` / wizard choice → `store.sql` pins
  */
 
 import { readFileSync } from "node:fs";
@@ -25,14 +25,14 @@ import {
 import { materializeLocalOkengineDependency } from "./local-okengine.ts";
 import { packageRoot } from "./templates.ts";
 
-/** SQL store drivers selectable at scaffold time. */
-export const SQL_DRIVERS = ["sqlite", "postgres"] as const;
+/** SQL store drivers selectable at scaffold time (SQLite removed). */
+export const SQL_DRIVERS = ["postgres"] as const;
 
 /** A known store.sql driver id for create-oke. */
 export type SqlDriverId = (typeof SQL_DRIVERS)[number];
 
 /** Default when `--sql` / wizard choice is omitted (matches template sources). */
-export const DEFAULT_SQL_DRIVER: SqlDriverId = "sqlite";
+export const DEFAULT_SQL_DRIVER: SqlDriverId = "postgres";
 
 /**
  * Whether `value` is a known {@link SqlDriverId}.
@@ -124,64 +124,72 @@ export function shouldSkipTemplatePath(relativePath: string): boolean {
 }
 
 /**
- * Rewrite a Drizzle schema file to the dialect for `driver`.
+ * Real `DRIVER_DEFAULTS` mirrors (okengine/config) — create-oke has no
+ * runtime dependency on okengine, so keep a local copy for sparse pins.
  *
- * Templates ship as `sqliteTable` / `drizzle-orm/sqlite-core`. Choosing
- * `postgres` swaps to `pgTable` / `pg-core` (and the reverse is idempotent).
- *
- * @param source - Schema TypeScript source
- * @param driver - Target store.sql driver
+ * Keys with no entry (e.g. `index`, `ai`) always emit every env column.
  */
-export function transformSchemaForSqlDriver(source: string, driver: SqlDriverId): string {
-  if (driver === "postgres") {
-    return source
-      .replaceAll("drizzle-orm/sqlite-core", "drizzle-orm/pg-core")
-      .replaceAll("sqliteTable", "pgTable");
-  }
-  return source
-    .replaceAll("drizzle-orm/pg-core", "drizzle-orm/sqlite-core")
-    .replaceAll("pgTable", "sqliteTable");
-}
+const PIN_DEFAULTS: Readonly<Partial<Record<string, EnvDriverPins>>> = {
+  sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+  kv: { dev: "redis", test: "memory", prod: "redis" },
+  files: { dev: "s3", test: "memory", prod: "s3" },
+  signal: { dev: "redis", test: "memory", prod: "redis" },
+  clock: { dev: "postgres", test: "frozen", prod: "postgres" },
+  vault: { dev: "env", test: "memory", prod: "vault" },
+  email: { dev: "smtp", test: "console", prod: "smtp" },
+};
 
 /**
- * Pin `store.sql` `local` / `docker` / `prod` in `oke.config.ts` to `driver`.
+ * Pin `store.sql` `dev` / `prod` in `oke.config.ts` to `driver`.
  *
- * Leaves `test: "memory"` (and every other facet) untouched.
+ * Leaves `test` (and every other facet) untouched. When the template omits
+ * `store.sql` (defaults already match), this is a no-op for `postgres`.
  *
  * @param source - Config TypeScript source
  * @param driver - Target store.sql driver
  */
 export function transformConfigForSqlDriver(source: string, driver: SqlDriverId): string {
-  return source.replace(/sql:\s*\{[\s\S]*?\n\s*\}/, (block) =>
-    block
-      .replace(/local:\s*"(?:sqlite|postgres)"/, `local: "${driver}"`)
-      .replace(/docker:\s*"(?:sqlite|postgres)"/, `docker: "${driver}"`)
-      .replace(/prod:\s*"(?:sqlite|postgres)"/, `prod: "${driver}"`),
-  );
+  const sqlRe = /^( {6})sql:\s*\{[\s\S]*?\n\1\}/m;
+  if (sqlRe.test(source)) {
+    return source.replace(sqlRe, (block) =>
+      block
+        .replace(/dev:\s*"(?:postgres|pglite|memory)"/, `dev: "${driver}"`)
+        .replace(/prod:\s*"(?:postgres|pglite|memory)"/, `prod: "${driver}"`),
+    );
+  }
+  // Sparse template with no sql override — defaults already cover postgres.
+  if (driver === "postgres") return source;
+  return upsertStoreFacet(source, "sql", {
+    dev: driver,
+    test: "pglite",
+    prod: driver,
+  });
 }
 
 /**
  * Apply full customize answers to `oke.config.ts` source.
  *
  * Rewrites driver maps and syncs `images` keys for docker-backed roles.
+ * Pins that match {@link PIN_DEFAULTS} are omitted (or removed) so scaffolds
+ * stay override-only.
  *
  * @param source - Config TypeScript source
  * @param defaults - Customize / reuse payload
  */
 export function applyCreateAnswers(source: string, defaults: CreateDefaults): string {
   let next = source;
-  next = replaceEnvMap(next, "sql", defaults.drivers.store.sql, { nestedUnderStore: true });
-  next = replaceEnvMap(next, "kv", defaults.drivers.store.kv, { nestedUnderStore: true });
-  next = replaceEnvMap(next, "files", defaults.drivers.store.files, { nestedUnderStore: true });
+  next = upsertEnvMap(next, "sql", defaults.drivers.store.sql, { nestedUnderStore: true });
+  next = upsertEnvMap(next, "kv", defaults.drivers.store.kv, { nestedUnderStore: true });
+  next = upsertEnvMap(next, "files", defaults.drivers.store.files, { nestedUnderStore: true });
 
   if (defaults.drivers.store.index) {
     next = upsertStoreIndex(next, defaults.drivers.store.index);
   }
 
-  next = replaceEnvMap(next, "signal", defaults.drivers.signal, { nestedUnderStore: false });
-  next = replaceEnvMap(next, "clock", defaults.drivers.clock, { nestedUnderStore: false });
-  next = replaceEnvMap(next, "vault", defaults.drivers.vault, { nestedUnderStore: false });
-  next = replaceChannelEmail(next, defaults.drivers.channel.email);
+  next = upsertEnvMap(next, "signal", defaults.drivers.signal, { nestedUnderStore: false });
+  next = upsertEnvMap(next, "clock", defaults.drivers.clock, { nestedUnderStore: false });
+  next = upsertEnvMap(next, "vault", defaults.drivers.vault, { nestedUnderStore: false });
+  next = upsertChannelEmail(next, defaults.drivers.channel.email);
 
   if (defaults.drivers.ai) {
     next = upsertAiDrivers(next, defaults.drivers.ai);
@@ -192,41 +200,175 @@ export function applyCreateAnswers(source: string, defaults: CreateDefaults): st
 }
 
 /**
- * Replace a top-level or store-nested env map block by key name.
+ * Env columns that differ from a known default map (or all columns when none).
+ *
+ * @param pins - Full three-env pins from the wizard
+ * @param defaults - Optional real defaults for this key
+ */
+function sparsePinEntries(
+  pins: EnvDriverPins,
+  defaults: EnvDriverPins | undefined,
+): ReadonlyArray<readonly ["dev" | "test" | "prod", string]> {
+  const envs = ["dev", "test", "prod"] as const;
+  if (!defaults) {
+    return envs.map((env) => [env, pins[env]] as const);
+  }
+  return envs.filter((env) => pins[env] !== defaults[env]).map((env) => [env, pins[env]] as const);
+}
+
+/**
+ * Format an env driver map literal — only keys that differ from defaults.
+ *
+ * @param pins - Pins
+ * @param indentLevel - Indent of the map key (`signal` → 2, `sql`/`email` → 3;
+ *   two spaces each). Inner fields use `indentLevel + 1`; the closing `}`
+ *   aligns with the key.
+ * @param defaultsKey - {@link PIN_DEFAULTS} lookup key (omit for no defaults)
+ * @returns Formatted `{ … }` or `null` when every pin matches the default
+ */
+function formatEnvMap(
+  pins: EnvDriverPins,
+  indentLevel: number,
+  defaultsKey?: string,
+): string | null {
+  const defaults = defaultsKey !== undefined ? PIN_DEFAULTS[defaultsKey] : undefined;
+  const entries = sparsePinEntries(pins, defaults);
+  if (entries.length === 0) return null;
+  const pad = "  ".repeat(indentLevel + 1);
+  const close = "  ".repeat(indentLevel);
+  const lines = entries.map(([env, value]) => `${pad}${env}: "${value}",`);
+  return `{\n${lines.join("\n")}\n${close}}`;
+}
+
+/**
+ * Match `key: { … }` at a fixed indentation (store facet = 6, drivers = 4).
+ *
+ * @param key - Map key
+ * @param indent - Leading spaces before the key
+ */
+function envMapRe(key: string, indent: number): RegExp {
+  const pad = " ".repeat(indent);
+  return new RegExp(`^${pad}${key}:\\s*\\{[\\s\\S]*?\\n${pad}\\}`, "m");
+}
+
+/**
+ * Remove a matched env-map block and its trailing comma / blank line.
+ *
+ * @param source - Config source
+ * @param re - Block matcher
+ */
+function removeMatchedBlock(source: string, re: RegExp): string {
+  return source.replace(re, "").replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * Rewrite the `drivers: { … }` body, or throw when missing.
+ *
+ * @param source - Config source
+ * @param rewrite - Maps current body → next body
+ */
+function mapDriversBody(source: string, rewrite: (body: string) => string): string {
+  const drivers = findBraceBlock(source, /drivers:\s*\{/);
+  if (!drivers) {
+    throw new Error("create-oke: oke.config.ts missing drivers block");
+  }
+  const body = source.slice(drivers.bodyStart, drivers.bodyEnd);
+  return `${source.slice(0, drivers.bodyStart)}${rewrite(body)}${source.slice(drivers.bodyEnd)}`;
+}
+
+/**
+ * Insert `store: { facet }` (or a facet into an existing store) into drivers.
+ *
+ * Scoped to the `drivers` block so `images.store` is never touched.
+ *
+ * @param source - Config source
+ * @param key - Store facet key
+ * @param pins - Pins (full; formatted sparsely inside)
+ */
+function upsertStoreFacet(source: string, key: string, pins: EnvDriverPins): string {
+  const block = formatEnvMap(pins, 3, key);
+  const facetRe = envMapRe(key, 6);
+  if (block === null) {
+    return mapDriversBody(source, (body) => removeMatchedBlock(body, facetRe));
+  }
+  return mapDriversBody(source, (body) => {
+    if (facetRe.test(body)) {
+      return body.replace(facetRe, `      ${key}: ${block}`);
+    }
+    const storeRe = /^( {4})store:\s*\{/m;
+    if (storeRe.test(body)) {
+      return body.replace(storeRe, (open) => `${open}\n      ${key}: ${block},`);
+    }
+    const entry = `    store: {\n      ${key}: ${block},\n    },\n`;
+    return `${body}${body.endsWith("\n") ? "" : "\n"}${entry}`;
+  });
+}
+
+/**
+ * Upsert a top-level or store-nested env map; omit when pins match defaults.
  *
  * @param source - Config source
  * @param key - Map key (`sql`, `signal`, …)
  * @param pins - New pins
  * @param options - Nesting
  */
-function replaceEnvMap(
+function upsertEnvMap(
   source: string,
   key: string,
   pins: EnvDriverPins,
   options: { readonly nestedUnderStore: boolean },
 ): string {
-  const block = formatEnvMap(pins, options.nestedUnderStore ? 3 : 2);
-  // Match `key: { … }` at the driver indentation used in the template.
-  const re = new RegExp(`${key}:\\s*\\{[\\s\\S]*?\\n\\s*\\}`, "m");
-  if (!re.test(source)) {
-    throw new Error(`create-oke: oke.config.ts missing drivers.${key} block`);
+  if (options.nestedUnderStore) {
+    return upsertStoreFacet(source, key, pins);
   }
-  return source.replace(re, `${key}: ${block}`);
+  const indent = 2;
+  const block = formatEnvMap(pins, indent, key);
+  const re = envMapRe(key, 4);
+  if (block === null) {
+    return mapDriversBody(source, (body) => removeMatchedBlock(body, re));
+  }
+  return mapDriversBody(source, (body) => {
+    if (re.test(body)) {
+      return body.replace(re, `    ${key}: ${block}`);
+    }
+    const entry = `    ${key}: ${block},\n`;
+    return `${body}${body.endsWith("\n") ? "" : "\n"}${entry}`;
+  });
 }
 
 /**
- * Replace `channel.email` env map.
+ * Upsert `drivers.channel.email` (creates `drivers.channel` when needed).
+ *
+ * Never touches `images.channel` (string role pins at the same indent).
  *
  * @param source - Config source
  * @param pins - Email pins
  */
-function replaceChannelEmail(source: string, pins: EnvDriverPins): string {
-  const block = formatEnvMap(pins, 3);
-  const re = /email:\s*\{[\s\S]*?\n\s*\}/;
-  if (!re.test(source)) {
-    throw new Error("create-oke: oke.config.ts missing channel.email block");
+function upsertChannelEmail(source: string, pins: EnvDriverPins): string {
+  const block = formatEnvMap(pins, 3, "email");
+  // Brace-map `email: { … }` only exists under drivers.channel — images uses
+  // `email: "image:tag"`.
+  const emailRe = envMapRe("email", 6);
+  if (block === null) {
+    let next = removeMatchedBlock(source, emailRe);
+    next = next.replace(/^( {4})channel:\s*\{\s*\n\1\},?\n/m, "");
+    return next;
   }
-  return source.replace(re, `email: ${block}`);
+  if (emailRe.test(source)) {
+    return source.replace(emailRe, `      email: ${block}`);
+  }
+  const drivers = findBraceBlock(source, /drivers:\s*\{/);
+  if (drivers) {
+    const body = source.slice(drivers.bodyStart, drivers.bodyEnd);
+    if (/^ {4}channel:\s*\{/m.test(body)) {
+      const nextBody = body.replace(
+        /^( {4})channel:\s*\{/m,
+        (open) => `${open}\n      email: ${block},`,
+      );
+      return `${source.slice(0, drivers.bodyStart)}${nextBody}${source.slice(drivers.bodyEnd)}`;
+    }
+  }
+  return insertDriversEntry(source, `    channel: {\n      email: ${block},\n    },`);
 }
 
 /**
@@ -239,64 +381,80 @@ function replaceChannelEmail(source: string, pins: EnvDriverPins): string {
  * @param pins - Index pins
  */
 function upsertStoreIndex(source: string, pins: EnvDriverPins): string {
-  const block = formatEnvMap(pins, 3);
-  const indexRe = /^( {6})index:\s*\{[\s\S]*?\n\1\}/m;
-  if (indexRe.test(source)) {
-    return source.replace(indexRe, `$1index: ${block}`);
-  }
-  // Insert after files block inside store.
-  const filesRe = /(files:\s*\{[\s\S]*?\n\s*\},)/;
-  if (!filesRe.test(source)) {
-    throw new Error("create-oke: oke.config.ts missing store.files to insert index");
-  }
-  return source.replace(filesRe, `$1\n      index: ${block},`);
+  // No DRIVER_DEFAULTS table — emit every env column.
+  return upsertStoreFacet(source, "index", pins);
 }
 
 /**
- * Insert or replace top-level `drivers.ai` (sibling of `channel`, never nested).
+ * Insert a drivers-body entry before the closing `}` of `drivers: { … }`.
  *
- * Indentation-anchored: only matches `ai:` / `channel:` at the drivers-body
- * indent (4 spaces). The old non-greedy `channel: { … },` regex closed on
- * `email`'s `},` and nested `ai` inside `channel` — hero then showed `ai: —`.
+ * @param source - Config source
+ * @param entry - Full indented entry including trailing comma
+ */
+function insertDriversEntry(source: string, entry: string): string {
+  return mapDriversBody(source, (body) => {
+    const needsNl = !body.endsWith("\n");
+    return `${body}${needsNl ? "\n" : ""}${entry}\n`;
+  });
+}
+
+/**
+ * Locate a `{ … }` block by opener regex and brace depth.
+ *
+ * @param source - Source text
+ * @param openRe - Matches through the opening `{`
+ */
+function findBraceBlock(
+  source: string,
+  openRe: RegExp,
+): {
+  readonly start: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  readonly end: number;
+} | null {
+  const m = openRe.exec(source);
+  if (!m) return null;
+  const start = m.index;
+  const openIdx = start + m[0].length - 1;
+  let depth = 0;
+  for (let i = openIdx; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return { start, bodyStart: openIdx + 1, bodyEnd: i, end: i + 1 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Insert or replace top-level `drivers.ai` (never under `channel` / `images`).
+ *
+ * Replaces an existing `drivers.ai` map; otherwise appends inside `drivers`
+ * so sparse templates (no `drivers.channel`) cannot match `images.channel`.
  *
  * @param source - Config source
  * @param pins - AI pins
  */
 export function upsertAiDrivers(source: string, pins: EnvDriverPins): string {
+  // AI has no DRIVER_DEFAULTS — always emit all three envs.
   const block = formatEnvMap(pins, 2);
-  const aiRe = /^( {4})ai:\s*\{[\s\S]*?\n\1\}/m;
-  if (aiRe.test(source)) {
-    return source.replace(aiRe, `$1ai: ${block}`);
+  if (block === null) {
+    throw new Error("create-oke: ai pins must not be empty");
   }
-  const channelRe = /^( {4})channel:\s*\{[\s\S]*?\n\1\},?\n/m;
-  if (!channelRe.test(source)) {
-    throw new Error("create-oke: oke.config.ts missing channel block to insert ai");
-  }
-  return source.replace(channelRe, (match) => `${match}    ai: ${block},\n`);
-}
-
-/**
- * Format an env driver map literal.
- *
- * @param pins - Pins
- * @param indentLevel - Indent of the map key (`signal` → 2, `sql`/`email` → 3;
- *   two spaces each). Inner fields use `indentLevel + 1`; the closing `}`
- *   aligns with the key. An off-by-one here made `email`'s `},` look like
- *   `channel`'s close, so {@link upsertAiDrivers} nested `ai` under `channel`.
- */
-function formatEnvMap(pins: EnvDriverPins, indentLevel: number): string {
-  const pad = "  ".repeat(indentLevel + 1);
-  const close = "  ".repeat(indentLevel);
-  return `{
-${pad}local: "${pins.local}",
-${pad}docker: "${pins.docker}",
-${pad}test: "${pins.test}",
-${pad}prod: "${pins.prod}",
-${close}}`;
+  const aiRe = envMapRe("ai", 4);
+  return mapDriversBody(source, (body) => {
+    if (aiRe.test(body)) {
+      return body.replace(aiRe, `    ai: ${block}`);
+    }
+    return `${body}${body.endsWith("\n") ? "" : "\n"}    ai: ${block},\n`;
+  });
 }
 
 /** Env-column keys that must never appear under `images`. */
-const IMAGE_ENV_COLUMNS = new Set(["local", "docker", "test", "prod"]);
+const IMAGE_ENV_COLUMNS = new Set(["dev", "test", "prod"]);
 
 /** Known compose role keys written into `images` (dotted, post-flatten). */
 const IMAGE_ROLE_KEY = /^(?:store\.(?:sql|kv|files|index)|channel\.email|vault|ai|pgdog|proxy)$/;
@@ -322,35 +480,34 @@ function syncImages(source: string, defaults: CreateDefaults): string {
   };
 
   if (
-    d.store.sql.docker === "postgres" ||
+    d.store.sql.dev === "postgres" ||
     d.store.sql.prod === "postgres" ||
-    d.store.sql.docker === "pgvector" ||
+    d.store.sql.dev === "pgvector" ||
     d.store.sql.prod === "pgvector"
   ) {
     pin("store.sql", DEFAULT_IMAGES["store.sql"]!);
-    pin("pgdog", DEFAULT_IMAGES.pgdog!);
+    if (defaults.pgdog) {
+      pin("pgdog", DEFAULT_IMAGES.pgdog!);
+    }
   }
-  if (d.store.kv.docker === "redis" || d.signal.docker === "redis") {
+  if (d.store.kv.dev === "redis" || d.signal.dev === "redis") {
     pin("store.kv", DEFAULT_IMAGES["store.kv"]!);
   }
-  if (d.store.files.docker === "s3") {
+  if (d.store.files.dev === "s3") {
     pin("store.files", DEFAULT_IMAGES["store.files"]!);
   }
-  if (d.channel.email.docker === "smtp") {
+  if (d.channel.email.dev === "smtp") {
     pin("channel.email", DEFAULT_IMAGES["channel.email"]!);
   }
-  if (d.vault.docker === "openbao") {
-    pin("vault", DEFAULT_IMAGES.vault!);
-  }
-  if (d.store.index?.docker === "meilisearch") {
+  if (d.store.index?.dev === "meilisearch") {
     pin("store.index", DEFAULT_IMAGES["store.index"]!);
   }
   if (
     d.ai &&
-    (d.ai.docker === "ollama" ||
-      d.ai.local === "ollama" ||
-      d.ai.docker === "openai-compatible" ||
-      d.ai.local === "openai-compatible")
+    (d.ai.dev === "ollama" ||
+      d.ai.prod === "ollama" ||
+      d.ai.dev === "openai-compatible" ||
+      d.ai.prod === "openai-compatible")
   ) {
     pin("ai", aiImageForDefaults(defaults));
   }
@@ -365,12 +522,12 @@ function syncImages(source: string, defaults: CreateDefaults): string {
  */
 function aiImageForDefaults(defaults: CreateDefaults): string {
   const provider = defaults.ai.provider;
-  if (provider === "ollama" || defaults.drivers.ai?.local === "ollama") {
+  if (provider === "ollama" || defaults.drivers.ai?.dev === "ollama") {
     return OLLAMA_IMAGE;
   }
   if (provider === "vllm") return VLLM_IMAGE;
   if (provider === "sglang") return SGLANG_IMAGE;
-  if (provider === "llama-cpp" || defaults.drivers.ai?.local === "openai-compatible") {
+  if (provider === "llama-cpp" || defaults.drivers.ai?.dev === "openai-compatible") {
     return LLAMA_CPP_IMAGE;
   }
   return DEFAULT_IMAGES.ai!;
@@ -410,7 +567,7 @@ export function findImagesBlock(source: string): {
  * of `store` / `channel` nesting (mirrors {@link flattenImagesConfig} in
  * `okengine/config`).
  *
- * Skips `//` comment lines and rejects env-column keys (`local`/`docker`/…).
+ * Skips `//` comment lines and rejects env-column keys (`dev`/`test`/`prod`).
  *
  * @param source - Config source
  */
@@ -482,6 +639,24 @@ export function replaceImagesBlock(source: string, images: Record<string, string
     throw new Error("create-oke: oke.config.ts missing images block");
   }
   return `${source.slice(0, block.start)}${formatImagesBlock(images)}${source.slice(block.end)}`;
+}
+
+/**
+ * Add or remove the `images.pgdog` pin (PgDog in front of Postgres).
+ *
+ * @param source - `oke.config.ts` source
+ * @param enabled - When true, pin the default PgDog image
+ */
+export function applyPgDogToConfig(source: string, enabled: boolean): string {
+  const images = extractImages(source);
+  if (enabled) {
+    if (images.pgdog) return source;
+    images.pgdog = DEFAULT_IMAGES.pgdog!;
+  } else {
+    if (!images.pgdog) return source;
+    delete images.pgdog;
+  }
+  return replaceImagesBlock(source, images);
 }
 
 /**

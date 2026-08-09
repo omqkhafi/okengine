@@ -2,6 +2,7 @@
  * Static Vault markup for the axe gate — same landmarks as the live panel.
  */
 
+import { formatVaultBackend } from "./backend.ts";
 import { formatBlastRadius } from "./blast-radius.ts";
 import { VAULT_LIST_FIXTURE } from "./fixture.ts";
 import { groupByKind } from "./group.ts";
@@ -23,6 +24,8 @@ export function VaultA11yView(props: VaultA11yViewProps) {
   const open = VAULT_LIST_FIXTURE.secrets.find((s) => s.name === openName);
   const blast = open ? formatBlastRadius(open.blastRadius) : null;
   const env = VAULT_LIST_FIXTURE.env;
+  const backend = VAULT_LIST_FIXTURE.backend;
+  const backendCard = formatVaultBackend(backend);
 
   return (
     <div className="vault-a11y">
@@ -37,6 +40,35 @@ export function VaultA11yView(props: VaultA11yViewProps) {
         </label>
       </header>
       <main id="vault-main">
+        {backendCard ? (
+          <section aria-label="Vault backend">
+            <h2>{backendCard.title}</h2>
+            <p>{backendCard.description}</p>
+            <p>
+              {backendCard.badges.map((badge) => (
+                <span key={badge.id} role={badge.tone === "warn" ? "alert" : "status"}>
+                  {badge.label}{" "}
+                </span>
+              ))}
+            </p>
+            <dl>
+              {backendCard.facts.map((fact) => (
+                <div key={fact.label}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {backendCard.hint ? <p role="status">{backendCard.hint}</p> : null}
+            {backend?.builtin ? (
+              <p>
+                Audit trail is hash-chained in the backend — read it with `oke vault audit`, verify
+                it with `oke vault audit verify`.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
         <section aria-label="Vault list">
           <h2>Contracts</h2>
           {groups.map((group) => (
@@ -111,7 +143,7 @@ export function VaultA11yView(props: VaultA11yViewProps) {
             <section aria-label="Readers">
               <h3>Readers</h3>
               <p>
-                Flows that declare fx.vault({open.name}): {open.readers.join(", ") || "none"}
+                Flows that declare fx.vault.get({open.name}): {open.readers.join(", ") || "none"}
               </p>
             </section>
 

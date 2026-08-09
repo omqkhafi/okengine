@@ -1,13 +1,13 @@
 ---
 title: Docker
-description: Deploy with plain docker compose — shared drivers, PgDog, readiness, graceful SIGTERM, and opt-in Caddy or Traefik when you need TLS without an orchestrator.
+description: Deploy with plain docker compose — single production-grade docker-compose.yml, shared drivers, PgDog, readiness, graceful SIGTERM, and opt-in Caddy or Traefik when you need TLS without an orchestrator.
 icon: Package
 source: README.md
 ---
 
 Plain `docker compose` is the simplest production shape: single or few app
 instances on one host (or a small set you manage yourself). Derive with
-`oke docker --prod`; opt into a proxy only when you need HTTPS at the edge.
+`oke docker`; opt into a proxy only when you need HTTPS at the edge.
 
 <Callout title="The one rule">
   Treat every app container as replaceable. Put durable state in Postgres / Redis / S3, wait on `GET
@@ -23,11 +23,21 @@ instances on one host (or a small set you manage yourself). Derive with
 ### Derive compose
 
 ```bash
-oke docker --prod
+oke docker
 ```
 
-Writes `Dockerfile`, `compose.yml`, per-role layers, and `compose.prod.yml`.
-Also emits **`compose.all.yml`** (same layers merged) — optional single file.
+Writes `Dockerfile` + production-grade **`docker-compose.yml`** under `docker/`
+(readiness HEALTHCHECK on `/_/ready`, deploy policy, resource limits).
+Default host budget is **4 CPU / 8 GiB** — override with `--cpus` / `--memory`.
+
+Other layouts when you ask for them:
+
+| Flag        | Output                                                    |
+| ----------- | --------------------------------------------------------- |
+| _(default)_ | `docker-compose.yml`                                      |
+| `--split`   | `compose.yml` + `compose.<role>.yml` + `compose.prod.yml` |
+| `--stack`   | `docker-stack.yml` for Swarm (`docker stack deploy -c`)   |
+
 Without a proxy, the app still publishes port `6530`.
 
 </Step>
@@ -35,33 +45,28 @@ Without a proxy, the app still publishes port `6530`.
 <Step>
 ### Share backing services
 
-Pin docker/prod drivers to shared stores (create-oke templates already do):
+Pin `dev`/`prod` drivers to shared stores (create-oke templates already do —
+same protocols locally via `oke dev` and in production):
 
-| Concern                       | Driver                       | Shared backend                                    |
-| ----------------------------- | ---------------------------- | ------------------------------------------------- |
-| SQL / durable journal / clock | `postgres`                   | Postgres (optionally via PgDog)                   |
-| Gate rate counters            | `redis` (`drivers.store.kv`) | Redis / Valkey / Dragonfly (`images["store.kv"]`) |
-| Files                         | `s3`                         | S3-compatible object store                        |
-| Signal                        | see known limits below       | —                                                 |
+| Concern                       | Driver                       | Shared backend                                 |
+| ----------------------------- | ---------------------------- | ---------------------------------------------- |
+| SQL / durable journal / clock | `postgres`                   | Postgres (optionally via PgDog)                |
+| Gate rate counters            | `redis` (`drivers.store.kv`) | Redis / Valkey / Dragonfly (`images.store.kv`) |
+| Files                         | `s3`                         | S3-compatible object store                     |
+| Signal                        | see known limits below       | —                                              |
 
 </Step>
 
 <Step>
 ### Bring the stack up
 
-Default — organized per-role files (`oke docker` prints the `-f` order):
-
 ```bash
 cd docker
-docker compose -f compose.yml -f compose.store.sql.yml \
-  -f compose.pgdog.yml -f compose.prod.yml up -d
+docker compose -f docker-compose.yml up -d
 ```
 
-Pass every `-f` file listed. For TLS at the edge, see
-[Reverse proxy](#reverse-proxy), then include `compose.proxy.yml`.
-
-Single-file alternative: `docker compose -f compose.all.yml up -d`
-(add `-f compose.override.yml` if you use one).
+Add `-f docker-compose.override.yml` if you keep local tweaks (oke never writes
+that file). With `--split`, pass every `-f` file `oke docker` prints.
 
 </Step>
 
@@ -72,9 +77,10 @@ Single-file alternative: `docker compose -f compose.all.yml up -d`
 Bun.SQL defaults to **10** connections per process — fine for one instance.
 Scale out and `N × pool` can exceed Postgres `max_connections`.
 
-When both `store.sql` and `pgdog` are pinned (docker/prod default in templates),
+When both `store.sql` and `pgdog` are pinned (dev/prod default in templates),
 `DATABASE_URL` points at PgDog on port `6432` — transaction pooling, wire-protocol
-transparent to Bun.SQL / Drizzle. No app code changes.
+transparent to Bun.SQL / Drizzle. No app code changes. Configs land in
+`docker/pgdog/pgdog.toml` and `docker/pgdog/users.toml`.
 
 **Why PgDog.** Transaction pooling fixes the connection math. Naive poolers can
 leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`) across clients; PgDog
@@ -91,10 +97,10 @@ licenses: [Store · KV](/docs/elements/store#kv).
 
 ## Readiness and liveness
 
-| Endpoint       | Role                                                        | On plain compose                                           |
-| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| `GET /_/ready` | Kernel readiness (`booting` → `orphan_scan` → `ready`)      | `compose.prod.yml` HEALTHCHECK; load balancers should wait |
-| `GET /health`  | App liveness (create-oke ships one) — cheap “process alive” | External monitors only — not orphan-scan aware             |
+| Endpoint       | Role                                                        | On plain compose                                     |
+| -------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
+| `GET /_/ready` | Kernel readiness (`booting` → `orphan_scan` → `ready`)      | HEALTHCHECK in `docker-compose.yml`; LBs should wait |
+| `GET /health`  | App liveness (create-oke ships one) — cheap “process alive” | External monitors only — not orphan-scan aware       |
 
 `/_/ready` returns `200 { ready: true }` only after boot and the durable orphan
 scan finish. While booting or scanning it returns
@@ -113,7 +119,7 @@ runner; call it next to `createBunRuntime().serve` in custom entries):
 3. Closes element runtimes and exits
 
 Signal message leases have no proactive release today — survivors reclaim after
-the visibility TTL (default 30s). `compose.prod.yml` sets `stop_grace_period: 30s`
+the visibility TTL (default 30s). Generated compose sets `stop_grace_period: 30s`
 so the release path can finish (≥ typical Clock / Journal / Signal lease TTL).
 
 ## Reverse proxy
@@ -138,7 +144,7 @@ OKE_PROXY_HOST=app.example.com
 OKE_PROXY_ACME_EMAIL=admin@example.com
 ```
 
-Re-run `oke docker --prod`. Edge publishes `80`/`443`; `app` stays internal.
+Re-run `oke docker`. Edge publishes `80`/`443`; `app` stays internal.
 Set `allowedHosts` to your public hostname ([Security](/docs/reference/security)).
 
 Traefik never mounts raw `docker.sock` — only a filtered
@@ -163,25 +169,26 @@ Let's Encrypt, and socket-proxy rationale → [Reverse proxy](/docs/deployment/r
 <Accordion title="compose up --scale app=N fails with port already allocated">
 
 You still have `6530:6530` on `app`. Confirm `images.proxy` is set and
-`compose.proxy.yml` is in the `-f` list so derivation omitted the host bind.
+re-derived so the host bind was omitted.
 
 </Accordion>
 <Accordion title="New replica gets traffic before orphan scan finishes">
 
-Confirm `compose.prod.yml` is in the `-f` list and the healthcheck hits
-`/_/ready`. Without it, compose treats “container started” as ready.
+Confirm the healthcheck hits `/_/ready` (default `oke docker` output). Without
+it, compose treats “container started” as ready. Pass `--no-prod` only when you
+intentionally want a bare derive.
 
 </Accordion>
 <Accordion title="Rate limits look twice as high after scaling to 2">
 
 `drivers.store.kv` must be `redis` with `REDIS_URL` set. A missing URL **fails
 boot** (no silent memory fallback). Declaring `memory` for local is fine;
-docker/prod should stay on redis.
+`dev`/`prod` should stay on redis.
 
 </Accordion>
 <Accordion title="Files uploaded on instance A are missing on B">
 
-`drivers.store.files: "fs"` is single-host. Switch docker/prod to `s3`
+`drivers.store.files: "fs"` is single-host. Switch `dev`/`prod` to `s3`
 (create-oke templates already do).
 
 </Accordion>
@@ -197,9 +204,9 @@ Serve validates `Host`. Add your public hostname to `allowedHosts`
 
 - [Deployment](/docs/deployment) — choose compose, Swarm, or Kubernetes
 - [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik in full
-- [Docker Swarm](/docs/deployment/docker-swarm) — `docker stack deploy` on the same files
+- [Docker Swarm](/docs/deployment/docker-swarm) — `docker stack deploy`
 - [Kubernetes](/docs/deployment/kubernetes) — Deployment, probes, Ingress
-- [CLI](/docs/reference/cli) — `oke docker`, `oke docker --prod`
+- [CLI](/docs/reference/cli) — `oke docker`, layouts, budget flags
 - [Store](/docs/elements/store) — PgDog and facets
 - [Security](/docs/reference/security) — `allowedHosts`
 

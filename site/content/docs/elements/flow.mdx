@@ -71,15 +71,15 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 
 ## Anatomy of a Flow
 
-| Part         | Role                                                            |
-| ------------ | --------------------------------------------------------------- |
-| trigger      | What starts the flow — `http`, a signal, `every`, a row change  |
-| `in`         | Input contract — validated before `do` runs; bad input is a 422 |
-| `out`        | Output contract — the return value is checked against it        |
-| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown      |
-| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)     |
-| `do`         | The work — every read, write, emit, and call goes through `fx`  |
-| `compensate` | Durable only — undo phase after terminal failure (same journal) |
+| Part         | Role                                                                       |
+| ------------ | -------------------------------------------------------------------------- |
+| trigger      | What starts the flow — `http`, a signal, `every`, a row change             |
+| `in`         | Input contract — validated before `do` runs; bad input is a 422            |
+| `out`        | Output contract — the return value is checked against it                   |
+| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown                 |
+| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)                |
+| `do`         | The work — every read, write, emit, and call goes through `fx`             |
+| `compensate` | Durable only — optional hook after auto per-step `{ undo }` (same journal) |
 
 Failures are values, not exceptions:
 
@@ -181,22 +181,22 @@ const order = await fx.call(getOrder, { id: orderId }); // from any other flow
 
 Everything a flow may touch, on one object:
 
-| Surface                                     | Effect recorded | What it does                                 |
-| ------------------------------------------- | --------------- | -------------------------------------------- |
-| `fx.store(db).select/insert/…`              | read / write    | SQL, KV, files, index sessions               |
-| `fx.emit(signal, payload)`                  | emit            | Publish a signal (transactional with writes) |
-| `fx.send(template, opts)`                   | send            | Reach a human (email · SMS · …)              |
-| `fx.ask(prompt, input)`                     | ask             | Call a versioned AI prompt                   |
-| `fx.run(agent, input)`                      | ask             | Run a bounded agent                          |
-| `fx.call(flow, input)`                      | call            | Invoke another flow                          |
-| `fx.vault(contract)`                        | read            | Read a secret (`Redacted`; logs masked)      |
-| `fx.clock.now()` / `.sleep(…)`              | —               | Injected time / durable sleep                |
-| `fx.cache.get/set`                          | —               | Shared cache with effect-aware invalidation  |
-| `fx.step(name, fn)`                         | —               | Named durable step — never re-runs on replay |
-| `fx.all` / `fx.race` / `fx.retry`           | —               | Structured concurrency + backoff retry       |
-| `fx.signal`                                 | —               | Ambient `AbortSignal` for the current branch |
-| `fx.id()` · `fx.log` · `fx.t` · `fx.locale` | —               | UUIDs, redacting logger, ICU i18n            |
-| `fx.auth` · `fx.operator` · `fx.tenant`     | —               | Who is calling (user / operator / tenant)    |
+| Surface                                     | Effect recorded | What it does                                       |
+| ------------------------------------------- | --------------- | -------------------------------------------------- |
+| `fx.store(db).select/insert/…`              | read / write    | SQL, KV, files, index sessions                     |
+| `fx.emit(signal, payload)`                  | emit            | Publish a signal (transactional with writes)       |
+| `fx.send(template, opts)`                   | send            | Reach a human (email · SMS · …)                    |
+| `fx.ask(prompt, input)`                     | ask             | Call a versioned AI prompt                         |
+| `fx.run(agent, input)`                      | ask             | Run a bounded agent                                |
+| `fx.call(flow, input)`                      | call            | Invoke another flow                                |
+| `fx.vault.get(contract)`                    | secret          | Read a secret (`Redacted`; logs masked)            |
+| `fx.clock.now()` / `.sleep(…)`              | —               | Injected time / durable sleep                      |
+| `fx.cache.get/set`                          | —               | Shared cache with effect-aware invalidation        |
+| `fx.step(name, fn, { undo? })`              | —               | Named durable step — optional LIFO undo on failure |
+| `fx.all` / `fx.race` / `fx.retry`           | —               | Structured concurrency + backoff retry             |
+| `fx.signal`                                 | —               | Ambient `AbortSignal` for the current branch       |
+| `fx.id()` · `fx.log` · `fx.t` · `fx.locale` | —               | UUIDs, redacting logger, ICU i18n                  |
+| `fx.auth` · `fx.operator` · `fx.tenant`     | —               | Who is calling (user / operator / tenant)          |
 
 <Callout title="Why this strictness pays off">
   Effects are inferred from `fx` usage, so the Manifest knows exactly which flows read `orders` or
@@ -216,28 +216,27 @@ export const chargeOrder = flow("payments.chargeOrder", {
   in: OrderRef,
   out: z.boolean(),
   do: async ({ orderId }, fx) => {
-    const intent = await fx.step("create-intent", () =>
-      stripe(fx.vault(stripeKey).reveal()).create(orderId),
-    );
+    const key = await fx.vault.get(stripeKey);
+    const intent = await fx.step("create-intent", () => stripe(key.reveal()).create(orderId));
 
     await fx.clock.sleep("verify-window", "2m"); // journals wakeAt in a durable flow
 
-    return fx.step("confirm", () => stripe(fx.vault(stripeKey).reveal()).confirm(intent));
+    return fx.step("confirm", () => stripe(key.reveal()).confirm(intent));
   },
 });
 ```
 
 **Consequence:** completed steps replay from the journal — on resume, `create-intent` does not re-run, so the card is not charged twice.
 
-**Crash recovery needs a shared journal.** Set `drivers.journal: "postgres"` (the docker/prod template default) and every run persists in `oke_journal_runs` under a per-run lease: boot scans for orphaned `running` / due `sleeping` runs and resumes them, and the lease lets exactly one instance execute a run at a time. The default `memory` journal is per process — replay holds for that process only.
+**Crash recovery needs a shared journal.** Set `drivers.journal: "postgres"` (the `dev`/`prod` template default) and every run persists in `oke_journal_runs` under a per-run lease: boot scans for orphaned `running` / `compensating` / due `sleeping` runs and resumes them, and the lease lets exactly one instance execute a run at a time. The default `memory` journal is per process — replay holds for that process only.
 
 Replay is **at-least-once** for a step whose body never persisted (crash mid-step, lease overrun): that step re-runs on reclaim, so keep step bodies short or internally idempotent. A client transport retry starts a _new_ run with a fresh `runId` — request-level idempotency is an application concern, not the journal's.
 
 For flaky sub-steps, wrap the work in `fx.retry` **inside** `fx.step` so a completed charge is never retried on resume. Coarse whole-body retry is also available as `flow(name, { retry: { retries, delay, backoff, jitter } })` and reuses the same journal session.
 
-After a **terminal** failure (`fx.fail` or exhausted retries / uncaught throw), optional
-`compensate` runs under the same journal. Undo work must use **new** step names
-(`undo:…`) — never rewind forward steps:
+After a **terminal** failure (`fx.fail` or exhausted retries / uncaught throw), declare
+undo next to each step. Only **persisted** steps undo (LIFO) — if `charge` throws before
+it journals, `undo:charge` does not run:
 
 ```typescript
 export const chargeOrder = flow("payments.chargeOrder", {
@@ -245,23 +244,23 @@ export const chargeOrder = flow("payments.chargeOrder", {
   in: OrderRef,
   out: z.boolean(),
   do: async ({ orderId }, fx) => {
-    await fx.step("reserve", () => reserve(orderId));
-    await fx.step("charge", () => charge(orderId));
+    await fx.step("reserve", () => reserve(orderId), {
+      undo: () => release(orderId),
+    });
+    await fx.step("charge", () => charge(orderId), {
+      undo: (intent) => refund(intent), // journaled value — resume-safe
+    });
     return true;
-  },
-  compensate: async ({ input, completedSteps }, fx) => {
-    if (completedSteps.includes("charge")) {
-      await fx.step("undo:charge", () => refund(input.orderId));
-    }
-    if (completedSteps.includes("reserve")) {
-      await fx.step("undo:reserve", () => release(input.orderId));
-    }
   },
 });
 ```
 
-Thrown errors on the durable execute path commit the journal as `failed` (and land on Runs).
-`JournalSuspend` (sleep) is park, not failure — compensate does not run.
+The runtime journals undos as `undo:<name>` under status `compensating`, then commits
+`failed`. Orphan reclaim resumes that phase without re-entering forward work.
+`flow.compensate` remains an optional hook after auto undos for cross-cutting cleanup.
+`JournalSuspend` (sleep) is park, not failure — undo does not run.
+Use `fx.using` for same-attempt cleanup; `{ undo }` for durable external effects — not both
+for the same release.
 
 ## Composition is just calls
 
@@ -298,9 +297,9 @@ Use `fx.all` (or `fx.race`) with thunks. The first rejection aborts siblings thr
 Put `fx.retry` **inside** `fx.step`, not around it. Completed steps replay from the journal and never re-run. `flow(name, { retry })` is for coarse whole-body retries on the same session.
 
 </Accordion>
-<Accordion title="When does compensate run?">
+<Accordion title="When does undo / compensate run?">
 
-Only after terminal failure for that journal attempt — not on sleep, not mid-retry, not on success. Undo bodies must be idempotent (`undo:*` steps resume like any other step). Irreversible effects (`send` / `ask`) need developer-declared undos or an explicit no-op.
+Only after terminal failure for that journal attempt — not on sleep, not mid-retry, not on success. Per-step `{ undo }` runs first (LIFO, only for persisted steps), then optional `flow.compensate`. The run stays `compensating` until undos finish so a crash mid-undo resumes the undo phase, not forward `do`. Undo bodies must be idempotent. Irreversible effects (`send` / `ask`) need developer-declared undos or an explicit no-op.
 
 </Accordion>
 <Accordion title="How do I share logic between flows — a private function?">

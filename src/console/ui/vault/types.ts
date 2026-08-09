@@ -43,10 +43,36 @@ export interface VaultRecord {
   readonly sharedFingerprintEnvs: readonly string[];
 }
 
+/** Vault backend driver id — matches `drivers.vault`. */
+export type VaultDriverId = "env" | "vault" | "managed" | "memory";
+
+/** Built-in Vault backend state (epoch-ms timestamps). */
+export interface VaultBuiltinStatus {
+  readonly initialized: boolean;
+  readonly sealed: boolean;
+  readonly masterKeyPresent: boolean;
+  readonly kekVersion: number;
+  readonly secretCount: number;
+  readonly sealCount: number;
+  readonly lastSealedAt: number | null;
+  readonly lastUnsealedAt: number | null;
+  readonly rewrapTargetKekVersion: number | null;
+}
+
+/** Backend serving the terminal layer of the resolution chain. */
+export interface VaultBackend {
+  readonly driverId: VaultDriverId;
+  readonly builtin: boolean;
+  readonly status: VaultBuiltinStatus | null;
+  readonly unavailable: string | null;
+}
+
 /** `console.vault.list` response. */
 export interface VaultListResponse {
   readonly secrets: readonly VaultRecord[];
   readonly env: string;
+  /** `null` when the server could not resolve a backend. */
+  readonly backend: VaultBackend | null;
 }
 
 /** Grouped list section (secrets vs config). */

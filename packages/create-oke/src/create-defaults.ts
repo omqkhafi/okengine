@@ -1,7 +1,7 @@
 /**
  * User-global create-oke defaults — `~/.oke/create-defaults.json`.
  *
- * Project-local `.oke/` (mode, sqlite, …) stays under the app cwd.
+ * Project-local `.oke/` stays under the app cwd.
  * This file is the first home-directory preference for the scaffold wizard.
  */
 
@@ -10,13 +10,12 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { isTemplateId, type TemplateId } from "./templates.ts";
 
-/** Create profile assumption — mirrors `oke dev` local vs docker-ready. */
-export type CreateProfile = "local-only" | "docker-ready";
+/** Create profile — Docker Compose is always the `dev` runtime. */
+export type CreateProfile = "docker-ready";
 
 /** Env columns written into `oke.config.ts` driver maps. */
 export type EnvDriverPins = {
-  readonly local: string;
-  readonly docker: string;
+  readonly dev: string;
   readonly test: string;
   readonly prod: string;
 };
@@ -62,6 +61,16 @@ export type CreateDefaults = {
     readonly ai: EnvDriverPins | null;
   };
   readonly ai: CreateAiPref;
+  /**
+   * Extra locales beyond English (`en` is always the default).
+   * Empty = English-only project.
+   */
+  readonly locales: readonly string[];
+  /**
+   * Pin `images.pgdog` so Compose puts PgDog in front of Postgres.
+   * Default false — opt in via the wizard or `--pgdog`.
+   */
+  readonly pgdog: boolean;
   readonly updatedAt: string;
 };
 
@@ -130,7 +139,8 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (o.version !== 1) return null;
-  if (o.profile !== "local-only" && o.profile !== "docker-ready") return null;
+  // Reject deprecated local-only / unknown profiles (Docker-first only).
+  if (o.profile !== "docker-ready") return null;
   // Older files omit template — treat as standard so reuse stays usable.
   const templateRaw = o.template === undefined || o.template === null ? "standard" : o.template;
   if (typeof templateRaw !== "string" || !isTemplateId(templateRaw)) return null;
@@ -190,6 +200,19 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
     return null;
   }
   if (typeof o.updatedAt !== "string") return null;
+  let locales: readonly string[] = [];
+  if (o.locales !== undefined && o.locales !== null) {
+    if (!Array.isArray(o.locales) || !o.locales.every((x) => typeof x === "string")) {
+      return null;
+    }
+    locales = o.locales.filter((tag) => tag !== "en");
+  }
+  // Older files omit pgdog — treat as off (opt-in).
+  let pgdog = false;
+  if (o.pgdog !== undefined && o.pgdog !== null) {
+    if (typeof o.pgdog !== "boolean") return null;
+    pgdog = o.pgdog;
+  }
   return {
     version: 1,
     template,
@@ -212,6 +235,8 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
       ...(baseUrl !== undefined ? { baseUrl } : {}),
       ...(apiKeyEnv !== undefined ? { apiKeyEnv } : {}),
     },
+    locales,
+    pgdog,
     updatedAt: o.updatedAt,
   };
 }
@@ -234,13 +259,8 @@ function optionalStringOrNull(value: unknown): string | null | undefined | false
 function parsePins(raw: unknown): EnvDriverPins | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (
-    typeof o.local !== "string" ||
-    typeof o.docker !== "string" ||
-    typeof o.test !== "string" ||
-    typeof o.prod !== "string"
-  ) {
+  if (typeof o.dev !== "string" || typeof o.test !== "string" || typeof o.prod !== "string") {
     return null;
   }
-  return { local: o.local, docker: o.docker, test: o.test, prod: o.prod };
+  return { dev: o.dev, test: o.test, prod: o.prod };
 }

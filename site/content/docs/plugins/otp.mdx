@@ -40,7 +40,7 @@ import { otp } from "okengine/plugins";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: { auth: {} },
 }).plug(
   otp({
@@ -122,7 +122,7 @@ const { data } = await api.auth.verifyOtp({
 export default {
   drivers: {
     channel: {
-      sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
+      sms: { test: "console", prod: "taqnyat" },
     },
   },
 };

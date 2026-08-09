@@ -17,7 +17,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { flow } from "../kernel/flow.ts";
-import { createFileJournalStore, createMemoryJournalStore } from "../kernel/journal.ts";
+import {
+  createFileJournalStore,
+  createJournal,
+  createMemoryJournalStore,
+} from "../kernel/journal.ts";
 import {
   clock,
   createClockRuntime,
@@ -65,7 +69,6 @@ describe("durable journal", () => {
     const calls: string[] = [];
     const journalStore = createMemoryJournalStore();
     const tt = createTimeTravel(0);
-    let crashAfterFirstStep = true;
 
     const charge = flow("payments.charge", {
       durable: true,
@@ -74,9 +77,6 @@ describe("durable journal", () => {
           calls.push("create-intent");
           return { id: "pi_1" };
         });
-        if (crashAfterFirstStep) {
-          throw new Error("KILLED");
-        }
         return fx.step("confirm", () => {
           calls.push("confirm");
           return intent.id === "pi_1";
@@ -84,17 +84,16 @@ describe("durable journal", () => {
       },
     });
 
-    const first = await runDurable({
-      flow: charge,
-      input: { orderId: "o1" },
-      journalStore,
-      now: tt.now,
+    // Simulate crash after the first step: leave status `running` (orphans,
+    // not terminal `failed` — failed runs refuse resume).
+    const journal = createJournal({ store: journalStore, now: tt.now });
+    const crashed = await journal.start("payments.charge", { orderId: "o1" });
+    await crashed.step("create-intent", () => {
+      calls.push("create-intent");
+      return { id: "pi_1" };
     });
-    expect(first.status).toBe("failed");
-    expect(calls).toEqual(["create-intent"]);
+    const runId = crashed.runId;
 
-    crashAfterFirstStep = false;
-    const runId = first.status === "failed" ? first.runId : "";
     const second = await runDurable({
       flow: charge,
       input: { orderId: "o1" },

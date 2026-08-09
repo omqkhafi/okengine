@@ -54,7 +54,7 @@ export const app = oke({ name: "shop", env: "dev" }).plug(audit);
 <Step>
 ### Everything derives as usual
 
-Plugin flows appear in the Manifest, plugin tables land in `schema.generated.ts` on the next `oke db push`, plugin panels show up in the Console. No extra wiring — a contribution is ordinary OKE, just authored elsewhere.
+Plugin flows appear in the Manifest, plugin tables land in `schema.drizzle.ts` on the next `oke db push`, plugin panels show up in the Console. No extra wiring — a contribution is ordinary OKE, just authored elsewhere.
 
 </Step>
 
@@ -225,7 +225,7 @@ Extending an existing **app-owned** table with plugin columns is not supported i
     two configurations of one plugin would silently diverge. Pass identical config, or rename one
     instance.
   </Accordion>
-  <Accordion title="My plugin table is missing from schema.generated.ts">
+  <Accordion title="My plugin table is missing from schema.drizzle.ts">
     The CLI reads table contributions from the live app entry. Make sure the plugin is actually
     `.plug()`ed in `src/app.ts` (or `db.entry` if overridden), then re-run `oke db push`.
   </Accordion>

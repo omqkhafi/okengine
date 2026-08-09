@@ -3,8 +3,8 @@
  * flow under that unit — the stale/missing `.adopt()` barrel case.
  *
  * Mirrors `effects-stamping.test.ts`'s OKE1008 shape exactly: opt-in only
- * via `rootDir`, `local`/`test` warn once (dev-loop stays unbroken),
- * `docker`/`prod` hard-fail (`OKE1009`) — never a silently-incomplete route
+ * via `rootDir`, `test` warns once (dev-loop stays unbroken),
+ * `dev`+compose / `prod` hard-fail (`OKE1009`) — never a silently-incomplete route
  * table in a deploy-shaped environment.
  */
 
@@ -41,23 +41,23 @@ describe("assertAdoptBarrelFresh — direct", () => {
     try {
       await makeUnitDir(root, "notes");
       const notesFlow = flow("notes.create", { do: () => ({ ok: true as const }) });
-      await expect(assertAdoptBarrelFresh([notesFlow], "docker", root)).resolves.toBeUndefined();
+      await expect(assertAdoptBarrelFresh([notesFlow], "dev", root, true)).resolves.toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test("stale: unit on disk, zero adopted flows for it — docker hard-fails OKE1009", async () => {
+  test("stale: unit on disk, zero adopted flows for it — dev+compose hard-fails OKE1009", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       await makeUnitDir(root, "notes");
-      await expect(assertAdoptBarrelFresh([], "docker", root)).rejects.toThrow(/OKE1009/);
+      await expect(assertAdoptBarrelFresh([], "dev", root, true)).rejects.toThrow(/OKE1009/);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test("stale: prod — same posture as docker", async () => {
+  test("stale: prod — same posture as dev+compose", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       await makeUnitDir(root, "notes");
@@ -67,11 +67,11 @@ describe("assertAdoptBarrelFresh — direct", () => {
     }
   });
 
-  test("stale: local — warns, never throws (dev-loop stays unbroken)", async () => {
+  test("stale: test — warns, never throws (dev-loop stays unbroken)", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       await makeUnitDir(root, "notes");
-      await expect(assertAdoptBarrelFresh([], "local", root)).resolves.toBeUndefined();
+      await expect(assertAdoptBarrelFresh([], "test", root)).resolves.toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -79,7 +79,7 @@ describe("assertAdoptBarrelFresh — direct", () => {
 });
 
 describe("boot-level: stale barrel through a real oke() boot", () => {
-  test("docker: real app.boot() hard-fails OKE1009 when a unit folder was never adopted", async () => {
+  test("dev+compose: real app.boot() hard-fails OKE1009 when a unit folder was never adopted", async () => {
     const root = await mkdtemp(join(tmpdir(), "oke-adopt-fresh-"));
     try {
       // "notes" exists on disk but this app only ever adopted "main" —
@@ -94,7 +94,22 @@ describe("boot-level: stale barrel through a real oke() boot", () => {
       const app = oke({ name: "stale-barrel", gate: { unguardedHttp: "allow" } });
 
       await expect(
-        app.boot({ env: "docker", rootDir: root, unguardedHttp: "allow", startScheduler: false }),
+        app.boot({
+          env: "dev",
+          docker: true,
+          rootDir: root,
+          unguardedHttp: "allow",
+          startScheduler: false,
+          config: {
+            drivers: {
+              store: {
+                sql: { dev: "memory" },
+                kv: { dev: "memory" },
+              },
+              channel: { email: { dev: "console" } },
+            },
+          },
+        }),
       ).rejects.toThrow(/OKE1009/);
     } finally {
       await rm(root, { recursive: true, force: true });

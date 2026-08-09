@@ -9,9 +9,7 @@ import type { ColumnClassification, StoreFacet } from "../manifest/types.ts";
 
 /** Protocol ids for store drivers in scope. */
 export type StoreDriverId =
-  | "sqlite"
   | "postgres"
-  | "libsql"
   | "pglite"
   | "memory"
   | "redis"
@@ -31,14 +29,14 @@ export type SqlRow = Record<string, unknown>;
 
 /** Options when opening a SQL connection. */
 export interface SqlConnectOptions {
-  /** Connection URL or path (`:memory:`, `file:…`, `postgres://…`). */
+  /** Connection URL or path (`memory://`, `.oke/pgdata`, `postgres://…`). */
   readonly url?: string;
   /** Explicit role (defaults to primary). */
   readonly role?: SqlRole;
-  /** Pool / open hint — ignored by memory/sqlite. */
+  /** Pool / open hint — ignored by memory drivers. */
   readonly pool?: { readonly max?: number };
   /**
-   * Injected client for tests (Bun.SQL-compatible query fn, or bun:sqlite Database).
+   * Injected client for tests (Bun.SQL-compatible query fn).
    * Production code omits this and binds the native client.
    */
   readonly client?: unknown;
@@ -47,7 +45,7 @@ export interface SqlConnectOptions {
 /** Low-level SQL connection used by every sql driver. */
 export interface SqlConnection {
   /** Protocol driver id. */
-  readonly driverId: "sqlite" | "postgres" | "libsql" | "pglite" | "memory";
+  readonly driverId: "postgres" | "pglite" | "memory";
   /** Primary vs replica. */
   readonly role: SqlRole;
   /**
@@ -71,7 +69,7 @@ export interface SqlConnection {
 /** SQL driver factory. */
 export interface SqlDriver {
   /** Protocol id. */
-  readonly id: "sqlite" | "postgres" | "libsql" | "pglite" | "memory";
+  readonly id: "postgres" | "pglite" | "memory";
   /** Facet this driver serves. */
   readonly facet: "sql";
   /**
@@ -262,7 +260,7 @@ export interface IndexHit {
 
 /** Vector (ANN) index handle. */
 export interface VectorIndexStore {
-  readonly driverId: "memory" | "pgvector" | "libsql";
+  readonly driverId: "memory" | "pgvector";
   /**
    * Upsert a vector.
    *
@@ -356,7 +354,7 @@ export interface IndexOpenOptions {
 
 /** Vector index driver factory. */
 export interface VectorIndexDriver {
-  readonly id: "memory" | "pgvector" | "libsql";
+  readonly id: "memory" | "pgvector";
   readonly facet: "index";
   /**
    * Open a vector index.
@@ -384,8 +382,8 @@ export type IndexDriver = VectorIndexDriver | TextIndexDriver;
 /** True when the index driver shares the sql facet's engine (never memory). */
 export function indexDriverNeedsSql(
   driver: IndexDriver,
-): driver is VectorIndexDriver & { id: "pgvector" | "libsql" } {
-  return driver.id === "pgvector" || driver.id === "libsql";
+): driver is VectorIndexDriver & { id: "pgvector" } {
+  return driver.id === "pgvector";
 }
 
 /** Union of all store drivers. */

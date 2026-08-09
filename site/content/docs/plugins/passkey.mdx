@@ -28,7 +28,7 @@ import { passkey } from "okengine/plugins";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: { auth: {} },
 }).plug(passkey({ origins: ["http://localhost", "https://localhost"] }));
 ```

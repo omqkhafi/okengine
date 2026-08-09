@@ -1,41 +1,36 @@
 /**
- * Driver map resolution — including `docker` → prod fallback.
+ * Driver map resolution — including `dev` → prod fallback.
  */
 
 import { describe, expect, test } from "bun:test";
 import { resolveDomainDdlMode, resolveDriverId } from "./index.ts";
 
 describe("resolveDomainDdlMode", () => {
-  test("test keeps ensure; docker/prod always off", () => {
+  test("test keeps ensure; prod always off", () => {
     expect(resolveDomainDdlMode("test", true)).toBe("ensure");
-    expect(resolveDomainDdlMode("docker", true)).toBe("off");
     expect(resolveDomainDdlMode("prod", true)).toBe("off");
   });
 
-  test("local follows autoPush", () => {
-    expect(resolveDomainDdlMode("local", true)).toBe("off");
-    expect(resolveDomainDdlMode("local", false)).toBe("ensure");
+  test("dev follows autoPush", () => {
+    expect(resolveDomainDdlMode("dev", true)).toBe("off");
+    expect(resolveDomainDdlMode("dev", false)).toBe("ensure");
   });
 });
 
 describe("resolveDriverId", () => {
   test("reads the named env key", () => {
-    expect(resolveDriverId({ local: "sqlite", prod: "postgres" }, "local")).toBe("sqlite");
-    expect(resolveDriverId({ local: "sqlite", prod: "postgres" }, "prod")).toBe("postgres");
+    expect(resolveDriverId({ dev: "postgres", prod: "postgres" }, "dev")).toBe("postgres");
+    expect(resolveDriverId({ dev: "postgres", prod: "postgres" }, "prod")).toBe("postgres");
   });
 
-  test("docker prefers docker, then prod, then local", () => {
-    expect(
-      resolveDriverId({ local: "sqlite", docker: "postgres", prod: "postgres" }, "docker"),
-    ).toBe("postgres");
-    expect(resolveDriverId({ local: "sqlite", prod: "postgres" }, "docker")).toBe("postgres");
-    expect(resolveDriverId({ local: "sqlite" }, "docker")).toBe("sqlite");
+  test("without defaults, cascade is env → dev → prod → test", () => {
+    expect(resolveDriverId({ prod: "postgres" }, "dev")).toBe("postgres");
+    expect(resolveDriverId({ test: "pglite" }, "dev")).toBe("pglite");
   });
 
-  test("legacy keys resolve after normalize", () => {
-    expect(resolveDriverId({ dev: "sqlite", stack: "postgres" } as never, "local")).toBe("sqlite");
-    expect(resolveDriverId({ dev: "sqlite", stack: "postgres" } as never, "docker")).toBe(
-      "postgres",
-    );
+  test("bare string expands to all envs", () => {
+    expect(resolveDriverId("redis", "dev")).toBe("redis");
+    expect(resolveDriverId("redis", "test")).toBe("redis");
+    expect(resolveDriverId("redis", "prod")).toBe("redis");
   });
 });

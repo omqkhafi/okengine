@@ -60,7 +60,7 @@ const CLAIM_LEASE_SQL = `SELECT * FROM oke_journal_runs WHERE id=? AND ((locked_
 const CLAIM_DUE_SQL = `SELECT * FROM oke_journal_runs WHERE status='sleeping' AND wake_at<=? AND ((locked_by IS NULL) OR (lease_expires_at IS NOT NULL AND lease_expires_at<=?)) ORDER BY wake_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
 
 /** Boot-time orphan discovery: running/sleeping runs with no live lease. */
-const ORPHANS_SQL = `SELECT * FROM oke_journal_runs WHERE (status='running' OR status='sleeping') AND ((locked_by IS NULL) OR (lease_expires_at IS NOT NULL AND lease_expires_at<=?))`;
+const ORPHANS_SQL = `SELECT * FROM oke_journal_runs WHERE (status='running' OR status='sleeping' OR status='compensating') AND ((locked_by IS NULL) OR (lease_expires_at IS NOT NULL AND lease_expires_at<=?))`;
 
 const UPDATE_LEASE_SQL = `UPDATE oke_journal_runs SET locked_by = ?, lease_expires_at = ? WHERE id = ?`;
 
@@ -284,7 +284,9 @@ export function createPostgresJournalFake(): PostgresJournalSql & {
         const cutoff = Number(params[0]);
         return state.rows
           .filter(
-            (r) => (r.status === "running" || r.status === "sleeping") && noLiveLease(r, cutoff),
+            (r) =>
+              (r.status === "running" || r.status === "sleeping" || r.status === "compensating") &&
+              noLiveLease(r, cutoff),
           )
           .map((r) => ({ ...r }));
       }

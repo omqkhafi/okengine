@@ -3,11 +3,7 @@
  */
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
-import {
-  CHANNEL_EMAIL_DEFAULTS,
-  CHANNEL_SMS_DEFAULTS,
-  dockerFlagDefaults,
-} from "../../config/driver-defaults.ts";
+import { CHANNEL_EMAIL_DEFAULTS, CHANNEL_SMS_DEFAULTS } from "../../config/driver-defaults.ts";
 import { openConsoleChannel } from "../../drivers/channel-console.ts";
 import { openMsegatChannel } from "../../drivers/channel-msegat.ts";
 import { openResendChannel } from "../../drivers/channel-resend.ts";
@@ -86,12 +82,9 @@ export function resolveEmailDriverId(
   env: ConfigEnv,
   docker: boolean,
 ): string {
+  void docker;
   // Defaults cover every ConfigEnv key, so this is never undefined.
-  return resolveDriverId(
-    options.config?.drivers?.channel?.email,
-    env,
-    dockerFlagDefaults(CHANNEL_EMAIL_DEFAULTS, docker),
-  )!;
+  return resolveDriverId(options.config?.drivers?.channel?.email, env, CHANNEL_EMAIL_DEFAULTS)!;
 }
 
 /**

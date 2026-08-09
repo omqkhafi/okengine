@@ -18,6 +18,9 @@ describe("isDomainSchemaWatchPath", () => {
   });
 
   test("ignores emit output (avoids push ↔ generated feedback loop)", () => {
+    expect(isDomainSchemaWatchPath("src/db/schema.drizzle.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("schema.drizzle.ts")).toBe(false);
+    expect(isDomainSchemaWatchPath("flows/notes/schema.drizzle.tsx")).toBe(false);
     expect(isDomainSchemaWatchPath("src/schema.generated.ts")).toBe(false);
     expect(isDomainSchemaWatchPath("schema.generated.ts")).toBe(false);
     expect(isDomainSchemaWatchPath("flows/notes/schema.generated.tsx")).toBe(false);
@@ -35,12 +38,12 @@ describe("isDomainSchemaWatchPath", () => {
 });
 
 describe("resolveDevAutoPush", () => {
-  test("default on for local", () => {
+  test("default on", () => {
     expect(resolveDevAutoPush({})).toBe(true);
   });
 
-  test("off for docker", () => {
-    expect(resolveDevAutoPush({ docker: true })).toBe(false);
+  test("docker flag ignored (always-compose)", () => {
+    expect(resolveDevAutoPush({ docker: true })).toBe(true);
   });
 
   test("off for --no-db-push", () => {

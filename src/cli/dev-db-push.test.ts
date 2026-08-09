@@ -6,9 +6,38 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runDev, type DevSession, type DevWatchFn } from "./dev.ts";
+import { runDev, type DevOptions, type DevSession, type DevWatchFn } from "./dev.ts";
 
 const sessions: DevSession[] = [];
+
+const STUB_IMAGES = {
+  "store.sql": "postgres:16-alpine",
+  "store.kv": "redis:7-alpine",
+} as const;
+const STUB_CREDENTIALS = {
+  "store.sql": {
+    user: "oke",
+    password: "test-password-not-in-yaml",
+    database: "oke",
+  },
+} as const;
+
+function stubCompose(): Pick<
+  DevOptions,
+  "images" | "credentials" | "composeUp" | "composeHealth" | "composeStop"
+> {
+  return {
+    images: STUB_IMAGES,
+    credentials: STUB_CREDENTIALS,
+    composeUp: async () => {},
+    composeHealth: async () =>
+      new Map([
+        ["store-sql", "ready"],
+        ["store-kv", "ready"],
+      ]),
+    composeStop: () => {},
+  };
+}
 
 afterEach(() => {
   for (const s of sessions.splice(0)) s.stop();
@@ -46,25 +75,26 @@ async function scaffoldProject(): Promise<string> {
     join(dir, "oke.config.ts"),
     `import { defineConfig } from ${JSON.stringify(configMod)};
 export default defineConfig({
-  drivers: { store: { sql: { local: "sqlite", test: "memory", prod: "postgres" } } },
+  drivers: { store: { sql: { dev: "postgres", test: "pglite", prod: "postgres" } } },
 });
 `,
   );
   await writeFile(join(dir, "src", "app.ts"), `export {};\n`);
   await writeFile(
     join(dir, "src", "schema.ts"),
-    `import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-export const entries = sqliteTable("entries", { id: text("id").primaryKey() });
+    `import { pgTable, text } from "drizzle-orm/pg-core";
+export const entries = pgTable("entries", { id: text("id").primaryKey() });
 `,
   );
   await writeFile(
     join(dir, "drizzle.config.ts"),
     `import { defineConfig } from "drizzle-kit";
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
+  driver: "pglite",
   schema: "./src/schema.ts",
   out: "./drizzle",
-  dbCredentials: { url: "file::memory:" },
+  dbCredentials: { url: "memory://" },
 });
 `,
   );
@@ -83,7 +113,7 @@ describe("oke dev db auto-push", () => {
 
     const result = await runDev({
       cwd,
-      local: true,
+      ...stubCompose(),
       keepAlive: false,
       dryRun: false,
       appPort: 0,
@@ -127,8 +157,8 @@ describe("oke dev db auto-push", () => {
     const before = pushes.length;
     await writeFile(
       join(cwd, "src", "schema.ts"),
-      `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-export const entries = sqliteTable("entries", {
+      `import { integer, pgTable, text } from "drizzle-orm/pg-core";
+export const entries = pgTable("entries", {
   id: text("id").primaryKey(),
   n: integer("n"),
 });
@@ -139,7 +169,7 @@ export const entries = sqliteTable("entries", {
     expect(pushes.length).toBeGreaterThan(before);
   });
 
-  test("schema.generated.ts change does not re-trigger dbPush", async () => {
+  test("schema.drizzle.ts change does not re-trigger dbPush", async () => {
     const cwd = await scaffoldProject();
     const pushes: string[] = [];
     const watcher = controlledWatcher();
@@ -150,7 +180,7 @@ export const entries = sqliteTable("entries", {
 
     const result = await runDev({
       cwd,
-      local: true,
+      ...stubCompose(),
       keepAlive: false,
       dryRun: false,
       appPort: 0,
@@ -191,7 +221,9 @@ export const entries = sqliteTable("entries", {
     const before = pushes.length;
     expect(before).toBeGreaterThanOrEqual(1);
 
-    // Simulate emit writing schema.generated.ts after push — must not loop.
+    // Simulate emit writing schema.drizzle.ts after push — must not loop.
+    watcher.change("schema.drizzle.ts");
+    watcher.change("src/db/schema.drizzle.ts");
     watcher.change("schema.generated.ts");
     watcher.change("src/schema.generated.ts");
     await Bun.sleep(500);
@@ -205,7 +237,7 @@ export const entries = sqliteTable("entries", {
 
     const result = await runDev({
       cwd,
-      local: true,
+      ...stubCompose(),
       noDbPush: true,
       keepAlive: false,
       appPort: 0,
@@ -241,8 +273,8 @@ export const entries = sqliteTable("entries", {
     expect(result.code).toBe(0);
     await writeFile(
       join(cwd, "src", "schema.ts"),
-      `import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-export const entries = sqliteTable("entries", { id: text("id").primaryKey(), x: text("x") });
+      `import { pgTable, text } from "drizzle-orm/pg-core";
+export const entries = pgTable("entries", { id: text("id").primaryKey(), x: text("x") });
 `,
     );
     watcher.change("schema.ts");

@@ -2,21 +2,22 @@
  * `oke.config.ts` surface. Subpath: `okengine/config`.
  *
  * Driver maps are protocol-named; vendor/image choice lives in `images`.
+ * Three environment targets: `dev` (Docker Compose), `test` (PGLite), `prod`.
  * @module
  */
 
 /**
  * Environment role keys used in driver maps.
  *
- * - `local` — laptop defaults (`oke dev` / `oke dev -l`)
- * - `docker` — compose infra + host Bun (`oke dev -d`)
- * - `test` — automated tests
+ * - `dev` — local development via Docker Compose (`oke dev`)
+ * - `test` — automated tests (`oke test` / PGLite)
  * - `prod` — production deploy
  */
-export type ConfigEnv = "local" | "docker" | "test" | "prod";
+import type { VaultElementConfig } from "../elements/vault/types.ts";
 
-/** Legacy driver-map keys accepted during soft-compat migration. */
-type LegacyConfigEnv = "dev" | "stack";
+export type { VaultElementConfig };
+
+export type ConfigEnv = "dev" | "test" | "prod";
 
 /** Pool options for SQL drivers. */
 export interface DriverPoolOptions {
@@ -38,29 +39,26 @@ export type DriverRef =
       readonly key?: unknown;
     };
 
-/** Map of env → driver ref. */
+/** Map of env → driver ref (canonical three-key shape). */
 export type EnvDriverMap = Partial<Record<ConfigEnv, DriverRef>>;
 
-/**
- * Raw map that may still use deprecated `dev` / `stack` keys.
- * Normalized by {@link normalizeEnvDriverMap}.
- */
-export type RawEnvDriverMap = Partial<Record<ConfigEnv | LegacyConfigEnv, DriverRef>>;
+/** Driver pin: bare ref (all envs) or per-env map (`dev` / `test` / `prod`). */
+export type EnvDriverInput = DriverRef | EnvDriverMap;
 
 /** Store facet driver maps. */
 export interface StoreDriversConfig {
-  readonly sql?: EnvDriverMap;
-  readonly kv?: EnvDriverMap;
-  readonly files?: EnvDriverMap;
-  readonly index?: EnvDriverMap;
+  readonly sql?: EnvDriverInput;
+  readonly kv?: EnvDriverInput;
+  readonly files?: EnvDriverInput;
+  readonly index?: EnvDriverInput;
 }
 
 /** Channel medium → env driver map. */
 export interface ChannelDriversConfig {
-  readonly email?: EnvDriverMap;
-  readonly sms?: EnvDriverMap;
-  readonly whatsapp?: EnvDriverMap;
-  readonly push?: EnvDriverMap;
+  readonly email?: EnvDriverInput;
+  readonly sms?: EnvDriverInput;
+  readonly whatsapp?: EnvDriverInput;
+  readonly push?: EnvDriverInput;
 }
 
 /** Top-level drivers block in {@link OkeConfig}. */
@@ -71,14 +69,14 @@ export interface DriversConfig {
    */
   readonly prod?: readonly string[];
   readonly store?: StoreDriversConfig;
-  readonly signal?: EnvDriverMap;
-  readonly clock?: EnvDriverMap;
+  readonly signal?: EnvDriverInput;
+  readonly clock?: EnvDriverInput;
   /** Durable-run journal: `memory` · `file` · `postgres`. */
-  readonly journal?: EnvDriverMap;
-  readonly vault?: EnvDriverMap;
+  readonly journal?: EnvDriverInput;
+  readonly vault?: EnvDriverInput;
   readonly channel?: ChannelDriversConfig;
-  readonly ai?: EnvDriverMap;
-  readonly runs?: EnvDriverMap;
+  readonly ai?: EnvDriverInput;
+  readonly runs?: EnvDriverInput;
 }
 
 /**
@@ -189,9 +187,9 @@ export type PrivacyConfig = Readonly<Record<string, unknown>>;
  */
 export interface DbConfig {
   /**
-   * Auto-run `oke db push` when domain schema files change under `oke dev`
-   * (local mode only). Default `true`. Set `false` to opt out explicitly.
-   * Forced off for `docker` / `prod`.
+   * Auto-run `oke db push` when domain schema files change under `oke dev`.
+   * Default `true`. Set `false` to opt out explicitly.
+   * Forced off for `prod`.
    */
   readonly autoPush?: boolean;
   /**
@@ -207,7 +205,8 @@ export interface DbConfig {
   readonly declare?: string;
   /**
    * Generated Drizzle schema path written from abstract decls.
-   * Default `"src/db/schema.generated.ts"` (legacy `"src/schema.generated.ts"`).
+   * Default `"src/db/schema.drizzle.ts"` (prior `"src/db/schema.generated.ts"`;
+   * legacy `"src/schema.generated.ts"`).
    * Point `drizzle.config.ts` `schema` at this file when using the abstract path.
    */
   readonly generated?: string;
@@ -240,6 +239,11 @@ export interface OkeConfig {
    * Domain Drizzle schema sync (`oke db …`). Not related to `oke schema`.
    */
   readonly db?: DbConfig;
+  /**
+   * Encrypted-at-rest Vault settings (algorithm, master key, audit, seal).
+   * Contracts stay in code — this block only configures the backend.
+   */
+  readonly vault?: VaultElementConfig;
   readonly topology?: "monolith" | "services";
   readonly ports?: PortsConfig;
   readonly console?: ConsoleConfig;
@@ -248,8 +252,8 @@ export interface OkeConfig {
 /**
  * Whether domain auto-DDL (`ensureFromMeta`) should run for this env.
  *
- * - `ensure` — `CREATE TABLE IF NOT EXISTS` on first touch (test / local opt-out)
- * - `off` — migrations / `oke db push` own DDL (docker, prod, local+autoPush)
+ * - `ensure` — `CREATE TABLE IF NOT EXISTS` on first touch (test / dev opt-out)
+ * - `off` — migrations / `oke db push` own DDL (dev+autoPush, prod)
  */
 export type DomainDdlMode = "ensure" | "off";
 
@@ -261,47 +265,100 @@ export type DomainDdlMode = "ensure" | "off";
  */
 export function resolveDomainDdlMode(env: ConfigEnv, autoPush = true): DomainDdlMode {
   if (env === "test") return "ensure";
-  if (env === "docker" || env === "prod") return "off";
+  if (env === "prod") return "off";
   return autoPush ? "off" : "ensure";
 }
 
-/** Whether a legacy-key deprecation warning was already emitted this process. */
-let legacyKeyWarned = false;
+/**
+ * Extract the protocol id from a {@link DriverRef}.
+ *
+ * @param ref - Driver ref
+ */
+export function driverRefId(ref: DriverRef | undefined): string | undefined {
+  if (ref === undefined) return undefined;
+  return typeof ref === "string" ? ref : ref.driver;
+}
 
 /**
- * Normalize deprecated `dev`/`stack` driver-map keys to `local`/`docker`.
+ * True when `value` is a bare driver pin (string or `{ driver, … }`), not an env map.
  *
- * Emits a one-time stderr warning when legacy keys are present.
- *
- * @param raw - Env → driver map (possibly legacy keys)
+ * @param value - Unknown driver input
  */
-export function normalizeEnvDriverMap(
-  raw: RawEnvDriverMap | EnvDriverMap | undefined,
-): EnvDriverMap | undefined {
-  if (!raw) return undefined;
-  const hasLegacy =
-    (raw as RawEnvDriverMap).dev !== undefined || (raw as RawEnvDriverMap).stack !== undefined;
-  if (hasLegacy && !legacyKeyWarned) {
-    legacyKeyWarned = true;
-    console.warn(
-      "oke: driver map keys `dev`/`stack` are deprecated — use `local`/`docker` (run `oke upgrade`)",
-    );
-  }
-  const out: EnvDriverMap = { ...(raw as EnvDriverMap) };
-  const legacy = raw as RawEnvDriverMap;
-  if (legacy.local === undefined && legacy.dev !== undefined) {
-    out.local = legacy.dev;
-  }
-  if (legacy.docker === undefined && legacy.stack !== undefined) {
-    out.docker = legacy.stack;
-  }
-  delete (out as RawEnvDriverMap).dev;
-  delete (out as RawEnvDriverMap).stack;
+function isBareDriverRef(value: unknown): value is DriverRef {
+  if (typeof value === "string") return true;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.driver === "string";
+}
+
+/**
+ * Expand a bare {@link DriverRef} to all three env keys.
+ *
+ * @param ref - Driver ref applied to every env
+ */
+export function expandDriverRefToMap(ref: DriverRef): EnvDriverMap {
+  return { dev: ref, test: ref, prod: ref };
+}
+
+/**
+ * Expand a bare driver pin to `{ dev, test, prod }`, or pass through a map.
+ *
+ * @param raw - Env → driver map, bare ref, or undefined
+ */
+export function normalizeEnvDriverMap(raw: EnvDriverInput | undefined): EnvDriverMap | undefined {
+  if (raw === undefined) return undefined;
+  if (isBareDriverRef(raw)) return expandDriverRefToMap(raw);
+  const record = raw as EnvDriverMap;
+  const out: EnvDriverMap = {};
+  if (record.dev !== undefined) out.dev = record.dev;
+  if (record.test !== undefined) out.test = record.test;
+  if (record.prod !== undefined) out.prod = record.prod;
   return out;
 }
 
 /**
- * Normalize every env map under a drivers block.
+ * Apply `fn` to every env-driver slot under a drivers block.
+ *
+ * @param drivers - Drivers block
+ * @param fn - Per-slot transform
+ */
+function mapDriversSlots(
+  drivers: DriversConfig,
+  fn: (input: EnvDriverInput | undefined) => EnvDriverInput | undefined,
+): DriversConfig {
+  const store = drivers.store
+    ? {
+        ...drivers.store,
+        sql: fn(drivers.store.sql),
+        kv: fn(drivers.store.kv),
+        files: fn(drivers.store.files),
+        index: fn(drivers.store.index),
+      }
+    : undefined;
+  const channel = drivers.channel
+    ? {
+        ...drivers.channel,
+        email: fn(drivers.channel.email),
+        sms: fn(drivers.channel.sms),
+        whatsapp: fn(drivers.channel.whatsapp),
+        push: fn(drivers.channel.push),
+      }
+    : undefined;
+  return {
+    ...drivers,
+    ...(store !== undefined ? { store } : {}),
+    signal: fn(drivers.signal),
+    clock: fn(drivers.clock),
+    journal: fn(drivers.journal),
+    vault: fn(drivers.vault),
+    ...(channel !== undefined ? { channel } : {}),
+    ai: fn(drivers.ai),
+    runs: fn(drivers.runs),
+  };
+}
+
+/**
+ * Normalize every env map under a drivers block (expand shorthand + rewrite keys).
  *
  * @param drivers - Drivers block
  */
@@ -309,47 +366,14 @@ export function normalizeDriversConfig(
   drivers: DriversConfig | undefined,
 ): DriversConfig | undefined {
   if (!drivers) return undefined;
-  const store = drivers.store
-    ? {
-        ...drivers.store,
-        sql: normalizeEnvDriverMap(drivers.store.sql as RawEnvDriverMap),
-        kv: normalizeEnvDriverMap(drivers.store.kv as RawEnvDriverMap),
-        files: normalizeEnvDriverMap(drivers.store.files as RawEnvDriverMap),
-        index: normalizeEnvDriverMap(drivers.store.index as RawEnvDriverMap),
-      }
-    : undefined;
-  const channel = drivers.channel
-    ? {
-        ...drivers.channel,
-        email: normalizeEnvDriverMap(drivers.channel.email as RawEnvDriverMap),
-        sms: normalizeEnvDriverMap(drivers.channel.sms as RawEnvDriverMap),
-        whatsapp: normalizeEnvDriverMap(drivers.channel.whatsapp as RawEnvDriverMap),
-        push: normalizeEnvDriverMap(drivers.channel.push as RawEnvDriverMap),
-      }
-    : undefined;
-  return {
-    ...drivers,
-    ...(store !== undefined ? { store } : {}),
-    signal: normalizeEnvDriverMap(drivers.signal as RawEnvDriverMap),
-    clock: normalizeEnvDriverMap(drivers.clock as RawEnvDriverMap),
-    journal: normalizeEnvDriverMap(drivers.journal as RawEnvDriverMap),
-    vault: normalizeEnvDriverMap(drivers.vault as RawEnvDriverMap),
-    ...(channel !== undefined ? { channel } : {}),
-    ai: normalizeEnvDriverMap(drivers.ai as RawEnvDriverMap),
-    runs: normalizeEnvDriverMap(drivers.runs as RawEnvDriverMap),
-  };
+  return mapDriversSlots(drivers, normalizeEnvDriverMap);
 }
 
 /**
  * Merge a developer's partial {@link EnvDriverMap} onto the real default map
  * for one specific driver — per environment key, never a whole-object
  * replace. An unset key keeps that driver's own real default; it never
- * inherits a sibling key's value (the old `docker → prod → local → test`
- * cascade in {@link resolveDriverId} did that, which is exactly the bug this
- * fixes — `{ local: "pglite" }` no longer leaks `pglite` into `docker`).
- *
- * Scoped strictly to the `{ local?, docker?, test?, prod? }` shape — not a
- * generic deep merge, and never applied to a whole config object.
+ * inherits a sibling key's value.
  *
  * @param override - Developer-supplied partial map (may be `undefined`)
  * @param defaults - Real, already-established default map for this driver
@@ -359,79 +383,91 @@ export function mergeEnvDriverMap(
   defaults: EnvDriverMap,
 ): EnvDriverMap {
   return {
-    local: override?.local ?? defaults.local,
-    docker: override?.docker ?? defaults.docker,
+    dev: override?.dev ?? defaults.dev,
     test: override?.test ?? defaults.test,
     prod: override?.prod ?? defaults.prod,
   };
 }
 
 /**
- * Fill missing `docker` pins from `prod` (compose infra ≈ production protocols).
+ * Fill missing `dev` pins from `prod` (compose laptop ≈ production protocols).
  *
  * @param map - Env → driver map
  */
-export function fillDockerFromProd(map: EnvDriverMap | undefined): EnvDriverMap | undefined {
+export function fillDevFromProd(map: EnvDriverMap | undefined): EnvDriverMap | undefined {
   if (!map) return undefined;
-  if (map.docker !== undefined || map.prod === undefined) return map;
-  return { ...map, docker: map.prod };
+  if (map.dev !== undefined || map.prod === undefined) return map;
+  return { ...map, dev: map.prod };
 }
 
 /**
- * Copy production driver pins onto `docker` wherever `docker` is omitted.
+ * Copy production driver pins onto `dev` wherever `dev` is omitted.
  *
  * @param drivers - Drivers block
  */
-export function fillDriversDockerFromProd(
+export function fillDriversDevFromProd(
   drivers: DriversConfig | undefined,
 ): DriversConfig | undefined {
   if (!drivers) return undefined;
-  const store = drivers.store
-    ? {
-        ...drivers.store,
-        sql: fillDockerFromProd(drivers.store.sql),
-        kv: fillDockerFromProd(drivers.store.kv),
-        files: fillDockerFromProd(drivers.store.files),
-        index: fillDockerFromProd(drivers.store.index),
+  return mapDriversSlots(drivers, (input) => fillDevFromProd(input as EnvDriverMap | undefined));
+}
+
+/**
+ * Walk every driver pin and throw if `sqlite` appears or test SQL is not `pglite`.
+ *
+ * @param drivers - Normalized drivers block
+ */
+export function assertDriverSafety(drivers: DriversConfig | undefined): void {
+  if (!drivers) return;
+  const maps: readonly (EnvDriverMap | undefined)[] = [
+    drivers.store?.sql as EnvDriverMap | undefined,
+    drivers.store?.kv as EnvDriverMap | undefined,
+    drivers.store?.files as EnvDriverMap | undefined,
+    drivers.store?.index as EnvDriverMap | undefined,
+    drivers.signal as EnvDriverMap | undefined,
+    drivers.clock as EnvDriverMap | undefined,
+    drivers.journal as EnvDriverMap | undefined,
+    drivers.vault as EnvDriverMap | undefined,
+    drivers.channel?.email as EnvDriverMap | undefined,
+    drivers.channel?.sms as EnvDriverMap | undefined,
+    drivers.channel?.whatsapp as EnvDriverMap | undefined,
+    drivers.channel?.push as EnvDriverMap | undefined,
+    drivers.ai as EnvDriverMap | undefined,
+    drivers.runs as EnvDriverMap | undefined,
+  ];
+  for (const map of maps) {
+    if (!map) continue;
+    for (const env of ["dev", "test", "prod"] as const) {
+      const id = driverRefId(map[env]);
+      if (id === "sqlite" || id === "libsql") {
+        throw new Error(
+          `oke.config: "${id}" was removed — use postgres (dev/prod) or pglite (test); index → pgvector/memory`,
+        );
       }
-    : undefined;
-  const channel = drivers.channel
-    ? {
-        ...drivers.channel,
-        email: fillDockerFromProd(drivers.channel.email),
-        sms: fillDockerFromProd(drivers.channel.sms),
-        whatsapp: fillDockerFromProd(drivers.channel.whatsapp),
-        push: fillDockerFromProd(drivers.channel.push),
-      }
-    : undefined;
-  return {
-    ...drivers,
-    ...(store !== undefined ? { store } : {}),
-    signal: fillDockerFromProd(drivers.signal),
-    clock: fillDockerFromProd(drivers.clock),
-    journal: fillDockerFromProd(drivers.journal),
-    vault: fillDockerFromProd(drivers.vault),
-    ...(channel !== undefined ? { channel } : {}),
-    ai: fillDockerFromProd(drivers.ai),
-    runs: fillDockerFromProd(drivers.runs),
-  };
+    }
+  }
+  const sqlTest = driverRefId((drivers.store?.sql as EnvDriverMap | undefined)?.test);
+  if (sqlTest !== undefined && sqlTest !== "pglite") {
+    throw new Error(`oke.config: drivers.store.sql.test must be "pglite" (got "${sqlTest}")`);
+  }
 }
 
 /**
  * Define an `oke.config.ts` document.
  *
- * Missing `docker` driver pins are filled from `prod` so `oke dev -d` uses the
- * same server protocols as production (vault → `env` for `docker/.env.docker`).
- * Legacy `dev`/`stack` keys are normalized to `local`/`docker`.
+ * Bare string pins expand to all three envs. Missing `dev` pins fill from
+ * `prod`. Rejects `sqlite` / `libsql` and non-`pglite` test SQL.
  *
  * @param config - Driver / tenancy / i18n / topology
  */
 export function defineConfig(config: OkeConfig): OkeConfig {
   if (!config.drivers) return config;
   const normalized = normalizeDriversConfig(config.drivers);
+  const filled = fillDriversDevFromProd(normalized);
+  assertDriverSafety(filled);
   return {
     ...config,
-    drivers: fillDriversDockerFromProd(normalized),
+    drivers: filled,
   };
 }
 
@@ -441,36 +477,25 @@ export function defineConfig(config: OkeConfig): OkeConfig {
  * With `defaults` given, the developer's map is merged onto it per-key via
  * {@link mergeEnvDriverMap} and the active env's slot is read directly — a
  * key the developer never set keeps that driver's real default, full stop.
- * This is the path every driver map with an established default should use.
  *
  * Without `defaults` (legacy path — `store.index`, `channel.whatsapp` /
- * `push`, `ai`, which have no single established default table): `docker`
- * falls back to `prod` then `local` then `test` so existing configs keep
- * working until an explicit `docker:` pin is added. Legacy `dev`/`stack`
- * keys are normalized first either way.
+ * `push`, `ai`): cascade is `env → dev → prod → test`.
  *
- * @param map - Env → driver map
+ * @param map - Env → driver map (or bare ref)
  * @param env - Active environment
  * @param defaults - Real default map for this specific driver (per-key merge)
  */
 export function resolveDriverId(
-  map: EnvDriverMap | RawEnvDriverMap | undefined,
+  map: EnvDriverInput | undefined,
   env: ConfigEnv,
   defaults?: EnvDriverMap,
 ): string | undefined {
-  const normalized = normalizeEnvDriverMap(map as RawEnvDriverMap);
+  const normalized = normalizeEnvDriverMap(map);
   if (defaults) {
     const merged = mergeEnvDriverMap(normalized, defaults);
-    const ref = merged[env];
-    if (ref === undefined) return undefined;
-    return typeof ref === "string" ? ref : ref.driver;
+    return driverRefId(merged[env]);
   }
-  if (!map) return undefined;
-  const resolved = normalized ?? map;
-  const ref =
-    env === "docker"
-      ? (resolved.docker ?? resolved.prod ?? resolved.local ?? resolved.test)
-      : (resolved[env] ?? resolved.local ?? resolved.test);
-  if (ref === undefined) return undefined;
-  return typeof ref === "string" ? ref : ref.driver;
+  if (!normalized) return undefined;
+  const ref = normalized[env] ?? normalized.dev ?? normalized.prod ?? normalized.test;
+  return driverRefId(ref);
 }

@@ -67,7 +67,7 @@ Local runs one vendor client, CI another, prod a third — three glue stories
 for the same database. "Works on my machine" is a driver mismatch.
 
 **OKE derives:** drivers are named after protocols (`postgres`, `redis`,
-`s3`), the vendor lives in `images`, and `oke dev --docker` runs the real
+`s3`), the vendor lives in `images`, and `oke dev` runs the real
 stack locally.
 
 ## The tax is drift
@@ -101,7 +101,7 @@ ninth element — the set of eight is closed.
 | Secrets / config   | Env sprawl; fails on first request                        | Vault contracts; `VaultBootError` at boot                               |
 | Observability      | Bolted on; separate source of truth                       | Console from the Manifest, dev and prod (`:6533`)                       |
 | Permissions        | Ad-hoc checks scattered in handlers                       | Least-privilege matrix from declared effects                            |
-| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev --docker`                |
+| Local vs prod      | Vendor clients; one-off compose                           | Protocol drivers; vendor in `images`; `oke dev`                         |
 | Client / agents    | Separate codegen or hand-kept schemas                     | Typed client and MCP (`:6535`) from the same Manifest                   |
 
 ## Ambition, stated plainly

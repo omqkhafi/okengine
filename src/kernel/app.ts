@@ -41,6 +41,7 @@ import { runWithLocale } from "../i18n/locale-context.ts";
 import { getMessageCatalogs, matchConfiguredLocale } from "../i18n/messages.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
+import { failureCodeOf, runCompensationPhase } from "./compensate.ts";
 import { fxRetry } from "./concurrency.ts";
 import {
   createFxContext,
@@ -85,6 +86,7 @@ import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
   channelTemplateRegistry,
+  requiredEnvRegistry,
   secretRegistry,
   signalRegistry,
   storeRegistry,
@@ -159,11 +161,11 @@ export interface OkeOptions {
    * subject key.
    */
   readonly archiveInputFields?: readonly string[];
-  /** Active environment for {@link OkeApp.boot} (defaults to `local`). */
+  /** Active environment for {@link OkeApp.boot} (`dev` / `test` / `prod`). */
   readonly env?: BootOptions["env"];
   /**
-   * Docker mode (`oke dev -d` / `OKE_DOCKER=1`) — force the `docker`
-   * driver profile at boot.
+   * Compose mode (`oke dev` / `OKE_DOCKER=1`) — select the `dev` driver
+   * profile at boot when `env` is omitted.
    */
   readonly docker?: BootOptions["docker"];
   /** Optional `oke.config.ts` document consumed at boot. */
@@ -485,22 +487,35 @@ export function oke(options: OkeOptions): OkeApp {
   // explicitly-passed decl that is also in the registry is not doubled.
   const registrySnapshot =
     registry === "ignore"
-      ? { stores: [], secrets: [], signals: [], channelTemplates: [] }
+      ? { stores: [], secrets: [], requiredEnv: [], signals: [], channelTemplates: [] }
       : {
           stores: storeRegistry.slice(),
           secrets: secretRegistry.slice(),
+          requiredEnv: requiredEnvRegistry.slice(),
           signals: signalRegistry.slice(),
           channelTemplates: channelTemplateRegistry.slice(),
         };
   if (registry === "consume") {
     storeRegistry.length = 0;
     secretRegistry.length = 0;
+    requiredEnvRegistry.length = 0;
     signalRegistry.length = 0;
     channelTemplateRegistry.length = 0;
   }
   const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
   const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
   const effectiveSignals = mergeUnique(options.signals, registrySnapshot.signals);
+  /**
+   * Fold registered `vault.env.required` names into the vault boot options so
+   * boot reports missing env vars in the same gap list as missing secrets.
+   *
+   * @param base - Vault options from `oke({ vault })` / a boot override
+   */
+  const withRequiredEnv = (base: BootOptions["vault"]): BootOptions["vault"] => {
+    const names = [...new Set([...(base?.requiredEnv ?? []), ...registrySnapshot.requiredEnv])];
+    if (names.length === 0) return base;
+    return { ...(base ?? {}), requiredEnv: names };
+  };
   // Stay `undefined` (never a defined-but-empty object) when neither an
   // explicit `options.channel` nor a registered template exists — a defined
   // object here would flip `resolveElementNeeds`'s `channel` need to `true`
@@ -655,7 +670,7 @@ export function oke(options: OkeOptions): OkeApp {
   let bootResult: BootResult | undefined;
   let bootPromise: Promise<BootResult> | undefined;
   let readyState: ReadyState = "booting";
-  let bootEnv: BootOptions["env"] = options.env ?? "local";
+  let bootEnv: BootOptions["env"] = options.env;
   let authBinding: AppAuthBinding | undefined =
     gateConfig.auth !== undefined
       ? createAppAuthBinding({
@@ -787,7 +802,7 @@ export function oke(options: OkeOptions): OkeApp {
     }
   }
 
-  /** Boot-time orphan scan — `running`/`sleeping` runs with no live lease. */
+  /** Boot-time orphan scan — `running`/`sleeping`/`compensating` with no live lease. */
   async function resumeOrphanedDurableRuns(): Promise<void> {
     const { store } = activeJournal();
     if (!hasJournalLease(store)) return;
@@ -807,7 +822,15 @@ export function oke(options: OkeOptions): OkeApp {
     const { bootApplication, resolveElementNeeds } = await import("./boot.ts");
     const { assertHttpGatePosture } = await import("../elements/gate/boot.ts");
     const { assertPluginNeeds, buildAvailableNeedTokens } = await import("./plugin-needs.ts");
-    bootEnv = overrides?.env ?? options.env ?? "local";
+    const dockerFlag =
+      overrides?.docker === true ||
+      (overrides?.docker !== false &&
+        (options.docker === true || (options.docker !== false && process.env.OKE_DOCKER === "1")));
+    // Mirror bootApplication: prod / compose-dev / else test (PGLite + memory).
+    bootEnv =
+      overrides?.env ??
+      options.env ??
+      (process.env.NODE_ENV === "production" ? "prod" : dockerFlag ? "dev" : "test");
 
     // Prod without a real secret fails even if construction minted a dev secret.
     if (gateConfig.auth?.secretMinted && bootEnv === "prod") {
@@ -830,7 +853,7 @@ export function oke(options: OkeOptions): OkeApp {
       config: overrides?.config ?? options.config,
       elements: overrides?.elements ?? options.elements,
       secrets: overrides?.secrets ?? effectiveSecrets,
-      vault: overrides?.vault ?? options.vault,
+      vault: withRequiredEnv(overrides?.vault ?? options.vault),
       gates: [...baseGates, ...authGates],
       signals: overrides?.signals ?? effectiveSignals,
       clocks: overrides?.clocks ?? options.clocks,
@@ -900,7 +923,7 @@ export function oke(options: OkeOptions): OkeApp {
       rootDir: overrides?.rootDir ?? options.rootDir,
       elements: overrides?.elements ?? options.elements,
       secrets: [...baseSecrets, ...pluginSecrets],
-      vault: overrides?.vault ?? options.vault,
+      vault: withRequiredEnv(overrides?.vault ?? options.vault),
       gates: [...baseGates, ...authGates, ...pluginGates],
       unguardedHttp,
       signals: [...baseSignals, ...pluginSignals],
@@ -1013,7 +1036,7 @@ export function oke(options: OkeOptions): OkeApp {
     registerFlow(flowDef);
 
     const i18nConfig = options.config?.i18n;
-    const configuredLocales = i18nConfig?.locales ?? ["en", "ar"];
+    const configuredLocales = i18nConfig?.locales ?? ["en"];
     const defaultLocale = i18nConfig?.default ?? "en";
     const acceptLanguage = extras?.request?.headers.get("accept-language") ?? undefined;
     const resolvedLocale = matchConfiguredLocale(
@@ -1281,30 +1304,13 @@ export function oke(options: OkeOptions): OkeApp {
         });
       } else if (!sleeping && isTerminalFailure(result)) {
         const terminalErr = result.failure ?? result.ctx.error;
-        if (flowDef.compensate) {
-          try {
-            const completedSteps = journalSession.run.entries
-              .filter((e) => e.kind === "step")
-              .map((e) => e.name);
-            await flowDef.compensate(
-              {
-                input: ctx.input as never,
-                error: terminalErr,
-                completedSteps,
-              },
-              fx,
-            );
-          } catch (compErr) {
-            await journalSession.commit("failed", {
-              error: `compensate:${failureCodeOf(compErr)}`,
-            });
-          }
-        }
-        if (journalSession.run.status === "running") {
-          await journalSession.commit("failed", {
-            error: failureCodeOf(terminalErr),
-          });
-        }
+        await runCompensationPhase({
+          flow: flowDef,
+          input: ctx.input,
+          session: journalSession,
+          fx,
+          error: terminalErr,
+        });
       } else if (!sleeping) {
         await journalSession.commit("completed", { output: result.output });
       }
@@ -1697,14 +1703,6 @@ function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
 function isTerminalFailure(result: PipelineResult): boolean {
   if (result.failure) return true;
   return result.ctx.error !== undefined && !isJournalSuspend(result.ctx.error);
-}
-
-/** Machine-readable code for journal / Runs failure fields. */
-function failureCodeOf(err: unknown): string {
-  if (isFlowFailure(err)) return err.error.code;
-  if (err instanceof Error && err.name && err.name !== "Error") return err.name;
-  if (err instanceof Error && err.message) return err.message.slice(0, 120);
-  return "Error";
 }
 
 /** Coerce a thrown value into a FlowFailure for Runs wide events. */

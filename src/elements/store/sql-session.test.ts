@@ -7,22 +7,21 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
 import { and, desc, eq, like, lt, or } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { sqliteDriver } from "../../drivers/sqlite.ts";
+import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { pgliteDriver } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
 import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
 
-const posts = sqliteTable("posts", {
+const posts = pgTable("posts", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   createdAt: integer("created_at").notNull(),
 });
 
 async function openHandle(): Promise<{ handle: SqlStoreHandle; conn: SqlConnection }> {
-  const conn = await sqliteDriver.connect({
-    client: new Database(":memory:"),
+  const conn = await pgliteDriver.connect({
+    url: "memory://",
     role: "primary",
   });
   const handle = createSqlStoreHandle("sql:app", {
@@ -36,8 +35,7 @@ async function openHandle(): Promise<{ handle: SqlStoreHandle; conn: SqlConnecti
 
 describe("SqlStoreHandle — no relational query surface (path b)", () => {
   test("created handle exposes exactly the single-table surface", async () => {
-    const db = new Database(":memory:");
-    const conn = await sqliteDriver.connect({ client: db, role: "primary" });
+    const conn = await pgliteDriver.connect({ url: "memory://", role: "primary" });
     const handle = createSqlStoreHandle("sql:app", {
       connection: conn,
       classifications: new Map(),
@@ -124,12 +122,12 @@ describe("SqlStoreHandle — orderBy / limit select chain", () => {
     await conn.close();
   });
 
-  test("like filters rows through the session (sqlite ASCII-insensitive)", async () => {
+  test("like filters rows through the session (postgres case-sensitive)", async () => {
     const { handle, conn } = await openHandle();
     await handle.insert(posts).values({ id: "p1", title: "alpha", createdAt: 100 });
     await handle.insert(posts).values({ id: "p2", title: "bravo", createdAt: 200 });
 
-    const rows = await handle.select().from(posts).where(like(posts.title, "A%"));
+    const rows = await handle.select().from(posts).where(like(posts.title, "a%"));
     expect(rows.map((r) => r.id)).toEqual(["p1"]);
     await conn.close();
   });

@@ -11,11 +11,11 @@ import {
 } from "../config/index.ts";
 import type { DevStatus } from "../term.ts";
 
-/** How the process is running (local laptop → production). */
-export type DevRuntimeProfile = "local" | "docker" | "test" | "production";
+/** How the process is running (dev Compose → production). */
+export type DevRuntimeProfile = "dev" | "test" | "production";
 
-/** Data plane: still on a laptop vs real production. */
-export type DevRuntimeEnv = "local" | "production";
+/** Data plane: still on a laptop vs production deploy. */
+export type DevRuntimeEnv = "dev" | "production";
 
 /** One of the eight elements with its active driver summary. */
 export type HeroElementRow = {
@@ -69,16 +69,17 @@ export function resolveDevProfile(options: {
 }): DevRuntimeProfile {
   if (options.nodeEnv === "test") return "test";
   if (options.nodeEnv === "production") return "production";
-  return options.docker ? "docker" : "local";
+  void options.docker;
+  return "dev";
 }
 
 /**
- * Data-plane environment (local machine vs production deploy).
+ * Data-plane environment (dev machine vs production deploy).
  *
  * @param profile - Runtime profile
  */
 export function resolveDevRuntimeEnv(profile: DevRuntimeProfile): DevRuntimeEnv {
-  return profile === "production" ? "production" : "local";
+  return profile === "production" ? "production" : "dev";
 }
 
 /**
@@ -155,13 +156,13 @@ export function resolveHeroElements(
     readonly aiModel?: string;
     /** AI readiness when known (model loading / ready). */
     readonly aiStatus?: DevStatus;
-    /** Which driver map column to read (default `local`). */
+    /** Which driver map column to read (default `test` unless `docker`). */
     readonly configEnv?: ConfigEnv;
   },
 ): readonly HeroElementRow[] {
   const drivers = config?.drivers;
   // `-d` reads the `docker` profile for every element (not a store-only override).
-  const configEnv: ConfigEnv = options.configEnv ?? (options.docker ? "docker" : "local");
+  const configEnv: ConfigEnv = options.configEnv ?? (options.docker ? "dev" : "test");
 
   // Gate rates share `drivers.store.kv` (no separate drivers.gate).
   const gateKv =

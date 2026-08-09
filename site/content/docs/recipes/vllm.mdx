@@ -23,7 +23,7 @@ you choose to self-host inference instead of a managed provider. Driver id stays
 
 ```typescript title="oke.config.ts"
 drivers: {
-  ai: { docker: "openai-compatible", prod: "openai-compatible", test: "mock" },
+  ai: { dev: "openai-compatible", test: "mock", prod: "openai-compatible" },
 },
 images: {
   ai: "vllm/vllm-openai:v0.26.0", // never :latest

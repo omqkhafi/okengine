@@ -5,7 +5,7 @@ icon: "Zap"
 source: "docs/spec/unified-theory.md"
 ---
 
-Redis is the default `store.kv` image in docker and prod. `oke docker` matches image
+Redis is the default `store.kv` image in `dev` and `prod`. `oke docker` matches image
 references containing `redis` or `keydb` and derives a password-required server — no
 unauthenticated instance.
 
@@ -99,7 +99,7 @@ Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an i
 <Accordion title="oke boot: redis driver needs REDIS_URL">
 
 Missing `REDIS_URL` fails boot loudly — never a silent fallback to `memory`. Re-run
-`oke dev --docker` or export `REDIS_URL` when using a managed host. In docker mode the
+`oke dev` or export `REDIS_URL` when using a managed host. Under Compose the
 message asks whether `oke dev -d` wrote `docker/.env.docker`.
 
 </Accordion>

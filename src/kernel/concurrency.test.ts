@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { currentAbortSignal, isAbortError, withAbortSignal } from "./abort-scope.ts";
-import { createMemoryJournalStore } from "./journal.ts";
+import { createJournal, createMemoryJournalStore } from "./journal.ts";
 import { createFx, createFxContext } from "./fx.ts";
 import { flow } from "./flow.ts";
 import { runDurable } from "../elements/clock/durable.ts";
@@ -216,12 +216,11 @@ describe("retry + durable journal", () => {
   test("fx.retry inside fx.step does not re-run completed step on resume", async () => {
     const journalStore = createMemoryJournalStore();
     let attempts = 0;
-    let crash = true;
 
     const f = flow("pay.retry", {
       durable: true,
       do: async (_input, fx) => {
-        const charged = await fx.step("charge", () =>
+        return fx.step("charge", () =>
           fx.retry(
             async () => {
               attempts += 1;
@@ -230,20 +229,22 @@ describe("retry + durable journal", () => {
             { retries: 2, delay: 0 },
           ),
         );
-        if (crash) throw new Error("KILLED");
-        return charged;
       },
     });
 
-    const first = await runDurable({ flow: f, journalStore });
-    expect(first.status).toBe("failed");
+    // Simulate crash after the journaled step: leave status `running`.
+    const journal = createJournal({ store: journalStore });
+    const crashed = await journal.start("pay.retry");
+    await crashed.step("charge", () => {
+      attempts += 1;
+      return { id: "ch_1" };
+    });
     expect(attempts).toBe(1);
 
-    crash = false;
     const second = await runDurable({
       flow: f,
       journalStore,
-      runId: first.status === "failed" ? first.runId : "",
+      runId: crashed.runId,
     });
     expect(second.status).toBe("completed");
     expect(attempts).toBe(1);

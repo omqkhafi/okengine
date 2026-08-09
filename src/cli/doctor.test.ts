@@ -84,6 +84,46 @@ describe("oke doctor", () => {
     expect(findings).toHaveLength(0);
   });
 
+  test("fails closed in prod when builtin vault master key is env-sourced", async () => {
+    const { code, findings } = await runDoctor({
+      secrets: [],
+      ports: [],
+      isPortInUse: async () => false,
+      skipDbDrift: true,
+      configEnv: "prod",
+      driversConfig: {
+        vault: { dev: "vault", test: "memory", prod: "vault" },
+      },
+      vaultConfig: {
+        encryption: { masterKey: { kind: "env", name: "OKE_VAULT_MASTER_KEY" } },
+      },
+      write: () => {},
+    });
+    expect(code).toBe(2);
+    const finding = findings.find((f) => f.code === "vault_master_key");
+    expect(finding?.severity).toBe("error");
+    expect(finding?.message).toContain("environment variable");
+  });
+
+  test("NODE_ENV=production selects prod env for the vault master-key gate", async () => {
+    const { code, findings } = await runDoctor({
+      secrets: [],
+      ports: [],
+      isPortInUse: async () => false,
+      skipDbDrift: true,
+      env: (k) => (k === "NODE_ENV" ? "production" : undefined),
+      driversConfig: {
+        vault: { dev: "vault", test: "memory", prod: "vault" },
+      },
+      vaultConfig: {
+        encryption: { masterKey: { kind: "env", name: "OKE_VAULT_MASTER_KEY" } },
+      },
+      write: () => {},
+    });
+    expect(code).toBe(2);
+    expect(findings.some((f) => f.code === "vault_master_key")).toBe(true);
+  });
+
   test("fails with flow name when PII reaches unguarded ask", async () => {
     const manifest: Manifest = {
       oke: "1.0",

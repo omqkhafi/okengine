@@ -12,7 +12,6 @@ import {
   resolveSelection,
   selectionKey,
   type DockerRunner,
-  type OkeContainer,
   type OkeStack,
 } from "../docker/cleanup.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
@@ -49,8 +48,8 @@ export function dockerCleanHelp(): string {
 
 Remove leftover OKE docker compose stacks (containers, networks, volumes).
 
-Inside a project: focuses the current stack (oke-dev-<id>); optionally
-include other stacks on this machine.
+Selection is by compose project name (oke-dev-<id>) — never per-service.
+Inside a project: focuses the current stack; optionally include others.
 Outside a project: list every oke-dev-* stack and pick what to remove.
 
   --yes, -y   Non-interactive; required when stdin is not a TTY
@@ -235,10 +234,10 @@ async function runInteractive(options: {
     if (current.length === 0) {
       write(`No stack for this project (${currentProject}).\n`);
     } else {
-      const keys = await pickContainerKeys({
+      const keys = await pickProjectKeys({
         stacks: current,
         scope: "current",
-        message: `Containers for this project (${currentProject})`,
+        message: `Stack for this project (${currentProject})`,
         initialAll: true,
         pickKeys,
       });
@@ -256,7 +255,7 @@ async function runInteractive(options: {
         return EXIT_OK;
       }
       if (include) {
-        const keys = await pickContainerKeys({
+        const keys = await pickProjectKeys({
           stacks: others,
           scope: "other",
           message: "Other OKE stacks on this machine",
@@ -271,7 +270,7 @@ async function runInteractive(options: {
       }
     }
   } else {
-    const keys = await pickContainerKeys({
+    const keys = await pickProjectKeys({
       stacks,
       scope: "all",
       message: "OKE docker stacks on this machine",
@@ -330,7 +329,10 @@ async function askIncludeOthersPrompt(): Promise<boolean | null> {
   return value;
 }
 
-async function pickContainerKeys(options: {
+/**
+ * Multiselect compose projects (one row per `oke-dev-*` name).
+ */
+async function pickProjectKeys(options: {
   readonly stacks: readonly OkeStack[];
   readonly scope: "current" | "other" | "all";
   readonly message: string;
@@ -344,7 +346,7 @@ async function pickContainerKeys(options: {
   if (entries.length === 0) return [];
 
   const value = await multiselect({
-    message: `${message} — selecting any container removes its whole stack`,
+    message: `${message} — removes the whole stack (containers, networks, volumes)`,
     options: entries.map((e) => ({
       value: e.key,
       label: e.label,
@@ -357,34 +359,27 @@ async function pickContainerKeys(options: {
   return value;
 }
 
-function selectionEntries(stacks: readonly OkeStack[]): readonly {
+/**
+ * One selectable row per compose project.
+ *
+ * @param stacks - Discovered stacks
+ */
+export function selectionEntries(stacks: readonly OkeStack[]): readonly {
   readonly key: string;
   readonly label: string;
   readonly hint?: string;
 }[] {
-  const out: { key: string; label: string; hint?: string }[] = [];
-  for (const stack of stacks) {
-    if (stack.containers.length === 0) {
-      out.push({
-        key: selectionKey(stack.project),
-        label: stack.project,
-        hint: "no containers · volumes/networks may remain",
-      });
-      continue;
-    }
-    for (const c of stack.containers) {
-      out.push({
-        key: selectionKey(stack.project, c.name),
-        label: `${stack.project} · ${displayContainer(c)}`,
-        hint: c.state || undefined,
-      });
-    }
-  }
-  return out;
-}
-
-function displayContainer(c: OkeContainer): string {
-  return c.service && c.service !== c.name ? `${c.service} (${c.name})` : c.name;
+  return stacks.map((stack) => {
+    const n = stack.containers.length;
+    return {
+      key: selectionKey(stack.project),
+      label: stack.project,
+      hint:
+        n === 0
+          ? "no containers · volumes/networks may remain"
+          : `${n} container${n === 1 ? "" : "s"}`,
+    };
+  });
 }
 
 async function tearDownProjects(

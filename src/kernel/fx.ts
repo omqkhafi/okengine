@@ -28,7 +28,7 @@ import type {
 import type { SqlRow } from "../drivers/types.ts";
 import type { SignalRuntime } from "../elements/signal.ts";
 import type { SignalEmitOptions } from "../drivers/signal-types.ts";
-import type { VaultRuntime } from "../elements/vault.ts";
+import type { VaultActor, VaultAdapter, VaultRuntime } from "../elements/vault.ts";
 import type { ChannelRuntime } from "../elements/channel.ts";
 import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
@@ -51,18 +51,21 @@ import {
   type FxThunk,
 } from "./concurrency.ts";
 import { maskRedactedDeep, Redacted } from "./redacted.ts";
-import type { JournalSession } from "./journal.ts";
+import type { JournalSession, JournalStepOptions } from "./journal.ts";
+
+/** Options for {@link Fx.step} — see {@link JournalStepOptions}. */
+export type StepOptions<T> = JournalStepOptions<T>;
 import type { RunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
 import type { RunsRow, WideEvent } from "../runs/types.ts";
-import {
-  evaluateSloBreaches,
-  windowStatsForFlow,
-  type RunWindowStats,
-  type SloBreach,
-} from "../runs/window.ts";
+import type { RunWindowStats, SloBreach } from "../runs/window.ts";
 import { translate, type MessageCatalogs } from "../i18n/messages.ts";
 import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
+
+/** Lazy runs/window helpers — kept off the cold `oke` static graph. */
+async function loadRunsWindow(): Promise<typeof import("../runs/window.ts")> {
+  return import("../runs/window.ts");
+}
 
 /** Resource ref Flows declare to read the Runs store via {@link Fx.runs}. */
 export const RUNS_RESOURCE = "runs";
@@ -339,6 +342,83 @@ export interface FxJson {
   with<T>(data: T, meta: Record<string, unknown>): JsonResult<T>;
 }
 
+/** Options for {@link FxVault.set}. */
+export interface FxVaultSetOptions {
+  /** Relative expiry from now, in milliseconds. */
+  readonly ttlMs?: number;
+  /** Non-sensitive metadata stored beside the ciphertext. */
+  readonly metadata?: Record<string, unknown>;
+}
+
+/** Identity of a written secret version. */
+export interface FxVaultWriteResult {
+  /** Canonical path that was written. */
+  readonly path: string;
+  /** Monotonic version of the new value. */
+  readonly version: number;
+}
+
+/** Operational state of the bound Vault backend. */
+export interface FxVaultStatus {
+  /** Whether the master key is currently unavailable. */
+  readonly sealed: boolean;
+  /** Whether the backend has been initialized. */
+  readonly initialized: boolean;
+  /** Backend id (`sql`, `memory`, `vault`, …). */
+  readonly backend: string;
+}
+
+/**
+ * Vault surface on `fx`.
+ *
+ * `get` reads through the boot-time resolution chain and is the only method
+ * every app has: the mutation and introspection methods need a bound
+ * {@link CreateFxOptions.vaultAdapter} (the encrypted-at-rest backend) and
+ * throw without one.
+ */
+export interface FxVault {
+  /**
+   * Read a vault secret (records `secret`).
+   *
+   * Returns a {@link Redacted} — printing / logging / serializing it yields a
+   * placeholder, never the value. Call `.reveal()` at the one boundary that
+   * needs the real value (e.g. passing a credential to a driver).
+   *
+   * @param secret - Secret name or handle
+   */
+  get(secret: NamedRef): Promise<Redacted<string>>;
+  /**
+   * Write a new version of a path (records `secret`).
+   *
+   * @param path - Secret path or handle
+   * @param value - Cleartext value
+   * @param options - TTL / metadata
+   */
+  set(path: NamedRef, value: string, options?: FxVaultSetOptions): Promise<FxVaultWriteResult>;
+  /**
+   * Write a new version with a fresh data key, retiring the previous one
+   * (records `secret`).
+   *
+   * @param path - Secret path or handle
+   * @param value - New cleartext value
+   */
+  rotate(path: NamedRef, value: string): Promise<FxVaultWriteResult>;
+  /**
+   * Crypto-shred a path (records `secret`). Returns whether anything went.
+   *
+   * @param path - Secret path or handle
+   */
+  delete(path: NamedRef): Promise<boolean>;
+  /**
+   * Enumerate secret paths (never values).
+   *
+   * @param prefix - Canonical path prefix filter
+   */
+  list(prefix?: string): Promise<readonly string[]>;
+  /** Seal / initialization state of the backend. */
+  status(): Promise<FxVaultStatus>;
+}
+
 /**
  * Flow-facing read door to the Runs wide-event store.
  *
@@ -420,16 +500,8 @@ export interface Fx {
   readonly runs: FxRuns;
   /** Clock surface. */
   readonly clock: FxClock;
-  /**
-   * Read a vault secret (records `secret`).
-   *
-   * Returns a {@link Redacted} — printing / logging / serializing it yields a
-   * placeholder, never the value. Call `.reveal()` at the one boundary that
-   * needs the real value (e.g. passing a credential to a driver).
-   *
-   * @param secret - Secret name or handle
-   */
-  vault(secret: NamedRef): Redacted<string>;
+  /** Vault surface — `fx.vault.get(secret)` and the adapter-backed mutations. */
+  readonly vault: FxVault;
   /** Cache surface. */
   readonly cache: FxCache;
   /**
@@ -544,8 +616,9 @@ export interface Fx {
    *
    * @param name - Step name
    * @param fn - Step body
+   * @param opts - Optional `{ undo }` — durable compensation on terminal failure
    */
-  step<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+  step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T>;
   /**
    * Ambient abort signal for the current structured-concurrency branch.
    * Outside `all` / `race`, a never-aborted signal.
@@ -619,7 +692,7 @@ export interface CreateFxOptions {
   readonly principal?: FxPrincipal;
   /** Tenant. */
   readonly tenant?: FxTenant;
-  /** Secret name → value map for `fx.vault`. */
+  /** Secret name → value map for `fx.vault.get`. */
   readonly secrets?: Readonly<Record<string, string>>;
   /** Seed data for in-memory stores: ref → key → value. */
   readonly storeData?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
@@ -651,10 +724,16 @@ export interface CreateFxOptions {
    */
   readonly runsRuntime?: RunsRuntime;
   /**
-   * Optional vault runtime. When set, `fx.vault` reads through it and
+   * Optional vault runtime. When set, `fx.vault.get` reads through it and
    * `fx.log` redacts loaded secret values automatically.
    */
   readonly vaultRuntime?: VaultRuntime;
+  /**
+   * Optional encrypted-at-rest Vault backend. Required by the `fx.vault`
+   * mutation / introspection methods (`set`, `rotate`, `delete`, `list`,
+   * `status`); reads never need it.
+   */
+  readonly vaultAdapter?: VaultAdapter;
   /**
    * Optional channel runtime. When set, `fx.send` delivers through it
    * (templates, consent, fallback chains, receipts).
@@ -1229,6 +1308,116 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
   };
 
+  const vaultActor: VaultActor = {
+    type: "flow",
+    id: options.flow,
+    ...(options.runId !== undefined ? { requestId: options.runId } : {}),
+  };
+
+  /**
+   * Capability-check a vault path and ledger the `secret` effect around it.
+   *
+   * Kept off {@link gated} deliberately: secret access is never journaled,
+   * so a durable replay re-reads the live value instead of resurrecting a
+   * rotated one from the journal.
+   *
+   * @param name - Secret path
+   * @param body - Work to run under the gate
+   */
+  async function gatedSecret<T>(name: string, body: () => T | Promise<T>): Promise<T> {
+    capability.assert("secret", name);
+    const timestamp = now();
+    try {
+      return await body();
+    } finally {
+      ledger.record({
+        kind: "secret",
+        resource: name,
+        timestamp,
+        duration: Math.max(0, now() - timestamp),
+        reversibility: reversibilityOf("secret"),
+      });
+    }
+  }
+
+  /**
+   * @param op - Method name for the error message
+   */
+  function vaultAdapterFor(op: string): VaultAdapter {
+    const adapter = options.vaultAdapter;
+    if (!adapter) {
+      throw new Error(
+        `fx.vault.${op} needs a bound Vault backend — configure the vault element (drivers.vault = "vault") or pass vaultAdapter to createFx`,
+      );
+    }
+    return adapter;
+  }
+
+  /**
+   * @param op - Method name for the error message
+   * @param path - Secret path
+   */
+  function refuseDryRunVaultWrite(op: string, path: string): void {
+    if (isDryRun()) {
+      throw new DryRunWriteIsolationError(
+        `fx.vault.${op}("${path}") cannot isolate writes during dry-run; dry-run refused rather than risk mutating a live secret.`,
+      );
+    }
+  }
+
+  const vaultSurface: FxVault = {
+    get(secret) {
+      const name = resolveName(secret);
+      return gatedSecret(name, () => {
+        const value = options.vaultRuntime
+          ? options.vaultRuntime.read(name)
+          : (secrets[name] ?? `[secret:${name}]`);
+        return new Redacted(value);
+      });
+    },
+    set(path, value, setOptions) {
+      const name = resolveName(path);
+      return gatedSecret(name, async () => {
+        refuseDryRunVaultWrite("set", name);
+        const written = await vaultAdapterFor("set").set(name, value, {
+          ...(setOptions?.ttlMs !== undefined ? { ttlMs: setOptions.ttlMs } : {}),
+          ...(setOptions?.metadata !== undefined ? { metadata: setOptions.metadata } : {}),
+          actor: vaultActor,
+        });
+        return { path: written.path, version: written.version };
+      });
+    },
+    rotate(path, value) {
+      const name = resolveName(path);
+      return gatedSecret(name, async () => {
+        refuseDryRunVaultWrite("rotate", name);
+        const written = await vaultAdapterFor("rotate").rotate(name, value, {
+          actor: vaultActor,
+        });
+        return { path: written.path, version: written.version };
+      });
+    },
+    delete(path) {
+      const name = resolveName(path);
+      return gatedSecret(name, async () => {
+        refuseDryRunVaultWrite("delete", name);
+        return vaultAdapterFor("delete").delete(name, { actor: vaultActor });
+      });
+    },
+    async list(prefix) {
+      const entries = await vaultAdapterFor("list").list({
+        ...(prefix !== undefined ? { prefix } : {}),
+        actor: vaultActor,
+      });
+      return entries.map((entry) => entry.path);
+    },
+    async status() {
+      const adapter = vaultAdapterFor("status");
+      const state = await adapter.status();
+      return { sealed: state.sealed, initialized: state.initialized, backend: adapter.id };
+    },
+  };
+
   const runsSurface: FxRuns = {
     query(sql) {
       return gated("read", RUNS_RESOURCE, async () => {
@@ -1251,6 +1440,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (!options.runsRuntime) {
           throw new Error("fx.runs.window requires a bound runs runtime (oke({ runs }))");
         }
+        const { windowStatsForFlow } = await loadRunsWindow();
         const events = await options.runsRuntime.all();
         return windowStatsForFlow(events, flowName, now(), windowMs);
       });
@@ -1260,6 +1450,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (!options.runsRuntime) {
           throw new Error("fx.runs.checkSlo requires a bound runs runtime (oke({ runs }))");
         }
+        const { windowStatsForFlow, evaluateSloBreaches } = await loadRunsWindow();
         const events = await options.runsRuntime.all();
         const stats = windowStatsForFlow(events, flowName, now(), windowMs);
         return evaluateSloBreaches(stats, slo);
@@ -1294,23 +1485,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       });
     },
     clock,
-    vault(secret) {
-      const name = resolveName(secret);
-      // vault is sync in the public examples; check + record synchronously
-      capability.assert("secret", name);
-      const timestamp = now();
-      const value = options.vaultRuntime
-        ? options.vaultRuntime.read(name)
-        : (secrets[name] ?? `[secret:${name}]`);
-      ledger.record({
-        kind: "secret",
-        resource: name,
-        timestamp,
-        duration: Math.max(0, now() - timestamp),
-        reversibility: reversibilityOf("secret"),
-      });
-      return new Redacted(value);
-    },
+    vault: vaultSurface,
     cache,
     send(template, opts) {
       const name = resolveName(template);
@@ -1538,9 +1713,9 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         return { [jsonResultBrand]: true, status: 200, value: data, meta } as JsonResult<T>;
       },
     },
-    async step<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+    async step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T> {
       if (journal) {
-        return journal.step(name, fn);
+        return journal.step(name, fn, opts);
       }
       return await fn();
     },

@@ -212,10 +212,10 @@ describe("pipeline — Bearer cryptographic verification", () => {
         auth: { secret: "hmac-secret-for-tests", sessions, http: false },
         policies: [member],
       },
-      env: "local",
+      env: "test",
       startScheduler: false,
     });
-    await app.boot({ env: "local", gates: [member], startScheduler: false });
+    await app.boot({ env: "test", gates: [member], startScheduler: false });
 
     const res = await app.fetch(
       new Request("http://localhost/secure", {
@@ -267,12 +267,12 @@ describe("pipeline — Bearer cryptographic verification", () => {
         auth: { secret, sessions, now: () => nowMs, http: false },
         policies: [member],
       },
-      env: "local",
+      env: "test",
       elements: { clock: clockRt },
       startScheduler: false,
     });
     await app.boot({
-      env: "local",
+      env: "test",
       gates: [member],
       startScheduler: false,
       elements: { clock: clockRt },
@@ -317,10 +317,24 @@ describe("pipeline — Bearer cryptographic verification", () => {
     const app = oke({
       name: "no-inject",
       gate: { policies: [member] },
-      env: "local",
+      env: "dev",
+      config: {
+        drivers: {
+          store: { kv: { dev: "memory", test: "memory", prod: "memory" } },
+          signal: { dev: "memory", test: "memory", prod: "memory" },
+          clock: { dev: "memory", test: "frozen", prod: "memory" },
+          journal: { dev: "memory", test: "memory", prod: "memory" },
+          channel: { email: { dev: "console", test: "console", prod: "console" } },
+        },
+      },
       startScheduler: false,
     });
-    await app.boot({ env: "local", gates: [member], startScheduler: false });
+    await app.boot({
+      env: "dev",
+      gates: [member],
+      startScheduler: false,
+      config: app.$options.config,
+    });
 
     const result = await app.execute(
       app.flow("orders.inject")!,

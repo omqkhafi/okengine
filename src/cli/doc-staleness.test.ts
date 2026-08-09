@@ -11,9 +11,7 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "../..");
 
-/** Forbidden CLI flag, split so this file does not match itself. */
-const FORBIDDEN_STACK_FLAG = ["--", "stack"].join("");
-/** Forbidden compose env filename. */
+/** Forbidden compose env filename (legacy soft-compat). */
 const FORBIDDEN_ENV_STACK = [".env.", "stack"].join("");
 /** Forbidden env var — name avoids the contiguous token so this file is clean. */
 const FORBIDDEN_LEGACY_ENV = ["OKE_", "STACK"].join("");
@@ -47,9 +45,8 @@ function assertZeroGitGrep(pattern: string, ignorePrefixes: readonly string[] = 
 }
 
 describe("legacy stack-mode removal gate", () => {
-  test("tracked tree has zero legacy docker-mode flag outside changelog", () => {
-    assertZeroGitGrep(FORBIDDEN_STACK_FLAG, ["changelog.md:"]);
-  });
+  // `--stack` is first-class again (Swarm `docker-stack.yml` layout). Legacy
+  // soft-compat was the env filename + vault helper surface — those stay forbidden.
 
   test("tracked tree has zero legacy compose env filename outside changelog", () => {
     assertZeroGitGrep(FORBIDDEN_ENV_STACK, ["changelog.md:"]);

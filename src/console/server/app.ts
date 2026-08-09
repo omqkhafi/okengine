@@ -21,7 +21,7 @@ import { createManifestChannelRuntime } from "./channels.ts";
 import { createManifestClockRuntime } from "./clock.ts";
 import { createManifestStoreRuntime } from "./store.ts";
 import { VaultBootError } from "../../elements/vault.ts";
-import { createManifestVaultRuntime } from "./vault.ts";
+import { createManifestVaultRuntime, resolveVaultDriverId } from "./vault.ts";
 import { printClaimCodeOnce } from "./claim.ts";
 
 /** Options for {@link createConsoleApp}. */
@@ -248,12 +248,14 @@ export async function bindManifestVaultRuntime(state: ConsoleState): Promise<voi
   if (!state.manifest?.vault || Object.keys(state.manifest.vault).length === 0) {
     return;
   }
+  const env = state.production ? "prod" : "dev";
   try {
     state.vaultRuntime = await createManifestVaultRuntime(state.manifest, {
       cwd: state.cwd,
-      env: state.production ? "prod" : "local",
+      env,
       allowDevFallbacks: !state.production,
       now: state.now,
+      driverId: resolveVaultDriverId(state.okeConfig, env),
     });
   } catch (err) {
     // Gaps are a doctor concern — Console still lists contracts from Manifest.

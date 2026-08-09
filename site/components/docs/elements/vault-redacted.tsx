@@ -1,5 +1,5 @@
 /**
- * Redacted until reveal — fx.vault wraps the value so logs and serialization
+ * Redacted until reveal — fx.vault.get wraps the value so logs and serialization
  * never see cleartext; only `.reveal()` yields the credential at the provider
  * boundary. Shared beat across both cards (StoreKvTtl pattern). Deterministic
  * from one tick, never Math.random.
@@ -20,7 +20,7 @@ const TICK_MS = 1100;
 const PHASES = ["vault", "log", "json", "reveal"] as const;
 
 /**
- * Same `fx.vault` read — hold the Redacted (safe) vs `.reveal()` at the edge.
+ * Same `fx.vault.get` read — hold the Redacted (safe) vs `.reveal()` at the edge.
  */
 export function VaultRedacted() {
   const tick = useTick(TICK_MS);
@@ -34,12 +34,12 @@ export function VaultRedacted() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Vault Redacted physics: fx.vault returns a Redacted wrapper so fx.log, String, and JSON show [redacted]; only .reveal() yields cleartext at the provider boundary."
+      aria-label="Vault Redacted physics: fx.vault.get returns a Redacted wrapper so fx.log, String, and JSON show [redacted]; only .reveal() yields cleartext at the provider boundary."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Redacted until you reveal</p>
         <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground">
-          fx.vault(secret) → Redacted
+          fx.vault.get(secret) → Redacted
         </code>
       </div>
 
@@ -55,7 +55,7 @@ export function VaultRedacted() {
         <PathCard
           icon={Shield}
           title="hold Redacted"
-          syntax="fx.vault(stripeKey)"
+          syntax="fx.vault.get(stripeKey)"
           live={masked}
           outcome="[redacted]"
           detail="fx.log, String(), and JSON.stringify never see the value — nested Redacted included."

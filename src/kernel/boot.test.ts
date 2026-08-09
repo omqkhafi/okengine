@@ -130,8 +130,9 @@ describe("boot — lazy element needs", () => {
       // + `tryListFlowsUnits` in `boot.ts` (`.adopt()` barrel staleness
       // check, OKE1009) — part of the already-lazily-loaded boot graph, not
       // the `oke()` construction path, but `Bun.build` still traces and
-      // sums the dynamic-import chunk (~54.3 kB → 54.7 kB cap).
-      expect(total).toBeLessThan(54_700);
+      // sums the dynamic-import chunk (~54.3 kB → 54.7 kB → 55.0 kB after
+      // ConfigEnv local/docker → dev/test/prod + sqlite removal).
+      expect(total).toBeLessThan(55_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -273,11 +274,18 @@ describe("boot — cron autostart via real timer loop", () => {
       }),
     );
 
-    // env: "local" → startScheduler defaults ON. No createTestApp / advance.
+    // Non-test env → startScheduler defaults ON. No createTestApp / advance.
     const app = oke({
       name: "cron-autostart",
-      env: "local",
+      env: "dev",
       schedulerIntervalMs: 1000,
+      config: {
+        drivers: {
+          clock: { dev: "memory" },
+          store: { sql: { dev: "memory" }, kv: { dev: "memory" } },
+          channel: { email: { dev: "console" } },
+        },
+      },
     });
     await app.boot();
 

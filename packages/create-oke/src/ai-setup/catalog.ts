@@ -788,9 +788,8 @@ export const LLAMA_CPP_CHAT_MODELS: readonly CatalogModel[] = [
   {
     id: "smollm2",
     label: "SmolLM2",
-    hint: "Default · lightest",
+    hint: "Lightest",
     role: "chat",
-    recommended: true,
     ramGb: 1,
     tier: "ultra-fast",
     modalities: ["text"],
@@ -951,8 +950,9 @@ export const LLAMA_CPP_CHAT_MODELS: readonly CatalogModel[] = [
   {
     id: "granite3.3:2b",
     label: "Granite 3.3 2B",
-    hint: "IBM 2B",
+    hint: "Default · IBM 2B",
     role: "chat",
+    recommended: true,
     ramGb: 2,
     tier: "ultra-fast",
     modalities: ["text", "code"],

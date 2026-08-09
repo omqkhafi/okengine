@@ -1,5 +1,6 @@
 /**
- * Durable Console operators + sessions under `.oke/console.sqlite`.
+ * Durable Console operators + sessions in Postgres schema `oke_console`
+ * (PGlite under `.oke/console-pg` when no DATABASE_URL).
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -8,8 +9,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createOperator } from "../../auth/operator.ts";
 import { issueSession, verifyAccess } from "../../auth/sessions.ts";
+import { AUTH_TABLES } from "../../auth/tables.ts";
+import { connectPglite } from "../../drivers/pglite.ts";
 import { bootConsoleApp, createConsoleApp } from "./app.ts";
-import { openConsolePersistence, resolveConsoleSecret } from "./operator-db.ts";
+import {
+  CONSOLE_PG_SCHEMA,
+  consoleTable,
+  openConsolePersistence,
+  resolveConsoleSecret,
+} from "./operator-db.ts";
 
 describe("console operator persistence", () => {
   const dirs: string[] = [];
@@ -38,8 +46,8 @@ describe("console operator persistence", () => {
       name: "Ops",
       password: "password1234",
     });
-    first.persistOperator(op.id);
-    first.close();
+    await first.persistOperator(op.id);
+    await first.close();
 
     const second = await openConsolePersistence(cwd);
     expect(second.operators.operators.size).toBe(1);
@@ -65,7 +73,7 @@ describe("console operator persistence", () => {
       expect(printed.join("\n")).not.toContain("Claim code");
     } finally {
       console.log = origLog;
-      second.close();
+      await second.close();
     }
   });
 
@@ -79,20 +87,20 @@ describe("console operator persistence", () => {
       name: "Ops",
       password: "password1234",
     });
-    first.persistOperator(op.id);
+    await first.persistOperator(op.id);
     const issued = await issueSession(
       first.sessions,
       { secret: first.secret },
       { id: op.id, plane: "operator", scopes: ["console:*"] },
     );
-    first.persistSessions();
-    first.close();
+    await first.persistSessions();
+    await first.close();
 
     const second = await openConsolePersistence(cwd);
     expect(second.sessions.sessions.size).toBe(1);
     const claims = await verifyAccess(second.sessions, second.secret, issued.accessToken);
     expect(claims.sub).toBe(op.id);
-    second.close();
+    await second.close();
   });
 
   test("claim then reopen keeps session.me authorized", async () => {
@@ -131,7 +139,7 @@ describe("console operator persistence", () => {
       accessToken = body.data.accessToken;
     } finally {
       await first.app.stop();
-      firstPersist.close();
+      await firstPersist.close();
     }
 
     const secondPersist = await openConsolePersistence(cwd);
@@ -158,7 +166,7 @@ describe("console operator persistence", () => {
       expect(meBody.data.email).toBe("ops@example.com");
     } finally {
       await second.app.stop();
-      secondPersist.close();
+      await secondPersist.close();
     }
   });
 
@@ -171,7 +179,7 @@ describe("console operator persistence", () => {
       name: "Ops",
       password: "password1234",
     });
-    persistence.persistOperator(op.id);
+    await persistence.persistOperator(op.id);
 
     const handle = createConsoleApp({
       cwd,
@@ -196,7 +204,41 @@ describe("console operator persistence", () => {
       expect(body.data.setupClosed).toBe(true);
     } finally {
       await handle.app.stop();
-      persistence.close();
+      await persistence.close();
     }
   });
+
+  test("tables live in oke_console schema, not public", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-schema-"));
+    dirs.push(cwd);
+    const shared = await connectPglite({
+      url: `memory://console-schema-${crypto.randomUUID()}`,
+    });
+    const opened = await openConsolePersistence(cwd, { connection: shared });
+    try {
+      const op = await createOperator(opened.operators, {
+        email: "schema@example.com",
+        name: "Schema",
+        password: "password1234",
+      });
+      await opened.persistOperator(op.id);
+
+      const inConsole = await shared.query(
+        `SELECT email FROM ${consoleTable(AUTH_TABLES.operators)} WHERE id = ?`,
+        [op.id],
+      );
+      expect(inConsole[0]?.["email"]).toBe("schema@example.com");
+
+      const schemas = await shared.query(
+        `SELECT table_schema
+         FROM information_schema.tables
+         WHERE table_name = ?`,
+        [AUTH_TABLES.operators],
+      );
+      expect(schemas.map((r) => r["table_schema"])).toEqual([CONSOLE_PG_SCHEMA]);
+    } finally {
+      // connection was injected — close the shared handle ourselves
+      await shared.close();
+    }
+  }, 15_000);
 });

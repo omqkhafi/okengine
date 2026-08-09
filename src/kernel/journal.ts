@@ -14,7 +14,49 @@ import { JournalSuspend } from "./journal-suspend.ts";
 export { JournalSuspend, isJournalSuspend } from "./journal-suspend.ts";
 
 /** Status of a durable run. */
-export type JournalRunStatus = "running" | "sleeping" | "completed" | "failed";
+export type JournalRunStatus = "running" | "sleeping" | "compensating" | "completed" | "failed";
+
+/** Reserved prefix for compensation undo steps — never use for forward work. */
+export const JOURNAL_UNDO_PREFIX = "undo:";
+
+/**
+ * Options for {@link JournalSession.step}.
+ *
+ * @typeParam T - Step result type
+ */
+export interface JournalStepOptions<T> {
+  /**
+   * Durable undo for this step — registered on persist and replay.
+   * Invoked with the journaled value on terminal failure (LIFO).
+   */
+  readonly undo?: (value: T) => unknown | Promise<unknown>;
+}
+
+/** One registered per-step undo frame (in-memory; closures re-bound on resume). */
+export interface JournalUndoFrame {
+  /** Forward step name (without {@link JOURNAL_UNDO_PREFIX}). */
+  readonly name: string;
+  /** Journaled step value passed to {@link undo}. */
+  readonly value: unknown;
+  /** Undo body. */
+  readonly undo: (value: unknown) => unknown | Promise<unknown>;
+}
+
+/**
+ * Thrown during a compensating registration pass when `do` would execute
+ * new forward work — stops re-entry without continuing the happy path.
+ */
+export class JournalRegistrationComplete extends Error {
+  constructor() {
+    super("journal: registration pass complete");
+    this.name = "JournalRegistrationComplete";
+  }
+}
+
+/** Type guard for {@link JournalRegistrationComplete}. */
+export function isJournalRegistrationComplete(err: unknown): err is JournalRegistrationComplete {
+  return err instanceof JournalRegistrationComplete;
+}
 
 /** A completed named step. */
 export interface JournalStepEntry {
@@ -98,8 +140,8 @@ export interface JournalLeaseStore {
    */
   claimDueSleep(instanceId: string, now: number, leaseMs: number): Promise<JournalRun | undefined>;
   /**
-   * Boot-time orphan discovery: `running` / `sleeping` runs with no live lease
-   * (crashed holder or never claimed). Rows are never deleted.
+   * Boot-time orphan discovery: `running` / `sleeping` / `compensating` runs
+   * with no live lease (crashed holder or never claimed). Rows are never deleted.
    *
    * @param now - Epoch-ms
    */
@@ -212,7 +254,11 @@ function leaseMethods(
     async listOrphans(now) {
       const map = await load();
       return [...map.values()]
-        .filter((r) => (r.status === "running" || r.status === "sleeping") && !hasLiveLease(r, now))
+        .filter(
+          (r) =>
+            (r.status === "running" || r.status === "sleeping" || r.status === "compensating") &&
+            !hasLiveLease(r, now),
+        )
         .map(cloneRun);
     },
   };
@@ -325,8 +371,9 @@ export interface JournalSession {
    *
    * @param name - Step name
    * @param fn - Step body
+   * @param opts - Optional per-step undo registration
    */
-  step<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+  step<T>(name: string, fn: () => T | Promise<T>, opts?: JournalStepOptions<T>): Promise<T>;
   /**
    * Durable sleep — journals wake time; suspends until elapsed.
    *
@@ -346,9 +393,25 @@ export interface JournalSession {
   /**
    * Rewind the replay cursor to the start of the entry list.
    * Used by flow-level retry so a re-entered `do` replays completed steps
-   * instead of treating the cursor as past them.
+   * instead of treating the cursor as past them. Clears the in-memory undo stack
+   * so frames re-bind on the next walk.
    */
   rewind(): void;
+  /** Registered per-step undos in persist/replay order (LIFO compensate). */
+  undoStack(): readonly JournalUndoFrame[];
+  /**
+   * Enter registration-only mode — replay + re-bind undos; new forward work
+   * throws {@link JournalRegistrationComplete}.
+   */
+  beginRegistrationPass(): void;
+  /** Exit registration-only mode. */
+  endRegistrationPass(): void;
+  /**
+   * Allow appending `undo:*` steps (compensation phase only).
+   *
+   * @param allowed - Whether undo-prefix steps may append
+   */
+  setUndoExecution(allowed: boolean): void;
   /** Persist current run status / output. */
   commit(
     status: JournalRunStatus,
@@ -389,6 +452,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
     /** Next entry index to consume on replay. */
     let cursor = 0;
     let leaseHeld = leased;
+    let registrationPass = false;
+    let undoExecution = false;
+    const undos: JournalUndoFrame[] = [];
 
     async function persist(): Promise<void> {
       run.updatedAt = now();
@@ -407,18 +473,53 @@ export function createJournal(options: CreateJournalOptions): Journal {
       delete run.leaseExpiresAt;
     }
 
+    function registerUndo<T>(name: string, value: T, opts?: JournalStepOptions<T>): void {
+      if (!opts?.undo) return;
+      const undo = opts.undo as (value: unknown) => unknown | Promise<unknown>;
+      const idx = undos.findIndex((f) => f.name === name);
+      const frame: JournalUndoFrame = { name, value, undo };
+      if (idx >= 0) undos[idx] = frame;
+      else undos.push(frame);
+    }
+
+    function assertCanAppendStep(name: string): void {
+      if (registrationPass) {
+        throw new JournalRegistrationComplete();
+      }
+      const isUndoStep = name.startsWith(JOURNAL_UNDO_PREFIX);
+      if (isUndoStep && !undoExecution) {
+        throw new Error(
+          `journal: step name "${name}" uses reserved prefix "${JOURNAL_UNDO_PREFIX}"`,
+        );
+      }
+      if (!isUndoStep && run.entries.some((e) => e.kind === "step" && e.name === name)) {
+        throw new Error(`journal: duplicate step name "${name}"`);
+      }
+    }
+
     return {
       runId: run.id,
       run,
-      async step<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+      async step<T>(
+        name: string,
+        fn: () => T | Promise<T>,
+        opts?: JournalStepOptions<T>,
+      ): Promise<T> {
+        if (name.startsWith(JOURNAL_UNDO_PREFIX) && opts?.undo) {
+          throw new Error("journal: undo steps cannot register nested undo");
+        }
         // Prefer name match among remaining entries (resume after crash).
         for (let i = cursor; i < run.entries.length; i++) {
           const e = run.entries[i]!;
           if (e.kind === "step" && e.name === name) {
             cursor = i + 1;
+            if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
+              registerUndo(name, e.value as T, opts);
+            }
             return e.value as T;
           }
         }
+        assertCanAppendStep(name);
         const value = await fn();
         const entry: JournalStepEntry = {
           kind: "step",
@@ -429,6 +530,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
         run.entries.push(entry);
         cursor = run.entries.length;
         await persist();
+        if (!name.startsWith(JOURNAL_UNDO_PREFIX)) {
+          registerUndo(name, value, opts);
+        }
         return value;
       },
       async sleep(label, duration, parseMs) {
@@ -445,6 +549,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
             }
             return;
           }
+        }
+        if (registrationPass) {
+          throw new JournalRegistrationComplete();
         }
         const wakeAt = now() + parseMs(duration);
         const entry: JournalSleepEntry = {
@@ -477,6 +584,9 @@ export function createJournal(options: CreateJournalOptions): Journal {
             return e.value as T;
           }
         }
+        if (registrationPass) {
+          throw new JournalRegistrationComplete();
+        }
         const value = await execute();
         const entry: JournalEffectEntry = {
           kind: "effect",
@@ -492,6 +602,19 @@ export function createJournal(options: CreateJournalOptions): Journal {
       },
       rewind() {
         cursor = 0;
+        undos.length = 0;
+      },
+      undoStack() {
+        return undos;
+      },
+      beginRegistrationPass() {
+        registrationPass = true;
+      },
+      endRegistrationPass() {
+        registrationPass = false;
+      },
+      setUndoExecution(allowed) {
+        undoExecution = allowed;
       },
       async commit(status, patch) {
         run.status = status;

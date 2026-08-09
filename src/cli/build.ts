@@ -27,7 +27,7 @@ export interface BuildOptions {
 
 /**
  * Regenerate `src/flows/generated.ts` from every `src/flows/<unit>/index.ts`
- * unit folder — pre-step for `oke build` (mirrors `oke db`'s `schema.generated.ts`
+ * unit folder — pre-step for `oke build` (mirrors `oke db`'s `schema.drizzle.ts`
  * pre-step). A real file on disk, not a virtual module: identical resolution
  * under `oke dev`'s runtime `import()` and `oke build`'s `Bun.build()`
  * (investigated — a virtual-module Bun plugin does not resolve consistently

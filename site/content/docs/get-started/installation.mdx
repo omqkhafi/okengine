@@ -21,7 +21,10 @@ This page gets you from zero to a running app on Bun. The engine targets
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.3.14 (`bun --version`)
+- [Docker](https://docs.docker.com/get-docker/) with a running daemon (`docker info`)
 - A terminal and a code editor
+
+`oke dev` always starts Docker Compose for Postgres / Redis / S3 / SMTP (and other pinned images). Use `oke test` for PGLite tests without Compose.
 
 </Step>
 
@@ -59,23 +62,19 @@ bunx create-oke@latest my-app --sql postgres
 bunx create-oke@latest my-app --yes
 ```
 
-Two Notes starters: **standard** (local-first) and **advanced** (docker-ready +
-files/digest/AI). Both ship a minimal GitHub Actions workflow (typecheck +
-`bun test` on push/PR) so the first push has working CI.
+Two Notes starters: **standard** and **advanced** (adds `store.index` + optional AI).
+Both are Docker-first (`dev`/`prod` share production protocols; `test` uses PGLite /
+memory). Both ship a minimal GitHub Actions workflow (typecheck + `bun test`).
 
 On a TTY: pick a template, then **recommended defaults**, **customize**, or
-**reuse** matching saved settings (saved to `~/.oke/create-defaults.json`).
+**reuse** matching saved settings (`~/.oke/create-defaults.json`).
 
-Customize asks local or docker first, walks facets (including `store.index` with
-`none`), then **AI setup** (Recommended / Customize / Off). Project name rejects
-a non-empty existing path.
+Customize walks Docker-first facets (including `store.index` with `none`), then
+**AI setup** (Recommended / Customize / Off). Project name rejects a non-empty
+existing path.
 
-Non-TTY / `--yes` stay scriptable. Defaults: local SQLite · Docker/prod Postgres.
-`--sql postgres` pins SQL; `--ai` runs the model wizard before install.
-
-Scaffold writes `.oke/mode` (standard → `local`, advanced → `docker`) so the
-first `oke dev` skips the mode prompt unless you delete it or pass `--local` /
-`--docker`.
+Non-TTY / `--yes` stay scriptable. `--sql postgres` pins SQL; `--ai` runs the
+model wizard before install.
 
 </Step>
 
@@ -102,9 +101,9 @@ configured.**
 
 </Steps>
 
-## Local database sync
+## Database sync in `oke dev`
 
-Local mode watches schema paths and auto-runs `oke db push` so the database
+`oke dev` watches schema paths and auto-runs `oke db push` so the database
 stays in sync. Opt out with `oke dev --no-db-push` or
 `db: { autoPush: false }` in `oke.config.ts`.
 
@@ -116,24 +115,17 @@ oke db generate   # write drizzle/*.sql
 oke db migrate    # apply
 ```
 
-## Docker mode
+## Docker Compose under `oke dev`
 
-Want Postgres/Redis like production while the app stays on host Bun?
-
-<DevModes />
+`oke dev` always brings up Compose under `docker/` and runs the app on host Bun
+with the `dev` driver profile (filled from `prod` when omitted). Credentials and
+host ports are unique per project.
 
 ```bash title="Terminal"
-oke dev --docker   # or: oke dev -d
-# or set the saved default: oke mode docker
+oke dev                      # full Compose set from images
+oke dev -d store.sql,signal  # optional: only these roles
+oke test                     # PGLite tests — no Compose
 ```
-
-Uses the `docker` driver profile in `oke.config.ts` (filled from `prod` when
-omitted). Compose and credentials land under `docker/` (`.env.docker` beside
-compose); host ports are unique per project.
-
-Bare `oke dev` uses `.oke/mode` when present (seeded by create-oke). On a TTY
-with no saved mode it prompts once and writes the file; non-TTY defaults to
-`local`.
 
 | Protocol            | Env shape (generated)                                                                                           |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -142,9 +134,11 @@ with no saved mode it prompts once and writes the file; non-TTY defaults to
 | S3-compatible files | `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_URL`, `S3_REGION`, `S3_CONSOLE_URL` |
 | SMTP email          | `SMTP_URL`, `SMTP_HOST`, `SMTP_PORT`, `MAILPIT_UI_URL`, optional `SMTP_USER` / `SMTP_PASSWORD`                  |
 
-Each section also includes commented controls (Redis memory policy, Postgres
-init options, Bun S3 session tokens, Mailpit limits). Uncommented supported
-controls are preserved when `oke dev --docker` regenerates the file.
+Uncommented supported controls in the generated compose env are preserved when
+`oke dev` regenerates the file.
+
+Migrating from `local` / `docker` maps or `oke mode`?
+See [Migrating environments](/docs/reference/migrating-environments).
 
 ## Troubleshooting
 
@@ -154,6 +148,11 @@ controls are preserved when `oke dev --docker` regenerates the file.
   Install the npm package `okengine` (not JSR alone): `bun add okengine` in the project, or `bun
   install -g okengine` for a global binary. Or invoke via `bunx oke dev`. There is no separate `oke`
   package name — only `okengine`.
+</Accordion>
+
+<Accordion title="Docker daemon not running">
+  `oke dev` requires Docker. Start Docker Desktop (or your engine), confirm with `docker info`, then
+  retry. For tests without Compose, use `oke test`.
 </Accordion>
 
 <Accordion title="Console is empty / no flows listed">
@@ -168,12 +167,12 @@ controls are preserved when `oke dev --docker` regenerates the file.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">
-  Local `oke dev` auto-pushes by default. If you passed `--no-db-push` or set `db.autoPush: false`,
-  run `oke db push` yourself, or re-enable auto-push.
+  `oke dev` auto-pushes by default. If you passed `--no-db-push` or set `db.autoPush: false`, run
+  `oke db push` yourself, or re-enable auto-push.
 </Accordion>
 
 <Accordion title="Docker containers left after deleting a project">
-  Each project gets its own `oke-dev-<id>` compose stack; `oke dev` stop keeps volumes. Run
+  Each project gets its own `oke-dev-<id>` compose project; `oke dev` stop keeps volumes. Run
   `oke docker clean` (TTY picker) or `oke docker clean --all --yes` from anywhere to remove
   leftover containers, networks, and volumes.
 </Accordion>
@@ -182,9 +181,10 @@ controls are preserved when `oke dev --docker` regenerates the file.
 
 ## Learn more
 
-- [CLI Reference](/docs/reference/cli) — `oke`, `create-oke`, mode, and db commands
+- [CLI Reference](/docs/reference/cli) — `oke`, `create-oke`, `oke test`, and db commands
 - [Environment variables](/docs/reference/environment-variables) — protocol-shaped env
 - [Configuration](/docs/reference/configuration) — `oke.config.ts` drivers and `db.autoPush`
+- [Migrating environments](/docs/reference/migrating-environments) — four-key maps → three
 
 ## Next
 

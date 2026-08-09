@@ -100,7 +100,7 @@ describe("fx — effect ledger", () => {
     await fx.emit("order-placed", {});
     await fx.send("order-confirmed", { to: "u1" });
     await fx.ask("triage@1", {});
-    expect(fx.vault("STRIPE_KEY").reveal()).toBe("sk_test");
+    expect((await fx.vault.get("STRIPE_KEY")).reveal()).toBe("sk_test");
     await fx.call("payments.charge", {});
 
     expect(ledger.entries).toHaveLength(7);
@@ -109,6 +109,105 @@ describe("fx — effect ledger", () => {
     for (const entry of ledger.entries) {
       expect(entry.reversibility).toBe(reversibilityOf(entry.kind));
     }
+  });
+});
+
+describe("fx.vault — object surface", () => {
+  /** Minimal in-memory adapter covering the surface `fx.vault` uses. */
+  function memoryAdapter() {
+    const rows = new Map<string, { value: string; version: number }>();
+    const actors: string[] = [];
+    return {
+      rows,
+      actors,
+      adapter: {
+        id: "memory",
+        async get(path: string) {
+          const row = rows.get(path);
+          return row === undefined ? undefined : { path, ...row };
+        },
+        async set(path: string, value: string, opts?: { actor?: { id?: string } }) {
+          if (opts?.actor?.id) actors.push(opts.actor.id);
+          const version = (rows.get(path)?.version ?? 0) + 1;
+          rows.set(path, { value, version });
+          return { path, value, version };
+        },
+        async rotate(path: string, value: string) {
+          const version = (rows.get(path)?.version ?? 0) + 1;
+          rows.set(path, { value, version });
+          return { path, value, version };
+        },
+        async delete(path: string) {
+          return rows.delete(path);
+        },
+        async list(opts?: { prefix?: string }) {
+          return [...rows.keys()]
+            .filter((p) => opts?.prefix === undefined || p.startsWith(opts.prefix))
+            .map((path) => ({ path, version: rows.get(path)!.version }));
+        },
+        async status() {
+          return { sealed: false, initialized: true, secretCount: rows.size };
+        },
+      },
+    };
+  }
+
+  test("mutations run through the adapter, ledger `secret`, and carry the flow actor", async () => {
+    const { adapter, actors, rows } = memoryAdapter();
+    const ledger = createEffectLedger();
+    const fx = createFx({
+      flow: "ops.rotateKey",
+      effects: { secrets: ["prod/api/stripe"] },
+      ledger,
+      // The adapter's structural shape is all `fx.vault` consumes.
+      vaultAdapter: adapter as never,
+    });
+
+    expect(await fx.vault.set("prod/api/stripe", "sk_1")).toEqual({
+      path: "prod/api/stripe",
+      version: 1,
+    });
+    expect(await fx.vault.rotate("prod/api/stripe", "sk_2")).toEqual({
+      path: "prod/api/stripe",
+      version: 2,
+    });
+    expect(await fx.vault.list("prod/")).toEqual(["prod/api/stripe"]);
+    expect(await fx.vault.status()).toEqual({
+      sealed: false,
+      initialized: true,
+      backend: "memory",
+    });
+    expect(await fx.vault.delete("prod/api/stripe")).toBe(true);
+
+    expect(rows.size).toBe(0);
+    expect(actors).toEqual(["ops.rotateKey"]);
+    expect(ledger.entries.map((e) => e.kind)).toEqual(["secret", "secret", "secret"]);
+  });
+
+  test("an undeclared path is refused before the adapter is touched", async () => {
+    const { adapter, rows } = memoryAdapter();
+    const fx = createFx({
+      flow: "ops.rotateKey",
+      effects: { secrets: ["prod/api/stripe"] },
+      vaultAdapter: adapter as never,
+    });
+
+    await expect(fx.vault.set("prod/api/other", "sk_1")).rejects.toThrow(/OKE1006/);
+    expect(rows.size).toBe(0);
+  });
+
+  test("mutations without a bound adapter name the missing backend", async () => {
+    const fx = createFx({
+      flow: "ops.rotateKey",
+      effects: { secrets: ["prod/api/stripe"] },
+    });
+
+    await expect(fx.vault.set("prod/api/stripe", "sk_1")).rejects.toThrow(
+      /fx\.vault\.set needs a bound Vault backend/,
+    );
+    await expect(fx.vault.status()).rejects.toThrow(
+      /fx\.vault\.status needs a bound Vault backend/,
+    );
   });
 });
 
@@ -144,8 +243,25 @@ describe("fx — wholesale swap", () => {
         now: () => 0,
         sleep: async () => undefined,
       },
-      vault() {
-        return new Redacted("");
+      vault: {
+        async get() {
+          return new Redacted("");
+        },
+        async set() {
+          throw new Error("vault.set must not be used");
+        },
+        async rotate() {
+          throw new Error("vault.rotate must not be used");
+        },
+        async delete() {
+          throw new Error("vault.delete must not be used");
+        },
+        async list() {
+          return [];
+        },
+        async status() {
+          return { sealed: false, initialized: true, backend: "memory" };
+        },
       },
       cache: {
         get: async () => undefined,

@@ -4,7 +4,7 @@
  * Physics: secrets · config · environment.
  */
 
-import { secretRegistry } from "../../kernel/element-registries.ts";
+import { requiredEnvRegistry, secretRegistry } from "../../kernel/element-registries.ts";
 
 /** Options for {@link vault} / {@link vault.secret} / {@link vault.config}. */
 export interface VaultSecretOptions {
@@ -106,6 +106,163 @@ function declareConfig(name: string, options: VaultSecretOptions = {}): VaultSec
 }
 
 /**
+ * Synchronous environment-variable helpers on `vault.env`.
+ *
+ * Plain process configuration — no boot chain, no driver, no redaction.
+ * Reach for {@link vault.secret} when the value is a contract the runtime
+ * must resolve, fingerprint, and keep out of logs.
+ */
+export interface VaultEnvApi {
+  /**
+   * Raw value, or `undefined` when unset / empty.
+   *
+   * @param name - Environment variable name
+   */
+  (name: string): string | undefined;
+  /**
+   * Value that must exist. Registers `name` so boot reports every missing
+   * variable at once alongside secret gaps.
+   *
+   * @param name - Environment variable name
+   * @throws TypeError when the variable is unset or empty
+   */
+  required(name: string): string;
+  /**
+   * Integer value.
+   *
+   * @param name - Environment variable name
+   * @param defaultValue - Used when the variable is unset or empty
+   * @throws TypeError when missing without a default, or not an integer
+   */
+  int(name: string, defaultValue?: number): number;
+  /**
+   * Boolean value (`1`/`true`/`yes`/`on` · `0`/`false`/`no`/`off`).
+   *
+   * @param name - Environment variable name
+   * @param defaultValue - Used when the variable is unset or empty
+   * @throws TypeError when missing without a default, or not boolean-shaped
+   */
+  bool(name: string, defaultValue?: boolean): boolean;
+  /**
+   * JSON-parsed value, or `undefined` when unset / empty.
+   *
+   * @param name - Environment variable name
+   * @throws TypeError when the value is not valid JSON
+   */
+  json<T = unknown>(name: string): T | undefined;
+}
+
+/**
+ * Read one environment variable, treating empty strings as unset.
+ *
+ * @param name - Environment variable name
+ */
+export function readEnv(name: string): string | undefined {
+  const value =
+    (typeof Bun !== "undefined" ? Bun.env[name] : undefined) ?? process.env[name] ?? undefined;
+  return value === undefined || value.length === 0 ? undefined : value;
+}
+
+/**
+ * Snapshot of every name passed to {@link vault.env.required} since the last
+ * reset. Boot turns the missing ones into {@link VaultGap}s.
+ */
+export function listRequiredEnvNames(): readonly string[] {
+  return requiredEnvRegistry.slice();
+}
+
+/**
+ * Clear the required-env registry (tests / fresh app adopt).
+ *
+ * @internal
+ */
+export function resetRequiredEnvNames(): void {
+  requiredEnvRegistry.length = 0;
+}
+
+/**
+ * @param name - Environment variable name
+ */
+function envValue(name: string): string | undefined {
+  if (!name) throw new TypeError("vault.env: name is required");
+  return readEnv(name);
+}
+
+/**
+ * @param name - Environment variable name
+ */
+function envRequired(name: string): string {
+  if (!name) throw new TypeError("vault.env.required: name is required");
+  if (!requiredEnvRegistry.includes(name)) requiredEnvRegistry.push(name);
+  const value = readEnv(name);
+  if (value === undefined) {
+    throw new TypeError(`vault.env.required: ${name} is not set`);
+  }
+  return value;
+}
+
+/**
+ * @param name - Environment variable name
+ * @param defaultValue - Used when the variable is unset
+ */
+function envInt(name: string, defaultValue?: number): number {
+  const raw = envValue(name);
+  if (raw === undefined) {
+    if (defaultValue === undefined) {
+      throw new TypeError(`vault.env.int: ${name} is not set and has no default`);
+    }
+    return defaultValue;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) {
+    throw new TypeError(`vault.env.int: ${name} is not an integer`);
+  }
+  return parsed;
+}
+
+const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
+
+/**
+ * @param name - Environment variable name
+ * @param defaultValue - Used when the variable is unset
+ */
+function envBool(name: string, defaultValue?: boolean): boolean {
+  const raw = envValue(name);
+  if (raw === undefined) {
+    if (defaultValue === undefined) {
+      throw new TypeError(`vault.env.bool: ${name} is not set and has no default`);
+    }
+    return defaultValue;
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (TRUE_VALUES.has(normalized)) return true;
+  if (FALSE_VALUES.has(normalized)) return false;
+  throw new TypeError(`vault.env.bool: ${name} is not a boolean (got "${raw}")`);
+}
+
+/**
+ * @param name - Environment variable name
+ */
+function envJson<T = unknown>(name: string): T | undefined {
+  const raw = envValue(name);
+  if (raw === undefined) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new TypeError(`vault.env.json: ${name} is not valid JSON`);
+  }
+}
+
+/** Sync env helpers exposed as {@link vault.env}. */
+export const vaultEnvApi: VaultEnvApi = Object.assign(envValue, {
+  required: envRequired,
+  int: envInt,
+  bool: envBool,
+  json: envJson,
+});
+
+/**
  * Marker prefix for {@link vault.fromDocker} local fallbacks.
  * Resolved from `docker/.env.docker` by `oke dev --docker` / vault boot.
  */
@@ -144,18 +301,22 @@ export function fromDockerRole(value: string): string {
 }
 
 /**
- * Vault element — `vault("NAME", opts)` · `vault.secret` · `vault.config`.
+ * Vault element — `vault("NAME", opts)` · `vault.secret` · `vault.config`
+ * · `vault.env`.
  *
  * A declaration is a contract, not a value. Values resolve at boot through
- * the configured driver chain.
+ * the configured driver chain. `vault.env` is the escape hatch for plain
+ * process configuration that needs no contract.
  */
 export const vault: {
   (name: string, options?: VaultSecretOptions): VaultSecretDecl;
   secret(name: string, options?: VaultSecretOptions): VaultSecretDecl;
   config(name: string, options?: VaultSecretOptions): VaultSecretDecl;
   fromDocker(role: string): string;
+  env: VaultEnvApi;
 } = Object.assign(declareSecret, {
   secret: declareSecret,
   config: declareConfig,
   fromDocker,
+  env: vaultEnvApi,
 });

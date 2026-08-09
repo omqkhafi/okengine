@@ -3,10 +3,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { connectPglite } from "../drivers/pglite.ts";
 import { createFx } from "../kernel/fx.ts";
 import { defineSeed, type SeedFn } from "../elements/store/seed.ts";
 import { EXIT_OK, EXIT_RUNTIME, EXIT_USAGE } from "./exit.ts";
@@ -151,7 +151,7 @@ describe("oke db emit — live plugged plugin tables", () => {
       join(dir, "oke.config.ts"),
       `import { defineConfig } from ${JSON.stringify(CONFIG_MOD)};
 export default defineConfig({
-  drivers: { store: { sql: { local: "sqlite", test: "memory", prod: "postgres" } } },
+  drivers: { store: { sql: { dev: "postgres", test: "pglite", prod: "postgres" } } },
   db: { declare: "src/schema.decl.ts", generated: "src/schema.generated.ts" },
 });
 `,
@@ -185,10 +185,10 @@ export const app = oke({ name: "plugin-emit" }).plug(audit);
       join(dir, "drizzle.config.ts"),
       `import { defineConfig } from "drizzle-kit";
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
   schema: "./src/schema.generated.ts",
   out: "./drizzle",
-  dbCredentials: { url: "file:./local.db" },
+  dbCredentials: { url: "postgres://127.0.0.1:5432/oke" },
 });
 `,
     );
@@ -205,8 +205,8 @@ export default defineConfig({
     expect(out.join("")).toMatch(/emitted.*schema\.generated\.ts/);
 
     const generated = await readFile(join(dir, "src", "schema.generated.ts"), "utf8");
-    expect(generated).toContain('sqliteTable("notes"');
-    expect(generated).toContain('sqliteTable("audit_events"');
+    expect(generated).toContain('pgTable("notes"');
+    expect(generated).toContain('pgTable("audit_events"');
     expect(generated).toContain('text("actor_id")');
     expect(generated).toContain('text("action")');
     expect(generated).toContain(".notNull()");
@@ -220,7 +220,7 @@ export default defineConfig({
       join(dir, "oke.config.ts"),
       `import { defineConfig } from ${JSON.stringify(CONFIG_MOD)};
 export default defineConfig({
-  drivers: { store: { sql: { local: "sqlite" } } },
+  drivers: { store: { sql: { test: "pglite" } } },
 });
 `,
     );
@@ -239,12 +239,13 @@ export const app = oke({ name: "plugin-only" }).plug(
 
     const { loadOkeConfig } = await import("./load-config.ts");
     const loaded = await loadOkeConfig(dir);
-    const emitted = await emitAbstractSchemaPrestep(dir, loaded.config, () => {}, "local");
+    const emitted = await emitAbstractSchemaPrestep(dir, loaded.config, () => {}, "test");
     expect(emitted).toBe(true);
 
-    const generated = await readFile(join(dir, "src", "db", "schema.generated.ts"), "utf8");
-    expect(generated).toContain('sqliteTable("metrics_daily"');
-    expect(generated).toContain('integer("hits")');
+    const generated = await readFile(join(dir, "src", "db", "schema.drizzle.ts"), "utf8");
+    expect(generated).toContain('pgTable("metrics_daily"');
+    // Postgres dialect maps abstract integer → bigint (32-bit INTEGER is too narrow).
+    expect(generated).toContain('bigint("hits", { mode: "number" })');
   });
 });
 
@@ -252,17 +253,49 @@ describe("oke db multi-migration catch-up", () => {
   /**
    * Real drizzle-kit generate/migrate through `oke db` — proves multi-file
    * versioned migrations and that re-migrate / environment lag only apply
-   * previously-unapplied files (drizzle-kit `__drizzle_migrations` history).
-   * The CLI wrapper must not interfere with that bookkeeping.
+   * previously-unapplied files (drizzle-kit `drizzle.__drizzle_migrations`
+   * history). The CLI wrapper must not interfere with that bookkeeping.
    */
   test("second migrate skips applied files; lag DB catches up with only the new one", async () => {
     const dir = await mkdtemp(join(import.meta.dir, ".tmp-db-mig-"));
+    const pgdata = join(dir, "app.pglite");
+    async function migrationNames(): Promise<string[]> {
+      const conn = await connectPglite({ url: pgdata });
+      try {
+        const rows = await conn.query(`SELECT name FROM drizzle.__drizzle_migrations ORDER BY id`);
+        return rows.map((r) => String(r.name));
+      } finally {
+        await conn.close();
+      }
+    }
+    async function noteColumns(): Promise<string[]> {
+      const conn = await connectPglite({ url: pgdata });
+      try {
+        const rows = await conn.query(
+          `SELECT column_name AS name FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'notes'`,
+        );
+        return rows.map((r) => String(r.name));
+      } finally {
+        await conn.close();
+      }
+    }
+    async function notesTableExists(): Promise<boolean> {
+      const conn = await connectPglite({ url: pgdata });
+      try {
+        const rows = await conn.query(`SELECT to_regclass('public.notes') AS reg`);
+        return rows[0]?.reg != null;
+      } finally {
+        await conn.close();
+      }
+    }
+
     try {
       await mkdir(join(dir, "src"), { recursive: true });
       await writeFile(
         join(dir, "src", "schema.ts"),
-        `import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-export const notes = sqliteTable("notes", {
+        `import { pgTable, text } from "drizzle-orm/pg-core";
+export const notes = pgTable("notes", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
 });
@@ -272,10 +305,11 @@ export const notes = sqliteTable("notes", {
         join(dir, "drizzle.config.ts"),
         `import { defineConfig } from "drizzle-kit";
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
+  driver: "pglite",
   schema: "./src/schema.ts",
   out: "./drizzle",
-  dbCredentials: { url: "file:./app.db" },
+  dbCredentials: { url: ${JSON.stringify(pgdata)} },
 });
 `,
       );
@@ -293,20 +327,13 @@ export default defineConfig({
       expect(mig1.code).toBe(EXIT_OK);
       expect(mig1.out).toContain("oke db migrate: applied");
 
-      let db = new Database(join(dir, "app.db"));
-      expect(
-        db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='notes'").get(),
-      ).toBeTruthy();
-      let history = db.query("SELECT name FROM __drizzle_migrations ORDER BY id").all() as Array<{
-        name: string;
-      }>;
-      expect(history.map((r) => r.name)).toEqual([initialMig]);
-      db.close();
+      expect(await notesTableExists()).toBe(true);
+      expect(await migrationNames()).toEqual([initialMig]);
 
       await writeFile(
         join(dir, "src", "schema.ts"),
-        `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-export const notes = sqliteTable("notes", {
+        `import { integer, pgTable, text } from "drizzle-orm/pg-core";
+export const notes = pgTable("notes", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   pinned: integer("pinned").notNull().default(0),
@@ -333,54 +360,31 @@ export const notes = sqliteTable("notes", {
       const mig2 = await runDbFresh("migrate", dir);
       expect(mig2.code).toBe(EXIT_OK);
 
-      db = new Database(join(dir, "app.db"));
-      history = db.query("SELECT name FROM __drizzle_migrations ORDER BY id").all() as Array<{
-        name: string;
-      }>;
-      expect(history.map((r) => r.name)).toEqual([firstMig, secondMig]);
-      const cols = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
-      expect(cols.map((c) => c.name)).toContain("pinned");
-      db.close();
+      expect(await migrationNames()).toEqual([firstMig, secondMig]);
+      expect(await noteColumns()).toContain("pinned");
 
       // Idempotent re-migrate: history unchanged, no error.
       const migNoop = await runDbFresh("migrate", dir);
       expect(migNoop.code).toBe(EXIT_OK);
-      db = new Database(join(dir, "app.db"));
-      const historyNoop = db
-        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
-        .all() as Array<{ name: string }>;
-      expect(historyNoop.map((r) => r.name)).toEqual([firstMig, secondMig]);
-      db.close();
+      expect(await migrationNames()).toEqual([firstMig, secondMig]);
 
       // Staging/prod lag: fresh DB with only the first migration applied,
       // then both files present — catch up applies only the second.
-      await rm(join(dir, "app.db"), { force: true });
+      await rm(pgdata, { recursive: true, force: true });
       const stash = join(dir, "_stash_second");
       await rm(stash, { recursive: true, force: true });
       await rename(join(dir, "drizzle", secondMig), stash);
 
       const lagFirst = await runDbFresh("migrate", dir);
       expect(lagFirst.code).toBe(EXIT_OK);
-      db = new Database(join(dir, "app.db"));
-      const lagHist1 = db
-        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
-        .all() as Array<{ name: string }>;
-      expect(lagHist1.map((r) => r.name)).toEqual([firstMig]);
-      const lagCols1 = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
-      expect(lagCols1.map((c) => c.name)).not.toContain("pinned");
-      db.close();
+      expect(await migrationNames()).toEqual([firstMig]);
+      expect(await noteColumns()).not.toContain("pinned");
 
       await rename(stash, join(dir, "drizzle", secondMig));
       const lagCatchUp = await runDbFresh("migrate", dir);
       expect(lagCatchUp.code).toBe(EXIT_OK);
-      db = new Database(join(dir, "app.db"));
-      const lagHist2 = db
-        .query("SELECT name FROM __drizzle_migrations ORDER BY id")
-        .all() as Array<{ name: string }>;
-      expect(lagHist2.map((r) => r.name)).toEqual([firstMig, secondMig]);
-      const lagCols2 = db.query("PRAGMA table_info(notes)").all() as Array<{ name: string }>;
-      expect(lagCols2.map((c) => c.name)).toContain("pinned");
-      db.close();
+      expect(await migrationNames()).toEqual([firstMig, secondMig]);
+      expect(await noteColumns()).toContain("pinned");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -409,7 +413,7 @@ describe("oke db seed", () => {
   }
 
   async function seedWith(
-    env: "local" | "docker" | "test" | "prod",
+    env: "dev" | "test" | "prod",
     extras: Parameters<typeof runSeed>[0] = {},
   ) {
     const order: string[] = [];
@@ -429,20 +433,15 @@ describe("oke db seed", () => {
   }
 
   test("essential array order is execution order", async () => {
-    const { code, order, out } = await seedWith("local");
+    const { code, order, out } = await seedWith("dev");
     expect(code).toBe(EXIT_OK);
     expect(order.slice(0, 2)).toEqual(["a", "b"]);
     expect(out).toContain("oke db seed: essential a");
     expect(out).toContain("oke db seed: ok");
   });
 
-  test("local runs essential + dev, never prod", async () => {
-    const { order } = await seedWith("local");
-    expect(order).toEqual(["a", "b", "dev"]);
-  });
-
-  test("docker runs essential + dev, never prod", async () => {
-    const { order } = await seedWith("docker");
+  test("dev runs essential + dev, never prod", async () => {
+    const { order } = await seedWith("dev");
     expect(order).toEqual(["a", "b", "dev"]);
   });
 
@@ -493,11 +492,11 @@ describe("oke db seed", () => {
     expect(code).toBe(EXIT_OK);
   });
 
-  test("docker confirm proceeds when confirmEnv returns true", async () => {
+  test("dev confirm proceeds when confirmEnv returns true", async () => {
     const out: string[] = [];
     const order: string[] = [];
     const code = await runSeed({
-      env: "docker",
+      env: "dev",
       force: false,
       stdinIsTTY: true,
       seedDef: trackingDef(order),
@@ -506,7 +505,7 @@ describe("oke db seed", () => {
         stop: async () => {},
       }),
       confirmEnv: async (env, target) => {
-        expect(env).toBe("docker");
+        expect(env).toBe("dev");
         expect(target.length).toBeGreaterThan(0);
         return true;
       },

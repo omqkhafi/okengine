@@ -5,9 +5,8 @@ icon: "HardDrive"
 source: "docs/spec/unified-theory.md"
 ---
 
-RustFS is the default docker `store.files` image — an Apache-2.0 S3-compatible object
-store (MinIO alternative). Driver id stays `s3`; Bun binds `Bun.S3Client` against the
-endpoint.
+RustFS is the default `oke dev` / prod `store.files` image — an Apache-2.0 S3-compatible
+object store. Driver id stays `s3`; Bun binds `Bun.S3Client` against the endpoint.
 
 <Callout title="The one rule">
   Protocol name is `s3` — vendor choice is the image pin (`rustfs/rustfs:…`) plus `S3_ENDPOINT`.
@@ -24,11 +23,11 @@ endpoint.
 ```typescript title="oke.config.ts"
 drivers: {
   store: {
-    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
+    files: { dev: "s3", test: "memory", prod: "s3" },
   },
 },
 images: {
-  "store.files": "rustfs/rustfs:1.0.0-beta.11",
+  store: { files: "rustfs/rustfs:1.0.0-beta.11" },
 },
 ```
 
@@ -116,7 +115,7 @@ the recipe enables the console for local ops.
 <Accordion title="oke boot: redis / meilisearch / S3 URL missing — S3_BUCKET">
 
 Files on the `s3` driver need `S3_BUCKET` (or `OKE_STORE_FILES_DB`). Without it the
-facet cannot open. Re-run `oke dev --docker` so stack env fills `S3_*`, or export them
+facet cannot open. Re-run `oke dev` so stack env fills `S3_*`, or export them
 for a managed bucket.
 
 </Accordion>
@@ -143,6 +142,10 @@ running service; confirm health at `/health` before debugging client signatures.
     description="SMTP catcher for the same stack."
     href="/docs/recipes/mailpit"
   />
-  <Card title="OpenBao" description="Vault for secrets." href="/docs/recipes/openbao" />
+  <Card
+    title="Vault"
+    description="Secrets and built-in encrypted store."
+    href="/docs/elements/vault"
+  />
   <Card title="Store" description="Files facet details." href="/docs/elements/store" />
 </Cards>

@@ -3,12 +3,14 @@
  *
  * Recipes translate a normalised {@link ServiceSpec} into image-specific
  * env / command / healthcheck and expose {@link ImageRecipe.url} so the
- * kernel never learns an env-var name. Four compose override layers end
- * in an untouched `compose.override.yml`. Credentials never enter YAML.
+ * kernel never learns an env-var name. Default layout is a single
+ * production-grade `docker-compose.yml` (opt-in `--split` / `--stack`).
+ * Credentials never enter YAML.
  */
 
 export type {
   ComposeHealthcheck,
+  ComposeLayout,
   DeriveOptions,
   DeriveResult,
   GeneratedFile,
@@ -26,7 +28,11 @@ export { DEFAULT_DOCKER_DIR } from "./types.ts";
 
 export {
   COMPOSE_ALL,
+  COMPOSE_BASE,
   COMPOSE_OVERRIDE,
+  DOCKER_COMPOSE,
+  DOCKER_COMPOSE_OVERRIDE,
+  DOCKER_STACK,
   assertNoCredentialsInYaml,
   buildSpecs,
   buildStackEnv,
@@ -36,9 +42,24 @@ export {
   formatStackEnv,
 } from "./compose.ts";
 
+export {
+  DEFAULT_SERVER_BUDGET,
+  allocateServiceResources,
+  mergeDeployResources,
+  resolveServerBudget,
+  type ServerBudget,
+  type ServiceResourceLimit,
+} from "./resources.ts";
+
 export { deriveInfrastructure, writeDerivedFiles } from "./derive.ts";
 export { emitDockerfile } from "./dockerfile.ts";
-export { credEnv, envPrefix, serviceNameFor } from "./helpers.ts";
+export {
+  composeToYaml,
+  credEnv,
+  envPrefix,
+  serviceNameFor,
+  type ComposeYamlOptions,
+} from "./helpers.ts";
 export { generateCredentials } from "./credentials.ts";
 export {
   ensureOllamaModel,
@@ -92,7 +113,6 @@ export {
   ollama,
   OLLAMA_IMAGE,
   OLLAMA_MIN_SAFE_VERSION,
-  openbao,
   pgdog,
   postgres,
   recipeFor,
@@ -108,7 +128,12 @@ export {
   yugabyte,
 } from "./recipes/index.ts";
 export { CADDY_APP_SERVICE, buildCaddyfile } from "./recipes/caddy.ts";
-export { PGDOG_BACKEND_SERVICE, buildPgDogToml, buildPgDogUsersToml } from "./recipes/pgdog.ts";
+export {
+  PGDOG_BACKEND_SERVICE,
+  PGDOG_CONFIG_DIR,
+  buildPgDogToml,
+  buildPgDogUsersToml,
+} from "./recipes/pgdog.ts";
 export { SOCKET_PROXY_IMAGE, SOCKET_PROXY_SERVICE, traefikAppLabels } from "./recipes/traefik.ts";
 export {
   formatStackPreview,

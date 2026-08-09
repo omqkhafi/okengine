@@ -1,7 +1,7 @@
 /**
  * `meilisearch` index driver — full-text search over the Meilisearch HTTP API.
  *
- * Product-as-protocol id (same pattern as `openbao` / `pgvector`); the image
+ * Product-as-protocol id (same pattern as `pgvector`); the image
  * pin lives in `images["store.index"]` (e.g. `getmeili/meilisearch`). This is
  * a genuinely different capability from the vector ANN drivers — typo-tolerant
  * / faceted full-text relevance, not cosine similarity.

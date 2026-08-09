@@ -3,7 +3,13 @@
  */
 
 import { resolve } from "node:path";
-import { flattenImagesConfig, type DriverRef, type OkeConfig } from "../config/index.ts";
+import {
+  driverRefId,
+  flattenImagesConfig,
+  normalizeEnvDriverMap,
+  type EnvDriverInput,
+  type OkeConfig,
+} from "../config/index.ts";
 import type { Manifest } from "../manifest/types.ts";
 
 /** Default image pins when `images` is omitted but prod drivers need containers. */
@@ -11,27 +17,15 @@ const DEFAULT_SQL_IMAGE = "postgres:18-alpine";
 const DEFAULT_PGVECTOR_IMAGE = "pgvector/pgvector:pg17";
 const DEFAULT_PGDOG_IMAGE = "ghcr.io/pgdogdev/pgdog:v0.1.51";
 const DEFAULT_KV_IMAGE = "redis:8-alpine";
-const DEFAULT_VAULT_IMAGE = "openbao/openbao:2.6.1";
 
 /**
- * Extract protocol id from a driver ref.
+ * Prefer `dev` then `prod` for a driver map (compose infra ≈ production).
  *
- * @param ref - String or `{ driver }` object
+ * @param map - Env driver input (normalized first)
  */
-function driverId(ref: DriverRef | undefined): string | undefined {
-  if (ref === undefined) return undefined;
-  return typeof ref === "string" ? ref : ref.driver;
-}
-
-/**
- * Prefer `docker` then `prod` for a driver map (compose infra ≈ production).
- *
- * @param map - Env driver map
- */
-function dockerOrProdId(
-  map: { readonly docker?: DriverRef; readonly prod?: DriverRef } | undefined,
-): string | undefined {
-  return driverId(map?.docker) ?? driverId(map?.prod);
+function dockerOrProdId(map: EnvDriverInput | undefined): string | undefined {
+  const normalized = normalizeEnvDriverMap(map);
+  return driverRefId(normalized?.dev) ?? driverRefId(normalized?.prod);
 }
 
 /**
@@ -75,11 +69,6 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
     out["store.kv"] = DEFAULT_KV_IMAGE;
   }
 
-  const vault = dockerOrProdId(config.drivers?.vault);
-  if (vault === "openbao") {
-    out.vault = DEFAULT_VAULT_IMAGE;
-  }
-
   return out;
 }
 
@@ -87,6 +76,21 @@ export function defaultImagesFromConfig(config: OkeConfig): Readonly<Record<stri
 export interface LoadedConfig {
   readonly config: OkeConfig;
   readonly path: string;
+}
+
+/**
+ * Reject removed env keys / drivers in `oke.config.*` source.
+ * Migration is documented — no soft-compat rewrite.
+ *
+ * @param source - File contents
+ */
+export function assertOkeConfigSource(source: string): void {
+  if (/(^|[^\w.])local\s*:/.test(source)) {
+    throw new Error(`"local" is no longer a valid environment key in oke.config.ts.`);
+  }
+  if (/(["'])sqlite\1/.test(source)) {
+    throw new Error(`"sqlite" is no longer a valid driver in oke.config.ts.`);
+  }
 }
 
 /**
@@ -110,6 +114,8 @@ export async function loadOkeConfig(
   for (const path of candidates) {
     const file = Bun.file(path);
     if (!(await file.exists())) continue;
+    const source = await file.text();
+    assertOkeConfigSource(source);
     const mod = (await import(path)) as { default?: OkeConfig };
     if (!mod.default || typeof mod.default !== "object") {
       throw new Error(`oke: ${path} must default-export defineConfig({...})`);
@@ -174,14 +180,14 @@ export function dockerDevDriverMismatches(
 ): readonly StackDriverMismatch[] {
   const roles = new Set(stackRoles);
   const out: StackDriverMismatch[] = [];
-  const sqlDocker =
-    driverId(config.drivers?.store?.sql?.docker) ?? driverId(config.drivers?.store?.sql?.prod);
-  const kvDocker =
-    driverId(config.drivers?.store?.kv?.docker) ?? driverId(config.drivers?.store?.kv?.prod);
+  const sqlMap = normalizeEnvDriverMap(config.drivers?.store?.sql);
+  const kvMap = normalizeEnvDriverMap(config.drivers?.store?.kv);
+  const sqlDocker = driverRefId(sqlMap?.dev) ?? driverRefId(sqlMap?.prod);
+  const kvDocker = driverRefId(kvMap?.dev) ?? driverRefId(kvMap?.prod);
 
   if (
     roles.has("store.sql") &&
-    (sqlDocker === "sqlite" || sqlDocker === "memory" || sqlDocker === undefined)
+    (sqlDocker === "memory" || sqlDocker === "pglite" || sqlDocker === undefined)
   ) {
     out.push({
       label: "sql",

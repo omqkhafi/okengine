@@ -14,6 +14,9 @@
  * ```
  */
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createMockAiDriver,
   createChannelInbox,
@@ -212,6 +215,12 @@ export async function createTestApp<App extends OkeApp>(
     return out;
   };
 
+  // Unique on-disk PGLite datadir per harness — `memory://` is not reliably
+  // isolated across boots in one worker (IF NOT EXISTS / row leaks).
+  const prevPgliteUrl = process.env.OKE_PGLITE_URL;
+  const pgliteDir = await mkdtemp(join(tmpdir(), "oke-pglite-"));
+  process.env.OKE_PGLITE_URL = pgliteDir;
+
   await app.boot({
     ...(options.boot ?? {}),
     env: "test",
@@ -322,6 +331,9 @@ export async function createTestApp<App extends OkeApp>(
     },
     async close() {
       await app.bootResult?.close();
+      if (prevPgliteUrl === undefined) delete process.env.OKE_PGLITE_URL;
+      else process.env.OKE_PGLITE_URL = prevPgliteUrl;
+      await rm(pgliteDir, { recursive: true, force: true }).catch(() => undefined);
     },
   };
 

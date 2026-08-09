@@ -5,8 +5,7 @@
  * opts into the `meilisearch` store.index driver. This module:
  *
  *  - generates the master key once and persists it under `.oke/meilisearch/`
- *    (`0700` dir / `0600` file, atomic write — same material discipline as
- *    OpenBao, minus the init/unseal ceremony: a single static key),
+ *    (`0700` dir / `0600` file, atomic write — a single static key),
  *  - resolves the `meilisearch` binary from `PATH` (a documented prerequisite,
  *    like Docker for `--docker`; we never auto-download binaries),
  *  - spawns it via `Bun.spawn` with its own data dir + port, polls `/health`,

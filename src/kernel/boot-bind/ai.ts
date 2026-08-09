@@ -33,7 +33,7 @@ export function bindAi(
   options: BootOptions,
   gate: GateRuntime | undefined,
   now: () => number,
-  env: ConfigEnv = "local",
+  env: ConfigEnv = "test",
   docker = false,
 ): AiRuntime {
   const id = resolveAiDriverId(options, env, docker);
@@ -115,6 +115,7 @@ export function openDefaultsFor(id: string, docker = false): AiOpenOptions {
     return {
       ...(apiKey ? { apiKey } : {}),
       ...(baseUrl ? { baseUrl } : {}),
+      ...(process.env.OKE_AI_MODEL?.trim() ? { model: process.env.OKE_AI_MODEL.trim() } : {}),
     };
   }
   return {};

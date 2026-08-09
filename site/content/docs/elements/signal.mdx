@@ -238,13 +238,13 @@ When a signal disappears from code, reconciliation marks its config row `orphane
 
 ```typescript title="oke.config.ts"
 drivers: {
-  signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
+  signal: { dev: "redis", test: "memory", prod: "redis" },
 },
 ```
 
 | Driver     | Runs as                              | Boot today                                                                  |
 | ---------- | ------------------------------------ | --------------------------------------------------------------------------- |
-| `memory`   | in-process                           | Local loop + tests — zero infrastructure                                    |
+| `memory`   | in-process                           | Tests — zero infrastructure                                                 |
 | `redis`    | Redis / Valkey / Dragonfly image pin | Boot-bound — **emit relay** via Streams / pub/sub; consume is process-local |
 | `postgres` | Postgres                             | Driver exists; boot **fails loud** until a LISTEN/NOTIFY SQL client binds   |
 | `nats`     | NATS                                 | Driver exists; boot **fails loud** until a production NATS client binds     |

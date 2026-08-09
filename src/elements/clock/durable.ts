@@ -7,8 +7,10 @@
  */
 
 import { fxRetry } from "../../kernel/concurrency.ts";
+import { failureCodeOf, rebindUndosFromDo, runCompensationPhase } from "../../kernel/compensate.ts";
 import type { AnyFlowDef } from "../../kernel/flow.ts";
 import { createFxContext, type CreateFxOptions, type Fx } from "../../kernel/fx.ts";
+import { isFlowFailure } from "../../kernel/hooks.ts";
 import {
   createJournal,
   isJournalSuspend,
@@ -17,6 +19,7 @@ import {
   type JournalSession,
   type JournalStore,
 } from "../../kernel/journal.ts";
+
 /** Outcome of one durable attempt. */
 export type DurableResult<O = unknown> =
   | {
@@ -74,7 +77,21 @@ export async function runDurable<O = unknown>(
 
   if (options.runId) {
     const existing = await options.journalStore.get(options.runId);
-    if (existing?.wakeAt !== undefined && now() < existing.wakeAt) {
+    if (!existing) {
+      return {
+        status: "failed",
+        runId: options.runId,
+        error: `journal: run "${options.runId}" not found`,
+      };
+    }
+    if (existing.status === "failed" || existing.status === "completed") {
+      return {
+        status: "failed",
+        runId: existing.id,
+        error: existing.error ?? `journal: run is already ${existing.status}`,
+      };
+    }
+    if (existing.wakeAt !== undefined && now() < existing.wakeAt) {
       const sleepEntry = [...existing.entries].reverse().find((e) => e.kind === "sleep");
       return {
         status: "sleeping",
@@ -102,6 +119,23 @@ export async function runDurable<O = unknown>(
     durable: true,
   });
 
+  if (session.run.status === "compensating") {
+    await rebindUndosFromDo(options.flow, options.input, fx, session);
+    const priorError = session.run.error ?? "Error";
+    await runCompensationPhase({
+      flow: options.flow,
+      input: options.input,
+      session,
+      fx,
+      error: new Error(priorError),
+    });
+    return {
+      status: "failed",
+      runId: session.runId,
+      error: session.run.error ?? priorError,
+    };
+  }
+
   try {
     const run = () => {
       // Same journal session across attempts — rewind so completed steps replay.
@@ -109,6 +143,20 @@ export async function runDurable<O = unknown>(
       return options.flow.do(options.input as never, fx);
     };
     const output = await (options.flow.retry ? fxRetry(run, options.flow.retry) : run());
+    if (isFlowFailure(output)) {
+      await runCompensationPhase({
+        flow: options.flow,
+        input: options.input,
+        session,
+        fx,
+        error: output,
+      });
+      return {
+        status: "failed",
+        runId: session.runId,
+        error: session.run.error ?? failureCodeOf(output),
+      };
+    }
     await session.commit("completed", { output });
     return {
       status: "completed",
@@ -124,12 +172,17 @@ export async function runDurable<O = unknown>(
         label: err.label,
       };
     }
-    const message = err instanceof Error ? err.message : String(err);
-    await session.commit("failed", { error: message });
+    await runCompensationPhase({
+      flow: options.flow,
+      input: options.input,
+      session,
+      fx,
+      error: err,
+    });
     return {
       status: "failed",
       runId: session.runId,
-      error: message,
+      error: session.run.error ?? failureCodeOf(err),
     };
   }
 }

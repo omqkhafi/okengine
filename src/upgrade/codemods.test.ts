@@ -5,8 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   CODEMODS,
-  rewriteConfigEnvKeys,
-  rewriteFromStackMarkers,
+  rewriteThinRootImports,
   runCodemods,
   validateCodemodRegistry,
   type Codemod,
@@ -54,24 +53,12 @@ describe("codemod registry", () => {
     expect(changes).toEqual([{ path: "src/x.ts", before: "old", after: "new" }]);
   });
 
-  test("rewriteConfigEnvKeys renames driver-map keys", () => {
-    const after = rewriteConfigEnvKeys(`sql: {
-  dev: "sqlite",
-  stack: "postgres",
-  prod: "postgres",
-}`);
-    expect(after).toContain('local: "sqlite"');
-    expect(after).toContain('docker: "postgres"');
-    expect(after).not.toMatch(/(^|[^\w.])dev\s*:/);
-    expect(after).not.toMatch(/(^|[^\w.])stack\s*:/);
-  });
-
-  test("rewriteFromStackMarkers renames vault helpers", () => {
-    const after = rewriteFromStackMarkers(
-      `dev: vault.fromStack("store.sql") // __oke_from_stack__`,
+  test("rewriteThinRootImports moves deep imports to subpaths", () => {
+    const after = rewriteThinRootImports(
+      `import { createFx, on } from "okengine";\nimport { flow } from "okengine";\n`,
     );
-    expect(after).toContain("fromDocker");
-    expect(after).toContain("__oke_from_docker__");
-    expect(after).not.toContain("fromStack");
+    expect(after).toContain('from "okengine/full"');
+    expect(after).toContain("createFx");
+    expect(after).toMatch(/from ["']okengine["']/);
   });
 });

@@ -144,6 +144,17 @@ derived from these ten names:
 import { on, flow, signal, store, clock, gate, vault, channel, ai, plugin } from "okengine";
 ```
 
+For HTTP-only apps, prefer the slim entry so the cold graph stays on the edge
+router:
+
+```ts title="okengine/http"
+import { on, flow, http, gate, oke, createBunRuntime } from "okengine/http";
+```
+
+Heavy surfaces (`runs`, journal factories, compiler extract, the legacy
+mega-barrel) live on `okengine/runs`, `okengine/journal`, `okengine/compiler`,
+and `okengine/full`.
+
 <Vocabulary />
 
 ## Learn more

@@ -71,8 +71,10 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
   readonly breaking?: boolean;
   /**
    * Compensation phase after terminal failure on a durable flow.
-   * Runs under the same journal session before `commit("failed")`.
-   * Bodies must use distinct `fx.step("undo:…")` names — never reuse
+   * Runs under the same journal session after auto per-step `{ undo }`
+   * handlers and before `commit("failed")`. Prefer `fx.step(name, fn, { undo })`
+   * for step-local reverse work; use this hook for cross-cutting cleanup.
+   * Manual bodies must use distinct `fx.step("undo:…")` names — never reuse
    * forward step names. Never called on retryable attempts or sleep park.
    */
   readonly compensate?: (

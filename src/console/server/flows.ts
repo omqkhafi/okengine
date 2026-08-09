@@ -596,9 +596,29 @@ const VaultRowOut = z.object({
   sharedFingerprintEnvs: z.array(z.string()),
 });
 
+const VaultBuiltinStatusOut = z.object({
+  initialized: z.boolean(),
+  sealed: z.boolean(),
+  masterKeyPresent: z.boolean(),
+  kekVersion: z.number(),
+  secretCount: z.number(),
+  sealCount: z.number(),
+  lastSealedAt: z.number().nullable(),
+  lastUnsealedAt: z.number().nullable(),
+  rewrapTargetKekVersion: z.number().nullable(),
+});
+
+const VaultBackendOut = z.object({
+  driverId: z.enum(["env", "vault", "managed", "memory"]),
+  builtin: z.boolean(),
+  status: VaultBuiltinStatusOut.nullable(),
+  unavailable: z.string().nullable(),
+});
+
 const VaultListOut = z.object({
   secrets: z.array(VaultRowOut),
   env: z.string(),
+  backend: VaultBackendOut.nullable(),
 });
 
 const VaultWriteIn = z.object({
@@ -1725,7 +1745,7 @@ function createSetupClaim(state: ConsoleState) {
         }
         throw err;
       }
-      state.persistOperator(op.id);
+      await state.persistOperator(op.id);
       const issued = await issueOperatorSession(state, op.id);
       fx.log.info("console.setup.claim", { operatorId: op.id });
       return sessionPayload(op.id, op.email, op.name, issued);
@@ -2272,7 +2292,7 @@ async function issueOperatorSession(
       scopes: ["console:*"],
     },
   );
-  state.persistSessions();
+  await state.persistSessions();
   return issued;
 }
 

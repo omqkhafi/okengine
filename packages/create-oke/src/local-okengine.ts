@@ -95,9 +95,19 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
   };
 
   const stage = localOkengineStageDir();
-  rmSync(stage, { recursive: true, force: true });
-  mkdirSync(stage, { recursive: true });
-  writeFileSync(join(stage, "package.json"), `${JSON.stringify(consumer, null, 2)}\n`, "utf8");
+  const pkgBody = `${JSON.stringify(consumer, null, 2)}\n`;
+  const stagePkgPath = join(stage, "package.json");
+  const stageReady =
+    existsSync(join(stage, "node_modules", "zod")) &&
+    existsSync(join(stage, "node_modules", "drizzle-kit", "cli.mjs")) &&
+    existsSync(stagePkgPath) &&
+    readFileSync(stagePkgPath, "utf8") === pkgBody;
+
+  if (!stageReady) {
+    rmSync(stage, { recursive: true, force: true });
+    mkdirSync(stage, { recursive: true });
+    writeFileSync(stagePkgPath, pkgBody, "utf8");
+  }
 
   const entries =
     consumer.files && consumer.files.length > 0
@@ -109,20 +119,24 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
     if (!existsSync(from)) continue;
     const to = join(stage, rel);
     mkdirSync(dirname(to), { recursive: true });
+    // Refresh publish files every call so scaffold always sees current source.
+    rmSync(to, { recursive: true, force: true });
     cpSync(from, to, { recursive: true, dereference: true });
   }
 
-  const install = Bun.spawnSync({
-    cmd: ["bun", "install"],
-    cwd: stage,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (install.exitCode !== 0) {
-    const err = new TextDecoder().decode(install.stderr).trim();
-    throw new Error(
-      `create-oke: bun install failed in local okengine stage${err ? `\n${err}` : ""}`,
-    );
+  if (!stageReady) {
+    const install = Bun.spawnSync({
+      cmd: ["bun", "install"],
+      cwd: stage,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (install.exitCode !== 0) {
+      const err = new TextDecoder().decode(install.stderr).trim();
+      throw new Error(
+        `create-oke: bun install failed in local okengine stage${err ? `\n${err}` : ""}`,
+      );
+    }
   }
 
   return `file:${stage}`;

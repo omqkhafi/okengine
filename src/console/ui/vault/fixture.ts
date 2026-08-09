@@ -2,7 +2,7 @@
  * Vault panel fixture — fingerprints only; never real secret values.
  */
 
-import type { VaultListResponse, VaultRecord } from "./types.ts";
+import type { VaultBackend, VaultListResponse, VaultRecord } from "./types.ts";
 
 /** Fixture secret used only for leak-detection tests (never in panel rows). */
 export const FIXTURE_SECRET_VALUE = "sk_live_DO_NOT_LEAK_fixture";
@@ -68,8 +68,27 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
   },
 ];
 
+/** Built-in backend, initialized and sealed in this process. */
+export const VAULT_BACKEND_FIXTURE: VaultBackend = {
+  driverId: "vault",
+  builtin: true,
+  status: {
+    initialized: true,
+    sealed: true,
+    masterKeyPresent: true,
+    kekVersion: 2,
+    secretCount: 7,
+    sealCount: 1,
+    lastSealedAt: 1_700_000_100_000,
+    lastUnsealedAt: 1_700_000_000_000,
+    rewrapTargetKekVersion: null,
+  },
+  unavailable: null,
+};
+
 /** List response matching `console.vault.list`. */
 export const VAULT_LIST_FIXTURE: VaultListResponse = {
   secrets: VAULT_FIXTURE,
-  env: "local",
+  env: "dev",
+  backend: VAULT_BACKEND_FIXTURE,
 };

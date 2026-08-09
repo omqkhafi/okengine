@@ -2,17 +2,17 @@
  * Shared Vault resolution-chain assembly for app boot and Console.
  *
  * Order (first hit wins): process.env → .env.local → compose .env.docker →
- * backend layer (`env` seed / openbao / memory / managed).
+ * backend layer (`env` seed / vault / memory / managed).
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ConfigEnv } from "../../config/index.ts";
 import {
+  builtinVaultDriver,
   envVaultDriver,
   managedVaultDriver,
   memoryVaultDriver,
-  openbaoVaultDriver,
 } from "../../drivers/index.ts";
 import { parseDotenv } from "../../drivers/vault-dotenv-parse.ts";
 import type { VaultDriverId } from "../../drivers/vault-types.ts";
@@ -25,32 +25,30 @@ export interface BuildVaultBootChainOptions {
   readonly cwd?: string;
   /** Resolved `drivers.vault` id for the active env. */
   readonly driverId: VaultDriverId;
-  /** Active config env — controls fail-loud vs soft fallback for openbao. */
+  /** Active config env. */
   readonly env?: ConfigEnv;
   /** Seed secrets for the terminal memory / managed layer. */
   readonly seed?: Readonly<Record<string, string>>;
-  /**
-   * When `openbao` is selected but credentials are missing:
-   * - `"throw"` — fail loud (default for `prod` / `docker`)
-   * - `"memory"` — soft-fallback to a seeded memory bag (Console / local)
-   */
-  readonly missingOpenbao?: "throw" | "memory";
 }
 
 /**
  * Normalize a config label to a {@link VaultDriverId}.
  *
- * Accepts legacy `"dotenv"` as an alias for `"env"`.
+ * Accepts legacy `"dotenv"` as an alias for `"env"`, and `"builtin"` as an
+ * alias for the built-in `"vault"` store.
  *
  * @param raw - Config string
  */
 export function normalizeVaultDriverId(raw: string): VaultDriverId {
   if (raw === "dotenv") return "env";
-  if (raw === "env" || raw === "openbao" || raw === "memory" || raw === "managed") {
+  if (raw === "builtin") return "vault";
+  if (raw === "env" || raw === "vault" || raw === "memory" || raw === "managed") {
     return raw;
   }
   throw new Error(
-    `oke boot: unknown vault driver "${raw}" (expected env · openbao · memory · managed)`,
+    `oke boot: unknown vault driver "${raw}" (expected env · vault · memory · managed). ` +
+      'Official backends: built-in vault (drivers.vault: "vault"), ENV, or managed with ' +
+      'provider "aws-secrets-manager".',
   );
 }
 
@@ -69,9 +67,11 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
     composeText = readFileSync(composeEnv.path, "utf8").toString();
   }
   const envMap = parseDotenv(composeText);
-  const openbaoUrl = process.env.OKE_VAULT_URL ?? envMap.get("OKE_VAULT_URL");
-  const openbaoToken = process.env.OKE_VAULT_TOKEN ?? envMap.get("OKE_VAULT_TOKEN");
-  const openbaoMount = process.env.OKE_VAULT_MOUNT ?? envMap.get("OKE_VAULT_MOUNT") ?? "secret";
+  const vaultUrl = process.env.OKE_VAULT_URL ?? envMap.get("OKE_VAULT_URL");
+  const vaultToken = process.env.OKE_VAULT_TOKEN ?? envMap.get("OKE_VAULT_TOKEN");
+  const vaultMount = process.env.OKE_VAULT_MOUNT ?? envMap.get("OKE_VAULT_MOUNT");
+  const vaultProvider = process.env.OKE_VAULT_PROVIDER ?? envMap.get("OKE_VAULT_PROVIDER");
+  const vaultRegion = process.env.OKE_VAULT_REGION ?? envMap.get("OKE_VAULT_REGION");
 
   const envLayers: VaultChainLayer[] = [
     { driver: envVaultDriver, source: "process.env" },
@@ -96,14 +96,36 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
           options: { secrets: seed },
         },
       ];
-    case "managed":
+    case "managed": {
+      // No provider: the platform injected the values as env vars, so the
+      // driver's own env+seed bag is the whole chain.
+      if (vaultProvider === undefined || vaultProvider === "") {
+        return [
+          {
+            driver: managedVaultDriver,
+            source: "driver",
+            options: { secrets: seed },
+          },
+        ];
+      }
+      // With a remote provider the bag is remote-only, so the env layers go
+      // in front — an operator override in `process.env` still wins.
       return [
+        ...envLayers,
         {
           driver: managedVaultDriver,
           source: "driver",
-          options: { secrets: seed },
+          options: {
+            provider: vaultProvider,
+            secrets: seed,
+            ...(vaultUrl === undefined ? {} : { url: vaultUrl }),
+            ...(vaultToken === undefined ? {} : { token: vaultToken }),
+            ...(vaultMount === undefined ? {} : { mount: vaultMount }),
+            ...(vaultRegion === undefined ? {} : { region: vaultRegion }),
+          },
         },
       ];
+    }
     case "env":
       return [
         ...envLayers,
@@ -113,35 +135,17 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
           options: { secrets: seed },
         },
       ];
-    case "openbao": {
-      if (openbaoUrl && openbaoToken) {
-        return [
-          ...envLayers,
-          {
-            driver: openbaoVaultDriver,
-            source: "driver",
-            options: { url: openbaoUrl, token: openbaoToken, mount: openbaoMount },
-          },
-        ];
-      }
-      const env = options.env ?? "local";
-      const missing =
-        options.missingOpenbao ?? (env === "prod" || env === "docker" ? "throw" : "memory");
-      if (missing === "throw") {
-        throw new Error(
-          'oke boot: vault driver "openbao" needs OKE_VAULT_URL and OKE_VAULT_TOKEN ' +
-            "(did `oke dev -d` bootstrap OpenBao / write docker/.env.docker?)",
-        );
-      }
+    case "vault":
+      // The built-in store sits behind the env layers: an operator override
+      // in `process.env` still wins, exactly as it does for every driver.
       return [
         ...envLayers,
         {
-          driver: memoryVaultDriver,
+          driver: builtinVaultDriver,
           source: "driver",
           options: { secrets: seed },
         },
       ];
-    }
     default: {
       const _exhaustive: never = options.driverId;
       throw new Error(`oke boot: unhandled vault driver ${String(_exhaustive)}`);

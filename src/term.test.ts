@@ -16,9 +16,6 @@ import {
   formatRequestLine,
   formatStackSummary,
   countTermLines,
-  createAnchoredBoard,
-  createBootProgress,
-  createRewritableBlock,
   formatStatusDot,
   formatStatusLine,
   termStyle,
@@ -48,7 +45,7 @@ describe("term", () => {
         { element: "flow", detail: "", status: "ready" },
         { element: "store", detail: "sql postgres · kv redis", status: "ready" },
         { element: "signal", detail: "memory", status: "ready" },
-        { element: "ai", detail: "openai-compatible · smollm2", status: "pending" },
+        { element: "ai", detail: "openai-compatible · granite3.3:2b", status: "pending" },
       ],
     });
     expect(out).toContain("oke dev  v0.2.4");
@@ -77,47 +74,9 @@ describe("term", () => {
     expect(formatStatusDot("ready", false)).toBe("●");
   });
 
-  test("createRewritableBlock appends when disabled", () => {
-    let out = "";
-    const block = createRewritableBlock((t) => {
-      out += t;
-    }, false);
-    block.paint("a\nb\n");
-    block.paint("c\n");
-    expect(out).toBe("a\nb\nc\n");
+  test("countTermLines counts rows", () => {
     expect(countTermLines("a\nb\n")).toBe(2);
-  });
-
-  test("createBootProgress replaces keyed rows then clears", () => {
-    let out = "";
-    const progress = createBootProgress((t) => {
-      out += t;
-    }, false);
-    progress.set("compose", "compose…\n");
-    progress.set("compose", "compose ok\n");
-    progress.set("vault", "vault ok\n");
-    // Non-TTY appends each set (including replacements).
-    expect(out).toContain("compose ok\n");
-    expect(out).toContain("vault ok\n");
-    progress.clear();
-    // clear is a no-op on the stream when rewrite is disabled
-    expect(out).toContain("vault ok\n");
-  });
-
-  test("createAnchoredBoard wrapWrite tracks below output", () => {
-    let out = "";
-    const board = createAnchoredBoard((t) => {
-      out += t;
-    }, false);
-    board.paint("board\n");
-    const w = board.wrapWrite((t) => {
-      out += t;
-    });
-    w("below\n");
-    board.paint("board2\n"); // non-TTY: no rewrite append
-    expect(out).toContain("board\n");
-    expect(out).toContain("below\n");
-    board.stop();
+    expect(countTermLines("")).toBe(0);
   });
 
   test("formatServiceLine / formatAppReadyLine include URL", () => {

@@ -23,7 +23,7 @@ want its library pull UX. Pin `images.ai` and set `drivers.ai` to `ollama`.
 
 ```typescript title="oke.config.ts"
 drivers: {
-  ai: { local: "ollama", docker: "ollama", test: "mock" }, // prod: set deliberately
+  ai: { dev: "ollama", test: "mock", prod: "ollama" }, // or set prod deliberately
 },
 images: {
   ai: "ollama/ollama:0.32.6", // never :latest — floor 0.17.1 (CVE-2026-7482)

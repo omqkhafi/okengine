@@ -216,7 +216,9 @@ export interface ElementNeeds {
 export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   const pre = options.elements ?? {};
   let vault =
-    pre.vault !== undefined || (options.vault?.secrets ?? options.secrets ?? []).length > 0;
+    pre.vault !== undefined ||
+    (options.vault?.secrets ?? options.secrets ?? []).length > 0 ||
+    (options.vault?.requiredEnv?.length ?? 0) > 0;
   let store = pre.store !== undefined || (options.stores?.length ?? 0) > 0;
   let signal = pre.signal !== undefined || (options.signals?.length ?? 0) > 0;
   let clock = pre.clock !== undefined || (options.clocks?.length ?? 0) > 0;
@@ -283,9 +285,10 @@ async function loadBind<T>(name: string): Promise<T> {
 export async function bootApplication(input: BootOptions = {}): Promise<BootResult> {
   const docker =
     input.docker === true || (input.docker !== false && process.env.OKE_DOCKER === "1");
-  // `-d` always selects the `docker` driver profile — not a mix of local/test +
-  // prod store overrides when `$options.env` is unset.
-  const env: ConfigEnv = input.env ?? (docker ? "docker" : "local");
+  // Three targets: `prod` when NODE_ENV=production; `dev` when compose infra
+  // is up (`oke dev` / `OKE_DOCKER=1`); otherwise `test` (PGLite / memory).
+  const env: ConfigEnv =
+    input.env ?? (process.env.NODE_ENV === "production" ? "prod" : docker ? "dev" : "test");
   let config = input.config;
   if (config === undefined) {
     try {
@@ -482,12 +485,13 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   const capabilities = await mintCapabilities(options.flows ?? [], env, {
     manifest: options.manifest,
     rootDir: options.rootDir,
+    docker,
   });
 
   // 9. `.adopt()` barrel freshness — opt-in only (same `rootDir` gate as
   // capability minting above; never a filesystem read the kernel performs
   // on its own).
-  await assertAdoptBarrelFresh(options.flows ?? [], env, options.rootDir);
+  await assertAdoptBarrelFresh(options.flows ?? [], env, options.rootDir, docker);
 
   return {
     vault,
@@ -556,10 +560,9 @@ async function tryAutoExtractManifest(rootDir: string): Promise<Manifest | undef
  * an explicit {@link BootOptions.manifest}, or a lazy AoT extract from
  * {@link BootOptions.rootDir} / `OKE_ROOT_DIR`.
  *
- * When neither is available: `local` / `test` stay open (today's dev-loop
- * behavior, unbroken) with a once-per-process `oke boot:` warning; `docker`
- * / `prod` fail loud (`OKE1008`) — docker mirrors prod's posture, never a
- * silent open door in a deploy-shaped environment.
+ * When neither is available: `test` stays open with a once-per-process
+ * `oke boot:` warning; `dev` with compose infra and `prod` fail loud
+ * (`OKE1008`) — never a silent open door in a deploy-shaped environment.
  *
  * @param flows - Adopted flows
  * @param env - Resolved {@link ConfigEnv}
@@ -567,8 +570,12 @@ async function tryAutoExtractManifest(rootDir: string): Promise<Manifest | undef
  */
 export async function mintCapabilities(
   flows: readonly AnyFlowDef[],
-  env: ConfigEnv = "local",
-  options: { readonly manifest?: Manifest; readonly rootDir?: string } = {},
+  env: ConfigEnv = "test",
+  options: {
+    readonly manifest?: Manifest;
+    readonly rootDir?: string;
+    readonly docker?: boolean;
+  } = {},
 ): Promise<Map<string, CapabilityToken>> {
   const map = new Map<string, CapabilityToken>();
 
@@ -591,7 +598,8 @@ export async function mintCapabilities(
       continue;
     }
 
-    if (env === "docker" || env === "prod") {
+    const strict = env === "prod" || (env === "dev" && options.docker === true);
+    if (strict) {
       throwOke("NO_EFFECTS_DECLARED", { flow: f.name });
     }
     if (!noEffectsWarned) {
@@ -600,7 +608,7 @@ export async function mintCapabilities(
         `oke boot: flow "${f.name}" (and possibly others) has no declared effects and no ` +
           "Manifest-derived effects — running with an OPEN capability token (every access " +
           "allowed, ledgered but not gated). Run `oke build`, or boot with `manifest` / " +
-          "`rootDir`, before deploying — docker/prod refuse to boot this way.",
+          "`rootDir`, before deploying — dev+compose/prod refuse to boot this way.",
       );
     }
     map.set(f.name, createCapabilityToken(f.name, undefined));
@@ -645,18 +653,21 @@ async function tryListFlowsUnits(rootDir: string): Promise<readonly string[] | u
  *
  * Opt-in only via {@link BootOptions.rootDir} / `OKE_ROOT_DIR` (same gate as
  * {@link mintCapabilities}'s Manifest fallback) — never a filesystem read
- * the kernel performs on its own. `local` / `test` warn once per process;
- * `docker` / `prod` fail loud (`OKE1009`) — same class as `NO_EFFECTS_DECLARED`,
- * never a silently-incomplete route table in a deploy-shaped environment.
+ * the kernel performs on its own. `test` warns once per process; `prod`
+ * (and `dev` with compose) fail loud (`OKE1009`) — same class as
+ * `NO_EFFECTS_DECLARED`, never a silently-incomplete route table in a
+ * deploy-shaped environment.
  *
  * @param flows - Adopted flows
  * @param env - Resolved {@link ConfigEnv}
  * @param rootDir - Explicit project root (falls back to `OKE_ROOT_DIR`)
+ * @param docker - Compose infra active (`oke dev`)
  */
 export async function assertAdoptBarrelFresh(
   flows: readonly AnyFlowDef[],
-  env: ConfigEnv = "local",
+  env: ConfigEnv = "test",
   rootDir?: string,
+  docker = false,
 ): Promise<void> {
   const dir = rootDir ?? process.env["OKE_ROOT_DIR"];
   if (!dir) return;
@@ -670,7 +681,8 @@ export async function assertAdoptBarrelFresh(
   const missing = diskUnits.filter((u) => !adoptedUnits.has(u));
   if (missing.length === 0) return;
 
-  if (env === "docker" || env === "prod") {
+  const strict = env === "prod" || (env === "dev" && docker);
+  if (strict) {
     throwOke("ADOPT_BARREL_STALE", { unit: missing[0]! });
   }
   if (!staleAdoptBarrelWarned) {
@@ -678,7 +690,7 @@ export async function assertAdoptBarrelFresh(
     emitBootWarn(
       `oke boot: src/flows/${missing[0]} exists on disk but adopted no flows — the ` +
         '.adopt() barrel ("src/flows/generated.ts") is stale. Run `oke dev` or `oke build` ' +
-        "to regenerate it — docker/prod refuse to boot this way.",
+        "to regenerate it — dev+compose/prod refuse to boot this way.",
     );
   }
 }

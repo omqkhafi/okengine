@@ -1,6 +1,6 @@
 import { defineSeed, type Fx } from "okengine";
-import { db } from "../../core";
-import { notes } from "../schema.decl";
+import { db } from "@/core";
+import { notes } from "@/db/schema.decl";
 
 /**
  * Seed data — run explicitly with `oke db seed` (never at boot).

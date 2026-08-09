@@ -55,8 +55,8 @@ describe("oke dev --docker postgres integration", () => {
           writeStackEnv: true,
         });
 
-        // Infra-only: network + role compose (no app build).
-        const composeFiles = ["compose.yml", "compose.store.sql.yml"];
+        // Infra-only: single docker-compose.yml (no app build).
+        const composeFiles = ["docker-compose.yml"];
         const up = Bun.spawn(
           [
             "docker",
@@ -122,24 +122,13 @@ describe("oke dev --docker postgres integration", () => {
         }
 
         // Prove credentials live in docker/.env.docker, not YAML.
-        const yml = await Bun.file(join(dockerDir, "compose.store.sql.yml")).text();
+        const yml = await Bun.file(join(dockerDir, "docker-compose.yml")).text();
         expect(yml).not.toContain("stack-integration-pass");
         expect(formatStackEnv(derived.stackEnv)).toContain("stack-integration-pass");
         expect(await Bun.file(join(dockerDir, ".env.docker")).exists()).toBe(true);
       } finally {
         await Bun.spawn(
-          [
-            "docker",
-            "compose",
-            "-p",
-            project,
-            "-f",
-            "compose.yml",
-            "-f",
-            "compose.store.sql.yml",
-            "down",
-            "-v",
-          ],
+          ["docker", "compose", "-p", project, "-f", "docker-compose.yml", "down", "-v"],
           { cwd: dockerDir, stdout: "pipe", stderr: "pipe" },
         ).exited.catch(() => {});
         await rm(dir, { recursive: true, force: true }).catch(() => {});

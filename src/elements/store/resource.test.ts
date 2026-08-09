@@ -6,11 +6,10 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, pgTable, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
-import { sqliteDriver } from "../../drivers/sqlite.ts";
+import { pgliteDriver } from "../../drivers/pglite.ts";
 import { oke } from "../../kernel/app.ts";
 import { resetFlowSeq } from "../../kernel/flow.ts";
 import { on, resetBindings } from "../../kernel/on.ts";
@@ -26,7 +25,7 @@ afterEach(() => {
 });
 
 describe("mapRowToJs — declared keys only", () => {
-  const posts = sqliteTable("posts", {
+  const posts = pgTable("posts", {
     id: text("id").primaryKey(),
     createdAt: integer("created_at").notNull(),
   });
@@ -48,15 +47,15 @@ describe("mapRowToJs — declared keys only", () => {
 });
 
 describe("SqlStoreHandle exit — list/get/create return JS keys only", () => {
-  const posts = sqliteTable("posts", {
+  const posts = pgTable("posts", {
     id: text("id").primaryKey(),
     title: text("title").notNull(),
     createdAt: integer("created_at").notNull(),
   });
 
   test("select / findById / insert.returning never emit created_at", async () => {
-    const conn = await sqliteDriver.connect({
-      client: new Database(":memory:"),
+    const conn = await pgliteDriver.connect({
+      url: "memory://",
       role: "primary",
     });
     const handle = createSqlStoreHandle("sql:app", {
@@ -87,7 +86,7 @@ describe("SqlStoreHandle exit — list/get/create return JS keys only", () => {
 
 describe("resource HTTP — exact keys + PII with differing TS/SQL names", () => {
   // TS `email` ↔ SQL `email_addr`; TS `createdAt` ↔ SQL `created_at`.
-  const contacts = sqliteTable("contacts", {
+  const contacts = pgTable("contacts", {
     id: text("id").primaryKey().$defaultFn(id),
     email: text("email_addr").notNull(),
     createdAt: integer("created_at").notNull().$defaultFn(now),
@@ -122,7 +121,11 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
 
     const mounted = on(http.resource("/contacts", contactsR.all()));
     const app = oke({ name: "contacts-resource-test" }).adopt({ contacts: mounted });
-    Object.assign(app.$options, { env: "test", stores: [db] });
+    Object.assign(app.$options, {
+      env: "test",
+      stores: [db],
+      config: { drivers: { store: { sql: { test: "pglite" } } } },
+    });
     return app;
   }
 
@@ -229,7 +232,11 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
 
     const mounted = on(http.resource("/people", peopleR.all()));
     const app = oke({ name: "people-pii-test" }).adopt({ people: mounted });
-    Object.assign(app.$options, { env: "test", stores: [db] });
+    Object.assign(app.$options, {
+      env: "test",
+      stores: [db],
+      config: { drivers: { store: { sql: { test: "pglite" } } } },
+    });
 
     const t = await createTestApp(app);
     const created = await app.fetch(

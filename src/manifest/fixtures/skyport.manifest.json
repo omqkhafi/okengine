@@ -137,7 +137,7 @@
     }
   },
   "drivers": {
-    "prod": ["postgres", "redis", "s3", "smtp", "openbao", "anthropic", "pgvector"]
+    "prod": ["postgres", "redis", "s3", "smtp", "vault", "anthropic", "pgvector"]
   },
   "tenancy": { "isolation": "row" },
   "i18n": {

@@ -150,7 +150,7 @@ describe("llama.cpp catalog", () => {
   });
 
   test("recommendLlamaCppForTier returns a model in that tier", () => {
-    expect(recommendLlamaCppForTier("ultra-fast", 8).id).toBe("smollm2");
+    expect(recommendLlamaCppForTier("ultra-fast", 8).id).toBe("granite3.3:2b");
     expect(recommendLlamaCppForTier("fast", 16).tier).toBe("fast");
   });
 

@@ -68,7 +68,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
     return {
       driver: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-      chatModel: "smollm2",
+      chatModel: "granite3.3:2b",
       visionModel: null,
       embedModel: null,
       image: LLAMA_CPP_IMAGE,

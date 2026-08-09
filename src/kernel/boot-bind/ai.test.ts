@@ -16,15 +16,15 @@ describe("ai boot binder", () => {
   });
 
   test("resolveAiDriverId defaults to mock; honours config + OKE_AI_DRIVER in docker", () => {
-    expect(resolveAiDriverId({}, "local")).toBe("mock");
-    expect(resolveAiDriverId({ config: { drivers: { ai: { local: "ollama" } } } }, "local")).toBe(
+    expect(resolveAiDriverId({}, "test")).toBe("mock");
+    expect(resolveAiDriverId({ config: { drivers: { ai: { test: "ollama" } } } }, "test")).toBe(
       "ollama",
     );
 
     const prev = process.env.OKE_AI_DRIVER;
     process.env.OKE_AI_DRIVER = "ollama";
     try {
-      expect(resolveAiDriverId({}, "local", true)).toBe("ollama");
+      expect(resolveAiDriverId({}, "test", true)).toBe("ollama");
     } finally {
       if (prev === undefined) delete process.env.OKE_AI_DRIVER;
       else process.env.OKE_AI_DRIVER = prev;
@@ -48,12 +48,12 @@ describe("ai boot binder", () => {
   test("bindAi uses injected defaultDriver over config (tests stay on mock)", () => {
     const runtime = bindAi(
       {
-        config: { drivers: { ai: { local: "ollama" } } },
+        config: { drivers: { ai: { test: "ollama" } } },
         ai: { defaultDriver: mockAiDriver },
       },
       undefined,
       () => 0,
-      "local",
+      "test",
     );
     expect(runtime.autoCacheDisabled).toBe(true);
   });

@@ -11,16 +11,22 @@
  */
 
 import { z } from "zod";
-import { field, id, now, store } from "../store.ts";
+import { field, id, store } from "../store.ts";
 
-const docsItems = store.schema.table("docs_items", {
+/** Unique table name — avoids colliding with other suites' `docs_items` DDL. */
+const docsItems = store.schema.table("docs_list_items", {
   id: field.text().primaryKey().defaultFn(id),
   title: field.text().notNull(),
   secret: field.text().notNull(),
-  createdAt: field.integer().notNull().defaultFn(now),
+  // Small default — docs fixtures only need a stable integer clock column.
+  // (ms `now()` exceeds Postgres INTEGER; ensure DDL maps to BIGINT for apps.)
+  createdAt: field.integer().notNull().default(1),
 });
 
-const db = store.sql("docs-items", { schema: { docs_items: docsItems } });
+/** Shared SQL store — tests must pass this to `oke({ stores })` after registry consume. */
+export const docsListItemsStore = store.sql("docs-list-items", {
+  schema: { docs_list_items: docsItems },
+});
 
 const inSchema = z.object({ title: z.string().min(1), secret: z.string().min(1) });
 const outSchema = z.object({
@@ -35,7 +41,7 @@ const outSchema = z.object({
  * `count: "exact"` (offset default) and point to `count: "none"` as the escape
  * hatch when COUNT(*) is too expensive.
  */
-export const docsAdminTableResource = store.resource(db, docsItems, {
+export const docsAdminTableResource = store.resource(docsListItemsStore, docsItems, {
   in: inSchema,
   out: outSchema,
   list: { mode: "offset", count: "exact", limit: 20 },
@@ -47,7 +53,7 @@ export const docsAdminTableResource = store.resource(db, docsItems, {
  * Public restricted endpoint — filters off entirely. Any `?col=op.value`
  * query key that is not a reserved list param fails validation (422).
  */
-export const docsRestrictedResource = store.resource(db, docsItems, {
+export const docsRestrictedResource = store.resource(docsListItemsStore, docsItems, {
   in: inSchema,
   out: outSchema,
   list: { mode: "offset", filter: "none", limit: 20 },

@@ -12,6 +12,193 @@ needed).
 
 ## Unreleased
 
+## v0.11.0 — 2026-08-09
+
+### ✨ Added
+
+- `fx.step(name, fn, { undo })` — declare durable per-step compensation next to the
+  forward work; on terminal failure the runtime runs undos LIFO as journaled
+  `undo:<name>` steps under status `compensating` (resume-safe; execute + orphan paths).
+- Shared durable compensation phase (`runCompensationPhase`) so orphan/sleep resume
+  undoes the same way as `app.execute`; `flow.compensate` still runs after auto undos.
+- Interactive `oke` TUI (Ink + React): bare `oke` on a TTY opens Dashboard / Dev /
+  Database / Docker / Navigator panels; `oke --tui` forces it; non-TTY keeps help.
+- Headless `DevController` + `.oke/dev.json` session lock so a second `oke` can attach
+  as Connected without starting another stack (never kills a foreign pid).
+- `oke db studio` — drizzle-kit Studio under the same env overlay as other db commands.
+- Built-in encrypted Vault (`drivers.vault: "vault"`) — PostgreSQL/PGlite envelope
+  encryption (AES-256-GCM + HKDF), seal/unseal, versioned secrets, resumable
+  `rotate-master`, hash-chained audit, versioned backup with a separate backup KEK, and
+  `oke vault init|status|seal|unseal|rotate|rotate-master|audit|purge-expired|backup|restore`.
+- `vault.env` / `.required` / `.int` / `.bool` / `.json` — sync env helpers; required
+  names join boot gaps before any SQL connection opens.
+- Managed Vault provider: AWS Secrets Manager (optional peer
+  `@aws-sdk/client-secrets-manager`); Azure/GCP/Doppler/1Password return a clear
+  `UNSUPPORTED` error. Community adapters can extend `managed`.
+- Optional peer `@aws-sdk/client-kms` for KMS auto-unseal of the built-in master key.
+- Console Vault status card (initialized / sealed / KEK generation / counts) for the
+  built-in backend; create-oke defaults docker/prod Vault to the built-in store.
+- `OkeConfig.vault` element config + `oke doctor` warning when prod would use an
+  env-sourced master key with the built-in Vault.
+- `okengine/http`, `okengine/kernel`, `okengine/full`, `okengine/i18n`,
+  `okengine/compiler`, and `okengine/journal` package entries for slim imports.
+- `bun run build:lib` prebuilds tree-shaken ESM under `dist/` (Bun still resolves `src/`
+  via the `"bun"` export condition; Node `"import"` uses dist).
+- HTTP-ping app budget samples (raw + gzip) and cold-start probe via `okengine/http`.
+- Upgrade codemod `0.10.3-thin-root-subpaths` for deep imports that left the thin root.
+- `oke test` — sets test posture (`NODE_ENV=test`, PGLite URL defaults) and runs
+  `bun test`. Apps should add `@electric-sql/pglite` as a devDependency.
+
+### ♻️ Changed
+
+- create-oke starters load locales from `src/core.ts` via `src/locales/index.ts`, so
+  `app.ts` only needs one `import "@/core"` (no per-locale imports).
+- Durable `runDurable` treats returned `fx.fail` as terminal failure (runs undo/
+  compensate) and refuses to resume `failed` / `completed` journal runs — crash recovery
+  stays on `running` / `sleeping` / `compensating` orphans.
+- Default local AI is **openai-compatible** (llama.cpp) with model `granite3.3:2b` (was
+  `smollm2`); env examples, `oke ai setup --yes`, create-oke Recommended, and the
+  llama.cpp recipe share that default. Ollama remains a fully supported alternative.
+- Default domain Drizzle emit path is `src/db/schema.drizzle.ts` (was
+  `schema.generated.ts`). Existing `src/db/schema.generated.ts` /
+  `src/schema.generated.ts` paths still resolve; update `db.generated` and
+  `drizzle.config.ts` when ready.
+- Generated `docker-compose.yml` (and split/stack compose files) now separate services
+  with blank lines and role comments (`# ai — …`, `# store.sql — …`), matching the
+  `.env.docker` section style.
+- create-oke `standard` / `advanced` ship a single `src/core.ts` (store, gates, vault,
+  channels) instead of `src/core/*`; `oke ai setup` and locale apply merge into that
+  file (legacy `src/core/` still supported).
+- `oke ai setup` / create-oke write `OKE_AI_MODEL` as a **commented** hint in
+  `.env.local` (same as `OKE_AI_DRIVER` / `OKE_AI_URL`) so it does not shadow
+  `docker/.env.docker`. First-boot stack seeding still reads the commented value.
+- `oke schema generate` writes `.oke/schema/oke.ts` (not root `schema/`); create-oke
+  emits it on scaffold / after install; `oke db push|generate` refreshes stubs when
+  plugins change. drizzle.config is postgresql-only.
+- create-oke `standard` / `advanced` `oke.config.ts` pins only driver keys that differ
+  from `DRIVER_DEFAULTS` (e.g. `vault: { dev: "vault" }`); customize / reuse upserts
+  sparse maps the same way.
+- create-oke asks whether to add PgDog pooling in front of Postgres (`--pgdog` /
+  `--no-pgdog`; default off for `--yes`). Templates no longer pin `images.pgdog` until
+  opted in.
+- create-oke defaults to English-only i18n; the wizard asks whether to add more
+  languages (`ar` or `ar,fr`, …) and `--locales` works non-interactively. Boot’s
+  implicit locale list is now `["en"]` (was `["en", "ar"]`).
+- Docker TUI: list services by compose project (`oke-dev-<id>`); clean picks whole
+  stacks (not per-service) inside Ink — no clack overlay fighting the frame.
+- Interactive `oke` TUI polish: clear viewport before Ink; green OKE wordmark + version;
+  green active tabs / cyan focus; Esc focus layers; quieter chrome; panel-specific
+  Dev/Database/Docker/Navigator layouts; aligned service tables; footer shortcuts +
+  status; spinners and empty states.
+- create-oke scaffolds ship `docker/docker-compose.yml` + production-grade defaults
+  (same derive path as `oke docker`); `oke dev --docker` regenerates a single
+  infra-only `docker-compose.yml`.
+- TUI `/` command palette with Tab autofill over the full `oke` CLI (+ panel jumps).
+- `oke dev` interactive chrome uses Ink (`useInput` for `? r q u x`) instead of custom
+  ANSI rewritable boards / raw-mode stdin. Plain log formatters remain in `term.ts`.
+- create-oke templates pin built-in Vault for prod and document `OKE_VAULT_MASTER_KEY` /
+  managed AWS Secrets Manager env vars.
+- `oke()` lazy-loads auth modules, FormatJS (`intl-messageformat`), the RegExp router
+  (when not on the edge preset), and `fx.runs` window helpers; memory journal fallback
+  is created on first use. Small all-static HTTP apps auto-select the edge router.
+  `gate.public` no longer pulls rate-strategy Lua registration.
+- `@duckdb/node-api`, `ajv`, `ajv-formats`, and `oxc-parser` are optional peer
+  dependencies (install when using Runs DuckDB, Manifest Ajv validate, or oxc extract).
+- `create-oke` app entry and get-started docs prefer `okengine/http`.
+- Starter templates and `create-oke` scaffold emit `{dev,test,prod}` maps, PostgreSQL
+  drizzle defaults, committed compose artefacts, and `"test": "oke test"`. PGLite
+  packages are template devDependencies.
+- Doctor / db / hero-meta env flags use `dev|test|prod`.
+- Abstract `integer` columns ensure as `BIGINT` on Postgres/PGLite so millisecond
+  timestamps are safe (SQLite INTEGER affinity no longer covers local-dev).
+- create-oke's local `file:` okengine stage skips a fresh `bun install` when the staged
+  `package.json` and peers are already present (still refreshes package source files).
+
+### 💥 Breaking Changes
+
+- Console operator persistence no longer uses `.oke/console.sqlite`. Operators and
+  sessions live in Postgres schema `oke_console` on the same database as the app (`DATABASE_URL` / `OKE_STORE_SQL_URL`; `public` stays for app tables). Without a
+  Postgres URL, Console falls back to PGlite under `.oke/console-pg`. Delete stale
+  `console.sqlite*` files and re-claim the Console once after upgrading.
+- `oke schema generate` default output moves from `schema/oke.ts` to
+  `.oke/schema/oke.ts`. Re-run generate (or delete the old `schema/` folder). `--check`
+  still accepts a correct legacy file once during migrate.
+- `oke docker` defaults to a single production-grade `docker/docker-compose.yml` (plus
+  `Dockerfile`) instead of layered `compose.yml` + `compose.<role>.yml` +
+  `compose.all.yml`. Opt into `--split` or `--stack` (`docker-stack.yml`).
+- PgDog configs move to `docker/pgdog/pgdog.toml` and `docker/pgdog/users.toml` (was
+  flat `docker/pgdog.toml` + `docker/users.toml`).
+- `oke docker` enables production overlays by default (readiness HEALTHCHECK, deploy
+  policy, resource limits). Pass `--no-prod` for a bare derive. Resource limits are
+  apportioned from a default **4 CPU / 8 GiB** host budget (`--cpus` / `--memory` to
+  override).
+- `drivers.vault: "openbao"` is no longer valid. Use `"vault"` (built-in) or `"managed"`
+  with `OKE_VAULT_PROVIDER=aws-secrets-manager`. OpenBao is not an official core
+  backend.
+- `fx.vault(secret)` is now an object surface: use `await fx.vault.get(secret)` (still
+  returns `Redacted<string>`). Mutations (`set` / `rotate` / `delete` / `list` /
+  `status`) require a bound built-in Vault adapter.
+- Default `drivers.vault.prod` is `"vault"` (built-in) instead of `"env"`. Prefer
+  `masterKey.source: "kms"` in production, or `managed` + AWS Secrets Manager.
+- The root `okengine` entry is now a **thin** surface (ten exports + `oke` + HTTP
+  runtime). Deep helpers such as `createRunsRuntime`, journal store factories,
+  `compileAot` / extract, and boot internals move to subpaths (`okengine/runs`,
+  `okengine/journal`, `okengine/compiler`, `okengine/full`). Prefer `okengine/http`
+  for HTTP-only apps; use `oke upgrade` for the codemod. The previous mega-barrel
+  remains as deprecated `okengine/full`.
+- Config environments collapse to three targets: `dev` / `test` / `prod` (replacing
+  `local` / `docker` / `test` / `prod`). Bare driver strings expand to all three;
+  missing `dev` fills from `prod`. No soft-compat and no upgrade codemod — edit
+  `oke.config.ts` by hand (see Configuration). The CLI errors if `oke.config.ts` still
+  contains a `local:` key or `"sqlite"` pin.
+- `oke dev` always uses Docker Compose (`OKE_DOCKER=1`). `--local` / `-l` and
+  `oke mode local|docker` are removed (`oke mode` exits with a migration hint).
+- The `sqlite` and `libsql` SQL drivers are removed. Pin `postgres` for `dev` / `prod`
+  and `pglite` for `test`. `defineConfig` rejects any `sqlite` / `libsql` pin and
+  requires `drivers.store.sql.test === "pglite"`. Loading config via the CLI also
+  rejects `"sqlite"` in source.
+- Default driver maps now follow the Docker-first / PGLite-test philosophy (see
+  `src/config/driver-defaults.ts` and Configuration docs).
+
+### 🔥 Removed
+
+- OpenBao adapter, docker recipe, bootstrap (`oke dev` unseal), and recipe docs from
+  core. Official vault backends: built-in (`vault`), ENV, AWS Secrets Manager via
+  `managed`. `ManagedAdapter` / `createManagedVaultBag` stay open for community
+  plugins.
+- SQLite-family SQL drivers (`sqlite`, `libsql` / `@libsql/client`), laptop-only
+  `oke mode`, and four-key env maps as the supported config surface. Vector index
+  `libsql` is gone — use `pgvector` (with postgres/pglite SQL) or `memory`. Drizzle
+  emit/kit dialect is `postgresql` only. Migrate by hand (see Configuration); no
+  env-model codemod.
+
+### 🐛 Fixed
+
+- `oke dev` no longer reprints the elements/Docker board on every AI/compose health
+  update (anchored in-place rewrite restored).
+- Domain schema emit writes `bigint(…, { mode: "number" })` so `oke db push` no longer
+  crashes with `config.mode` on abstract integer columns.
+- create-oke templates use `@/` imports consistently (`app`, seed, tests) with an
+  `@/*` path map (no deprecated `baseUrl` — TypeScript 6+); locale scaffolding writes
+  `@/locales/<tag>` too.
+- create-oke `standard` / `advanced` note flows no longer hand-declare `effects` — the
+  compiler infers them from `fx` usage (same as current Flow docs).
+- Store list-docs fixture tests pass `stores: […]` explicitly so a second `oke()` after
+  registry consume no longer falls back to `.oke/pgdata` and 500s.
+
+### 🔒 Security
+
+- `Redacted` now masks `valueOf` / `util.inspect` (and `Redacted.of` / `.map`) so
+  accidental HTTP JSON or console formatting cannot leak vault cleartext.
+- `oke vault` master keys accept `--key -` (stdin) or a hidden TTY prompt; help warns
+  against putting keys on argv in shared shells (history risk).
+- Built-in Vault SQL retries transient Postgres/network blips; audit appends stay off
+  the retry path so the hash chain is never duplicated.
+- `oke vault purge-expired [--dry-run] [--before]` hard-deletes expired secret rows (`expires_at`) with a single count-only audit `purge` event.
+- Envelope AAD binds `path|version|algorithm|kek_version`; master key lives only inside
+  an Unsealer closure; `VaultError` never attaches crypto-bearing `cause` s; audit rows
+  never store secret values; backups encrypt under a domain-separated backup KEK.
+
 ## v0.10.3 — 2026-08-08
 
 ### ✨ Added

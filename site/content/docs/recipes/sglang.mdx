@@ -23,7 +23,7 @@ production apps. For general multi-user serving, prefer [vLLM](/docs/recipes/vll
 
 ```typescript title="oke.config.ts"
 drivers: {
-  ai: { docker: "openai-compatible", prod: "openai-compatible", test: "mock" },
+  ai: { dev: "openai-compatible", test: "mock", prod: "openai-compatible" },
 },
 images: {
   ai: "lmsysorg/sglang:v0.5.16-runtime", // never :latest

@@ -11,34 +11,41 @@ source: "docs/cli.md"
 bun add okengine                 # ONE package (project)
 bun install -g okengine          # global `oke` on PATH
 
+oke                              # interactive TUI (TTY) — Dashboard · Dev · Database · Docker · Navigator
+oke --tui                        # force TUI even when other args were passed
+oke --help                       # command list (also what bare `oke` prints when non-TTY / CI)
+
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535 · docs MCP :6536
-                                 #   → client types + domain schema push on save (local)
-oke dev --local                  # -l  session-only local (in-memory; never writes .oke/mode)
+                                 #   → always Docker Compose under docker/ + host Bun
+                                 #   → client types + domain schema push on save
 oke dev --no-db-push             #     opt out of auto oke db push on schema input save
-oke dev --docker                 # -d  infra compose under docker/ (no app container; host Bun)
-                                 #     Ctrl-C / close terminal → docker compose stop (volumes kept)
-oke dev -d store.sql,signal      #     partial: only these roles get real backends
-oke mode local|docker            # get/set default oke dev mode (saved in .oke/mode)
+oke dev -d store.sql,signal      #     optional role filter (still Compose; requires Docker)
+oke test                         # bun test with PGLite posture (NODE_ENV=test, OKE_PGLITE_URL=memory://)
+                                 #   → does not start Docker Compose
+oke mode                         # removed — prints error; use oke dev (Compose) / oke test (PGLite)
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke stack                        # preview resolved images/tags/ports — writes nothing
 
-oke schema generate              # core + plugin stubs → schema/oke.ts   (--check in CI)
-oke db push                      # domain schema.ts → live local DB (dev; drizzle-kit)
+oke schema generate              # core + plugin stubs → .oke/schema/oke.ts (--check in CI)
+oke db push                      # domain schema.ts → live DB (dev; drizzle-kit)
 oke db generate                  # versioned SQL under drizzle/ (review)
 oke db migrate                   # apply migrations (explicit; never auto in prod)
 oke db seed                      # defineSeed (essential + env category); never at boot
-oke db seed --env prod --force   # CI: skip docker/prod confirmation prompt
+oke db seed --env prod --force   # CI: skip prod confirmation prompt
+oke db studio                    # drizzle-kit Studio (long-running)
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
 oke client add <url>             # types for a separate frontend repo
 
-oke docker                       # docker/Dockerfile + compose.yml + compose.<role>.yml + compose.all.yml · …
-                                 # opt-in images.proxy → Caddyfile (caddy) or Traefik labels + socket-proxy
-oke docker --prod                # + compose.prod.yml (HEALTHCHECK /_/ready, deploy, limits); folded into compose.all.yml
-oke docker clean                 # TTY: pick oke-dev-* stacks → down -v (containers, networks, volumes)
-oke docker clean --yes           # non-TTY: current project stack only
-oke docker clean --all --yes     # non-TTY: every oke-dev-* stack on this machine
+oke docker                       # docker/Dockerfile + docker-compose.yml (prod-grade; 4 CPU / 8 GiB budget)
+oke docker --split               # layered compose.yml + compose.<role>.yml + compose.prod.yml
+oke docker --stack               # docker-stack.yml for docker stack deploy
+oke docker --cpus 8 --memory 16  # override host budget used for deploy.resources
+oke docker --no-prod             # skip readiness / deploy / resource budget
+oke docker clean                 # TTY: pick oke-dev-* projects → down -v (containers, networks, volumes)
+oke docker clean --yes           # non-TTY: current project only
+oke docker clean --all --yes     # non-TTY: every oke-dev-* project on this machine
 oke images pin                   # tags → digests in oke.images.lock
 
 oke build --target edge          # < 15 kB kernel profile
@@ -58,20 +65,31 @@ In development, app, Console, MCP, and docs MCP prefer the canonical ports and m
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
 each built-in service, preventing one service's offset port from overlapping another's.
 
-`oke dev` boot chrome prints immediately (wordmark + Starting + profile), then
-streams background work (compose up, vault, per-service health, AI probe) in a
-live progress pane — no blank multi-second wait. That pane clears before the
-elements + Docker board. Status ● is green ready · yellow pending/loading ·
-red error · dim idle. Compose health keeps polling (`docker compose ps -a`)
-so ● updates live if you stop a container; AI ● tracks model phase while the
-AI container is up. Boot does not wait for the model to become ready.
+Bare `oke` on a TTY opens an Ink interactive shell (optional deps `ink` +
+`react`). The viewport is cleared before render so boot logs never sit above the
+frame. Chrome matches `oke dev`: green OKE wordmark on Dashboard, green active
+tabs, cyan focus rows. Panels cover live ports (App / Console / MCP / Docs MCP),
+Dev start/stop/attach with live logs, Database action cards (including Studio),
+Docker compose status, and a Manifest navigator. **Tab** / **←→** (on the tab
+strip) switch panels; **↑↓** navigate inside a panel; **Esc** returns to the tab
+strip, then confirms quit when a managed `oke dev` is running; **1–5** jump
+panels from any focus. Press `/` for the **command palette** (Tab autofill,
+Enter runs `oke …`; status shows in the global footer). If `oke dev` is already
+running, the TUI shows **Connected** via `.oke/dev.json` + port probes and will
+not spawn a second stack. Non-TTY / CI keeps the classic help listing
+(`EXIT_USAGE`).
 
-On a TTY with `-d`, keyboard controls stay active under Logs. Status ● for
-compose/AI live on the board **above** Logs (not as log lines) — it already
-lists every service, so refresh is enough to see the stack; there is no
-separate services panel. Press `r` to clear the log pane and reprint the
-latest board. `?` also refreshes first so the help panel is not mixed into
-request logs.
+`oke dev` always starts Compose (requires a running Docker daemon). Boot chrome
+prints immediately (wordmark + Starting + profile), then streams background work
+(compose up, vault, per-service health, AI probe). Status ● is green ready ·
+yellow pending/loading · red error · dim idle. Compose health keeps polling
+(`docker compose ps -a`); AI ● tracks model phase while the AI container is up.
+Boot does not wait for the model to become ready. A successful session writes
+`.oke/dev.json` (pid · ports · startedAt) and clears it on stop.
+
+On a TTY, Ink keyboard controls stay active after boot (`useInput` — same
+shortcuts as before). Press `r` to clear the log pane and reprint the latest
+board.
 
 | Key       | Action                              |
 | --------- | ----------------------------------- |
@@ -82,6 +100,12 @@ request logs.
 
 Compose stays quiet unless it fails. Process-local boot notices print once under
 the hero (not once per process).
+
+`oke test` sets `NODE_ENV=test` and `OKE_PGLITE_URL=memory://` when unset, checks
+that `@electric-sql/pglite` resolves, then forwards argv to `bun test`.
+
+`oke mode` and `oke dev --local` / `-l` are removed — they exit with an error.
+See [Migrating environments](/docs/reference/migrating-environments).
 
 ### create-oke
 
@@ -95,13 +119,10 @@ bunx create-oke@latest my-app --no-ai
 ```
 
 On a TTY: pick **standard** or **advanced**, then recommended defaults or
-customize. Customize asks **local** or **docker** first, walks facets for that
-side only (including `store.index` with a `none` opt-out — no separate enable
-prompt), then whether to customize the other (defaults if no). **AI setup**
-offers Recommended (llama.cpp) · Customize · Off. Writes user-global
-`~/.oke/create-defaults.json` (reuse only when `template` matches). Scaffold
-writes `.oke/mode` from the primary side. Non-TTY / `--yes` / explicit
-`--template` never prompt.
+customize. Customize walks **Docker-first** facets once (including `store.index`
+with a `none` opt-out), then **AI setup**: Recommended (llama.cpp) · Customize ·
+Off. Writes user-global `~/.oke/create-defaults.json` (reuse only when `template`
+matches). Non-TTY / `--yes` / explicit `--template` never prompt.
 
 ### Additional commands
 
@@ -132,8 +153,7 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 
 | Long                 | Short | Where                                          |
 | -------------------- | ----- | ---------------------------------------------- |
-| `--local`            | `-l`  | `dev`                                          |
-| `--docker`           | `-d`  | `dev`                                          |
+| `--docker`           | `-d`  | `dev` (optional Compose **role filter**)       |
 | `--no-db-push`       |       | `dev`                                          |
 | `--prod`             | `-p`  | `docker`                                       |
 | `--yes`              | `-y`  | `docker clean`                                 |
@@ -156,6 +176,9 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 | `--subject`          | `-s`  | `privacy erase`                                |
 | `--before`           | `-b`  | `doctor --diff`                                |
 | `--base`             | `-B`  | `doctor --diff`                                |
+| `--env`              |       | `db *` (`dev` \| `test` \| `prod`)             |
+| `--force`            |       | `db seed`                                      |
+| `--local` / `-l`     |       | **removed** on `dev` (use `oke test`)          |
 
 ### Exit codes
 

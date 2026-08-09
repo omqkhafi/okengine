@@ -39,11 +39,12 @@ describe("oke docker CLI", () => {
     expect(code).toBe(0);
     expect(result).toBeDefined();
     expect(await Bun.file(join(dir, "docker/Dockerfile")).exists()).toBe(true);
-    expect(await Bun.file(join(dir, "docker/compose.store.sql.yml")).exists()).toBe(true);
-    const yml = await Bun.file(join(dir, "docker/compose.store.sql.yml")).text();
+    expect(await Bun.file(join(dir, "docker/docker-compose.yml")).exists()).toBe(true);
+    const yml = await Bun.file(join(dir, "docker/docker-compose.yml")).text();
     expect(yml).not.toContain("test-password-not-in-yaml");
     expect(yml).toContain(".env.docker");
-    expect(logs.join("")).toContain("docker/compose.override.yml");
+    expect(yml).toContain("/_/ready");
+    expect(logs.join("")).toContain("docker-compose.override.yml");
   });
 });
 
@@ -136,7 +137,7 @@ describe("oke images list", () => {
 });
 
 describe("oke schema generate", () => {
-  test("emits schema/oke.ts and --check catches drift", async () => {
+  test("emits .oke/schema/oke.ts and --check catches drift", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-cli-schema-"));
     const code = await runSchemaGenerate({
       cwd: dir,
@@ -144,7 +145,7 @@ describe("oke schema generate", () => {
       write: () => {},
     });
     expect(code).toBe(0);
-    const src = await Bun.file(join(dir, "schema/oke.ts")).text();
+    const src = await Bun.file(join(dir, ".oke/schema/oke.ts")).text();
     expect(src).toContain("bookings");
     expect(src).toContain("oke_roles");
 
@@ -156,7 +157,7 @@ describe("oke schema generate", () => {
     });
     expect(checkOk).toBe(0);
 
-    await Bun.write(join(dir, "schema/oke.ts"), emitSchemaSource(["other"]));
+    await Bun.write(join(dir, ".oke/schema/oke.ts"), emitSchemaSource(["other"]));
     const checkFail = await runSchemaGenerate({
       cwd: dir,
       extraTables: ["bookings"],
@@ -167,7 +168,7 @@ describe("oke schema generate", () => {
   });
 });
 
-describe("oke dev --docker", () => {
+describe("oke dev compose plan", () => {
   test("plans docker with postgres and writes nothing on dryRun", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-cli-dev-dry-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
@@ -182,11 +183,11 @@ describe("oke dev --docker", () => {
     });
     expect(code).toBe(0);
     expect(plan?.stackRoles).toEqual(["store.sql"]);
-    expect(plan?.composeFiles?.some((f) => f.includes("store.sql"))).toBe(true);
-    expect(plan?.composeFiles).toContain("compose.yml");
+    expect(plan?.composeFiles).toContain("docker-compose.yml");
+    expect(plan?.composeFiles?.some((f) => f.includes("store.sql"))).toBe(false);
     expect(plan?.stackEnv?.DATABASE_URL).toContain("postgres://");
-    expect(await Bun.file(join(dir, "compose.yml")).exists()).toBe(false);
-    expect(await Bun.file(join(dir, "docker/compose.yml")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "docker-compose.yml")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "docker/docker-compose.yml")).exists()).toBe(false);
   });
 });
 

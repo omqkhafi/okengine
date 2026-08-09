@@ -202,7 +202,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
     return {
       driver: "openai-compatible",
       baseUrl: process.env.OKE_AI_URL ?? "http://127.0.0.1:8080/v1",
-      chatModel: args.chat ?? "smollm2",
+      chatModel: args.chat ?? "granite3.3:2b",
       visionModel: null,
       embedModel: null,
       image: "ghcr.io/ggml-org/llama.cpp:server-b10290",

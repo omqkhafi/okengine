@@ -17,7 +17,7 @@ export type SeedFns = SeedFn | readonly SeedFn[];
  * Seed categories for {@link defineSeed}.
  *
  * - `essential` — every environment, always
- * - `dev` — `local` or `docker` only
+ * - `dev` — `dev` ConfigEnv only (Docker Compose laptop)
  * - `prod` — `prod` only
  */
 export interface SeedDef {
@@ -52,17 +52,16 @@ export function normalizeSeedFns(fns?: SeedFns): SeedFn[] {
 /**
  * Which optional category runs for `env` (single source of truth).
  *
- * | env    | category |
- * | ------ | -------- |
- * | local  | dev      |
- * | docker | dev      |
- * | test   | (none)   |
- * | prod   | prod     |
+ * | env  | category |
+ * | ---- | -------- |
+ * | dev  | dev      |
+ * | test | (none)   |
+ * | prod | prod     |
  *
  * @param env - Resolved {@link ConfigEnv}
  */
 export function resolveSeedCategory(env: ConfigEnv): SeedCategory | null {
-  if (env === "local" || env === "docker") return "dev";
+  if (env === "dev") return "dev";
   if (env === "prod") return "prod";
   return null;
 }

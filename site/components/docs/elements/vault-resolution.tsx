@@ -24,7 +24,7 @@ const LAYERS: ReadonlyArray<{
   { n: "1", source: "process.env", content: "Real env (CI, hosting)" },
   { n: "2", source: ".env.local", content: "Local overrides (gitignored)" },
   { n: "3", source: ".env.docker", content: "Compose credentials (docker/.env.docker)" },
-  { n: "4", source: "driver", content: "OpenBao bag (docker / prod)" },
+  { n: "4", source: "driver", content: "Built-in vault / managed bag" },
   { n: "5", source: "dev-fallback", content: "dev: on the contract — never in prod" },
 ];
 

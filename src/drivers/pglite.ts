@@ -7,9 +7,8 @@
  *
  * Honest latency trade-off (measured on `@electric-sql/pglite@0.5.4`): first
  * init ~900 ms one-time (WASM instantiation); reopen of an existing datadir
- * ~44 ms; warm CRUD ~45 ms vs ~3 ms for `bun:sqlite` (~15× slower). Choose
- * `pglite` for dialect/pgvector parity on a laptop — never as a
- * latency-competitive default. `local` stays on `sqlite`.
+ * ~44 ms; warm CRUD ~45 ms. Default for `env: "test"` (`memory://`);
+ * `dev`/`prod` use real Postgres via Docker.
  */
 
 import { toPostgresParams } from "./postgres.ts";
@@ -39,6 +38,24 @@ async function loadPgliteVector(): Promise<PgliteVectorModule> {
   }
 }
 
+/** Default on-disk PGlite datadir (under the project `.oke/` tree). */
+export const PGLITE_DEFAULT_DATADIR = ".oke/pgdata";
+
+/**
+ * Resolve a PGlite URL to either in-memory (`memory://…`) or an on-disk datadir.
+ *
+ * SQLite's `":memory:"` is **not** in-memory for PGlite — it would create a
+ * literal `./:memory:` folder. Map that legacy token to {@link PGLITE_DEFAULT_DATADIR}.
+ *
+ * @param url - Raw connect URL / path
+ */
+export function resolvePgliteDataDir(url: string | undefined): string | "memory" {
+  const raw = url && url.length > 0 ? url : PGLITE_DEFAULT_DATADIR;
+  if (raw.startsWith("memory://")) return "memory";
+  if (raw === ":memory:") return PGLITE_DEFAULT_DATADIR;
+  return raw;
+}
+
 /**
  * Open a PGlite connection implementing {@link SqlConnection}.
  *
@@ -52,8 +69,14 @@ export async function connectPglite(options: SqlConnectOptions = {}): Promise<Sq
   const role = options.role ?? "primary";
   const { PGlite } = await loadPglite();
   const { vector } = await loadPgliteVector();
-  const dataDir = options.url && options.url.length > 0 ? options.url : ".oke/pgdata";
-  const db = await PGlite.create(dataDir, { extensions: { vector } });
+  const resolved = resolvePgliteDataDir(options.url);
+  // `memory://…` must be a fresh in-memory instance every connect — passing the
+  // string as dataDir is not reliably isolated across boots (IF NOT EXISTS then
+  // keeps a prior INTEGER column after we switch DDL to BIGINT).
+  const db =
+    resolved === "memory"
+      ? await PGlite.create({ extensions: { vector } })
+      : await PGlite.create(resolved, { extensions: { vector } });
   return {
     driverId: "pglite",
     role,

@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 /**
  * `oke` CLI entry.
+ *
+ * Bare `oke` (TTY) → interactive Ink TUI. `oke <command>` runs directly.
  */
 
 import { aiCli } from "./ai.ts";
@@ -23,11 +25,32 @@ import { replayCli } from "./replay.ts";
 import { schemaCli } from "./schema.ts";
 import { stackCli } from "./stack.ts";
 import { startCli } from "./start.ts";
+import { testCli } from "./test.ts";
 import { upgradeCli } from "./upgrade.ts";
 import { vaultCli } from "./vault-cmd.ts";
 
-const argv = process.argv.slice(2);
+const rawArgv = process.argv.slice(2);
+const wantTui = rawArgv.includes("--tui");
+const argv = rawArgv.filter((a) => a !== "--tui");
 const [cmd, sub, ...rest] = argv;
+/** Nested TUI / slash child — never re-enter the interactive shell. */
+const noTui = process.env["OKE_NO_TUI"] === "1";
+
+/**
+ * Launch interactive TUI when allowed; otherwise print help (non-TTY).
+ */
+async function maybeLaunchTui(): Promise<never> {
+  const { canRenderTui, launchTui } = await import("./tui/launch.ts");
+  if (noTui || !canRenderTui(process.stdout)) {
+    console.log(formatOkeHelp());
+    process.exit(EXIT_USAGE);
+  }
+  process.exit(await launchTui(process.cwd()));
+}
+
+if (wantTui && !noTui) {
+  await maybeLaunchTui();
+}
 
 if (cmd === "dev") {
   process.exit(await devCli(sub ? [sub, ...rest] : rest));
@@ -35,6 +58,10 @@ if (cmd === "dev") {
 
 if (cmd === "mode") {
   process.exit(await modeCli(sub ? [sub, ...rest] : rest));
+}
+
+if (cmd === "test") {
+  process.exit(await testCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "start") {
@@ -109,11 +136,14 @@ if (cmd === "completion") {
   process.exit(completionCli(sub ? [sub, ...rest] : rest));
 }
 
-if (cmd === undefined || cmd === "--help" || cmd === "-h" || cmd === "help") {
-  // Bare `oke` — commands only. Exit-code table only on explicit --help.
-  const help = cmd === undefined ? formatOkeHelp() : `${formatOkeHelp()}${EXIT_CODE_HELP}`;
-  console.log(help);
-  process.exit(cmd ? EXIT_OK : EXIT_USAGE);
+if (cmd === "--help" || cmd === "-h" || cmd === "help") {
+  console.log(`${formatOkeHelp()}${EXIT_CODE_HELP}`);
+  process.exit(EXIT_OK);
+}
+
+if (cmd === undefined) {
+  // Bare `oke` — TUI on TTY; help + EXIT_USAGE when piped / CI / OKE_NO_TUI.
+  await maybeLaunchTui();
 }
 
 console.error(`Unknown command: ${cmd}${sub ? ` ${sub}` : ""}`);

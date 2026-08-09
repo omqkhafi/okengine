@@ -39,6 +39,7 @@ import {
 } from "./ai-setup/from-pref.ts";
 import { askAiSetup } from "./ai-setup/prompts.ts";
 import { askCustomizeFlow } from "./customize-flow.ts";
+import { parseExtraLocales } from "./locales.ts";
 import {
   scaffold,
   targetDirectoryBlockReason,
@@ -65,7 +66,7 @@ export type CliArgs = {
   readonly template: TemplateId;
   /** True when `--template` / `-t` was present on the argv. */
   readonly templateExplicit: boolean;
-  /** Store SQL driver (`sqlite` default). */
+  /** Store SQL driver (`postgres` default). */
   readonly sqlDriver: SqlDriverId;
   /** True when `--sql` was present on the argv. */
   readonly sqlDriverExplicit: boolean;
@@ -81,6 +82,13 @@ export type CliArgs = {
   readonly agentsMd: boolean;
   /** AI setup after install. */
   readonly ai: AiCliMode;
+  /** Extra locales beyond English (`--locales ar,fr`). */
+  readonly locales: readonly string[];
+  /**
+   * PgDog pooling flag from CLI.
+   * `undefined` = ask (interactive) / off (`--yes`).
+   */
+  readonly pgdog: boolean | undefined;
   readonly targetDir: string | undefined;
 };
 
@@ -111,8 +119,8 @@ export function defaultsBranchOptions(
       label: "Yes, use recommended defaults",
       hint:
         template === "advanced"
-          ? "Notes · docker-ready pins · .oke/mode docker"
-          : "Notes · local-first pins · .oke/mode local",
+          ? "Notes · Docker-first pins · store.index"
+          : "Notes · Docker-first pins (postgres · redis · s3)",
     },
   ];
   if (hasPreviousForTemplate) {
@@ -125,10 +133,7 @@ export function defaultsBranchOptions(
   options.push({
     value: "customize",
     label: "No, customize settings",
-    hint:
-      template === "standard"
-        ? "local|docker · SQL · optional AI"
-        : "local|docker · all facets · optional AI",
+    hint: template === "standard" ? "dev/prod SQL · optional AI" : "dev/prod facets · optional AI",
   });
   return options;
 }
@@ -143,6 +148,10 @@ export type InteractiveAnswers = {
   readonly createDefaults: CreateDefaults | undefined;
   /** Model / env apply payload — written after scaffold, before install. */
   readonly aiApply: AiSetupApplyInput | null;
+  /** Extra locales beyond English (empty = English only). */
+  readonly locales: readonly string[];
+  /** Pin PgDog in front of Postgres. */
+  readonly pgdog: boolean;
 };
 
 /**
@@ -155,8 +164,12 @@ export type ScaffoldCallArgs = {
   readonly agentsMd: boolean;
   readonly sqlDriver: SqlDriverId;
   readonly createDefaults?: CreateDefaults;
-  /** Apply `src/core/ai.ts` + `.env.local` after scaffold (before install). */
+  /** Apply AI models in `src/core.ts` + `.env.local` after scaffold (before install). */
   readonly aiApply?: AiSetupApplyInput | null;
+  /** Extra locales beyond English. */
+  readonly locales?: readonly string[];
+  /** Pin PgDog in front of Postgres. */
+  readonly pgdog?: boolean;
 };
 
 /**
@@ -175,6 +188,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let install: boolean | undefined;
   let agentsMd = true;
   let ai: AiCliMode = "prompt";
+  let locales: readonly string[] = [];
+  let pgdog: boolean | undefined;
   let targetDir: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
@@ -259,6 +274,33 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       templateExplicit = true;
       continue;
     }
+    if (a === "--locales") {
+      const next = argv[++i];
+      if (!next) throw new Error("create-oke: --locales requires a value (e.g. ar or ar,fr)");
+      const parsed = parseExtraLocales(next);
+      if (parsed === null) {
+        throw new Error("create-oke: --locales must be BCP-47 tags like ar or ar,fr");
+      }
+      locales = parsed;
+      continue;
+    }
+    if (a.startsWith("--locales=")) {
+      const value = a.slice("--locales=".length);
+      const parsed = parseExtraLocales(value);
+      if (parsed === null) {
+        throw new Error("create-oke: --locales must be BCP-47 tags like ar or ar,fr");
+      }
+      locales = parsed;
+      continue;
+    }
+    if (a === "--pgdog") {
+      pgdog = true;
+      continue;
+    }
+    if (a === "--no-pgdog") {
+      pgdog = false;
+      continue;
+    }
     if (a.startsWith("-")) {
       throw new Error(`create-oke: unknown option ${a}`);
     }
@@ -271,6 +313,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
 
   if (argv.includes("--install") && argv.includes("--no-install")) {
     throw new Error("create-oke: use either --install or --no-install, not both");
+  }
+  if (argv.includes("--pgdog") && argv.includes("--no-pgdog")) {
+    throw new Error("create-oke: use either --pgdog or --no-pgdog, not both");
   }
 
   if (name !== undefined) {
@@ -288,6 +333,8 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     install,
     agentsMd,
     ai,
+    locales,
+    pgdog,
     targetDir,
   };
 }
@@ -316,7 +363,8 @@ Next steps:
 
   cd ${formatCdPath(result.targetDir)}
   bun install
-  oke dev          # app :6530 · Console :6533 · MCP :6535
+  oke schema generate   # system stubs → .oke/schema/oke.ts (also runs on db push)
+  oke dev               # app :6530 · Console :6533 · MCP :6535
 
 Docs: ${docsUrl("/docs")}
 `;
@@ -339,9 +387,8 @@ Usage:
 
 Options:
   -t, --template <id>   Clean starter (default: ${DEFAULT_TEMPLATE})
-  --sql <id>            Opt-in Store SQL dialect: ${SQL_DRIVERS.join("|")}
-                        Default keeps local sqlite · docker/prod postgres.
-                        --sql postgres pins store.sql local/docker/prod to postgres.
+  --sql <id>            Store SQL dialect: ${SQL_DRIVERS.join("|")} (default)
+                        Pins store.sql dev/prod (test stays pglite).
   -y, --yes             No prompts; defaults + bun install (no oke dev)
   --install             Run bun install after scaffold
   --no-install          Skip bun install
@@ -349,15 +396,19 @@ Options:
   --no-agents-md        Skip AGENTS.md
   --ai                  Configure AI in the wizard (models before install)
   --no-ai, --ai skip    Skip AI configuration
+  --locales <tags>      Extra languages beyond English (e.g. ar or ar,fr)
+  --pgdog               Pin PgDog pooling in front of Postgres
+  --no-pgdog            Skip PgDog (default for --yes)
   -h, --help            Show this help
 
 Template:
 ${templateLines}
 
 On a TTY: pick standard|advanced, then recommended defaults, customize
-(local or docker first; store.index with none; AI setup Recommended /
-Customize / Off; optional other side; saved to ~/.oke/create-defaults.json),
-or reuse when saved for that template. Non-TTY / --yes stay zero-prompt.
+(Docker-first facets; store.index with none; AI setup Recommended /
+Customize / Off; saved to ~/.oke/create-defaults.json),
+optional extra locales + PgDog pooling, or reuse when saved for that template.
+Non-TTY / --yes stay English-only / no PgDog unless --locales / --pgdog.
 `;
 }
 
@@ -400,6 +451,8 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriver,
     aiApply: args.ai === "force" ? nonInteractiveAiApply("llama-cpp") : null,
+    locales: args.locales,
+    pgdog: args.pgdog ?? false,
   };
 }
 
@@ -426,8 +479,7 @@ export function scaffoldArgsFromAnswers(
         store: {
           ...createDefaults.drivers.store,
           sql: {
-            local: "postgres",
-            docker: "postgres",
+            dev: "postgres",
             test: createDefaults.drivers.store.sql.test,
             prod: "postgres",
           },
@@ -437,7 +489,7 @@ export function scaffoldArgsFromAnswers(
     sqlDriver = "postgres";
   } else if (!createDefaults && sqlDriverOverride) {
     sqlDriver = sqlDriverOverride;
-  } else if (createDefaults?.drivers.store.sql.local === "postgres") {
+  } else if (createDefaults?.drivers.store.sql.dev === "postgres") {
     sqlDriver = "postgres";
   }
 
@@ -449,6 +501,8 @@ export function scaffoldArgsFromAnswers(
     sqlDriver,
     ...(createDefaults !== undefined ? { createDefaults } : {}),
     aiApply: answers.aiApply,
+    locales: answers.locales,
+    pgdog: answers.pgdog,
   };
 }
 
@@ -463,6 +517,8 @@ export type AskInteractiveFn = (partial: {
   readonly sqlDriver?: SqlDriverId;
   readonly ai?: AiCliMode;
   readonly template?: TemplateId;
+  readonly locales?: readonly string[];
+  readonly pgdog?: boolean;
 }) => Promise<InteractiveAnswers | null>;
 
 /** Injectable persistence seams for tests. */
@@ -486,6 +542,8 @@ export async function askInteractiveAnswers(
     readonly sqlDriver?: SqlDriverId;
     readonly ai?: AiCliMode;
     readonly template?: TemplateId;
+    readonly locales?: readonly string[];
+    readonly pgdog?: boolean;
   } = {},
   io: CreateDefaultsIo = {
     path: createDefaultsPath(),
@@ -523,6 +581,7 @@ export async function askInteractiveAnswers(
 
   let createDefaults: CreateDefaults | undefined;
   let aiApply: AiSetupApplyInput | null = null;
+  let persistDefaults = false;
 
   for (;;) {
     const previous = io.read();
@@ -570,8 +629,7 @@ export async function askInteractiveAnswers(
     if (customized === null) return null;
     if (customized === WIZARD_BACK) continue;
     createDefaults = customized;
-    io.write(customized);
-    note(`Saved globally for next projects → ${io.path}`, "Defaults");
+    persistDefaults = true;
     if (customized.ai.enabled && partial.ai !== "skip") {
       aiApply = applyInputFromAiPref(customized.ai);
     }
@@ -584,6 +642,39 @@ export async function askInteractiveAnswers(
     const picked = await askAiSetup({});
     if (picked === null) return null;
     aiApply = picked;
+  }
+
+  const locales = await askExtraLocales(partial.locales ?? createDefaults?.locales ?? []);
+  if (locales === null) return null;
+
+  const usesPostgres = createDefaults
+    ? createDefaults.drivers.store.sql.dev === "postgres" ||
+      createDefaults.drivers.store.sql.prod === "postgres" ||
+      createDefaults.drivers.store.sql.dev === "pgvector" ||
+      createDefaults.drivers.store.sql.prod === "pgvector"
+    : true;
+  let pgdog = false;
+  if (usesPostgres) {
+    if (partial.pgdog !== undefined) {
+      pgdog = partial.pgdog;
+    } else {
+      const picked = await askPgDog(createDefaults?.pgdog ?? false);
+      if (picked === null) return null;
+      pgdog = picked;
+    }
+  }
+
+  if (createDefaults) {
+    createDefaults = {
+      ...createDefaults,
+      locales,
+      pgdog,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  if (persistDefaults && createDefaults) {
+    io.write(createDefaults);
+    note(`Saved globally for next projects → ${io.path}`, "Defaults");
   }
 
   const agentsMd = partial.agentsMd ?? true;
@@ -601,25 +692,77 @@ export async function askInteractiveAnswers(
     agentsMd,
     createDefaults,
     aiApply,
+    locales,
+    pgdog,
   };
+}
+
+/**
+ * Ask whether to add languages beyond English, then collect BCP-47 tags.
+ *
+ * @param initialExtra - Prefill from reused create-defaults
+ * @returns Extra locale tags, or `null` on cancel
+ */
+async function askExtraLocales(
+  initialExtra: readonly string[] = [],
+): Promise<readonly string[] | null> {
+  const addMore = await confirm({
+    message: "Add more languages besides English?",
+    initialValue: initialExtra.length > 0,
+  });
+  if (isCancel(addMore)) return null;
+  if (!addMore) return [];
+
+  const raw = await text({
+    message: "Language codes (comma-separated)",
+    placeholder: "ar",
+    initialValue: initialExtra.length > 0 ? initialExtra.join(",") : "ar",
+    validate: (value) => {
+      if (!value?.trim()) return "Enter at least one code (e.g. ar or ar,fr)";
+      if (parseExtraLocales(value) === null) {
+        return "Use BCP-47 tags like ar or ar,fr";
+      }
+      return undefined;
+    },
+  });
+  if (isCancel(raw)) return null;
+  return parseExtraLocales(String(raw)) ?? [];
+}
+
+/**
+ * Ask whether to put PgDog in front of Postgres.
+ *
+ * @param initial - Prefill from reused create-defaults
+ * @returns `true` to pin PgDog, or `null` on cancel
+ */
+async function askPgDog(initial: boolean = false): Promise<boolean | null> {
+  const value = await confirm({
+    message: "Add PgDog connection pooling in front of Postgres?",
+    initialValue: initial,
+  });
+  if (isCancel(value)) return null;
+  return Boolean(value);
 }
 
 /**
  * Provider passed to `oke ai setup` — prefer native Ollama when either env uses it.
  *
- * @param localProvider - Menu id chosen for local
+ * @param menuProvider - Menu id chosen in the wizard
  * @param pins - Resolved driver pins
  */
-export function aiSetupProviderFor(localProvider: string, pins: EnvDriverPins): string {
-  if (localProvider === "ollama" || pins.local === "ollama") return "ollama";
-  if (pins.docker === "ollama") return "ollama";
-  if (localProvider === "llama-cpp") return "llama-cpp";
-  if (localProvider === "vllm" || localProvider === "sglang") return localProvider;
-  if (localProvider === "mock") {
-    if (pins.docker === "anthropic") return "anthropic";
-    if (pins.docker === "openai-compatible") return "llama-cpp";
+export function aiSetupProviderFor(menuProvider: string, pins: EnvDriverPins): string {
+  if (menuProvider === "ollama" || pins.dev === "ollama" || pins.prod === "ollama") {
+    return "ollama";
   }
-  return localProvider;
+  if (menuProvider === "llama-cpp") return "llama-cpp";
+  if (menuProvider === "vllm" || menuProvider === "sglang") return menuProvider;
+  if (menuProvider === "mock") {
+    if (pins.dev === "anthropic" || pins.prod === "anthropic") return "anthropic";
+    if (pins.dev === "openai-compatible" || pins.prod === "openai-compatible") {
+      return "llama-cpp";
+    }
+  }
+  return menuProvider;
 }
 
 /**
@@ -728,6 +871,8 @@ async function runInteractive(
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriverExplicit ? args.sqlDriver : undefined,
     ai: args.ai,
+    locales: args.locales,
+    ...(args.pgdog !== undefined ? { pgdog: args.pgdog } : {}),
   });
   if (answers === null) {
     cancel("Cancelled.");
@@ -764,6 +909,8 @@ async function runScaffold(
     sqlDriver,
     createDefaults,
     aiApply,
+    locales,
+    pgdog,
     interactive,
     install,
     startDev,
@@ -791,17 +938,19 @@ async function runScaffold(
       spun = spinner();
       spun.start("Scaffolding…");
     }
-    const result = scaffold({
+    const result = await scaffold({
       targetDir,
       name,
       source,
       writeAgentsMd: agentsMd,
       sqlDriver,
       ...(createDefaults !== undefined ? { createDefaults } : {}),
+      ...(locales !== undefined ? { locales } : {}),
+      ...(pgdog !== undefined ? { pgdog } : {}),
     });
     if (spun) spun.stop("Scaffolded.");
 
-    // Models were chosen in the wizard — write env + src/core/ai.ts before install
+    // Models were chosen in the wizard — write env + AI models in src/core.ts before install
     // so `--no-install` still gets a complete AI project. Preserve per-env
     // `drivers.ai` pins from customize; flatten only when pins were never written.
     if (runPostScaffold && aiApply) {
@@ -829,6 +978,15 @@ async function runScaffold(
         return 1;
       }
       if (interactive) log.success("Installed.");
+      // System stubs under `.oke/schema/` — refresh after install so published
+      // create-oke (no monorepo import) still gets them; re-run after plugins.
+      const schemaOk = await runCommand(["bunx", "oke", "schema", "generate"], targetDir, {
+        inherit: false,
+      });
+      if (interactive) {
+        if (schemaOk) log.success("System schema generated (.oke/schema/oke.ts).");
+        else log.warn("oke schema generate skipped — run it after plugins / auth tables.");
+      }
     }
 
     const message = nextStepsText(result);

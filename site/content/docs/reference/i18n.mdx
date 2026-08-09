@@ -22,19 +22,22 @@ format inside a Flow with `fx.t`. Configure supported locales once in
 ### Configure locales
 
 ```typescript title="oke.config.ts"
-i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
+i18n: { locales: ["en"], default: "en" },
 ```
 
-If `i18n` is omitted, boot still defaults to `locales: ["en", "ar"]` and
-`default: "en"`.
+create-oke scaffolds English-only. Choose **Add more languages** (or
+`--locales ar,fr`) to write locale files + `locales/index.ts` and expand
+`i18n.locales` (Arabic also gets `dir: { ar: "rtl" }`).
+
+If `i18n` is omitted, boot defaults to `locales: ["en"]` and `default: "en"`.
 
 </Step>
 
 <Step>
 ### Register catalogs
 
-Side-effect import locale modules before boot (the starter already does this
-from `src/app.ts`):
+Each locale file calls `defineLocale`. The starter pulls them in once from
+`core.ts` via `locales/index.ts` — `app.ts` only needs `import "@/core"`:
 
 ```typescript title="src/locales/en.ts"
 import { defineMessages, defineLocale } from "okengine";
@@ -55,7 +58,7 @@ declare module "okengine" {
 
 ```typescript title="src/locales/ar.ts"
 import { defineLocale, type MessagesFor } from "okengine";
-import { en } from "./en";
+import type { en } from "./en";
 
 defineLocale("ar", {
   greeting: "مرحباً، {name}",
@@ -63,6 +66,14 @@ defineLocale("ar", {
   errors: { notFound: "غير موجود" },
 } satisfies MessagesFor<typeof en>);
 ```
+
+```typescript title="src/locales/index.ts"
+import "./en";
+import "./ar";
+```
+
+When you add `ar` via create-oke, the Arabic catalog is filled in and
+`locales/index.ts` gains `import "./ar"`. Other tags get an English stub.
 
 </Step>
 

@@ -15,23 +15,23 @@ import {
 const SAMPLE: OkeConfig = {
   drivers: {
     store: {
-      sql: { local: "sqlite", docker: "postgres", prod: "postgres" },
-      kv: { local: "memory", docker: "redis", prod: "redis" },
+      sql: { dev: "postgres", test: "pglite", prod: "postgres" },
+      kv: { dev: "redis", test: "memory", prod: "redis" },
     },
-    signal: { local: "memory", docker: "redis", prod: "redis" },
-    clock: { local: "memory", docker: "file", prod: "file" },
-    vault: { local: "env", docker: "openbao", prod: "openbao" },
+    signal: { dev: "redis", test: "memory", prod: "redis" },
+    clock: { dev: "file", test: "memory", prod: "file" },
+    vault: { dev: "vault", test: "env", prod: "vault" },
     channel: {
-      email: { local: "console", docker: "smtp", prod: "smtp" },
+      email: { dev: "smtp", test: "console", prod: "smtp" },
     },
-    ai: { local: "mock", docker: "mock" },
+    ai: { dev: "mock", test: "mock" },
   },
 };
 
 describe("hero-meta", () => {
-  test("resolveDevProfile maps docker and NODE_ENV", () => {
-    expect(resolveDevProfile({ docker: false })).toBe("local");
-    expect(resolveDevProfile({ docker: true })).toBe("docker");
+  test("resolveDevProfile maps NODE_ENV (docker flag ignored)", () => {
+    expect(resolveDevProfile({ docker: false })).toBe("dev");
+    expect(resolveDevProfile({ docker: true })).toBe("dev");
     expect(resolveDevProfile({ docker: false, nodeEnv: "test" })).toBe("test");
     expect(resolveDevProfile({ docker: false, nodeEnv: "production" })).toBe("production");
   });
@@ -48,12 +48,12 @@ describe("hero-meta", () => {
       "channel",
       "ai",
     ]);
-    expect(rows.find((r) => r.element === "store")?.detail).toContain("sqlite");
+    expect(rows.find((r) => r.element === "store")?.detail).toContain("pglite");
     expect(rows.find((r) => r.element === "flow")?.detail).toBe("");
     expect(rows.find((r) => r.element === "flow")?.status).toBe("ready");
   });
 
-  test("docker profile applies to every element", () => {
+  test("dev (compose) profile applies to every element", () => {
     const rows = resolveHeroElements(SAMPLE, {
       docker: true,
       sqlDriver: "postgres",
@@ -62,7 +62,7 @@ describe("hero-meta", () => {
     const store = rows.find((r) => r.element === "store")?.detail ?? "";
     expect(store).toContain("postgres");
     expect(store).toContain("redis");
-    expect(store).not.toContain("sqlite");
+    expect(store).not.toContain("pglite");
     expect(rows.find((r) => r.element === "signal")?.detail).toBe("redis");
     expect(rows.find((r) => r.element === "clock")?.detail).toBe("file");
     expect(rows.find((r) => r.element === "gate")?.detail).toBe("redis");
@@ -78,8 +78,8 @@ describe("hero-meta", () => {
       version: "0.2.4",
       nodeEnv: "development",
     });
-    expect(snap.profile).toBe("docker");
-    expect(snap.runtimeEnv).toBe("local");
+    expect(snap.profile).toBe("dev");
+    expect(snap.runtimeEnv).toBe("dev");
     expect(decodeHeroSnapshot(encodeHeroSnapshot(snap))).toEqual(snap);
   });
 

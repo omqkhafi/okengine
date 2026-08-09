@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyAiSetup, renderAiTs, upsertAiDrivers, upsertEnv } from "./apply.ts";
@@ -48,8 +48,7 @@ describe("apply", () => {
   drivers: {
     channel: {
       email: {
-        local: "console",
-        docker: "smtp",
+        dev: "smtp",
         test: "console",
         prod: "smtp",
       },
@@ -65,7 +64,11 @@ describe("apply", () => {
     const config = new Function("defineConfig", body)(<T>(c: T): T => c) as {
       drivers?: { ai?: unknown; channel?: { ai?: unknown; email?: unknown } };
     };
-    expect(config.drivers?.ai).toMatchObject({ local: "ollama", docker: "ollama" });
+    expect(config.drivers?.ai).toMatchObject({
+      dev: "ollama",
+      test: "mock",
+      prod: "ollama",
+    });
     expect(config.drivers?.channel?.ai).toBeUndefined();
     expect(config.drivers?.channel?.email).toBeDefined();
   });
@@ -99,7 +102,7 @@ describe("apply", () => {
     expect(ts).toContain("docsEmbed");
   });
 
-  test("applyAiSetup writes config, env, core/ai.ts", () => {
+  test("applyAiSetup writes config, env, AI models in core.ts", () => {
     const dir = mkdtempSync(join(tmpdir(), "oke-ai-setup-"));
     try {
       writeFileSync(
@@ -109,8 +112,7 @@ export default defineConfig({
   drivers: {
     channel: {
       email: {
-        local: "console",
-        docker: "smtp",
+        dev: "smtp",
         test: "console",
         prod: "smtp",
       },
@@ -126,7 +128,16 @@ export default defineConfig({
         "utf8",
       );
       mkdirSync(join(dir, "src"), { recursive: true });
-      writeFileSync(join(dir, "src", "app.ts"), `export const app = {};\n`, "utf8");
+      writeFileSync(
+        join(dir, "src", "core.ts"),
+        `import { store } from "okengine";\n\nexport const db = store.sql("app");\n`,
+        "utf8",
+      );
+      writeFileSync(
+        join(dir, "src", "app.ts"),
+        `import "@/core";\nexport const app = {};\n`,
+        "utf8",
+      );
 
       applyAiSetup(dir, {
         driver: "ollama",
@@ -137,18 +148,19 @@ export default defineConfig({
       });
 
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
-      expect(config).toContain('local: "ollama"');
+      expect(config).toContain('dev: "ollama"');
       expect(config).toContain('ai: "ollama/ollama:0.32.6"');
       const env = readFileSync(join(dir, ".env.local"), "utf8");
       expect(env).toContain("# OKE_AI_DRIVER=ollama");
-      expect(env).toMatch(/^OKE_AI_MODEL=gemma4:e4b$/m);
-      expect(env).not.toMatch(/^#\s*OKE_AI_MODEL=gemma4:e4b$/m);
+      expect(env).toMatch(/^#\s*OKE_AI_MODEL=gemma4:e4b$/m);
+      expect(env).not.toMatch(/^OKE_AI_MODEL=/m);
       expect(env).toContain("# OKE_AI_URL=http://127.0.0.1:11434");
       expect(env).not.toMatch(/^OKE_AI_URL=/m);
-      const aiTs = readFileSync(join(dir, "src", "core", "ai.ts"), "utf8");
-      expect(aiTs).toContain("smart");
-      const app = readFileSync(join(dir, "src", "app.ts"), "utf8");
-      expect(app).toContain('import "./core/ai"');
+      const core = readFileSync(join(dir, "src", "core.ts"), "utf8");
+      expect(core).toContain('import { ai, store } from "okengine"');
+      expect(core).toContain("smart");
+      expect(core).toContain('ai.model("vision"');
+      expect(existsSync(join(dir, "src", "core", "ai.ts"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -40,7 +40,7 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates", () 
         sends: ["before-note-created"],
       },
       do: async (_input, fx) => {
-        const secret = fx.vault(secretBefore);
+        const secret = await fx.vault.get(secretBefore);
         await fx.emit(signalBefore, {});
         await fx.send(templateBefore, { to: "you@localhost", data: {} });
         return { secret };
@@ -78,7 +78,7 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates", () 
         sends: ["after-note-created"],
       },
       do: async (_input, fx) => {
-        const secret = fx.vault(secretAfter);
+        const secret = await fx.vault.get(secretAfter);
         await fx.emit(signalAfter, {});
         await fx.send(templateAfter, { to: "you@localhost", data: {} });
         return { secret };

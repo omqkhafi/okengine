@@ -63,11 +63,18 @@ describe("loadExistingStackControls", () => {
     expect(controls?.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
   });
 
+  test("seeds commented OKE_AI_MODEL from .env.local when .env.docker omits it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-stack-ai-"));
+    await writeFile(join(dir, ".env.local"), "# OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
+    const controls = await loadExistingStackControls(dir);
+    expect(controls?.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
+  });
+
   test("prefers active OKE_AI_MODEL in docker/.env.docker over .env.local", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-stack-ai-"));
     await mkdir(join(dir, "docker"), { recursive: true });
     await writeFile(join(dir, "docker", ".env.docker"), "OKE_AI_MODEL=smollm2\n", "utf8");
-    await writeFile(join(dir, ".env.local"), "OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
+    await writeFile(join(dir, ".env.local"), "# OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
     const controls = await loadExistingStackControls(dir);
     expect(controls?.OKE_AI_MODEL).toBe("smollm2");
   });
@@ -132,7 +139,7 @@ describe("deriveInfrastructure instanceId", () => {
         },
       },
     });
-    const base = result.files.find((f) => f.path === "compose.yml")!.content;
+    const base = result.files.find((f) => f.path === "docker-compose.yml")!.content;
     expect(base).toContain("oke-dev-abcdef");
     expect(result.stackEnv.DATABASE_URL).toMatch(/:15\d{3}\//);
     expect(result.stackEnv.REDIS_URL).toMatch(/:16\d{3}/);
@@ -163,8 +170,8 @@ describe("deriveInfrastructure instanceId", () => {
         },
       },
     });
-    const mailYml = result.files.find((f) => f.path === "compose.channel.email.yml")!.content;
-    const filesYml = result.files.find((f) => f.path === "compose.store.files.yml")!.content;
+    const mailYml = result.files.find((f) => f.path === "docker-compose.yml")!.content;
+    const filesYml = mailYml;
     expect(mailYml).toContain(`${20_000 + n}:1025`);
     expect(mailYml).toContain(`${21_000 + n}:8025`);
     expect(mailYml).not.toContain("8025:8025");

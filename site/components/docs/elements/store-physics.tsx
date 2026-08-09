@@ -344,7 +344,7 @@ const INDEX_MODES: ReadonlyArray<{
     id: "vector",
     label: "vector",
     icon: Binary,
-    drivers: "memory · pgvector · libsql",
+    drivers: "memory · pgvector",
     upsert: "upsert(id, vector, meta?)",
     search: "search(vector, topK?)",
     score: "cosine similarity",

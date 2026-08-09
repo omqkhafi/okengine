@@ -43,7 +43,7 @@ Unset defaults to `localhost` — Caddy issues a **local** TLS cert instead of L
 ### Include the proxy layer
 
 ```bash
-docker compose -f compose.yml -f compose.proxy.yml … up -d
+docker compose -f docker-compose.yml up -d
 ```
 
 Generated `Caddyfile`: `{$OKE_PROXY_HOST:localhost} { reverse_proxy app:6530 }`.

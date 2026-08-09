@@ -3,7 +3,7 @@
  */
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
-import { dockerFlagDefaults, STORE_KV_DEFAULTS } from "../../config/driver-defaults.ts";
+import { STORE_KV_DEFAULTS } from "../../config/driver-defaults.ts";
 import { memoryDrivers } from "../../drivers/memory.ts";
 import { redisDriver } from "../../drivers/redis.ts";
 import type { KvClientLike } from "../../drivers/types.ts";
@@ -28,11 +28,7 @@ export function resolveGateKvDriverId(
   const fromEnv = process.env.OKE_KV_DRIVER?.trim();
   if (docker && fromEnv === "redis") return "redis";
   if (docker && fromEnv === "memory") return "memory";
-  const resolved = resolveDriverId(
-    options.config?.drivers?.store?.kv,
-    env,
-    dockerFlagDefaults(STORE_KV_DEFAULTS, docker),
-  );
+  const resolved = resolveDriverId(options.config?.drivers?.store?.kv, env, STORE_KV_DEFAULTS);
   return resolved === "redis" ? "redis" : "memory";
 }
 
@@ -41,8 +37,8 @@ function kvUrlFor(docker: boolean): string {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: gate redis kv needs REDIS_URL (did `oke dev -d` write docker/.env.docker?)"
-        : "oke boot: gate redis kv needs REDIS_URL — declare drivers.store.kv memory for local, or set REDIS_URL",
+        ? "oke boot: gate redis kv needs REDIS_URL (did `oke dev` write docker/.env.docker?)"
+        : "oke boot: gate redis kv needs REDIS_URL — declare drivers.store.kv memory for test, or set REDIS_URL",
     );
   }
   return url;
@@ -59,7 +55,7 @@ function kvUrlFor(docker: boolean): string {
 export async function bindGate(
   options: BootOptions,
   now: () => number,
-  env: ConfigEnv = "local",
+  env: ConfigEnv = "test",
   docker = false,
 ): Promise<GateRuntime> {
   const kvId = resolveGateKvDriverId(options, env, docker);

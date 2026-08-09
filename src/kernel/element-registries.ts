@@ -1,8 +1,8 @@
 /**
  * Module-evaluation registries for `store.sql` / `store.files`, `vault.secret`,
- * `signal()`, and `channel.<medium>().template()` — the plain arrays behind
- * each declare module's `listX()` / `resetX()` pair (mirrors `on.ts`'s
- * trigger-drain `bindings` array).
+ * `vault.env.required`, `signal()`, and `channel.<medium>().template()` — the
+ * plain arrays behind each declare module's `listX()` / `resetX()` pair
+ * (mirrors `on.ts`'s trigger-drain `bindings` array).
  *
  * Lives here, not in the declare modules themselves, so {@link oke} can read
  * every registry with one lightweight import instead of statically pulling
@@ -21,6 +21,8 @@ import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
 export const storeRegistry: StoreDecl[] = [];
 /** `vault.secret` declarations since the last reset. */
 export const secretRegistry: VaultSecretDecl[] = [];
+/** `vault.env.required(name)` environment variables since the last reset. */
+export const requiredEnvRegistry: string[] = [];
 /** `signal()` declarations since the last reset. */
 export const signalRegistry: SignalDecl[] = [];
 /** Medium-binder `.template()` declarations since the last reset. */

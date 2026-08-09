@@ -120,6 +120,9 @@ const WRITE_METHODS = new Set([
   "putImage",
 ]);
 
+/** `fx.vault.*` methods whose first argument is a secret path. */
+const VAULT_PATH_METHODS = new Set(["get", "set", "rotate", "delete"]);
+
 /** Methods whose first argument is a table / collection identifier. */
 const TABLE_ARG_METHODS = new Set([
   "insert",
@@ -189,6 +192,10 @@ export function inferEffects(options: InferEffectsOptions): InferredEffects {
     }
 
     if (chain.rootMethod === "vault" && call === chain.rootCall) {
+      // `fx.vault.list()` / `fx.vault.status()` take no path — nothing to
+      // declare. Every other method's first argument is the secret.
+      const method = chain.methods[1] ?? "get";
+      if (!VAULT_PATH_METHODS.has(method)) continue;
       const ref = resolveNamed(call.arguments[0], options.bindings, "secret");
       if (ref) secrets.add(ref);
       continue;

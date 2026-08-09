@@ -147,12 +147,12 @@ describe("ollama live — real completion", () => {
 
         const runtime = bindAi(
           {
-            config: { drivers: { ai: { local: "ollama", test: "ollama" } } },
+            config: { drivers: { ai: { test: "ollama", dev: "ollama" } } },
             ai: { models: [smart], prompts: [ping] },
           },
           undefined,
           () => Date.now(),
-          "local",
+          "test",
           false,
         );
         expect(runtime.prompts.has("ollama-ping")).toBe(true);

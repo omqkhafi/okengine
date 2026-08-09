@@ -46,5 +46,5 @@ Without AI, summarize returns a local excerpt (`via: "fallback"`).
 
 ## Drivers
 
-See `oke.config.ts`: local sqlite/memory/fs · docker postgres/redis/s3/openbao/smtp.
+See `oke.config.ts`: local env/memory/fs · docker postgres/redis/s3/smtp; vault built-in.
 Optional Meilisearch index pin is commented — enable via create-oke customize.

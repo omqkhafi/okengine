@@ -77,8 +77,29 @@ export function exportBudgetGroup(subpath: string): BudgetGroup {
   return "exports";
 }
 
+/** One package.json exports target (string path or conditional map). */
+export type PackageExportTarget =
+  | string
+  | Readonly<Partial<Record<"types" | "bun" | "import" | "default" | "require", string>>>;
+
 interface PackageExports {
-  readonly exports?: Readonly<Record<string, string>>;
+  readonly exports?: Readonly<Record<string, PackageExportTarget>>;
+}
+
+/**
+ * Resolve a package export target to the TypeScript source path used for budgets.
+ *
+ * Prefers `bun` / `types` (src) over compiled `import`/`default` (dist).
+ *
+ * @param target - Export target from package.json
+ */
+export function resolveExportSourcePath(target: PackageExportTarget): string {
+  if (typeof target === "string") return target;
+  const path = target.bun ?? target.types ?? target.import ?? target.default;
+  if (!path || typeof path !== "string") {
+    throw new Error("export target has no resolvable string path");
+  }
+  return path;
 }
 
 /**
@@ -150,7 +171,7 @@ export async function resolveExportBudgetTargets(options?: {
 
   const targets: ExportBudgetTarget[] = [];
 
-  for (const [subpath, entryRel] of Object.entries(exportsMap)) {
+  for (const [subpath, entryTarget] of Object.entries(exportsMap)) {
     if (subpath.endsWith("/*")) {
       if (subpath !== "./drivers/*") {
         throw new Error(`unsupported export glob ${subpath}: only ./drivers/* is expanded`);
@@ -164,8 +185,13 @@ export async function resolveExportBudgetTargets(options?: {
       continue;
     }
 
-    if (typeof entryRel !== "string") {
-      throw new Error(`export ${subpath} must map to a string path`);
+    let entryRel: string;
+    try {
+      entryRel = resolveExportSourcePath(entryTarget);
+    } catch {
+      throw new Error(
+        `export ${subpath} must map to a string path or conditional bun/types target`,
+      );
     }
 
     targets.push(targetFor(subpath, resolve(root, entryRel)));

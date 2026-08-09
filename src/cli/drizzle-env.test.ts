@@ -24,22 +24,20 @@ async function tempDir(): Promise<string> {
 const dualConfig = {
   drivers: {
     store: {
-      sql: { local: "sqlite", docker: "postgres", prod: "postgres", test: "memory" },
+      sql: { dev: "postgres", test: "pglite", prod: "postgres" },
     },
   },
 } as unknown as OkeConfig;
 
 describe("resolveDrizzleKitEnv", () => {
-  test("local env → sqlite dialect + sqlite url", async () => {
+  test("test env → postgresql dialect (pglite)", async () => {
     const dir = await tempDir();
-    const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "local");
-    expect(ctx.dialect).toBe("sqlite");
-    expect(ctx.overlay.OKE_DRIZZLE_DIALECT).toBe("sqlite");
-    expect(ctx.overlay.OKE_SQLITE_URL).toContain(".oke/app.sqlite");
-    expect(ctx.overlay.DATABASE_URL).toBeUndefined();
+    const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "test");
+    expect(ctx.dialect).toBe("postgresql");
+    expect(ctx.overlay.OKE_DRIZZLE_DIALECT).toBe("postgresql");
   });
 
-  test("docker env → postgresql dialect + DATABASE_URL from compose env", async () => {
+  test("dev env → postgresql dialect + DATABASE_URL from compose env", async () => {
     const dir = await tempDir();
     await mkdir(join(dir, "docker"), { recursive: true });
     await writeFile(
@@ -49,7 +47,7 @@ describe("resolveDrizzleKitEnv", () => {
     const prevDb = process.env["DATABASE_URL"];
     delete process.env["DATABASE_URL"];
     try {
-      const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "docker");
+      const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "dev");
       expect(ctx.dialect).toBe("postgresql");
       expect(ctx.overlay.OKE_DRIZZLE_DIALECT).toBe("postgresql");
       expect(ctx.overlay.DATABASE_URL).toBe("postgres://u:p@127.0.0.1:5432/oke");
@@ -60,16 +58,16 @@ describe("resolveDrizzleKitEnv", () => {
     }
   });
 
-  test("docker dialect is postgresql even when DATABASE_URL unset (no URL guessing)", async () => {
+  test("dev dialect is postgresql even when DATABASE_URL unset (no URL guessing)", async () => {
     const dir = await tempDir();
-    const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "docker");
+    const ctx = await resolveDrizzleKitEnv(dir, dualConfig, "dev");
     expect(ctx.dialect).toBe("postgresql");
   });
 
   test("unsupported driver id errors clearly", async () => {
     const dir = await tempDir();
-    const bad = { drivers: { store: { sql: { local: "memory" } } } } as unknown as OkeConfig;
-    await expect(resolveDrizzleKitEnv(dir, bad, "local")).rejects.toThrow(/not supported/);
+    const bad = { drivers: { store: { sql: { test: "memory" } } } } as unknown as OkeConfig;
+    await expect(resolveDrizzleKitEnv(dir, bad, "test")).rejects.toThrow(/not supported/);
   });
 });
 

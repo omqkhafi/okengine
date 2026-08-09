@@ -48,7 +48,7 @@ import { member, canBook, fair } from "./gates";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: { policies: [member, canBook, fair] },
 });
 ```
@@ -166,7 +166,7 @@ Fine-grained authorization (`gate.scope`, roles) stays opt-in — attach it only
 
 All five run as atomic Lua on the kv driver — correct under concurrency, identical on the memory
 driver in tests. Boot opens a dedicated `oke:gates` namespace on **`drivers.store.kv`**
-(`memory` locally · `redis` in docker/prod) so multi-instance rate limits share counters.
+(`memory` in test · `redis` in `dev`/`prod`) so multi-instance rate limits share counters.
 
 ## Auth posture at boot
 
@@ -183,7 +183,7 @@ on(http.post("/bookings").gate(member, canBook), flow("bookings.create", {/* …
 posture but does **not** authenticate.
 
 `gate: { unguardedHttp: "allow" }` skips the audit **only** when `env === "test"`.
-In `local` / `prod` / `docker` migrate with per-trigger `gate.public`.
+In `dev` / `prod` migrate with per-trigger `gate.public`.
 
 ## Built-in auth (`gate.auth`)
 
@@ -196,7 +196,7 @@ import { member, canBook } from "./gates";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: {
     auth: {
       emailAndPassword: { enabled: true },
@@ -248,7 +248,8 @@ gate: {
 }
 ```
 
-Customize tables, then run `oke schema generate` (supports `--check` in CI). Extra sign-in
+Customize tables, then run `oke schema generate` (writes `.oke/schema/oke.ts`;
+supports `--check` in CI). Extra sign-in
 shapes: [Plugins](/docs/plugins) (username, magic link, OTP, TOTP, passkeys). Call auth from
 [createClient](/docs/reference/client) — one client, helpers in `okengine/client/auth`.
 

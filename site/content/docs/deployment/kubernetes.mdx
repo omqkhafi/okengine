@@ -31,7 +31,7 @@ sticky network id to preserve. Scale with `replicas: N`.
 <Step>
 ### Share backing services
 
-Pin docker/prod drivers to shared stores:
+Pin `dev`/`prod` drivers to shared stores:
 
 | Concern                       | Driver                       | Shared backend                                    |
 | ----------------------------- | ---------------------------- | ------------------------------------------------- |
@@ -59,7 +59,7 @@ Wire `readinessProbe` to `/_/ready` and `livenessProbe` to `/health`.
 Bun.SQL defaults to **10** connections per process — fine for one pod.
 Scale the Deployment and `N × pool` can exceed Postgres `max_connections`.
 
-When both `store.sql` and `pgdog` are pinned (docker/prod default in templates),
+When both `store.sql` and `pgdog` are pinned (`dev`/`prod` default in templates),
 `DATABASE_URL` points at PgDog on port `6432` — transaction pooling, wire-protocol
 transparent to Bun.SQL / Drizzle. Point the cluster Service at that pooler.
 
@@ -137,12 +137,12 @@ so traffic does not hit a pod mid-takeover.
 
 `drivers.store.kv` must be `redis` with `REDIS_URL` set. A missing URL now
 **fails boot** (no silent memory fallback). Declaring `memory` for local is fine;
-docker/prod should stay on redis.
+`dev`/`prod` should stay on redis.
 
 </Accordion>
 <Accordion title="Files uploaded on pod A are missing on pod B">
 
-`drivers.store.files: "fs"` is single-host. Switch docker/prod to `s3`
+`drivers.store.files: "fs"` is single-host. Switch `dev`/`prod` to `s3`
 (create-oke templates already do).
 
 </Accordion>

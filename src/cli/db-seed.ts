@@ -97,18 +97,17 @@ export function redactConnectionTarget(raw: string): string {
  * Human-readable DB target from drizzle overlay.
  *
  * @param overlay - Resolved drizzle-kit env overlay
- * @param dialect - sqlite | postgresql
+ * @param dialect - postgresql (only supported kit dialect)
  */
 export function formatSeedTarget(
   overlay: Readonly<Record<string, string>>,
   dialect: string,
 ): string {
-  if (dialect === "postgresql" || overlay.DATABASE_URL) {
-    const url = overlay.DATABASE_URL ?? "(DATABASE_URL unset)";
-    return `postgresql ${redactConnectionTarget(url)}`;
+  if (overlay.OKE_PGLITE_URL && !overlay.DATABASE_URL) {
+    return `pglite ${redactConnectionTarget(overlay.OKE_PGLITE_URL)}`;
   }
-  const url = overlay.OKE_SQLITE_URL ?? "file:.oke/app.sqlite";
-  return `sqlite ${redactConnectionTarget(url)}`;
+  const url = overlay.DATABASE_URL ?? "(DATABASE_URL unset)";
+  return `${dialect === "postgresql" ? "postgresql" : dialect} ${redactConnectionTarget(url)}`;
 }
 
 /**
@@ -218,7 +217,7 @@ export async function bootSeedFx(
   entry?: string,
   config?: OkeConfig | null,
 ): Promise<{ readonly fx: Fx; readonly stop: () => Promise<void> }> {
-  if (env === "docker") {
+  if (env === "dev") {
     await applyComposeEnvToProcess(cwd);
     if (process.env.OKE_DOCKER === undefined) process.env.OKE_DOCKER = "1";
   }
@@ -272,7 +271,7 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
   }
   write(`oke db seed: env ${env} → ${targetLabel}\n`);
 
-  if (env === "docker" || env === "prod") {
+  if (env === "dev" || env === "prod") {
     if (options.force !== true) {
       const tty = options.stdinIsTTY ?? Boolean(process.stdin.isTTY);
       const confirm =

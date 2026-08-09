@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { issueSession } from "../../auth/index.ts";
 import { createClient } from "../../client/index.ts";
 import { CONSOLE_CSP, PLUGIN_IFRAME_SANDBOX } from "./security-headers.ts";
+import { createConsoleApp } from "./app.ts";
 import { serveConsole, type ConsoleServerHandle } from "./serve.ts";
 import { startConsoleApp } from "./serve.ts";
 
@@ -321,7 +322,7 @@ describe("console serve security", () => {
       cwd,
       secret: "serve-secret",
       silentClaim: true,
-      env: "dev",
+      env: "test",
     });
   });
 
@@ -377,5 +378,61 @@ describe("console serve security", () => {
   test("plugin iframe sandbox omits allow-same-origin", () => {
     expect(PLUGIN_IFRAME_SANDBOX.includes("allow-same-origin")).toBe(false);
     expect(PLUGIN_IFRAME_SANDBOX).toContain("allow-scripts");
+  });
+});
+
+describe("console boot under oke dev compose env", () => {
+  /**
+   * Isolate from compose URLs — this suite proves capability minting, not
+   * driver wiring. `serveConsole` passes the same `docker: false` flag.
+   */
+  const isolatedDevConfig = {
+    drivers: {
+      store: {
+        sql: { dev: "memory" },
+        kv: { dev: "memory" },
+        files: { dev: "memory" },
+        index: { dev: "memory" },
+      },
+      signal: { dev: "memory" },
+      clock: { dev: "frozen" },
+      journal: { dev: "memory" },
+      vault: { dev: "memory" },
+      channel: { email: { dev: "console" } },
+      ai: { dev: "mock" },
+    },
+  } as const;
+
+  test("docker:true + env:dev hard-fails OKE1008 on undeclared console flows", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-docker-strict-"));
+    const handle = createConsoleApp({
+      cwd,
+      secret: "compose-dev-secret",
+      silentClaim: true,
+    });
+    await expect(
+      handle.app.boot({ env: "dev", docker: true, config: isolatedDevConfig }),
+    ).rejects.toThrow(/OKE1008/);
+  });
+
+  test("docker:false + env:dev boots even when OKE_DOCKER=1 (serveConsole contract)", async () => {
+    const prev = process.env.OKE_DOCKER;
+    process.env.OKE_DOCKER = "1";
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-docker-open-"));
+    const handle = createConsoleApp({
+      cwd,
+      secret: "compose-dev-secret",
+      silentClaim: true,
+    });
+    try {
+      // Same flags `serveConsole` now passes — must not inherit OKE_DOCKER=1.
+      await handle.app.boot({ env: "dev", docker: false, config: isolatedDevConfig });
+      const res = await handle.app.fetch(new Request("http://console.test/console/setup/status"));
+      expect(res.status).toBe(200);
+    } finally {
+      await handle.app.stop();
+      if (prev === undefined) delete process.env.OKE_DOCKER;
+      else process.env.OKE_DOCKER = prev;
+    }
   });
 });

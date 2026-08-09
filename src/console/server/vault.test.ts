@@ -10,11 +10,15 @@ import type { Manifest } from "../../manifest/types.ts";
 import {
   assertNoSecretLeak,
   blastRadiusOf,
+  probeVaultBackend,
   projectVaultList,
   readersOf,
+  resolveVaultDriverId,
   rotateVaultValue,
   setVaultValue,
+  toConsoleVaultStatus,
 } from "./vault.ts";
+import type { VaultStatus } from "../../elements/vault/types.ts";
 
 const SECRET = "sk_live_console_vault_test_do_not_leak";
 
@@ -75,13 +79,13 @@ describe("projectVaultList", () => {
     const { secrets, env } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "local",
+      env: "test",
       peerFingerprints: {
         STRIPE_KEY: { staging: fingerprintSecretSync(SECRET) },
       },
     });
 
-    expect(env).toBe("local");
+    expect(env).toBe("test");
     const stripe = secrets.find((s) => s.name === "STRIPE_KEY");
     const pub = secrets.find((s) => s.name === "PUBLIC_APP_URL");
     expect(stripe?.sensitive).toBe(true);
@@ -124,7 +128,7 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: null,
       runtime: rt,
-      env: "local",
+      env: "test",
     });
     const row = secrets.find((s) => s.name === "KEY");
     expect(row?.winner).toBe(".env.local");
@@ -141,7 +145,7 @@ describe("projectVaultList", () => {
     const { secrets } = await projectVaultList({
       manifest: manifest(),
       runtime: rt,
-      env: "local",
+      env: "test",
     });
     expect(secrets.find((s) => s.name === "STRIPE_KEY")?.lastReadAt).toBe(1_700_000_000_000);
   });
@@ -202,10 +206,121 @@ describe("projectVaultList", () => {
       manifest: manifest(),
       runtime: rt,
       journal,
-      env: "local",
+      env: "test",
       now: () => now,
     });
     expect(secrets.find((s) => s.name === "STRIPE_KEY")?.blastRadius.count).toBe(2);
+  });
+});
+
+describe("backend badge", () => {
+  const builtinStatus: VaultStatus = {
+    sealed: true,
+    initialized: true,
+    masterKeyPresent: true,
+    kekVersion: 2,
+    secretCount: 3,
+    sealCount: 1,
+    lastSealedAt: new Date(1_700_000_100_000),
+    lastUnsealedAt: new Date(1_700_000_000_000),
+    rewrapTargetKekVersion: 3,
+  };
+
+  test("driver id comes from config, falling back to framework defaults", () => {
+    expect(resolveVaultDriverId(null, "dev")).toBe("env");
+    expect(resolveVaultDriverId(null, "test")).toBe("memory");
+    expect(resolveVaultDriverId(null, "prod")).toBe("vault");
+    expect(resolveVaultDriverId({ drivers: { vault: { dev: "managed" } } }, "dev")).toBe("managed");
+    expect(resolveVaultDriverId({ drivers: { vault: { dev: "builtin" } } }, "dev")).toBe("vault");
+    // An unknown id is a boot concern — the Console still renders.
+    expect(resolveVaultDriverId({ drivers: { vault: { dev: "nope" } } }, "dev")).toBe("env");
+    expect(
+      resolveVaultDriverId({ drivers: { vault: { dev: ["open", "bao"].join("") } } }, "dev"),
+    ).toBe("env");
+  });
+
+  test("non-builtin driver reports its id and no status", async () => {
+    const backend = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "managed" } } },
+      env: "dev",
+      processEnv: {},
+    });
+    expect(backend).toEqual({
+      driverId: "managed",
+      builtin: false,
+      status: null,
+      unavailable: null,
+    });
+  });
+
+  test("builtin status is JSON-safe and sealed follows the master key", async () => {
+    const sealed = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "vault" } } },
+      env: "dev",
+      processEnv: {},
+      loadStatus: async () => builtinStatus,
+    });
+    expect(sealed.builtin).toBe(true);
+    expect(sealed.status).toEqual({
+      ...toConsoleVaultStatus(builtinStatus),
+      sealed: true,
+    });
+    expect(sealed.status?.lastUnsealedAt).toBe(1_700_000_000_000);
+    expect(sealed.status?.rewrapTargetKekVersion).toBe(3);
+
+    const unsealed = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "vault" } } },
+      env: "dev",
+      processEnv: { OKE_VAULT_MASTER_KEY: "a-base64-key" },
+      loadStatus: async () => builtinStatus,
+    });
+    expect(unsealed.status?.sealed).toBe(false);
+  });
+
+  test("an unreachable builtin backend degrades to a reason, never a throw", async () => {
+    const backend = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "vault" } } },
+      env: "dev",
+      processEnv: {},
+      loadStatus: async () => {
+        throw new Error("relation oke_vault_status does not exist");
+      },
+    });
+    expect(backend.status).toBeNull();
+    expect(backend.unavailable).toContain("oke_vault_status");
+  });
+
+  test("builtin backend with no SQL configured says so instead of spinning PGlite", async () => {
+    const backend = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "vault" } } },
+      env: "dev",
+      processEnv: {},
+    });
+    expect(backend.status).toBeNull();
+    expect(backend.unavailable).toContain("DATABASE_URL");
+  });
+
+  test("the projection passes the backend through untouched", async () => {
+    const rt = await runtime();
+    const backend = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "memory" } } },
+      env: "dev",
+      processEnv: {},
+    });
+    const listed = await projectVaultList({
+      manifest: manifest(),
+      runtime: rt,
+      env: "test",
+      backend,
+    });
+    expect(listed.backend).toEqual(backend);
+
+    const unprobed = await projectVaultList({
+      manifest: manifest(),
+      runtime: rt,
+      env: "test",
+    });
+    expect(unprobed.backend).toBeNull();
   });
 });
 

@@ -232,7 +232,7 @@ export const MANIFEST_INPUTS: ReadonlyArray<{
 }> = [
   { syntax: "on(trigger)", records: "triggers" },
   { syntax: "flow(name, { in, out, errors })", records: "contracts" },
-  { syntax: "fx.store · fx.emit · fx.vault · fx.ask", records: "effects" },
+  { syntax: "fx.store · fx.emit · fx.vault.get · fx.ask", records: "effects" },
   { syntax: ".gate(…)", records: "permissions" },
 ];
 

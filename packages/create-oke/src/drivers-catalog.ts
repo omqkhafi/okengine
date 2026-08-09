@@ -4,6 +4,9 @@
  * Never lists ids that fail loud at boot (signal postgres/nats,
  * ai bedrock/vertex). Clock + journal `postgres` are real (SKIP LOCKED
  * CronStore / durable-run journal).
+ *
+ * Docker-first: `dev`/`prod` share compose-backed protocols; `test` uses
+ * PGLite for SQL and memory drivers elsewhere. SQLite is not offered.
  */
 
 import type { CreateDefaults, CreateProfile, EnvDriverPins } from "./create-defaults.ts";
@@ -15,31 +18,21 @@ export type DriverChoice = {
   readonly label: string;
 };
 
-/** Standard template docker/prod pins (unchanged for local-only profile). */
-export const TEMPLATE_DOCKER_PROD = {
+/** Template `dev`/`prod` pins (Docker Compose runtime). */
+export const TEMPLATE_DEV = {
   sql: "postgres",
   kv: "redis",
   files: "s3",
   signal: "redis",
   clock: "postgres",
-  vault: "openbao",
+  /** Built-in encrypted-at-rest store — SQL-backed, so no extra container. */
+  vault: "vault",
   email: "smtp",
 } as const;
 
-/** Standard template local defaults. */
-export const TEMPLATE_LOCAL = {
-  sql: "sqlite",
-  kv: "memory",
-  files: "fs",
-  signal: "memory",
-  clock: "memory",
-  vault: "env",
-  email: "console",
-} as const;
-
-/** Test-column defaults (always applied). */
+/** Test-column defaults (PGLite for SQL — not a customize choice). */
 export const TEMPLATE_TEST = {
-  sql: "memory",
+  sql: "pglite",
   kv: "memory",
   files: "memory",
   signal: "memory",
@@ -48,11 +41,11 @@ export const TEMPLATE_TEST = {
   email: "console",
 } as const;
 
+/** @deprecated Use {@link TEMPLATE_DEV}. */
+export const TEMPLATE_DOCKER_PROD = TEMPLATE_DEV;
+
 export const SQL_CHOICES: readonly DriverChoice[] = [
-  { value: "sqlite", label: "sqlite" },
   { value: "postgres", label: "postgres" },
-  { value: "libsql", label: "libsql" },
-  { value: "pglite", label: "pglite" },
   { value: "memory", label: "memory" },
 ];
 
@@ -71,7 +64,6 @@ export const INDEX_CHOICES: readonly DriverChoice[] = [
   { value: "none", label: "none" },
   { value: "memory", label: "memory" },
   { value: "pgvector", label: "pgvector" },
-  { value: "libsql", label: "libsql" },
   { value: "meilisearch", label: "meilisearch" },
 ];
 
@@ -93,11 +85,17 @@ export const JOURNAL_CHOICES: readonly DriverChoice[] = [
   { value: "postgres", label: "postgres" },
 ];
 
+/**
+ * Vault backends. `vault` is okengine's own encrypted-at-rest store: it lives
+ * in the app's Postgres, so it needs no extra container, and it is the only
+ * backend with `oke vault init` / `seal` / `audit`. `managed` reads from a
+ * provider secret store (e.g. AWS Secrets Manager).
+ */
 export const VAULT_CHOICES: readonly DriverChoice[] = [
-  { value: "env", label: "env" },
-  { value: "openbao", label: "openbao" },
-  { value: "managed", label: "managed" },
-  { value: "memory", label: "memory" },
+  { value: "env", label: "env (dotenv layers only)" },
+  { value: "vault", label: "vault (built-in, encrypted at rest — recommended)" },
+  { value: "managed", label: "managed (KMS / provider secret store)" },
+  { value: "memory", label: "memory (test)" },
 ];
 
 /** Email driver ids for `drivers.channel.email` (SMS/WhatsApp/push are other mediums). */
@@ -140,31 +138,30 @@ export const AI_PROVIDERS = [
 export type AiProviderId = (typeof AI_PROVIDERS)[number]["value"];
 
 /**
- * Build env pins for local-only: user local + template docker/prod + test.
+ * Build `{ dev, test, prod }` pins (prod mirrors dev).
  *
- * @param local - Chosen local driver
- * @param dockerProd - Template docker/prod pin for this facet
+ * @param dev - Dev (Compose) driver
  * @param test - Test pin
+ * @param prod - Prod pin (defaults to `dev`)
  */
-export function pinsLocalOnly(local: string, dockerProd: string, test: string): EnvDriverPins {
-  return { local, docker: dockerProd, test, prod: dockerProd };
+export function pinsEnv(dev: string, test: string, prod: string = dev): EnvDriverPins {
+  return { dev, test, prod };
 }
 
 /**
- * Build env pins when the user chose both columns (docker-ready).
+ * Docker-ready pins — `dev`/`prod` share the chosen driver; `test` is separate.
  *
- * @param local - Local driver
- * @param docker - Docker driver (also copied to prod)
+ * @param dev - Dev/prod driver
  * @param test - Test pin
  */
-export function pinsDockerReady(local: string, docker: string, test: string): EnvDriverPins {
-  return { local, docker, test, prod: docker };
+export function pinsDockerReady(dev: string, test: string): EnvDriverPins {
+  return pinsEnv(dev, test, dev);
 }
 
 /**
  * Default recommended create-defaults (matches template driver maps).
  *
- * @param profile - Profile assumption
+ * @param profile - Always docker-ready (kept for call-site compat)
  * @param template - Starter id
  */
 export function recommendedDefaults(
@@ -172,9 +169,9 @@ export function recommendedDefaults(
   template: TemplateId = "standard",
 ): CreateDefaults {
   const store = {
-    sql: pinsLocalOnly(TEMPLATE_LOCAL.sql, TEMPLATE_DOCKER_PROD.sql, TEMPLATE_TEST.sql),
-    kv: pinsLocalOnly(TEMPLATE_LOCAL.kv, TEMPLATE_DOCKER_PROD.kv, TEMPLATE_TEST.kv),
-    files: pinsLocalOnly(TEMPLATE_LOCAL.files, TEMPLATE_DOCKER_PROD.files, TEMPLATE_TEST.files),
+    sql: pinsDockerReady(TEMPLATE_DEV.sql, TEMPLATE_TEST.sql),
+    kv: pinsDockerReady(TEMPLATE_DEV.kv, TEMPLATE_TEST.kv),
+    files: pinsDockerReady(TEMPLATE_DEV.files, TEMPLATE_TEST.files),
     index: null as EnvDriverPins | null,
   };
   return {
@@ -183,19 +180,17 @@ export function recommendedDefaults(
     profile,
     drivers: {
       store,
-      signal: pinsLocalOnly(
-        TEMPLATE_LOCAL.signal,
-        TEMPLATE_DOCKER_PROD.signal,
-        TEMPLATE_TEST.signal,
-      ),
-      clock: pinsLocalOnly(TEMPLATE_LOCAL.clock, TEMPLATE_DOCKER_PROD.clock, TEMPLATE_TEST.clock),
-      vault: pinsLocalOnly(TEMPLATE_LOCAL.vault, TEMPLATE_DOCKER_PROD.vault, TEMPLATE_TEST.vault),
+      signal: pinsDockerReady(TEMPLATE_DEV.signal, TEMPLATE_TEST.signal),
+      clock: pinsDockerReady(TEMPLATE_DEV.clock, TEMPLATE_TEST.clock),
+      vault: pinsDockerReady(TEMPLATE_DEV.vault, TEMPLATE_TEST.vault),
       channel: {
-        email: pinsLocalOnly(TEMPLATE_LOCAL.email, TEMPLATE_DOCKER_PROD.email, TEMPLATE_TEST.email),
+        email: pinsDockerReady(TEMPLATE_DEV.email, TEMPLATE_TEST.email),
       },
       ai: null,
     },
     ai: { enabled: false, provider: null, driver: null },
+    locales: [],
+    pgdog: false,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -212,7 +207,7 @@ export type CustomizeFacetId =
   | "email";
 
 /**
- * Facets shown for a template (AI is asked after both env passes).
+ * Facets shown for a template (AI is asked after the env pass).
  *
  * @param template - Starter id
  */
@@ -238,7 +233,6 @@ export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.kv": "redis:8-alpine",
   "store.files": "rustfs/rustfs:1.0.0-beta.11",
   "channel.email": "axllent/mailpit:v1.22.3",
-  vault: "openbao/openbao:2.6.1",
   "store.index": "getmeili/meilisearch:v1.37",
   ai: LLAMA_CPP_IMAGE,
 };

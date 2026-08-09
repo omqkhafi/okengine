@@ -1,13 +1,13 @@
 /**
  * Store element acceptance:
- * - same flow runs unchanged against sqlite and postgres
+ * - same flow runs unchanged against memory and postgres
  * - read-only flow provably hits a replica
  * - auto-invalidation fires on exactly the writes touching the read's keys
  * - SELECT * masks classified columns
  */
 
 import { describe, expect, test } from "bun:test";
-import { createPostgresFakeClient, postgresDriver, sqliteDriver } from "../drivers/index.ts";
+import { createPostgresFakeClient, memorySqlDriver, postgresDriver } from "../drivers/index.ts";
 import type { Effects } from "../manifest/types.ts";
 import {
   classify,
@@ -73,7 +73,7 @@ describe("store facets", () => {
   });
 });
 
-describe("same flow against sqlite and postgres", () => {
+describe("same flow against memory and postgres", () => {
   test("insert / select / findById unchanged across drivers", async () => {
     const decl = store.sql("notes", {
       schema: { notes },
@@ -81,7 +81,7 @@ describe("same flow against sqlite and postgres", () => {
     });
 
     for (const [label, driver, client] of [
-      ["sqlite", sqliteDriver, undefined],
+      ["memory", memorySqlDriver, undefined],
       ["postgres", postgresDriver, createPostgresFakeClient()],
     ] as const) {
       const runtime = createStoreRuntime({
@@ -89,7 +89,7 @@ describe("same flow against sqlite and postgres", () => {
         sql: {
           notes: {
             name: "notes",
-            primary: { url: ":memory:", client },
+            primary: { client },
           },
         },
       });
@@ -218,8 +218,8 @@ describe("tier-1 cache invalidation from effects", () => {
 
   test("runtime putTier1 + onWriteEffects", async () => {
     const runtime = createStoreRuntime({
-      drivers: { sql: sqliteDriver },
-      sql: { notes: { name: "notes", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver },
+      sql: { notes: { name: "notes", primary: {} } },
     });
     const keys = runtime.putTier1({ reads: ["sql:notes"] }, ["cached"]);
     expect(runtime.cache.get<string[]>(keys[0]!)).toEqual(["cached"]);
@@ -237,7 +237,7 @@ describe("exists and increment helpers", () => {
 
   test("exists returns correctly for present / absent rows across sqlite and postgres", async () => {
     for (const [label, driver, client] of [
-      ["sqlite", sqliteDriver, undefined],
+      ["memory", memorySqlDriver, undefined],
       ["postgres", postgresDriver, createPostgresFakeClient()],
     ] as const) {
       const decl = store.sql("counters");
@@ -246,7 +246,7 @@ describe("exists and increment helpers", () => {
         sql: {
           counters: {
             name: "counters",
-            primary: { url: ":memory:", client },
+            primary: { client },
           },
         },
       });
@@ -267,7 +267,7 @@ describe("exists and increment helpers", () => {
 
   test("increment under 100 concurrent callers lands on the correct final value", async () => {
     for (const [label, driver, client] of [
-      ["sqlite", sqliteDriver, undefined],
+      ["memory", memorySqlDriver, undefined],
       ["postgres", postgresDriver, createPostgresFakeClient()],
     ] as const) {
       const decl = store.sql("counters");
@@ -276,7 +276,7 @@ describe("exists and increment helpers", () => {
         sql: {
           counters: {
             name: "counters",
-            primary: { url: ":memory:", client },
+            primary: { client },
           },
         },
       });
@@ -308,8 +308,8 @@ describe("PII masking at the driver boundary", () => {
       classify: { notes: { email: classify({ pii: true }) } },
     });
     const runtime = createStoreRuntime({
-      drivers: { sql: sqliteDriver },
-      sql: { notes: { name: "notes", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver },
+      sql: { notes: { name: "notes", primary: {} } },
     });
     runtime.register(decl);
     const handle = asSql(

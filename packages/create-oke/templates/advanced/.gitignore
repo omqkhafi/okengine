@@ -6,19 +6,16 @@ node_modules/
 .env.*
 !.env.example
 
-# build / local
+# build / runtime
 dist/
 out/
 *.tgz
 .oke/
 
-# oke-generated compose (keep user override)
+# docker secrets / optional generated artefacts (compose is committed)
+/docker/.env.docker
 /docker/Dockerfile
-/docker/compose.yml
-/docker/compose.*.yml
-!/docker/compose.override.yml
-/docker/pgdog.toml
-/docker/users.toml
+/docker/pgdog/
 
 # logs & coverage
 logs/

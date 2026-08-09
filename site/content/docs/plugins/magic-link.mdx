@@ -27,7 +27,7 @@ import { magicLink } from "okengine/plugins";
 
 export const app = oke({
   name: "shop",
-  env: "local",
+  env: "dev",
   gate: { auth: {} },
 }).plug(magicLink({ baseUrl: "http://127.0.0.1:6530" }));
 ```
@@ -43,8 +43,8 @@ const { data } = await api.auth.requestMagicLink({ email: "ali@example.com" });
 // data.devToken only when exposeDevToken
 ```
 
-`POST /auth/magic-link/request`. Locally the `console` driver captures mail; with
-`oke dev --docker`, Mailpit receives the real SMTP message.
+`POST /auth/magic-link/request`. Under `oke test` the `console` driver captures mail; with
+`oke dev`, Mailpit receives the real SMTP message.
 
 </Step>
 
@@ -88,12 +88,12 @@ catalog bodies (`{{link}}`, `{{token}}`). Override copy by merging your own cata
 
 ## Delivery drivers
 
-| `drivers.channel.email` | Delivery                                                          |
-| ----------------------- | ----------------------------------------------------------------- |
-| `console`               | Dev inbox (local/test default)                                    |
-| `smtp`                  | Any SMTP host — Mailpit under `oke dev --docker` (docker default) |
-| `resend` / `sndr`       | Hosted email APIs                                                 |
-| `taqnyat-mail`          | Taqnyat Mail API (additive option)                                |
+| `drivers.channel.email` | Delivery                                              |
+| ----------------------- | ----------------------------------------------------- |
+| `console`               | Dev inbox (local/test default)                        |
+| `smtp`                  | Any SMTP host — Mailpit under `oke dev` (dev default) |
+| `resend` / `sndr`       | Hosted email APIs                                     |
+| `taqnyat-mail`          | Taqnyat Mail API (additive option)                    |
 
 ### Taqnyat Mail
 
@@ -101,7 +101,7 @@ catalog bodies (`{{link}}`, `{{token}}`). Override copy by merging your own cata
 export default {
   drivers: {
     channel: {
-      email: { local: "console", docker: "smtp", test: "console", prod: "taqnyat-mail" },
+      email: { dev: "smtp", test: "console", prod: "taqnyat-mail" },
     },
   },
 };
@@ -139,7 +139,7 @@ Token expired (default 10m), already used, or mistyped. Request a new link.
 <Accordion title="No email arrived">
 
 In `local` / `test` the `console` driver captures mail into the inbox — nothing hits a mailbox.
-Run `oke dev --docker` and open Mailpit (`MAILPIT_UI_URL`) to see the rendered message. For
+Run `oke dev` and open Mailpit (`MAILPIT_UI_URL`) to see the rendered message. For
 unit tests without SMTP, set `exposeDevToken: true`.
 
 </Accordion>

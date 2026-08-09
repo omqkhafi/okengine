@@ -132,6 +132,15 @@ export interface ImageRecipe {
   url(spec: ServiceSpec, endpoint: ServiceEndpoint): string;
 }
 
+/**
+ * How derived compose artefacts are laid out under {@link DeriveOptions.composeDir}.
+ *
+ * - `single` (default) — one production-grade `docker-compose.yml`
+ * - `split` — `compose.yml` + per-role `compose.<role>.yml` (+ `compose.prod.yml` when prod)
+ * - `stack` — one Swarm-oriented `docker-stack.yml`
+ */
+export type ComposeLayout = "single" | "split" | "stack";
+
 /** Options for compose / Dockerfile derivation. */
 export interface DeriveOptions {
   /** Role → image pin (from `oke.config.ts` / Manifest). */
@@ -140,10 +149,30 @@ export interface DeriveOptions {
   readonly app?: string;
   /** App listen port (default 6530). */
   readonly appPort?: number;
-  /** When true, emit prod overlays (limits, secret refs, deploy.replicas). */
+  /**
+   * When true, fold production readiness (`/_/ready` HEALTHCHECK, deploy,
+   * restart policy, secret refs) and apportion {@link serverCpus} /
+   * {@link serverMemoryGb} across services. `oke docker` defaults true;
+   * `oke dev --docker` keeps false.
+   */
   readonly prod?: boolean;
   /**
-   * Include the `app` service in `compose.yml` (default true).
+   * Compose file layout (default `single` → `docker-compose.yml`).
+   * Pass `split` for layered `compose.<role>.yml`, or `stack` for `docker-stack.yml`.
+   */
+  readonly layout?: ComposeLayout;
+  /**
+   * Host CPU count used to size `deploy.resources` when {@link prod} is true
+   * (default 4).
+   */
+  readonly serverCpus?: number;
+  /**
+   * Host RAM in GiB used to size `deploy.resources` when {@link prod} is true
+   * (default 8).
+   */
+  readonly serverMemoryGb?: number;
+  /**
+   * Include the `app` service in the compose document (default true).
    * `oke dev --docker` sets false — host Bun runs the app; Docker is infra only.
    */
   readonly includeApp?: boolean;
@@ -193,6 +222,9 @@ export interface DeriveResult {
    * never embedded in YAML.
    */
   readonly stackEnv: Readonly<Record<string, string>>;
-  /** Compose `-f` merge order (four override layers). */
+  /**
+   * Compose `-f` merge order (includes a user-owned override that oke never
+   * writes — callers should skip it when the file is absent).
+   */
   readonly composeFiles: readonly string[];
 }

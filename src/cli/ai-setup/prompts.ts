@@ -154,7 +154,7 @@ async function askLlamaCppPath(options: {
     if (mode === null) return null;
 
     if (mode === "manual") {
-      const id = await askOtherModelId("smollm2");
+      const id = await askOtherModelId("granite3.3:2b");
       if (id === null) return null;
       return finishLlamaCpp(id);
     }

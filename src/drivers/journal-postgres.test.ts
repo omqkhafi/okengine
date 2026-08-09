@@ -142,18 +142,20 @@ describe("postgres JournalStore (fake)", () => {
     await store.close();
   });
 
-  test("listOrphans: running/sleeping without a live lease; never completed", async () => {
+  test("listOrphans: running/sleeping/compensating without a live lease; never completed", async () => {
     const store = await createPostgresJournalStore({ sql: createPostgresJournalFake() });
     await store.put(seedRun({ id: "running-unlocked" }));
     await store.put(seedRun({ id: "running-expired", lockedBy: "dead", leaseExpiresAt: 10 }));
     await store.put(seedRun({ id: "running-live", lockedBy: "alive", leaseExpiresAt: 9_000 }));
     await store.put(seedRun({ id: "sleeping-future", status: "sleeping", wakeAt: 99_000 }));
+    await store.put(seedRun({ id: "compensating-open", status: "compensating" }));
     await store.put(seedRun({ id: "done", status: "completed" }));
 
     const orphans = (await store.listOrphans(1_000)).map((r) => r.id);
     expect(orphans).toContain("running-unlocked");
     expect(orphans).toContain("running-expired");
     expect(orphans).toContain("sleeping-future");
+    expect(orphans).toContain("compensating-open");
     expect(orphans).not.toContain("running-live");
     expect(orphans).not.toContain("done");
     await store.close();

@@ -64,36 +64,43 @@ export async function applyComposeEnvToProcess(cwd: string): Promise<readonly st
  * Dialect comes from the configured driver via the exhaustive
  * `SQL_DRIVER_TO_DRIZZLE_DIALECT` map — a missing/unsupported driver id is a
  * compile-time gap there, and a clear runtime error here (never a silent
- * sqlite fallback).
+ * fallback).
  *
  * @param cwd - Project root
- * @param config - Loaded `oke.config.ts` (null → sqlite/local defaults)
- * @param env - Active env (`local` | `docker` for dev tooling)
+ * @param config - Loaded `oke.config.ts` (null → postgres/dev defaults)
+ * @param env - Active {@link ConfigEnv}
  */
 export async function resolveDrizzleKitEnv(
   cwd: string,
   config: OkeConfig | null | undefined,
   env: ConfigEnv,
 ): Promise<DrizzleKitEnvContext> {
-  const driverId = resolveDriverId(config?.drivers?.store?.sql, env) ?? "sqlite";
-  if (driverId !== "sqlite" && driverId !== "postgres") {
+  const driverId = resolveDriverId(config?.drivers?.store?.sql, env) ?? "postgres";
+  if (driverId !== "postgres" && driverId !== "pglite") {
     throw new Error(
-      `oke db: store.sql driver "${driverId}" is not supported by drizzle-kit (sqlite | postgres)`,
+      `oke db: store.sql driver "${driverId}" is not supported by drizzle-kit (postgres | pglite)`,
     );
   }
   const dialect = drizzleDialectFromSqlDriver(driverId);
 
-  const compose = env === "docker" ? await readComposeEnv(cwd) : new Map<string, string>();
+  const compose = env === "dev" ? await readComposeEnv(cwd) : new Map<string, string>();
 
   const overlay: Record<string, string> = { OKE_DRIZZLE_DIALECT: dialect };
-  if (dialect === "postgresql") {
+  if (driverId === "pglite") {
+    const url =
+      process.env.OKE_PGLITE_URL ??
+      compose.get("OKE_PGLITE_URL") ??
+      (env === "test" ? "memory://" : ".oke/pgdata");
+    overlay.OKE_PGLITE_URL = url;
+    // drizzle-kit still wants a postgres-shaped URL for dialect postgresql when
+    // not using PGlite kit plugins — prefer DATABASE_URL from compose for push.
+    const pgUrl =
+      process.env.DATABASE_URL ?? compose.get("DATABASE_URL") ?? compose.get("OKE_STORE_SQL_URL");
+    if (pgUrl !== undefined) overlay.DATABASE_URL = pgUrl;
+  } else {
     const url =
       process.env.DATABASE_URL ?? compose.get("DATABASE_URL") ?? compose.get("OKE_STORE_SQL_URL");
     if (url !== undefined) overlay.DATABASE_URL = url;
-  } else {
-    const url =
-      process.env.OKE_SQLITE_URL ?? compose.get("OKE_SQLITE_URL") ?? "file:.oke/app.sqlite";
-    overlay.OKE_SQLITE_URL = url;
   }
   return { env, dialect, overlay };
 }

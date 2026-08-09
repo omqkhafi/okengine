@@ -1,66 +1,21 @@
 import { defineConfig } from "okengine/config";
 
 /**
- * Standard starter — local-first Notes.
- * Docker/prod pins stay ready when you switch `oke mode docker`.
+ * Standard starter — Docker-first Notes.
+ * `oke dev` always uses Docker Compose (dev). Tests use PGLite / memory.
+ * Pin only driver keys that differ from `DRIVER_DEFAULTS` (see okengine/config).
  */
 export default defineConfig({
   db: {
     declare: "src/db/schema.decl.ts",
-    generated: "src/db/schema.generated.ts",
+    generated: "src/db/schema.drizzle.ts",
   },
   drivers: {
-    store: {
-      sql: {
-        local: "sqlite",
-        docker: "postgres",
-        test: "memory",
-        prod: "postgres",
-      },
-      kv: {
-        local: "memory",
-        docker: "redis",
-        test: "memory",
-        prod: "redis",
-      },
-      files: {
-        local: "fs",
-        docker: "s3",
-        test: "memory",
-        prod: "s3",
-      },
-    },
-    signal: {
-      local: "memory",
-      docker: "redis",
-      test: "memory",
-      prod: "redis",
-    },
-    clock: {
-      local: "memory",
-      docker: "postgres",
-      test: "frozen",
-      prod: "postgres",
-    },
-    journal: {
-      local: "memory",
-      docker: "postgres",
-      test: "memory",
-      prod: "postgres",
-    },
+    // Built-in encrypted-at-rest store — lives in Postgres, no extra service.
+    // Default `vault.dev` is `"env"`; pin built-in for local Docker-first apps.
+    // `oke vault init` prints the master key; set OKE_VAULT_MASTER_KEY to unseal.
     vault: {
-      local: "env",
-      docker: "openbao",
-      test: "memory",
-      prod: "openbao",
-    },
-    channel: {
-      email: {
-        local: "console",
-        docker: "smtp",
-        test: "console",
-        prod: "smtp",
-      },
+      dev: "vault",
     },
   },
   images: {
@@ -72,8 +27,7 @@ export default defineConfig({
     channel: {
       email: "axllent/mailpit:v1.22.3",
     },
-    vault: "openbao/openbao:2.6.1",
-    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+    // pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51", // create-oke wizard / --pgdog
   },
-  i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
+  i18n: { locales: ["en"], default: "en" },
 });

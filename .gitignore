@@ -46,8 +46,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.production.local
 .env.local
 .env.docker
-docker/pgdog.toml
-docker/users.toml
+docker/pgdog/
 
 # caches
 .eslintcache
@@ -63,6 +62,8 @@ docker/users.toml
 # Console / Playwright
 tests/console/.claim-code
 .oke/
+# Accidental PGlite datadir when SQLite's `:memory:` was passed as a path
+/:memory:/
 playwright-report/
 test-results/
 blob-report/

@@ -84,6 +84,27 @@ const HELP: CliFlag = {
   summary: "Show help",
 };
 
+const VAULT_KEY: CliFlag = {
+  long: "--key",
+  takesValue: true,
+  valueName: "base64|-",
+  summary: "Master key (`-` = stdin; else env / interactive prompt)",
+};
+
+const VAULT_NEW_KEY: CliFlag = {
+  long: "--new-key",
+  takesValue: true,
+  valueName: "base64|-",
+  summary: "New master key for resume (`-` = stdin)",
+};
+
+const VAULT_URL: CliFlag = {
+  long: "--url",
+  takesValue: true,
+  valueName: "url",
+  summary: "SQL URL (else DATABASE_URL)",
+};
+
 /**
  * Canonical `oke` command catalogue.
  *
@@ -93,24 +114,19 @@ const HELP: CliFlag = {
 export const OKE_COMMANDS: readonly CliCommand[] = [
   {
     name: "dev",
-    summary: "watch · hot reload · Console · client types",
+    summary: "watch · hot reload · Console · client types (Docker Compose)",
     leaf: true,
     flags: [
-      {
-        long: "--local",
-        short: "-l",
-        summary: "Session-only local mode (in-memory; no compose)",
-      },
       {
         long: "--docker",
         short: "-d",
         takesValue: true,
         valueName: "roles",
-        summary: "Session-only docker compose (optional role list)",
+        summary: "Optional compose role filter (default: all roles)",
       },
       {
         long: "--no-db-push",
-        summary: "Disable auto `oke db push` on schema change (local)",
+        summary: "Disable auto `oke db push` on schema change",
       },
       ENTRY,
       HELP,
@@ -118,7 +134,13 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "mode",
-    summary: "get/set default oke dev mode (local|docker)",
+    summary: "deprecated — oke dev always uses Docker Compose",
+    leaf: true,
+    flags: [HELP],
+  },
+  {
+    name: "test",
+    summary: "run bun test with PGLite test posture",
     leaf: true,
     flags: [HELP],
   },
@@ -182,11 +204,11 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "schema",
-    summary: "core + plugin tables → schema/oke.ts",
+    summary: "core + plugin tables → .oke/schema/oke.ts",
     subcommands: [
       {
         name: "generate",
-        summary: "Emit schema/oke.ts",
+        summary: "Emit .oke/schema/oke.ts",
         flags: [
           {
             long: "--check",
@@ -202,7 +224,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "db",
-    summary: "domain schema — push · generate · migrate · seed",
+    summary: "domain schema — push · generate · migrate · seed · studio",
     subcommands: [
       {
         name: "push",
@@ -219,7 +241,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             long: "--env",
             takesValue: true,
             valueName: "name",
-            summary: "Config env (local|docker|test|prod)",
+            summary: "Config env (dev|test|prod)",
           },
           HELP,
         ],
@@ -239,7 +261,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             long: "--env",
             takesValue: true,
             valueName: "name",
-            summary: "Config env (local|docker|test|prod)",
+            summary: "Config env (dev|test|prod)",
           },
           HELP,
         ],
@@ -259,7 +281,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             long: "--env",
             takesValue: true,
             valueName: "name",
-            summary: "Config env (local|docker|test|prod)",
+            summary: "Config env (dev|test|prod)",
           },
           HELP,
         ],
@@ -272,13 +294,33 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
             long: "--env",
             takesValue: true,
             valueName: "name",
-            summary: "Config env (local|docker|test|prod)",
+            summary: "Config env (dev|test|prod)",
           },
           {
             long: "--force",
             summary: "Skip docker/prod confirmation prompt",
           },
           ENTRY,
+          HELP,
+        ],
+      },
+      {
+        name: "studio",
+        summary: "Open drizzle-kit Studio (long-running)",
+        flags: [
+          {
+            long: "--config",
+            short: "-c",
+            takesValue: true,
+            valueName: "path",
+            summary: "drizzle.config.ts path",
+          },
+          {
+            long: "--env",
+            takesValue: true,
+            valueName: "name",
+            summary: "Config env (dev|test|prod)",
+          },
           HELP,
         ],
       },
@@ -298,7 +340,7 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
   },
   {
     name: "vault",
-    summary: "set · list · import · key rotate",
+    summary: "secrets — set · list · seal/unseal · rotate · audit · backup",
     subcommands: [
       {
         name: "set",
@@ -318,6 +360,96 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
         summary: "Key operations",
         positionals: "rotate",
         flags: [HELP],
+      },
+      {
+        name: "init",
+        summary: "Create the builtin vault; print the master key once",
+        flags: [VAULT_URL, HELP],
+      },
+      {
+        name: "status",
+        summary: "Seal state · KEK generation · secret count",
+        flags: [VAULT_KEY, VAULT_URL, JSON_FLAG, HELP],
+      },
+      {
+        name: "seal",
+        summary: "Drop the master key; reads fail until unsealed",
+        flags: [VAULT_URL, HELP],
+      },
+      {
+        name: "unseal",
+        summary: "Verify the master key and clear the sealed flag",
+        flags: [VAULT_KEY, VAULT_URL, HELP],
+      },
+      {
+        name: "rotate",
+        summary: "New version of a secret under a fresh data key",
+        positionals: "<path> [value]",
+        flags: [VAULT_KEY, VAULT_URL, HELP],
+      },
+      {
+        name: "rotate-master",
+        summary: "New master key; re-wrap every data key",
+        flags: [VAULT_KEY, VAULT_NEW_KEY, VAULT_URL, HELP],
+      },
+      {
+        name: "audit",
+        summary: "Read · verify · purge the tamper-evident chain",
+        positionals: "[verify|purge]",
+        flags: [
+          {
+            long: "--limit",
+            takesValue: true,
+            valueName: "n",
+            summary: "Rows to show (default 50)",
+          },
+          {
+            long: "--path",
+            takesValue: true,
+            valueName: "path",
+            summary: "Restrict to one secret path",
+          },
+          {
+            long: "--before",
+            takesValue: true,
+            valueName: "iso",
+            summary: "Purge rows older than this instant",
+          },
+          VAULT_URL,
+          JSON_FLAG,
+          HELP,
+        ],
+      },
+      {
+        name: "purge-expired",
+        summary: "Hard-delete secret rows past expires_at",
+        flags: [
+          VAULT_KEY,
+          VAULT_URL,
+          {
+            long: "--dry-run",
+            summary: "Count expired rows without deleting",
+          },
+          {
+            long: "--before",
+            takesValue: true,
+            valueName: "iso",
+            summary: "Exclusive upper bound (default: now)",
+          },
+          HELP,
+        ],
+      },
+      {
+        name: "backup",
+        summary: "Write every live secret as one encrypted bundle",
+        positionals: "<file>",
+        flags: [VAULT_KEY, VAULT_URL, HELP],
+      },
+      {
+        name: "restore",
+        summary: "Replay a bundle as new versions",
+        positionals: "<file>",
+        flags: [VAULT_KEY, VAULT_URL, HELP],
       },
     ],
   },
@@ -549,7 +681,15 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
  * @returns Help text (no trailing exit-code block)
  */
 export function formatOkeHelp(): string {
-  const lines = ["oke — okengine CLI", "", "Commands:"];
+  const lines = [
+    "oke — okengine CLI",
+    "",
+    "  oke              Interactive TUI (TTY). Non-TTY prints this help.",
+    "  oke --tui        Force the interactive TUI",
+    "  oke --help       This command list",
+    "",
+    "Commands:",
+  ];
   for (const cmd of OKE_COMMANDS) {
     const usage = formatCommandUsage(cmd);
     lines.push(`  ${pad(usage, 34)} ${cmd.summary}`);
@@ -608,7 +748,7 @@ function formatCommandUsage(cmd: CliCommand): string {
     return `oke ${cmd.name} ${sub.name}${pos}${flagHint ? ` ${flagHint}` : ""}`;
   }
   if (cmd.subcommands && cmd.subcommands.length > 1) {
-    const subs = cmd.subcommands.map((s) => s.name).join("|");
+    const subs = summarizeSubcommands(cmd.subcommands);
     // Prefer shared JSON flag hint when every list-like sub supports it.
     const jsonHint = cmd.subcommands.some((s) => s.flags?.some((f) => f.long === "--json"))
       ? " [--json|-j]"
@@ -622,6 +762,22 @@ function formatCommandUsage(cmd: CliCommand): string {
     .join(" ");
   const pos = cmd.positionals ? ` ${cmd.positionals}` : "";
   return `oke ${cmd.name}${pos}${flagHint ? ` ${flagHint}` : ""}`;
+}
+
+/** Longest `a|b|c` sub list the one-line help layout can carry. */
+const MAX_SUBCOMMAND_HINTS = 4;
+
+/**
+ * Join subcommand names for the one-line usage, eliding a long tail.
+ *
+ * Commands with a large surface (`vault`) would otherwise push the summary
+ * column off screen; the full list still reaches completion and `--help`.
+ *
+ * @param subs - Subcommands in registry order
+ */
+function summarizeSubcommands(subs: readonly CliSubcommand[]): string {
+  const shown = subs.slice(0, MAX_SUBCOMMAND_HINTS).map((s) => s.name);
+  return subs.length > MAX_SUBCOMMAND_HINTS ? `${shown.join("|")}|…` : shown.join("|");
 }
 
 function formatFlagHint(f: CliFlag): string {

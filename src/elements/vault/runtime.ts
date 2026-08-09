@@ -3,7 +3,7 @@
  */
 
 import type { VaultBag, VaultDriver } from "../../drivers/vault-types.ts";
-import { fromDockerRole, isFromDocker } from "./declare.ts";
+import { fromDockerRole, isFromDocker, readEnv } from "./declare.ts";
 import type { VaultSecretDecl } from "./declare.ts";
 import { fingerprintSecretSync } from "./fingerprint.ts";
 import { createSecretRedactor, SECRET_MASK } from "./redact.ts";
@@ -70,8 +70,14 @@ export interface CreateVaultRuntimeOptions {
   /** Declared secret / config contracts. */
   readonly secrets?: readonly VaultSecretDecl[];
   /**
+   * Environment variables declared through `vault.env.required`. Missing
+   * ones are reported as {@link VaultGap}s in the same boot pass as secrets,
+   * so one run lists every hole in the configuration.
+   */
+  readonly requiredEnv?: readonly string[];
+  /**
    * Resolution chain — first hit wins.
-   * Callers pass the env-appropriate layers (env / openbao / memory / …).
+   * Callers pass the env-appropriate layers (env / vault / memory / managed).
    */
   readonly chain?: readonly VaultChainLayer[];
   /**
@@ -88,7 +94,7 @@ export interface VaultRuntime {
   /** Declared contracts by name. */
   readonly contracts: ReadonlyMap<string, VaultSecretDecl>;
   /**
-   * Driver ids of each chain layer in order (`env` · `openbao` · `memory` · `managed`).
+   * Driver ids of each chain layer in order (`env` · `vault` · `memory` · `managed`).
    * Available before {@link boot}.
    */
   readonly chainDriverIds: readonly string[];
@@ -100,7 +106,7 @@ export interface VaultRuntime {
   /** Whether {@link boot} has succeeded. */
   readonly booted: boolean;
   /**
-   * Read a secret (capability is enforced by `fx.vault`).
+   * Read a secret (capability is enforced by `fx.vault.get`).
    * Records {@link lastReadAt}.
    *
    * @param name - Secret name
@@ -238,6 +244,7 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
         });
       }
     }
+    gaps.push(...requiredEnvGaps(options.requiredEnv ?? [], new Set(contracts.keys())));
     if (gaps.length > 0) {
       throw new VaultBootError(gaps);
     }
@@ -376,6 +383,31 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
       booted = false;
     },
   };
+}
+
+/**
+ * Gaps for every `vault.env.required` name absent from the process
+ * environment. Names that are also declared contracts are skipped — those
+ * resolve through the boot chain (`.env.local`, driver, dev fallback), so
+ * `process.env` alone would report a false gap.
+ *
+ * @param names - Required environment variable names
+ * @param declared - Contract names already validated by the boot chain
+ */
+export function requiredEnvGaps(
+  names: readonly string[],
+  declared: ReadonlySet<string> = new Set(),
+): VaultGap[] {
+  const gaps: VaultGap[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (declared.has(name) || seen.has(name)) continue;
+    seen.add(name);
+    if (readEnv(name) === undefined) {
+      gaps.push({ name, description: "required environment variable (vault.env.required)" });
+    }
+  }
+  return gaps;
 }
 
 /**

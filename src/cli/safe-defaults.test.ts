@@ -12,36 +12,54 @@ import { runImagesPin } from "./images.ts";
 import { upgradeCli } from "./upgrade.ts";
 
 describe("oke safe-default overrides", () => {
-  test("docker --prod is off unless --prod|-p is passed", async () => {
+  test("docker prod overlays are on by default; --no-prod opts out", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-safe-docker-"));
     await Bun.write(
       join(dir, "oke.config.ts"),
       `export default { images: { store: { sql: "postgres:18-alpine" } } }\n`,
     );
-    // Without --prod, derive still runs but prod overlays are not requested.
-    // We assert the parser default by calling runDockerDerive via dockerCli
-    // with a dry path: inspect that -p flips prod on.
     const { runDockerDerive } = await import("./docker.ts");
-    const off = await runDockerDerive({
+
+    // Default layout is single: prod readiness/deploy folds into docker-compose.yml
+    // (no separate compose.prod.yml). Assert production-grade content is present.
+    const defaults = await runDockerDerive({
       cwd: dir,
       outDir: dir,
       images: { "store.sql": "postgres:18-alpine" },
       dryRun: true,
       write: () => {},
     });
-    expect(off.code).toBe(0);
-    expect(off.result?.files.some((f) => f.path.includes("prod"))).toBe(false);
+    expect(defaults.code).toBe(0);
+    const defaultCompose = defaults.result?.files.find((f) => f.path === "docker-compose.yml");
+    expect(defaultCompose).toBeDefined();
+    expect(defaultCompose!.content).toContain("/_/ready");
+    expect(defaults.result?.files.some((f) => f.path.includes("prod"))).toBe(false);
 
-    const on = await runDockerDerive({
+    const noProd = await runDockerDerive({
+      cwd: dir,
+      outDir: dir,
+      images: { "store.sql": "postgres:18-alpine" },
+      prod: false,
+      dryRun: true,
+      write: () => {},
+    });
+    expect(noProd.code).toBe(0);
+    const noProdCompose = noProd.result?.files.find((f) => f.path === "docker-compose.yml");
+    expect(noProdCompose).toBeDefined();
+    expect(noProdCompose!.content).not.toContain("/_/ready");
+
+    // Split layout still emits a separate compose.prod.yml when prod is on.
+    const splitProd = await runDockerDerive({
       cwd: dir,
       outDir: dir,
       images: { "store.sql": "postgres:18-alpine" },
       prod: true,
+      layout: "split",
       dryRun: true,
       write: () => {},
     });
-    expect(on.code).toBe(0);
-    expect(on.result?.files.some((f) => f.path.includes("prod"))).toBe(true);
+    expect(splitProd.code).toBe(0);
+    expect(splitProd.result?.files.some((f) => f.path === "compose.prod.yml")).toBe(true);
 
     expect(await dockerCli(["--help"])).toBe(0);
   });

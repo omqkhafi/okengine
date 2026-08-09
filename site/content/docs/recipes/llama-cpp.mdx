@@ -23,7 +23,7 @@ for single-user / dev. Driver id stays `openai-compatible`.
 
 ```typescript title="oke.config.ts"
 drivers: {
-  ai: { local: "openai-compatible", docker: "openai-compatible", test: "mock" },
+  ai: { dev: "openai-compatible", test: "mock", prod: "openai-compatible" },
 },
 images: {
   ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // never :latest
@@ -32,7 +32,7 @@ images: {
 
 Or `oke ai setup --provider llama-cpp` (TTY: banner → Ultra Fast / Fast /
 Balanced / Smart → up to 20 curated Docker Hub `ai/` picks per tier) / `--yes`
-for `smollm2`.
+for `granite3.3:2b`.
 
 </Step>
 
@@ -41,19 +41,16 @@ for `smollm2`.
 
 ```bash title="docker/.env.docker"
 OKE_AI_URL=http://127.0.0.1:8080/v1
-OKE_AI_MODEL=smollm2
+OKE_AI_MODEL=granite3.3:2b
 ```
 
 `OKE_AI_MODEL` is a Docker Hub `ai/<id>` model. The recipe writes
-`docker/llama-entrypoint.py`, which Hub-pulls into the cache volume (native
-`llama download -dr`, then a CNCF `model.weight` fallback for newer tags like
-gemma4), then starts `llama-server -m <gguf> --alias <id>` (single-model — not
-router `--models-preset` / bare `--docker-repo`, which hang on b10290+). Never
-set `LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` in the container env.
+`docker/llama-entrypoint.py`, which Hub-pulls into the cache volume, then starts
+`llama-server -m <gguf> --alias <id>` (single-model).
 
-`oke dev -d` shows the model id in the hero / Docker summary and polls
-`/v1/models` in the background until status is `ready` (first boot may take
-minutes while the Hub image downloads).
+Never set `LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` — those hang on
+b10290+. `oke dev` shows the model id and polls `/v1/models` until `ready`
+(first boot may take minutes).
 
 </Step>
 
@@ -65,7 +62,7 @@ import { ai } from "okengine";
 
 export const smart = ai.model("smart", {
   provider: "openai-compatible",
-  model: process.env.OKE_AI_MODEL ?? "smollm2",
+  model: process.env.OKE_AI_MODEL ?? "granite3.3:2b",
 });
 ```
 
@@ -89,10 +86,10 @@ Postgres/Redis, stricter on the published interface because of GGUF CVE risk.
 
 ## Required env
 
-| Variable       | Required?         | Meaning                                 |
-| -------------- | ----------------- | --------------------------------------- |
-| `OKE_AI_URL`   | **Yes** in docker | Base URL including `/v1`                |
-| `OKE_AI_MODEL` | Recommended       | Docker Hub `ai/` id (default `smollm2`) |
+| Variable       | Required?         | Meaning                                       |
+| -------------- | ----------------- | --------------------------------------------- |
+| `OKE_AI_URL`   | **Yes** in docker | Base URL including `/v1`                      |
+| `OKE_AI_MODEL` | Recommended       | Docker Hub `ai/` id (default `granite3.3:2b`) |
 
 ## What the recipe configures
 
@@ -127,13 +124,14 @@ interfaces). `OKE_AI_URL` must include `/v1`.
 
 First start Hub-pulls the curated `ai/` model into the named cache volume
 (see logs: `oke ai: ensuring…` / download %). Prefer `oke ai setup` tiers
-(Ultra Fast → `smollm2`) for smoke tests. Confirm `OKE_AI_MODEL` is active in
-`.env.local` / `docker/.env.docker`. Watch `oke dev` (`AI … — waiting…` →
-`ready`). If status stays `loading` forever on an old stack that still uses
-`--models-preset`, regenerate `docker/` and recreate AI. Newer Hub tags use
-CNCF weight layers — the entrypoint falls back when native `llama download`
-cannot find `vnd.docker.ai.gguf.v3`. Do not mount random GGUF files. Never put
-`LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` in the container env.
+(Ultra Fast → `granite3.3:2b`) for smoke tests.
+
+Confirm `OKE_AI_MODEL` in `docker/.env.docker` (keep the `.env.local` hint commented so it does not shadow compose). Watch `oke
+dev` until AI status is `ready`.
+
+If status stays `loading` on Compose that still uses `--models-preset`,
+regenerate `docker/` and recreate AI. Never mount random GGUF or set
+`LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO`.
 
 </Accordion>
 </Accordions>

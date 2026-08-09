@@ -6,7 +6,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { memoryKvDriver } from "../drivers/memory.ts";
-import { sqliteDriver } from "../drivers/sqlite.ts";
+import { memorySqlDriver } from "../drivers/memory.ts";
 import { store } from "../elements/store/declare.ts";
 import { createStoreRuntime } from "../elements/store/runtime.ts";
 import type { SqlStoreHandle } from "../elements/store/sql-session.ts";
@@ -61,8 +61,8 @@ describe("configSource — box semantics", () => {
     const db = store.sql("cfgdb");
     const cfg = store.kv("cfg");
     const runtime = createStoreRuntime({
-      drivers: { sql: sqliteDriver, kv: memoryKvDriver },
-      sql: { cfgdb: { name: "cfgdb", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver, kv: memoryKvDriver },
+      sql: { cfgdb: { name: "cfgdb", primary: {} } },
       kv: { cfg: {} },
     });
     runtime.register(db);
@@ -103,8 +103,8 @@ describe("configSource — box semantics", () => {
   test("an empty DB reverts to the code config", async () => {
     const db = store.sql("cfgdb");
     const runtime = createStoreRuntime({
-      drivers: { sql: sqliteDriver },
-      sql: { cfgdb: { name: "cfgdb", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver },
+      sql: { cfgdb: { name: "cfgdb", primary: {} } },
     });
     runtime.register(db);
 
@@ -125,8 +125,8 @@ describe("configSource — box semantics", () => {
   test("a corrupt JSON row fails the sync loudly", async () => {
     const db = store.sql("cfgdb");
     const runtime = createStoreRuntime({
-      drivers: { sql: sqliteDriver },
-      sql: { cfgdb: { name: "cfgdb", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver },
+      sql: { cfgdb: { name: "cfgdb", primary: {} } },
     });
     runtime.register(db);
 

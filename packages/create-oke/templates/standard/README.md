@@ -48,7 +48,7 @@ never anonymous `flow_1`.
 | `src/db/migrations/` | versioned drizzle migrations |
 | `src/flows/notes/` | list · create · get · archive · onCreated |
 | `src/flows/main/` | root · health |
-| `oke.config.ts` | local sqlite · docker postgres (+ redis/s3/openbao/smtp) |
+| `oke.config.ts` | local env · docker postgres (+ redis/s3/smtp); vault built-in |
 | `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
 
 Switch mode anytime: `oke mode docker` then `oke dev` (or `oke dev --docker`).

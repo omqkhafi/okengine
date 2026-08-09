@@ -34,7 +34,7 @@ images: {
 ### Bring the stack up
 
 ```bash
-oke dev --docker
+oke dev
 ```
 
 `oke docker` injects `COCKROACH_USER` / `COCKROACH_PASSWORD` / `COCKROACH_DATABASE`
@@ -94,7 +94,7 @@ not multi-region HA. For managed multi-region, use the
 <Accordions>
 <Accordion title="oke boot: postgres driver needs DATABASE_URL">
 
-Re-run `oke dev --docker` so the stack writes `docker/.env.docker`, or export
+Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
 `DATABASE_URL` yourself when pointing at a remote Cockroach host.
 
 </Accordion>

@@ -10,7 +10,6 @@ import { llamaCpp } from "./llama-cpp.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
 import { ollama } from "./ollama.ts";
-import { openbao } from "./openbao.ts";
 import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
@@ -36,7 +35,6 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   redis,
   mailpit,
   rustfs,
-  openbao,
   meilisearch,
   llamaCpp,
   vllm,
@@ -54,7 +52,6 @@ export {
   mailpit,
   meilisearch,
   ollama,
-  openbao,
   pgdog,
   postgres,
   redis,

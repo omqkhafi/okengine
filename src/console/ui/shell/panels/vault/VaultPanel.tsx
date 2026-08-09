@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   exportSafeList,
   formatBlastRadius,
+  formatVaultBackend,
   groupByKind,
   openVault,
   rotateConfirmation,
@@ -55,6 +56,8 @@ export function VaultPanel() {
 
   const secrets = listQuery.data?.secrets ?? [];
   const env = listQuery.data?.env ?? "local";
+  const backend = listQuery.data?.backend ?? null;
+  const backendCard = useMemo(() => formatVaultBackend(backend), [backend]);
   const groups = useMemo(() => groupByKind(secrets, search.q ?? ""), [secrets, search.q]);
   const open = secrets.find((s) => s.name === search.name);
   const blast = open ? formatBlastRadius(open.blastRadius) : null;
@@ -162,6 +165,56 @@ export function VaultPanel() {
         <p className="px-4 py-2 text-sm text-[var(--oke-muted)]" role="status">
           {exportNote}
         </p>
+      ) : null}
+
+      {backendCard ? (
+        <section
+          aria-label="Vault backend"
+          className="shrink-0 border-b border-[var(--oke-line)] px-4 py-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium text-[var(--oke-fg)]">{backendCard.title}</h2>
+            {backendCard.badges.map((badge) => (
+              <span
+                key={badge.id}
+                role={badge.tone === "warn" ? "alert" : "status"}
+                className={clsx(
+                  "border border-[var(--oke-line)] px-2 py-0.5 text-xs",
+                  badge.tone === "warn"
+                    ? "text-[var(--oke-danger)]"
+                    : badge.tone === "ok"
+                      ? "text-[var(--oke-fg)]"
+                      : "text-[var(--oke-muted)]",
+                )}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+          <p className="mt-1 text-sm text-[var(--oke-muted)]">{backendCard.description}</p>
+          {backendCard.facts.length > 0 ? (
+            <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              {backendCard.facts.map((fact) => (
+                <div key={fact.label} className="flex gap-2">
+                  <dt className="text-[var(--oke-muted)]">{fact.label}</dt>
+                  <dd className="font-mono">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {backendCard.hint ? (
+            <p className="mt-1 text-sm text-[var(--oke-muted)]" role="status">
+              {backendCard.hint}
+            </p>
+          ) : null}
+          {backend?.builtin ? (
+            <p className="mt-1 text-sm text-[var(--oke-muted)]">
+              Every read, write, seal and rotate is recorded in a hash-chained audit log. Read it
+              with <code className="font-mono">oke vault audit</code>; verify the chain with{" "}
+              <code className="font-mono">oke vault audit verify</code>.
+            </p>
+          ) : null}
+        </section>
       ) : null}
 
       <div className="flex min-h-0 flex-1">
@@ -289,7 +342,7 @@ export function VaultPanel() {
               <section aria-label="Readers">
                 <h3 className="mb-2 text-sm font-medium">Readers</h3>
                 <p className="text-sm text-[var(--oke-muted)]">
-                  Flows that declare <code className="font-mono">fx.vault({open.name})</code>
+                  Flows that declare <code className="font-mono">fx.vault.get({open.name})</code>
                 </p>
                 <ul className="mt-1 list-disc pl-5 font-mono text-sm">
                   {open.readers.length === 0 ? (

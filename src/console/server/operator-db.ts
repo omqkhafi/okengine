@@ -1,5 +1,12 @@
 /**
- * Durable operator plane for Console — `.oke/console.sqlite` + secret file.
+ * Durable operator plane for Console — Postgres schema `oke_console` + secret file.
+ *
+ * Same database as the app (`DATABASE_URL` / `OKE_STORE_SQL_URL`):
+ * - `public` — application + shared runtime tables
+ * - `oke_console` — Console operators / sessions (never mixed into `public`)
+ *
+ * When no Postgres URL is set (unit tests), falls back to PGlite under
+ * `.oke/console-pg` so reopen durability still works without Docker.
  *
  * Spec: wizard closes permanently once the first operator exists (console §2.5).
  * Claim codes stay ephemeral; operators, sessions, and the signing secret must
@@ -8,7 +15,6 @@
 
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
 import { createOperatorStore, type OperatorStore } from "../../auth/operator.ts";
 import { createSessionStore, type SessionStore } from "../../auth/sessions.ts";
 import type {
@@ -19,11 +25,19 @@ import type {
   SessionRow,
 } from "../../auth/tables.ts";
 import { AUTH_TABLES } from "../../auth/tables.ts";
+import type { SqlConnection } from "../../drivers/types.ts";
 
 /** Relative paths under project cwd. */
 export const CONSOLE_OKE_DIR = ".oke";
-export const CONSOLE_SQLITE_NAME = "console.sqlite";
+/** Signing secret file (still local — not a DB row). */
 export const CONSOLE_SECRET_NAME = "console.secret";
+/** PGlite datadir when no Postgres URL is configured. */
+export const CONSOLE_PGLITE_DIR = "console-pg";
+/**
+ * Postgres schema for Console operator-plane tables.
+ * App domain tables stay in `public` on the same database.
+ */
+export const CONSOLE_PG_SCHEMA = "oke_console";
 
 /** Opened Console persistence handle. */
 export interface ConsolePersistence {
@@ -34,11 +48,23 @@ export interface ConsolePersistence {
   /** Hydrated session + refresh Maps. */
   readonly sessions: SessionStore;
   /** Persist (or update) one operator + credential + roles/sso. */
-  readonly persistOperator: (operatorId: string) => void;
+  readonly persistOperator: (operatorId: string) => Promise<void>;
   /** Persist the full session store (issue / revoke). */
-  readonly persistSessions: () => void;
-  /** Close the SQLite connection. */
-  readonly close: () => void;
+  readonly persistSessions: () => Promise<void>;
+  /** Close the SQL connection. */
+  readonly close: () => Promise<void>;
+}
+
+/** Options for {@link openConsolePersistence}. */
+export interface OpenConsolePersistenceOptions {
+  /** Optional `OKE_CONSOLE_SECRET` override. */
+  readonly envSecret?: string;
+  /** SQL URL override (`DATABASE_URL` / `OKE_STORE_SQL_URL` otherwise). */
+  readonly url?: string;
+  /** Injected connection (tests). */
+  readonly connection?: SqlConnection;
+  /** Injected env map (tests). */
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -48,16 +74,25 @@ export interface ConsolePersistence {
  */
 export function consoleOkePaths(cwd: string): {
   readonly dir: string;
-  readonly sqlite: string;
   readonly secret: string;
+  readonly pglite: string;
 } {
   const dir = join(cwd, CONSOLE_OKE_DIR);
   mkdirSync(dir, { recursive: true });
   return {
     dir,
-    sqlite: join(dir, CONSOLE_SQLITE_NAME),
     secret: join(dir, CONSOLE_SECRET_NAME),
+    pglite: join(dir, CONSOLE_PGLITE_DIR),
   };
+}
+
+/**
+ * Qualify a table name inside {@link CONSOLE_PG_SCHEMA}.
+ *
+ * @param table - Bare table name (`oke_operators`, …)
+ */
+export function consoleTable(table: string): string {
+  return `"${CONSOLE_PG_SCHEMA}"."${table}"`;
 }
 
 /**
@@ -85,192 +120,230 @@ export async function resolveConsoleSecret(cwd: string, envSecret?: string): Pro
  * Open Console operator DB, migrate schema, hydrate Maps.
  *
  * @param cwd - Project root
- * @param options - Optional env secret override
+ * @param options - Secret / URL / connection overrides
  */
 export async function openConsolePersistence(
   cwd: string,
-  options: { readonly envSecret?: string } = {},
+  options: OpenConsolePersistenceOptions = {},
 ): Promise<ConsolePersistence> {
-  const paths = consoleOkePaths(cwd);
   const secret = await resolveConsoleSecret(cwd, options.envSecret);
-  const db = new Database(paths.sqlite, { create: true });
-  db.exec("PRAGMA journal_mode = WAL;");
-  migrateOperatorSchema(db);
-  const operators = loadOperatorStore(db);
-  const sessions = loadSessionStore(db);
+  const env = options.env ?? process.env;
+  const url = options.url ?? env.DATABASE_URL ?? env.OKE_STORE_SQL_URL;
+  const owned = options.connection === undefined;
+  const sql = options.connection ?? (await connectConsoleSql(cwd, url));
+
+  await migrateOperatorSchema(sql);
+  const operators = await loadOperatorStore(sql);
+  const sessions = await loadSessionStore(sql);
 
   return {
     secret,
     operators,
     sessions,
-    persistOperator(operatorId: string) {
-      persistOperator(db, operators, operatorId);
+    async persistOperator(operatorId: string) {
+      await persistOperator(sql, operators, operatorId);
     },
-    persistSessions() {
-      persistSessions(db, sessions);
+    async persistSessions() {
+      await persistSessions(sql, sessions);
     },
-    close() {
-      db.close();
+    async close() {
+      if (owned) await sql.close();
     },
   };
 }
 
 /**
- * Create operator tables if missing.
+ * Open Postgres (shared app URL) or PGlite under `.oke/console-pg`.
  *
- * @param db - bun:sqlite database
+ * @param cwd - Project root
+ * @param url - Resolved SQL URL, when configured
  */
-export function migrateOperatorSchema(db: Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.operators} (
+async function connectConsoleSql(cwd: string, url: string | undefined): Promise<SqlConnection> {
+  if (url !== undefined && /^postgres(ql)?:\/\//.test(url)) {
+    const { connectPostgres } = await import("../../drivers/postgres.ts");
+    return connectPostgres({ url });
+  }
+  const { connectPglite } = await import("../../drivers/pglite.ts");
+  const paths = consoleOkePaths(cwd);
+  // Explicit non-postgres URL (tests) wins; otherwise durable PGlite datadir.
+  if (url !== undefined && url.length > 0) {
+    return connectPglite({ url });
+  }
+  return connectPglite({ url: paths.pglite });
+}
+
+/**
+ * Create `oke_console` schema + operator tables if missing.
+ *
+ * @param sql - SQL connection
+ */
+export async function migrateOperatorSchema(sql: SqlConnection): Promise<void> {
+  await sql.exec(`CREATE SCHEMA IF NOT EXISTS "${CONSOLE_PG_SCHEMA}"`);
+  const ops = consoleTable(AUTH_TABLES.operators);
+  const creds = consoleTable(AUTH_TABLES.operatorCredentials);
+  const sso = consoleTable(AUTH_TABLES.operatorSsoLinks);
+  const roles = consoleTable(AUTH_TABLES.operatorRoles);
+  const sessions = consoleTable(AUTH_TABLES.sessions);
+  const refresh = consoleTable(AUTH_TABLES.refreshTokens);
+
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${ops} (
       id TEXT PRIMARY KEY NOT NULL,
       email TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       status TEXT NOT NULL,
-      mfa_enabled INTEGER NOT NULL DEFAULT 0,
+      mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       invited_by TEXT,
-      last_seen_at INTEGER
+      last_seen_at BIGINT
     );
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.operatorCredentials} (
+  `);
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${creds} (
       operator_id TEXT PRIMARY KEY NOT NULL,
       password_hash TEXT NOT NULL,
-      login_enabled INTEGER NOT NULL DEFAULT 1,
-      FOREIGN KEY (operator_id) REFERENCES ${AUTH_TABLES.operators}(id)
+      login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      FOREIGN KEY (operator_id) REFERENCES ${ops}(id)
     );
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.operatorSsoLinks} (
+  `);
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${sso} (
       operator_id TEXT NOT NULL,
       provider TEXT NOT NULL,
       subject TEXT NOT NULL,
       PRIMARY KEY (operator_id, provider, subject),
-      FOREIGN KEY (operator_id) REFERENCES ${AUTH_TABLES.operators}(id)
+      FOREIGN KEY (operator_id) REFERENCES ${ops}(id)
     );
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.operatorRoles} (
+  `);
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${roles} (
       operator_id TEXT NOT NULL,
       role TEXT NOT NULL,
       PRIMARY KEY (operator_id, role),
-      FOREIGN KEY (operator_id) REFERENCES ${AUTH_TABLES.operators}(id)
+      FOREIGN KEY (operator_id) REFERENCES ${ops}(id)
     );
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.sessions} (
+  `);
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${sessions} (
       id TEXT PRIMARY KEY NOT NULL,
       plane TEXT NOT NULL,
       principal_id TEXT NOT NULL,
       family_id TEXT NOT NULL,
-      revoked_at INTEGER,
-      created_at INTEGER NOT NULL,
-      expires_at INTEGER NOT NULL,
-      last_active_at INTEGER,
+      revoked_at BIGINT,
+      created_at BIGINT NOT NULL,
+      expires_at BIGINT NOT NULL,
+      last_active_at BIGINT,
       scopes TEXT NOT NULL DEFAULT '[]',
       audience TEXT
     );
-    CREATE TABLE IF NOT EXISTS ${AUTH_TABLES.refreshTokens} (
+  `);
+  await sql.exec(`
+    CREATE TABLE IF NOT EXISTS ${refresh} (
       id TEXT PRIMARY KEY NOT NULL,
       session_id TEXT NOT NULL,
       family_id TEXT NOT NULL,
       hash TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      used_at INTEGER,
-      revoked_at INTEGER
+      expires_at BIGINT NOT NULL,
+      used_at BIGINT,
+      revoked_at BIGINT
     );
   `);
-  ensureSessionColumns(db);
+  await ensureSessionColumns(sql);
 }
 
 /**
- * Add session columns when opening an older console.sqlite.
+ * Add session columns when opening an older Console schema.
  *
- * @param db - Open database
+ * @param sql - Open connection
  */
-function ensureSessionColumns(db: Database): void {
-  const cols = db.query(`PRAGMA table_info(${AUTH_TABLES.sessions})`).all() as Array<{
-    name: string;
-  }>;
-  const names = new Set(cols.map((c) => c.name));
-  if (!names.has("last_active_at")) {
-    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN last_active_at INTEGER`);
-  }
-  if (!names.has("scopes")) {
-    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN scopes TEXT NOT NULL DEFAULT '[]'`);
-  }
-  if (!names.has("audience")) {
-    db.exec(`ALTER TABLE ${AUTH_TABLES.sessions} ADD COLUMN audience TEXT`);
-  }
+async function ensureSessionColumns(sql: SqlConnection): Promise<void> {
+  const sessions = consoleTable(AUTH_TABLES.sessions);
+  await sql.exec(`ALTER TABLE ${sessions} ADD COLUMN IF NOT EXISTS last_active_at BIGINT`);
+  await sql.exec(
+    `ALTER TABLE ${sessions} ADD COLUMN IF NOT EXISTS scopes TEXT NOT NULL DEFAULT '[]'`,
+  );
+  await sql.exec(`ALTER TABLE ${sessions} ADD COLUMN IF NOT EXISTS audience TEXT`);
 }
 
 /**
- * Hydrate a {@link SessionStore} from SQLite.
+ * Coerce a SQL boolean / 0|1 cell to boolean.
  *
- * @param db - Open database
+ * @param value - Driver cell
  */
-export function loadSessionStore(db: Database): SessionStore {
+function asBool(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "t" || value === "true";
+}
+
+/**
+ * Coerce a SQL numeric cell to number | null.
+ *
+ * @param value - Driver cell
+ */
+function asNum(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Hydrate a {@link SessionStore} from SQL.
+ *
+ * @param sql - Open connection
+ */
+export async function loadSessionStore(sql: SqlConnection): Promise<SessionStore> {
   const store = createSessionStore();
+  const sessions = consoleTable(AUTH_TABLES.sessions);
+  const refresh = consoleTable(AUTH_TABLES.refreshTokens);
 
-  const sessionRows = db
-    .query(
-      `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience
-       FROM ${AUTH_TABLES.sessions}`,
-    )
-    .all() as Array<{
-    id: string;
-    plane: SessionRow["plane"];
-    principal_id: string;
-    family_id: string;
-    revoked_at: number | null;
-    created_at: number;
-    expires_at: number;
-    last_active_at: number | null;
-    scopes: string | null;
-    audience: string | null;
-  }>;
+  const sessionRows = await sql.query(
+    `SELECT id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience
+     FROM ${sessions}`,
+  );
 
   for (const row of sessionRows) {
     let scopes: string[] = [];
-    if (row.scopes) {
+    const scopesRaw = row["scopes"];
+    if (typeof scopesRaw === "string" && scopesRaw.length > 0) {
       try {
-        const parsed = JSON.parse(row.scopes) as unknown;
+        const parsed = JSON.parse(scopesRaw) as unknown;
         if (Array.isArray(parsed)) scopes = parsed.map(String);
       } catch {
         scopes = [];
       }
     }
+    const createdAt = asNum(row["created_at"]) ?? 0;
     const session: SessionRow = {
-      id: row.id,
-      plane: row.plane,
-      principalId: row.principal_id,
-      familyId: row.family_id,
-      revokedAt: row.revoked_at,
-      createdAt: row.created_at,
-      expiresAt: row.expires_at,
-      lastActiveAt: row.last_active_at ?? row.created_at,
+      id: String(row["id"]),
+      plane: row["plane"] as SessionRow["plane"],
+      principalId: String(row["principal_id"]),
+      familyId: String(row["family_id"]),
+      revokedAt: asNum(row["revoked_at"]),
+      createdAt,
+      expiresAt: asNum(row["expires_at"]) ?? 0,
+      lastActiveAt: asNum(row["last_active_at"]) ?? createdAt,
       scopes,
-      ...(row.audience ? { audience: row.audience } : {}),
+      ...(typeof row["audience"] === "string" && row["audience"].length > 0
+        ? { audience: row["audience"] }
+        : {}),
     };
     store.sessions.set(session.id, session);
   }
 
-  const refreshRows = db
-    .query(
-      `SELECT id, session_id, family_id, hash, expires_at, used_at, revoked_at
-       FROM ${AUTH_TABLES.refreshTokens}`,
-    )
-    .all() as Array<{
-    id: string;
-    session_id: string;
-    family_id: string;
-    hash: string;
-    expires_at: number;
-    used_at: number | null;
-    revoked_at: number | null;
-  }>;
+  const refreshRows = await sql.query(
+    `SELECT id, session_id, family_id, hash, expires_at, used_at, revoked_at
+     FROM ${refresh}`,
+  );
 
   for (const row of refreshRows) {
     const token: RefreshTokenRow = {
-      id: row.id,
-      sessionId: row.session_id,
-      familyId: row.family_id,
-      hash: row.hash,
-      expiresAt: row.expires_at,
-      usedAt: row.used_at,
-      revokedAt: row.revoked_at,
+      id: String(row["id"]),
+      sessionId: String(row["session_id"]),
+      familyId: String(row["family_id"]),
+      hash: String(row["hash"]),
+      expiresAt: asNum(row["expires_at"]) ?? 0,
+      usedAt: asNum(row["used_at"]),
+      revokedAt: asNum(row["revoked_at"]),
     };
     store.refresh.set(token.id, token);
   }
@@ -281,133 +354,117 @@ export function loadSessionStore(db: Database): SessionStore {
 /**
  * Replace session tables with the in-memory store snapshot.
  *
- * @param db - Open database
+ * @param sql - Open connection
  * @param store - In-memory session store
  */
-export function persistSessions(db: Database, store: SessionStore): void {
-  db.exec(`DELETE FROM ${AUTH_TABLES.refreshTokens}`);
-  db.exec(`DELETE FROM ${AUTH_TABLES.sessions}`);
+export async function persistSessions(sql: SqlConnection, store: SessionStore): Promise<void> {
+  const sessions = consoleTable(AUTH_TABLES.sessions);
+  const refresh = consoleTable(AUTH_TABLES.refreshTokens);
 
-  const insertSession = db.query(
-    `INSERT INTO ${AUTH_TABLES.sessions}
-      (id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience)
-     VALUES ($id, $plane, $principal, $family, $revoked, $created, $expires, $lastActive, $scopes, $audience)`,
-  );
+  await sql.exec(`DELETE FROM ${refresh}`);
+  await sql.exec(`DELETE FROM ${sessions}`);
+
   for (const session of store.sessions.values()) {
-    insertSession.run({
-      $id: session.id,
-      $plane: session.plane,
-      $principal: session.principalId,
-      $family: session.familyId,
-      $revoked: session.revokedAt,
-      $created: session.createdAt,
-      $expires: session.expiresAt,
-      $lastActive: session.lastActiveAt,
-      $scopes: JSON.stringify(session.scopes ?? []),
-      $audience: session.audience ?? null,
-    });
+    await sql.exec(
+      `INSERT INTO ${sessions}
+        (id, plane, principal_id, family_id, revoked_at, created_at, expires_at, last_active_at, scopes, audience)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        session.id,
+        session.plane,
+        session.principalId,
+        session.familyId,
+        session.revokedAt,
+        session.createdAt,
+        session.expiresAt,
+        session.lastActiveAt,
+        JSON.stringify(session.scopes ?? []),
+        session.audience ?? null,
+      ],
+    );
   }
 
-  const insertRefresh = db.query(
-    `INSERT INTO ${AUTH_TABLES.refreshTokens}
-      (id, session_id, family_id, hash, expires_at, used_at, revoked_at)
-     VALUES ($id, $session, $family, $hash, $expires, $used, $revoked)`,
-  );
   for (const token of store.refresh.values()) {
-    insertRefresh.run({
-      $id: token.id,
-      $session: token.sessionId,
-      $family: token.familyId,
-      $hash: token.hash,
-      $expires: token.expiresAt,
-      $used: token.usedAt,
-      $revoked: token.revokedAt,
-    });
+    await sql.exec(
+      `INSERT INTO ${refresh}
+        (id, session_id, family_id, hash, expires_at, used_at, revoked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        token.id,
+        token.sessionId,
+        token.familyId,
+        token.hash,
+        token.expiresAt,
+        token.usedAt,
+        token.revokedAt,
+      ],
+    );
   }
 }
 
 /**
- * Hydrate an {@link OperatorStore} from SQLite.
+ * Hydrate an {@link OperatorStore} from SQL.
  *
- * @param db - Open database
+ * @param sql - Open connection
  */
-export function loadOperatorStore(db: Database): OperatorStore {
+export async function loadOperatorStore(sql: SqlConnection): Promise<OperatorStore> {
   const store = createOperatorStore();
+  const ops = consoleTable(AUTH_TABLES.operators);
+  const creds = consoleTable(AUTH_TABLES.operatorCredentials);
+  const sso = consoleTable(AUTH_TABLES.operatorSsoLinks);
+  const roles = consoleTable(AUTH_TABLES.operatorRoles);
 
-  const opRows = db
-    .query(
-      `SELECT id, email, name, status, mfa_enabled, invited_by, last_seen_at
-       FROM ${AUTH_TABLES.operators}`,
-    )
-    .all() as Array<{
-    id: string;
-    email: string;
-    name: string;
-    status: OperatorRow["status"];
-    mfa_enabled: number;
-    invited_by: string | null;
-    last_seen_at: number | null;
-  }>;
+  const opRows = await sql.query(
+    `SELECT id, email, name, status, mfa_enabled, invited_by, last_seen_at
+     FROM ${ops}`,
+  );
 
   for (const row of opRows) {
-    store.operators.set(row.id, {
-      id: row.id,
-      email: row.email,
-      name: row.name,
-      status: row.status,
-      mfaEnabled: row.mfa_enabled === 1,
-      invitedBy: row.invited_by,
-      lastSeenAt: row.last_seen_at,
+    store.operators.set(String(row["id"]), {
+      id: String(row["id"]),
+      email: String(row["email"]),
+      name: String(row["name"]),
+      status: row["status"] as OperatorRow["status"],
+      mfaEnabled: asBool(row["mfa_enabled"]),
+      invitedBy: typeof row["invited_by"] === "string" ? row["invited_by"] : null,
+      lastSeenAt: asNum(row["last_seen_at"]),
     });
   }
 
-  const credRows = db
-    .query(
-      `SELECT operator_id, password_hash, login_enabled
-       FROM ${AUTH_TABLES.operatorCredentials}`,
-    )
-    .all() as Array<{
-    operator_id: string;
-    password_hash: string;
-    login_enabled: number;
-  }>;
+  const credRows = await sql.query(
+    `SELECT operator_id, password_hash, login_enabled
+     FROM ${creds}`,
+  );
 
   for (const row of credRows) {
     const cred: OperatorCredentialRow = {
-      operatorId: row.operator_id,
-      passwordHash: row.password_hash,
-      loginEnabled: row.login_enabled === 1,
+      operatorId: String(row["operator_id"]),
+      passwordHash: String(row["password_hash"]),
+      loginEnabled: asBool(row["login_enabled"]),
     };
-    store.credentials.set(row.operator_id, cred);
+    store.credentials.set(cred.operatorId, cred);
   }
 
-  const ssoRows = db
-    .query(`SELECT operator_id, provider, subject FROM ${AUTH_TABLES.operatorSsoLinks}`)
-    .all() as Array<{
-    operator_id: string;
-    provider: string;
-    subject: string;
-  }>;
+  const ssoRows = await sql.query(`SELECT operator_id, provider, subject FROM ${sso}`);
 
   for (const row of ssoRows) {
     const link: OperatorSsoLinkRow = {
-      operatorId: row.operator_id,
-      provider: row.provider,
-      subject: row.subject,
+      operatorId: String(row["operator_id"]),
+      provider: String(row["provider"]),
+      subject: String(row["subject"]),
     };
-    const list = store.ssoLinks.get(row.operator_id) ?? [];
+    const list = store.ssoLinks.get(link.operatorId) ?? [];
     list.push(link);
-    store.ssoLinks.set(row.operator_id, list);
+    store.ssoLinks.set(link.operatorId, list);
   }
 
-  const roleRows = db
-    .query(`SELECT operator_id, role FROM ${AUTH_TABLES.operatorRoles}`)
-    .all() as Array<{ operator_id: string; role: string }>;
+  const roleRows = await sql.query(`SELECT operator_id, role FROM ${roles}`);
 
   for (const row of roleRows) {
-    const list = store.roles.get(row.operator_id) ?? [];
-    list.push(row.role);
-    store.roles.set(row.operator_id, list);
+    const operatorId = String(row["operator_id"]);
+    const list = store.roles.get(operatorId) ?? [];
+    list.push(String(row["role"]));
+    store.roles.set(operatorId, list);
   }
 
   return store;
@@ -416,11 +473,15 @@ export function loadOperatorStore(db: Database): OperatorStore {
 /**
  * Upsert one operator (and related rows) from the in-memory store.
  *
- * @param db - Open database
+ * @param sql - Open connection
  * @param store - In-memory store
  * @param operatorId - Operator id
  */
-export function persistOperator(db: Database, store: OperatorStore, operatorId: string): void {
+export async function persistOperator(
+  sql: SqlConnection,
+  store: OperatorStore,
+  operatorId: string,
+): Promise<void> {
   const op = store.operators.get(operatorId);
   if (!op) {
     throw new Error(`oke console: unknown operator ${operatorId}`);
@@ -430,65 +491,46 @@ export function persistOperator(db: Database, store: OperatorStore, operatorId: 
     throw new Error(`oke console: missing credential for ${operatorId}`);
   }
 
-  const upsertOp = db.query(
-    `INSERT INTO ${AUTH_TABLES.operators}
+  const ops = consoleTable(AUTH_TABLES.operators);
+  const creds = consoleTable(AUTH_TABLES.operatorCredentials);
+  const sso = consoleTable(AUTH_TABLES.operatorSsoLinks);
+  const roles = consoleTable(AUTH_TABLES.operatorRoles);
+
+  await sql.exec(
+    `INSERT INTO ${ops}
       (id, email, name, status, mfa_enabled, invited_by, last_seen_at)
-     VALUES ($id, $email, $name, $status, $mfa, $invited, $seen)
-     ON CONFLICT(id) DO UPDATE SET
-       email = excluded.email,
-       name = excluded.name,
-       status = excluded.status,
-       mfa_enabled = excluded.mfa_enabled,
-       invited_by = excluded.invited_by,
-       last_seen_at = excluded.last_seen_at`,
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET
+       email = EXCLUDED.email,
+       name = EXCLUDED.name,
+       status = EXCLUDED.status,
+       mfa_enabled = EXCLUDED.mfa_enabled,
+       invited_by = EXCLUDED.invited_by,
+       last_seen_at = EXCLUDED.last_seen_at`,
+    [op.id, op.email, op.name, op.status, op.mfaEnabled, op.invitedBy, op.lastSeenAt],
   );
-  upsertOp.run({
-    $id: op.id,
-    $email: op.email,
-    $name: op.name,
-    $status: op.status,
-    $mfa: op.mfaEnabled ? 1 : 0,
-    $invited: op.invitedBy,
-    $seen: op.lastSeenAt,
-  });
 
-  const upsertCred = db.query(
-    `INSERT INTO ${AUTH_TABLES.operatorCredentials}
+  await sql.exec(
+    `INSERT INTO ${creds}
       (operator_id, password_hash, login_enabled)
-     VALUES ($id, $hash, $enabled)
-     ON CONFLICT(operator_id) DO UPDATE SET
-       password_hash = excluded.password_hash,
-       login_enabled = excluded.login_enabled`,
+     VALUES (?, ?, ?)
+     ON CONFLICT (operator_id) DO UPDATE SET
+       password_hash = EXCLUDED.password_hash,
+       login_enabled = EXCLUDED.login_enabled`,
+    [cred.operatorId, cred.passwordHash, cred.loginEnabled],
   );
-  upsertCred.run({
-    $id: cred.operatorId,
-    $hash: cred.passwordHash,
-    $enabled: cred.loginEnabled ? 1 : 0,
-  });
 
-  db.query(`DELETE FROM ${AUTH_TABLES.operatorSsoLinks} WHERE operator_id = $id`).run({
-    $id: operatorId,
-  });
-  const insertSso = db.query(
-    `INSERT INTO ${AUTH_TABLES.operatorSsoLinks} (operator_id, provider, subject)
-     VALUES ($id, $provider, $subject)`,
-  );
+  await sql.exec(`DELETE FROM ${sso} WHERE operator_id = ?`, [operatorId]);
   for (const link of store.ssoLinks.get(operatorId) ?? []) {
-    insertSso.run({
-      $id: link.operatorId,
-      $provider: link.provider,
-      $subject: link.subject,
-    });
+    await sql.exec(`INSERT INTO ${sso} (operator_id, provider, subject) VALUES (?, ?, ?)`, [
+      link.operatorId,
+      link.provider,
+      link.subject,
+    ]);
   }
 
-  db.query(`DELETE FROM ${AUTH_TABLES.operatorRoles} WHERE operator_id = $id`).run({
-    $id: operatorId,
-  });
-  const insertRole = db.query(
-    `INSERT INTO ${AUTH_TABLES.operatorRoles} (operator_id, role)
-     VALUES ($id, $role)`,
-  );
+  await sql.exec(`DELETE FROM ${roles} WHERE operator_id = ?`, [operatorId]);
   for (const role of store.roles.get(operatorId) ?? []) {
-    insertRole.run({ $id: operatorId, $role: role });
+    await sql.exec(`INSERT INTO ${roles} (operator_id, role) VALUES (?, ?)`, [operatorId, role]);
   }
 }

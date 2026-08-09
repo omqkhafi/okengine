@@ -20,13 +20,51 @@ import type { WideEvent } from "../runs/types.ts";
 import { isDataEnvelope, MCP_DATA_KIND } from "../mcp/data.ts";
 import { mintMcpSession } from "../mcp/session.ts";
 import { runDev, type DevOptions, type DevSession } from "./dev.ts";
-import { readDevMode, writeDevMode } from "./dev-mode.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 
 /** Repo public entry — absolute import so temp apps need no install. */
 const OKE_INDEX = resolve(import.meta.dir, "../index.ts");
 
 const SECRET = "oke-dev-mcp-integration-secret";
+
+/** Minimal compose injectables — unit tests never shell out to Docker. */
+const STUB_IMAGES = {
+  "store.sql": "postgres:16-alpine",
+  "store.kv": "redis:7-alpine",
+} as const;
+const STUB_CREDENTIALS = {
+  "store.sql": {
+    user: "oke",
+    password: "test-password-not-in-yaml",
+    database: "oke",
+  },
+} as const;
+
+function stubCompose(
+  overrides: Partial<
+    Pick<
+      DevOptions,
+      "images" | "credentials" | "composeUp" | "composeHealth" | "composeStop" | "noDbPush"
+    >
+  > = {},
+): Pick<
+  DevOptions,
+  "images" | "credentials" | "composeUp" | "composeHealth" | "composeStop" | "noDbPush"
+> {
+  return {
+    images: STUB_IMAGES,
+    credentials: STUB_CREDENTIALS,
+    composeUp: async () => {},
+    composeHealth: async () =>
+      new Map([
+        ["store-sql", "ready"],
+        ["store-kv", "ready"],
+      ]),
+    composeStop: () => {},
+    noDbPush: true,
+    ...overrides,
+  };
+}
 
 const LIVE_MANIFEST: Manifest = {
   oke: "1.0",
@@ -77,6 +115,52 @@ describe("mcpContextFromConsole", () => {
   });
 });
 
+/**
+ * Console for MCP tests — boot with `docker: false` so host `OKE_DOCKER=1`
+ * from compose stubs does not force redis/smtp docker URLs.
+ */
+async function serveTestConsole(
+  port: number,
+  cwd: string,
+  manifest: Manifest = LIVE_MANIFEST,
+): Promise<{
+  readonly console: import("../console/server/app.ts").ConsoleAppHandle;
+  readonly port: number;
+  readonly stop: () => void;
+}> {
+  const { createConsoleApp } = await import("../console/server/app.ts");
+  const handle = createConsoleApp({
+    cwd,
+    secret: SECRET,
+    silentClaim: true,
+    manifest,
+  });
+  await handle.app.boot({ env: "test", docker: false });
+  handle.state.listRuns = async () => {
+    const runs = handle.app.bootResult?.runs;
+    if (!runs) return [];
+    return runs.all();
+  };
+  const server = Bun.serve({
+    port,
+    hostname: "127.0.0.1",
+    fetch: (req) => handle.app.fetch(req),
+  });
+  const boundPort = server.port;
+  if (boundPort === undefined) {
+    server.stop(true);
+    throw new Error("test console: Bun.serve did not bind a port");
+  }
+  return {
+    console: handle,
+    port: boundPort,
+    stop() {
+      server.stop(true);
+      void handle.app.stop();
+    },
+  };
+}
+
 describe("oke dev MCP live wiring", () => {
   let session: DevSession | undefined;
 
@@ -99,9 +183,11 @@ describe("oke dev MCP live wiring", () => {
       consolePort: 0,
       mcpPort: 0,
       appPort: 0,
+      ...stubCompose(),
       startApp: async () => ({ stop() {} }),
       regenClient: async () => {},
       write: () => {},
+      serveConsole: async (port) => serveTestConsole(port, dir),
     });
 
     expect(result.code).toBe(0);
@@ -228,26 +314,18 @@ describe("oke dev MCP live wiring", () => {
       mcpPort: 0,
       appPort: 0,
       manifest: LIVE_MANIFEST,
+      ...stubCompose(),
       startApp: async () => ({ stop() {} }),
       regenClient: async () => {},
       write: () => {},
       serveConsole: async (port) => {
-        const { serveConsole } = await import("../console/server/serve.ts");
-        const server = await serveConsole({
-          port,
-          hostname: "127.0.0.1",
-          cwd: dir,
-          secret: SECRET,
-          silentClaim: true,
-          env: "dev",
-          manifest: LIVE_MANIFEST,
-        });
+        const server = await serveTestConsole(port, dir);
         return {
           console: server.console,
           port: server.port,
           stop() {
             consoleStopped = true;
-            server.stop(true);
+            server.stop();
           },
         };
       },
@@ -298,6 +376,7 @@ describe("oke dev docs MCP", () => {
       consolePort: 0,
       mcpPort: 0,
       docsMcpPort: 0,
+      ...stubCompose(),
       startApp: async () => ({ stop() {} }),
       regenClient: async () => {},
       write: () => {},
@@ -371,6 +450,7 @@ describe("oke dev docs MCP", () => {
       consolePort: 0,
       mcpPort: 0,
       docsMcpPort: 0,
+      ...stubCompose(),
       startApp: async () => ({ stop() {} }),
       regenClient: async () => {},
       write: (t) => {
@@ -426,7 +506,7 @@ export const app = oke({ name: "dev-hot", env: "test" }).adopt({ ping });
   );
 }
 
-/** Stub Console + MCP so boot/hot tests isolate the app child. */
+/** Stub Console + MCP + compose so boot/hot tests isolate the app child. */
 function stubSurfaces(): Pick<
   DevOptions,
   | "serveConsole"
@@ -436,6 +516,12 @@ function stubSurfaces(): Pick<
   | "write"
   | "silentClaim"
   | "keepAlive"
+  | "images"
+  | "credentials"
+  | "composeUp"
+  | "composeHealth"
+  | "composeStop"
+  | "noDbPush"
 > {
   return {
     silentClaim: true,
@@ -445,6 +531,7 @@ function stubSurfaces(): Pick<
     serveConsole: async () => ({ stop() {} }),
     serveMcp: async () => ({ stop() {} }),
     serveDocsMcp: async () => ({ stop() {} }),
+    ...stubCompose(),
   };
 }
 
@@ -561,6 +648,8 @@ describe("oke dev syncAdoptBarrel atomic write", () => {
       cwd: dir,
       dryRun: true,
       stdinIsTTY: false,
+      images: STUB_IMAGES,
+      credentials: STUB_CREDENTIALS,
       write: () => {},
     });
     expect(code).toBe(0);
@@ -631,109 +720,49 @@ describe("oke dev syncAdoptBarrel atomic write", () => {
   });
 });
 
-describe("oke dev mode resolution", () => {
-  test("non-TTY + unset mode → local, zero ask, zero docker, no save", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-nontty-"));
+describe("oke dev Docker-first", () => {
+  test("dryRun always plans compose (no mode ask)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-always-compose-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    let askCalls = 0;
     let composeCalls = 0;
     const { code, plan } = await runDev({
       cwd: dir,
       dryRun: true,
       stdinIsTTY: false,
-      ask: async () => {
-        askCalls++;
-        return "docker";
-      },
+      images: STUB_IMAGES,
+      credentials: STUB_CREDENTIALS,
       composeUp: async () => {
         composeCalls++;
       },
       write: () => {},
     });
     expect(code).toBe(0);
-    expect(askCalls).toBe(0);
     expect(composeCalls).toBe(0);
-    expect(plan?.stackRoles).toBeNull();
-    expect(await readDevMode(dir)).toBeNull();
+    expect(plan?.stackRoles).toEqual(["store.sql", "store.kv"]);
   });
 
-  test("TTY + unset mode → ask once, save choice", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-tty-"));
+  test("role filter -d store.sql plans only that role", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-roles-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    let askCalls = 0;
-    const { code } = await runDev({
-      cwd: dir,
-      dryRun: true,
-      stdinIsTTY: true,
-      ask: async () => {
-        askCalls++;
-        return "local";
-      },
-      write: () => {},
-    });
-    expect(code).toBe(0);
-    expect(askCalls).toBe(1);
-    expect(await readDevMode(dir)).toBe("local");
-  });
-
-  test("TTY + unset mode → docker choice saves and plans compose on dryRun", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-tty-d-"));
-    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    let askCalls = 0;
-    let composeCalls = 0;
     const { code, plan } = await runDev({
       cwd: dir,
       dryRun: true,
-      stdinIsTTY: true,
-      images: { "store.sql": "postgres:16-alpine" },
-      credentials: {
-        "store.sql": {
-          user: "oke",
-          password: "test-password-not-in-yaml",
-          database: "oke",
-        },
+      stdinIsTTY: false,
+      docker: ["store.sql"],
+      images: {
+        "store.sql": "postgres:16-alpine",
+        "store.kv": "redis:7-alpine",
       },
-      ask: async () => {
-        askCalls++;
-        return "docker";
-      },
-      composeUp: async () => {
-        composeCalls++;
-      },
+      credentials: STUB_CREDENTIALS,
       write: () => {},
     });
     expect(code).toBe(0);
-    expect(askCalls).toBe(1);
-    expect(composeCalls).toBe(0);
-    expect(await readDevMode(dir)).toBe("docker");
     expect(plan?.stackRoles).toEqual(["store.sql"]);
   });
 
-  test("session --local never writes .oke/mode", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-local-"));
-    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    let askCalls = 0;
-    const { code, plan } = await runDev({
-      cwd: dir,
-      dryRun: true,
-      local: true,
-      stdinIsTTY: true,
-      ask: async () => {
-        askCalls++;
-        return "docker";
-      },
-      write: () => {},
-    });
-    expect(code).toBe(0);
-    expect(askCalls).toBe(0);
-    expect(plan?.stackRoles).toBeNull();
-    expect(await readDevMode(dir)).toBeNull();
-  });
-
-  test("session stop calls composeStop after a successful docker up", async () => {
+  test("session stop calls composeStop after a successful compose up", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-compose-stop-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    await writeDevMode(dir, "docker");
     let upCalls = 0;
     let stopCalls = 0;
     let stoppedFiles: readonly string[] | undefined;
@@ -746,26 +775,20 @@ describe("oke dev mode resolution", () => {
       const result = await runDev({
         cwd: dir,
         stdinIsTTY: false,
-        images: { "store.sql": "postgres:16-alpine" },
-        credentials: {
-          "store.sql": {
-            user: "oke",
-            password: "test-password-not-in-yaml",
-            database: "oke",
+        ...stubCompose({
+          composeUp: async (files) => {
+            upCalls++;
+            expect(files.length).toBeGreaterThan(0);
           },
-        },
-        composeUp: async (files) => {
-          upCalls++;
-          expect(files.length).toBeGreaterThan(0);
-        },
-        composeHealth: async ({ onUpdate }) => {
-          onUpdate?.("store-sql", "ready");
-          return new Map([["store-sql", "ready"]]);
-        },
-        composeStop: (files) => {
-          stopCalls++;
-          stoppedFiles = files;
-        },
+          composeHealth: async ({ onUpdate }) => {
+            onUpdate?.("store-sql", "ready");
+            return new Map([["store-sql", "ready"]]);
+          },
+          composeStop: (files) => {
+            stopCalls++;
+            stoppedFiles = files;
+          },
+        }),
         startApp: async () => ({ stop() {} }),
         serveConsole: async () => ({ stop() {} }),
         regenClient: async () => {},
@@ -790,10 +813,9 @@ describe("oke dev mode resolution", () => {
     }
   });
 
-  test("saved docker + compose failure exits loudly (no silent downgrade)", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-dev-mode-fail-"));
+  test("compose failure exits loudly (no silent downgrade)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-compose-fail-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
-    await writeDevMode(dir, "docker");
     const lines: string[] = [];
     const origErr = console.error;
     console.error = (...args: unknown[]) => {
@@ -803,17 +825,11 @@ describe("oke dev mode resolution", () => {
       const { code } = await runDev({
         cwd: dir,
         stdinIsTTY: false,
-        images: { "store.sql": "postgres:16-alpine" },
-        credentials: {
-          "store.sql": {
-            user: "oke",
-            password: "test-password-not-in-yaml",
-            database: "oke",
+        ...stubCompose({
+          composeUp: async () => {
+            throw new Error("compose boom");
           },
-        },
-        composeUp: async () => {
-          throw new Error("compose boom");
-        },
+        }),
         startApp: async () => ({ stop() {} }),
         serveConsole: async () => ({ stop() {} }),
         regenClient: async () => {},
@@ -821,7 +837,36 @@ describe("oke dev mode resolution", () => {
         keepAlive: false,
       });
       expect(code).toBe(1);
-      expect(lines.some((l) => l.includes("oke mode local"))).toBe(true);
+      expect(lines.some((l) => l.includes("Docker Compose failed"))).toBe(true);
+    } finally {
+      console.error = origErr;
+    }
+  });
+
+  test("missing Docker daemon fails fast with a clear error", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-no-daemon-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    const lines: string[] = [];
+    const origErr = console.error;
+    console.error = (...args: unknown[]) => {
+      lines.push(args.map(String).join(" "));
+    };
+    try {
+      const { code } = await runDev({
+        cwd: dir,
+        stdinIsTTY: false,
+        images: STUB_IMAGES,
+        credentials: STUB_CREDENTIALS,
+        assertDocker: async () => {
+          throw new Error(
+            "oke dev: Docker daemon unavailable — start Docker Desktop (or the Docker daemon) and retry",
+          );
+        },
+        write: () => {},
+        keepAlive: false,
+      });
+      expect(code).toBe(1);
+      expect(lines.some((l) => l.includes("Docker daemon unavailable"))).toBe(true);
     } finally {
       console.error = origErr;
     }

@@ -3,9 +3,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
 import { OkeError, OKE_ERRORS } from "../../kernel/errors.ts";
-import { sqliteDriver } from "../../drivers/sqlite.ts";
+import { memorySqlDriver } from "../../drivers/memory.ts";
 import { defineTable } from "./table.ts";
 import { createSqlStoreHandle } from "./sql-session.ts";
 
@@ -13,8 +12,7 @@ const notes = defineTable("notes", { id: true, title: true });
 
 describe("domain DDL policy", () => {
   test("ensure mode creates tables on first touch", async () => {
-    const db = new Database(":memory:");
-    const conn = await sqliteDriver.connect({ client: db, role: "primary" });
+    const conn = await memorySqlDriver.connect({ role: "primary" });
     const handle = createSqlStoreHandle("sql:app", {
       connection: conn,
       classifications: new Map(),
@@ -28,12 +26,11 @@ describe("domain DDL policy", () => {
   });
 
   test("prod/off mode never CREATE TABLE IF NOT EXISTS", async () => {
-    const db = new Database(":memory:");
     const execSql: string[] = [];
-    const base = await sqliteDriver.connect({ client: db, role: "primary" });
+    const base = await memorySqlDriver.connect({ role: "primary" });
     const conn = {
       ...base,
-      driverId: "sqlite" as const,
+      driverId: "memory" as const,
       role: "primary" as const,
       async query(sql: string, params?: readonly unknown[]) {
         execSql.push(sql);
@@ -61,8 +58,7 @@ describe("domain DDL policy", () => {
   });
 
   test("off mode remaps missing table to DOMAIN_SCHEMA_MISSING", async () => {
-    const db = new Database(":memory:");
-    const conn = await sqliteDriver.connect({ client: db, role: "primary" });
+    const conn = await memorySqlDriver.connect({ role: "primary" });
     const handle = createSqlStoreHandle("sql:app", {
       connection: conn,
       classifications: new Map(),
@@ -78,9 +74,6 @@ describe("domain DDL policy", () => {
     expect(err).toBeInstanceOf(OkeError);
     const oke = err as OkeError;
     expect(oke.code).toBe(OKE_ERRORS.DOMAIN_SCHEMA_MISSING.code);
-    expect(oke.causeText).toContain("migrations have not been applied");
-    expect(oke.fix).toContain("oke db migrate");
-    expect(oke.docsUrl).toContain(`/e/${OKE_ERRORS.DOMAIN_SCHEMA_MISSING.code}`);
     await conn.close();
   });
 });

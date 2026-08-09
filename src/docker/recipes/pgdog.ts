@@ -3,9 +3,13 @@
  *
  * Sits in front of the `postgres` recipe. Transaction pooling is set
  * explicitly (`pooler_mode = "transaction"` — also PgDog's upstream default).
- * Config shape matches upstream docs: `pgdog.toml` + `users.toml`
+ * Config shape matches upstream docs under `pgdog/`:
+ * `pgdog/pgdog.toml` + `pgdog/users.toml`
  * (https://docs.pgdog.dev/configuration/).
  */
+
+/** Relative directory for generated PgDog TOML (under the compose dir). */
+export const PGDOG_CONFIG_DIR = "pgdog";
 
 import type { ImageRecipe } from "../types.ts";
 
@@ -66,7 +70,10 @@ export const pgdog: ImageRecipe = {
   port: 6432,
   match: (i) => /pgdog/i.test(i),
   apply: () => ({
-    volumes: ["./pgdog.toml:/pgdog/pgdog.toml:ro", "./users.toml:/pgdog/users.toml:ro"],
+    volumes: [
+      `./${PGDOG_CONFIG_DIR}/pgdog.toml:/pgdog/pgdog.toml:ro`,
+      `./${PGDOG_CONFIG_DIR}/users.toml:/pgdog/users.toml:ro`,
+    ],
     dependsOn: {
       [PGDOG_BACKEND_SERVICE]: { condition: "service_healthy" },
     },

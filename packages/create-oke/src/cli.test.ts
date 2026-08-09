@@ -35,22 +35,15 @@ import {
   toCreateDefaults,
   writeCreateDefaults,
 } from "./create-defaults.ts";
-import { pinsDockerReady, pinsLocalOnly, recommendedDefaults } from "./drivers-catalog.ts";
+import { pinsDockerReady, recommendedDefaults } from "./drivers-catalog.ts";
 import { listTemplateFiles, scaffold, targetDirectoryBlockReason } from "./scaffold.ts";
-import {
-  DEFAULT_TEMPLATE,
-  TEMPLATE_DEFAULT_MODE,
-  TEMPLATES,
-  packageRoot,
-  resolveTemplateDir,
-} from "./templates.ts";
+import { DEFAULT_TEMPLATE, TEMPLATES, packageRoot, resolveTemplateDir } from "./templates.ts";
 import {
   applyCreateAnswers,
   sanitizeProjectName,
   shouldSkipTemplatePath,
   transformConfigForSqlDriver,
   transformPackageJson,
-  transformSchemaForSqlDriver,
 } from "./transform.ts";
 
 describe("defaultsBranchOptions", () => {
@@ -80,12 +73,12 @@ describe("parseArgs", () => {
     expect(parseArgs(["x", "--template", "standard"]).templateExplicit).toBe(true);
   });
 
-  test("accepts --sql sqlite|postgres", () => {
-    expect(parseArgs(["x"]).sqlDriver).toBe("sqlite");
+  test("accepts --sql postgres (sqlite removed)", () => {
+    expect(parseArgs(["x"]).sqlDriver).toBe("postgres");
     expect(parseArgs(["x"]).sqlDriverExplicit).toBe(false);
     expect(parseArgs(["x", "--sql", "postgres"]).sqlDriver).toBe("postgres");
-    expect(parseArgs(["x", "--sql=sqlite"]).sqlDriver).toBe("sqlite");
     expect(parseArgs(["x", "--sql", "postgres"]).sqlDriverExplicit).toBe(true);
+    expect(() => parseArgs(["x", "--sql=sqlite"])).toThrow(/sql/);
   });
 
   test("rejects unknown template, option, and sql", () => {
@@ -124,6 +117,19 @@ describe("parseArgs flags", () => {
     expect(parseArgs(["x"]).agentsMd).toBe(true);
   });
 
+  test("accepts --locales ar,fr", () => {
+    expect(parseArgs(["x", "--locales", "ar,fr"]).locales).toEqual(["ar", "fr"]);
+    expect(parseArgs(["x", "--locales=ar"]).locales).toEqual(["ar"]);
+    expect(parseArgs(["x"]).locales).toEqual([]);
+  });
+
+  test("accepts --pgdog / --no-pgdog", () => {
+    expect(parseArgs(["x", "--pgdog"]).pgdog).toBe(true);
+    expect(parseArgs(["x", "--no-pgdog"]).pgdog).toBe(false);
+    expect(parseArgs(["x"]).pgdog).toBeUndefined();
+    expect(() => parseArgs(["x", "--pgdog", "--no-pgdog"])).toThrow(/pgdog/);
+  });
+
   test("rejects --install with --no-install", () => {
     expect(() => parseArgs(["x", "--install", "--no-install"])).toThrow(/install/);
   });
@@ -146,6 +152,8 @@ function recommendedAnswers(overrides: Partial<InteractiveAnswers> = {}): Intera
     agentsMd: true,
     createDefaults: undefined,
     aiApply: null,
+    locales: [],
+    pgdog: false,
     ...overrides,
   };
 }
@@ -165,8 +173,8 @@ describe("scaffoldArgsFromAnswers ≡ flag-driven", () => {
     }
   });
 
-  test("interactive never opts into --sql postgres without override", () => {
-    expect(scaffoldArgsFromAnswers(recommendedAnswers()).sqlDriver).toBe("sqlite");
+  test("interactive defaults to postgres SQL", () => {
+    expect(scaffoldArgsFromAnswers(recommendedAnswers()).sqlDriver).toBe("postgres");
     expect(
       scaffoldArgsFromCli(parseArgs(["x", "--template", "standard", "--sql", "postgres"]))
         .sqlDriver,
@@ -206,22 +214,20 @@ describe("wizard ← Back", () => {
 });
 
 describe("aiSetupProviderFor", () => {
-  test("prefers ollama when docker is ollama even if local is mock", () => {
+  test("prefers ollama when prod/dev is ollama even if menu is mock", () => {
     expect(
       aiSetupProviderFor("mock", {
-        local: "mock",
-        docker: "ollama",
+        dev: "mock",
         test: "mock",
         prod: "ollama",
       }),
     ).toBe("ollama");
   });
 
-  test("keeps local ollama", () => {
+  test("keeps menu ollama", () => {
     expect(
       aiSetupProviderFor("ollama", {
-        local: "ollama",
-        docker: "anthropic",
+        dev: "ollama",
         test: "mock",
         prod: "anthropic",
       }),
@@ -230,7 +236,7 @@ describe("aiSetupProviderFor", () => {
 });
 
 describe("interactive branches", () => {
-  test("recommended → no createDefaults, no AI setup", async () => {
+  test("recommended → no createDefaults, Docker-first pins, no .oke/mode", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oke-rec-"));
     rmSync(dir, { recursive: true, force: true });
     try {
@@ -241,15 +247,17 @@ describe("interactive branches", () => {
       });
       expect(code).toBe(0);
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
-      expect(config).toContain('local: "sqlite"');
-      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("local");
+      expect(config).toMatch(/vault:\s*\{\s*dev: "vault"/);
+      expect(config).not.toMatch(/^\s*sql:\s*\{/m);
+      expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
+      expect(existsSync(join(dir, "docker", "docker-compose.yml"))).toBe(true);
       expect(existsSync(join(dir, "src", "flows", "notes", "index.ts"))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test("recommended advanced → docker mode + advanced Notes flows", async () => {
+  test("recommended advanced → advanced Notes flows + compose", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oke-rec-adv-"));
     rmSync(dir, { recursive: true, force: true });
     try {
@@ -259,10 +267,13 @@ describe("interactive branches", () => {
         ask: async () => recommendedAnswers({ name: dir, choice: "advanced" }),
       });
       expect(code).toBe(0);
-      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("docker");
+      expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
       const notes = readFileSync(join(dir, "src", "flows", "notes", "index.ts"), "utf8");
       expect(notes).toContain('flow("notes.digest"');
       expect(notes).toContain('flow("notes.attach"');
+      expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toMatch(
+        /index:\s*\{\s*test:\s*"memory",\s*prod:\s*"meilisearch"/,
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -271,7 +282,7 @@ describe("interactive branches", () => {
   test("reuse previous settings round-trip", async () => {
     const home = mkdtempSync(join(tmpdir(), "oke-reuse-"));
     const path = createDefaultsPath(home);
-    const base = recommendedDefaults("local-only");
+    const base = recommendedDefaults("docker-ready");
     const saved = {
       ...base,
       drivers: {
@@ -279,9 +290,8 @@ describe("interactive branches", () => {
         store: {
           ...base.drivers.store,
           sql: {
-            local: "libsql",
-            docker: "postgres",
-            test: "memory",
+            dev: "postgres",
+            test: "pglite",
             prod: "postgres",
           },
         },
@@ -305,7 +315,7 @@ describe("interactive branches", () => {
       });
       expect(code).toBe(0);
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
-      expect(config).toContain('local: "libsql"');
+      expect(config).toMatch(/vault:\s*\{\s*dev: "vault"/);
       const templateConfig = readFileSync(
         join(resolveTemplateDir("standard"), "oke.config.ts"),
         "utf8",
@@ -322,21 +332,23 @@ describe("interactive branches", () => {
     const path = createDefaultsPath(home);
     const customized = toCreateDefaults({
       template: "standard",
-      profile: "local-only",
+      profile: "docker-ready",
       drivers: {
         store: {
-          sql: pinsLocalOnly("pglite", "postgres", "memory"),
-          kv: pinsLocalOnly("memory", "redis", "memory"),
-          files: pinsLocalOnly("fs", "s3", "memory"),
+          sql: pinsDockerReady("postgres", "pglite"),
+          kv: pinsDockerReady("redis", "memory"),
+          files: pinsDockerReady("s3", "memory"),
           index: null,
         },
-        signal: pinsLocalOnly("memory", "redis", "memory"),
-        clock: pinsLocalOnly("memory", "file", "frozen"),
-        vault: pinsLocalOnly("env", "openbao", "memory"),
-        channel: { email: pinsLocalOnly("console", "smtp", "console") },
+        signal: pinsDockerReady("redis", "memory"),
+        clock: pinsDockerReady("postgres", "frozen"),
+        vault: pinsDockerReady("vault", "memory"),
+        channel: { email: pinsDockerReady("smtp", "console") },
         ai: null,
       },
       ai: { enabled: false, provider: null, driver: null },
+      locales: [],
+      pgdog: false,
     });
 
     const dir = mkdtempSync(join(tmpdir(), "oke-custom-app-"));
@@ -357,51 +369,13 @@ describe("interactive branches", () => {
       });
       expect(code).toBe(0);
       expect(existsSync(path)).toBe(true);
-      expect(readCreateDefaults(path)?.drivers.store.sql.local).toBe("pglite");
-      expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toContain('local: "pglite"');
-      // local-only profile → seed oke dev mode so the prompt is not repeated.
-      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("local");
+      expect(readCreateDefaults(path)?.drivers.store.sql.dev).toBe("postgres");
+      expect(readFileSync(join(dir, "oke.config.ts"), "utf8")).toMatch(
+        /vault:\s*\{\s*dev: "vault"/,
+      );
+      expect(existsSync(join(dir, ".oke", "mode"))).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("docker-ready profile seeds .oke/mode as docker", async () => {
-    const customized = toCreateDefaults({
-      template: "advanced",
-      profile: "docker-ready",
-      drivers: {
-        store: {
-          sql: pinsDockerReady("sqlite", "postgres", "memory"),
-          kv: pinsLocalOnly("memory", "redis", "memory"),
-          files: pinsLocalOnly("fs", "s3", "memory"),
-          index: null,
-        },
-        signal: pinsLocalOnly("memory", "redis", "memory"),
-        clock: pinsLocalOnly("memory", "file", "frozen"),
-        vault: pinsLocalOnly("env", "openbao", "memory"),
-        channel: { email: pinsLocalOnly("console", "smtp", "console") },
-        ai: null,
-      },
-      ai: { enabled: false, provider: null, driver: null },
-    });
-    const dir = mkdtempSync(join(tmpdir(), "oke-docker-mode-"));
-    rmSync(dir, { recursive: true, force: true });
-    try {
-      const code = await run([dir], {
-        stdinIsTTY: true,
-        runPostScaffold: false,
-        ask: async () =>
-          recommendedAnswers({
-            name: dir,
-            createDefaults: customized,
-            aiApply: null,
-          }),
-      });
-      expect(code).toBe(0);
-      expect(readFileSync(join(dir, ".oke", "mode"), "utf8").trim()).toBe("docker");
-    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -422,7 +396,7 @@ describe("interactive branches", () => {
       expect(code).toBe(0);
       expect(askCalled).toBe(false);
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
-      expect(config).toContain('local: "sqlite"');
+      expect(config).toMatch(/vault:\s*\{\s*dev: "vault"/);
       expect(config).not.toMatch(/\bai:\s*\{/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -452,45 +426,25 @@ describe("transformPackageJson", () => {
   });
 });
 
-describe("transformSchemaForSqlDriver", () => {
-  const sqliteSchema = `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-export const pings = sqliteTable("pings", {});
-`;
-
-  test("postgres swaps dialect imports and table helper", () => {
-    const next = transformSchemaForSqlDriver(sqliteSchema, "postgres");
-    expect(next).toContain('from "drizzle-orm/pg-core"');
-    expect(next).toContain("pgTable(");
-    expect(next).not.toContain("sqliteTable");
-    expect(next).not.toContain("sqlite-core");
-  });
-
-  test("sqlite is idempotent on template sources", () => {
-    expect(transformSchemaForSqlDriver(sqliteSchema, "sqlite")).toBe(sqliteSchema);
-  });
-});
-
 describe("transformConfigForSqlDriver", () => {
   const config = `export default defineConfig({
   drivers: {
     store: {
       sql: {
-        local: "sqlite",
-        docker: "postgres",
-        test: "memory",
-        prod: "postgres",
+        dev: "memory",
+        test: "pglite",
+        prod: "memory",
       },
     },
   },
 });
 `;
 
-  test("postgres pins local/docker/prod and leaves test memory", () => {
+  test("postgres pins dev/prod and leaves test pglite", () => {
     const next = transformConfigForSqlDriver(config, "postgres");
-    expect(next).toContain('local: "postgres"');
-    expect(next).toContain('docker: "postgres"');
+    expect(next).toContain('dev: "postgres"');
     expect(next).toContain('prod: "postgres"');
-    expect(next).toContain('test: "memory"');
+    expect(next).toContain('test: "pglite"');
   });
 });
 
@@ -517,28 +471,30 @@ describe("formatCdPath", () => {
 });
 
 describe("scaffold structure", () => {
-  test("each clean template produces its source tree (minus skips)", () => {
+  test("each clean template produces its source tree (minus skips)", async () => {
     for (const id of TEMPLATES) {
       const dir = mkdtempSync(join(tmpdir(), `create-oke-${id}-`));
       try {
         const templateDir = resolveTemplateDir(id);
         const expected = listTemplateFiles(templateDir);
-        const result = scaffold({
+        const result = await scaffold({
           targetDir: join(dir, id),
           name: `app-${id}`,
           source: { kind: "template", id },
         });
-        const extras = ["AGENTS.md", ".oke/mode"];
+        const extras = ["AGENTS.md"];
         if (expected.includes(".env.example")) extras.push(".env.local");
-        expect([...result.files].sort()).toEqual([...expected, ...extras].sort());
-        expect(readFileSync(join(result.targetDir, ".oke", "mode"), "utf8").trim()).toBe(
-          TEMPLATE_DEFAULT_MODE[id],
-        );
+        const composeExtras = result.files.filter((f) => f.startsWith("docker/"));
+        expect(composeExtras.length).toBeGreaterThan(0);
+        expect(result.files).toContain("docker/docker-compose.yml");
+        expect(existsSync(join(result.targetDir, ".oke", "mode"))).toBe(false);
+        for (const f of expected) expect(result.files).toContain(f);
+        for (const f of extras) expect(result.files).toContain(f);
         expect(result.files).toContain(".gitignore");
         expect(result.files).toContain("README.md");
         expect(result.files).toContain(".github/workflows/ci.yml");
         expect(result.files).toContain("tsconfig.json");
-        expect(result.sqlDriver).toBe("sqlite");
+        expect(result.sqlDriver).toBe("postgres");
         expect(readFileSync(join(result.targetDir, "AGENTS.md"), "utf8")).toMatch(
           /one law|on\(Trigger\)/i,
         );
@@ -548,7 +504,10 @@ describe("scaffold structure", () => {
         expect(readme).toMatch(/notes\.(create|attach|digest)|main\.health/);
         expect(readme).toMatch(/scaffold|Included vs you build/i);
         expect(readme).toMatch(/\.github\/workflows\/ci\.yml/);
-        expect(readFileSync(join(result.targetDir, ".gitignore"), "utf8")).toMatch(/node_modules/);
+        const gitignore = readFileSync(join(result.targetDir, ".gitignore"), "utf8");
+        expect(gitignore).toMatch(/node_modules/);
+        expect(gitignore).toMatch(/\.env\.docker/);
+        expect(gitignore).not.toMatch(/^\/docker\/compose\.yml$/m);
         const ciYml = readFileSync(join(result.targetDir, ".github/workflows/ci.yml"), "utf8");
         expect(() => Bun.YAML.parse(ciYml)).not.toThrow();
         const ci = Bun.YAML.parse(ciYml) as {
@@ -564,43 +523,53 @@ describe("scaffold structure", () => {
         const appTs = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
         expect(appTs).not.toMatch(/Object\.assign/);
         expect(appTs).not.toMatch(/env:\s*["']test["']/);
-        // stores/secrets/signals/channel.templates auto-register — the
-        // minimal `oke({ name: "notes" })` shape carries no explicit arrays.
         expect(appTs).not.toMatch(/stores:\s*\[/);
         expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']\s*\}\)/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string };
           scripts: { typecheck?: string; test?: string };
-          devDependencies: { typescript?: string };
+          devDependencies: {
+            typescript?: string;
+            "@electric-sql/pglite"?: string;
+            "@electric-sql/pglite-pgvector"?: string;
+          };
         };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
         expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
-        expect(pkg.scripts.test).toBe("bun test");
+        expect(pkg.scripts.test).toBe("oke test");
         expect(pkg.devDependencies.typescript).toBeTruthy();
+        expect(pkg.devDependencies["@electric-sql/pglite"]).toBe("^0.5.4");
+        expect(pkg.devDependencies["@electric-sql/pglite-pgvector"]).toBe("^0.0.5");
+        const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
+        expect(drizzle).toContain('dialect: "postgresql"');
+        expect(drizzle).toContain("DATABASE_URL");
+        expect(drizzle).toContain("OKE_STORE_SQL_URL");
+        expect(drizzle).not.toContain("OKE_SQLITE_URL");
+        expect(drizzle).toContain(".oke/schema/oke.ts");
+        expect(existsSync(join(result.targetDir, ".oke/schema/oke.ts"))).toBe(true);
+        const sqlYml = readFileSync(join(result.targetDir, "docker/docker-compose.yml"), "utf8");
+        expect(sqlYml).toMatch(/healthcheck/);
+        expect(sqlYml).toMatch(/pg_isready/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     }
   });
 
-  test("standard has Notes layout (gates/vault/channels + notes flows)", () => {
+  test("standard has Notes layout (core.ts + notes flows)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-standard-assert-"));
     try {
-      const result = scaffold({
+      const result = await scaffold({
         targetDir: join(dir, "standard"),
         name: "standard-app",
         source: { kind: "template", id: "standard" },
       });
       for (const path of [
-        "src/core/gates.ts",
-        "src/core/vault.ts",
-        "src/core/channels.ts",
-        "src/core/store.ts",
-        "src/core/index.ts",
+        "src/core.ts",
         "src/locales/en.ts",
-        "src/locales/ar.ts",
+        "src/locales/index.ts",
         "src/flows/main/shapes.ts",
         "src/flows/main/signals.ts",
         "src/flows/notes/index.ts",
@@ -614,6 +583,19 @@ describe("scaffold structure", () => {
       const notes = readFileSync(join(result.targetDir, "src/flows/notes/index.ts"), "utf8");
       expect(notes).toContain('flow("notes.create"');
       expect(notes).not.toContain('flow("notes.digest"');
+      expect(existsSync(join(result.targetDir, "src/locales/ar.ts"))).toBe(false);
+      expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).toContain(
+        'locales: ["en"]',
+      );
+      expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).not.toMatch(
+        /^\s*pgdog:\s*"/m,
+      );
+      const appTsStandard = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
+      expect(appTsStandard).toContain('import "@/core"');
+      expect(appTsStandard).not.toContain('import "@/locales/');
+      expect(readFileSync(join(result.targetDir, "src/core.ts"), "utf8")).toContain(
+        'import "@/locales"',
+      );
       const all = result.files
         .filter((f) => f.endsWith(".ts") || f.endsWith(".md"))
         .map((f) => readFileSync(join(result.targetDir, f), "utf8"))
@@ -624,38 +606,96 @@ describe("scaffold structure", () => {
     }
   });
 
-  test("--sql postgres pins store.sql (abstract schema stays dialect-agnostic)", () => {
+  test("locales ar,fr adds catalogs and keeps en default", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-locales-"));
+    try {
+      const result = await scaffold({
+        targetDir: join(dir, "i18n-app"),
+        name: "i18n-app",
+        source: { kind: "template", id: "standard" },
+        locales: ["ar", "fr"],
+      });
+      expect(result.locales).toEqual(["ar", "fr"]);
+      expect(existsSync(join(result.targetDir, "src/locales/ar.ts"))).toBe(true);
+      expect(existsSync(join(result.targetDir, "src/locales/fr.ts"))).toBe(true);
+      const config = readFileSync(join(result.targetDir, "oke.config.ts"), "utf8");
+      expect(config).toContain('"ar"');
+      expect(config).toContain('"fr"');
+      expect(config).toContain('"ar": "rtl"');
+      const app = readFileSync(join(result.targetDir, "src/app.ts"), "utf8");
+      expect(app).toContain('import "@/core"');
+      expect(app).not.toContain('import "@/locales/');
+      const localesIndex = readFileSync(join(result.targetDir, "src/locales/index.ts"), "utf8");
+      expect(localesIndex).toContain('import "./en";');
+      expect(localesIndex).toContain('import "./ar";');
+      expect(localesIndex).toContain('import "./fr";');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("pgdog opt-in pins images.pgdog and compose service", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-pgdog-"));
+    try {
+      const off = await scaffold({
+        targetDir: join(dir, "no-pool"),
+        name: "no-pool",
+        source: { kind: "template", id: "standard" },
+        pgdog: false,
+      });
+      expect(off.pgdog).toBe(false);
+      expect(readFileSync(join(off.targetDir, "oke.config.ts"), "utf8")).not.toMatch(
+        /^\s*pgdog:\s*"/m,
+      );
+
+      const on = await scaffold({
+        targetDir: join(dir, "with-pool"),
+        name: "with-pool",
+        source: { kind: "template", id: "standard" },
+        pgdog: true,
+      });
+      expect(on.pgdog).toBe(true);
+      const config = readFileSync(join(on.targetDir, "oke.config.ts"), "utf8");
+      expect(config).toMatch(/pgdog:\s*"ghcr\.io\/pgdogdev\/pgdog:/);
+      const compose = readFileSync(join(on.targetDir, "docker/docker-compose.yml"), "utf8");
+      expect(compose).toContain("pgdog:");
+      expect(existsSync(join(on.targetDir, "docker/pgdog/pgdog.toml"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("--sql postgres pins store.sql (abstract schema stays dialect-agnostic)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-sql-pg-"));
     try {
-      const result = scaffold({
+      const result = await scaffold({
         targetDir: join(dir, "pg-app"),
         name: "pg-app",
         source: { kind: "template", id: "standard" },
         sqlDriver: "postgres",
       });
       expect(result.sqlDriver).toBe("postgres");
-      // Abstract decl is dialect-agnostic — emit picks pgTable at sync time.
       const decl = readFileSync(join(result.targetDir, "src/db/schema.decl.ts"), "utf8");
       expect(decl).toContain("store.schema.table(");
       expect(decl).not.toContain("sqliteTable");
       expect(decl).not.toContain("pgTable");
       const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
-      expect(drizzle).toContain("OKE_DRIZZLE_DIALECT");
-      expect(drizzle).toContain("schema.generated.ts");
+      expect(drizzle).toContain('dialect: "postgresql"');
+      expect(drizzle).toContain("schema.drizzle.ts");
+      expect(drizzle).toContain(".oke/schema/oke.ts");
       const config = readFileSync(join(result.targetDir, "oke.config.ts"), "utf8");
-      expect(config).toMatch(/sql:\s*\{[\s\S]*local:\s*"postgres"/);
-      expect(config).toMatch(/sql:\s*\{[\s\S]*docker:\s*"postgres"/);
-      expect(config).toMatch(/sql:\s*\{[\s\S]*prod:\s*"postgres"/);
-      expect(config).toMatch(/sql:\s*\{[\s\S]*test:\s*"memory"/);
+      // postgres is DRIVER_DEFAULTS — sparse templates omit the sql map entirely.
+      expect(config).not.toMatch(/^\s*sql:\s*\{/m);
+      expect(config).toMatch(/vault:\s*\{\s*dev: "vault"/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test("--no-agents-md skips AGENTS.md", () => {
+  test("--no-agents-md skips AGENTS.md", async () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-no-agents-"));
     try {
-      const result = scaffold({
+      const result = await scaffold({
         targetDir: join(dir, "standard"),
         name: "no-agents",
         source: { kind: "template", id: "standard" },
@@ -742,7 +782,6 @@ describe("non-TTY CLI", () => {
     const err = await new Response(proc.stderr).text();
     expect(code).toBe(1);
     expect(err).toMatch(/missing <name>/);
-    // Clack intro / select chrome must not appear.
     expect(out + err).not.toMatch(/Project name|Start from a worked example/);
     expect(out + err).not.toMatch(/│/);
   });
@@ -765,7 +804,9 @@ describe("non-TTY CLI", () => {
         label: "standard",
         okengineDependency: "x",
         files: [],
-        sqlDriver: "sqlite" as const,
+        sqlDriver: "postgres" as const,
+        locales: [],
+        pgdog: false,
       };
       expect(nextStepsText(result)).toContain("oke dev");
       expect(nextStepsText(result)).toContain("bun install");

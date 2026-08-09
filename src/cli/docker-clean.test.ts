@@ -8,7 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { composeProjectName, type DockerRunner } from "../docker/cleanup.ts";
 import { dockerCli } from "./docker.ts";
-import { dockerCleanHelp, parseDockerCleanArgs, runDockerClean } from "./docker-clean.ts";
+import {
+  dockerCleanHelp,
+  parseDockerCleanArgs,
+  runDockerClean,
+  selectionEntries,
+} from "./docker-clean.ts";
 import { EXIT_OK, EXIT_USAGE } from "./exit.ts";
 import { formatOkeHelp, flagTokensFor, OKE_COMMANDS } from "./registry.ts";
 
@@ -175,5 +180,32 @@ describe("oke docker clean", () => {
     expect(flagTokensFor(docker, "clean")).toContain("--yes");
     expect(flagTokensFor(docker, "clean")).toContain("--all");
     expect(formatOkeHelp()).toContain("clean");
+  });
+
+  test("selectionEntries is one row per project (not per container)", () => {
+    const entries = selectionEntries([
+      {
+        project: "oke-dev-aaaaaa",
+        containers: [
+          {
+            id: "1",
+            name: "oke-dev-aaaaaa-redis-1",
+            service: "redis",
+            state: "running",
+            project: "oke-dev-aaaaaa",
+          },
+          {
+            id: "2",
+            name: "oke-dev-aaaaaa-postgres-1",
+            service: "postgres",
+            state: "running",
+            project: "oke-dev-aaaaaa",
+          },
+        ],
+      },
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.label).toBe("oke-dev-aaaaaa");
+    expect(entries[0]?.hint).toContain("2 container");
   });
 });

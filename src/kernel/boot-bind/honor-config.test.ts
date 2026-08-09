@@ -37,11 +37,11 @@ describe("boot binders honour drivers.* config", () => {
     process.env.APP_NAME = "honor-config";
     try {
       const result = await bootApplication({
-        env: "local",
+        env: "test",
         secrets: [vault.config("APP_NAME", { description: "app" })],
         config: {
           drivers: {
-            vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
+            vault: { test: "env" },
           },
         },
       });
@@ -58,21 +58,17 @@ describe("boot binders honour drivers.* config", () => {
     }
   });
 
-  test("vault: drivers.vault openbao with credentials selects openbao layer", () => {
-    process.env.OKE_VAULT_URL = "http://127.0.0.1:8200";
-    process.env.OKE_VAULT_TOKEN = "test-token";
+  test("vault: drivers.vault vault selects built-in layer behind env", () => {
     const chain = buildVaultBootChain({
-      driverId: "openbao",
-      env: "local",
-      missingOpenbao: "throw",
+      driverId: "vault",
+      env: "test",
     });
-    expect(chain.map((l) => l.driver.id)).toContain("openbao");
+    expect(chain.map((l) => l.driver.id)).toContain("vault");
     expect(chain.map((l) => l.driver.id)).toContain("env");
   });
 
-  test("vault: openbao without credentials fails loud in prod", async () => {
-    delete process.env.OKE_VAULT_URL;
-    delete process.env.OKE_VAULT_TOKEN;
+  test("vault: unknown driver id fails loud at boot", async () => {
+    const removed = ["open", "bao"].join("");
     await expect(
       bootApplication({
         env: "prod",
@@ -80,21 +76,23 @@ describe("boot binders honour drivers.* config", () => {
         vault: { allowDevFallbacks: true },
         config: {
           drivers: {
-            vault: { prod: "openbao" },
+            vault: { prod: removed },
           },
         },
       }),
-    ).rejects.toThrow(/openbao.*OKE_VAULT_URL/);
+    ).rejects.toThrow(/unknown vault driver/);
   });
 
   test("clock: drivers.clock memory binds memory CronStore", async () => {
+    // `test` env always forces frozen — pin under `dev` to honour memory.
     const result = await bootApplication({
-      env: "local",
+      env: "dev",
       startScheduler: false,
       clocks: [clock("tick", { every: "1h" })],
       config: {
         drivers: {
-          clock: { local: "memory", docker: "file", test: "frozen", prod: "file" },
+          clock: { dev: "memory" },
+          store: { sql: { dev: "memory" }, kv: { dev: "memory" } },
         },
       },
     });
@@ -110,12 +108,13 @@ describe("boot binders honour drivers.* config", () => {
     tmp = await mkdtemp(join(tmpdir(), "oke-clock-file-"));
     process.chdir(tmp);
     const result = await bootApplication({
-      env: "local",
+      env: "dev",
       startScheduler: false,
       clocks: [clock("tick", { every: "1h" })],
       config: {
         drivers: {
-          clock: { local: "file", docker: "file", test: "frozen", prod: "file" },
+          clock: { dev: "file" },
+          store: { sql: { dev: "memory" }, kv: { dev: "memory" } },
         },
       },
     });
@@ -135,12 +134,13 @@ describe("boot binders honour drivers.* config", () => {
     try {
       await expect(
         bootApplication({
-          env: "local",
+          env: "dev",
           startScheduler: false,
           clocks: [clock("tick", { every: "1h" })],
           config: {
             drivers: {
-              clock: { local: "postgres" },
+              clock: { dev: "postgres" },
+              store: { sql: { dev: "memory" }, kv: { dev: "memory" } },
             },
           },
         }),
@@ -155,7 +155,7 @@ describe("boot binders honour drivers.* config", () => {
 
   test("journal: durable flow binds memory journal by default", async () => {
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       startScheduler: false,
       flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
     });
@@ -170,7 +170,7 @@ describe("boot binders honour drivers.* config", () => {
 
   test("journal: no durable flow → no journal runtime", async () => {
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       startScheduler: false,
       flows: [flow("plain", { do: () => ({ ok: true }) })],
     });
@@ -185,12 +185,12 @@ describe("boot binders honour drivers.* config", () => {
     tmp = await mkdtemp(join(tmpdir(), "oke-journal-file-"));
     process.chdir(tmp);
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       startScheduler: false,
       flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
       config: {
         drivers: {
-          journal: { local: "file", docker: "postgres", test: "memory", prod: "postgres" },
+          journal: { test: "file" },
         },
       },
     });
@@ -209,12 +209,12 @@ describe("boot binders honour drivers.* config", () => {
     try {
       await expect(
         bootApplication({
-          env: "local",
+          env: "test",
           startScheduler: false,
           flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
           config: {
             drivers: {
-              journal: { local: "postgres" },
+              journal: { test: "postgres" },
             },
           },
         }),
@@ -230,12 +230,12 @@ describe("boot binders honour drivers.* config", () => {
   test("journal: unknown driver fails loud", async () => {
     await expect(
       bootApplication({
-        env: "local",
+        env: "test",
         startScheduler: false,
         flows: [flow("charge", { durable: true, do: () => ({ ok: true }) })],
         config: {
           drivers: {
-            journal: { local: "neon" },
+            journal: { test: "neon" },
           },
         },
       }),
@@ -245,13 +245,13 @@ describe("boot binders honour drivers.* config", () => {
   test("gate: drivers.store.kv redis opens redis-backed oke:gates", async () => {
     const fake = createRedisFakeClient();
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       gates: [gate.rate({ max: 10, per: "1m" })],
       clients: { kv: fake },
       config: {
         drivers: {
           store: {
-            kv: { local: "redis", docker: "redis", prod: "redis" },
+            kv: { test: "redis", dev: "redis", prod: "redis" },
           },
         },
       },
@@ -268,12 +268,12 @@ describe("boot binders honour drivers.* config", () => {
     delete process.env.OKE_STORE_KV_URL;
     await expect(
       bootApplication({
-        env: "local",
+        env: "test",
         gates: [gate.rate({ max: 10, per: "1m" })],
         config: {
           drivers: {
             store: {
-              kv: { local: "redis", docker: "redis", prod: "redis" },
+              kv: { test: "redis", dev: "redis", prod: "redis" },
             },
           },
         },
@@ -283,12 +283,12 @@ describe("boot binders honour drivers.* config", () => {
 
   test("gate: drivers.store.kv memory keeps memory oke:gates", async () => {
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       gates: [gate.rate({ max: 10, per: "1m" })],
       config: {
         drivers: {
           store: {
-            kv: { local: "memory", docker: "redis", prod: "redis" },
+            kv: { dev: "redis", test: "memory", prod: "redis" },
           },
         },
       },
@@ -302,11 +302,11 @@ describe("boot binders honour drivers.* config", () => {
 
   test("signal: drivers.signal memory binds memory", async () => {
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       signals: [signal("ping", { delivery: "once" })],
       config: {
         drivers: {
-          signal: { local: "memory", docker: "redis", prod: "redis" },
+          signal: { dev: "redis", test: "memory", prod: "redis" },
         },
       },
     });
@@ -320,12 +320,12 @@ describe("boot binders honour drivers.* config", () => {
   test("signal: drivers.signal redis binds redis", async () => {
     const fake = createSignalRedisFake();
     const result = await bootApplication({
-      env: "local",
+      env: "test",
       signals: [signal("ping", { delivery: "once" })],
       clients: { signalRedis: fake },
       config: {
         drivers: {
-          signal: { local: "redis", docker: "redis", prod: "redis" },
+          signal: { test: "redis", dev: "redis", prod: "redis" },
         },
       },
     });
@@ -339,11 +339,11 @@ describe("boot binders honour drivers.* config", () => {
   test("signal: drivers.signal postgres fails loud (never silent memory)", async () => {
     await expect(
       bootApplication({
-        env: "local",
+        env: "test",
         signals: [signal("ping", { delivery: "once" })],
         config: {
           drivers: {
-            signal: { local: "postgres" },
+            signal: { test: "postgres" },
           },
         },
       }),
@@ -353,11 +353,11 @@ describe("boot binders honour drivers.* config", () => {
   test("signal: drivers.signal nats fails loud", async () => {
     await expect(
       bootApplication({
-        env: "local",
+        env: "test",
         signals: [signal("ping", { delivery: "once" })],
         config: {
           drivers: {
-            signal: { local: "nats" },
+            signal: { test: "nats" },
           },
         },
       }),

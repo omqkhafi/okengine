@@ -66,8 +66,6 @@ export {
   memoryDrivers,
 } from "./memory.ts";
 
-export { sqliteDriver, connectSqlite } from "./sqlite.ts";
-
 export {
   postgresDriver,
   connectPostgres,
@@ -86,8 +84,6 @@ export { s3Driver, openS3Bucket, createS3FakeClient } from "./s3.ts";
 
 export { pgvectorDriver, openPgvectorIndex } from "./pgvector.ts";
 
-export { libsqlDriver, connectLibsql, libsqlIndexDriver, openLibsqlIndex } from "./libsql.ts";
-
 export {
   meilisearchDriver,
   openMeilisearchIndex,
@@ -95,7 +91,12 @@ export {
   type MeilisearchIndexOptions,
 } from "./meilisearch.ts";
 
-export { pgliteDriver, connectPglite } from "./pglite.ts";
+export {
+  pgliteDriver,
+  connectPglite,
+  PGLITE_DEFAULT_DATADIR,
+  resolvePgliteDataDir,
+} from "./pglite.ts";
 
 export { memorySignalDriver, openMemorySignal } from "./signal-memory.ts";
 
@@ -139,8 +140,24 @@ export type { VaultDriverId, VaultOpenOptions, VaultBag, VaultDriver } from "./v
 
 export { memoryVaultDriver } from "./vault-memory.ts";
 export { envVaultDriver } from "./vault-env.ts";
-export { openbaoVaultDriver, OpenBaoUnavailableError } from "./vault-openbao.ts";
-export { managedVaultDriver } from "./vault-managed.ts";
+export {
+  builtinVaultDriver,
+  openBuiltinVaultAdapter,
+  VAULT_MASTER_KEY_ENV,
+  type OpenBuiltinVaultOptions,
+  type OpenedBuiltinVault,
+} from "./vault-builtin.ts";
+export {
+  managedVaultDriver,
+  createManagedVaultBag,
+  type ManagedVaultOptions,
+  type ManagedVaultProviderId,
+} from "./vault-managed.ts";
+export {
+  openAwsSecretsManagerBag,
+  type AwsSecretsManagerClient,
+  type OpenAwsSecretsManagerOptions,
+} from "./vault-aws-secrets-manager.ts";
 
 export type {
   ChannelDriverId,

@@ -58,23 +58,23 @@ describe("bindChannel driver resolution", () => {
     config: {
       drivers: {
         channel: {
-          email: { local: "console", docker: "smtp", test: "console", prod: "sndr" },
-          sms: { local: "console", docker: "taqnyat", test: "msegat", prod: "taqnyat" },
+          email: { dev: "smtp", test: "console", prod: "sndr" },
+          sms: { dev: "taqnyat", test: "msegat", prod: "taqnyat" },
         },
       },
     },
   };
 
   test("uses console locally and smtp in docker", () => {
-    expect(resolveEmailDriverId(options, "local", false)).toBe("console");
-    expect(resolveEmailDriverId(options, "docker", true)).toBe("smtp");
+    expect(resolveEmailDriverId(options, "test", false)).toBe("console");
+    expect(resolveEmailDriverId(options, "dev", true)).toBe("smtp");
     expect(resolveEmailDriverId(options, "prod", false)).toBe("sndr");
   });
 
   test("resolves sms driver ids", () => {
-    expect(resolveSmsDriverId(options, "local")).toBe("console");
-    expect(resolveSmsDriverId(options, "docker")).toBe("taqnyat");
     expect(resolveSmsDriverId(options, "test")).toBe("msegat");
+    expect(resolveSmsDriverId(options, "dev")).toBe("taqnyat");
+    expect(resolveSmsDriverId(options, "prod")).toBe("taqnyat");
   });
 
   test("parses SMTP_URL and optional auth overrides", () => {

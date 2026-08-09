@@ -1,5 +1,9 @@
 /**
- * `oke schema generate` — core + auth + plugin tables → `schema/oke.ts`.
+ * `oke schema generate` — core + auth + plugin tables → `.oke/schema/oke.ts`.
+ *
+ * Domain Drizzle lives under `src/db/` (`oke db …`). This file is the
+ * generated system/stub catalogue — kept under `.oke/` so it never lands
+ * at the project root next to app source.
  */
 
 import { createHash } from "node:crypto";
@@ -15,10 +19,16 @@ import type { Manifest } from "../manifest/types.ts";
 import { loadManifest } from "./load-config.ts";
 
 /** Fingerprint file written beside generated schema. */
-export const SCHEMA_FINGERPRINT_FILE = "schema/.oke-schema.sha256";
+export const SCHEMA_FINGERPRINT_FILE = ".oke/schema/.oke-schema.sha256";
 
-/** Default generated schema path. */
-export const SCHEMA_OUT = "schema/oke.ts";
+/** Default generated system schema path (under `.oke/`, not project root). */
+export const SCHEMA_OUT = ".oke/schema/oke.ts";
+
+/** Pre-0.10.4 path — still read for doctor / --check soft-compat. */
+export const LEGACY_SCHEMA_OUT = "schema/oke.ts";
+
+/** Pre-0.10.4 fingerprint path. */
+export const LEGACY_SCHEMA_FINGERPRINT_FILE = "schema/.oke-schema.sha256";
 
 /** Options for {@link runSchemaGenerate}. */
 export interface SchemaGenerateOptions {
@@ -36,7 +46,7 @@ export interface SchemaGenerateOptions {
 }
 
 /**
- * Generate `schema/oke.ts` from Manifest store tables + core auth columns.
+ * Generate `.oke/schema/oke.ts` from Manifest store tables + core auth columns.
  *
  * @param options - Manifest / check flag
  */
@@ -60,6 +70,11 @@ export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Pr
     "oke_crons",
     "oke_signal_config",
     "oke_console_prefs",
+    "oke_vault_secrets",
+    "oke_vault_keys",
+    "oke_vault_audit",
+    "oke_vault_master",
+    "oke_vault_status",
     ...(options.extraTables ?? []),
   ]);
   if (authSchema) {
@@ -85,13 +100,31 @@ export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Pr
   }
 
   const source = emitSchemaSource([...tables].sort(), authSchema);
-  const out = resolve(cwd, options.out ?? SCHEMA_OUT);
+  const outRel = options.out ?? SCHEMA_OUT;
+  const out = resolve(cwd, outRel);
   const fp = hashSource(source);
+  const fpRel = options.out
+    ? `${dirname(outRel)}/.oke-schema.sha256`.replace(/^\.\//, "")
+    : SCHEMA_FINGERPRINT_FILE;
 
   if (options.check) {
     const existing = Bun.file(out);
     if (!(await existing.exists())) {
-      write("oke schema generate --check: schema/oke.ts missing\n");
+      // Soft-compat: accept a correct legacy root `schema/oke.ts` during migrate.
+      if (!options.out) {
+        const legacy = Bun.file(resolve(cwd, LEGACY_SCHEMA_OUT));
+        if (await legacy.exists()) {
+          if (hashSource(await legacy.text()) === fp) {
+            write(
+              "oke schema generate --check: ok (legacy schema/oke.ts — re-run without --check to move under .oke/schema/)\n",
+            );
+            return 0;
+          }
+          write("oke schema generate --check: schema drift\n");
+          return 1;
+        }
+      }
+      write(`oke schema generate --check: ${outRel} missing\n`);
       return 1;
     }
     const current = await existing.text();
@@ -105,7 +138,7 @@ export async function runSchemaGenerate(options: SchemaGenerateOptions = {}): Pr
 
   await mkdir(dirname(out), { recursive: true });
   await Bun.write(out, source);
-  await Bun.write(resolve(cwd, SCHEMA_FINGERPRINT_FILE), `${fp}\n`);
+  await Bun.write(resolve(cwd, fpRel), `${fp}\n`);
   write(`oke schema generate: wrote ${out} (${tables.size} table(s))\n`);
   return 0;
 }
@@ -128,6 +161,11 @@ export async function schemaFingerprint(cwd: string, manifest?: Manifest): Promi
     "oke_crons",
     "oke_signal_config",
     "oke_console_prefs",
+    "oke_vault_secrets",
+    "oke_vault_keys",
+    "oke_vault_audit",
+    "oke_vault_master",
+    "oke_vault_status",
     ...authSchema.tableNames,
   ]);
   if (m?.stores) {
@@ -141,16 +179,24 @@ export async function schemaFingerprint(cwd: string, manifest?: Manifest): Promi
 /**
  * Read the on-disk schema fingerprint, if any.
  *
+ * Prefers `.oke/schema/`, then legacy root `schema/`.
+ *
  * @param cwd - Project root
  */
 export async function readSchemaFingerprint(cwd: string): Promise<string | null> {
-  const fpFile = Bun.file(resolve(cwd, SCHEMA_FINGERPRINT_FILE));
-  if (await fpFile.exists()) {
-    return (await fpFile.text()).trim();
+  for (const rel of [SCHEMA_FINGERPRINT_FILE, LEGACY_SCHEMA_FINGERPRINT_FILE] as const) {
+    const fpFile = Bun.file(resolve(cwd, rel));
+    if (await fpFile.exists()) {
+      return (await fpFile.text()).trim();
+    }
   }
-  const schema = Bun.file(resolve(cwd, SCHEMA_OUT));
-  if (!(await schema.exists())) return null;
-  return hashSource(await schema.text());
+  for (const rel of [SCHEMA_OUT, LEGACY_SCHEMA_OUT] as const) {
+    const schema = Bun.file(resolve(cwd, rel));
+    if (await schema.exists()) {
+      return hashSource(await schema.text());
+    }
+  }
+  return null;
 }
 
 /**
@@ -173,9 +219,11 @@ export async function schemaCli(args: readonly string[]): Promise<number> {
     else if (a === "--manifest" || a === "-m") manifestPath = rest[++i];
     else if (a === "--out" || a === "-o") out = rest[++i];
     else if (a === "--help" || a === "-h") {
-      console.log(`oke schema generate [--check|-c] [--out|-o schema/oke.ts]
+      console.log(`oke schema generate [--check|-c] [--out|-o .oke/schema/oke.ts]
 
-Emit core auth columns + Manifest store tables. Use --check in CI to fail on drift.
+Emit core auth columns + Manifest store tables into \`.oke/schema/oke.ts\`
+(system stubs — not domain Drizzle under src/db/). Use --check in CI to fail on drift.
+Re-run after adding plugins / auth tables so the stub catalogue stays current.
 `);
       return 0;
     }
@@ -211,6 +259,7 @@ export function emitSchemaSource(
   return `/**
  * Generated by \`oke schema generate\` — do not edit.
  * Core Gate auth tables + Manifest store tables.
+ * Path: \`.oke/schema/oke.ts\` (system stubs; domain schema lives under \`src/db/\`).
  */
 
 ${decls}

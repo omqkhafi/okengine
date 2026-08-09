@@ -20,11 +20,10 @@ import {
 
 describe("mergeEnvDriverMap", () => {
   test("an unset key keeps the real default, not a sibling key's value", () => {
-    const merged = mergeEnvDriverMap({ local: "pglite" }, STORE_SQL_DEFAULTS);
+    const merged = mergeEnvDriverMap({ test: "pglite" }, STORE_SQL_DEFAULTS);
     expect(merged).toEqual({
-      local: "pglite",
-      docker: "postgres",
-      test: "memory",
+      dev: "postgres",
+      test: "pglite",
       prod: "postgres",
     });
   });
@@ -34,28 +33,27 @@ describe("mergeEnvDriverMap", () => {
   });
 
   test("a fully-specified override wins on every key", () => {
-    const override = { local: "a", docker: "b", test: "c", prod: "d" };
+    const override = { dev: "a", test: "b", prod: "c" };
     expect(mergeEnvDriverMap(override, STORE_SQL_DEFAULTS)).toEqual(override);
   });
 });
 
-describe("resolveEffectiveDrivers — the drivers.store.sql.local discussion scenario", () => {
-  test("`{ store: { sql: { local: 'pglite' } } }` resolves sql to the real map, pglite only on local", () => {
+describe("resolveEffectiveDrivers", () => {
+  test("`{ store: { sql: { test: 'pglite' } } }` keeps postgres on dev/prod", () => {
     const effective = resolveEffectiveDrivers({
-      store: { sql: { local: "pglite" } },
+      store: { sql: { test: "pglite" } },
     });
 
     expect(effective.store.sql).toEqual({
-      local: "pglite",
-      docker: "postgres",
-      test: "memory",
+      dev: "postgres",
+      test: "pglite",
       prod: "postgres",
     });
   });
 
   test("every other driver stays at its full, real, untouched default map", () => {
     const effective = resolveEffectiveDrivers({
-      store: { sql: { local: "pglite" } },
+      store: { sql: { test: "pglite" } },
     });
 
     expect(effective.store.kv).toEqual(STORE_KV_DEFAULTS);
@@ -70,34 +68,29 @@ describe("resolveEffectiveDrivers — the drivers.store.sql.local discussion sce
 
   test("overriding one driver's map has zero effect on a sibling driver's defaults", () => {
     const effective = resolveEffectiveDrivers({
-      store: { kv: { local: "redis" } },
+      store: { kv: { dev: "redis" } },
     });
 
-    // The overridden driver (kv) reflects the override on its one set key.
     expect(effective.store.kv).toEqual({
-      local: "redis",
-      docker: "redis",
+      dev: "redis",
       test: "memory",
       prod: "redis",
     });
-    // sql / files (same element, different facet) stay fully at real defaults.
     expect(effective.store.sql).toEqual(STORE_SQL_DEFAULTS);
     expect(effective.store.files).toEqual(STORE_FILES_DEFAULTS);
-    // Unrelated elements stay fully at real defaults too.
     expect(effective.signal).toEqual(SIGNAL_DEFAULTS);
     expect(effective.vault).toEqual(VAULT_DEFAULTS);
   });
 
-  test("overriding one env key leaves the other three at real defaults for that driver", () => {
+  test("overriding one env key leaves the other two at real defaults for that driver", () => {
     const effective = resolveEffectiveDrivers({
-      vault: { local: "keychain" },
+      vault: { dev: "keychain" },
     });
 
     expect(effective.vault).toEqual({
-      local: "keychain",
-      docker: "env",
+      dev: "keychain",
       test: "memory",
-      prod: "env",
+      prod: "vault",
     });
   });
 

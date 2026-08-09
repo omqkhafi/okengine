@@ -22,41 +22,41 @@ async function tempDir(): Promise<string> {
 }
 
 describe("sqlDialectForEnv", () => {
-  test("local → sqlite, docker → postgresql", async () => {
+  test("test → postgresql (pglite), dev → postgresql", async () => {
     const config = {
       drivers: {
-        store: { sql: { local: "sqlite", docker: "postgres", prod: "postgres", test: "memory" } },
+        store: { sql: { dev: "postgres", test: "pglite", prod: "postgres" } },
       },
     } as never;
-    expect(sqlDialectForEnv(config, "local").dialect).toBe("sqlite");
-    expect(sqlDialectForEnv(config, "docker").dialect).toBe("postgresql");
+    expect(sqlDialectForEnv(config, "test").dialect).toBe("postgresql");
+    expect(sqlDialectForEnv(config, "dev").dialect).toBe("postgresql");
   });
 
-  test("missing config → sqlite default", () => {
-    expect(sqlDialectForEnv(null, "local").dialect).toBe("sqlite");
+  test("missing config → postgresql default", () => {
+    expect(sqlDialectForEnv(null, "test").dialect).toBe("postgresql");
   });
 });
 
 describe("syncDevSchema", () => {
-  test("local: ensures drizzle config, emits, pushes with env", async () => {
+  test("test: ensures drizzle config, emits, pushes with env", async () => {
     const dir = await tempDir();
     const calls: { cwd: string; env: ConfigEnv }[] = [];
-    const result = await syncDevSchema(dir, "local", {
+    const result = await syncDevSchema(dir, "test", {
       write: () => {},
       pushFn: async (cwd, env) => {
         calls.push({ cwd, env });
         return 0;
       },
     });
-    expect(result.dialect).toBe("sqlite");
+    expect(result.dialect).toBe("postgresql");
     expect(result.pushed).toBe(true);
-    expect(calls).toEqual([{ cwd: dir, env: "local" }]);
+    expect(calls).toEqual([{ cwd: dir, env: "test" }]);
     expect(await Bun.file(join(dir, "drizzle.config.ts")).exists()).toBe(true);
   });
 
   test("push failure surfaces code without throwing", async () => {
     const dir = await tempDir();
-    const result = await syncDevSchema(dir, "local", {
+    const result = await syncDevSchema(dir, "test", {
       write: () => {},
       pushFn: async () => 1,
     });

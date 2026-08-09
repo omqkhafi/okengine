@@ -55,7 +55,7 @@ def cache_dir() -> str:
 
 
 def parse_model(model: str) -> tuple[str, str]:
-    raw = model.strip() or "smollm2"
+    raw = model.strip() or "granite3.3:2b"
     if "/" not in raw.split(":", 1)[0]:
         raw = f"ai/{raw}"
     if ":" in raw:
@@ -187,7 +187,7 @@ def hub_pull(repo: str, tag: str, dest: str) -> None:
 def ensure_model(model: str) -> str:
     repo, tag = parse_model(model)
     # llama download -dr expects id without forced ai/ prefix when using default org.
-    dr = model.strip() or "smollm2"
+    dr = model.strip() or "granite3.3:2b"
     if dr.startswith("ai/"):
         dr = dr[3:]
     dest = os.path.join(cache_dir(), expected_gguf(repo, tag))
@@ -219,7 +219,7 @@ def ensure_model(model: str) -> str:
 
 
 def main() -> None:
-    model = (os.environ.get("OKE_AI_MODEL") or "smollm2").strip() or "smollm2"
+    model = (os.environ.get("OKE_AI_MODEL") or "granite3.3:2b").strip() or "granite3.3:2b"
     gguf = ensure_model(model)
     # Without an explicit --ctx-size, llama-server defaults to the model's
     # full native training context (32K-256K+ for many current models). The
@@ -259,7 +259,7 @@ export const llamaCpp: ImageRecipe = {
   match: (i) => /llama\.cpp|llamacpp/i.test(i),
   apply: (s) => ({
     // OKE_AI_MODEL comes from compose `env_file` (`.env.docker`). Do not
-    // re-declare it as `${OKE_AI_MODEL:-smollm2}` here — Compose interpolates
+    // re-declare it as `${OKE_AI_MODEL:-granite3.3:2b}` here — Compose interpolates
     // that from the *host* shell and can override the stack file with the
     // default. Never set LLAMA_ARG_MODELS_PRESET / LLAMA_ARG_DOCKER_REPO
     // (router children inherit `LLAMA_ARG_*` and can OOM).

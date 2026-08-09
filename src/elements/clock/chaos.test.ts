@@ -87,7 +87,10 @@ describe("chaos — multi-process leader election", () => {
     const markerPath = join(dir, "held.json");
     const fireLogPath = join(dir, "fires.jsonl");
     const leaseMs = 120;
-    const tickSlackMs = 250;
+    // Shared-runner / loaded laptops routinely miss a 50ms tick; keep this a
+    // loose upper bound (not a product SLA) so SIGKILL takeover still proves
+    // lease physics without flaking on scheduling noise.
+    const tickSlackMs = 500;
     try {
       const leader = Bun.spawn({
         cmd: ["bun", childPath, "hold-lease", storePath, "leader", markerPath, String(leaseMs)],

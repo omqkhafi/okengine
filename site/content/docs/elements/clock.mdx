@@ -124,7 +124,7 @@ reclaimed after its lease expires and continues at the next unfinished step.
 
 **Leader election needs a shared store.** The default in-memory CronStore is per process. Multi-replica
 exclusivity holds when every instance opens the same durable CronStore — `postgres` (SKIP LOCKED +
-lease reclaim, docker/prod default) or `file` (shared volume, single-host / local).
+lease reclaim, `dev`/`prod` default) or `file` (shared volume, single-host).
 
 **Catch-up example:** an hourly clock down for five hours reports `missedRuns: 5` and
 `catchUp: "one"`, then a single tick runs the handler once.
@@ -141,16 +141,16 @@ Detection attaches `dstAmbiguity` on the cron row and the Console shows it. `oke
 
 ```typescript title="oke.config.ts"
 drivers: {
-  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
+  clock: { dev: "postgres", test: "frozen", prod: "postgres" },
 },
 ```
 
-| Driver     | Behavior                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------- |
-| `memory`   | In-process CronStore + timers — single process; lost on exit                                   |
-| `postgres` | Postgres CronStore (`oke_crons`) — multi-host leader election via SKIP LOCKED + lease reclaim  |
-| `file`     | On-disk CronStore (`.oke/crons.json`) — multi-process on a shared volume (local / single-host) |
-| `frozen`   | Deterministic test clock — time advances only when the test says so                            |
+| Driver     | Behavior                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `memory`   | In-process CronStore + timers — single process; lost on exit                                  |
+| `postgres` | Postgres CronStore (`oke_crons`) — multi-host leader election via SKIP LOCKED + lease reclaim |
+| `file`     | On-disk CronStore (`.oke/crons.json`) — multi-process on a shared volume (single-host)        |
+| `frozen`   | Deterministic test clock — time advances only when the test says so                           |
 
 `frozen` is why the no-`Date.now()` rule pays off: tests inject time travel through `fx.clock` and every flow obeys it automatically.
 

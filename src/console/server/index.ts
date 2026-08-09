@@ -72,9 +72,12 @@ export {
   type ClaimVerifyResult,
 } from "./claim.ts";
 export {
+  CONSOLE_PG_SCHEMA,
+  consoleTable,
   openConsolePersistence,
   resolveConsoleSecret,
   type ConsolePersistence,
+  type OpenConsolePersistenceOptions,
 } from "./operator-db.ts";
 export { createConsoleBindings } from "./flows.ts";
 export { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";

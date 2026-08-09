@@ -18,6 +18,7 @@
 import { afterEach } from "bun:test";
 import {
   channelTemplateRegistry,
+  requiredEnvRegistry,
   secretRegistry,
   signalRegistry,
   storeRegistry,
@@ -26,6 +27,7 @@ import {
 afterEach(() => {
   storeRegistry.length = 0;
   secretRegistry.length = 0;
+  requiredEnvRegistry.length = 0;
   signalRegistry.length = 0;
   channelTemplateRegistry.length = 0;
 });

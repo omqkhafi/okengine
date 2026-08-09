@@ -1,12 +1,12 @@
 /**
- * `okengine` public entry — kernel surface used by apps and examples.
+ * `okengine` public entry — ten exports + HTTP runtime essentials.
  *
- * Full ten-export surface lands as elements ship; this entry exposes the
- * executable core (oke · on · flow · http · fx · contracts).
+ * Heavy surfaces live on subpaths: `okengine/full`, `okengine/runs`,
+ * `okengine/i18n`, `okengine/compiler`, `okengine/journal`, `okengine/http`.
  *
  * @example
  * ```ts
- * import { oke, on, flow, http } from "okengine";
+ * import { oke, on, flow, http, gate } from "okengine";
  *
  * export const app = oke({ name: "notes" });
  * ```
@@ -14,52 +14,28 @@
  * @module
  */
 
+export { oke, type OkeApp, type OkeOptions, type ReadyState } from "./kernel/app.ts";
+export { on, type Binding } from "./kernel/on.ts";
+export { flow, isFlow, type FlowDef } from "./kernel/flow.ts";
+export { http, every, internal, table } from "./kernel/triggers.ts";
+export { fail, type FlowFailure, type FlowErrorValue } from "./kernel/errors.ts";
+export { isFlowFailure } from "./kernel/hooks.ts";
+export { plugin, isPlugin, type PluginDef, type PluginCapabilities } from "./kernel/plugin.ts";
+export type { Fx, FxPrincipal, StepOptions } from "./kernel/fx.ts";
+
 export {
-  oke,
-  on,
-  flow,
-  http,
-  every,
-  internal,
-  table,
-  fail,
-  createFx,
-  isFlow,
-  isFlowFailure,
-  plugin,
-  isPlugin,
-  bootApplication,
-  mintCapabilities,
-  gateDenialFailure,
-  journey,
-  unit,
-  rateLimit,
-  Redacted,
-  isRedacted,
-  maskRedactedDeep,
-  REDACTED_PLACEHOLDER,
-  PluginNeedsError,
-  assertPluginNeeds,
-  freezePrincipal,
-  installGracefulShutdown,
-  releaseInstanceLeases,
-  type OkeApp,
-  type OkeOptions,
-  type ReadyState,
-  type FlowDef,
-  type FlowFailure,
-  type FlowErrorValue,
-  type Fx,
-  type FxPrincipal,
-  type Binding,
-  type PluginDef,
-  type PluginCapabilities,
-  type BootOptions,
-  type BootResult,
-  type ElementRuntimes,
-  type JourneyDecl,
-  type UnitBag,
-} from "./kernel/index.ts";
+  defineLocale,
+  defineMessages,
+  flattenMessages,
+  getMessageCatalogs,
+  matchConfiguredLocale,
+  translate,
+  type MessageCatalog,
+  type MessageCatalogs,
+} from "./i18n/messages.ts";
+export type { AppMessageKey, MessageTree, MessageValues, MessagesFor } from "./i18n/types.ts";
+export { runWithLocale, type LocaleContext } from "./i18n/locale-context.ts";
+export { isRtlLocale, parseAcceptLanguage, resolveLocale } from "./elements/channel/locale.ts";
 
 export {
   store,
@@ -111,20 +87,16 @@ export {
 export {
   gate,
   GATE_PUBLIC_NAME,
-  GateBootError,
-  assertHttpGatePosture,
-  createGateRuntime,
-  resolveGateConfig,
-  takeRate,
-  deriveModuleActions,
-  ALL_RATE_STRATEGIES,
   type GateDecl,
-  type GateOptions,
-  type GatePostureGap,
-  type GateRuntime,
   type RateOptions,
+} from "./elements/gate/declare.ts";
+export {
+  resolveGateConfig,
+  type GateOptions,
   type ResolvedGateConfig,
-} from "./elements/gate.ts";
+} from "./elements/gate/config.ts";
+export { GateBootError, assertHttpGatePosture, type GatePostureGap } from "./elements/gate/boot.ts";
+export { DEFAULT_RATE_STRATEGY, ALL_RATE_STRATEGIES } from "./elements/gate/constants.ts";
 
 export {
   vault,
@@ -133,6 +105,9 @@ export {
   createVaultRuntime,
   VaultBootError,
   SECRET_MASK,
+  listRequiredEnvNames,
+  resetRequiredEnvNames,
+  type VaultEnvApi,
   type VaultSecretDecl,
   type VaultRuntime,
 } from "./elements/vault.ts";
@@ -162,94 +137,9 @@ export {
 } from "./elements/ai.ts";
 
 export {
-  createJournal,
-  createMemoryJournalStore,
-  createFileJournalStore,
-  hasJournalLease,
-  isJournalLeaseBusy,
-  JournalLeaseBusy,
-  JOURNAL_DEFAULT_LEASE_MS,
-  type Journal,
-  type JournalLeaseOptions,
-  type JournalLeaseStore,
-  type JournalStore,
-  type JournalRun,
-} from "./kernel/journal.ts";
-
-export {
-  validate,
-  isStandardSchema,
-  fromTypeBox,
-  VALIDATION_ERROR_CODE,
-  type StandardSchemaV1,
-  type SchemaInput,
-  type ValidationErrorData,
-} from "./validation/index.ts";
-
-export {
-  compileAot,
-  compileDynamic,
-  compileRoute,
-  sucrose,
-  type CompiledRoute,
-  type ContextInference,
-} from "./compiler/index.ts";
-
-export {
-  defineLocale,
-  defineMessages,
-  flattenMessages,
-  formatMessage,
-  getMessageCatalogs,
-  interpolateMessage,
-  isRtlLocale,
-  matchConfiguredLocale,
-  parseAcceptLanguage,
-  resolveFailureMessage,
-  resolveLocale,
-  runWithLocale,
-  translate,
-  type AppMessageKey,
-  type FlattenKeys,
-  type LocaleContext,
-  type MessageCatalog,
-  type MessageCatalogs,
-  type MessageTree,
-  type MessageValue,
-  type MessageValues,
-  type MessagesFor,
-  type Register,
-} from "./i18n/index.ts";
-
-export {
   createBunRuntime,
   createWebStandardRuntime,
   APP_PORT,
-  CONSOLE_PORT,
-  MCP_PORT,
   type Runtime,
   type ServeOptions,
 } from "./runtime/index.ts";
-export {
-  createRunsRuntime,
-  collectWideEvent,
-  createRunTelemetry,
-  explainOutliers,
-  seedOutlierDataset,
-  privacyErase,
-  createMemorySubjectKeys,
-  subjectKeysFromVault,
-  archiveFields,
-  revealArchived,
-  eraseSubject,
-  SHREDDED,
-  filesRunsDriver,
-  memoryRunsDriver,
-  postgresRunsDriver,
-  clickhouseRunsDriver,
-  type RunsRuntime,
-  type WideEvent,
-  type CreateRunsRuntimeOptions,
-  type OutlierFinding,
-  type SubjectKeyVault,
-} from "./runs/index.ts";

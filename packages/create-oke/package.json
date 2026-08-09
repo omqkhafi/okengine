@@ -1,6 +1,6 @@
 {
   "name": "create-oke",
-  "version": "0.10.3",
+  "version": "0.11.0",
   "description": "Scaffold an okengine app — bunx create-oke@latest <name>",
   "license": "MIT",
   "repository": {
@@ -22,7 +22,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test src"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0"

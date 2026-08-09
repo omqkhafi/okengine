@@ -33,7 +33,7 @@ images: {
 ### Bring the stack up
 
 ```bash
-oke dev --docker
+oke dev
 ```
 
 `oke docker` injects `YSQL_USER` / `YSQL_PASSWORD` / `YSQL_DB` from `OKE_STORE_SQL_*`
@@ -105,7 +105,7 @@ Receiver or remap that port in `compose.override.yml` if you need the UI.
 <Accordion title="password authentication failed">
 
 `YSQL_PASSWORD` must match `DATABASE_URL`. Regenerate `docker/.env.docker` with
-`oke dev --docker`. Auth is off only when `YSQL_PASSWORD` is unset — this recipe
+`oke dev`. Auth is off only when `YSQL_PASSWORD` is unset — this recipe
 always sets it.
 
 </Accordion>

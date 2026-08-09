@@ -1,19 +1,19 @@
 /**
- * Four compose override layers ending in an untouched `compose.override.yml`.
+ * Compose artefact emission — three production-grade layouts:
  *
- * 1. `compose.yml`            — app + network (generated)
- * 2. `compose.<role>.yml`     — per-role services (generated)
- * 3. `compose.prod.yml`       — prod overlays (generated when `--prod`)
- * 4. `compose.override.yml`   — user-owned; oke never writes it
+ * - `single` (default) → `docker-compose.yml`
+ * - `split` → `compose.yml` + `compose.<role>.yml` (+ `compose.prod.yml` when prod)
+ * - `stack` → `docker-stack.yml` (Swarm `docker stack deploy -c`)
  *
- * Also emits {@link COMPOSE_ALL} — layers 1–3 deep-merged into one file
- * (for Swarm `stack deploy -c` and single-file preferrers). Not part of the
- * `-f` merge order; never includes layer 4.
+ * User-owned overrides (`docker-compose.override.yml` / `compose.override.yml`)
+ * are listed in {@link emitComposeLayers}'s `composeFiles` but never written.
  */
 
-import { defaultHostPort, envPrefix, serviceNameFor, toYaml } from "./helpers.ts";
+import { composeToYaml, defaultHostPort, envPrefix, serviceNameFor } from "./helpers.ts";
 import { recipeFor } from "./recipes/index.ts";
+import { allocateServiceResources, mergeDeployResources, type ServerBudget } from "./resources.ts";
 import type {
+  ComposeLayout,
   DeriveOptions,
   GeneratedFile,
   ImageRecipe,
@@ -25,14 +25,26 @@ import { generateCredentials } from "./credentials.ts";
 import { extraHostPortForInstance, hostPortForInstance, STACK_CONTROL_KEYS } from "./stack-id.ts";
 import { APP_PORT } from "../runtime/types.ts";
 
-/** Canonical layer-4 filename — never written by derivation. */
+/** Default single-file compose artefact. */
+export const DOCKER_COMPOSE = "docker-compose.yml";
+
+/** User-owned override beside {@link DOCKER_COMPOSE} — never written by oke. */
+export const DOCKER_COMPOSE_OVERRIDE = "docker-compose.override.yml";
+
+/** Swarm stack artefact (`docker stack deploy -c`). */
+export const DOCKER_STACK = "docker-stack.yml";
+
+/** Split-layout base layer. */
+export const COMPOSE_BASE = "compose.yml";
+
+/** Split-layout user override — never written by derivation. */
 export const COMPOSE_OVERRIDE = "compose.override.yml";
 
 /**
- * Fully merged compose (layers 1–3) — additive single-file alternative.
- * Does not replace or shadow the base {@code compose.yml} layer.
+ * @deprecated Prefer {@link DOCKER_COMPOSE} or {@link DOCKER_STACK}. Kept as an
+ * alias of {@link DOCKER_COMPOSE} for soft-compat with older tests / docs.
  */
-export const COMPOSE_ALL = "compose.all.yml";
+export const COMPOSE_ALL = DOCKER_COMPOSE;
 
 /**
  * Relative path refs for compose files living under {@link DeriveOptions.composeDir}.
@@ -80,7 +92,7 @@ export function buildSpecs(options: DeriveOptions): ServiceSpec[] {
 }
 
 /**
- * Emit compose layers 1–3 (+ Dockerfile companion handled elsewhere).
+ * Emit compose artefacts for the chosen {@link ComposeLayout}.
  *
  * @param specs - Normalised services
  * @param options - Derive options
@@ -93,15 +105,18 @@ export function emitComposeLayers(
   const appPort = options.appPort ?? APP_PORT;
   const app = options.app ?? "app";
   const includeApp = options.includeApp !== false;
+  const layout: ComposeLayout = options.layout ?? "single";
   const paths = composePathRefs(options.composeDir ?? DEFAULT_DOCKER_DIR);
   const files: GeneratedFile[] = [];
-  /** Layers 1–3 as objects — same merge Compose would apply via `-f` order. */
+  /** Layers as objects — same merge Compose would apply via `-f` order. */
   const mergeLayers: Record<string, unknown>[] = [];
 
   // Layer 1 — project name + network (+ optional app for deploy / oke docker)
   const base: Record<string, unknown> = {
     name: `oke-${app}`,
-    networks: { oke: { driver: "bridge" } },
+    networks: {
+      oke: { driver: layout === "stack" ? "overlay" : "bridge" },
+    },
   };
   if (includeApp) {
     // `image` + `build`: local compose builds and tags; Swarm stack deploy
@@ -113,10 +128,14 @@ export function emitComposeLayers(
     base.services = {
       app: {
         image: `oke-${app}:latest`,
-        build: {
-          context: paths.buildContext,
-          dockerfile: paths.dockerfile,
-        },
+        ...(layout === "stack"
+          ? {}
+          : {
+              build: {
+                context: paths.buildContext,
+                dockerfile: paths.dockerfile,
+              },
+            }),
         ...(hasProxy ? {} : { ports: [`${appPort}:${appPort}`] }),
         env_file: [paths.envFile],
         depends_on: Object.fromEntries(
@@ -127,9 +146,9 @@ export function emitComposeLayers(
     };
   }
   mergeLayers.push(base);
-  files.push({ path: "compose.yml", content: `${toYaml(base)}\n` });
 
   // Layer 2 — per-role
+  const roleDocs: { readonly role: string; readonly doc: Record<string, unknown> }[] = [];
   for (const spec of specs) {
     const recipe = recipeFor(spec.image, recipes);
     const applied = recipe.apply(spec);
@@ -177,11 +196,11 @@ export function emitComposeLayers(
       doc.volumes = namedVolumes;
     }
     mergeLayers.push(doc);
-    const path = `compose.${spec.role}.yml`;
-    files.push({ path, content: `${toYaml(doc)}\n` });
+    roleDocs.push({ role: spec.role, doc });
   }
 
-  // Layer 3 — prod overlay (Swarm-aware deploy + app readiness healthcheck)
+  // Layer 3 — prod overlay (readiness + deploy policy; resources budgeted below)
+  let prodDoc: Record<string, unknown> | undefined;
   if (options.prod) {
     const prodServices: Record<string, unknown> = {};
     if (includeApp) {
@@ -218,9 +237,6 @@ export function emitComposeLayers(
             max_attempts: 3,
             window: "120s",
           },
-          resources: {
-            limits: { cpus: "1.0", memory: "512M" },
-          },
         },
         secrets: specs.flatMap((s) => secretNames(s)),
       };
@@ -228,37 +244,117 @@ export function emitComposeLayers(
     for (const spec of specs) {
       prodServices[spec.serviceName] = {
         deploy: {
-          resources: {
-            limits: { cpus: "1.0", memory: "512M" },
+          restart_policy: {
+            condition: "on-failure",
+            delay: "5s",
+            max_attempts: 3,
+            window: "120s",
           },
         },
         secrets: secretNames(spec),
       };
     }
-    const prodDoc = { services: prodServices };
+    prodDoc = { services: prodServices };
     mergeLayers.push(prodDoc);
-    files.push({
-      path: "compose.prod.yml",
-      content: `${toYaml(prodDoc)}\n`,
-    });
   }
 
-  // Additive single-file merge of layers 1–3 (not in `-f` order; no layer 4).
   const merged = mergeLayers.reduce<Record<string, unknown>>(
     (acc, layer) => deepMergeCompose(acc, layer),
     {},
   );
-  files.push({ path: COMPOSE_ALL, content: `${toYaml(merged)}\n` });
 
-  // Layer 4 — never written. Document merge order only.
-  const composeFiles = [
-    "compose.yml",
-    ...specs.map((s) => `compose.${s.role}.yml`),
-    ...(options.prod ? ["compose.prod.yml"] : []),
-    COMPOSE_OVERRIDE,
-  ];
+  if (options.prod) {
+    applyResourceBudget(merged, {
+      cpus: options.serverCpus,
+      memoryGb: options.serverMemoryGb,
+    });
+  }
 
-  return { files, composeFiles };
+  if (layout === "single") {
+    files.push({ path: DOCKER_COMPOSE, content: formatComposeYaml(merged) });
+    return {
+      files,
+      composeFiles: [DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE],
+    };
+  }
+
+  if (layout === "stack") {
+    files.push({ path: DOCKER_STACK, content: formatComposeYaml(merged) });
+    return {
+      files,
+      composeFiles: [DOCKER_STACK],
+    };
+  }
+
+  // split — layered files + optional prod overlay; override never written
+  files.push({ path: COMPOSE_BASE, content: formatComposeYaml(base) });
+  for (const { role, doc } of roleDocs) {
+    files.push({ path: `compose.${role}.yml`, content: formatComposeYaml(doc) });
+  }
+  if (prodDoc) {
+    // Re-emit prod overlay with budgeted resources so `-f` merge matches single.
+    const budgetedProd = budgetProdOverlay(prodDoc, merged);
+    files.push({
+      path: "compose.prod.yml",
+      content: formatComposeYaml(budgetedProd),
+    });
+  }
+  return {
+    files,
+    composeFiles: [
+      COMPOSE_BASE,
+      ...specs.map((s) => `compose.${s.role}.yml`),
+      ...(prodDoc ? ["compose.prod.yml"] : []),
+      COMPOSE_OVERRIDE,
+    ],
+  };
+}
+
+/**
+ * Write budgeted `deploy.resources` onto every service in a merged compose doc.
+ *
+ * @param doc - Merged compose document (mutated)
+ * @param budget - Host capacity
+ */
+function applyResourceBudget(doc: Record<string, unknown>, budget: Partial<ServerBudget>): void {
+  const services = doc.services;
+  if (!isPlainObject(services)) return;
+  const names = Object.keys(services);
+  const limits = allocateServiceResources(names, budget);
+  for (const name of names) {
+    const limit = limits.get(name);
+    if (!limit) continue;
+    const svc = services[name];
+    if (!isPlainObject(svc)) continue;
+    const existingDeploy = isPlainObject(svc.deploy) ? svc.deploy : undefined;
+    svc.deploy = mergeDeployResources(limit, existingDeploy);
+  }
+}
+
+/**
+ * Copy budgeted `deploy.resources` from the merged doc onto the prod overlay
+ * so split `-f` merges stay aligned with the single-file output.
+ *
+ * @param prodDoc - Prod overlay before budgeting
+ * @param merged - Fully merged (already budgeted) document
+ */
+function budgetProdOverlay(
+  prodDoc: Record<string, unknown>,
+  merged: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = deepMergeCompose({}, prodDoc);
+  const outServices = out.services;
+  const mergedServices = merged.services;
+  if (!isPlainObject(outServices) || !isPlainObject(mergedServices)) return out;
+  for (const [name, svc] of Object.entries(outServices)) {
+    if (!isPlainObject(svc)) continue;
+    const mergedSvc = mergedServices[name];
+    if (!isPlainObject(mergedSvc) || !isPlainObject(mergedSvc.deploy)) continue;
+    const mergedDeploy = mergedSvc.deploy;
+    const prevDeploy = isPlainObject(svc.deploy) ? svc.deploy : {};
+    svc.deploy = deepMergeCompose({ ...prevDeploy }, { ...mergedDeploy });
+  }
+  return out;
 }
 
 /**
@@ -359,15 +455,6 @@ export function buildStackEnv(
       env.SMTP_HOST = host;
       env.SMTP_PORT = String(spec.hostPort);
       if (uiHost !== undefined) env.MAILPIT_UI_URL = `http://${host}:${uiHost}`;
-    } else if (spec.role === "vault") {
-      // Token is minted by OpenBao bootstrap and preserved via stack controls —
-      // never a generated password here.
-      env[`${prefix}_URL`] = url;
-      env.OKE_VAULT_URL = url;
-      if (controls.OKE_VAULT_TOKEN) {
-        env.OKE_VAULT_TOKEN = controls.OKE_VAULT_TOKEN;
-        env.OKE_VAULT_MOUNT = controls.OKE_VAULT_MOUNT ?? "secret";
-      }
     } else if (spec.role === "store.index") {
       // Meilisearch: standalone HTTP URL + the generated master key.
       env[`${prefix}_URL`] = url;
@@ -419,10 +506,30 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "store.index": "store.index — search index",
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
-  vault: "vault — OpenBao",
   ai: "ai — local inference (llama.cpp / Ollama / vLLM / SGLang)",
   proxy: "proxy — TLS terminator (Caddy / Traefik)",
 };
+
+/**
+ * Serialise a compose mapping with section gaps and per-service comments.
+ *
+ * @param doc - Merged or layered compose document
+ */
+function formatComposeYaml(doc: Record<string, unknown>): string {
+  return composeToYaml(doc, { serviceComment: commentForComposeService });
+}
+
+/**
+ * Human-readable comment for a compose service key.
+ *
+ * @param serviceName - Compose service name (`store-sql`, `app`, …)
+ */
+function commentForComposeService(serviceName: string): string {
+  if (serviceName === "app") return "App — okengine runtime";
+  if (serviceName === "socket-proxy") return "Docker socket proxy (Traefik companion)";
+  const role = serviceName.replaceAll("-", ".");
+  return ROLE_SECTION_TITLE[role] ?? role;
+}
 
 /** Friendly aliases emitted beside their role block. */
 const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
@@ -454,7 +561,6 @@ const ROLE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   // OKE_AI_URL is already emitted as `${prefix}_URL` — do not alias it again.
   ai: ["OKE_AI_MODEL", "OKE_AI_CTX_SIZE"],
   proxy: ["OKE_PROXY_HOST", "OKE_PROXY_ACME_EMAIL"],
-  vault: ["OKE_VAULT_TOKEN", "OKE_VAULT_MOUNT"],
   "store.index": ["OKE_STORE_INDEX_KEY"],
 };
 
@@ -474,7 +580,7 @@ const ROLE_CONTROL_EXAMPLES: Readonly<Record<string, readonly string[]>> = {
   // OKE_AI_CTX_SIZE bounds the KV cache llama-server allocates at load —
   // left at the model's full native context (often 32K-256K+), a small
   // model's KV cache alone can OOM the container regardless of host RAM.
-  ai: ["OKE_AI_MODEL=smollm2", "OKE_AI_CTX_SIZE=4096"],
+  ai: ["OKE_AI_MODEL=granite3.3:2b", "OKE_AI_CTX_SIZE=4096"],
   proxy: ["OKE_PROXY_HOST=localhost", "OKE_PROXY_ACME_EMAIL=admin@example.com"],
 };
 
@@ -503,9 +609,6 @@ function roleFromEnvKey(key: string): string | undefined {
   if (key === "OKE_PROXY_URL" || key === "OKE_PROXY_HOST" || key === "OKE_PROXY_ACME_EMAIL") {
     return "proxy";
   }
-  if (key === "OKE_VAULT_TOKEN" || key === "OKE_VAULT_MOUNT" || key === "OKE_VAULT_URL") {
-    return "vault";
-  }
   if (key === "OKE_STORE_INDEX_KEY" || key === "OKE_STORE_INDEX_URL") return "store.index";
   return undefined;
 }
@@ -530,7 +633,7 @@ export function formatStackEnv(env: Readonly<Record<string, string>>): string {
     "# Vault resolution: process.env → .env.local → docker/.env.docker → driver",
     "#",
     "# Re-run `oke dev --docker` to regenerate. Put compose tweaks in",
-    "# compose.override.yml — never put secrets in YAML.",
+    "# docker-compose.override.yml (or compose.override.yml for --split) — never put secrets in YAML.",
     "",
   ];
 

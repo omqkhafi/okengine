@@ -1,10 +1,10 @@
 ---
 title: "Configuration"
-description: "Every option in oke.config.ts — drivers per environment, images, i18n, tenancy, privacy, db sync, topology, ports, and console."
+description: "Every option in oke.config.ts — three environments (dev · test · prod), drivers, images, i18n, tenancy, privacy, db sync, topology, ports, and console."
 icon: "Settings2"
 ---
 
-Complete reference for `oke.config.ts`. Every option below is verified against `defineConfig`; the four environment keys everywhere are `local` · `docker` · `test` · `prod`.
+Complete reference for `oke.config.ts`. Options below match `defineConfig`. Driver maps use three keys: **dev** · **test** · **prod**.
 
 ```typescript title="oke.config.ts"
 import { defineConfig } from "okengine/config";
@@ -14,38 +14,104 @@ export default defineConfig({
 });
 ```
 
-## drivers
+<Callout title="Philosophy">
+  We test on what we deploy. Local development runs the same stack as production via Docker. Tests
+  use PGLite for speed without sacrificing Postgres correctness.
+</Callout>
 
-Which backend each element talks to, per environment. A value is either a driver id string or a rich object:
+## Environments
+
+| Key    | When                       | Typical backends                                      |
+| ------ | -------------------------- | ----------------------------------------------------- |
+| `dev`  | `oke dev` (Docker Compose) | Same protocols as prod (Postgres, Redis, S3, SMTP, …) |
+| `test` | `oke test` / `bun test`    | PGLite for SQL; memory / frozen / console elsewhere   |
+| `prod` | Production deploy          | Shared durable backends                               |
+
+Missing `dev` pins fill from `prod` (`fillDevFromProd`). Only `dev` / `test` / `prod` keys are
+valid — see [Migrating environments](/docs/reference/migrating-environments) if you still have
+`local` / `docker` maps.
+
+## Quick start
+
+<Steps>
+
+<Step>
+### Pin drivers for three envs
+
+Pin **only the env keys that differ** from the built-in defaults — omitted keys
+keep `DRIVER_DEFAULTS`. create-oke templates ship that sparse shape:
+
+```typescript title="oke.config.ts"
+import { defineConfig } from "okengine/config";
+
+export default defineConfig({
+  drivers: {
+    // Default vault.dev is "env"; pin the built-in store for Docker-first apps.
+    vault: { dev: "vault" },
+  },
+});
+```
+
+</Step>
+
+<Step>
+### Or use a string shorthand
+
+A bare string (or `{ driver, … }` object) expands to all three envs:
 
 ```typescript
 drivers: {
-  store: {
-    sql: { local: "sqlite", docker: "postgres", test: "memory", prod: "postgres" },
-    kv: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
-    files: { local: "fs", docker: "s3", test: "memory", prod: "s3" },
-  },
-  signal: { local: "memory", docker: "redis", test: "memory", prod: "redis" },
-  clock: { local: "memory", docker: "postgres", test: "frozen", prod: "postgres" },
-  journal: { local: "memory", docker: "postgres", test: "memory", prod: "postgres" },
-  vault: { local: "env", docker: "openbao", test: "memory", prod: "openbao" },
-  channel: {
-    email: { local: "console", docker: "smtp", test: "console", prod: "smtp" },
-    sms: { local: "console", docker: "taqnyat", test: "console", prod: "taqnyat" },
-  },
+  signal: "redis", // → { dev: "redis", test: "redis", prod: "redis" }
 },
 ```
 
-| Key                | Shape          | Driver ids (verified)                                                        |
+Prefer an explicit `{ dev, test, prod }` map (or a partial override) when test
+should differ from the default for that driver.
+
+</Step>
+
+<Step>
+### Run and test
+
+```bash title="Terminal"
+oke dev    # Docker Compose + host Bun · drivers.dev
+oke test   # bun test · NODE_ENV=test · OKE_PGLITE_URL=memory://
+```
+
+</Step>
+
+</Steps>
+
+## Default driver maps
+
+Built-in defaults (`DRIVER_DEFAULTS`) when a key is omitted:
+
+| Map             | `dev`      | `test`    | `prod`     |
+| --------------- | ---------- | --------- | ---------- |
+| `store.sql`     | `postgres` | `pglite`  | `postgres` |
+| `store.kv`      | `redis`    | `memory`  | `redis`    |
+| `store.files`   | `s3`       | `memory`  | `s3`       |
+| `signal`        | `redis`    | `memory`  | `redis`    |
+| `clock`         | `postgres` | `frozen`  | `postgres` |
+| `journal`       | `postgres` | `memory`  | `postgres` |
+| `vault`         | `env`      | `memory`  | `vault`    |
+| `channel.email` | `smtp`     | `console` | `smtp`     |
+| `channel.sms`   | — (opt-in) | —         | —          |
+
+`store.index`, `channel.whatsapp` / `push`, and `ai` have no single three-env default table — set them explicitly when you need them. create-oke templates pin `vault.dev: "vault"` (built-in) because the default `dev` driver is `env`.
+
+## Driver keys and ids
+
+| Key                | Shape          | Driver ids                                                                   |
 | ------------------ | -------------- | ---------------------------------------------------------------------------- |
-| `store.sql`        | env driver map | `sqlite` · `postgres` · `libsql` · `pglite` · `memory`                       |
+| `store.sql`        | env driver map | `postgres` · `pglite` · `memory`                                             |
 | `store.kv`         | env driver map | `memory` · `redis`                                                           |
 | `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
-| `store.index`      | env driver map | `memory` · `pgvector` · `libsql` · `meilisearch`                             |
+| `store.index`      | env driver map | `memory` · `pgvector` · `meilisearch`                                        |
 | `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind  |
 | `clock`            | env driver map | `memory` · `postgres` · `file` · `frozen`                                    |
 | `journal`          | env driver map | `memory` · `file` · `postgres`                                               |
-| `vault`            | env driver map | `env` · `openbao` · `memory` · `managed`                                     |
+| `vault`            | env driver map | `env` · `vault` · `memory` · `managed`                                       |
 | `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`                      |
 | `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |
 | `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                       |
@@ -54,7 +120,14 @@ drivers: {
 | `runs`             | env driver map | runs-store driver (distinct from top-level `runs`)                           |
 | `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred              |
 
-When `docker` is omitted it inherits the `prod` driver. The rich object form adds connection detail:
+### Safety rules
+
+`defineConfig` rejects unsafe pins:
+
+- **`sqlite` is removed** — use `postgres` (dev/prod) or `pglite` (test).
+- **`drivers.store.sql.test` must be `pglite`** when set — real Postgres semantics in tests.
+
+### Rich driver objects
 
 ```typescript
 sql: {
@@ -70,58 +143,40 @@ sql: {
 
 ## images
 
-Container image pins keyed by element role — vendor choice lives here, never in driver ids:
+Nested pins by element role — vendor choice lives here, never in driver ids:
 
 ```typescript
 images: {
-  "store.sql": "postgres:18",
+  store: {
+    sql: "postgres:18-alpine",
+    kv: "redis:8-alpine",
+    files: "rustfs/rustfs:1.0.0-beta.11",
+  },
+  channel: { email: "axllent/mailpit:v1.22.3" },
   pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
-  "store.kv": "redis:8",
-  // or: "valkey/valkey:8-alpine"
-  // or: "docker.dragonflydb.io/dragonflydb/dragonfly"
-  "store.files": "rustfs/rustfs:1.0.0-beta.11",
-  "channel.email": "axllent/mailpit:v1.22.3",
-  vault: "openbao/openbao:2.6.1",
-  ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // default; or ollama/ollama:0.32.6
-  // opt-in TLS edge — omit for the default (app publishes 6530):
-  // proxy: "caddy:2-alpine",   // simplest automatic HTTPS
-  // proxy: "traefik:v3.3",     // label auto-discovery for --scale app=N
+  // ai: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+  // proxy: "caddy:2-alpine",
 },
 ```
 
-When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog
-(`6432`) — wire-protocol transparent to Bun.SQL / Drizzle. See
-[Store · Multiple environments](/docs/elements/store#multiple-environments).
+Omitted image keys mean no container for that role. When both `store.sql` and `pgdog` are pinned, `DATABASE_URL` points at PgDog — see [Store](/docs/elements/store#multiple-environments).
 
-For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays
-`redis`, same `REDIS_URL`. Image table + licenses: [Store · KV](/docs/elements/store#kv).
-
-For `ai`, default is [llama.cpp](/docs/recipes/llama-cpp) (`OKE_AI_URL` →
-`/v1`, curated Docker Hub `ai/` model). Ollama / vLLM / SGLang are explicit
-alternatives — see [Recipes · AI](/docs/recipes#ai-local--self-hosted).
-
-For `proxy`, pin **either** Caddy or Traefik — never both. Opt-in only; see
-[Reverse proxy](/docs/deployment/reverse-proxy).
+For `store.kv`, pin Redis (default), Valkey, or Dragonfly — driver id stays `redis`. For `ai`, see [Recipes · AI](/docs/recipes#ai-local--self-hosted). For `proxy`, see [Reverse proxy](/docs/deployment/reverse-proxy).
 
 ## i18n
 
-| Option    | Type       | Default | Meaning                                     |
-| --------- | ---------- | ------- | ------------------------------------------- |
-| `locales` | `string[]` | —       | Supported locales                           |
-| `default` | string     | —       | Fallback locale (channel templates, `fx.t`) |
-| `dir`     | record     | —       | Per-locale direction: `"ltr"` \| `"rtl"`    |
+| Option    | Type       | Default               | Meaning                                     |
+| --------- | ---------- | --------------------- | ------------------------------------------- |
+| `locales` | `string[]` | `["en"]` when omitted | Supported locales                           |
+| `default` | string     | `"en"` when omitted   | Fallback locale (channel templates, `fx.t`) |
+| `dir`     | record     | —                     | Per-locale direction: `"ltr"` \| `"rtl"`    |
 
 ```typescript
-i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
+i18n: { locales: ["en"], default: "en" },
+// or with Arabic: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } }
 ```
 
-`fx.t` catalogs are ICU strings from `defineLocale` / `defineMessages` — see
-[i18n](/docs/reference/i18n). Built-ins also cover failure `error.message` and
-OKE cause/fix; Channel templates keep separate `locales` + `{{field}}` bodies.
-
 ## tenancy
-
-Multi-tenant isolation policy.
 
 | Option      | Type                              | Meaning                                  |
 | ----------- | --------------------------------- | ---------------------------------------- |
@@ -130,7 +185,7 @@ Multi-tenant isolation policy.
 
 ## privacy
 
-Presence of this block turns the CORE privacy tooling on in the Console — masking, classification surfaces. It is not a `.plug()` call.
+Presence of this block turns CORE privacy tooling on in the Console — not a `.plug()` call.
 
 ```typescript
 privacy: {},
@@ -138,7 +193,7 @@ privacy: {},
 
 ## runs
 
-Runs retention and redaction at the config surface — **not** the same key as `drivers.runs`.
+Runs retention and redaction — **not** the same key as `drivers.runs`.
 
 | Option   | Type                     | Meaning                                               |
 | -------- | ------------------------ | ----------------------------------------------------- |
@@ -148,13 +203,13 @@ Runs retention and redaction at the config surface — **not** the same key as `
 
 Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated to `oke schema generate`.
 
-| Option      | Default                     | Meaning                                                                                                           |
-| ----------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `autoPush`  | `true` (local only)         | Auto-run `db push` when schema inputs change in `oke dev` (not on emit of `generated`); forced off in docker/prod |
-| `config`    | `"drizzle.config.ts"`       | Path to the drizzle-kit config                                                                                    |
-| `declare`   | `"src/schema.decl.ts"`      | Abstract schema module (`store.schema.table` exports)                                                             |
-| `generated` | `"src/schema.generated.ts"` | Where `oke db` emits dialect Drizzle                                                                              |
-| `entry`     | `src/app.ts`                | App entry for collecting plugin table contributions                                                               |
+| Option      | Default                      | Meaning                                                                   |
+| ----------- | ---------------------------- | ------------------------------------------------------------------------- |
+| `autoPush`  | `true`                       | Auto-run `db push` on schema change under `oke dev`; forced off in `prod` |
+| `config`    | `"drizzle.config.ts"`        | Path to the drizzle-kit config                                            |
+| `declare`   | `"src/db/schema.decl.ts"`    | Abstract schema module (`store.schema.table` exports)                     |
+| `generated` | `"src/db/schema.drizzle.ts"` | Where `oke db` emits dialect Drizzle                                      |
+| `entry`     | `src/app.ts`                 | App entry for collecting plugin table contributions                       |
 
 ## topology
 
@@ -173,15 +228,35 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 
 ## console
 
-Production Console exposure.
-
 | Option         | Type                                 | Default | Meaning                   |
 | -------------- | ------------------------------------ | ------- | ------------------------- |
 | `prod.enabled` | boolean                              | —       | Serve the Console in prod |
 | `prod.auth`    | `"required" \| "optional" \| "none"` | —       | Access requirement        |
 
+## Troubleshooting
+
+<Accordions>
+
+<Accordion title='oke.config: … uses removed driver "sqlite"'>
+  The `sqlite` driver is gone. Pin `postgres` for `dev`/`prod` and `pglite` for `test`. Edit the
+  file by hand — see [Migrating environments](/docs/reference/migrating-environments).
+</Accordion>
+
+<Accordion title='drivers.store.sql.test must be "pglite"'>
+  Tests use PGLite so SQL semantics match Postgres. Set `test: "pglite"` (or omit the key and keep
+  the default). Do not use `memory` or `postgres` for `store.sql.test`.
+</Accordion>
+
+<Accordion title='CLI error: "local" / "sqlite" is no longer valid'>
+  There is no soft-compat. Rename env keys to `dev` / `test` / `prod` and replace `sqlite` with
+  `postgres` / `pglite`. `oke mode` was removed — `oke dev` always starts Docker Compose.
+</Accordion>
+
+</Accordions>
+
 ## Learn more
 
-- [CLI Reference](/docs/reference/cli) — `oke dev` · `oke db` · `oke docker`
+- [Migrating environments](/docs/reference/migrating-environments) — four-key maps → `dev`/`test`/`prod`
+- [CLI Reference](/docs/reference/cli) — `oke dev` · `oke test` · `oke db`
 - [Environment Variables](/docs/reference/environment-variables) — URL and secret resolution
 - [Store](/docs/elements/store) — what the store drivers back

@@ -1,0 +1,87 @@
+# ==========================================
+# OKENGINE — .cursorignore
+# Tailored for: Bun monorepo + Vite Console + Drizzle + Playwright
+# ==========================================
+
+# ---------- Dependencies ----------
+node_modules/
+packages/*/node_modules/
+site/node_modules/
+
+# ---------- Lockfiles (massive, auto-generated) ----------
+bun.lock
+bun.lockb
+site/bun.lock
+site/bun.lockb
+
+# ---------- Build Output ----------
+dist/
+out/
+*.tgz
+site/.next/
+site/out/
+site/.source/
+
+# Console SPA build artifacts (shipped on npm but generated — ignore for AI context)
+src/console/ui/dist/
+!src/console/ui/dist/.gitkeep
+
+# ---------- Coverage & Test Artifacts ----------
+coverage/
+*.lcov
+playwright-report/
+test-results/
+blob-report/
+tests/console/.claim-code
+
+# ---------- Local / Ephemeral ----------
+.oke/
+reports/
+.tmp-db-mig-*/
+.claude/
+*.log
+logs/
+
+# ---------- Secrets ----------
+.env
+.env.*
+!.env.example
+docker/pgdog.toml
+docker/users.toml
+
+# ---------- Large Static / Generated Schemas ----------
+# manifest.v1.schema.json is ~2000 lines of JSON Schema — static spec, not source
+manifest.v1.schema.json
+
+# ---------- Documentation (keep source, ignore rendered) ----------
+/docs/**
+!/docs/changelog.md
+!/docs/cli.md
+!/docs/spec/
+!/docs/spec/**
+!/docs/guides/
+!/docs/guides/**
+!site/content/docs/
+!site/content/docs/**
+
+# Root docs files (AI doesn't need to read these on every prompt)
+AGENTS.md
+README.md
+BUDGETS.md
+CHANGELOG*
+LICENSE*
+CONTRIBUTING*
+
+# ---------- IDE & OS ----------
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+*~
+.eslintcache
+.cache/
+*.tsbuildinfo
+
+# ---------- Local scratch (from .gitignore) ----------
+src/plugins/__taqnyat-final.ts

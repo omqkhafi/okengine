@@ -4,7 +4,13 @@
 
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { VAULT_DEFAULTS } from "../../config/driver-defaults.ts";
-import { createVaultRuntime, type VaultRuntime } from "../../elements/vault.ts";
+import {
+  createVaultRuntime,
+  listRequiredEnvNames,
+  requiredEnvGaps,
+  VaultBootError,
+  type VaultRuntime,
+} from "../../elements/vault.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "../../elements/vault/boot-chain.ts";
 import type { BootOptions } from "../boot.ts";
 
@@ -30,6 +36,14 @@ export function resolveVaultDriverId(options: BootOptions, env: ConfigEnv): stri
  */
 export async function bindVault(options: BootOptions, env: ConfigEnv): Promise<VaultRuntime> {
   const vaultSecrets = options.vault?.secrets ?? options.secrets ?? [];
+  const requiredEnv = options.vault?.requiredEnv ?? listRequiredEnvNames();
+  // Fail before the chain is built: the builtin `vault` driver opens SQL at
+  // `open()`, and a boot that is already doomed by a missing env var should
+  // never pay for (or leak) a database connection first.
+  const envGaps = requiredEnvGaps(requiredEnv, new Set(vaultSecrets.map((s) => s.name)));
+  if (envGaps.length > 0) {
+    throw new VaultBootError(envGaps);
+  }
   const chain =
     options.vault?.chain ??
     buildVaultBootChain({
@@ -40,6 +54,7 @@ export async function bindVault(options: BootOptions, env: ConfigEnv): Promise<V
     });
   const vault = createVaultRuntime({
     secrets: vaultSecrets,
+    requiredEnv,
     chain,
     allowDevFallbacks: options.vault?.allowDevFallbacks ?? env !== "prod",
     now: options.vault?.now,

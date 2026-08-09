@@ -14,7 +14,7 @@ import { flow } from "./flow.ts";
 import { createFx } from "./fx.ts";
 import { mergeHooks, runPipeline } from "./hooks.ts";
 import { on, resetBindings } from "./on.ts";
-import { createRouter } from "./router.ts";
+import { createEdgeRouter as createRouter } from "./router/create-edge.ts";
 import { http } from "./triggers.ts";
 
 /**

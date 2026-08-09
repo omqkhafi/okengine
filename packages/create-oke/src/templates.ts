@@ -17,14 +17,8 @@ export const DEFAULT_TEMPLATE: TemplateId = "standard";
 
 /** One-line purpose for the starter (interactive select + help). */
 export const TEMPLATE_PURPOSES: Readonly<Record<TemplateId, string>> = {
-  standard: "Notes app — local-first (sqlite · memory · console email)",
-  advanced: "Notes app — docker-ready (postgres · redis · s3 · openbao)",
-};
-
-/** Recommended `.oke/mode` when using recommended defaults (no customize). */
-export const TEMPLATE_DEFAULT_MODE: Readonly<Record<TemplateId, "local" | "docker">> = {
-  standard: "local",
-  advanced: "docker",
+  standard: "Notes app — Docker-first (postgres · redis · s3 · smtp)",
+  advanced: "Notes app — Docker-first + store.index (meilisearch)",
 };
 
 /**

@@ -1,42 +1,40 @@
 /**
- * Resolve the active SQL env for schema tooling (`oke db`, `oke mode`,
- * `oke dev` one-shot sync) from session overrides and the saved dev mode.
+ * Resolve the active SQL env for schema tooling (`oke db`, `oke dev`
+ * one-shot sync). Docker-first: `oke dev` always uses `dev`.
  */
 
 import type { ConfigEnv } from "../config/index.ts";
-import { readDevMode } from "./dev-mode.ts";
 
 /** Options for {@link resolveDevSqlEnv}. */
 export interface ResolveDevSqlEnvOptions {
   /**
-   * Session override — `true` means docker (e.g. `OKE_DOCKER=1` or
-   * `oke dev --docker`). `false` means local. `undefined` → auto-resolve.
+   * Session override — `true` means compose infra is up. Ignored for env
+   * selection (always `dev` unless `options.env` is set); kept for call-site
+   * compatibility.
    */
   readonly docker?: boolean;
   /**
-   * Explicit env override (e.g. `oke db --env docker`). Wins over `.oke/mode`.
+   * Explicit env override (e.g. `oke db --env test`). Wins over the default.
    */
   readonly env?: ConfigEnv;
 }
 
 /**
- * Resolve the SQL env (`local` | `docker` for dev tooling) without prompting.
+ * Resolve the SQL {@link ConfigEnv} for tooling without prompting.
  *
  * Order:
  * 1. Explicit `options.env` (CLI flag)
- * 2. Session docker flag (`options.docker`)
- * 3. `.oke/mode` persisted preference
- * 4. Default `local`
+ * 2. Default `dev` (Docker-first local development)
  *
- * @param cwd - Project root
+ * @param _cwd - Project root (unused; kept for call-site compatibility)
  * @param options - Session / CLI overrides
  */
 export async function resolveDevSqlEnv(
-  cwd: string,
+  _cwd: string,
   options: ResolveDevSqlEnvOptions = {},
 ): Promise<ConfigEnv> {
+  void _cwd;
+  void options.docker;
   if (options.env !== undefined) return options.env;
-  if (options.docker !== undefined) return options.docker ? "docker" : "local";
-  const saved = await readDevMode(cwd);
-  return saved ?? "local";
+  return "dev";
 }

@@ -3,7 +3,10 @@
  */
 
 export type {
+  VaultBackend,
   VaultBlastRadius,
+  VaultBuiltinStatus,
+  VaultDriverId,
   VaultKindGroup,
   VaultListResponse,
   VaultRecord,
@@ -11,7 +14,14 @@ export type {
   VaultResolutionStep,
 } from "./types.ts";
 
-export { VAULT_FIXTURE, VAULT_LIST_FIXTURE, FIXTURE_SECRET_VALUE } from "./fixture.ts";
+export { formatVaultBackend, type VaultBackendBadge, type VaultBackendCard } from "./backend.ts";
+
+export {
+  VAULT_BACKEND_FIXTURE,
+  VAULT_FIXTURE,
+  VAULT_LIST_FIXTURE,
+  FIXTURE_SECRET_VALUE,
+} from "./fixture.ts";
 
 export {
   parseVaultSearch,

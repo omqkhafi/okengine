@@ -1,19 +1,17 @@
 /**
- * Keyboard controls for a live `oke dev` session (TTY raw mode).
+ * Dev control key mapping + pure dispatcher (tests).
  *
- * Keys: `?` help · `q` quit · `r` refresh · `u` up all · `x` stop all.
- *
- * Compose health / model phase update the status board above Logs — it
- * already lists every service with a live ● status, so refresh alone is
- * enough to see the stack; there is no separate services panel.
+ * Interactive raw-mode stdin was removed — Ink `useInput` owns TTY input
+ * via {@link ./tui/keys.ts}.
  */
 
 import { formatStatusLine, termColorEnabled, termStyle } from "../term.ts";
+import { mapDevControlInput } from "./tui/keys.ts";
 
 /** Compose action against the whole stack. */
 export type DevComposeControlAction = "up" | "stop";
 
-/** Options for {@link startDevControls}. */
+/** Options for {@link createDevControlDispatcher}. */
 export type StartDevControlsOptions = {
   readonly write: (text: string) => void;
   /** Called on `q` / Ctrl+C. */
@@ -23,14 +21,13 @@ export type StartDevControlsOptions = {
    */
   readonly onRefresh?: () => void | Promise<void>;
   /**
-   * Show help in a clean pane (refreshes chrome first so the panel is not
-   * interleaved with request logs).
+   * Show help in a clean pane.
    *
    * @param body - Formatted panel text
    */
   readonly onShowPanel?: (body: string) => void | Promise<void>;
   /**
-   * After a compose up/stop — sync health into the board (no log lines).
+   * After a compose up/stop — sync health into the board.
    */
   readonly onComposeSettled?: () => void | Promise<void>;
   /**
@@ -39,14 +36,7 @@ export type StartDevControlsOptions = {
    * @param action - up / stop
    */
   readonly composeAction: (action: DevComposeControlAction) => Promise<void>;
-  readonly stdin?: NodeJS.ReadStream;
-  readonly isTTY?: boolean;
   readonly color?: boolean;
-};
-
-/** Handle returned by {@link startDevControls}. */
-export type DevControlsHandle = {
-  readonly stop: () => void;
 };
 
 /**
@@ -97,24 +87,18 @@ export function formatDevControlsHelp(color: boolean = termColorEnabled()): stri
  */
 export function parseDevControlKey(chunk: string): string | null {
   if (chunk.length === 0) return null;
-  if (chunk === "\u0003") return "q"; // Ctrl+C
-  const ch = chunk[0]!;
-  if (ch === "?" || ch === "h" || ch === "H") return "?";
-  if (ch === "q" || ch === "Q") return "q";
-  if (ch === "r" || ch === "R") return "r";
-  if (ch === "u" || ch === "U") return "u";
-  if (ch === "x" || ch === "X") return "x";
-  return null;
+  if (chunk === "\u0003") return mapDevControlInput("c", { ctrl: true });
+  return mapDevControlInput(chunk[0] ?? "", {});
 }
 
-/** Key dispatcher for tests and {@link startDevControls}. */
+/** Key dispatcher for tests. */
 export type DevControlDispatcher = {
   readonly handleKey: (key: string) => void;
   readonly stop: () => void;
 };
 
 /**
- * Pure key dispatcher (no stdin) — used by tests and the TTY listener.
+ * Pure key dispatcher (no stdin) — used by tests.
  *
  * @param opts - Quit / compose actions
  */
@@ -162,44 +146,6 @@ export function createDevControlDispatcher(opts: StartDevControlsOptions): DevCo
     },
     stop() {
       stopped = true;
-    },
-  };
-}
-
-/**
- * Start raw-mode keyboard controls. No-op when stdin is not a TTY.
- *
- * @param opts - Quit / compose actions
- */
-export function startDevControls(opts: StartDevControlsOptions): DevControlsHandle {
-  const stdin = opts.stdin ?? process.stdin;
-  const isTTY = opts.isTTY ?? stdin.isTTY === true;
-  const dispatcher = createDevControlDispatcher(opts);
-
-  if (!isTTY || typeof stdin.setRawMode !== "function") {
-    return { stop: () => dispatcher.stop() };
-  }
-
-  const onData = (buf: string | Buffer): void => {
-    const chunk = typeof buf === "string" ? buf : buf.toString("utf8");
-    const key = parseDevControlKey(chunk);
-    if (key) dispatcher.handleKey(key);
-  };
-
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdin.setEncoding("utf8");
-  stdin.on("data", onData);
-
-  return {
-    stop() {
-      dispatcher.stop();
-      stdin.off("data", onData);
-      try {
-        if (typeof stdin.setRawMode === "function") stdin.setRawMode(false);
-      } catch {
-        // already closed
-      }
     },
   };
 }

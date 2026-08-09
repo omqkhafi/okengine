@@ -56,7 +56,7 @@ describe("store.schema.table + field.*", () => {
     const decl = store.sql("notes", { schema: { notes } });
     const runtime = createStoreRuntime({
       drivers: {},
-      sql: { notes: { name: "notes", primary: { url: ":memory:" } } },
+      sql: { notes: { name: "notes", primary: {} } },
     });
     // Register so classificationsFor merges table columns.
     runtime.register(decl);
@@ -68,10 +68,10 @@ describe("store.schema.table + field.*", () => {
     expect(masked[0]!.email).toBe(PII_MASK);
 
     // Runtime path: open handle and query — ensure classificationsFromTable feeds mask.
-    const { sqliteDriver } = await import("../../drivers/index.ts");
+    const { memorySqlDriver } = await import("../../drivers/index.ts");
     const rt = createStoreRuntime({
-      drivers: { sql: sqliteDriver },
-      sql: { notes: { name: "notes", primary: { url: ":memory:" } } },
+      drivers: { sql: memorySqlDriver },
+      sql: { notes: { name: "notes", primary: {} } },
     });
     rt.register(decl);
     const handle = (await rt.open(decl, {
@@ -84,7 +84,7 @@ describe("store.schema.table + field.*", () => {
   });
 });
 
-describe("emitDrizzleSource — both dialects from one declaration", () => {
+describe("emitDrizzleSource — postgres pgTable from one declaration", () => {
   const notes = store.schema.table("notes", {
     id: field.text().primaryKey().defaultFn(id),
     title: field.text().notNull(),
@@ -92,24 +92,17 @@ describe("emitDrizzleSource — both dialects from one declaration", () => {
     createdAt: field.integer().notNull().defaultFn(now),
   });
 
-  test("sqlite emits sqliteTable", () => {
-    const src = emitDrizzleSource([notes], "sqlite");
-    expect(src.startsWith(GENERATED_SCHEMA_HEADER)).toBe(true);
-    expect(src).toContain('from "drizzle-orm/sqlite-core"');
-    expect(src).toContain("sqliteTable");
-    expect(src).not.toContain("pgTable");
-    expect(src).toContain('text("id").primaryKey().$defaultFn(id)');
-    expect(src).toContain('integer("created_at").notNull().$defaultFn(now)');
-    expect(src).toContain('text("body").notNull()');
-  });
-
-  test("postgres emits pgTable from the same decl", () => {
+  test("postgres emits pgTable", () => {
     const src = emitDrizzleSource([notes], "postgres");
+    expect(src.startsWith(GENERATED_SCHEMA_HEADER)).toBe(true);
     expect(src).toContain('from "drizzle-orm/pg-core"');
     expect(src).toContain("pgTable");
     expect(src).not.toContain("sqliteTable");
+    expect(src).not.toContain("drizzle-orm/sqlite-core");
     expect(src).toContain('text("id").primaryKey().$defaultFn(id)');
-    expect(src).toContain('integer("created_at").notNull().$defaultFn(now)');
+    // Postgres INTEGER is 32-bit — abstract integer maps to bigint for ms clocks.
+    expect(src).toContain('bigint("created_at", { mode: "number" }).notNull().$defaultFn(now)');
+    expect(src).toContain('text("body").notNull()');
   });
 });
 
@@ -142,9 +135,9 @@ describe("plugin table columns in generated schema", () => {
     expect(pluginTables[0]!.columns.actorId!.classification?.pii).toBe(true);
 
     const merged = mergeSchemaTables([notes], pluginTables);
-    const src = emitDrizzleSource(merged, "sqlite");
-    expect(src).toContain('sqliteTable("notes"');
-    expect(src).toContain('sqliteTable("audit_events"');
+    const src = emitDrizzleSource(merged, "postgres");
+    expect(src).toContain('pgTable("notes"');
+    expect(src).toContain('pgTable("audit_events"');
     expect(src).toContain('text("actor_id").notNull()');
   });
 
@@ -195,21 +188,12 @@ describe("emitDrizzleSource — references + relations (Linkly-shaped)", () => {
     },
   }));
 
-  test("sqlite emit includes FK + defineRelations", () => {
-    const src = emitDrizzleSource([links, daily], "sqlite", { relations: [relations] });
-    expect(src).toContain("sqliteTable");
-    expect(src).toContain(".references(() => links.code)");
-    expect(src).toContain('import { defineRelations } from "drizzle-orm"');
-    expect(src).toContain("defineRelations({ links, daily }");
-    expect(src).toContain("r.many.daily({ from: r.links.code, to: r.daily.code })");
-    expect(src).toContain("r.one.links({ from: r.daily.code, to: r.links.code, optional: false })");
-  });
-
-  test("postgres emit includes same FK + defineRelations from one decl", () => {
+  test("postgres emit includes FK + defineRelations", () => {
     const src = emitDrizzleSource([links, daily], "postgres", { relations: [relations] });
     expect(src).toContain("pgTable");
     expect(src).not.toContain("sqliteTable");
     expect(src).toContain(".references(() => links.code)");
+    expect(src).toContain('import { defineRelations } from "drizzle-orm"');
     expect(src).toContain("defineRelations({ links, daily }");
     expect(src).toContain("r.many.daily({ from: r.links.code, to: r.daily.code })");
     expect(src).toContain("r.one.links({ from: r.daily.code, to: r.links.code, optional: false })");

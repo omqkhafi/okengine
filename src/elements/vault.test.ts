@@ -6,13 +6,15 @@
  * - resolution chain (first hit wins)
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { envVaultDriver, memoryVaultDriver } from "../drivers/index.ts";
 import { createFx } from "../kernel/fx.ts";
 import { REDACTED_PLACEHOLDER, Redacted } from "../kernel/redacted.ts";
 import {
   createVaultRuntime,
   fingerprintSecretSync,
+  listRequiredEnvNames,
+  resetRequiredEnvNames,
   SECRET_MASK,
   vault,
   VaultBootError,
@@ -189,6 +191,72 @@ describe("resolution chain", () => {
   });
 });
 
+describe("vault.env", () => {
+  const NAME = "OKE_TEST_VAULT_ENV";
+
+  afterEach(() => {
+    delete process.env[NAME];
+    resetRequiredEnvNames();
+  });
+
+  test("reads, coerces, and treats an empty value as unset", () => {
+    expect(vault.env(NAME)).toBeUndefined();
+    process.env[NAME] = "";
+    expect(vault.env(NAME)).toBeUndefined();
+
+    process.env[NAME] = "42";
+    expect(vault.env(NAME)).toBe("42");
+    expect(vault.env.int(NAME)).toBe(42);
+
+    process.env[NAME] = "YES";
+    expect(vault.env.bool(NAME)).toBe(true);
+    process.env[NAME] = "off";
+    expect(vault.env.bool(NAME)).toBe(false);
+
+    process.env[NAME] = '{"a":1}';
+    expect(vault.env.json<{ a: number }>(NAME)).toEqual({ a: 1 });
+
+    delete process.env[NAME];
+    expect(vault.env.int(NAME, 7)).toBe(7);
+    expect(vault.env.bool(NAME, true)).toBe(true);
+    expect(vault.env.json(NAME)).toBeUndefined();
+  });
+
+  test("malformed values and missing defaults throw TypeError", () => {
+    process.env[NAME] = "not-a-number";
+    expect(() => vault.env.int(NAME)).toThrow(TypeError);
+    process.env[NAME] = "maybe";
+    expect(() => vault.env.bool(NAME)).toThrow(TypeError);
+    process.env[NAME] = "{";
+    expect(() => vault.env.json(NAME)).toThrow(TypeError);
+    delete process.env[NAME];
+    expect(() => vault.env.int(NAME)).toThrow(TypeError);
+  });
+
+  test("required registers the name and throws when unset", () => {
+    expect(() => vault.env.required(NAME)).toThrow(TypeError);
+    expect(listRequiredEnvNames()).toContain(NAME);
+
+    process.env[NAME] = "present";
+    expect(vault.env.required(NAME)).toBe("present");
+    expect(listRequiredEnvNames().filter((n) => n === NAME)).toHaveLength(1);
+  });
+
+  test("a missing required env var joins the secret gaps in one boot failure", async () => {
+    const runtime = createVaultRuntime({
+      secrets: [vault("STRIPE_KEY")],
+      requiredEnv: [NAME],
+      chain: [{ driver: memoryVaultDriver, options: { secrets: {} } }],
+    });
+    const error = await runtime.boot().then(
+      () => undefined,
+      (e: unknown) => e as VaultBootError,
+    );
+    expect(error).toBeInstanceOf(VaultBootError);
+    expect(error?.gaps.map((g) => g.name).sort()).toEqual([NAME, "STRIPE_KEY"]);
+  });
+});
+
 describe("redaction + fingerprints", () => {
   test("secret value never appears in fx.log even when passed explicitly", async () => {
     const secret = "sk_live_super_secret_value_do_not_leak";
@@ -201,7 +269,7 @@ describe("redaction + fingerprints", () => {
     const lines: Array<{ message: string; data?: Record<string, unknown> }> = [];
     const { fx } = createFxContextWithVault(runtime, lines);
 
-    const wrapped = fx.vault("STRIPE_KEY");
+    const wrapped = await fx.vault.get("STRIPE_KEY");
     expect(wrapped.reveal()).toBe(secret);
 
     fx.log.info(`charging with ${wrapped}`, { key: wrapped, nested: { k: wrapped } });
@@ -216,7 +284,7 @@ describe("redaction + fingerprints", () => {
     expect(lines[1]!.message).toContain(SECRET_MASK);
   });
 
-  test("Redacted from fx.vault is masked in fx.log without a vault runtime", () => {
+  test("Redacted from fx.vault is masked in fx.log without a vault runtime", async () => {
     const secret = "sk_no_vault_runtime";
     const lines: Array<{ message: string; data?: Record<string, unknown> }> = [];
     const fx = createFx({
@@ -225,7 +293,7 @@ describe("redaction + fingerprints", () => {
       onLog: (_level, message, data) => lines.push({ message, data }),
     });
 
-    const wrapped = fx.vault("STRIPE_KEY");
+    const wrapped = await fx.vault.get("STRIPE_KEY");
     expect(wrapped).toBeInstanceOf(Redacted);
     expect(String(wrapped)).toBe(REDACTED_PLACEHOLDER);
     expect(`${wrapped}`).toBe(REDACTED_PLACEHOLDER);
