@@ -12,6 +12,21 @@ needed).
 
 ## Unreleased
 
+## v0.11.1 — 2026-08-09
+
+### ♻️ Changed
+
+- HTTP-only cold graphs drop kv-lua: `gate.public` / `gate.rate` defaults read
+  `DEFAULT_RATE_STRATEGY` from `gate/constants` (strategies load only with the rate runtime).
+- `oke()` narrows compiler imports to `dynamic` + `response` (no extract/oxc barrel on the
+  HTTP construction path) and defers the memory journal store until first durable use.
+- `gate.auth` materialization is sync-lazy via `requirePackageModule` (`kernel/app-auth`,
+  `auth/config`) with matching `dist/app-auth.js` + `dist/auth-config.js` chunks for
+  non-Bun consumers — ping apps no longer pay the auth/zod graph up front.
+- Refreshed `budgets.json` / `BUDGETS.md` after the cold-graph cuts: Bun cold start ~9 ms
+  (under the 75 ms cap), HTTP-ping gzip ~36 kB, and thinner `okengine` / `http` /
+  `kernel` / `gate` / auth-plugin export rows.
+
 ## v0.11.0 — 2026-08-09
 
 ### ✨ Added

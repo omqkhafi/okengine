@@ -11,6 +11,8 @@
 import { registerLuaScript, type LuaKvStore } from "../../drivers/kv-lua.ts";
 import type { RateStrategy } from "../../manifest/types.ts";
 
+export { ALL_RATE_STRATEGIES, DEFAULT_RATE_STRATEGY } from "./constants.ts";
+
 /** Result of a rate-limit take attempt. */
 export interface RateTakeResult {
   /** Whether the request is allowed. */
@@ -337,18 +339,6 @@ export const RATE_STRATEGIES: Record<RateStrategy, StrategyDef> = {
   "token-bucket": tokenBucket,
   "leaky-bucket": leakyBucket,
 };
-
-/** Default rate strategy (unified-theory §16). */
-export const DEFAULT_RATE_STRATEGY: RateStrategy = "sliding-window-counter";
-
-/** All five strategy ids. */
-export const ALL_RATE_STRATEGIES: readonly RateStrategy[] = [
-  "fixed-window",
-  "sliding-window-counter",
-  "sliding-log",
-  "token-bucket",
-  "leaky-bucket",
-];
 
 for (const def of Object.values(RATE_STRATEGIES)) {
   registerLuaScript(def.lua, (store, keys, args) => def.run(store, keys, args));

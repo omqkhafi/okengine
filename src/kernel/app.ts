@@ -6,12 +6,9 @@
  * pipeline, and wires `fx.call` to untriggered (and triggered) flows.
  */
 
-import {
-  compileRoute,
-  encodeExecuteResult,
-  encodeFailure,
-  type CompiledRoute,
-} from "../compiler/index.ts";
+import { compileRoute } from "../compiler/dynamic.ts";
+import type { CompiledRoute } from "../compiler/aot.ts";
+import { encodeExecuteResult, encodeFailure } from "../compiler/response.ts";
 import { validate } from "../validation/standard-schema.ts";
 import {
   accumulateAdoptArgs,
@@ -25,16 +22,15 @@ import {
 // when an app actually boots (AGENTS.md / unified-theory budget: cold start < 75 ms).
 import type { BootOptions, BootResult, ElementRuntimes } from "./boot.ts";
 import type { CapabilityToken } from "./capability.ts";
-import { createAppAuthBinding, verifyBearerToken, type AppAuthBinding } from "./auth-resolve.ts";
-import { createAuthHttpBindings, type AuthHttpMaterialization } from "../auth/bindings.ts";
-import { auth as authPlugin } from "../auth/plugin.ts";
-import { tokenFromCookieHeader } from "../auth/cookies.ts";
-import { setActiveGateAuthContext } from "../auth/method-context.ts";
+import type { AppAuthBinding } from "./auth-resolve.ts";
+import type { AuthHttpMaterialization } from "../auth/bindings.ts";
+import type { WiredGateAuth } from "./app-auth.ts";
 import {
   resolveGateConfig,
   type GateOptions,
   type ResolvedGateConfig,
 } from "../elements/gate/config.ts";
+import { requirePackageModule } from "../shared/lazy-src.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
@@ -534,14 +530,6 @@ export function oke(options: OkeOptions): OkeApp {
     gate: options.gate,
     env: options.env,
   });
-  let authMaterialization: AuthHttpMaterialization | undefined;
-  if (gateConfig.auth?.http) {
-    authMaterialization = createAuthHttpBindings(gateConfig.auth, {
-      rateLimitEnabled: gateConfig.rateLimitEnabled,
-      sessions: gateConfig.auth.sessions,
-    });
-    adopted.push(...authMaterialization.bindings);
-  }
 
   /** Retained for test harness / boot merges. */
   const $options = options;
@@ -555,27 +543,26 @@ export function oke(options: OkeOptions): OkeApp {
   /** Runtime route table — types accumulate on the returned {@link OkeApp}. */
   const routes: RuntimeRouteMap = {};
 
-  // Absorb auth() tables into gate.auth — `.needs("auth")` sees plugin name.
+  let authMaterialization: AuthHttpMaterialization | undefined;
+  let wiredAuth: WiredGateAuth | undefined;
+  let authBinding: AppAuthBinding | undefined;
   if (gateConfig.auth) {
-    applyPlugin(
-      pluginRegistry,
-      authPlugin({
-        secret: gateConfig.auth.secret,
-        accessTtlMs: gateConfig.auth.session.accessTtlMs,
-        refreshTtlMs: gateConfig.auth.session.refreshTtlMs,
-        session: {
-          accessTtlMs: gateConfig.auth.session.accessTtlMs,
-          refreshTtlMs: gateConfig.auth.session.refreshTtlMs,
-          idleTtlMs: gateConfig.auth.session.idleTtlMs,
-          absoluteTtlMs: gateConfig.auth.session.absoluteTtlMs,
-          singleSessionPerUser: gateConfig.auth.session.singleSessionPerUser,
-        },
-        password: gateConfig.auth.password,
-        passwordPolicy: gateConfig.auth.passwordPolicy,
-        breachCheck: gateConfig.auth.breachCheck,
-      }),
-      appPluginScope,
+    const { wireGateAuth } = requirePackageModule<typeof import("./app-auth.ts")>(
+      "kernel/app-auth",
+      "app-auth",
     );
+    wiredAuth = wireGateAuth({
+      gateConfig: { ...gateConfig, auth: gateConfig.auth },
+      now: options.fx?.now,
+    });
+    authMaterialization = wiredAuth.materialization;
+    authBinding = wiredAuth.authBinding;
+    if (authMaterialization) {
+      adopted.push(...authMaterialization.bindings);
+    }
+    if (wiredAuth.authPlugin) {
+      applyPlugin(pluginRegistry, wiredAuth.authPlugin, appPluginScope);
+    }
   }
 
   const smart = createRouter<Binding>(options.router ?? "default");
@@ -671,29 +658,10 @@ export function oke(options: OkeOptions): OkeApp {
   let bootPromise: Promise<BootResult> | undefined;
   let readyState: ReadyState = "booting";
   let bootEnv: BootOptions["env"] = options.env;
-  let authBinding: AppAuthBinding | undefined =
-    gateConfig.auth !== undefined
-      ? createAppAuthBinding({
-          secret: gateConfig.auth.secret,
-          sessions: authMaterialization?.ctx.sessions ?? gateConfig.auth.sessions,
-          now: gateConfig.auth.now ?? options.fx?.now,
-        })
-      : undefined;
-  if (authBinding) {
-    setActiveGateAuthContext({
-      secret: authBinding.secret,
-      sessions: authBinding.sessions,
-      now: authBinding.now,
-      passwordPolicy: gateConfig.auth?.passwordPolicy,
-      password: gateConfig.auth?.password,
-      breachCheck: gateConfig.auth?.breachCheck,
-    });
-  } else {
-    setActiveGateAuthContext(undefined);
-  }
   // Fallback journal for pre-boot / `autoBoot: false` unit tests. A booted
   // app replaces this with the bound `drivers.journal` store (postgres etc.).
-  const fallbackJournalStore = createMemoryJournalStore();
+  // Constructed on first use so non-durable HTTP apps skip the alloc.
+  let fallbackJournalStore: JournalStore | undefined;
   const fallbackJournalInstanceId = `app-${crypto.randomUUID()}`;
   const sleepingRuns = new Map<
     string,
@@ -715,6 +683,7 @@ export function oke(options: OkeOptions): OkeApp {
     if (bound) {
       return { store: bound.store, instanceId: bound.instanceId, leaseMs: bound.leaseMs };
     }
+    fallbackJournalStore ??= createMemoryJournalStore();
     return {
       store: fallbackJournalStore,
       instanceId: fallbackJournalInstanceId,
@@ -978,12 +947,9 @@ export function oke(options: OkeOptions): OkeApp {
       readyState = "ready";
     }
     // Prefer the booted clock for access-token expiry checks.
-    if (authBinding) {
-      authBinding = createAppAuthBinding({
-        secret: authBinding.secret,
-        sessions: authBinding.sessions,
-        now: result.clock?.now.bind(result.clock) ?? authBinding.now,
-      });
+    if (wiredAuth && authBinding) {
+      const now = result.clock?.now.bind(result.clock) ?? authBinding.now;
+      authBinding = wiredAuth.rebind(now);
     }
     return result;
   }
@@ -1144,21 +1110,24 @@ export function oke(options: OkeOptions): OkeApp {
 
       const binding = authBinding;
       const cookieOpts = gateConfig.auth?.cookies;
+      const verifyBearer = wiredAuth?.verifyBearerToken;
+      const cookieToken = wiredAuth?.tokenFromCookieHeader;
       const elementHooks = createElementPipelineHooks({
         gates: booted.gate,
         principals,
         telemetry,
         allowTestPrincipals: testMode,
-        verifyBearer: binding ? async (token) => verifyBearerToken(binding, token) : undefined,
+        verifyBearer:
+          binding && verifyBearer ? async (token) => verifyBearer(binding, token) : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
         resolveToken:
-          binding && cookieOpts?.enabled
+          binding && cookieOpts?.enabled && cookieToken
             ? (request) => {
                 const header = request.headers.get("authorization");
                 if (header?.startsWith("Bearer ")) {
                   return header.slice("Bearer ".length).trim() || undefined;
                 }
-                return tokenFromCookieHeader(request.headers.get("cookie"), cookieOpts);
+                return cookieToken(request.headers.get("cookie"), cookieOpts);
               }
             : undefined,
       });

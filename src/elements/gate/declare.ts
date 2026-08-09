@@ -5,7 +5,7 @@
  */
 
 import type { RateStrategy } from "../../manifest/types.ts";
-import { DEFAULT_RATE_STRATEGY } from "./strategies.ts";
+import { DEFAULT_RATE_STRATEGY } from "./constants.ts";
 
 /** Context passed to policy predicates at evaluation time. */
 export interface GatePolicyContext {

@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 54.3 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 39 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -116,23 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after fx.sendOtp/verifyOtp on the shared fx surface (~50.1 kB
-      // gzip), durable-journal lease surface (~51.2 kB), fx.deliverOtp +
-      // unified otp() (~50.9 kB → 53 kB), then fx.runs / SLO window on the
-      // shared surface (~53.3 kB → 54 kB cap). Clock/channel/journal drivers
-      // stay lazy-bound; far below eager bind. Rebased again for the
-      // store/vault/signal/channel auto-registry drain (`element-registries.ts`
-      // + the `oke()` merge/dedup logic) — every app now carries this
-      // regardless of which elements it uses, since the drain must run
-      // synchronously at construction (same isolation guarantee as the
-      // `on()` binding registry) and can't be deferred behind a lazy import
-      // (~54.0 kB → 54.3 kB cap). Rebased again for `assertAdoptBarrelFresh`
-      // + `tryListFlowsUnits` in `boot.ts` (`.adopt()` barrel staleness
-      // check, OKE1009) — part of the already-lazily-loaded boot graph, not
-      // the `oke()` construction path, but `Bun.build` still traces and
-      // sums the dynamic-import chunk (~54.3 kB → 54.7 kB → 55.0 kB after
-      // ConfigEnv local/docker → dev/test/prod + sqlite removal).
-      expect(total).toBeLessThan(55_000);
+      // Rebased after lazy `gate.auth` / auth-config chunks + `gate.public`
+      // decoupling from kv-lua strategies (~38.9 kB gzip with export externals).
+      expect(total).toBeLessThan(40_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

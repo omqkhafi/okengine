@@ -1,8 +1,12 @@
 /**
  * `oke({ gate })` — nested Gate bag (auth · policies · rate · posture).
+ *
+ * Auth resolution is sync-lazy via {@link requirePackageModule} so HTTP-only
+ * apps never evaluate `auth/config` (and so `dist/` can ship a separate chunk).
  */
 
-import { resolveGateAuth, type GateAuthOptions, type ResolvedGateAuth } from "../../auth/config.ts";
+import type { GateAuthOptions, ResolvedGateAuth } from "../../auth/config.ts";
+import { requirePackageModule } from "../../shared/lazy-src.ts";
 import type { GateDecl } from "./declare.ts";
 
 /** Rate-limit defaults under Gate. */
@@ -51,8 +55,14 @@ export interface ResolveGateConfigOptions {
  */
 export function resolveGateConfig(options: ResolveGateConfigOptions = {}): ResolvedGateConfig {
   const bag = options.gate ?? {};
-  const auth =
-    bag.auth !== undefined ? resolveGateAuth({ auth: bag.auth, env: options.env }) : undefined;
+  let auth: ResolvedGateAuth | undefined;
+  if (bag.auth !== undefined) {
+    const { resolveGateAuth } = requirePackageModule<typeof import("../../auth/config.ts")>(
+      "auth/config",
+      "auth-config",
+    );
+    auth = resolveGateAuth({ auth: bag.auth, env: options.env });
+  }
   const rateLimitEnabled =
     bag.rateLimit?.enabled !== undefined
       ? bag.rateLimit.enabled

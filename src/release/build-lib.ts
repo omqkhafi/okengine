@@ -22,6 +22,9 @@ const ENTRIES: readonly { readonly src: string; readonly out: string }[] = [
   { src: "src/i18n-entry.ts", out: "dist/i18n-entry.js" },
   { src: "src/compiler-entry.ts", out: "dist/compiler-entry.js" },
   { src: "src/journal-entry.ts", out: "dist/journal-entry.js" },
+  // Lazy sync chunks — loaded via requirePackageModule when gate.auth is set.
+  { src: "src/kernel/app-auth.ts", out: "dist/app-auth.js" },
+  { src: "src/auth/config.ts", out: "dist/auth-config.js" },
 ];
 
 /**
