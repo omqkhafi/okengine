@@ -156,6 +156,11 @@ export interface OkeOptions {
    */
   readonly runs?: BootOptions["runs"];
   /**
+   * Push recorded WideEvents to Console ingest (`oke dev` live Traces bridge).
+   * See {@link BootOptions.runsBridge}.
+   */
+  readonly runsBridge?: BootOptions["runsBridge"];
+  /**
    * Personal fields to archive (crypto-shred) from the validated input.
    * Keys are input property names; values become ciphertext under the
    * subject key.
@@ -903,6 +908,7 @@ export function oke(options: OkeOptions): OkeApp {
       channel: overrides?.channel ?? effectiveChannel,
       ai: overrides?.ai ?? effectiveAi,
       runs: overrides?.runs ?? options.runs,
+      runsBridge: overrides?.runsBridge ?? options.runsBridge,
       bindings: adopted,
       flows: [...flowsByName.values()],
     });
@@ -982,6 +988,7 @@ export function oke(options: OkeOptions): OkeApp {
       },
       ai: overrides?.ai ?? effectiveAi,
       runs: overrides?.runs ?? options.runs,
+      runsBridge: overrides?.runsBridge ?? options.runsBridge,
       now: overrides?.now ?? options.fx?.now,
       instanceId: overrides?.instanceId,
       startScheduler: overrides?.startScheduler ?? options.startScheduler,
@@ -1378,6 +1385,9 @@ export function oke(options: OkeOptions): OkeApp {
           failure: recordFailure,
           id: runId,
           input: replayInput,
+          ...(result.output !== undefined && !recordFailure
+            ? { output: result.output }
+            : {}),
           ...(parentId !== undefined ? { parentId } : {}),
         },
         archiveCleartext,

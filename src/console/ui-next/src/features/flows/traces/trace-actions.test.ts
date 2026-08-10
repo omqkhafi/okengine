@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { RunRow } from "@/client.ts";
-import { replayRequestForRun, runNeedsDryRun } from "./trace-actions.ts";
+import { copyRunIdText, replayRequestForRun, runNeedsDryRun } from "./trace-actions.ts";
 
 function sampleRun(partial: Partial<RunRow> = {}): RunRow {
   return {
@@ -29,11 +29,13 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     endedAt: 13,
     durationMs: 12,
     error: null,
+    errorMessage: null,
     sampled: "sample",
     effects: [],
     logs: [],
     dimensions: {},
     input: null,
+    output: null,
     ...partial,
   };
 }
@@ -63,5 +65,14 @@ describe("replayRequestForRun", () => {
       rootId: "run-42",
       dryRun: true,
     });
+  });
+});
+
+describe("copyRunIdText", () => {
+  test("returns the real run id for the clipboard", () => {
+    expect(copyRunIdText(sampleRun({ id: "pw-run-bookings-create" }))).toBe(
+      "pw-run-bookings-create",
+    );
+    expect(copyRunIdText(sampleRun())).toBe("run-42");
   });
 });

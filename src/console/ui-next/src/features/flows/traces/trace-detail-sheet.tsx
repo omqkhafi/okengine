@@ -64,6 +64,7 @@ import {
   type TimelineView,
   type WaterfallGap,
 } from "./waterfall-timeline.ts";
+import { waterfallBarTooltip } from "./waterfall-tooltip.ts";
 
 /** Props for {@link TraceDetailSheet}. */
 export type TraceDetailSheetProps = {
@@ -121,6 +122,7 @@ export function TraceDetailSheet({
   const [hintTone, setHintTone] = useState<"ok" | "error" | null>(null);
   const [eventsOpen, setEventsOpen] = useState(true);
   const [inputOpen, setInputOpen] = useState(true);
+  const [outputOpen, setOutputOpen] = useState(true);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
@@ -137,6 +139,7 @@ export function TraceDetailSheet({
     setBusy(false);
     setEventsOpen(true);
     setInputOpen(true);
+    setOutputOpen(true);
     setHoverIndex(null);
     setZoom(1);
     setViewStart(0);
@@ -178,7 +181,7 @@ export function TraceDetailSheet({
         side="right"
         showOverlay={false}
         data-slot="trace-detail-sheet"
-        className="inset-y-0 right-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl sm:max-w-xl"
+        className="inset-y-0 right-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl data-[side=right]:sm:max-w-xl"
       >
         {run && trigger ? (
           <>
@@ -197,7 +200,6 @@ export function TraceDetailSheet({
                   </SheetTitle>
                   <SheetDescription className="mt-0.5 text-[11px] text-muted-foreground">
                     {trigger.label}
-                    {run.error ? ` · ${run.error}` : ""}
                   </SheetDescription>
                 </div>
               </div>
@@ -430,8 +432,13 @@ export function TraceDetailSheet({
                 path={requestMeta.path}
                 headline={requestMeta.headline}
                 input={run.input}
+                output={run.output}
+                error={run.error}
+                errorMessage={run.errorMessage}
                 inputOpen={inputOpen}
                 onInputOpenChange={setInputOpen}
+                outputOpen={outputOpen}
+                onOutputOpenChange={setOutputOpen}
               />
             </div>
           </>
@@ -737,8 +744,7 @@ function OverviewTrack({
               )}
             />
             <TooltipContent side="top" className="max-w-xs font-mono text-[11px]">
-              {effectEventLabel(bar)} · {bar.resource} · {formatDuration(bar.durationMs)} · +
-              {formatDuration(bar.startOffsetMs)}
+              {waterfallBarTooltip(bar)}
             </TooltipContent>
           </Tooltip>
         );
@@ -807,7 +813,6 @@ function WaterfallBarRow({
 }): JSX.Element | null {
   const mapped = mapToViewport(bar.offsetRatio, bar.widthRatio, view);
   if (!mapped || mapped.width <= 0) return null;
-  const tip = `${effectEventLabel(bar)} · ${bar.resource} · ${formatDuration(bar.durationMs)} · +${formatDuration(bar.startOffsetMs)}`;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -842,7 +847,7 @@ function WaterfallBarRow({
         )}
       />
       <TooltipContent side="top" className="max-w-xs font-mono text-[11px]">
-        {tip}
+        {waterfallBarTooltip(bar)}
       </TooltipContent>
     </Tooltip>
   );

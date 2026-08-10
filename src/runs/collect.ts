@@ -34,6 +34,8 @@ export interface CollectWideEventInput {
   readonly failure?: FlowFailure | null;
   /** Validated flow input (for local replay). */
   readonly input?: unknown;
+  /** Flow return value when the run completed with an output. */
+  readonly output?: unknown;
   /** Optional parent run id (causal chain). */
   readonly parentId?: string;
   /** Optional run id (generated when omitted). */
@@ -107,6 +109,7 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     ...(input.buildVersion !== undefined ? { buildVersion: input.buildVersion } : {}),
     error,
     ...(input.input !== undefined ? { input: input.input } : {}),
+    ...(input.output !== undefined ? { output: input.output } : {}),
     effects: [...input.ledger.entries],
     logs: [...input.telemetry.logs],
     durationMs,

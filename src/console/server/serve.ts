@@ -25,6 +25,7 @@ import {
 } from "./app.ts";
 import { createLiveWebsocket, type ConsoleLiveData } from "./live.ts";
 import { openConsolePersistence } from "./operator-db.ts";
+import { handleRunsIngest, RUNS_INGEST_PATH } from "./runs-ingest.ts";
 import {
   CONSOLE_COOKIES,
   consoleSessionCookie,
@@ -118,6 +119,11 @@ export async function serveConsole(
       return withConsoleSecurityHeaders(
         new Response("Expected WebSocket upgrade", { status: 426 }),
       );
+    }
+
+    // Host → Console WideEvent bridge (oke dev). Secret-gated; not an operator flow.
+    if (url.pathname === RUNS_INGEST_PATH) {
+      return withConsoleSecurityHeaders(await handleRunsIngest(request, handle));
     }
 
     const authed = withCookieAuth(request);

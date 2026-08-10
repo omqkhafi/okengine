@@ -111,6 +111,8 @@ const RunsListOut = z.object({
       endedAt: z.number(),
       durationMs: z.number(),
       error: z.string().nullable(),
+      /** Human message from the run ledger when present. */
+      errorMessage: z.string().nullable(),
       sampled: z.enum(["full", "error", "sample", "boost"]),
       effects: z.array(EffectEntryOut),
       /** `fx.log` lines — a field on the run, not a parallel stream. */
@@ -119,6 +121,8 @@ const RunsListOut = z.object({
       dimensions: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
       /** Validated flow input snapshot for replay — null when absent. */
       input: z.unknown().nullable(),
+      /** Flow return value snapshot — null when absent (failures / legacy). */
+      output: z.unknown().nullable(),
     }),
   ),
 });
@@ -1889,6 +1893,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
     endedAt: r.endedAt,
     durationMs: r.durationMs,
     error: masked.error?.code ?? null,
+    errorMessage: masked.error?.message ?? null,
     sampled: masked.error ? ("error" as const) : ("sample" as const),
     effects: masked.effects.map((e) => ({
       kind: e.kind,
@@ -1905,6 +1910,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
     })),
     dimensions,
     input: masked.input === undefined ? null : masked.input,
+    output: masked.output === undefined ? null : masked.output,
   };
 }
 

@@ -284,15 +284,22 @@ export type RunRow = {
   readonly endedAt: number;
   readonly durationMs: number;
   readonly error: string | null;
+  /** Optional human message paired with {@link error}. */
+  readonly errorMessage: string | null;
   readonly sampled: "full" | "error" | "sample" | "boost";
   readonly effects: readonly RunEffect[];
   readonly logs: readonly RunLog[];
   readonly dimensions: Record<string, string | number | boolean | null>;
   /**
    * Validated flow input snapshot (powers replay). `null` when the run has
-   * no stored input — never invent a response/output field.
+   * no stored input.
    */
   readonly input: unknown;
+  /**
+   * Flow return value snapshot. `null` when the run has no stored output
+   * (failures, sleeps, or legacy rows).
+   */
+  readonly output: unknown;
 };
 
 /** Runs list payload (`GET /console/runs`). */

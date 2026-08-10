@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format-duration.ts";
 import { durationClassName } from "./duration-tone.ts";
-import { executeTraceReplay } from "./trace-actions.ts";
+import { copyRunIdText, executeTraceReplay } from "./trace-actions.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
 
 function relativeTime(startedAt: number): string {
@@ -74,7 +74,7 @@ export function TraceRow({
   const onCopy = async (e: MouseEvent) => {
     e.stopPropagation();
     try {
-      await copyText(run.id);
+      await copyText(copyRunIdText(run));
       setActionHint("Copied run id");
     } catch {
       setActionHint("Copy failed");

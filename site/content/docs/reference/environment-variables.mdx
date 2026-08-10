@@ -133,10 +133,12 @@ provider's real credentials — credentials alone never send.
 | `OKE_DOCKER`          | `"1"` marks Compose / `oke dev` posture (set by the CLI)                                                              |
 | `OKE_DB_AUTO_PUSH`    | Overrides `db.autoPush` at boot                                                                                       |
 | `OKE_DRIZZLE_DIALECT` | `"postgresql"` for drizzle-kit overlays (templates hardcode it)                                                       |
-| `OKE_DEV_REQUEST_LOG` | `"1"` logs requests during `oke dev` (set by the CLI)                                                                 |
-| `OKE_CONSOLE_SECRET`  | Console operator-session signing secret (HMAC) — set in production; else `.oke/console.secret`. Not a Vault contract. |
-| `PORT`                | App port in production containers (default `6530`)                                                                    |
-| `NODE_ENV`            | `"production"` switches the Console to its production posture                                                         |
+| `OKE_DEV_REQUEST_LOG`     | `"1"` logs requests during `oke dev` (set by the CLI)                                                                 |
+| `OKE_CONSOLE_SECRET`      | Console operator-session signing secret (HMAC) — set in production; else `.oke/console.secret`. Not a Vault contract. |
+| `OKE_RUNS_INGEST_URL`     | Host → Console WideEvent ingest URL (`oke dev` sets this on the app child). Enables a memory runs store + push.       |
+| `OKE_RUNS_INGEST_SECRET`  | Shared secret for `POST /console/runs/ingest` (`x-oke-runs-ingest` header). Minted by `oke dev`; never return events.  |
+| `PORT`                    | App port in production containers (default `6530`)                                                                    |
+| `NODE_ENV`                | `"production"` switches the Console to its production posture                                                         |
 
 Console operator rows are **not** stored in `.oke/console.sqlite`. With `DATABASE_URL` (or
 `OKE_STORE_SQL_URL`) they live in Postgres schema `oke_console`. Without a Postgres URL,

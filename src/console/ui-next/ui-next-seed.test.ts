@@ -56,6 +56,7 @@ describe("ui-next seed", () => {
     expect(run.effects.some((e) => e.kind === "emit" && e.resource === "order-placed")).toBe(true);
     expect(run.logs.length).toBeGreaterThan(0);
     expect(run.input).toEqual({ flightId: "SK-441", seats: 2, cabin: "economy" });
+    expect(run.output).toEqual({ id: "bk_8f2a" });
   });
 
   test("featured runs cover chain + AI + clock elements", () => {
@@ -83,6 +84,8 @@ describe("ui-next seed", () => {
     expect(fulfill?.trigger).toBe("signal");
     expect(fulfill?.effects.some((e) => e.kind === "send")).toBe(true);
     expect(fail?.error?.code).toBe("FlightFull");
+    expect(fail?.output).toBeUndefined();
+    expect(support?.output).toMatchObject({ replyQueued: true, template: "support-reply" });
     expect(support?.effects.some((e) => e.kind === "ask")).toBe(true);
     expect(support?.effects.some((e) => e.kind === "secret" && e.resource === "OPENAI_KEY")).toBe(
       true,

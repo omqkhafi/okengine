@@ -255,6 +255,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     replica: "primary",
     buildVersion: "0.11.2",
     input: { bookingId: "bk_8f2a", amountCents: 42_900, currency: "USD" },
+    output: { intentId: "pi_3Px9k2", bookingId: "bk_8f2a", status: "confirmed" },
     effects: [
       {
         kind: "secret",
@@ -317,6 +318,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
       seats: 2,
       cabin: "economy",
     },
+    output: { id: "bk_8f2a" },
     effects: [
       {
         kind: "read",
@@ -389,6 +391,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     cache: "none",
     buildVersion: "0.11.2",
     input: { signal: "order-placed", bookingId: "bk_8f2a" },
+    output: { bookingId: "bk_8f2a", shipped: true, template: "booking-confirmed" },
     effects: [
       {
         kind: "write",
@@ -504,6 +507,14 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     replica: "replica",
     replicaLagMs: 12,
     buildVersion: "0.11.2",
+    output: {
+      count: 3,
+      bookings: [
+        { id: "bk_8f2a", flightId: "SK-441", seats: 2 },
+        { id: "bk_7c1e", flightId: "SK-118", seats: 1 },
+        { id: "bk_3aa0", flightId: "SK-902", seats: 2 },
+      ],
+    },
     effects: [
       {
         kind: "read",
@@ -547,6 +558,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     cache: "none",
     replica: "primary",
     buildVersion: "0.11.2",
+    output: { scanned: 1284, fixed: 3 },
     effects: [
       {
         kind: "read",
@@ -609,6 +621,11 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     input: {
       bookingId: "bk_8f2a",
       message: "Can I change my seats to window?",
+    },
+    output: {
+      category: "seat_change",
+      replyQueued: true,
+      template: "support-reply",
     },
     effects: [
       {
@@ -689,6 +706,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     gates: [],
     cache: "none",
     buildVersion: "0.11.2",
+    output: { expired: 4 },
     effects: [
       {
         kind: "read",
@@ -884,6 +902,7 @@ export function createUiNextOperationRuns(
         replica: "primary",
         buildVersion: "0.11.2",
         input: { flightId, seats, cabin },
+        output: { id: `bk_ops_${seq}` },
         effects: [
           {
             kind: "read",
@@ -955,6 +974,7 @@ export function createUiNextOperationRuns(
           cache: "none",
           buildVersion: "0.11.2",
           input: { signal: "order-placed", bookingId: `bk_ops_${seq}` },
+          output: { bookingId: `bk_ops_${seq}`, shipped: true },
           effects: [
             {
               kind: "write",
@@ -1078,6 +1098,11 @@ export function createUiNextOperationRuns(
           amountCents,
           currency: "USD",
         },
+        output: {
+          intentId: `pi_ops_${seq}`,
+          bookingId: `bk_ops_${seq}`,
+          status: "confirmed",
+        },
         effects: [
           {
             kind: "secret",
@@ -1137,6 +1162,15 @@ export function createUiNextOperationRuns(
         cost,
         promptVersion: 3,
         buildVersion: "0.11.2",
+        input: {
+          bookingId: `bk_ops_${seq}`,
+          message: "Need help with my booking",
+        },
+        output: {
+          category: "general",
+          replyQueued: true,
+          template: "support-reply",
+        },
         effects: [
           {
             kind: "secret",
@@ -1200,6 +1234,7 @@ export function createUiNextOperationRuns(
         gates: [],
         cache: "none",
         buildVersion: "0.11.2",
+        output: { expired: 1 + Math.floor(rand() * 5) },
         effects: [
           {
             kind: "read",

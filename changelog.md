@@ -53,6 +53,12 @@ needed).
 
 ### ✨ Added
 
+- `oke dev` live Traces bridge: host-app WideEvents POST to Console
+  `POST /console/runs/ingest` (secret-gated). Console appends into its own
+  runs store → existing `feedRun` / `projectRun` PII mask for
+  `GET /console/runs` and `/console/live`. Prod stays opt-in (`oke({ runs })`);
+  the bridge env is set only by `oke dev`.
+
 - ui-next Traces pane parity: contextual `formatDuration` (μs / ms / s), status row
   tint + trigger icons (HTTP / Signal / Clock), persistent selected accent, hover
   Replay + Copy run ID, and All/Errors + duration-threshold filters over the scoped
@@ -72,6 +78,10 @@ needed).
 - ui-next Request section is a protocol frame: method-colored rail, Body with
   Fields/Raw toggle (typed key·value rows + per-field copy), byte size, and
   line-numbered Raw JSON.
+
+- WideEvent / Console runs project optional **`output`** (flow return value),
+  PII-masked like `input`. ui-next trace sheet shows an Output protocol frame;
+  seeded skyport runs include realistic outputs (failures omit them).
 
 - ui-next Traces duration filter uses shadcn Base UI `Select` with cool→hot
   colored dots on each threshold (Any / >10ms…>5s), matching row duration tones.
@@ -120,6 +130,11 @@ needed).
 
 - `motion` (Motion for React) reserved for near-future ui-next animations; import via
   `motion/react`.
+
+### 🔒 Security
+
+- Host → Console runs ingest never returns WideEvent bodies; operator
+  reads stay on the masked `projectRun` path (adversarial PII gate covered).
 
 ## v0.11.2 — 2026-08-10
 

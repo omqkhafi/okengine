@@ -69,6 +69,14 @@ input. Defaults to dry-run when the ledger has `send` / `ask` (pass `--live`
 to override). Needs a build that persisted `WideEvent.input`. Console Traces
 Replay (`POST /console/traces/replay`) uses the same `runReplay` path.
 
+`oke dev` bridges host-app WideEvents into Console Traces: the CLI starts
+Console first, mints a loopback ingest secret, and sets `OKE_RUNS_INGEST_URL` /
+`OKE_RUNS_INGEST_SECRET` on the host child so every recorded run POSTs to
+`POST /console/runs/ingest`. Console appends into its own runs store (live
+`feedRun` → PII-masked `projectRun` for `GET /console/runs` and
+`/console/live`). Production stays opt-in — `oke start` does not enable the
+bridge; set `oke({ runs })` (or future `drivers.runs`) explicitly.
+
 In development, app, Console, MCP, and docs MCP prefer the canonical ports and move upward
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for
 each built-in service, preventing one service's offset port from overlapping another's.

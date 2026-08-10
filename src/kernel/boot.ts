@@ -39,7 +39,13 @@ import type {
   VaultSecretDecl,
 } from "../elements/vault.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
-import type { CreateRunsRuntimeOptions, RunsRuntime } from "../runs/index.ts";
+import {
+  resolveRunsConsoleBridge,
+  wrapRunsForConsoleIngest,
+  type CreateRunsRuntimeOptions,
+  type RunsConsoleBridgeTarget,
+  type RunsRuntime,
+} from "../runs/index.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import { throwOke } from "./errors.ts";
 import type { AnyFlowDef } from "./flow.ts";
@@ -106,6 +112,13 @@ export interface BootOptions {
   readonly ai?: CreateAiRuntimeOptions;
   /** Runs runtime or create options. */
   readonly runs?: RunsRuntime | CreateRunsRuntimeOptions;
+  /**
+   * Push recorded WideEvents to Console ingest (`oke dev` live Traces bridge).
+   * When set (or via `OKE_RUNS_INGEST_*` env), boot enables a memory runs
+   * store automatically. `false` disables env lookup. Prod stays opt-in —
+   * only `oke dev` sets the env.
+   */
+  readonly runsBridge?: RunsConsoleBridgeTarget | false;
   /** Adopted bindings (for every→cron + signal consumers). */
   readonly bindings?: readonly Binding[];
   /** Flows known to the app (for capability minting). */
@@ -225,7 +238,10 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
   let gate = pre.gate !== undefined || (options.gates?.length ?? 0) > 0;
   let channel = pre.channel !== undefined || options.channel !== undefined;
   let ai = pre.ai !== undefined || options.ai !== undefined;
-  let runs = pre.runs !== undefined || options.runs !== undefined;
+  let runs =
+    pre.runs !== undefined ||
+    options.runs !== undefined ||
+    resolveRunsConsoleBridge(options.runsBridge) !== null;
   let journal = pre.journal !== undefined;
 
   const considerFlow = (f: AnyFlowDef): void => {
@@ -467,17 +483,25 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
 
   // 7. Runs
   let runs = pre.runs;
-  if (needs.runs) {
+  const runsBridge = resolveRunsConsoleBridge(options.runsBridge);
+  if (needs.runs || runsBridge) {
     if (!runs) {
       if (options.runs && isRunsRuntime(options.runs)) {
         runs = options.runs;
         if (!runs.store) await runs.open();
       } else {
         const runsOpts = options.runs && !isRunsRuntime(options.runs) ? options.runs : undefined;
+        if (!runsBind) {
+          const m = await loadBind<RunsBind>("runs");
+          runsBind = m;
+        }
         runs = await runsBind!.bindRuns(runsOpts);
       }
     } else if (!runs.store) {
       await runs.open();
+    }
+    if (runs && runsBridge) {
+      runs = wrapRunsForConsoleIngest(runs, runsBridge);
     }
   }
 

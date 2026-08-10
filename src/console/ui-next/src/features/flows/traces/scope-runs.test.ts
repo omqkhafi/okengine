@@ -24,11 +24,13 @@ function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "startedAt"
     endedAt: partial.startedAt + 1,
     durationMs: 1,
     error: null,
+    errorMessage: null,
     sampled: "sample",
     effects: [],
     logs: [],
     dimensions: {},
     input: null,
+    output: null,
     ...partial,
   };
 }

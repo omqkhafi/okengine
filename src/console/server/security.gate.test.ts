@@ -59,6 +59,7 @@ describe("console security gates (whole surface)", () => {
       secret: "test-secret-security-gate",
       silentClaim: true,
       manifest: PII_MANIFEST,
+      runsIngestSecret: "gate-ingest-secret",
     });
 
     const claimRes = await handle.app.fetch(
@@ -182,6 +183,54 @@ describe("console security gates (whole surface)", () => {
     const projected = projectRun(event, pii);
     expect(projected.dimensions.email).toBe(PII_MASK);
     expect(projected.logs[0]?.data?.email).toBe(PII_MASK);
+  });
+
+  test("5b. host ingest path cannot surface unmasked PII via GET /console/runs", async () => {
+    // Ingest is serve-layer (not a console.* flow) — exercise append + list projection.
+    const leak = "ingest-gate@example.com";
+    const { handleRunsIngest, RUNS_INGEST_PATH } = await import("./runs-ingest.ts");
+    const event = {
+      id: "run-ingest-pii",
+      flow: "bookings.create",
+      unit: "bookings",
+      trigger: "http",
+      plane: "user" as const,
+      gates: [],
+      cache: "none" as const,
+      effects: [],
+      logs: [{ level: "info" as const, message: "x", data: { email: leak }, at: 1 }],
+      durationMs: 1,
+      startedAt: 1,
+      endedAt: 2,
+      dimensions: { email: leak, id: "b2" },
+      input: { email: leak },
+    };
+    const ingest = await handleRunsIngest(
+      new Request(`http://console.test${RUNS_INGEST_PATH}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-oke-runs-ingest": "gate-ingest-secret",
+        },
+        body: JSON.stringify({ event }),
+      }),
+      handle,
+    );
+    expect(ingest.status).toBe(204);
+
+    const listRes = await handle.app.fetch(
+      new Request("http://console.test/console/runs", {
+        headers: { authorization: `Bearer ${operatorToken}` },
+      }),
+    );
+    expect(listRes.status).toBe(200);
+    const body = (await listRes.json()) as {
+      data: { runs: readonly { readonly id: string; readonly dimensions: Record<string, unknown> }[] };
+    };
+    const row = body.data.runs.find((r) => r.id === "run-ingest-pii");
+    expect(row).toBeDefined();
+    expect(row!.dimensions.email).toBe(PII_MASK);
+    expect(JSON.stringify(body)).not.toContain(leak);
   });
 
   test("7. every registered console.* flow leaves a Runs entry when executed", async () => {

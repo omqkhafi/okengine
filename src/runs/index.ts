@@ -66,6 +66,16 @@ export {
   type RunsRuntime,
 } from "./runtime.ts";
 
+export {
+  RUNS_INGEST_SECRET_HEADER,
+  RUNS_INGEST_URL_ENV,
+  RUNS_INGEST_SECRET_ENV,
+  resolveRunsConsoleBridge,
+  wrapRunsForConsoleIngest,
+  type RunsConsoleBridgeFetch,
+  type RunsConsoleBridgeTarget,
+} from "./bridge-to-console.ts";
+
 export { privacyErase, type PrivacyEraseOptions, type PrivacyEraseResult } from "./privacy.ts";
 
 export {

@@ -27,11 +27,13 @@ function run(
     endedAt: 2,
     durationMs: 1,
     error: null,
+    errorMessage: null,
     sampled: "sample",
     effects: [],
     logs: [],
     dimensions: {},
     input: null,
+    output: null,
     ...partial,
   };
 }

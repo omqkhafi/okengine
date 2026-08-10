@@ -170,6 +170,11 @@ export interface ConsoleState {
   /** Bound after Console app boot — reads the runs store. */
   listRuns: () => Promise<WideEvent[]>;
   /**
+   * Shared secret for host → Console WideEvent ingest (`oke dev` bridge).
+   * `null` disables `POST /console/runs/ingest`.
+   */
+  readonly runsIngestSecret: string | null;
+  /**
    * Optional host-app re-invoke for `console.traces.replay`.
    * When unset, the flow falls back to CLI-equivalent {@link runReplay}
    * against `cwd` (loads the app entry and re-executes with stored input).
@@ -398,12 +403,16 @@ export interface ConsoleLiveRun {
   readonly endedAt: number;
   readonly durationMs: number;
   readonly error: string | null;
+  /** Optional human message paired with {@link error}. */
+  readonly errorMessage: string | null;
   readonly sampled: "full" | "error" | "sample" | "boost";
   readonly effects: readonly ConsoleLiveRunEffect[];
   readonly logs: readonly ConsoleLiveRunLog[];
   readonly dimensions: Record<string, string | number | boolean | null>;
   /** Validated flow input snapshot — null when the run has no stored input. */
   readonly input: unknown;
+  /** Flow return value snapshot — null when the run has no stored output. */
+  readonly output: unknown;
 }
 
 /** Effect entry on a live run row. */
@@ -473,6 +482,11 @@ export interface CreateConsoleStateOptions {
   readonly persistOperator?: (operatorId: string) => void | Promise<void>;
   /** Persist hook after session issue / revoke. */
   readonly persistSessions?: () => void | Promise<void>;
+  /**
+   * Shared secret for host → Console runs ingest (`oke dev` bridge).
+   * When omitted, ingest is disabled (404).
+   */
+  readonly runsIngestSecret?: string | null;
 }
 
 /**
@@ -666,6 +680,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     listRuns: async () => [],
+    runsIngestSecret: options.runsIngestSecret ?? null,
     replayTrace: null,
     signalConfig,
     signalBus: null,

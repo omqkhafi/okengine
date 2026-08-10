@@ -35,6 +35,7 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     endedAt: 1_056,
     durationMs: 56,
     error: null,
+    errorMessage: null,
     sampled: "sample",
     effects: [
       {
@@ -65,6 +66,7 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     ],
     dimensions: {},
     input: { flightId: "SK-441", seats: 2 },
+    output: { id: "bk_8f2a" },
     ...partial,
   };
 }

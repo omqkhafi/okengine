@@ -46,3 +46,12 @@ export async function executeTraceReplay(
 ): Promise<ConsoleApiResult<TracesReplayResult>> {
   return replay(replayRequestForRun(run));
 }
+
+/**
+ * Clipboard payload for the Trace row "Copy run ID" action — the real run id.
+ *
+ * @param run - Projected run row (or any object with `id`)
+ */
+export function copyRunIdText(run: Pick<RunRow, "id">): string {
+  return run.id;
+}

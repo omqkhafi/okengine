@@ -270,4 +270,87 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await expect(page.locator('[data-slot="trace-request"]')).toBeVisible();
   await expect(page.locator('[data-slot="trace-request-method"]')).toHaveText("POST");
   await expect(page.locator('[data-slot="trace-request"]')).toContainText("/bookings");
+  await expect(page.locator('[data-slot="trace-response"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-response"]')).toContainText("bk_8f2a");
+});
+
+/**
+ * Sign in and open Flows so the seeded Traces pane is ready.
+ *
+ * @param page - Playwright page
+ */
+async function signInAndOpenFlows(page: import("@playwright/test").Page): Promise<void> {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.evaluate(() => sessionStorage.removeItem("oke_console_at"));
+  await page.locator("#email").fill(OPERATOR_EMAIL);
+  await page.locator("#password").fill(OPERATOR_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
+  await expect(page).toHaveURL(/\/flows/);
+  await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible({ timeout: 15_000 });
+}
+
+test("ui-next: failed trace sheet shows error in Response", async ({ page }) => {
+  test.setTimeout(90_000);
+  await signInAndOpenFlows(page);
+
+  const traces = page.locator('[data-slot="traces-pane"]');
+  const failRow = traces.locator('[data-run-id="pw-run-bookings-create-fail"]');
+  await expect(failRow).toBeVisible({ timeout: 15_000 });
+  await failRow.locator("button").first().click();
+
+  await expect(page.locator('[data-slot="trace-detail-sheet"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-response-error"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-response-error"]')).toContainText("FlightFull");
+  await expect(page.locator('[data-slot="trace-response-error"]')).toContainText(
+    "No seats left on SK-902",
+  );
+});
+
+test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(90_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await signInAndOpenFlows(page);
+
+  const traces = page.locator('[data-slot="traces-pane"]');
+  await expect(traces.locator('[data-slot="trace-row"]')).toHaveCount(80, { timeout: 15_000 });
+
+  // 1) Advanced opens the real dimension-query panel and filters the list.
+  await traces.locator('[data-slot="traces-advanced-toggle"]').click();
+  const advanced = traces.locator('[data-slot="traces-advanced-filters"]');
+  await expect(advanced).toBeVisible();
+  await advanced.getByRole("button", { name: "Signal", exact: true }).click();
+  await expect(traces.locator('[data-run-id="pw-run-fulfillment-on-order"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-bookings-create"]')).toHaveCount(0);
+  const signalCount = await traces.locator('[data-slot="trace-row"]').count();
+  expect(signalCount).toBeGreaterThan(0);
+  expect(signalCount).toBeLessThan(80);
+  await advanced.getByRole("button", { name: "Clear" }).click();
+  await expect(traces.locator('[data-slot="trace-row"]')).toHaveCount(80);
+
+  // 2) Copy run ID writes the real run id to the clipboard.
+  const row = traces.locator('[data-run-id="pw-run-bookings-create"]');
+  await row.hover();
+  await row.locator('[data-slot="trace-copy-id"]').click();
+  await expect
+    .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("pw-run-bookings-create");
+
+  // 3) Waterfall bar hover shows kind · resource · duration · +offset.
+  await row.locator("button").first().click();
+  await expect(page.locator('[data-slot="trace-detail-sheet"]')).toBeVisible();
+  const track = page.locator('[data-slot="trace-waterfall-track"]').first();
+  await expect(track).toBeVisible();
+  await track.hover();
+  const tip = page.locator('[data-slot="tooltip-content"]').filter({
+    hasText: "DB query · sql:bookings · 9ms · +3ms",
+  });
+  await expect(tip).toBeVisible({ timeout: 5_000 });
 });

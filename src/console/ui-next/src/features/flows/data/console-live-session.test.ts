@@ -35,11 +35,13 @@ function runRow(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow">): RunRow 
     endedAt: 2,
     durationMs: 1,
     error: null,
+    errorMessage: null,
     sampled: "sample",
     effects: [],
     logs: [],
     dimensions: {},
     input: null,
+    output: null,
     ...partial,
   };
 }

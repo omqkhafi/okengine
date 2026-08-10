@@ -9,7 +9,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { SessionStore } from "../auth/sessions.ts";
 import type { ConsoleAppHandle } from "../console/server/app.ts";
+import { RUNS_INGEST_PATH } from "../console/server/runs-ingest.ts";
 import type { ConsoleState } from "../console/server/state.ts";
+import {
+  RUNS_INGEST_SECRET_ENV,
+  RUNS_INGEST_URL_ENV,
+} from "../runs/bridge-to-console.ts";
 import {
   DEFAULT_DOCKER_DIR,
   deriveInfrastructure,
@@ -1071,6 +1076,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
   }
 
+  /** Host → Console WideEvent ingest secret (live Traces bridge). */
+  const runsIngestSecret = crypto.randomUUID();
+
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
@@ -1081,6 +1089,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         cwd,
         env: "dev",
         silentClaim: options.silentClaim ?? false,
+        runsIngestSecret,
         ...(options.secret !== undefined ? { secret: options.secret } : {}),
         ...(seedManifest !== undefined && seedManifest !== null ? { manifest: seedManifest } : {}),
       });
@@ -1153,10 +1162,19 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       }
     });
 
-  const app = await startApp(plan.entry, env);
-  const boundAppPort = app.port ?? appPort;
+  // Console before host so ingest URL/secret are real when the child boots.
   const consoleServer = await serveConsole(consolePort);
   const boundConsolePort = consoleServer.port ?? consolePort;
+  env.OKE_DEV_HERO_CONSOLE = `http://127.0.0.1:${boundConsolePort}`;
+  const ingestSecret = consoleServer.console?.state.runsIngestSecret;
+  if (ingestSecret) {
+    env[RUNS_INGEST_URL_ENV] =
+      `http://127.0.0.1:${boundConsolePort}${RUNS_INGEST_PATH}`;
+    env[RUNS_INGEST_SECRET_ENV] = ingestSecret;
+  }
+
+  const app = await startApp(plan.entry, env);
+  const boundAppPort = app.port ?? appPort;
 
   let mcpServer: DevMcpHandle | null = null;
   let consoleState: ConsoleState | null = null;

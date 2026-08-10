@@ -104,6 +104,7 @@ describe("zero-instrumentation dimensions", () => {
     expect(e.dimensions.flow).toBe("bookings.create");
     expect(e.dimensions.tenant).toBe("org_a41");
     expect(e.dimensions.cache).toBe("hit");
+    expect(e.output).toEqual({ ok: true });
 
     await runs.close();
   });

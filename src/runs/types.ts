@@ -74,6 +74,11 @@ export interface WideEvent {
    * Declared personal fields may be crypto-shredded into {@link archived}.
    */
   readonly input?: unknown;
+  /**
+   * Flow return value snapshot when the run completed successfully.
+   * Absent on failures / in-flight sleeps — never invent a response.
+   */
+  readonly output?: unknown;
   /** Effect ledger snapshot. */
   readonly effects: readonly EffectEntry[];
   /**
