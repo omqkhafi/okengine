@@ -31,6 +31,7 @@ export {
   bootConsoleApp,
   createConsoleApp,
   ensureConsolePanelRuntimes,
+  wrapConsoleRunsForLive,
   type ConsoleApp,
   type ConsoleAppHandle,
   type CreateConsoleAppOptions,
@@ -88,7 +89,13 @@ export {
 } from "./operator-db.ts";
 export { createConsoleBindings } from "./flows.ts";
 export { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
-export { createLiveWebsocket, feedManifest, subscribeLive, type ConsoleLiveData } from "./live.ts";
+export {
+  createLiveWebsocket,
+  feedManifest,
+  feedRun,
+  subscribeLive,
+  type ConsoleLiveData,
+} from "./live.ts";
 export { consolePlugin } from "./plugin.ts";
 export {
   CONSOLE_COOKIES,
@@ -112,6 +119,9 @@ export {
   setManifest,
   type ConsoleIdentity,
   type ConsoleLiveMessage,
+  type ConsoleLiveRun,
+  type ConsoleLiveRunEffect,
+  type ConsoleLiveRunLog,
   type ConsoleState,
   type CreateConsoleStateOptions,
 } from "./state.ts";

@@ -2,8 +2,12 @@
  * Console live channel — Manifest feed over WebSocket.
  *
  * Spec §5.1: code edit → oxc re-parses → Manifest → WebSocket → Console.
+ * Also carries live run events for the Flow split-view Traces pane.
  */
 
+import type { WideEvent } from "../../runs/types.ts";
+import { projectRun } from "./flows.ts";
+import { piiFieldNamesFromManifest } from "./runs-pii.ts";
 import type { ConsoleLiveMessage, ConsoleState } from "./state.ts";
 import { publishLive } from "./state.ts";
 
@@ -97,4 +101,16 @@ export function feedManifest(
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });
   }
+}
+
+/**
+ * Push one recorded run to live subscribers (Flow split-view Traces).
+ *
+ * @param state - Console state
+ * @param event - Wide event just recorded into the runs store
+ */
+export function feedRun(state: ConsoleState, event: WideEvent): void {
+  if (state.liveSubscribers.size === 0) return;
+  const piiFields = piiFieldNamesFromManifest(state.manifest);
+  publishLive(state, { type: "run", run: projectRun(event, piiFields) });
 }

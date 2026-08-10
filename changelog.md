@@ -28,7 +28,8 @@ needed).
   out mid-progress in dark mode).
 - ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
 - ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
-- ui-next sidebar toggle lives in the sidebar header (end when expanded; logo→trigger on hover when collapsed); main header keeps a mobile-only trigger. Brand/trigger swap uses Motion springs (respects reduced motion).
+- ui-next sidebar toggle lives in the sidebar header (end when expanded; logo→trigger on hover when collapsed). Brand/trigger swap uses Motion springs (respects reduced motion).
+- ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
 
 ### 🐛 Fixed
 

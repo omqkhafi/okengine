@@ -356,7 +356,65 @@ export type ConsoleLiveMessage =
       readonly before: Manifest;
       readonly after: Manifest;
     }
-  | { readonly type: "ping"; readonly at: number };
+  | { readonly type: "ping"; readonly at: number }
+  | { readonly type: "run"; readonly run: ConsoleLiveRun }
+  | { readonly type: "runs.batch"; readonly runs: readonly ConsoleLiveRun[] };
+
+/**
+ * Projected run pushed over the live channel.
+ *
+ * Kept structurally identical to the `GET /console/runs` row projection
+ * (`projectRun` in `flows.ts`) so the client can treat HTTP and WS rows
+ * interchangeably.
+ */
+export interface ConsoleLiveRun {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly flow: string;
+  readonly unit: string | null;
+  readonly trigger: string;
+  readonly plane: string;
+  readonly tenant: string | null;
+  readonly principal: string | null;
+  readonly gates: readonly string[];
+  readonly cache: "hit" | "miss" | "none";
+  readonly replica: "primary" | "replica" | null;
+  readonly replicaLagMs: number | null;
+  readonly cost: number | null;
+  readonly promptVersion: number | null;
+  readonly buildVersion: string | null;
+  readonly startedAt: number;
+  readonly endedAt: number;
+  readonly durationMs: number;
+  readonly error: string | null;
+  readonly sampled: "full" | "error" | "sample" | "boost";
+  readonly effects: readonly ConsoleLiveRunEffect[];
+  readonly logs: readonly ConsoleLiveRunLog[];
+  readonly dimensions: Record<string, string | number | boolean | null>;
+}
+
+/** Effect entry on a live run row. */
+export interface ConsoleLiveRunEffect {
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
+  readonly resource: string;
+  readonly timestamp: number;
+  readonly duration: number;
+  readonly reversibility:
+    | "none"
+    | "reversible"
+    | "deferred"
+    | "irreversible"
+    | "capability"
+    | "portal";
+}
+
+/** Log line on a live run row. */
+export interface ConsoleLiveRunLog {
+  readonly level: "debug" | "info" | "warn" | "error";
+  readonly message: string;
+  readonly data?: Record<string, unknown>;
+  readonly at: number;
+}
 
 /** Options for {@link createConsoleState}. */
 export interface CreateConsoleStateOptions {

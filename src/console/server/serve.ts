@@ -19,6 +19,7 @@ import {
   bindManifestVaultRuntime,
   bootConsoleApp,
   createConsoleApp,
+  wrapConsoleRunsForLive,
   type ConsoleAppHandle,
   type CreateConsoleAppOptions,
 } from "./app.ts";
@@ -95,6 +96,7 @@ export async function serveConsole(
     env: env === "dev" || env === "test" || env === "prod" ? env : "test",
     docker: false,
   });
+  wrapConsoleRunsForLive(handle);
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
     if (!runs) return [];

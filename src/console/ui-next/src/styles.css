@@ -127,3 +127,36 @@
     min-height: 100dvh;
   }
 }
+
+/* React Flow — match Console theme tokens (controls, background, attribution). */
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--muted-foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-attribution-background-color: transparent;
+  --xy-attribution-color: var(--muted-foreground);
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--border);
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}

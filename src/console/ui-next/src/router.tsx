@@ -6,7 +6,6 @@
 import {
   DashboardSquare01Icon,
   Database01Icon,
-  WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import {
   createRootRoute,
@@ -23,6 +22,8 @@ import {
   type SessionOperator,
 } from "./client.ts";
 import { ClaimPage } from "./features/setup/claim-page.tsx";
+import { FlowsPage } from "./features/flows/flows-page.tsx";
+import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
 import { SectionEmpty } from "./components/shell/section-empty.tsx";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -88,15 +89,8 @@ const overviewRoute = createRoute({
 const flowsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/flows",
-  component: function FlowsPage() {
-    return (
-      <SectionEmpty
-        title="Flows is not built yet"
-        description="This section is a real placeholder — Flows content lands in a later phase."
-        icon={WorkflowSquare01Icon}
-      />
-    );
-  },
+  validateSearch: validateFlowsSearch,
+  component: FlowsPage,
 });
 
 const storeRoute = createRoute({

@@ -6,9 +6,11 @@ import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
+import type { RunsRuntime } from "../../runs/index.ts";
 import { createManifestAiRuntime } from "./ai.ts";
 import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";
+import { feedRun } from "./live.ts";
 import { consolePlugin } from "./plugin.ts";
 import {
   bindAiRuntime,
@@ -147,6 +149,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
  */
 export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> {
   await handle.app.boot({ env: "test" });
+  wrapConsoleRunsForLive(handle);
   handle.state.listRuns = async () => {
     const runs = handle.app.bootResult?.runs;
     if (!runs) return [];
@@ -156,6 +159,34 @@ export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> 
   // via list* methods / bindManifest* callers) — not all seventeen at boot.
   return handle.app;
 }
+
+/**
+ * Wrap the Console runs runtime so every recorded wide event is also pushed
+ * to `/console/live` subscribers (Flow split-view Traces). Idempotent.
+ *
+ * @param handle - Console app handle
+ */
+export function wrapConsoleRunsForLive(handle: ConsoleAppHandle): void {
+  const runs = handle.app.bootResult?.runs;
+  if (!runs) return;
+  const flagged = runs as RunsRuntime & { [RUNS_LIVE_WRAPPED]?: true };
+  if (flagged[RUNS_LIVE_WRAPPED]) return;
+  const state = handle.state;
+  const origRecord = runs.record.bind(runs);
+  const origAppend = runs.append.bind(runs);
+  runs.record = async (input, archiveCleartext) => {
+    const event = await origRecord(input, archiveCleartext);
+    feedRun(state, event);
+    return event;
+  };
+  runs.append = async (event) => {
+    await origAppend(event);
+    feedRun(state, event);
+  };
+  flagged[RUNS_LIVE_WRAPPED] = true;
+}
+
+const RUNS_LIVE_WRAPPED = Symbol.for("oke.console.runs.liveWrapped");
 
 /**
  * Ensure Manifest-backed element runtimes for a panel are bound (idempotent).

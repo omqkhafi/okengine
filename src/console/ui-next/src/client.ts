@@ -3,6 +3,8 @@
  * Same-origin `/console/*` (no mocks).
  */
 
+import type { Manifest } from "../../../manifest/types.ts";
+
 /** Session access token key (matches current Console SPA). */
 export const ACCESS_TOKEN_KEY = "oke_console_at";
 
@@ -224,4 +226,78 @@ export async function sessionLogin(body: SessionLoginInput): Promise<ConsoleApiR
  */
 export async function sessionMe(): Promise<ConsoleApiResult<SessionMe>> {
   return consoleFetch<SessionMe>("/console/session/me");
+}
+
+/** Manifest snapshot payload (`GET /console/manifest`). */
+export type ManifestPayload = {
+  readonly manifest: Manifest | null;
+};
+
+/**
+ * GET /console/manifest — Manifest snapshot for the Flow graph.
+ */
+export async function manifestGet(): Promise<ConsoleApiResult<ManifestPayload>> {
+  return consoleFetch<ManifestPayload>("/console/manifest");
+}
+
+/** Effect entry on a run row (matches server `RunsListOut`). */
+export type RunEffect = {
+  readonly kind: "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
+  readonly resource: string;
+  readonly timestamp: number;
+  readonly duration: number;
+  readonly reversibility:
+    | "none"
+    | "reversible"
+    | "deferred"
+    | "irreversible"
+    | "capability"
+    | "portal";
+};
+
+/** Log line on a run row (matches server `RunsListOut`). */
+export type RunLog = {
+  readonly level: "debug" | "info" | "warn" | "error";
+  readonly message: string;
+  readonly data?: Record<string, unknown>;
+  readonly at: number;
+};
+
+/** One run row from `GET /console/runs` (matches server `projectRun`). */
+export type RunRow = {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly flow: string;
+  readonly unit: string | null;
+  readonly trigger: string;
+  readonly plane: string;
+  readonly tenant: string | null;
+  readonly principal: string | null;
+  readonly gates: readonly string[];
+  readonly cache: "hit" | "miss" | "none";
+  readonly replica: "primary" | "replica" | null;
+  readonly replicaLagMs: number | null;
+  readonly cost: number | null;
+  readonly promptVersion: number | null;
+  readonly buildVersion: string | null;
+  readonly startedAt: number;
+  readonly endedAt: number;
+  readonly durationMs: number;
+  readonly error: string | null;
+  readonly sampled: "full" | "error" | "sample" | "boost";
+  readonly effects: readonly RunEffect[];
+  readonly logs: readonly RunLog[];
+  readonly dimensions: Record<string, string | number | boolean | null>;
+};
+
+/** Runs list payload (`GET /console/runs`). */
+export type RunsListPayload = {
+  readonly runs: RunRow[];
+};
+
+/**
+ * GET /console/runs — recent wide events for the Traces pane.
+ */
+export async function runsList(): Promise<ConsoleApiResult<RunsListPayload>> {
+  return consoleFetch<RunsListPayload>("/console/runs");
 }
