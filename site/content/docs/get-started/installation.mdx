@@ -107,6 +107,11 @@ configured.**
 stays in sync. Opt out with `oke dev --no-db-push` or
 `db: { autoPush: false }` in `oke.config.ts`.
 
+A broken `schema.decl.ts` (bad table / relation definition) prints a red ●
+`schema.decl.ts has an error — …` line and keeps the session up — it is never
+framed as a quiet `skipped`. Environmental gaps (no `oke.config.ts` / no
+images yet) still soft-skip.
+
 For production, generate and apply migrations deliberately — never automatic on
 boot:
 

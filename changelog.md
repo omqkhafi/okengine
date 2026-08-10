@@ -37,6 +37,10 @@ needed).
 
 ### 🐛 Fixed
 
+- `oke dev` schema sync: a broken `schema.decl.ts` (table / relation definition
+  error) now prints a red ● `schema.decl.ts has an error — …` line instead of the
+  soft `oke db push (dev) skipped — …` framing that looked like a benign skip.
+  Environmental gaps (no config / no images) still soft-skip; the session stays up.
 - Share one warmed in-memory PGlite per remaining dialect test file
   (`sql-session` / `resource` / `index-boot`) and raise `beforeAll` hook
   budgets to 15s so Bun does not mis-report cold WASM as a hook timeout

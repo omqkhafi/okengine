@@ -38,6 +38,7 @@ import {
   formatServiceLine,
   formatStackSummary,
   formatStatusLine,
+  termColorEnabled,
   type BootProgress,
   type DevStatus,
   type StackSummaryService,
@@ -358,8 +359,14 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     });
   try {
     await syncAdoptBarrel(cwd);
-  } catch {
-    /* best-effort — boot-time assertAdoptBarrelFresh (rootDir opt-in) is the real gate */
+  } catch (err) {
+    // Best-effort: boot-time assertAdoptBarrelFresh (rootDir opt-in) is the real gate.
+    // Still surface so a broken generator is not fully silent in the boot log.
+    write(
+      formatStatusLine(
+        `.adopt() barrel sync skipped — ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
   }
 
   const preferredApp = options.appPort ?? Number(Bun.env.PORT ?? APP_PORT);
@@ -425,7 +432,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     };
     if (typeof pkg.version === "string") okeVersion = pkg.version;
   } catch {
-    // shipped binary may not sit next to package.json
+    // Inconsequential: banner version only — shipped binaries may not sit next to package.json.
   }
   const earlyProfile = resolveDevProfile({ docker: true, nodeEnv: "development" });
   write(
@@ -473,8 +480,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   let loadedConfig: Awaited<ReturnType<typeof loadOkeConfig>>["config"] | null = null;
   try {
     loadedConfig = (await loadOkeConfig(cwd)).config;
-  } catch {
+  } catch (err) {
     loadedConfig = null;
+    const msg = err instanceof Error ? err.message : String(err);
+    // Missing config is common for injectable/`--images` trees; surface parse bugs only.
+    if (!/no oke\.config\.ts found/i.test(msg)) {
+      write(formatStatusLine(`oke.config.ts load skipped — ${msg}`));
+    }
   }
 
   {
@@ -496,8 +508,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     } else if (!loadedConfig) {
       try {
         loadedConfig = (await loadOkeConfig(cwd)).config;
-      } catch {
+      } catch (err) {
         loadedConfig = null;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/no oke\.config\.ts found/i.test(msg)) {
+          write(formatStatusLine(`oke.config.ts load skipped — ${msg}`));
+        }
       }
     }
     if (Array.isArray(options.docker)) {
@@ -1003,11 +1019,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         });
       }
     } catch (err) {
-      write(
-        formatStatusLine(
-          `oke db push (dev) skipped — ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      );
+      write(await formatDevSchemaSyncFailure(cwd, err, "boot"));
     }
   }
 
@@ -1054,7 +1066,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       const next = await extractManifest({ rootDir: cwd });
       feedManifest(state, next);
     } catch {
-      // Source may be mid-edit — keep the last good Manifest.
+      // Inconsequential while watching: mid-edit parse failures are expected on every
+      // keystroke — keep the last good Manifest. Logging here would flood the Logs pane.
     }
   }
 
@@ -1130,8 +1143,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           out: resolve(cwd, "oke-client.d.ts"),
         });
         write(formatStatusLine("regenerated oke-client.d.ts"));
-      } catch {
-        // App may not be ready yet — ignore until next save.
+      } catch (err) {
+        // App may not be ready yet on first tick — still surface so a stuck regen is visible.
+        write(
+          formatStatusLine(
+            `oke-client.d.ts regen skipped — ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        );
       }
     });
 
@@ -1196,8 +1214,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     write(formatStatusLine("oke db push (schema change)"));
     try {
       await dbPush(cwd);
-    } catch {
-      // Mid-edit / kit unavailable — next save retries.
+    } catch (err) {
+      // Dev-loop stays up (next save retries) — but definition errors must not look like a quiet skip.
+      write(await formatDevSchemaSyncFailure(cwd, err, "watch"));
     }
   });
 
@@ -1394,7 +1413,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
       // Esc / unmount without q — still tear down.
       stop();
     } catch {
-      // Ink optional — fall back to keep-alive without keyboard chrome.
+      // Inconsequential: Ink/TUI is optional chrome — fall back to keep-alive without keyboard.
       await new Promise(() => {});
     }
     return { code: 0, plan: session.plan, session };
@@ -1421,6 +1440,75 @@ function isSparseManifest(manifest: Manifest): boolean {
 }
 
 /**
+ * Environmental syncDevSchema throws that are fine to soft-skip in the
+ * compose (`dev`) boot path — no Store / no docker images yet, etc.
+ *
+ * @param message - Caught error message
+ */
+function isBenignDevSchemaEnvSkip(message: string): boolean {
+  return (
+    message.startsWith("docker mode: oke.config.ts not found") ||
+    message.startsWith("docker mode: no images configured")
+  );
+}
+
+/**
+ * Whether a caught sync/push error is a schema.decl definition failure
+ * (import evaluation, emit, duplicate tables, bad `.references()`, …).
+ *
+ * Message text alone is insufficient — emit-time bugs often look like bare
+ * TypeErrors (`target.tableName`) — so also inspect the stack for declare /
+ * emit frames.
+ *
+ * @param err - Caught value
+ * @param declarePath - Resolved schema.decl path for this project
+ */
+function isSchemaDeclDefinitionError(err: unknown, declarePath: string): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? (err.stack ?? "") : "";
+  const blob = `${msg}\n${stack}`;
+  if (/failed to load schema declare|store schema:|oke schema emit:/i.test(blob)) return true;
+  if (/schema\.decl/i.test(blob)) return true;
+  if (/emit-drizzle|emitColumnSource|emitDrizzleSource|maybeEmitDomainSchema/i.test(blob)) {
+    return true;
+  }
+  return declarePath.length > 0 && blob.includes(declarePath);
+}
+
+/**
+ * Frame a schema-sync failure for the `oke dev` loop: warn loud for developer
+ * bugs, soft-skip only known environmental gaps. Never crashes the session.
+ *
+ * Matches the fail-loud status style used by compose controls (`failed —` +
+ * red ●), and ADOPT_BARREL_STALE's "never silent" posture — without turning
+ * this path into a hard boot failure.
+ *
+ * @param cwd - Project root
+ * @param err - Caught value from {@link syncDevSchema} / watch push
+ * @param context - Boot one-shot vs schema-watch auto-push
+ */
+async function formatDevSchemaSyncFailure(
+  cwd: string,
+  err: unknown,
+  context: "boot" | "watch",
+): Promise<string> {
+  const msg = err instanceof Error ? err.message : String(err);
+  const color = termColorEnabled();
+  if (isBenignDevSchemaEnvSkip(msg)) {
+    return formatStatusLine(`oke db push (dev) skipped — ${msg}`, color);
+  }
+
+  const { resolveEmitPaths } = await import("../elements/store/emit-drizzle.ts");
+  const { declarePath } = resolveEmitPaths(cwd);
+  if (isSchemaDeclDefinitionError(err, declarePath)) {
+    return formatStatusLine(`schema.decl.ts has an error — ${msg}`, color, "error");
+  }
+
+  const label = context === "watch" ? "oke db push (schema change)" : "oke db push (dev)";
+  return formatStatusLine(`${label} failed — ${msg}`, color, "error");
+}
+
+/**
  * Load Manifest — prefer AoT extract from `src/` when it has flows;
  * otherwise on-disk JSON snapshots; otherwise a sparse extract.
  *
@@ -1432,7 +1520,8 @@ async function tryLoadProjectManifest(cwd: string): Promise<Manifest | null | un
     const { extractManifest } = await import("../compiler/extract.ts");
     extracted = await extractManifest({ rootDir: cwd });
   } catch {
-    // Fall through to JSON snapshots.
+    // Inconsequential here: extract is one of two sources — fall through to on-disk JSON
+    // snapshots. A broken source tree still boots Console with the last good Manifest file.
   }
 
   let fromDisk: Manifest | undefined;
@@ -1492,7 +1581,7 @@ async function startAppHot(
       // open (create-oke afterEach `rmSync` otherwise races the child exit).
       proc.kill("SIGKILL");
     } catch {
-      // already exited
+      // Inconsequential: process already exited — kill is idempotent best-effort.
     }
     void unlink(readyPath).catch(() => {});
   };

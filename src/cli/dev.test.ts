@@ -872,3 +872,119 @@ describe("oke dev Docker-first", () => {
     }
   });
 });
+
+describe("oke dev schema.decl sync framing", () => {
+  let session: DevSession | undefined;
+
+  afterEach(() => {
+    session?.stop();
+    session = undefined;
+  });
+
+  test("schema-definition error is a loud failure line, not a benign skip", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-schema-decl-err-"));
+    await mkdir(join(dir, "src/db"), { recursive: true });
+    await Bun.write(
+      join(dir, "oke.config.ts"),
+      `export default {
+  name: "schema-decl-err",
+  images: {
+    "store.sql": "postgres:16-alpine",
+    "store.kv": "redis:7-alpine",
+  },
+  drivers: {
+    store: { sql: { dev: "postgres", test: "pglite", prod: "postgres" } },
+  },
+};
+`,
+    );
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    // Genuine definition error: `.references()` target is undefined → emit throws.
+    await Bun.write(
+      join(dir, "src/db/schema.decl.ts"),
+      `import { store, field } from ${JSON.stringify(OKE_INDEX)};
+
+export const authors = store.schema.table("authors", {
+  id: field.text().primaryKey(),
+});
+
+export const posts = store.schema.table("posts", {
+  id: field.text().primaryKey(),
+  authorId: field.text().notNull().references(() => (authors as { missingColumn: never }).missingColumn),
+});
+`,
+    );
+
+    const writes: string[] = [];
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      silentClaim: true,
+      keepAlive: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      docsMcpPort: 0,
+      ...stubCompose({ noDbPush: false }),
+      startApp: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: (t) => {
+        writes.push(t);
+      },
+      serveConsole: async () => ({ stop() {} }),
+      serveMcp: async () => ({ stop() {} }),
+      serveDocsMcp: async () => ({
+        stop() {},
+        port: 1,
+        url: new URL("http://127.0.0.1:1"),
+      }),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+
+    const plain = writes.join("").replace(/\x1b\[[0-9;]*m/g, "");
+    expect(plain).toContain("schema.decl.ts has an error");
+    expect(plain).toMatch(/●\s*schema\.decl\.ts has an error/);
+    expect(plain).not.toContain("oke db push (dev) skipped");
+  }, 60_000);
+
+  test("benign environmental sync gap still uses skip framing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-schema-skip-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+    // No oke.config.ts — syncDevSchema(env=dev) throws the known docker-mode skip.
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+
+    const writes: string[] = [];
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      silentClaim: true,
+      keepAlive: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      docsMcpPort: 0,
+      ...stubCompose({ noDbPush: false }),
+      startApp: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: (t) => {
+        writes.push(t);
+      },
+      serveConsole: async () => ({ stop() {} }),
+      serveMcp: async () => ({ stop() {} }),
+      serveDocsMcp: async () => ({
+        stop() {},
+        port: 1,
+        url: new URL("http://127.0.0.1:1"),
+      }),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+
+    const plain = writes.join("").replace(/\x1b\[[0-9;]*m/g, "");
+    expect(plain).toContain("oke db push (dev) skipped — docker mode: oke.config.ts not found");
+    expect(plain).not.toContain("schema.decl.ts has an error");
+  }, 60_000);
+});
