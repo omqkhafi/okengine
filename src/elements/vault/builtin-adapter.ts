@@ -1258,8 +1258,19 @@ export async function writeBackupFileAtomic(path: string, blob: Uint8Array): Pro
  * @param bytes - Payload to hash
  */
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
   return Buffer.from(digest).toString("hex");
+}
+
+/**
+ * Copy into a real `ArrayBuffer` for Web Crypto `BufferSource` typing.
+ *
+ * @param view - Source bytes (may be backed by `ArrayBufferLike`)
+ */
+function toArrayBuffer(view: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(view);
+  return copy.buffer;
 }
 
 /**

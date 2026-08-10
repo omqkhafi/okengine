@@ -166,10 +166,12 @@ describe("chaos — 2. concurrent rotateMaster", () => {
     const rejected = [ra, rb].filter((r) => r.status === "rejected");
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    const rejectMsg =
-      rejected[0]!.status === "rejected" && rejected[0].reason instanceof Error
-        ? rejected[0].reason.message
-        : "";
+    const loser = rejected[0];
+    expect(loser).toBeDefined();
+    if (loser === undefined || loser.status !== "rejected") {
+      throw new Error("expected exactly one rejected rotateMaster");
+    }
+    const rejectMsg = loser.reason instanceof Error ? loser.reason.message : String(loser.reason);
     expect(rejectMsg).toMatch(/lease held|already in progress/i);
 
     const winnerKey = ra.status === "fulfilled" ? keyA : keyB;
@@ -461,7 +463,9 @@ describe("chaos — 4. crash mid-backup", () => {
       expect(marker.startsWithMagic).toBe(true);
 
       const partial = new Uint8Array(await Bun.file(bundlePath).arrayBuffer());
-      expect(new TextDecoder().decode(partial.subarray(0, 20))).toContain("oke-vault-backup");
+      expect(new TextDecoder().decode(partial.subarray(0, BACKUP_MAGIC.length))).toBe(
+        BACKUP_MAGIC,
+      );
       expect(
         new TextDecoder().decode(partial.subarray(Math.max(0, partial.byteLength - 32))),
       ).not.toContain(BACKUP_END_MARKER.trim());
