@@ -102,11 +102,14 @@ describe("console dry-run / preview audit", () => {
     expect(slice).toContain("state.previewChannel");
   });
 
-  test("Traces dryRun is metadata / logging, not withDryRun execution", async () => {
+  test("Traces replay delegates to runReplay (oke replay), not a log-only stub", async () => {
     const flows = await Bun.file(`${import.meta.dir}/flows.ts`).text();
     const idx = flows.indexOf('flow("console.traces.replay"');
     expect(idx).toBeGreaterThan(0);
-    const slice = flows.slice(idx, idx + 500);
+    const slice = flows.slice(idx, idx + 1_800);
+    expect(slice).toContain("runReplay");
+    expect(slice).toContain("eventHasIrreversible");
+    // Kernel withDryRun stays inside cli/replay — Console flow must not call it directly.
     expect(slice).not.toContain("withDryRun");
   });
 });

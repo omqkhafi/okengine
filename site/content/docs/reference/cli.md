@@ -28,8 +28,9 @@ oke start                        # runs exactly what production runs (this is th
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
                                  #   → `bun run dev:console-next` boots kernel + Vite and prints the claim
-                                 #   → `bun run dev:console-next:seeded` same + FLOWS_TEST_MANIFEST graph
-                                 #     and one bookings.create trace (click Traces row → highlight node)
+                                 #   → `bun run dev:console-next:seeded` same + all 8 elements + ~80 traces
+                                 #     (flow/signal/store/clock/gate/vault/channel/ai + ops traffic;
+                                 #     click Traces row → highlight chain; hover → Replay / Copy run ID)
                                  #   → after `bun run test:console:setup-ui-next`, open the HTML report:
                                  #     `bun run test:console:setup-ui-next:report` (trace + screenshots + video)
 oke stack                        # preview resolved images/tags/ports — writes nothing
@@ -65,7 +66,8 @@ oke upgrade                      # run codemods for a breaking change, print the
 
 `oke replay` loads a Runs WideEvent by id and re-enters the Flow with stored
 input. Defaults to dry-run when the ledger has `send` / `ask` (pass `--live`
-to override). Needs a build that persisted `WideEvent.input`.
+to override). Needs a build that persisted `WideEvent.input`. Console Traces
+Replay (`POST /console/traces/replay`) uses the same `runReplay` path.
 
 In development, app, Console, MCP, and docs MCP prefer the canonical ports and move upward
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for

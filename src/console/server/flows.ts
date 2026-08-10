@@ -18,6 +18,8 @@ import {
 import { DryRunWriteIsolationError } from "../../kernel/dry-run.ts";
 import { fail, flow, http, type AnyFlowDef, type Binding } from "../../kernel/index.ts";
 import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts";
+import { eventHasIrreversible, runReplay } from "../../cli/replay.ts";
+import { createRunsRuntime } from "../../runs/runtime.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
@@ -129,6 +131,17 @@ const TracesReplayOut = z.object({
   rootId: z.string(),
   dryRun: z.boolean(),
   at: z.number(),
+  flow: z.string(),
+});
+
+const ReplayUnavailable = z.object({
+  rootId: z.string(),
+  reason: z.enum(["no_stored_input"]),
+});
+
+const ReplayFailed = z.object({
+  rootId: z.string(),
+  message: z.string(),
 });
 
 const SignalEndpointOut = z.object({
@@ -1897,23 +1910,61 @@ function createTracesReplay(state: ConsoleState) {
     plane: "operator",
     in: TracesReplayIn,
     out: TracesReplayOut,
-    errors: { AuthFailed, NotFound },
+    errors: { AuthFailed, NotFound, ReplayUnavailable, ReplayFailed },
     do: async (input: z.infer<typeof TracesReplayIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
       const root = all.find((r) => r.id === input.rootId);
       if (!root) return fail("NotFound", { flowId: input.rootId });
+      if (root.input === undefined) {
+        return fail("ReplayUnavailable", {
+          rootId: input.rootId,
+          reason: "no_stored_input" as const,
+        });
+      }
+
+      const irreversible = eventHasIrreversible(root);
+      const dryRun = input.dryRun || irreversible;
+
+      const runs = createRunsRuntime({ driver: "memory" });
+      await runs.open();
+      await runs.append(root);
+
+      const lines: string[] = [];
+      const code = await runReplay({
+        requestId: input.rootId,
+        cwd: state.cwd,
+        dryRun: dryRun ? true : undefined,
+        live: dryRun ? undefined : true,
+        runs,
+        write: (t) => lines.push(t),
+        ...(state.replayTrace
+          ? {
+              executeReplay: async (_entry: string, event: WideEvent, d: boolean) =>
+                state.replayTrace!({ event, dryRun: d }),
+            }
+          : {}),
+      });
+
+      if (code !== 0) {
+        return fail("ReplayFailed", {
+          rootId: input.rootId,
+          message: lines.join("").trim() || "replay failed",
+        });
+      }
+
       fx.log.info("console.traces.replay", {
         operatorId: fx.operator.id,
         rootId: input.rootId,
-        dryRun: input.dryRun,
+        dryRun,
         flow: root.flow,
       });
       return {
         ok: true as const,
         rootId: input.rootId,
-        dryRun: input.dryRun,
+        dryRun,
         at: Date.now(),
+        flow: root.flow,
       };
     },
   });

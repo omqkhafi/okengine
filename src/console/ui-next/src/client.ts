@@ -301,3 +301,32 @@ export type RunsListPayload = {
 export async function runsList(): Promise<ConsoleApiResult<RunsListPayload>> {
   return consoleFetch<RunsListPayload>("/console/runs");
 }
+
+/** Request body for `POST /console/traces/replay`. */
+export type TracesReplayInput = {
+  readonly rootId: string;
+  readonly dryRun: boolean;
+};
+
+/** Success payload from `POST /console/traces/replay`. */
+export type TracesReplayResult = {
+  readonly ok: true;
+  readonly rootId: string;
+  readonly dryRun: boolean;
+  readonly at: number;
+  readonly flow: string;
+};
+
+/**
+ * POST /console/traces/replay — re-invoke a past run via the same path as `oke replay`.
+ *
+ * @param body - Root run id + dry-run preference
+ */
+export async function tracesReplay(
+  body: TracesReplayInput,
+): Promise<ConsoleApiResult<TracesReplayResult>> {
+  return consoleFetch<TracesReplayResult>("/console/traces/replay", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

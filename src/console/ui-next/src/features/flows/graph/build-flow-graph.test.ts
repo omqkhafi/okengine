@@ -7,10 +7,12 @@ import type { Manifest } from "../../../../../../manifest/types.ts";
 import { FLOWS_TEST_MANIFEST } from "../../../../../ui/flows/fixture.ts";
 import {
   applyChainHighlight,
+  applyEdgeHighlight,
   buildFlowGraph,
   unitOfFlowId,
   actionOfFlowId,
 } from "./build-flow-graph.ts";
+import { EDGE_STROKE } from "./flow-graph-theme.ts";
 
 /** Fixture with an AI ask so the graph covers every effect edge kind. */
 const baseFlows = FLOWS_TEST_MANIFEST.flows!;
@@ -89,8 +91,9 @@ describe("buildFlowGraph", () => {
   test("edges are declared Manifest effects — not runtime traffic", () => {
     const edgeIds = new Set(edges.map((e) => e.id));
 
-    // reads/writes → store
-    expect(edgeIds.has("e:flow:bookings.create->sql:bookings")).toBe(true);
+    // reads / writes are distinct edges (color-coded by kind), even to the same store
+    expect(edgeIds.has("e:flow:bookings.create-reads->sql:bookings")).toBe(true);
+    expect(edgeIds.has("e:flow:bookings.create-writes->sql:bookings")).toBe(true);
     // emits → signal
     expect(edgeIds.has("e:flow:bookings.create->signal:order-placed")).toBe(true);
     // trigger.signal → inbound to flow
@@ -98,11 +101,35 @@ describe("buildFlowGraph", () => {
     // calls → flow→flow (animated)
     const call = edges.find((e) => e.id === "e:flow:payments.chargeBooking->flow:bookings.create");
     expect(call?.animated).toBe(true);
+    expect(call?.data?.kind).toBe("calls");
     // asks → AI
     expect(edgeIds.has("e:flow:payments.chargeBooking->ai:ticket-triage")).toBe(true);
 
     // No phantom runtime-only edges (e.g. from a live run that never appears in Manifest).
     expect(edges.every((e) => !e.id.includes("runtime"))).toBe(true);
+  });
+
+  test("edge strokes encode effect kind as real color (not style-only)", () => {
+    const byKind = new Map(edges.map((e) => [e.data?.kind, e.style?.stroke]));
+    expect(byKind.get("reads")).toBe("#2DD4BF");
+    expect(byKind.get("writes")).toBe("#FB923C");
+    expect(byKind.get("emits")).toBe("#FBBF24");
+    expect(byKind.get("calls")).toBe("#60A5FA");
+    expect(byKind.get("asks")).toBe("#FB7185");
+    expect(byKind.get("trigger")).toBe("#FBBF24");
+    // Every edge is an explicit smoothstep ribbon (never straight/step).
+    expect(edges.every((e) => e.type === "smoothstep")).toBe(true);
+  });
+
+  test("unit groups hug content bounds instead of a fixed dead-space box", () => {
+    const unit = nodes.find((n) => n.id === "unit:fulfillment");
+    const flow = nodes.find((n) => n.id === "flow:fulfillment.onOrder");
+    expect(unit?.style?.width).toBeLessThan(280);
+    expect(unit?.style?.height).toBeLessThan(120);
+    expect(flow?.parentId).toBe("unit:fulfillment");
+    // Child sits inside the header/pad chrome, not at a naive ROW_H stack offset.
+    expect(flow?.position.y).toBeGreaterThan(20);
+    expect(flow?.position.y).toBeLessThan(40);
   });
 
   test("empty / null Manifest yields an empty graph", () => {
@@ -137,5 +164,26 @@ describe("applyChainHighlight", () => {
   test("leaves nodes undimmed when nothing is selected", () => {
     const next = applyChainHighlight(nodes, new Set(), new Set());
     expect(next.every((n) => n.data.kind === "unit" || n.data.dimmed !== true)).toBe(true);
+  });
+});
+
+describe("applyEdgeHighlight", () => {
+  const { nodes, edges } = buildFlowGraph(GRAPH_MANIFEST);
+
+  test("mutes off-chain edges when a chain is active", () => {
+    const highlighted = applyChainHighlight(
+      nodes,
+      new Set(["bookings.create", "fulfillment.onOrder"]),
+      new Set(["signal:order-placed"]),
+    );
+    const next = applyEdgeHighlight(edges, highlighted);
+    const emit = next.find((e) => e.id === "e:flow:bookings.create->signal:order-placed");
+    const trigger = next.find((e) => e.id === "e:signal:order-placed->flow:fulfillment.onOrder");
+    const call = next.find((e) => e.id === "e:flow:payments.chargeBooking->flow:bookings.create");
+
+    expect(emit?.style?.opacity).toBe(1);
+    expect(trigger?.style?.opacity).toBe(1);
+    expect(call?.style?.opacity).toBe(0.32);
+    expect(emit?.style?.stroke).toBe(EDGE_STROKE.emits);
   });
 });

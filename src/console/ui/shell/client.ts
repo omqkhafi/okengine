@@ -210,6 +210,7 @@ interface ConsoleClient {
       rootId: string;
       dryRun: boolean;
       at: number;
+      flow: string;
     }>;
     signalsList: (input: Record<string, never>) => CallResult<{
       signals: Array<{

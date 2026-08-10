@@ -22,6 +22,12 @@ needed).
 
 ### ♻️ Changed
 
+- ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
+  color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,
+  selection glow + desaturated dim, tighter unit-group bounds.
+- ui-next seeded mode ships a lived-in skyport slice: payments→bookings.create→fulfillment
+  chain (effects, logs, tenants, input), a `FlightFull` failure, `bookings.mine` poll,
+  and `ops.nightlyReconcile` cron — all eight elements (flow · signal · store · clock · gate · vault · channel · ai) plus eight featured story rows and 72 operational traces (~80 total).
 - Console first-operator claim keeps a stricter minLength **12** with the same character classes
   (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
 - ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
@@ -47,10 +53,24 @@ needed).
 
 ### ✨ Added
 
+- ui-next Traces pane parity: contextual `formatDuration` (μs / ms / s), status row
+  tint + trigger icons (HTTP / Signal / Clock), persistent selected accent, hover
+  Replay + Copy run ID, and All/Errors + duration-threshold filters over the scoped
+  runs list. `POST /console/traces/replay` now re-invokes through `runReplay` (same
+  path as `oke replay --request-id`), not a log-only stub.
+
+- ui-next Traces **Advanced** filtering: progressive-disclosure dimension query
+  (`flow = X AND cache = miss AND duration > 1s`) with presets, chips, and
+  expression editor — same language as Runs (§9.11), client-side on the scoped list.
+- ui-next eight-element HugeIcons vocabulary (`ELEMENT_ICONS`) aligned with site
+  Lucide; Traces trigger icons and Flow graph nodes share Flow / Signal / Store /
+  Clock / Gate / Vault / Channel / AI glyphs.
+
+
 - `bun run dev:console-next:seeded` (`OKE_CONSOLE_NEXT_SEEDED=1`) boots the same Console
-  kernel + FLOWS_TEST_MANIFEST + seeded `bookings.create` WideEvent as the Playwright
-  ui-next fixture, so opening http://127.0.0.1:6537 shows a real Flows graph and Traces
-  row (click → highlight). Terminal prints URL, claim code, and a one-line seed summary.
+  kernel + skyport Manifest + seeded WideEvent chain as the Playwright ui-next fixture,
+  so opening http://127.0.0.1:6537 shows a real Flows graph and Traces (click → highlight).
+  Terminal prints URL, claim code, and a one-line seed summary.
 - `playwright.ui-next.config.ts` always records trace + screenshot + video; after
   `bun run test:console:setup-ui-next`, `bun run test:console:setup-ui-next:report`
   opens the HTML timeline report.

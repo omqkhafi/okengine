@@ -169,6 +169,17 @@ export interface ConsoleState {
   }>;
   /** Bound after Console app boot — reads the runs store. */
   listRuns: () => Promise<WideEvent[]>;
+  /**
+   * Optional host-app re-invoke for `console.traces.replay`.
+   * When unset, the flow falls back to CLI-equivalent {@link runReplay}
+   * against `cwd` (loads the app entry and re-executes with stored input).
+   */
+  replayTrace:
+    | ((input: {
+        readonly event: WideEvent;
+        readonly dryRun: boolean;
+      }) => Promise<{ readonly output: unknown; readonly failure?: unknown }>)
+    | null;
   /** Signal config store (`oke_signal_config`) — retains orphaned rows. */
   readonly signalConfig: SignalConfigStore;
   /**
@@ -653,6 +664,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     listRuns: async () => [],
+    replayTrace: null,
     signalConfig,
     signalBus: null,
     listSignals: async () => {

@@ -40,6 +40,12 @@ if (!runs) {
 }
 await appendUiNextSeedRun(runs);
 
+// Thin host-app substitute so Traces Replay hits the real console.traces.replay
+// path (same as `oke replay`) without loading a project entry in the fixture.
+server.console.state.replayTrace = async ({ event, dryRun }) => ({
+  output: { replayed: event.id, dryRun, input: event.input ?? null },
+});
+
 const claimCode = server.console.state.claim.code;
 await Bun.write(claimPath, claimCode);
 console.log(`console ui-next setup fixture ready on ${server.url}`);

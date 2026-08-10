@@ -43,7 +43,7 @@ function printConsoleNextBanner(
     log(`      Seed:  ${uiNextSeededSummary()}`);
     log(`      Next:  open URL → claim → Flows (graph + Traces row already present)`);
   } else {
-    log(`      Tip:   bun run dev:console-next:seeded  — real Flows graph + one trace`);
+    log(`      Tip:   bun run dev:console-next:seeded  — all 8 elements + ~80 lived-in traces`);
   }
   log("");
 }
@@ -114,6 +114,11 @@ export function okeConsoleKernelPlugin(): Plugin {
           throw new Error("console-next seeded: Console bootResult.runs missing");
         }
         await appendUiNextSeedRun(runs);
+        // Same thin host substitute as the Playwright fixture — Replay hits
+        // real console.traces.replay → runReplay without a project entry.
+        handle.console.state.replayTrace = async ({ event, dryRun }) => ({
+          output: { replayed: event.id, dryRun, input: event.input ?? null },
+        });
       }
 
       server.config.logger.info(`[oke] Console ${handle.url}`);

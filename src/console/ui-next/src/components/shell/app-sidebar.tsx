@@ -4,8 +4,6 @@
 
 import {
   DashboardSquare01Icon,
-  Database01Icon,
-  WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
@@ -26,8 +24,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { AnimatePresence, motion, useReducedMotion } from "@/lib/motion";
 import type { SessionOperator } from "@/client.ts";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
+import { AnimatePresence, motion, useReducedMotion } from "@/lib/motion";
 
 const navItems = [
   {
@@ -38,12 +37,12 @@ const navItems = [
   {
     title: "Flows",
     to: "/flows" as const,
-    icon: WorkflowSquare01Icon,
+    icon: ELEMENT_ICONS.flow.icon,
   },
   {
     title: "Store",
     to: "/store" as const,
-    icon: Database01Icon,
+    icon: ELEMENT_ICONS.store.icon,
   },
 ] as const;
 

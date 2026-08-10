@@ -210,7 +210,7 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   const graph = page.locator('[data-slot="flow-graph"]');
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
-  // Real Manifest nodes (FLOWS_TEST_MANIFEST) — unit headers + flow actions.
+  // Real Manifest nodes (skyport seed) — unit headers + flow actions.
   await expect(graph.getByText("bookings", { exact: true }).first()).toBeVisible();
   await expect(page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]')).toBeVisible(
     {
@@ -220,18 +220,49 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await expect(
     page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]'),
   ).toBeVisible();
+  await expect(
+    page.locator('[data-slot="flow-node"][data-flow-id="payments.chargeBooking"]'),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-slot="flow-node"][data-flow-id="ops.nightlyReconcile"]'),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-slot="flow-node"][data-flow-id="support.triage"]'),
+  ).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="holds.expire"]')).toBeVisible();
+  // AI / store / signal targets from declared effects.
+  await expect(page.locator('[data-slot="ai-node"]')).toBeVisible();
+  await expect(page.locator('[data-slot="store-node"]').first()).toBeVisible();
+  await expect(page.locator('[data-slot="signal-node"]').first()).toBeVisible();
 
   const traces = page.locator('[data-slot="traces-pane"]');
   await expect(traces).toBeVisible();
-  // Seeded WideEvent from ui-next-seed (same as dev:console-next:seeded).
-  const row = traces.getByRole("button", { name: /bookings\.create/ });
+  // Featured (8) + operational (72) = 80.
+  await expect(traces.locator('[data-slot="trace-row"]')).toHaveCount(80, { timeout: 15_000 });
+  await expect(traces.locator('[data-run-id="pw-run-fulfillment-on-order"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-bookings-create-fail"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-bookings-create-fail"]')).toHaveAttribute(
+    "data-failed",
+    "true",
+  );
+  await expect(traces.locator('[data-run-id="pw-run-support-triage"]')).toBeVisible();
+  // Operational bulk is present (scrollable list — count already covers volume).
+  await expect(traces.locator('[data-run-id^="pw-ops-"]')).toHaveCount(72);
+
+  const row = traces.locator('[data-run-id="pw-run-bookings-create"]');
   await expect(row).toBeVisible({ timeout: 15_000 });
 
-  const flowNode = page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]');
-  await expect(flowNode).toHaveAttribute("data-highlighted", "false");
+  const createNode = page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]');
+  const fulfillNode = page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]');
+  const paymentsNode = page.locator(
+    '[data-slot="flow-node"][data-flow-id="payments.chargeBooking"]',
+  );
+  await expect(createNode).toHaveAttribute("data-highlighted", "false");
 
   await row.click();
   await expect(page).toHaveURL(/run=pw-run-bookings-create/);
-  await expect(flowNode).toHaveAttribute("data-highlighted", "true", { timeout: 5_000 });
-  await expect(row).toHaveAttribute("aria-pressed", "true");
+  await expect(createNode).toHaveAttribute("data-highlighted", "true", { timeout: 5_000 });
+  await expect(fulfillNode).toHaveAttribute("data-highlighted", "true");
+  await expect(paymentsNode).toHaveAttribute("data-highlighted", "true");
+  await expect(row).toHaveAttribute("data-selected", "true");
 });

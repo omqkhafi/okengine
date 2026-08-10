@@ -9,6 +9,7 @@ import type { Manifest } from "../../../../../../manifest/types.ts";
 import { useTheme } from "@/components/theme-provider";
 import {
   applyChainHighlight,
+  applyEdgeHighlight,
   buildFlowGraph,
   type FlowGraphNode,
 } from "./build-flow-graph.ts";
@@ -39,6 +40,11 @@ function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: Fl
     [graph.nodes, highlightedFlowIds, highlightedNodeIds],
   );
 
+  const edges = useMemo(
+    () => applyEdgeHighlight(graph.edges, nodes),
+    [graph.edges, nodes],
+  );
+
   // Follow-camera: zoom to the highlighted chain when enabled.
   useEffect(() => {
     if (!follow) return;
@@ -50,7 +56,7 @@ function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: Fl
   return (
     <ReactFlow
       nodes={nodes}
-      edges={graph.edges}
+      edges={edges}
       nodeTypes={flowGraphNodeTypes}
       colorMode={colorMode}
       fitView
@@ -60,8 +66,9 @@ function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: Fl
       proOptions={{ hideAttribution: true }}
       minZoom={0.2}
       maxZoom={1.6}
+      defaultEdgeOptions={{ type: "smoothstep" }}
     >
-      <Background gap={24} />
+      <Background gap={24} size={1} color="color-mix(in oklab, var(--foreground) 14%, transparent)" />
       <Controls showInteractive={false} />
     </ReactFlow>
   );
