@@ -29,7 +29,7 @@ let sharedConn: SqlConnection;
 
 beforeAll(async () => {
   sharedConn = await connectPglite({ url: "memory://vault-adapter-shared" });
-});
+}, 15_000);
 
 afterAll(async () => {
   await sharedConn.close();
@@ -316,6 +316,51 @@ describe("builtin vault adapter — master rotation", () => {
     }
   });
 
+  test("rotateMaster: concurrent callers — exactly one wins, loser fails before any DEK rewrite", async () => {
+    const h = await harness({ batchSize: 2 });
+    try {
+      for (let i = 0; i < 6; i += 1) {
+        await h.adapter.set(`prod/race/${i}`, `v-${i}`);
+      }
+      const other = createBuiltinVaultAdapter({
+        db: h.db,
+        kekRewrapBatchSize: 2,
+        rotateLeaseMs: 5_000,
+      });
+      await other.unseal(h.masterKey);
+
+      const keyA = generateMasterKey();
+      const keyB = generateMasterKey();
+      const before = await h.db.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM oke_vault_keys WHERE kek_version = 2`,
+      );
+      expect(before[0]?.n).toBe("0");
+
+      const [ra, rb] = await Promise.allSettled([
+        h.adapter.rotateMaster(keyA),
+        other.rotateMaster(keyB),
+      ]);
+      expect([ra, rb].filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect([ra, rb].filter((r) => r.status === "rejected")).toHaveLength(1);
+
+      const loser = ra.status === "rejected" ? ra : rb;
+      expect(
+        loser.status === "rejected" && loser.reason instanceof Error
+          ? loser.reason.message
+          : "",
+      ).toMatch(/lease held|already in progress/i);
+
+      // Loser must not have wrapped any DEK under its key: at most the winner's batch.
+      const mid = await h.db.query<{ kek_version: string; n: string }>(
+        `SELECT kek_version::text, COUNT(*)::text AS n FROM oke_vault_keys GROUP BY kek_version ORDER BY 1`,
+      );
+      const v2 = mid.find((r) => r.kek_version === "2");
+      expect(Number(v2?.n ?? "0")).toBeLessThanOrEqual(2);
+    } finally {
+      await h.close();
+    }
+  });
+
   test("continueRotateMaster cold-resumes from rewrap_key_hash after process death", async () => {
     await resetVaultTables(sharedConn);
     const db = asExec(sharedConn);
@@ -332,7 +377,12 @@ describe("builtin vault adapter — master rotation", () => {
     expect(progress.remaining).toBe(3);
     expect((await first.status()).rewrapTargetKekVersion).toBe(2);
 
-    // Simulate process death: drop in-memory pending, reopen over the same DB.
+    // Simulate process death: drop in-memory pending, expire the rotate lease
+    // (lazy reclaim — same physics as SIGKILL + lease TTL).
+    await db.execute(
+      `UPDATE oke_vault_status SET rotate_lease_expires_at = $1 WHERE id = 1`,
+      [Date.now() - 1],
+    );
     const second = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
     await second.unseal(init.masterKey);
     expect((await second.status()).rewrapTargetKekVersion).toBe(2);
@@ -467,6 +517,7 @@ describe("builtin vault adapter — audit and backup", () => {
 
       const blob = await h.adapter.exportBackup();
       expect(Buffer.from(blob).toString("utf8")).toStartWith("oke-vault-backup-v1\n");
+      expect(Buffer.from(blob).toString("utf8")).toEndWith("oke-vault-backup-end\n");
       expect(Buffer.from(blob).toString("utf8")).not.toContain("prod/db/main");
 
       await h.adapter.delete("prod/api/stripe");

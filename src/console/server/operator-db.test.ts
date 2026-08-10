@@ -39,9 +39,11 @@ describe("console operator persistence", () => {
   const dirs: string[] = [];
   let sharedSql: SqlConnection;
 
+  // Bun reports beforeAll timeouts as "beforeEach/afterEach hook timed out".
+  // Cold WASM under suite contention can exceed the default 5s hook budget.
   beforeAll(async () => {
     sharedSql = await connectPglite({ url: "memory://console-operator-shared" });
-  });
+  }, 15_000);
 
   afterAll(async () => {
     await sharedSql.close();

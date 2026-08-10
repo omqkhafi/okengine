@@ -6,7 +6,7 @@
  * native ANN index — no JS-side full scan survives.
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { connectPglite } from "../../drivers/pglite.ts";
 import { openPgvectorIndex } from "../../drivers/pgvector.ts";
 import { connectPostgres } from "../../drivers/postgres.ts";
@@ -21,6 +21,17 @@ const WRITE_CTX = (name: string) => ({
 const prev = {
   pglite: process.env.OKE_PGLITE_URL,
 };
+
+/** Warmed PGlite for direct openPgvectorIndex cases (boot path opens its own). */
+let sharedPglite: SqlConnection | undefined;
+
+beforeAll(async () => {
+  sharedPglite = await connectPglite({ url: "memory://index-boot-shared" });
+}, 15_000);
+
+afterAll(async () => {
+  await sharedPglite?.close();
+});
 
 afterEach(() => {
   if (prev.pglite === undefined) delete process.env.OKE_PGLITE_URL;
@@ -43,7 +54,8 @@ function recordingConn(conn: SqlConnection): { conn: SqlConnection; statements: 
         statements.push(sql);
         return conn.exec(sql, params);
       },
-      close: () => conn.close(),
+      // Never close the underlying shared PGlite — afterAll owns that.
+      close: async () => {},
     },
   };
 }
@@ -63,33 +75,42 @@ describe("store.index boot wiring — memory", () => {
 });
 
 describe("store.index boot wiring — pglite + pgvector", () => {
-  test("boot: sql=pglite + index=pgvector resolves end to end", async () => {
-    process.env.OKE_PGLITE_URL = "memory://";
-    const kb = declareIndex("kb", { dims: 3 });
-    const runtime = bindStore(
-      {
-        config: { drivers: { store: { sql: { test: "pglite" }, index: { test: "pgvector" } } } },
-        stores: [kb],
-      },
-      "test",
-      () => Date.now(),
-    );
-    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
-    expect(handle.driverId).toBe("pgvector");
+  // bindStore opens its own PGlite — cannot inject the shared instance; allow
+  // cold WASM under suite contention (same budget as sql conformance).
+  test(
+    "boot: sql=pglite + index=pgvector resolves end to end",
+    async () => {
+      process.env.OKE_PGLITE_URL = "memory://";
+      const kb = declareIndex("kb", { dims: 3 });
+      const runtime = bindStore(
+        {
+          config: {
+            drivers: { store: { sql: { test: "pglite" }, index: { test: "pgvector" } } },
+          },
+          stores: [kb],
+        },
+        "test",
+        () => Date.now(),
+      );
+      const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
+      expect(handle.driverId).toBe("pgvector");
 
-    await handle.upsert("near", [1, 0.1, 0], { label: "near" });
-    await handle.upsert("far", [0, 1, 0]);
-    await handle.upsert("farther", [-1, 0, 0]);
-    const hits = await handle.search([1, 0, 0], 3);
-    expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
-    expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
-    expect(hits[0]!.meta).toEqual({ label: "near" });
-    expect(await handle.delete("farther")).toBe(true);
-    await runtime.close();
-  });
+      await handle.upsert("near", [1, 0.1, 0], { label: "near" });
+      await handle.upsert("far", [0, 1, 0]);
+      await handle.upsert("farther", [-1, 0, 0]);
+      const hits = await handle.search([1, 0, 0], 3);
+      expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
+      expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
+      expect(hits[0]!.meta).toEqual({ label: "near" });
+      expect(await handle.delete("farther")).toBe(true);
+      await runtime.close();
+    },
+    15_000,
+  );
 
   test("pglite runs the shared pgvector HNSW path — real ANN, not a scan", async () => {
-    const real = await connectPglite({ url: "memory://" });
+    const real = sharedPglite!;
+    await real.exec(`DROP TABLE IF EXISTS oke_idx_ann CASCADE`);
     const { conn, statements } = recordingConn(real);
     const idx = await openPgvectorIndex({ name: "ann", dims: 3, sql: conn });
     await idx.upsert("a", [1, 0, 0]);
@@ -106,7 +127,7 @@ describe("store.index boot wiring — pglite + pgvector", () => {
     );
     expect(JSON.stringify(indexes)).toContain("USING hnsw");
     await idx.close();
-    await real.close();
+    // shared connection — closed in afterAll
   });
 });
 

@@ -20,7 +20,7 @@ let sharedConn: SqlConnection;
 
 beforeAll(async () => {
   sharedConn = await connectPglite({ url: "memory://vault-driver-shared" });
-});
+}, 15_000);
 
 afterAll(async () => {
   await sharedConn.close();
@@ -114,5 +114,5 @@ describe("builtin vault driver", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });

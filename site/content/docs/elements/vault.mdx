@@ -161,14 +161,23 @@ VaultBootError: 1 secret(s) missing:
 | `oke vault import <file>`                          | Bulk-import names from a dotenv file                                 |
 | `oke vault init`                                   | Initialize the built-in encrypted store (prints the master key once) |
 | `oke vault status` / `seal` / `unseal`             | Built-in seal lifecycle                                              |
-| `oke vault rotate <path>` / `rotate-master`        | Re-encrypt a secret, or rewrap every DEK under a new master          |
-| `oke vault audit` / `audit verify` / `audit purge` | Hash-chained audit (no secret values)                                |
-| `oke vault purge-expired [--dry-run] [--before]`   | Hard-delete secret rows past `expires_at` (operator cleanup)         |
-| `oke vault backup` / `restore`                     | Encrypted backup under a separate backup KEK                         |
+| `oke vault rotate <path>` / `rotate-master`        | Re-encrypt a secret, or rewrap every DEK under a new master (exclusive lease) |
+| `oke vault audit` / `audit verify` / `audit purge` | Hash-chained audit (serialized appends; no secret values)                     |
+| `oke vault purge-expired [--dry-run] [--before]`   | Hard-delete secret rows past `expires_at` (operator cleanup)                  |
+| `oke vault backup` / `restore`                     | Encrypted backup (atomic write + end marker; separate backup KEK)             |
 
 Flows can write too, through the same capability gate as reads: `fx.vault.set(path, value, { ttlMs?, metadata? })`, `fx.vault.rotate(path, value)`, `fx.vault.delete(path)`, plus `fx.vault.list(prefix?)` and `fx.vault.status()`. These need the encrypted-at-rest backend (`drivers.vault = "vault"`) and throw without it; `fx.vault.get` works on every app.
 
 The **Console** (`:6533`) can also set and rotate values, but it is **write-only**: it shows a salted fingerprint (`sha256:…`) per secret, never the cleartext. When you rotate a key there, the panel shows the **blast radius** — which in-flight durable runs will wake up with the new value.
+
+<Callout title="Builtin concurrency (rotate / audit / backup)">
+  `rotate-master` uses the same SKIP LOCKED + lease-expiry physics as Clock and
+  Signal: one holder at a time; a crashed holder is reclaimed after the lease
+  TTL. Audit rows append under a transactional row lock so the hash chain stays
+  verifiable under concurrent writers. Backups are written via temp → fsync →
+  rename and carry an end marker + checksum — restore rejects incomplete files
+  before decrypt.
+</Callout>
 
 <Callout title="Builtin master keys and expired rows">
   Resolve the master key with `--key -` (stdin), `OKE_VAULT_MASTER_KEY`, or a hidden TTY prompt —

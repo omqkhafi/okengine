@@ -35,6 +35,27 @@ export interface SqlExec {
    * @param params - Positional parameters
    */
   execute(sql: string, params?: unknown[]): Promise<void>;
+  /**
+   * Optional transactional scope — required for `FOR UPDATE` / `SKIP LOCKED`
+   * lease and audit serialization (Clock / Signal class).
+   *
+   * @param fn - Work that must see a single snapshot under row locks
+   */
+  begin?<T>(fn: (tx: SqlExec) => Promise<T>): Promise<T>;
+}
+
+/**
+ * Run `fn` inside {@link SqlExec.begin} when available.
+ *
+ * @param db - SQL surface
+ * @param fn - Transactional work
+ */
+export async function withSqlTransaction<T>(
+  db: SqlExec,
+  fn: (tx: SqlExec) => Promise<T>,
+): Promise<T> {
+  if (db.begin) return db.begin(fn);
+  return fn(db);
 }
 
 /** Encrypted secret versions. One row per `(path, version)`. */
@@ -122,9 +143,20 @@ CREATE TABLE IF NOT EXISTS oke_vault_status (
   rewrap_checkpoint text,
   rewrap_target_kek_version integer,
   rewrap_key_hash text,
+  rotate_locked_by text,
+  rotate_lease_expires_at bigint,
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT oke_vault_status_singleton CHECK (id = 1)
 )`;
+
+/**
+ * Claim the rotate-master lease — same predicate as Clock/Signal
+ * (`FOR UPDATE SKIP LOCKED` + lease-expiry reclaim).
+ */
+export const CLAIM_ROTATE_LEASE_SQL = `SELECT id FROM oke_vault_status WHERE id = 1 AND ((rotate_locked_by IS NULL) OR (rotate_locked_by = $1) OR (rotate_lease_expires_at IS NULL) OR (rotate_lease_expires_at <= $2)) FOR UPDATE SKIP LOCKED`;
+
+/** Default rotate-master lease TTL (ms) — lazy reclaim, no sweeper. */
+export const DEFAULT_ROTATE_LEASE_MS = 30_000;
 
 /** Index / seed statements applied after the tables exist. */
 const POST_DDL_STATEMENTS: readonly string[] = [
@@ -134,6 +166,8 @@ const POST_DDL_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS oke_vault_keys_kek_version_idx ON oke_vault_keys (kek_version)`,
   `ALTER TABLE oke_vault_audit ADD COLUMN IF NOT EXISTS seq bigserial NOT NULL`,
   `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rewrap_key_hash text`,
+  `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rotate_locked_by text`,
+  `ALTER TABLE oke_vault_status ADD COLUMN IF NOT EXISTS rotate_lease_expires_at bigint`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_seq_idx ON oke_vault_audit (seq)`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_created_idx ON oke_vault_audit (created_at, id)`,
   `CREATE INDEX IF NOT EXISTS oke_vault_audit_path_idx ON oke_vault_audit (path)`,
@@ -392,12 +426,77 @@ export async function verifyAuditChain(db: SqlExec): Promise<AuditChainResult> {
 }
 
 /**
+ * Acquire the rotate-master lease (Clock/Signal SKIP LOCKED + lease-expiry).
+ *
+ * Exactly one concurrent claimant wins; losers get `false` immediately
+ * (no wait). A crashed holder's lease is reclaimed lazily when
+ * `rotate_lease_expires_at <= now`.
+ *
+ * @param db - SQL surface (uses {@link SqlExec.begin} when present)
+ * @param holderId - Claimant id (per rotation attempt)
+ * @param now - Epoch-ms
+ * @param leaseMs - Lease TTL
+ */
+export async function acquireRotateLease(
+  db: SqlExec,
+  holderId: string,
+  now: number,
+  leaseMs: number = DEFAULT_ROTATE_LEASE_MS,
+): Promise<boolean> {
+  return withSqlTransaction(db, async (tx) => {
+    const claimed = await tx.query<{ id: number | string }>(CLAIM_ROTATE_LEASE_SQL, [
+      holderId,
+      now,
+    ]);
+    if (!claimed[0]) return false;
+    await tx.execute(
+      `UPDATE oke_vault_status
+       SET rotate_locked_by = $1, rotate_lease_expires_at = $2, updated_at = now()
+       WHERE id = 1`,
+      [holderId, now + leaseMs],
+    );
+    return true;
+  });
+}
+
+/**
+ * Drop the rotate-master lease when this holder still owns it.
+ *
+ * @param db - SQL surface
+ * @param holderId - Holder that acquired the lease
+ */
+export async function releaseRotateLease(db: SqlExec, holderId: string): Promise<void> {
+  await db.execute(
+    `UPDATE oke_vault_status
+     SET rotate_locked_by = NULL, rotate_lease_expires_at = NULL, updated_at = now()
+     WHERE id = 1 AND rotate_locked_by = $1`,
+    [holderId],
+  );
+}
+
+/**
+ * Renew the rotate-master lease for a long rewrap.
+ *
+ * @param db - SQL surface
+ * @param holderId - Current holder
+ * @param now - Epoch-ms
+ * @param leaseMs - Lease TTL
+ */
+export async function renewRotateLease(
+  db: SqlExec,
+  holderId: string,
+  now: number,
+  leaseMs: number = DEFAULT_ROTATE_LEASE_MS,
+): Promise<boolean> {
+  return acquireRotateLease(db, holderId, now, leaseMs);
+}
+
+/**
  * Backend-side {@link AuditWriter} over `oke_vault_audit`.
  *
- * Reads the current chain head, links the new row to it, and inserts.
- * Concurrent appends must be serialized by the caller (a transaction with
- * `SELECT … FOR UPDATE` on the head, or a single writer) — two racing
- * appends would otherwise share a `prev_hash`.
+ * Appends run inside a transaction that locks the status singleton with
+ * `SELECT … FOR UPDATE` so concurrent writers cannot share a `prev_hash`
+ * (same exclusivity class as Signal competing consumers).
  *
  * @param db - SQL surface
  */
@@ -407,29 +506,33 @@ export function createSqlAuditWriter(db: SqlExec): AuditWriter {
       const createdAt = entry.at ?? new Date();
       const payload = toAuditHashPayload(entry, createdAt);
       try {
-        const head = await db.query<{ row_hash: string }>(
-          `SELECT row_hash FROM oke_vault_audit ORDER BY seq DESC LIMIT 1`,
-        );
-        const prevHash = head[0]?.row_hash ?? AUDIT_GENESIS_HASH;
-        const rowHash = await computeAuditRowHash(prevHash, payload);
-        await db.execute(
-          `INSERT INTO oke_vault_audit
-             (action, path, actor_type, actor_id, success, error_code, error_message, request_id, prev_hash, row_hash, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            payload.action,
-            payload.path,
-            payload.actorType,
-            payload.actorId,
-            payload.success,
-            payload.errorCode,
-            payload.errorMessage,
-            payload.requestId,
-            prevHash,
-            rowHash,
-            createdAt,
-          ],
-        );
+        await withSqlTransaction(db, async (tx) => {
+          // Serialize writers on the singleton — FOR UPDATE waits, does not skip.
+          await tx.query(`SELECT id FROM oke_vault_status WHERE id = 1 FOR UPDATE`);
+          const head = await tx.query<{ row_hash: string }>(
+            `SELECT row_hash FROM oke_vault_audit ORDER BY seq DESC LIMIT 1`,
+          );
+          const prevHash = head[0]?.row_hash ?? AUDIT_GENESIS_HASH;
+          const rowHash = await computeAuditRowHash(prevHash, payload);
+          await tx.execute(
+            `INSERT INTO oke_vault_audit
+               (action, path, actor_type, actor_id, success, error_code, error_message, request_id, prev_hash, row_hash, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              payload.action,
+              payload.path,
+              payload.actorType,
+              payload.actorId,
+              payload.success,
+              payload.errorCode,
+              payload.errorMessage,
+              payload.requestId,
+              prevHash,
+              rowHash,
+              createdAt,
+            ],
+          );
+        });
       } catch (error) {
         if (error instanceof VaultError) throw error;
         throw new VaultError("BACKEND_ERROR", "vault: failed to append audit row");

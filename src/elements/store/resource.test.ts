@@ -5,24 +5,37 @@
  * client-facing key.
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { pgliteDriver } from "../../drivers/pglite.ts";
+import type { SqlConnection } from "../../drivers/types.ts";
 import { oke } from "../../kernel/app.ts";
 import { resetFlowSeq } from "../../kernel/flow.ts";
 import { on, resetBindings } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
 import { createTestApp } from "../../test/create-test-app.ts";
 import { classify, field, id, now, PII_MASK, store } from "../store.ts";
-import { createSqlStoreHandle } from "./sql-session.ts";
+import { createSqlStoreHandle, type SqlStoreHandle } from "./sql-session.ts";
 import { mapRowToJs, resolveColumns } from "./table.ts";
 
 afterEach(() => {
   resetBindings();
   resetFlowSeq();
 });
+
+/** Posts table for the JS-key exit lock (needs real Postgres dialect via PGlite). */
+const jsKeyPosts = pgTable("posts", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** File-scoped warmed PGlite for the SqlStoreHandle exit describe. */
+let sharedConn: SqlConnection;
+/** Handle over {@link sharedConn}. */
+let sharedHandle: SqlStoreHandle;
 
 describe("mapRowToJs — declared keys only", () => {
   const posts = pgTable("posts", {
@@ -47,40 +60,46 @@ describe("mapRowToJs — declared keys only", () => {
 });
 
 describe("SqlStoreHandle exit — list/get/create return JS keys only", () => {
-  const posts = pgTable("posts", {
-    id: text("id").primaryKey(),
-    title: text("title").notNull(),
-    createdAt: integer("created_at").notNull(),
-  });
-
-  test("select / findById / insert.returning never emit created_at", async () => {
-    const conn = await pgliteDriver.connect({
-      url: "memory://",
+  // Real Postgres dialect (PGlite) — share one warmed instance; TRUNCATE between tests.
+  beforeAll(async () => {
+    sharedConn = await pgliteDriver.connect({
+      url: "memory://resource-js-keys-shared",
       role: "primary",
     });
-    const handle = createSqlStoreHandle("sql:app", {
-      connection: conn,
+    sharedHandle = createSqlStoreHandle("sql:app", {
+      connection: sharedConn,
       classifications: new Map(),
       routedRole: "primary",
       domainDdl: "ensure",
     });
+    // Warm DDL via the insert path (pgTable is not a TableHandle for ensureTable).
+    await sharedHandle.insert(jsKeyPosts).values({ id: "_warmup", title: "x", createdAt: 0 });
+    await sharedConn.exec(`TRUNCATE "posts" RESTART IDENTITY CASCADE`);
+  }, 15_000);
 
-    const [created] = await handle
-      .insert(posts)
+  afterAll(async () => {
+    await sharedConn.close();
+  });
+
+  beforeEach(async () => {
+    await sharedConn.exec(`TRUNCATE "posts" RESTART IDENTITY CASCADE`);
+  });
+
+  test("select / findById / insert.returning never emit created_at", async () => {
+    const [created] = await sharedHandle
+      .insert(jsKeyPosts)
       .values({ id: "p1", title: "one", createdAt: 100 })
       .returning();
     expect(Object.keys(created!).sort()).toEqual(["createdAt", "id", "title"]);
     expect("created_at" in created!).toBe(false);
 
-    const listed = await handle.select().from(posts);
+    const listed = await sharedHandle.select().from(jsKeyPosts);
     expect(Object.keys(listed[0]!).sort()).toEqual(["createdAt", "id", "title"]);
     expect("created_at" in listed[0]!).toBe(false);
 
-    const got = await handle.findById(posts, "p1");
+    const got = await sharedHandle.findById(jsKeyPosts, "p1");
     expect(Object.keys(got!).sort()).toEqual(["createdAt", "id", "title"]);
     expect("created_at" in got!).toBe(false);
-
-    await conn.close();
   });
 });
 

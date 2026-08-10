@@ -62,9 +62,34 @@ export function createMemoryVaultSql(): SqlConnection {
       return [];
     }
 
+    if (text === "begin" || text === "commit" || text === "rollback") {
+      return [];
+    }
+
     if (text.startsWith("insert into oke_vault_status") && text.includes("on conflict")) {
       // Singleton already seeded in {@link defaultStatus}.
       return [];
+    }
+
+    if (text.startsWith("select id from oke_vault_status where id = 1 for update")) {
+      return [{ id: 1 }];
+    }
+
+    if (
+      text.startsWith("select id from oke_vault_status where id = 1 and") &&
+      text.includes("rotate_locked_by") &&
+      text.includes("for update skip locked")
+    ) {
+      const holderId = p[0];
+      const now = Number(p[1]);
+      const lockedBy = status.rotate_locked_by;
+      const expires = status.rotate_lease_expires_at;
+      const free =
+        lockedBy == null ||
+        lockedBy === holderId ||
+        expires == null ||
+        Number(expires) <= now;
+      return free ? [{ id: 1 }] : [];
     }
 
     if (text.startsWith("select sealed, initialized, master_key_present")) {
@@ -246,6 +271,8 @@ function defaultStatus(): Row {
     rewrap_checkpoint: null,
     rewrap_target_kek_version: null,
     rewrap_key_hash: null,
+    rotate_locked_by: null,
+    rotate_lease_expires_at: null,
     updated_at: new Date(),
   };
 }
@@ -280,7 +307,50 @@ function applyStatusUpdate(status: Row, text: string, params: unknown[]): void {
     return;
   }
 
-  // Fallback: ignore unknown status updates (rotation checkpoints, etc.).
+  if (text.includes("rotate_locked_by = $1") && text.includes("rotate_lease_expires_at = $2")) {
+    status.rotate_locked_by = params[0] ?? null;
+    status.rotate_lease_expires_at = params[1] ?? null;
+    return;
+  }
+
+  if (text.includes("rotate_locked_by = null") && text.includes("rotate_lease_expires_at = null")) {
+    if (params[0] === undefined || status.rotate_locked_by === params[0]) {
+      status.rotate_locked_by = null;
+      status.rotate_lease_expires_at = null;
+    }
+    return;
+  }
+
+  if (text.includes("rewrap_target_kek_version = $1") && text.includes("rewrap_key_hash = $2")) {
+    status.rewrap_target_kek_version = params[0] ?? null;
+    status.rewrap_checkpoint = null;
+    status.rewrap_key_hash = params[1] ?? null;
+    return;
+  }
+
+  if (
+    text.includes("rewrap_checkpoint = $1") &&
+    text.includes("rewrap_target_kek_version = $2") &&
+    text.includes("rewrap_key_hash = $3")
+  ) {
+    status.rewrap_checkpoint = params[0] ?? null;
+    status.rewrap_target_kek_version = params[1] ?? null;
+    status.rewrap_key_hash = params[2] ?? null;
+    return;
+  }
+
+  if (
+    text.includes("rewrap_checkpoint = null") &&
+    text.includes("rewrap_target_kek_version = null") &&
+    text.includes("rewrap_key_hash = null")
+  ) {
+    status.rewrap_checkpoint = null;
+    status.rewrap_target_kek_version = null;
+    status.rewrap_key_hash = null;
+    return;
+  }
+
+  // Fallback: ignore unknown status updates.
   void params;
 }
 

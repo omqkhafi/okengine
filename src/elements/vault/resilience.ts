@@ -96,7 +96,7 @@ export async function withResilience<T>(
  * @param config - Retry tunables
  */
 export function createResilientSqlExec(db: SqlExec, config: RetryConfig = DEFAULT_RETRY): SqlExec {
-  return {
+  const wrapped: SqlExec = {
     query<T>(sql: string, params?: unknown[]): Promise<T[]> {
       return withResilience(() => db.query<T>(sql, params), config);
     },
@@ -104,4 +104,9 @@ export function createResilientSqlExec(db: SqlExec, config: RetryConfig = DEFAUL
       return withResilience(() => db.execute(sql, params), config);
     },
   };
+  if (db.begin) {
+    wrapped.begin = <T>(fn: (tx: SqlExec) => Promise<T>): Promise<T> =>
+      db.begin!(async (tx) => fn(createResilientSqlExec(tx, config)));
+  }
+  return wrapped;
 }

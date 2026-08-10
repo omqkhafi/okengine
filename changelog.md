@@ -12,6 +12,18 @@ needed).
 
 ## Unreleased
 
+### 🔒 Security
+
+- Built-in Vault `rotateMaster` takes a Clock/Signal-class lease
+  (`FOR UPDATE SKIP LOCKED` + lease-expiry on `oke_vault_status`): concurrent
+  rotators — exactly one wins; the other fails loud before any DEK rewrite, so
+  no DEK can end up wrapped under an unsaved key.
+- Audit appends serialize with `SELECT … FOR UPDATE` on the status singleton
+  inside a transaction, so concurrent writers cannot fork the hash chain.
+- `oke vault backup` writes temp → fsync → atomic rename; bundles include a
+  trailing `oke-vault-backup-end` marker and payload SHA-256 checked before
+  decrypt (incomplete files no longer look restore-ready).
+
 ### ♻️ Changed
 
 - Durable local markers move to `.oke/state.json` (`seededAt` after the one-shot
@@ -25,6 +37,9 @@ needed).
 
 ### 🐛 Fixed
 
+- Share one warmed in-memory PGlite per remaining dialect test file
+  (`sql-session` / `resource` / `index-boot`) and raise `beforeAll` hook
+  budgets to 15s so Bun does not mis-report cold WASM as a hook timeout
 - `createTestApp` again forces in-process memory SQL (and drops the per-harness
   on-disk PGLite datadir). After v0.11 made `STORE_SQL_DEFAULTS.test` PGLite,
   kernel tests that insert via the harness were paying cold WASM+pgvector init

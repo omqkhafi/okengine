@@ -4,9 +4,13 @@
  * Relational `with:` / Drizzle RQB (`db.query.*.findMany({ with })`) is a
  * documented limitation: effects, cache keys, and PII masking assume one
  * table per call, so no relational query surface may appear on the handle.
+ *
+ * Upsert / orderBy / like need the real Postgres dialect (PGlite). One warmed
+ * in-memory PGlite is shared for the whole file (cold WASM once); TRUNCATE
+ * isolates each test without a fresh `PGlite.create`.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, desc, eq, like, lt, or } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 import { pgliteDriver } from "../../drivers/pglite.ts";
@@ -19,31 +23,38 @@ const posts = pgTable("posts", {
   createdAt: integer("created_at").notNull(),
 });
 
-async function openHandle(): Promise<{ handle: SqlStoreHandle; conn: SqlConnection }> {
-  const conn = await pgliteDriver.connect({
-    url: "memory://",
+/** File-scoped warmed PGlite — opened in {@link beforeAll}. */
+let sharedConn: SqlConnection;
+/** Handle over {@link sharedConn}. */
+let sharedHandle: SqlStoreHandle;
+
+beforeAll(async () => {
+  sharedConn = await pgliteDriver.connect({
+    url: "memory://sql-session-shared",
     role: "primary",
   });
-  const handle = createSqlStoreHandle("sql:app", {
-    connection: conn,
+  sharedHandle = createSqlStoreHandle("sql:app", {
+    connection: sharedConn,
     classifications: new Map(),
     routedRole: "primary",
     domainDdl: "ensure",
   });
-  return { handle, conn };
-}
+  // Warm DDL via the insert path (pgTable is not a TableHandle for ensureTable).
+  await sharedHandle.insert(posts).values({ id: "_warmup", title: "x", createdAt: 0 });
+  await sharedConn.exec(`TRUNCATE "posts" RESTART IDENTITY CASCADE`);
+}, 15_000);
+
+afterAll(async () => {
+  await sharedConn.close();
+});
+
+beforeEach(async () => {
+  await sharedConn.exec(`TRUNCATE "posts" RESTART IDENTITY CASCADE`);
+});
 
 describe("SqlStoreHandle — no relational query surface (path b)", () => {
-  test("created handle exposes exactly the single-table surface", async () => {
-    const conn = await pgliteDriver.connect({ url: "memory://", role: "primary" });
-    const handle = createSqlStoreHandle("sql:app", {
-      connection: conn,
-      classifications: new Map(),
-      routedRole: "primary",
-      domainDdl: "ensure",
-    });
-
-    expect(Object.keys(handle).sort()).toEqual(
+  test("created handle exposes exactly the single-table surface", () => {
+    expect(Object.keys(sharedHandle).sort()).toEqual(
       [
         "ref",
         "routedRole",
@@ -64,47 +75,40 @@ describe("SqlStoreHandle — no relational query surface (path b)", () => {
     );
 
     // No Drizzle RQB / with: surface — ever.
-    expect("query" in handle).toBe(false);
-    expect("findMany" in handle).toBe(false);
-    expect("findFirst" in handle).toBe(false);
-    expect("with" in handle).toBe(false);
-
-    await conn.close();
+    expect("query" in sharedHandle).toBe(false);
+    expect("findMany" in sharedHandle).toBe(false);
+    expect("findFirst" in sharedHandle).toBe(false);
+    expect("with" in sharedHandle).toBe(false);
   });
 });
 
 describe("SqlStoreHandle — orderBy / limit select chain", () => {
   test("orderBy + limit without where", async () => {
-    const { handle, conn } = await openHandle();
-    await handle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
-    await handle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
-    await handle.insert(posts).values({ id: "p3", title: "three", createdAt: 200 });
+    await sharedHandle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
+    await sharedHandle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
+    await sharedHandle.insert(posts).values({ id: "p3", title: "three", createdAt: 200 });
 
-    const rows = await handle.select().from(posts).orderBy(desc(posts.createdAt)).limit(2);
+    const rows = await sharedHandle.select().from(posts).orderBy(desc(posts.createdAt)).limit(2);
     expect(rows.map((r) => r.id)).toEqual(["p2", "p3"]);
-    await conn.close();
   });
 
   test("limit directly on from() — no where required", async () => {
-    const { handle, conn } = await openHandle();
-    await handle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
-    await handle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
+    await sharedHandle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
+    await sharedHandle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
 
-    const rows = await handle.select().from(posts).limit(1);
+    const rows = await sharedHandle.select().from(posts).limit(1);
     expect(rows).toHaveLength(1);
-    await conn.close();
   });
 
   test("composite cursor predicate: where → orderBy → limit", async () => {
-    const { handle, conn } = await openHandle();
-    await handle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
-    await handle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
-    await handle.insert(posts).values({ id: "p3", title: "three", createdAt: 200 });
+    await sharedHandle.insert(posts).values({ id: "p1", title: "one", createdAt: 100 });
+    await sharedHandle.insert(posts).values({ id: "p2", title: "two", createdAt: 300 });
+    await sharedHandle.insert(posts).values({ id: "p3", title: "three", createdAt: 200 });
     // Tie on createdAt=200 with an id that sorts after the cursor id.
-    await handle.insert(posts).values({ id: "p0", title: "four", createdAt: 200 });
+    await sharedHandle.insert(posts).values({ id: "p0", title: "four", createdAt: 200 });
 
     const order = [desc(posts.createdAt), desc(posts.id)] as const;
-    const page1 = await handle
+    const page1 = await sharedHandle
       .select()
       .from(posts)
       .orderBy(...order)
@@ -112,61 +116,54 @@ describe("SqlStoreHandle — orderBy / limit select chain", () => {
     expect(page1.map((r) => r.id)).toEqual(["p2", "p3"]);
 
     // (createdAt, id) < (200, "p3") — the second page of a keyset cursor.
-    const page2 = await handle
+    const page2 = await sharedHandle
       .select()
       .from(posts)
       .where(or(lt(posts.createdAt, 200), and(eq(posts.createdAt, 200), lt(posts.id, "p3"))))
       .orderBy(...order)
       .limit(2);
     expect(page2.map((r) => r.id)).toEqual(["p0", "p1"]);
-    await conn.close();
   });
 
   test("like filters rows through the session (postgres case-sensitive)", async () => {
-    const { handle, conn } = await openHandle();
-    await handle.insert(posts).values({ id: "p1", title: "alpha", createdAt: 100 });
-    await handle.insert(posts).values({ id: "p2", title: "bravo", createdAt: 200 });
+    await sharedHandle.insert(posts).values({ id: "p1", title: "alpha", createdAt: 100 });
+    await sharedHandle.insert(posts).values({ id: "p2", title: "bravo", createdAt: 200 });
 
-    const rows = await handle.select().from(posts).where(like(posts.title, "a%"));
+    const rows = await sharedHandle.select().from(posts).where(like(posts.title, "a%"));
     expect(rows.map((r) => r.id)).toEqual(["p1"]);
-    await conn.close();
   });
 });
 
 describe("SqlStoreHandle — upsert", () => {
   test("default inserts once then already-existed without touching the row", async () => {
-    const { handle, conn } = await openHandle();
-    const first = await handle.upsert(
+    const first = await sharedHandle.upsert(
       posts,
       { id: "welcome" },
       { id: "welcome", title: "Hello", createdAt: 1 },
     );
     expect(first.status).toBe("upserted");
 
-    const second = await handle.upsert(
+    const second = await sharedHandle.upsert(
       posts,
       { id: "welcome" },
       { id: "welcome", title: "Changed", createdAt: 2 },
     );
     expect(second.status).toBe("already-existed");
 
-    const row = await handle.findById(posts, "welcome");
+    const row = await sharedHandle.findById(posts, "welcome");
     expect(row).toEqual({ id: "welcome", title: "Hello", createdAt: 1 });
-    await conn.close();
   });
 
   test("onExisting update changes matched columns", async () => {
-    const { handle, conn } = await openHandle();
-    await handle.upsert(posts, { id: "n1" }, { id: "n1", title: "one", createdAt: 10 });
-    const updated = await handle.upsert(
+    await sharedHandle.upsert(posts, { id: "n1" }, { id: "n1", title: "one", createdAt: 10 });
+    const updated = await sharedHandle.upsert(
       posts,
       { id: "n1" },
       { id: "n1", title: "two", createdAt: 20 },
       { onExisting: "update" },
     );
     expect(updated.status).toBe("changed");
-    const row = await handle.findById(posts, "n1");
+    const row = await sharedHandle.findById(posts, "n1");
     expect(row).toEqual({ id: "n1", title: "two", createdAt: 20 });
-    await conn.close();
   });
 });

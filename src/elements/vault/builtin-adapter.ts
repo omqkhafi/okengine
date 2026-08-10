@@ -44,11 +44,15 @@ import { VaultError } from "./errors.ts";
 import { canonicalizePath, canonicalizePrefix } from "./path.ts";
 import { createResilientSqlExec } from "./resilience.ts";
 import {
+  acquireRotateLease,
   createSqlAuditWriter,
+  DEFAULT_ROTATE_LEASE_MS,
   ensureVaultTables,
   purgeAuditBefore as purgeAuditRows,
   purgeExpiredSecrets,
   readAuditPage,
+  releaseRotateLease,
+  renewRotateLease,
   verifyAuditChain,
   type AuditChainResult,
   type AuditPageOptions,
@@ -76,6 +80,9 @@ export const DEFAULT_KEK_REWRAP_BATCH_SIZE = 100;
 /** Leading magic line of an {@link BuiltinVaultAdapter.exportBackup} bundle. */
 export const BACKUP_MAGIC = "oke-vault-backup-v1\n";
 
+/** Trailing completeness marker — absent means the file was truncated mid-write. */
+export const BACKUP_END_MARKER = "oke-vault-backup-end\n";
+
 /** Synthetic path bound into the backup bundle's AAD. */
 const BACKUP_AAD_PATH = "oke-vault-backup";
 
@@ -92,6 +99,11 @@ export interface CreateBuiltinVaultOptions {
   readonly auditSink?: AuditSink;
   /** DEKs re-wrapped per rotation batch. Defaults to {@link DEFAULT_KEK_REWRAP_BATCH_SIZE}. */
   readonly kekRewrapBatchSize?: number;
+  /**
+   * Rotate-master lease TTL in ms (Clock/Signal lazy-reclaim physics).
+   * Defaults to {@link DEFAULT_ROTATE_LEASE_MS}.
+   */
+  readonly rotateLeaseMs?: number;
 }
 
 /** Progress of a master-key rotation. */
@@ -247,6 +259,8 @@ interface BackupMetadata {
   readonly count: number;
   readonly iv: string;
   readonly tag: string;
+  /** Hex SHA-256 of the ciphertext bytes (completeness check before decrypt). */
+  readonly payloadSha256: string;
 }
 
 /** Master key held for the target generation of an in-flight rewrap. */
@@ -254,6 +268,8 @@ interface PendingRotation {
   readonly unsealer: Unsealer;
   readonly kekVersion: number;
   readonly verifyHash: string;
+  /** Lease holder id for SKIP LOCKED rotate exclusivity. */
+  readonly holderId: string;
 }
 
 /**
@@ -270,6 +286,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
   const rawDb = opts.db;
   const db = createResilientSqlExec(rawDb);
   const batchSize = Math.max(1, opts.kekRewrapBatchSize ?? DEFAULT_KEK_REWRAP_BATCH_SIZE);
+  const rotateLeaseMs = Math.max(50, opts.rotateLeaseMs ?? DEFAULT_ROTATE_LEASE_MS);
   const audit = opts.auditSink ?? createAuditSink("db", { writer: createSqlAuditWriter(rawDb) });
 
   let unsealer: Unsealer | null = opts.unsealer ?? null;
@@ -612,6 +629,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
       unsealer?.seal();
       unsealer = rotation.unsealer;
       pending = null;
+      await releaseRotateLease(rawDb, rotation.holderId);
     } else {
       await db.execute(
         `UPDATE oke_vault_status
@@ -620,6 +638,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
          WHERE id = 1`,
         [checkpoint, target, rotation.verifyHash],
       );
+      await renewRotateLease(rawDb, rotation.holderId, Date.now(), rotateLeaseMs);
     }
 
     await record("rewrap", undefined, { success: true });
@@ -836,34 +855,65 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
       if (pending) {
         throw new VaultError("UNSUPPORTED", "vault: a master rotation is already in progress");
       }
-      const master = await readMaster();
-      const target = toInt(master.kek_version) + 1;
 
-      const generated = newMasterKey === undefined;
-      const raw = newMasterKey ?? generateMasterKey();
-      let rotation: PendingRotation;
-      let encoded: string | undefined;
-      try {
-        rotation = {
-          unsealer: createMemoryUnsealer(raw),
-          kekVersion: target,
-          verifyHash: await deriveVerifyHash(raw),
-        };
-        if (generated) encoded = masterKeyToBase64(raw);
-      } finally {
-        if (generated) zeroBytes(raw);
+      const holderId = crypto.randomUUID();
+      const now = Date.now();
+      const won = await acquireRotateLease(rawDb, holderId, now, rotateLeaseMs);
+      if (!won) {
+        throw new VaultError(
+          "UNSUPPORTED",
+          "vault: master rotation lease held by another instance",
+        );
       }
-      pending = rotation;
 
-      await db.execute(
-        `UPDATE oke_vault_status
-         SET rewrap_target_kek_version = $1, rewrap_checkpoint = NULL,
-             rewrap_key_hash = $2, updated_at = now()
-         WHERE id = 1`,
-        [target, rotation.verifyHash],
-      );
-      const result = await rewrapBatch(rotation);
-      return encoded === undefined ? result : { ...result, masterKey: encoded };
+      try {
+        const status = await readStatus();
+        if (status.rewrap_target_kek_version !== null) {
+          throw new VaultError("UNSUPPORTED", "vault: a master rotation is already in progress");
+        }
+
+        const master = await readMaster();
+        const target = toInt(master.kek_version) + 1;
+
+        const generated = newMasterKey === undefined;
+        const raw = newMasterKey ?? generateMasterKey();
+        let rotation: PendingRotation;
+        let encoded: string | undefined;
+        try {
+          rotation = {
+            unsealer: createMemoryUnsealer(raw),
+            kekVersion: target,
+            verifyHash: await deriveVerifyHash(raw),
+            holderId,
+          };
+          if (generated) encoded = masterKeyToBase64(raw);
+        } finally {
+          if (generated) zeroBytes(raw);
+        }
+        pending = rotation;
+
+        await db.execute(
+          `UPDATE oke_vault_status
+           SET rewrap_target_kek_version = $1, rewrap_checkpoint = NULL,
+               rewrap_key_hash = $2, updated_at = now()
+           WHERE id = 1`,
+          [target, rotation.verifyHash],
+        );
+        const result = await rewrapBatch(rotation);
+        return encoded === undefined ? result : { ...result, masterKey: encoded };
+      } catch (error) {
+        // No persisted rewrap yet → release so a peer can retry immediately.
+        if (pending === null) {
+          await releaseRotateLease(rawDb, holderId).catch(() => undefined);
+        } else {
+          const status = await readStatus().catch(() => null);
+          if (status?.rewrap_target_kek_version === null) {
+            pending = null;
+            await releaseRotateLease(rawDb, holderId).catch(() => undefined);
+          }
+        }
+        throw error;
+      }
     },
 
     async continueRotateMaster(
@@ -887,6 +937,14 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
             "vault: resume rotate-master with the new master key (--new-key / OKE_VAULT_NEW_MASTER_KEY)",
           );
         }
+        const holderId = crypto.randomUUID();
+        const won = await acquireRotateLease(rawDb, holderId, Date.now(), rotateLeaseMs);
+        if (!won) {
+          throw new VaultError(
+            "UNSUPPORTED",
+            "vault: master rotation lease held by another instance",
+          );
+        }
         const raw =
           typeof newMasterKey === "string"
             ? masterKeyFromBase64(newMasterKey)
@@ -894,6 +952,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
         try {
           const hash = await deriveVerifyHash(raw);
           if (!constantTimeEqualStrings(hash, expectedHash)) {
+            await releaseRotateLease(rawDb, holderId).catch(() => undefined);
             throw new VaultError(
               "INVALID_KEY",
               "vault: new master key does not match in-flight rotation",
@@ -903,10 +962,24 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
             unsealer: createMemoryUnsealer(raw),
             kekVersion: toInt(target),
             verifyHash: hash,
+            holderId,
           };
           pending = rotation;
         } finally {
           zeroBytes(raw);
+        }
+      } else {
+        const won = await renewRotateLease(
+          rawDb,
+          rotation.holderId,
+          Date.now(),
+          rotateLeaseMs,
+        );
+        if (!won) {
+          throw new VaultError(
+            "UNSUPPORTED",
+            "vault: master rotation lease held by another instance",
+          );
         }
       }
       return rewrapBatch(rotation);
@@ -982,6 +1055,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
         zeroBytes(payload);
       }
 
+      const payloadSha256 = await sha256Hex(sealed.ciphertext);
       const metadata: BackupMetadata = {
         format: 1,
         createdAt: new Date().toISOString(),
@@ -989,39 +1063,66 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
         count: entries.length,
         iv: toBase64(sealed.iv),
         tag: toBase64(sealed.tag),
+        payloadSha256,
       };
       const header = new TextEncoder().encode(`${BACKUP_MAGIC}${JSON.stringify(metadata)}\n`);
-      const blob = new Uint8Array(header.byteLength + sealed.ciphertext.byteLength);
+      const end = new TextEncoder().encode(BACKUP_END_MARKER);
+      const blob = new Uint8Array(
+        header.byteLength + sealed.ciphertext.byteLength + end.byteLength,
+      );
       blob.set(header, 0);
       blob.set(sealed.ciphertext, header.byteLength);
+      blob.set(end, header.byteLength + sealed.ciphertext.byteLength);
       return blob;
     },
 
     async importBackup(blob: Uint8Array): Promise<void> {
       await ensureReady();
       const active = requireUnsealer();
-      const text = new TextDecoder().decode(blob.subarray(0, Math.min(blob.byteLength, 8192)));
-      if (!text.startsWith(BACKUP_MAGIC)) {
+      const textHead = new TextDecoder().decode(blob.subarray(0, Math.min(blob.byteLength, 8192)));
+      if (!textHead.startsWith(BACKUP_MAGIC)) {
         throw new VaultError("UNSUPPORTED", "vault: not an oke vault backup bundle");
       }
-      const headerEnd = text.indexOf("\n", BACKUP_MAGIC.length);
+
+      const endBytes = new TextEncoder().encode(BACKUP_END_MARKER);
+      if (blob.byteLength < endBytes.byteLength || !tailEquals(blob, endBytes)) {
+        throw new VaultError(
+          "UNSUPPORTED",
+          "vault: backup bundle is incomplete (missing end marker)",
+        );
+      }
+      const body = blob.subarray(0, blob.byteLength - endBytes.byteLength);
+
+      const headerEnd = textHead.indexOf("\n", BACKUP_MAGIC.length);
       if (headerEnd < 0) {
         throw new VaultError("UNSUPPORTED", "vault: backup bundle header is truncated");
       }
 
       let metadata: BackupMetadata;
       try {
-        metadata = JSON.parse(text.slice(BACKUP_MAGIC.length, headerEnd)) as BackupMetadata;
+        metadata = JSON.parse(textHead.slice(BACKUP_MAGIC.length, headerEnd)) as BackupMetadata;
       } catch {
         throw new VaultError("UNSUPPORTED", "vault: backup bundle header is not valid JSON");
       }
 
-      const offset = new TextEncoder().encode(text.slice(0, headerEnd + 1)).byteLength;
+      const offset = new TextEncoder().encode(textHead.slice(0, headerEnd + 1)).byteLength;
+      const ciphertext = body.subarray(offset);
+      if (
+        typeof metadata.payloadSha256 !== "string" ||
+        metadata.payloadSha256.length === 0 ||
+        !constantTimeEqualStrings(metadata.payloadSha256, await sha256Hex(ciphertext))
+      ) {
+        throw new VaultError(
+          "UNSUPPORTED",
+          "vault: backup bundle checksum mismatch (truncated or corrupt)",
+        );
+      }
+
       const plain = await decryptBytes(
         await active.unwrapBackupKek(),
         {
           iv: fromBase64(metadata.iv),
-          ciphertext: blob.subarray(offset),
+          ciphertext,
           tag: fromBase64(metadata.tag),
         },
         buildAad(BACKUP_AAD_PATH, 1, ALGORITHM, metadata.kekVersion),
@@ -1062,7 +1163,10 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
  * object to the {@link SqlExec} surface the Vault needs.
  *
  * Accepts either `exec` (the driver contract) or `execute`, so a thin custom
- * wrapper works without a shim.
+ * wrapper works without a shim. Always exposes {@link SqlExec.begin} so
+ * rotate-master leases (`FOR UPDATE SKIP LOCKED`) and audit appends
+ * (`FOR UPDATE`) serialize — in-process via a mutex, and on real SQL via
+ * `BEGIN`/`COMMIT` when the driver is not the memory fake.
  *
  * @param conn - Connection exposing `query` plus `exec` or `execute`
  */
@@ -1070,23 +1174,107 @@ export function sqlConnectionAsExec(conn: {
   query(sql: string, params?: readonly unknown[]): Promise<unknown[]>;
   exec?(sql: string, params?: readonly unknown[]): Promise<unknown>;
   execute?(sql: string, params?: readonly unknown[]): Promise<void>;
+  driverId?: string;
 }): SqlExec {
-  return {
-    async query<T>(sql: string, params?: unknown[]): Promise<T[]> {
-      return (await conn.query(sql, params ?? [])) as T[];
-    },
-    async execute(sql: string, params?: unknown[]): Promise<void> {
-      if (conn.exec) {
-        await conn.exec(sql, params ?? []);
-        return;
-      }
-      if (conn.execute) {
-        await conn.execute(sql, params ?? []);
-        return;
-      }
-      await conn.query(sql, params ?? []);
+  let gate: Promise<unknown> = Promise.resolve();
+
+  async function runQuery<T>(sql: string, params?: unknown[]): Promise<T[]> {
+    return (await conn.query(sql, params ?? [])) as T[];
+  }
+
+  async function runExecute(sql: string, params?: unknown[]): Promise<void> {
+    if (conn.exec) {
+      await conn.exec(sql, params ?? []);
+      return;
+    }
+    if (conn.execute) {
+      await conn.execute(sql, params ?? []);
+      return;
+    }
+    await conn.query(sql, params ?? []);
+  }
+
+  const surface: SqlExec = {
+    query: runQuery,
+    execute: runExecute,
+    begin<T>(fn: (tx: SqlExec) => Promise<T>): Promise<T> {
+      const run = async (): Promise<T> => {
+        const useSqlTx = conn.driverId !== "memory";
+        if (useSqlTx) await runExecute("BEGIN");
+        try {
+          // Nested work shares this connection; the gate serializes begin() callers.
+          const result = await fn({
+            query: runQuery,
+            execute: runExecute,
+          });
+          if (useSqlTx) await runExecute("COMMIT");
+          return result;
+        } catch (error) {
+          if (useSqlTx) await runExecute("ROLLBACK").catch(() => undefined);
+          throw error;
+        }
+      };
+      const next = gate.then(run, run);
+      gate = next.then(
+        () => undefined,
+        () => undefined,
+      );
+      return next;
     },
   };
+  return surface;
+}
+
+/**
+ * Write a vault backup bundle atomically: temp file → fsync → rename.
+ *
+ * Prevents a crash mid-write from leaving a magic-prefixed partial file at
+ * the final path that an operator could mistake for a complete backup.
+ *
+ * @param path - Final destination path
+ * @param blob - Complete bundle bytes (including end marker)
+ */
+export async function writeBackupFileAtomic(path: string, blob: Uint8Array): Promise<void> {
+  const { open, rename, unlink } = await import("node:fs/promises");
+  const tmp = `${path}.oke-tmp-${process.pid}-${Date.now()}`;
+  try {
+    await Bun.write(tmp, blob);
+    const fh = await open(tmp, "r+");
+    try {
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
+    await rename(tmp, path);
+  } catch (error) {
+    await unlink(tmp).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * Hex-encode a SHA-256 digest of `bytes`.
+ *
+ * @param bytes - Payload to hash
+ */
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Buffer.from(digest).toString("hex");
+}
+
+/**
+ * Whether `blob` ends exactly with `tail`.
+ *
+ * @param blob - Full buffer
+ * @param tail - Expected suffix
+ */
+function tailEquals(blob: Uint8Array, tail: Uint8Array): boolean {
+  if (blob.byteLength < tail.byteLength) return false;
+  const start = blob.byteLength - tail.byteLength;
+  for (let i = 0; i < tail.byteLength; i += 1) {
+    if (blob[start + i] !== tail[i]) return false;
+  }
+  return true;
 }
 
 /**

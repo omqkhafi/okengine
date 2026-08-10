@@ -96,6 +96,7 @@ void seats;
       }),
     );
 
+    // `bunx tsc` under full-suite contention can exceed the default 5s budget.
     const proc = Bun.spawn(["bunx", "tsc", "--project", tsconfig], {
       cwd: dir,
       stdout: "pipe",
@@ -110,7 +111,7 @@ void seats;
     if (code !== 0) {
       throw new Error(`tsc failed (${code})\n${stdout}\n${stderr}\n--- d.ts ---\n${result.source}`);
     }
-  });
+  }, 15_000);
 
   test("fetches /_oke/client.json from url", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-client-add-"));

@@ -27,7 +27,7 @@ let sharedPglite: SqlConnection;
 
 beforeAll(async () => {
   sharedPglite = await connectPglite({ url: "memory://vault-cli-shared" });
-});
+}, 15_000);
 
 afterAll(async () => {
   await sharedPglite.close();

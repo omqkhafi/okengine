@@ -67,10 +67,12 @@ export type {
 } from "./vault/types.ts";
 
 export {
+  BACKUP_END_MARKER,
   BACKUP_MAGIC,
   createBuiltinVaultAdapter,
   DEFAULT_KEK_REWRAP_BATCH_SIZE,
   sqlConnectionAsExec,
+  writeBackupFileAtomic,
 } from "./vault/builtin-adapter.ts";
 export type {
   BuiltinVaultAdapter,
@@ -87,11 +89,15 @@ export {
 export type { AuditAction, AuditEntry, AuditSink, AuditWriter } from "./vault/audit.ts";
 
 export {
+  acquireRotateLease,
+  CLAIM_ROTATE_LEASE_SQL,
   createSqlAuditWriter,
+  DEFAULT_ROTATE_LEASE_MS,
   ensureVaultTables,
   purgeAuditBefore,
   purgeExpiredSecrets,
   readAuditPage,
+  releaseRotateLease,
   verifyAuditChain,
   VAULT_DDL_STATEMENTS,
 } from "./vault/storage.ts";

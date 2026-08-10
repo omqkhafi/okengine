@@ -755,7 +755,8 @@ async function runVaultBackup(
     return 1;
   }
   const blob = await withVault(options, flags, key, (a) => a.exportBackup());
-  await Bun.write(resolve(cwd, file), blob);
+  const { writeBackupFileAtomic } = await import("../elements/vault/builtin-adapter.ts");
+  await writeBackupFileAtomic(resolve(cwd, file), blob);
   write(`oke vault: wrote ${blob.byteLength} encrypted byte(s) to ${file}\n`);
   return 0;
 }
