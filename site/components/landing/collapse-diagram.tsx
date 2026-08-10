@@ -1562,7 +1562,7 @@ function ZooPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               transition={radius(dot, node, fade)}
             />
             {/* Hit area sized for a pointer, independent of the drawn node. */}
-            <circle cx={concern.node.x} cy={concern.node.y} r="9" fill="transparent" />
+            <circle cx={concern.node.x} cy={concern.node.y} r="9" fill="none" pointerEvents="all" />
           </motion.g>
         );
       })}
@@ -1754,7 +1754,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
           : null}
       </g>
 
-      {/* Element circles cover the inner ends of the concern spokes. */}
+      {/* Element discs sit above spokes so junctions stay masked. */}
       {ELEMENT_NODES.map((element) => {
         const shown = element.firstConcern < visible;
         const touched = activeElement === element.name;
@@ -1767,7 +1767,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
         const elementDimmed =
           activeElement !== null ? !touched : changedElements.length > 0 && !lit;
         return (
-          <motion.g
+          <g
             key={element.name}
             tabIndex={shown ? 0 : -1}
             aria-label={`${element.name} — ${shown ? `subsumes ${owned.map((index) => CONCERNS[index]!.text).join(", ")}` : "not yet added"}`}
@@ -1775,19 +1775,29 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
             onMouseLeave={() => onHover(null)}
             onFocus={() => onHover({ kind: "element", name: element.name })}
             onBlur={() => onHover(null)}
-            initial={false}
-            animate={{ opacity: shown ? (elementDimmed ? 0.4 : 1) : 0 }}
-            transition={fade}
             pointerEvents={shown ? "auto" : "none"}
             style={{ cursor: shown ? "pointer" : "default", outline: "none" }}
           >
+            {/*
+             * Opaque plate first — never inherits dim opacity, so spokes cannot
+             * show through the symbol. Ink/stroke/text dim separately below.
+             */}
+            <motion.circle
+              cx={element.node.x}
+              cy={element.node.y}
+              fill="var(--color-fd-background)"
+              initial={false}
+              animate={{ r: ring, opacity: shown ? 1 : 0 }}
+              transition={radius(ring, node, fade)}
+              style={{ pointerEvents: "none" }}
+            />
             <motion.circle
               cx={element.node.x}
               cy={element.node.y}
               fill={inked ? tone : "var(--color-fd-foreground)"}
-              style={tint}
+              style={{ ...tint, pointerEvents: "none" }}
               initial={false}
-              animate={{ r: halo, opacity: touched ? 0.14 : 0.09 }}
+              animate={{ r: halo, opacity: shown ? (touched ? 0.14 : lit ? 0.09 : 0) : 0 }}
               transition={radius(halo, node, fade)}
             />
             <motion.circle
@@ -1795,13 +1805,18 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               cy={element.node.y}
               fill={
                 inked
-                  ? `color-mix(in oklch, ${tone} 18%, var(--color-fd-secondary))`
-                  : "var(--color-fd-secondary)"
+                  ? `color-mix(in oklch, ${tone} 22%, var(--color-fd-background))`
+                  : "var(--color-fd-background)"
               }
-              stroke={inked ? tone : "var(--color-fd-border)"}
-              style={tint}
+              stroke={inked ? tone : "var(--color-fd-muted-foreground)"}
+              style={{ ...tint, pointerEvents: "none" }}
               initial={false}
-              animate={{ r: ring, strokeWidth: touched ? 1.4 : 1 }}
+              animate={{
+                r: ring,
+                strokeWidth: touched ? 1.4 : 1.15,
+                strokeOpacity: shown ? (inked ? 1 : elementDimmed ? 0.45 : 0.75) : 0,
+                opacity: shown ? 1 : 0,
+              }}
               transition={radius(ring, node, fade)}
             />
             <motion.text
@@ -1811,15 +1826,21 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               fontSize="11.5"
               fontFamily="var(--font-mono, ui-monospace, monospace)"
               fill={inked ? tone : "var(--color-fd-foreground)"}
-              style={tint}
+              style={{ ...tint, pointerEvents: "none" }}
               initial={false}
-              animate={{ opacity: shown ? 1 : 0 }}
+              animate={{ opacity: shown ? (elementDimmed ? 0.45 : 1) : 0 }}
               transition={fade}
             >
               {element.symbol}
             </motion.text>
-            <circle cx={element.node.x} cy={element.node.y} r={ELEMENT_R + 4} fill="transparent" />
-          </motion.g>
+            <circle
+              cx={element.node.x}
+              cy={element.node.y}
+              r={ELEMENT_R + 4}
+              fill="none"
+              pointerEvents="all"
+            />
+          </g>
         );
       })}
 
@@ -1897,7 +1918,7 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
               animate={{ r: dot }}
               transition={radius(dot, node, fade)}
             />
-            <circle cx={concern.node.x} cy={concern.node.y} r="9" fill="transparent" />
+            <circle cx={concern.node.x} cy={concern.node.y} r="9" fill="none" pointerEvents="all" />
           </motion.g>
         );
       })}

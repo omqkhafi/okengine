@@ -12,6 +12,8 @@ needed).
 
 ## Unreleased
 
+## v0.11.2 — 2026-08-10
+
 ### ✨ Added
 
 - Prompt recovery + deadline: `smart.prompt(name, { via: ["smart", "local"], timeout: "30s" })`.
@@ -44,6 +46,12 @@ needed).
 
 ### 🐛 Fixed
 
+- Collapse diagram hub nodes: opaque background plates mask spoke junctions;
+  dimming hits stroke/label only so symbols stay readable on dark cards.
+- Landing element lattice: header/footer readout swaps stay absolute so the
+  idle beat no longer briefly doubles chrome height on every step.
+- Collapse diagram hub nodes: idle element discs use a muted-into-card fill
+  (no stroke) so dimmed symbols stay readable on dark cards.
 - `create-oke`: locales and PgDog answers now always write to
   `~/.oke/create-defaults.json` (reuse / recommended), not only after
   customize — so Previous settings keep `ar` / PgDog across runs.

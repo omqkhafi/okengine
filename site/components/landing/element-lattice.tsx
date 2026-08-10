@@ -14,8 +14,9 @@
  * being touched.
  *
  * Touch / coarse pointers skip the spotlight and sticky hover: tap selects via
- * focus, and the idle walk still runs. Compact padding and a stacked chrome
- * keep the 2×4 phone grid readable.
+ * focus, and the idle walk still runs. Compact padding keeps the 2×4 phone
+ * grid readable; header and footer chrome stay one stable row so the beat
+ * cannot stretch the panel.
  *
  * Everything is spring-driven through one `MotionConfig`. We honor
  * prefers-reduced-motion ourselves (after hydration) rather than via
@@ -174,14 +175,17 @@ export function ElementLattice() {
 
           <motion.div
             variants={cell}
-            className="relative flex flex-col gap-1 border-b border-fd-border px-3 py-2.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:px-4 sm:py-3"
+            className="relative flex items-center justify-between gap-3 border-b border-fd-border px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
           >
             <p className="shrink-0 font-mono text-[11px] tracking-[0.16em] text-fd-muted-foreground uppercase">
               eight elements
             </p>
 
-            {/* Reads out what the element under the beat or the pointer replaces. */}
-            <div className="relative min-h-4 min-w-0 flex-1">
+            {/*
+             * Absolute swap so enter/exit never stack in flow — the idle beat
+             * used to double this row's height for ~220ms on every step.
+             */}
+            <div className="relative h-4 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.p
                   key={focused?.name ?? "law"}
@@ -189,7 +193,7 @@ export function ElementLattice() {
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                  className="text-[11px] leading-snug text-fd-muted-foreground sm:absolute sm:inset-0 sm:truncate sm:text-right sm:leading-none"
+                  className="absolute inset-0 truncate text-right text-[11px] leading-none text-fd-muted-foreground"
                 >
                   {focused ? (
                     <>
@@ -299,7 +303,7 @@ export function ElementLattice() {
 
           <motion.div
             variants={cell}
-            className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-fd-border px-3.5 py-3.5 sm:px-5 sm:py-4"
+            className="relative flex items-center justify-between gap-3 border-t border-fd-border px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
           >
             {/* Idle beat walks a highlight along the footer rule. */}
             {lit === null || beat === null || reduced ? null : (
@@ -318,10 +322,11 @@ export function ElementLattice() {
             )}
 
             {/*
-             * Footer mirrors the header: header says what the lit element replaces;
-             * footer points at the reference page and what the element is for.
+             * Footer mirrors the header chrome (same padding / one stable row):
+             * path left, essence right. Absolute swap keeps the beat from
+             * stretching the bar.
              */}
-            <div className="relative min-h-5 min-w-0 flex-1">
+            <div className="relative h-5 min-w-0 flex-1">
               <AnimatePresence initial={false}>
                 <motion.div
                   key={focused?.name ?? "idle"}
@@ -329,22 +334,22 @@ export function ElementLattice() {
                   animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
                   transition={{ duration: reduced ? 0 : 0.22, ease: "easeOut" }}
-                  className="flex flex-col gap-1.5 sm:absolute sm:inset-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-x-5"
+                  className="absolute inset-0 flex items-center justify-between gap-3 sm:gap-x-5"
                 >
                   {focused ? (
                     <>
                       <Link
                         href={focused.href}
-                        className="shrink-0 font-mono text-[13px] text-fd-foreground underline-offset-2 hover:underline"
+                        className="shrink-0 font-mono text-[13px] leading-none text-fd-foreground underline-offset-2 hover:underline"
                       >
                         docs/elements/{focused.preview}
                       </Link>
-                      <p className="min-w-0 text-xs leading-snug text-fd-muted-foreground sm:truncate sm:text-right sm:leading-none">
+                      <p className="min-w-0 truncate text-right text-xs leading-none text-fd-muted-foreground">
                         {focused.description}
                       </p>
                     </>
                   ) : (
-                    <p className="text-xs text-fd-muted-foreground">
+                    <p className="text-xs leading-none text-fd-muted-foreground">
                       New infrastructure is a driver — never a ninth element.
                     </p>
                   )}
