@@ -1,5 +1,6 @@
 /**
- * ui-next setup + login — real kernel + real SPA: claim, then login success/failure.
+ * ui-next setup + login + shell — real kernel + real SPA.
+ * Claim/login navigate to the authenticated shell; unauth shell visits redirect.
  */
 
 import { expect, test } from "@playwright/test";
@@ -10,6 +11,30 @@ import { fileURLToPath } from "node:url";
 const OPERATOR_EMAIL = "smoke@example.com";
 const OPERATOR_NAME = "Smoke Ops";
 const OPERATOR_PASSWORD = "Password1234!";
+
+/**
+ * Assert the authenticated shell is visible for the signed-in operator.
+ *
+ * @param page - Playwright page
+ * @param sectionTitle - Empty-state title for the active section
+ */
+async function expectShell(
+  page: import("@playwright/test").Page,
+  sectionTitle: string,
+): Promise<void> {
+  const sidebar = page.locator('[data-slot="sidebar"]');
+  await expect(sidebar).toBeVisible({ timeout: 15_000 });
+  await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Flows" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
+  await expect(page.getByText(sectionTitle)).toBeVisible();
+
+  // Sidebar starts collapsed (icon mode) — expand so operator name/email are visible.
+  await page.locator('[data-slot="sidebar-trigger"]').click();
+  await expect(sidebar.getByText(OPERATOR_NAME)).toBeVisible();
+  await expect(sidebar.getByText(OPERATOR_EMAIL)).toBeVisible();
+  await expect(page.locator('[data-slot="operator-avatar"]')).toBeVisible();
+}
 
 test("ui-next claim succeeds and already-claimed path closes setup", async ({ page, request }) => {
   const claimPath = join(dirname(fileURLToPath(import.meta.url)), ".claim-code-ui-next");
@@ -33,11 +58,8 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Create admin account" }).click();
 
-  await expect(
-    page.getByText(`First operator created. Signed in as ${OPERATOR_NAME}`),
-  ).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expectShell(page, "Overview is not built yet");
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
@@ -64,7 +86,8 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   expect(reopenBody.error.code).toBe("SetupClosed");
   expect(reopenBody.error.data?.reason).toBe("first_operator_exists");
 
-  await page.reload();
+  await page.evaluate(() => sessionStorage.removeItem("oke_console_at"));
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
     timeout: 15_000,
   });
@@ -75,7 +98,7 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 });
 
-test("ui-next login rejects wrong password then succeeds with claim credentials", async ({
+test("ui-next login rejects wrong password then succeeds into the shell", async ({
   page,
   request,
 }) => {
@@ -106,14 +129,29 @@ test("ui-next login rejects wrong password then succeeds with claim credentials"
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(
-    page.getByText(`Signed in as ${OPERATOR_NAME} (${OPERATOR_EMAIL})`),
-  ).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expectShell(page, "Overview is not built yet");
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
+
+  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
+  await expect(page).toHaveURL(/\/flows$/);
+  await expect(page.getByText("Flows is not built yet")).toBeVisible();
+});
+
+test("ui-next unauthenticated shell visit redirects to the pre-auth gate", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    sessionStorage.removeItem("oke_console_at");
+    sessionStorage.removeItem("oke_console_operator");
+  });
+  await page.goto("/overview");
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator('[data-slot="sidebar"]')).toHaveCount(0);
 });
 
 test("ui-next theme toggle flips .dark and persists across reload", async ({ page }) => {

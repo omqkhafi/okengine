@@ -1,10 +1,13 @@
 /**
- * Thin Console client for ui-next — setup + session login against the real kernel.
+ * Thin Console client for ui-next — setup + session against the real kernel.
  * Same-origin `/console/*` (no mocks).
  */
 
 /** Session access token key (matches current Console SPA). */
 export const ACCESS_TOKEN_KEY = "oke_console_at";
+
+/** Operator identity key (name/email from claim or login / session/me). */
+export const OPERATOR_KEY = "oke_console_operator";
 
 let accessToken: string | null = null;
 
@@ -19,6 +22,7 @@ export function setAccessToken(token: string | null): void {
     sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
   } else {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+    sessionStorage.removeItem(OPERATOR_KEY);
   }
 }
 
@@ -34,6 +38,65 @@ export function restoreAccessToken(): void {
  */
 export function getAccessToken(): string | null {
   return accessToken;
+}
+
+/** Operator identity shown in the shell footer. */
+export type SessionOperator = {
+  readonly operatorId: string;
+  readonly email: string;
+  readonly name: string;
+};
+
+/**
+ * Persist operator identity alongside the access token.
+ *
+ * @param operator - Operator from claim/login/`session/me`, or null to clear
+ */
+export function setSessionOperator(operator: SessionOperator | null): void {
+  if (operator) {
+    sessionStorage.setItem(OPERATOR_KEY, JSON.stringify(operator));
+  } else {
+    sessionStorage.removeItem(OPERATOR_KEY);
+  }
+}
+
+/**
+ * Read persisted operator identity from sessionStorage.
+ */
+export function getSessionOperator(): SessionOperator | null {
+  const raw = sessionStorage.getItem(OPERATOR_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SessionOperator>;
+    if (
+      typeof parsed.operatorId === "string" &&
+      typeof parsed.email === "string" &&
+      typeof parsed.name === "string"
+    ) {
+      return {
+        operatorId: parsed.operatorId,
+        email: parsed.email,
+        name: parsed.name,
+      };
+    }
+  } catch {
+    // ignore corrupt storage
+  }
+  return null;
+}
+
+/**
+ * Apply a successful claim or login session (token + operator identity).
+ *
+ * @param session - SessionOut from claim or login
+ */
+export function applySession(session: SessionOut): void {
+  setAccessToken(session.accessToken);
+  setSessionOperator({
+    operatorId: session.operatorId,
+    email: session.email,
+    name: session.name,
+  });
 }
 
 /** Console API error envelope. */
@@ -84,6 +147,14 @@ export type SessionLoginInput = {
   readonly password: string;
 };
 
+/** GET /console/session/me payload (matches server MeOut). */
+export type SessionMe = {
+  readonly operatorId: string;
+  readonly email: string;
+  readonly name: string;
+  readonly setupClosed: boolean;
+};
+
 /**
  * Prefer human message / reason over a bare error code (matches current Wizard).
  *
@@ -129,9 +200,7 @@ export async function setupStatus(): Promise<ConsoleApiResult<SetupStatus>> {
  *
  * @param body - Claim payload
  */
-export async function setupClaim(
-  body: SetupClaimInput,
-): Promise<ConsoleApiResult<SessionOut>> {
+export async function setupClaim(body: SetupClaimInput): Promise<ConsoleApiResult<SessionOut>> {
   return consoleFetch<SessionOut>("/console/setup/claim", {
     method: "POST",
     body: JSON.stringify(body),
@@ -143,11 +212,16 @@ export async function setupClaim(
  *
  * @param body - Email + password
  */
-export async function sessionLogin(
-  body: SessionLoginInput,
-): Promise<ConsoleApiResult<SessionOut>> {
+export async function sessionLogin(body: SessionLoginInput): Promise<ConsoleApiResult<SessionOut>> {
   return consoleFetch<SessionOut>("/console/session/login", {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * GET /console/session/me — validate the current operator session.
+ */
+export async function sessionMe(): Promise<ConsoleApiResult<SessionMe>> {
+  return consoleFetch<SessionMe>("/console/session/me");
 }

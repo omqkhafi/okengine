@@ -1,18 +1,19 @@
 /**
- * Setup gate — claim when open; real login when closed (Phase 2).
- * No Shell/sidebar yet — claim + login success stay in-page.
+ * Setup gate — claim when open; real login when closed.
+ * Claim success navigates to the authenticated shell (`/overview`).
  */
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {
+  applySession,
   clientErrorText,
   setAccessToken,
   setupClaim,
   setupStatus,
-  type SessionOut,
 } from "../../client.ts";
 import { LoginForm } from "@/features/auth/login-form";
 import { AuthCard, AuthCardSkeleton } from "@/components/auth-card";
@@ -70,7 +71,7 @@ function SetupFrame({ children }: { children: ReactNode }) {
  */
 export function ClaimPage() {
   const qc = useQueryClient();
-  const [claimed, setClaimed] = useState<SessionOut | null>(null);
+  const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
 
   const status = useQuery({
@@ -98,10 +99,10 @@ export function ClaimPage() {
       return res.data;
     },
     onSuccess: (data) => {
-      setAccessToken(data.accessToken);
-      setClaimed(data);
+      applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
+      void navigate({ to: "/overview" });
     },
     onError: (err: Error) => {
       setFormError(err.message);
@@ -140,18 +141,6 @@ export function ClaimPage() {
             {status.error instanceof Error
               ? status.error.message
               : "Is the Console kernel running on :6533?"}
-          </p>
-        </AuthCard>
-      </SetupFrame>
-    );
-  }
-
-  if (claimed) {
-    return (
-      <SetupFrame>
-        <AuthCard title="Setup complete" description="The first operator account is ready.">
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-            First operator created. Signed in as {claimed.name} ({claimed.email}).
           </p>
         </AuthCard>
       </SetupFrame>

@@ -3,9 +3,4 @@
  * Package: `motion` (motion.dev); React entry: `motion/react`.
  */
 
-export {
-  AnimatePresence,
-  LayoutGroup,
-  motion,
-  useReducedMotion,
-} from "motion/react";
+export { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";

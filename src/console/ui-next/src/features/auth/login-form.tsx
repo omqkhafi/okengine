@@ -1,18 +1,14 @@
 /**
- * Operator login — real POST /console/session/login (Phase 2).
- * Shown when setup is closed; success stores `oke_console_at` (no Shell yet).
+ * Operator login — real POST /console/session/login.
+ * Shown when setup is closed; success navigates to the authenticated shell.
  */
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
-import {
-  clientErrorText,
-  sessionLogin,
-  setAccessToken,
-  type SessionOut,
-} from "../../client.ts";
+import { applySession, clientErrorText, sessionLogin } from "../../client.ts";
 import { AuthCard } from "@/components/auth-card";
 import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
@@ -54,7 +50,7 @@ function RequiredMark() {
  */
 export function LoginForm() {
   const qc = useQueryClient();
-  const [signedIn, setSignedIn] = useState<SessionOut | null>(null);
+  const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
 
   const login = useMutation({
@@ -65,10 +61,10 @@ export function LoginForm() {
       return res.data;
     },
     onSuccess: (data) => {
-      setAccessToken(data.accessToken);
-      setSignedIn(data);
+      applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
+      void navigate({ to: "/overview" });
     },
     onError: (err: Error) => {
       setFormError(err.message);
@@ -88,16 +84,6 @@ export function LoginForm() {
       await login.mutateAsync(value);
     },
   });
-
-  if (signedIn) {
-    return (
-      <AuthCard title="Signed in" description="You're authenticated as an operator.">
-        <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-          Signed in as {signedIn.name} ({signedIn.email}).
-        </p>
-      </AuthCard>
-    );
-  }
 
   const formErrorId = "login-form-error";
 

@@ -6,13 +6,7 @@
  */
 
 import { useId, type ReactNode } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -43,11 +37,7 @@ export function AuthCard({ title, description, children, footer, className }: Au
   return (
     <div
       data-auth-layer="0"
-      className={cn(
-        "flex w-full flex-col gap-6 px-0 pt-0 pb-6",
-        authPlateClassName,
-        className,
-      )}
+      className={cn("flex w-full flex-col gap-6 px-0 pt-0 pb-6", authPlateClassName, className)}
     >
       <Card
         data-auth-layer="1"
@@ -55,9 +45,7 @@ export function AuthCard({ title, description, children, footer, className }: Au
       >
         <CardHeader>
           <CardTitle id={titleId}>{title}</CardTitle>
-          {description ? (
-            <CardDescription id={descriptionId}>{description}</CardDescription>
-          ) : null}
+          {description ? <CardDescription id={descriptionId}>{description}</CardDescription> : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           {typeof children === "function" ? children({ titleId, descriptionId }) : children}

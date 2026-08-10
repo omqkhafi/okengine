@@ -58,9 +58,7 @@ export function ModeToggle() {
                     className={cn(
                       "relative inline-flex h-7 min-w-7 items-center justify-center gap-1.5 overflow-hidden rounded-full px-2.5 text-xs font-medium whitespace-nowrap outline-none select-none transition-transform active:scale-95",
                       "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                      active
-                        ? "text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
+                      active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                       props.className,
                     )}
                   >

@@ -5,10 +5,7 @@
 
 import { CheckmarkCircle02Icon, CircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  evaluateConsolePasswordRules,
-  type ConsolePasswordRule,
-} from "@console/password-policy";
+import { evaluateConsolePasswordRules, type ConsolePasswordRule } from "@console/password-policy";
 import { cn } from "@/lib/utils";
 
 /** Single password rule used for checklist + progress. */
@@ -100,7 +97,10 @@ export function PasswordStrength({ password, id = "password-strength" }: Passwor
             Password strength
           </p>
           <p
-            className={cn("text-xs tabular-nums font-medium", empty ? "text-muted-foreground" : tone.text)}
+            className={cn(
+              "text-xs tabular-nums font-medium",
+              empty ? "text-muted-foreground" : tone.text,
+            )}
             aria-hidden
           >
             {empty ? `0/${rules.length}` : `${tone.label} · ${metCount}/${rules.length}`}
@@ -144,9 +144,7 @@ export function PasswordStrength({ password, id = "password-strength" }: Passwor
               color="currentColor"
               strokeWidth={1.5}
               className={cn(
-                rule.met
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-muted-foreground/60",
+                rule.met ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60",
               )}
               aria-hidden
             />

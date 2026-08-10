@@ -1,13 +1,14 @@
 /**
- * Parallel Console SPA entry — Query + theme + nuqs providers, claim page only.
+ * Parallel Console SPA entry — Query + theme + TanStack Router.
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "@tanstack/react-router";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
+import { router } from "./router.tsx";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
@@ -34,7 +35,7 @@ createRoot(rootEl).render(
       <TooltipProvider delay={0}>
         <QueryClientProvider client={queryClient}>
           <NuqsAdapter>
-            <App />
+            <RouterProvider router={router} />
           </NuqsAdapter>
         </QueryClientProvider>
       </TooltipProvider>

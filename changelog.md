@@ -53,7 +53,13 @@ needed).
 - ui-next operator login when setup is closed: Email + Password (TanStack Form + Zod +
   shadcn Field) posts to real `POST /console/session/login`, stores `oke_console_at` on
   success, and surfaces `AuthFailed` / `AuthRateLimited` errors. Same ConsoleChrome
-  shell as claim; no Shell/sidebar yet. Gate extended in `test:console:setup-ui-next`.
+  shell as claim. Gate extended in `test:console:setup-ui-next`.
+
+- ui-next authenticated shell (Phase 3): TanStack Router (`/` pre-auth, `/overview` ·
+  `/flows` · `/store` guarded shell). Claim and login success navigate to `/overview`.
+  Sidebar-07 layout collapsed by default, OKE logo header, Overview/Flows/Store nav with
+  honest Empty placeholders, operator Avatar footer from real session/`session/me`.
+  Unauthenticated shell visits redirect to `/`. Gate: `test:console:setup-ui-next`.
 
 - Parallel Console SPA scaffold at `src/console/ui-next/` (React + Vite + shadcn/Base UI +
   TanStack Form/Query + HugeIcons) with a real first-admin claim page wired to
