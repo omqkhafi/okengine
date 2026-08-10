@@ -297,6 +297,8 @@ export interface FxDeliverOtpOptions {
 /** Options for {@link Fx.ask}. */
 export interface FxAskOptions {
   readonly via?: readonly NamedRef[];
+  /** Per-call deadline — overrides prompt `timeout` (`"30s"` or ms). */
+  readonly timeout?: string | number;
   /** Flow refs offered as tools — each model call goes through `fx.call`. */
   readonly tools?: readonly NamedRef[];
   /** Bound on tool invocations (default 6). */
@@ -1587,13 +1589,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         if (options.aiRuntime) {
           return options.aiRuntime.ask(name, input, {
             via: opts?.via?.map(resolveName),
+            ...(opts?.timeout !== undefined ? { timeout: opts.timeout } : {}),
             tools: opts?.tools?.map(resolveName),
             maxSteps: opts?.maxSteps,
             // Host fx.call — same capability / ledger / Runs path as any call.
             callTool: (tool, toolInput) => fx.call(tool, toolInput),
           });
         }
-        return {};
+        throw new Error(`fx.ask: AI runtime is not configured for prompt "${name}"`);
       });
     },
     search(embed, query, opts) {

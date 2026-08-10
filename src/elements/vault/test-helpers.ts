@@ -85,10 +85,7 @@ export function createMemoryVaultSql(): SqlConnection {
       const lockedBy = status.rotate_locked_by;
       const expires = status.rotate_lease_expires_at;
       const free =
-        lockedBy == null ||
-        lockedBy === holderId ||
-        expires == null ||
-        Number(expires) <= now;
+        lockedBy == null || lockedBy === holderId || expires == null || Number(expires) <= now;
       return free ? [{ id: 1 }] : [];
     }
 

@@ -27,6 +27,7 @@ import {
   shouldPrompt,
   sourceFromArgs,
   withBackOption,
+  withLocalesPgDog,
   type InteractiveAnswers,
 } from "./cli.ts";
 import {
@@ -45,6 +46,55 @@ import {
   transformConfigForSqlDriver,
   transformPackageJson,
 } from "./transform.ts";
+
+describe("withLocalesPgDog", () => {
+  test("updates session defaults (reuse / customize)", () => {
+    const session = recommendedDefaults("docker-ready", "advanced");
+    const next = withLocalesPgDog({
+      template: "advanced",
+      locales: ["ar"],
+      pgdog: true,
+      session,
+      previous: null,
+    });
+    expect(next.template).toBe("advanced");
+    expect(next.locales).toEqual(["ar"]);
+    expect(next.pgdog).toBe(true);
+    expect(next.drivers.store.sql.dev).toBe(session.drivers.store.sql.dev);
+  });
+
+  test("updates previous settings when recommended has no session", () => {
+    const previous = {
+      ...recommendedDefaults("docker-ready", "advanced"),
+      locales: [] as const,
+      pgdog: false,
+    };
+    const next = withLocalesPgDog({
+      template: "advanced",
+      locales: ["ar", "fr"],
+      pgdog: true,
+      session: undefined,
+      previous,
+    });
+    expect(next.locales).toEqual(["ar", "fr"]);
+    expect(next.pgdog).toBe(true);
+    expect(next.drivers).toEqual(previous.drivers);
+  });
+
+  test("falls back to recommended pins when nothing is saved", () => {
+    const next = withLocalesPgDog({
+      template: "standard",
+      locales: ["ar"],
+      pgdog: true,
+      session: undefined,
+      previous: null,
+    });
+    expect(next.template).toBe("standard");
+    expect(next.locales).toEqual(["ar"]);
+    expect(next.pgdog).toBe(true);
+    expect(next.profile).toBe("docker-ready");
+  });
+});
 
 describe("defaultsBranchOptions", () => {
   test("hides reuse when no previous settings exist", () => {

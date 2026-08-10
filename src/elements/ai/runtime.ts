@@ -12,13 +12,22 @@ import type { IndexStore } from "../../drivers/types.ts";
 import { maskRedactedDeep } from "../../kernel/redacted.ts";
 import type { GatePolicyContext } from "../gate/declare.ts";
 import type { GateRuntime } from "../gate/runtime.ts";
-import type { AiAgentDecl, AiEmbedDecl, AiModelDecl, AiPromptDecl } from "./declare.ts";
+import type { AiAgentDecl, AiEmbedDecl, AiModelDecl, AiPromptDecl, AiTimeout } from "./declare.ts";
+import {
+  isRetryableAiError,
+  mergeAskAbortSignal,
+  outExpectsVia,
+  resolveTimeoutMs,
+} from "./errors.ts";
 import {
   AiSchemaValidationError,
   coerceModelObject,
   validatePromptOut,
   type AiSchemaMismatch,
 } from "./schema.ts";
+
+/** Brief pause before the same-model retry on a retryable failure. */
+const AI_SAME_MODEL_RETRY_BACKOFF_MS = 250;
 
 /** Default bound for tool / agent loops. */
 export const AI_DEFAULT_MAX_STEPS = 6;
@@ -146,6 +155,8 @@ export interface CreateAiRuntimeOptions {
 /** Ask options. */
 export interface AiAskOptions {
   readonly via?: readonly string[];
+  /** Per-call deadline — overrides prompt `timeout` (`"30s"` or ms). */
+  readonly timeout?: AiTimeout;
   readonly allowPii?: boolean;
   /** Flow names offered as tools — each model call dispatches via `callTool`. */
   readonly tools?: readonly string[];
@@ -275,6 +286,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     const model = models.get(name);
     const opened = await options.defaultDriver.open({
       model: model?.model ?? name,
+      ...(model?.baseUrl !== undefined ? { baseUrl: model.baseUrl } : {}),
+      ...(model?.apiKey !== undefined ? { apiKey: model.apiKey } : {}),
     });
     clients.set(name, opened);
     return opened;
@@ -389,6 +402,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     readonly maxSteps: number;
     readonly agentLabel: string;
     readonly responseFormat?: unknown;
+    readonly signal?: AbortSignal;
     readonly callTool?: (name: string, input: unknown) => Promise<unknown>;
     readonly auth?: GatePolicyContext["auth"];
     readonly operator?: GatePolicyContext["operator"];
@@ -421,6 +435,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         messages,
         tools: defs.length > 0 ? defs : undefined,
         responseFormat: opts.responseFormat,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
       });
       cost += result.usage?.cost ?? 0;
       lastText = result.text;
@@ -498,6 +513,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const version = decl.version;
       const started = now();
       const tools = opts?.tools ?? [];
+      const signal = mergeAskAbortSignal(resolveTimeoutMs(opts?.timeout ?? decl.timeout));
 
       // Replay from journal when input matches (nondeterministic contract)
       if (journalingForced && tools.length === 0) {
@@ -514,7 +530,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
         }
       }
 
-      const via = opts?.via ?? (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
+      const via =
+        opts?.via ?? decl.via ?? (decl.model ? [decl.model] : [...models.keys()].slice(0, 1));
       const attempts: AiFallbackAttempt[] = [];
       let lastError: string | undefined;
       let lastSchema: AiSchemaMismatch | undefined;
@@ -522,72 +539,66 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       const userContent = promptContentFromInput(input);
 
       for (const modelName of via) {
-        const attemptStart = now();
-        try {
-          const client = await clientFor(modelName);
-          let raw: unknown;
-          let attemptCost = 0;
-
-          if (tools.length > 0) {
-            const loop = await toolLoop({
-              client,
-              modelName,
-              messages: [{ role: "user", content: userContent }],
-              tools,
-              maxSteps: opts?.maxSteps ?? AI_DEFAULT_MAX_STEPS,
-              agentLabel: prompt,
-              responseFormat: decl.out,
-              callTool: opts?.callTool,
-            });
-            raw = loop.lastToolResult !== undefined && !loop.text ? loop.lastToolResult : loop.raw;
-            attemptCost = loop.cost;
-            totalCost += attemptCost;
-            if (loop.denials.length > 0 && loop.trail.every((t) => t.status === "denied")) {
-              throw new Error(
-                `ai: all tool calls denied for prompt "${prompt}": ${loop.denials[0]?.reason}`,
-              );
-            }
-          } else {
-            const result = await client.complete({
-              model: wireModel(modelName, client),
-              messages: [{ role: "user", content: userContent }],
-              responseFormat: decl.out,
-            });
-            attemptCost = result.usage?.cost ?? 0;
-            totalCost += attemptCost;
-            raw = result.raw !== undefined ? result.raw : result.text;
-          }
-
-          const latencyMs = Math.max(0, now() - attemptStart);
-
+        let sameModelTries = 0;
+        let advance = true;
+        while (sameModelTries < 2 && advance) {
+          sameModelTries++;
+          const attemptStart = now();
           try {
-            const output = decl.out
-              ? validatePromptOut(prompt, version, decl.out, raw)
-              : coerceModelObject(raw);
-            attempts.push({
-              model: modelName,
-              ok: true,
-              cost: attemptCost,
-              latencyMs,
-              at: now(),
-            });
-            if (journalingForced) {
-              journal.push({
-                prompt,
-                ...(version !== undefined ? { version } : {}),
-                input,
-                output,
-                attempts: [...attempts],
-                outcome: "ok",
-                cost: totalCost,
-                latencyMs: Math.max(0, now() - started),
-                at: now(),
+            const client = await clientFor(modelName);
+            let raw: unknown;
+            let attemptCost = 0;
+
+            if (tools.length > 0) {
+              const loop = await toolLoop({
+                client,
+                modelName,
+                messages: [{ role: "user", content: userContent }],
+                tools,
+                maxSteps: opts?.maxSteps ?? AI_DEFAULT_MAX_STEPS,
+                agentLabel: prompt,
+                responseFormat: decl.out,
+                callTool: opts?.callTool,
+                ...(signal !== undefined ? { signal } : {}),
               });
+              raw =
+                loop.lastToolResult !== undefined && !loop.text ? loop.lastToolResult : loop.raw;
+              attemptCost = loop.cost;
+              totalCost += attemptCost;
+              if (loop.denials.length > 0 && loop.trail.every((t) => t.status === "denied")) {
+                throw new Error(
+                  `ai: all tool calls denied for prompt "${prompt}": ${loop.denials[0]?.reason}`,
+                );
+              }
+            } else {
+              const result = await client.complete({
+                model: wireModel(modelName, client),
+                messages: [{ role: "user", content: userContent }],
+                responseFormat: decl.out,
+                ...(signal !== undefined ? { signal } : {}),
+              });
+              attemptCost = result.usage?.cost ?? 0;
+              totalCost += attemptCost;
+              // Prefer assistant text — `raw` is often the transport envelope
+              // (OpenAI chat.completion object), which must not shadow the content.
+              raw =
+                typeof result.text === "string" && result.text.length > 0
+                  ? result.text
+                  : result.raw !== undefined
+                    ? result.raw
+                    : result.text;
             }
-            return output;
-          } catch (err) {
-            if (err instanceof AiSchemaValidationError) {
-              lastSchema = err.mismatch;
+
+            const latencyMs = Math.max(0, now() - attemptStart);
+
+            try {
+              const coerced = coerceModelObject(raw);
+              const prepared = outExpectsVia(decl.out) ? { ...coerced, via: modelName } : coerced;
+              const validated = decl.out
+                ? validatePromptOut(prompt, version, decl.out, prepared)
+                : prepared;
+              // Always report the winning logical model for recovery chains.
+              const output = { ...validated, via: modelName };
               attempts.push({
                 model: modelName,
                 ok: true,
@@ -600,30 +611,79 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                   prompt,
                   ...(version !== undefined ? { version } : {}),
                   input,
-                  output: coerceModelObject(raw),
+                  output,
                   attempts: [...attempts],
-                  outcome: "schema_invalid",
+                  outcome: "ok",
                   cost: totalCost,
                   latencyMs: Math.max(0, now() - started),
-                  schemaMismatch: err.mismatch,
                   at: now(),
                 });
               }
+              return output;
+            } catch (err) {
+              if (err instanceof AiSchemaValidationError) {
+                lastSchema = err.mismatch;
+                attempts.push({
+                  model: modelName,
+                  ok: true,
+                  cost: attemptCost,
+                  latencyMs,
+                  at: now(),
+                });
+                if (journalingForced) {
+                  journal.push({
+                    prompt,
+                    ...(version !== undefined ? { version } : {}),
+                    input,
+                    output: coerceModelObject(raw),
+                    attempts: [...attempts],
+                    outcome: "schema_invalid",
+                    cost: totalCost,
+                    latencyMs: Math.max(0, now() - started),
+                    schemaMismatch: err.mismatch,
+                    at: now(),
+                  });
+                }
+                throw err;
+              }
               throw err;
             }
-            throw err;
+          } catch (err) {
+            if (err instanceof AiSchemaValidationError) throw err;
+            lastError = err instanceof Error ? err.message : String(err);
+            attempts.push({
+              model: modelName,
+              ok: false,
+              error: lastError,
+              cost: 0,
+              latencyMs: Math.max(0, now() - attemptStart),
+              at: now(),
+            });
+
+            if (!isRetryableAiError(err)) {
+              if (journalingForced) {
+                journal.push({
+                  prompt,
+                  ...(version !== undefined ? { version } : {}),
+                  input,
+                  output: { error: lastError },
+                  attempts,
+                  outcome: "provider_error",
+                  cost: totalCost,
+                  latencyMs: Math.max(0, now() - started),
+                  at: now(),
+                });
+              }
+              throw err instanceof Error ? err : new Error(String(err));
+            }
+
+            if (sameModelTries < 2) {
+              await new Promise((r) => setTimeout(r, AI_SAME_MODEL_RETRY_BACKOFF_MS));
+              continue;
+            }
+            advance = true;
+            break;
           }
-        } catch (err) {
-          if (err instanceof AiSchemaValidationError) throw err;
-          lastError = err instanceof Error ? err.message : String(err);
-          attempts.push({
-            model: modelName,
-            ok: false,
-            error: lastError,
-            cost: 0,
-            latencyMs: Math.max(0, now() - attemptStart),
-            at: now(),
-          });
         }
       }
 

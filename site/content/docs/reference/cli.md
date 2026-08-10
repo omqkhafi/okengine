@@ -125,7 +125,8 @@ On a TTY: pick **standard** or **advanced**, then recommended defaults or
 customize. Customize walks **Docker-first** facets once (including `store.index`
 with a `none` opt-out), then **AI setup**: Recommended (llama.cpp) · Customize ·
 Off. Writes user-global `~/.oke/create-defaults.json` (reuse only when `template`
-matches). Non-TTY / `--yes` / explicit `--template` never prompt.
+matches). Extra locales and PgDog answers are persisted on every TTY run — not
+only after customize. Non-TTY / `--yes` / explicit `--template` never prompt.
 
 ### Additional commands
 

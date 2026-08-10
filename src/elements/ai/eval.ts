@@ -48,12 +48,37 @@ export interface RunPromptEvalsOptions {
 }
 
 /**
+ * Deep equality for eval expectations — ignore a runtime-stamped `via`
+ * when the case did not declare one.
+ *
+ * @param actual - Ask output
+ * @param expect - Case expectation
+ */
+function defaultEvalEquals(actual: unknown, expect: unknown): boolean {
+  if (JSON.stringify(actual) === JSON.stringify(expect)) return true;
+  if (
+    actual &&
+    typeof actual === "object" &&
+    !Array.isArray(actual) &&
+    expect &&
+    typeof expect === "object" &&
+    !Array.isArray(expect) &&
+    !("via" in expect) &&
+    "via" in actual
+  ) {
+    const { via: _via, ...rest } = actual as Record<string, unknown>;
+    return JSON.stringify(rest) === JSON.stringify(expect);
+  }
+  return false;
+}
+
+/**
  * Run a prompt eval set. Fails CI when any case fails (`ok === false`).
  *
  * @param options - Cases + ask fn
  */
 export async function runPromptEvals(options: RunPromptEvalsOptions): Promise<EvalSuiteResult> {
-  const equals = options.equals ?? ((a, b) => JSON.stringify(a) === JSON.stringify(b));
+  const equals = options.equals ?? defaultEvalEquals;
   const results: EvalCaseResult[] = [];
 
   for (let i = 0; i < options.cases.length; i++) {

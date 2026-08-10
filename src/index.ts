@@ -124,6 +124,8 @@ export {
 
 export {
   ai,
+  listAiDecls,
+  resetAiDecls,
   createAiRuntime,
   assertAllowPiiForAsk,
   AiPiiBuildError,

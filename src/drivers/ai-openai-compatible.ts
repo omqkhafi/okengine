@@ -24,6 +24,18 @@ import type {
 export const OPENAI_COMPAT_DEFAULT_BASE = "https://api.openai.com/v1";
 
 /**
+ * Throw a provider error with an HTTP `status` field for retry classification.
+ *
+ * @param message - Error message
+ * @param status - HTTP status
+ */
+function throwHttp(message: string, status: number): never {
+  const err = new Error(message) as Error & { status: number };
+  err.status = status;
+  throw err;
+}
+
+/**
  * Normalize a chat/embeddings base URL (strip trailing slash).
  *
  * @param raw - Base URL
@@ -112,7 +124,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       const raw = (await res.json().catch(() => ({}))) as OpenAiChatResponse;
       if (!res.ok) {
         const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
-        throw new Error(`openai-compatible: ${msg}`);
+        throwHttp(`openai-compatible: ${msg}`, res.status);
       }
       const message = raw.choices?.[0]?.message;
       const text = message?.content ?? "";
@@ -148,7 +160,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       if (!res.ok) {
         const raw = (await res.json().catch(() => ({}))) as OpenAiChatResponse;
         const msg = raw.error?.message ?? `openai-compatible HTTP ${res.status}`;
-        throw new Error(`openai-compatible: ${msg}`);
+        throwHttp(`openai-compatible: ${msg}`, res.status);
       }
       if (!res.body) {
         throw new Error("openai-compatible: stream response has no body");
@@ -166,7 +178,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       const raw = (await res.json().catch(() => ({}))) as OpenAiEmbedResponse;
       if (!res.ok) {
         const msg = raw.error?.message ?? `openai-compatible embed HTTP ${res.status}`;
-        throw new Error(`openai-compatible: ${msg}`);
+        throwHttp(`openai-compatible: ${msg}`, res.status);
       }
       const vectors = (raw.data ?? [])
         .slice()

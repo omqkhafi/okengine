@@ -1,17 +1,24 @@
 /**
  * Module-evaluation registries for `store.sql` / `store.files`, `vault.secret`,
- * `vault.env.required`, `signal()`, and `channel.<medium>().template()` — the
- * plain arrays behind each declare module's `listX()` / `resetX()` pair
- * (mirrors `on.ts`'s trigger-drain `bindings` array).
+ * `vault.env.required`, `signal()`, `channel.<medium>().template()`, and
+ * `ai.model` / `.prompt` / `ai.embed` / `ai.agent` — the plain arrays behind
+ * each declare module's `listX()` / `resetX()` pair (mirrors `on.ts`'s
+ * trigger-drain `bindings` array).
  *
  * Lives here, not in the declare modules themselves, so {@link oke} can read
  * every registry with one lightweight import instead of statically pulling
- * in all four element `declare.ts` modules (and every unrelated export they
+ * in all element `declare.ts` modules (and every unrelated export they
  * carry) into every app's bundle — see the `oke()` Store-only bundle-size
  * budget in `boot.test.ts`. Only type imports cross back to the declare
  * modules, so this file has zero runtime dependencies of its own.
  */
 
+import type {
+  AiAgentDecl,
+  AiEmbedDecl,
+  AiModelDecl,
+  AiPromptDecl,
+} from "../elements/ai/declare.ts";
 import type { StoreDecl } from "../elements/store/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
@@ -27,3 +34,11 @@ export const requiredEnvRegistry: string[] = [];
 export const signalRegistry: SignalDecl[] = [];
 /** Medium-binder `.template()` declarations since the last reset. */
 export const channelTemplateRegistry: ChannelTemplateDecl[] = [];
+/** `ai.model` declarations since the last reset. */
+export const aiModelRegistry: AiModelDecl[] = [];
+/** `model.prompt` declarations since the last reset. */
+export const aiPromptRegistry: AiPromptDecl[] = [];
+/** `ai.embed` declarations since the last reset. */
+export const aiEmbedRegistry: AiEmbedDecl[] = [];
+/** `ai.agent` declarations since the last reset. */
+export const aiAgentRegistry: AiAgentDecl[] = [];

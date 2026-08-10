@@ -323,11 +323,13 @@ describe("console serve security", () => {
       secret: "serve-secret",
       silentClaim: true,
       env: "test",
+      // Security suite is hermetic — do not inherit a host DATABASE_URL.
+      persist: false,
     });
   });
 
   afterAll(() => {
-    server.stop(true);
+    server?.stop(true);
   });
 
   test("rejects unexpected Host", async () => {

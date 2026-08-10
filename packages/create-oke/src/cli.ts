@@ -39,6 +39,7 @@ import {
 } from "./ai-setup/from-pref.ts";
 import { askAiSetup } from "./ai-setup/prompts.ts";
 import { askCustomizeFlow } from "./customize-flow.ts";
+import { recommendedDefaults } from "./drivers-catalog.ts";
 import { parseExtraLocales } from "./locales.ts";
 import {
   scaffold,
@@ -406,8 +407,9 @@ ${templateLines}
 
 On a TTY: pick standard|advanced, then recommended defaults, customize
 (Docker-first facets; store.index with none; AI setup Recommended /
-Customize / Off; saved to ~/.oke/create-defaults.json),
-optional extra locales + PgDog pooling, or reuse when saved for that template.
+Customize / Off), optional extra locales + PgDog pooling, or reuse when
+saved for that template. Locales + PgDog (and customize pins) write to
+~/.oke/create-defaults.json on every TTY run.
 Non-TTY / --yes stay English-only / no PgDog unless --locales / --pgdog.
 `;
 }
@@ -527,6 +529,35 @@ export type CreateDefaultsIo = {
   readonly read: () => CreateDefaults | null;
   readonly write: (defaults: CreateDefaults) => void;
 };
+
+/**
+ * Merge wizard locales / PgDog into a create-defaults document to persist.
+ *
+ * Prefer the in-session answers (customize / reuse), else same-template
+ * previous settings, else recommended pins for the template.
+ *
+ * @param input - Template, locales, pgdog, and optional session / previous docs
+ */
+export function withLocalesPgDog(input: {
+  readonly template: TemplateId;
+  readonly locales: readonly string[];
+  readonly pgdog: boolean;
+  readonly session: CreateDefaults | undefined;
+  readonly previous: CreateDefaults | null;
+}): CreateDefaults {
+  const { template, locales, pgdog, session, previous } = input;
+  const base =
+    session ??
+    (previous?.template === template ? previous : null) ??
+    recommendedDefaults("docker-ready", template);
+  return {
+    ...base,
+    template,
+    locales,
+    pgdog,
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 /**
  * Collect interactive answers via `@clack/prompts`.
@@ -664,16 +695,20 @@ export async function askInteractiveAnswers(
     }
   }
 
+  // Locales / PgDog are asked on every TTY run — always persist them so reuse
+  // (and recommended) keep the last answers in ~/.oke/create-defaults.json.
+  const persisted = withLocalesPgDog({
+    template,
+    locales,
+    pgdog,
+    session: createDefaults,
+    previous: io.read(),
+  });
   if (createDefaults) {
-    createDefaults = {
-      ...createDefaults,
-      locales,
-      pgdog,
-      updatedAt: new Date().toISOString(),
-    };
+    createDefaults = persisted;
   }
-  if (persistDefaults && createDefaults) {
-    io.write(createDefaults);
+  io.write(persisted);
+  if (persistDefaults) {
     note(`Saved globally for next projects → ${io.path}`, "Defaults");
   }
 

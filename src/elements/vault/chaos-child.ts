@@ -148,10 +148,7 @@ if (mode === "rotate-mid-rewrap") {
       killAfter,
     };
     await Bun.write(statePath, JSON.stringify(state));
-    await Bun.write(
-      markerPath,
-      JSON.stringify({ readyAt: Date.now(), killAfter, secretCount }),
-    );
+    await Bun.write(markerPath, JSON.stringify({ readyAt: Date.now(), killAfter, secretCount }));
   });
 
   const seeded = await seedVault(db, secretCount, batchSize);
@@ -253,7 +250,9 @@ if (mode === "backup-partial") {
       JSON.stringify({
         fullBytes: blob.byteLength,
         writtenBytes: keep,
-        startsWithMagic: new TextDecoder().decode(blob.subarray(0, 20)).startsWith("oke-vault-backup"),
+        startsWithMagic: new TextDecoder()
+          .decode(blob.subarray(0, 20))
+          .startsWith("oke-vault-backup"),
       }),
     );
     // Hang so the parent can SIGKILL after the partial file is on disk.

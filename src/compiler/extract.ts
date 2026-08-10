@@ -803,7 +803,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       }
     }
 
-    // model.prompt("ticket-triage", { version, evals, budget })
+    // model.prompt("ticket-triage", { version, evals, budget, via, timeout })
     if (prop === "prompt") {
       const promptName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
@@ -811,6 +811,10 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const version = numberProp(opts, "version");
         const evals = stringProp(opts, "evals");
         const budgetObj = objectProp(opts, "budget");
+        const via = stringArrayProp(opts, "via");
+        const timeoutStr = stringProp(opts, "timeout");
+        const timeoutNum = numberProp(opts, "timeout");
+        const timeout = timeoutStr ?? timeoutNum;
         const prompt: AiPrompt = {
           ...(version !== undefined ? { version } : {}),
           ...(evals ? { evals } : {}),
@@ -822,9 +826,16 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
                         maxCostPerCall: numberProp(budgetObj, "maxCostPerCall"),
                       }
                     : {}),
+                  ...(numberProp(budgetObj, "maxCostPerRun") !== undefined
+                    ? {
+                        maxCostPerRun: numberProp(budgetObj, "maxCostPerRun"),
+                      }
+                    : {}),
                 },
               }
             : {}),
+          ...(via && via.length > 0 ? { via } : {}),
+          ...(timeout !== undefined ? { timeout } : {}),
         };
         scope.ai.prompts = scope.ai.prompts ?? {};
         scope.ai.prompts[promptName] = prompt;

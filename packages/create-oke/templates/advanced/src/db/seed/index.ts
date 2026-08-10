@@ -53,7 +53,7 @@ async function sampleNotes(fx: Fx) {
     {
       id: "sample-summarize",
       title: "Try summarize",
-      body: "POST /notes/:id/summarize uses fx.ask when AI is configured, else a local excerpt.",
+      body: "POST /notes/:id/summarize uses fx.ask with the prompt's via recovery chain.",
       archivedAt: null,
       createdAt: 4,
     },

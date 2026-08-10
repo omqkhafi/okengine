@@ -20,7 +20,7 @@ import { flow } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
 import { http } from "./triggers.ts";
 
-describe("oke() auto-registry — stores/secrets/signals/channel.templates", () => {
+describe("oke() auto-registry — stores/secrets/signals/channel.templates/ai", () => {
   test("before/after: zero explicit arrays boots identically to the explicit-array form", async () => {
     resetBindings();
 
@@ -194,5 +194,56 @@ describe("oke() auto-registry — stores/secrets/signals/channel.templates", () 
     expect(appB.bootResult?.vault).toBeUndefined();
     expect(appB.bootResult?.signal).toBeUndefined();
     expect(appB.bootResult?.channel?.templates.has("leak-template") ?? false).toBe(false);
+  });
+
+  test("ai.model / .prompt auto-drain into oke options (no explicit oke({ ai }))", async () => {
+    const { ai } = await import("../elements/ai/declare.ts");
+    const { mockAiDriver } = await import("../drivers/ai-mock.ts");
+    const { createAiRuntime } = await import("../elements/ai/runtime.ts");
+
+    const smart = ai.model("smart", { provider: "mock" });
+    const summarizeNote = smart.prompt("summarize-note", {
+      version: 1,
+    });
+
+    const ping = flow("ai.ping", {
+      effects: { asks: ["summarize-note"] },
+      do: async (_input, fx) => fx.ask("summarize-note", { title: "t", body: "b" }),
+    });
+    on(http.post("/ai-ping"), ping);
+
+    const app = oke({
+      name: "ai-auto-registry",
+      autoBoot: false,
+      startScheduler: false,
+      gate: { unguardedHttp: "allow" },
+    });
+
+    expect(app.$options.ai?.models?.some((m) => m.name === "smart")).toBe(true);
+    expect(app.$options.ai?.prompts?.some((p) => p.name === "summarize-note")).toBe(true);
+
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [summarizeNote],
+      defaultDriver: {
+        id: "mock",
+        open: () =>
+          mockAiDriver.open({
+            mockResponses: { "*": { summary: "one-line summary" } },
+          }),
+      },
+    });
+    await app.boot({
+      env: "test",
+      unguardedHttp: "allow",
+      elements: { ai: runtime },
+    });
+
+    const res = await app.fetch(
+      new Request("http://127.0.0.1/ai-ping", { method: "POST", body: "{}" }),
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { data: { summary: string } };
+    expect(json.data.summary).toBe("one-line summary");
   });
 });

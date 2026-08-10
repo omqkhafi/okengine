@@ -135,9 +135,7 @@ describe("chaos — 1. crash mid-rotation (SIGKILL)", () => {
       expect(result.remaining).toBe(0);
       expect(result.statusAfter.rewrapTargetKekVersion).toBeUndefined();
       expect(result.statusAfter.kekVersion).toBe(2);
-      expect(result.values).toEqual(
-        Array.from({ length: secretCount }, (_, i) => `value-${i}`),
-      );
+      expect(result.values).toEqual(Array.from({ length: secretCount }, (_, i) => `value-${i}`));
       expect(result.kekVersions.every((v) => v === 2)).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -237,9 +235,7 @@ describe("chaos — 2. concurrent rotateMaster", () => {
 
     // Winner key is the only recoverable master after completion.
     await winnerAdapter.seal();
-    await winnerAdapter.unseal(
-      (await import("./crypto.ts")).masterKeyToBase64(winnerKey),
-    );
+    await winnerAdapter.unseal((await import("./crypto.ts")).masterKeyToBase64(winnerKey));
     for (let i = 0; i < 8; i += 1) {
       expect((await winnerAdapter.get(`chaos/concurrent-${i}`))?.value).toBe(`v-${i}`);
     }
@@ -267,30 +263,12 @@ describe.skipIf(!LIVE_URL)("chaos — 2b. concurrent rotateMaster (multi-process
       await adapter.seal();
 
       const a = Bun.spawn({
-        cmd: [
-          "bun",
-          childPath,
-          "rotate-race",
-          url,
-          init.masterKey,
-          "inst-a",
-          resultPath,
-          "8",
-        ],
+        cmd: ["bun", childPath, "rotate-race", url, init.masterKey, "inst-a", resultPath, "8"],
         stdout: "pipe",
         stderr: "pipe",
       });
       const b = Bun.spawn({
-        cmd: [
-          "bun",
-          childPath,
-          "rotate-race",
-          url,
-          init.masterKey,
-          "inst-b",
-          resultPath,
-          "8",
-        ],
+        cmd: ["bun", childPath, "rotate-race", url, init.masterKey, "inst-b", resultPath, "8"],
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -463,9 +441,7 @@ describe("chaos — 4. crash mid-backup", () => {
       expect(marker.startsWithMagic).toBe(true);
 
       const partial = new Uint8Array(await Bun.file(bundlePath).arrayBuffer());
-      expect(new TextDecoder().decode(partial.subarray(0, BACKUP_MAGIC.length))).toBe(
-        BACKUP_MAGIC,
-      );
+      expect(new TextDecoder().decode(partial.subarray(0, BACKUP_MAGIC.length))).toBe(BACKUP_MAGIC);
       expect(
         new TextDecoder().decode(partial.subarray(Math.max(0, partial.byteLength - 32))),
       ).not.toContain(BACKUP_END_MARKER.trim());
@@ -496,9 +472,9 @@ describe("chaos — 4. crash mid-backup", () => {
       await adapter.unseal(init.masterKey);
       await adapter.set("chaos/atomic", "payload");
       const blob = await adapter.exportBackup();
-      expect(new TextDecoder().decode(blob.subarray(blob.byteLength - BACKUP_END_MARKER.length))).toBe(
-        BACKUP_END_MARKER,
-      );
+      expect(
+        new TextDecoder().decode(blob.subarray(blob.byteLength - BACKUP_END_MARKER.length)),
+      ).toBe(BACKUP_END_MARKER);
 
       await writeBackupFileAtomic(dest, blob);
       expect(await Bun.file(dest).exists()).toBe(true);
@@ -656,7 +632,9 @@ describe.skipIf(!LIVE_URL)("chaos — 6b. multi-instance safety (multi-process P
         }
       }
       const audit = await adapter.verifyAudit();
-      console.log(`[vault pg multi-process audit] ok=${audit.ok} brokenAt=${audit.brokenAt ?? "-"}`);
+      console.log(
+        `[vault pg multi-process audit] ok=${audit.ok} brokenAt=${audit.brokenAt ?? "-"}`,
+      );
       expect(audit.ok).toBe(true);
     } finally {
       await resetVaultTables(conn).catch(() => undefined);

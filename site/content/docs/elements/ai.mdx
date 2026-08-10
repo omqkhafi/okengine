@@ -86,7 +86,28 @@ export const triage = smart.prompt("ticket-triage", {
 | `in` / `out` | zod / Standard Schema | Input and output contracts — responses validated against `out` |
 | `version`    | number                | Artifact version — diffs and regressions tracked per version   |
 | `evals`      | string                | Path to a `.jsonl` eval set, regression-gated via `oke eval`   |
-| `budget`     | object                | `maxCostPerCall` — cost is a first-class dimension             |
+| `budget`     | object                | `maxCostPerCall` / `maxCostPerRun` — cost, not time            |
+| `via`        | `string[]`            | Ordered recovery chain of logical model names for this prompt  |
+| `timeout`    | `string \| number`    | Deadline — clock duration (`"30s"`) or milliseconds            |
+
+## Recovery chain + per-command timeout
+
+Fallback is **recovery**, not a fixed cloud→local doctrine. Declare the chain and deadline on the prompt; the call site stays thin:
+
+```typescript
+export const summarizeNote = smart.prompt("summarize-note", {
+  via: ["smart", "local"],
+  timeout: "30s",
+});
+
+// in a flow
+const out = await fx.ask(summarizeNote, { title, body });
+// out.via is the logical model that answered
+```
+
+Resolution: `fx.ask(…, { via })` overrides `prompt.via`, else the prompt’s bound model. On each model the runtime retries **once** for retryable failures (timeout / 429 / 5xx / network), then advances. Permanent failures (401 / other 4xx / schema invalid) stop the chain. When every eligible attempt fails, `fx.ask` throws — map that to a typed error in the flow (no silent text excerpt).
+
+`timeout` uses the same duration vocabulary as Clock (`"30s"`, `"2m"`, or a millisecond number). Ask-time `fx.ask(…, { timeout: "10s" })` overrides the prompt. Omit = no artificial cap. Cost caps stay on `budget`.
 
 ## Declared guardrails
 

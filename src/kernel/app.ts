@@ -81,6 +81,10 @@ import { releaseInstanceLeases } from "./graceful-shutdown.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
+  aiAgentRegistry,
+  aiEmbedRegistry,
+  aiModelRegistry,
+  aiPromptRegistry,
   channelTemplateRegistry,
   requiredEnvRegistry,
   secretRegistry,
@@ -462,6 +466,45 @@ function mergeUnique<T>(explicit: readonly T[] | undefined, fromRegistry: readon
 }
 
 /**
+ * Merge explicit `oke({ ai })` with auto-drained AI decls. Returns
+ * `undefined` when neither side contributes — a defined empty object would
+ * flip {@link resolveElementNeeds}'s `ai` flag for every app.
+ *
+ * @param explicit - Hand-passed AI boot options
+ * @param fromRegistry - Models / prompts / embeds / agents from declare registries
+ */
+function mergeAiOptions(
+  explicit: BootOptions["ai"] | undefined,
+  fromRegistry: {
+    readonly models: NonNullable<BootOptions["ai"]>["models"];
+    readonly prompts: NonNullable<BootOptions["ai"]>["prompts"];
+    readonly embeds: NonNullable<BootOptions["ai"]>["embeds"];
+    readonly agents: NonNullable<BootOptions["ai"]>["agents"];
+  },
+): BootOptions["ai"] | undefined {
+  const models = mergeUnique(explicit?.models, fromRegistry.models ?? []);
+  const prompts = mergeUnique(explicit?.prompts, fromRegistry.prompts ?? []);
+  const embeds = mergeUnique(explicit?.embeds, fromRegistry.embeds ?? []);
+  const agents = mergeUnique(explicit?.agents, fromRegistry.agents ?? []);
+  if (
+    explicit === undefined &&
+    models.length === 0 &&
+    prompts.length === 0 &&
+    embeds.length === 0 &&
+    agents.length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    ...(explicit ?? {}),
+    ...(models.length > 0 ? { models } : {}),
+    ...(prompts.length > 0 ? { prompts } : {}),
+    ...(embeds.length > 0 ? { embeds } : {}),
+    ...(agents.length > 0 ? { agents } : {}),
+  };
+}
+
+/**
  * Create an application. Adopts bindings registered via {@link on}.
  *
  * @param options - App name and router preset
@@ -476,20 +519,35 @@ export function oke(options: OkeOptions): OkeApp {
   if (registry === "consume") resetBindings();
 
   // Same registry mode drains store.sql/store.files, vault.secret, signal(),
-  // and channel.<medium>().template() — module-evaluation registries that
-  // mirror `on`'s trigger drain (`listBindings`/`resetBindings` above).
-  // Explicit `options.stores` / `secrets` / `signals` / `channel.templates`
-  // are additive, never silently ignored — deduped by reference so an
-  // explicitly-passed decl that is also in the registry is not doubled.
+  // channel.<medium>().template(), and ai.model/prompt/embed/agent —
+  // module-evaluation registries that mirror `on`'s trigger drain
+  // (`listBindings`/`resetBindings` above). Explicit `options.stores` /
+  // `secrets` / `signals` / `channel.templates` / `ai` are additive, never
+  // silently ignored — deduped by reference so an explicitly-passed decl
+  // that is also in the registry is not doubled.
   const registrySnapshot =
     registry === "ignore"
-      ? { stores: [], secrets: [], requiredEnv: [], signals: [], channelTemplates: [] }
+      ? {
+          stores: [],
+          secrets: [],
+          requiredEnv: [],
+          signals: [],
+          channelTemplates: [],
+          aiModels: [],
+          aiPrompts: [],
+          aiEmbeds: [],
+          aiAgents: [],
+        }
       : {
           stores: storeRegistry.slice(),
           secrets: secretRegistry.slice(),
           requiredEnv: requiredEnvRegistry.slice(),
           signals: signalRegistry.slice(),
           channelTemplates: channelTemplateRegistry.slice(),
+          aiModels: aiModelRegistry.slice(),
+          aiPrompts: aiPromptRegistry.slice(),
+          aiEmbeds: aiEmbedRegistry.slice(),
+          aiAgents: aiAgentRegistry.slice(),
         };
   if (registry === "consume") {
     storeRegistry.length = 0;
@@ -497,6 +555,10 @@ export function oke(options: OkeOptions): OkeApp {
     requiredEnvRegistry.length = 0;
     signalRegistry.length = 0;
     channelTemplateRegistry.length = 0;
+    aiModelRegistry.length = 0;
+    aiPromptRegistry.length = 0;
+    aiEmbedRegistry.length = 0;
+    aiAgentRegistry.length = 0;
   }
   const effectiveStores = mergeUnique(options.stores, registrySnapshot.stores);
   const effectiveSecrets = mergeUnique(options.secrets, registrySnapshot.secrets);
@@ -523,6 +585,14 @@ export function oke(options: OkeOptions): OkeApp {
           ...(options.channel ?? {}),
           templates: mergeUnique(options.channel?.templates, registrySnapshot.channelTemplates),
         };
+  // Same undefined-when-empty rule for AI — a bare `{}` would force the AI
+  // runtime open even when the app never declared models / prompts.
+  const effectiveAi = mergeAiOptions(options.ai, {
+    models: registrySnapshot.aiModels,
+    prompts: registrySnapshot.aiPrompts,
+    embeds: registrySnapshot.aiEmbeds,
+    agents: registrySnapshot.aiAgents,
+  });
 
   // Resolve Gate bag early so auth HTTP Bindings join `adopted` + the router
   // before posture audit (same ensureBoot → doBoot path — never a side channel).
@@ -531,8 +601,11 @@ export function oke(options: OkeOptions): OkeApp {
     env: options.env,
   });
 
-  /** Retained for test harness / boot merges. */
-  const $options = options;
+  /** Retained for test harness / boot merges (includes auto-drained AI decls). */
+  const $options: OkeOptions =
+    effectiveAi === undefined || options.ai === effectiveAi
+      ? options
+      : { ...options, ai: effectiveAi };
 
   const appHooks: HookMap = {};
   const unitHooks = new Map<string, HookMap>();
@@ -828,7 +901,7 @@ export function oke(options: OkeOptions): OkeApp {
       clocks: overrides?.clocks ?? options.clocks,
       stores: overrides?.stores ?? effectiveStores,
       channel: overrides?.channel ?? effectiveChannel,
-      ai: overrides?.ai ?? options.ai,
+      ai: overrides?.ai ?? effectiveAi,
       runs: overrides?.runs ?? options.runs,
       bindings: adopted,
       flows: [...flowsByName.values()],
@@ -907,7 +980,7 @@ export function oke(options: OkeOptions): OkeApp {
           (overrides?.config ?? options.config)?.i18n?.default ??
           "en",
       },
-      ai: overrides?.ai ?? options.ai,
+      ai: overrides?.ai ?? effectiveAi,
       runs: overrides?.runs ?? options.runs,
       now: overrides?.now ?? options.fx?.now,
       instanceId: overrides?.instanceId,

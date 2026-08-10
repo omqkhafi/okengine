@@ -93,6 +93,31 @@ describe("fx — effect ledger", () => {
       },
       ledger,
       secrets: { STRIPE_KEY: "sk_test" },
+      aiRuntime: {
+        prompts: new Map(),
+        agents: new Map(),
+        embeds: new Map(),
+        autoCacheDisabled: true,
+        journalingForced: false,
+        denials: [],
+        agentRuns: [],
+        journal: [],
+        async ask() {
+          return { ok: true };
+        },
+        async runAgent() {
+          return { ok: true, steps: 0, denials: [], output: {} };
+        },
+        async *stream() {
+          /* no tokens */
+        },
+        async search() {
+          return [];
+        },
+        async embed() {
+          return { vectors: [] };
+        },
+      } as never,
     });
 
     await stub(fx, "sql:bookings").get("x");

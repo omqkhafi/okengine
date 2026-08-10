@@ -208,9 +208,27 @@ export function renderAiTs(input: AiSetupApplyInput): string {
   const lines = [
     `import { ai } from "okengine";`,
     ``,
+    `/** Cloud OpenAI-compatible binding (OpenAI / Groq / OpenRouter / …). */`,
     `export const smart = ai.model("smart", {`,
     `  provider: "${provider}",`,
-    `  model: process.env.OKE_AI_MODEL ?? "${chat}",`,
+    `  model: process.env.OKE_AI_CLOUD_MODEL ?? process.env.OKE_AI_MODEL ?? "${chat}",`,
+    `  baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",`,
+    `  ...(process.env.OPENAI_API_KEY?.trim()`,
+    `    ? { apiKey: process.env.OPENAI_API_KEY.trim() }`,
+    `    : {}),`,
+    `});`,
+    ``,
+    `/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */`,
+    `export const local = ai.model("local", {`,
+    `  provider: "${provider === "ollama" ? "ollama" : "openai-compatible"}",`,
+    `  model: process.env.OKE_AI_LOCAL_MODEL ?? "${chat}",`,
+    `  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),`,
+    `});`,
+    ``,
+    `/** Advanced Notes summarize — used by \`notes.summarize\` via \`fx.ask\`. */`,
+    `export const summarizeNote = smart.prompt("summarize-note", {`,
+    `  via: ["smart", "local"],`,
+    `  timeout: "30s",`,
     `});`,
   ];
 
@@ -265,6 +283,10 @@ function writeAiModels(cwd: string, input: AiSetupApplyInput): string {
   if (existsSync(coreTsPath)) {
     const existing = readFileSync(coreTsPath, "utf8");
     if (hasAiModels(existing)) {
+      const withPrompt = ensureSummarizeNotePrompt(existing);
+      if (withPrompt !== existing) {
+        writeFileSync(coreTsPath, withPrompt, "utf8");
+      }
       return coreTsPath;
     }
     writeFileSync(coreTsPath, mergeAiIntoCore(existing, rendered), "utf8");
@@ -284,6 +306,44 @@ function hasAiModels(source: string): boolean {
     /from\s+["']\.\/(?:core\/)?ai["']/.test(source) ||
     /import\s+["']\.\/(?:core\/)?ai["']/.test(source)
   );
+}
+
+/**
+ * Append the advanced Notes `summarize-note` prompt when a `smart` model
+ * exists but the prompt was never declared (common after older `--ai` runs).
+ *
+ * @param source - Existing `src/core.ts` (or AI sidecar) source
+ */
+export function ensureSummarizeNotePrompt(source: string): string {
+  let next = source;
+  if (
+    !/\bai\.model\s*\(\s*["']local["']/.test(next) &&
+    /\bai\.model\s*\(\s*["']smart["']/.test(next)
+  ) {
+    next = `${next.trimEnd()}
+
+/** Local inference binding (docker llama.cpp / Ollama via \`OKE_AI_URL\`). */
+export const local = ai.model("local", {
+  provider: "openai-compatible",
+  model: process.env.OKE_AI_LOCAL_MODEL ?? "granite3.3:2b",
+  ...(process.env.OKE_AI_URL?.trim() ? { baseUrl: process.env.OKE_AI_URL.trim() } : {}),
+});
+`;
+  }
+  if (/summarize-note/.test(next) || /summarizeNote/.test(next)) {
+    return next;
+  }
+  if (!/\bai\.model\s*\(\s*["']smart["']/.test(next)) {
+    return next;
+  }
+  const prompt = `
+/** Advanced Notes summarize — used by \`notes.summarize\` via \`fx.ask\`. */
+export const summarizeNote = smart.prompt("summarize-note", {
+  via: ["smart", "local"],
+  timeout: "30s",
+});
+`;
+  return `${next.trimEnd()}\n${prompt}\n`;
 }
 
 /**

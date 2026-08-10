@@ -46,9 +46,8 @@ OKE_AI_MODEL=granite3.3:2b
 
 `OKE_AI_MODEL` is a Docker Hub `ai/<id>` model. The recipe writes
 `.oke/llama-entrypoint.py` (generated, gitignored — not app source), which
-Hub-pulls into the cache volume, then starts `llama-server -m <gguf> --alias
-
-<id>` (single-model).
+Hub-pulls into the cache volume, then starts `llama-server -m <gguf> --alias <id>`
+(single-model).
 
 Never set `LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` — those hang on
 b10290+. `oke dev` shows the model id and polls `/v1/models` until `ready`

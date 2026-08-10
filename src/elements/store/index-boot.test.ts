@@ -77,36 +77,32 @@ describe("store.index boot wiring — memory", () => {
 describe("store.index boot wiring — pglite + pgvector", () => {
   // bindStore opens its own PGlite — cannot inject the shared instance; allow
   // cold WASM under suite contention (same budget as sql conformance).
-  test(
-    "boot: sql=pglite + index=pgvector resolves end to end",
-    async () => {
-      process.env.OKE_PGLITE_URL = "memory://";
-      const kb = declareIndex("kb", { dims: 3 });
-      const runtime = bindStore(
-        {
-          config: {
-            drivers: { store: { sql: { test: "pglite" }, index: { test: "pgvector" } } },
-          },
-          stores: [kb],
+  test("boot: sql=pglite + index=pgvector resolves end to end", async () => {
+    process.env.OKE_PGLITE_URL = "memory://";
+    const kb = declareIndex("kb", { dims: 3 });
+    const runtime = bindStore(
+      {
+        config: {
+          drivers: { store: { sql: { test: "pglite" }, index: { test: "pgvector" } } },
         },
-        "test",
-        () => Date.now(),
-      );
-      const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
-      expect(handle.driverId).toBe("pgvector");
+        stores: [kb],
+      },
+      "test",
+      () => Date.now(),
+    );
+    const handle = (await runtime.open(kb, WRITE_CTX("kb"))) as VectorIndexStoreFxHandle;
+    expect(handle.driverId).toBe("pgvector");
 
-      await handle.upsert("near", [1, 0.1, 0], { label: "near" });
-      await handle.upsert("far", [0, 1, 0]);
-      await handle.upsert("farther", [-1, 0, 0]);
-      const hits = await handle.search([1, 0, 0], 3);
-      expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
-      expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
-      expect(hits[0]!.meta).toEqual({ label: "near" });
-      expect(await handle.delete("farther")).toBe(true);
-      await runtime.close();
-    },
-    15_000,
-  );
+    await handle.upsert("near", [1, 0.1, 0], { label: "near" });
+    await handle.upsert("far", [0, 1, 0]);
+    await handle.upsert("farther", [-1, 0, 0]);
+    const hits = await handle.search([1, 0, 0], 3);
+    expect(hits.map((h: { id: string }) => h.id)).toEqual(["near", "far", "farther"]);
+    expect(hits[0]!.score).toBeGreaterThan(hits[1]!.score);
+    expect(hits[0]!.meta).toEqual({ label: "near" });
+    expect(await handle.delete("farther")).toBe(true);
+    await runtime.close();
+  }, 15_000);
 
   test("pglite runs the shared pgvector HNSW path — real ANN, not a scan", async () => {
     const real = sharedPglite!;

@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-08-09T19:45:37.757Z",
-  "version": "0.11.0",
+  "measuredAt": "2026-08-10T14:04:54.775Z",
+  "version": "0.11.1",
   "budgets": [
     {
       "id": "kernelEdgeGzipBytes",
       "label": "Kernel (edge profile)",
-      "value": 15285,
+      "value": 15324,
       "limit": 15360,
       "unit": "bytes",
       "gate": "absolute",
@@ -35,7 +35,7 @@
     {
       "id": "coldStartMedianMs",
       "label": "Cold start on Bun",
-      "value": 9.32,
+      "value": 8.968,
       "limit": 75,
       "unit": "ms",
       "gate": "absolute",
@@ -55,7 +55,7 @@
     {
       "id": "httpPingGzipBytes",
       "label": "HTTP ping app (gzip, externals)",
-      "value": 37135,
+      "value": 37395,
       "limit": 37878,
       "unit": "bytes",
       "gate": "regression",
@@ -65,7 +65,7 @@
     {
       "id": "httpPingRawBytes",
       "label": "HTTP ping app (raw, externals)",
-      "value": 110617,
+      "value": 111395,
       "limit": 112830,
       "unit": "bytes",
       "gate": "regression",
@@ -75,7 +75,7 @@
     {
       "id": "export:.",
       "label": "okengine",
-      "value": 63481,
+      "value": 64547,
       "limit": 64751,
       "unit": "bytes",
       "gate": "regression",
@@ -85,12 +85,12 @@
     {
       "id": "export:./ai",
       "label": "ai",
-      "value": 5183,
+      "value": 6188,
       "limit": 5439,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./auth",
@@ -145,7 +145,7 @@
     {
       "id": "export:./clock",
       "label": "clock",
-      "value": 17002,
+      "value": 17039,
       "limit": 17343,
       "unit": "bytes",
       "gate": "regression",
@@ -155,7 +155,7 @@
     {
       "id": "export:./compiler",
       "label": "compiler",
-      "value": 14227,
+      "value": 14294,
       "limit": 14512,
       "unit": "bytes",
       "gate": "regression",
@@ -175,7 +175,7 @@
     {
       "id": "export:./console",
       "label": "console",
-      "value": 106268,
+      "value": 108109,
       "limit": 108394,
       "unit": "bytes",
       "gate": "regression",
@@ -185,7 +185,7 @@
     {
       "id": "export:./full",
       "label": "full",
-      "value": 73462,
+      "value": 74423,
       "limit": 74932,
       "unit": "bytes",
       "gate": "regression",
@@ -205,7 +205,7 @@
     {
       "id": "export:./http",
       "label": "http",
-      "value": 37603,
+      "value": 37848,
       "limit": 38356,
       "unit": "bytes",
       "gate": "regression",
@@ -235,7 +235,7 @@
     {
       "id": "export:./kernel",
       "label": "kernel",
-      "value": 37582,
+      "value": 37816,
       "limit": 38334,
       "unit": "bytes",
       "gate": "regression",
@@ -285,7 +285,7 @@
     {
       "id": "export:./store",
       "label": "store",
-      "value": 17814,
+      "value": 17816,
       "limit": 18171,
       "unit": "bytes",
       "gate": "regression",
@@ -295,22 +295,22 @@
     {
       "id": "export:./test",
       "label": "test",
-      "value": 12748,
+      "value": 13266,
       "limit": 13004,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./vault",
       "label": "vault",
-      "value": 11461,
+      "value": 12558,
       "limit": 11717,
       "unit": "bytes",
       "gate": "regression",
       "group": "exports",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./plugins/username",
@@ -435,7 +435,7 @@
     {
       "id": "export:./drivers",
       "label": "drivers",
-      "value": 63431,
+      "value": 64277,
       "limit": 64700,
       "unit": "bytes",
       "gate": "regression",
@@ -475,7 +475,7 @@
     {
       "id": "export:./drivers/ai-openai-compatible",
       "label": "ai-openai-compatible",
-      "value": 1819,
+      "value": 1835,
       "limit": 2075,
       "unit": "bytes",
       "gate": "regression",
@@ -745,7 +745,7 @@
     {
       "id": "export:./drivers/signal-engine",
       "label": "signal-engine",
-      "value": 7196,
+      "value": 7201,
       "limit": 7452,
       "unit": "bytes",
       "gate": "regression",
@@ -755,7 +755,7 @@
     {
       "id": "export:./drivers/signal-memory",
       "label": "signal-memory",
-      "value": 7239,
+      "value": 7245,
       "limit": 7495,
       "unit": "bytes",
       "gate": "regression",
@@ -765,7 +765,7 @@
     {
       "id": "export:./drivers/signal-nats",
       "label": "signal-nats",
-      "value": 7738,
+      "value": 7743,
       "limit": 7994,
       "unit": "bytes",
       "gate": "regression",
@@ -775,7 +775,7 @@
     {
       "id": "export:./drivers/signal-postgres",
       "label": "signal-postgres",
-      "value": 9427,
+      "value": 9432,
       "limit": 9683,
       "unit": "bytes",
       "gate": "regression",
@@ -785,7 +785,7 @@
     {
       "id": "export:./drivers/signal-redis",
       "label": "signal-redis",
-      "value": 8374,
+      "value": 8379,
       "limit": 8630,
       "unit": "bytes",
       "gate": "regression",
@@ -805,12 +805,12 @@
     {
       "id": "export:./drivers/vault-builtin",
       "label": "vault-builtin",
-      "value": 10133,
+      "value": 10995,
       "limit": 10389,
       "unit": "bytes",
       "gate": "regression",
       "group": "drivers",
-      "ok": true
+      "ok": false
     },
     {
       "id": "export:./drivers/vault-dotenv-parse",

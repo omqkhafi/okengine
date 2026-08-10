@@ -12,7 +12,7 @@
  * @module
  */
 
-export { ai } from "./ai/declare.ts";
+export { ai, listAiDecls, resetAiDecls } from "./ai/declare.ts";
 export type {
   AiAgentDecl,
   AiAgentOptions,
@@ -23,7 +23,17 @@ export type {
   AiModelOptions,
   AiPromptDecl,
   AiPromptOptions,
+  AiTimeout,
 } from "./ai/declare.ts";
+
+export {
+  aiHttpError,
+  isRetryableAiError,
+  mergeAskAbortSignal,
+  outExpectsVia,
+  resolveTimeoutMs,
+} from "./ai/errors.ts";
+export type { AiErrorFields } from "./ai/errors.ts";
 
 export {
   createAiRuntime,

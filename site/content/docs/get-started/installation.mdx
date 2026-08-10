@@ -67,7 +67,8 @@ Both are Docker-first (`dev`/`prod` share production protocols; `test` uses PGLi
 memory). Both ship a minimal GitHub Actions workflow (typecheck + `bun test`).
 
 On a TTY: pick a template, then **recommended defaults**, **customize**, or
-**reuse** matching saved settings (`~/.oke/create-defaults.json`).
+**reuse** matching saved settings (`~/.oke/create-defaults.json`). Extra locales
+and PgDog answers are saved into that file on every TTY run (not only customize).
 
 Customize walks Docker-first facets (including `store.index` with `none`), then
 **AI setup** (Recommended / Customize / Off). Project name rejects a non-empty

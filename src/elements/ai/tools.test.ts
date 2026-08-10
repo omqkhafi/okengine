@@ -58,7 +58,7 @@ describe("fx.ask tools via fx.call", () => {
     });
 
     const out = await fx.ask(prompt, { q: "status?" }, { tools: ["lookup.booking"], maxSteps: 4 });
-    expect(out).toEqual({ answer: "found" });
+    expect(out).toEqual({ answer: "found", via: "smart" });
     expect(calls).toEqual([{ name: "lookup.booking", input: { id: "B9" } }]);
     expect(ledger.entries.some((e) => e.kind === "ask" && e.resource === "assistant")).toBe(true);
     expect(

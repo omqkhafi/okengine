@@ -90,7 +90,7 @@ describe("apply", () => {
     expect(upsertEnv(env, "OPENAI_API_KEY", "sk-test")).toContain("OPENAI_API_KEY=sk-test");
   });
 
-  test("renderAiTs includes vision + embed", () => {
+  test("renderAiTs includes vision + embed + summarize-note + local", () => {
     const ts = renderAiTs({
       driver: "ollama",
       chatModel: "gemma4:e4b",
@@ -98,8 +98,10 @@ describe("apply", () => {
       embedModel: "nomic-embed-text",
     });
     expect(ts).toContain('ai.model("smart"');
+    expect(ts).toContain('ai.model("local"');
     expect(ts).toContain('ai.model("vision"');
     expect(ts).toContain("docsEmbed");
+    expect(ts).toContain('smart.prompt("summarize-note"');
   });
 
   test("applyAiSetup writes config, env, AI models in core.ts", () => {

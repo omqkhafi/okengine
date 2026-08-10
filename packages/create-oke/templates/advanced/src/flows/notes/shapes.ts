@@ -48,5 +48,11 @@ export const NoteSummarizeIn = z.object({
 export const NoteSummarizeOut = z.object({
   id: z.string(),
   summary: z.string(),
-  via: z.enum(["ai", "fallback"]),
+  /** Logical model name that answered (`smart`, `local`, …). */
+  via: z.string().min(1),
+});
+
+/** Both recovery links failed — no silent text excerpt. */
+export const Unavailable = z.object({
+  message: z.string(),
 });

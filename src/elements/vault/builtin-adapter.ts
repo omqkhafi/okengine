@@ -969,12 +969,7 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
           zeroBytes(raw);
         }
       } else {
-        const won = await renewRotateLease(
-          rawDb,
-          rotation.holderId,
-          Date.now(),
-          rotateLeaseMs,
-        );
+        const won = await renewRotateLease(rawDb, rotation.holderId, Date.now(), rotateLeaseMs);
         if (!won) {
           throw new VaultError(
             "UNSUPPORTED",

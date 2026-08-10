@@ -300,6 +300,10 @@ export interface AiPrompt {
   version?: number;
   evals?: string;
   budget?: AiBudget;
+  /** Ordered recovery chain of logical model names. */
+  via?: string[];
+  /** Per-command deadline (`"30s"` or milliseconds). */
+  timeout?: string | number;
   model?: string;
   in?: JsonSchema;
   out?: JsonSchema;

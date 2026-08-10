@@ -14,11 +14,53 @@ import {
   NoteSummarizeIn,
   NoteSummarizeOut,
   NotFound,
+  Unavailable,
 } from "./shapes";
 import { noteCreated } from "./signals";
 
 import "./shapes";
 import "./signals";
+
+/**
+ * Pull a usable summary string from an `fx.ask` payload.
+ *
+ * @param out - Model output object
+ */
+function extractSummary(out: unknown): string {
+  if (typeof out === "string") return unwrapSummaryText(out);
+  if (!out || typeof out !== "object") return "";
+  const record = out as Record<string, unknown>;
+  if (typeof record.summary === "string") return record.summary.trim();
+  if (typeof record.text === "string") return unwrapSummaryText(record.text);
+  return "";
+}
+
+/**
+ * Local models sometimes return over-escaped JSON (`{\\"summary\\":...}`).
+ * Peel one or two JSON layers, then fall back to the raw text.
+ *
+ * @param text - Model text payload
+ */
+function unwrapSummaryText(text: string): string {
+  let current = text.trim();
+  for (let i = 0; i < 2; i++) {
+    if (!(current.startsWith("{") || current.startsWith('"'))) break;
+    try {
+      const parsed = JSON.parse(current) as unknown;
+      if (typeof parsed === "string") {
+        current = parsed.trim();
+        continue;
+      }
+      if (parsed && typeof parsed === "object" && "summary" in parsed) {
+        return String((parsed as { summary: unknown }).summary).trim();
+      }
+      break;
+    } catch {
+      break;
+    }
+  }
+  return current;
+}
 
 /** List active (non-archived) notes, newest first. */
 export const list = on(
@@ -162,32 +204,37 @@ export const digest = on(
 );
 
 /**
- * Summarize a note via AI when configured (`oke ai setup` / create-oke --ai).
- * Without an AI runtime, returns a local fallback excerpt.
+ * Summarize a note via the prompt's declared recovery chain.
+ * Exhausted / failed asks surface as Unavailable — never a body excerpt.
  */
 export const summarize = on(
   http.post("/notes/:id/summarize").gate(gate.public),
   flow("notes.summarize", {
     in: NoteSummarizeIn,
     out: NoteSummarizeOut,
-    errors: { NotFound },
+    errors: { NotFound, Unavailable },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(notes, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      const body = String(row.body);
       try {
         const out = await fx.ask("summarize-note", {
+          instruction:
+            'Summarize this note in one or two sentences. Reply with JSON only: {"summary":"..."}',
           title: String(row.title),
-          body,
+          body: String(row.body),
         });
-        const summary =
-          typeof out === "object" && out !== null && "summary" in out
-            ? String((out as { summary: unknown }).summary)
-            : JSON.stringify(out);
-        return { id: input.id, summary, via: "ai" as const };
+        const summary = extractSummary(out);
+        const via = typeof out.via === "string" ? out.via.trim() : "";
+        if (!summary || !via) {
+          return fail("Unavailable", {
+            message: "AI service unavailable. Try again later.",
+          });
+        }
+        return { id: input.id, summary, via };
       } catch {
-        const summary = body.length > 160 ? `${body.slice(0, 157)}…` : body;
-        return { id: input.id, summary, via: "fallback" as const };
+        return fail("Unavailable", {
+          message: "AI service unavailable. Try again later.",
+        });
       }
     },
   }),

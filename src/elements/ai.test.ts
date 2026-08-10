@@ -29,10 +29,14 @@ describe("ai declaration", () => {
       version: 3,
       evals: "./evals/triage.jsonl",
       budget: { maxCostPerCall: 0.02 },
+      via: ["smart", "fast"],
+      timeout: "30s",
     });
     expect(triage.name).toBe("ticket-triage");
     expect(triage.version).toBe(3);
     expect(triage.model).toBe("smart");
+    expect(triage.via).toEqual(["smart", "fast"]);
+    expect(triage.timeout).toBe("30s");
 
     const agent = ai.agent("support", {
       tools: [{ name: "bookings.getBooking" }, "bookings.refundBooking"],
@@ -334,12 +338,105 @@ describe("model fallback chain", () => {
       },
     );
     expect(out.urgency).toBe("low");
+    expect(out.via).toBe("fast");
     const entry = runtime.journal[0]!;
-    expect(entry.attempts).toHaveLength(2);
+    // Same-model retry (1) + second model success.
+    expect(entry.attempts.length).toBeGreaterThanOrEqual(2);
     expect(entry.attempts[0]).toMatchObject({ model: "smart", ok: false });
-    expect(entry.attempts[1]).toMatchObject({ model: "fast", ok: true });
+    expect(entry.attempts.at(-1)).toMatchObject({ model: "fast", ok: true });
     expect(entry.outcome).toBe("ok");
   });
+
+  test("prompt.via is used when ask omits via", async () => {
+    const failing = {
+      driverId: "mock" as const,
+      model: "smart",
+      async complete() {
+        throw new Error("smart down");
+      },
+    };
+    const ok = await createMockAiDriver({
+      "*": { summary: "ok" },
+    }).open({ model: "local" });
+    const smart = ai.model("smart", { provider: "mock" });
+    const local = ai.model("local", { provider: "mock" });
+    const summarize = smart.prompt("summarize-note", {
+      via: ["smart", "local"],
+      timeout: "30s",
+    });
+    const runtime = createAiRuntime({
+      models: [smart, local],
+      prompts: [summarize],
+      clients: { smart: failing, local: ok },
+    });
+    const out = await runtime.ask("summarize-note", { body: "x" });
+    expect(out.summary).toBe("ok");
+    expect(out.via).toBe("local");
+  });
+
+  test("permanent 401 does not advance via", async () => {
+    const unauthorized = {
+      driverId: "mock" as const,
+      model: "smart",
+      async complete() {
+        const err = new Error("openai-compatible HTTP 401") as Error & { status: number };
+        err.status = 401;
+        throw err;
+      },
+    };
+    let localCalls = 0;
+    const local = {
+      driverId: "mock" as const,
+      model: "local",
+      async complete() {
+        localCalls++;
+        return { text: "{}", raw: { summary: "nope" }, model: "local", driverId: "mock" as const };
+      },
+    };
+    const smart = ai.model("smart", { provider: "mock" });
+    const localModel = ai.model("local", { provider: "mock" });
+    const prompt = smart.prompt("summarize-note", { via: ["smart", "local"] });
+    const runtime = createAiRuntime({
+      models: [smart, localModel],
+      prompts: [prompt],
+      clients: { smart: unauthorized, local },
+    });
+    await expect(runtime.ask("summarize-note", {})).rejects.toThrow(/401/);
+    expect(localCalls).toBe(0);
+  });
+
+  test("timeout aborts a hanging complete", async () => {
+    const hanging = {
+      driverId: "mock" as const,
+      model: "smart",
+      async complete(opts: { signal?: AbortSignal }) {
+        const signal = opts.signal;
+        if (!signal) throw new Error("expected abort signal");
+        await new Promise<void>((_resolve, reject) => {
+          const onAbort = () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          };
+          if (signal.aborted) {
+            onAbort();
+            return;
+          }
+          signal.addEventListener("abort", onAbort, { once: true });
+        });
+        return { text: "late", raw: { text: "late" }, model: "smart", driverId: "mock" as const };
+      },
+    };
+    const smart = ai.model("smart", { provider: "mock" });
+    const prompt = smart.prompt("hang", { timeout: 40 });
+    const runtime = createAiRuntime({
+      models: [smart],
+      prompts: [prompt],
+      clients: { smart: hanging },
+      forceJournal: false,
+    });
+    await expect(runtime.ask("hang", {})).rejects.toThrow();
+  }, 2_000);
 });
 
 describe("schema-validation is its own class", () => {

@@ -48,13 +48,20 @@ describe("catalog labels", () => {
 
 describe("recommendedAiApply", () => {
   test("returns llama.cpp (openai-compatible) with curated ai/ model", () => {
-    const apply = recommendedAiApply();
-    expect(apply.driver).toBe("openai-compatible");
-    expect(apply.chatModel).toBe("granite3.3:2b");
-    expect(apply.baseUrl).toContain("8080");
-    expect(apply.image).toContain("llama.cpp");
-    expect(apply.image).not.toContain("latest");
-    expect(apply.visionModel).toBeNull();
+    const prev = process.env.OKE_AI_URL;
+    delete process.env.OKE_AI_URL;
+    try {
+      const apply = recommendedAiApply();
+      expect(apply.driver).toBe("openai-compatible");
+      expect(apply.chatModel).toBe("granite3.3:2b");
+      expect(apply.baseUrl).toContain("8080");
+      expect(apply.image).toContain("llama.cpp");
+      expect(apply.image).not.toContain("latest");
+      expect(apply.visionModel).toBeNull();
+    } finally {
+      if (prev !== undefined) process.env.OKE_AI_URL = prev;
+      else delete process.env.OKE_AI_URL;
+    }
   });
 });
 

@@ -163,6 +163,8 @@ export type {
 
 export {
   ai,
+  listAiDecls,
+  resetAiDecls,
   createAiRuntime,
   assertAllowPiiForAsk,
   AiPiiBuildError,

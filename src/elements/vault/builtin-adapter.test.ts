@@ -345,9 +345,7 @@ describe("builtin vault adapter — master rotation", () => {
 
       const loser = ra.status === "rejected" ? ra : rb;
       expect(
-        loser.status === "rejected" && loser.reason instanceof Error
-          ? loser.reason.message
-          : "",
+        loser.status === "rejected" && loser.reason instanceof Error ? loser.reason.message : "",
       ).toMatch(/lease held|already in progress/i);
 
       // Loser must not have wrapped any DEK under its key: at most the winner's batch.
@@ -379,10 +377,9 @@ describe("builtin vault adapter — master rotation", () => {
 
     // Simulate process death: drop in-memory pending, expire the rotate lease
     // (lazy reclaim — same physics as SIGKILL + lease TTL).
-    await db.execute(
-      `UPDATE oke_vault_status SET rotate_lease_expires_at = $1 WHERE id = 1`,
-      [Date.now() - 1],
-    );
+    await db.execute(`UPDATE oke_vault_status SET rotate_lease_expires_at = $1 WHERE id = 1`, [
+      Date.now() - 1,
+    ]);
     const second = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
     await second.unseal(init.masterKey);
     expect((await second.status()).rewrapTargetKekVersion).toBe(2);

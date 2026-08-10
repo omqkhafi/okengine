@@ -4,6 +4,13 @@
  * Physics: inference · prompts · embeddings · agents.
  */
 
+import {
+  aiAgentRegistry,
+  aiEmbedRegistry,
+  aiModelRegistry,
+  aiPromptRegistry,
+} from "../../kernel/element-registries.ts";
+
 /** Budget for a prompt or agent. */
 export interface AiBudgetDecl {
   readonly maxCostPerCall?: number;
@@ -15,13 +22,34 @@ export interface AiModelOptions {
   readonly provider?: string;
   readonly tier?: string;
   readonly model?: string;
+  /**
+   * Optional endpoint override for this logical binding (openai-compatible /
+   * ollama). Lets `fx.ask(…, { via: ["smart", "local"] })` reach cloud then
+   * local without sharing one process-wide base URL.
+   */
+  readonly baseUrl?: string;
+  /** Optional API key override for this binding (cloud providers). */
+  readonly apiKey?: string;
 }
+
+/**
+ * Ask deadline — clock duration string (`"30s"`, `"2m"`) or milliseconds.
+ * Time is not a cost budget; keep it off {@link AiBudgetDecl}.
+ */
+export type AiTimeout = string | number;
 
 /** Options for {@link AiModelDecl.prompt}. */
 export interface AiPromptOptions {
   readonly version?: number;
   readonly evals?: string;
   readonly budget?: AiBudgetDecl;
+  /**
+   * Ordered recovery chain of logical model names for this command.
+   * Resolved as `ask.via ?? prompt.via ?? [prompt.model]`.
+   */
+  readonly via?: readonly string[];
+  /** Per-command deadline (overrides only when ask omits `timeout`). */
+  readonly timeout?: AiTimeout;
   readonly in?: unknown;
   readonly out?: unknown;
 }
@@ -47,6 +75,8 @@ export interface AiModelDecl {
   readonly provider?: string;
   readonly tier?: string;
   readonly model?: string;
+  readonly baseUrl?: string;
+  readonly apiKey?: string;
   /**
    * Declare a versioned prompt artifact on this model.
    *
@@ -63,6 +93,8 @@ export interface AiPromptDecl {
   readonly version?: number;
   readonly evals?: string;
   readonly budget?: AiBudgetDecl;
+  readonly via?: readonly string[];
+  readonly timeout?: AiTimeout;
   readonly model?: string;
   readonly in?: unknown;
   readonly out?: unknown;
@@ -123,6 +155,33 @@ export interface AiNamespace {
 }
 
 /**
+ * Snapshot of AI decls registered since the last reset.
+ */
+export function listAiDecls(): {
+  readonly models: readonly AiModelDecl[];
+  readonly prompts: readonly AiPromptDecl[];
+  readonly embeds: readonly AiEmbedDecl[];
+  readonly agents: readonly AiAgentDecl[];
+} {
+  return {
+    models: aiModelRegistry.slice(),
+    prompts: aiPromptRegistry.slice(),
+    embeds: aiEmbedRegistry.slice(),
+    agents: aiAgentRegistry.slice(),
+  };
+}
+
+/**
+ * Clear AI declaration registries (tests / fresh app adopt).
+ */
+export function resetAiDecls(): void {
+  aiModelRegistry.length = 0;
+  aiPromptRegistry.length = 0;
+  aiEmbedRegistry.length = 0;
+  aiAgentRegistry.length = 0;
+}
+
+/**
  * AI element namespace.
  */
 export const ai: AiNamespace = {
@@ -140,19 +199,26 @@ export const ai: AiNamespace = {
       ...(options.provider !== undefined ? { provider: options.provider } : {}),
       ...(options.tier !== undefined ? { tier: options.tier } : {}),
       ...(options.model !== undefined ? { model: options.model } : {}),
+      ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
+      ...(options.apiKey !== undefined ? { apiKey: options.apiKey } : {}),
       prompt(promptName, promptOpts = {}) {
-        return {
+        const promptDecl: AiPromptDecl = {
           kind: "prompt",
           name: promptName,
           model: name,
           ...(promptOpts.version !== undefined ? { version: promptOpts.version } : {}),
           ...(promptOpts.evals !== undefined ? { evals: promptOpts.evals } : {}),
           ...(promptOpts.budget !== undefined ? { budget: promptOpts.budget } : {}),
+          ...(promptOpts.via !== undefined ? { via: promptOpts.via } : {}),
+          ...(promptOpts.timeout !== undefined ? { timeout: promptOpts.timeout } : {}),
           ...(promptOpts.in !== undefined ? { in: promptOpts.in } : {}),
           ...(promptOpts.out !== undefined ? { out: promptOpts.out } : {}),
         };
+        aiPromptRegistry.push(promptDecl);
+        return promptDecl;
       },
     };
+    aiModelRegistry.push(decl);
     return decl;
   },
 
@@ -165,12 +231,14 @@ export const ai: AiNamespace = {
   embed(name: string, options: AiEmbedOptions = {}): AiEmbedDecl {
     const model = typeof options.model === "string" ? options.model : options.model?.name;
     const into = typeof options.into === "string" ? options.into : options.into?.name;
-    return {
+    const decl: AiEmbedDecl = {
       kind: "embed",
       name,
       ...(model !== undefined ? { model } : {}),
       ...(into !== undefined ? { into } : {}),
     };
+    aiEmbedRegistry.push(decl);
+    return decl;
   },
 
   /**
@@ -180,7 +248,7 @@ export const ai: AiNamespace = {
    * @param options - Tools / maxSteps / model / budget
    */
   agent(name: string, options: AiAgentOptions = {}): AiAgentDecl {
-    return {
+    const decl: AiAgentDecl = {
       kind: "agent",
       name,
       tools: (options.tools ?? []).map(toolName),
@@ -192,5 +260,7 @@ export const ai: AiNamespace = {
           ? { model: options.model.name }
           : {}),
     };
+    aiAgentRegistry.push(decl);
+    return decl;
   },
 };

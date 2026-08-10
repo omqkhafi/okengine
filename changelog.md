@@ -12,6 +12,13 @@ needed).
 
 ## Unreleased
 
+### ✨ Added
+
+- Prompt recovery + deadline: `smart.prompt(name, { via: ["smart", "local"], timeout: "30s" })`.
+  `fx.ask` walks the chain with one same-model retry on retryable errors (timeout / 429 / 5xx),
+  stops on permanent failures (401 / schema), stamps winning `via` on the result, and throws when
+  the chain is exhausted. Ask-time `{ via, timeout }` overrides the prompt.
+
 ### 🔒 Security
 
 - Built-in Vault `rotateMaster` takes a Clock/Signal-class lease
@@ -37,6 +44,9 @@ needed).
 
 ### 🐛 Fixed
 
+- `create-oke`: locales and PgDog answers now always write to
+  `~/.oke/create-defaults.json` (reuse / recommended), not only after
+  customize — so Previous settings keep `ar` / PgDog across runs.
 - `oke dev` schema sync: a broken `schema.decl.ts` (table / relation definition
   error) now prints a red ● `schema.decl.ts has an error — …` line instead of the
   soft `oke db push (dev) skipped — …` framing that looked like a benign skip.
