@@ -31,7 +31,12 @@ export function UnitNode({ data }: NodeProps<GraphNode>) {
 /** Flow node. */
 export function FlowNode({ data }: NodeProps<GraphNode>) {
   return (
-    <div className={shell(data, "bg-card")}>
+    <div
+      className={shell(data, "bg-card")}
+      data-slot="flow-node"
+      data-flow-id={data.refId}
+      data-highlighted={data.highlighted ? "true" : "false"}
+    >
       <Handle type="target" position={Position.Left} className="!size-1.5" />
       <div className="font-medium text-foreground">{data.label}</div>
       <div className="text-[10px] text-muted-foreground">{data.plane}</div>

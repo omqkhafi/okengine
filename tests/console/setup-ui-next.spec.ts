@@ -29,8 +29,11 @@ async function expectShell(
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
   await expect(page.getByText(sectionTitle)).toBeVisible();
 
-  // Sidebar starts collapsed (icon mode) — expand so operator name/email are visible.
-  await page.locator('[data-slot="sidebar-trigger"]').click();
+  // Sidebar starts collapsed (icon mode) — expand via the brand hover trigger
+  // (inset SidebarTrigger is md:hidden on desktop viewports).
+  const brand = sidebar.locator('[data-sidebar="header"]');
+  await brand.hover();
+  await sidebar.locator('[data-slot="sidebar-trigger"]').click();
   await expect(sidebar.getByText(OPERATOR_NAME)).toBeVisible();
   await expect(sidebar.getByText(OPERATOR_EMAIL)).toBeVisible();
   await expect(page.locator('[data-slot="operator-avatar"]')).toBeVisible();
@@ -137,7 +140,9 @@ test("ui-next login rejects wrong password then succeeds into the shell", async 
 
   await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
   await expect(page).toHaveURL(/\/flows$/);
-  await expect(page.getByText("Flows is not built yet")).toBeVisible();
+  await expect(page.locator('[data-slot="flow-graph"]')).toBeVisible();
+  await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible();
+  await expect(page.getByText("Traces")).toBeVisible();
 });
 
 test("ui-next unauthenticated shell visit redirects to the pre-auth gate", async ({ page }) => {
@@ -184,4 +189,47 @@ test("ui-next theme toggle flips .dark and persists across reload", async ({ pag
   await expect
     .poll(async () => page.evaluate(() => localStorage.getItem("oke-console-theme")))
     .toBe("light");
+});
+
+test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highlights on click", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.evaluate(() => sessionStorage.removeItem("oke_console_at"));
+  await page.locator("#email").fill(OPERATOR_EMAIL);
+  await page.locator("#password").fill(OPERATOR_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+
+  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
+  await expect(page).toHaveURL(/\/flows/);
+
+  const graph = page.locator('[data-slot="flow-graph"]');
+  await expect(graph).toBeVisible({ timeout: 15_000 });
+
+  // Real Manifest nodes (FLOWS_TEST_MANIFEST) — unit headers + flow actions.
+  await expect(graph.getByText("bookings", { exact: true }).first()).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]'),
+  ).toBeVisible();
+
+  const traces = page.locator('[data-slot="traces-pane"]');
+  await expect(traces).toBeVisible();
+  // Seeded WideEvent from serve-fixture-ui-next (live channel or initial GET /console/runs).
+  const row = traces.getByRole("button", { name: /bookings\.create/ });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  const flowNode = page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]');
+  await expect(flowNode).toHaveAttribute("data-highlighted", "false");
+
+  await row.click();
+  await expect(page).toHaveURL(/run=pw-run-bookings-create/);
+  await expect(flowNode).toHaveAttribute("data-highlighted", "true", { timeout: 5_000 });
+  await expect(row).toHaveAttribute("aria-pressed", "true");
 });
