@@ -50,6 +50,7 @@
       "src/console/ui/vite.config.ts",
       "src/console/ui/tsconfig.json",
       "src/console/ui/**/*.test.ts",
+      "src/console/ui-next",
       "src/compiler/fixtures",
       "**/*.test.ts",
       "**/tests/**"

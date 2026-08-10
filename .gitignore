@@ -61,6 +61,7 @@ docker/pgdog/
 
 # Console / Playwright
 tests/console/.claim-code
+tests/console/.claim-code-ui-next
 .oke/
 # Accidental PGlite datadir when SQLite's `:memory:` was passed as a path
 /:memory:/

@@ -1,27 +1,23 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",
     "jsx": "react-jsx",
-    "types": ["bun"],
-
+    "types": ["vite/client", "bun"],
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "rewriteRelativeImportExtensions": true,
-
     "strict": true,
     "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*.ts", "src/cli/tui/**/*.tsx", "tests/**/*.ts"],
-  "exclude": ["src/compiler/fixtures/**", "src/console/ui/**", "src/console/ui-next/**"]
+  "include": ["./**/*.ts", "./**/*.tsx"]
 }

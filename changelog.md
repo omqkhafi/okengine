@@ -12,6 +12,13 @@ needed).
 
 ## Unreleased
 
+### ✨ Added
+
+- Parallel Console SPA scaffold at `src/console/ui-next/` (React + Vite + shadcn/Base UI +
+  TanStack Form/Query + HugeIcons) with a real first-admin claim page wired to
+  `/console/setup/status` and `/console/setup/claim`. Existing `src/console/ui/` is unchanged;
+  cutover is not yet. Gate: `bun run test:console:setup-ui-next`.
+
 ## v0.11.2 — 2026-08-10
 
 ### ✨ Added
