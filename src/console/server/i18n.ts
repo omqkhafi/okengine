@@ -5,10 +5,13 @@
 
 const en = {
   ClaimFailed: "Could not create the first operator.",
-  "ClaimFailed.mismatch": "That claim code does not match. Copy it from the boot log.",
-  "ClaimFailed.expired": "That claim code expired. Restart `oke dev` for a new one.",
+  "ClaimFailed.mismatch":
+    "That claim code does not match. Copy it from the boot log or run `oke console claim-code`.",
+  "ClaimFailed.expired":
+    "That claim code expired. Restart `oke dev` for a new one, then `oke console claim-code`.",
   "ClaimFailed.rate_limited": "Too many claim attempts. Wait a minute and try again.",
-  "ClaimFailed.missing": "No claim code is active. Restart `oke dev` to mint one.",
+  "ClaimFailed.missing":
+    "No claim code is active. Restart `oke dev` to mint one, then `oke console claim-code`.",
   "ClaimFailed.password_policy":
     "Password needs at least 12 characters, including uppercase, lowercase, a number, and a special character.",
   "ClaimFailed.password_breached":

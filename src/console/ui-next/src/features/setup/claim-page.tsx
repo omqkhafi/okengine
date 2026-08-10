@@ -172,7 +172,7 @@ export function ClaimPage() {
     <SetupFrame>
       <AuthCard
         title="First admin"
-        description="Enter the claim code printed once to the boot log. This wizard closes permanently after the first operator."
+        description="Enter the claim code from the Console boot log, or run `oke console claim-code`. This wizard closes permanently after the first operator."
         footer={
           <Button
             type="submit"

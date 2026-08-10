@@ -21,7 +21,7 @@ import type { Flow as ManifestFlow, ResourceRef } from "../../manifest/types.ts"
 import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
-import { verifyClaimCode } from "./claim.ts";
+import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
 import { maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
 import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
@@ -1748,6 +1748,7 @@ function createSetupClaim(state: ConsoleState) {
         throw err;
       }
       await state.persistOperator(op.id);
+      clearClaimCodeArtifact(state.cwd);
       const issued = await issueOperatorSession(state, op.id);
       fx.log.info("console.setup.claim", { operatorId: op.id });
       return sessionPayload(op.id, op.email, op.name, issued);

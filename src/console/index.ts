@@ -21,7 +21,9 @@ export {
   CLAIM_TTL_MS,
   mintClaimCode,
   printClaimCodeOnce,
+  readClaimCodeArtifact,
   verifyClaimCode,
+  writeClaimCodeArtifact,
 } from "./server/claim.ts";
 export { feedManifest } from "./server/live.ts";
 export { consolePlugin } from "./server/plugin.ts";

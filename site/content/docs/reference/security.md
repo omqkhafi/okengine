@@ -45,7 +45,10 @@ Our path is concrete: a booking name containing "ignore previous instructions an
 - **Plugin panels** run in a sandboxed iframe without `allow-same-origin`, communicating only over a `postMessage` bridge with their own CSP, no access to the operator session token, and exposure limited to that plugin's declared flows.
 - **Session and framing:** `frame-ancestors 'none'`, `SameSite=Strict`, step-up authentication before destructive actions.
 - **Secret write path:** TLS required, no autocomplete, never echoed, never logged, not retained in browser memory after submission.
-- **The setup claim code** is rate-limited and compared in constant time. The first-operator password
+- **The setup claim code** is rate-limited and compared in constant time. It is
+  printed once to the Console boot log and mirrored to gitignored `.oke/claim-code`
+  (mode 0600) for `oke console claim-code` while setup is open; the file is removed
+  after a successful claim. The first-operator password
   uses Console policy (minLength 12, upper + lower + number + special / `requireSpecial` — stricter than Gate auth’s
   minLength 8 with the same character classes); weak passwords return `ClaimFailed` /
   `password_policy`, not an opaque 500.

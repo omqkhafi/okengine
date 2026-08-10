@@ -20,5 +20,6 @@
       "@console/password-policy": ["../password-policy.ts"]
     }
   },
-  "include": ["./**/*.ts", "./**/*.tsx"]
+  "include": ["./src/**/*.ts", "./src/**/*.tsx"],
+  "exclude": ["dist"]
 }

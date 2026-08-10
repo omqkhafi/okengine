@@ -100,8 +100,9 @@ export function SetupWizard() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--oke-muted)]">First admin</p>
         <h1 className="text-3xl font-semibold tracking-tight">Console</h1>
         <p className="text-[var(--oke-muted)]">
-          Enter the claim code printed once to the boot log. This wizard closes permanently after
-          the first operator.
+          Enter the claim code from the Console boot log, or run{" "}
+          <code className="font-mono text-[0.9em]">oke console claim-code</code>. This wizard
+          closes permanently after the first operator.
         </p>
       </header>
       <form className="flex flex-col gap-4" onSubmit={onSubmit} autoComplete="off">

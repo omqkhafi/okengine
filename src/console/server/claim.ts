@@ -1,12 +1,20 @@
 /**
- * First-admin claim code — printed once to the boot log, never persisted.
+ * First-admin claim code — printed once to the boot log.
+ *
+ * Not stored in Postgres. While setup is open, the same code is mirrored to
+ * `.oke/claim-code` (mode 0600, gitignored) so `oke console claim-code` can
+ * re-print it without scrolling the boot log. File is removed after a
+ * successful claim or when setup is already closed at boot.
  *
  * Expires in 30 minutes, regenerates on restart. Compared in constant time
  * and rate-limited (console §2.5 · §10.4).
  */
 
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { formatClaimNote } from "../../term.ts";
 import { AUTH_RATE_LIMIT, AUTH_RATE_WINDOW_MS, touchRateLimit } from "./auth-rate.ts";
+import { CONSOLE_OKE_DIR } from "./operator-db.ts";
 
 /** Claim-code lifetime (30 minutes). */
 export const CLAIM_TTL_MS = 30 * 60 * 1000;
@@ -17,9 +25,12 @@ export const CLAIM_RATE_LIMIT = AUTH_RATE_LIMIT;
 /** Rate-limit window (same strategy as operator login). */
 export const CLAIM_RATE_WINDOW_MS = AUTH_RATE_WINDOW_MS;
 
+/** Filename under `.oke/` for the local DX claim mirror. */
+export const CLAIM_CODE_FILE = "claim-code";
+
 /** In-memory claim-code state for one Console boot. */
 export interface ClaimCodeState {
-  /** Raw code (never written to disk). */
+  /** Raw code (mirrored to `.oke/claim-code` while setup is open). */
   readonly code: string;
   /** Epoch-ms when the code expires. */
   readonly expiresAt: number;
@@ -29,6 +40,130 @@ export interface ClaimCodeState {
   printed: boolean;
   /** Sliding attempt timestamps for rate limiting. */
   readonly attempts: number[];
+}
+
+/** On-disk claim mirror written for local DX (`oke console claim-code`). */
+export interface ClaimCodeArtifact {
+  readonly code: string;
+  readonly expiresAt: number;
+  readonly mintedAt: number;
+}
+
+/**
+ * Absolute path to `.oke/claim-code` under a project root.
+ *
+ * @param cwd - Project root
+ */
+export function claimCodeArtifactPath(cwd: string): string {
+  return join(cwd, CONSOLE_OKE_DIR, CLAIM_CODE_FILE);
+}
+
+/**
+ * Mirror the boot claim code to `.oke/claim-code` (0600).
+ *
+ * @param cwd - Project root
+ * @param state - Minted claim state
+ * @returns Absolute path written
+ */
+export function writeClaimCodeArtifact(
+  cwd: string,
+  state: Pick<ClaimCodeState, "code" | "expiresAt" | "mintedAt">,
+): string {
+  const dir = join(cwd, CONSOLE_OKE_DIR);
+  mkdirSync(dir, { recursive: true });
+  const path = claimCodeArtifactPath(cwd);
+  const body: ClaimCodeArtifact = {
+    code: state.code,
+    expiresAt: state.expiresAt,
+    mintedAt: state.mintedAt,
+  };
+  writeFileSync(path, `${JSON.stringify(body)}\n`, { mode: 0o600 });
+  return path;
+}
+
+/**
+ * Remove `.oke/claim-code` if present (setup closed / claim succeeded).
+ *
+ * @param cwd - Project root
+ */
+export function clearClaimCodeArtifact(cwd: string): void {
+  try {
+    unlinkSync(claimCodeArtifactPath(cwd));
+  } catch {
+    // missing is fine
+  }
+}
+
+/** Result of {@link readClaimCodeArtifact}. */
+export type ReadClaimCodeArtifactResult =
+  | { readonly ok: true; readonly artifact: ClaimCodeArtifact; readonly path: string }
+  | {
+      readonly ok: false;
+      readonly reason: "missing" | "expired" | "invalid";
+      readonly path: string;
+    };
+
+/**
+ * Read and validate the local claim-code mirror.
+ *
+ * @param cwd - Project root
+ * @param now - Clock
+ */
+export function readClaimCodeArtifact(
+  cwd: string,
+  now: () => number = Date.now,
+): ReadClaimCodeArtifactResult {
+  const path = claimCodeArtifactPath(cwd);
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8").trim();
+  } catch {
+    return { ok: false, reason: "missing", path };
+  }
+  if (raw.length === 0) return { ok: false, reason: "invalid", path };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Plain hex (legacy / Playwright-style) — treat as expired-unknown without TTL.
+    if (/^[0-9a-f]{32}$/i.test(raw)) {
+      return {
+        ok: true,
+        path,
+        artifact: { code: raw.toLowerCase(), expiresAt: Number.POSITIVE_INFINITY, mintedAt: 0 },
+      };
+    }
+    return { ok: false, reason: "invalid", path };
+  }
+
+  if (parsed === null || typeof parsed !== "object") {
+    return { ok: false, reason: "invalid", path };
+  }
+  const o = parsed as Record<string, unknown>;
+  const code = o["code"];
+  const expiresAt = o["expiresAt"];
+  const mintedAt = o["mintedAt"];
+  if (
+    typeof code !== "string" ||
+    code.length === 0 ||
+    typeof expiresAt !== "number" ||
+    !Number.isFinite(expiresAt) ||
+    typeof mintedAt !== "number" ||
+    !Number.isFinite(mintedAt)
+  ) {
+    return { ok: false, reason: "invalid", path };
+  }
+
+  if (now() >= expiresAt) {
+    return { ok: false, reason: "expired", path };
+  }
+
+  return {
+    ok: true,
+    path,
+    artifact: { code, expiresAt, mintedAt },
+  };
 }
 
 /**

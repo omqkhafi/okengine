@@ -22,7 +22,11 @@ import { createManifestClockRuntime } from "./clock.ts";
 import { createManifestStoreRuntime } from "./store.ts";
 import { VaultBootError } from "../../elements/vault.ts";
 import { createManifestVaultRuntime, resolveVaultDriverId } from "./vault.ts";
-import { printClaimCodeOnce } from "./claim.ts";
+import {
+  clearClaimCodeArtifact,
+  printClaimCodeOnce,
+  writeClaimCodeArtifact,
+} from "./claim.ts";
 
 /** Options for {@link createConsoleApp}. */
 export interface CreateConsoleAppOptions extends CreateConsoleStateOptions {
@@ -48,8 +52,13 @@ export interface ConsoleAppHandle {
 export function createConsoleApp(options: CreateConsoleAppOptions = {}): ConsoleAppHandle {
   const state = createConsoleState(options);
   // Spec §2.5 — claim prints only while setup is open (no operators yet).
-  if (!options.silentClaim && !state.setupClosed) {
-    printClaimCodeOnce(state.claim);
+  if (!state.setupClosed) {
+    if (!options.silentClaim) {
+      printClaimCodeOnce(state.claim);
+      writeClaimCodeArtifact(state.cwd, state.claim);
+    }
+  } else {
+    clearClaimCodeArtifact(state.cwd);
   }
 
   const { bindings, routes } = createConsoleBindings(state);

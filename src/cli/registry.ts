@@ -656,6 +656,17 @@ export const OKE_COMMANDS: readonly CliCommand[] = [
     ],
   },
   {
+    name: "console",
+    summary: "Console helpers — claim-code",
+    subcommands: [
+      {
+        name: "claim-code",
+        summary: "Print the local setup claim code from .oke/claim-code",
+        flags: [JSON_FLAG, HELP],
+      },
+    ],
+  },
+  {
     name: "gates",
     summary: "gate catalogue from Manifest",
     subcommands: [

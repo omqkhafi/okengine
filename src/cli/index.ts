@@ -10,6 +10,7 @@ import { branchCli } from "./branch.ts";
 import { buildCli } from "./build.ts";
 import { clientAddCli } from "./client-add.ts";
 import { completionCli } from "./completion.ts";
+import { consoleCli } from "./console-cmd.ts";
 import { dbCli } from "./db.ts";
 import { devCli } from "./dev.ts";
 import { doctorCli } from "./doctor.ts";
@@ -130,6 +131,10 @@ if (cmd === "upgrade") {
 
 if (cmd === "gates" && sub === "list") {
   process.exit(await gatesListCli(rest));
+}
+
+if (cmd === "console") {
+  process.exit(await consoleCli(sub ? [sub, ...rest] : rest));
 }
 
 if (cmd === "completion") {

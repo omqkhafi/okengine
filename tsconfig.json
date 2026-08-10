@@ -26,7 +26,8 @@
   "exclude": [
     "src/compiler/fixtures/**",
     "src/console/ui/**",
-    "src/console/ui-next/**",
+    "src/console/ui-next/src/**",
+    "src/console/ui-next/dist/**",
     "tests/console/setup-ui-next.spec.ts"
   ]
 }

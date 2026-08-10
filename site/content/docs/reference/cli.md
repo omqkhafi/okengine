@@ -26,6 +26,8 @@ oke mode                         # removed — prints error; use oke dev (Compos
 
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
+oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
+                                 #   → `bun run dev:console-next` boots kernel + Vite and prints the claim
 oke stack                        # preview resolved images/tags/ports — writes nothing
 
 oke schema generate              # core + plugin stubs → .oke/schema/oke.ts (--check in CI)
@@ -136,6 +138,7 @@ oke doctor --json                # -j  JSON on stdout; hints on stderr (agents /
 oke stack --json                 # -j
 oke images list                  # recipe · image · tag · digest · size (--json|-j)
 oke gates list                   # Module:Action catalogue (--json|-j)
+oke console claim-code           # first-admin claim from .oke/claim-code (--json|-j)
 oke ai setup --provider llama-cpp --yes  # default local AI
 oke ai setup --provider ollama --yes     # fully supported alternative
 # TTY: llama.cpp / Ollama → banner · tiers · manual; vLLM / SGLang / cloud → model
@@ -170,7 +173,7 @@ Long form is canonical in docs; short form is convenience only. Shared letters f
 | `--after`            | `-a`  | `doctor --diff`                                |
 | `--target`           | `-t`  | `build`                                        |
 | `--diff`             |       | `doctor`                                       |
-| `--json`             | `-j`  | `doctor`, `stack`, `images list`, `gates list` |
+| `--json`             | `-j`  | `doctor`, `stack`, `images list`, `gates list`, `console claim-code` |
 | `--manifest`         | `-m`  | most Manifest readers                          |
 | `--entry`            | `-e`  | `dev`, `start`, `build`, `replay`              |
 | `--request-id`       | `-r`  | `replay`                                       |

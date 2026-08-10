@@ -61,15 +61,22 @@ export {
   type VaultWriteInput,
 } from "./vault.ts";
 export {
+  CLAIM_CODE_FILE,
   CLAIM_RATE_LIMIT,
   CLAIM_RATE_WINDOW_MS,
   CLAIM_TTL_MS,
+  claimCodeArtifactPath,
+  clearClaimCodeArtifact,
   constantTimeEqual,
   mintClaimCode,
   printClaimCodeOnce,
+  readClaimCodeArtifact,
   verifyClaimCode,
+  writeClaimCodeArtifact,
+  type ClaimCodeArtifact,
   type ClaimCodeState,
   type ClaimVerifyResult,
+  type ReadClaimCodeArtifactResult,
 } from "./claim.ts";
 export {
   CONSOLE_PG_SCHEMA,

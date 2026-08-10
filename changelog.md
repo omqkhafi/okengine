@@ -31,6 +31,8 @@ needed).
 
 ### 🐛 Fixed
 
+- ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
+  DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
 - Password policy special-character rule is canonical as `requireSpecial` on both
   `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
   password missing only a special is rejected and that ui-next’s 5 checklist criteria match
@@ -40,6 +42,13 @@ needed).
 
 ### ✨ Added
 
+- `oke console claim-code` prints the first-admin claim mirrored to `.oke/claim-code`
+  (mode 0600) on Console boot while setup is open; cleared after a successful claim.
+  Same code still prints once to the boot log.
+
+- `bun run dev:console-next` boots an ephemeral Console kernel on :6533 beside Vite
+  and prints the claim code in the same terminal (also mirrored to `.oke/claim-code`).
+  Uses `bunx --bun vite` so the Console graph runs under Bun (not Node).
 
 - ui-next operator login when setup is closed: Email + Password (TanStack Form + Zod +
   shadcn Field) posts to real `POST /console/session/login`, stores `oke_console_at` on

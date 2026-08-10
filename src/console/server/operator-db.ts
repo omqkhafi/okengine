@@ -9,8 +9,8 @@
  * `.oke/console-pg` so reopen durability still works without Docker.
  *
  * Spec: wizard closes permanently once the first operator exists (console §2.5).
- * Claim codes stay ephemeral; operators, sessions, and the signing secret must
- * survive restarts.
+ * Claim codes stay out of Postgres (optional local DX mirror: `.oke/claim-code`);
+ * operators, sessions, and the signing secret must survive restarts.
  */
 
 import { mkdirSync } from "node:fs";
