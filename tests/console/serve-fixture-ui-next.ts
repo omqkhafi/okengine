@@ -3,6 +3,7 @@
  *
  * Seeds a real Manifest (FLOWS_TEST_MANIFEST) and one WideEvent so the Flows
  * page can assert graph nodes + Traces without inventing client-side mocks.
+ * Same seed as `bun run dev:console-next:seeded`.
  */
 
 import { mkdtemp } from "node:fs/promises";
@@ -10,8 +11,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveConsole } from "../../src/console/server/serve.ts";
-import { FLOWS_TEST_MANIFEST } from "../../src/console/ui/flows/fixture.ts";
-import type { WideEvent } from "../../src/runs/types.ts";
+import {
+  appendUiNextSeedRun,
+  UI_NEXT_SEEDED_MANIFEST,
+} from "../../src/console/ui-next/ui-next-seed.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const uiNextDist = join(here, "../../src/console/ui-next/dist/");
@@ -28,31 +31,14 @@ const server = await serveConsole({
   // do not hard-fail the Playwright webServer boot.
   env: "test",
   staticDir: uiNextDist,
-  manifest: FLOWS_TEST_MANIFEST,
+  manifest: UI_NEXT_SEEDED_MANIFEST,
 });
-
-const now = Date.now();
-const seedRun: WideEvent = {
-  id: "pw-run-bookings-create",
-  flow: "bookings.create",
-  unit: "bookings",
-  trigger: "http",
-  plane: "user",
-  gates: [],
-  cache: "none",
-  effects: [],
-  logs: [],
-  durationMs: 12,
-  startedAt: now - 12,
-  endedAt: now,
-  dimensions: { flow: "bookings.create" },
-};
 
 const runs = server.console.app.bootResult?.runs;
 if (!runs) {
   throw new Error("ui-next fixture: Console bootResult.runs missing");
 }
-await runs.append(seedRun);
+await appendUiNextSeedRun(runs);
 
 const claimCode = server.console.state.claim.code;
 await Bun.write(claimPath, claimCode);

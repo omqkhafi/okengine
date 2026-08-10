@@ -28,6 +28,10 @@ oke start                        # runs exactly what production runs (this is th
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
                                  #   → `bun run dev:console-next` boots kernel + Vite and prints the claim
+                                 #   → `bun run dev:console-next:seeded` same + FLOWS_TEST_MANIFEST graph
+                                 #     and one bookings.create trace (click Traces row → highlight node)
+                                 #   → after `bun run test:console:setup-ui-next`, open the HTML report:
+                                 #     `bun run test:console:setup-ui-next:report` (trace + screenshots + video)
 oke stack                        # preview resolved images/tags/ports — writes nothing
 
 oke schema generate              # core + plugin stubs → .oke/schema/oke.ts (--check in CI)
@@ -158,34 +162,34 @@ oke completion fish | source
 
 Long form is canonical in docs; short form is convenience only. Shared letters follow git’s pattern (different meanings on different subcommands — e.g. `-c` is `--check` on `schema generate`, `--config` on `stack` / `docker` / `images`).
 
-| Long                 | Short | Where                                          |
-| -------------------- | ----- | ---------------------------------------------- |
-| `--docker`           | `-d`  | `dev` (optional Compose **role filter**)       |
-| `--no-db-push`       |       | `dev`                                          |
-| `--prod`             | `-p`  | `docker`                                       |
-| `--yes`              | `-y`  | `docker clean`                                 |
-| `--all`              |       | `docker clean`                                 |
-| `--port`             | `-p`  | `start`                                        |
-| `--check`            | `-c`  | `schema generate`                              |
-| `--config`           | `-c`  | `stack`, `docker`, `images`, `db *` (drizzle)  |
-| `--apply`            | `-a`  | `upgrade`                                      |
-| `--at`               | `-a`  | `branch`                                       |
-| `--after`            | `-a`  | `doctor --diff`                                |
-| `--target`           | `-t`  | `build`                                        |
-| `--diff`             |       | `doctor`                                       |
+| Long                 | Short | Where                                                                |
+| -------------------- | ----- | -------------------------------------------------------------------- |
+| `--docker`           | `-d`  | `dev` (optional Compose **role filter**)                             |
+| `--no-db-push`       |       | `dev`                                                                |
+| `--prod`             | `-p`  | `docker`                                                             |
+| `--yes`              | `-y`  | `docker clean`                                                       |
+| `--all`              |       | `docker clean`                                                       |
+| `--port`             | `-p`  | `start`                                                              |
+| `--check`            | `-c`  | `schema generate`                                                    |
+| `--config`           | `-c`  | `stack`, `docker`, `images`, `db *` (drizzle)                        |
+| `--apply`            | `-a`  | `upgrade`                                                            |
+| `--at`               | `-a`  | `branch`                                                             |
+| `--after`            | `-a`  | `doctor --diff`                                                      |
+| `--target`           | `-t`  | `build`                                                              |
+| `--diff`             |       | `doctor`                                                             |
 | `--json`             | `-j`  | `doctor`, `stack`, `images list`, `gates list`, `console claim-code` |
-| `--manifest`         | `-m`  | most Manifest readers                          |
-| `--entry`            | `-e`  | `dev`, `start`, `build`, `replay`              |
-| `--request-id`       | `-r`  | `replay`                                       |
-| `--dry-run`          |       | `replay`                                       |
-| `--live`             |       | `replay`                                       |
-| `--out` / `--outdir` | `-o`  | writers                                        |
-| `--subject`          | `-s`  | `privacy erase`                                |
-| `--before`           | `-b`  | `doctor --diff`                                |
-| `--base`             | `-B`  | `doctor --diff`                                |
-| `--env`              |       | `db *` (`dev` \| `test` \| `prod`)             |
-| `--force`            |       | `db seed`                                      |
-| `--local` / `-l`     |       | **removed** on `dev` (use `oke test`)          |
+| `--manifest`         | `-m`  | most Manifest readers                                                |
+| `--entry`            | `-e`  | `dev`, `start`, `build`, `replay`                                    |
+| `--request-id`       | `-r`  | `replay`                                                             |
+| `--dry-run`          |       | `replay`                                                             |
+| `--live`             |       | `replay`                                                             |
+| `--out` / `--outdir` | `-o`  | writers                                                              |
+| `--subject`          | `-s`  | `privacy erase`                                                      |
+| `--before`           | `-b`  | `doctor --diff`                                                      |
+| `--base`             | `-B`  | `doctor --diff`                                                      |
+| `--env`              |       | `db *` (`dev` \| `test` \| `prod`)                                   |
+| `--force`            |       | `db seed`                                                            |
+| `--local` / `-l`     |       | **removed** on `dev` (use `oke test`)                                |
 
 ### Exit codes
 

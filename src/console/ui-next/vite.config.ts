@@ -1,6 +1,7 @@
 /**
  * Vite build for the parallel Console SPA (ui-next).
  * Dev server :6537 with /console → :6533 proxy + ephemeral Console kernel.
+ * Seeded: `OKE_CONSOLE_NEXT_SEEDED=1` / `bun run dev:console-next:seeded`.
  */
 
 import tailwindcss from "@tailwindcss/vite";

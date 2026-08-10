@@ -212,16 +212,18 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
 
   // Real Manifest nodes (FLOWS_TEST_MANIFEST) — unit headers + flow actions.
   await expect(graph.getByText("bookings", { exact: true }).first()).toBeVisible();
-  await expect(page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]')).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]')).toBeVisible(
+    {
+      timeout: 15_000,
+    },
+  );
   await expect(
     page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]'),
   ).toBeVisible();
 
   const traces = page.locator('[data-slot="traces-pane"]');
   await expect(traces).toBeVisible();
-  // Seeded WideEvent from serve-fixture-ui-next (live channel or initial GET /console/runs).
+  // Seeded WideEvent from ui-next-seed (same as dev:console-next:seeded).
   const row = traces.getByRole("button", { name: /bookings\.create/ });
   await expect(row).toBeVisible({ timeout: 15_000 });
 

@@ -47,6 +47,14 @@ needed).
 
 ### ✨ Added
 
+- `bun run dev:console-next:seeded` (`OKE_CONSOLE_NEXT_SEEDED=1`) boots the same Console
+  kernel + FLOWS_TEST_MANIFEST + seeded `bookings.create` WideEvent as the Playwright
+  ui-next fixture, so opening http://127.0.0.1:6537 shows a real Flows graph and Traces
+  row (click → highlight). Terminal prints URL, claim code, and a one-line seed summary.
+- `playwright.ui-next.config.ts` always records trace + screenshot + video; after
+  `bun run test:console:setup-ui-next`, `bun run test:console:setup-ui-next:report`
+  opens the HTML timeline report.
+
 - `oke console claim-code` prints the first-admin claim mirrored to `.oke/claim-code`
   (mode 0600) on Console boot while setup is open; cleared after a successful claim.
   Same code still prints once to the boot log.
