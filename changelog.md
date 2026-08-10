@@ -25,6 +25,7 @@ needed).
 - ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
   out mid-progress in dark mode).
 - ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
+- ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
 
 ### 🐛 Fixed
 
