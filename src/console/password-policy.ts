@@ -3,11 +3,15 @@
  * Used by claim / operator create and mirrored by the Console UI meter.
  */
 
-import type { PasswordPolicyOptions } from "../auth/password-policy.ts";
-import { resolvePasswordPolicy } from "../auth/password-policy.ts";
+import {
+  assertPasswordPolicy,
+  passwordHasSpecial,
+  resolvePasswordPolicy,
+  type PasswordPolicyOptions,
+} from "../auth/password-policy.ts";
 
 /**
- * Console-specific password policy: length 12+, upper, lower, number, symbol.
+ * Console-specific password policy: length 12+, upper, lower, number, special.
  */
 export const CONSOLE_PASSWORD_POLICY = {
   minLength: 12,
@@ -15,7 +19,7 @@ export const CONSOLE_PASSWORD_POLICY = {
   requireNumber: true,
   requireUppercase: true,
   requireLowercase: true,
-  requireSymbol: true,
+  requireSpecial: true,
 } as const satisfies PasswordPolicyOptions;
 
 /** Rule row for UI checklists / meters. */
@@ -27,6 +31,7 @@ export type ConsolePasswordRule = {
 
 /**
  * Evaluate a password against {@link CONSOLE_PASSWORD_POLICY}.
+ * Checklist rows mirror the same predicates {@link assertPasswordPolicy} enforces.
  *
  * @param password - Plaintext
  */
@@ -54,9 +59,23 @@ export function evaluateConsolePasswordRules(password: string): readonly Console
       met: /\d/.test(password),
     },
     {
-      id: "symbol",
+      id: "special",
       label: "Contains a special character",
-      met: /[^A-Za-z0-9]/.test(password),
+      met: passwordHasSpecial(password),
     },
   ] as const;
+}
+
+/**
+ * Whether every Console UI checklist rule is met (same outcome as server assert).
+ *
+ * @param password - Plaintext
+ */
+export function consolePasswordMeetsPolicy(password: string): boolean {
+  try {
+    assertPasswordPolicy(password, CONSOLE_PASSWORD_POLICY);
+    return true;
+  } catch {
+    return false;
+  }
 }

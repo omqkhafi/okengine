@@ -145,7 +145,7 @@ describe("username policy", () => {
           minLength: 12,
           requireLetter: true,
           requireNumber: true,
-          requireSymbol: true,
+          requireSpecial: true,
         },
       }),
     );
@@ -188,7 +188,7 @@ describe("username policy", () => {
       error: { data?: { reason?: string; reasons?: string[] } };
     };
     expect(weakBody.error.data?.reason).toBe("password_policy");
-    expect(weakBody.error.data?.reasons).toContain("requireSymbol");
+    expect(weakBody.error.data?.reasons).toContain("requireSpecial");
 
     const ok = await app.fetch(
       new Request("http://localhost/auth/sign-up/username", {
@@ -239,7 +239,7 @@ describe("username policy", () => {
             minLength: 12,
             requireLetter: true,
             requireNumber: true,
-            requireSymbol: true,
+            requireSpecial: true,
           },
         },
       },
@@ -257,7 +257,7 @@ describe("username policy", () => {
       error: { data?: { reason?: string; reasons?: string[] } };
     };
     expect(weakBody.error.data?.reason).toBe("password_policy");
-    expect(weakBody.error.data?.reasons).toContain("requireSymbol");
+    expect(weakBody.error.data?.reasons).toContain("requireSpecial");
 
     const ok = await app.fetch(
       new Request("http://localhost/auth/sign-up/username", {

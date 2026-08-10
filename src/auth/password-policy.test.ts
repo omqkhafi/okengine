@@ -5,31 +5,133 @@ import {
   sha1HexUpper,
   BreachCheckError,
 } from "./breach-check.ts";
-import { assertPasswordPolicy, PasswordPolicyError } from "./password-policy.ts";
+import {
+  assertPasswordPolicy,
+  DEFAULT_PASSWORD_POLICY,
+  PasswordPolicyError,
+  resolvePasswordPolicy,
+} from "./password-policy.ts";
+import {
+  CONSOLE_PASSWORD_POLICY,
+  consolePasswordMeetsPolicy,
+  evaluateConsolePasswordRules,
+} from "../console/password-policy.ts";
 import { createBunCrypto } from "../runtime/primitives.ts";
 import { ARGON2ID_MEMORY_COST_FLOOR } from "../runtime/types.ts";
 import { createOperator, createOperatorStore } from "./operator.ts";
 import { createSessionStore, issueSession, rotateRefresh, SessionError } from "./sessions.ts";
 
 describe("password policy", () => {
-  test("defaults require length 8, upper, lower, number, symbol", () => {
+  test("defaults require length 8, upper, lower, number, special", () => {
     expect(() => assertPasswordPolicy("Aa1!", {})).toThrow(PasswordPolicyError);
     expect(() => assertPasswordPolicy("password", {})).toThrow(PasswordPolicyError);
     expect(() => assertPasswordPolicy("Password1", {})).toThrow(PasswordPolicyError);
     expect(() => assertPasswordPolicy("Password1!", {})).not.toThrow();
   });
 
-  test("requireUppercase, requireLowercase, and requireSymbol can be turned off", () => {
+  test("DEFAULT_PASSWORD_POLICY separates upper, lower, and requireSpecial", () => {
+    const resolved = resolvePasswordPolicy(DEFAULT_PASSWORD_POLICY);
+    expect(resolved.minLength).toBe(8);
+    expect(resolved.requireLetter).toBe(true);
+    expect(resolved.requireNumber).toBe(true);
+    expect(resolved.requireUppercase).toBe(true);
+    expect(resolved.requireLowercase).toBe(true);
+    expect(resolved.requireSpecial).toBe(true);
+
+    expect(() => assertPasswordPolicy("password1!", DEFAULT_PASSWORD_POLICY)).toThrow(
+      /requireUppercase/,
+    );
+    expect(() => assertPasswordPolicy("PASSWORD1!", DEFAULT_PASSWORD_POLICY)).toThrow(
+      /requireLowercase/,
+    );
+  });
+
+  test("rejects password missing ONLY a special character (Global + Console)", () => {
+    // Global: length 8+, upper, lower, number — no special.
+    const globalOnlyMissingSpecial = "Password1";
+    expect(globalOnlyMissingSpecial.length).toBeGreaterThanOrEqual(DEFAULT_PASSWORD_POLICY.minLength);
+    expect(/[A-Z]/.test(globalOnlyMissingSpecial)).toBe(true);
+    expect(/[a-z]/.test(globalOnlyMissingSpecial)).toBe(true);
+    expect(/\d/.test(globalOnlyMissingSpecial)).toBe(true);
+    expect(/[^A-Za-z0-9]/.test(globalOnlyMissingSpecial)).toBe(false);
+    expect(() => assertPasswordPolicy(globalOnlyMissingSpecial, DEFAULT_PASSWORD_POLICY)).toThrow(
+      PasswordPolicyError,
+    );
+    try {
+      assertPasswordPolicy(globalOnlyMissingSpecial, DEFAULT_PASSWORD_POLICY);
+    } catch (err) {
+      expect(err).toBeInstanceOf(PasswordPolicyError);
+      expect((err as PasswordPolicyError).reasons).toEqual(["requireSpecial"]);
+    }
+
+    // Console: length 12+, upper, lower, number — no special.
+    const consoleOnlyMissingSpecial = "Password1234";
+    expect(consoleOnlyMissingSpecial.length).toBeGreaterThanOrEqual(CONSOLE_PASSWORD_POLICY.minLength);
+    expect(/[A-Z]/.test(consoleOnlyMissingSpecial)).toBe(true);
+    expect(/[a-z]/.test(consoleOnlyMissingSpecial)).toBe(true);
+    expect(/\d/.test(consoleOnlyMissingSpecial)).toBe(true);
+    expect(/[^A-Za-z0-9]/.test(consoleOnlyMissingSpecial)).toBe(false);
+    expect(() => assertPasswordPolicy(consoleOnlyMissingSpecial, CONSOLE_PASSWORD_POLICY)).toThrow(
+      PasswordPolicyError,
+    );
+    try {
+      assertPasswordPolicy(consoleOnlyMissingSpecial, CONSOLE_PASSWORD_POLICY);
+    } catch (err) {
+      expect(err).toBeInstanceOf(PasswordPolicyError);
+      expect((err as PasswordPolicyError).reasons).toEqual(["requireSpecial"]);
+    }
+  });
+
+  test("requireUppercase, requireLowercase, and requireSpecial can be turned off", () => {
     const loose = {
       minLength: 8,
       requireUppercase: false,
       requireLowercase: false,
-      requireSymbol: false,
+      requireSpecial: false,
       requireLetter: true,
       requireNumber: true,
     };
     expect(() => assertPasswordPolicy("password1", loose)).not.toThrow();
     expect(() => assertPasswordPolicy("PASSWORD1", loose)).not.toThrow();
+  });
+
+  test("ui-next checklist criteria match Console server validation exactly", () => {
+    const rules = evaluateConsolePasswordRules("");
+    expect(rules.map((r) => r.id)).toEqual([
+      "length",
+      "uppercase",
+      "lowercase",
+      "number",
+      "special",
+    ]);
+    expect(rules.find((r) => r.id === "length")?.label).toBe(
+      `At least ${CONSOLE_PASSWORD_POLICY.minLength} characters`,
+    );
+    expect(CONSOLE_PASSWORD_POLICY.minLength).toBe(12);
+    expect(CONSOLE_PASSWORD_POLICY.requireSpecial).toBe(true);
+
+    const samples = [
+      "",
+      "short",
+      "password1234",
+      "Password1234",
+      "PASSWORD1234!",
+      "Password!!!!!",
+      "Password12!!",
+      "CorrectHorse1!",
+    ];
+    for (const password of samples) {
+      const allMet = evaluateConsolePasswordRules(password).every((rule) => rule.met);
+      const serverOk = consolePasswordMeetsPolicy(password);
+      expect(allMet).toBe(serverOk);
+      if (serverOk) {
+        expect(() => assertPasswordPolicy(password, CONSOLE_PASSWORD_POLICY)).not.toThrow();
+      } else {
+        expect(() => assertPasswordPolicy(password, CONSOLE_PASSWORD_POLICY)).toThrow(
+          PasswordPolicyError,
+        );
+      }
+    }
   });
 
   test("createOperator rejects weak passwords by default without passwordPolicy", async () => {

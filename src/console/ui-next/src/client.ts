@@ -1,6 +1,6 @@
 /**
- * Thin Console client for ui-next Phase 1 — setup status + claim only.
- * Same-origin `/console/*` against the real Console kernel (no mocks).
+ * Thin Console client for ui-next — setup + session login against the real kernel.
+ * Same-origin `/console/*` (no mocks).
  */
 
 /** Session access token key (matches current Console SPA). */
@@ -9,7 +9,7 @@ export const ACCESS_TOKEN_KEY = "oke_console_at";
 let accessToken: string | null = null;
 
 /**
- * Store the operator access token after a successful claim.
+ * Store the operator access token after a successful claim or login.
  *
  * @param token - Access token or null to clear
  */
@@ -63,14 +63,25 @@ export type SetupClaimInput = {
   readonly password: string;
 };
 
-/** Claim success payload (matches server SessionOut). */
-export type SetupClaimResult = {
+/**
+ * Session success payload (claim + login — matches server SessionOut).
+ */
+export type SessionOut = {
   readonly operatorId: string;
   readonly email: string;
   readonly name: string;
   readonly accessToken: string;
   readonly refreshToken: string;
   readonly accessExpiresAt: number;
+};
+
+/** Claim success payload alias (matches server SessionOut). */
+export type SetupClaimResult = SessionOut;
+
+/** Login request body (matches server LoginIn). */
+export type SessionLoginInput = {
+  readonly email: string;
+  readonly password: string;
 };
 
 /**
@@ -86,6 +97,9 @@ export function clientErrorText(error: ConsoleApiError): string {
     const data = error.data as { message?: unknown; reason?: unknown };
     if (typeof data.message === "string" && data.message.trim().length > 0) {
       return data.message;
+    }
+    if (typeof data.reason === "string" && data.reason.trim().length > 0) {
+      return data.reason;
     }
   }
   return error.code;
@@ -117,8 +131,22 @@ export async function setupStatus(): Promise<ConsoleApiResult<SetupStatus>> {
  */
 export async function setupClaim(
   body: SetupClaimInput,
-): Promise<ConsoleApiResult<SetupClaimResult>> {
-  return consoleFetch<SetupClaimResult>("/console/setup/claim", {
+): Promise<ConsoleApiResult<SessionOut>> {
+  return consoleFetch<SessionOut>("/console/setup/claim", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/session/login
+ *
+ * @param body - Email + password
+ */
+export async function sessionLogin(
+  body: SessionLoginInput,
+): Promise<ConsoleApiResult<SessionOut>> {
+  return consoleFetch<SessionOut>("/console/session/login", {
     method: "POST",
     body: JSON.stringify(body),
   });

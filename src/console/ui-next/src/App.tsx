@@ -1,5 +1,5 @@
 /**
- * ui-next root — Phase 1 setup claim gate only.
+ * ui-next root — setup claim when open, operator login when closed.
  */
 
 import { ClaimPage } from "./features/setup/claim-page.tsx";

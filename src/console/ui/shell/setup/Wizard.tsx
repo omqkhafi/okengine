@@ -131,7 +131,7 @@ export function SetupWizard() {
             required
           />
         </Field>
-        <Field label="Password" hint="At least 12 characters, with a letter and a number.">
+        <Field label="Password" hint="At least 12 characters, with uppercase, lowercase, a number, and a special character.">
           <Input
             name="password"
             type="password"

@@ -1,6 +1,6 @@
 /**
- * First-admin claim page — real GET/POST /console/setup/* wiring.
- * Phase 1: claim + closed + success only (no login, no shell panels).
+ * Setup gate — claim when open; real login when closed (Phase 2).
+ * No Shell/sidebar yet — claim + login success stay in-page.
  */
 
 import { useForm } from "@tanstack/react-form";
@@ -12,8 +12,9 @@ import {
   setAccessToken,
   setupClaim,
   setupStatus,
-  type SetupClaimResult,
+  type SessionOut,
 } from "../../client.ts";
+import { LoginForm } from "@/features/auth/login-form";
 import { AuthCard, AuthCardSkeleton } from "@/components/auth-card";
 import { ConsoleChrome } from "@/components/console-chrome";
 import { PasswordInput } from "@/components/password-input";
@@ -65,11 +66,11 @@ function SetupFrame({ children }: { children: ReactNode }) {
 }
 
 /**
- * Setup / claim gate for ui-next Phase 1.
+ * Setup / claim / login gate for ui-next.
  */
 export function ClaimPage() {
   const qc = useQueryClient();
-  const [claimed, setClaimed] = useState<SetupClaimResult | null>(null);
+  const [claimed, setClaimed] = useState<SessionOut | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const status = useQuery({
@@ -160,11 +161,7 @@ export function ClaimPage() {
   if (status.data?.setupClosed) {
     return (
       <SetupFrame>
-        <AuthCard title="Setup closed" description="An operator already exists for this Console.">
-          <p className="text-sm text-muted-foreground">
-            Setup is closed. Sign in with an existing operator account.
-          </p>
-        </AuthCard>
+        <LoginForm />
       </SetupFrame>
     );
   }

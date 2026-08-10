@@ -223,7 +223,7 @@ export const app = oke({
 | `audience`                                  | `oke-app` | Audience stamped on access tokens                                              |
 | `emailAndPassword.enabled`                  | `false`   | Sign-up / sign-in email Flows                                                  |
 | `emailAndPassword.requireEmailVerification` | `false`   | Block sign-in until email is verified                                          |
-| `passwordPolicy`                            | secure\*  | `\*` minLength 8, letter + number + upper + lower + symbol; sign-up → `AuthFailed` / `password_policy` |
+| `passwordPolicy`                            | secure\*  | `\*` minLength 8, letter + number + upper + lower + special (`requireSpecial`); sign-up → `AuthFailed` / `password_policy` |
 | `breachCheck`                               | unset     | `(password) => Promise<boolean>` — `true` rejects as `password_breached`       |
 | `session.freshAgeMs`                        | 24h       | Window for step-up `auth.fresh` policy                                         |
 | `session.accessTtlMs` / `refreshTtlMs`      | 14m / 30d | Access / refresh lifetimes                                                     |

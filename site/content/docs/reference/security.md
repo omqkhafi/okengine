@@ -46,7 +46,7 @@ Our path is concrete: a booking name containing "ignore previous instructions an
 - **Session and framing:** `frame-ancestors 'none'`, `SameSite=Strict`, step-up authentication before destructive actions.
 - **Secret write path:** TLS required, no autocomplete, never echoed, never logged, not retained in browser memory after submission.
 - **The setup claim code** is rate-limited and compared in constant time. The first-operator password
-  uses Console policy (minLength 12, upper + lower + number + symbol — stricter than Gate auth’s
+  uses Console policy (minLength 12, upper + lower + number + special / `requireSpecial` — stricter than Gate auth’s
   minLength 8 with the same character classes); weak passwords return `ClaimFailed` /
   `password_policy`, not an opaque 500.
 

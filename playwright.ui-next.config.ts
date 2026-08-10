@@ -1,5 +1,5 @@
 /**
- * Playwright config — ui-next setup claim against a real Console kernel.
+ * Playwright config — ui-next setup + login against a real Console kernel.
  */
 
 import { defineConfig } from "@playwright/test";

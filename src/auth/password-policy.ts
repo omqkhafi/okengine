@@ -2,6 +2,9 @@
  * Password policy — length + character-class rules (never weaker defaults).
  */
 
+/** Non-alphanumeric special character (any Unicode letter/digit excluded via ASCII class). */
+const SPECIAL_CHAR_RE = /[^A-Za-z0-9]/;
+
 /** Options for {@link assertPasswordPolicy}. */
 export interface PasswordPolicyOptions {
   /** Minimum length (default {@link DEFAULT_PASSWORD_MIN_LENGTH}). */
@@ -14,8 +17,8 @@ export interface PasswordPolicyOptions {
   readonly requireUppercase?: boolean;
   /** Require at least one lowercase letter (default true). */
   readonly requireLowercase?: boolean;
-  /** Require at least one non-alphanumeric symbol (default true). */
-  readonly requireSymbol?: boolean;
+  /** Require at least one non-alphanumeric special character (default true). */
+  readonly requireSpecial?: boolean;
 }
 
 /** Resolved policy with defaults applied. */
@@ -25,7 +28,7 @@ export interface ResolvedPasswordPolicy {
   readonly requireNumber: boolean;
   readonly requireUppercase: boolean;
   readonly requireLowercase: boolean;
-  readonly requireSymbol: boolean;
+  readonly requireSpecial: boolean;
 }
 
 /** Default minimum password length (global / Gate auth). */
@@ -41,7 +44,7 @@ export const DEFAULT_PASSWORD_POLICY = {
   requireNumber: true,
   requireUppercase: true,
   requireLowercase: true,
-  requireSymbol: true,
+  requireSpecial: true,
 } as const satisfies Required<PasswordPolicyOptions>;
 
 /**
@@ -56,8 +59,17 @@ export function resolvePasswordPolicy(options: PasswordPolicyOptions = {}): Reso
     requireNumber: options.requireNumber ?? DEFAULT_PASSWORD_POLICY.requireNumber,
     requireUppercase: options.requireUppercase ?? DEFAULT_PASSWORD_POLICY.requireUppercase,
     requireLowercase: options.requireLowercase ?? DEFAULT_PASSWORD_POLICY.requireLowercase,
-    requireSymbol: options.requireSymbol ?? DEFAULT_PASSWORD_POLICY.requireSymbol,
+    requireSpecial: options.requireSpecial ?? DEFAULT_PASSWORD_POLICY.requireSpecial,
   };
+}
+
+/**
+ * Whether `password` contains a non-alphanumeric special character.
+ *
+ * @param password - Plaintext
+ */
+export function passwordHasSpecial(password: string): boolean {
+  return SPECIAL_CHAR_RE.test(password);
 }
 
 /**
@@ -84,8 +96,8 @@ export function assertPasswordPolicy(password: string, options: PasswordPolicyOp
   if (policy.requireNumber && !/\d/.test(password)) {
     reasons.push("requireNumber");
   }
-  if (policy.requireSymbol && !/[^A-Za-z0-9]/.test(password)) {
-    reasons.push("requireSymbol");
+  if (policy.requireSpecial && !passwordHasSpecial(password)) {
+    reasons.push("requireSpecial");
   }
   if (reasons.length > 0) {
     throw new PasswordPolicyError(reasons);

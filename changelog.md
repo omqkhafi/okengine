@@ -15,8 +15,10 @@ needed).
 ### 💥 Breaking Changes
 
 - Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
-  special character required (`DEFAULT_PASSWORD_POLICY`). Previous defaults were minLength 12 with
-  letter + number only. Override via `gate.auth.passwordPolicy` / `createOperator({ passwordPolicy })`.
+  special character required (`DEFAULT_PASSWORD_POLICY.requireSpecial`). Previous defaults were
+  minLength 12 with letter + number only. Override via `gate.auth.passwordPolicy` /
+  `createOperator({ passwordPolicy })`. The special-character option is named `requireSpecial`
+  (failure reason `requireSpecial`); do not use `requireSymbol` on password policies.
 
 ### ♻️ Changed
 
@@ -29,11 +31,20 @@ needed).
 
 ### 🐛 Fixed
 
+- Password policy special-character rule is canonical as `requireSpecial` on both
+  `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
+  password missing only a special is rejected and that ui-next’s 5 checklist criteria match
+  server validation.
 - Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
   `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
 
 ### ✨ Added
 
+
+- ui-next operator login when setup is closed: Email + Password (TanStack Form + Zod +
+  shadcn Field) posts to real `POST /console/session/login`, stores `oke_console_at` on
+  success, and surfaces `AuthFailed` / `AuthRateLimited` errors. Same ConsoleChrome
+  shell as claim; no Shell/sidebar yet. Gate extended in `test:console:setup-ui-next`.
 
 - Parallel Console SPA scaffold at `src/console/ui-next/` (React + Vite + shadcn/Base UI +
   TanStack Form/Query + HugeIcons) with a real first-admin claim page wired to
