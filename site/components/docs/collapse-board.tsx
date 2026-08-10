@@ -1,10 +1,11 @@
 /**
  * Collapse board — the compact, docs-side telling of the integration curve.
  *
- * The landing page carries the full stepped CollapseDiagram; docs get one
- * look instead: the same forty concerns on the same ring twice. Left, the
- * zoo — every seam drawn, 136 of them. Right, the collapse — each concern
- * spoked to its element, each element trunked once to the law, 48 edges.
+ * The landing page carries the full stepped CollapseDiagram with both rings
+ * side by side; docs get one look instead: the same forty concerns on the
+ * same ring twice. Left, the zoo — every seam drawn, 136 of them. Right, the
+ * collapse — each concern spoked to its element, each element trunked once to
+ * the law, 48 edges.
  *
  * One live beat carries the argument: a change feed picks a concern
  * (deterministic hash, never Math.random — the server renders beat zero too)

@@ -2,15 +2,16 @@
  * Collapse diagram — the integration curve, stepped one element's worth of
  * concerns at a time.
  *
- * Both tabs add the same concerns in the same order: every concern the §5 table
- * says the eight elements replace, all forty of them. In "the zoo" a concern
- * lands on the several concerns already present that it genuinely has to know
- * about — the curated seams in `lib/zoo-graph.ts`, not a complete graph — so
- * the seams you own outgrow the concerns you added. In "okengine" a concern
- * attaches to its element and the element is bound once to the law, so one
- * spoke arrives and the trunk is already there. Stepping through both with the
- * same readout is the argument, and every number on screen is counted from the
- * seam data rather than from a formula.
+ * Both shapes add the same concerns in the same order: every concern the §5
+ * table says the eight elements replace, all forty of them. In "the zoo" a
+ * concern lands on the several concerns already present that it genuinely has
+ * to know about — the curated seams in `lib/zoo-graph.ts`, not a complete
+ * graph — so the seams you own outgrow the concerns you added. In "okengine" a
+ * concern attaches to its element and the element is bound once to the law, so
+ * one spoke arrives and the trunk is already there. Both rings sit side by
+ * side on one shared step index — the argument is the contrast, not a tab
+ * flip — and every number on screen is counted from the seam data rather than
+ * from a formula.
  *
  * Pacing: one step per element, eight in all, which is the argument's own unit
  * — the zoo takes on a cluster of concerns while the hub side takes on exactly
@@ -30,11 +31,12 @@
  *
  * Two live layers carry the argument without the user touching anything.
  * Hovering any node lights only its own seams — two to fifteen of them in the
- * zoo, always two here. While idle, a change feed jumps around the ring: each
- * beat lights a small real-world operation — a few concerns on different
- * elements at once — and costs that bundle in both shapes. The jump is a
- * deterministic hash of the beat index, never `Math.random`: the server renders
- * beat zero too, and a different pick in the browser is a hydration mismatch.
+ * zoo, always two here — on both rings at once. While idle, a change feed jumps
+ * around the ring: each beat lights a small real-world operation — a few
+ * concerns on different elements at once — and costs that bundle in both
+ * shapes. The jump is a deterministic hash of the beat index, never
+ * `Math.random`: the server renders beat zero too, and a different pick in the
+ * browser is a hydration mismatch.
  *
  * Concept inspired by stepped "problem space" diagrams common on backend
  * framework marketing sites (see site/NOTICE); geometry, markup, interaction,
@@ -46,7 +48,7 @@
  * staggered within the arriving arc so a step reads as a fan. The travelling
  * dash of a change is CSS (`stroke-dashoffset` on a path with SVG
  * `pathLength={1}`), not Framer — `pathOffset` left a frozen fleck on the lit
- * seams. Switching tabs crossfades the two shapes in place.
+ * seams.
  *
  * Performance note: the mesh is 136 lines. Drawn the way the rest of the
  * diagram is — one `motion.line` per seam, with the hover state in `animate` —
@@ -57,9 +59,8 @@
  * SVG: `SeamMesh` is memoised on the step and knows nothing about the pointer,
  * a hover dims it with one style write on its wrapper, and the light is a
  * separate overlay of at most fifteen lines. That took the same 4× sweep to a
- * 50 ms p95 in dev and 34 ms in a production build, where the whole pass and
- * the tab crossfade hold 60 fps. Everything else — nodes, spokes, trunks,
- * traces, the crossfade, the counter — is still Framer, which is comfortable
+ * 50 ms p95 in dev and 34 ms in a production build. Everything else — nodes,
+ * spokes, trunks, traces, the counter — is still Framer, which is comfortable
  * at those counts.
  *
  * SVG note: colours and sizes are presentation attributes bound to Fumadocs
@@ -76,7 +77,6 @@
 
 import {
   animate,
-  AnimatePresence,
   motion,
   MotionConfig,
   useMotionValue,
@@ -539,22 +539,10 @@ function captionFor(tab: TabId, step: number): string {
   return `+ ${arrived} → ${group.element} — ${spokes} spokes and 1 trunk, ${total} edges in total.`;
 }
 
-/**
- * What one change to `index` costs: every seam that concern owns in the zoo, or
- * its spoke plus the trunk its element already holds.
- *
- * @param tab - Which shape is showing
- * @param index - Ring position of the changed concern
- * @param visible - Concerns present at the current step
- */
-function changeCost(tab: TabId, index: number, visible: number): number {
-  return tab === "zoo" ? zooDegree(index, visible) : TREE_CHANGE_COST;
-}
-
 /** One label/value line of the readout. */
 type ReadoutRow = { readonly label: string; readonly value: string };
 
-/** What the readout column reports: the beat, the hovered node, or the step. */
+/** What the shared readout reports: the beat, the hovered node, or the step. */
 type Readout = {
   readonly mode: "live" | "hover" | "step";
   readonly progress: string | null;
@@ -563,17 +551,16 @@ type Readout = {
 };
 
 /**
- * The readout, in priority order: a hover always wins, then the change feed,
- * then the step that is on screen.
+ * The shared readout under both rings, in priority order: a hover always wins,
+ * then the change feed, then the step that is on screen. Every mode names both
+ * costs — that contrast is the whole reason the rings sit side by side.
  *
- * @param tab - Which shape is showing
  * @param visible - Concerns present at the current step
  * @param step - Current step index
  * @param hover - Hovered node, if any
  * @param beat - Current change-feed beat, if the feed is running
  */
 function readoutFor(
-  tab: TabId,
   visible: number,
   step: number,
   hover: Hover | null,
@@ -588,7 +575,7 @@ function readoutFor(
       progress: null,
       rows: [
         { label: "element", value: hover.name },
-        { label: "edges", value: `${owned.length + 1}` },
+        { label: "spokes + trunk", value: `${owned.length + 1}` },
         { label: "subsumes", value: labels.join(" · ") },
       ],
       note: `${hover.name} subsumes ${labels.join(" · ")} — ${owned.length} spoke${s(owned.length)} and one trunk to the law.`,
@@ -597,9 +584,9 @@ function readoutFor(
 
   if (hover?.kind === "concern") {
     const concern = CONCERNS[hover.index]!;
-    const cost = changeCost(tab, hover.index, visible);
+    const zooCost = zooDegree(hover.index, visible);
     // The busiest node owns fifteen seams, and fifteen labels would reflow the
-    // column under the pointer, so the note names a few and counts the rest.
+    // strip under the pointer, so the note names a few and counts the rest.
     const named = wiredTo(hover.index, visible);
     const seams =
       named.length > 4
@@ -610,65 +597,49 @@ function readoutFor(
       progress: null,
       rows: [
         { label: "node", value: concern.text },
-        { label: tab === "zoo" ? "seams" : "edges", value: `${cost}` },
+        { label: "zoo seams", value: `${zooCost}` },
+        { label: "oke edges", value: `${TREE_CHANGE_COST}` },
         {
-          label: tab === "zoo" ? "wired to" : "element",
+          label: "wired to",
           value:
-            tab === "zoo"
-              ? named.length > 3
-                ? `${named.slice(0, 3).join(" · ")} +${named.length - 3}`
-                : named.join(" · ")
-              : concern.element,
+            named.length > 3
+              ? `${named.slice(0, 3).join(" · ")} +${named.length - 3}`
+              : named.join(" · "),
         },
       ],
-      note:
-        tab === "zoo"
-          ? `${concern.text} is wired to ${seams} — ${cost} seam${s(cost)} to keep in sync.`
-          : `${concern.text} → ${concern.element} — 2 edges: one spoke, and a trunk ${concern.element} already owns.`,
+      note: `${concern.text} is wired to ${seams} — ${zooCost} seam${s(zooCost)} in the zoo, always ${TREE_CHANGE_COST} edges via ${concern.element}.`,
     };
   }
 
   if (beat) {
     const labels = beat.concerns.map((index) => CONCERNS[index]!.text);
-    const cost = beat.concerns.reduce((sum, index) => sum + changeCost(tab, index, visible), 0);
-    const elements = [...new Set(beat.concerns.map((index) => CONCERNS[index]!.element))];
-    // The worst one change can cost in this shape — always two on the hub side,
-    // which is the whole point of the comparison.
-    const busiest = tab === "zoo" ? zooBusiest(visible) : null;
+    const zooCost = beat.concerns.reduce((sum, index) => sum + zooDegree(index, visible), 0);
+    const hubCost = beat.concerns.length * TREE_CHANGE_COST;
+    const busiest = zooBusiest(visible);
     return {
       mode: "live",
       progress: `op ${beat.index + 1}`,
       rows: [
         { label: "changed", value: labels.join(" · ") },
-        { label: "edges re-checked", value: `${cost}` },
-        {
-          label: tab === "zoo" ? "busiest node" : "elements",
-          value: busiest
-            ? `${busiest.label} · ${busiest.seams}`
-            : `${elements.join(" · ")} · ${TREE_CHANGE_COST} each`,
-        },
+        { label: "zoo re-checks", value: `${zooCost}` },
+        { label: "oke re-checks", value: `${hubCost}` },
+        { label: "busiest node", value: `${busiest.label} · ${busiest.seams}` },
       ],
-      note:
-        tab === "zoo"
-          ? `Change ${listOf(labels)} and ${cost} seams have to be re-checked.`
-          : `Change ${listOf(labels)} — ${beat.concerns.length} spoke${s(beat.concerns.length)} across ${elements.join(", ")}, each element already bound to the law.`,
+      note: `Change ${listOf(labels)} — ${zooCost} seams in the zoo, ${hubCost} edges here.`,
     };
   }
 
   const group = groupAt(step);
-  const total = tab === "zoo" ? zooSeamCount(visible) : treeEdgeCount(visible);
   return {
     mode: "step",
     progress: `step ${step + 1} / ${LAST_STEP + 1}`,
     rows: [
       { label: "added", value: `${group.element} · ${group.end - group.start}` },
-      { label: tab === "zoo" ? "seams" : "edges", value: `${total}` },
-      {
-        label: tab === "zoo" ? "if each changed once" : "trunks",
-        value: tab === "zoo" ? `${zooPassCost(visible)}` : `${step + 1}`,
-      },
+      { label: "zoo seams", value: `${zooSeamCount(visible)}` },
+      { label: "oke edges", value: `${treeEdgeCount(visible)}` },
+      { label: "if each changed once", value: `${zooPassCost(visible)} → ${TREE_CHANGE_COST}` },
     ],
-    note: "Hover any node, or let the feed cost a small multi-element operation.",
+    note: "Hover any node on either ring — both shapes light the same change.",
   };
 }
 
@@ -695,24 +666,13 @@ function dashedSeams(beat: Beat, visible: number): ReadonlyMap<string, number> {
   return lanes;
 }
 
-const TABS: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
-  { id: "zoo", label: "the zoo" },
-  { id: "okengine", label: "okengine" },
+const PROSE: ReadonlyArray<string> = [
+  `All ${TOTAL} concerns the eight elements replace, straight off the unified theory's §5 table — each its own tool, client, and config. An edge is drawn only where two concerns genuinely meet: a credential, an invalidation, an ordering, a delivery.`,
+  `That is still ${zooSeamCount(TOTAL)} seams you own on the left — or ${treeEdgeCount(TOTAL)} edges on the right, once every concern belongs to an element bound once to the law. Concern ${TOTAL + 1} adds one edge and no new element; effects stay inferred from what the flow touches through fx.`,
 ];
 
-const PROSE: Readonly<Record<TabId, ReadonlyArray<string>>> = {
-  zoo: [
-    `All ${TOTAL} concerns the eight elements replace, straight off the unified theory's §5 table — each its own tool, client, and config.`,
-    `An edge is drawn only where two concerns genuinely meet: a credential, an invalidation, an ordering, a delivery. That is still ${zooSeamCount(TOTAL)} seams you own, and a trace that stops at every one of them.`,
-  ],
-  okengine: [
-    `The same ${TOTAL} concerns, collapsed. A concern belongs to an element; the element is bound once to the law.`,
-    `Concern ${TOTAL + 1} adds one edge and no new element — the set of eight is closed — and effects stay inferred from what the flow touches through fx.`,
-  ],
-};
-
-/** Both shapes share the square cell, so a tab switch can crossfade in place. */
-const PANEL_SVG = "absolute inset-0 size-full";
+/** Each ring owns its own square cell. */
+const PANEL_SVG = "size-full";
 
 /** Advance of the mono face at the 11.5px label size, close enough to lay out a chip. */
 const LABEL_CHAR = 6.9;
@@ -1933,11 +1893,11 @@ function HubPanel({ visible, hover, onHover, reduced, beat }: PanelProps) {
 }
 
 /**
- * Stepped, tabbed contrast between the infrastructure zoo and the eight
- * elements: one counter grows quadratically, the other linearly.
+ * Stepped side-by-side contrast between the infrastructure zoo and the eight
+ * elements: one counter grows with the curated seams, the other with spokes
+ * and trunks.
  */
 export function CollapseDiagram() {
-  const [tab, setTab] = useState<TabId>("zoo");
   /** Open on the finished graph; Play / step controls still walk the pass. */
   const [step, setStep] = useState(LAST_STEP);
   const [playing, setPlaying] = useState(false);
@@ -1981,12 +1941,12 @@ export function CollapseDiagram() {
   }, []);
 
   const visible = visibleCount(shownStep);
-  const edges = tab === "zoo" ? zooSeamCount(visible) : treeEdgeCount(visible);
-  const Panel = tab === "zoo" ? ZooPanel : HubPanel;
+  const zooEdges = zooSeamCount(visible);
+  const hubEdges = treeEdgeCount(visible);
   const beat: Beat | null = feeding
     ? { index: tick, concerns: changedConcerns(tick, visible) }
     : null;
-  const readout = readoutFor(tab, visible, shownStep, hover, beat);
+  const readout = readoutFor(visible, shownStep, hover, beat);
 
   return (
     /*
@@ -1995,148 +1955,113 @@ export function CollapseDiagram() {
      * transform animates and warn under the OS preference.
      */
     <MotionConfig reducedMotion="never" transition={reduced ? INSTANT : FADE}>
-      <div className="@container w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-fd-border px-3 py-2.5 sm:px-4">
+      <div
+        className="@container w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
+        aria-label={`The collapse: ${TOTAL} infrastructure concerns as ${zooSeamCount(TOTAL)} hand-maintained seams on the left, or ${treeEdgeCount(TOTAL)} edges on eight elements bound once to the law on the right.`}
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-3 py-2.5 sm:px-4">
           <div className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
               className="size-2 shrink-0 rounded-full bg-fd-primary ring-2 ring-fd-border"
             />
-            <div className="relative h-4 w-20 shrink-0">
-              <AnimatePresence initial={false}>
-                <motion.span
-                  key={tab}
-                  initial={reduced ? false : { opacity: 0, y: 5 }}
-                  animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                  exit={reduced ? { opacity: 0 } : { opacity: 0, y: -5 }}
-                  className="absolute inset-0 font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase"
-                >
-                  {tab === "zoo" ? "the zoo" : "okengine"}
-                </motion.span>
-              </AnimatePresence>
-            </div>
+            <span className="font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+              the collapse
+            </span>
           </div>
-          <div
-            role="tablist"
-            aria-label="Backend shape"
-            className="flex max-w-full flex-wrap items-center gap-0.5 rounded-md border border-fd-border p-0.5"
-          >
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={item.id === tab}
-                onClick={() => {
-                  setTab(item.id);
-                  setHover(null);
-                }}
-                className={cn(
-                  "rounded px-2.5 py-1 font-mono text-[11px] transition-colors",
-                  item.id === tab
-                    ? "bg-fd-primary text-fd-primary-foreground"
-                    : "text-fd-muted-foreground hover:text-fd-foreground",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <code className="shrink-0 font-mono text-[11px] text-fd-muted-foreground tabular-nums">
+            <EdgeCount value={zooEdges} reduced={reduced} /> seams →{" "}
+            <EdgeCount value={hubEdges} reduced={reduced} /> edges
+          </code>
         </div>
 
-        {/* Stats column beside the ring only when the container is wide (homepage / large docs). */}
-        <div className="grid gap-px bg-fd-border @min-[48rem]:grid-cols-[minmax(0,1fr)_min(17rem,32%)]">
-          <div
-            className="min-w-0 bg-fd-card px-3 py-4 sm:px-6 sm:py-5"
-            onMouseLeave={() => setHover(null)}
+        <div
+          className="grid gap-px bg-fd-border @min-[42rem]:grid-cols-2"
+          onMouseLeave={() => setHover(null)}
+        >
+          <ShapeColumn
+            label="the zoo"
+            metricLabel="seams"
+            metric={<EdgeCount value={zooEdges} reduced={reduced} />}
+            concerns={visible}
+            caption={captionFor("zoo", shownStep)}
           >
-            {/* Square cell: both shapes are 420×420, so they crossfade in place. */}
-            <div className="relative mx-auto aspect-square w-full max-w-full @min-[36rem]:max-w-[36rem]">
-              <AnimatePresence initial={false}>
-                <Panel
-                  key={tab}
-                  visible={visible}
-                  hover={hover}
-                  onHover={onHover}
-                  reduced={reduced}
-                  beat={beat}
-                />
-              </AnimatePresence>
-            </div>
-          </div>
+            <ZooPanel
+              visible={visible}
+              hover={hover}
+              onHover={onHover}
+              reduced={reduced}
+              beat={beat}
+            />
+          </ShapeColumn>
 
-          <div className="flex flex-col gap-4 bg-fd-card px-4 py-5 sm:px-6">
-            <dl className="grid grid-cols-2 gap-4">
-              <div>
-                <dt className="font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
-                  concerns
-                </dt>
-                <dd className="mt-1 font-mono text-2xl leading-none font-medium text-fd-foreground">
-                  {visible}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
-                  {tab === "zoo" ? "seams" : "edges"}
-                </dt>
-                <dd className="mt-1 font-mono text-3xl leading-none font-medium text-fd-foreground">
-                  <EdgeCount value={edges} reduced={reduced} />
-                </dd>
-              </div>
+          <ShapeColumn
+            label="okengine"
+            metricLabel="edges"
+            metric={<EdgeCount value={hubEdges} reduced={reduced} />}
+            concerns={visible}
+            caption={captionFor("okengine", shownStep)}
+          >
+            <HubPanel
+              visible={visible}
+              hover={hover}
+              onHover={onHover}
+              reduced={reduced}
+              beat={beat}
+            />
+          </ShapeColumn>
+        </div>
+
+        {/*
+         * Same 2-col + gap-px seam as the rings above, so the live strip and
+         * prose sit under the zoo / okengine columns instead of drifting past
+         * the center line with a different fraction grid.
+         */}
+        <div className="grid gap-px border-t border-fd-border bg-fd-border @min-[42rem]:grid-cols-2">
+          <div className="flex flex-col gap-2 bg-fd-card px-3 py-4 sm:px-5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    readout.mode === "live"
+                      ? "animate-pulse bg-fd-primary"
+                      : "bg-fd-muted-foreground/40",
+                  )}
+                />
+                {readout.mode}
+              </span>
+              {readout.progress ? (
+                <span className="font-mono text-[10px] text-fd-muted-foreground/70 tabular-nums">
+                  {readout.progress}
+                </span>
+              ) : null}
+            </div>
+
+            <dl className="flex flex-col gap-1">
+              {readout.rows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-baseline justify-between gap-3 font-mono text-[11px]"
+                >
+                  <dt className="text-fd-muted-foreground">{row.label}</dt>
+                  <dd className="truncate text-fd-foreground tabular-nums">{row.value}</dd>
+                </div>
+              ))}
             </dl>
 
-            <p
-              aria-live="polite"
-              className="border-t border-fd-border pt-3 text-sm leading-snug text-fd-foreground"
-            >
-              {captionFor(tab, shownStep)}
+            <p className="min-h-8 text-xs leading-relaxed text-fd-muted-foreground">
+              {readout.note}
             </p>
+          </div>
 
-            <div className="flex flex-col gap-2 border-t border-fd-border pt-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] text-fd-muted-foreground/70 uppercase">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      readout.mode === "live"
-                        ? "animate-pulse bg-fd-primary"
-                        : "bg-fd-muted-foreground/40",
-                    )}
-                  />
-                  {readout.mode}
-                </span>
-                {readout.progress ? (
-                  <span className="font-mono text-[10px] text-fd-muted-foreground/70 tabular-nums">
-                    {readout.progress}
-                  </span>
-                ) : null}
-              </div>
-
-              <dl className="flex flex-col gap-1">
-                {readout.rows.map((row) => (
-                  <div
-                    key={row.label}
-                    className="flex items-baseline justify-between gap-3 font-mono text-[11px]"
-                  >
-                    <dt className="text-fd-muted-foreground">{row.label}</dt>
-                    <dd className="truncate text-fd-foreground tabular-nums">{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <p className="min-h-8 text-xs leading-relaxed text-fd-muted-foreground">
-                {readout.note}
+          <div className="flex flex-col gap-2 border-t border-fd-border bg-fd-card px-3 py-4 sm:px-5 @min-[42rem]:border-t-0">
+            {PROSE.map((line) => (
+              <p key={line} className="text-xs leading-relaxed text-fd-muted-foreground">
+                {line}
               </p>
-            </div>
-
-            <div className="flex flex-col gap-2 border-t border-fd-border pt-3">
-              {PROSE[tab].map((line) => (
-                <p key={line} className="text-xs leading-relaxed text-fd-muted-foreground">
-                  {line}
-                </p>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
 
@@ -2193,9 +2118,61 @@ export function CollapseDiagram() {
 }
 
 /**
+ * One ring column: label, square SVG, concern/edge counts, and the step caption.
+ *
+ * @param label - Shape name shown above the ring
+ * @param metricLabel - "seams" or "edges"
+ * @param metric - Animated counter for that metric
+ * @param concerns - Concerns present at the current step
+ * @param caption - Live caption for this shape at the current step
+ * @param children - ZooPanel or HubPanel
+ */
+function ShapeColumn({
+  label,
+  metricLabel,
+  metric,
+  concerns,
+  caption,
+  children,
+}: {
+  label: string;
+  metricLabel: string;
+  metric: ReactNode;
+  concerns: number;
+  caption: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 bg-fd-card px-3 py-4 sm:px-5 sm:py-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[11px] tracking-[0.14em] text-fd-muted-foreground uppercase">
+          {label}
+        </span>
+        <dl className="flex items-baseline gap-3 font-mono text-[11px] tabular-nums">
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-fd-muted-foreground/70">concerns</dt>
+            <dd className="text-fd-foreground">{concerns}</dd>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <dt className="text-fd-muted-foreground/70">{metricLabel}</dt>
+            <dd className="text-base leading-none font-medium text-fd-foreground">{metric}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="mx-auto aspect-square w-full max-w-[28rem]">{children}</div>
+
+      <p aria-live="polite" className="text-sm leading-snug text-fd-foreground">
+        {caption}
+      </p>
+    </div>
+  );
+}
+
+/**
  * The connection counter, rolled rather than swapped: the whole argument is
  * that one of these two numbers climbs far faster than the other, so the climb
- * is worth watching — and switching tabs rolls it back down again.
+ * is worth watching side by side.
  *
  * The rolled value never re-renders React; the motion value writes the text
  * node itself.

@@ -36,6 +36,7 @@ needed).
 - ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
 - ui-next sidebar toggle lives in the sidebar header (end when expanded; logo→trigger on hover when collapsed). Brand/trigger swap uses Motion springs (respects reduced motion).
 - ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
+- Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
 
 ### 🐛 Fixed
 
