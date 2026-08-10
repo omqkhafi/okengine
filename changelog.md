@@ -12,6 +12,22 @@ needed).
 
 ## Unreleased
 
+### ♻️ Changed
+
+- llama.cpp entrypoint now lands in `.oke/llama-entrypoint.py` (generated /
+  gitignored) instead of `docker/` — app trees stay TypeScript-only; compose
+  mounts `../.oke/…`. Stale `docker/llama-entrypoint.py` is pruned on derive.
+- OKE1008 / OKE1009 copy now says `dev+compose/prod` (ConfigEnv collapse),
+  matching the boot warn strings.
+
+### 🐛 Fixed
+
+- `createTestApp` again forces in-process memory SQL (and drops the per-harness
+  on-disk PGLite datadir). After v0.11 made `STORE_SQL_DEFAULTS.test` PGLite,
+  kernel tests that insert via the harness were paying cold WASM+pgvector init
+  (~5s) and timing out — dialect tests still opt into PGLite via
+  `boot.config.drivers.store.sql`.
+
 ## v0.11.1 — 2026-08-09
 
 ### ♻️ Changed

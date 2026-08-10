@@ -18,6 +18,7 @@ import { buildCaddyfile } from "./recipes/caddy.ts";
 import {
   buildLlamaCppEntrypoint,
   LLAMA_CPP_ENTRYPOINT_FILE,
+  LLAMA_CPP_ENTRYPOINT_HOST_PATH,
   llamaCpp,
 } from "./recipes/llama-cpp.ts";
 import { buildPgDogToml, buildPgDogUsersToml, PGDOG_CONFIG_DIR } from "./recipes/pgdog.ts";
@@ -84,8 +85,10 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
 }
 
 /**
- * Emit `llama-entrypoint.sh` when the AI role is llama.cpp so first boot can
- * Hub-pull then serve single-model (router `--docker-repo` hangs on b10290+).
+ * Emit `.oke/llama-entrypoint.py` (path relative to compose dir) when the AI
+ * role is llama.cpp so first boot can Hub-pull then serve single-model
+ * (router `--docker-repo` hangs on b10290+). Kept out of `docker/` so app
+ * trees stay TypeScript-only.
  *
  * @param specs - Normalised services
  */
@@ -94,7 +97,7 @@ function llamaCppEntrypointFiles(specs: DeriveResult["specs"]): GeneratedFile[] 
   if (!ai || !llamaCpp.match(ai.image)) return [];
   return [
     {
-      path: LLAMA_CPP_ENTRYPOINT_FILE,
+      path: LLAMA_CPP_ENTRYPOINT_HOST_PATH,
       content: buildLlamaCppEntrypoint(),
     },
   ];
@@ -173,6 +176,7 @@ export async function writeDerivedFiles(
   mkdirSync(root, { recursive: true });
   const keep = new Set(result.files.map((f) => f.path));
   pruneStaleGenerated(root, keep);
+  pruneLlamaEntrypoint(root, keep);
   for (const file of result.files) {
     const path = join(root, file.path);
     mkdirSync(dirname(path), { recursive: true });
@@ -196,10 +200,27 @@ const PRUNE_ROOT_FILES = new Set([
   "compose.all.yml",
   "compose.prod.yml",
   "Caddyfile",
+  // Legacy: entrypoint used to land in `docker/`; now `.oke/` only.
   LLAMA_CPP_ENTRYPOINT_FILE,
   "pgdog.toml",
   "users.toml",
 ]);
+
+/**
+ * Drop `.oke/llama-entrypoint.py` when the stack no longer uses llama.cpp.
+ *
+ * @param root - Compose directory (`docker/`)
+ * @param keep - Relative paths that will be rewritten
+ */
+function pruneLlamaEntrypoint(root: string, keep: ReadonlySet<string>): void {
+  if (keep.has(LLAMA_CPP_ENTRYPOINT_HOST_PATH)) return;
+  const abs = join(root, LLAMA_CPP_ENTRYPOINT_HOST_PATH);
+  try {
+    unlinkSync(abs);
+  } catch {
+    // absent or not a file
+  }
+}
 
 /**
  * Remove previously generated artefacts that the current layout no longer emits.

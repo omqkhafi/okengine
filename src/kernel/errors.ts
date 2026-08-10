@@ -144,19 +144,19 @@ export const OKE_ERRORS = {
   },
   /**
    * Flow has no declared `effects` and no Manifest-derived effects were
-   * available to stamp at boot (docker / prod — never a silent open token).
+   * available to stamp at boot (dev+compose / prod — never a silent open token).
    */
   NO_EFFECTS_DECLARED: {
     code: 1008,
     cause: 'Flow "{flow}" has no declared effects and no Manifest to derive them from.',
     fix:
       "Add explicit `effects` to this flow, or boot with a Manifest (`oke build`) / " +
-      "`rootDir` so effects can be derived. docker/prod refuse an open capability token.",
+      "`rootDir` so effects can be derived. dev+compose/prod refuse an open capability token.",
   },
   /**
    * A `src/flows/<unit>` folder exists on disk but no adopted flow carries
    * that unit — the generated `.adopt()` barrel (`src/flows/generated.ts`)
-   * is stale or was hand-edited. docker/prod — never a silently-incomplete
+   * is stale or was hand-edited. dev+compose / prod — never a silently-incomplete
    * route table in a deploy-shaped environment.
    */
   ADOPT_BARREL_STALE: {

@@ -14,9 +14,6 @@
  * ```
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   createMockAiDriver,
   createChannelInbox,
@@ -215,15 +212,26 @@ export async function createTestApp<App extends OkeApp>(
     return out;
   };
 
-  // Unique on-disk PGLite datadir per harness — `memory://` is not reliably
-  // isolated across boots in one worker (IF NOT EXISTS / row leaks).
-  const prevPgliteUrl = process.env.OKE_PGLITE_URL;
-  const pgliteDir = await mkdtemp(join(tmpdir(), "oke-pglite-"));
-  process.env.OKE_PGLITE_URL = pgliteDir;
+  // Harness contract is in-process memory SQL (same as vault/channel/ai/runs).
+  // Global `STORE_SQL_DEFAULTS.test` is PGLite for real app boots — do not inherit
+  // that here, or every insert pays cold WASM+pgvector init (~seconds). Dialects
+  // that need PGLite pass `boot.config.drivers.store.sql` explicitly.
+  const bootConfig = options.boot?.config;
+  const config = {
+    ...(bootConfig ?? {}),
+    drivers: {
+      ...(bootConfig?.drivers ?? {}),
+      store: {
+        ...(bootConfig?.drivers?.store ?? {}),
+        sql: bootConfig?.drivers?.store?.sql ?? { test: "memory" },
+      },
+    },
+  };
 
   await app.boot({
     ...(options.boot ?? {}),
     env: "test",
+    config,
     // Test-only opt-out (honoured because env is "test" below). Production
     // boots never skip posture via this flag.
     unguardedHttp: options.boot?.unguardedHttp ?? appOpts.gate?.unguardedHttp ?? "allow",
@@ -331,9 +339,6 @@ export async function createTestApp<App extends OkeApp>(
     },
     async close() {
       await app.bootResult?.close();
-      if (prevPgliteUrl === undefined) delete process.env.OKE_PGLITE_URL;
-      else process.env.OKE_PGLITE_URL = prevPgliteUrl;
-      await rm(pgliteDir, { recursive: true, force: true }).catch(() => undefined);
     },
   };
 
