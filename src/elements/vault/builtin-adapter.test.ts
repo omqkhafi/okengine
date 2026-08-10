@@ -3,9 +3,12 @@
  *
  * Runs against a real PGlite instance so the SQL (DDL, `bytea` round-trip,
  * `DISTINCT ON`, `jsonb`) is exercised rather than mocked.
+ *
+ * One warmed in-memory PGlite is shared for the whole file (cold WASM once);
+ * {@link resetVaultTables} isolates each test without a fresh `PGlite.create`.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { connectPglite } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
 import {
@@ -16,9 +19,21 @@ import {
 import { generateMasterKey, masterKeyToBase64 } from "./crypto.ts";
 import { isVaultError, VaultError } from "./errors.ts";
 import type { SqlExec } from "./storage.ts";
+import { resetVaultTables } from "./test-helpers.ts";
 
 const PATH = "prod/api/stripe";
 const VALUE = "sk_live_do_not_log_me";
+
+/** File-scoped warmed PGlite — opened in {@link beforeAll}. */
+let sharedConn: SqlConnection;
+
+beforeAll(async () => {
+  sharedConn = await connectPglite({ url: "memory://vault-adapter-shared" });
+});
+
+afterAll(async () => {
+  await sharedConn.close();
+});
 
 /**
  * Adapt a driver connection to the Vault's {@link SqlExec} surface.
@@ -29,7 +44,7 @@ function asExec(conn: SqlConnection): SqlExec {
   return sqlConnectionAsExec(conn);
 }
 
-/** An adapter over a fresh in-memory PGlite, plus its teardown. */
+/** An initialized, unsealed adapter over the shared PGlite, plus a no-op close. */
 interface Harness {
   readonly adapter: BuiltinVaultAdapter;
   readonly db: SqlExec;
@@ -38,13 +53,13 @@ interface Harness {
 }
 
 /**
- * Boot an initialized, unsealed adapter over a fresh PGlite instance.
+ * Boot an initialized, unsealed adapter over the shared PGlite (tables reset).
  *
  * @param options - Rewrap batch size for rotation tests
  */
 async function harness(options: { batchSize?: number } = {}): Promise<Harness> {
-  const conn = await connectPglite({ url: "memory://vault-test" });
-  const db = asExec(conn);
+  await resetVaultTables(sharedConn);
+  const db = asExec(sharedConn);
   const adapter = createBuiltinVaultAdapter({
     db,
     ...(options.batchSize === undefined ? {} : { kekRewrapBatchSize: options.batchSize }),
@@ -55,31 +70,29 @@ async function harness(options: { batchSize?: number } = {}): Promise<Harness> {
     adapter,
     db,
     masterKey: init.masterKey,
-    close: () => conn.close(),
+    async close() {
+      /* shared connection — closed in afterAll */
+    },
   };
 }
 
 describe("builtin vault adapter — lifecycle", () => {
   test("initialize returns the master key once and refuses a second run", async () => {
-    const conn = await connectPglite({ url: "memory://vault-test" });
-    try {
-      const adapter = createBuiltinVaultAdapter({ db: asExec(conn) });
-      const init = await adapter.initialize();
+    await resetVaultTables(sharedConn);
+    const adapter = createBuiltinVaultAdapter({ db: asExec(sharedConn) });
+    const init = await adapter.initialize();
 
-      expect(init.masterKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
-      expect(init.verifyHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(init.kekVersion).toBe(1);
+    expect(init.masterKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
+    expect(init.verifyHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(init.kekVersion).toBe(1);
 
-      const status = await adapter.status();
-      expect(status.initialized).toBe(true);
-      expect(status.sealed).toBe(true);
-      expect(status.masterKeyPresent).toBe(true);
+    const status = await adapter.status();
+    expect(status.initialized).toBe(true);
+    expect(status.sealed).toBe(true);
+    expect(status.masterKeyPresent).toBe(true);
 
-      const failure = await adapter.initialize().catch((e: unknown) => e);
-      expect(isVaultError(failure, "ALREADY_INITIALIZED")).toBe(true);
-    } finally {
-      await conn.close();
-    }
+    const failure = await adapter.initialize().catch((e: unknown) => e);
+    expect(isVaultError(failure, "ALREADY_INITIALIZED")).toBe(true);
   });
 
   test("unseal + set/get round-trips a secret", async () => {
@@ -304,50 +317,46 @@ describe("builtin vault adapter — master rotation", () => {
   });
 
   test("continueRotateMaster cold-resumes from rewrap_key_hash after process death", async () => {
-    const conn = await connectPglite({ url: "memory://vault-cold-resume" });
-    const db = asExec(conn);
-    try {
-      const first = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
-      const init = await first.initialize();
-      await first.unseal(init.masterKey);
-      for (let i = 0; i < 5; i += 1) {
-        await first.set(`prod/api/key-${i}`, `value-${i}`);
-      }
-
-      const next = generateMasterKey();
-      const nextB64 = masterKeyToBase64(next);
-      let progress = await first.rotateMaster(next);
-      expect(progress.remaining).toBe(3);
-      expect((await first.status()).rewrapTargetKekVersion).toBe(2);
-
-      // Simulate process death: drop in-memory pending, reopen over the same DB.
-      const second = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
-      await second.unseal(init.masterKey);
-      expect((await second.status()).rewrapTargetKekVersion).toBe(2);
-
-      const wrong = await second.continueRotateMaster().catch((e: unknown) => e);
-      expect(isVaultError(wrong, "INVALID_KEY")).toBe(true);
-
-      progress = await second.continueRotateMaster(nextB64);
-      while (progress.remaining > 0) {
-        progress = await second.continueRotateMaster(nextB64);
-      }
-      expect(progress.remaining).toBe(0);
-      expect((await second.status()).kekVersion).toBe(2);
-      expect((await second.status()).rewrapTargetKekVersion).toBeUndefined();
-
-      for (let i = 0; i < 5; i += 1) {
-        expect((await second.get(`prod/api/key-${i}`))?.value).toBe(`value-${i}`);
-      }
-
-      await second.seal();
-      const stale = await second.unseal(init.masterKey).catch((e: unknown) => e);
-      expect(isVaultError(stale, "INVALID_KEY")).toBe(true);
-      await second.unseal(nextB64);
-      expect((await second.get("prod/api/key-0"))?.value).toBe("value-0");
-    } finally {
-      await conn.close();
+    await resetVaultTables(sharedConn);
+    const db = asExec(sharedConn);
+    const first = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
+    const init = await first.initialize();
+    await first.unseal(init.masterKey);
+    for (let i = 0; i < 5; i += 1) {
+      await first.set(`prod/api/key-${i}`, `value-${i}`);
     }
+
+    const next = generateMasterKey();
+    const nextB64 = masterKeyToBase64(next);
+    let progress = await first.rotateMaster(next);
+    expect(progress.remaining).toBe(3);
+    expect((await first.status()).rewrapTargetKekVersion).toBe(2);
+
+    // Simulate process death: drop in-memory pending, reopen over the same DB.
+    const second = createBuiltinVaultAdapter({ db, kekRewrapBatchSize: 2 });
+    await second.unseal(init.masterKey);
+    expect((await second.status()).rewrapTargetKekVersion).toBe(2);
+
+    const wrong = await second.continueRotateMaster().catch((e: unknown) => e);
+    expect(isVaultError(wrong, "INVALID_KEY")).toBe(true);
+
+    progress = await second.continueRotateMaster(nextB64);
+    while (progress.remaining > 0) {
+      progress = await second.continueRotateMaster(nextB64);
+    }
+    expect(progress.remaining).toBe(0);
+    expect((await second.status()).kekVersion).toBe(2);
+    expect((await second.status()).rewrapTargetKekVersion).toBeUndefined();
+
+    for (let i = 0; i < 5; i += 1) {
+      expect((await second.get(`prod/api/key-${i}`))?.value).toBe(`value-${i}`);
+    }
+
+    await second.seal();
+    const stale = await second.unseal(init.masterKey).catch((e: unknown) => e);
+    expect(isVaultError(stale, "INVALID_KEY")).toBe(true);
+    await second.unseal(nextB64);
+    expect((await second.get("prod/api/key-0"))?.value).toBe("value-0");
   });
 });
 

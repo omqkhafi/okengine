@@ -4,12 +4,11 @@
  *
  * Logic-only cases (init / status seal-state) use the in-memory Vault SQL
  * fake so they do not pay PGlite WASM cold-start. Dialect-heavy cases
- * (rotate, backup, audit purge, …) still share a real PGlite instance
- * across the subcommands of one scenario — matching a live vault where
- * each `oke vault …` is a fresh process that must re-supply the master key.
+ * (rotate, backup, audit purge, …) share one warmed file-scoped PGlite
+ * (cold WASM once; {@link resetVaultTables} between tests).
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,8 +19,19 @@ import {
   sqlConnectionAsExec,
   type BuiltinVaultAdapter,
 } from "../elements/vault/builtin-adapter.ts";
-import { createMemoryVaultSql } from "../elements/vault/test-helpers.ts";
+import { createMemoryVaultSql, resetVaultTables } from "../elements/vault/test-helpers.ts";
 import { vaultCli } from "./vault-cmd.ts";
+
+/** File-scoped warmed PGlite for dialect-heavy CLI cases. */
+let sharedPglite: SqlConnection;
+
+beforeAll(async () => {
+  sharedPglite = await connectPglite({ url: "memory://vault-cli-shared" });
+});
+
+afterAll(async () => {
+  await sharedPglite.close();
+});
 
 /** A CLI bound to one in-memory vault, plus its captured stdout. */
 interface Harness {
@@ -39,7 +49,7 @@ interface HarnessOptions {
   /** Project root for relative file arguments. */
   readonly cwd?: string;
   /**
-   * Pre-opened SQL. Defaults to real PGlite (`memory://`). Pass
+   * Pre-opened SQL. Defaults to the file-scoped warmed PGlite. Pass
    * {@link createMemoryVaultSql} for logic-only cases that must not pay
    * WASM cold-start.
    */
@@ -47,12 +57,14 @@ interface HarnessOptions {
 }
 
 /**
- * Open a CLI harness over an injected or fresh PGlite connection.
+ * Open a CLI harness over an injected or shared PGlite connection.
  *
  * @param options - Cwd / SQL backend
  */
 async function harness(options: HarnessOptions = {}): Promise<Harness> {
-  const sql = options.sql ?? (await connectPglite({ url: "memory://vault-cli-test" }));
+  const injected = options.sql !== undefined;
+  if (!injected) await resetVaultTables(sharedPglite);
+  const sql = options.sql ?? sharedPglite;
   const cwd = options.cwd;
   let captured = "";
   return {
@@ -71,7 +83,7 @@ async function harness(options: HarnessOptions = {}): Promise<Harness> {
     reset: () => {
       captured = "";
     },
-    close: () => sql.close(),
+    close: () => (injected ? sql.close() : Promise.resolve()),
   };
 }
 

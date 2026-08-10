@@ -1,13 +1,38 @@
 /**
- * In-memory Vault SQL fake for logic-only unit tests.
+ * In-memory Vault SQL fake + shared-PGlite helpers for Vault tests.
  *
- * Covers the statement catalog the builtin adapter + audit writer emit for
- * init / status / seal / unseal / set / verifyAudit. Not a general SQL
- * engine — dialect / bytea / DISTINCT ON proof stays on real PGlite in
- * `builtin-adapter.test.ts`.
+ * - {@link createMemoryVaultSql} — logic-only unit tests (no WASM).
+ * - {@link resetVaultTables} — cheap isolation between dialect tests that
+ *   share one warmed PGlite connection per file.
  */
 
 import type { SqlConnection, SqlRow } from "../../drivers/types.ts";
+
+/** Vault tables truncated between shared-PGlite dialect tests. */
+const VAULT_TABLES = [
+  "oke_vault_keys",
+  "oke_vault_secrets",
+  "oke_vault_audit",
+  "oke_vault_master",
+  "oke_vault_status",
+] as const;
+
+/**
+ * Wipe every Vault table on a live connection and restart identity columns.
+ *
+ * Used when dialect tests share one warmed PGlite instance: TRUNCATE is
+ * milliseconds; a fresh `PGlite.create` is hundreds of ms to multi-second.
+ * No-ops when tables do not exist yet (first harness before DDL).
+ *
+ * @param conn - Open SQL connection (typically shared file-scoped PGlite)
+ */
+export async function resetVaultTables(conn: SqlConnection): Promise<void> {
+  try {
+    await conn.exec(`TRUNCATE ${VAULT_TABLES.join(", ")} RESTART IDENTITY CASCADE`);
+  } catch {
+    // Tables not created yet — ensureVaultTables will seed on first use.
+  }
+}
 
 /** One row in an in-memory table. */
 type Row = Record<string, unknown>;

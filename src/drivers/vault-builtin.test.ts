@@ -1,34 +1,46 @@
 /**
  * `vault` driver — adapter wiring and the never-fail-boot degradation path.
+ *
+ * Dialect cases share one warmed in-memory PGlite (cold WASM once). The
+ * on-disk snapshot test still uses a unique tmpdir so reopen-via-URL is real.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connectPglite } from "./pglite.ts";
-import { builtinVaultDriver, openBuiltinVaultAdapter, VAULT_BAG_ADAPTER } from "./vault-builtin.ts";
 import type { BuiltinVaultAdapter } from "../elements/vault/builtin-adapter.ts";
+import { resetVaultTables } from "../elements/vault/test-helpers.ts";
+import { connectPglite } from "./pglite.ts";
+import type { SqlConnection } from "./types.ts";
+import { builtinVaultDriver, openBuiltinVaultAdapter, VAULT_BAG_ADAPTER } from "./vault-builtin.ts";
+
+/** File-scoped warmed PGlite for injected-connection cases. */
+let sharedConn: SqlConnection;
+
+beforeAll(async () => {
+  sharedConn = await connectPglite({ url: "memory://vault-driver-shared" });
+});
+
+afterAll(async () => {
+  await sharedConn.close();
+});
 
 describe("builtin vault driver", () => {
   test("openBuiltinVaultAdapter unseals an injected connection", async () => {
-    const connection = await connectPglite({ url: "memory://vault-driver-test" });
-    try {
-      const first = await openBuiltinVaultAdapter({ connection, env: {} });
-      const init = await first.adapter.initialize();
-      await first.adapter.unseal(init.masterKey);
-      await first.adapter.set("prod/api/stripe", "sk_live_x");
+    await resetVaultTables(sharedConn);
+    const first = await openBuiltinVaultAdapter({ connection: sharedConn, env: {} });
+    const init = await first.adapter.initialize();
+    await first.adapter.unseal(init.masterKey);
+    await first.adapter.set("prod/api/stripe", "sk_live_x");
 
-      // A second open over the same connection unseals from the master key.
-      const second = await openBuiltinVaultAdapter({
-        connection,
-        env: { OKE_VAULT_MASTER_KEY: init.masterKey },
-      });
-      expect(second.adapter.getUnsealer()).not.toBeNull();
-      expect((await second.adapter.get("prod/api/stripe"))?.value).toBe("sk_live_x");
-    } finally {
-      await connection.close();
-    }
+    // A second open over the same connection unseals from the master key.
+    const second = await openBuiltinVaultAdapter({
+      connection: sharedConn,
+      env: { OKE_VAULT_MASTER_KEY: init.masterKey },
+    });
+    expect(second.adapter.getUnsealer()).not.toBeNull();
+    expect((await second.adapter.get("prod/api/stripe"))?.value).toBe("sk_live_x");
   });
 
   test("open with no SQL configured degrades to the seed bag", async () => {
@@ -47,31 +59,27 @@ describe("builtin vault driver", () => {
   });
 
   test("bag close auto-seals the adapter (SIGTERM → bootResult.close path)", async () => {
-    const connection = await connectPglite({ url: "memory://vault-autoseal" });
-    try {
-      const staging = await openBuiltinVaultAdapter({ connection, env: {} });
-      const init = await staging.adapter.initialize();
-      await staging.adapter.unseal(init.masterKey);
-      await staging.adapter.set("prod/api/stripe", "sk_live_z");
-      await staging.adapter.seal();
+    await resetVaultTables(sharedConn);
+    const staging = await openBuiltinVaultAdapter({ connection: sharedConn, env: {} });
+    const init = await staging.adapter.initialize();
+    await staging.adapter.unseal(init.masterKey);
+    await staging.adapter.set("prod/api/stripe", "sk_live_z");
+    await staging.adapter.seal();
 
-      const bag = await builtinVaultDriver.open({
-        connection,
-        env: { OKE_VAULT_MASTER_KEY: init.masterKey },
-      });
-      const held = (bag as unknown as Record<symbol, BuiltinVaultAdapter | undefined>)[
-        VAULT_BAG_ADAPTER
-      ];
-      expect(held).toBeDefined();
-      expect(held!.getUnsealer()).not.toBeNull();
-      expect(bag.get("prod/api/stripe")).toBe("sk_live_z");
+    const bag = await builtinVaultDriver.open({
+      connection: sharedConn,
+      env: { OKE_VAULT_MASTER_KEY: init.masterKey },
+    });
+    const held = (bag as unknown as Record<symbol, BuiltinVaultAdapter | undefined>)[
+      VAULT_BAG_ADAPTER
+    ];
+    expect(held).toBeDefined();
+    expect(held!.getUnsealer()).not.toBeNull();
+    expect(bag.get("prod/api/stripe")).toBe("sk_live_z");
 
-      await bag.close?.();
-      expect(held!.getUnsealer()).toBeNull();
-      await expect(held!.get("prod/api/stripe")).rejects.toThrow(/sealed/i);
-    } finally {
-      await connection.close();
-    }
+    await bag.close?.();
+    expect(held!.getUnsealer()).toBeNull();
+    await expect(held!.get("prod/api/stripe")).rejects.toThrow(/sealed/i);
   });
 
   test("open snapshots live secrets from an initialized vault", async () => {

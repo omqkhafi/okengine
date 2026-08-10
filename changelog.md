@@ -33,6 +33,10 @@ needed).
 - Vault logic-only unit tests (`oke vault` init/status seal-state CLI, security
   checklist audit-tamper) use an in-memory Vault SQL fake instead of cold
   PGlite WASM — dialect proof stays on `builtin-adapter.test.ts`.
+- Vault/Console dialect tests share one warmed in-memory PGlite per file
+  (`beforeAll` + `TRUNCATE` between cases) so cold WASM is paid once, not per
+  test — `builtin-adapter`, `vault-cmd` dialect cases, `vault-builtin`, and
+  `operator-db` persistence.
 
 ## v0.11.1 — 2026-08-09
 
