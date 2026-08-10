@@ -6,7 +6,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { maybeAskSeed, SEEDED_MARKER } from "./ask-seed.ts";
+import { maybeAskSeed } from "./ask-seed.ts";
+import { PROJECT_STATE_REL } from "./project-state.ts";
 
 describe("maybeAskSeed", () => {
   test("skips when non-TTY", async () => {
@@ -31,7 +32,7 @@ describe("maybeAskSeed", () => {
     }
   });
 
-  test("asks once then writes marker", async () => {
+  test("asks once then writes .oke/state.json seededAt", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ask-seed-"));
     try {
       mkdirSync(join(dir, "src", "db", "seed"), { recursive: true });
@@ -48,7 +49,7 @@ describe("maybeAskSeed", () => {
         },
       });
       expect(calls).toBe(1);
-      expect(existsSync(join(dir, SEEDED_MARKER))).toBe(true);
+      expect(existsSync(join(dir, PROJECT_STATE_REL))).toBe(true);
 
       await maybeAskSeed({
         cwd: dir,

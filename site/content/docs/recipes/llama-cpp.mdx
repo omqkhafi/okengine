@@ -47,6 +47,7 @@ OKE_AI_MODEL=granite3.3:2b
 `OKE_AI_MODEL` is a Docker Hub `ai/<id>` model. The recipe writes
 `.oke/llama-entrypoint.py` (generated, gitignored — not app source), which
 Hub-pulls into the cache volume, then starts `llama-server -m <gguf> --alias
+
 <id>` (single-model).
 
 Never set `LLAMA_ARG_MODELS_PRESET` / `LLAMA_ARG_DOCKER_REPO` — those hang on
@@ -94,12 +95,12 @@ Postgres/Redis, stricter on the published interface because of GGUF CVE risk.
 
 ## What the recipe configures
 
-| Field          | Value                                                           |
-| -------------- | --------------------------------------------------------------- |
-| Container port | `8080`                                                          |
-| Host publish   | `127.0.0.1:8080:8080`                                           |
-| Healthcheck    | `GET /health`, every 5s, 24 retries, 900s start                 |
-| Connection URL | `http://host:8080/v1`                                           |
+| Field          | Value                                                        |
+| -------------- | ------------------------------------------------------------ |
+| Container port | `8080`                                                       |
+| Host publish   | `127.0.0.1:8080:8080`                                        |
+| Healthcheck    | `GET /health`, every 5s, 24 retries, 900s start              |
+| Connection URL | `http://host:8080/v1`                                        |
 | Model load     | `.oke/llama-entrypoint.py` → Hub pull (incl. CNCF) then `-m` |
 
 ## When to choose something else

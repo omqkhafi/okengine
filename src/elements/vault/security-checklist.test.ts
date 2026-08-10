@@ -1,9 +1,11 @@
 /**
  * Phase 10 security checklist — threat-model assertions for the built-in vault.
+ *
+ * SQL-backed cases use the in-memory Vault SQL fake: these tests assert seal
+ * physics and audit integrity, not Postgres dialect / pgvector behavior.
  */
 
 import { describe, expect, test } from "bun:test";
-import { connectPglite } from "../../drivers/pglite.ts";
 import type { SqlConnection } from "../../drivers/types.ts";
 import {
   createBuiltinVaultAdapter,
@@ -23,16 +25,17 @@ import {
 import { VaultError } from "./errors.ts";
 import { canonicalizePath } from "./path.ts";
 import type { SqlExec } from "./storage.ts";
+import { createMemoryVaultSql } from "./test-helpers.ts";
 import { createMemoryUnsealer } from "./unseal.ts";
 
-/** Fresh initialized + unsealed adapter. */
+/** Fresh initialized + unsealed adapter over the in-memory Vault SQL fake. */
 async function harness(): Promise<{
   adapter: BuiltinVaultAdapter;
   db: SqlExec;
   conn: SqlConnection;
   close(): Promise<void>;
 }> {
-  const conn = await connectPglite({ url: `memory://vault-sec-${crypto.randomUUID()}` });
+  const conn = createMemoryVaultSql();
   const db = sqlConnectionAsExec(conn);
   const adapter = createBuiltinVaultAdapter({ db });
   const init = await adapter.initialize!();
@@ -53,12 +56,11 @@ describe("vault security checklist", () => {
     try {
       const secret = `sk_live_${crypto.randomUUID()}`;
       await h.adapter.set("prod/api/stripe", secret);
-      const rows = await h.conn.query(
-        "select encode(encrypted_value, 'escape') as blob from oke_vault_secrets",
-      );
+      const rows = await h.conn.query("select encrypted_value from oke_vault_secrets");
       for (const row of rows) {
-        const blob = String((row as { blob?: unknown }).blob ?? "");
-        expect(blob.includes(secret)).toBe(false);
+        const raw = (row as { encrypted_value?: unknown }).encrypted_value;
+        const bytes = raw instanceof Uint8Array ? raw : new Uint8Array();
+        expect(Buffer.from(bytes).toString("utf8").includes(secret)).toBe(false);
       }
     } finally {
       await h.close();

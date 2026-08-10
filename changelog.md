@@ -14,6 +14,9 @@ needed).
 
 ### ♻️ Changed
 
+- Durable local markers move to `.oke/state.json` (`seededAt` after the one-shot
+  seed prompt). Legacy `.oke/seeded` migrates once then is removed. `.oke/dev.json`
+  stays the live session lock; `.oke/console.secret` stays Console signing (not Vault).
 - llama.cpp entrypoint now lands in `.oke/llama-entrypoint.py` (generated /
   gitignored) instead of `docker/` — app trees stay TypeScript-only; compose
   mounts `../.oke/…`. Stale `docker/llama-entrypoint.py` is pruned on derive.
@@ -27,6 +30,9 @@ needed).
   kernel tests that insert via the harness were paying cold WASM+pgvector init
   (~5s) and timing out — dialect tests still opt into PGLite via
   `boot.config.drivers.store.sql`.
+- Vault logic-only unit tests (`oke vault` init/status seal-state CLI, security
+  checklist audit-tamper) use an in-memory Vault SQL fake instead of cold
+  PGlite WASM — dialect proof stays on `builtin-adapter.test.ts`.
 
 ## v0.11.1 — 2026-08-09
 

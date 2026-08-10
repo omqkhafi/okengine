@@ -2,9 +2,11 @@
  * `oke vault` builtin loop — init · status · seal/unseal · rotate · audit ·
  * backup/restore.
  *
- * Every case runs against a real PGlite instance shared across the
- * subcommands of one scenario, which is what a live vault looks like: each
- * `oke vault …` is a fresh process that must re-supply the master key.
+ * Logic-only cases (init / status seal-state) use the in-memory Vault SQL
+ * fake so they do not pay PGlite WASM cold-start. Dialect-heavy cases
+ * (rotate, backup, audit purge, …) still share a real PGlite instance
+ * across the subcommands of one scenario — matching a live vault where
+ * each `oke vault …` is a fresh process that must re-supply the master key.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -18,6 +20,7 @@ import {
   sqlConnectionAsExec,
   type BuiltinVaultAdapter,
 } from "../elements/vault/builtin-adapter.ts";
+import { createMemoryVaultSql } from "../elements/vault/test-helpers.ts";
 import { vaultCli } from "./vault-cmd.ts";
 
 /** A CLI bound to one in-memory vault, plus its captured stdout. */
@@ -31,13 +34,26 @@ interface Harness {
   close(): Promise<void>;
 }
 
+/** Options for {@link harness}. */
+interface HarnessOptions {
+  /** Project root for relative file arguments. */
+  readonly cwd?: string;
+  /**
+   * Pre-opened SQL. Defaults to real PGlite (`memory://`). Pass
+   * {@link createMemoryVaultSql} for logic-only cases that must not pay
+   * WASM cold-start.
+   */
+  readonly sql?: SqlConnection;
+}
+
 /**
- * Open a CLI harness over a fresh PGlite instance.
+ * Open a CLI harness over an injected or fresh PGlite connection.
  *
- * @param cwd - Project root for relative file arguments
+ * @param options - Cwd / SQL backend
  */
-async function harness(cwd?: string): Promise<Harness> {
-  const sql = await connectPglite({ url: "memory://vault-cli-test" });
+async function harness(options: HarnessOptions = {}): Promise<Harness> {
+  const sql = options.sql ?? (await connectPglite({ url: "memory://vault-cli-test" }));
+  const cwd = options.cwd;
   let captured = "";
   return {
     sql,
@@ -84,7 +100,8 @@ async function attach(sql: SqlConnection, masterKey: string): Promise<BuiltinVau
 
 describe("oke vault — builtin lifecycle", () => {
   test("init prints the master key once and status reflects seal state", async () => {
-    const h = await harness();
+    // Logic-only: seal-state + init CLI copy — no Postgres dialect under test.
+    const h = await harness({ sql: createMemoryVaultSql() });
     try {
       // A never-initialized vault reports rather than crashes.
       expect(await h.run(["status"])).toBe(0);
@@ -121,7 +138,7 @@ describe("oke vault — builtin lifecycle", () => {
   });
 
   test("unseal requires a key and seal records the transition", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -149,7 +166,7 @@ describe("oke vault — builtin lifecycle", () => {
 
 describe("oke vault rotate", () => {
   test("rotate re-encrypts the current value under a new version", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -179,7 +196,7 @@ describe("oke vault rotate", () => {
   });
 
   test("rotate-master issues a new key and retires the old one", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const first = masterKeyFrom(h.output());
@@ -211,7 +228,7 @@ describe("oke vault rotate", () => {
 
 describe("oke vault audit", () => {
   test("lists rows, verifies the chain, and purges by date", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -256,7 +273,7 @@ describe("oke vault audit", () => {
 describe("oke vault backup / restore", () => {
   test("round-trips every live secret through an encrypted bundle", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-vault-cli-"));
-    const h = await harness(dir);
+    const h = await harness({ cwd: dir });
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -319,7 +336,7 @@ describe("oke vault help", () => {
 
 describe("oke vault secure master-key input", () => {
   test("unseal accepts --key - via injected stdin", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -340,7 +357,7 @@ describe("oke vault secure master-key input", () => {
   });
 
   test("unseal accepts an injected interactive prompt", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());
@@ -367,7 +384,7 @@ describe("oke vault secure master-key input", () => {
 
 describe("oke vault purge-expired", () => {
   test("dry-run counts without deleting; live purge removes expired rows", async () => {
-    const h = await harness();
+    const h = await harness({});
     try {
       await h.run(["init"]);
       const masterKey = masterKeyFrom(h.output());

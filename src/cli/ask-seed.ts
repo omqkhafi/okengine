@@ -3,13 +3,13 @@
  */
 
 import { confirm, isCancel } from "@clack/prompts";
-import { resolve } from "node:path";
 import type { ConfigEnv } from "../config/index.ts";
 import { formatCliChrome } from "../term.ts";
 import { resolveSeedModulePath, runSeed } from "./db-seed.ts";
+import { isProjectSeeded, markProjectSeeded } from "./project-state.ts";
 
-/** Marker written after a successful prompted seed (skip re-ask). */
-export const SEEDED_MARKER = ".oke/seeded";
+/** @deprecated Use `.oke/state.json` `seededAt` via {@link isProjectSeeded}. */
+export { LEGACY_SEEDED_MARKER as SEEDED_MARKER } from "./project-state.ts";
 
 /** Options for {@link maybeAskSeed}. */
 export interface AskSeedOptions {
@@ -37,8 +37,7 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
   if (!tty) return;
 
   const cwd = options.cwd;
-  const marker = resolve(cwd, SEEDED_MARKER);
-  if (await Bun.file(marker).exists()) return;
+  if (await isProjectSeeded(cwd)) return;
 
   const seedPath = await resolveSeedModulePath(cwd);
   if (!(await Bun.file(seedPath).exists())) return;
@@ -74,6 +73,6 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
       }));
   const code = await seed(cwd, options.env);
   if (code === 0) {
-    await Bun.write(marker, `${new Date().toISOString()}\n`);
+    await markProjectSeeded(cwd);
   }
 }

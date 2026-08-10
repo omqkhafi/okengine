@@ -85,7 +85,10 @@ prints immediately (wordmark + Starting + profile), then streams background work
 yellow pending/loading · red error · dim idle. Compose health keeps polling
 (`docker compose ps -a`); AI ● tracks model phase while the AI container is up.
 Boot does not wait for the model to become ready. A successful session writes
-`.oke/dev.json` (pid · ports · startedAt) and clears it on stop.
+`.oke/dev.json` (pid · ports · startedAt) and clears it on stop. Durable local
+markers live in `.oke/state.json` (e.g. `seededAt` after the one-shot seed
+prompt) — not in the session lock. Console session signing uses
+`.oke/console.secret` (or `OKE_CONSOLE_SECRET`); that is not a Vault secret.
 
 On a TTY, Ink keyboard controls stay active after boot (`useInput` — same
 shortcuts as before). Press `r` to clear the log pane and reprint the latest

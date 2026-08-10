@@ -29,7 +29,11 @@ import type { SqlConnection } from "../../drivers/types.ts";
 
 /** Relative paths under project cwd. */
 export const CONSOLE_OKE_DIR = ".oke";
-/** Signing secret file (still local — not a DB row). */
+/**
+ * Console session HMAC signing secret (local file under `.oke/`).
+ * Not a Vault contract — operators/sessions must sign even when Vault is sealed.
+ * Override with `OKE_CONSOLE_SECRET` when set.
+ */
 export const CONSOLE_SECRET_NAME = "console.secret";
 /** PGlite datadir when no Postgres URL is configured. */
 export const CONSOLE_PGLITE_DIR = "console-pg";
