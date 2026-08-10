@@ -33,6 +33,7 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     effects: [],
     logs: [],
     dimensions: {},
+    input: null,
     ...partial,
   };
 }

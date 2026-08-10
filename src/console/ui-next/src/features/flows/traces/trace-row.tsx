@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./format-duration.ts";
-import { replayRequestForRun } from "./trace-actions.ts";
+import { durationClassName } from "./duration-tone.ts";
+import { executeTraceReplay } from "./trace-actions.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
 
 function relativeTime(startedAt: number): string {
@@ -57,7 +58,7 @@ export function TraceRow({
     setBusy(true);
     setActionHint(null);
     try {
-      const res = await replay(replayRequestForRun(run));
+      const res = await executeTraceReplay(run, replay);
       if (res.error) {
         setActionHint(res.error.message ?? res.error.code);
         return;
@@ -118,7 +119,7 @@ export function TraceRow({
           <HugeiconsIcon icon={trigger.icon} className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{run.flow}</span>
-        <span className="shrink-0 tabular-nums text-muted-foreground">
+        <span className={cn("shrink-0 tabular-nums font-medium", durationClassName(run.durationMs))}>
           {formatDuration(run.durationMs)}
         </span>
         <span className="w-16 shrink-0 truncate text-right text-muted-foreground">

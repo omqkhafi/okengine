@@ -33,6 +33,7 @@ function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "durationMs
     effects: [],
     logs: [],
     dimensions: {},
+    input: null,
     ...partial,
   };
 }
@@ -96,7 +97,12 @@ describe("durationThresholdLabel", () => {
   test("labels presets", () => {
     expect(durationThresholdLabel(null)).toBe("Any duration");
     expect(durationThresholdLabel(10)).toBe("> 10ms");
+    expect(durationThresholdLabel(25)).toBe("> 25ms");
+    expect(durationThresholdLabel(50)).toBe("> 50ms");
     expect(durationThresholdLabel(100)).toBe("> 100ms");
+    expect(durationThresholdLabel(250)).toBe("> 250ms");
+    expect(durationThresholdLabel(500)).toBe("> 500ms");
     expect(durationThresholdLabel(1_000)).toBe("> 1s");
+    expect(durationThresholdLabel(5_000)).toBe("> 5s");
   });
 });

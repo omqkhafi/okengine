@@ -18,6 +18,14 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
 import type { LiveStatus } from "../data/use-console-live.ts";
@@ -25,15 +33,37 @@ import { AdvancedFilters } from "./advanced-filters.tsx";
 import type { DimensionQuery } from "./dimension-query.ts";
 import {
   DEFAULT_TRACES_FILTERS,
+  DURATION_THRESHOLD_OPTIONS,
   durationThresholdLabel,
   filterScopedRuns,
   type TracesDurationThresholdMs,
   type TracesFilters,
   type TracesStatusFilter,
 } from "./filter-runs.ts";
+import {
+  durationThresholdDotClass,
+  durationThresholdFilterClass,
+  durationTone,
+  durationToneClass,
+} from "./duration-tone.ts";
+import { TraceDetailSheet } from "./trace-detail-sheet.tsx";
 import { TraceRow } from "./trace-row.tsx";
 
-const DURATION_OPTIONS: readonly TracesDurationThresholdMs[] = [null, 10, 100, 1_000];
+/** Select item values for {@link DURATION_THRESHOLD_OPTIONS} (`any` = no threshold). */
+const DURATION_SELECT_ITEMS = DURATION_THRESHOLD_OPTIONS.map((ms) => ({
+  value: ms === null ? "any" : String(ms),
+  label: durationThresholdLabel(ms),
+}));
+
+/**
+ * Parse a duration-select value back to a threshold preset.
+ *
+ * @param raw - Select value string
+ */
+function parseDurationSelectValue(raw: string): TracesDurationThresholdMs {
+  if (raw === "any") return null;
+  return Number(raw) as TracesDurationThresholdMs;
+}
 
 const STATUS_FILTERS = [
   { value: "all" as const, label: "All", icon: Menu01Icon },
@@ -60,6 +90,10 @@ export function TracesPane({
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const visible = useMemo(() => filterScopedRuns(runs, filters), [runs, filters]);
+  const selectedRun = useMemo(
+    () => (selectedRunId ? (runs.find((r) => r.id === selectedRunId) ?? null) : null),
+    [runs, selectedRunId],
+  );
   const advancedActive = filters.advanced.clauses.length > 0;
 
   const setStatus = (status: TracesStatusFilter) => {
@@ -125,29 +159,75 @@ export function TracesPane({
               </button>
             ))}
           </div>
-          <label className="relative flex items-center text-[10px] text-muted-foreground">
-            <span className="sr-only">Duration threshold</span>
-            <HugeiconsIcon
-              icon={Timer01Icon}
-              className="pointer-events-none absolute left-1.5 size-3 text-muted-foreground"
-              aria-hidden
-            />
-            <select
+          <Select
+            items={DURATION_SELECT_ITEMS}
+            value={filters.minDurationMs === null ? "any" : String(filters.minDurationMs)}
+            onValueChange={(value) => {
+              if (value == null || Array.isArray(value)) return;
+              setMinDuration(parseDurationSelectValue(String(value)));
+            }}
+          >
+            <SelectTrigger
               aria-label="Duration threshold"
-              className="h-6 max-w-[8.5rem] rounded-md border border-border/70 bg-transparent py-0 pr-1.5 pl-6 text-[10px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-              value={filters.minDurationMs === null ? "" : String(filters.minDurationMs)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setMinDuration(raw === "" ? null : (Number(raw) as TracesDurationThresholdMs));
-              }}
+              size="sm"
+              className={cn(
+                "h-6 max-w-42 gap-1 rounded-md border bg-transparent py-0 pr-1 pl-1.5 text-[10px] shadow-none dark:bg-transparent [&_svg:not([class*='size-'])]:size-3",
+                durationThresholdFilterClass(filters.minDurationMs),
+              )}
             >
-              {DURATION_OPTIONS.map((ms) => (
-                <option key={ms === null ? "any" : ms} value={ms === null ? "" : String(ms)}>
-                  {durationThresholdLabel(ms)}
-                </option>
-              ))}
-            </select>
-          </label>
+              <HugeiconsIcon
+                icon={Timer01Icon}
+                className={cn(
+                  "size-3 shrink-0",
+                  filters.minDurationMs === null
+                    ? "text-muted-foreground"
+                    : durationToneClass(durationTone(filters.minDurationMs)),
+                )}
+                aria-hidden
+              />
+              <SelectValue>
+                {(raw) => {
+                  const ms = parseDurationSelectValue(String(raw ?? "any"));
+                  return (
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          durationThresholdDotClass(ms),
+                        )}
+                        aria-hidden
+                      />
+                      <span className="truncate">{durationThresholdLabel(ms)}</span>
+                    </span>
+                  );
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent
+              align="start"
+              alignItemWithTrigger={false}
+              className="min-w-42"
+            >
+              <SelectGroup>
+                {DURATION_THRESHOLD_OPTIONS.map((ms) => (
+                  <SelectItem
+                    key={ms === null ? "any" : ms}
+                    value={ms === null ? "any" : String(ms)}
+                    className="text-[10px]"
+                  >
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        durationThresholdDotClass(ms),
+                      )}
+                      aria-hidden
+                    />
+                    {durationThresholdLabel(ms)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <button
             type="button"
             aria-expanded={advancedOpen}
@@ -211,6 +291,8 @@ export function TracesPane({
           ))
         )}
       </div>
+
+      <TraceDetailSheet run={selectedRun} onClose={() => onSelect(null)} />
     </div>
   );
 }

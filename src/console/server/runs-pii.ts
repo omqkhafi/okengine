@@ -89,5 +89,17 @@ export function maskWideEventForConsole(
       data: maskPiiRecord(line.data as Record<string, unknown>, piiFields),
     };
   });
-  return { ...event, dimensions, logs };
+  const input =
+    event.input !== undefined &&
+    event.input !== null &&
+    typeof event.input === "object" &&
+    !Array.isArray(event.input)
+      ? maskPiiRecord(event.input as Record<string, unknown>, piiFields)
+      : event.input;
+  return {
+    ...event,
+    dimensions,
+    logs,
+    ...(input !== undefined ? { input } : {}),
+  };
 }

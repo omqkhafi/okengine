@@ -28,6 +28,7 @@ function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "startedAt"
     effects: [],
     logs: [],
     dimensions: {},
+    input: null,
     ...partial,
   };
 }

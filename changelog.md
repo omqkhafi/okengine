@@ -58,7 +58,23 @@ needed).
   Replay + Copy run ID, and All/Errors + duration-threshold filters over the scoped
   runs list. `POST /console/traces/replay` now re-invokes through `runReplay` (same
   path as `oke replay --request-id`), not a log-only stub.
+- ui-next trace detail Sheet (shadcn, side=right): row click keeps graph highlight and
+  opens a real breakdown — summary counts from EffectKind + logs, proportional
+  waterfall bars from EffectEntry timestamps/durations (EDGE_STROKE colors),
+  expandable event list, and REQUEST with Manifest method/path plus Shiki-highlighted
+  `WideEvent.input`. No RESPONSE section (WideEvent has no output field today).
+  `GET /console/runs` / live projection now include masked `input`.
 
+- ui-next trace detail Sheet surfaces the **Gate** element: summary chip from
+  `run.gates`, plus a Gates section with Manifest kind/description (e.g.
+  `member` · policy · Signed-in member on `support.triage`).
+
+- ui-next Request section is a protocol frame: method-colored rail, Body with
+  Fields/Raw toggle (typed key·value rows + per-field copy), byte size, and
+  line-numbered Raw JSON.
+
+- ui-next Traces duration filter uses shadcn Base UI `Select` with cool→hot
+  colored dots on each threshold (Any / >10ms…>5s), matching row duration tones.
 - ui-next Traces **Advanced** filtering: progressive-disclosure dimension query
   (`flow = X AND cache = miss AND duration > 1s`) with presets, chips, and
   expression editor — same language as Runs (§9.11), client-side on the scoped list.

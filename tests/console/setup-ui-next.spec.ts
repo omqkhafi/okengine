@@ -265,4 +265,9 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await expect(fulfillNode).toHaveAttribute("data-highlighted", "true");
   await expect(paymentsNode).toHaveAttribute("data-highlighted", "true");
   await expect(row).toHaveAttribute("data-selected", "true");
+  await expect(page.locator('[data-slot="trace-detail-sheet"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-waterfall"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-request"]')).toBeVisible();
+  await expect(page.locator('[data-slot="trace-request-method"]')).toHaveText("POST");
+  await expect(page.locator('[data-slot="trace-request"]')).toContainText("/bookings");
 });

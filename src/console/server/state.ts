@@ -402,6 +402,8 @@ export interface ConsoleLiveRun {
   readonly effects: readonly ConsoleLiveRunEffect[];
   readonly logs: readonly ConsoleLiveRunLog[];
   readonly dimensions: Record<string, string | number | boolean | null>;
+  /** Validated flow input snapshot — null when the run has no stored input. */
+  readonly input: unknown;
 }
 
 /** Effect entry on a live run row. */

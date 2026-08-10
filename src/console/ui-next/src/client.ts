@@ -288,6 +288,11 @@ export type RunRow = {
   readonly effects: readonly RunEffect[];
   readonly logs: readonly RunLog[];
   readonly dimensions: Record<string, string | number | boolean | null>;
+  /**
+   * Validated flow input snapshot (powers replay). `null` when the run has
+   * no stored input — never invent a response/output field.
+   */
+  readonly input: unknown;
 };
 
 /** Runs list payload (`GET /console/runs`). */

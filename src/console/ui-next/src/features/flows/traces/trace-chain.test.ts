@@ -31,6 +31,7 @@ function run(
     effects: [],
     logs: [],
     dimensions: {},
+    input: null,
     ...partial,
   };
 }

@@ -117,6 +117,8 @@ const RunsListOut = z.object({
       logs: z.array(LogLineOut),
       /** All queryable dimensions for population analysis. */
       dimensions: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+      /** Validated flow input snapshot for replay — null when absent. */
+      input: z.unknown().nullable(),
     }),
   ),
 });
@@ -1902,6 +1904,7 @@ export function projectRun(r: WideEvent, piiFields: ReadonlySet<string> = new Se
       at: line.at,
     })),
     dimensions,
+    input: masked.input === undefined ? null : masked.input,
   };
 }
 
