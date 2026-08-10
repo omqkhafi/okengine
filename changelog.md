@@ -24,6 +24,12 @@ needed).
   (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
 - ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
   out mid-progress in dark mode).
+- ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
+
+### 🐛 Fixed
+
+- Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
+  `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
 
 ### ✨ Added
 
@@ -35,6 +41,9 @@ needed).
 
 - ui-next shell chrome: OKE wordmark + light/dark/system theme toggle (official shadcn Vite
   ThemeProvider, `oke-console-theme` storage, no next-themes).
+
+- `motion` (Motion for React) reserved for near-future ui-next animations; import via
+  `motion/react`.
 
 ## v0.11.2 — 2026-08-10
 

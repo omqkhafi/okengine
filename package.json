@@ -88,7 +88,7 @@
     "./drivers/*": "./src/drivers/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit && bun run --cwd packages/create-oke typecheck",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/console/tsconfig.ui-next.json && tsc --noEmit -p src/console/ui-next && bun run --cwd packages/create-oke typecheck",
     "lint": "oxlint --quiet",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
@@ -160,6 +160,7 @@
     "happy-dom": "^20.11.1",
     "hast-util-to-jsx-runtime": "^2.3.6",
     "mermaid": "^11.16.0",
+    "motion": "^13.1.0",
     "nuqs": "^2.8.0",
     "oxc-parser": "^0.142.0",
     "oxfmt": "^0.61.0",

@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./styles.css";
 
 restoreAccessToken();
@@ -30,11 +31,13 @@ if (!rootEl) {
 createRoot(rootEl).render(
   <StrictMode>
     <ThemeProvider defaultTheme="system" storageKey="oke-console-theme">
-      <QueryClientProvider client={queryClient}>
-        <NuqsAdapter>
-          <App />
-        </NuqsAdapter>
-      </QueryClientProvider>
+      <TooltipProvider delay={0}>
+        <QueryClientProvider client={queryClient}>
+          <NuqsAdapter>
+            <App />
+          </NuqsAdapter>
+        </QueryClientProvider>
+      </TooltipProvider>
     </ThemeProvider>
   </StrictMode>,
 );

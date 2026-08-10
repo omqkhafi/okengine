@@ -23,5 +23,10 @@
     "erasableSyntaxOnly": true
   },
   "include": ["src/**/*.ts", "src/cli/tui/**/*.tsx", "tests/**/*.ts"],
-  "exclude": ["src/compiler/fixtures/**", "src/console/ui/**", "src/console/ui-next/**"]
+  "exclude": [
+    "src/compiler/fixtures/**",
+    "src/console/ui/**",
+    "src/console/ui-next/**",
+    "tests/console/setup-ui-next.spec.ts"
+  ]
 }
