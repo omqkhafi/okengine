@@ -223,7 +223,7 @@ export const app = oke({
 | `audience`                                  | `oke-app` | Audience stamped on access tokens                                              |
 | `emailAndPassword.enabled`                  | `false`   | Sign-up / sign-in email Flows                                                  |
 | `emailAndPassword.requireEmailVerification` | `false`   | Block sign-in until email is verified                                          |
-| `passwordPolicy`                            | secure\*  | `\*` minLength 12, letter + number; sign-up → `AuthFailed` / `password_policy` |
+| `passwordPolicy`                            | secure\*  | `\*` minLength 8, letter + number + upper + lower + symbol; sign-up → `AuthFailed` / `password_policy` |
 | `breachCheck`                               | unset     | `(password) => Promise<boolean>` — `true` rejects as `password_breached`       |
 | `session.freshAgeMs`                        | 24h       | Window for step-up `auth.fresh` policy                                         |
 | `session.accessTtlMs` / `refreshTtlMs`      | 14m / 30d | Access / refresh lifetimes                                                     |
@@ -291,8 +291,10 @@ Set `gate.auth.secret` (or provide it before boot). Non-prod may mint a developm
 </Accordion>
 <Accordion title="Sign-up returns AuthFailed password_policy">
 
-Default policy requires length ≥ 12 plus a letter and a number. Short passwords like `"123"`
-are rejected — not accepted silently. Tighten or loosen via `gate.auth.passwordPolicy`.
+Default policy requires length ≥ 8 plus uppercase, lowercase, a number, and a special character.
+Short passwords like `"123"` are rejected — not accepted silently. Tighten or loosen via
+`gate.auth.passwordPolicy`. Console claim uses a stricter min length of 12 with the same
+character classes.
 
 </Accordion>
 <Accordion title="Which keyBy should I use?">

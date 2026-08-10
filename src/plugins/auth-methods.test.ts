@@ -57,7 +57,7 @@ describe("auth method plugins", () => {
       new Request("http://localhost/auth/sign-up/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "alice", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "alice", password: "CorrectHorse1!" }),
       }),
     );
     expect(signUp.status).toBe(200);
@@ -81,7 +81,7 @@ describe("auth method plugins", () => {
       new Request("http://localhost/auth/sign-in/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "alice", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "alice", password: "CorrectHorse1!" }),
       }),
     );
     expect(signIn.status).toBe(200);

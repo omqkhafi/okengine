@@ -115,7 +115,7 @@ describe("username policy", () => {
       new Request("http://localhost/auth/sign-up/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "Admin", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "Admin", password: "CorrectHorse1!" }),
       }),
     );
     const body = (await res.json()) as {
@@ -181,7 +181,7 @@ describe("username policy", () => {
       new Request("http://localhost/auth/sign-up/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "alice1", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "alice1", password: "CorrectHorse12" }),
       }),
     );
     const weakBody = (await weakPass.json()) as {
@@ -250,7 +250,7 @@ describe("username policy", () => {
       new Request("http://localhost/auth/sign-up/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "alice", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "alice", password: "CorrectHorse12" }),
       }),
     );
     const weakBody = (await weak.json()) as {
@@ -289,7 +289,7 @@ describe("username policy", () => {
       new Request("http://localhost/auth/sign-up/username", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "alice", password: "CorrectHorse1" }),
+        body: JSON.stringify({ username: "alice", password: "CorrectHorse1!" }),
       }),
     );
     const body = (await res.json()) as {

@@ -43,7 +43,7 @@ export interface CreateOperatorOptions {
   readonly roles?: readonly string[];
   /**
    * Password length / character-class policy. Defaults applied when omitted
-   * (minLength 12, letter + number). Pass custom knobs to tighten/loosen
+   * (minLength 8, letter, number, upper, lower, symbol). Pass custom knobs to tighten/loosen
    * within reason — never skip without {@link skipPasswordPolicy}.
    */
   readonly passwordPolicy?: PasswordPolicyOptions;

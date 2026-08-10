@@ -69,7 +69,7 @@ async function mintUsernameSession(
   const res = await app.fetch(
     jsonPost("/auth/sign-up/username", {
       username: usernameValue,
-      password: "CorrectHorse1",
+      password: "CorrectHorse1!",
     }),
   );
   expect(res.status).toBe(200);
@@ -167,7 +167,7 @@ describe("auth methods — rate limiting / enumeration", () => {
     const missing = await app.fetch(
       jsonPost("/auth/sign-in/username", {
         username: "no_such_user",
-        password: "CorrectHorse1",
+        password: "CorrectHorse1!",
       }),
     );
     const wrong = await app.fetch(
@@ -407,7 +407,7 @@ describe("auth methods — anonymous non-escalation", () => {
     const linked = await app.fetch(
       jsonPost("/auth/sign-up/username", {
         username: "fresh_from_anon",
-        password: "CorrectHorse1",
+        password: "CorrectHorse1!",
       }),
     );
     const linkedBody = (await linked.json()) as { data: { userId: string } };

@@ -12,10 +12,24 @@ import { createOperator, createOperatorStore } from "./operator.ts";
 import { createSessionStore, issueSession, rotateRefresh, SessionError } from "./sessions.ts";
 
 describe("password policy", () => {
-  test("defaults require length 12, letter, number", () => {
-    expect(() => assertPasswordPolicy("short1A", {})).toThrow(PasswordPolicyError);
-    expect(() => assertPasswordPolicy("longenoughword", {})).toThrow(PasswordPolicyError);
-    expect(() => assertPasswordPolicy("Longenough12", {})).not.toThrow();
+  test("defaults require length 8, upper, lower, number, symbol", () => {
+    expect(() => assertPasswordPolicy("Aa1!", {})).toThrow(PasswordPolicyError);
+    expect(() => assertPasswordPolicy("password", {})).toThrow(PasswordPolicyError);
+    expect(() => assertPasswordPolicy("Password1", {})).toThrow(PasswordPolicyError);
+    expect(() => assertPasswordPolicy("Password1!", {})).not.toThrow();
+  });
+
+  test("requireUppercase, requireLowercase, and requireSymbol can be turned off", () => {
+    const loose = {
+      minLength: 8,
+      requireUppercase: false,
+      requireLowercase: false,
+      requireSymbol: false,
+      requireLetter: true,
+      requireNumber: true,
+    };
+    expect(() => assertPasswordPolicy("password1", loose)).not.toThrow();
+    expect(() => assertPasswordPolicy("PASSWORD1", loose)).not.toThrow();
   });
 
   test("createOperator rejects weak passwords by default without passwordPolicy", async () => {

@@ -79,7 +79,7 @@ describe("console operator persistence", () => {
     const op = await createOperator(first.operators, {
       email: "ops@example.com",
       name: "Ops",
-      password: "password1234",
+      password: "Password1234!",
     });
     await first.persistOperator(op.id);
     await first.close();
@@ -120,7 +120,7 @@ describe("console operator persistence", () => {
     const op = await createOperator(first.operators, {
       email: "ops@example.com",
       name: "Ops",
-      password: "password1234",
+      password: "Password1234!",
     });
     await first.persistOperator(op.id);
     const issued = await issueSession(
@@ -163,7 +163,7 @@ describe("console operator persistence", () => {
             claimCode: first.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -212,7 +212,7 @@ describe("console operator persistence", () => {
     const op = await createOperator(persistence.operators, {
       email: "ops@example.com",
       name: "Ops",
-      password: "password1234",
+      password: "Password1234!",
     });
     await persistence.persistOperator(op.id);
 
@@ -251,7 +251,7 @@ describe("console operator persistence", () => {
       const op = await createOperator(opened.operators, {
         email: "schema@example.com",
         name: "Schema",
-        password: "password1234",
+        password: "Password1234!",
       });
       await opened.persistOperator(op.id);
 

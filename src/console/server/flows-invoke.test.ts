@@ -31,7 +31,7 @@ describe("console flows invoke", () => {
             claimCode: code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -100,7 +100,7 @@ describe("console flows invoke", () => {
             claimCode: code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );

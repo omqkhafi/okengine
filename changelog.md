@@ -12,12 +12,29 @@ needed).
 
 ## Unreleased
 
+### 💥 Breaking Changes
+
+- Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
+  special character required (`DEFAULT_PASSWORD_POLICY`). Previous defaults were minLength 12 with
+  letter + number only. Override via `gate.auth.passwordPolicy` / `createOperator({ passwordPolicy })`.
+
+### ♻️ Changed
+
+- Console first-operator claim keeps a stricter minLength **12** with the same character classes
+  (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
+- ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
+  out mid-progress in dark mode).
+
 ### ✨ Added
+
 
 - Parallel Console SPA scaffold at `src/console/ui-next/` (React + Vite + shadcn/Base UI +
   TanStack Form/Query + HugeIcons) with a real first-admin claim page wired to
   `/console/setup/status` and `/console/setup/claim`. Existing `src/console/ui/` is unchanged;
   cutover is not yet. Gate: `bun run test:console:setup-ui-next`.
+
+- ui-next shell chrome: OKE wordmark + light/dark/system theme toggle (official shadcn Vite
+  ThemeProvider, `oke-console-theme` storage, no next-themes).
 
 ## v0.11.2 — 2026-08-10
 

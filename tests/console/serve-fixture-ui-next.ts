@@ -14,7 +14,7 @@ const cwd = await mkdtemp(join(tmpdir(), "oke-console-ui-next-"));
 const claimPath = join(here, ".claim-code-ui-next");
 
 const server = await serveConsole({
-  port: 6533,
+  port: 6538,
   hostname: "127.0.0.1",
   cwd,
   secret: "playwright-console-ui-next-secret",

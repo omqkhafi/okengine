@@ -176,7 +176,7 @@ describe("gate.auth — email Flows + security", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           email: "user@example.com",
-          password: "CorrectHorse1",
+          password: "CorrectHorse1!",
           name: "User",
         }),
       }),
@@ -192,7 +192,7 @@ describe("gate.auth — email Flows + security", () => {
       new Request("http://localhost/auth/sign-in/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: "missing@example.com", password: "CorrectHorse1" }),
+        body: JSON.stringify({ email: "missing@example.com", password: "CorrectHorse1!" }),
       }),
     );
     const badBody = (await bad.json()) as { error: { code: string; data?: { reason?: string } } };
@@ -262,7 +262,7 @@ describe("gate.auth — email Flows + security", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           email: "weak@example.com",
-          password: "CorrectHorse1",
+          password: "CorrectHorse1!",
           name: "Strong",
         }),
       }),
@@ -289,14 +289,14 @@ describe("gate.auth — email Flows + security", () => {
       new Request("http://localhost/auth/sign-up/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: "dup@example.com", password: "CorrectHorse1" }),
+        body: JSON.stringify({ email: "dup@example.com", password: "CorrectHorse1!" }),
       }),
     );
     const again = await app.fetch(
       new Request("http://localhost/auth/sign-up/email", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: "dup@example.com", password: "CorrectHorse1" }),
+        body: JSON.stringify({ email: "dup@example.com", password: "CorrectHorse1!" }),
       }),
     );
     const body = (await again.json()) as { error: { data?: { reason?: string } } };

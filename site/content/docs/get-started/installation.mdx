@@ -167,9 +167,10 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Create first operator fails (password / claim code)">
-  Use a password with at least 12 characters, including a letter and a number. Copy the claim code
-  from the current `oke dev` boot log (it expires in 30 minutes; restart mint a new one). The form
-  and the request log now show the reason — not a bare `TransportError` / `500`.
+  Use a password with at least 12 characters, including uppercase, lowercase, a number, and a
+  special character. Copy the claim code from the current `oke dev` boot log (it expires in 30
+  minutes; restart mint a new one). The form and the request log now show the reason — not a bare
+  `TransportError` / `500`.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">

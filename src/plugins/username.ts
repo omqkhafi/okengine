@@ -260,7 +260,7 @@ export interface UsernamePluginOptions extends AuthMethodOptions {
   /**
    * Password length / character-class policy on sign-up.
    * Defaults to `gate.auth.passwordPolicy` when plugged after `oke()`,
-   * else the same secure defaults (minLength 12, letter + number).
+   * else the same secure defaults (minLength 8, letter, number, upper, lower, symbol).
    */
   readonly passwordPolicy?: PasswordPolicyOptions;
   /**

@@ -21,13 +21,13 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   expect(statusBody.data.claimRequired).toBe(true);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Console" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "First admin" })).toBeVisible();
 
-  await page.getByLabel("Claim code").fill(claimCode);
-  await page.getByLabel("Name").fill("Smoke Ops");
-  await page.getByLabel("Email").fill("smoke@example.com");
-  await page.getByLabel("Password").fill("password1234");
-  await page.getByRole("button", { name: "Create first operator" }).click();
+  await page.locator("#claimCode").fill(claimCode);
+  await page.locator("#name").fill("Smoke Ops");
+  await page.locator("#email").fill("smoke@example.com");
+  await page.locator("#password").fill("Password1234!");
+  await page.getByRole("button", { name: "Create admin account" }).click();
 
   await expect(page.getByText(/First operator created\. Signed in as Smoke Ops/)).toBeVisible({
     timeout: 15_000,
@@ -48,7 +48,7 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
       claimCode,
       email: "other@example.com",
       name: "Other",
-      password: "password1234",
+      password: "Password1234!",
     },
   });
   expect(reopen.status()).toBe(400);
@@ -62,5 +62,37 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await expect(
     page.getByText("Setup is closed. Sign in with an existing operator account."),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "Create first operator" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create admin account" })).toHaveCount(0);
+});
+
+test("ui-next theme toggle flips .dark and persists across reload", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("img", { name: "OKE" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Theme" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Dark" }).click();
+
+  await expect
+    .poll(async () => page.evaluate(() => document.documentElement.classList.contains("dark")))
+    .toBe(true);
+  await expect
+    .poll(async () => page.evaluate(() => localStorage.getItem("oke-console-theme")))
+    .toBe("dark");
+
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Theme" })).toBeVisible();
+  await expect
+    .poll(async () => page.evaluate(() => document.documentElement.classList.contains("dark")))
+    .toBe(true);
+  await expect
+    .poll(async () => page.evaluate(() => localStorage.getItem("oke-console-theme")))
+    .toBe("dark");
+
+  await page.getByRole("button", { name: "Light" }).click();
+  await expect
+    .poll(async () => page.evaluate(() => document.documentElement.classList.contains("dark")))
+    .toBe(false);
+  await expect
+    .poll(async () => page.evaluate(() => localStorage.getItem("oke-console-theme")))
+    .toBe("light");
 });

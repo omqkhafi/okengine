@@ -16,7 +16,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@console/password-policy": ["../password-policy.ts"]
     }
   },
   "include": ["./**/*.ts", "./**/*.tsx"]

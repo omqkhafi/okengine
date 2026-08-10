@@ -115,7 +115,7 @@ describe("console.channel.sendTest", () => {
             claimCode: code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );

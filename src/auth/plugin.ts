@@ -40,8 +40,8 @@ export interface AuthPluginOptions {
    */
   readonly password?: PasswordHashOptions;
   /**
-   * Password length / character-class policy (defaults: minLength 12,
-   * letter + number). Credential-set paths enforce defaults unless a
+   * Password length / character-class policy (defaults: minLength 8,
+   * letter, number, upper, lower, symbol). Credential-set paths enforce defaults unless a
    * caller passes `skipPasswordPolicy` (tests only).
    */
   readonly passwordPolicy?: PasswordPolicyOptions;

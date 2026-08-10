@@ -94,6 +94,26 @@ describe("console kernel", () => {
       expect(body.error.code).toBe("ClaimFailed");
       expect(body.error.data?.reason).toBe("password_policy");
       expect(body.error.message).toMatch(/12 characters/i);
+
+      // Former default-policy password (letter+number, no upper/symbol) must fail Console policy.
+      const oldDefault = await handle.app.fetch(
+        new Request("http://console.test/console/setup/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            claimCode: handle.state.claim.code,
+            email: "ops@example.com",
+            name: "Ops",
+            password: "password1234",
+          }),
+        }),
+      );
+      expect(oldDefault.status).toBe(400);
+      const oldBody = (await oldDefault.json()) as {
+        error: { code: string; data?: { reason?: string } };
+      };
+      expect(oldBody.error.code).toBe("ClaimFailed");
+      expect(oldBody.error.data?.reason).toBe("password_policy");
     } finally {
       await handle.app.stop();
     }
@@ -115,7 +135,7 @@ describe("console kernel", () => {
             claimCode: code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -135,7 +155,7 @@ describe("console kernel", () => {
             claimCode: code,
             email: "other@example.com",
             name: "Other",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -173,7 +193,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -221,7 +241,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -269,7 +289,7 @@ describe("console kernel", () => {
             claimCode: handle.state.claim.code,
             email: "ops@example.com",
             name: "Ops",
-            password: "password1234",
+            password: "Password1234!",
           }),
         }),
       );
@@ -365,7 +385,7 @@ describe("console serve security", () => {
           claimCode: server.console.state.claim.code,
           email: "ops@example.com",
           name: "Ops",
-          password: "password1234",
+          password: "Password1234!",
         }),
       }),
     );

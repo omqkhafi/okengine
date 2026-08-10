@@ -28,7 +28,7 @@ test("setup wizard claims first admin, action is traced, wizard cannot reopen", 
   await page.getByLabel("Claim code").fill(claimCode);
   await page.getByLabel("Name").fill("Smoke Ops");
   await page.getByLabel("Email").fill("smoke@example.com");
-  await page.getByLabel("Password").fill("password1234");
+  await page.getByLabel("Password").fill("Password1234!");
   await page.getByRole("button", { name: "Create first operator" }).click();
 
   await expect(page.getByText(/Signed in as Smoke Ops/)).toBeVisible({
@@ -45,7 +45,7 @@ test("setup wizard claims first admin, action is traced, wizard cannot reopen", 
       claimCode,
       email: "other@example.com",
       name: "Other",
-      password: "password1234",
+      password: "Password1234!",
     },
   });
   expect(reopen.status()).toBe(400);

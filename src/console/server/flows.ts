@@ -27,6 +27,7 @@ import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
 import { consoleFailureMessage } from "./i18n.ts";
+import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { tenancyDeclared } from "./store.ts";
 
@@ -41,7 +42,7 @@ const ClaimIn = z.object({
   claimCode: z.string().min(1),
   email: z.string().email(),
   name: z.string().min(1),
-  /** Matches default operator password policy (minLength 12). */
+  /** Matches {@link CONSOLE_PASSWORD_POLICY} (enforced again in createOperator). */
   password: z.string().min(12),
 });
 
@@ -1726,6 +1727,7 @@ function createSetupClaim(state: ConsoleState) {
           email: input.email,
           name: input.name,
           password: input.password,
+          passwordPolicy: CONSOLE_PASSWORD_POLICY,
         });
       } catch (err) {
         if (err instanceof PasswordPolicyError) {

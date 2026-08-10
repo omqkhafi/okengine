@@ -10,7 +10,7 @@ const en = {
   "ClaimFailed.rate_limited": "Too many claim attempts. Wait a minute and try again.",
   "ClaimFailed.missing": "No claim code is active. Restart `oke dev` to mint one.",
   "ClaimFailed.password_policy":
-    "Password needs at least 12 characters, including a letter and a number.",
+    "Password needs at least 12 characters, including uppercase, lowercase, a number, and a special character.",
   "ClaimFailed.password_breached":
     "Choose a different password — this one appears in a breach list.",
   SetupClosed: "Setup is closed — an operator already exists. Sign in instead.",

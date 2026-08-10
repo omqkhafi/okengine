@@ -4,13 +4,17 @@
 
 /** Options for {@link assertPasswordPolicy}. */
 export interface PasswordPolicyOptions {
-  /** Minimum length (default 12). */
+  /** Minimum length (default {@link DEFAULT_PASSWORD_MIN_LENGTH}). */
   readonly minLength?: number;
   /** Require at least one letter (default true). */
   readonly requireLetter?: boolean;
   /** Require at least one digit (default true). */
   readonly requireNumber?: boolean;
-  /** Require at least one non-alphanumeric symbol (default false). */
+  /** Require at least one uppercase letter (default true). */
+  readonly requireUppercase?: boolean;
+  /** Require at least one lowercase letter (default true). */
+  readonly requireLowercase?: boolean;
+  /** Require at least one non-alphanumeric symbol (default true). */
   readonly requireSymbol?: boolean;
 }
 
@@ -19,11 +23,26 @@ export interface ResolvedPasswordPolicy {
   readonly minLength: number;
   readonly requireLetter: boolean;
   readonly requireNumber: boolean;
+  readonly requireUppercase: boolean;
+  readonly requireLowercase: boolean;
   readonly requireSymbol: boolean;
 }
 
-/** Default minimum password length. */
-export const DEFAULT_PASSWORD_MIN_LENGTH = 12;
+/** Default minimum password length (global / Gate auth). */
+export const DEFAULT_PASSWORD_MIN_LENGTH = 8;
+
+/**
+ * Global password policy defaults (Gate auth / `createIdentity` / `createOperator`
+ * when no `passwordPolicy` is passed). Console claim uses a stricter constant.
+ */
+export const DEFAULT_PASSWORD_POLICY = {
+  minLength: DEFAULT_PASSWORD_MIN_LENGTH,
+  requireLetter: true,
+  requireNumber: true,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireSymbol: true,
+} as const satisfies Required<PasswordPolicyOptions>;
 
 /**
  * Resolve policy options with safe defaults.
@@ -32,10 +51,12 @@ export const DEFAULT_PASSWORD_MIN_LENGTH = 12;
  */
 export function resolvePasswordPolicy(options: PasswordPolicyOptions = {}): ResolvedPasswordPolicy {
   return {
-    minLength: options.minLength ?? DEFAULT_PASSWORD_MIN_LENGTH,
-    requireLetter: options.requireLetter ?? true,
-    requireNumber: options.requireNumber ?? true,
-    requireSymbol: options.requireSymbol ?? false,
+    minLength: options.minLength ?? DEFAULT_PASSWORD_POLICY.minLength,
+    requireLetter: options.requireLetter ?? DEFAULT_PASSWORD_POLICY.requireLetter,
+    requireNumber: options.requireNumber ?? DEFAULT_PASSWORD_POLICY.requireNumber,
+    requireUppercase: options.requireUppercase ?? DEFAULT_PASSWORD_POLICY.requireUppercase,
+    requireLowercase: options.requireLowercase ?? DEFAULT_PASSWORD_POLICY.requireLowercase,
+    requireSymbol: options.requireSymbol ?? DEFAULT_PASSWORD_POLICY.requireSymbol,
   };
 }
 
@@ -53,6 +74,12 @@ export function assertPasswordPolicy(password: string, options: PasswordPolicyOp
   }
   if (policy.requireLetter && !/[A-Za-z]/.test(password)) {
     reasons.push("requireLetter");
+  }
+  if (policy.requireUppercase && !/[A-Z]/.test(password)) {
+    reasons.push("requireUppercase");
+  }
+  if (policy.requireLowercase && !/[a-z]/.test(password)) {
+    reasons.push("requireLowercase");
   }
   if (policy.requireNumber && !/\d/.test(password)) {
     reasons.push("requireNumber");

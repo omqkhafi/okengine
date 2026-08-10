@@ -1,5 +1,5 @@
 /**
- * Parallel Console SPA entry — Query + nuqs providers, claim page only.
+ * Parallel Console SPA entry — Query + theme + nuqs providers, claim page only.
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { restoreAccessToken } from "./client.ts";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./styles.css";
 
 restoreAccessToken();
@@ -28,10 +29,12 @@ if (!rootEl) {
 
 createRoot(rootEl).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <NuqsAdapter>
-        <App />
-      </NuqsAdapter>
-    </QueryClientProvider>
+    <ThemeProvider defaultTheme="system" storageKey="oke-console-theme">
+      <QueryClientProvider client={queryClient}>
+        <NuqsAdapter>
+          <App />
+        </NuqsAdapter>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

@@ -11,13 +11,13 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   use: {
-    baseURL: "http://127.0.0.1:6533",
+    baseURL: "http://127.0.0.1:6538",
     headless: true,
     trace: "off",
   },
   webServer: {
     command: "bun run build:console-next && bun ./tests/console/serve-fixture-ui-next.ts",
-    url: "http://127.0.0.1:6533/console/setup/status",
+    url: "http://127.0.0.1:6538/console/setup/status",
     reuseExistingServer: false,
     timeout: 120_000,
   },
