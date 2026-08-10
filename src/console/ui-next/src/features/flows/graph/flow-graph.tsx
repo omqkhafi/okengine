@@ -21,9 +21,26 @@ interface FlowGraphProps {
   readonly highlightedNodeIds: ReadonlySet<string>;
   /** Whether selection should move the viewport (follow-camera). */
   readonly follow: boolean;
+  /** Node id currently pulsing during Replay playback. */
+  readonly activeNodeId?: string | null;
+  /** Node id emphasized by sticky sheet focus (store / signal / ai). */
+  readonly focusedNodeId?: string | null;
+  /** Called when a graph node is clicked. */
+  readonly onNodeClick?: (nodeId: string) => void;
+  /** Called when the empty canvas is clicked. */
+  readonly onPaneClick?: () => void;
 }
 
-function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: FlowGraphProps) {
+function Canvas({
+  manifest,
+  highlightedFlowIds,
+  highlightedNodeIds,
+  follow,
+  activeNodeId = null,
+  focusedNodeId = null,
+  onNodeClick,
+  onPaneClick,
+}: FlowGraphProps) {
   const { fitView } = useReactFlow();
   const { theme } = useTheme();
   const colorMode =
@@ -36,8 +53,12 @@ function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: Fl
   const graph = useMemo(() => buildFlowGraph(manifest), [manifest]);
 
   const nodes = useMemo<FlowGraphNode[]>(
-    () => applyChainHighlight(graph.nodes, highlightedFlowIds, highlightedNodeIds),
-    [graph.nodes, highlightedFlowIds, highlightedNodeIds],
+    () =>
+      applyChainHighlight(graph.nodes, highlightedFlowIds, highlightedNodeIds, {
+        activeNodeId,
+        focusedNodeId,
+      }),
+    [graph.nodes, highlightedFlowIds, highlightedNodeIds, activeNodeId, focusedNodeId],
   );
 
   const edges = useMemo(
@@ -67,6 +88,8 @@ function Canvas({ manifest, highlightedFlowIds, highlightedNodeIds, follow }: Fl
       minZoom={0.2}
       maxZoom={1.6}
       defaultEdgeOptions={{ type: "smoothstep" }}
+      onNodeClick={(_, node) => onNodeClick?.(node.id)}
+      onPaneClick={() => onPaneClick?.()}
     >
       <Background gap={24} size={1} color="color-mix(in oklab, var(--foreground) 14%, transparent)" />
       <Controls showInteractive={false} />

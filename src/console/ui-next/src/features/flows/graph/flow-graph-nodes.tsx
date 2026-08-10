@@ -5,6 +5,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import type { ComponentProps, CSSProperties } from "react";
+import { motion, useReducedMotion } from "@/lib/motion";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
 import type { FlowGraphNodeData } from "./build-flow-graph.ts";
@@ -30,17 +31,18 @@ const KIND_SHAPE: Record<FlowGraphAccentKind, string> = {
 
 function shellClass(data: FlowGraphNodeData, kind: FlowGraphAccentKind): string {
   return cn(
-    "group relative flex h-full w-full items-center gap-2.5 border-2 px-2.5 text-xs transition-[opacity,filter,box-shadow,border-color,transform] duration-200",
+    "group relative flex h-full w-full items-center gap-2.5 border-2 px-2.5 text-xs transition-[opacity,filter,box-shadow,border-color] duration-200",
     KIND_SHAPE[kind],
     data.dimmed && "opacity-30 saturate-[0.35]",
-    data.highlighted && "z-10 scale-[1.02]",
+    data.highlighted && "z-10",
+    data.focused && "z-10",
   );
 }
 
 function shellStyle(kind: FlowGraphAccentKind, data: FlowGraphNodeData): CSSProperties {
   const accent = NODE_ACCENT[kind];
   const tint = `color-mix(in oklab, ${accent.accent} 20%, var(--card))`;
-  if (data.highlighted) {
+  if (data.highlighted || data.focused) {
     return {
       borderColor: accent.accent,
       background: `color-mix(in oklab, ${accent.accent} 26%, var(--card))`,
@@ -52,6 +54,51 @@ function shellStyle(kind: FlowGraphAccentKind, data: FlowGraphNodeData): CSSProp
     background: tint,
     boxShadow: `inset 3px 0 0 ${accent.accent}`,
   };
+}
+
+/**
+ * Motion wrapper for graph node shells — hover/tap affordance, highlight
+ * scale, and a Replay playback pulse. Reduced-motion collapses to static.
+ */
+function NodeShell({
+  data,
+  kind,
+  className,
+  style,
+  children,
+  ...rest
+}: {
+  readonly data: FlowGraphNodeData;
+  readonly kind: FlowGraphAccentKind;
+  readonly className?: string;
+  readonly style?: CSSProperties;
+  readonly children: React.ReactNode;
+} & Record<string, unknown>) {
+  const reduceMotion = useReducedMotion();
+  const accent = NODE_ACCENT[kind];
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      initial={false}
+      whileHover={reduceMotion ? undefined : { scale: 1.04 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+      animate={{
+        scale: reduceMotion ? 1 : data.active ? [1, 1.08, 1] : data.highlighted ? 1.02 : 1,
+        boxShadow: data.active
+          ? `0 0 0 2px ${accent.accent}, 0 0 30px ${accent.glow}`
+          : undefined,
+      }}
+      transition={
+        data.active
+          ? { duration: 0.5, ease: "easeInOut" }
+          : { type: "spring", stiffness: 400, damping: 28 }
+      }
+      {...rest}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 function IconWell({ kind }: { readonly kind: FlowGraphAccentKind }) {
@@ -125,7 +172,9 @@ export function UnitNode({ data }: NodeProps<GraphNode>) {
 /** Flow node — circular icon well + sky accent bar. */
 export function FlowNode({ data }: NodeProps<GraphNode>) {
   return (
-    <div
+    <NodeShell
+      data={data}
+      kind="flow"
       className={shellClass(data, "flow")}
       style={shellStyle("flow", data)}
       data-slot="flow-node"
@@ -141,14 +190,16 @@ export function FlowNode({ data }: NodeProps<GraphNode>) {
         </div>
       </div>
       <HandleDot type="source" kind="flow" />
-    </div>
+    </NodeShell>
   );
 }
 
 /** Store resource node — square icon well + emerald accent. */
 export function StoreNode({ data }: NodeProps<GraphNode>) {
   return (
-    <div
+    <NodeShell
+      data={data}
+      kind="store"
       className={shellClass(data, "store")}
       style={shellStyle("store", data)}
       data-slot="store-node"
@@ -161,14 +212,16 @@ export function StoreNode({ data }: NodeProps<GraphNode>) {
           <MetaBadge text={data.badge ?? data.facet ?? "store"} />
         </div>
       </div>
-    </div>
+    </NodeShell>
   );
 }
 
 /** Signal node — pill shell + amber accent. */
 export function SignalNode({ data }: NodeProps<GraphNode>) {
   return (
-    <div
+    <NodeShell
+      data={data}
+      kind="signal"
       className={shellClass(data, "signal")}
       style={shellStyle("signal", data)}
       data-slot="signal-node"
@@ -182,14 +235,16 @@ export function SignalNode({ data }: NodeProps<GraphNode>) {
         </div>
       </div>
       <HandleDot type="source" kind="signal" />
-    </div>
+    </NodeShell>
   );
 }
 
 /** AI prompt node — soft rounded shell + rose accent. */
 export function AiNode({ data }: NodeProps<GraphNode>) {
   return (
-    <div
+    <NodeShell
+      data={data}
+      kind="ai"
       className={shellClass(data, "ai")}
       style={shellStyle("ai", data)}
       data-slot="ai-node"
@@ -202,7 +257,7 @@ export function AiNode({ data }: NodeProps<GraphNode>) {
           <MetaBadge text={data.badge ?? "ai"} />
         </div>
       </div>
-    </div>
+    </NodeShell>
   );
 }
 

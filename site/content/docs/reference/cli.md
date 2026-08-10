@@ -30,7 +30,8 @@ oke console claim-code           # print setup claim code from .oke/claim-code (
                                  #   → `bun run dev:console-next` boots kernel + Vite and prints the claim
                                  #   → `bun run dev:console-next:seeded` same + all 8 elements + ~80 traces
                                  #     (flow/signal/store/clock/gate/vault/channel/ai + ops traffic;
-                                 #     click Traces row → highlight chain; hover → Replay / Copy run ID)
+                                 #     click Traces row → highlight chain; click graph node → filter runs;
+                                 #     Replay → waterfall playhead + chain pulse on the graph)
                                  #   → after `bun run test:console:setup-ui-next`, open the HTML report:
                                  #     `bun run test:console:setup-ui-next:report` (trace + screenshots + video)
 oke stack                        # preview resolved images/tags/ports — writes nothing

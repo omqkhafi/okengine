@@ -38,6 +38,10 @@ export type FlowGraphNodeData = {
   readonly dimmed?: boolean;
   /** Emphasis ring when part of the highlighted chain. */
   readonly highlighted?: boolean;
+  /** Pulsing during Replay playback (active chain step). */
+  readonly active?: boolean;
+  /** Emphasized by sticky sheet focus (store / signal / ai resource). */
+  readonly focused?: boolean;
 };
 
 export type FlowGraphNode = Node<FlowGraphNodeData>;
@@ -367,11 +371,20 @@ function layoutWithDagre(
   return nodes;
 }
 
+/** Extra per-node emphasis flags layered onto chain highlight. */
+export interface ChainHighlightOptions {
+  /** Node id pulsing during Replay playback. */
+  readonly activeNodeId?: string | null;
+  /** Node id emphasized by sticky sheet focus. */
+  readonly focusedNodeId?: string | null;
+}
+
 /** Apply highlight/dim to nodes for a selected trace chain. */
 export function applyChainHighlight(
   nodes: FlowGraphNode[],
   highlightedFlowIds: ReadonlySet<string>,
   highlightedNodeIds: ReadonlySet<string>,
+  options: ChainHighlightOptions = {},
 ): FlowGraphNode[] {
   const active = highlightedFlowIds.size > 0 || highlightedNodeIds.size > 0;
   return nodes.map((node) => {
@@ -386,6 +399,8 @@ export function applyChainHighlight(
         ...node.data,
         highlighted: inChain,
         dimmed: active && !inChain,
+        active: options.activeNodeId != null && node.id === options.activeNodeId,
+        focused: options.focusedNodeId != null && node.id === options.focusedNodeId,
       },
     };
   });

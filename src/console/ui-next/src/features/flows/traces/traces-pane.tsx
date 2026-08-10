@@ -2,7 +2,7 @@
  * Scoped Traces pane (right side of the Flow split-view).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircleIcon,
   FilterHorizontalIcon,
@@ -10,6 +10,7 @@ import {
   Timer01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
 import {
   Empty,
@@ -31,6 +32,11 @@ import { cn } from "@/lib/utils";
 import type { LiveStatus } from "../data/use-console-live.ts";
 import { AdvancedFilters } from "./advanced-filters.tsx";
 import type { DimensionQuery } from "./dimension-query.ts";
+import {
+  applyGraphFilterToQuery,
+  filterRunsByGraph,
+  type GraphFilter,
+} from "./graph-filter.ts";
 import {
   DEFAULT_TRACES_FILTERS,
   DURATION_THRESHOLD_OPTIONS,
@@ -80,19 +86,54 @@ export function TracesPane({
   selectedRunId,
   onSelect,
   liveStatus,
+  manifest,
+  graphFilter,
+  onGraphFilterChange,
+  focusEffectIndex,
+  onFocusEffectChange,
+  playbackKey,
+  onReplayStart,
+  selectedRun: selectedRunProp,
 }: {
   readonly runs: readonly RunRow[];
   readonly selectedRunId: string | null;
   readonly onSelect: (id: string | null) => void;
   readonly liveStatus: LiveStatus;
+  readonly manifest: Manifest | null;
+  readonly graphFilter: GraphFilter | null;
+  readonly onGraphFilterChange: (filter: GraphFilter | null) => void;
+  readonly focusEffectIndex: number | null;
+  readonly onFocusEffectChange: (index: number | null) => void;
+  readonly playbackKey: number;
+  readonly onReplayStart: () => void;
+  readonly selectedRun?: RunRow | null;
 }) {
   const [filters, setFilters] = useState<TracesFilters>(DEFAULT_TRACES_FILTERS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const visible = useMemo(() => filterScopedRuns(runs, filters), [runs, filters]);
+  // Graph flow clicks upsert a `flow = X` clause into the shared advanced query.
+  useEffect(() => {
+    if (graphFilter?.kind === "flow") {
+      setFilters((prev) => ({
+        ...prev,
+        advanced: applyGraphFilterToQuery(prev.advanced, graphFilter),
+      }));
+    }
+  }, [graphFilter]);
+
+  const visible = useMemo(() => {
+    const base = filterScopedRuns(runs, filters);
+    return filterRunsByGraph(base, graphFilter, manifest);
+  }, [runs, filters, graphFilter, manifest]);
+
   const selectedRun = useMemo(
-    () => (selectedRunId ? (runs.find((r) => r.id === selectedRunId) ?? null) : null),
-    [runs, selectedRunId],
+    () =>
+      selectedRunProp !== undefined
+        ? selectedRunProp
+        : selectedRunId
+          ? (runs.find((r) => r.id === selectedRunId) ?? null)
+          : null,
+    [selectedRunProp, runs, selectedRunId],
   );
   const advancedActive = filters.advanced.clauses.length > 0;
 
@@ -249,6 +290,18 @@ export function TracesPane({
               </span>
             ) : null}
           </button>
+          {graphFilter ? (
+            <button
+              type="button"
+              data-slot="traces-graph-filter"
+              onClick={() => onGraphFilterChange(null)}
+              title="Clear graph filter"
+              className="inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
+            >
+              {graphFilter.kind === "flow" ? graphFilter.flowId : `signal:${graphFilter.signal}`}
+              <span aria-hidden>×</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -292,7 +345,14 @@ export function TracesPane({
         )}
       </div>
 
-      <TraceDetailSheet run={selectedRun} onClose={() => onSelect(null)} />
+      <TraceDetailSheet
+        run={selectedRun}
+        onClose={() => onSelect(null)}
+        focusEffectIndex={focusEffectIndex}
+        onFocusEffectChange={onFocusEffectChange}
+        playbackKey={playbackKey}
+        onReplayStart={onReplayStart}
+      />
     </div>
   );
 }

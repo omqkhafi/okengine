@@ -53,6 +53,15 @@ needed).
 
 ### ✨ Added
 
+- ui-next Flows split-view is bidirectionally interactive: clicking a flow node filters the
+  Traces list (`flow = X` advanced clause), clicking a signal node filters to runs whose flow
+  emits or consumes that signal, and clicking the canvas clears the filter (removable chip in
+  the filter row).
+- ui-next Trace detail sheet supports sticky effect focus — click a waterfall bar, overview
+  segment, or event row to pin emphasis (click again to release).
+- ui-next Replay is now visible: a Motion playhead sweeps the waterfall while bars grow as it
+  crosses them, the hero duration counts up in sync, and
+  the Flow graph pulses along the causal chain. All motion respects reduced-motion settings.
 - `oke dev` live Traces bridge: host-app WideEvents POST to Console
   `POST /console/runs/ingest` (secret-gated). Console appends into its own
   runs store → existing `feedRun` / `projectRun` PII mask for

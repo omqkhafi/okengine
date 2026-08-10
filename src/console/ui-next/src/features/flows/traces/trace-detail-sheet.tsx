@@ -16,6 +16,15 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { tracesReplay, type RunRow } from "@/client.ts";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type MotionValue,
+} from "@/lib/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +62,7 @@ import { TraceRequestSection } from "./trace-request-section.tsx";
 import { executeTraceReplay } from "./trace-actions.ts";
 import { traceGateInfos, type TraceGateInfo } from "./trace-gates.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
+import { playbackDurationMs } from "./replay-playback.ts";
 import { waterfallBars, type WaterfallBar } from "./waterfall-bars.ts";
 import {
   mapToViewport,
@@ -74,6 +84,14 @@ export type TraceDetailSheetProps = {
   readonly onClose: () => void;
   /** Optional inject for tests — defaults to {@link tracesReplay}. */
   readonly replay?: typeof tracesReplay;
+  /** Sticky focused effect index (synced with the graph). */
+  readonly focusEffectIndex?: number | null;
+  /** Set sticky focus when a bar / event row is clicked. */
+  readonly onFocusEffectChange?: (index: number | null) => void;
+  /** Bumped by the page to retrigger playback for the same run. */
+  readonly playbackKey?: number;
+  /** Called when Replay succeeds so the page can pulse the graph chain. */
+  readonly onReplayStart?: () => void;
 };
 
 const sectionClassName = "flex flex-col gap-2.5 border-b border-border/60 px-3 py-3 last:border-b-0";
@@ -93,8 +111,13 @@ export function TraceDetailSheet({
   run,
   onClose,
   replay = tracesReplay,
+  focusEffectIndex = null,
+  onFocusEffectChange,
+  playbackKey = 0,
+  onReplayStart,
 }: TraceDetailSheetProps) {
   const manifest = useManifest();
+  const reduceMotion = useReducedMotion();
   const trigger = run ? triggerIconSpec(run.trigger) : null;
   const chips = useMemo(() => (run ? effectSummaryChips(run) : []), [run]);
   const gateInfos = useMemo(
@@ -126,12 +149,23 @@ export function TraceDetailSheet({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [viewStart, setViewStart] = useState(0);
+  const [playing, setPlaying] = useState(false);
+
+  const progress = useMotionValue(0);
+  // Hero duration counter — counts up on open, tracks the playhead on Replay.
+  const durationMv = useMotionValue(0);
 
   const view = useMemo(() => timelineView(zoom, viewStart), [zoom, viewStart]);
   const ticks = useMemo(
     () => (run ? timelineTicksForView(run.durationMs, view) : []),
     [run, view],
   );
+
+  // Playhead tracks the zoomed viewport; parks offscreen when out of view.
+  const playheadLeft = useTransform(progress, (p) => {
+    const mapped = mapToViewport(p, 0.0001, view);
+    return mapped ? `${mapped.left * 100}%` : "-10%";
+  });
 
   useEffect(() => {
     setHint(null);
@@ -143,7 +177,50 @@ export function TraceDetailSheet({
     setHoverIndex(null);
     setZoom(1);
     setViewStart(0);
-  }, [run?.id]);
+    setPlaying(false);
+    progress.set(0);
+    if (!run) return;
+    if (reduceMotion) {
+      durationMv.set(run.durationMs);
+      return;
+    }
+    durationMv.set(0);
+    const controls = animate(durationMv, run.durationMs, {
+      duration: 0.6,
+      ease: [0.16, 1, 0.3, 1],
+    });
+    return () => controls.stop();
+    // Count-up runs once per selected run — not on live-poll identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id, reduceMotion]);
+
+  // Drive the waterfall playhead when the page bumps playbackKey (Replay).
+  useEffect(() => {
+    if (playbackKey === 0 || !run) return;
+    if (reduceMotion) {
+      progress.set(1);
+      durationMv.set(run.durationMs);
+      setPlaying(false);
+      return;
+    }
+    setPlaying(true);
+    progress.set(0);
+    durationMv.set(0);
+    const controls = animate(progress, 1, {
+      duration: playbackDurationMs(run.durationMs) / 1000,
+      ease: "linear",
+      onUpdate: (p) => durationMv.set(p * run.durationMs),
+      onComplete: () => {
+        durationMv.set(run.durationMs);
+        setPlaying(false);
+      },
+    });
+    return () => {
+      controls.stop();
+      setPlaying(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playbackKey]);
 
   const onReplay = async (e: MouseEvent) => {
     e.stopPropagation();
@@ -160,6 +237,7 @@ export function TraceDetailSheet({
       }
       setHint(res.data?.dryRun ? "Replayed (dry-run)" : "Replayed");
       setHintTone("ok");
+      onReplayStart?.();
     } catch (err) {
       setHint(err instanceof Error ? err.message : "Replay failed");
       setHintTone("error");
@@ -203,26 +281,40 @@ export function TraceDetailSheet({
                   </SheetDescription>
                 </div>
               </div>
-              {hint ? (
-                <Badge
-                  variant="outline"
-                  role="status"
-                  className={cn(
-                    "h-5 w-fit rounded-md px-1.5 text-[10px] font-medium",
-                    hintTone === "ok" &&
-                      "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                    hintTone === "error" &&
-                      "border-destructive/40 bg-destructive/10 text-destructive",
-                  )}
-                >
-                  {hint}
-                </Badge>
-              ) : null}
+              <AnimatePresence mode="wait">
+                {hint ? (
+                  <motion.div
+                    key={hint}
+                    initial={reduceMotion ? false : { opacity: 0, y: -4, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, y: -4, scale: 0.96 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                  >
+                    <Badge
+                      variant="outline"
+                      role="status"
+                      className={cn(
+                        "h-5 w-fit rounded-md px-1.5 text-[10px] font-medium",
+                        hintTone === "ok" &&
+                          "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                        hintTone === "error" &&
+                          "border-destructive/40 bg-destructive/10 text-destructive",
+                      )}
+                    >
+                      {hint}
+                    </Badge>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </SheetHeader>
 
             <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto p-0">
               <section className={sectionClassName} data-slot="trace-summary">
-                <TraceSummaryStrip chips={chips} durationMs={run.durationMs} />
+                <TraceSummaryStrip
+                  chips={chips}
+                  durationMs={run.durationMs}
+                  durationValue={durationMv}
+                />
               </section>
 
               {gateInfos.length > 0 ? (
@@ -315,7 +407,7 @@ export function TraceDetailSheet({
                 {bars.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">No effects recorded</p>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
+                  <div className="relative flex flex-col gap-1.5">
                     <TimelineRuler ticks={ticks} />
                     <OverviewTrack
                       bars={bars}
@@ -323,6 +415,10 @@ export function TraceDetailSheet({
                       view={view}
                       hoverIndex={hoverIndex}
                       onHover={setHoverIndex}
+                      onSelect={(index) =>
+                        onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                      }
+                      focusIndex={focusEffectIndex}
                     />
                     {bars.map((bar) => (
                       <WaterfallBarRow
@@ -330,9 +426,23 @@ export function TraceDetailSheet({
                         bar={bar}
                         view={view}
                         dimmed={hoverIndex !== null && hoverIndex !== bar.index}
+                        focused={focusEffectIndex === bar.index}
+                        progress={progress}
+                        playing={playing}
                         onHover={setHoverIndex}
+                        onSelect={(index) =>
+                          onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                        }
                       />
                     ))}
+                    {playing ? (
+                      <motion.div
+                        className="pointer-events-none absolute top-4 bottom-0 w-px bg-foreground/70"
+                        style={{ left: playheadLeft }}
+                        data-slot="trace-waterfall-playhead"
+                        aria-hidden
+                      />
+                    ) : null}
                     {gaps.length > 0 ? (
                       <p className="text-[10px] text-muted-foreground">
                         Hatched spans are idle time — no effects recorded.
@@ -383,10 +493,18 @@ export function TraceDetailSheet({
                             key={`${effect.kind}:${effect.resource}:${index}`}
                             data-slot="trace-event-row"
                             data-index={index}
+                            data-focused={focusEffectIndex === index ? "true" : "false"}
                             className={cn(
-                              "flex flex-col gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors",
-                              hoverIndex === index ? "bg-muted" : "hover:bg-muted/60",
+                              "flex cursor-pointer flex-col gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors",
+                              focusEffectIndex === index
+                                ? "bg-muted ring-1 ring-foreground/20"
+                                : hoverIndex === index
+                                  ? "bg-muted"
+                                  : "hover:bg-muted/60",
                             )}
+                            onClick={() =>
+                              onFocusEffectChange?.(focusEffectIndex === index ? null : index)
+                            }
                             onMouseEnter={() => setHoverIndex(index)}
                             onMouseLeave={() => setHoverIndex(null)}
                           >
@@ -408,14 +526,13 @@ export function TraceDetailSheet({
                                 data-slot="trace-event-bar-track"
                                 aria-hidden
                               >
-                                <div
-                                  className="absolute inset-y-0 rounded-full"
-                                  style={{
-                                    left: `${bar.offsetRatio * 100}%`,
-                                    width: `${Math.max(bar.widthRatio * 100, bar.widthRatio > 0 ? 0.5 : 0)}%`,
-                                    backgroundColor: effectBarColor(bar.kind),
-                                  }}
-                                  data-slot="trace-event-bar"
+                                <PlaybackBarFill
+                                  bar={bar}
+                                  left={bar.offsetRatio}
+                                  width={bar.widthRatio}
+                                  progress={progress}
+                                  playing={playing}
+                                  slot="trace-event-bar"
                                 />
                               </div>
                             ) : null}
@@ -478,12 +595,16 @@ function EffectKindGlyph({ kind }: { readonly kind: RunEffectKind }): JSX.Elemen
 function TraceSummaryStrip({
   chips,
   durationMs,
+  durationValue,
 }: {
   readonly chips: readonly EffectSummaryChip[];
   readonly durationMs: number;
+  /** Animated duration in ms — counts up on open, tracks Replay playback. */
+  readonly durationValue: MotionValue<number>;
 }): JSX.Element {
   const duration = chips.find((c) => c.variant === "duration");
   const metrics = chips.filter((c) => c.variant !== "duration");
+  const label = useTransform(durationValue, (v) => formatDuration(Math.round(v)));
   return (
     <div
       className="flex items-center gap-3"
@@ -505,14 +626,14 @@ function TraceSummaryStrip({
                   className={cn("size-3.5", durationClassName(durationMs))}
                   aria-hidden
                 />
-                <span
+                <motion.span
                   className={cn(
                     "font-mono text-xl font-semibold tracking-tight tabular-nums leading-none",
                     durationClassName(durationMs),
                   )}
                 >
-                  {duration.label}
-                </span>
+                  {label}
+                </motion.span>
               </div>
             )}
           />
@@ -689,12 +810,16 @@ function OverviewTrack({
   view,
   hoverIndex,
   onHover,
+  onSelect,
+  focusIndex,
 }: {
   readonly bars: readonly WaterfallBar[];
   readonly gaps: readonly WaterfallGap[];
   readonly view: TimelineView;
   readonly hoverIndex: number | null;
   readonly onHover: (index: number | null) => void;
+  readonly onSelect?: (index: number) => void;
+  readonly focusIndex?: number | null;
 }): JSX.Element {
   return (
     <div
@@ -716,6 +841,7 @@ function OverviewTrack({
       {bars.map((bar) => {
         const mapped = mapToViewport(bar.offsetRatio, bar.widthRatio, view);
         if (!mapped || mapped.width <= 0) return null;
+        const focused = focusIndex === bar.index;
         return (
           <Tooltip key={`ov-${bar.index}`}>
             <TooltipTrigger
@@ -723,8 +849,9 @@ function OverviewTrack({
                 <div
                   {...props}
                   className={cn(
-                    "absolute inset-y-0.5 rounded-full transition-opacity",
-                    hoverIndex !== null && hoverIndex !== bar.index && "opacity-35",
+                    "absolute inset-y-0.5 cursor-pointer rounded-full transition-opacity",
+                    hoverIndex !== null && hoverIndex !== bar.index && !focused && "opacity-35",
+                    focused && "ring-1 ring-foreground/40",
                   )}
                   style={{
                     left: `${mapped.left * 100}%`,
@@ -732,6 +859,10 @@ function OverviewTrack({
                     backgroundColor: effectBarColor(bar.kind),
                   }}
                   data-slot="trace-waterfall-overview-bar"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect?.(bar.index);
+                  }}
                   onMouseEnter={(event) => {
                     props.onMouseEnter?.(event);
                     onHover(bar.index);
@@ -804,12 +935,20 @@ function WaterfallBarRow({
   bar,
   view,
   dimmed,
+  focused,
+  progress,
+  playing,
   onHover,
+  onSelect,
 }: {
   readonly bar: WaterfallBar;
   readonly view: TimelineView;
   readonly dimmed: boolean;
+  readonly focused?: boolean;
+  readonly progress: MotionValue<number>;
+  readonly playing: boolean;
   readonly onHover: (index: number | null) => void;
+  readonly onSelect?: (index: number) => void;
 }): JSX.Element | null {
   const mapped = mapToViewport(bar.offsetRatio, bar.widthRatio, view);
   if (!mapped || mapped.width <= 0) return null;
@@ -819,9 +958,13 @@ function WaterfallBarRow({
         render={(props) => (
           <div
             {...props}
-            className="relative h-2.5 w-full cursor-default rounded-full bg-muted/70"
+            className="relative h-2.5 w-full cursor-pointer rounded-full bg-muted/70"
             data-slot="trace-waterfall-track"
             data-index={bar.index}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect?.(bar.index);
+            }}
             onMouseEnter={(event) => {
               props.onMouseEnter?.(event);
               onHover(bar.index);
@@ -831,17 +974,15 @@ function WaterfallBarRow({
               onHover(null);
             }}
           >
-            <div
-              className={cn(
-                "absolute inset-y-0 rounded-full transition-opacity",
-                dimmed && "opacity-35",
-              )}
-              style={{
-                left: `${mapped.left * 100}%`,
-                width: `${Math.max(mapped.width * 100, 0.5)}%`,
-                backgroundColor: effectBarColor(bar.kind),
-              }}
-              data-slot="trace-waterfall-bar"
+            <PlaybackBarFill
+              bar={bar}
+              left={mapped.left}
+              width={mapped.width}
+              progress={progress}
+              playing={playing}
+              dimmed={dimmed}
+              focused={focused}
+              slot="trace-waterfall-bar"
             />
           </div>
         )}
@@ -850,6 +991,57 @@ function WaterfallBarRow({
         {waterfallBarTooltip(bar)}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * Waterfall / event bar fill. Static at rest; during Replay playback the fill
+ * grows from its left edge as the playhead crosses the bar's run-time span.
+ */
+function PlaybackBarFill({
+  bar,
+  left,
+  width,
+  progress,
+  playing,
+  dimmed = false,
+  focused = false,
+  slot,
+}: {
+  readonly bar: WaterfallBar;
+  /** Display left edge as a `[0, 1]` fraction of the track. */
+  readonly left: number;
+  /** Display width as a `[0, 1]` fraction of the track. */
+  readonly width: number;
+  readonly progress: MotionValue<number>;
+  readonly playing: boolean;
+  readonly dimmed?: boolean;
+  readonly focused?: boolean;
+  readonly slot: string;
+}): JSX.Element {
+  // Grow across the bar's own run-time span (epsilon floor for instant effects).
+  const span = Math.max(bar.widthRatio, 0.02);
+  const scaleX = useTransform(progress, [bar.offsetRatio, bar.offsetRatio + span], [0, 1], {
+    clamp: true,
+  });
+  const opacity = useTransform(progress, (p) => (p >= bar.offsetRatio ? 1 : 0.25));
+  const animated = playing;
+  return (
+    <motion.div
+      className={cn(
+        "absolute inset-y-0 rounded-full transition-opacity",
+        !animated && dimmed && !focused && "opacity-35",
+        focused && "ring-1 ring-foreground/40",
+      )}
+      style={{
+        left: `${left * 100}%`,
+        width: `${Math.max(width * 100, 0.5)}%`,
+        backgroundColor: effectBarColor(bar.kind),
+        transformOrigin: "left",
+        ...(animated ? { scaleX, opacity } : {}),
+      }}
+      data-slot={slot}
+    />
   );
 }
 
