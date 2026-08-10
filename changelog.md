@@ -28,9 +28,13 @@ needed).
   out mid-progress in dark mode).
 - ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
 - ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
+- ui-next sidebar toggle lives in the sidebar header (end when expanded; logo→trigger on hover when collapsed); main header keeps a mobile-only trigger. Brand/trigger swap uses Motion springs (respects reduced motion).
 
 ### 🐛 Fixed
 
+- First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
+  stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
+  re-wrapping a body already consumed by `parseValidate`.
 - ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
   DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
 - Password policy special-character rule is canonical as `requireSpecial` on both

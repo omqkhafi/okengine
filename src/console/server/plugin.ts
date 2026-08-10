@@ -28,7 +28,12 @@ export function consolePlugin(): PluginDef {
       .table("oke_console_prefs", undefined, { plane: "operator" })
       // Public flows must not 401 when a stale Bearer/cookie is present —
       // kernel onAuth verifies before beforeHandle's public-flow exemption.
-      // Rebuild from URL: `new Request(req, { headers })` re-copies Authorization.
+      // Rebuild from URL so Authorization is dropped (mutating Headers in place
+      // can leave the header visible to later stages).
+      //
+      // `app.fetch` parseValidate may already have consumed the body before
+      // this hook runs — never re-wrap a used stream (throws
+      // "ReadableStream has already been used" on claim/login).
       .hook("onRequest", (ctx) => {
         if (!PUBLIC_CONSOLE_FLOWS.has(ctx.flow.name) || !ctx.request) return;
         const auth = ctx.request.headers.get("authorization");
@@ -40,7 +45,12 @@ export function consolePlugin(): PluginDef {
         }
         const method = ctx.request.method;
         const init: RequestInit = { method, headers };
-        if (method !== "GET" && method !== "HEAD") {
+        if (
+          method !== "GET" &&
+          method !== "HEAD" &&
+          ctx.request.body !== null &&
+          !ctx.request.bodyUsed
+        ) {
           init.body = ctx.request.body;
           (init as RequestInit & { duplex: "half" }).duplex = "half";
         }

@@ -418,6 +418,50 @@ describe("console serve security", () => {
     expect(joined).toContain("oke_console_at=");
   });
 
+  test("claim succeeds when a stale session cookie is present", async () => {
+    const claimCwd = await mkdtemp(join(tmpdir(), "oke-console-stale-claim-"));
+    const claimServer = await serveConsole({
+      port: 0,
+      hostname: "127.0.0.1",
+      cwd: claimCwd,
+      secret: "stale-claim-secret",
+      silentClaim: true,
+      env: "test",
+      persist: false,
+    });
+    try {
+      const res = await claimServer.fetch(
+        new Request(`${claimServer.url}console/setup/claim`, {
+          method: "POST",
+          headers: {
+            host: "127.0.0.1",
+            "content-type": "application/json",
+            // Leftover HttpOnly cookie from a prior Console session — withCookieAuth
+            // injects Bearer, and public-flow onRequest must strip it without
+            // re-wrapping the already-parsed body stream.
+            cookie: "oke_console_at=stale.forged.token",
+          },
+          body: JSON.stringify({
+            claimCode: claimServer.console.state.claim.code,
+            email: "fresh@example.com",
+            name: "Fresh",
+            password: "Password1234!",
+          }),
+        }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        data: { accessToken: string; email: string } | null;
+        error: { message?: string } | null;
+      };
+      expect(body.error).toBeNull();
+      expect(body.data?.email).toBe("fresh@example.com");
+      expect(body.data?.accessToken).toBeTruthy();
+    } finally {
+      claimServer.stop(true);
+    }
+  });
+
   test("plugin iframe sandbox omits allow-same-origin", () => {
     expect(PLUGIN_IFRAME_SANDBOX.includes("allow-same-origin")).toBe(false);
     expect(PLUGIN_IFRAME_SANDBOX).toContain("allow-scripts");
