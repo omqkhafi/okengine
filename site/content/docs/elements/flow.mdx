@@ -255,12 +255,9 @@ export const chargeOrder = flow("payments.chargeOrder", {
 });
 ```
 
-The runtime journals undos as `undo:<name>` under status `compensating`, then commits
-`failed`. Orphan reclaim resumes that phase without re-entering forward work.
-`flow.compensate` remains an optional hook after auto undos for cross-cutting cleanup.
-`JournalSuspend` (sleep) is park, not failure — undo does not run.
-Use `fx.using` for same-attempt cleanup; `{ undo }` for durable external effects — not both
-for the same release.
+The runtime journals undos as `undo:<name>` under `compensating`, then commits `failed`.
+Orphan reclaim resumes that phase; `flow.compensate` is optional after auto undos.
+`JournalSuspend` is park (no undo). Prefer `fx.using` or `{ undo }` — not both for one release.
 
 ## Composition is just calls
 

@@ -507,7 +507,7 @@ const ROLE_SECTION_TITLE: Readonly<Record<string, string>> = {
   "channel.email": "channel.email — Mailpit (SMTP + UI)",
   signal: "signal — message bus",
   ai: "ai — local inference (llama.cpp / Ollama / vLLM / SGLang)",
-  proxy: "proxy — TLS terminator (Caddy / Traefik)",
+  proxy: "proxy — edge reverse proxy (Caddy / Traefik / nginx)",
 };
 
 /**

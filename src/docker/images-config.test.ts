@@ -95,6 +95,7 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       { images: { proxy: "caddy:2-alpine" }, role: "proxy", image: "caddy:2-alpine" },
       { images: { proxy: "traefik:v3.1" }, role: "proxy", image: "traefik:v3.1" },
+      { images: { proxy: "nginx:1.27-alpine" }, role: "proxy", image: "nginx:1.27-alpine" },
     ];
 
     const matchedIds = new Set<string>();

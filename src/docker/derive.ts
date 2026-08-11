@@ -15,6 +15,7 @@ import {
 } from "./compose.ts";
 import { emitDockerfile } from "./dockerfile.ts";
 import { buildCaddyfile } from "./recipes/caddy.ts";
+import { buildNginxConf } from "./recipes/nginx.ts";
 import {
   buildLlamaCppEntrypoint,
   LLAMA_CPP_ENTRYPOINT_FILE,
@@ -137,8 +138,8 @@ function pgdogConfigFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
 /**
  * Emit proxy companion configs when `images.proxy` is pinned.
  *
- * Caddy gets a generated `Caddyfile`. Traefik configures via Docker labels
- * (no companion file).
+ * Caddy gets a generated `Caddyfile`. nginx gets `nginx.conf`. Traefik
+ * configures via Docker labels (no companion file).
  *
  * @param specs - Normalised services
  * @param appPort - App listen port (default 6530)
@@ -149,8 +150,12 @@ function proxyConfigFiles(
 ): GeneratedFile[] {
   const proxy = specs.find((s) => s.role === "proxy");
   if (!proxy) return [];
+  const port = appPort ?? APP_PORT;
   if (/caddy/i.test(proxy.image)) {
-    return [{ path: "Caddyfile", content: buildCaddyfile({ appPort: appPort ?? APP_PORT }) }];
+    return [{ path: "Caddyfile", content: buildCaddyfile({ appPort: port }) }];
+  }
+  if (/nginx/i.test(proxy.image)) {
+    return [{ path: "nginx.conf", content: buildNginxConf({ appPort: port }) }];
   }
   return [];
 }
@@ -200,6 +205,7 @@ const PRUNE_ROOT_FILES = new Set([
   "compose.all.yml",
   "compose.prod.yml",
   "Caddyfile",
+  "nginx.conf",
   // Legacy: entrypoint used to land in `docker/`; now `.oke/` only.
   LLAMA_CPP_ENTRYPOINT_FILE,
   "pgdog.toml",

@@ -111,6 +111,7 @@ export {
   LLAMA_CPP_MIN_SAFE_BUILD,
   mailpit,
   meilisearch,
+  nginx,
   ollama,
   OLLAMA_IMAGE,
   OLLAMA_MIN_SAFE_VERSION,
@@ -129,6 +130,7 @@ export {
   yugabyte,
 } from "./recipes/index.ts";
 export { CADDY_APP_SERVICE, buildCaddyfile } from "./recipes/caddy.ts";
+export { NGINX_APP_SERVICE, buildNginxConf } from "./recipes/nginx.ts";
 export {
   PGDOG_BACKEND_SERVICE,
   PGDOG_CONFIG_DIR,

@@ -63,7 +63,7 @@ Driver id stays `redis` for every image below.
 
 ## Proxy
 
-Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N`.
+Opt-in via `images.proxy` — leave unset until you need an edge or `--scale app=N`.
 
 <Cards>
   <Card title="Caddy" description="Automatic-HTTPS, single instance." href="/docs/recipes/caddy" />
@@ -71,6 +71,11 @@ Opt-in via `images.proxy` — leave unset until you need HTTPS or `--scale app=N
     title="Traefik"
     description="Docker-label discovery + socket-proxy."
     href="/docs/recipes/traefik"
+  />
+  <Card
+    title="nginx"
+    description="Static nginx.conf reverse proxy (HTTP)."
+    href="/docs/recipes/nginx"
   />
 </Cards>
 

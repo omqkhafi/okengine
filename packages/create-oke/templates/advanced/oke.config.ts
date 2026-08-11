@@ -37,6 +37,7 @@ export default defineConfig({
       email: "axllent/mailpit:v1.22.3",
     },
     // pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51", // create-oke wizard / --pgdog
+    // proxy: "caddy:2-alpine", // or traefik:v3.3 / nginx:1.27-alpine
     // ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // or ollama/ollama:0.32.6
   },
   i18n: { locales: ["en"], default: "en" },

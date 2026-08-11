@@ -74,6 +74,7 @@ const PATH_BRANDS: Readonly<Record<string, BrandMarkId>> = {
   "/docs/recipes/dragonfly": "dragonfly",
   "/docs/recipes/caddy": "caddy",
   "/docs/recipes/traefik": "traefik",
+  "/docs/recipes/nginx": "nginx",
   "/docs/recipes/timescale": "timescale",
   "/docs/recipes/rustfs": "rustfs",
   "/docs/recipes/mailpit": "mailpit",

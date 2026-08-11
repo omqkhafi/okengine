@@ -1,6 +1,6 @@
 ---
 title: Docker
-description: Deploy with plain docker compose — single production-grade docker-compose.yml, shared drivers, PgDog, readiness, graceful SIGTERM, and opt-in Caddy or Traefik when you need TLS without an orchestrator.
+description: Deploy with plain docker compose — single production-grade docker-compose.yml, shared drivers, PgDog, readiness, graceful SIGTERM, and opt-in Caddy, Traefik, or nginx when you need an edge without an orchestrator.
 icon: Package
 source: README.md
 ---
@@ -77,10 +77,9 @@ that file). With `--split`, pass every `-f` file `oke docker` prints.
 Bun.SQL defaults to **10** connections per process — fine for one instance.
 Scale out and `N × pool` can exceed Postgres `max_connections`.
 
-When both `store.sql` and `pgdog` are pinned (dev/prod default in templates),
-`DATABASE_URL` points at PgDog on port `6432` — transaction pooling, wire-protocol
-transparent to Bun.SQL / Drizzle. No app code changes. Configs land in
-`docker/pgdog/pgdog.toml` and `docker/pgdog/users.toml`.
+When both `store.sql` and `pgdog` are pinned (templates' `dev`/`prod` default),
+`DATABASE_URL` points at PgDog `:6432` — transaction pooling, wire-transparent.
+Configs: `docker/pgdog/pgdog.toml` + `docker/pgdog/users.toml`.
 
 **Why PgDog.** Transaction pooling fixes the connection math. Naive poolers can
 leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`) across clients; PgDog
@@ -129,15 +128,18 @@ host port bind. Then pick one:
 
 | Choice                       | Best for                                  | How routing works                                                  |
 | ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------ |
-| **Caddy** (`caddy:2-alpine`) | Single instance, simplest automatic HTTPS | Generated `Caddyfile` → `reverse_proxy app:6530`                   |
-| **Traefik** (`traefik:v3.3`) | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **Caddy** (`caddy:2-alpine`)     | Single instance, simplest automatic HTTPS | Generated `Caddyfile` → `reverse_proxy app:6530`                   |
+| **Traefik** (`traefik:v3.3`)     | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **nginx** (`nginx:1.27-alpine`)  | Static HTTP edge; TLS elsewhere           | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
 
 ```typescript title="oke.config.ts"
 images: {
   // …
-  proxy: "caddy:2-alpine", // or "traefik:v3.3"
+  proxy: "caddy:2-alpine", // or "traefik:v3.3" / "nginx:1.27-alpine"
 },
 ```
+
+`create-oke` asks **Add a reverse proxy…?** (or `--proxy caddy|traefik|nginx|none`).
 
 ```bash title="docker/.env.docker"
 OKE_PROXY_HOST=app.example.com
@@ -203,7 +205,7 @@ Serve validates `Host`. Add your public hostname to `allowedHosts`
 ## Learn more
 
 - [Deployment](/docs/deployment) — choose compose, Swarm, or Kubernetes
-- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik in full
+- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik / nginx in full
 - [Docker Swarm](/docs/deployment/docker-swarm) — `docker stack deploy`
 - [Kubernetes](/docs/deployment/kubernetes) — Deployment, probes, Ingress
 - [CLI](/docs/reference/cli) — `oke docker`, layouts, budget flags

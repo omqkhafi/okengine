@@ -103,7 +103,7 @@ longest lease TTL (typically ≥ 30s) so release finishes before kubelet SIGKILL
 ## Ingress (TLS / routing)
 
 Use cluster-native **Ingress** or Gateway API for HTTPS.
-Compose `images.proxy` recipes (Caddy / Traefik) target plain Docker and Swarm —
+Compose `images.proxy` recipes (Caddy / Traefik / nginx) target plain Docker and Swarm —
 see [Reverse proxy](/docs/deployment/reverse-proxy) when you are not on Kubernetes.
 
 Still set serve `allowedHosts` to the public hostname
@@ -159,7 +159,7 @@ on `/_/ready` so the pod stays Alive while Waiting for Ready.
 - [Deployment](/docs/deployment) — choose compose, Swarm, or Kubernetes
 - [Docker](/docs/deployment/docker) — plain compose
 - [Docker Swarm](/docs/deployment/docker-swarm) — `docker stack deploy`
-- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik (non-K8s)
+- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik / nginx (non-K8s)
 - [Store](/docs/elements/store) — PgDog and facets
 - [Clock](/docs/elements/clock) — shared CronStore / leader election
 - [Flow](/docs/elements/flow) — durable journal

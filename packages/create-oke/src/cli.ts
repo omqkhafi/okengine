@@ -25,10 +25,13 @@ import { existsSync, rmSync } from "node:fs";
 import { agentsMdContent } from "./agents-md.ts";
 import {
   createDefaultsPath,
+  isCreateProxyId,
   readCreateDefaults,
   writeCreateDefaults,
   type CreateDefaults,
+  type CreateProxyId,
   type EnvDriverPins,
+  CREATE_PROXY_IDS,
 } from "./create-defaults.ts";
 import { docsUrl } from "./docs-origin.ts";
 import { applyAiSetup, type AiSetupApplyInput } from "./ai-setup/apply.ts";
@@ -90,6 +93,11 @@ export type CliArgs = {
    * `undefined` = ask (interactive) / off (`--yes`).
    */
   readonly pgdog: boolean | undefined;
+  /**
+   * Proxy pin from CLI.
+   * `undefined` = ask (interactive) / none (`--yes`).
+   */
+  readonly proxy: CreateProxyId | undefined;
   readonly targetDir: string | undefined;
 };
 
@@ -153,6 +161,8 @@ export type InteractiveAnswers = {
   readonly locales: readonly string[];
   /** Pin PgDog in front of Postgres. */
   readonly pgdog: boolean;
+  /** Pin `images.proxy` (`none` = unset). */
+  readonly proxy: CreateProxyId;
 };
 
 /**
@@ -171,6 +181,8 @@ export type ScaffoldCallArgs = {
   readonly locales?: readonly string[];
   /** Pin PgDog in front of Postgres. */
   readonly pgdog?: boolean;
+  /** Pin `images.proxy`. */
+  readonly proxy?: CreateProxyId;
 };
 
 /**
@@ -191,6 +203,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   let ai: AiCliMode = "prompt";
   let locales: readonly string[] = [];
   let pgdog: boolean | undefined;
+  let proxy: CreateProxyId | undefined;
   let targetDir: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
@@ -302,6 +315,26 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       pgdog = false;
       continue;
     }
+    if (a === "--proxy") {
+      const next = argv[++i];
+      if (!next || !isCreateProxyId(next)) {
+        throw new Error(`create-oke: --proxy must be one of ${CREATE_PROXY_IDS.join("|")}`);
+      }
+      proxy = next;
+      continue;
+    }
+    if (a.startsWith("--proxy=")) {
+      const value = a.slice("--proxy=".length);
+      if (!isCreateProxyId(value)) {
+        throw new Error(`create-oke: --proxy must be one of ${CREATE_PROXY_IDS.join("|")}`);
+      }
+      proxy = value;
+      continue;
+    }
+    if (a === "--no-proxy") {
+      proxy = "none";
+      continue;
+    }
     if (a.startsWith("-")) {
       throw new Error(`create-oke: unknown option ${a}`);
     }
@@ -317,6 +350,11 @@ export function parseArgs(argv: readonly string[]): CliArgs {
   }
   if (argv.includes("--pgdog") && argv.includes("--no-pgdog")) {
     throw new Error("create-oke: use either --pgdog or --no-pgdog, not both");
+  }
+  if (argv.includes("--proxy") || argv.some((x) => x.startsWith("--proxy="))) {
+    if (argv.includes("--no-proxy")) {
+      throw new Error("create-oke: use either --proxy or --no-proxy, not both");
+    }
   }
 
   if (name !== undefined) {
@@ -336,6 +374,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     ai,
     locales,
     pgdog,
+    proxy,
     targetDir,
   };
 }
@@ -354,9 +393,9 @@ export function formatCdPath(targetDir: string): string {
 /**
  * Post-scaffold next-steps block — shared by interactive and flag-driven paths.
  *
- * @param result - Successful scaffold result
+ * @param result - Successful scaffold result (only `label` + `targetDir` are read)
  */
-export function nextStepsText(result: ScaffoldResult): string {
+export function nextStepsText(result: Pick<ScaffoldResult, "label" | "targetDir">): string {
   return `
 Scaffolded ${result.label} → ${result.targetDir}
 
@@ -400,6 +439,8 @@ Options:
   --locales <tags>      Extra languages beyond English (e.g. ar or ar,fr)
   --pgdog               Pin PgDog pooling in front of Postgres
   --no-pgdog            Skip PgDog (default for --yes)
+  --proxy <id>          Pin reverse proxy: ${CREATE_PROXY_IDS.join("|")}
+  --no-proxy            Skip proxy (default for --yes)
   -h, --help            Show this help
 
 Template:
@@ -407,10 +448,10 @@ ${templateLines}
 
 On a TTY: pick standard|advanced, then recommended defaults, customize
 (Docker-first facets; store.index with none; AI setup Recommended /
-Customize / Off), optional extra locales + PgDog pooling, or reuse when
-saved for that template. Locales + PgDog (and customize pins) write to
-~/.oke/create-defaults.json on every TTY run.
-Non-TTY / --yes stay English-only / no PgDog unless --locales / --pgdog.
+Customize / Off), optional locales + PgDog + proxy, or reuse when
+saved for that template. Reuse applies saved locales / PgDog / proxy
+without re-asking. Answers write to ~/.oke/create-defaults.json.
+Non-TTY / --yes stay English-only / no PgDog / no proxy unless flagged.
 `;
 }
 
@@ -455,6 +496,7 @@ export function scaffoldArgsFromCli(args: CliArgs): ScaffoldCallArgs {
     aiApply: args.ai === "force" ? nonInteractiveAiApply("llama-cpp") : null,
     locales: args.locales,
     pgdog: args.pgdog ?? false,
+    proxy: args.proxy ?? "none",
   };
 }
 
@@ -505,6 +547,7 @@ export function scaffoldArgsFromAnswers(
     aiApply: answers.aiApply,
     locales: answers.locales,
     pgdog: answers.pgdog,
+    proxy: answers.proxy,
   };
 }
 
@@ -521,6 +564,7 @@ export type AskInteractiveFn = (partial: {
   readonly template?: TemplateId;
   readonly locales?: readonly string[];
   readonly pgdog?: boolean;
+  readonly proxy?: CreateProxyId;
 }) => Promise<InteractiveAnswers | null>;
 
 /** Injectable persistence seams for tests. */
@@ -531,21 +575,22 @@ export type CreateDefaultsIo = {
 };
 
 /**
- * Merge wizard locales / PgDog into a create-defaults document to persist.
+ * Merge wizard locales / PgDog / proxy into a create-defaults document to persist.
  *
  * Prefer the in-session answers (customize / reuse), else same-template
  * previous settings, else recommended pins for the template.
  *
- * @param input - Template, locales, pgdog, and optional session / previous docs
+ * @param input - Template, locales, pgdog, proxy, and optional session / previous docs
  */
-export function withLocalesPgDog(input: {
+export function withWizardExtras(input: {
   readonly template: TemplateId;
   readonly locales: readonly string[];
   readonly pgdog: boolean;
+  readonly proxy: CreateProxyId;
   readonly session: CreateDefaults | undefined;
   readonly previous: CreateDefaults | null;
 }): CreateDefaults {
-  const { template, locales, pgdog, session, previous } = input;
+  const { template, locales, pgdog, proxy, session, previous } = input;
   const base =
     session ??
     (previous?.template === template ? previous : null) ??
@@ -555,8 +600,24 @@ export function withLocalesPgDog(input: {
     template,
     locales,
     pgdog,
+    proxy,
     updatedAt: new Date().toISOString(),
   };
+}
+
+/** @deprecated Prefer {@link withWizardExtras}. */
+export function withLocalesPgDog(input: {
+  readonly template: TemplateId;
+  readonly locales: readonly string[];
+  readonly pgdog: boolean;
+  readonly proxy?: CreateProxyId;
+  readonly session: CreateDefaults | undefined;
+  readonly previous: CreateDefaults | null;
+}): CreateDefaults {
+  return withWizardExtras({
+    ...input,
+    proxy: input.proxy ?? input.session?.proxy ?? input.previous?.proxy ?? "none",
+  });
 }
 
 /**
@@ -575,6 +636,7 @@ export async function askInteractiveAnswers(
     readonly template?: TemplateId;
     readonly locales?: readonly string[];
     readonly pgdog?: boolean;
+    readonly proxy?: CreateProxyId;
   } = {},
   io: CreateDefaultsIo = {
     path: createDefaultsPath(),
@@ -613,6 +675,7 @@ export async function askInteractiveAnswers(
   let createDefaults: CreateDefaults | undefined;
   let aiApply: AiSetupApplyInput | null = null;
   let persistDefaults = false;
+  let reused = false;
 
   for (;;) {
     const previous = io.read();
@@ -639,6 +702,7 @@ export async function askInteractiveAnswers(
         continue;
       }
       createDefaults = prev;
+      reused = true;
       if (prev.ai.enabled && partial.ai !== "skip") {
         aiApply = applyInputFromAiPref(prev.ai);
         if (!aiApply?.chatModel && prev.ai.provider && prev.ai.provider !== "mock") {
@@ -675,32 +739,58 @@ export async function askInteractiveAnswers(
     aiApply = picked;
   }
 
-  const locales = await askExtraLocales(partial.locales ?? createDefaults?.locales ?? []);
-  if (locales === null) return null;
+  // Reuse applies saved locales / PgDog / proxy without re-asking (CLI flags still win).
+  let locales: readonly string[];
+  let pgdog: boolean;
+  let proxy: CreateProxyId;
 
-  const usesPostgres = createDefaults
-    ? createDefaults.drivers.store.sql.dev === "postgres" ||
-      createDefaults.drivers.store.sql.prod === "postgres" ||
-      createDefaults.drivers.store.sql.dev === "pgvector" ||
-      createDefaults.drivers.store.sql.prod === "pgvector"
-    : true;
-  let pgdog = false;
-  if (usesPostgres) {
-    if (partial.pgdog !== undefined) {
-      pgdog = partial.pgdog;
+  if (reused && createDefaults) {
+    locales =
+      partial.locales !== undefined && partial.locales.length > 0
+        ? partial.locales
+        : createDefaults.locales;
+    pgdog = partial.pgdog !== undefined ? partial.pgdog : createDefaults.pgdog;
+    proxy = partial.proxy !== undefined ? partial.proxy : createDefaults.proxy;
+  } else {
+    if (partial.locales !== undefined && partial.locales.length > 0) {
+      locales = partial.locales;
     } else {
-      const picked = await askPgDog(createDefaults?.pgdog ?? false);
+      const pickedLocales = await askExtraLocales(createDefaults?.locales ?? []);
+      if (pickedLocales === null) return null;
+      locales = pickedLocales;
+    }
+
+    const usesPostgres = createDefaults
+      ? createDefaults.drivers.store.sql.dev === "postgres" ||
+        createDefaults.drivers.store.sql.prod === "postgres" ||
+        createDefaults.drivers.store.sql.dev === "pgvector" ||
+        createDefaults.drivers.store.sql.prod === "pgvector"
+      : true;
+    pgdog = false;
+    if (usesPostgres) {
+      if (partial.pgdog !== undefined) {
+        pgdog = partial.pgdog;
+      } else {
+        const picked = await askPgDog(createDefaults?.pgdog ?? false);
+        if (picked === null) return null;
+        pgdog = picked;
+      }
+    }
+
+    if (partial.proxy !== undefined) {
+      proxy = partial.proxy;
+    } else {
+      const picked = await askProxy(createDefaults?.proxy ?? "none");
       if (picked === null) return null;
-      pgdog = picked;
+      proxy = picked;
     }
   }
 
-  // Locales / PgDog are asked on every TTY run — always persist them so reuse
-  // (and recommended) keep the last answers in ~/.oke/create-defaults.json.
-  const persisted = withLocalesPgDog({
+  const persisted = withWizardExtras({
     template,
     locales,
     pgdog,
+    proxy,
     session: createDefaults,
     previous: io.read(),
   });
@@ -729,6 +819,7 @@ export async function askInteractiveAnswers(
     aiApply,
     locales,
     pgdog,
+    proxy,
   };
 }
 
@@ -777,6 +868,27 @@ async function askPgDog(initial: boolean = false): Promise<boolean | null> {
   });
   if (isCancel(value)) return null;
   return Boolean(value);
+}
+
+/**
+ * Ask which reverse proxy to pin (or none).
+ *
+ * @param initial - Prefill from reused create-defaults
+ * @returns Proxy id, or `null` on cancel
+ */
+async function askProxy(initial: CreateProxyId = "none"): Promise<CreateProxyId | null> {
+  const value = await select({
+    message: "Add a reverse proxy in front of the app?",
+    options: [
+      { value: "none", label: "No", hint: "app publishes :6530" },
+      { value: "caddy", label: "Caddy", hint: "automatic HTTPS · Caddyfile" },
+      { value: "traefik", label: "Traefik", hint: "Docker labels · --scale app=N" },
+      { value: "nginx", label: "nginx", hint: "static nginx.conf reverse proxy" },
+    ],
+    initialValue: initial,
+  });
+  if (isCancel(value)) return null;
+  return value as CreateProxyId;
 }
 
 /**
@@ -906,8 +1018,9 @@ async function runInteractive(
     agentsMd: args.agentsMd,
     sqlDriver: args.sqlDriverExplicit ? args.sqlDriver : undefined,
     ai: args.ai,
-    locales: args.locales,
+    ...(args.locales.length > 0 ? { locales: args.locales } : {}),
     ...(args.pgdog !== undefined ? { pgdog: args.pgdog } : {}),
+    ...(args.proxy !== undefined ? { proxy: args.proxy } : {}),
   });
   if (answers === null) {
     cancel("Cancelled.");
@@ -946,6 +1059,7 @@ async function runScaffold(
     aiApply,
     locales,
     pgdog,
+    proxy,
     interactive,
     install,
     startDev,
@@ -982,6 +1096,7 @@ async function runScaffold(
       ...(createDefaults !== undefined ? { createDefaults } : {}),
       ...(locales !== undefined ? { locales } : {}),
       ...(pgdog !== undefined ? { pgdog } : {}),
+      ...(proxy !== undefined ? { proxy } : {}),
     });
     if (spun) spun.stop("Scaffolded.");
 

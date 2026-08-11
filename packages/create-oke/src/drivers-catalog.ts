@@ -191,6 +191,7 @@ export function recommendedDefaults(
     ai: { enabled: false, provider: null, driver: null },
     locales: [],
     pgdog: false,
+    proxy: "none",
     updatedAt: new Date().toISOString(),
   };
 }
@@ -235,4 +236,12 @@ export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "channel.email": "axllent/mailpit:v1.22.3",
   "store.index": "getmeili/meilisearch:v1.37",
   ai: LLAMA_CPP_IMAGE,
+  proxy: "caddy:2-alpine",
+};
+
+/** Default `images.proxy` pins by wizard id (excluding `none`). */
+export const PROXY_IMAGES: Readonly<Record<"caddy" | "traefik" | "nginx", string>> = {
+  caddy: "caddy:2-alpine",
+  traefik: "traefik:v3.3",
+  nginx: "nginx:1.27-alpine",
 };

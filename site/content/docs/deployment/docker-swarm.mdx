@@ -1,6 +1,6 @@
 ---
 title: Docker Swarm
-description: Deploy with docker stack deploy — docker-stack.yml, PgDog, HEALTHCHECK readiness, graceful SIGTERM, known multi-instance limits, and optional Caddy or Traefik.
+description: Deploy with docker stack deploy — docker-stack.yml, PgDog, HEALTHCHECK readiness, graceful SIGTERM, known multi-instance limits, and optional Caddy, Traefik, or nginx.
 icon: Ship
 source: README.md
 ---
@@ -83,10 +83,9 @@ Pin `dev`/`prod` drivers to shared stores:
 Bun.SQL defaults to **10** connections per process — fine for one replica.
 Scale the Swarm service and `N × pool` can exceed Postgres `max_connections`.
 
-When both `store.sql` and `pgdog` are pinned (`dev`/`prod` default in templates),
-`DATABASE_URL` points at PgDog on port `6432` — transaction pooling, wire-protocol
-transparent to Bun.SQL / Drizzle. No app code changes. Configs:
-`docker/pgdog/pgdog.toml` + `docker/pgdog/users.toml`.
+When both `store.sql` and `pgdog` are pinned (`dev`/`prod` template default),
+`DATABASE_URL` points at PgDog `:6432` — transaction pooling, wire-transparent.
+Configs: `docker/pgdog/pgdog.toml` + `docker/pgdog/users.toml`.
 
 **Why PgDog.** Transaction pooling fixes the connection math. Naive poolers can
 leak session state (`SET`, RLS vars, `LISTEN`/`NOTIFY`) across clients; PgDog
@@ -116,7 +115,7 @@ visibility TTL on survivors.
 
 ## Reverse proxy
 
-Same opt-in `images.proxy` pins as plain Compose — Caddy or Traefik. Re-run
+Same opt-in `images.proxy` pins as plain Compose — Caddy, Traefik, or nginx. Re-run
 `oke docker --stack` after pinning. Details:
 [Reverse proxy](/docs/deployment/reverse-proxy).
 
@@ -152,7 +151,7 @@ volumes for durable state across nodes.
 ## Learn more
 
 - [Docker](/docs/deployment/docker) — plain compose default
-- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik
+- [Reverse proxy](/docs/deployment/reverse-proxy) — Caddy / Traefik / nginx
 - [Kubernetes](/docs/deployment/kubernetes) — Deployment, probes, Ingress
 - [CLI](/docs/reference/cli) — `oke docker --stack`
 

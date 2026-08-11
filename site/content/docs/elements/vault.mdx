@@ -171,11 +171,9 @@ Flows can write too, through the same capability gate as reads: `fx.vault.set(pa
 The **Console** (`:6533`) can also set and rotate values, but it is **write-only**: it shows a salted fingerprint (`sha256:…`) per secret, never the cleartext. When you rotate a key there, the panel shows the **blast radius** — which in-flight durable runs will wake up with the new value.
 
 <Callout title="Builtin concurrency (rotate / audit / backup)">
-  `rotate-master` uses the same SKIP LOCKED + lease-expiry physics as Clock and Signal: one holder
-  at a time; a crashed holder is reclaimed after the lease TTL. Audit rows append under a
-  transactional row lock so the hash chain stays verifiable under concurrent writers. Backups are
-  written via temp → fsync → rename and carry an end marker + checksum — restore rejects incomplete
-  files before decrypt.
+  `rotate-master` uses SKIP LOCKED + lease TTL (one holder; crashed holders reclaim). Audit
+  appends under a transactional row lock. Backups use temp → fsync → rename with end marker +
+  checksum — restore rejects incomplete files before decrypt.
 </Callout>
 
 <Callout title="Builtin master keys and expired rows">

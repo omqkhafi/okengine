@@ -40,6 +40,9 @@ needed).
 
 ### 🐛 Fixed
 
+- `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
+  saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
+
 - First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
   stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
   re-wrapping a body already consumed by `parseValidate`.
@@ -53,6 +56,11 @@ needed).
   `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
 
 ### ✨ Added
+
+- `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
+  `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
+- nginx image recipe (`nginx:1.27-alpine`) — generated `nginx.conf` reverse proxy on :80;
+  companion docs under Recipes → nginx.
 
 - ui-next Flows split-view is bidirectionally interactive: clicking a flow node filters the
   Traces list (`flow = X` advanced clause), clicking a signal node filters to runs whose flow

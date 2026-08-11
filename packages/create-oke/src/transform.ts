@@ -14,11 +14,12 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CreateDefaults, EnvDriverPins } from "./create-defaults.ts";
+import type { CreateDefaults, CreateProxyId, EnvDriverPins } from "./create-defaults.ts";
 import {
   DEFAULT_IMAGES,
   LLAMA_CPP_IMAGE,
   OLLAMA_IMAGE,
+  PROXY_IMAGES,
   SGLANG_IMAGE,
   VLLM_IMAGE,
 } from "./drivers-catalog.ts";
@@ -511,6 +512,9 @@ function syncImages(source: string, defaults: CreateDefaults): string {
   ) {
     pin("ai", aiImageForDefaults(defaults));
   }
+  if (defaults.proxy !== "none") {
+    pin("proxy", PROXY_IMAGES[defaults.proxy]);
+  }
 
   return replaceImagesBlock(source, images);
 }
@@ -655,6 +659,25 @@ export function applyPgDogToConfig(source: string, enabled: boolean): string {
   } else {
     if (!images.pgdog) return source;
     delete images.pgdog;
+  }
+  return replaceImagesBlock(source, images);
+}
+
+/**
+ * Add or remove the `images.proxy` pin (Caddy / Traefik / nginx).
+ *
+ * @param source - `oke.config.ts` source
+ * @param proxy - Wizard / CLI proxy id (`none` clears the pin)
+ */
+export function applyProxyToConfig(source: string, proxy: CreateProxyId): string {
+  const images = extractImages(source);
+  if (proxy === "none") {
+    if (!images.proxy) return source;
+    delete images.proxy;
+  } else {
+    const image = PROXY_IMAGES[proxy];
+    if (images.proxy === image) return source;
+    images.proxy = image;
   }
   return replaceImagesBlock(source, images);
 }

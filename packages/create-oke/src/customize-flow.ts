@@ -240,9 +240,10 @@ export async function askCustomizeFlow(
     profile: "docker-ready",
     drivers: { ...drivers, ai: aiPins },
     ai: aiPref,
-    // Locales / PgDog are asked once in the main wizard (not per customize pass).
+    // Locales / PgDog / proxy are asked once in the main wizard (not per customize pass).
     locales: [],
     pgdog: false,
+    proxy: "none",
   });
 }
 

@@ -45,6 +45,13 @@ describe("parseCreateDefaults", () => {
     const parsed = parseCreateDefaults(rest);
     expect(parsed?.template).toBe("standard");
   });
+
+  test("older files without proxy default to none", () => {
+    const d = recommendedDefaults("docker-ready", "standard");
+    const { proxy: _p, ...rest } = d;
+    const parsed = parseCreateDefaults(rest);
+    expect(parsed?.proxy).toBe("none");
+  });
 });
 
 describe("read/write round-trip", () => {
@@ -71,6 +78,7 @@ describe("read/write round-trip", () => {
         ai: { enabled: true, provider: "ollama", driver: "ollama" },
         locales: ["ar"],
         pgdog: true,
+        proxy: "caddy",
       });
       writeCreateDefaults(original, path);
       const loaded = readCreateDefaults(path);
@@ -82,6 +90,7 @@ describe("read/write round-trip", () => {
       expect(loaded!.profile).toBe("docker-ready");
       expect(loaded!.locales).toEqual(["ar"]);
       expect(loaded!.pgdog).toBe(true);
+      expect(loaded!.proxy).toBe("caddy");
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

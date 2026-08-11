@@ -232,11 +232,9 @@ export const relations = store.schema.relations({ links, daily }, (r) => ({
 | `oke db generate` | Write versioned SQL under `drizzle/` for review                |
 | `oke db migrate`  | Apply those files — human or CI, **never** at boot             |
 
-`oke dev` auto-pushes when you save a schema _input_ (`schema.decl.ts`,
-hand-written `schema.ts`, `app.ts` for plugin tables, or `drizzle.config.ts`) —
-not when emit rewrites `schema.drizzle.ts`. A definition error in
-`schema.decl.ts` prints `schema.decl.ts has an error — …` (red ●) and keeps the
-session running — it is not framed as a quiet skip.
+`oke dev` auto-pushes on schema _inputs_ (`schema.decl.ts`, hand-written `schema.ts`,
+`app.ts` plugin tables, `drizzle.config.ts`) — not when emit rewrites `schema.drizzle.ts`.
+A `schema.decl.ts` error prints `schema.decl.ts has an error — …` (red ●) and keeps running.
 
 Opt out with `--no-db-push` or `db: { autoPush: false }`. `prod` **never**
 auto-applies DDL; a missing table fails as **OKE1101** (`oke db migrate`).

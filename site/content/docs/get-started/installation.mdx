@@ -67,8 +67,8 @@ Both are Docker-first (`dev`/`prod` share production protocols; `test` uses PGLi
 memory). Both ship a minimal GitHub Actions workflow (typecheck + `bun test`).
 
 On a TTY: pick a template, then **recommended defaults**, **customize**, or
-**reuse** matching saved settings (`~/.oke/create-defaults.json`). Extra locales
-and PgDog answers are saved into that file on every TTY run (not only customize).
+**reuse** (`~/.oke/create-defaults.json`). Reuse applies saved locales / PgDog /
+proxy without re-asking; recommended and customize ask and persist those answers.
 
 Customize walks Docker-first facets (including `store.index` with `none`), then
 **AI setup** (Recommended / Customize / Off). Project name rejects a non-empty
@@ -108,10 +108,9 @@ configured.**
 stays in sync. Opt out with `oke dev --no-db-push` or
 `db: { autoPush: false }` in `oke.config.ts`.
 
-A broken `schema.decl.ts` (bad table / relation definition) prints a red ●
-`schema.decl.ts has an error — …` line and keeps the session up — it is never
-framed as a quiet `skipped`. Environmental gaps (no `oke.config.ts` / no
-images yet) still soft-skip.
+A broken `schema.decl.ts` prints a red ● `schema.decl.ts has an error — …` and
+keeps the session up — never a quiet `skipped`. Missing `oke.config.ts` / images
+still soft-skip.
 
 For production, generate and apply migrations deliberately — never automatic on
 boot:
@@ -167,10 +166,9 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Create first operator fails (password / claim code)">
-  Use a password with at least 12 characters, including uppercase, lowercase, a number, and a
-  special character. Copy the claim code from the current `oke dev` boot log (it expires in 30
-  minutes; restart mint a new one). The form and the request log now show the reason — not a bare
-  `TransportError` / `500`.
+  Password: ≥ 12 chars with upper, lower, number, and special. Copy the claim code from
+  the current `oke dev` boot log (30 min TTL; restart mints a new one). The form and request
+  log show the reason — not a bare `TransportError` / `500`.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">

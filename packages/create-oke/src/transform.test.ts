@@ -54,6 +54,7 @@ function defaultsWithIndex(indexDev: string) {
     ai: { enabled: false, provider: null, driver: null },
     locales: [],
     pgdog: false,
+    proxy: "none",
   });
 }
 
@@ -128,6 +129,7 @@ describe("vault backend defaults", () => {
         ai: { enabled: false, provider: null, driver: null },
         locales: [],
         pgdog: false,
+        proxy: "none",
       }),
     );
     expect(next).toMatch(/vault:\s*\{\s*dev: "managed"/);
@@ -176,6 +178,7 @@ describe("upsertAiDrivers", () => {
           ai: { enabled: true, provider: "llama-cpp", driver: "openai-compatible" },
           locales: [],
           pgdog: false,
+          proxy: "none",
         }),
       );
       const config = evalConfig(next);

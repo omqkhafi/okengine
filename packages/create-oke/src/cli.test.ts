@@ -28,6 +28,7 @@ import {
   sourceFromArgs,
   withBackOption,
   withLocalesPgDog,
+  withWizardExtras,
   type InteractiveAnswers,
 } from "./cli.ts";
 import {
@@ -47,19 +48,21 @@ import {
   transformPackageJson,
 } from "./transform.ts";
 
-describe("withLocalesPgDog", () => {
+describe("withWizardExtras / withLocalesPgDog", () => {
   test("updates session defaults (reuse / customize)", () => {
     const session = recommendedDefaults("docker-ready", "advanced");
-    const next = withLocalesPgDog({
+    const next = withWizardExtras({
       template: "advanced",
       locales: ["ar"],
       pgdog: true,
+      proxy: "nginx",
       session,
       previous: null,
     });
     expect(next.template).toBe("advanced");
     expect(next.locales).toEqual(["ar"]);
     expect(next.pgdog).toBe(true);
+    expect(next.proxy).toBe("nginx");
     expect(next.drivers.store.sql.dev).toBe(session.drivers.store.sql.dev);
   });
 
@@ -68,30 +71,35 @@ describe("withLocalesPgDog", () => {
       ...recommendedDefaults("docker-ready", "advanced"),
       locales: [] as const,
       pgdog: false,
+      proxy: "none" as const,
     };
     const next = withLocalesPgDog({
       template: "advanced",
       locales: ["ar", "fr"],
       pgdog: true,
+      proxy: "traefik",
       session: undefined,
       previous,
     });
     expect(next.locales).toEqual(["ar", "fr"]);
     expect(next.pgdog).toBe(true);
+    expect(next.proxy).toBe("traefik");
     expect(next.drivers).toEqual(previous.drivers);
   });
 
   test("falls back to recommended pins when nothing is saved", () => {
-    const next = withLocalesPgDog({
+    const next = withWizardExtras({
       template: "standard",
       locales: ["ar"],
       pgdog: true,
+      proxy: "caddy",
       session: undefined,
       previous: null,
     });
     expect(next.template).toBe("standard");
     expect(next.locales).toEqual(["ar"]);
     expect(next.pgdog).toBe(true);
+    expect(next.proxy).toBe("caddy");
     expect(next.profile).toBe("docker-ready");
   });
 });
@@ -180,6 +188,15 @@ describe("parseArgs flags", () => {
     expect(() => parseArgs(["x", "--pgdog", "--no-pgdog"])).toThrow(/pgdog/);
   });
 
+  test("accepts --proxy / --no-proxy", () => {
+    expect(parseArgs(["x", "--proxy", "caddy"]).proxy).toBe("caddy");
+    expect(parseArgs(["x", "--proxy=nginx"]).proxy).toBe("nginx");
+    expect(parseArgs(["x", "--no-proxy"]).proxy).toBe("none");
+    expect(parseArgs(["x"]).proxy).toBeUndefined();
+    expect(() => parseArgs(["x", "--proxy", "nope"])).toThrow(/proxy/);
+    expect(() => parseArgs(["x", "--proxy", "caddy", "--no-proxy"])).toThrow(/proxy/);
+  });
+
   test("rejects --install with --no-install", () => {
     expect(() => parseArgs(["x", "--install", "--no-install"])).toThrow(/install/);
   });
@@ -204,6 +221,7 @@ function recommendedAnswers(overrides: Partial<InteractiveAnswers> = {}): Intera
     aiApply: null,
     locales: [],
     pgdog: false,
+    proxy: "none",
     ...overrides,
   };
 }
@@ -399,6 +417,7 @@ describe("interactive branches", () => {
       ai: { enabled: false, provider: null, driver: null },
       locales: [],
       pgdog: false,
+      proxy: "none",
     });
 
     const dir = mkdtempSync(join(tmpdir(), "oke-custom-app-"));
@@ -715,6 +734,37 @@ describe("scaffold structure", () => {
     }
   });
 
+  test("proxy opt-in pins images.proxy and emits companion config", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "create-oke-proxy-"));
+    try {
+      const caddy = await scaffold({
+        targetDir: join(dir, "with-caddy"),
+        name: "with-caddy",
+        source: { kind: "template", id: "standard" },
+        proxy: "caddy",
+      });
+      expect(caddy.proxy).toBe("caddy");
+      expect(readFileSync(join(caddy.targetDir, "oke.config.ts"), "utf8")).toMatch(
+        /proxy:\s*"caddy:2-alpine"/,
+      );
+      expect(existsSync(join(caddy.targetDir, "docker/Caddyfile"))).toBe(true);
+
+      const nginx = await scaffold({
+        targetDir: join(dir, "with-nginx"),
+        name: "with-nginx",
+        source: { kind: "template", id: "standard" },
+        proxy: "nginx",
+      });
+      expect(nginx.proxy).toBe("nginx");
+      expect(readFileSync(join(nginx.targetDir, "oke.config.ts"), "utf8")).toMatch(
+        /proxy:\s*"nginx:1\.27-alpine"/,
+      );
+      expect(existsSync(join(nginx.targetDir, "docker/nginx.conf"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("--sql postgres pins store.sql (abstract schema stays dialect-agnostic)", async () => {
     const dir = mkdtempSync(join(tmpdir(), "create-oke-sql-pg-"));
     try {
@@ -849,14 +899,7 @@ describe("non-TTY CLI", () => {
       expect(existsSync(join(target, "AGENTS.md"))).toBe(true);
       const result = {
         targetDir: target,
-        name: "flag-app",
-        source: { kind: "template" as const, id: "standard" as const },
         label: "standard",
-        okengineDependency: "x",
-        files: [],
-        sqlDriver: "postgres" as const,
-        locales: [],
-        pgdog: false,
       };
       expect(nextStepsText(result)).toContain("oke dev");
       expect(nextStepsText(result)).toContain("bun install");

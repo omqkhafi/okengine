@@ -16,6 +16,7 @@
     "---Proxy---",
     "caddy",
     "traefik",
+    "nginx",
     "---Services---",
     "pgdog",
     "rustfs",

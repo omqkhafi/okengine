@@ -16,13 +16,14 @@ import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveLocalOkengineRoot, resolveTemplateDir, type TemplateId } from "./templates.ts";
 import { agentsMdContent } from "./agents-md.ts";
-import type { CreateDefaults } from "./create-defaults.ts";
+import type { CreateDefaults, CreateProxyId } from "./create-defaults.ts";
 import { DEFAULT_IMAGES, TEMPLATE_DEV } from "./drivers-catalog.ts";
 import { applyLocalesToProject } from "./locales.ts";
 import {
   DEFAULT_SQL_DRIVER,
   applyCreateAnswers,
   applyPgDogToConfig,
+  applyProxyToConfig,
   extractImages,
   sanitizeProjectName,
   shouldSkipTemplatePath,
@@ -64,6 +65,11 @@ export type ScaffoldOptions = {
    * {@link CreateDefaults.pgdog} or `false`.
    */
   readonly pgdog?: boolean;
+  /**
+   * Pin `images.proxy`. When omitted, uses {@link CreateDefaults.proxy} or
+   * `none`.
+   */
+  readonly proxy?: CreateProxyId;
 };
 
 /** Result of a successful scaffold. */
@@ -82,6 +88,8 @@ export type ScaffoldResult = {
   readonly locales: readonly string[];
   /** Whether `images.pgdog` was pinned. */
   readonly pgdog: boolean;
+  /** Proxy wizard id applied (`none` = unset). */
+  readonly proxy: CreateProxyId;
   /** Relative paths written (POSIX), sorted. */
   readonly files: readonly string[];
 };
@@ -178,10 +186,13 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
     }
 
     const pgdog = options.pgdog ?? createDefaults?.pgdog ?? false;
+    const proxy = options.proxy ?? createDefaults?.proxy ?? "none";
     const configPath = join(targetDir, "oke.config.ts");
     if (existsSync(configPath)) {
+      let next = readFileSync(configPath, "utf8");
+      next = applyPgDogToConfig(next, pgdog);
+      next = applyProxyToConfig(next, proxy);
       const prev = readFileSync(configPath, "utf8");
-      const next = applyPgDogToConfig(prev, pgdog);
       if (next !== prev) writeFileSync(configPath, next, "utf8");
     }
 
@@ -204,6 +215,7 @@ export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult
       ...(createDefaults !== undefined ? { createDefaults } : {}),
       locales,
       pgdog,
+      proxy,
       files: written,
     };
   } catch (e) {

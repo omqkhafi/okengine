@@ -13,6 +13,9 @@ import { isTemplateId, type TemplateId } from "./templates.ts";
 /** Create profile — Docker Compose is always the `dev` runtime. */
 export type CreateProfile = "docker-ready";
 
+/** Opt-in reverse proxy pinned into `images.proxy`. */
+export type CreateProxyId = "none" | "caddy" | "traefik" | "nginx";
+
 /** Env columns written into `oke.config.ts` driver maps. */
 export type EnvDriverPins = {
   readonly dev: string;
@@ -71,11 +74,19 @@ export type CreateDefaults = {
    * Default false — opt in via the wizard or `--pgdog`.
    */
   readonly pgdog: boolean;
+  /**
+   * Pin `images.proxy` (Caddy / Traefik / nginx). `none` leaves the role unset.
+   * Default `none` — opt in via the wizard or `--proxy`.
+   */
+  readonly proxy: CreateProxyId;
   readonly updatedAt: string;
 };
 
 /** Relative path under the user home directory. */
 export const CREATE_DEFAULTS_RELATIVE = ".oke/create-defaults.json";
+
+/** Valid proxy wizard / CLI values. */
+export const CREATE_PROXY_IDS = ["none", "caddy", "traefik", "nginx"] as const;
 
 /**
  * Absolute path to the create-defaults file.
@@ -128,6 +139,15 @@ export function toCreateDefaults(
     ...answers,
     updatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Whether `value` is a known {@link CreateProxyId}.
+ *
+ * @param value - Candidate
+ */
+export function isCreateProxyId(value: string): value is CreateProxyId {
+  return (CREATE_PROXY_IDS as readonly string[]).includes(value);
 }
 
 /**
@@ -213,6 +233,12 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
     if (typeof o.pgdog !== "boolean") return null;
     pgdog = o.pgdog;
   }
+  // Older files omit proxy — treat as none (opt-in).
+  let proxy: CreateProxyId = "none";
+  if (o.proxy !== undefined && o.proxy !== null) {
+    if (typeof o.proxy !== "string" || !isCreateProxyId(o.proxy)) return null;
+    proxy = o.proxy;
+  }
   return {
     version: 1,
     template,
@@ -237,6 +263,7 @@ export function parseCreateDefaults(raw: unknown): CreateDefaults | null {
     },
     locales,
     pgdog,
+    proxy,
     updatedAt: o.updatedAt,
   };
 }

@@ -1,18 +1,18 @@
 ---
 title: Reverse proxy
-description: Opt-in Caddy or Traefik for TLS termination and routing on plain Docker and Swarm — custom domains, Let's Encrypt, and the socket-proxy security model.
+description: Opt-in Caddy, Traefik, or nginx for edge routing on plain Docker and Swarm — custom domains, Let's Encrypt, and the socket-proxy security model.
 icon: Globe
 source: README.md
 ---
 
-Pin `images.proxy` when you need HTTPS at the edge on plain `docker compose` or
+Pin `images.proxy` when you need an edge in front of the app on plain `docker compose` or
 Docker Swarm. Kubernetes uses cluster Ingress / Gateway API instead — this page
 is for the compose recipes.
 
 <Callout title="The one rule">
-  Leave the no-proxy default until you need TLS or horizontal scale on compose. Then pick **Caddy**
-  (simplest automatic HTTPS) or **Traefik** (label auto-discovery for `--scale app=N`). Never mount
-  the raw Docker socket into Traefik.
+  Leave the no-proxy default until you need an edge on compose. Then pick **Caddy** (automatic
+  HTTPS), **Traefik** (`--scale app=N`), or **nginx** (HTTP; TLS elsewhere). Never mount raw
+  `docker.sock` into Traefik.
 </Callout>
 
 ## Quick start
@@ -26,11 +26,12 @@ is for the compose recipes.
 images: {
   "store.sql": "postgres:18-alpine",
   // …
-  proxy: "caddy:2-alpine", // or "traefik:v3.3"
+  proxy: "caddy:2-alpine", // or "traefik:v3.3" / "nginx:1.27-alpine"
 },
 ```
 
-Pin **either** Caddy or Traefik — never both. Re-run `oke docker --prod`.
+Pin **one** proxy image — never two. `create-oke` asks **Add a reverse proxy…?** (or
+`--proxy`). Re-run `oke docker --prod`.
 
 </Step>
 
@@ -69,12 +70,14 @@ Add your public hostname to serve `allowedHosts`
 
 | Choice                       | Best for                                                   | How routing works                                                  |
 | ---------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Caddy** (`caddy:2-alpine`) | hello / minimal / standard — single instance, simplest TLS | Generated `Caddyfile` → `reverse_proxy app:6530`; automatic HTTPS  |
-| **Traefik** (`traefik:v3.3`) | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
-| _(omit `images.proxy`)_      | Local / private networks                                   | App publishes `6530` — **default, unchanged**                      |
+| **Caddy** (`caddy:2-alpine`)    | hello / minimal / standard — single instance, simplest TLS | Generated `Caddyfile` → `reverse_proxy app:6530`; automatic HTTPS  |
+| **Traefik** (`traefik:v3.3`)    | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **nginx** (`nginx:1.27-alpine`) | Static HTTP edge; TLS elsewhere                            | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
+| _(omit `images.proxy`)_         | Local / private networks                                   | App publishes `6530` — **default, unchanged**                      |
 
 **Consequence:** Caddy is the recommended default when you just need a certificate.
 Choose Traefik when `docker compose up --scale app=N` is the deployment shape.
+Choose nginx when another edge already terminates TLS.
 
 ## Caddy
 
@@ -119,6 +122,14 @@ HTTP (`:80`) redirects to HTTPS. ACME email comes from
 Scaled replicas need no label edits — `docker compose up --scale app=N` registers
 every replica through the Docker provider.
 
+## nginx
+
+| Piece              | Meaning                                                                 |
+| ------------------ | ----------------------------------------------------------------------- |
+| Generated file     | `docker/nginx.conf` — `proxy_pass` to `app:6530` on `:80`               |
+| TLS                | None in-container — put Cloudflare / an ALB in front, or switch recipes |
+| Full recipe        | [nginx](/docs/recipes/nginx)                                            |
+
 ## Why docker-socket-proxy (Traefik)
 
 Traefik's Docker provider watches the Engine API for containers and labels.
@@ -158,7 +169,7 @@ the full Docker control plane.
 
 | Surface                                       | Edge / ingress                                           |
 | --------------------------------------------- | -------------------------------------------------------- |
-| [Docker](/docs/deployment/docker)             | Opt-in Caddy or Traefik (`images.proxy`)                 |
+| [Docker](/docs/deployment/docker)             | Opt-in Caddy / Traefik / nginx (`images.proxy`)          |
 | [Docker Swarm](/docs/deployment/docker-swarm) | Same proxy recipes + Swarm routing mesh                  |
 | [Kubernetes](/docs/deployment/kubernetes)     | Ingress / Gateway API (cluster-native — not this recipe) |
 

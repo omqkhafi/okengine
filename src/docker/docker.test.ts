@@ -14,6 +14,7 @@ import {
   DOCKER_STACK,
   assertNoCredentialsInYaml,
   buildCaddyfile,
+  buildNginxConf,
   buildPgDogToml,
   buildPgDogUsersToml,
   builtinRecipes,
@@ -23,6 +24,7 @@ import {
   dragonfly,
   emitDockerfile,
   formatStackEnv,
+  nginx,
   pgdog,
   postgres,
   recipeFor,
@@ -532,6 +534,28 @@ describe("image recipes", () => {
     );
   });
 
+  test("nginx matches official images and emits nginx.conf reverse_proxy", () => {
+    expect(recipeFor("nginx:1.27-alpine").id).toBe("nginx");
+    expect(nginx.match("library/nginx:1.27")).toBe(true);
+    const spec: ServiceSpec = {
+      role: "proxy",
+      serviceName: "proxy",
+      image: "nginx:1.27-alpine",
+      port: 80,
+      hostPort: 80,
+      credentials: { user: "oke", password: "unused-proxy", database: "oke" },
+    };
+    const applied = nginx.apply(spec);
+    expect(applied.extraPorts).toBeUndefined();
+    expect(applied.volumes).toContain("./nginx.conf:/etc/nginx/nginx.conf:ro");
+    const file = buildNginxConf();
+    expect(file).toContain("server app:6530");
+    expect(file).toContain("proxy_pass http://oke_app");
+    expect(nginx.url(spec, { host: "app.example.com", port: 80, ...spec.credentials })).toBe(
+      "http://app.example.com",
+    );
+  });
+
   test("traefik matches official images, labels app, and uses socket-proxy", () => {
     expect(recipeFor("traefik:v3.3").id).toBe("traefik");
     expect(traefik.match("traefik:v3.1")).toBe(true);
@@ -1032,7 +1056,7 @@ describe("deriveInfrastructure", () => {
     const caddyfile = result.files.find((f) => f.path === "Caddyfile")!.content;
     expect(caddyfile).toContain("reverse_proxy app:6530");
     expect(result.stackEnv.OKE_PROXY_URL).toBe("https://127.0.0.1");
-    expect(formatStackEnv(result.stackEnv)).toContain("# ── proxy — TLS terminator");
+    expect(formatStackEnv(result.stackEnv)).toContain("# ── proxy — edge reverse proxy");
     expect(formatStackEnv(result.stackEnv)).toContain("# OKE_PROXY_HOST=localhost");
   });
 
@@ -1064,6 +1088,25 @@ describe("deriveInfrastructure", () => {
     expect(result.files.some((f) => f.path === "Caddyfile")).toBe(false);
     expect(result.stackEnv.OKE_PROXY_URL).toBe("https://127.0.0.1");
     expect(result.composeFiles).toEqual([DOCKER_COMPOSE, DOCKER_COMPOSE_OVERRIDE]);
+  });
+
+  test("opt-in nginx proxy emits nginx.conf and unpublishes app ports", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        proxy: "nginx:1.27-alpine",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      app: "skyport",
+    });
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    expect(yml).not.toContain("6530:6530");
+    expect(yml).toContain("nginx:1.27-alpine");
+    expect(yml).toContain("./nginx.conf:/etc/nginx/nginx.conf:ro");
+    const conf = result.files.find((f) => f.path === "nginx.conf")!.content;
+    expect(conf).toContain("proxy_pass http://oke_app");
+    expect(conf).toContain("server app:6530");
+    expect(result.stackEnv.OKE_PROXY_URL).toBe("http://127.0.0.1");
   });
 
   test("without proxy role, app still publishes 6530 (default unchanged)", () => {

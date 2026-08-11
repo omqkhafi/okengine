@@ -248,10 +248,9 @@ gate: {
 }
 ```
 
-Customize tables, then run `oke schema generate` (writes `.oke/schema/oke.ts`;
-supports `--check` in CI). Extra sign-in
-shapes: [Plugins](/docs/plugins) (username, magic link, OTP, TOTP, passkeys). Call auth from
-[createClient](/docs/reference/client) — one client, helpers in `okengine/client/auth`.
+Customize tables, then `oke schema generate` (`.oke/schema/oke.ts`; `--check` in CI). Extra
+sign-in shapes: [Plugins](/docs/plugins). Call auth from
+[createClient](/docs/reference/client) — helpers in `okengine/client/auth`.
 
 ## Identity and decisions
 
@@ -291,9 +290,8 @@ Set `gate.auth.secret` (or provide it before boot). Non-prod may mint a developm
 </Accordion>
 <Accordion title="Sign-up returns AuthFailed password_policy">
 
-Default policy requires length ≥ 8 plus uppercase, lowercase, a number, and a special character.
-Short passwords like `"123"` are rejected — not accepted silently. Tighten or loosen via
-`gate.auth.passwordPolicy`. Console claim uses a stricter min length of 12 with the same
+Default policy: length ≥ 8 plus upper, lower, number, and special (`"123"` is rejected).
+Tighten via `gate.auth.passwordPolicy`. Console claim uses min length 12 with the same
 character classes.
 
 </Accordion>

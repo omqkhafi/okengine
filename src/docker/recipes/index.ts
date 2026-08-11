@@ -9,6 +9,7 @@ import { dragonfly } from "./dragonfly.ts";
 import { llamaCpp } from "./llama-cpp.ts";
 import { mailpit } from "./mailpit.ts";
 import { meilisearch } from "./meilisearch.ts";
+import { nginx } from "./nginx.ts";
 import { ollama } from "./ollama.ts";
 import { pgdog } from "./pgdog.ts";
 import { postgres } from "./postgres.ts";
@@ -41,6 +42,7 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   sglang,
   ollama,
   caddy,
+  nginx,
   traefik,
 ];
 
@@ -51,6 +53,7 @@ export {
   llamaCpp,
   mailpit,
   meilisearch,
+  nginx,
   ollama,
   pgdog,
   postgres,
