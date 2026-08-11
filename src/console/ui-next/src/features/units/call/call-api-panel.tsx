@@ -14,6 +14,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
+import type { FlowIdentity } from "@/client.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -40,7 +41,6 @@ import { pathParamNames } from "../lib/path-params.ts";
 import { resolveClockForFlow, type ClockResolveResult } from "../lib/resolve-clock.ts";
 import { validateContract } from "../lib/validate-contract.ts";
 import { schemaTypeBadgeClass } from "../lib/schema-type-visual.ts";
-import type { FlowIdentity } from "@/client.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
 
 /** Props for {@link CallApiPanel}. */
@@ -280,12 +280,16 @@ function ClockRunPanel({
                 }}
               >
                 <SelectTrigger className="h-8" data-slot="call-api-identity">
-                  <SelectValue placeholder="Select identity…" />
+                  <SelectValue placeholder="Select identity…">
+                    {(raw) =>
+                      identityTriggerLabel(identities.data ?? [], raw == null ? null : String(raw))
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {(identities.data ?? []).map((id) => (
                     <SelectItem key={id.id} value={id.id} disabled={id.status !== "active"}>
-                      {id.name} · {id.email}
+                      {identityLabel(id)}
                     </SelectItem>
                   ))}
                 </SelectContent>
