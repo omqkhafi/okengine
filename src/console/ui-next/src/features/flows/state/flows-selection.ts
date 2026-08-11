@@ -1,7 +1,8 @@
 /**
  * Flow split-view selection state — URL-backed via TanStack Router search.
  *
- * `run` selects a trace; `follow` controls the graph follow-camera.
+ * `run` selects a trace; `flow` seeds a graph/Traces filter; `follow`
+ * controls the graph follow-camera.
  */
 
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -10,15 +11,19 @@ import { useCallback } from "react";
 /** Search params accepted by the `/flows` route. */
 export interface FlowsSearch {
   readonly run?: string;
+  /** Structural deep-link — seeds graph filter + fitView for this flow id. */
+  readonly flow?: string;
   readonly follow?: boolean;
 }
 
 /** Validate raw router search into {@link FlowsSearch}. */
 export function validateFlowsSearch(search: Record<string, unknown>): FlowsSearch {
   const run = typeof search.run === "string" && search.run.length > 0 ? search.run : undefined;
+  const flow = typeof search.flow === "string" && search.flow.length > 0 ? search.flow : undefined;
   const follow = search.follow === false || search.follow === "false" ? false : undefined;
   return {
     ...(run !== undefined ? { run } : {}),
+    ...(flow !== undefined ? { flow } : {}),
     ...(follow !== undefined ? { follow } : {}),
   };
 }
@@ -31,6 +36,7 @@ export function useFlowsSelection() {
   const navigate = useNavigate();
 
   const selectedRunId = typeof search.run === "string" ? search.run : null;
+  const selectedFlowId = typeof search.flow === "string" ? search.flow : null;
   const follow = search.follow !== false;
 
   const setSelectedRun = useCallback(
@@ -40,6 +46,20 @@ export function useFlowsSelection() {
         search: (prev: Record<string, unknown>) => ({
           ...prev,
           run: run ?? undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const setSelectedFlow = useCallback(
+    (flow: string | null) => {
+      void navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          flow: flow ?? undefined,
         }),
         replace: true,
       });
@@ -61,5 +81,12 @@ export function useFlowsSelection() {
     [navigate],
   );
 
-  return { selectedRunId, follow, setSelectedRun, setFollow };
+  return {
+    selectedRunId,
+    selectedFlowId,
+    follow,
+    setSelectedRun,
+    setSelectedFlow,
+    setFollow,
+  };
 }

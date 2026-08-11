@@ -63,6 +63,17 @@ needed).
 
 ### ✨ Added
 
+- ui-next Units ↔ Flows connector: `/flows?flow=<id>` seeds the graph/Traces
+  filter and fitView; Units contract header has **Open in graph**. Recent
+  activity strip shows real buffered call count / error rate for the selected
+  flow (honest empty when the Console runs buffer has nothing in-window). Units
+  subscribes to `useRuns` + `/console/live` like Flows.
+- ui-next Units **Platform failure modes**: derived only from this flow's Gates
+  + request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
+  403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
+  Call API chrome's default-400 quirk. Declared Flow errors stay a separate
+  tier.
+
 - Console `POST /console/flows/invoke` executes the target flow on a bound host via
   invoke-as (assumed identity scopes) — no more stub `echo` / `inv_*` responses. Fail-closed
   when the host adapter is unbound. Optional `pathParams`; response includes `status` /

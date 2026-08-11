@@ -5,26 +5,33 @@
 import type { JSX } from "react";
 import { Radio01Icon, SecurityCheckIcon, Timer01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Link } from "@tanstack/react-router";
 import type { Manifest, Signal } from "../../../../../../manifest/types.ts";
+import type { RunRow } from "@/client.ts";
 import { GateList } from "@/components/gate-list";
 import { HttpMethodBadge } from "@/components/http-method-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { callersOfFlow } from "@/features/flows/graph/build-flow-graph.ts";
 import { traceGateInfos } from "@/features/flows/traces/trace-gates.ts";
 import { traceRequestMeta } from "@/features/flows/traces/request-meta.ts";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
 import { fieldsFromSchema, schemaObject } from "../lib/fields-from-schema.ts";
 import { flowTriggerKind, flowTriggerSpec } from "../lib/flow-trigger.ts";
 import { resolveClockForFlow } from "../lib/resolve-clock.ts";
 import { EffectsSummary } from "./effects-summary.tsx";
 import { ErrorsSection } from "./errors-section.tsx";
+import { FlowActivityStrip } from "./flow-activity-strip.tsx";
 import { SchemaFields } from "./schema-fields.tsx";
 
 /** Props for {@link FlowContractPanel}. */
 export interface FlowContractPanelProps {
   readonly row: UnitFlowRow;
   readonly manifest: Manifest | null;
+  /** Live runs buffer (Units live hookup); may be undefined while loading. */
+  readonly runs?: readonly RunRow[];
 }
 
 const sectionClassName = "flex flex-col gap-2";
@@ -32,9 +39,9 @@ const sectionClassName = "flex flex-col gap-2";
 /**
  * Top detail pane for a selected flow.
  *
- * @param props - Flow row + Manifest
+ * @param props - Flow row + Manifest + optional runs buffer
  */
-export function FlowContractPanel({ row, manifest }: FlowContractPanelProps): JSX.Element {
+export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProps): JSX.Element {
   const kind = flowTriggerKind(row.flow.trigger);
   const trigger = flowTriggerSpec(row.flow.trigger);
   const meta = traceRequestMeta(
@@ -57,6 +64,8 @@ export function FlowContractPanel({ row, manifest }: FlowContractPanelProps): JS
 
   return (
     <div className="flex flex-col gap-5 p-4" data-slot="flow-contract-panel" data-trigger={kind}>
+      <FlowActivityStrip flowId={row.id} runs={runs} />
+
       <header className="flex flex-col gap-2.5" data-slot="endpoint-header">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span
@@ -78,6 +87,15 @@ export function FlowContractPanel({ row, manifest }: FlowContractPanelProps): JS
           >
             {trigger.label}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0 gap-1 px-2 text-[11px]"
+            render={<Link to="/flows" search={{ flow: row.id }} data-slot="open-in-graph" />}
+          >
+            <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
+            Open in graph
+          </Button>
         </div>
 
         {kind === "http" && meta.method && meta.path ? (
@@ -181,7 +199,7 @@ export function FlowContractPanel({ row, manifest }: FlowContractPanelProps): JS
         />
       </section>
 
-      <ErrorsSection errors={row.flow.errors} />
+      <ErrorsSection errors={row.flow.errors} flow={row.flow} manifest={manifest} />
       <GateList gates={gates} />
       <EffectsSummary effects={row.flow.effects} />
     </div>

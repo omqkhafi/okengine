@@ -3,22 +3,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "./data/use-console-live.ts";
 import { useManifest } from "./data/use-manifest.ts";
 import { useRuns } from "./data/use-runs.ts";
 import { FlowGraph } from "./graph/flow-graph.tsx";
 import { useFlowsSelection } from "./state/flows-selection.ts";
 import { graphFilterForNodeId, type GraphFilter } from "./traces/graph-filter.ts";
-import {
-  activeNodeAt,
-  playbackDurationMs,
-  playbackNodeSteps,
-} from "./traces/replay-playback.ts";
+import { activeNodeAt, playbackDurationMs, playbackNodeSteps } from "./traces/replay-playback.ts";
 import { scopeRunsToFlows } from "./traces/scope-runs.ts";
 import { chainFlowIds } from "./traces/trace-chain.ts";
 import { TracesPane } from "./traces/traces-pane.tsx";
@@ -31,7 +23,8 @@ export function FlowsPage() {
   const manifest = useManifest();
   const runs = useRuns();
   const liveStatus = useConsoleLive(true);
-  const { selectedRunId, follow, setSelectedRun } = useFlowsSelection();
+  const { selectedRunId, selectedFlowId, follow, setSelectedRun, setSelectedFlow } =
+    useFlowsSelection();
 
   const [graphFilter, setGraphFilter] = useState<GraphFilter | null>(null);
   const [focusEffectIndex, setFocusEffectIndex] = useState<number | null>(null);
@@ -49,10 +42,30 @@ export function FlowsPage() {
     [runs.data, visibleFlowIds],
   );
 
-  const highlightedFlowIds = useMemo(
-    () => chainFlowIds(runs.data ?? [], selectedRunId),
-    [runs.data, selectedRunId],
+  // Seed graph filter from `?flow=` deep-link (Units → Open in graph).
+  useEffect(() => {
+    if (!selectedFlowId) return;
+    setGraphFilter((prev) => {
+      if (prev?.kind === "flow" && prev.flowId === selectedFlowId) return prev;
+      return { kind: "flow", flowId: selectedFlowId };
+    });
+  }, [selectedFlowId]);
+
+  const applyGraphFilter = useCallback(
+    (filter: GraphFilter | null) => {
+      setGraphFilter(filter);
+      if (filter?.kind === "flow") setSelectedFlow(filter.flowId);
+      else setSelectedFlow(null);
+    },
+    [setSelectedFlow],
   );
+
+  const highlightedFlowIds = useMemo(() => {
+    const fromRun = chainFlowIds(runs.data ?? [], selectedRunId);
+    if (fromRun.size > 0) return fromRun;
+    if (selectedFlowId) return new Set([selectedFlowId]);
+    return fromRun;
+  }, [runs.data, selectedRunId, selectedFlowId]);
 
   // Signal nodes between chain flows (emit → consume) also highlight.
   const highlightedNodeIds = useMemo(() => {
@@ -76,18 +89,20 @@ export function FlowsPage() {
     (nodeId: string) => {
       const filter = graphFilterForNodeId(nodeId);
       if (!filter) return;
-      setGraphFilter((prev) =>
-        prev && prev.kind === filter.kind && JSON.stringify(prev) === JSON.stringify(filter)
+      applyGraphFilter(
+        graphFilter &&
+          graphFilter.kind === filter.kind &&
+          JSON.stringify(graphFilter) === JSON.stringify(filter)
           ? null
           : filter,
       );
     },
-    [],
+    [applyGraphFilter, graphFilter],
   );
 
   const onGraphPaneClick = useCallback(() => {
-    setGraphFilter(null);
-  }, []);
+    applyGraphFilter(null);
+  }, [applyGraphFilter]);
 
   const onReplayStart = useCallback(() => {
     setPlaybackKey((k) => k + 1);
@@ -148,7 +163,7 @@ export function FlowsPage() {
               liveStatus={liveStatus}
               manifest={manifest.data ?? null}
               graphFilter={graphFilter}
-              onGraphFilterChange={setGraphFilter}
+              onGraphFilterChange={applyGraphFilter}
               focusEffectIndex={focusEffectIndex}
               onFocusEffectChange={setFocusEffectIndex}
               playbackKey={playbackKey}

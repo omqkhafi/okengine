@@ -4,7 +4,9 @@
 
 import { useMemo, type JSX } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
 import { useManifest } from "@/features/flows/data/use-manifest.ts";
+import { useRuns } from "@/features/flows/data/use-runs.ts";
 import { CallApiPanel } from "./call/call-api-panel.tsx";
 import { FlowContractPanel } from "./detail/flow-contract-panel.tsx";
 import { UnitsTree } from "./explorer/units-tree.tsx";
@@ -16,6 +18,8 @@ import { useUnitsSelection } from "./state/units-selection.ts";
  */
 export function UnitsPage(): JSX.Element {
   const manifestQuery = useManifest();
+  const runs = useRuns();
+  useConsoleLive(true);
   const { selectedFlowId: urlFlowId, setSelectedFlow } = useUnitsSelection();
   const groups = useMemo(() => buildUnitTree(manifestQuery.data ?? null), [manifestQuery.data]);
 
@@ -49,7 +53,11 @@ export function UnitsPage(): JSX.Element {
             <div className="flex h-full min-h-0 flex-col overflow-y-auto">
               {selectedRow ? (
                 <>
-                  <FlowContractPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
+                  <FlowContractPanel
+                    row={selectedRow}
+                    manifest={manifestQuery.data ?? null}
+                    runs={runs.data}
+                  />
                   <CallApiPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
                 </>
               ) : (
