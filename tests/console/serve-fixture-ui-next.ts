@@ -46,11 +46,16 @@ server.console.state.replayTrace = async ({ event, dryRun }) => ({
   output: { replayed: event.id, dryRun, input: event.input ?? null },
 });
 
+const { bootUiNextSeedInvoke } = await import("../../src/console/ui-next/seed-invoke-host.ts");
+const seedInvoke = await bootUiNextSeedInvoke();
+server.console.state.invokeUserFlow = seedInvoke.invokeUserFlow;
+
 const claimCode = server.console.state.claim.code;
 await Bun.write(claimPath, claimCode);
 console.log(`console ui-next setup fixture ready on ${server.url}`);
 
 const stop = () => {
+  void seedInvoke.stop();
   server.stop(true);
   try {
     Bun.spawnSync(["rm", "-f", claimPath]);

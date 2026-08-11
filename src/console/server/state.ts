@@ -185,6 +185,11 @@ export interface ConsoleState {
         readonly dryRun: boolean;
       }) => Promise<{ readonly output: unknown; readonly failure?: unknown }>)
     | null;
+  /**
+   * Optional host-app invoke-as for `console.flows.invoke`.
+   * When unset, invoke fails closed (`InvokeDenied`) — never stubs.
+   */
+  invokeUserFlow: import("./invoke-user-flow.ts").ConsoleInvokeUserFlow | null;
   /** Signal config store (`oke_signal_config`) — retains orphaned rows. */
   readonly signalConfig: SignalConfigStore;
   /**
@@ -682,6 +687,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
     listRuns: async () => [],
     runsIngestSecret: options.runsIngestSecret ?? null,
     replayTrace: null,
+    invokeUserFlow: null,
     signalConfig,
     signalBus: null,
     listSignals: async () => {

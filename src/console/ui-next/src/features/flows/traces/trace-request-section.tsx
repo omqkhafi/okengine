@@ -12,6 +12,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { HighlightedJson } from "@/components/highlighted-json";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,8 +21,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useTheme } from "@/components/theme-provider";
-import { highlightCode } from "@/lib/highlight.ts";
 import { cn } from "@/lib/utils";
 import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
 import {
@@ -558,59 +557,5 @@ function CopyIconButton({
         {copied ? "Copied" : label}
       </TooltipContent>
     </Tooltip>
-  );
-}
-
-/**
- * Shiki-highlighted JSON block for the Raw body view.
- *
- * @param props - Pre-serialized JSON
- */
-function HighlightedJson({
-  json,
-  dataSlot,
-}: {
-  readonly json: string;
-  readonly dataSlot: string;
-}): JSX.Element {
-  const { theme } = useTheme();
-  const [nodes, setNodes] = useState<JSX.Element | null>(null);
-  const lines = useMemo(() => json.split("\n"), [json]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const root = window.document.documentElement;
-    const dark =
-      theme === "dark" || (theme === "system" && root.classList.contains("dark"));
-    void highlightCode(json, {
-      lang: "json",
-      theme: dark ? "github-dark" : "github-light",
-    }).then((el) => {
-      if (!cancelled) setNodes(el);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [json, theme]);
-
-  return (
-    <div
-      data-slot={dataSlot}
-      className="flex max-h-56 overflow-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      <div
-        className="sticky left-0 select-none border-r border-border/40 bg-muted/30 px-1.5 py-1.5 text-right font-mono text-[10px] leading-snug text-muted-foreground/80"
-        aria-hidden
-      >
-        {lines.map((_, i) => (
-          <div key={i}>{i + 1}</div>
-        ))}
-      </div>
-      <div className="min-w-0 flex-1 px-2 py-1.5 text-[11px] leading-snug [&_pre]:m-0 [&_pre]:bg-transparent! [&_code]:font-mono">
-        {nodes ?? (
-          <pre className="font-mono whitespace-pre-wrap text-muted-foreground">{json}</pre>
-        )}
-      </div>
-    </div>
   );
 }

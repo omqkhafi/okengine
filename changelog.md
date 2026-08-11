@@ -57,6 +57,21 @@ needed).
 
 ### ✨ Added
 
+- Console `POST /console/flows/invoke` executes the target flow on a bound host via
+  invoke-as (assumed identity scopes) — no more stub `echo` / `inv_*` responses. Fail-closed
+  when the host adapter is unbound. Optional `pathParams`; response includes `status` /
+  `failure` / `runId` when the host provides them. Kernel `execute` accepts
+  `trustedInvoke` for console-trusted principal injection outside `env: "test"`.
+- ui-next **Units** page (`/units`): Manifest flows grouped by unit, contract panel
+  (request/response schema rows, typed errors, gates, effects), and session-authenticated
+  Call API wired to real invoke-as.
+
+### 🔒 Security
+
+- Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
+  scopes; host gates enforce the assumed principal.
+
+
 - `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
   `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
 - nginx image recipe (`nginx:1.27-alpine`) — generated `nginx.conf` reverse proxy on :80;

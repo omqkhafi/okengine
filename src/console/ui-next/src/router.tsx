@@ -1,6 +1,6 @@
 /**
  * ui-next router — code-based TanStack Router (Vite SPA, same pattern as current Console).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/units` | `/store`.
  */
 
 import {
@@ -24,6 +24,8 @@ import {
 import { ClaimPage } from "./features/setup/claim-page.tsx";
 import { FlowsPage } from "./features/flows/flows-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
+import { UnitsPage } from "./features/units/units-page.tsx";
+import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
 import { SectionEmpty } from "./components/shell/section-empty.tsx";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -93,6 +95,13 @@ const flowsRoute = createRoute({
   component: FlowsPage,
 });
 
+const unitsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/units",
+  validateSearch: validateUnitsSearch,
+  component: UnitsPage,
+});
+
 const storeRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/store",
@@ -109,7 +118,7 @@ const storeRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  authenticatedRoute.addChildren([overviewRoute, flowsRoute, storeRoute]),
+  authenticatedRoute.addChildren([overviewRoute, flowsRoute, unitsRoute, storeRoute]),
 ]);
 
 /**

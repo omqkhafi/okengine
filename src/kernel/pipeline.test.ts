@@ -4,7 +4,7 @@
  * - RateLimited / Forbidden typed denials (never thrown)
  * - evaluated gate chain lands on the run (not only declared names)
  * - forged / expired Bearer → Unauthorized (cryptographic verifyAccess)
- * - extras.principal injection gated to test env only
+ * - extras.principal injection gated to test env / trustedInvoke only
  */
 
 import { describe, expect, test } from "bun:test";
@@ -337,7 +337,7 @@ describe("pipeline — Bearer cryptographic verification", () => {
     });
 
     const result = await app.execute(
-      app.flow("orders.inject")!,
+      app.bindings.find((b) => b.flow.name === "orders.inject")!.flow,
       { sku: "X" },
       http.post("/orders").gate(member),
       {
@@ -350,6 +350,60 @@ describe("pipeline — Bearer cryptographic verification", () => {
       },
     );
     expect(result.failure?.error.code).toBe("Unauthorized");
+
+    await app.stop();
+  });
+
+  test("extras.trustedInvoke allows principal injection outside test env", async () => {
+    resetBindings();
+    resetFlowSeq();
+
+    on(
+      http.post("/orders").gate(member),
+      flow("orders.trusted", {
+        in: z.object({ sku: z.string() }),
+        do: (_input, fx) => ({ userId: fx.auth.userId }),
+      }),
+    );
+
+    const app = oke({
+      name: "trusted-inject",
+      gate: { policies: [member] },
+      env: "dev",
+      config: {
+        drivers: {
+          store: { kv: { dev: "memory", test: "memory", prod: "memory" } },
+          signal: { dev: "memory", test: "memory", prod: "memory" },
+          clock: { dev: "memory", test: "frozen", prod: "memory" },
+          journal: { dev: "memory", test: "memory", prod: "memory" },
+          channel: { email: { dev: "console", test: "console", prod: "console" } },
+        },
+      },
+      startScheduler: false,
+    });
+    await app.boot({
+      env: "dev",
+      gates: [member],
+      startScheduler: false,
+      config: app.$options.config,
+    });
+
+    const result = await app.execute(
+      app.bindings.find((b) => b.flow.name === "orders.trusted")!.flow,
+      { sku: "X" },
+      http.post("/orders").gate(member),
+      {
+        trustedInvoke: true,
+        principal: {
+          plane: "user",
+          userId: "console-assumed",
+          scopes: new Set(["member"]),
+          verified: true,
+        },
+      },
+    );
+    expect(result.failure).toBeUndefined();
+    expect(result.output).toEqual({ userId: "console-assumed" });
 
     await app.stop();
   });

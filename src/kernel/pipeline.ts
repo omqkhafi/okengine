@@ -61,7 +61,8 @@ export interface PipelineDeps {
   readonly resolveToken?: (request: Request) => string | undefined;
   /**
    * When true, `ctx.state.principal` / execute `extras.principal` injection
-   * is honoured (test harness only). Must be false for production HTTP.
+   * is honoured (test harness or console-trusted invoke-as). Must be false
+   * for production HTTP request handling.
    */
   readonly allowTestPrincipals?: boolean;
   /** Per-invocation principal bag (same object passed into createFx). */

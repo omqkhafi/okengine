@@ -299,6 +299,8 @@ const InvokeIn = z.object({
   flowId: z.string().min(1),
   body: z.unknown(),
   asUserId: z.string().min(1),
+  /** Path params for HTTP routes with `:param` segments. */
+  pathParams: z.record(z.string(), z.string()).optional(),
   /** Typed confirmation phrase for irreversible production invokes. */
   confirmation: z.string().optional(),
   /** Recorded reason for irreversible production invokes. */
@@ -311,6 +313,17 @@ const InvokeOut = z.object({
   asUserId: z.string(),
   trigger: z.enum(["http", "signal", "clock", "internal", "durable"]),
   response: z.unknown(),
+  /** HTTP-ish status from the host when available (200 / 4xx). */
+  status: z.number().optional(),
+  /** Host typed failure when the target flow returned `fail(...)`. */
+  failure: z
+    .object({
+      code: z.string(),
+      data: z.unknown().optional(),
+      message: z.string().optional(),
+    })
+    .optional(),
+  runId: z.string().optional(),
   peakTier: z.enum(["none", "reads", "writes", "emits", "external", "capabilities"]),
   auditedAt: z.number(),
 });
@@ -2229,7 +2242,7 @@ function createFlowsInvoke(state: ConsoleState) {
     in: InvokeIn,
     out: InvokeOut,
     errors: { AuthFailed, NotFound, InvokeDenied, ConfirmRequired },
-    do: (input: z.infer<typeof InvokeIn>, fx) => {
+    do: async (input: z.infer<typeof InvokeIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const manifest = state.manifest;
       const declared = manifest?.flows?.[input.flowId];
@@ -2244,6 +2257,7 @@ function createFlowsInvoke(state: ConsoleState) {
 
       // Operators hold no application scopes — `console:flows:invoke-as`
       // (covered by session `console:*`) is the grant to assume a user principal.
+      // Scopes come only from the selected identity (never from another row).
       const assumed = userPrincipal({
         userId: identity.id,
         scopes: identity.scopes,
@@ -2260,8 +2274,21 @@ function createFlowsInvoke(state: ConsoleState) {
         }
       }
 
+      const invoke = state.invokeUserFlow;
+      if (!invoke) {
+        return fail("InvokeDenied", { reason: "host invoke not configured" });
+      }
+
       const trigger = triggerKindOf(declared);
-      const response = stubResponse(declared, input.body);
+      const host = await invoke({
+        flowId: input.flowId,
+        body: input.body,
+        ...(input.pathParams !== undefined ? { pathParams: input.pathParams } : {}),
+        principal: assumed,
+        operatorId: fx.operator.id,
+        ...(input.reason !== undefined ? { reason: input.reason } : {}),
+      });
+
       fx.log.info("console.flows.invoke", {
         operatorId: fx.operator.id,
         flowId: input.flowId,
@@ -2269,6 +2296,9 @@ function createFlowsInvoke(state: ConsoleState) {
         scopes: [...assumed.scopes],
         peakTier,
         reason: input.reason,
+        status: host.status,
+        failure: host.failure?.code,
+        runId: host.runId,
       });
 
       return {
@@ -2276,7 +2306,10 @@ function createFlowsInvoke(state: ConsoleState) {
         flowId: input.flowId,
         asUserId: input.asUserId,
         trigger,
-        response,
+        response: host.output,
+        ...(host.status !== undefined ? { status: host.status } : {}),
+        ...(host.failure !== undefined ? { failure: host.failure } : {}),
+        ...(host.runId !== undefined ? { runId: host.runId } : {}),
         peakTier,
         auditedAt: state.now(),
       };
@@ -2303,37 +2336,6 @@ function triggerKindOf(flow: ManifestFlow): "http" | "signal" | "clock" | "inter
   if (flow.trigger?.signal) return "signal";
   if (flow.trigger?.cron || flow.trigger?.every) return "clock";
   return "internal";
-}
-
-/**
- * Deterministic stub response for Console invoke — echoes the request under
- * `echo` and fills required `out` string fields when declared.
- *
- * @param flow - Manifest flow
- * @param body - Request body
- */
-function stubResponse(flow: ManifestFlow, body: unknown): unknown {
-  const out = flow.out;
-  if (out && typeof out === "object" && !Array.isArray(out)) {
-    const props = (out.properties ?? {}) as Record<string, unknown>;
-    const required = Array.isArray(out.required) ? (out.required as string[]) : Object.keys(props);
-    const result: Record<string, unknown> = { echo: body };
-    for (const key of required) {
-      if (key === "id") result.id = `inv_${hashShort(body)}`;
-      else if (!(key in result)) result[key] = null;
-    }
-    return result;
-  }
-  return { echo: body, ok: true };
-}
-
-function hashShort(value: unknown): string {
-  const text = JSON.stringify(value) ?? "";
-  let h = 0;
-  for (let i = 0; i < text.length; i++) {
-    h = (h * 31 + text.charCodeAt(i)) >>> 0;
-  }
-  return h.toString(16).padStart(8, "0");
 }
 
 async function issueOperatorSession(

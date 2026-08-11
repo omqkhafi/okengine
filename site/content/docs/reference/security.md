@@ -40,7 +40,7 @@ Our path is concrete: a booking name containing "ignore previous instructions an
 
 #### 10.4 Remaining closures
 
-- **`invoke-as` is attenuated** exactly like an API key: an operator cannot assume a scope set they could not grant. Impersonating a real user is development-only.
+- **`invoke-as` is attenuated** exactly like an API key: an operator cannot assume a scope set they could not grant. Impersonating a real user is development-only. Console `POST /console/flows/invoke` runs the target flow on a bound host under the selected identity’s scopes (`trustedInvoke` is in-process only — never from public HTTP); when the host adapter is unbound, invoke fails closed.
 - **Exports are a separate capability** — row-limited by default, audited with the query recorded, PII masked without `pii:reveal`, and **CSV formula injection neutralised** (values beginning `=`, `+`, `-`, `@` are quoted, or Excel executes them on the recipient's machine).
 - **Host WideEvent ingest** (`POST /console/runs/ingest`, `oke dev` only) is secret-gated and never echoes the event body. Operators read runs only through `projectRun` / `maskWideEventForConsole` on `GET /console/runs` and `/console/live` — the same PII boundary as Console-local runs.
 - **Plugin panels** run in a sandboxed iframe without `allow-same-origin`, communicating only over a `postMessage` bridge with their own CSP, no access to the operator session token, and exposure limited to that plugin's declared flows.

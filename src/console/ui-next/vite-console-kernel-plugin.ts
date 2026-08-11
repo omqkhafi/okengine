@@ -119,6 +119,9 @@ export function okeConsoleKernelPlugin(): Plugin {
         handle.console.state.replayTrace = async ({ event, dryRun }) => ({
           output: { replayed: event.id, dryRun, input: event.input ?? null },
         });
+        const { bootUiNextSeedInvoke } = await import("./seed-invoke-host.ts");
+        const seedInvoke = await bootUiNextSeedInvoke();
+        handle.console.state.invokeUserFlow = seedInvoke.invokeUserFlow;
       }
 
       server.config.logger.info(`[oke] Console ${handle.url}`);

@@ -40,6 +40,11 @@ const navItems = [
     icon: ELEMENT_ICONS.flow.icon,
   },
   {
+    title: "Units",
+    to: "/units" as const,
+    icon: ELEMENT_ICONS.flow.icon,
+  },
+  {
     title: "Store",
     to: "/store" as const,
     icon: ELEMENT_ICONS.store.icon,

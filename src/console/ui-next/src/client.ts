@@ -342,3 +342,66 @@ export async function tracesReplay(
     body: JSON.stringify(body),
   });
 }
+
+/** One identity from `GET /console/flows/identities`. */
+export type FlowIdentity = {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly status: string;
+  readonly scopes: readonly string[];
+};
+
+/** Identities list payload. */
+export type FlowsIdentitiesPayload = {
+  readonly identities: readonly FlowIdentity[];
+};
+
+/**
+ * GET /console/flows/identities — invoke-as picker.
+ */
+export async function flowsIdentities(): Promise<ConsoleApiResult<FlowsIdentitiesPayload>> {
+  return consoleFetch<FlowsIdentitiesPayload>("/console/flows/identities");
+}
+
+/** Request body for `POST /console/flows/invoke`. */
+export type FlowsInvokeInput = {
+  readonly flowId: string;
+  readonly body: unknown;
+  readonly asUserId: string;
+  readonly pathParams?: Readonly<Record<string, string>>;
+  readonly confirmation?: string;
+  readonly reason?: string;
+};
+
+/** Success payload from `POST /console/flows/invoke`. */
+export type FlowsInvokeResult = {
+  readonly ok: true;
+  readonly flowId: string;
+  readonly asUserId: string;
+  readonly trigger: string;
+  readonly response: unknown;
+  readonly status?: number;
+  readonly failure?: {
+    readonly code: string;
+    readonly data?: unknown;
+    readonly message?: string;
+  };
+  readonly runId?: string;
+  readonly peakTier: string;
+  readonly auditedAt: number;
+};
+
+/**
+ * POST /console/flows/invoke — real host invoke-as (operator session).
+ *
+ * @param body - Flow id, body, assumed identity
+ */
+export async function flowsInvoke(
+  body: FlowsInvokeInput,
+): Promise<ConsoleApiResult<FlowsInvokeResult>> {
+  return consoleFetch<FlowsInvokeResult>("/console/flows/invoke", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

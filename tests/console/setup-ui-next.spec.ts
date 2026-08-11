@@ -26,6 +26,7 @@ async function expectShell(
   await expect(sidebar).toBeVisible({ timeout: 15_000 });
   await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Flows" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Units" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
   await expect(page.getByText(sectionTitle)).toBeVisible();
 
@@ -353,4 +354,79 @@ test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", asyn
     hasText: "DB query · sql:bookings · 9ms · +3ms",
   });
   await expect(tip).toBeVisible({ timeout: 5_000 });
+});
+
+test("ui-next Units: Call API invokes for real (non-stub response)", async ({ page, request }) => {
+  test.setTimeout(90_000);
+
+  const status = await request.get("/console/setup/status");
+  const statusBody = (await status.json()) as {
+    data: { setupClosed: boolean; claimRequired: boolean };
+  };
+
+  await page.goto("/");
+  await page.evaluate(() => sessionStorage.removeItem("oke_console_at"));
+
+  if (statusBody.data.claimRequired) {
+    const claimPath = join(dirname(fileURLToPath(import.meta.url)), ".claim-code-ui-next");
+    const claimCode = readFileSync(claimPath, "utf8").trim();
+    await expect(page.getByRole("heading", { name: "First admin" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.locator("#claimCode").fill(claimCode);
+    await page.locator("#name").fill(OPERATOR_NAME);
+    await page.locator("#email").fill(OPERATOR_EMAIL);
+    await page.locator("#password").fill(OPERATOR_PASSWORD);
+    await page.getByRole("button", { name: "Create admin account" }).click();
+  } else {
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.locator("#email").fill(OPERATOR_EMAIL);
+    await page.locator("#password").fill(OPERATOR_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+  }
+
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+
+  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Units" }).click();
+  await expect(page).toHaveURL(/\/units/);
+  await expect(page.locator('[data-slot="units-page"]')).toBeVisible({ timeout: 15_000 });
+
+  const createItem = page.locator('[data-slot="unit-flow-item"][data-flow-id="bookings.create"]');
+  await expect(createItem).toBeVisible({ timeout: 15_000 });
+  await createItem.click();
+
+  await expect(page.locator('[data-slot="flow-contract-panel"]')).toBeVisible();
+  await expect(page.locator('[data-slot="call-api-panel"]')).toBeVisible();
+
+  await expect(page.locator('[data-slot="call-api-identity"]')).toBeVisible();
+  await expect(page.locator('[data-slot="call-api-submit"]')).toBeEnabled({ timeout: 10_000 });
+
+  const flightInput = page.locator("#body-flightId");
+  await expect(flightInput).toBeVisible();
+  await flightInput.fill("SK1");
+  const seatsInput = page.locator("#body-seats");
+  await expect(seatsInput).toBeVisible();
+  await seatsInput.fill("2");
+
+  const invokeWait = page.waitForResponse(
+    (res) => res.url().includes("/console/flows/invoke") && res.request().method() === "POST",
+    { timeout: 15_000 },
+  );
+  await page.locator('[data-slot="call-api-submit"]').click();
+  const invokeRes = await invokeWait;
+  expect(invokeRes.ok()).toBeTruthy();
+  const invokeJson = (await invokeRes.json()) as {
+    data?: { response?: { id?: string } };
+    error?: { code?: string };
+  };
+  expect(invokeJson.error ?? null).toBeNull();
+  expect(invokeJson.data?.response?.id).toBe("real_SK1_2");
+
+  const response = page.locator('[data-slot="call-api-response"]');
+  await expect(response).toBeVisible({ timeout: 10_000 });
+  await expect(response).toContainText("real_SK1_2");
+  await expect(response).not.toContainText('"echo"');
+  await expect(response).not.toContainText("inv_");
 });

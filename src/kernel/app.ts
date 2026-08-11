@@ -386,6 +386,12 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
       readonly operator?: FxOperator;
       /** Pre-resolved principal (either plane). */
       readonly principal?: ResolvedPrincipal;
+      /**
+       * Console invoke-as / trusted in-process callers only.
+       * When true, `principal` / `auth` injection is honoured outside `env: "test"`.
+       * Must never be set from public HTTP request handling.
+       */
+      readonly trustedInvoke?: boolean;
       /** Parent WideEvent id when this execution was caused by another. */
       readonly parentId?: string;
       /** Explicit run / WideEvent id (defaults to a new UUID). */
@@ -1069,6 +1075,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly auth?: ResolvedPrincipal | FxAuth;
       readonly operator?: FxOperator;
       readonly principal?: ResolvedPrincipal;
+      /** Console invoke-as / trusted in-process callers only. */
+      readonly trustedInvoke?: boolean;
       /** Frozen origin identity for {@link Fx.principal} across `fx.call`. */
       readonly originPrincipal?: FxPrincipal;
       /** Explicit locale override for {@link Fx.t} / channel sends. */
@@ -1114,6 +1122,7 @@ export function oke(options: OkeOptions): OkeApp {
       readonly auth?: ResolvedPrincipal | FxAuth;
       readonly operator?: FxOperator;
       readonly principal?: ResolvedPrincipal;
+      readonly trustedInvoke?: boolean;
       readonly originPrincipal?: FxPrincipal;
       readonly locale?: string;
       readonly parentId?: string;
@@ -1179,10 +1188,11 @@ export function oke(options: OkeOptions): OkeApp {
         operator: { id: options.fx?.operator?.id ?? null },
       };
 
-      // extras.principal / extras.auth are test-harness only — never from
-      // a real HTTP request in production mode.
+      // Principal injection: test harness (`env: "test"`) OR console-trusted
+      // invoke-as (`extras.trustedInvoke`). Never from public HTTP fetch.
       const testMode = bootEnv === "test";
-      if (testMode) {
+      const allowInjectedPrincipals = testMode || extras?.trustedInvoke === true;
+      if (allowInjectedPrincipals) {
         applyPrincipal(principals, extras?.auth as ResolvedPrincipal | undefined);
         applyPrincipal(principals, extras?.principal);
         if (extras?.operator) principals.operator.id = extras.operator.id;
@@ -1196,7 +1206,7 @@ export function oke(options: OkeOptions): OkeApp {
         gates: booted.gate,
         principals,
         telemetry,
-        allowTestPrincipals: testMode,
+        allowTestPrincipals: allowInjectedPrincipals,
         verifyBearer:
           binding && verifyBearer ? async (token) => verifyBearer(binding, token) : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.

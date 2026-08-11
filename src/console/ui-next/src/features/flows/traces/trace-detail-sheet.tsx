@@ -40,6 +40,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { GateList } from "@/components/gate-list";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
 import { useManifest } from "../data/use-manifest.ts";
@@ -60,7 +61,7 @@ import { durationClassName } from "./duration-tone.ts";
 import { traceRequestMeta } from "./request-meta.ts";
 import { TraceRequestSection } from "./trace-request-section.tsx";
 import { executeTraceReplay } from "./trace-actions.ts";
-import { traceGateInfos, type TraceGateInfo } from "./trace-gates.ts";
+import { traceGateInfos } from "./trace-gates.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
 import { playbackDurationMs } from "./replay-playback.ts";
 import { waterfallBars, type WaterfallBar } from "./waterfall-bars.ts";
@@ -319,14 +320,7 @@ export function TraceDetailSheet({
 
               {gateInfos.length > 0 ? (
                 <section className={sectionClassName} data-slot="trace-gates">
-                  <h3 className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                    Gates
-                  </h3>
-                  <ul className="flex flex-col gap-1" data-slot="trace-gates-list">
-                    {gateInfos.map((gate) => (
-                      <GateRow key={gate.name} gate={gate} />
-                    ))}
-                  </ul>
+                  <GateList gates={gateInfos} />
                 </section>
               ) : null}
 
@@ -695,37 +689,6 @@ function SummaryChip({ chip }: { readonly chip: EffectSummaryChip }): JSX.Elemen
 
 /** Gate element accent — distinct from store / signal / AI graph tokens. */
 const GATE_ACCENT = "#A78BFA";
-
-/**
- * One Gate row — name + Manifest kind/description when declared.
- *
- * @param props - Resolved gate info
- */
-function GateRow({ gate }: { readonly gate: TraceGateInfo }): JSX.Element {
-  const meta = [gate.kind, gate.description].filter(Boolean).join(" · ");
-  return (
-    <li
-      className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-[11px] hover:bg-muted/60"
-      data-slot="trace-gate-row"
-    >
-      <span
-        className="flex size-5 shrink-0 items-center justify-center"
-        style={{ color: GATE_ACCENT }}
-        aria-hidden
-      >
-        <HugeiconsIcon icon={ELEMENT_ICONS.gate.icon} className="size-3.5" />
-      </span>
-      <span className="min-w-0 flex-1 truncate font-mono font-medium text-foreground/90">
-        {gate.name}
-      </span>
-      {meta ? (
-        <span className="min-w-0 max-w-[55%] truncate text-muted-foreground">{meta}</span>
-      ) : (
-        <span className="shrink-0 text-muted-foreground">undeclared</span>
-      )}
-    </li>
-  );
-}
 
 function summaryIcon(variant: EffectSummaryVariant) {
   switch (variant) {
