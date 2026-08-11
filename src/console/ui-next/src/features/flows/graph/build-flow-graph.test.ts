@@ -9,6 +9,7 @@ import {
   applyChainHighlight,
   applyEdgeHighlight,
   buildFlowGraph,
+  callersOfFlow,
   unitOfFlowId,
   actionOfFlowId,
 } from "./build-flow-graph.ts";
@@ -119,6 +120,19 @@ describe("buildFlowGraph", () => {
     expect(byKind.get("trigger")).toBe("#FBBF24");
     // Every edge is an explicit smoothstep ribbon (never straight/step).
     expect(edges.every((e) => e.type === "smoothstep")).toBe(true);
+  });
+
+  test("callersOfFlow reuses effects.calls reverse-index (same as call edges)", () => {
+    // Call edges in the graph are the forward walk; callersOfFlow is the reverse.
+    const callEdges = edges.filter((e) => e.data?.kind === "calls");
+    expect(callEdges.length).toBeGreaterThan(0);
+    for (const e of callEdges) {
+      const caller = e.source.replace(/^flow:/, "");
+      const callee = e.target.replace(/^flow:/, "");
+      expect(callersOfFlow(GRAPH_MANIFEST, callee)).toContain(caller);
+    }
+    expect(callersOfFlow(GRAPH_MANIFEST, "bookings.create")).toEqual(["payments.chargeBooking"]);
+    expect(callersOfFlow(GRAPH_MANIFEST, "payments.chargeBooking")).toEqual([]);
   });
 
   test("unit groups hug content bounds instead of a fixed dead-space box", () => {

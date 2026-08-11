@@ -405,3 +405,32 @@ export async function flowsInvoke(
     body: JSON.stringify(body),
   });
 }
+
+/** Request body for `POST /console/clock/run-now`. */
+export type ClockRunNowInput = {
+  readonly name: string;
+  readonly confirmation?: string;
+  readonly reason?: string;
+};
+
+/** Success payload from `POST /console/clock/run-now`. */
+export type ClockRunNowResult = {
+  readonly ok: true;
+  readonly name: string;
+  readonly ran: boolean;
+  readonly at: number;
+};
+
+/**
+ * POST /console/clock/run-now — lease-gated cron tick (Clock panel).
+ *
+ * @param body - Clock name + optional typed confirmation
+ */
+export async function clockRunNow(
+  body: ClockRunNowInput,
+): Promise<ConsoleApiResult<ClockRunNowResult>> {
+  return consoleFetch<ClockRunNowResult>("/console/clock/run-now", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

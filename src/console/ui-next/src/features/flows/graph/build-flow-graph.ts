@@ -10,12 +10,7 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
-import {
-  EDGE_STROKE,
-  NODE_BOX,
-  UNIT_CHROME,
-  type FlowGraphEdgeKind,
-} from "./flow-graph-theme.ts";
+import { EDGE_STROKE, NODE_BOX, UNIT_CHROME, type FlowGraphEdgeKind } from "./flow-graph-theme.ts";
 
 /** Node kinds rendered by the Flow graph. */
 export type FlowGraphNodeKind = "unit" | "flow" | "store" | "signal" | "ai";
@@ -68,6 +63,47 @@ export function actionOfFlowId(flowId: string): string {
   return i === -1 ? flowId : flowId.slice(i + 1);
 }
 
+/**
+ * Reverse index: callee → callers, from Manifest `effects.calls`.
+ *
+ * Same walk as the call edges in {@link buildFlowGraph} — one source of truth
+ * for Units call-only framing and the Flows graph.
+ *
+ * @param manifest - Live Manifest (null → empty)
+ */
+export function callersIndex(
+  manifest: Manifest | null | undefined,
+): ReadonlyMap<string, readonly string[]> {
+  const flowsMap = manifest?.flows ?? {};
+  const callersOf = new Map<string, string[]>();
+  for (const id of Object.keys(flowsMap)) {
+    const calls = flowsMap[id]?.effects?.calls ?? [];
+    for (const callee of calls) {
+      const list = callersOf.get(callee) ?? [];
+      list.push(id);
+      callersOf.set(callee, list);
+    }
+  }
+  for (const [callee, list] of callersOf) {
+    list.sort((a, b) => a.localeCompare(b));
+    callersOf.set(callee, list);
+  }
+  return callersOf;
+}
+
+/**
+ * Flows that declare `effects.calls` including `flowId`.
+ *
+ * @param manifest - Live Manifest
+ * @param flowId - Callee flow id
+ */
+export function callersOfFlow(
+  manifest: Manifest | null | undefined,
+  flowId: string,
+): readonly string[] {
+  return callersIndex(manifest).get(flowId) ?? [];
+}
+
 interface TargetSpec {
   readonly id: string;
   readonly kind: "store" | "signal" | "ai";
@@ -82,8 +118,7 @@ function targetFromRef(ref: string): TargetSpec | null {
     return { id: ref, kind: "store", label: ref.slice(6), facet: "files" };
   if (ref.startsWith("index:"))
     return { id: ref, kind: "store", label: ref.slice(6), facet: "index" };
-  if (ref.startsWith("signal:"))
-    return { id: ref, kind: "signal", label: ref.slice(7) };
+  if (ref.startsWith("signal:")) return { id: ref, kind: "signal", label: ref.slice(7) };
   if (ref.startsWith("ai:")) return { id: ref, kind: "ai", label: ref.slice(3) };
   return null;
 }
@@ -147,9 +182,7 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
       const ref = `signal:${flow.trigger.signal}`;
       const spec = targetFromRef(ref);
       if (spec) targets.set(ref, spec);
-      edges.push(
-        styledEdge(`e:${ref}->flow:${flowId}`, ref, `flow:${flowId}`, "trigger"),
-      );
+      edges.push(styledEdge(`e:${ref}->flow:${flowId}`, ref, `flow:${flowId}`, "trigger"));
     }
 
     const e = flow.effects;
@@ -159,18 +192,14 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
         if (!spec) continue;
         targets.set(r, spec);
         effectCount.set(r, (effectCount.get(r) ?? 0) + 1);
-        edges.push(
-          styledEdge(`e:flow:${flowId}-reads->${r}`, `flow:${flowId}`, r, "reads"),
-        );
+        edges.push(styledEdge(`e:flow:${flowId}-reads->${r}`, `flow:${flowId}`, r, "reads"));
       }
       for (const r of e.writes ?? []) {
         const spec = targetFromRef(r);
         if (!spec) continue;
         targets.set(r, spec);
         effectCount.set(r, (effectCount.get(r) ?? 0) + 1);
-        edges.push(
-          styledEdge(`e:flow:${flowId}-writes->${r}`, `flow:${flowId}`, r, "writes"),
-        );
+        edges.push(styledEdge(`e:flow:${flowId}-writes->${r}`, `flow:${flowId}`, r, "writes"));
       }
       for (const s of e.emits ?? []) {
         const ref = `signal:${s}`;
@@ -178,14 +207,7 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
         if (!spec) continue;
         targets.set(ref, spec);
         effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
-        edges.push(
-          styledEdge(
-            `e:flow:${flowId}->${ref}`,
-            `flow:${flowId}`,
-            ref,
-            "emits",
-          ),
-        );
+        edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "emits"));
       }
       for (const a of e.asks ?? []) {
         const ref = `ai:${a}`;
@@ -193,14 +215,7 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
         if (!spec) continue;
         targets.set(ref, spec);
         effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
-        edges.push(
-          styledEdge(
-            `e:flow:${flowId}->${ref}`,
-            `flow:${flowId}`,
-            ref,
-            "asks",
-          ),
-        );
+        edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "asks"));
       }
       for (const callee of e.calls ?? []) {
         edges.push(

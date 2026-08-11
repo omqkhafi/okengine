@@ -22,6 +22,11 @@ needed).
 
 ### ♻️ Changed
 
+- ui-next Units Call API is trigger-aware: HTTP keeps method/path + body; call-only keeps
+  `flow.in` with a bypasses-caller note and Manifest callers from `effects.calls`;
+  cron/every prefer lease-gated `/console/clock/run-now` when a Manifest clock soft-joins,
+  otherwise honest empty-input invoke fallback; signal keeps handler invoke with copy that
+  it does not test bus delivery physics.
 - `dev:console-next` / `:seed` boot a fixed operator (`dev@oke.dev` / `Okengine123!`) so restarts skip claim; login form prefills in Vite serve. `dev:console-next:fresh` / `:fresh:seed` keep first-admin claim open. Renamed `dev:console-next:seeded` → `:seed`.
 - ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
   color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,

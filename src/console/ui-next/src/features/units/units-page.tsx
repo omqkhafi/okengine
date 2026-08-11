@@ -50,7 +50,7 @@ export function UnitsPage(): JSX.Element {
               {selectedRow ? (
                 <>
                   <FlowContractPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
-                  <CallApiPanel row={selectedRow} />
+                  <CallApiPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
                 </>
               ) : (
                 <p className="p-6 text-sm text-muted-foreground">

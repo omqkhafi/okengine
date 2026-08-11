@@ -1,5 +1,5 @@
 /**
- * Units Call API — session-authenticated invoke-as against the host.
+ * Units Call API — trigger-aware action zone (invoke / run-now).
  */
 
 import { useEffect, useMemo, useState, type JSX } from "react";
@@ -13,6 +13,7 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { Manifest } from "../../../../../../manifest/types.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -27,21 +28,49 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
-import { useFlowsIdentities, useFlowsInvoke } from "../data/use-flows-invoke.ts";
+import { useClockRunNow, useFlowsIdentities, useFlowsInvoke } from "../data/use-flows-invoke.ts";
 import {
   fieldsFromSchema,
   schemaObject,
   seedFromSchema,
   type FormField,
 } from "../lib/fields-from-schema.ts";
+import { flowTriggerKind } from "../lib/flow-trigger.ts";
 import { pathParamNames } from "../lib/path-params.ts";
+import { resolveClockForFlow, type ClockResolveResult } from "../lib/resolve-clock.ts";
 import { validateContract } from "../lib/validate-contract.ts";
 import { schemaTypeBadgeClass } from "../lib/schema-type-visual.ts";
+import type { FlowIdentity } from "@/client.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
 
 /** Props for {@link CallApiPanel}. */
 export interface CallApiPanelProps {
   readonly row: UnitFlowRow;
+  readonly manifest: Manifest | null;
+}
+
+/**
+ * Human-readable label for an invoke-as identity (name, not id key).
+ *
+ * @param identity - Identity row
+ */
+function identityLabel(identity: Pick<FlowIdentity, "name" | "email">): string {
+  return `${identity.name} · ${identity.email}`;
+}
+
+/**
+ * Resolve the closed Select trigger text for a selected identity id.
+ *
+ * @param identities - Available identities
+ * @param id - Selected identity id (API key)
+ */
+function identityTriggerLabel(
+  identities: readonly FlowIdentity[],
+  id: string | null | undefined,
+): string {
+  if (!id) return "";
+  const match = identities.find((row) => row.id === id);
+  return match ? identityLabel(match) : id;
 }
 
 /** Body editor mode — structured fields or raw JSON (matches Trace Request). */
@@ -57,16 +86,261 @@ function stringifyBody(value: Record<string, unknown>): string {
 }
 
 /**
- * Request builder + real invoke response — the interactive action zone.
+ * Request builder + real host action — interactive zone, shaped by trigger kind.
  *
- * @param props - Selected flow row
+ * @param props - Selected flow row + Manifest
  */
-export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
+export function CallApiPanel({ row, manifest }: CallApiPanelProps): JSX.Element {
+  const kind = flowTriggerKind(row.flow.trigger);
+  if (kind === "cron" || kind === "every") {
+    return <ClockRunPanel row={row} manifest={manifest} />;
+  }
+  return <InvokeBodyPanel row={row} kind={kind} />;
+}
+
+/**
+ * Cron / Every — prefer lease-gated clock run-now; honest invoke fallback.
+ *
+ * @param props - Flow + Manifest
+ */
+function ClockRunPanel({
+  row,
+  manifest,
+}: {
+  readonly row: UnitFlowRow;
+  readonly manifest: Manifest | null;
+}): JSX.Element {
+  const resolve: ClockResolveResult = useMemo(
+    () => resolveClockForFlow(manifest, row.id),
+    [manifest, row.id],
+  );
+  const clockRun = useClockRunNow();
+  const identities = useFlowsIdentities();
+  const invoke = useFlowsInvoke();
+  const [asUserId, setAsUserId] = useState("");
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [pathUsed, setPathUsed] = useState<"clock" | "invoke" | null>(null);
+
+  useEffect(() => {
+    clockRun.reset();
+    invoke.reset();
+    setPathUsed(null);
+    setStartedAt(null);
+  }, [row.id]);
+
+  useEffect(() => {
+    const first = identities.data?.find((i) => i.status === "active");
+    if (first && !asUserId) setAsUserId(first.id);
+  }, [identities.data, asUserId]);
+
+  const matched = resolve.kind === "matched";
+
+  async function onRun(): Promise<void> {
+    setStartedAt(performance.now());
+    if (matched) {
+      setPathUsed("clock");
+      try {
+        await clockRun.mutateAsync({ name: resolve.clockName });
+      } catch {
+        // Error surface via mutation
+      }
+      return;
+    }
+    if (!asUserId) return;
+    setPathUsed("invoke");
+    try {
+      await invoke.mutateAsync({
+        flowId: row.id,
+        body: {},
+        asUserId,
+      });
+    } catch {
+      // Error surface via mutation
+    }
+  }
+
+  const pending = matched ? clockRun.isPending : invoke.isPending;
+  const failed = matched
+    ? clockRun.isError
+    : invoke.isError || (invoke.isSuccess && invoke.data?.failure != null);
+  const success = matched ? clockRun.isSuccess : invoke.isSuccess && !invoke.data?.failure;
+  const elapsed = startedAt !== null && (success || failed) ? performance.now() - startedAt : null;
+
+  const responseJson = useMemo(() => {
+    if (matched && clockRun.data) {
+      return JSON.stringify(clockRun.data, null, 2);
+    }
+    if (!matched && invoke.data) {
+      return JSON.stringify(
+        {
+          status: invoke.data.status,
+          failure: invoke.data.failure ?? null,
+          response: invoke.data.response,
+          path: "flows.invoke",
+        },
+        null,
+        2,
+      );
+    }
+    return null;
+  }, [matched, clockRun.data, invoke.data]);
+
+  const title = matched ? "Run now" : "Run handler";
+  const submitLabel = matched ? "Run now" : "Run handler once";
+
+  return (
+    <div
+      className="p-4 pt-0"
+      data-slot="call-api-panel"
+      data-mode={matched ? "clock" : "invoke-fallback"}
+    >
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <span
+              className="flex size-6 items-center justify-center rounded-md border border-foreground/15 bg-background text-foreground"
+              aria-hidden
+            >
+              <HugeiconsIcon icon={PlayIcon} className="size-3" />
+            </span>
+            <h3 className="text-[10px] font-semibold tracking-[0.14em] text-foreground/85 uppercase">
+              {title}
+            </h3>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            data-slot="call-api-submit"
+            disabled={pending || (!matched && !asUserId)}
+            onClick={() => void onRun()}
+          >
+            {pending ? (
+              <>
+                <HugeiconsIcon
+                  icon={Loading03Icon}
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+                Running…
+              </>
+            ) : (
+              <>
+                <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
+                {submitLabel}
+              </>
+            )}
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-4 p-3.5">
+          {matched ? (
+            <p
+              className="text-[11px] leading-snug text-muted-foreground"
+              data-slot="clock-path-copy"
+            >
+              Fires Manifest clock{" "}
+              <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
+                {resolve.clockName}
+              </code>{" "}
+              via{" "}
+              <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
+                /console/clock/run-now
+              </code>{" "}
+              (lease-gated — the real scheduler path).
+              {resolve.timezone ? (
+                <>
+                  {" "}
+                  Timezone · <span className="font-mono">{resolve.timezone}</span>.
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <div
+              className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug text-foreground/90"
+              data-slot="invoke-fallback-copy"
+              role="note"
+            >
+              No unique Manifest clock matches this flow&apos;s schedule.{" "}
+              <strong className="font-medium">Run handler once</strong> uses{" "}
+              <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
+                /console/flows/invoke
+              </code>{" "}
+              with empty input — it does <em>not</em> exercise the Clock lease / scheduler path.
+            </div>
+          )}
+
+          {!matched ? (
+            <Field>
+              <FieldLabel>Identity</FieldLabel>
+              <Select
+                value={asUserId || null}
+                onValueChange={(value) => {
+                  if (value == null || Array.isArray(value)) return;
+                  setAsUserId(String(value));
+                }}
+              >
+                <SelectTrigger className="h-8" data-slot="call-api-identity">
+                  <SelectValue placeholder="Select identity…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(identities.data ?? []).map((id) => (
+                    <SelectItem key={id.id} value={id.id} disabled={id.status !== "active"}>
+                      {id.name} · {id.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
+
+          <ResponseBlock
+            failed={Boolean(failed)}
+            success={Boolean(success)}
+            elapsed={elapsed}
+            statusCode={matched ? (clockRun.data?.ran ? 200 : 409) : invoke.data?.status}
+            errorMessage={
+              matched
+                ? clockRun.isError
+                  ? (clockRun.error as Error).message
+                  : null
+                : invoke.isError
+                  ? (invoke.error as Error).message
+                  : null
+            }
+            responseJson={responseJson}
+            emptyHint={
+              matched
+                ? "Run now to fire the real clock tick."
+                : "Run handler once to invoke with empty input."
+            }
+            pathUsed={pathUsed}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * HTTP / signal / call-only — body form + kind-specific honesty copy.
+ *
+ * @param props - Flow + kind
+ */
+function InvokeBodyPanel({
+  row,
+  kind,
+}: {
+  readonly row: UnitFlowRow;
+  readonly kind: "http" | "signal" | "cdc" | "internal";
+}): JSX.Element {
   const identities = useFlowsIdentities();
   const invoke = useFlowsInvoke();
   const inSchema = schemaObject(row.flow.in);
   const fields = useMemo(() => fieldsFromSchema(inSchema), [inSchema]);
-  const params = useMemo(() => (row.path ? pathParamNames(row.path) : []), [row.path]);
+  const params = useMemo(
+    () => (kind === "http" && row.path ? pathParamNames(row.path) : []),
+    [kind, row.path],
+  );
 
   const [asUserId, setAsUserId] = useState("");
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
@@ -198,11 +472,12 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
 
   const failed = invoke.isSuccess && invoke.data?.failure != null;
   const statusCode = invoke.data?.status;
+  const actionTitle = kind === "http" ? "Call API" : kind === "signal" ? "Run handler" : "Invoke";
+  const submitLabel = actionTitle;
 
   return (
-    <div className="p-4 pt-0" data-slot="call-api-panel">
+    <div className="p-4 pt-0" data-slot="call-api-panel" data-trigger={kind}>
       <div className="overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
-        {/* Action-zone header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-3 py-2.5">
           <div className="flex items-center gap-2">
             <span
@@ -212,7 +487,7 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
               <HugeiconsIcon icon={PlayIcon} className="size-3" />
             </span>
             <h3 className="text-[10px] font-semibold tracking-[0.14em] text-foreground/85 uppercase">
-              Call API
+              {actionTitle}
             </h3>
           </div>
           <div className="flex items-center gap-1.5">
@@ -257,7 +532,7 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
               ) : (
                 <>
                   <HugeiconsIcon icon={PlayIcon} data-icon="inline-start" />
-                  Call API
+                  {submitLabel}
                 </>
               )}
             </Button>
@@ -265,13 +540,47 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
         </div>
 
         <div className="flex flex-col gap-4 p-3.5">
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            Uses your operator session. Operators hold no application scopes — invoke uses{" "}
-            <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
-              console:flows:invoke-as
-            </code>
-            .
-          </p>
+          {kind === "http" ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Uses your operator session. Operators hold no application scopes — invoke uses{" "}
+              <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
+                console:flows:invoke-as
+              </code>
+              .
+            </p>
+          ) : null}
+          {kind === "signal" ? (
+            <div
+              className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-snug text-foreground/90"
+              data-slot="signal-honest-copy"
+              role="note"
+            >
+              <strong className="font-medium">Run handler directly</strong> — invokes the flow with
+              your payload via{" "}
+              <code className="rounded bg-muted/50 px-1 py-px font-mono text-[10px]">
+                /console/flows/invoke
+              </code>
+              . It does <em>not</em> publish on the signal bus, so it does not test delivery physics
+              (once / broadcast / live, retries, dead-letter).
+            </div>
+          ) : null}
+          {kind === "internal" ? (
+            <div
+              className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px] leading-snug text-muted-foreground"
+              data-slot="call-only-bypass-copy"
+              role="note"
+            >
+              This flow has no external trigger. Invoking here bypasses its normal caller (
+              <code className="font-mono text-[10px]">fx.call</code> /{" "}
+              <code className="font-mono text-[10px]">effects.calls</code>
+              ). The body still matches <code className="font-mono text-[10px]">flow.in</code>.
+            </div>
+          ) : null}
+          {kind === "cdc" ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Direct handler invoke — not a Store CDC event.
+            </p>
+          ) : null}
 
           <Field>
             <FieldLabel>Identity</FieldLabel>
@@ -283,12 +592,16 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
               }}
             >
               <SelectTrigger className="h-8" data-slot="call-api-identity">
-                <SelectValue placeholder="Select identity…" />
+                <SelectValue placeholder="Select identity…">
+                  {(raw) =>
+                    identityTriggerLabel(identities.data ?? [], raw == null ? null : String(raw))
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {(identities.data ?? []).map((id) => (
                   <SelectItem key={id.id} value={id.id} disabled={id.status !== "active"}>
-                    {id.name} · {id.email}
+                    {identityLabel(id)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -341,7 +654,11 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
                   )}
                 />
                 {rawError ? (
-                  <p role="alert" className="text-xs text-destructive" data-slot="call-api-raw-error">
+                  <p
+                    role="alert"
+                    className="text-xs text-destructive"
+                    data-slot="call-api-raw-error"
+                  >
                     {rawError}
                   </p>
                 ) : null}
@@ -366,69 +683,114 @@ export function CallApiPanel({ row }: CallApiPanelProps): JSX.Element {
             ) : null}
           </section>
 
-          <section className="flex flex-col gap-2" aria-label="Response">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                Response
-              </h4>
-              <div className="flex items-center gap-2">
-                {invoke.isSuccess ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[9px] font-semibold tracking-wide uppercase",
-                      failed
-                        ? "border-destructive/30 bg-destructive/10 text-destructive"
-                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                    )}
-                    data-slot="call-api-status"
-                    data-failed={failed ? "true" : "false"}
-                  >
-                    <HugeiconsIcon
-                      icon={failed ? Alert02Icon : Tick02Icon}
-                      className="size-3"
-                      aria-hidden
-                    />
-                    {statusCode ?? (failed ? "error" : "ok")}
-                  </span>
-                ) : null}
-                {elapsed !== null ? (
-                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                    {formatDuration(elapsed)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            {invoke.isError ? (
-              <p role="alert" className="text-sm text-destructive" data-slot="call-api-error">
-                {(invoke.error as Error).message}
-              </p>
-            ) : null}
-            {responseJson ? (
-              <div
-                className="overflow-hidden rounded-md border border-border/55 bg-muted/15"
-                data-slot="call-api-response-frame"
-              >
-                <div className="flex min-w-0">
-                  <div
-                    className={cn(
-                      "w-1 shrink-0 self-stretch",
-                      failed ? "bg-destructive" : "bg-emerald-500",
-                    )}
-                    aria-hidden
-                    data-slot="call-api-response-rail"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <HighlightedJson json={responseJson} dataSlot="call-api-response" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">Call API to see a real host response.</p>
-            )}
-          </section>
+          <ResponseBlock
+            failed={Boolean(failed)}
+            success={invoke.isSuccess && !failed}
+            elapsed={elapsed}
+            statusCode={statusCode}
+            errorMessage={invoke.isError ? (invoke.error as Error).message : null}
+            responseJson={responseJson}
+            emptyHint="Call to see a real host response."
+            pathUsed={null}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Shared response chrome for invoke / run-now.
+ */
+function ResponseBlock({
+  failed,
+  success,
+  elapsed,
+  statusCode,
+  errorMessage,
+  responseJson,
+  emptyHint,
+  pathUsed,
+}: {
+  readonly failed: boolean;
+  readonly success: boolean;
+  readonly elapsed: number | null;
+  readonly statusCode?: number;
+  readonly errorMessage: string | null;
+  readonly responseJson: string | null;
+  readonly emptyHint: string;
+  readonly pathUsed: "clock" | "invoke" | null;
+}): JSX.Element {
+  return (
+    <section className="flex flex-col gap-2" aria-label="Response">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          Response
+        </h4>
+        <div className="flex items-center gap-2">
+          {pathUsed ? (
+            <span
+              className="font-mono text-[9px] tracking-wide text-muted-foreground uppercase"
+              data-slot="call-api-path-used"
+              data-path={pathUsed}
+            >
+              via {pathUsed === "clock" ? "clock.run-now" : "flows.invoke"}
+            </span>
+          ) : null}
+          {success || failed ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[9px] font-semibold tracking-wide uppercase",
+                failed
+                  ? "border-destructive/30 bg-destructive/10 text-destructive"
+                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+              )}
+              data-slot="call-api-status"
+              data-failed={failed ? "true" : "false"}
+            >
+              <HugeiconsIcon
+                icon={failed ? Alert02Icon : Tick02Icon}
+                className="size-3"
+                aria-hidden
+              />
+              {statusCode ?? (failed ? "error" : "ok")}
+            </span>
+          ) : null}
+          {elapsed !== null ? (
+            <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+              {formatDuration(elapsed)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {errorMessage ? (
+        <p role="alert" className="text-sm text-destructive" data-slot="call-api-error">
+          {errorMessage}
+        </p>
+      ) : null}
+      {responseJson ? (
+        <div
+          className="overflow-hidden rounded-md border border-border/55 bg-muted/15"
+          data-slot="call-api-response-frame"
+        >
+          <div className="flex min-w-0">
+            <div
+              className={cn(
+                "w-1 shrink-0 self-stretch",
+                failed ? "bg-destructive" : "bg-emerald-500",
+              )}
+              aria-hidden
+              data-slot="call-api-response-rail"
+            />
+            <div className="min-w-0 flex-1">
+              <HighlightedJson json={responseJson} dataSlot="call-api-response" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{emptyHint}</p>
+      )}
+    </section>
   );
 }
 
@@ -483,9 +845,7 @@ function BodyViewToggleButton({
       type="button"
       className={cn(
         "inline-flex h-5 items-center gap-1 rounded-[5px] px-1.5 text-[10px] font-medium transition-colors",
-        active
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:text-foreground",
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       aria-pressed={active}
       aria-label={label}

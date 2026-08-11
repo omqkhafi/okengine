@@ -4,8 +4,11 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  clockRunNow,
   flowsIdentities,
   flowsInvoke,
+  type ClockRunNowInput,
+  type ClockRunNowResult,
   type FlowsInvokeInput,
   type FlowsInvokeResult,
 } from "@/client.ts";
@@ -44,6 +47,28 @@ export function useFlowsInvoke() {
         throw err;
       }
       if (!res.data) throw new Error("Empty invoke response");
+      return res.data;
+    },
+  });
+}
+
+/**
+ * Mutation for lease-gated Clock run-now.
+ */
+export function useClockRunNow() {
+  return useMutation({
+    mutationFn: async (input: ClockRunNowInput): Promise<ClockRunNowResult> => {
+      const res = await clockRunNow(input);
+      if (res.error) {
+        const err = new Error(res.error.code) as Error & {
+          code: string;
+          data?: unknown;
+        };
+        err.code = res.error.code;
+        err.data = res.error.data;
+        throw err;
+      }
+      if (!res.data) throw new Error("Empty clock run-now response");
       return res.data;
     },
   });
