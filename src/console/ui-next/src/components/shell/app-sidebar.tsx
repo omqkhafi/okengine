@@ -1,10 +1,8 @@
 /**
- * Authenticated Console sidebar — sidebar-07 layout, Overview / Flows / Store only.
+ * Authenticated Console sidebar — sidebar-07 layout, Flows / Units / Store.
  */
 
-import {
-  DashboardSquare01Icon,
-} from "@hugeicons/core-free-icons";
+import { Folder01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, type ComponentProps, type FocusEvent } from "react";
@@ -30,11 +28,6 @@ import { AnimatePresence, motion, useReducedMotion } from "@/lib/motion";
 
 const navItems = [
   {
-    title: "Overview",
-    to: "/overview" as const,
-    icon: DashboardSquare01Icon,
-  },
-  {
     title: "Flows",
     to: "/flows" as const,
     icon: ELEMENT_ICONS.flow.icon,
@@ -42,7 +35,7 @@ const navItems = [
   {
     title: "Units",
     to: "/units" as const,
-    icon: ELEMENT_ICONS.flow.icon,
+    icon: Folder01Icon,
   },
   {
     title: "Store",

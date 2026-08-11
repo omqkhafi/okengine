@@ -61,7 +61,10 @@ export function EffectsSummary({ effects }: EffectsSummaryProps): JSX.Element | 
 function flattenEffects(effects: Effects | undefined): EffectChip[] {
   if (!effects) return [];
   const out: EffectChip[] = [];
-  const push = (kind: RunEffectKind, refs: readonly (string | { readonly ref?: string })[] | undefined) => {
+  const push = (
+    kind: RunEffectKind,
+    refs: readonly (string | { readonly ref?: string })[] | undefined,
+  ) => {
     for (const ref of refs ?? []) {
       const s = typeof ref === "string" ? ref : (ref.ref ?? String(ref));
       out.push({ kind, ref: s });

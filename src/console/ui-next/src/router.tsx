@@ -1,12 +1,9 @@
 /**
  * ui-next router — code-based TanStack Router (Vite SPA, same pattern as current Console).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/units` | `/store`.
+ * Pre-auth `/` and authenticated shell `/flows` | `/units` | `/store`.
  */
 
-import {
-  DashboardSquare01Icon,
-  Database01Icon,
-} from "@hugeicons/core-free-icons";
+import { Database01Icon } from "@hugeicons/core-free-icons";
 import {
   createRootRoute,
   createRoute,
@@ -74,20 +71,6 @@ const authenticatedRoute = createRoute({
   },
 });
 
-const overviewRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: "/overview",
-  component: function OverviewPage() {
-    return (
-      <SectionEmpty
-        title="Overview is not built yet"
-        description="This section is a real placeholder — Overview content lands in a later phase."
-        icon={DashboardSquare01Icon}
-      />
-    );
-  },
-});
-
 const flowsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/flows",
@@ -118,7 +101,7 @@ const storeRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  authenticatedRoute.addChildren([overviewRoute, flowsRoute, unitsRoute, storeRoute]),
+  authenticatedRoute.addChildren([flowsRoute, unitsRoute, storeRoute]),
 ]);
 
 /**

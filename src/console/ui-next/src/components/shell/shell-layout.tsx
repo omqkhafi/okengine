@@ -11,20 +11,32 @@ import type { SessionOperator } from "@/client.ts";
 /**
  * Shell chrome around authenticated panel routes.
  *
- * `/flows` renders full-bleed (no padding / gap); other sections keep the
- * padded inset.
+ * `/flows` and `/units` render full-bleed (no padding / gap); other sections
+ * keep the padded inset.
  *
  * @param props - Operator from the session guard
  */
 export function ShellLayout({ operator }: { readonly operator: SessionOperator }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const fullBleed = pathname === "/flows";
+  const fullBleed = pathname === "/flows" || pathname === "/units";
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider
+      defaultOpen={false}
+      className={fullBleed ? "h-svh max-h-svh overflow-hidden" : undefined}
+    >
       <AppSidebar operator={operator} />
-      <SidebarInset>
-        <div className={cn("flex flex-1 flex-col", fullBleed ? "" : "gap-4 p-4")}>
+      <SidebarInset
+        className={fullBleed ? "min-h-0 max-h-svh overflow-hidden" : undefined}
+      >
+        <div
+          className={cn(
+            "flex flex-col",
+            fullBleed
+              ? "h-svh max-h-svh min-h-0 overflow-hidden"
+              : "flex-1 gap-4 p-4",
+          )}
+        >
           <SidebarTrigger className="-ml-1 md:hidden" />
           <Outlet />
         </div>

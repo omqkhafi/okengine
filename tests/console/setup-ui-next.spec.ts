@@ -24,7 +24,6 @@ async function expectShell(
 ): Promise<void> {
   const sidebar = page.locator('[data-slot="sidebar"]');
   await expect(sidebar).toBeVisible({ timeout: 15_000 });
-  await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Flows" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Units" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
@@ -62,8 +61,8 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Create admin account" }).click();
 
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
-  await expectShell(page, "Overview is not built yet");
+  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expectShell(page, "Traces");
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
@@ -133,14 +132,12 @@ test("ui-next login rejects wrong password then succeeds into the shell", async 
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
-  await expectShell(page, "Overview is not built yet");
+  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expectShell(page, "Traces");
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
 
-  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
-  await expect(page).toHaveURL(/\/flows$/);
   await expect(page.locator('[data-slot="flow-graph"]')).toBeVisible();
   await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible();
   await expect(page.getByText("Traces")).toBeVisible();
@@ -152,7 +149,7 @@ test("ui-next unauthenticated shell visit redirects to the pre-auth gate", async
     sessionStorage.removeItem("oke_console_at");
     sessionStorage.removeItem("oke_console_operator");
   });
-  await page.goto("/overview");
+  await page.goto("/flows");
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
     timeout: 15_000,
@@ -203,10 +200,7 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await page.locator("#email").fill(OPERATOR_EMAIL);
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
-
-  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
-  await expect(page).toHaveURL(/\/flows/);
+  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
 
   const graph = page.locator('[data-slot="flow-graph"]');
   await expect(graph).toBeVisible({ timeout: 15_000 });
@@ -289,9 +283,7 @@ async function signInAndOpenFlows(page: import("@playwright/test").Page): Promis
   await page.locator("#email").fill(OPERATOR_EMAIL);
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
-  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
-  await expect(page).toHaveURL(/\/flows/);
+  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
   await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible({ timeout: 15_000 });
 }
 
@@ -387,7 +379,7 @@ test("ui-next Units: Call API invokes for real (non-stub response)", async ({ pa
     await page.getByRole("button", { name: "Sign in" }).click();
   }
 
-  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
 
   await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Units" }).click();
   await expect(page).toHaveURL(/\/units/);

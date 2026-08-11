@@ -2,8 +2,14 @@
  * Group Manifest flows by derived unit for the Units tree.
  */
 
-import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
+import type { Flow, FlowPlane, Manifest } from "../../../../../../manifest/types.ts";
 import { unitOfFlowId } from "@/features/flows/graph/build-flow-graph.ts";
+import {
+  FLOW_TRIGGER_KIND_SPECS,
+  FLOW_TRIGGER_KINDS,
+  flowTriggerKind,
+  type FlowTriggerKind,
+} from "./flow-trigger.ts";
 
 /** One flow row in the Units explorer. */
 export interface UnitFlowRow {
@@ -19,6 +25,56 @@ export interface UnitFlowRow {
 export interface UnitGroup {
   readonly unit: string;
   readonly flows: readonly UnitFlowRow[];
+}
+
+/**
+ * One top-level trigger-kind category in the Units tree.
+ *
+ * One band per populated {@link FLOW_TRIGGER_KINDS} entry (HTTP, Signal, …).
+ * Empty bands are omitted. A mixed unit can appear in several bands with
+ * only the matching flows.
+ */
+export interface UnitTreeBand {
+  readonly id: FlowTriggerKind;
+  readonly label: string;
+  readonly groups: readonly UnitGroup[];
+}
+
+/**
+ * Project filtered unit groups into every trigger-kind band that has flows.
+ *
+ * Returns {@link FLOW_TRIGGER_KINDS} bands in canonical order, omitting empty
+ * bands so the tree stays dense. Unit order inside each band is preserved.
+ *
+ * @param groups - Flat unit → flow groups (full or filtered)
+ */
+export function bandUnitTree(groups: readonly UnitGroup[]): readonly UnitTreeBand[] {
+  const byKind = new Map<FlowTriggerKind, UnitGroup[]>(
+    FLOW_TRIGGER_KINDS.map((kind) => [kind, []]),
+  );
+  for (const g of groups) {
+    const flowsByKind = new Map<FlowTriggerKind, UnitFlowRow[]>();
+    for (const f of g.flows) {
+      const kind = flowTriggerKind(f.flow.trigger);
+      const list = flowsByKind.get(kind) ?? [];
+      list.push(f);
+      flowsByKind.set(kind, list);
+    }
+    for (const [kind, flows] of flowsByKind) {
+      byKind.get(kind)?.push({ unit: g.unit, flows });
+    }
+  }
+  return FLOW_TRIGGER_KINDS.flatMap((kind) => {
+    const kindGroups = byKind.get(kind) ?? [];
+    if (kindGroups.length === 0) return [];
+    return [
+      {
+        id: kind,
+        label: FLOW_TRIGGER_KIND_SPECS[kind].label,
+        groups: kindGroups,
+      },
+    ];
+  });
 }
 
 /**
@@ -62,10 +118,7 @@ export function buildUnitTree(manifest: Manifest | null | undefined): readonly U
  * @param groups - Full tree
  * @param needle - Search text
  */
-export function filterUnitTree(
-  groups: readonly UnitGroup[],
-  needle: string,
-): readonly UnitGroup[] {
+export function filterUnitTree(groups: readonly UnitGroup[], needle: string): readonly UnitGroup[] {
   const q = needle.trim().toLowerCase();
   if (!q) return groups;
   return groups
@@ -80,6 +133,70 @@ export function filterUnitTree(
               (f.method?.toLowerCase().includes(q) ?? false) ||
               (f.path?.toLowerCase().includes(q) ?? false),
           );
+      return flows.length > 0 ? { unit: g.unit, flows } : null;
+    })
+    .filter((g): g is UnitGroup => g !== null);
+}
+
+/**
+ * Advanced facet selection for the Units tree.
+ *
+ * Every dimension ANDs together; an empty/absent dimension matches
+ * everything. Compose with {@link filterUnitTree} for free-text search.
+ */
+export interface UnitTreeFacets {
+  /** Trigger kinds to keep — empty/undefined keeps all kinds. */
+  readonly triggerKinds?: readonly FlowTriggerKind[];
+  /** Planes to keep — empty/undefined keeps all planes. */
+  readonly planes?: readonly FlowPlane[];
+  /** Keep only durable flows. */
+  readonly durableOnly?: boolean;
+  /** Keep only live flows. */
+  readonly liveOnly?: boolean;
+}
+
+/**
+ * Count individually active facet selections (toggle badge).
+ *
+ * @param facets - Current facet selection
+ */
+export function countActiveFacets(facets: UnitTreeFacets): number {
+  return (
+    (facets.triggerKinds?.length ?? 0) +
+    (facets.planes?.length ?? 0) +
+    (facets.durableOnly ? 1 : 0) +
+    (facets.liveOnly ? 1 : 0)
+  );
+}
+
+/**
+ * Filter unit groups by advanced facets — trigger kind, plane, durable, live.
+ *
+ * Facets AND together and intersect with {@link filterUnitTree} results.
+ * A flow without an explicit `plane` counts as `"user"` (Manifest default).
+ * Groups left with no flows are dropped.
+ *
+ * @param groups - Tree to filter (full or text-filtered)
+ * @param facets - Facet selection
+ */
+export function filterUnitsAdvanced(
+  groups: readonly UnitGroup[],
+  facets: UnitTreeFacets,
+): readonly UnitGroup[] {
+  const kinds = facets.triggerKinds?.length ? new Set(facets.triggerKinds) : null;
+  const planes = facets.planes?.length ? new Set(facets.planes) : null;
+  const durableOnly = facets.durableOnly === true;
+  const liveOnly = facets.liveOnly === true;
+  if (!kinds && !planes && !durableOnly && !liveOnly) return groups;
+  return groups
+    .map((g): UnitGroup | null => {
+      const flows = g.flows.filter((f) => {
+        if (kinds && !kinds.has(flowTriggerKind(f.flow.trigger))) return false;
+        if (planes && !planes.has(f.flow.plane ?? "user")) return false;
+        if (durableOnly && !f.flow.durable) return false;
+        if (liveOnly && !f.flow.live) return false;
+        return true;
+      });
       return flows.length > 0 ? { unit: g.unit, flows } : null;
     })
     .filter((g): g is UnitGroup => g !== null);

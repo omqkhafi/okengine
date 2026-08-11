@@ -64,7 +64,7 @@ export function LoginForm() {
       applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
-      void navigate({ to: "/overview" });
+      void navigate({ to: "/flows" });
     },
     onError: (err: Error) => {
       setFormError(err.message);

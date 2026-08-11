@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircleIcon,
+  Alert02Icon,
   FilterHorizontalIcon,
   Menu01Icon,
   Timer01Icon,
@@ -32,11 +32,7 @@ import { cn } from "@/lib/utils";
 import type { LiveStatus } from "../data/use-console-live.ts";
 import { AdvancedFilters } from "./advanced-filters.tsx";
 import type { DimensionQuery } from "./dimension-query.ts";
-import {
-  applyGraphFilterToQuery,
-  filterRunsByGraph,
-  type GraphFilter,
-} from "./graph-filter.ts";
+import { applyGraphFilterToQuery, filterRunsByGraph, type GraphFilter } from "./graph-filter.ts";
 import {
   DEFAULT_TRACES_FILTERS,
   DURATION_THRESHOLD_OPTIONS,
@@ -73,7 +69,7 @@ function parseDurationSelectValue(raw: string): TracesDurationThresholdMs {
 
 const STATUS_FILTERS = [
   { value: "all" as const, label: "All", icon: Menu01Icon },
-  { value: "errors" as const, label: "Errors", icon: AlertCircleIcon },
+  { value: "errors" as const, label: "Errors", icon: Alert02Icon },
 ];
 
 /**
@@ -244,11 +240,7 @@ export function TracesPane({
                 }}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent
-              align="start"
-              alignItemWithTrigger={false}
-              className="min-w-42"
-            >
+            <SelectContent align="start" alignItemWithTrigger={false} className="min-w-42">
               <SelectGroup>
                 {DURATION_THRESHOLD_OPTIONS.map((ms) => (
                   <SelectItem

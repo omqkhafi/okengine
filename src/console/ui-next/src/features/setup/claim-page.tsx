@@ -1,6 +1,6 @@
 /**
  * Setup gate — claim when open; real login when closed.
- * Claim success navigates to the authenticated shell (`/overview`).
+ * Claim success navigates to the authenticated shell (`/flows`).
  */
 
 import { useForm } from "@tanstack/react-form";
@@ -102,7 +102,7 @@ export function ClaimPage() {
       applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
-      void navigate({ to: "/overview" });
+      void navigate({ to: "/flows" });
     },
     onError: (err: Error) => {
       setFormError(err.message);
