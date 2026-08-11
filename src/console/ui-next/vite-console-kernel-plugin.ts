@@ -1,9 +1,12 @@
 /**
  * Vite `apply: "serve"` plugin — boots an ephemeral Console kernel on :6533
- * so `bun run dev:console-next` prints the claim code in the same terminal.
+ * so `bun run dev:console-next` prints login (or claim) details in the same terminal.
  *
- * Set `OKE_CONSOLE_NEXT_SEEDED=1` (or `bun run dev:console-next:seeded`) to
+ * Set `OKE_CONSOLE_NEXT_SEEDED=1` (or `bun run dev:console-next:seed`) to
  * load the same FLOWS_TEST_MANIFEST + WideEvent as the Playwright fixture.
+ *
+ * Set `OKE_CONSOLE_NEXT_FRESH=1` (or `bun run dev:console-next:fresh`) to
+ * skip the fixed operator and keep first-admin claim open.
  *
  * Requires Vite under Bun (`bunx --bun vite`): Node lacks `import.meta.dir`
  * used by the Console graph.
@@ -13,6 +16,11 @@ import type { Plugin, ViteDevServer } from "vite";
 import { isPortInUse } from "../../cli/ports.ts";
 import { CONSOLE_PORT } from "../../runtime/types.ts";
 import { serveConsole, type ConsoleServerHandle } from "../server/serve.ts";
+import {
+  isConsoleNextFresh,
+  UI_NEXT_DEV_OPERATOR,
+  seedUiNextDevOperator,
+} from "./ui-next-dev-operator.ts";
 import {
   appendUiNextSeedRun,
   isConsoleNextSeeded,
@@ -24,26 +32,40 @@ import {
 const UI_NEXT_DEV_URL = "http://127.0.0.1:6537";
 
 /**
- * Print post-boot instructions for seeded (or plain) console-next.
+ * Print post-boot instructions for console-next (operator login or fresh claim).
  *
  * @param log - Vite logger line writer
- * @param claimCode - First-admin claim code
- * @param seeded - Whether Manifest + run were seeded
+ * @param options - Mode flags + optional claim code when fresh
  */
 function printConsoleNextBanner(
   log: (msg: string) => void,
-  claimCode: string,
-  seeded: boolean,
+  options: {
+    readonly seeded: boolean;
+    readonly fresh: boolean;
+    readonly claimCode: string;
+  },
 ): void {
+  const { seeded, fresh, claimCode } = options;
   log("");
   log(`[oke] console-next ready`);
   log(`      URL:   ${UI_NEXT_DEV_URL}`);
-  log(`      Claim: ${claimCode}`);
+  if (fresh) {
+    log(`      Claim: ${claimCode}`);
+    log(`      Mode:  fresh (first-admin claim open)`);
+  } else {
+    log(`      Login: ${UI_NEXT_DEV_OPERATOR.email} / ${UI_NEXT_DEV_OPERATOR.password}`);
+  }
   if (seeded) {
     log(`      Seed:  ${uiNextSeededSummary()}`);
-    log(`      Next:  open URL → claim → Flows (graph + Traces row already present)`);
+    if (fresh) {
+      log(`      Next:  open URL → claim → Flows (graph + Traces row already present)`);
+    } else {
+      log(`      Next:  open URL → Sign in → Flows (graph + Traces row already present)`);
+    }
+  } else if (!fresh) {
+    log(`      Tip:   bun run dev:console-next:seed  — all 8 elements + ~80 lived-in traces`);
   } else {
-    log(`      Tip:   bun run dev:console-next:seeded  — all 8 elements + ~80 lived-in traces`);
+    log(`      Tip:   bun run dev:console-next:fresh:seed  — claim + all 8 elements + ~80 traces`);
   }
   log("");
 }
@@ -82,12 +104,19 @@ export function okeConsoleKernelPlugin(): Plugin {
       const port = CONSOLE_PORT;
       const hostname = "127.0.0.1";
       const seeded = isConsoleNextSeeded();
+      const fresh = isConsoleNextFresh();
 
       if (await isPortInUse(port)) {
         server.config.logger.error(
           `\n[oke] Console port :${port} is already in use.\n` +
             `      Stop the other process, then re-run: bun run ${
-              seeded ? "dev:console-next:seeded" : "dev:console-next"
+              fresh
+                ? seeded
+                  ? "dev:console-next:fresh:seed"
+                  : "dev:console-next:fresh"
+                : seeded
+                  ? "dev:console-next:seed"
+                  : "dev:console-next"
             }\n`,
         );
         process.exit(1);
@@ -97,14 +126,17 @@ export function okeConsoleKernelPlugin(): Plugin {
       // lines are noise here (same latch `oke dev` uses on Backend children).
       process.env["OKE_SUPPRESS_BOOT_WARN"] = "1";
 
+      const operators = fresh ? undefined : (await seedUiNextDevOperator()).store;
+
       handle = await serveConsole({
         port,
         hostname,
         cwd: process.cwd(),
         persist: false,
-        silentClaim: false,
+        silentClaim: !fresh,
         env: "test",
         secret: process.env.OKE_CONSOLE_SECRET ?? "oke-console-next-dev-secret",
+        ...(operators ? { operators } : {}),
         ...(seeded ? { manifest: UI_NEXT_SEEDED_MANIFEST } : {}),
       });
 
@@ -129,8 +161,11 @@ export function okeConsoleKernelPlugin(): Plugin {
         (msg) => {
           server.config.logger.info(msg);
         },
-        handle.console.state.claim.code,
-        seeded,
+        {
+          seeded,
+          fresh,
+          claimCode: handle.console.state.claim.code,
+        },
       );
 
       const onClose = (): void => {

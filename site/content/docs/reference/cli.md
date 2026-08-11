@@ -27,11 +27,14 @@ oke mode                         # removed — prints error; use oke dev (Compos
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
-                                 #   → `bun run dev:console-next` boots kernel + Vite and prints the claim
-                                 #   → `bun run dev:console-next:seeded` same + all 8 elements + ~80 traces
+                                 #   → `bun run dev:console-next` boots kernel + Vite with a fixed
+                                 #     operator (`dev@oke.dev` / `Okengine123!`) — Sign in (prefilled)
+                                 #   → `bun run dev:console-next:seed` same + all 8 elements + ~80 traces
                                  #     (flow/signal/store/clock/gate/vault/channel/ai + ops traffic;
                                  #     click Traces row → highlight chain; click graph node → filter runs;
                                  #     Replay → waterfall playhead + chain pulse on the graph)
+                                 #   → `bun run dev:console-next:fresh` / `:fresh:seed` — claim from scratch
+                                 #     (no fixed operator; claim code printed in the boot log)
                                  #   → after `bun run test:console:setup-ui-next`, open the HTML report:
                                  #     `bun run test:console:setup-ui-next:report` (trace + screenshots + video)
 oke stack                        # preview resolved images/tags/ports — writes nothing

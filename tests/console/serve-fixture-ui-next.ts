@@ -3,7 +3,7 @@
  *
  * Seeds a real Manifest (FLOWS_TEST_MANIFEST) and one WideEvent so the Flows
  * page can assert graph nodes + Traces without inventing client-side mocks.
- * Same seed as `bun run dev:console-next:seeded`.
+ * Same seed as `bun run dev:console-next:seed`.
  */
 
 import { mkdtemp } from "node:fs/promises";

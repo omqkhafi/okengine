@@ -73,8 +73,8 @@ export function LoginForm() {
 
   const form = useForm({
     defaultValues: {
-      email: "",
-      password: "",
+      email: __OKE_DEV_OPERATOR__?.email ?? "",
+      password: __OKE_DEV_OPERATOR__?.password ?? "",
     } satisfies LoginValues,
     validators: {
       onSubmit: loginSchema,
