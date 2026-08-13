@@ -40,9 +40,7 @@ export interface InvokeUserFlowResult {
 /**
  * Optional ConsoleState hook — when unset, `console.flows.invoke` fails closed.
  */
-export type ConsoleInvokeUserFlow = (
-  input: InvokeUserFlowInput,
-) => Promise<InvokeUserFlowResult>;
+export type ConsoleInvokeUserFlow = (input: InvokeUserFlowInput) => Promise<InvokeUserFlowResult>;
 
 /** Minimal host surface needed to bind invoke-as. */
 export type InvokeHostApp = Pick<OkeApp, "bindings" | "execute">;

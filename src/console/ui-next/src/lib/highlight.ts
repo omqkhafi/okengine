@@ -26,8 +26,7 @@ export async function highlightCode(
   code: string,
   options: HighlightCodeOptions | BundledLanguage = {},
 ): Promise<JSX.Element> {
-  const opts: HighlightCodeOptions =
-    typeof options === "string" ? { lang: options } : options;
+  const opts: HighlightCodeOptions = typeof options === "string" ? { lang: options } : options;
   const hast = await codeToHast(code, {
     lang: opts.lang ?? "typescript",
     theme: opts.theme ?? "github-light",

@@ -8,7 +8,7 @@
 import type { NamedRef } from "./fx.ts";
 
 /** HTTP methods accepted by {@link http}. */
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "QUERY";
 
 /** Gate reference attached via `.gate(...)`. */
 export type GateRef = NamedRef;
@@ -188,58 +188,37 @@ export interface HttpTriggerNamespace {
    */
   head<P extends string>(path: P): HttpTrigger<"HEAD", P>;
   /**
+   * Safe, idempotent read that carries a JSON body (RFC 10008).
+   *
+   * @param path - Route path
+   */
+  query<P extends string>(path: P): HttpTrigger<"QUERY", P>;
+  /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
    * `path/:id`) for the `on(http.resource(…))` overload.
    */
   resource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount;
 }
 
+/** Bind an HTTP verb constructor (`http.get`, `http.query`, …). */
+function httpVerb<M extends HttpMethod>(
+  method: M,
+): <P extends string>(path: P) => HttpTrigger<M, P> {
+  return (path) => createHttpTrigger(method, path);
+}
+
 /**
  * HTTP trigger constructors — `http.get("/notes")`, `http.post("/links")`, …
  */
 export const http: HttpTriggerNamespace = {
-  /**
-   * @param path - Route path (`/:id` params supported)
-   */
-  get<P extends string>(path: P): HttpTrigger<"GET", P> {
-    return createHttpTrigger("GET", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  post<P extends string>(path: P): HttpTrigger<"POST", P> {
-    return createHttpTrigger("POST", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  put<P extends string>(path: P): HttpTrigger<"PUT", P> {
-    return createHttpTrigger("PUT", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  patch<P extends string>(path: P): HttpTrigger<"PATCH", P> {
-    return createHttpTrigger("PATCH", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  delete<P extends string>(path: P): HttpTrigger<"DELETE", P> {
-    return createHttpTrigger("DELETE", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  options<P extends string>(path: P): HttpTrigger<"OPTIONS", P> {
-    return createHttpTrigger("OPTIONS", path);
-  },
-  /**
-   * @param path - Route path
-   */
-  head<P extends string>(path: P): HttpTrigger<"HEAD", P> {
-    return createHttpTrigger("HEAD", path);
-  },
+  get: httpVerb("GET"),
+  post: httpVerb("POST"),
+  put: httpVerb("PUT"),
+  patch: httpVerb("PATCH"),
+  delete: httpVerb("DELETE"),
+  options: httpVerb("OPTIONS"),
+  head: httpVerb("HEAD"),
+  query: httpVerb("QUERY"),
   resource: httpResource,
 };
 

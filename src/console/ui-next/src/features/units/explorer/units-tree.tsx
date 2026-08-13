@@ -2,8 +2,9 @@
  * Units explorer — left tree of Manifest flows grouped by unit.
  */
 
-import { useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import {
+  ArrowDown01Icon,
   FilterHorizontalIcon,
   Folder01Icon,
   Radio01Icon,
@@ -208,11 +209,11 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
           </div>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {bands.length === 0 ? (
           <p className="px-2 py-4 text-sm text-muted-foreground">No flows match.</p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col">
             {bands.map((band) => (
               <TriggerBand
                 key={band.id}
@@ -309,6 +310,8 @@ function toggleItem<T>(list: readonly T[], item: T): T[] {
 /**
  * Top-level trigger-kind category with its unit folders underneath.
  *
+ * Separated as a bordered band; header collapses the whole kind.
+ *
  * @param props - Band + selection
  */
 function TriggerBand({
@@ -320,26 +323,74 @@ function TriggerBand({
   readonly selectedFlowId: string | null;
   readonly onSelect: (flowId: string) => void;
 }): JSX.Element {
+  const kindSpec = FLOW_TRIGGER_KIND_SPECS[band.id];
+  const flowCount = band.groups.reduce((n, g) => n + g.flows.length, 0);
+  const containsSelected = band.groups.some((g) => g.flows.some((f) => f.id === selectedFlowId));
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (containsSelected) setOpen(true);
+  }, [containsSelected, selectedFlowId]);
+
   return (
-    <section data-slot="units-trigger-band" data-band={band.id} aria-label={band.label}>
-      <p className="px-2 pb-1 text-[9px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {band.label}
-      </p>
-      <ul className="flex flex-col gap-1">
-        {band.groups.map((g) => (
-          <UnitGroupItem
-            key={`${band.id}:${g.unit}`}
-            group={g}
-            selectedFlowId={selectedFlowId}
-            onSelect={onSelect}
-            defaultOpen
+    <section
+      data-slot="units-trigger-band"
+      data-band={band.id}
+      aria-label={band.label}
+      className="overflow-hidden border-b border-border/60 bg-muted/15 last:border-b-0"
+    >
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger
+          className="group/band flex w-full items-center gap-1.5 border-b border-border/50 bg-muted/25 px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
+          data-slot="units-trigger-band-toggle"
+        >
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground transition-transform",
+              !open && "-rotate-90",
+            )}
+            aria-hidden
           />
-        ))}
-      </ul>
+          <span
+            className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded-md border",
+              kindSpec.wellClass,
+            )}
+            aria-hidden
+          >
+            <HugeiconsIcon icon={kindSpec.icon} className="size-3" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase group-hover/band:text-foreground">
+            {band.label}
+          </span>
+          <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground">
+            {flowCount}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul className="flex flex-col gap-0.5 p-1">
+            {band.groups.map((g) => (
+              <UnitGroupItem
+                key={`${band.id}:${g.unit}`}
+                group={g}
+                selectedFlowId={selectedFlowId}
+                onSelect={onSelect}
+                defaultOpen
+              />
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
 
+/**
+ * One unit folder (collapsible) under a trigger band.
+ *
+ * @param props - Group + selection
+ */
 function UnitGroupItem({
   group,
   selectedFlowId,
@@ -351,26 +402,40 @@ function UnitGroupItem({
   readonly onSelect: (flowId: string) => void;
   readonly defaultOpen: boolean;
 }): JSX.Element {
+  const containsSelected = group.flows.some((f) => f.id === selectedFlowId);
   const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    if (containsSelected) setOpen(true);
+  }, [containsSelected, selectedFlowId]);
+
   return (
     <li data-slot="unit-group" data-unit={group.unit}>
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger className="group/unit flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60">
+        <CollapsibleTrigger className="group/unit flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/60">
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground transition-transform",
+              !open && "-rotate-90",
+            )}
+            aria-hidden
+          />
           <span
             className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground transition-colors group-hover/unit:text-foreground"
             aria-hidden
           >
             <HugeiconsIcon icon={Folder01Icon} className="size-3" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-xs font-semibold tracking-wide text-foreground">
-            <span className="font-mono">{group.unit}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold tracking-wide text-foreground">
+            {group.unit}
           </span>
-          <span className="shrink-0 text-[10px] font-normal tabular-nums text-muted-foreground">
+          <span className="shrink-0 rounded border border-border/50 bg-muted/30 px-1.5 py-px text-[10px] font-normal tabular-nums text-muted-foreground">
             {group.flows.length}
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ul className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-1">
+          <ul className="mt-0.5 mb-0.5 ml-2 flex flex-col gap-0.5 border-l border-border/50 pl-2">
             {group.flows.map((f) => (
               <FlowListItem
                 key={f.id}
@@ -386,6 +451,11 @@ function UnitGroupItem({
   );
 }
 
+/**
+ * One selectable flow row (method badge or trigger icon + action).
+ *
+ * @param props - Flow + selection
+ */
 function FlowListItem({
   flow,
   selected,
@@ -405,7 +475,7 @@ function FlowListItem({
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(flow.id)}
         className={cn(
-          "group/flow relative flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-3 text-left text-[11px] transition-colors hover:bg-muted/60",
+          "group/flow relative flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-[11px] transition-colors hover:bg-muted/60",
           selected && "bg-muted/70 text-foreground",
         )}
       >
@@ -413,7 +483,7 @@ function FlowListItem({
           aria-hidden
           className={cn(
             "absolute inset-y-1 left-0 w-0.5 rounded-full transition-colors",
-            selected ? "bg-foreground/70" : "bg-transparent",
+            selected ? "bg-sky-500" : "bg-transparent",
           )}
         />
         {flow.method ? (
@@ -424,7 +494,10 @@ function FlowListItem({
               render={(props) => (
                 <span
                   {...props}
-                  className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground transition-colors group-hover/flow:text-foreground"
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-md border",
+                    trigger.wellClass,
+                  )}
                   aria-hidden
                 >
                   <HugeiconsIcon icon={trigger.icon} className="size-3" />
@@ -436,7 +509,14 @@ function FlowListItem({
             </TooltipContent>
           </Tooltip>
         )}
-        <span className="min-w-0 flex-1 truncate font-mono">{flow.action}</span>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate font-mono transition-colors group-hover/flow:text-foreground",
+            selected ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {flow.action}
+        </span>
       </button>
     </li>
   );

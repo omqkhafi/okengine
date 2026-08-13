@@ -86,12 +86,16 @@ export class SmartRouter<T> implements Router<T> {
     return this.#matchSelf(method, path);
   }
 
+  /**
+   * @param path - Pathname
+   */
+  allowedMethods(path: string): string[] {
+    return (this.#active ?? this.#select()).allowedMethods(path);
+  }
+
   #select(): Router<T> {
     if (this.#active) return this.#active;
     const routes = this.#routes ?? this.#allRoutes;
-    if (routes.length === 0 && this.#allRoutes.length === 0) {
-      // Empty app — still pick the first factory so match() is defined.
-    }
 
     for (const factory of this.#factories) {
       const candidate = factory();

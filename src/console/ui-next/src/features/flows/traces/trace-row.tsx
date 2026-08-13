@@ -119,7 +119,9 @@ export function TraceRow({
           <HugeiconsIcon icon={trigger.icon} className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{run.flow}</span>
-        <span className={cn("shrink-0 tabular-nums font-medium", durationClassName(run.durationMs))}>
+        <span
+          className={cn("shrink-0 tabular-nums font-medium", durationClassName(run.durationMs))}
+        >
           {formatDuration(run.durationMs)}
         </span>
         <span className="w-16 shrink-0 truncate text-right text-muted-foreground">

@@ -1624,7 +1624,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/signals/dry-run-replay"), signalsDryRunReplay),
     bindHttp(http.post("/console/signals/discard"), signalsDiscard),
     bindHttp(http.get("/console/store"), storeList),
-    bindHttp(http.post("/console/store/query"), storeQuery),
+    bindHttp(http.query("/console/store/query"), storeQuery),
     bindHttp(http.post("/console/store/reveal"), storeReveal),
     bindHttp(http.post("/console/store/edit"), storeEdit),
     bindHttp(http.post("/console/store/delete"), storeDelete),
@@ -1636,10 +1636,10 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/vault/rotate"), vaultRotate),
     bindHttp(http.get("/console/ai"), aiList),
     bindHttp(http.get("/console/gates"), gatesList),
-    bindHttp(http.post("/console/gates/simulate"), gatesSimulate),
-    bindHttp(http.post("/console/gates/powers"), gatesPowers),
+    bindHttp(http.query("/console/gates/simulate"), gatesSimulate),
+    bindHttp(http.query("/console/gates/powers"), gatesPowers),
     bindHttp(http.get("/console/access"), accessList),
-    bindHttp(http.post("/console/access/effective"), accessEffective),
+    bindHttp(http.query("/console/access/effective"), accessEffective),
     bindHttp(http.post("/console/access/key-blast"), accessKeyBlast),
     bindHttp(http.post("/console/access/keys"), accessCreateKeyFlow),
     bindHttp(http.post("/console/access/keys/revoke"), accessRevokeKeyFlow),
@@ -1653,7 +1653,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/clock/edit-schedule"), clockEditSchedule),
     bindHttp(http.post("/console/clock/wake-early"), clockWakeEarly),
     bindHttp(http.get("/console/channels"), channelsList),
-    bindHttp(http.post("/console/channels/preview"), channelPreview),
+    bindHttp(http.query("/console/channels/preview"), channelPreview),
     bindHttp(http.post("/console/channels/verify-auth"), channelVerifyAuth),
     bindHttp(http.post("/console/channels/reveal"), channelReveal),
     bindHttp(http.post("/console/channels/send-test"), channelSendTest),
@@ -1863,8 +1863,12 @@ function createRunsList(state: ConsoleState) {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const all = await state.listRuns();
       const piiFields = piiFieldNamesFromManifest(state.manifest);
+      // Drop prior list polls — they are operator chrome, not Traces rows,
+      // and must never re-enter the projection (nested-output bomb).
       return {
-        runs: all.map((r) => projectRun(r, piiFields)),
+        runs: all
+          .filter((r) => r.flow !== "console.runs.list")
+          .map((r) => projectRun(r, piiFields)),
       };
     },
   });

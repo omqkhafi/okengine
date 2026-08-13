@@ -31,17 +31,7 @@ export const DURATION_TONE_BOUNDS = [
 ] as const;
 
 /** Duration filter presets (ms). `null` = no threshold. */
-export const DURATION_THRESHOLD_OPTIONS = [
-  null,
-  10,
-  25,
-  50,
-  100,
-  250,
-  500,
-  1_000,
-  5_000,
-] as const;
+export const DURATION_THRESHOLD_OPTIONS = [null, 10, 25, 50, 100, 250, 500, 1_000, 5_000] as const;
 
 /** One duration-threshold preset value. */
 export type DurationThresholdMs = (typeof DURATION_THRESHOLD_OPTIONS)[number];

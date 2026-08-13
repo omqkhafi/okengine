@@ -101,8 +101,8 @@ export function SetupWizard() {
         <h1 className="text-3xl font-semibold tracking-tight">Console</h1>
         <p className="text-[var(--oke-muted)]">
           Enter the claim code from the Console boot log, or run{" "}
-          <code className="font-mono text-[0.9em]">oke console claim-code</code>. This wizard
-          closes permanently after the first operator.
+          <code className="font-mono text-[0.9em]">oke console claim-code</code>. This wizard closes
+          permanently after the first operator.
         </p>
       </header>
       <form className="flex flex-col gap-4" onSubmit={onSubmit} autoComplete="off">
@@ -132,7 +132,10 @@ export function SetupWizard() {
             required
           />
         </Field>
-        <Field label="Password" hint="At least 12 characters, with uppercase, lowercase, a number, and a special character.">
+        <Field
+          label="Password"
+          hint="At least 12 characters, with uppercase, lowercase, a number, and a special character."
+        >
           <Input
             name="password"
             type="password"

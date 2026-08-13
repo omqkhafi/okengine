@@ -11,13 +11,7 @@ import { formatDuration } from "./format-duration.ts";
 import { effectKindSummaryLabel, type RunEffectKind } from "./effect-kind.ts";
 
 /** Visual variant for a summary chip (drives icon + accent). */
-export type EffectSummaryVariant =
-  | "duration"
-  | "api"
-  | "gate"
-  | "db"
-  | "logs"
-  | RunEffectKind;
+export type EffectSummaryVariant = "duration" | "api" | "gate" | "db" | "logs" | RunEffectKind;
 
 /** One chip in the Sheet summary row. */
 export type EffectSummaryChip = {
@@ -158,9 +152,7 @@ export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): 
   return labels[effect.kind];
 }
 
-function countByKindExcludingSql(
-  effects: readonly RunEffect[],
-): Map<RunEffectKind, number> {
+function countByKindExcludingSql(effects: readonly RunEffect[]): Map<RunEffectKind, number> {
   const counts = new Map<RunEffectKind, number>();
   for (const e of effects) {
     if (isSqlResource(e.resource)) continue;

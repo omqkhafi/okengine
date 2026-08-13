@@ -3,7 +3,6 @@
  * Pre-auth `/` and authenticated shell `/flows` | `/units` | `/store`.
  */
 
-import { Database01Icon } from "@hugeicons/core-free-icons";
 import {
   createRootRoute,
   createRoute,
@@ -21,9 +20,10 @@ import {
 import { ClaimPage } from "./features/setup/claim-page.tsx";
 import { FlowsPage } from "./features/flows/flows-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
+import { StorePage } from "./features/store/store-page.tsx";
+import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { UnitsPage } from "./features/units/units-page.tsx";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
-import { SectionEmpty } from "./components/shell/section-empty.tsx";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
 /**
@@ -88,15 +88,8 @@ const unitsRoute = createRoute({
 const storeRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/store",
-  component: function StorePage() {
-    return (
-      <SectionEmpty
-        title="Store is not built yet"
-        description="This section is a real placeholder — Store content lands in a later phase."
-        icon={Database01Icon}
-      />
-    );
-  },
+  validateSearch: validateStoreSearch,
+  component: StorePage,
 });
 
 const routeTree = rootRoute.addChildren([

@@ -27,11 +27,7 @@ import {
 } from "@/lib/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetContent,
@@ -45,11 +41,7 @@ import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
 import { useManifest } from "../data/use-manifest.ts";
 import { NODE_ACCENT } from "../graph/flow-graph-theme.ts";
-import {
-  effectBarColor,
-  effectKindIcon,
-  type RunEffectKind,
-} from "./effect-kind.ts";
+import { effectBarColor, effectKindIcon, type RunEffectKind } from "./effect-kind.ts";
 import {
   effectEventLabel,
   effectSummaryChips,
@@ -95,11 +87,11 @@ export type TraceDetailSheetProps = {
   readonly onReplayStart?: () => void;
 };
 
-const sectionClassName = "flex flex-col gap-2.5 border-b border-border/60 px-3 py-3 last:border-b-0";
+const sectionClassName =
+  "flex flex-col gap-2.5 border-b border-border/60 px-3 py-3 last:border-b-0";
 
 /** Bordered control button style for the sheet chrome. */
-const sheetControlButtonClass =
-  "border border-border bg-background shadow-none hover:bg-muted";
+const sheetControlButtonClass = "border border-border bg-background shadow-none hover:bg-muted";
 
 /**
  * Right-side Sheet opened by selecting a Traces row.
@@ -129,10 +121,7 @@ export function TraceDetailSheet({
     () => (run ? waterfallBars(run.effects, run.startedAt, run.durationMs) : []),
     [run],
   );
-  const gaps = useMemo(
-    () => (run ? waterfallGaps(bars, run.durationMs) : []),
-    [run, bars],
-  );
+  const gaps = useMemo(() => (run ? waterfallGaps(bars, run.durationMs) : []), [run, bars]);
   const requestMeta = useMemo(
     () =>
       run
@@ -157,10 +146,7 @@ export function TraceDetailSheet({
   const durationMv = useMotionValue(0);
 
   const view = useMemo(() => timelineView(zoom, viewStart), [zoom, viewStart]);
-  const ticks = useMemo(
-    () => (run ? timelineTicksForView(run.durationMs, view) : []),
-    [run, view],
-  );
+  const ticks = useMemo(() => (run ? timelineTicksForView(run.durationMs, view) : []), [run, view]);
 
   // Playhead tracks the zoomed viewport; parks offscreen when out of view.
   const playheadLeft = useTransform(progress, (p) => {
@@ -329,10 +315,7 @@ export function TraceDetailSheet({
                   <h3 className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
                     Waterfall
                   </h3>
-                  <div
-                    className="flex items-center gap-0.5"
-                    data-slot="trace-waterfall-zoom"
-                  >
+                  <div className="flex items-center gap-0.5" data-slot="trace-waterfall-zoom">
                     <Button
                       type="button"
                       variant="outline"
@@ -341,8 +324,9 @@ export function TraceDetailSheet({
                       aria-label="Pan left"
                       disabled={zoom <= 1 || view.startRatio <= 0}
                       onClick={() =>
-                        setViewStart((s) =>
-                          timelineView(zoom, Math.max(0, s - view.widthRatio * 0.5)).startRatio,
+                        setViewStart(
+                          (s) =>
+                            timelineView(zoom, Math.max(0, s - view.widthRatio * 0.5)).startRatio,
                         )
                       }
                     >
@@ -389,8 +373,8 @@ export function TraceDetailSheet({
                       aria-label="Pan right"
                       disabled={zoom <= 1 || view.startRatio + view.widthRatio >= 1}
                       onClick={() =>
-                        setViewStart((s) =>
-                          timelineView(zoom, s + view.widthRatio * 0.5).startRatio,
+                        setViewStart(
+                          (s) => timelineView(zoom, s + view.widthRatio * 0.5).startRatio,
                         )
                       }
                     >
@@ -1007,4 +991,3 @@ function PlaybackBarFill({
     />
   );
 }
-

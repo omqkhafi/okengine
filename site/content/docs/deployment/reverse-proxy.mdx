@@ -68,8 +68,8 @@ Add your public hostname to serve `allowedHosts`
 
 ## Which proxy?
 
-| Choice                       | Best for                                                   | How routing works                                                  |
-| ---------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| Choice                          | Best for                                                   | How routing works                                                  |
+| ------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
 | **Caddy** (`caddy:2-alpine`)    | hello / minimal / standard — single instance, simplest TLS | Generated `Caddyfile` → `reverse_proxy app:6530`; automatic HTTPS  |
 | **Traefik** (`traefik:v3.3`)    | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
 | **nginx** (`nginx:1.27-alpine`) | Static HTTP edge; TLS elsewhere                            | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
@@ -124,11 +124,11 @@ every replica through the Docker provider.
 
 ## nginx
 
-| Piece              | Meaning                                                                 |
-| ------------------ | ----------------------------------------------------------------------- |
-| Generated file     | `docker/nginx.conf` — `proxy_pass` to `app:6530` on `:80`               |
-| TLS                | None in-container — put Cloudflare / an ALB in front, or switch recipes |
-| Full recipe        | [nginx](/docs/recipes/nginx)                                            |
+| Piece          | Meaning                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| Generated file | `docker/nginx.conf` — `proxy_pass` to `app:6530` on `:80`               |
+| TLS            | None in-container — put Cloudflare / an ALB in front, or switch recipes |
+| Full recipe    | [nginx](/docs/recipes/nginx)                                            |
 
 ## Why docker-socket-proxy (Traefik)
 

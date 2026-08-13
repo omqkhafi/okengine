@@ -12,6 +12,13 @@ needed).
 
 ## Unreleased
 
+### ✨ Added
+
+- `http.query()` — RFC 10008 safe, idempotent HTTP trigger that still carries a JSON body
+  (parsed like POST). CORS default methods include QUERY; CSRF treats QUERY as safe (like GET).
+- Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
+  and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
+
 ### 💥 Breaking Changes
 
 - Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
@@ -22,6 +29,7 @@ needed).
 
 ### ♻️ Changed
 
+- ui-next Units tree: trigger bands (HTTP, Signal, …) are bordered, clearly separated sections with chevron + tinted kind-icon headers; unit folders also show chevrons and nest flows under a guide line — both levels collapse/expand (auto-reopen when the selection is inside). Trigger glyphs are now distinct per kind (API / radio / calendar / timer / store / function) with matching icon wells in Traces.
 - ui-next Units Call API is trigger-aware: HTTP keeps method/path + body; call-only keeps
   `flow.in` with a bypasses-caller note and Manifest callers from `effects.calls`;
   cron/every prefer lease-gated `/console/clock/run-now` when a Manifest clock soft-joins,
@@ -40,11 +48,32 @@ needed).
   out mid-progress in dark mode).
 - ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
 - ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
-- ui-next sidebar toggle lives in the sidebar header (end when expanded; logo→trigger on hover when collapsed). Brand/trigger swap uses Motion springs (respects reduced motion).
+- ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
 - ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
 - Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
+- ui-next Store browse adopts a single toolbar + row-detail Sheet layout (SACP-style chrome):
+  Refresh, find-in-results, sort indicator, Writers/Readers popover, tenant, page size, and row
+  count on one row; column headers carry PK/type glyphs from the Manifest; double-click a row for
+  Fields/JSON detail with the existing audited Reveal, edit, and typed-confirm Delete. No Insert /
+  Export / pagination arrows — those have no real backend endpoints. Seed bookings gain an Arabic
+  `note` so mixed RTL/LTR cells render without breaking column alignment.
 
 ### 🐛 Fixed
+
+- Wrong-method hits on a registered path return **405** with `Allow` listing bound methods
+  (was a generic 404). CORS preflight still answers first. Raw Console ingest 405s now include
+  `Allow: POST`.
+
+- Console Manifest StoreRuntime now derives SQL `classify` maps from
+  `tables.*.columns` PII/sensitive tags (and `table.column` keys on
+  `store.classifications`), so browse masking matches list `piiColumns` without a
+  hand-registered classify map. Store query/edit/delete/sql paths also bind the
+  panel-lazy runtime (previously only list did).
+
+- Console `GET /console/runs` no longer nests each list response back into the runs
+  store (`console.runs.list` output elided on record; prior list polls filtered from the
+  projection). Live/poll fallbacks were doubling payload size every tick and OOMing the
+  ui-next kernel (~GB RSS).
 
 - `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
   saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
@@ -63,16 +92,41 @@ needed).
 
 ### ✨ Added
 
+- **Console ui-next Store page (v1)** — read-first browse at `/store`: facet
+  tree, schema, masked SQL row browser with audited reveal, KV/files/index
+  browsers with honest “not PII-classified / no SQL-grade masking” copy, and
+  reverse readers/writers linking to Units/Flows (no edit/delete/SQL console).
+
+- **Console ui-next Store page (v2)** — browse is now a virtualized data grid
+  (TanStack Table + Virtual, Base UI chrome) with column sort, find-in-page
+  (honest “increase Limit to search more rows” copy), and safe mutations:
+  - Edit (SQL/KV) runs dry-run preview → typed `EDIT` + reason in production;
+    PII-masked cells require audited reveal before edit and the client strips
+    any `[redacted]` placeholder from the patch.
+  - Delete (all four facets) requires typed `DELETE` + reason in production.
+  - Server `applyEdit` rejects a patch value equal to `[redacted]` on a
+    classified PII column so the mask can never overwrite real data.
+  - No SQL Insert UI (no `/console/store/add` endpoint); KV “add” is edit/set.
+  - No server-side column WHERE filters yet — v1 find/sort are client-side on
+    the fetched page only.
+
+- ui-next seed now fills all four Store facets with real data (previously
+  schema-only): SQL `bookings` 5 rows / `shipments` 3 rows (with a PII
+  `email` column), KV `holds` 4 keys, Files `uploads` 3 objects (one
+  non-ASCII key for warnings), Index `docs` 4 vectors. Seeded via
+  `seedUiNextStoreData` in both the Vite dev plugin and the Playwright
+  fixture.
+
 - ui-next Units ↔ Flows connector: `/flows?flow=<id>` seeds the graph/Traces
   filter and fitView; Units contract header has **Open in graph**. Recent
   activity strip shows real buffered call count / error rate for the selected
   flow (honest empty when the Console runs buffer has nothing in-window). Units
   subscribes to `useRuns` + `/console/live` like Flows.
 - ui-next Units **Platform failure modes**: derived only from this flow's Gates
-  + request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
-  403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
-  Call API chrome's default-400 quirk. Declared Flow errors stay a separate
-  tier.
+  - request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
+    403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
+    Call API chrome's default-400 quirk. Declared Flow errors stay a separate
+    tier.
 
 - Console `POST /console/flows/invoke` executes the target flow on a bound host via
   invoke-as (assumed identity scopes) — no more stub `echo` / `inv_*` responses. Fail-closed
@@ -85,9 +139,12 @@ needed).
 
 ### 🔒 Security
 
+- Console security gate **5c**: default `QUERY /console/store/query` on a table with
+  PII-classified columns never returns unmasked values; `POST /console/store/reveal`
+  returns cleartext and leaves an audited `console.store.reveal` Runs log (operatorId,
+  ref, child, id, column) — same suite class as gate **5b** host-ingest masking.
 - Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
   scopes; host gates enforce the assumed principal.
-
 
 - `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
   `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
@@ -141,7 +198,6 @@ needed).
 - ui-next eight-element HugeIcons vocabulary (`ELEMENT_ICONS`) aligned with site
   Lucide; Traces trigger icons and Flow graph nodes share Flow / Signal / Store /
   Clock / Gate / Vault / Channel / AI glyphs.
-
 
 - `bun run dev:console-next:seeded` (`OKE_CONSOLE_NEXT_SEEDED=1`) boots the same Console
   kernel + skyport Manifest + seeded WideEvent chain as the Playwright ui-next fixture,

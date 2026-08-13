@@ -185,4 +185,12 @@ export class RegExpRouter<T> implements Router<T> {
     }
     return undefined;
   }
+
+  /**
+   * @param path - Pathname
+   */
+  allowedMethods(path: string): string[] {
+    this.build();
+    return [...this.#tables.keys()].filter((m) => this.match(m, path));
+  }
 }

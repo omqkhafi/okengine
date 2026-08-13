@@ -215,24 +215,24 @@ export const app = oke({
 | `POST /auth/revoke`        | when `gate.auth` is set                |
 | `GET /auth/me`             | Bearer session (`auth.session` policy) |
 
-| Auth option                                 | Default   | Meaning                                                                        |
-| ------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
-| `secret`                                    | minted\*  | HMAC for access tokens (\*`prod` requires you set it)                          |
-| `basePath`                                  | `"/auth"` | HTTP prefix for auth Flows                                                     |
-| `http`                                      | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)                           |
-| `audience`                                  | `oke-app` | Audience stamped on access tokens                                              |
-| `emailAndPassword.enabled`                  | `false`   | Sign-up / sign-in email Flows                                                  |
-| `emailAndPassword.requireEmailVerification` | `false`   | Block sign-in until email is verified                                          |
+| Auth option                                 | Default   | Meaning                                                                                                                    |
+| ------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `secret`                                    | minted\*  | HMAC for access tokens (\*`prod` requires you set it)                                                                      |
+| `basePath`                                  | `"/auth"` | HTTP prefix for auth Flows                                                                                                 |
+| `http`                                      | `true`    | `false` = secret/tables only (no `/auth/*` Bindings)                                                                       |
+| `audience`                                  | `oke-app` | Audience stamped on access tokens                                                                                          |
+| `emailAndPassword.enabled`                  | `false`   | Sign-up / sign-in email Flows                                                                                              |
+| `emailAndPassword.requireEmailVerification` | `false`   | Block sign-in until email is verified                                                                                      |
 | `passwordPolicy`                            | secure\*  | `\*` minLength 8, letter + number + upper + lower + special (`requireSpecial`); sign-up → `AuthFailed` / `password_policy` |
-| `breachCheck`                               | unset     | `(password) => Promise<boolean>` — `true` rejects as `password_breached`       |
-| `session.freshAgeMs`                        | 24h       | Window for step-up `auth.fresh` policy                                         |
-| `session.accessTtlMs` / `refreshTtlMs`      | 14m / 30d | Access / refresh lifetimes                                                     |
-| `session.idleTtlMs`                         | unset     | Opt-in: reject refresh when idle too long                                      |
-| `session.absoluteTtlMs`                     | unset     | Opt-in: hard cap from session creation                                         |
-| `session.singleSessionPerUser`              | `false`   | Opt-in: issuing a session revokes other families for that user                 |
-| `cookies.enabled`                           | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                           |
-| `secondaryStorage.enabled`                  | `false`   | Hot auth data in `store.kv` when configured                                    |
-| `user` / `session` / …                      | defaults  | `modelName` / `fields` / `additionalFields`                                    |
+| `breachCheck`                               | unset     | `(password) => Promise<boolean>` — `true` rejects as `password_breached`                                                   |
+| `session.freshAgeMs`                        | 24h       | Window for step-up `auth.fresh` policy                                                                                     |
+| `session.accessTtlMs` / `refreshTtlMs`      | 14m / 30d | Access / refresh lifetimes                                                                                                 |
+| `session.idleTtlMs`                         | unset     | Opt-in: reject refresh when idle too long                                                                                  |
+| `session.absoluteTtlMs`                     | unset     | Opt-in: hard cap from session creation                                                                                     |
+| `session.singleSessionPerUser`              | `false`   | Opt-in: issuing a session revokes other families for that user                                                             |
+| `cookies.enabled`                           | `false`   | Opt-in HttpOnly cookie mirror (Bearer stays default)                                                                       |
+| `secondaryStorage.enabled`                  | `false`   | Hot auth data in `store.kv` when configured                                                                                |
+| `user` / `session` / …                      | defaults  | `modelName` / `fields` / `additionalFields`                                                                                |
 
 HIBP via `createHibpBreachCheck` from `okengine/auth` (k-anonymity range API; requires
 `userAgent`; `onError` defaults to `"reject"` — fail closed while the check is enabled):

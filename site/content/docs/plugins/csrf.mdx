@@ -16,7 +16,7 @@ import { csrf } from "okengine/plugins";
 export const app = oke({ name: "shop", env: "dev" }).plug(csrf());
 ```
 
-`GET`/`HEAD`/`OPTIONS` always pass. A `POST` with `Sec-Fetch-Site: cross-site` now gets the gate element's typed `Forbidden` — unless its `Origin` is yours or allow-listed.
+`GET`/`HEAD`/`OPTIONS`/`QUERY` always pass. A `POST` with `Sec-Fetch-Site: cross-site` now gets the gate element's typed `Forbidden` — unless its `Origin` is yours or allow-listed.
 
 ## How it decides
 

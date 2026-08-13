@@ -106,7 +106,13 @@ import {
 } from "./plug.ts";
 import type { PluginCapabilities, PluginDef } from "./plugin.ts";
 import { createPluginRegistry, type PluginRegistry } from "./registry.ts";
-import { createRouter, type Router, type RouterPreset, type SmartRouter } from "./router.ts";
+import {
+  createRouter,
+  formatAllowHeader,
+  type Router,
+  type RouterPreset,
+  type SmartRouter,
+} from "./router.ts";
 import type {
   CdcTrigger,
   EveryTrigger,
@@ -1395,9 +1401,7 @@ export function oke(options: OkeOptions): OkeApp {
           failure: recordFailure,
           id: runId,
           input: replayInput,
-          ...(result.output !== undefined && !recordFailure
-            ? { output: result.output }
-            : {}),
+          ...(result.output !== undefined && !recordFailure ? { output: result.output } : {}),
           ...(parentId !== undefined ? { parentId } : {}),
         },
         archiveCleartext,
@@ -1647,6 +1651,15 @@ export function oke(options: OkeOptions): OkeApp {
         for (const handle of pluginRegistry.edgeHandlers()) {
           const edgeResponse = await handle(request, { method, path: url.pathname });
           if (edgeResponse !== undefined) return respond(edgeResponse);
+        }
+        const allowed = router.allowedMethods(url.pathname);
+        if (allowed.length > 0) {
+          return respond(
+            new Response("Method Not Allowed", {
+              status: 405,
+              headers: { allow: formatAllowHeader(allowed) },
+            }),
+          );
         }
         return respond(new Response("Not Found", { status: 404 }));
       }

@@ -225,12 +225,87 @@ describe("console security gates (whole surface)", () => {
     );
     expect(listRes.status).toBe(200);
     const body = (await listRes.json()) as {
-      data: { runs: readonly { readonly id: string; readonly dimensions: Record<string, unknown> }[] };
+      data: {
+        runs: readonly { readonly id: string; readonly dimensions: Record<string, unknown> }[];
+      };
     };
     const row = body.data.runs.find((r) => r.id === "run-ingest-pii");
     expect(row).toBeDefined();
     expect(row!.dimensions.email).toBe(PII_MASK);
     expect(JSON.stringify(body)).not.toContain(leak);
+  });
+
+  test("5c. store browse never returns unmasked PII without reveal; reveal is audited", async () => {
+    const leak = "browse-gate@example.com";
+    const { defineTable } = await import("../../elements/store.ts");
+    const { classify } = await import("../../elements/store/classify.ts");
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    const bookings = defineTable("bookings", {
+      id: true,
+      email: classify({ pii: true }),
+      seats: true,
+    });
+    if (!handle.state.storeRuntime) {
+      const { createManifestStoreRuntime } = await import("./store.ts");
+      handle.state.storeRuntime = await createManifestStoreRuntime(handle.state.manifest);
+    }
+    handle.state.storeRuntime.register(
+      declareSql("db", {
+        schema: { bookings },
+        classify: { bookings: { email: { pii: true } } },
+      }),
+    );
+    const sqlHandle = (await handle.state.storeRuntime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+      revealPii: true,
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sqlHandle.ensureTable(bookings);
+    await sqlHandle.insert(bookings).values({ id: "b1", email: leak, seats: 2 });
+
+    const browseRes = await handle.app.fetch(
+      new Request("http://console.test/console/store/query", {
+        method: "QUERY",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${operatorToken}`,
+        },
+        body: JSON.stringify({ ref: "sql:db", child: "bookings" }),
+      }),
+    );
+    expect(browseRes.status).toBe(200);
+    const browseBody = (await browseRes.json()) as {
+      data: { masked: boolean; rows?: readonly Record<string, unknown>[] };
+    };
+    expect(browseBody.data.masked).toBe(true);
+    expect(browseBody.data.rows?.[0]?.email).toBe(PII_MASK);
+    expect(JSON.stringify(browseBody)).not.toContain(leak);
+
+    const revealRes = await handle.app.fetch(
+      new Request("http://console.test/console/store/reveal", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${operatorToken}`,
+        },
+        body: JSON.stringify({ ref: "sql:db", child: "bookings", id: "b1", column: "email" }),
+      }),
+    );
+    expect(revealRes.status).toBe(200);
+    const revealBody = (await revealRes.json()) as { data: { value: unknown } };
+    expect(revealBody.data.value).toBe(leak);
+
+    const runs = await handle.state.listRuns();
+    const revealRuns = runs.filter((r: WideEvent) => r.flow === "console.store.reveal");
+    const revealRun = revealRuns.find((r: WideEvent) =>
+      r.logs.some((l) => l.message === "console.store.reveal"),
+    );
+    expect(revealRun).toBeDefined();
+    const audit = revealRun!.logs.find((l) => l.message === "console.store.reveal");
+    expect(audit!.data?.ref).toBe("sql:db");
+    expect(audit!.data?.child).toBe("bookings");
+    expect(audit!.data?.id).toBe("b1");
+    expect(audit!.data?.column).toBe("email");
+    expect(audit!.data?.operatorId).toBe(operatorId);
   });
 
   test("7. every registered console.* flow leaves a Runs entry when executed", async () => {

@@ -38,7 +38,7 @@ export interface CsrfOptions {
 
 /** Methods browsers can mutate state with (safe verbs pass untouched). */
 function isMutating(method: string): boolean {
-  return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+  return method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "QUERY";
 }
 
 /**

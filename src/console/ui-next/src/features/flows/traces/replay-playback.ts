@@ -29,10 +29,7 @@ export function playbackDurationMs(runDurationMs: number): number {
  * @param bars - Waterfall bars (offsetRatio in `[0, 1]`)
  * @param progress - Playback progress in `[0, 1]`
  */
-export function activeEffectIndexAt(
-  bars: readonly WaterfallBar[],
-  progress: number,
-): number {
+export function activeEffectIndexAt(bars: readonly WaterfallBar[], progress: number): number {
   let active = -1;
   for (const bar of bars) {
     if (bar.offsetRatio <= progress) active = bar.index;
@@ -103,10 +100,7 @@ function linkingSignal(
  * @param steps - Ordered node ids from {@link playbackNodeSteps}
  * @param progress - Playback progress in `[0, 1]`
  */
-export function activeNodeAt(
-  steps: readonly string[],
-  progress: number,
-): string | null {
+export function activeNodeAt(steps: readonly string[], progress: number): string | null {
   if (steps.length === 0) return null;
   const clamped = Math.min(0.999, Math.max(0, progress));
   return steps[Math.floor(clamped * steps.length)] ?? null;

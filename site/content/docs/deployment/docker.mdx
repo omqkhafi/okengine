@@ -126,11 +126,11 @@ so the release path can finish (≥ typical Clock / Journal / Signal lease TTL).
 Omit `images.proxy` until you need HTTPS or horizontal scale without fighting a
 host port bind. Then pick one:
 
-| Choice                       | Best for                                  | How routing works                                                  |
-| ---------------------------- | ----------------------------------------- | ------------------------------------------------------------------ |
-| **Caddy** (`caddy:2-alpine`)     | Single instance, simplest automatic HTTPS | Generated `Caddyfile` → `reverse_proxy app:6530`                   |
-| **Traefik** (`traefik:v3.3`)     | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
-| **nginx** (`nginx:1.27-alpine`)  | Static HTTP edge; TLS elsewhere           | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
+| Choice                          | Best for                                  | How routing works                                                  |
+| ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| **Caddy** (`caddy:2-alpine`)    | Single instance, simplest automatic HTTPS | Generated `Caddyfile` → `reverse_proxy app:6530`                   |
+| **Traefik** (`traefik:v3.3`)    | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **nginx** (`nginx:1.27-alpine`) | Static HTTP edge; TLS elsewhere           | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
 
 ```typescript title="oke.config.ts"
 images: {

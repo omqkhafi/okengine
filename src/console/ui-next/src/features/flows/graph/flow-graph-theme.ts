@@ -6,13 +6,7 @@
  */
 
 /** Declared effect / relationship kinds drawn as edges. */
-export type FlowGraphEdgeKind =
-  | "reads"
-  | "writes"
-  | "emits"
-  | "calls"
-  | "asks"
-  | "trigger";
+export type FlowGraphEdgeKind = "reads" | "writes" | "emits" | "calls" | "asks" | "trigger";
 
 /** Leaf node kinds that carry an accent (unit groups are chrome only). */
 export type FlowGraphAccentKind = "flow" | "store" | "signal" | "ai";
@@ -71,4 +65,3 @@ export const UNIT_CHROME = {
   padX: 10,
   padBottom: 10,
 } as const;
-

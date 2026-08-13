@@ -119,6 +119,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
+    "@tanstack/react-virtual": "^3.14.9",
     "intl-messageformat": "^11.2.13",
     "sently": "1.2.1"
   },

@@ -43,10 +43,7 @@ describe("scopeRunsToFlows", () => {
       run({ id: "noise", flow: "ghost.flow", startedAt: 40 }),
       run({ id: "mid", flow: "fulfillment.onOrder", startedAt: 20 }),
     ];
-    const scoped = scopeRunsToFlows(
-      runs,
-      new Set(["bookings.create", "fulfillment.onOrder"]),
-    );
+    const scoped = scopeRunsToFlows(runs, new Set(["bookings.create", "fulfillment.onOrder"]));
     expect(scoped.map((r) => r.id)).toEqual(["new", "mid", "old"]);
   });
 });

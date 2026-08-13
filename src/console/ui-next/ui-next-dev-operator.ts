@@ -5,11 +5,7 @@
  * Credentials are intentional and public for local/dev only; never use in prod.
  */
 
-import {
-  createOperator,
-  createOperatorStore,
-  type OperatorStore,
-} from "../../auth/operator.ts";
+import { createOperator, createOperatorStore, type OperatorStore } from "../../auth/operator.ts";
 import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 
 /** Stable email for the console-next dev operator. */

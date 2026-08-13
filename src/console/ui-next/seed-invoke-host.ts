@@ -21,10 +21,7 @@ import {
   signalRegistry,
   storeRegistry,
 } from "../../kernel/element-registries.ts";
-import {
-  bindHostInvokeUserFlow,
-  type ConsoleInvokeUserFlow,
-} from "../server/invoke-user-flow.ts";
+import { bindHostInvokeUserFlow, type ConsoleInvokeUserFlow } from "../server/invoke-user-flow.ts";
 
 const memoryDrivers = {
   store: { kv: { dev: "memory", test: "memory", prod: "memory" } },

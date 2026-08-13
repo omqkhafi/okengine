@@ -1,12 +1,15 @@
 /**
- * Map WideEvent trigger kinds to element-aligned HugeIcons.
+ * Map WideEvent trigger kinds to Units/Traces trigger glyphs.
  *
- * Triggers are not elements, but several map cleanly onto the eight-element
- * vocabulary (signal → Signal, cron/every → Clock, http → Flow, cdc → Store).
+ * Delegates to {@link FLOW_TRIGGER_KIND_SPECS} so Traces and Units share one
+ * icon set (HTTP ≠ call-only, cron ≠ every).
  */
 
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
-import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
+import {
+  FLOW_TRIGGER_KIND_SPECS,
+  type FlowTriggerKind,
+} from "@/features/units/lib/flow-trigger.ts";
 
 /** Icon + accessible label for a run's trigger kind. */
 export type TriggerIconSpec = {
@@ -20,18 +23,31 @@ export type TriggerIconSpec = {
  * @param trigger - `http` | `signal` | `every` | `cdc` | `internal` | …
  */
 export function triggerIconSpec(trigger: string): TriggerIconSpec {
+  const kind = wideEventTriggerKind(trigger);
+  const spec = FLOW_TRIGGER_KIND_SPECS[kind];
+  return { icon: spec.icon, label: spec.label };
+}
+
+/**
+ * Map a WideEvent trigger string onto {@link FlowTriggerKind}.
+ *
+ * @param trigger - Raw trigger field from a run / WideEvent
+ */
+function wideEventTriggerKind(trigger: string): FlowTriggerKind {
   switch (trigger) {
     case "http":
-    case "internal":
-      return { icon: ELEMENT_ICONS.flow.icon, label: trigger === "http" ? "HTTP" : "Internal" };
+      return "http";
     case "signal":
-      return { icon: ELEMENT_ICONS.signal.icon, label: "Signal" };
+      return "signal";
     case "every":
+      return "every";
     case "cron":
-      return { icon: ELEMENT_ICONS.clock.icon, label: "Clock" };
+      return "cron";
     case "cdc":
-      return { icon: ELEMENT_ICONS.store.icon, label: "CDC" };
+      return "cdc";
+    case "internal":
+      return "internal";
     default:
-      return { icon: ELEMENT_ICONS.flow.icon, label: trigger || "Trigger" };
+      return "internal";
   }
 }

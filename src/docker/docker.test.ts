@@ -583,6 +583,14 @@ describe("image recipes", () => {
     expect(labels["traefik.http.routers.app.rule"]).toContain("OKE_PROXY_HOST");
   });
 
+  test("proxy recipes do not filter HTTP methods", () => {
+    expect(buildCaddyfile()).toContain("reverse_proxy app:6530");
+    expect(buildCaddyfile()).not.toMatch(/method\s|allowed_methods|@method/i);
+    expect(buildNginxConf()).not.toMatch(/limit_except/i);
+    const labels = traefikAppLabels();
+    expect(JSON.stringify(labels)).not.toMatch(/Method\(|methods/i);
+  });
+
   test("recipe.url builds a connection string without env-var names in the kernel", () => {
     const spec: ServiceSpec = {
       role: "store.sql",

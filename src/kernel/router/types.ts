@@ -11,7 +11,7 @@ export class UnsupportedPathError extends Error {
    * @param path - Offending path pattern
    */
   constructor(path: string) {
-    super(`Unsupported path pattern: ${path}`);
+    super(path);
     this.name = "UnsupportedPathError";
     this.path = path;
   }
@@ -21,6 +21,39 @@ export class UnsupportedPathError extends Error {
 export interface RouteMatch<T> {
   readonly value: T;
   readonly params: Readonly<Record<string, string>>;
+}
+
+/**
+ * Canonical `Allow` order (RFC 9110 does not require one; keep the header
+ * stable across router strategies). Unknown verbs sort after these.
+ */
+const ALLOW_ORDER = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "QUERY"] as const;
+
+/**
+ * Deduplicate and order methods for an `Allow` header.
+ *
+ * @param methods - Registered methods that match the request path
+ */
+export function sortAllowMethods(methods: readonly string[]): string[] {
+  const seen = new Set(methods.map((m) => m.toUpperCase()));
+  const ordered: string[] = [];
+  for (const method of ALLOW_ORDER) {
+    if (seen.has(method)) {
+      ordered.push(method);
+      seen.delete(method);
+    }
+  }
+  ordered.push(...[...seen].sort());
+  return ordered;
+}
+
+/**
+ * `Allow` header value listing every method registered for a path.
+ *
+ * @param methods - Registered methods that match the request path
+ */
+export function formatAllowHeader(methods: readonly string[]): string {
+  return sortAllowMethods(methods).join(", ");
 }
 
 /** Router surface shared by all strategies. */
@@ -41,6 +74,13 @@ export interface Router<T> {
    * @param path - Request pathname
    */
   match(method: string, path: string): RouteMatch<T> | undefined;
+  /**
+   * HTTP methods registered for `path` (wrong-method → 405). Empty when
+   * the path matches no route.
+   *
+   * @param path - Request pathname
+   */
+  allowedMethods(path: string): string[];
 }
 
 /** True when the pattern cannot be expressed by the RegExp strategy. */

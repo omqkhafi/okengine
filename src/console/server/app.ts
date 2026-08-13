@@ -24,11 +24,7 @@ import { createManifestClockRuntime } from "./clock.ts";
 import { createManifestStoreRuntime } from "./store.ts";
 import { VaultBootError } from "../../elements/vault.ts";
 import { createManifestVaultRuntime, resolveVaultDriverId } from "./vault.ts";
-import {
-  clearClaimCodeArtifact,
-  printClaimCodeOnce,
-  writeClaimCodeArtifact,
-} from "./claim.ts";
+import { clearClaimCodeArtifact, printClaimCodeOnce, writeClaimCodeArtifact } from "./claim.ts";
 
 /** Options for {@link createConsoleApp}. */
 export interface CreateConsoleAppOptions extends CreateConsoleStateOptions {
@@ -164,6 +160,10 @@ export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> 
  * Wrap the Console runs runtime so every recorded wide event is also pushed
  * to `/console/live` subscribers (Flow split-view Traces). Idempotent.
  *
+ * Also elides `console.runs.list` outputs on record — listing returns every
+ * stored run, so persisting that payload into the same store nests prior
+ * lists and doubles size on each poll.
+ *
  * @param handle - Console app handle
  */
 export function wrapConsoleRunsForLive(handle: ConsoleAppHandle): void {
@@ -175,7 +175,12 @@ export function wrapConsoleRunsForLive(handle: ConsoleAppHandle): void {
   const origRecord = runs.record.bind(runs);
   const origAppend = runs.append.bind(runs);
   runs.record = async (input, archiveCleartext) => {
-    const event = await origRecord(input, archiveCleartext);
+    // `console.runs.list` returns every stored run — recording that output
+    // back into the same store nests prior list payloads and doubles size
+    // each poll (live fallback / React Query), OOMing the Console kernel.
+    const recordInput =
+      input.flow.name === "console.runs.list" ? { ...input, output: undefined } : input;
+    const event = await origRecord(recordInput, archiveCleartext);
     feedRun(state, event);
     return event;
   };

@@ -126,10 +126,7 @@ export function matchesDimensionQuery(run: RunRow, query: DimensionQuery): boole
  * @param runs - Runs
  * @param query - Dimension query
  */
-export function filterByDimensionQuery(
-  runs: readonly RunRow[],
-  query: DimensionQuery,
-): RunRow[] {
+export function filterByDimensionQuery(runs: readonly RunRow[], query: DimensionQuery): RunRow[] {
   if (query.clauses.length === 0) return [...runs];
   return runs.filter((r) => matchesDimensionQuery(r, query));
 }

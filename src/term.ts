@@ -658,7 +658,7 @@ export function formatRequestLine(options: {
   const statusColor = options.status >= 500 ? s.red : options.status >= 400 ? s.yellow : s.green;
   const methodRaw = options.method.toUpperCase();
   const methodColor =
-    methodRaw === "GET"
+    methodRaw === "GET" || methodRaw === "QUERY"
       ? s.green
       : methodRaw === "POST"
         ? s.yellow
@@ -667,7 +667,7 @@ export function formatRequestLine(options: {
           : methodRaw === "DELETE"
             ? s.red
             : s.cyan;
-  const method = methodRaw.padEnd(4);
+  const method = methodRaw.padEnd(6);
   const path = options.path.length > 28 ? `${options.path.slice(0, 27)}…` : options.path.padEnd(28);
   const flow = (options.flow ?? "—").padEnd(22);
   const ms = `${options.ms}ms`.padStart(6);

@@ -113,9 +113,12 @@ describe("pollConsoleRuns", () => {
 
   test("skips cache write when the list call errors", async () => {
     const cached: RunRow[][] = [];
-    await pollConsoleRuns(async () => ({ error: { code: "AuthFailed" } }), (runs) => {
-      cached.push(runs);
-    });
+    await pollConsoleRuns(
+      async () => ({ error: { code: "AuthFailed" } }),
+      (runs) => {
+        cached.push(runs);
+      },
+    );
     expect(cached).toEqual([]);
   });
 });

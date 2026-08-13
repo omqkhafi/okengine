@@ -15,11 +15,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { HighlightedJson } from "@/components/highlighted-json";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
@@ -60,8 +56,7 @@ export type TraceRequestSectionProps = {
 
 type BodyView = "fields" | "raw";
 
-const sheetControlButtonClass =
-  "border border-border bg-background shadow-none hover:bg-muted";
+const sheetControlButtonClass = "border border-border bg-background shadow-none hover:bg-muted";
 
 /**
  * Request + Response — method rail + endpoint, then return-value frame.
@@ -171,9 +166,7 @@ export function TraceRequestSection({
                     className="size-3.5 shrink-0 text-destructive"
                     aria-hidden
                   />
-                  <span className="font-mono text-xs font-semibold text-destructive">
-                    {error}
-                  </span>
+                  <span className="font-mono text-xs font-semibold text-destructive">{error}</span>
                 </div>
                 {errorMessage ? (
                   <p className="text-[11px] leading-snug text-destructive/90">{errorMessage}</p>
@@ -247,16 +240,10 @@ function PayloadPanel({
   readonly jsonSlot: string;
 }): JSX.Element {
   const hasValue = value !== null && value !== undefined;
-  const json = useMemo(
-    () => (hasValue ? JSON.stringify(value, null, 2) : ""),
-    [hasValue, value],
-  );
+  const json = useMemo(() => (hasValue ? JSON.stringify(value, null, 2) : ""), [hasValue, value]);
   const rows = useMemo(() => (hasValue ? inputFieldRows(value) : null), [hasValue, value]);
   const shapeHint = useMemo(() => (hasValue ? inputShapeHint(value) : null), [hasValue, value]);
-  const byteLabel = useMemo(
-    () => (hasValue ? inputByteLabel(json) : null),
-    [hasValue, json],
-  );
+  const byteLabel = useMemo(() => (hasValue ? inputByteLabel(json) : null), [hasValue, json]);
   const [view, setView] = useState<BodyView>(rows ? "fields" : "raw");
 
   useEffect(() => {
@@ -426,9 +413,7 @@ function ViewToggleButton({
       type="button"
       className={cn(
         "inline-flex h-5 items-center gap-1 rounded-[5px] px-1.5 text-[10px] font-medium transition-colors",
-        active
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:text-foreground",
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       aria-pressed={active}
       aria-label={label}

@@ -38,14 +38,14 @@ export const DEFAULT_PASSWORD_MIN_LENGTH = 8;
  * Global password policy defaults (Gate auth / `createIdentity` / `createOperator`
  * when no `passwordPolicy` is passed). Console claim uses a stricter constant.
  */
-export const DEFAULT_PASSWORD_POLICY = {
+export const DEFAULT_PASSWORD_POLICY: ResolvedPasswordPolicy = {
   minLength: DEFAULT_PASSWORD_MIN_LENGTH,
   requireLetter: true,
   requireNumber: true,
   requireUppercase: true,
   requireLowercase: true,
   requireSpecial: true,
-} as const satisfies Required<PasswordPolicyOptions>;
+};
 
 /**
  * Resolve policy options with safe defaults.

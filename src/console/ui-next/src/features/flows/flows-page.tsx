@@ -1,5 +1,5 @@
 /**
- * Flow split-view page — Manifest graph (left) + scoped live Traces (right).
+ * Flow split-view page — scoped live Traces (start) + Manifest graph (end).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,7 +16,7 @@ import { chainFlowIds } from "./traces/trace-chain.ts";
 import { TracesPane } from "./traces/traces-pane.tsx";
 
 /**
- * `/flows` — one composition: structure on the left, activity on the right,
+ * `/flows` — one composition: activity at the start, structure at the end,
  * linked by shared selection.
  */
 export function FlowsPage() {
@@ -140,20 +140,6 @@ export function FlowsPage() {
   return (
     <div className="flex h-dvh flex-col">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="70%" minSize="30%" className="min-h-0">
-          <div className="h-full min-h-0 overflow-hidden">
-            <FlowGraph
-              manifest={manifest.data ?? null}
-              highlightedFlowIds={highlightedFlowIds}
-              highlightedNodeIds={highlightedNodeIds}
-              follow={follow}
-              activeNodeId={activeNodeId}
-              onNodeClick={onGraphNodeClick}
-              onPaneClick={onGraphPaneClick}
-            />
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
         <ResizablePanel defaultSize="30%" minSize="240px" maxSize="50%" className="min-h-0">
           <div className="h-full min-h-0 overflow-hidden">
             <TracesPane
@@ -169,6 +155,20 @@ export function FlowsPage() {
               playbackKey={playbackKey}
               onReplayStart={onReplayStart}
               selectedRun={selectedRun}
+            />
+          </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize="70%" minSize="30%" className="min-h-0">
+          <div className="h-full min-h-0 overflow-hidden">
+            <FlowGraph
+              manifest={manifest.data ?? null}
+              highlightedFlowIds={highlightedFlowIds}
+              highlightedNodeIds={highlightedNodeIds}
+              follow={follow}
+              activeNodeId={activeNodeId}
+              onNodeClick={onGraphNodeClick}
+              onPaneClick={onGraphPaneClick}
             />
           </div>
         </ResizablePanel>

@@ -54,6 +54,17 @@ describe("sucrose — context inference", () => {
     expect(inference.params).toBe(true);
     expect(inference.body).toBe(false);
   });
+
+  test("QUERY enables body like POST", () => {
+    const inference = sucrose({
+      handler: ((input: { n: number }) => input) as never,
+      path: "/q",
+      method: "QUERY",
+      hasSchema: true,
+    });
+    expect(inference.body).toBe(true);
+    expect(inference.params).toBe(false);
+  });
 });
 
 describe("compileAot", () => {

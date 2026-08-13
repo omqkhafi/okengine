@@ -61,10 +61,7 @@ function Canvas({
     [graph.nodes, highlightedFlowIds, highlightedNodeIds, activeNodeId, focusedNodeId],
   );
 
-  const edges = useMemo(
-    () => applyEdgeHighlight(graph.edges, nodes),
-    [graph.edges, nodes],
-  );
+  const edges = useMemo(() => applyEdgeHighlight(graph.edges, nodes), [graph.edges, nodes]);
 
   // Follow-camera: zoom to the highlighted chain when enabled.
   useEffect(() => {
@@ -91,7 +88,11 @@ function Canvas({
       onNodeClick={(_, node) => onNodeClick?.(node.id)}
       onPaneClick={() => onPaneClick?.()}
     >
-      <Background gap={24} size={1} color="color-mix(in oklab, var(--foreground) 14%, transparent)" />
+      <Background
+        gap={24}
+        size={1}
+        color="color-mix(in oklab, var(--foreground) 14%, transparent)"
+      />
       <Controls showInteractive={false} />
     </ReactFlow>
   );

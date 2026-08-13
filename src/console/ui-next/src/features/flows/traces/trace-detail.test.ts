@@ -104,6 +104,7 @@ describe("effectKindIcon", () => {
 describe("httpMethodBadgeClass", () => {
   test("assigns distinct accents per method", () => {
     expect(httpMethodBadgeClass("GET")).toContain("emerald");
+    expect(httpMethodBadgeClass("QUERY")).toContain("emerald");
     expect(httpMethodBadgeClass("POST")).toContain("sky");
     expect(httpMethodBadgeClass("PUT")).toContain("amber");
     expect(httpMethodBadgeClass("DELETE")).toContain("rose");
@@ -127,13 +128,7 @@ describe("effectSummaryChips", () => {
       "1 emit",
       "2 log lines",
     ]);
-    expect(chips.map((c) => c.shortLabel)).toEqual([
-      "56ms",
-      "1 API",
-      "2 DB",
-      "1 emit",
-      "2 logs",
-    ]);
+    expect(chips.map((c) => c.shortLabel)).toEqual(["56ms", "1 API", "2 DB", "1 emit", "2 logs"]);
   });
 
   test("matches ops bookings.create shape (duration + 2 logs)", () => {
@@ -197,12 +192,7 @@ describe("effectSummaryChips", () => {
         logs: [],
       }),
     );
-    expect(chips.map((c) => c.label)).toEqual([
-      "56ms",
-      "1 API call",
-      "1 DB query",
-      "1 read",
-    ]);
+    expect(chips.map((c) => c.label)).toEqual(["56ms", "1 API call", "1 DB query", "1 read"]);
   });
 });
 
@@ -230,12 +220,8 @@ describe("traceGateInfos", () => {
 
 describe("effectEventLabel", () => {
   test("labels SQL resources as DB query / DB write", () => {
-    expect(
-      effectEventLabel({ kind: "read", resource: "sql:bookings" }),
-    ).toBe("DB query");
-    expect(
-      effectEventLabel({ kind: "write", resource: "sql:bookings" }),
-    ).toBe("DB write");
+    expect(effectEventLabel({ kind: "read", resource: "sql:bookings" })).toBe("DB query");
+    expect(effectEventLabel({ kind: "write", resource: "sql:bookings" })).toBe("DB write");
     expect(effectEventLabel({ kind: "emit", resource: "order-placed" })).toBe("Emit");
   });
 });

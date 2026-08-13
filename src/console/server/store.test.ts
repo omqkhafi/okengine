@@ -190,6 +190,44 @@ describe("PII masking survives SELECT *", () => {
     });
     expect(clear.rows?.[0]?.email).toBe("secret@example.com");
   });
+
+  test("edit rejects PII mask placeholder over classified column", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      email: classify({ pii: true }),
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(
+      declareSql("db", {
+        schema: { bookings },
+        classify: { bookings: { email: { pii: true } } },
+      }),
+    );
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+      revealPii: true,
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+    await sql.insert(bookings).values({ id: "b1", email: "secret@example.com", seats: 2 });
+
+    await expect(
+      editStore(
+        runtime,
+        MANIFEST,
+        { ref: "sql:db", child: "bookings", id: "b1", patch: { email: "[redacted]" } },
+        { production: false, dryRun: false },
+      ),
+    ).rejects.toThrow(/PII mask placeholder/);
+
+    const after = await queryStore(runtime, MANIFEST, {
+      ref: "sql:db",
+      child: "bookings",
+      revealPii: true,
+    });
+    expect(after.rows?.[0]?.email).toBe("secret@example.com");
+  });
 });
 
 describe("preview dual test (withDryRun)", () => {

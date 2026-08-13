@@ -3,17 +3,25 @@
  * gates + input schema — HTTP-encoding truth from {@link statusForFailure}.
  *
  * Never invents OKE#### codes or a static global list.
+ *
+ * Keep this module free of `src/validation` / kernel imports — those pull
+ * `node:async_hooks` into the Vite SPA and blank the page.
  */
 
 import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
-import { VALIDATION_ERROR_CODE } from "../../../../../../validation/standard-schema.ts";
+
+/**
+ * Same string as `VALIDATION_ERROR_CODE` in `src/validation/standard-schema.ts`
+ * (duplicated so the SPA never imports Node-bound validation).
+ */
+export const PLATFORM_VALIDATION_ERROR_CODE = "ValidationError" as const;
 
 /** Platform codes a real HTTP caller can receive for this flow's contract. */
 export type PlatformFailureCode =
   | "Unauthorized"
   | "Forbidden"
   | "RateLimited"
-  | typeof VALIDATION_ERROR_CODE;
+  | typeof PLATFORM_VALIDATION_ERROR_CODE;
 
 /** One derived platform failure mode for the Units contract panel. */
 export type PlatformFailureMode = {
@@ -112,7 +120,7 @@ export function platformFailureModes(
 
   if (flowDeclaresInputSchema(flow.in)) {
     out.push({
-      code: VALIDATION_ERROR_CODE,
+      code: PLATFORM_VALIDATION_ERROR_CODE,
       status: 422,
       source: "schema",
       detail: "Malformed or invalid request body / input",

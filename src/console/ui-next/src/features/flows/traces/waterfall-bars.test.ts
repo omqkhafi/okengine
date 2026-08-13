@@ -87,11 +87,7 @@ describe("waterfallBars", () => {
   });
 
   test("zero durationMs collapses every bar", () => {
-    const bars = waterfallBars(
-      [effect({ timestamp: startedAt, duration: 10 })],
-      startedAt,
-      0,
-    );
+    const bars = waterfallBars([effect({ timestamp: startedAt, duration: 10 })], startedAt, 0);
     expect(bars[0]).toMatchObject({ offsetRatio: 0, widthRatio: 0, durationMs: 0 });
   });
 });

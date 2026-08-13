@@ -1,16 +1,22 @@
 /**
- * Unit tests for Manifest flow trigger → element icon mapping.
+ * Unit tests for Manifest flow trigger → icon mapping.
  */
 
 import { describe, expect, test } from "bun:test";
+import {
+  ApiIcon,
+  Calendar03Icon,
+  FunctionCircleIcon,
+  Timer01Icon,
+} from "@hugeicons/core-free-icons";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { flowTriggerSpec } from "./flow-trigger.ts";
 
 describe("flowTriggerSpec", () => {
-  test("maps trigger kinds onto the eight-element vocabulary", () => {
+  test("maps each trigger kind to a distinct glyph", () => {
     expect(flowTriggerSpec({ http: { method: "POST", path: "/x" } })).toMatchObject({
       kind: "http",
-      icon: ELEMENT_ICONS.flow.icon,
+      icon: ApiIcon,
       label: "HTTP",
       detail: "POST /x",
     });
@@ -22,13 +28,13 @@ describe("flowTriggerSpec", () => {
     });
     expect(flowTriggerSpec({ cron: "0 0 * * *" })).toMatchObject({
       kind: "cron",
-      icon: ELEMENT_ICONS.clock.icon,
+      icon: Calendar03Icon,
       label: "Cron",
       detail: "0 0 * * *",
     });
     expect(flowTriggerSpec({ every: "5m" })).toMatchObject({
       kind: "every",
-      icon: ELEMENT_ICONS.clock.icon,
+      icon: Timer01Icon,
       label: "Every",
       detail: "5m",
     });
@@ -40,10 +46,10 @@ describe("flowTriggerSpec", () => {
     });
   });
 
-  test("call-only flows fall back to the Flow glyph", () => {
+  test("call-only flows use the function glyph (not HTTP)", () => {
     expect(flowTriggerSpec(undefined)).toMatchObject({
       kind: "internal",
-      icon: ELEMENT_ICONS.flow.icon,
+      icon: FunctionCircleIcon,
       label: "Call-only",
       detail: null,
     });

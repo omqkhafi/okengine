@@ -3,13 +3,7 @@
  */
 
 /** Scalar / container kind for a top-level input field. */
-export type InputFieldKind =
-  | "string"
-  | "number"
-  | "boolean"
-  | "null"
-  | "object"
-  | "array";
+export type InputFieldKind = "string" | "number" | "boolean" | "null" | "object" | "array";
 
 /** One top-level field row for the Fields view. */
 export type InputFieldRow = {

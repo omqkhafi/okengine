@@ -1521,7 +1521,16 @@ function parseHttpTrigger(call: CallExpression, scope: ProjectScope): ParsedTrig
 
   if (!method || !path) return undefined;
 
-  const httpMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
+  const httpMethods = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "HEAD",
+    "OPTIONS",
+    "QUERY",
+  ] as const;
   if (!(httpMethods as readonly string[]).includes(method)) return undefined;
 
   return {

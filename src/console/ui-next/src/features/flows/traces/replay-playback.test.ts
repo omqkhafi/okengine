@@ -71,10 +71,7 @@ describe("barPlayed", () => {
 
 describe("playbackNodeSteps", () => {
   test("interleaves the linking signal between chained flows", () => {
-    const steps = playbackNodeSteps(
-      new Set(["bookings.create", "fulfillment.onOrder"]),
-      MANIFEST,
-    );
+    const steps = playbackNodeSteps(new Set(["bookings.create", "fulfillment.onOrder"]), MANIFEST);
     expect(steps).toEqual([
       "flow:bookings.create",
       "signal:order-placed",

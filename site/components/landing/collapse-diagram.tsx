@@ -75,13 +75,7 @@
 
 "use client";
 
-import {
-  animate,
-  motion,
-  MotionConfig,
-  useMotionValue,
-  useTransform,
-} from "framer-motion";
+import { animate, motion, MotionConfig, useMotionValue, useTransform } from "framer-motion";
 import type { Transition } from "framer-motion";
 import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
 import { memo, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";

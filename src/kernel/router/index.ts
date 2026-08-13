@@ -14,6 +14,8 @@ export { RegExpRouter } from "./regexp.ts";
 export { SmartRouter } from "./smart.ts";
 export { TrieRouter } from "./trie.ts";
 export {
+  formatAllowHeader,
+  sortAllowMethods,
   UnsupportedPathError,
   isUnsupportedByRegExp,
   type RouteMatch,

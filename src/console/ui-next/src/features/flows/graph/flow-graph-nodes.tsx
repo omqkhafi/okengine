@@ -85,9 +85,7 @@ function NodeShell({
       whileTap={reduceMotion ? undefined : { scale: 0.97 }}
       animate={{
         scale: reduceMotion ? 1 : data.active ? [1, 1.08, 1] : data.highlighted ? 1.02 : 1,
-        boxShadow: data.active
-          ? `0 0 0 2px ${accent.accent}, 0 0 30px ${accent.glow}`
-          : undefined,
+        boxShadow: data.active ? `0 0 0 2px ${accent.accent}, 0 0 30px ${accent.glow}` : undefined,
       }}
       transition={
         data.active
@@ -113,10 +111,7 @@ function IconWell({ kind }: { readonly kind: FlowGraphAccentKind }) {
           : "rounded-full";
   return (
     <span
-      className={cn(
-        "flex size-7 shrink-0 items-center justify-center border",
-        rounded,
-      )}
+      className={cn("flex size-7 shrink-0 items-center justify-center border", rounded)}
       style={{
         color: accent.accent,
         background: accent.well,

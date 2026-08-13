@@ -5,7 +5,7 @@ icon: "Globe"
 source: "src/plugins/cors.ts"
 ---
 
-`cors()` decides which websites may call your app from a browser. It answers preflight `OPTIONS` requests itself — even for paths bound to other methods, which would otherwise 404 before any middleware could run — and stamps `Access-Control-*` headers on matched responses.
+`cors()` decides which websites may call your app from a browser. It answers preflight `OPTIONS` requests itself — even for paths bound to other methods, which would otherwise 405 or 404 before any middleware could run — and stamps `Access-Control-*` headers on matched responses.
 
 ## Quick start
 
@@ -27,14 +27,14 @@ Browsers on `https://app.example.com` can now call every flow; every other origi
 
 ## Options
 
-| Option           | Type                          | Default                                                | Does                                                                      |
-| ---------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `origin`         | `"*"` · `string` · `string[]` | none (closed)                                          | Origins allowed cross-origin; lists are exact matches                     |
-| `methods`        | `string[]`                    | GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS     | Methods answered on preflight                                             |
-| `allowedHeaders` | `string[]`                    | reflect the request's `Access-Control-Request-Headers` | `Access-Control-Allow-Headers` on preflight                               |
-| `exposedHeaders` | `string[]`                    | omit                                                   | `Access-Control-Expose-Headers` on actual responses                       |
-| `credentials`    | `boolean`                     | `false`                                                | Send `Access-Control-Allow-Credentials`; requires an explicit origin list |
-| `maxAge`         | `number`                      | omit                                                   | `Access-Control-Max-Age` seconds on preflight                             |
+| Option           | Type                          | Default                                                    | Does                                                                      |
+| ---------------- | ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `origin`         | `"*"` · `string` · `string[]` | none (closed)                                              | Origins allowed cross-origin; lists are exact matches                     |
+| `methods`        | `string[]`                    | GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS · QUERY | Methods answered on preflight                                             |
+| `allowedHeaders` | `string[]`                    | reflect the request's `Access-Control-Request-Headers`     | `Access-Control-Allow-Headers` on preflight                               |
+| `exposedHeaders` | `string[]`                    | omit                                                       | `Access-Control-Expose-Headers` on actual responses                       |
+| `credentials`    | `boolean`                     | `false`                                                    | Send `Access-Control-Allow-Credentials`; requires an explicit origin list |
+| `maxAge`         | `number`                      | omit                                                       | `Access-Control-Max-Age` seconds on preflight                             |
 
 ```typescript
 .plug(cors({

@@ -38,6 +38,7 @@ describe("cors plugin — preflight", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
     expect(res.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(res.headers.get("access-control-allow-methods")).toContain("QUERY");
     expect(res.headers.get("vary")).toContain("origin");
   });
 
@@ -61,12 +62,13 @@ describe("cors plugin — preflight", () => {
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 
-  test("a plain unmatched OPTIONS without preflight headers still 404s", async () => {
+  test("a plain OPTIONS without preflight headers is 405 when another method owns the path", async () => {
     on(http.get("/x"), flow("x.get", { do: () => ({ ok: true }) }));
     const app = oke({ autoBoot: false, name: "cors-404" }).plug(cors({ origin: "*" }));
 
     const res = await app.fetch(new Request("http://localhost/x", { method: "OPTIONS" }));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("GET");
   });
 
   test("reflects request headers by default, honors configured lists and maxAge", async () => {

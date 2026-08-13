@@ -12,6 +12,15 @@
 import type { Manifest } from "../../manifest/types.ts";
 import type { RunsStore, WideEvent } from "../../runs/types.ts";
 import { FLOWS_TEST_MANIFEST } from "../ui/flows/fixture.ts";
+import { defineTable } from "../../elements/store.ts";
+import { classify } from "../../elements/store/classify.ts";
+import type { SqlStoreHandle } from "../../elements/store/sql-session.ts";
+import type {
+  FilesStoreFxHandle,
+  KvStoreFxHandle,
+  StoreRuntime,
+  VectorIndexStoreFxHandle,
+} from "../../elements/store/runtime.ts";
 
 /** Stable run id for the successful `bookings.create` WideEvent (Playwright). */
 export const UI_NEXT_SEED_RUN_ID = "pw-run-bookings-create";
@@ -45,7 +54,7 @@ export const UI_NEXT_SEED_HOLDS_RUN_ID = "pw-run-holds-expire";
  * | ------- | ------------------------------------------------- |
  * | flow    | bookings · fulfillment · payments · support · …   |
  * | signal  | `order-placed` · `hold-expired`                   |
- * | store   | `sql:bookings/shipments` · `kv:holds`             |
+ * | store   | `sql:bookings/shipments` · `kv:holds` · `files:uploads` · `index:docs` |
  * | clock   | `nightly` cron · `expire-holds` every             |
  * | gate    | member · booking:create · bookings.write          |
  * | vault   | STRIPE_KEY · OPENAI_KEY                           |
@@ -97,6 +106,25 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       },
       source: "src/flows/holds/index.ts:6",
     },
+    "docs.index": {
+      trigger: { signal: "order-placed" },
+      plane: "operator",
+      effects: {
+        reads: ["sql:bookings"],
+        writes: ["index:docs"],
+      },
+      source: "src/flows/docs/index.ts:4",
+    },
+    "uploads.attach": {
+      trigger: { http: { method: "POST", path: "/uploads/attach" } },
+      plane: "user",
+      gates: ["member"],
+      effects: {
+        reads: ["sql:bookings"],
+        writes: ["files:uploads"],
+      },
+      source: "src/flows/uploads/index.ts:9",
+    },
     "ops.nightlyReconcile": {
       trigger: { cron: "0 3 * * *" },
       plane: "operator",
@@ -131,6 +159,15 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
             id: { type: "text", primaryKey: true },
             flight_id: { type: "text" },
             seats: { type: "integer" },
+            email: {
+              type: "text",
+              pii: true,
+              description: "Passenger contact (masked by default)",
+            },
+            note: {
+              type: "text",
+              description: "Operator note (mixed RTL/LTR sample)",
+            },
           },
         },
         shipments: {
@@ -145,6 +182,16 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       facet: "kv",
       description: "Ephemeral holds",
       namespaces: ["holds"],
+    },
+    uploads: {
+      facet: "files",
+      description: "Passenger uploads (tickets, IDs)",
+      buckets: ["uploads"],
+    },
+    docs: {
+      facet: "index",
+      description: "Semantic booking docs",
+      indexes: ["docs"],
     },
   },
   clocks: {
@@ -1369,6 +1416,117 @@ export async function appendUiNextSeedRun(
     await runs.append(seed);
   }
   return seeds;
+}
+
+/** Seeded SQL row counts (verifiable in PR/changelog). */
+export const UI_NEXT_SEED_STORE_COUNTS = {
+  sqlBookings: 5,
+  sqlShipments: 3,
+  kvHolds: 4,
+  filesUploads: 3,
+  indexDocs: 4,
+} as const;
+
+const SEED_BOOKINGS_ROWS: ReadonlyArray<{
+  id: string;
+  flight_id: string;
+  seats: number;
+  email: string;
+  note: string;
+}> = [
+  { id: "bk_8f2a", flight_id: "SK-441", seats: 2, email: "mara@skyport.dev", note: "window seat" },
+  { id: "bk_7c1e", flight_id: "SK-118", seats: 1, email: "jon@skyport.dev", note: "ملاحظة الراكب" },
+  { id: "bk_3aa0", flight_id: "SK-902", seats: 4, email: "priya@skyport.dev", note: "family row" },
+  { id: "bk_5d21", flight_id: "SK-441", seats: 1, email: "lee@skyport.dev", note: "aisle" },
+  { id: "bk_9e77", flight_id: "SK-655", seats: 3, email: "nadia@skyport.dev", note: "حجز مؤكد" },
+];
+
+const SEED_SHIPMENTS_ROWS: ReadonlyArray<{
+  id: string;
+  booking_id: string;
+}> = [
+  { id: "sh_1001", booking_id: "bk_8f2a" },
+  { id: "sh_1002", booking_id: "bk_7c1e" },
+  { id: "sh_1003", booking_id: "bk_3aa0" },
+];
+
+const SEED_HOLDS: ReadonlyArray<{ key: string; value: unknown }> = [
+  { key: "hold:SK-441:1", value: { seats: 2, expiresAt: "2026-08-12T00:00:00Z" } },
+  { key: "hold:SK-441:2", value: { seats: 1, expiresAt: "2026-08-12T00:05:00Z" } },
+  { key: "hold:SK-118:1", value: { seats: 1, expiresAt: "2026-08-12T00:10:00Z" } },
+  { key: "hold:SK-902:1", value: { seats: 4, expiresAt: "2026-08-12T00:15:00Z" } },
+];
+
+const SEED_UPLOADS: ReadonlyArray<{ key: string; data: string }> = [
+  { key: "tickets/bk_8f2a.pdf", data: "ticket-bytes:bk_8f2a" },
+  { key: "tickets/bk_7c1e.pdf", data: "ticket-bytes:bk_7c1e" },
+  { key: "фото/id.jpg", data: "photo-bytes:id" },
+];
+
+const SEED_DOCS: ReadonlyArray<{
+  id: string;
+  vector: readonly number[];
+  meta: Record<string, unknown>;
+}> = [
+  { id: "doc_bk_8f2a", vector: [1, 0, 0], meta: { booking: "bk_8f2a", kind: "itinerary" } },
+  { id: "doc_bk_7c1e", vector: [0, 1, 0], meta: { booking: "bk_7c1e", kind: "itinerary" } },
+  { id: "doc_bk_3aa0", vector: [0, 0, 1], meta: { booking: "bk_3aa0", kind: "itinerary" } },
+  { id: "doc_bk_5d21", vector: [1, 1, 0], meta: { booking: "bk_5d21", kind: "receipt" } },
+];
+
+/**
+ * Seed real Store rows/keys/objects/vectors into the Console Manifest memory
+ * runtime so every facet browse is non-empty (SQL/KV/Files/Index).
+ *
+ * @param runtime - Booted Console Store runtime
+ */
+export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> {
+  const sql = (await runtime.openRef("sql:db", {
+    effects: { writes: ["sql:db"] },
+    revealPii: true,
+  })) as SqlStoreHandle;
+
+  const bookings = defineTable("bookings", {
+    id: true,
+    flight_id: true,
+    seats: true,
+    email: classify({ pii: true }),
+    note: true,
+  });
+  const shipments = defineTable("shipments", {
+    id: true,
+    booking_id: true,
+  });
+
+  await sql.ensureTable(bookings);
+  await sql.ensureTable(shipments);
+  for (const row of SEED_BOOKINGS_ROWS) {
+    await sql.insert(bookings).values(row);
+  }
+  for (const row of SEED_SHIPMENTS_ROWS) {
+    await sql.insert(shipments).values(row);
+  }
+
+  const kv = (await runtime.openRef("kv:cache", {
+    effects: { writes: ["kv:cache"] },
+  })) as KvStoreFxHandle;
+  for (const entry of SEED_HOLDS) {
+    await kv.set(entry.key, entry.value);
+  }
+
+  const files = (await runtime.openRef("files:uploads", {
+    effects: { writes: ["files:uploads"] },
+  })) as FilesStoreFxHandle;
+  for (const entry of SEED_UPLOADS) {
+    await files.put(entry.key, entry.data);
+  }
+
+  const index = (await runtime.openRef("index:docs", {
+    effects: { writes: ["index:docs"] },
+  })) as VectorIndexStoreFxHandle;
+  for (const entry of SEED_DOCS) {
+    await index.upsert(entry.id, entry.vector, entry.meta);
+  }
 }
 
 /**

@@ -85,4 +85,11 @@ export class LinearRouter<T> implements Router<T> {
     }
     return undefined;
   }
+
+  /**
+   * @param path - Pathname
+   */
+  allowedMethods(path: string): string[] {
+    return this.#routes.map((r) => r.method).filter((m) => this.match(m, path));
+  }
 }

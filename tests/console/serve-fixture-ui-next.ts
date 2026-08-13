@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { serveConsole } from "../../src/console/server/serve.ts";
 import {
   appendUiNextSeedRun,
+  seedUiNextStoreData,
   UI_NEXT_SEEDED_MANIFEST,
 } from "../../src/console/ui-next/ui-next-seed.ts";
 
@@ -39,6 +40,9 @@ if (!runs) {
   throw new Error("ui-next fixture: Console bootResult.runs missing");
 }
 await appendUiNextSeedRun(runs);
+if (server.console.state.storeRuntime) {
+  await seedUiNextStoreData(server.console.state.storeRuntime);
+}
 
 // Thin host-app substitute so Traces Replay hits the real console.traces.replay
 // path (same as `oke replay`) without loading a project entry in the fixture.

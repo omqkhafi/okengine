@@ -3,14 +3,7 @@
  */
 
 /** Known HTTP methods from Manifest `HttpTrigger.method`. */
-export type HttpMethod =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE"
-  | "HEAD"
-  | "OPTIONS";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "QUERY";
 
 /**
  * Tailwind classes for a method badge — distinct accents per verb, matching
@@ -35,6 +28,8 @@ export function httpMethodBadgeClass(method: string): string {
       return "border-slate-500/35 bg-slate-500/15 text-slate-700 dark:text-slate-300";
     case "OPTIONS":
       return "border-zinc-500/35 bg-zinc-500/15 text-zinc-700 dark:text-zinc-300";
+    case "QUERY":
+      return "border-emerald-500/35 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400";
     default:
       return "border-border bg-muted text-muted-foreground";
   }
@@ -61,6 +56,8 @@ export function httpMethodRailClass(method: string): string {
       return "bg-slate-400";
     case "OPTIONS":
       return "bg-zinc-400";
+    case "QUERY":
+      return "bg-emerald-500";
     default:
       return "bg-muted-foreground";
   }

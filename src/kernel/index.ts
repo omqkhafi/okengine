@@ -286,10 +286,12 @@ export {
 
 export {
   createRouter,
+  formatAllowHeader,
   isUnsupportedByRegExp,
   LinearRouter,
   RegExpRouter,
   SmartRouter,
+  sortAllowMethods,
   TrieRouter,
   UnsupportedPathError,
   type RouteMatch,

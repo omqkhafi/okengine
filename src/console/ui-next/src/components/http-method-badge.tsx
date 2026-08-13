@@ -22,7 +22,11 @@ export function HttpMethodBadge({ method, className }: HttpMethodBadgeProps): JS
   return (
     <Badge
       variant="outline"
-      className={cn("h-5 px-1.5 font-mono text-[10px] uppercase", httpMethodBadgeClass(method), className)}
+      className={cn(
+        "h-5 px-1.5 font-mono text-[10px] uppercase",
+        httpMethodBadgeClass(method),
+        className,
+      )}
       data-slot="http-method-badge"
     >
       {method}

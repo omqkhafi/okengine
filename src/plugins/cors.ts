@@ -30,7 +30,7 @@ export interface CorsOptions {
   readonly origin?: "*" | string | readonly string[];
   /**
    * Methods answered on preflight. Default covers the verbs `http.*`
-   * triggers bind: GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS.
+   * triggers bind: GET · HEAD · POST · PUT · PATCH · DELETE · OPTIONS · QUERY.
    */
   readonly methods?: readonly string[];
   /**
@@ -51,7 +51,16 @@ export interface CorsOptions {
   readonly maxAge?: number;
 }
 
-const DEFAULT_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+const DEFAULT_METHODS = [
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+  "QUERY",
+] as const;
 
 const WILDCARD_CREDENTIALS_ERROR =
   'cors: origin: "*" cannot be combined with credentials: true — list exact origins instead ' +

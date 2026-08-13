@@ -27,7 +27,14 @@ import {
   type StoreRuntime,
 } from "../../elements/store.ts";
 import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
-import type { Effects, Manifest, ResourceRef, StoreFacet } from "../../manifest/types.ts";
+import { PII_MASK } from "../../elements/store/classify.ts";
+import type {
+  ColumnClassification,
+  Effects,
+  Manifest,
+  ResourceRef,
+  StoreFacet,
+} from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 
 /** Whether multi-tenancy is declared on the Manifest (off by default). */
@@ -668,6 +675,14 @@ async function applyEdit(
     if (!table || !id) throw new Error("sql edit requires child + id");
     const sets = Object.keys(input.patch);
     if (sets.length === 0) return;
+    const pii = piiColumnsForRef(runtime, input.ref, table);
+    for (const column of sets) {
+      if (pii.has(column) && input.patch[column] === PII_MASK) {
+        throw new Error(
+          `refusing to persist PII mask placeholder over column "${column}" — reveal or set a new value`,
+        );
+      }
+    }
     const assignments = sets.map((c) => `"${c}" = ?`).join(", ");
     const params = [...sets.map((c) => input.patch[c]), id];
     await sql.raw(`UPDATE "${table}" SET ${assignments} WHERE "id" = ?`, params);
@@ -676,6 +691,23 @@ async function applyEdit(
 
   throw new Error(`direct edit not supported for facet ${facet}`);
 }
+
+/** PII columns for a SQL child from the Manifest bound to this runtime. */
+function piiColumnsForRef(
+  runtime: StoreRuntime,
+  ref: ResourceRef,
+  table: string,
+): ReadonlySet<string> {
+  const manifest = runtimeManifest.get(runtime);
+  const storeName = ref.split(":")[1];
+  if (!storeName) return new Set();
+  const store = manifest?.stores?.[storeName];
+  if (!store) return new Set();
+  return new Set(piiColumnsFor(store, table));
+}
+
+/** Manifest captured when the Console runtime is created (for PII guard). */
+const runtimeManifest = new WeakMap<StoreRuntime, Manifest | null>();
 
 /** Delete rows/keys. */
 export interface StoreDeleteInput {
@@ -834,7 +866,7 @@ export async function createManifestStoreRuntime(
       case "sql":
         runtime.register(
           declareSql(name, {
-            classify: store.classifications as never,
+            classify: sqlClassifyFromManifest(store),
           }),
         );
         break;
@@ -849,5 +881,56 @@ export async function createManifestStoreRuntime(
         break;
     }
   }
+  runtimeManifest.set(runtime, manifest);
   return runtime;
+}
+
+/**
+ * Merge flat `store.classifications` with table-column tags from Manifest
+ * `stores.*.tables.*.columns` into the nested `table → column → tags` shape
+ * {@link declareSql} expects (driver-boundary masking).
+ *
+ * @param store - Manifest store row
+ */
+function sqlClassifyFromManifest(
+  store: NonNullable<Manifest["stores"]>[string],
+): Readonly<Record<string, Readonly<Record<string, ColumnClassification>>>> {
+  const nested: Record<string, Record<string, ColumnClassification>> = {};
+
+  for (const [key, value] of Object.entries(store.classifications ?? {})) {
+    const dot = key.indexOf(".");
+    if (dot <= 0) continue;
+    const table = key.slice(0, dot);
+    const column = key.slice(dot + 1);
+    if (column.length === 0) continue;
+    const tags = classificationFromValue(value);
+    if (!tags) continue;
+    nested[table] = { ...(nested[table] ?? {}), [column]: tags };
+  }
+
+  for (const [table, meta] of Object.entries(store.tables ?? {})) {
+    for (const [column, tags] of Object.entries(meta.columns ?? {})) {
+      const normalized = classificationFromValue(tags);
+      if (!normalized) continue;
+      nested[table] = { ...(nested[table] ?? {}), [column]: normalized };
+    }
+  }
+
+  return nested;
+}
+
+/**
+ * Normalize a Manifest classification value into tags, or null when not a
+ * tag object (e.g. string / string[] classification forms).
+ *
+ * @param value - Manifest classification value
+ */
+function classificationFromValue(value: unknown): ColumnClassification | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const tags: ColumnClassification = {};
+  if (v.pii === true) tags.pii = true;
+  if (v.sensitive === true) tags.sensitive = true;
+  if (typeof v.retain === "string") tags.retain = v.retain;
+  return Object.keys(tags).length > 0 ? tags : null;
 }

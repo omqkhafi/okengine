@@ -1107,7 +1107,7 @@ export const consoleApi = createClient(
         path: "/console/signals/discard",
       },
       "console.storeList": { method: "GET", path: "/console/store" },
-      "console.storeQuery": { method: "POST", path: "/console/store/query" },
+      "console.storeQuery": { method: "QUERY", path: "/console/store/query" },
       "console.storeReveal": { method: "POST", path: "/console/store/reveal" },
       "console.storeEdit": { method: "POST", path: "/console/store/edit" },
       "console.storeDelete": { method: "POST", path: "/console/store/delete" },
@@ -1140,7 +1140,7 @@ export const consoleApi = createClient(
       },
       "console.channelsList": { method: "GET", path: "/console/channels" },
       "console.channelPreview": {
-        method: "POST",
+        method: "QUERY",
         path: "/console/channels/preview",
       },
       "console.channelVerifyAuth": {
@@ -1157,16 +1157,16 @@ export const consoleApi = createClient(
       },
       "console.gatesList": { method: "GET", path: "/console/gates" },
       "console.gatesSimulate": {
-        method: "POST",
+        method: "QUERY",
         path: "/console/gates/simulate",
       },
       "console.gatesPowers": {
-        method: "POST",
+        method: "QUERY",
         path: "/console/gates/powers",
       },
       "console.accessList": { method: "GET", path: "/console/access" },
       "console.accessEffective": {
-        method: "POST",
+        method: "QUERY",
         path: "/console/access/effective",
       },
       "console.accessKeyBlast": {

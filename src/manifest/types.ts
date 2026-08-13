@@ -92,7 +92,7 @@ export interface Effects {
 
 /** HTTP trigger surface. */
 export interface HttpTrigger {
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "QUERY";
   path: string;
 }
 

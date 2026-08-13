@@ -110,14 +110,14 @@ At `onResponse`, `ctx.response` holds the **final serialized HTTP response** —
 
 ## Edge handlers answer unmatched requests
 
-Hooks only ever see requests a flow owns — an `OPTIONS` preflight for a path bound to `GET` matches nothing and would 404 untouched. `.edge(fn)` closes that gap: handlers run in install order when the router finds no flow, the first returned `Response` answers, and `undefined` passes to the next handler, then the plain 404:
+Hooks only ever see requests a flow owns — an `OPTIONS` preflight for a path bound to `GET` matches nothing and would 405 untouched. `.edge(fn)` closes that gap: handlers run in install order when the router finds no flow, the first returned `Response` answers, and `undefined` passes to the next handler, then **405** if the path exists for other methods, else 404:
 
 ```typescript
 plugin("cors", { version: "1.0.0" }).edge((request, info) => {
   if (info.method === "OPTIONS" && request.headers.has("origin")) {
     return new Response(null, { status: 204, headers: preflightHeaders(request) });
   }
-  return undefined; // not mine — let someone else answer, else 404
+  return undefined; // not mine — let someone else answer, else 405/404
 });
 ```
 

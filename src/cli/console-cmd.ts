@@ -3,10 +3,7 @@
  */
 
 import { resolve } from "node:path";
-import {
-  claimCodeArtifactPath,
-  readClaimCodeArtifact,
-} from "../console/server/claim.ts";
+import { claimCodeArtifactPath, readClaimCodeArtifact } from "../console/server/claim.ts";
 import { wantsJson } from "./args.ts";
 import { EXIT_OK, EXIT_RUNTIME } from "./exit.ts";
 
@@ -75,9 +72,7 @@ export async function consoleClaimCode(options: ConsoleClaimCodeOptions = {}): P
   }
 
   write(`${result.artifact.code}\n`);
-  writeErr(
-    `expires in ${Math.ceil(remainingMs / 60_000)} min · mirrored from ${result.path}\n`,
-  );
+  writeErr(`expires in ${Math.ceil(remainingMs / 60_000)} min · mirrored from ${result.path}\n`);
   return EXIT_OK;
 }
 

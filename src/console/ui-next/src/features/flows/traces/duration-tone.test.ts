@@ -57,17 +57,7 @@ describe("durationClassName", () => {
 
 describe("DURATION_THRESHOLD_OPTIONS", () => {
   test("includes expanded presets from 10ms through 5s", () => {
-    expect(DURATION_THRESHOLD_OPTIONS).toEqual([
-      null,
-      10,
-      25,
-      50,
-      100,
-      250,
-      500,
-      1_000,
-      5_000,
-    ]);
+    expect(DURATION_THRESHOLD_OPTIONS).toEqual([null, 10, 25, 50, 100, 250, 500, 1_000, 5_000]);
   });
 });
 

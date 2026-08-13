@@ -64,6 +64,30 @@ function SchemaFieldRow({
             optional
           </span>
         ) : null}
+        {field.primaryKey ? (
+          <span
+            className="shrink-0 rounded border border-border/60 bg-muted/30 px-1 py-px text-[9px] font-medium tracking-wide text-muted-foreground uppercase"
+            data-slot="schema-field-pk"
+          >
+            pk
+          </span>
+        ) : null}
+        {field.pii ? (
+          <span
+            className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-medium tracking-wide text-amber-800 uppercase dark:text-amber-300"
+            data-slot="schema-field-pii"
+          >
+            pii
+          </span>
+        ) : null}
+        {field.sensitive ? (
+          <span
+            className="shrink-0 rounded border border-rose-500/40 bg-rose-500/10 px-1 py-px text-[9px] font-medium tracking-wide text-rose-700 uppercase dark:text-rose-300"
+            data-slot="schema-field-sensitive"
+          >
+            sensitive
+          </span>
+        ) : null}
         <span
           className={cn(
             "ml-auto shrink-0 rounded border px-1.5 py-px font-mono text-[9px] font-medium tracking-wide",

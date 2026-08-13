@@ -21,11 +21,7 @@ export interface HighlightedJsonProps {
  *
  * @param props - Pre-serialized JSON
  */
-export function HighlightedJson({
-  json,
-  dataSlot,
-  className,
-}: HighlightedJsonProps): JSX.Element {
+export function HighlightedJson({ json, dataSlot, className }: HighlightedJsonProps): JSX.Element {
   const { theme } = useTheme();
   const [nodes, setNodes] = useState<JSX.Element | null>(null);
   const lines = useMemo(() => json.split("\n"), [json]);
@@ -33,8 +29,7 @@ export function HighlightedJson({
   useEffect(() => {
     let cancelled = false;
     const root = window.document.documentElement;
-    const dark =
-      theme === "dark" || (theme === "system" && root.classList.contains("dark"));
+    const dark = theme === "dark" || (theme === "system" && root.classList.contains("dark"));
     void highlightCode(json, {
       lang: "json",
       theme: dark ? "github-dark" : "github-light",
@@ -63,9 +58,7 @@ export function HighlightedJson({
         ))}
       </div>
       <div className="min-w-0 flex-1 px-2 py-1.5 text-[11px] leading-snug [&_pre]:m-0 [&_pre]:bg-transparent! [&_code]:font-mono">
-        {nodes ?? (
-          <pre className="font-mono whitespace-pre-wrap text-muted-foreground">{json}</pre>
-        )}
+        {nodes ?? <pre className="font-mono whitespace-pre-wrap text-muted-foreground">{json}</pre>}
       </div>
     </div>
   );

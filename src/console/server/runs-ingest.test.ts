@@ -19,6 +19,7 @@ import { http } from "../../kernel/triggers.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import { RUNS_INGEST_SECRET_HEADER, type WideEvent } from "../../runs/index.ts";
 import { subscribeLive } from "./live.ts";
+import type { ConsoleAppHandle } from "./app.ts";
 import { handleRunsIngest, RUNS_INGEST_PATH } from "./runs-ingest.ts";
 import { serveConsole, type ConsoleServerHandle } from "./serve.ts";
 import type { ConsoleLiveMessage } from "./state.ts";
@@ -365,5 +366,14 @@ describe("console runs ingest bridge", () => {
     } finally {
       closed.stop(true);
     }
+  });
+
+  test("non-POST ingest returns 405 with Allow: POST", async () => {
+    const res = await handleRunsIngest(
+      new Request("http://console.test/console/runs/ingest", { method: "GET" }),
+      { state: { runsIngestSecret: INGEST_SECRET } } as ConsoleAppHandle,
+    );
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("POST");
   });
 });

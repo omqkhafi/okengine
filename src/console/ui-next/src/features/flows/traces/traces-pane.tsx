@@ -1,5 +1,5 @@
 /**
- * Scoped Traces pane (right side of the Flow split-view).
+ * Scoped Traces pane (start side of the Flow split-view).
  */
 
 import { useEffect, useMemo, useState } from "react";

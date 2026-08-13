@@ -96,11 +96,7 @@ export {
   subscribeLive,
   type ConsoleLiveData,
 } from "./live.ts";
-export {
-  appendHostRunToConsole,
-  handleRunsIngest,
-  RUNS_INGEST_PATH,
-} from "./runs-ingest.ts";
+export { appendHostRunToConsole, handleRunsIngest, RUNS_INGEST_PATH } from "./runs-ingest.ts";
 export { consolePlugin } from "./plugin.ts";
 export {
   CONSOLE_COOKIES,

@@ -85,7 +85,10 @@ export async function handleRunsIngest(
   handle: ConsoleAppHandle,
 ): Promise<Response> {
   if (request.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
   }
 
   const expected = handle.state.runsIngestSecret;

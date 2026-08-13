@@ -49,7 +49,9 @@ describe("password policy", () => {
   test("rejects password missing ONLY a special character (Global + Console)", () => {
     // Global: length 8+, upper, lower, number — no special.
     const globalOnlyMissingSpecial = "Password1";
-    expect(globalOnlyMissingSpecial.length).toBeGreaterThanOrEqual(DEFAULT_PASSWORD_POLICY.minLength);
+    expect(globalOnlyMissingSpecial.length).toBeGreaterThanOrEqual(
+      DEFAULT_PASSWORD_POLICY.minLength,
+    );
     expect(/[A-Z]/.test(globalOnlyMissingSpecial)).toBe(true);
     expect(/[a-z]/.test(globalOnlyMissingSpecial)).toBe(true);
     expect(/\d/.test(globalOnlyMissingSpecial)).toBe(true);
@@ -66,7 +68,9 @@ describe("password policy", () => {
 
     // Console: length 12+, upper, lower, number — no special.
     const consoleOnlyMissingSpecial = "Password1234";
-    expect(consoleOnlyMissingSpecial.length).toBeGreaterThanOrEqual(CONSOLE_PASSWORD_POLICY.minLength);
+    expect(consoleOnlyMissingSpecial.length).toBeGreaterThanOrEqual(
+      CONSOLE_PASSWORD_POLICY.minLength,
+    );
     expect(/[A-Z]/.test(consoleOnlyMissingSpecial)).toBe(true);
     expect(/[a-z]/.test(consoleOnlyMissingSpecial)).toBe(true);
     expect(/\d/.test(consoleOnlyMissingSpecial)).toBe(true);

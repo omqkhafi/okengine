@@ -36,6 +36,23 @@ describe("csrf plugin", () => {
     expect(res.status).toBe(200);
   });
 
+  test("QUERY is a safe method and always passes", async () => {
+    on(http.query("/search"), flow("search.run", { do: () => ({ hits: [] }) }));
+    const app = oke({ autoBoot: false, name: `csrf-query-${crypto.randomUUID()}` }).plug(csrf({}));
+    const res = await app.fetch(
+      new Request("http://localhost/search", {
+        method: "QUERY",
+        headers: {
+          "content-type": "application/json",
+          "sec-fetch-site": "cross-site",
+          origin: "https://evil.com",
+        },
+        body: JSON.stringify({ q: "x" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
   test("same-origin and none pass; cross-site is denied with typed Forbidden", async () => {
     const app = appWith({});
 

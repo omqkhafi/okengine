@@ -127,7 +127,9 @@ describe("console flows invoke", () => {
         }),
       );
       expect(invokeRes.status).toBe(400);
-      const body = (await invokeRes.json()) as { error: { code: string; data?: { reason?: string } } };
+      const body = (await invokeRes.json()) as {
+        error: { code: string; data?: { reason?: string } };
+      };
       expect(body.error.code).toBe("InvokeDenied");
       expect(body.error.data?.reason).toBe("host invoke not configured");
     } finally {

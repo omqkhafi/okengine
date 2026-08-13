@@ -5,11 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { RunRow } from "@/client.ts";
 import { EMPTY_DIMENSION_QUERY, parseDimensionQuery } from "./dimension-query.ts";
-import {
-  durationThresholdLabel,
-  filterScopedRuns,
-  type TracesFilters,
-} from "./filter-runs.ts";
+import { durationThresholdLabel, filterScopedRuns, type TracesFilters } from "./filter-runs.ts";
 
 function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "durationMs">): RunRow {
   return {
@@ -81,7 +77,9 @@ describe("filterScopedRuns", () => {
     ).toEqual(["err-slow"]);
     const aboveAll = rows.map((r) => ({ ...r, durationMs: 50 }));
     expect(
-      filterScopedRuns(aboveAll, { status: "errors", minDurationMs: 100, ...base }).map((r) => r.id),
+      filterScopedRuns(aboveAll, { status: "errors", minDurationMs: 100, ...base }).map(
+        (r) => r.id,
+      ),
     ).toEqual([]);
   });
 

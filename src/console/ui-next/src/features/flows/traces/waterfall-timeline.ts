@@ -84,10 +84,7 @@ export function mapToViewport(
  * @param durationMs - Run wall duration
  * @param maxTicks - Soft cap on interior ticks (default 5 → ≤7 total with ends)
  */
-export function timelineTickOffsets(
-  durationMs: number,
-  maxTicks: number = 5,
-): readonly number[] {
+export function timelineTickOffsets(durationMs: number, maxTicks: number = 5): readonly number[] {
   if (!Number.isFinite(durationMs) || durationMs <= 0) return [0];
   const step = niceStep(durationMs, maxTicks);
   const out: number[] = [0];
@@ -115,9 +112,7 @@ export function timelineTicksForView(
   }
   const viewStartMs = view.startRatio * durationMs;
   const viewDurationMs = view.widthRatio * durationMs;
-  const offsets = timelineTickOffsets(viewDurationMs, maxTicks).map(
-    (o) => viewStartMs + o,
-  );
+  const offsets = timelineTickOffsets(viewDurationMs, maxTicks).map((o) => viewStartMs + o);
   // Always pin the visible right edge label to the view end (or run end).
   const viewEndMs = Math.min(durationMs, viewStartMs + viewDurationMs);
   if (offsets[offsets.length - 1] !== viewEndMs) {
@@ -214,7 +209,10 @@ function niceStep(durationMs: number, maxTicks: number): number {
  * @param zoom - Current zoom
  */
 export function zoomInStep(zoom: number): number {
-  return WATERFALL_ZOOM_STEPS.find((z) => z > zoom) ?? WATERFALL_ZOOM_STEPS[WATERFALL_ZOOM_STEPS.length - 1]!;
+  return (
+    WATERFALL_ZOOM_STEPS.find((z) => z > zoom) ??
+    WATERFALL_ZOOM_STEPS[WATERFALL_ZOOM_STEPS.length - 1]!
+  );
 }
 
 /**

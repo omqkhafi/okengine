@@ -18,10 +18,7 @@ export const RUNS_INGEST_URL_ENV = "OKE_RUNS_INGEST_URL";
 export const RUNS_INGEST_SECRET_ENV = "OKE_RUNS_INGEST_SECRET";
 
 /** Fetch function used by {@link wrapRunsForConsoleIngest} (tests inject). */
-export type RunsConsoleBridgeFetch = (
-  input: string,
-  init?: RequestInit,
-) => Promise<Response>;
+export type RunsConsoleBridgeFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 /** Target for {@link wrapRunsForConsoleIngest}. */
 export interface RunsConsoleBridgeTarget {

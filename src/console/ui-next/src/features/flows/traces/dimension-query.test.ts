@@ -66,7 +66,13 @@ describe("dimension query", () => {
     const rows = [
       run({ id: "a", flow: "bookings.create", trigger: "http", cache: "hit" }),
       run({ id: "b", flow: "fulfillment.onOrder", trigger: "signal", cache: "none" }),
-      run({ id: "c", flow: "bookings.create", trigger: "http", cache: "miss", error: "FlightFull" }),
+      run({
+        id: "c",
+        flow: "bookings.create",
+        trigger: "http",
+        cache: "miss",
+        error: "FlightFull",
+      }),
     ];
     expect(
       filterByDimensionQuery(rows, parseDimensionQuery("trigger = signal")).map((r) => r.id),

@@ -78,6 +78,13 @@ export class TrieRouter<T> implements Router<T> {
     return { value: found, params };
   }
 
+  /**
+   * @param path - Pathname
+   */
+  allowedMethods(path: string): string[] {
+    return [...this.#roots.keys()].filter((m) => this.match(m, path));
+  }
+
   #walk(
     node: TrieNode<T>,
     parts: readonly string[],

@@ -6,10 +6,7 @@
  */
 
 import type { RunRow } from "@/client.ts";
-import {
-  DURATION_THRESHOLD_OPTIONS,
-  type DurationThresholdMs,
-} from "./duration-tone.ts";
+import { DURATION_THRESHOLD_OPTIONS, type DurationThresholdMs } from "./duration-tone.ts";
 import {
   EMPTY_DIMENSION_QUERY,
   filterByDimensionQuery,
@@ -46,10 +43,7 @@ export { DURATION_THRESHOLD_OPTIONS };
  * @param runs - Already graph-scoped runs
  * @param filters - Active filters
  */
-export function filterScopedRuns(
-  runs: readonly RunRow[],
-  filters: TracesFilters,
-): RunRow[] {
+export function filterScopedRuns(runs: readonly RunRow[], filters: TracesFilters): RunRow[] {
   const basic = runs.filter((run) => {
     if (filters.status === "errors" && run.error === null) return false;
     if (filters.minDurationMs !== null && run.durationMs <= filters.minDurationMs) {

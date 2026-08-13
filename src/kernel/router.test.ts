@@ -3,6 +3,7 @@ import {
   createRouter,
   LinearRouter,
   RegExpRouter,
+  sortAllowMethods,
   TrieRouter,
   UnsupportedPathError,
 } from "./router.ts";
@@ -68,6 +69,32 @@ describe("router — RegExp + Trie + Linear + Smart", () => {
     r.build();
     expect(r.activeRouter.name).toBe("LinearRouter");
     expect(r.match("GET", "/x/1")).toEqual({ value: "x", params: { id: "1" } });
+  });
+
+  test("allowedMethods lists verbs for a path and is empty for unknown paths", () => {
+    const regexp = new RegExpRouter<string>();
+    regexp.add("POST", "/notes", "create");
+    regexp.add("GET", "/notes/:id", "get");
+    regexp.build();
+    expect(sortAllowMethods(regexp.allowedMethods("/notes"))).toEqual(["POST"]);
+    expect(sortAllowMethods(regexp.allowedMethods("/notes/n1"))).toEqual(["GET"]);
+    expect(regexp.allowedMethods("/missing")).toEqual([]);
+
+    const linear = new LinearRouter<string>();
+    linear.add("QUERY", "/search", "q");
+    linear.add("POST", "/search", "p");
+    expect(sortAllowMethods(linear.allowedMethods("/search"))).toEqual(["POST", "QUERY"]);
+
+    const trie = new TrieRouter<string>();
+    trie.add("GET", "/files/*", "asset");
+    expect(sortAllowMethods(trie.allowedMethods("/files/a/b"))).toEqual(["GET"]);
+    expect(trie.allowedMethods("/nope")).toEqual([]);
+
+    const smart = createRouter<string>("default");
+    smart.add("QUERY", "/q", "query");
+    smart.build();
+    expect(sortAllowMethods(smart.allowedMethods("/q"))).toEqual(["QUERY"]);
+    expect(smart.allowedMethods("/nope")).toEqual([]);
   });
 
   test("compiled RegExp beats linear scan by ≥10× at 200 routes", () => {

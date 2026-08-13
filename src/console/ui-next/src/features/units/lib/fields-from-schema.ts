@@ -21,6 +21,12 @@ export interface FormField {
   readonly maximum?: number;
   readonly description?: string;
   readonly children?: readonly FormField[];
+  /** When true, column is PII-classified (Store schema pills). */
+  readonly pii?: boolean;
+  /** When true, column is sensitive-classified (Store schema pills). */
+  readonly sensitive?: boolean;
+  /** When true, column is a primary key (Store schema pills). */
+  readonly primaryKey?: boolean;
 }
 
 /**

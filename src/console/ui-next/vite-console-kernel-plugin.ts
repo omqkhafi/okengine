@@ -146,6 +146,10 @@ export function okeConsoleKernelPlugin(): Plugin {
           throw new Error("console-next seeded: Console bootResult.runs missing");
         }
         await appendUiNextSeedRun(runs);
+        if (handle.console.state.storeRuntime) {
+          const { seedUiNextStoreData } = await import("./ui-next-seed.ts");
+          await seedUiNextStoreData(handle.console.state.storeRuntime);
+        }
         // Same thin host substitute as the Playwright fixture — Replay hits
         // real console.traces.replay → runReplay without a project entry.
         handle.console.state.replayTrace = async ({ event, dryRun }) => ({

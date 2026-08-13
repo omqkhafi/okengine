@@ -8,6 +8,7 @@ import {
   createUiNextSeedRun,
   createUiNextSeedRuns,
   isConsoleNextSeeded,
+  seedUiNextStoreData,
   UI_NEXT_SEED_FAIL_RUN_ID,
   UI_NEXT_SEED_FEATURED_COUNT,
   UI_NEXT_SEED_FULFILL_RUN_ID,
@@ -15,6 +16,7 @@ import {
   UI_NEXT_SEED_OPERATION_COUNT,
   UI_NEXT_SEED_PAYMENTS_RUN_ID,
   UI_NEXT_SEED_RUN_ID,
+  UI_NEXT_SEED_STORE_COUNTS,
   UI_NEXT_SEED_SUPPORT_RUN_ID,
   UI_NEXT_SEED_TOTAL_COUNT,
   UI_NEXT_SEEDED_MANIFEST,
@@ -43,6 +45,11 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.channels?.["support-reply"]?.medium).toBe("email");
     expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["ticket-triage"]?.version).toBe(3);
     expect(UI_NEXT_SEEDED_MANIFEST.signals?.["hold-expired"]?.delivery).toBe("broadcast");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["uploads"]?.facet).toBe("files");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["docs"]?.facet).toBe("index");
+    expect(
+      UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["bookings"]?.columns?.["email"],
+    ).toMatchObject({ pii: true });
   });
 
   test("primary seed run keeps Playwright-stable id and rich ledger", () => {
@@ -131,6 +138,52 @@ describe("ui-next seed", () => {
     } finally {
       if (prev === undefined) delete process.env["OKE_CONSOLE_NEXT_SEEDED"];
       else process.env["OKE_CONSOLE_NEXT_SEEDED"] = prev;
+    }
+  });
+
+  test("seedUiNextStoreData fills all four facets with non-zero rows", async () => {
+    const { createManifestStoreRuntime, queryStore } = await import("../server/store.ts");
+    const runtime = await createManifestStoreRuntime(UI_NEXT_SEEDED_MANIFEST);
+    try {
+      await seedUiNextStoreData(runtime);
+
+      const bookings = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "bookings",
+        revealPii: true,
+      });
+      expect(bookings.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlBookings);
+      expect(bookings.rows?.[0]?.email).toContain("@skyport.dev");
+      const notes = bookings.rows?.map((r) => r.note) ?? [];
+      expect(notes.some((n) => typeof n === "string" && /[؀-ۿ]/.test(n))).toBe(true);
+
+      const shipments = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "shipments",
+      });
+      expect(shipments.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlShipments);
+
+      const kv = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "kv:cache",
+        child: "holds",
+      });
+      expect(kv.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.kvHolds);
+
+      const files = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "files:uploads",
+        child: "uploads",
+      });
+      expect(files.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.filesUploads);
+
+      const index = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "index:docs",
+        child: "docs",
+        vector: [1, 0, 0],
+        topK: 10,
+      });
+      expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexDocs);
+    } finally {
+      await runtime.close();
     }
   });
 });

@@ -73,11 +73,7 @@ describe("waterfallGaps", () => {
   });
 
   test("leading idle before the first effect", () => {
-    const bars = waterfallBars(
-      [effect({ timestamp: 1_040, duration: 20 })],
-      startedAt,
-      durationMs,
-    );
+    const bars = waterfallBars([effect({ timestamp: 1_040, duration: 20 })], startedAt, durationMs);
     const gaps = waterfallGaps(bars, durationMs);
     expect(gaps[0]).toMatchObject({ startOffsetMs: 0, durationMs: 40 });
   });

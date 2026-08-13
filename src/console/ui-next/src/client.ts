@@ -434,3 +434,224 @@ export async function clockRunNow(
     body: JSON.stringify(body),
   });
 }
+
+/** Store facet from `GET /console/store` / query. */
+export type StoreFacet = "sql" | "kv" | "files" | "index";
+
+/** Will-not-fire projection on a store child (matches server `WillNotFireOut`). */
+export type StoreWillNotFire = {
+  readonly writerFlowIds: readonly string[];
+  readonly signals: readonly string[];
+  readonly channels: readonly string[];
+};
+
+/** Cache sub-view on a store child. */
+export type StoreChildCache = {
+  readonly producedByRead: string;
+  readonly invalidatedByWrites: readonly string[];
+  readonly invalidatingFlowIds: readonly string[];
+};
+
+/** Child resource under a store (table / namespace / bucket / index). */
+export type StoreListChild = {
+  readonly name: string;
+  readonly effectRef: string;
+  readonly writers: readonly string[];
+  readonly readers: readonly string[];
+  readonly cache: StoreChildCache;
+  readonly willNotFire: StoreWillNotFire;
+  readonly piiColumns: readonly string[];
+  readonly columnDescriptions: Readonly<Record<string, string>>;
+};
+
+/** One store row from `GET /console/store` (matches server `StoreListOut`). */
+export type StoreListStore = {
+  readonly ref: string;
+  readonly facet: StoreFacet;
+  readonly name: string;
+  readonly description?: string;
+  readonly children: readonly StoreListChild[];
+  readonly replicaLagMs: number | null;
+  readonly migrationDrift: {
+    readonly declared: string;
+    readonly applied: string | null;
+    readonly drifted: boolean;
+  } | null;
+  readonly contentAddressed: boolean;
+  readonly warnings: ReadonlyArray<{
+    readonly code: string;
+    readonly message: string;
+    readonly key: string;
+  }>;
+};
+
+/** Store list payload (`GET /console/store`). */
+export type StoreListPayload = {
+  readonly tenancyDeclared: boolean;
+  readonly tenants: readonly string[];
+  readonly stores: readonly StoreListStore[];
+};
+
+/**
+ * GET /console/store — projected Manifest stores for operator browse.
+ */
+export async function storeList(): Promise<ConsoleApiResult<StoreListPayload>> {
+  return consoleFetch<StoreListPayload>("/console/store");
+}
+
+/** Request body for `QUERY /console/store/query`. */
+export type StoreQueryInput = {
+  readonly ref: string;
+  readonly child?: string;
+  readonly tenant?: string;
+  readonly prefix?: string;
+  readonly limit?: number;
+  readonly vector?: readonly number[];
+  readonly topK?: number;
+};
+
+/** Success payload from `QUERY /console/store/query` (matches server `StoreQueryOut`). */
+export type StoreQueryResult = {
+  readonly facet: StoreFacet;
+  readonly rows?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly keys?: ReadonlyArray<{
+    readonly key: string;
+    readonly value?: unknown;
+    readonly warnings?: ReadonlyArray<{ readonly code: string; readonly message: string }>;
+  }>;
+  readonly hits?: ReadonlyArray<{
+    readonly id: string;
+    readonly score: number;
+    readonly meta?: Readonly<Record<string, unknown>>;
+  }>;
+  readonly masked: boolean;
+  readonly routedRole?: "primary" | "replica";
+};
+
+/**
+ * QUERY /console/store/query — browse rows / keys / hits (PII masked for SQL).
+ *
+ * @param body - Store ref + child + browse options
+ */
+export async function storeQuery(
+  body: StoreQueryInput,
+): Promise<ConsoleApiResult<StoreQueryResult>> {
+  return consoleFetch<StoreQueryResult>("/console/store/query", {
+    method: "QUERY",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/store/reveal`. */
+export type StoreRevealInput = {
+  readonly ref: string;
+  readonly child?: string;
+  readonly tenant?: string;
+  readonly id: string;
+  readonly column: string;
+};
+
+/** Success payload from `POST /console/store/reveal` (matches server `StoreRevealOut`). */
+export type StoreRevealResult = {
+  readonly ok: true;
+  readonly value: unknown;
+  readonly at: number;
+};
+
+/**
+ * POST /console/store/reveal — audited cleartext for one masked PII cell.
+ *
+ * @param body - Row id + column under a store child
+ */
+export async function storeReveal(
+  body: StoreRevealInput,
+): Promise<ConsoleApiResult<StoreRevealResult>> {
+  return consoleFetch<StoreRevealResult>("/console/store/reveal", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/store/edit` (and `/preview`). */
+export type StoreEditInput = {
+  readonly ref: string;
+  readonly child?: string;
+  readonly tenant?: string;
+  readonly id?: string;
+  readonly key?: string;
+  readonly patch: Record<string, unknown>;
+  readonly confirmation?: string;
+  readonly reason?: string;
+  readonly commit?: boolean;
+};
+
+/** Success payload from `POST /console/store/edit` (matches server). */
+export type StoreEditResult = {
+  readonly ok: true;
+  readonly dryRun: boolean;
+  readonly applied: boolean;
+  readonly willNotFire: StoreWillNotFire;
+  readonly wouldHaveFired: ReadonlyArray<{
+    readonly kind: "send" | "ask";
+    readonly resource: string;
+  }>;
+  readonly at: number;
+};
+
+/**
+ * POST /console/store/edit — dry-run by default; `commit: true` applies.
+ *
+ * @param body - Edit payload (typed confirmation required in production)
+ */
+export async function storeEdit(body: StoreEditInput): Promise<ConsoleApiResult<StoreEditResult>> {
+  return consoleFetch<StoreEditResult>("/console/store/edit", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/store/preview — always dry-run; inspect willNotFire before commit.
+ *
+ * @param body - Edit payload without confirmation
+ */
+export async function storePreview(
+  body: Omit<StoreEditInput, "confirmation" | "reason" | "commit">,
+): Promise<ConsoleApiResult<StoreEditResult>> {
+  return consoleFetch<StoreEditResult>("/console/store/preview", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/store/delete`. */
+export type StoreDeleteInput = {
+  readonly ref: string;
+  readonly child?: string;
+  readonly tenant?: string;
+  readonly ids?: readonly string[];
+  readonly keys?: readonly string[];
+  readonly confirmation?: string;
+  readonly reason?: string;
+};
+
+/** Success payload from `POST /console/store/delete`. */
+export type StoreDeleteResult = {
+  readonly ok: true;
+  readonly deleted: number;
+  readonly at: number;
+};
+
+/**
+ * POST /console/store/delete — delete rows/keys (typed confirmation in production).
+ *
+ * @param body - Delete payload
+ */
+export async function storeDelete(
+  body: StoreDeleteInput,
+): Promise<ConsoleApiResult<StoreDeleteResult>> {
+  return consoleFetch<StoreDeleteResult>("/console/store/delete", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
