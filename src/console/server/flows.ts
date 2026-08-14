@@ -31,7 +31,7 @@ import type { ConsoleState } from "./state.ts";
 import { consoleFailureMessage } from "./i18n.ts";
 import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
-import { isKnownConsoleSqlGate, tenancyDeclared } from "./store.ts";
+import { isKnownConsoleSqlGate, StoreFileNotFoundError, tenancyDeclared } from "./store.ts";
 
 export { PUBLIC_CONSOLE_FLOWS };
 
@@ -348,6 +348,7 @@ const ConfirmRequired = z.object({
     "PURGE",
     "SET",
     "ROTATE",
+    "ROTATE_MASTER",
     "REVOKE",
     "RUN",
     "SEND",
@@ -494,6 +495,9 @@ const ChannelSendTestOut = z.object({
 });
 
 const VaultNotFound = z.object({ name: z.string() });
+const VaultSealed = z.object({ reason: z.string() });
+const VaultRotateBusy = z.object({ reason: z.string() });
+const VaultUnsupported = z.object({ reason: z.string() });
 const ClockNotFound = z.object({ kind: z.enum(["cron", "run"]), id: z.string() });
 const ScheduleNotOverridable = z.object({ name: z.string() });
 
@@ -665,6 +669,40 @@ const VaultWriteOut = z.object({
   ok: z.literal(true),
   name: z.string(),
   fingerprint: z.string().nullable(),
+  at: z.number(),
+});
+
+const VaultAuditRowOut = z.object({
+  id: z.string(),
+  seq: z.number(),
+  action: z.string(),
+  path: z.string().nullable(),
+  actorType: z.string(),
+  actorId: z.string().nullable(),
+  success: z.boolean(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  requestId: z.string().nullable(),
+  createdAt: z.number(),
+});
+
+const VaultAuditVerifyOut = z.object({
+  ok: z.boolean(),
+  brokenAt: z.string().nullable(),
+  reason: z.enum(["link", "payload"]).nullable(),
+  row: VaultAuditRowOut.nullable(),
+});
+
+const VaultRotateMasterIn = z.object({
+  confirmation: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const VaultRotateMasterOut = z.object({
+  ok: z.literal(true),
+  kekVersion: z.number(),
+  remaining: z.number(),
+  masterKey: z.string().nullable(),
   at: z.number(),
 });
 
@@ -1317,6 +1355,7 @@ const StoreListOut = z.object({
         })
         .nullable(),
       contentAddressed: z.boolean(),
+      driverId: z.enum(["memory", "fs", "s3"]).optional(),
       warnings: z.array(
         z.object({
           code: z.string(),
@@ -1335,6 +1374,7 @@ const StoreQueryIn = z.object({
   prefix: z.string().optional(),
   limit: z.number().min(1).max(500).optional(),
   vector: z.array(z.number()).optional(),
+  q: z.string().optional(),
   topK: z.number().min(1).max(100).optional(),
   revealPii: z.boolean().optional(),
 });
@@ -1349,6 +1389,7 @@ const StoreQueryOut = z.object({
         value: z.unknown().optional(),
         ttlMs: z.number().nullable().optional(),
         sizeBytes: z.number().optional(),
+        originalName: z.string().optional(),
         warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
       }),
     )
@@ -1378,6 +1419,23 @@ const StoreRevealOut = z.object({
   ok: z.literal(true),
   value: z.unknown(),
   at: z.number(),
+});
+
+const StoreFileGetIn = z.object({
+  ref: z.string().min(1),
+  key: z.string().min(1),
+  tenant: z.string().optional(),
+});
+
+const StoreFileGetOut = z.object({
+  key: z.string(),
+  sizeBytes: z.number(),
+  contentType: z.string(),
+  encoding: z.enum(["utf8", "base64"]),
+  body: z.string(),
+  truncated: z.boolean(),
+  originalName: z.string().optional(),
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })),
 });
 
 const StoreEditIn = z.object({
@@ -1514,6 +1572,7 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly list: AnyFlowDef;
       readonly query: AnyFlowDef;
       readonly reveal: AnyFlowDef;
+      readonly object: AnyFlowDef;
       readonly edit: AnyFlowDef;
       readonly delete: AnyFlowDef;
       readonly purgeCache: AnyFlowDef;
@@ -1524,6 +1583,8 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly list: AnyFlowDef;
       readonly set: AnyFlowDef;
       readonly rotate: AnyFlowDef;
+      readonly rotateMaster: AnyFlowDef;
+      readonly auditVerify: AnyFlowDef;
     };
     readonly ai: {
       readonly list: AnyFlowDef;
@@ -1583,6 +1644,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const storeList = createStoreList(state);
   const storeQuery = createStoreQuery(state);
   const storeReveal = createStoreReveal(state);
+  const storeObject = createStoreObject(state);
   const storeEdit = createStoreEdit(state);
   const storeDelete = createStoreDelete(state);
   const storePurgeCache = createStorePurgeCache(state);
@@ -1591,6 +1653,8 @@ export function createConsoleBindings(state: ConsoleState): {
   const vaultList = createVaultList(state);
   const vaultSet = createVaultSet(state);
   const vaultRotate = createVaultRotate(state);
+  const vaultRotateMaster = createVaultRotateMaster(state);
+  const vaultAuditVerify = createVaultAuditVerify(state);
   const aiList = createAiList(state);
   const gatesList = createGatesList(state);
   const gatesSimulate = createGatesSimulate(state);
@@ -1635,6 +1699,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.get("/console/store"), storeList),
     bindHttp(http.query("/console/store/query"), storeQuery),
     bindHttp(http.post("/console/store/reveal"), storeReveal),
+    bindHttp(http.post("/console/store/object"), storeObject),
     bindHttp(http.post("/console/store/edit"), storeEdit),
     bindHttp(http.post("/console/store/delete"), storeDelete),
     bindHttp(http.post("/console/store/purge-cache"), storePurgeCache),
@@ -1643,6 +1708,8 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.get("/console/vault"), vaultList),
     bindHttp(http.post("/console/vault/set"), vaultSet),
     bindHttp(http.post("/console/vault/rotate"), vaultRotate),
+    bindHttp(http.post("/console/vault/rotate-master"), vaultRotateMaster),
+    bindHttp(http.get("/console/vault/audit/verify"), vaultAuditVerify),
     bindHttp(http.get("/console/ai"), aiList),
     bindHttp(http.get("/console/gates"), gatesList),
     bindHttp(http.query("/console/gates/simulate"), gatesSimulate),
@@ -1689,6 +1756,7 @@ export function createConsoleBindings(state: ConsoleState): {
         list: storeList,
         query: storeQuery,
         reveal: storeReveal,
+        object: storeObject,
         edit: storeEdit,
         delete: storeDelete,
         purgeCache: storePurgeCache,
@@ -1699,6 +1767,8 @@ export function createConsoleBindings(state: ConsoleState): {
         list: vaultList,
         set: vaultSet,
         rotate: vaultRotate,
+        rotateMaster: vaultRotateMaster,
+        auditVerify: vaultAuditVerify,
       },
       ai: { list: aiList },
       gates: {
@@ -2440,6 +2510,7 @@ function createStoreQuery(state: ConsoleState) {
         prefix: input.prefix,
         limit: input.limit,
         vector: input.vector,
+        q: input.q,
         topK: input.topK,
         revealPii: input.revealPii === true,
       });
@@ -2479,6 +2550,42 @@ function createStoreReveal(state: ConsoleState) {
         value: row[input.column],
         at: state.now(),
       };
+    },
+  });
+}
+
+function createStoreObject(state: ConsoleState) {
+  return flow("console.store.object", {
+    plane: "operator",
+    in: StoreFileGetIn,
+    out: StoreFileGetOut,
+    errors: { AuthFailed, TenantRequired, StoreNotFound },
+    do: async (input: z.infer<typeof StoreFileGetIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const tenantFail = requireTenantIfDeclared(state, input.tenant);
+      if (tenantFail) return tenantFail;
+      try {
+        const result = await state.getStoreFile({
+          ref: input.ref as ResourceRef,
+          key: input.key,
+          tenant: input.tenant,
+        });
+        fx.log.info("console.store.object", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          key: input.key,
+          sizeBytes: result.sizeBytes,
+          tenant: input.tenant,
+        });
+        return result;
+      } catch (err) {
+        if (err instanceof StoreFileNotFoundError) {
+          return fail("StoreNotFound", { ref: `${input.ref}:${input.key}` });
+        }
+        return fail("StoreNotFound", {
+          ref: `${input.ref}: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
     },
   });
 }
@@ -2840,6 +2947,80 @@ function createVaultRotate(state: ConsoleState) {
  * @param state - Console state
  * @param name - Contract name
  */
+function createVaultRotateMaster(state: ConsoleState) {
+  return flow("console.vault.rotateMaster", {
+    plane: "operator",
+    in: VaultRotateMasterIn,
+    out: VaultRotateMasterOut,
+    errors: { AuthFailed, ConfirmRequired, VaultSealed, VaultRotateBusy, VaultUnsupported },
+    do: async (input: z.infer<typeof VaultRotateMasterIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (input.confirmation !== "ROTATE_MASTER" || !input.reason || input.reason.length < 3) {
+        return fail("ConfirmRequired", {
+          phrase: "ROTATE_MASTER" as const,
+          reason:
+            "Type ROTATE_MASTER and provide a reason — both master keys stay live until remaining is 0",
+        });
+      }
+      try {
+        const result = await state.rotateMaster();
+        fx.log.info("console.vault.rotateMaster", {
+          operatorId: fx.operator.id,
+          kekVersion: result.kekVersion,
+          remaining: result.remaining,
+          reason: input.reason,
+        });
+        return {
+          ok: true as const,
+          kekVersion: result.kekVersion,
+          remaining: result.remaining,
+          masterKey: result.masterKey,
+          at: state.now(),
+        };
+      } catch (err) {
+        return mapVaultOperatorError(err);
+      }
+    },
+  });
+}
+
+function createVaultAuditVerify(state: ConsoleState) {
+  return flow("console.vault.auditVerify", {
+    plane: "operator",
+    out: VaultAuditVerifyOut,
+    errors: { AuthFailed, VaultUnsupported },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const result = await state.verifyVaultAudit();
+        fx.log.info("console.vault.audit.verify", {
+          operatorId: fx.operator.id,
+          ok: result.ok,
+          brokenAt: result.brokenAt,
+        });
+        return result;
+      } catch (err) {
+        return mapVaultOperatorError(err);
+      }
+    },
+  });
+}
+
+/**
+ * Map Console vault errors onto typed flow failures.
+ *
+ * @param err - Caught error
+ */
+function mapVaultOperatorError(err: unknown) {
+  const code =
+    err && typeof err === "object" && "code" in err ? (err as { code: string }).code : undefined;
+  const reason = err instanceof Error ? err.message : String(err);
+  if (code === "VaultSealed") return fail("VaultSealed", { reason });
+  if (code === "VaultRotateBusy") return fail("VaultRotateBusy", { reason });
+  if (code === "VaultUnsupported") return fail("VaultUnsupported", { reason });
+  return fail("VaultUnsupported", { reason });
+}
+
 async function vaultNameKnown(state: ConsoleState, name: string): Promise<boolean> {
   if (state.manifest?.vault?.[name]) return true;
   if (state.vaultRuntime?.contracts.has(name)) return true;

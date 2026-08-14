@@ -1,6 +1,6 @@
 /**
  * Operator login — real POST /console/session/login.
- * Shown when setup is closed; success restores `?next=` or `/flows`.
+ * Shown when setup is closed; success restores `?next=` or `/overview`.
  */
 
 import { useForm } from "@tanstack/react-form";

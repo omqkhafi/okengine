@@ -9,6 +9,7 @@ import {
   parseDimensionQuery,
   parseDurationMs,
   serializeDimensionQuery,
+  toggleClause,
   upsertClause,
 } from "./dimension-query.ts";
 
@@ -86,5 +87,12 @@ describe("dimension query", () => {
     let q = parseDimensionQuery("cache = hit");
     q = upsertClause(q, { dimension: "cache", op: "=", value: "miss" });
     expect(serializeDimensionQuery(q)).toBe("cache = miss");
+  });
+
+  test("toggleClause adds then removes an exact clause", () => {
+    const signal = { dimension: "trigger", op: "=" as const, value: "signal" };
+    const added = toggleClause(parseDimensionQuery(""), signal);
+    expect(serializeDimensionQuery(added)).toBe("trigger = signal");
+    expect(serializeDimensionQuery(toggleClause(added, signal))).toBe("");
   });
 });

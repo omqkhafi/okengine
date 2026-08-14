@@ -15,7 +15,10 @@ import {
   computedCacheKey,
   createStoreRuntime,
   files as declareFiles,
+  fileKeyWarnings,
   index as declareIndex,
+  coerceSafeFileObjectKey,
+  inferFileContentType,
   isInvalidatedByWrite,
   kv as declareKv,
   projectFileKeys,
@@ -28,6 +31,7 @@ import {
 } from "../../elements/store.ts";
 import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
 import { PII_MASK } from "../../elements/store/classify.ts";
+import { rankIndexHits } from "./index-search.ts";
 import type {
   ColumnClassification,
   Effects,
@@ -37,6 +41,13 @@ import type {
 } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 import { consoleAuthStoreEnabled, projectConsoleAuthStore } from "./auth-store.ts";
+import {
+  fileObjectRecord,
+  isFilesCatalogKey,
+  readFilesCatalog,
+  removeFilesCatalogRecords,
+  upsertFilesCatalogRecord,
+} from "./files-catalog.ts";
 import {
   alterSqlPolicy,
   createSqlPolicy,
@@ -108,6 +119,8 @@ export interface ConsoleStoreRow {
   readonly replicaLagMs: number | null;
   readonly migrationDrift: ConsoleMigrationDrift | null;
   readonly contentAddressed: boolean;
+  /** Files driver when the runtime could open the handle (`memory` / `fs` / `s3`). */
+  readonly driverId?: "memory" | "fs" | "s3";
   readonly warnings: ReadonlyArray<{
     readonly code: string;
     readonly message: string;
@@ -174,13 +187,17 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
     const replicaLagMs = facet === "sql" ? latestReplicaLag(options.runs ?? [], children) : null;
 
     let warnings: ConsoleStoreRow["warnings"] = [];
+    let filesDriverId: FilesStoreFxHandle["driverId"] | undefined;
     if (facet === "files" && options.runtime) {
       try {
         const handle = (await options.runtime.openRef(ref, {
           effects: { reads: [ref] },
         })) as FilesStoreFxHandle;
+        filesDriverId = handle.driverId;
         const keys = await handle.list();
-        warnings = projectFileKeys(keys).flatMap((k) => k.warnings);
+        warnings = projectFileKeys(keys.filter((k) => !isFilesCatalogKey(k))).flatMap(
+          (k) => k.warnings,
+        );
       } catch {
         warnings = [];
       }
@@ -195,6 +212,7 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
       replicaLagMs,
       migrationDrift: facet === "sql" ? drift : null,
       contentAddressed: facet === "files",
+      ...(filesDriverId ? { driverId: filesDriverId } : {}),
       warnings,
     });
   }
@@ -251,7 +269,6 @@ function childrenOf(
     return {
       name: childName,
       effectRef,
-      kind: "table" as const,
       writers,
       readers,
       cache: {
@@ -262,7 +279,7 @@ function childrenOf(
       willNotFire,
       piiColumns,
       columnDescriptions: columnDescriptionsFor(store, childName),
-      ...(facet === "sql" ? { rls: false } : {}),
+      ...(facet === "sql" ? { kind: "table" as const, rls: false } : {}),
     };
   });
   if (facet !== "sql") return tables;
@@ -399,6 +416,7 @@ export interface StoreQueryResult {
     readonly value?: unknown;
     readonly ttlMs?: number | null;
     readonly sizeBytes?: number;
+    readonly originalName?: string;
     readonly warnings?: ReadonlyArray<{
       readonly code: string;
       readonly message: string;
@@ -525,38 +543,185 @@ export async function queryStore(
 
   if (facet === "files") {
     const filesHandle = handle as FilesStoreFxHandle;
-    const keys = await filesHandle.list(input.prefix ?? "");
+    const keys = (await filesHandle.list(input.prefix ?? "")).filter((k) => !isFilesCatalogKey(k));
+    const catalog = await readFilesCatalog(filesHandle);
     const projected = projectFileKeys(keys.slice(0, input.limit ?? 100));
+    const entries = await Promise.all(
+      projected.map(async (k) => {
+        const data = await filesHandle.get(k.key);
+        const meta = catalog.objects[k.key];
+        return {
+          key: k.key,
+          sizeBytes: data?.byteLength ?? 0,
+          ...(meta ? { originalName: meta.originalName } : {}),
+          warnings: k.warnings.map((w) => ({
+            code: w.code,
+            message: w.message,
+          })),
+        };
+      }),
+    );
+    return { facet, keys: entries, masked: false };
+  }
+
+  // index — text query ranks stored meta; a vector still probes ANN.
+  const idx = handle as IndexStoreFxHandle;
+  void manifest;
+  const topK = input.topK ?? 5;
+  const listLimit = input.limit ?? 100;
+  const q = input.q?.trim() ?? "";
+  const vector = input.vector ?? [];
+
+  if (idx.driverId === "meilisearch") {
+    if (q.length > 0) {
+      const result = await idx.search(q, { topK });
+      return {
+        facet,
+        hits: result.hits,
+        facetDistribution: result.facetDistribution,
+        masked: false,
+      };
+    }
+    return { facet, hits: await idx.list(listLimit), masked: false };
+  }
+
+  if (vector.length > 0) {
+    return { facet, hits: await idx.search(vector, topK), masked: false };
+  }
+  if (q.length > 0) {
     return {
       facet,
-      keys: projected.map((k) => ({
-        key: k.key,
-        warnings: k.warnings.map((w) => ({
-          code: w.code,
-          message: w.message,
-        })),
-      })),
+      hits: rankIndexHits(await idx.list(INDEX_TEXT_SCAN), q, topK),
       masked: false,
     };
   }
+  return { facet, hits: await idx.list(listLimit), masked: false };
+}
 
-  // index
-  const idx = handle as IndexStoreFxHandle;
-  void manifest;
-  if (idx.driverId === "meilisearch") {
-    const q = input.q ?? "";
-    if (q.trim().length === 0) {
-      return { facet, hits: [], masked: false };
-    }
-    const result = await idx.search(q, { topK: input.topK ?? 5 });
-    return { facet, hits: result.hits, facetDistribution: result.facetDistribution, masked: false };
+/** How many documents a text query scans before ranking. */
+const INDEX_TEXT_SCAN = 2_000;
+
+/** Max object body returned by {@link getStoreFile} (2 MiB). */
+export const STORE_FILE_BODY_MAX = 2_000_000;
+
+/** Request for {@link getStoreFile}. */
+export interface StoreFileGetInput {
+  readonly ref: ResourceRef;
+  readonly key: string;
+  readonly tenant?: string;
+}
+
+/** Object payload for Console preview / download. */
+export interface StoreFileObject {
+  readonly key: string;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly encoding: "utf8" | "base64";
+  readonly body: string;
+  readonly truncated: boolean;
+  readonly originalName?: string;
+  readonly warnings: ReadonlyArray<{
+    readonly code: string;
+    readonly message: string;
+  }>;
+}
+
+/**
+ * Read one files object for Console preview / download.
+ *
+ * @param runtime - Store runtime
+ * @param input - Store ref + object key
+ */
+export async function getStoreFile(
+  runtime: StoreRuntime,
+  input: StoreFileGetInput,
+): Promise<StoreFileObject> {
+  const [facet] = input.ref.split(":") as [StoreFacet, string];
+  if (facet !== "files") {
+    throw new Error(`store object get requires a files ref, got ${input.ref}`);
   }
-  const vector = input.vector ?? [];
-  if (vector.length === 0) {
-    return { facet, hits: [], masked: false };
+  const handle = (await runtime.openRef(input.ref, {
+    effects: { reads: [input.ref] },
+  })) as FilesStoreFxHandle;
+  const data = await handle.get(input.key);
+  if (!data) {
+    throw new StoreFileNotFoundError(input.ref, input.key);
   }
-  const hits = await idx.search(vector, input.topK ?? 5);
-  return { facet, hits, masked: false };
+  const truncated = data.byteLength > STORE_FILE_BODY_MAX;
+  const slice = truncated ? data.subarray(0, STORE_FILE_BODY_MAX) : data;
+  const catalog = await readFilesCatalog(handle);
+  const meta = catalog.objects[input.key];
+  const contentType = meta?.contentType ?? inferFileContentType(meta?.originalName ?? input.key);
+  const asText = fileBytesAsUtf8(slice, contentType);
+  return {
+    key: input.key,
+    sizeBytes: data.byteLength,
+    contentType,
+    encoding: asText !== null ? "utf8" : "base64",
+    body: asText ?? bytesToBase64(slice),
+    truncated,
+    ...(meta ? { originalName: meta.originalName } : {}),
+    warnings: fileKeyWarnings(input.key).map((w) => ({
+      code: w.code,
+      message: w.message,
+    })),
+  };
+}
+
+/** Missing object on {@link getStoreFile}. */
+export class StoreFileNotFoundError extends Error {
+  readonly ref: string;
+  readonly key: string;
+
+  constructor(ref: string, key: string) {
+    super(`object not found: ${key}`);
+    this.name = "StoreFileNotFoundError";
+    this.ref = ref;
+    this.key = key;
+  }
+}
+
+function fileBytesAsUtf8(bytes: Uint8Array, contentType: string): string | null {
+  if (bytes.includes(0)) return null;
+  const textual =
+    contentType.startsWith("text/") ||
+    contentType === "application/json" ||
+    contentType === "application/xml" ||
+    contentType === "application/javascript";
+  if (!textual) return null;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function decodeFilePatchBody(patch: Readonly<Record<string, unknown>>): Uint8Array {
+  const body = patch.body;
+  if (typeof body !== "string") {
+    throw new Error("files put requires string patch.body");
+  }
+  if (patch.encoding === "utf8") {
+    return new TextEncoder().encode(body);
+  }
+  if (patch.encoding !== undefined && patch.encoding !== "base64") {
+    throw new Error("files put encoding must be utf8 or base64");
+  }
+  const binary = atob(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /** Options for a direct edit (not a flow execution). */
@@ -615,7 +780,7 @@ export async function editStore(
     const snapshot = await snapshotEditTarget(runtime, input);
     try {
       const { wouldHaveFired } = await withDryRun(async () => {
-        await applyEdit(runtime, input, { revealPii: false });
+        await applyEdit(runtime, input, { revealPii: false, persistMeta: false });
       });
       await restoreEditTarget(runtime, snapshot);
       return {
@@ -634,7 +799,7 @@ export async function editStore(
     }
   }
 
-  await applyEdit(runtime, input, { revealPii: false });
+  await applyEdit(runtime, input, { revealPii: false, persistMeta: true }, manifest);
   // Direct edit: invalidate cache for written resource (effects-derived).
   runtime.onWriteEffects({ writes: [effectRef] });
   void options.production;
@@ -676,6 +841,14 @@ type EditSnapshot =
       readonly id: string;
       readonly existed: boolean;
     }
+  | {
+      readonly kind: "files";
+      readonly ref: ResourceRef;
+      readonly key: string;
+      readonly data: Uint8Array | null;
+      readonly writtenKey: string;
+      readonly writtenData: Uint8Array | null;
+    }
   | { readonly kind: "none" };
 
 async function snapshotEditTarget(
@@ -683,6 +856,21 @@ async function snapshotEditTarget(
   input: StoreEditInput,
 ): Promise<EditSnapshot> {
   const [facet] = input.ref.split(":") as [StoreFacet, string];
+  if (facet === "files" && input.key) {
+    const filesHandle = (await runtime.openRef(input.ref, {
+      effects: { reads: [input.ref] },
+    })) as FilesStoreFxHandle;
+    const writtenKey = coerceSafeFileObjectKey(input.key);
+    const data = await filesHandle.get(input.key);
+    return {
+      kind: "files",
+      ref: input.ref,
+      key: input.key,
+      data,
+      writtenKey,
+      writtenData: writtenKey === input.key ? data : await filesHandle.get(writtenKey),
+    };
+  }
   if (facet === "kv" && input.key) {
     const kv = (await runtime.openRef(input.ref, {
       effects: { reads: [input.ref] },
@@ -751,6 +939,24 @@ async function snapshotEditTarget(
 }
 
 async function restoreEditTarget(runtime: StoreRuntime, snapshot: EditSnapshot): Promise<void> {
+  if (snapshot.kind === "files") {
+    const filesHandle = (await runtime.openRef(snapshot.ref, {
+      effects: { writes: [snapshot.ref] },
+    })) as FilesStoreFxHandle;
+    if (snapshot.writtenKey !== snapshot.key) {
+      if (snapshot.writtenData === null) {
+        await filesHandle.delete(snapshot.writtenKey);
+      } else {
+        await filesHandle.put(snapshot.writtenKey, snapshot.writtenData);
+      }
+    }
+    if (snapshot.data === null) {
+      await filesHandle.delete(snapshot.key);
+    } else {
+      await filesHandle.put(snapshot.key, snapshot.data);
+    }
+    return;
+  }
   if (snapshot.kind === "kv") {
     const kv = (await runtime.openRef(snapshot.ref, {
       effects: { writes: [snapshot.ref] },
@@ -813,16 +1019,123 @@ async function restoreEditTarget(runtime: StoreRuntime, snapshot: EditSnapshot):
   }
 }
 
+function findFileObjectsTable(
+  manifest: Manifest | null,
+): { readonly ref: ResourceRef; readonly table: string } | null {
+  if (!manifest?.stores) return null;
+  for (const [name, store] of Object.entries(manifest.stores)) {
+    if (store.facet === "sql" && store.tables && "file_objects" in store.tables) {
+      return { ref: `sql:${name}` as ResourceRef, table: "file_objects" };
+    }
+  }
+  return null;
+}
+
+async function upsertFileObjectsSql(
+  runtime: StoreRuntime,
+  manifest: Manifest | null,
+  storeRef: string,
+  row: {
+    readonly objectKey: string;
+    readonly originalName: string;
+    readonly contentType: string;
+    readonly sizeBytes: number;
+  },
+): Promise<void> {
+  const found = findFileObjectsTable(manifest);
+  if (!found) return;
+  try {
+    const sql = (await runtime.openRef(found.ref, {
+      effects: { writes: [found.ref] },
+    })) as SqlStoreHandle;
+    const existing = await sql.raw(
+      `SELECT "id" FROM "${found.table}" WHERE "object_key" = ? LIMIT 1`,
+      [row.objectKey],
+    );
+    if (existing.length > 0) {
+      await sql.raw(
+        `UPDATE "${found.table}" SET "original_name" = ?, "content_type" = ?, "size_bytes" = ?, "store_ref" = ? WHERE "object_key" = ?`,
+        [row.originalName, row.contentType, row.sizeBytes, storeRef, row.objectKey],
+      );
+      return;
+    }
+    await sql.raw(
+      `INSERT INTO "${found.table}" ("id", "object_key", "original_name", "content_type", "size_bytes", "store_ref") VALUES (?, ?, ?, ?, ?, ?)`,
+      [row.objectKey, row.objectKey, row.originalName, row.contentType, row.sizeBytes, storeRef],
+    );
+  } catch {
+    /* table missing or driver refused — catalog still holds the row */
+  }
+}
+
+async function deleteFileObjectsSql(
+  runtime: StoreRuntime,
+  manifest: Manifest | null,
+  storeRef: string,
+  keys: readonly string[],
+): Promise<void> {
+  const found = findFileObjectsTable(manifest);
+  if (!found || keys.length === 0) return;
+  try {
+    const sql = (await runtime.openRef(found.ref, {
+      effects: { writes: [found.ref] },
+    })) as SqlStoreHandle;
+    for (const key of keys) {
+      await sql.raw(`DELETE FROM "${found.table}" WHERE "object_key" = ? AND "store_ref" = ?`, [
+        key,
+        storeRef,
+      ]);
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
 async function applyEdit(
   runtime: StoreRuntime,
   input: StoreEditInput,
-  ctx: { readonly revealPii: boolean },
+  ctx: { readonly revealPii: boolean; readonly persistMeta?: boolean },
+  manifest?: Manifest | null,
 ): Promise<void> {
   const [facet] = input.ref.split(":") as [StoreFacet, string];
   const handle = await runtime.openRef(input.ref, {
     effects: { writes: [input.ref] },
     revealPii: ctx.revealPii,
   });
+
+  if (facet === "files") {
+    const filesHandle = handle as FilesStoreFxHandle;
+    const requested = input.key;
+    if (!requested) throw new Error("files edit requires key");
+    const bytes = decodeFilePatchBody(input.patch);
+    const key = coerceSafeFileObjectKey(requested);
+    const originalName =
+      typeof input.patch.originalName === "string" && input.patch.originalName.trim().length > 0
+        ? input.patch.originalName.trim()
+        : requested.slice(requested.lastIndexOf("/") + 1);
+    await filesHandle.put(key, bytes);
+    if (key !== requested) {
+      await filesHandle.delete(requested);
+    }
+    if (ctx.persistMeta !== false) {
+      if (key !== requested) {
+        await removeFilesCatalogRecords(filesHandle, [requested]);
+        await deleteFileObjectsSql(runtime, manifest ?? null, input.ref, [requested]);
+      }
+      await upsertFilesCatalogRecord(
+        filesHandle,
+        key,
+        fileObjectRecord(originalName, bytes.byteLength, key),
+      );
+      await upsertFileObjectsSql(runtime, manifest ?? null, input.ref, {
+        objectKey: key,
+        originalName,
+        contentType: inferFileContentType(originalName),
+        sizeBytes: bytes.byteLength,
+      });
+    }
+    return;
+  }
 
   if (facet === "kv") {
     const kv = handle as KvStoreFxHandle;
@@ -958,6 +1271,7 @@ export interface StoreDeleteInput {
 export async function deleteStore(
   runtime: StoreRuntime,
   input: StoreDeleteInput,
+  manifest?: Manifest | null,
 ): Promise<{ readonly deleted: number }> {
   const [facet] = input.ref.split(":") as [StoreFacet, string];
   const handle = await runtime.openRef(input.ref, {
@@ -971,9 +1285,16 @@ export async function deleteStore(
     }
   } else if (facet === "files") {
     const filesHandle = handle as FilesStoreFxHandle;
+    const removed: string[] = [];
     for (const key of input.keys ?? []) {
-      if (await filesHandle.delete(key)) deleted++;
+      if (isFilesCatalogKey(key)) continue;
+      if (await filesHandle.delete(key)) {
+        deleted++;
+        removed.push(key);
+      }
     }
+    await removeFilesCatalogRecords(filesHandle, removed);
+    await deleteFileObjectsSql(runtime, manifest ?? null, input.ref, removed);
   } else if (facet === "sql") {
     const sql = handle as SqlStoreHandle;
     const table = input.child;

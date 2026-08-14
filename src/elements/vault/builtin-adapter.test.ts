@@ -446,6 +446,7 @@ describe("builtin vault adapter — audit and backup", () => {
       const result = await h.adapter.verifyAudit();
       expect(result.ok).toBe(false);
       expect(result.brokenAt).toBe(victim);
+      expect(result.reason).toBe("payload");
     } finally {
       await h.close();
     }

@@ -140,6 +140,9 @@
   --xy-controls-button-border-color: var(--border);
   --xy-attribution-background-color: transparent;
   --xy-attribution-color: var(--muted-foreground);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklab, var(--background) 55%, transparent);
+  --xy-minimap-node-background-color: color-mix(in oklab, var(--foreground) 22%, transparent);
 }
 
 .react-flow__controls {
@@ -155,6 +158,17 @@
 
 .react-flow__controls-button:last-child {
   border-bottom: none;
+}
+
+.react-flow__node-law {
+  overflow: visible !important;
+}
+
+.react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 
 .react-flow__controls-button svg {
@@ -214,4 +228,54 @@
     animation: none;
     background: color-mix(in oklab, var(--oke-changes-ink) 45%, transparent);
   }
+
+  .oke-law-ripple,
+  .oke-law-hit {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@keyframes oke-law-ripple {
+  0% {
+    transform: scale(0.78);
+    opacity: 0.42;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes oke-law-hit {
+  0% {
+    transform: scale(0.88);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.72);
+    opacity: 0;
+  }
+}
+
+/**
+ * Concentric beat rings on the Overview law disc — pace follows live
+ * operations; a one-shot hit fires when the live count ticks up.
+ */
+.oke-law-ripple,
+.oke-law-hit {
+  position: absolute;
+  inset: 2%;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 1.5px solid color-mix(in oklab, currentColor 48%, transparent);
+}
+
+.oke-law-ripple {
+  animation: oke-law-ripple linear infinite;
+}
+
+.oke-law-hit {
+  border-width: 2px;
+  animation: oke-law-hit 0.7s ease-out forwards;
 }

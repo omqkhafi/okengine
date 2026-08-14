@@ -110,6 +110,8 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
         vaultList: routes.vault.list,
         vaultSet: routes.vault.set,
         vaultRotate: routes.vault.rotate,
+        vaultRotateMaster: routes.vault.rotateMaster,
+        vaultAuditVerify: routes.vault.auditVerify,
         aiList: routes.ai.list,
         gatesList: routes.gates.list,
         gatesSimulate: routes.gates.simulate,

@@ -478,11 +478,11 @@ function FieldsTable({
 function valueToneClass(kind: InputFieldKind): string {
   switch (kind) {
     case "string":
-      return "text-rose-700/90 dark:text-rose-300/90";
+      return "text-teal-800/90 dark:text-teal-300/90";
     case "number":
       return "text-amber-800 dark:text-amber-300";
     case "boolean":
-      return "text-emerald-700 dark:text-emerald-400";
+      return "text-violet-800 dark:text-violet-300";
     case "null":
       return "text-muted-foreground italic";
     default:

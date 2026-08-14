@@ -3,23 +3,24 @@
  * Schema lives in column headers; writers/readers surface in the command strip.
  */
 
-import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type JSX, type ReactNode } from "react";
 import {
   Alert02Icon,
   CheckmarkCircle02Icon,
-  Copy01Icon,
+  Folder01Icon,
   SecurityCheckIcon,
-  Tick02Icon,
   Timer01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow, StoreListChild, StoreListStore } from "@/client.ts";
-import { Button } from "@/components/ui/button";
+import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
+import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { durationTone, durationToneChipClass } from "@/features/flows/traces/duration-tone.ts";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { cn } from "@/lib/utils";
+import { filesDriverLabel, filesDriverOrigin } from "../lib/files-origin.ts";
 import { latestReplicaLagFromRuns } from "../lib/replica-lag.ts";
 import { isSqlCatalogChild, storeChildLabel } from "../lib/sql-catalog.ts";
 import { STORE_FACET_SPECS } from "../lib/store-tree.ts";
@@ -70,31 +71,18 @@ export function ResourcePanel({
   const lagMs = latestReplicaLagFromRuns(runs, effectRefs) ?? store.replicaLagMs;
   const lagTone = lagMs != null ? durationTone(lagMs) : null;
 
-  const showStatus = Boolean(
-    drift || lagMs !== null || store.contentAddressed || piiCount > 0,
-  );
+  const files = store.facet === "files";
+  const showStatus = Boolean(drift || lagMs !== null || store.contentAddressed || piiCount > 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="resource-panel">
-      <header
-        className="flex shrink-0 items-center gap-3 border-b border-border/60 px-3 py-2"
-        data-slot="resource-header"
-      >
-        <span
-          className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-lg border",
-            spec.wellClass,
-          )}
-          aria-hidden
-        >
-          <HugeiconsIcon icon={spec.icon} className="size-4" />
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">
-              {storeChildLabel(child)}
-            </h2>
+      <DetailHeader
+        dataSlot="resource-header"
+        icon={<HugeiconsIcon icon={files ? Folder01Icon : spec.icon} className="size-4" />}
+        wellClassName={spec.wellClass}
+        title={storeChildLabel(child)}
+        badge={
+          <>
             <span
               className={cn(
                 "inline-flex h-4 shrink-0 items-center rounded px-1.5 font-mono text-[9px] font-semibold tracking-[0.12em] uppercase",
@@ -102,84 +90,108 @@ export function ResourcePanel({
               )}
               data-slot="facet-badge"
             >
-              {spec.label}
+              {files ? "Bucket" : spec.label}
             </span>
             {store.description ? (
               <p className="min-w-0 truncate text-[11px] text-muted-foreground">
                 {store.description}
               </p>
             ) : null}
-          </div>
+          </>
+        }
+        subtitle={
           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
-            <span className="shrink-0 font-mono">{store.ref}</span>
-            <span aria-hidden className="text-border">
-              ·
-            </span>
-            <code className="min-w-0 truncate font-mono text-foreground/70">{child.effectRef}</code>
-            <CopyButton value={child.effectRef} />
+            {files ? (
+              <>
+                <span className="shrink-0 font-mono">{filesDriverLabel(store.driverId)}</span>
+                <span aria-hidden className="text-border">
+                  ·
+                </span>
+                <span className="shrink-0">{filesDriverOrigin(store.driverId)}</span>
+                <span aria-hidden className="text-border">
+                  ·
+                </span>
+                <code className="min-w-0 truncate font-mono text-foreground/70">
+                  {child.effectRef}
+                </code>
+                <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
+              </>
+            ) : (
+              <>
+                <span className="shrink-0 font-mono">{store.ref}</span>
+                <span aria-hidden className="text-border">
+                  ·
+                </span>
+                <code className="min-w-0 truncate font-mono text-foreground/70">
+                  {child.effectRef}
+                </code>
+                <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
+              </>
+            )}
           </div>
-        </div>
-
-        {showStatus ? (
-          <div
-            className="flex shrink-0 flex-wrap items-center justify-end gap-1"
-            data-slot="resource-status"
-          >
-            {lagMs !== null && lagTone ? (
-              <StatusChip
-                chipClassName={durationToneChipClass(lagTone)}
-                icon={<HugeiconsIcon icon={Timer01Icon} className="size-3" aria-hidden />}
-                title="Replica lag from the newest run that touched this store"
-                data-slot="replica-lag"
-              >
-                <span className="font-mono tabular-nums">{formatDuration(lagMs)}</span>
-                <span className="opacity-70">lag</span>
-              </StatusChip>
-            ) : null}
-            {store.contentAddressed ? <StatusChip>content-addressed</StatusChip> : null}
-            {piiCount > 0 ? (
-              <StatusChip
-                tone={piiMasked ? "sky" : "amber"}
-                icon={<HugeiconsIcon icon={SecurityCheckIcon} className="size-3" aria-hidden />}
-                title={
-                  piiMasked
-                    ? `PII masked on ${child.piiColumns.join(", ")}. Click to show all cleartext (audited).`
-                    : `PII visible on ${child.piiColumns.join(", ")}. Click to remask.`
-                }
-                pressed={piiMasked}
-                ariaLabel={
-                  piiMasked
-                    ? `PII masking on for ${piiCount} columns. Show all.`
-                    : `PII visible for ${piiCount} columns. Hide all.`
-                }
-                data-slot="pii-toggle"
-                onClick={() => setPiiMasked((on) => !on)}
-              >
-                {piiCount} PII
-              </StatusChip>
-            ) : null}
-            {drift ? (
-              <StatusChip
-                tone={drift.drifted ? "amber" : "emerald"}
-                icon={
-                  <HugeiconsIcon
-                    icon={drift.drifted ? Alert02Icon : CheckmarkCircle02Icon}
-                    className="size-3"
-                    aria-hidden
-                  />
-                }
-                title={`Migration — declared ${drift.declared} / applied ${drift.applied ?? "(none)"}`}
-                role="status"
-                data-slot="migration-drift"
-                data-drifted={drift.drifted ? "true" : "false"}
-              >
-                {drift.drifted ? "Drifted" : "In sync"}
-                <span className="font-mono opacity-70">{shortFp(drift.declared)}</span>
-              </StatusChip>
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+        }
+        actions={
+          showStatus ? (
+            <div
+              className="flex shrink-0 flex-wrap items-center justify-end gap-1"
+              data-slot="resource-status"
+            >
+              {lagMs !== null && lagTone ? (
+                <StatusChip
+                  chipClassName={durationToneChipClass(lagTone)}
+                  icon={<HugeiconsIcon icon={Timer01Icon} className="size-3" aria-hidden />}
+                  title="Replica lag from the newest run that touched this store"
+                  data-slot="replica-lag"
+                >
+                  <span className="font-mono tabular-nums">{formatDuration(lagMs)}</span>
+                  <span className="opacity-70">lag</span>
+                </StatusChip>
+              ) : null}
+              {store.contentAddressed ? <StatusChip>content-addressed</StatusChip> : null}
+              {piiCount > 0 ? (
+                <StatusChip
+                  tone={piiMasked ? "sky" : "amber"}
+                  icon={<HugeiconsIcon icon={SecurityCheckIcon} className="size-3" aria-hidden />}
+                  title={
+                    piiMasked
+                      ? `PII masked on ${child.piiColumns.join(", ")}. Click to show all cleartext (audited).`
+                      : `PII visible on ${child.piiColumns.join(", ")}. Click to remask.`
+                  }
+                  pressed={piiMasked}
+                  ariaLabel={
+                    piiMasked
+                      ? `PII masking on for ${piiCount} columns. Show all.`
+                      : `PII visible for ${piiCount} columns. Hide all.`
+                  }
+                  data-slot="pii-toggle"
+                  onClick={() => setPiiMasked((on) => !on)}
+                >
+                  {piiCount} PII
+                </StatusChip>
+              ) : null}
+              {drift ? (
+                <StatusChip
+                  tone={drift.drifted ? "amber" : "emerald"}
+                  icon={
+                    <HugeiconsIcon
+                      icon={drift.drifted ? Alert02Icon : CheckmarkCircle02Icon}
+                      className="size-3"
+                      aria-hidden
+                    />
+                  }
+                  title={`Migration — declared ${drift.declared} / applied ${drift.applied ?? "(none)"}`}
+                  role="status"
+                  data-slot="migration-drift"
+                  data-drifted={drift.drifted ? "true" : "false"}
+                >
+                  {drift.drifted ? "Drifted" : "In sync"}
+                  <span className="font-mono opacity-70">{shortFp(drift.declared)}</span>
+                </StatusChip>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+      />
 
       {store.warnings.length > 0 ? (
         <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/25 bg-amber-500/5 px-3 py-1.5">
@@ -301,61 +313,6 @@ function StatusChip({
       />
       <TooltipContent side="bottom" className="max-w-xs text-[11px]">
         {title}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
- * Copy-to-clipboard affordance for the effectRef (paste into Flow code).
- *
- * @param props - Value to copy
- */
-function CopyButton({ value }: { readonly value: string }): JSX.Element {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <Button
-            {...props}
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`Copy ${value}`}
-            className="size-4 text-muted-foreground"
-            onClick={(event) => {
-              props.onClick?.(event);
-              if (!navigator.clipboard) return;
-              navigator.clipboard
-                .writeText(value)
-                .then(() => {
-                  setCopied(true);
-                  if (timer.current) clearTimeout(timer.current);
-                  timer.current = setTimeout(() => setCopied(false), 1200);
-                })
-                .catch(() => {});
-            }}
-          >
-            <HugeiconsIcon
-              icon={copied ? Tick02Icon : Copy01Icon}
-              className={copied ? "size-3 text-emerald-600 dark:text-emerald-400" : "size-3"}
-              aria-hidden
-            />
-          </Button>
-        )}
-      />
-      <TooltipContent side="top" className="text-[11px]">
-        {copied ? "Copied" : "Copy effect ref"}
       </TooltipContent>
     </Tooltip>
   );

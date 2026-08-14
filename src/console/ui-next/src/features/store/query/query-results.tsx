@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils.ts";
 import { JsonValueSheet } from "../detail/json-value-sheet.tsx";
-import { ToolbarTip } from "../grid/toolbar-tip.tsx";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cellExportText, rowsToCsv } from "../lib/grid-transfer.ts";
 import { formatGridCell } from "../lib/grid-model.ts";
 import { asInspectableJson } from "../lib/json-value.ts";

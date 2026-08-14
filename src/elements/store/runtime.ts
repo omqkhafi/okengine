@@ -171,6 +171,14 @@ export interface VectorIndexStoreFxHandle {
     topK?: number,
   ): Promise<ReadonlyArray<{ id: string; score: number; meta?: Record<string, unknown> }>>;
   delete(id: string): Promise<boolean>;
+  /**
+   * List stored documents (id + meta, no embeddings).
+   *
+   * @param limit - Max documents (default 100)
+   */
+  list(
+    limit?: number,
+  ): Promise<ReadonlyArray<{ id: string; score: number; meta?: Record<string, unknown> }>>;
 }
 
 /** Full-text index handle on `fx.store`. */
@@ -180,6 +188,14 @@ export interface TextIndexStoreFxHandle {
   upsert(id: string, document: Record<string, unknown>): Promise<void>;
   search(q: string, opts?: TextIndexSearchOptions): Promise<TextIndexSearchResult>;
   delete(id: string): Promise<boolean>;
+  /**
+   * List stored documents (id + fields as meta).
+   *
+   * @param limit - Max documents (default 100)
+   */
+  list(
+    limit?: number,
+  ): Promise<ReadonlyArray<{ id: string; score: number; meta?: Record<string, unknown> }>>;
 }
 
 /** Index handle on `fx.store` — discriminated by `driverId`. */
@@ -433,6 +449,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
         upsert: (id, document) => text.upsert(id, document),
         search: (q, opts) => text.search(q, opts),
         delete: (id) => text.delete(id),
+        list: (limit) => text.list(limit),
       };
     }
     const vector = idx as VectorIndexStore;
@@ -442,6 +459,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       upsert: (id, vec, meta) => vector.upsert(id, vec, meta),
       search: (vec, topK) => vector.search(vec, topK),
       delete: (id) => vector.delete(id),
+      list: (limit) => vector.list(limit),
     };
   }
 

@@ -97,11 +97,13 @@ export {
   purgeAuditBefore,
   purgeExpiredSecrets,
   readAuditPage,
+  readAuditRow,
   releaseRotateLease,
   verifyAuditChain,
   VAULT_DDL_STATEMENTS,
 } from "./vault/storage.ts";
 export type {
+  AuditChainBreakReason,
   AuditChainResult,
   AuditPageOptions,
   PurgeExpiredResult,

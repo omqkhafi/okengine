@@ -1,5 +1,5 @@
 /**
- * Hover hint for Store browse toolbar controls.
+ * Hover hint for Console toolbar controls.
  */
 
 import type { JSX, ReactNode } from "react";

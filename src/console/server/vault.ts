@@ -12,6 +12,7 @@ import type { VaultDriverId } from "../../drivers/vault-types.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "../../elements/vault/boot-chain.ts";
 import {
   createVaultRuntime,
+  VaultError,
   vault as declareVault,
   type VaultResolutionSource,
   type VaultResolutionStep,
@@ -19,6 +20,7 @@ import {
   type VaultSecretDecl,
 } from "../../elements/vault.ts";
 import type { VaultStatus } from "../../elements/vault/types.ts";
+import type { AuditChainBreakReason, VaultAuditRecord } from "../../elements/vault/storage.ts";
 import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
 
@@ -300,6 +302,211 @@ export async function probeVaultBackend(
       unavailable: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/** Operator-safe audit row (epoch-ms timestamps, no chain hashes). */
+export interface ConsoleVaultAuditRow {
+  readonly id: string;
+  readonly seq: number;
+  readonly action: string;
+  readonly path: string | null;
+  readonly actorType: string;
+  readonly actorId: string | null;
+  readonly success: boolean;
+  readonly errorCode: string | null;
+  readonly errorMessage: string | null;
+  readonly requestId: string | null;
+  readonly createdAt: number;
+}
+
+/** `GET /console/vault/audit/verify` body. */
+export interface ConsoleVaultAuditVerifyResult {
+  readonly ok: boolean;
+  readonly brokenAt: string | null;
+  readonly reason: AuditChainBreakReason | null;
+  readonly row: ConsoleVaultAuditRow | null;
+}
+
+/** `POST /console/vault/rotate-master` success body (minus `at`). */
+export interface ConsoleVaultRotateMasterResult {
+  readonly kekVersion: number;
+  readonly remaining: number;
+  readonly masterKey: string | null;
+}
+
+/** In-process master-rotation handle — process-global, not session-scoped. */
+export interface ConsoleVaultRotateHandle {
+  readonly adapter: import("../../elements/vault/builtin-adapter.ts").BuiltinVaultAdapter;
+  close(): Promise<void>;
+  inFlight: boolean;
+}
+
+/** Options for {@link openConsoleBuiltinAdapter}. */
+export interface OpenConsoleBuiltinAdapterOptions {
+  readonly config?: OkeConfig | null;
+  readonly env?: ConfigEnv;
+  readonly processEnv?: Readonly<Record<string, string | undefined>>;
+  /** When true, unseal from `OKE_VAULT_MASTER_KEY`. Verify stays sealed. */
+  readonly unseal: boolean;
+  readonly kekRewrapBatchSize?: number;
+}
+
+/** Opened built-in adapter for Console operator actions. */
+export interface OpenedConsoleBuiltinAdapter {
+  readonly adapter: import("../../elements/vault/builtin-adapter.ts").BuiltinVaultAdapter;
+  close(): Promise<void>;
+}
+
+/**
+ * Open the built-in Vault adapter for Console verify / rotate-master.
+ *
+ * Never accepts a master key in the HTTP body. Unseal uses
+ * `OKE_VAULT_MASTER_KEY` only when {@link OpenConsoleBuiltinAdapterOptions.unseal}
+ * is true.
+ *
+ * @param options - Config / env / unseal
+ */
+export async function openConsoleBuiltinAdapter(
+  options: OpenConsoleBuiltinAdapterOptions,
+): Promise<OpenedConsoleBuiltinAdapter> {
+  const env = options.env ?? "dev";
+  const driverId = resolveVaultDriverId(options.config, env);
+  if (driverId !== "vault") {
+    throw new ConsoleVaultUnsupportedError(
+      `vault: backend ${driverId} has no seal lifecycle or master rotation`,
+    );
+  }
+  const processEnv = options.processEnv ?? process.env;
+  const url = processEnv.DATABASE_URL ?? processEnv.OKE_STORE_SQL_URL;
+  if (url === undefined || url.trim().length === 0) {
+    throw new ConsoleVaultUnsupportedError(
+      "No SQL URL configured — set DATABASE_URL or OKE_STORE_SQL_URL",
+    );
+  }
+  const keyHeld = (processEnv[VAULT_MASTER_KEY_ENV] ?? "").trim().length > 0;
+  if (options.unseal && !keyHeld) {
+    throw new ConsoleVaultSealedError(
+      "This process holds no master key — export OKE_VAULT_MASTER_KEY or run `oke vault unseal`",
+    );
+  }
+  const { openBuiltinVaultAdapter } = await import("../../drivers/vault-builtin.ts");
+  const opened = await openBuiltinVaultAdapter({
+    url,
+    env: processEnv,
+    masterKey: options.unseal ? (processEnv[VAULT_MASTER_KEY_ENV] ?? "") : "",
+    ...(options.kekRewrapBatchSize === undefined
+      ? {}
+      : { kekRewrapBatchSize: options.kekRewrapBatchSize }),
+  });
+  return {
+    adapter: opened.adapter,
+    close: () => opened.close(),
+  };
+}
+
+/**
+ * Verify the audit chain (sealed — no master key).
+ *
+ * @param options - Config / env
+ */
+export async function verifyConsoleVaultAudit(
+  options: Omit<OpenConsoleBuiltinAdapterOptions, "unseal"> = {},
+): Promise<ConsoleVaultAuditVerifyResult> {
+  const opened = await openConsoleBuiltinAdapter({ ...options, unseal: false });
+  try {
+    const result = await opened.adapter.verifyAudit();
+    if (result.ok || result.brokenAt === undefined) {
+      return { ok: true, brokenAt: null, reason: null, row: null };
+    }
+    const record = await opened.adapter.readAuditRow(result.brokenAt);
+    return {
+      ok: false,
+      brokenAt: result.brokenAt,
+      reason: result.reason ?? null,
+      row: record ? toConsoleVaultAuditRow(record) : null,
+    };
+  } finally {
+    await opened.close();
+  }
+}
+
+/**
+ * Convert an adapter audit row into the JSON-safe Console shape.
+ *
+ * @param row - Adapter record
+ */
+export function toConsoleVaultAuditRow(row: VaultAuditRecord): ConsoleVaultAuditRow {
+  return {
+    id: row.id,
+    seq: row.seq,
+    action: row.action,
+    path: row.path,
+    actorType: row.actorType,
+    actorId: row.actorId,
+    success: row.success,
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    requestId: row.requestId,
+    createdAt: row.createdAt.getTime(),
+  };
+}
+
+/** Built-in backend is missing or not the `vault` driver. */
+export class ConsoleVaultUnsupportedError extends Error {
+  readonly code = "VaultUnsupported" as const;
+  /**
+   * @param message - Secret-free reason
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "ConsoleVaultUnsupportedError";
+  }
+}
+
+/** This process has no master key. */
+export class ConsoleVaultSealedError extends Error {
+  readonly code = "VaultSealed" as const;
+  /**
+   * @param message - Secret-free reason
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "ConsoleVaultSealedError";
+  }
+}
+
+/** Lease held, batch in flight, or cold-resume required. */
+export class ConsoleVaultRotateBusyError extends Error {
+  readonly code = "VaultRotateBusy" as const;
+  /**
+   * @param message - Secret-free reason
+   */
+  constructor(message: string) {
+    super(message);
+    this.name = "ConsoleVaultRotateBusyError";
+  }
+}
+
+/**
+ * Map adapter / Console vault errors onto typed Console failures.
+ *
+ * @param error - Caught error
+ */
+export function mapConsoleVaultError(error: unknown): never {
+  if (error instanceof ConsoleVaultSealedError) throw error;
+  if (error instanceof ConsoleVaultRotateBusyError) throw error;
+  if (error instanceof ConsoleVaultUnsupportedError) throw error;
+  if (error instanceof VaultError) {
+    if (error.code === "SEALED") throw new ConsoleVaultSealedError(error.message);
+    if (
+      error.code === "UNSUPPORTED" &&
+      /lease held|already in progress|no master rotation|resume rotate-master/i.test(error.message)
+    ) {
+      throw new ConsoleVaultRotateBusyError(error.message);
+    }
+    throw new ConsoleVaultUnsupportedError(error.message);
+  }
+  throw error instanceof Error ? error : new Error(String(error));
 }
 
 /**

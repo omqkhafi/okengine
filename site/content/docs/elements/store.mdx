@@ -73,8 +73,9 @@ Install reviews the `CREATE EXTENSION` SQL; **Advanced** can set `SCHEMA`,
 When a newer packaged version exists, the name chip shows **Upgrade**
 (`ALTER EXTENSION … UPDATE`). Names link to the project or Postgres docs.
 
-Each table row in the Store tree shows whether RLS is on (emerald shield)
-or off (muted shield). Enabling RLS on create flips that shield.
+Each SQL table row shows whether Postgres RLS is on (emerald shield)
+or off (muted shield). KV, files, and index have no badge. Enabling
+RLS on create flips that shield.
 
 **RLS Policies** lists `pg_policies`. Create policy pins the SQL preview;
 **Templates** slides a flush library beside it (every `FOR` command, owner,
@@ -606,7 +607,8 @@ Dragonfly are equally legitimate opt-in pins.
 <StoreFacetMark facet="files" />
 
 The blob facet: opaque objects (`Uint8Array` or string) on the same handle as the optional image
-pipeline. Drivers swap `fs` ↔ `s3` (plus `memory` for tests).
+pipeline. Drivers swap `fs` ↔ `s3` (plus `memory` for tests). The Console Files band is a folder
+browser — upload, download, delete — not a signed-URL mint.
 
 ### Quick start
 
@@ -643,12 +645,12 @@ do: async ({ key, body }, fx) => {
 
 ### Blob CRUD — `put` / `get` / `delete` / `list`
 
-| Call             | Effect  | Returns              | Notes                                |
-| ---------------- | ------- | -------------------- | ------------------------------------ |
-| `put(key, data)` | `write` | `void`               | `data` is `Uint8Array` or `string`   |
-| `get(key)`       | `read`  | `Uint8Array \| null` | Missing key → `null`                 |
-| `delete(key)`    | `write` | `boolean`            | Whether an object was removed        |
-| `list(prefix?)`  | `read`  | `string[]`           | Prefix filter; Console browse source |
+| Call             | Effect  | Returns              | Notes                                        |
+| ---------------- | ------- | -------------------- | -------------------------------------------- |
+| `put(key, data)` | `write` | `void`               | `data` is `Uint8Array` or `string`           |
+| `get(key)`       | `read`  | `Uint8Array \| null` | Missing key → `null`                         |
+| `delete(key)`    | `write` | `boolean`            | Whether an object was removed                |
+| `list(prefix?)`  | `read`  | `string[]`           | Prefix filter; Console folder browser source |
 
 ```typescript
 const files = fx.store(uploads);
@@ -665,8 +667,9 @@ Keys are opaque strings the driver stores as-is. Prefer path-like prefixes (`pho
 | Helper / rule               | Meaning                                                                  |
 | --------------------------- | ------------------------------------------------------------------------ |
 | `contentAddressedKey(data)` | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly) |
+| `safeFileObjectKey(name, prefix?)` | URL-safe ASCII key (`file-a1b2c3d4.pdf`). Keep the original name in the catalog. |
 | Leading `/` or `..`         | Rejected by the `fs` driver (`Invalid object key`)                       |
-| Non-ASCII keys              | Console warns `non_ascii_key` — may break S3 signed URLs                 |
+| Non-ASCII keys              | Console warns `non_ascii_key`. Console puts rewrite the key and store `originalName` in `.oke/catalog.json` (and `file_objects` when that table exists). |
 
 ### Per-environment Files drivers
 
@@ -696,9 +699,10 @@ images: {
 
 **Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for `dev`/`prod` (create-oke templates already do).
 
-<Callout title="Operator tools can browse, not edit bytes">
-  Operator tools can list keys and delete them. Direct edit is **KV + SQL only** — blob bodies are
-  not patched.
+<Callout title="Console Files is a folder browser">
+  Inspect the **bucket**. Click a file to preview in a sheet. Uploads
+  use a URL-safe key; the original name lives in the object catalog.
+  Bytes live on `memory`, `fs`, or `s3`.
 </Callout>
 
 ### Images — `image` / `putImage`
@@ -796,11 +800,17 @@ One declaration shape — two search physics. The handle is a **discriminated un
 
 <StoreIndexModes />
 
-| Call (both)  | Effect  | Returns       |
-| ------------ | ------- | ------------- |
-| `upsert(…)`  | `write` | `void`        |
-| `search(…)`  | `read`  | hits / result |
-| `delete(id)` | `write` | `boolean`     |
+| Call (both)     | Effect  | Returns                     |
+| --------------- | ------- | --------------------------- |
+| `upsert(…)`     | `write` | `void`                      |
+| `search(…)`     | `read`  | hits / result               |
+| `list(limit?)`  | `read`  | documents (id + meta)       |
+| `delete(id)`    | `write` | `boolean`                   |
+
+<Callout title="Console Index is a search box">
+Type a phrase to find documents by id and stored meta. A comma-separated vector still runs an ANN
+probe. Meilisearch uses full-text `q`.
+</Callout>
 
 TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at
 runtime.
@@ -962,6 +972,11 @@ The vector length must match `store.index(…, { dims })` (runtime default `3` i
 <Accordion title="Index stays on memory under oke dev">
 
 Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` in `dev` — it stays `memory`. Set the map explicitly (and pair SQL for `pgvector`).
+
+</Accordion>
+<Accordion title="Console warns Non-ASCII object key">
+
+`fx.store(files).put` stores the key as-is. Console uploads mint an ASCII key and keep the original name in `.oke/catalog.json`. Re-upload to rewrite an existing object.
 
 </Accordion>
 </Accordions>

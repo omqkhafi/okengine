@@ -57,9 +57,7 @@ export function effectKindSummaryLabel(kind: RunEffectKind, count: number): stri
 /**
  * Waterfall / event-row color for an effect kind.
  *
- * Reuses {@link EDGE_STROKE} for reads/writes/emits/calls/asks. `send` and
- * `secret` have no graph-edge counterpart — distinct but related hues so the
- * Sheet stays consistent without inventing fake edge kinds.
+ * Reuses {@link EDGE_STROKE} for every kernel effect kind.
  *
  * @param kind - Effect kind
  */
@@ -76,9 +74,9 @@ export function effectBarColor(kind: RunEffectKind): string {
     case "ask":
       return EDGE_STROKE.asks;
     case "send":
-      return "#C084FC";
+      return EDGE_STROKE.sends;
     case "secret":
-      return "#94A3B8";
+      return EDGE_STROKE.secrets;
   }
 }
 

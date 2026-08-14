@@ -149,7 +149,7 @@ describe("createClient — same-repo <App>", () => {
     expect(method).toBe("QUERY");
     expect(url).toBe("http://app.test/search/x");
     expect(body).toBe("{}");
-    expect(contentType).toContain("application/json");
+    expect(contentType ?? "").toContain("application/json");
 
     await api.search.run({ id: "x", q: "ali" });
     expect(body).toBe('{"q":"ali"}');

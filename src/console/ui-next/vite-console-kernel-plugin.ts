@@ -156,7 +156,12 @@ export function okeConsoleKernelPlugin(): Plugin {
           output: { replayed: event.id, dryRun, input: event.input ?? null },
         });
         const { bootUiNextSeedInvoke } = await import("./seed-invoke-host.ts");
-        const seedInvoke = await bootUiNextSeedInvoke();
+        const seedInvoke = await bootUiNextSeedInvoke({
+          ...(handle.console.state.storeRuntime
+            ? { storeRuntime: handle.console.state.storeRuntime }
+            : {}),
+          manifest: UI_NEXT_SEEDED_MANIFEST,
+        });
         handle.console.state.invokeUserFlow = seedInvoke.invokeUserFlow;
       }
 

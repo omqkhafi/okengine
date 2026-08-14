@@ -120,12 +120,14 @@ export function buildStoreGridModel(options: StoreGridModelOptions): StoreGridMo
     return {
       columns: [
         { key: "key", type: "string", editable: false, pii: false },
+        { key: "size", type: "number", editable: false, pii: false, format: "bytes" },
         { key: "warnings", type: "string", editable: false, pii: false },
       ],
       rows: keys.map((entry) => ({
         id: entry.key,
         cells: {
           key: entry.key,
+          size: entry.sizeBytes ?? 0,
           warnings: entry.warnings?.map((w) => w.message).join("; ") ?? "",
         },
       })),

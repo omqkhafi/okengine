@@ -338,7 +338,33 @@ export async function readAuditPage(
     throw new VaultError("BACKEND_ERROR", "vault: failed to read audit rows");
   }
 
-  return rows.map((row) => ({
+  return rows.map((row) => toAuditRecord(row));
+}
+
+/**
+ * Load one audit row by id (operator-safe fields, no chain hashes).
+ *
+ * @param db - SQL surface
+ * @param id - Audit row id
+ */
+export async function readAuditRow(db: SqlExec, id: string): Promise<VaultAuditRecord | null> {
+  let rows: (AuditDbRow & { seq: number | string | bigint })[];
+  try {
+    rows = await db.query(
+      `SELECT id, seq, action, path, actor_type, actor_id, success, error_code, error_message,
+              request_id, prev_hash, row_hash, created_at
+       FROM oke_vault_audit WHERE id = $1`,
+      [id],
+    );
+  } catch {
+    throw new VaultError("BACKEND_ERROR", "vault: failed to read audit row");
+  }
+  const row = rows[0];
+  return row === undefined ? null : toAuditRecord(row);
+}
+
+function toAuditRecord(row: AuditDbRow & { seq: number | string | bigint }): VaultAuditRecord {
+  return {
     id: row.id,
     seq: typeof row.seq === "number" ? row.seq : Number(row.seq),
     action: row.action as AuditAction,
@@ -350,8 +376,11 @@ export async function readAuditPage(
     errorMessage: row.error_message,
     requestId: row.request_id,
     createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
-  }));
+  };
 }
+
+/** Why {@link verifyAuditChain} rejected a row. */
+export type AuditChainBreakReason = "link" | "payload";
 
 /** Result of {@link verifyAuditChain}. */
 export interface AuditChainResult {
@@ -359,6 +388,8 @@ export interface AuditChainResult {
   readonly ok: boolean;
   /** Id of the first row that failed verification. */
   readonly brokenAt?: string;
+  /** `link` = prev_hash mismatch; `payload` = stored row_hash ≠ recomputed. */
+  readonly reason?: AuditChainBreakReason;
 }
 
 /** Raw `oke_vault_audit` row shape. */
@@ -404,7 +435,7 @@ export async function verifyAuditChain(db: SqlExec): Promise<AuditChainResult> {
   let previousHash: string | undefined;
   for (const row of rows) {
     if (previousHash !== undefined && row.prev_hash !== previousHash) {
-      return { ok: false, brokenAt: row.id };
+      return { ok: false, brokenAt: row.id, reason: "link" };
     }
     const expected = await computeAuditRowHash(row.prev_hash, {
       action: row.action as AuditAction,
@@ -418,7 +449,7 @@ export async function verifyAuditChain(db: SqlExec): Promise<AuditChainResult> {
       createdAt: toIso(row.created_at),
     });
     if (expected !== row.row_hash) {
-      return { ok: false, brokenAt: row.id };
+      return { ok: false, brokenAt: row.id, reason: "payload" };
     }
     previousHash = row.row_hash;
   }

@@ -11,6 +11,7 @@ import {
   UI_NEXT_SEED_APP_SYSTEM_ROWS,
   UI_NEXT_SEED_APP_SYSTEM_TABLES,
 } from "./ui-next-seed-app-schema.ts";
+import type { SqlRow } from "../../drivers/types.ts";
 import type { SqlStoreHandle } from "../../elements/store/sql-session.ts";
 import type {
   FilesStoreFxHandle,
@@ -542,10 +543,30 @@ const SEED_KV: ReadonlyArray<{ key: string; value: unknown; ttl?: string }> = [
   },
 ];
 
-const SEED_FILES: ReadonlyArray<{ key: string; data: string }> = [
-  { key: "attachments/ENG-184/spec.pdf", data: "spec-bytes:ENG-184" },
-  { key: "attachments/ENG-184/pr-diff.patch", data: "diff-bytes:ENG-184" },
-  { key: "вложения/SUP-12/screenshot.png", data: "photo-bytes:SUP-12" },
+/** 1×1 PNG so the Files inspector can preview a real image. */
+const SEED_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  ),
+  (ch) => ch.charCodeAt(0),
+);
+
+const SEED_FILES: ReadonlyArray<{
+  key: string;
+  originalName: string;
+  data: string | Uint8Array;
+}> = [
+  { key: "attachments/ENG-184/spec.pdf", originalName: "spec.pdf", data: "spec-bytes:ENG-184" },
+  {
+    key: "attachments/ENG-184/pr-diff.patch",
+    originalName: "pr-diff.patch",
+    data: "diff-bytes:ENG-184",
+  },
+  {
+    key: "attachments/SUP-12/screenshot.png",
+    originalName: "screenshot.png",
+    data: SEED_PNG,
+  },
 ];
 
 const SEED_INDEX: ReadonlyArray<{
@@ -730,7 +751,7 @@ function generateKeelVolume(): {
     body: string;
   }>;
   readonly kv: ReadonlyArray<{ key: string; value: unknown }>;
-  readonly files: ReadonlyArray<{ key: string; data: string }>;
+  readonly files: ReadonlyArray<{ key: string; originalName: string; data: string }>;
   readonly index: ReadonlyArray<{
     id: string;
     vector: readonly number[];
@@ -876,6 +897,7 @@ function generateKeelVolume(): {
     const issue = issues[i]!;
     return {
       key: `attachments/${issue.identifier}/note-${i}.txt`,
+      originalName: `note-${i}.txt`,
       data: `bytes:${issue.identifier}`,
     };
   });
@@ -1048,6 +1070,14 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     parent_kind: true,
     parent_id: true,
   });
+  const fileObjects = defineTable("file_objects", {
+    id: true,
+    object_key: true,
+    original_name: true,
+    content_type: true,
+    size_bytes: true,
+    store_ref: true,
+  });
   const customerRequests = defineTable("customer_requests", {
     id: true,
     issue_id: true,
@@ -1055,7 +1085,7 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     body: true,
   });
 
-  const tables: ReadonlyArray<readonly [ReturnType<typeof defineTable>, readonly object[]]> = [
+  const tables: ReadonlyArray<readonly [ReturnType<typeof defineTable>, readonly SqlRow[]]> = [
     [teams, SEED_TEAMS],
     [members, [...SEED_MEMBERS, ...KEEL_VOLUME.members]],
     [workflowStates, SEED_STATES],
@@ -1070,6 +1100,23 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     [comments, [...SEED_COMMENTS, ...KEEL_VOLUME.comments]],
     [documents, [...SEED_DOCUMENTS, ...KEEL_VOLUME.documents]],
     [customerRequests, [...SEED_CUSTOMERS, ...KEEL_VOLUME.customerRequests]],
+    [
+      fileObjects,
+      [...SEED_FILES, ...KEEL_VOLUME.files].map((entry) => ({
+        id: entry.key,
+        object_key: entry.key,
+        original_name: entry.originalName,
+        content_type: entry.originalName.endsWith(".png")
+          ? "image/png"
+          : entry.originalName.endsWith(".pdf")
+            ? "application/pdf"
+            : entry.originalName.endsWith(".patch")
+              ? "text/x-patch"
+              : "text/plain",
+        size_bytes: typeof entry.data === "string" ? entry.data.length : entry.data.byteLength,
+        store_ref: "files:attachments",
+      })),
+    ],
   ];
 
   for (const [table, rows] of tables) {
@@ -1081,22 +1128,19 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
 
   for (const [name, rows] of Object.entries(UI_NEXT_SEED_APP_SYSTEM_ROWS)) {
     const declared = UI_NEXT_SEED_APP_SYSTEM_TABLES[name]?.columns ?? {};
-    const columns = Object.fromEntries(
-      Object.entries(declared).map(([key, spec]) => {
-        const pii = spec.pii === true;
-        const sensitive = spec.sensitive === true;
-        return [
-          key,
-          pii || sensitive
-            ? classify({ ...(pii ? { pii } : {}), ...(sensitive ? { sensitive } : {}) })
-            : true,
-        ];
-      }),
-    );
+    const columns: Record<string, true | ReturnType<typeof classify>> = {};
+    for (const [key, spec] of Object.entries(declared)) {
+      const pii = spec.pii === true;
+      const sensitive = spec.sensitive === true;
+      columns[key] =
+        pii || sensitive
+          ? classify({ ...(pii ? { pii } : {}), ...(sensitive ? { sensitive } : {}) })
+          : true;
+    }
     const table = defineTable(name, columns);
     await sql.ensureTable(table);
     for (const row of rows) {
-      await sql.insert(table).values(row);
+      await sql.insert(table).values(row as SqlRow);
     }
   }
 
@@ -1104,15 +1148,41 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     effects: { writes: ["kv:cache"] },
   })) as KvStoreFxHandle;
   for (const entry of [...SEED_KV, ...KEEL_VOLUME.kv]) {
-    await kv.set(entry.key, entry.value, "ttl" in entry ? entry.ttl : undefined);
+    await kv.set(
+      entry.key,
+      entry.value,
+      "ttl" in entry && typeof entry.ttl === "string" ? entry.ttl : undefined,
+    );
   }
 
   const files = (await runtime.openRef("files:attachments", {
     effects: { writes: ["files:attachments"] },
   })) as FilesStoreFxHandle;
-  for (const entry of [...SEED_FILES, ...KEEL_VOLUME.files]) {
+  const allFiles = [...SEED_FILES, ...KEEL_VOLUME.files];
+  for (const entry of allFiles) {
     await files.put(entry.key, entry.data);
   }
+  const catalog = {
+    version: 1 as const,
+    objects: Object.fromEntries(
+      allFiles.map((entry) => [
+        entry.key,
+        {
+          originalName: entry.originalName,
+          contentType: entry.originalName.endsWith(".png")
+            ? "image/png"
+            : entry.originalName.endsWith(".pdf")
+              ? "application/pdf"
+              : entry.originalName.endsWith(".patch")
+                ? "text/x-patch"
+                : "text/plain",
+          sizeBytes: typeof entry.data === "string" ? entry.data.length : entry.data.byteLength,
+          updatedAt: "2026-08-14T00:00:00.000Z",
+        },
+      ]),
+    ),
+  };
+  await files.put(".oke/catalog.json", JSON.stringify(catalog));
 
   const index = (await runtime.openRef("index:search", {
     effects: { writes: ["index:search"] },

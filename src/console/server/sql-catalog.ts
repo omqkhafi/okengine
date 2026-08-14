@@ -4,7 +4,7 @@
  */
 
 import type { Manifest } from "../../manifest/types.ts";
-import type { ResourceRef } from "../../shared/resources.ts";
+import type { ResourceRef } from "../../manifest/types.ts";
 import type { SqlStoreHandle } from "../../elements/store/sql-session.ts";
 import {
   isPgExtensionName,

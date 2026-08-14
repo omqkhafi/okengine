@@ -29,14 +29,12 @@ export function ConsoleChrome({ children }: ConsoleChromeProps) {
 
         <main className="flex flex-1 flex-col justify-center">{children}</main>
 
-        <footer className="grid shrink-0 grid-cols-3 items-center gap-2 pt-2">
-          <p className="justify-self-start text-xs font-medium text-muted-foreground">
+        <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 pt-2">
+          <p className="min-w-0 justify-self-start truncate text-xs font-medium text-muted-foreground">
             OKE | Console
           </p>
-          <div className="justify-self-center">
-            <ModeToggle />
-          </div>
-          <p className="inline-flex items-center justify-self-end gap-1.5 text-xs text-muted-foreground tabular-nums">
+          <ModeToggle />
+          <p className="inline-flex min-w-0 items-center justify-self-end gap-1.5 text-xs text-muted-foreground tabular-nums">
             <HugeiconsIcon
               icon={CubeIcon}
               size={14}

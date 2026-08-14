@@ -683,7 +683,7 @@ export function createUiNextOperationRuns(
     const seq = String(i).padStart(3, "0");
     const identifier = `${teamKey}-${100 + i}`;
 
-    if (roll < 0.38) {
+    if (roll < 0.22) {
       const durationMs = 8 + Math.floor(rand() * 40);
       const endedAt = startedAt + durationMs;
       const cache = rand() < 0.7 ? "hit" : "miss";
@@ -734,7 +734,77 @@ export function createUiNextOperationRuns(
       continue;
     }
 
-    if (roll < 0.58) {
+    if (roll < 0.32) {
+      const durationMs = 10 + Math.floor(rand() * 30);
+      const endedAt = startedAt + durationMs;
+      const kind = rand();
+      const flowId =
+        kind < 0.4
+          ? "issues.get"
+          : kind < 0.65
+            ? "projects.list"
+            : kind < 0.85
+              ? "comments.list"
+              : "teams.list";
+      const unit = flowId.split(".")[0]!;
+      const resource =
+        unit === "issues"
+          ? "sql:issues"
+          : unit === "projects"
+            ? "sql:projects"
+            : unit === "comments"
+              ? "sql:comments"
+              : "sql:teams";
+      out.push({
+        id: `pw-ops-read-${seq}`,
+        flow: flowId,
+        unit,
+        trigger: "http",
+        plane: "user",
+        tenant,
+        principal,
+        subjectId: principal,
+        gates: ["member"],
+        cache: rand() < 0.6 ? "hit" : "miss",
+        replica: "replica",
+        replicaLagMs: 6 + Math.floor(rand() * 20),
+        buildVersion: BUILD,
+        input: flowId === "issues.get" ? { id: `iss_ops_${seq}` } : { teamKey },
+        output: flowId === "issues.get" ? { id: `iss_ops_${seq}`, identifier } : { items: [] },
+        effects: [
+          {
+            kind: "read",
+            resource,
+            timestamp: startedAt + 2,
+            duration: Math.max(2, durationMs - 4),
+            reversibility: "none",
+          },
+        ],
+        logs: [
+          {
+            level: "debug",
+            message: `${flowId} served`,
+            data: { identifier },
+            at: startedAt + 3,
+          },
+        ],
+        durationMs,
+        startedAt,
+        endedAt,
+        dimensions: {
+          flow: flowId,
+          unit,
+          tenant,
+          cache: "hit",
+          duration_ms: durationMs,
+          build_version: BUILD,
+        },
+      });
+      i += 1;
+      continue;
+    }
+
+    if (roll < 0.52) {
       const durationMs = 28 + Math.floor(rand() * 90);
       const endedAt = startedAt + durationMs;
       const createId = `pw-ops-create-${seq}`;
@@ -868,7 +938,7 @@ export function createUiNextOperationRuns(
       continue;
     }
 
-    if (roll < 0.68) {
+    if (roll < 0.6) {
       const durationMs = 18 + Math.floor(rand() * 40);
       const endedAt = startedAt + durationMs;
       const duplicate = rand() < 0.35;
@@ -925,7 +995,7 @@ export function createUiNextOperationRuns(
       continue;
     }
 
-    if (roll < 0.78) {
+    if (roll < 0.68) {
       const durationMs = 40 + Math.floor(rand() * 160);
       const endedAt = startedAt + durationMs;
       out.push({
@@ -983,7 +1053,7 @@ export function createUiNextOperationRuns(
       continue;
     }
 
-    if (roll < 0.86) {
+    if (roll < 0.76) {
       const durationMs = 20 + Math.floor(rand() * 80);
       const endedAt = startedAt + durationMs;
       out.push({
@@ -1041,7 +1111,78 @@ export function createUiNextOperationRuns(
       continue;
     }
 
-    if (roll < 0.92) {
+    if (roll < 0.84) {
+      const durationMs = 18 + Math.floor(rand() * 50);
+      const endedAt = startedAt + durationMs;
+      const kind = rand();
+      const flowId =
+        kind < 0.35
+          ? "issues.archive"
+          : kind < 0.6
+            ? "issues.assign"
+            : kind < 0.8
+              ? "search.query"
+              : "drafts.save";
+      const unit = flowId.split(".")[0]!;
+      const resource =
+        flowId === "search.query"
+          ? "index:issues"
+          : flowId === "drafts.save"
+            ? "kv:drafts"
+            : "sql:issues";
+      out.push({
+        id: `pw-ops-custom-${seq}`,
+        flow: flowId,
+        unit,
+        trigger: "http",
+        plane: "user",
+        tenant,
+        principal,
+        subjectId: principal,
+        gates: flowId.startsWith("issues.") ? ["member", "issue:write"] : ["member"],
+        cache: "none",
+        buildVersion: BUILD,
+        input:
+          flowId === "search.query"
+            ? { q: title }
+            : flowId === "issues.assign"
+              ? { assigneeEmail: "aria@keel.dev" }
+              : { identifier },
+        output: { ok: true, identifier },
+        effects: [
+          {
+            kind: flowId === "drafts.save" || flowId.startsWith("issues.") ? "write" : "read",
+            resource,
+            timestamp: startedAt + 3,
+            duration: Math.max(4, durationMs - 6),
+            reversibility: flowId === "search.query" ? "none" : "reversible",
+          },
+        ],
+        logs: [
+          {
+            level: "info",
+            message: `${flowId} ok`,
+            data: { identifier },
+            at: endedAt - 3,
+          },
+        ],
+        durationMs,
+        startedAt,
+        endedAt,
+        dimensions: {
+          flow: flowId,
+          unit,
+          tenant,
+          cache: "none",
+          duration_ms: durationMs,
+          build_version: BUILD,
+        },
+      });
+      i += 1;
+      continue;
+    }
+
+    if (roll < 0.9) {
       const durationMs = 200 + Math.floor(rand() * 400);
       const endedAt = startedAt + durationMs;
       const cost = 0.008 + rand() * 0.02;

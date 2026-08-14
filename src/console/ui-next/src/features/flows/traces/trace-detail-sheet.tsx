@@ -48,6 +48,7 @@ import {
   type EffectSummaryChip,
   type EffectSummaryVariant,
 } from "./effect-summary.ts";
+import { cacheIconSpec } from "./cache-icon.ts";
 import { formatDuration } from "./format-duration.ts";
 import { durationClassName } from "./duration-tone.ts";
 import { traceRequestMeta } from "./request-meta.ts";
@@ -94,7 +95,7 @@ const sectionClassName =
 const sheetControlButtonClass = "border border-border bg-background shadow-none hover:bg-muted";
 
 /**
- * Right-side Sheet opened by selecting a Traces row.
+ * Start-side Sheet opened by selecting a Traces row.
  *
  * Additive to graph highlight — selection still drives the Flow graph.
  *
@@ -112,6 +113,7 @@ export function TraceDetailSheet({
   const manifest = useManifest();
   const reduceMotion = useReducedMotion();
   const trigger = run ? triggerIconSpec(run.trigger) : null;
+  const cache = run ? cacheIconSpec(run.cache) : null;
   const chips = useMemo(() => (run ? effectSummaryChips(run) : []), [run]);
   const gateInfos = useMemo(
     () => (run ? traceGateInfos(run.gates, manifest.data ?? null) : []),
@@ -243,10 +245,12 @@ export function TraceDetailSheet({
       }}
     >
       <SheetContent
-        side="right"
+        side="left"
         showOverlay={false}
         data-slot="trace-detail-sheet"
-        className="inset-y-0 right-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl data-[side=right]:sm:max-w-xl"
+        className="inset-y-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl md:left-12! data-[side=left]:sm:max-w-xl"
+        // left-12 = icon rail (3rem). Important beats SheetContent's left-0;
+        // the portal is outside the wrapper that defines --sidebar-width-icon.
       >
         {run && trigger ? (
           <>
@@ -263,8 +267,22 @@ export function TraceDetailSheet({
                   <SheetTitle className="truncate font-mono text-base font-semibold tracking-tight">
                     {run.flow}
                   </SheetTitle>
-                  <SheetDescription className="mt-0.5 text-[11px] text-muted-foreground">
-                    {trigger.label}
+                  <SheetDescription className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span>{trigger.label}</span>
+                    {cache ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span
+                          className={cn("inline-flex items-center gap-1", cache.className)}
+                          data-slot="trace-sheet-cache"
+                          data-cache={run.cache}
+                          title={cache.label}
+                        >
+                          <HugeiconsIcon icon={cache.icon} className="size-3" aria-hidden />
+                          {cache.label}
+                        </span>
+                      </>
+                    ) : null}
                   </SheetDescription>
                 </div>
               </div>
@@ -671,9 +689,6 @@ function SummaryChip({ chip }: { readonly chip: EffectSummaryChip }): JSX.Elemen
   );
 }
 
-/** Gate element accent — distinct from store / signal / AI graph tokens. */
-const GATE_ACCENT = "#A78BFA";
-
 function summaryIcon(variant: EffectSummaryVariant) {
   switch (variant) {
     case "duration":
@@ -698,7 +713,7 @@ function summaryAccent(variant: EffectSummaryVariant): string {
     case "api":
       return "var(--foreground)";
     case "gate":
-      return GATE_ACCENT;
+      return NODE_ACCENT.gate.accent;
     case "db":
       return NODE_ACCENT.store.accent;
     case "logs":

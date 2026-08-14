@@ -168,7 +168,40 @@ VaultBootError: 1 secret(s) missing:
 
 Flows can write too, through the same capability gate as reads: `fx.vault.set(path, value, { ttlMs?, metadata? })`, `fx.vault.rotate(path, value)`, `fx.vault.delete(path)`, plus `fx.vault.list(prefix?)` and `fx.vault.status()`. These need the encrypted-at-rest backend (`drivers.vault = "vault"`) and throw without it; `fx.vault.get` works on every app.
 
-The **Console** (`:6533`) can also set and rotate values, but it is **write-only**: it shows a salted fingerprint (`sha256:…`) per secret, never the cleartext. When you rotate a key there, the panel shows the **blast radius** — which in-flight durable runs will wake up with the new value.
+The **Console** (`:6533`) **Vault** page (`/vault`) is write-only: a salted
+fingerprint (`sha256:…`) per secret, never the cleartext.
+
+Search matches name, description, fingerprint, reader, and winner. Operators
+AND together. `/` focuses the field.
+
+| Token                                                  | Matches                         |
+| ------------------------------------------------------ | ------------------------------- |
+| `is:unset` / `is:set` / `is:healthy`                   | Value present or not            |
+| `is:blast` / `is:shared` / `is:dormant` / `is:overdue` | Posture                         |
+| `kind:secret` / `kind:config`                          | Contract kind                   |
+| `from:.env.local`                                      | Resolution winner               |
+| `reader:payments` / `fp:sha256`                        | Flow id / fingerprint           |
+| `has:readers` / `has:rotate`                           | Declared readers or rotate hint |
+
+The empty pane is a posture board (unset, blast, shared, dormant, overdue).
+Rotate shows **blast radius** — in-flight durable runs that will wake holding
+the new value.
+
+Verify, rotate-master, fingerprint export, and CLI copy live in the security
+sheet.
+
+| Action               | Confirm                                | HTTP                                                                   |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Set / rotate a value | `SET` (production) / `ROTATE` (always) | `POST /console/vault/set` · `/rotate`                                  |
+| Rotate master key    | `ROTATE_MASTER` + reason ≥ 3           | `POST /console/vault/rotate-master` — one batch; `remaining` is honest |
+| Verify audit chain   | session only                           | `GET /console/vault/audit/verify` → `{ ok, brokenAt, reason, row }`    |
+
+Master rotation is process-global: any operator in the same Console process may
+continue. Overlapping batches return `VaultRotateBusy`. A generated master key
+is shown once and never logged.
+
+Backup stays on the CLI (`oke vault backup` / `restore`). The Console never
+accepts a master key in the HTTP body — unseal via `OKE_VAULT_MASTER_KEY`.
 
 <Callout title="Builtin concurrency (rotate / audit / backup)">
   `rotate-master` uses SKIP LOCKED + lease TTL (one holder; crashed holders reclaim). Audit appends
@@ -251,7 +284,9 @@ A contract has no value in any layer of the chain. Fix by providing it in exactl
 </Accordion>
 <Accordion title="How do I rotate a key safely?">
 
-Set the new value (`oke vault set` or the Console). The Console's rotation view shows the blast radius — in-flight durable runs that will resume with the new value — before you commit. The `rotate: "90d"` hint on the contract drives the rotation-due signal.
+Set the new value (`oke vault set` or the Console). The Console shows blast
+radius before you confirm rotate, and `is:overdue` when a secret is past its
+`rotate: "90d"` hint.
 
 </Accordion>
 <Accordion title="How do I pass the builtin master key without shell history?">

@@ -105,6 +105,22 @@ async function openPgvectorSql(
       const result = await sql.exec(`DELETE FROM "${tableName}" WHERE id = ?`, [id]);
       return result.changes > 0;
     },
+    async list(limit = 100) {
+      const rows = await sql.query(`SELECT "id", "meta" FROM "${tableName}" LIMIT ?`, [
+        Math.max(1, Math.floor(limit)),
+      ]);
+      return rows.map((row) => {
+        const metaRaw = row.meta;
+        return {
+          id: String(row.id),
+          score: 0,
+          meta:
+            typeof metaRaw === "string"
+              ? (JSON.parse(metaRaw) as Record<string, unknown>)
+              : undefined,
+        };
+      });
+    },
     async close() {
       /* SQL connection owned by caller */
     },
@@ -131,6 +147,14 @@ function openPgvectorMemory(dims: number): VectorIndexStore {
     },
     async delete(id) {
       return docs.delete(id);
+    },
+    async list(limit = 100) {
+      const hits: IndexHit[] = [];
+      for (const [id, doc] of docs) {
+        hits.push({ id, score: 0, ...(doc.meta ? { meta: doc.meta } : {}) });
+        if (hits.length >= limit) break;
+      }
+      return hits;
     },
     async close() {
       docs.clear();

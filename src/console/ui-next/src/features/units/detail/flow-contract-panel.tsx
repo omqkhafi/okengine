@@ -1,5 +1,5 @@
 /**
- * Units contract detail — trigger-aware header + schemas + errors + gates + effects.
+ * Units contract briefing — identity, activity, effects, gates, errors, schemas, validation.
  */
 
 import type { JSX } from "react";
@@ -8,6 +8,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import type { Manifest, Signal } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
+import { DetailHeader } from "@/components/explorer/detail-header.tsx";
+import { SectionHead } from "@/components/explorer/section-head.tsx";
 import { GateList } from "@/components/gate-list";
 import { HttpMethodBadge } from "@/components/http-method-badge";
 import { Badge } from "@/components/ui/badge";
@@ -18,13 +20,16 @@ import { traceGateInfos } from "@/features/flows/traces/trace-gates.ts";
 import { traceRequestMeta } from "@/features/flows/traces/request-meta.ts";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
+import { splitContractInput } from "../lib/contract-input.ts";
 import { fieldsFromSchema, schemaObject } from "../lib/fields-from-schema.ts";
 import { flowTriggerKind, flowTriggerSpec } from "../lib/flow-trigger.ts";
+import { pathParamNames } from "../lib/path-params.ts";
 import { resolveClockForFlow } from "../lib/resolve-clock.ts";
 import { EffectsSummary } from "./effects-summary.tsx";
 import { ErrorsSection } from "./errors-section.tsx";
 import { FlowActivityStrip } from "./flow-activity-strip.tsx";
 import { SchemaFields } from "./schema-fields.tsx";
+import { ValidationSection } from "./validation-section.tsx";
 
 /** Props for {@link FlowContractPanel}. */
 export interface FlowContractPanelProps {
@@ -34,10 +39,8 @@ export interface FlowContractPanelProps {
   readonly runs?: readonly RunRow[];
 }
 
-const sectionClassName = "flex flex-col gap-2";
-
 /**
- * Top detail pane for a selected flow.
+ * Top inspector pane for a selected flow.
  *
  * @param props - Flow row + Manifest + optional runs buffer
  */
@@ -61,25 +64,28 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
   const callers = kind === "internal" ? callersOfFlow(manifest, row.id) : [];
   const inputLabel = kind === "http" ? "Request" : "Input";
   const outputLabel = kind === "http" ? "Response" : "Output";
+  const showInput = kind !== "cron" && kind !== "every";
+  const inputFields = fieldsFromSchema(inSchema);
+  const outputFields = fieldsFromSchema(outSchema);
+  const pathParams = kind === "http" && row.path ? pathParamNames(row.path) : [];
+  const inputSplit = splitContractInput(inputFields, pathParams);
 
   return (
-    <div className="flex flex-col gap-5 p-4" data-slot="flow-contract-panel" data-trigger={kind}>
-      <FlowActivityStrip flowId={row.id} runs={runs} />
-
-      <header className="flex flex-col gap-2.5" data-slot="endpoint-header">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/30 text-foreground"
-            title={trigger.detail ? `${trigger.label} · ${trigger.detail}` : trigger.label}
-            aria-hidden
-            data-slot="trigger-kind-icon"
-            data-kind={kind}
-          >
-            <HugeiconsIcon icon={trigger.icon} className="size-3.5" />
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden"
+      data-slot="flow-contract-panel"
+      data-trigger={kind}
+    >
+      <DetailHeader
+        dataSlot="endpoint-header"
+        icon={
+          <span data-slot="trigger-kind-icon" data-kind={kind}>
+            <HugeiconsIcon icon={trigger.icon} className="size-4" />
           </span>
-          <h2 className="min-w-0 flex-1 truncate font-mono text-base font-semibold tracking-tight text-foreground">
-            {row.id}
-          </h2>
+        }
+        wellClassName={trigger.wellClass}
+        title={<span className="font-mono">{row.id}</span>}
+        badge={
           <Badge
             variant="outline"
             className="h-5 shrink-0 px-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
@@ -87,135 +93,141 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
           >
             {trigger.label}
           </Badge>
+        }
+        subtitle={
+          kind === "http" && meta.method && meta.path ? (
+            <div className="mt-0.5 flex min-w-0 items-center gap-2" data-slot="http-endpoint-line">
+              <HttpMethodBadge method={meta.method} />
+              <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground select-all">
+                {meta.path}
+              </code>
+            </div>
+          ) : (
+            <p
+              className="mt-0.5 font-mono text-[11px] text-muted-foreground"
+              data-slot="trigger-headline"
+            >
+              {meta.headline}
+            </p>
+          )
+        }
+        actions={
           <Button
             variant="outline"
             size="sm"
             className="h-7 shrink-0 gap-1 px-2 text-[11px]"
-            render={<Link to="/flows" search={{ flow: row.id }} data-slot="open-in-graph" />}
+            render={<Link to="/overview" search={{ flow: row.id }} data-slot="open-in-graph" />}
           >
             <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
             Open in graph
           </Button>
-        </div>
+        }
+      />
 
-        {kind === "http" && meta.method && meta.path ? (
-          <div className="flex min-w-0 items-center gap-2" data-slot="http-endpoint-line">
-            <HttpMethodBadge method={meta.method} />
-            <code className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground select-all">
-              {meta.path}
-            </code>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1" data-slot="trigger-headline">
-            <p className="font-mono text-xs text-muted-foreground">{meta.headline}</p>
-            {kind === "signal" && signalDecl ? (
-              <p className="text-[11px] text-muted-foreground" data-slot="signal-delivery">
-                Delivery · {signalDecl.delivery}
-                {signalDecl.retries !== undefined ? ` · retries ${signalDecl.retries}` : ""}
-                {signalDecl.deadLetter ? " · dead-letter" : ""}
-              </p>
-            ) : null}
-            {(kind === "cron" || kind === "every") && clockMatch?.kind === "matched" ? (
-              <p className="text-[11px] text-muted-foreground" data-slot="clock-join">
-                Clock · <span className="font-mono">{clockMatch.clockName}</span>
-                {clockMatch.timezone ? ` · ${clockMatch.timezone}` : ""}
-              </p>
-            ) : null}
-            {kind === "internal" ? (
-              <p className="text-[11px] text-muted-foreground" data-slot="call-only-note">
-                No external trigger — reachable via <code className="font-mono">effects.calls</code>{" "}
-                / <code className="font-mono">fx.call</code>.
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {row.flow.plane ? <PlaneBadge plane={row.flow.plane} /> : null}
-          {row.flow.durable ? (
-            <MetaPill
-              icon={Timer01Icon}
-              label="durable"
-              title="Durable — long-running, retryable steps"
-            />
-          ) : null}
-          {row.flow.live ? (
-            <MetaPill
-              icon={Radio01Icon}
-              label="live"
-              title="Live — subscribes to realtime updates"
-            />
-          ) : null}
-        </div>
-
-        {kind === "internal" ? (
-          <section className="flex flex-col gap-1.5" aria-label="Callers" data-slot="callers-list">
-            <h3 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              Called by
-            </h3>
-            {callers.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">
-                No Manifest caller declares <code className="font-mono">effects.calls</code> for
-                this flow.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-0.5">
-                {callers.map((id) => (
-                  <li key={id} className="font-mono text-xs text-foreground/90">
-                    {id}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ) : null}
-      </header>
-
-      {kind === "cron" || kind === "every" ? null : (
-        <section className={sectionClassName} aria-label={inputLabel}>
-          <SectionHeading>{inputLabel}</SectionHeading>
-          <SchemaFields
-            fields={fieldsFromSchema(inSchema)}
-            emptyLabel={
-              typeof row.flow.in === "string"
-                ? "Schema not expanded in Manifest."
-                : kind === "signal"
-                  ? "No flow input schema — signal payload shape lives on the signal when declared."
-                  : "No input schema declared."
-            }
+      <FlowActivityStrip flowId={row.id} runs={runs}>
+        {row.flow.plane ? <PlaneBadge plane={row.flow.plane} /> : null}
+        {row.flow.durable ? (
+          <MetaPill
+            icon={Timer01Icon}
+            label="durable"
+            title="Durable — long-running, retryable steps"
           />
-        </section>
-      )}
+        ) : null}
+        {row.flow.live ? (
+          <MetaPill icon={Radio01Icon} label="live" title="Live — subscribes to realtime updates" />
+        ) : null}
+      </FlowActivityStrip>
 
-      <section className={sectionClassName} aria-label={outputLabel}>
-        <SectionHeading>{outputLabel}</SectionHeading>
-        <SchemaFields
-          fields={fieldsFromSchema(outSchema)}
-          emptyLabel={
-            typeof row.flow.out === "string"
-              ? "Schema not expanded in Manifest."
-              : "No output schema declared."
-          }
-        />
-      </section>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="flex flex-col gap-4">
+          <EffectsSummary effects={row.flow.effects} />
+          <GateList gates={gates} />
+          <ErrorsSection errors={row.flow.errors} />
+          {kind === "signal" && signalDecl ? (
+            <p className="text-[11px] text-muted-foreground" data-slot="signal-delivery">
+              Delivery · {signalDecl.delivery}
+              {signalDecl.retries !== undefined ? ` · retries ${signalDecl.retries}` : ""}
+              {signalDecl.deadLetter ? " · dead-letter" : ""}
+            </p>
+          ) : null}
+          {(kind === "cron" || kind === "every") && clockMatch?.kind === "matched" ? (
+            <p className="text-[11px] text-muted-foreground" data-slot="clock-join">
+              Clock · <span className="font-mono">{clockMatch.clockName}</span>
+              {clockMatch.timezone ? ` · ${clockMatch.timezone}` : ""}
+            </p>
+          ) : null}
+          {kind === "internal" ? (
+            <p className="text-[11px] text-muted-foreground" data-slot="call-only-note">
+              No external trigger — reachable via <code className="font-mono">effects.calls</code> /{" "}
+              <code className="font-mono">fx.call</code>.
+            </p>
+          ) : null}
 
-      <ErrorsSection errors={row.flow.errors} flow={row.flow} manifest={manifest} />
-      <GateList gates={gates} />
-      <EffectsSummary effects={row.flow.effects} />
+          {kind === "internal" ? (
+            <section
+              className="flex flex-col gap-1.5"
+              aria-label="Callers"
+              data-slot="callers-list"
+            >
+              <SectionHead title="Called by" meta={String(callers.length)} />
+              {callers.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  No Manifest caller declares <code className="font-mono">effects.calls</code> for
+                  this flow.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-0.5">
+                  {callers.map((id) => (
+                    <li key={id} className="font-mono text-xs text-foreground/90">
+                      {id}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
+
+          {showInput && inputSplit.parameters.length > 0 ? (
+            <section className="flex flex-col gap-2" aria-label="Parameters" data-slot="parameters">
+              <SectionHead title="Parameters" meta={String(inputSplit.parameters.length)} />
+              <SchemaFields fields={inputSplit.parameters} layout="grid" />
+            </section>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {showInput &&
+            (inputSplit.fields.length > 0 || inputSplit.parameters.length === 0) ? (
+              <section className="flex flex-col gap-2" aria-label={inputLabel} data-slot="request">
+                <SectionHead title={inputLabel} meta={String(inputSplit.fields.length)} />
+                <SchemaFields
+                  fields={inputSplit.fields}
+                  emptyLabel={
+                    typeof row.flow.in === "string"
+                      ? "Schema not expanded in Manifest."
+                      : kind === "signal"
+                        ? "No flow input schema — signal payload shape lives on the signal when declared."
+                        : "No input schema declared."
+                  }
+                />
+              </section>
+            ) : null}
+            <section className="flex flex-col gap-2" aria-label={outputLabel}>
+              <SectionHead title={outputLabel} meta={String(outputFields.length)} />
+              <SchemaFields
+                fields={outputFields}
+                emptyLabel={
+                  typeof row.flow.out === "string"
+                    ? "Schema not expanded in Manifest."
+                    : "No output schema declared."
+                }
+              />
+            </section>
+          </div>
+
+          {showInput ? <ValidationSection fields={inputFields} /> : null}
+        </div>
+      </div>
     </div>
-  );
-}
-
-/**
- * Uppercase section eyebrow — shared rhythm with TraceDetailSheet sections.
- *
- * @param props - Label text
- */
-function SectionHeading({ children }: { readonly children: string }): JSX.Element {
-  return (
-    <h3 className="border-b border-border/50 pb-1.5 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-      {children}
-    </h3>
   );
 }
 

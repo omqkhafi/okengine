@@ -7,6 +7,16 @@
 
 import type { Manifest } from "../../manifest/types.ts";
 import { UI_NEXT_SEED_APP_SYSTEM_TABLES } from "./ui-next-seed-app-schema.ts";
+import {
+  KEEL_LIST_IN,
+  KEEL_LIST_OUT,
+  KEEL_SURFACE_CHANNELS,
+  KEEL_SURFACE_CLOCKS,
+  KEEL_SURFACE_FLOWS,
+  KEEL_SURFACE_GATES,
+  KEEL_SURFACE_SIGNALS,
+  KEEL_SURFACE_VAULT,
+} from "./ui-next-seed-manifest-surface.ts";
 
 /**
  * Manifest seeded into the Console — a Linear-shaped workspace so the
@@ -14,7 +24,7 @@ import { UI_NEXT_SEED_APP_SYSTEM_TABLES } from "./ui-next-seed-app-schema.ts";
  *
  * | Element | Seed surface |
  * | ------- | ------------ |
- * | flow    | github · issues · comments · projects · documents · attachments · triage · notify · search · cycles · drafts · sla |
+ * | flow    | featured github→create→notify plus full CRUD + custom routes (archive, assign, merge, QUERY search, …) |
  * | signal  | `issue-created` · `comment-added` · `cycle-closed` · `sla-breaching` · `draft-expired` |
  * | store   | sql teams…customer_requests + Gate auth / oke_* system · kv drafts/snooze · files attachments · index issues |
  * | clock   | `close-cycles` cron · `expire-drafts` every · `watch-sla` every |
@@ -53,7 +63,19 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
         properties: {
           title: { type: "string" },
           teamKey: { type: "string" },
-          priority: { type: "integer", minimum: 0, maximum: 4 },
+          priority: {
+            type: "integer",
+            minimum: 0,
+            maximum: 4,
+            description: "Must be from 0 up to 4.",
+            oneOf: [
+              { const: 0, title: "No priority" },
+              { const: 1, title: "Urgent" },
+              { const: 2, title: "High" },
+              { const: 3, title: "Medium" },
+              { const: 4, title: "Low" },
+            ],
+          },
         },
       },
       out: {
@@ -88,6 +110,8 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       live: true,
       plane: "user",
       gates: ["member"],
+      in: KEEL_LIST_IN,
+      out: KEEL_LIST_OUT,
       effects: { reads: ["sql:issues"] },
       source: "src/flows/issues/index.ts:88",
     },
@@ -222,6 +246,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       },
       source: "src/flows/sla/index.ts:5",
     },
+    ...KEEL_SURFACE_FLOWS,
   },
   signals: {
     "issue-created": {
@@ -254,6 +279,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       deadLetter: true,
       description: "Compose-draft TTL elapsed",
     },
+    ...KEEL_SURFACE_SIGNALS,
   },
   stores: {
     db: {
@@ -389,6 +415,16 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
             parent_id: { type: "text" },
           },
         },
+        file_objects: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            object_key: { type: "text" },
+            original_name: { type: "text" },
+            content_type: { type: "text" },
+            size_bytes: { type: "integer" },
+            store_ref: { type: "text" },
+          },
+        },
         customer_requests: {
           columns: {
             id: { type: "text", primaryKey: true },
@@ -433,6 +469,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       timezone: "UTC",
       description: "Scan issue SLA high-risk / breached",
     },
+    ...KEEL_SURFACE_CLOCKS,
   },
   gates: {
     member: {
@@ -462,11 +499,13 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       keyBy: "user",
       description: "Issue write throttle",
     },
+    ...KEEL_SURFACE_GATES,
   },
   vault: {
     GITHUB_TOKEN: { description: "GitHub Issues Sync", rotate: "90d" },
     OPENAI_KEY: { description: "Triage Intelligence", rotate: "90d" },
     SLACK_WEBHOOK: { description: "Project / cycle digest webhook", rotate: "90d" },
+    ...KEEL_SURFACE_VAULT,
   },
   channels: {
     "issue-assigned": {
@@ -494,6 +533,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       locales: ["en"],
       description: "Project health update",
     },
+    ...KEEL_SURFACE_CHANNELS,
   },
   ai: {
     models: {
@@ -516,11 +556,28 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
         timeout: "15s",
         budget: { maxCostPerCall: 0.005 },
       },
+      "document-summary": {
+        version: 1,
+        model: "fast",
+        via: ["fast"],
+        timeout: "20s",
+        budget: { maxCostPerCall: 0.008 },
+      },
     },
     agents: {
       triage: {
-        tools: ["issues.list", "issues.create", "issues.update", "comments.create"],
-        maxSteps: 6,
+        tools: [
+          "issues.list",
+          "issues.get",
+          "issues.create",
+          "issues.update",
+          "issues.assign",
+          "comments.create",
+          "comments.list",
+          "triage.inbox",
+          "search.query",
+        ],
+        maxSteps: 8,
         model: "smart",
         budget: { maxCostPerRun: 0.25 },
       },

@@ -1,6 +1,6 @@
 /**
  * ui-next router — code-based TanStack Router (Vite SPA, same pattern as current Console).
- * Pre-auth `/` and authenticated shell `/flows` | `/units` | `/store`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault`.
  */
 
 import {
@@ -26,6 +26,8 @@ import { StorePage } from "./features/store/store-page.tsx";
 import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { UnitsPage } from "./features/units/units-page.tsx";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
+import { VaultPage } from "./features/vault/vault-page.tsx";
+import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
 /**
@@ -80,18 +82,31 @@ const authenticatedRoute = createRoute({
   },
 });
 
-const flowsRoute = createRoute({
+const overviewRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
-  path: "/flows",
+  path: "/overview",
   validateSearch: validateFlowsSearch,
   component: FlowsPage,
 });
 
-const unitsRoute = createRoute({
+const flowsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
-  path: "/units",
+  path: "/flows",
   validateSearch: validateUnitsSearch,
   component: UnitsPage,
+});
+
+const unitsRedirectRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/units",
+  beforeLoad: ({ search }) => {
+    throw redirect({
+      to: "/flows",
+      search: validateUnitsSearch(search as Record<string, unknown>),
+      replace: true,
+    });
+  },
+  component: () => null,
 });
 
 const storeRoute = createRoute({
@@ -101,9 +116,22 @@ const storeRoute = createRoute({
   component: StorePage,
 });
 
+const vaultRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/vault",
+  validateSearch: validateVaultSearch,
+  component: VaultPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  authenticatedRoute.addChildren([flowsRoute, unitsRoute, storeRoute]),
+  authenticatedRoute.addChildren([
+    overviewRoute,
+    flowsRoute,
+    unitsRedirectRoute,
+    storeRoute,
+    vaultRoute,
+  ]),
 ]);
 
 /**

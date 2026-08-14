@@ -5,7 +5,7 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-/** Search params for `/units`. */
+/** Search params for `/flows`. */
 export interface UnitsSearch {
   readonly flow?: string;
 }

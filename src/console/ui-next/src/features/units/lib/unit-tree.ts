@@ -97,16 +97,21 @@ export function unitTreeGroupKey(bandId: FlowTriggerKind, unit: string): string 
 }
 
 /**
- * Whether a Units tree node is open. Bands and unit folders default open.
+ * Whether a Units tree node is open. Bands and unit folders default closed
+ * so a large HTTP surface stays scannable; a search query defaults them open.
  *
  * @param key - {@link unitTreeBandKey} or {@link unitTreeGroupKey}
  * @param openByKey - Explicit overrides
+ * @param searching - When true, unset keys default open so matches are visible
  */
 export function unitTreeIsOpen(
   key: string,
   openByKey: Readonly<Record<string, boolean>>,
+  searching = false,
 ): boolean {
-  return openByKey[key] !== false;
+  const stored = openByKey[key];
+  if (stored !== undefined) return stored;
+  return searching;
 }
 
 /**

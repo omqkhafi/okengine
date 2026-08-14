@@ -125,7 +125,17 @@ export type {
   TextIndexStoreFxHandle,
 } from "./store/runtime.ts";
 
-export { fileKeyWarnings, contentAddressedKey, projectFileKeys } from "./store/files-policy.ts";
+export {
+  fileKeyWarnings,
+  contentAddressedKey,
+  projectFileKeys,
+  inferFileContentType,
+  isAsciiObjectKey,
+  slugFileSegment,
+  safeFilePrefix,
+  safeFileObjectKey,
+  coerceSafeFileObjectKey,
+} from "./store/files-policy.ts";
 export type { FileKeyWarning } from "./store/files-policy.ts";
 
 export {

@@ -214,11 +214,16 @@ function Canvas({
             <MiniMap
               pannable
               zoomable
-              maskColor="color-mix(in oklab, var(--background) 72%, transparent)"
+              ariaLabel="Schema graph overview"
+              bgColor="var(--card)"
+              maskColor="color-mix(in oklab, var(--background) 55%, transparent)"
               nodeColor={(node) => {
                 const hex = (node.data as SchemaGraphNode["data"]).color?.hex;
-                return hex ?? "color-mix(in oklab, var(--foreground) 22%, transparent)";
+                return hex ?? "#64748B";
               }}
+              nodeStrokeColor="transparent"
+              nodeStrokeWidth={12}
+              nodeBorderRadius={8}
             />
           </ReactFlow>
         )}

@@ -51,6 +51,7 @@ import {
   purgeAuditBefore as purgeAuditRows,
   purgeExpiredSecrets,
   readAuditPage,
+  readAuditRow,
   releaseRotateLease,
   renewRotateLease,
   verifyAuditChain,
@@ -179,6 +180,12 @@ export interface BuiltinVaultAdapter extends VaultAdapter {
    * @param options - Limit / path filter
    */
   listAudit(options?: AuditPageOptions): Promise<readonly VaultAuditRecord[]>;
+  /**
+   * Load one audit row by id (operator-safe fields).
+   *
+   * @param id - Audit row id
+   */
+  readAuditRow(id: string): Promise<VaultAuditRecord | null>;
   /** Export every live secret as one bundle encrypted under the backup KEK. */
   exportBackup(): Promise<Uint8Array>;
   /**
@@ -1013,6 +1020,11 @@ export function createBuiltinVaultAdapter(opts: CreateBuiltinVaultOptions): Buil
     async listAudit(options?: AuditPageOptions): Promise<readonly VaultAuditRecord[]> {
       await ensureReady();
       return readAuditPage(db, options ?? {});
+    },
+
+    async readAuditRow(id: string): Promise<VaultAuditRecord | null> {
+      await ensureReady();
+      return readAuditRow(db, id);
     },
 
     async exportBackup(): Promise<Uint8Array> {

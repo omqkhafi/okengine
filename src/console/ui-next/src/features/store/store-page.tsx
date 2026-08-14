@@ -3,7 +3,10 @@
  */
 
 import { useMemo, type JSX } from "react";
+import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
+import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
 import { useManifest } from "@/features/flows/data/use-manifest.ts";
 import { useRuns } from "@/features/flows/data/use-runs.ts";
@@ -42,9 +45,13 @@ export function StorePage(): JSX.Element {
   );
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden" data-slot="store-page">
+    <div className={EXPLORER_PAGE_CLASS} data-slot="store-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="28%" minSize="18%" className="min-h-0 overflow-hidden">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.start.defaultSize}
+          minSize={EXPLORER_SPLIT.start.minSize}
+          className="min-h-0 overflow-hidden"
+        >
           <div className="h-full min-h-0 overflow-hidden">
             <StoreTree
               stores={stores}
@@ -64,7 +71,11 @@ export function StorePage(): JSX.Element {
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize="72%" minSize="40%" className="min-h-0 overflow-hidden">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.end.defaultSize}
+          minSize={EXPLORER_SPLIT.end.minSize}
+          className="min-h-0 overflow-hidden"
+        >
           <div className="h-full min-h-0 overflow-hidden">
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
               {schemaView ? (
@@ -98,15 +109,23 @@ export function StorePage(): JSX.Element {
                   runs={runs.data ?? []}
                 />
               ) : (
-                <div className="flex h-full items-center justify-center p-6">
-                  <p className="text-sm text-muted-foreground">
-                    {list.isLoading
+                <ExplorerEmpty
+                  icon={ELEMENT_ICONS.store.icon}
+                  title={
+                    list.isLoading
                       ? "Loading stores…"
                       : list.isError
+                        ? "Store unavailable"
+                        : "Select a resource"
+                  }
+                  description={
+                    list.isLoading
+                      ? "Reading store catalogs."
+                      : list.isError
                         ? list.error.message
-                        : "Select a resource from the Store tree."}
-                  </p>
-                </div>
+                        : "Pick a table, namespace, bucket, or index from the tree."
+                  }
+                />
               )}
             </div>
           </div>

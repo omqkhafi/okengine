@@ -97,6 +97,31 @@ export function removeClause(query: DimensionQuery, dimension: string): Dimensio
   };
 }
 
+function clauseEqual(a: QueryClause, b: QueryClause): boolean {
+  return a.dimension === b.dimension && a.op === b.op && a.value === b.value;
+}
+
+/**
+ * Whether `query` already contains this exact clause.
+ *
+ * @param query - Current query
+ * @param clause - Clause to find
+ */
+export function hasClause(query: DimensionQuery, clause: QueryClause): boolean {
+  return query.clauses.some((c) => clauseEqual(c, clause));
+}
+
+/**
+ * Add a clause, or drop it if it is already present.
+ *
+ * @param query - Current query
+ * @param clause - Clause to toggle
+ */
+export function toggleClause(query: DimensionQuery, clause: QueryClause): DimensionQuery {
+  if (hasClause(query, clause)) return removeClause(query, clause.dimension);
+  return upsertClause(query, clause);
+}
+
 /**
  * Format a single clause for display / URL.
  *
@@ -241,6 +266,19 @@ function parseValue(dimension: string, raw: string): string | number | boolean |
   }
   if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
   return raw;
+}
+
+/**
+ * Display form of a clause value (`100ms`, quoted strings).
+ *
+ * @param dimension - Dimension name
+ * @param value - Raw clause value
+ */
+export function formatClauseValue(
+  dimension: string,
+  value: string | number | boolean,
+): string {
+  return formatValue(dimension, value);
 }
 
 function formatValue(dimension: string, value: string | number | boolean): string {

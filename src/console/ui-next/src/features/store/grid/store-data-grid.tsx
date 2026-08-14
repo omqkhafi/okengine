@@ -35,7 +35,6 @@ import {
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Checkbox } from "@/components/motion/checkbox.tsx";
 import { Switch } from "@/components/motion/switch.tsx";
 import { Table, type SortState, type TableColumn } from "@/components/motion/table/index.tsx";
 import { EditableCell } from "@/components/motion/table/editable-cell.tsx";
@@ -65,7 +64,7 @@ import { parseKvTtlDraft } from "../lib/kv-meta.ts";
 import { KvAddSheet } from "./kv-add-sheet.tsx";
 import { SqlInsertSheet } from "./sql-insert-sheet.tsx";
 import { PendingChangesSheet } from "./pending-changes-sheet.tsx";
-import { ToolbarTip } from "./toolbar-tip.tsx";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import {
   EMPTY_EDIT_HISTORY,
   invertEditBatch,
@@ -779,10 +778,13 @@ export function StoreDataGrid({
               onUpgrade={
                 row.cells.upgrade === true
                   ? () => {
-                      void commitBatch([{ rowId: row.id, key: "upgrade", next: true }], {
-                        notice: `Upgraded ${row.id}`,
-                        track: false,
-                      });
+                      void commitBatch(
+                        [{ rowId: row.id, key: "upgrade", prev: row.cells.upgrade, next: true }],
+                        {
+                          notice: `Upgraded ${row.id}`,
+                          track: false,
+                        },
+                      );
                     }
                   : undefined
               }

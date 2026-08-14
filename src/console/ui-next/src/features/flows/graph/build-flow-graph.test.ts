@@ -13,7 +13,7 @@ import {
   unitOfFlowId,
   actionOfFlowId,
 } from "./build-flow-graph.ts";
-import { EDGE_STROKE } from "./flow-graph-theme.ts";
+import { EDGE_STROKE, GRAPH_Z } from "./flow-graph-theme.ts";
 
 /** Fixture with an AI ask so the graph covers every effect edge kind. */
 const baseFlows = FLOWS_TEST_MANIFEST.flows!;
@@ -71,6 +71,18 @@ describe("buildFlowGraph", () => {
     });
   });
 
+  test("creates channel / vault targets from sends and secrets", () => {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    expect(byId.get("channel:booking-confirmed")?.data).toMatchObject({
+      kind: "channel",
+      label: "booking-confirmed",
+    });
+    expect(byId.get("vault:STRIPE_KEY")?.data).toMatchObject({
+      kind: "vault",
+      label: "STRIPE_KEY",
+    });
+  });
+
   test("creates store / signal / AI target nodes from declared effects", () => {
     const byId = new Map(nodes.map((n) => [n.id, n]));
     expect(byId.get("sql:bookings")?.data).toMatchObject({
@@ -105,6 +117,9 @@ describe("buildFlowGraph", () => {
     expect(call?.data?.kind).toBe("calls");
     // asks → AI
     expect(edgeIds.has("e:flow:payments.chargeBooking->ai:ticket-triage")).toBe(true);
+    // sends → channel, secrets → vault (eight-element targets)
+    expect(edgeIds.has("e:flow:fulfillment.onOrder->channel:booking-confirmed")).toBe(true);
+    expect(edgeIds.has("e:flow:payments.chargeBooking->vault:STRIPE_KEY")).toBe(true);
 
     // No phantom runtime-only edges (e.g. from a live run that never appears in Manifest).
     expect(edges.every((e) => !e.id.includes("runtime"))).toBe(true);
@@ -138,12 +153,30 @@ describe("buildFlowGraph", () => {
   test("unit groups hug content bounds instead of a fixed dead-space box", () => {
     const unit = nodes.find((n) => n.id === "unit:fulfillment");
     const flow = nodes.find((n) => n.id === "flow:fulfillment.onOrder");
-    expect(unit?.style?.width).toBeLessThan(280);
-    expect(unit?.style?.height).toBeLessThan(120);
+    expect(unit?.width).toBeLessThan(280);
+    expect(unit?.height).toBeLessThan(120);
     expect(flow?.parentId).toBe("unit:fulfillment");
     // Child sits inside the header/pad chrome, not at a naive ROW_H stack offset.
     expect(flow?.position.y).toBeGreaterThan(20);
     expect(flow?.position.y).toBeLessThan(40);
+  });
+
+  test("leaf ships stack above ribbons (manual z-index)", () => {
+    const unit = nodes.find((n) => n.data.kind === "unit");
+    const flow = nodes.find((n) => n.data.kind === "flow");
+    const store = nodes.find((n) => n.data.kind === "store");
+    expect(unit?.zIndex).toBe(GRAPH_Z.unit);
+    expect(flow?.zIndex).toBe(GRAPH_Z.leaf);
+    expect(store?.zIndex).toBe(GRAPH_Z.leaf);
+    expect(edges.every((e) => (e.zIndex ?? 0) < GRAPH_Z.leaf)).toBe(true);
+  });
+
+  test("every node declares width/height so MiniMap can paint", () => {
+    expect(nodes.length).toBeGreaterThan(0);
+    for (const node of nodes) {
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+    }
   });
 
   test("empty / null Manifest yields an empty graph", () => {

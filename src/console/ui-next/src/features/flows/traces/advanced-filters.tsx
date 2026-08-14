@@ -1,22 +1,29 @@
 /**
  * Progressive-disclosure advanced dimension filters for Traces.
  *
- * Always-on controls stay in the header; Advanced expands the Runs-style
- * dimension query builder (chips + expression) over the scoped list.
+ * Applied clauses are the visualization. Presets toggle them. The raw
+ * expression stays out of the way — operators read `trigger = signal`,
+ * not a query dump.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { RunRow } from "@/client.ts";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   BUILDER_DIMENSIONS,
   discoverDimensions,
   formatClause,
+  formatClauseValue,
+  hasClause,
   parseDimensionQuery,
   removeClause,
-  serializeDimensionQuery,
+  toggleClause,
   upsertClause,
   type DimensionQuery,
+  type QueryClause,
   type QueryOp,
 } from "./dimension-query.ts";
 
@@ -32,8 +39,16 @@ const ADVANCED_PRESETS: readonly {
   { id: "slow", label: "Slow", expr: "duration > 100ms" },
 ];
 
+const FLAT_SELECT =
+  "h-7 min-w-0 rounded-none border-0 bg-transparent px-0 font-mono text-[11px] text-foreground shadow-none outline-none focus-visible:ring-0 dark:bg-transparent";
+
+const TEXT_ACTION =
+  "rounded-none border-0 bg-transparent p-0 text-[11px] text-foreground/70 shadow-none transition-colors hover:text-foreground";
+
+const CLAUSE_GRID = "grid grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,1fr)_1.25rem] items-center gap-x-1";
+
 /**
- * Advanced filter panel — dimension builder + chips + expression.
+ * Advanced filter panel — visual clauses, togglable presets, optional add row.
  *
  * @param props - Query state, run population for discovered dimensions
  */
@@ -55,85 +70,39 @@ export function AdvancedFilters({
   const [dim, setDim] = useState<string>("trigger");
   const [op, setOp] = useState<QueryOp>("=");
   const [value, setValue] = useState("signal");
-  const [exprDraft, setExprDraft] = useState(() => serializeDimensionQuery(query));
-
-  useEffect(() => {
-    setExprDraft(serializeDimensionQuery(query));
-  }, [query]);
-
-  const commitExpr = (raw: string) => {
-    onChange(parseDimensionQuery(raw));
-  };
+  const [adding, setAdding] = useState(false);
 
   const addClause = () => {
     const parsed = parseDimensionQuery(`${dim} ${op} ${value}`);
     const clause = parsed.clauses[0];
     if (!clause) return;
     onChange(upsertClause(query, clause));
+    setAdding(false);
   };
 
   return (
     <div
-      className="flex flex-col gap-2 border-b border-border/60 bg-muted/20 px-3 py-2"
+      className="flex flex-col gap-1.5 border-b border-border/60 px-2 py-1.5"
       data-slot="traces-advanced-filters"
     >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-          Advanced
-        </span>
-        {ADVANCED_PRESETS.map((preset) => {
-          const active = serializeDimensionQuery(query) === preset.expr;
-          return (
-            <button
-              key={preset.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(parseDimensionQuery(preset.expr))}
-              className={cn(
-                "rounded-md border px-1.5 py-0.5 text-[10px] transition-colors",
-                active
-                  ? "border-foreground/30 bg-background text-foreground shadow-sm"
-                  : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground",
-              )}
-            >
-              {preset.label}
-            </button>
-          );
-        })}
-        {query.clauses.length > 0 ? (
-          <button
-            type="button"
-            className="ml-auto text-[10px] text-muted-foreground hover:text-foreground"
-            onClick={() => onChange(parseDimensionQuery(""))}
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-
       {query.clauses.length > 0 ? (
-        <ul aria-label="Active advanced filter clauses" className="flex flex-wrap gap-1.5">
-          {query.clauses.map((c) => (
-            <li key={c.dimension}>
-              <button
-                type="button"
-                className="rounded-md border border-border/70 bg-background px-1.5 py-0.5 font-mono text-[10px] text-foreground"
-                onClick={() => onChange(removeClause(query, c.dimension))}
-                title="Remove clause"
-              >
-                {formatClause(c)} ×
-              </button>
+        <ul aria-label="Active filters" className="flex flex-col gap-0.5">
+          {query.clauses.map((clause) => (
+            <li key={clause.dimension}>
+              <ClauseToken
+                clause={clause}
+                onRemove={() => onChange(removeClause(query, clause.dimension))}
+              />
             </li>
           ))}
         </ul>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-1.5">
-        <label className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground">Dimension</span>
+      {adding ? (
+        <div className={CLAUSE_GRID} data-slot="traces-advanced-composer">
           <select
             aria-label="Filter dimension"
-            className="h-6 max-w-[7rem] rounded-md border border-border/70 bg-transparent px-1 text-[10px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            className={FLAT_SELECT}
             value={dim}
             onChange={(e) => setDim(e.target.value)}
           >
@@ -143,12 +112,9 @@ export function AdvancedFilters({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground">Op</span>
           <select
             aria-label="Filter operator"
-            className="h-6 rounded-md border border-border/70 bg-transparent px-1 text-[10px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            className={cn(FLAT_SELECT, "text-center text-foreground/70")}
             value={op}
             onChange={(e) => setOp(e.target.value as QueryOp)}
           >
@@ -158,42 +124,98 @@ export function AdvancedFilters({
               </option>
             ))}
           </select>
-        </label>
-        <label className="flex min-w-[5rem] flex-1 flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground">Value</span>
-          <input
+          <Input
             aria-label="Filter value"
-            className="h-6 rounded-md border border-border/70 bg-transparent px-1.5 text-[10px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            flat
+            className="h-7 px-0 font-mono text-[11px]"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") addClause();
             }}
           />
-        </label>
+          <button type="button" className={TEXT_ACTION} onClick={addClause}>
+            Add
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        {ADVANCED_PRESETS.map((preset) => {
+          const clause = parseDimensionQuery(preset.expr).clauses[0];
+          const active = clause !== undefined && hasClause(query, clause);
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={active}
+              disabled={clause === undefined}
+              onClick={() => {
+                if (!clause) return;
+                onChange(toggleClause(query, clause));
+              }}
+              className={cn(
+                TEXT_ACTION,
+                active ? "font-medium text-foreground" : "text-foreground/70",
+              )}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
         <button
           type="button"
-          onClick={addClause}
-          className="h-6 rounded-md border border-border/70 bg-background px-2 text-[10px] font-medium text-foreground hover:bg-muted"
+          aria-expanded={adding}
+          className={cn(TEXT_ACTION, "ml-auto", adding && "text-foreground")}
+          onClick={() => setAdding((open) => !open)}
         >
-          Add
+          {adding ? "Cancel" : "Add clause"}
         </button>
+        {query.clauses.length > 0 ? (
+          <button
+            type="button"
+            className={TEXT_ACTION}
+            onClick={() => onChange(parseDimensionQuery(""))}
+          >
+            Clear
+          </button>
+        ) : null}
       </div>
+    </div>
+  );
+}
 
-      <label className="flex flex-col gap-0.5">
-        <span className="text-[9px] text-muted-foreground">Expression</span>
-        <input
-          aria-label="Dimension query expression"
-          className="h-6 rounded-md border border-border/70 bg-transparent px-1.5 font-mono text-[10px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-          placeholder="flow = X AND cache = miss AND duration > 1s"
-          value={exprDraft}
-          onChange={(e) => setExprDraft(e.target.value)}
-          onBlur={() => commitExpr(exprDraft)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitExpr(exprDraft);
-          }}
-        />
-      </label>
+/**
+ * One applied clause as a readable token — dimension, op, value, remove.
+ */
+function ClauseToken({
+  clause,
+  onRemove,
+}: {
+  readonly clause: QueryClause;
+  readonly onRemove: () => void;
+}) {
+  const label = formatClause(clause);
+  return (
+    <div className={CLAUSE_GRID} data-slot="traces-advanced-clause">
+      <span className="truncate font-mono text-[11px] text-foreground/80">{clause.dimension}</span>
+      <span className="text-center font-mono text-[11px] text-foreground/65" aria-hidden>
+        {clause.op}
+      </span>
+      <span className="truncate font-mono text-[11px] text-foreground">
+        {formatClauseValue(clause.dimension, clause.value)}
+      </span>
+      <button
+        type="button"
+        className={cn(
+          TEXT_ACTION,
+          "flex size-5 items-center justify-center text-foreground/55 hover:text-destructive",
+        )}
+        aria-label={`Remove ${label}`}
+        onClick={onRemove}
+      >
+        <HugeiconsIcon icon={Cancel01Icon} className="size-3" />
+      </button>
     </div>
   );
 }

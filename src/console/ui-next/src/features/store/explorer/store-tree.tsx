@@ -16,14 +16,29 @@ import {
   ShieldOff,
   SourceCodeIcon,
   TableIcon,
-  UnfoldLessIcon,
   ViewIcon,
   ViewOffSlashIcon,
   ZapIcon,
-  UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { StoreFacet, StoreListChild, StoreListStore } from "@/client.ts";
+import {
+  EXPLORER_BAND_CLASS,
+  EXPLORER_BAND_HEADER_CLASS,
+  EXPLORER_BAND_LABEL_CLASS,
+  EXPLORER_COUNT_CLASS,
+  EXPLORER_FOLDER_WELL_CLASS,
+  EXPLORER_LIST_EMPTY_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_RAIL_ACTIVE_CLASS,
+  EXPLORER_RAIL_CLASS,
+  EXPLORER_ROW_CLASS,
+  EXPLORER_ROW_SELECTED_CLASS,
+  EXPLORER_TOOLBAR_CLASS,
+  EXPLORER_WELL_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
+import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
+import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DropdownMenu,
@@ -35,7 +50,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -55,8 +69,18 @@ import {
   type StoreFacetBand,
   type StoreTreeStore,
 } from "../lib/store-tree.ts";
-import { ToolbarTip } from "../grid/toolbar-tip.tsx";
-import { childCatalogKind, groupSqlChildren, storeChildLabel } from "../lib/sql-catalog.ts";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
+import {
+  filesDriverLabel,
+  filesDriverOrigin,
+  isSingletonFilesBucket,
+} from "../lib/files-origin.ts";
+import {
+  childCatalogKind,
+  groupSqlChildren,
+  storeChildLabel,
+  storeChildShowsRls,
+} from "../lib/sql-catalog.ts";
 import type { StoreQueryFacet } from "../state/store-selection.ts";
 
 /** Props for {@link StoreTree}. */
@@ -155,13 +179,12 @@ export function StoreTree({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="store-tree">
       <div className="shrink-0 border-b border-border/60">
-        <div className="flex items-center gap-1">
-          <Input
+        <div className={cn(EXPLORER_TOOLBAR_CLASS, "border-b-0")}>
+          <ExplorerSearch
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search stores…"
             aria-label="Search stores"
-            className="h-8 min-w-0 flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
             data-slot="store-search"
           />
           <FacetVisibilityMenu
@@ -181,7 +204,7 @@ export function StoreTree({
       </div>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {visibleBands.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted-foreground">
+          <p className={EXPLORER_LIST_EMPTY_CLASS}>
             {bands.length === 0 ? "No stores match." : "All facets hidden."}
           </p>
         ) : (
@@ -220,76 +243,6 @@ export function StoreTree({
 }
 
 /**
- * Unfold control — search bar (all nodes) or a facet / store row.
- *
- * @param props - Open state + toggle + placement
- */
-function TreeExpandToggle({
-  allOpen,
-  disabled,
-  onToggle,
-  collapseLabel = "Collapse all",
-  expandLabel = "Expand all",
-  dataSlot,
-  className,
-  disclose = false,
-  bare = false,
-}: {
-  readonly allOpen: boolean;
-  readonly disabled?: boolean;
-  readonly onToggle: () => void;
-  readonly collapseLabel?: string;
-  readonly expandLabel?: string;
-  readonly dataSlot: string;
-  readonly className?: string;
-  /** When true, the button discloses one section (`aria-expanded`). */
-  readonly disclose?: boolean;
-  /** Icon-only — no chrome. Used on facet / store rows. */
-  readonly bare?: boolean;
-}): JSX.Element {
-  const label = allOpen ? collapseLabel : expandLabel;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <button
-            {...props}
-            type="button"
-            aria-label={label}
-            aria-expanded={disclose ? allOpen : undefined}
-            data-slot={dataSlot}
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onClick?.(event);
-              onToggle();
-            }}
-            className={cn(
-              "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-              "hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-              "disabled:pointer-events-none disabled:opacity-40",
-              bare
-                ? "border-0 bg-transparent hover:bg-transparent"
-                : "border border-border/70 hover:border-border focus-visible:border-ring",
-              className,
-            )}
-          >
-            <HugeiconsIcon
-              icon={allOpen ? UnfoldLessIcon : UnfoldMoreIcon}
-              className="size-3.5"
-              aria-hidden
-            />
-          </button>
-        )}
-      />
-      <TooltipContent side="bottom" className="text-[11px]">
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
  * Search-bar control to show or hide Store facet bands.
  *
  * @param props - Present bands + hidden set + toggles
@@ -320,10 +273,7 @@ function FacetVisibilityMenu({
               data-slot="store-tree-visibility"
               disabled={bands.length === 0}
               className={cn(
-                "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
-                "hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-                "disabled:pointer-events-none disabled:opacity-40",
-                "border border-border/70 hover:border-border focus-visible:border-ring",
+                EXPLORER_ICON_BUTTON_CLASS,
                 anyHidden && "border-foreground/25 text-foreground",
               )}
             >
@@ -417,22 +367,12 @@ function FacetBand({
 
   const identity = (
     <>
-      <span
-        className={cn(
-          "flex size-5 shrink-0 items-center justify-center rounded-md border",
-          facetSpec.wellClass,
-        )}
-        aria-hidden
-      >
+      <span className={cn(EXPLORER_WELL_CLASS, facetSpec.wellClass)} aria-hidden>
         <HugeiconsIcon icon={facetSpec.icon} className="size-3" />
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="min-w-0 truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase group-hover/band:text-foreground">
-          {band.label}
-        </span>
-        <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground">
-          {childCount}
-        </span>
+        <span className={EXPLORER_BAND_LABEL_CLASS}>{band.label}</span>
+        <span className={EXPLORER_COUNT_CLASS}>{childCount}</span>
       </span>
     </>
   );
@@ -442,12 +382,12 @@ function FacetBand({
       data-slot="store-facet-band"
       data-facet={band.facet}
       aria-label={band.label}
-      className="overflow-hidden border-b border-border/60 bg-muted/15 last:border-b-0"
+      className={EXPLORER_BAND_CLASS}
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
           nativeButton={false}
-          className="group/band flex w-full items-center gap-1.5 border-b border-border/50 bg-muted/25 px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
+          className={EXPLORER_BAND_HEADER_CLASS}
           data-slot="store-facet-band-toggle"
           render={(props) => (
             <div {...props}>
@@ -528,6 +468,18 @@ function StoreGroupItem({
   readonly selectedEffectRef: string | null;
   readonly onSelect: (effectRef: string) => void;
 }): JSX.Element {
+  const only = node.children[0];
+  if (isSingletonFilesBucket(node.store) && only) {
+    return (
+      <FilesBucketItem
+        store={node.store}
+        child={only}
+        selected={selectedEffectRef === only.effectRef}
+        onSelect={onSelect}
+      />
+    );
+  }
+
   return (
     <li data-slot="store-group" data-ref={node.store.ref}>
       <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -539,7 +491,7 @@ function StoreGroupItem({
             <div {...props}>
               <TreeChevron open={open} group="store" />
               <span
-                className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground transition-colors group-hover/store:text-foreground"
+                className={cn(EXPLORER_FOLDER_WELL_CLASS, "group-hover/store:text-foreground")}
                 aria-hidden
               >
                 <HugeiconsIcon icon={Folder01Icon} className="size-3" />
@@ -548,11 +500,14 @@ function StoreGroupItem({
                 <span className="min-w-0 truncate font-mono text-xs font-semibold tracking-wide text-foreground">
                   {node.store.name}
                 </span>
-                <span className="shrink-0 rounded border border-border/50 bg-muted/30 px-1.5 py-px text-[10px] font-normal tabular-nums text-muted-foreground">
+                <span className={EXPLORER_COUNT_CLASS}>
                   {node.store.facet === "sql"
                     ? groupSqlChildren(node.children).tables.length
                     : node.children.length}
                 </span>
+                {node.store.facet === "files" ? (
+                  <FilesDriverChip driverId={node.store.driverId} />
+                ) : null}
               </span>
               <TreeExpandToggle
                 allOpen={open}
@@ -611,7 +566,14 @@ function SqlStoreChildren({
             key={child.effectRef}
             child={child}
             wellClass={facetWellClass}
-            icon={node.store.facet === "sql" ? FileSpreadsheetIcon : facetIcon}
+            icon={
+              node.store.facet === "sql"
+                ? FileSpreadsheetIcon
+                : node.store.facet === "files"
+                  ? Folder01Icon
+                  : facetIcon
+            }
+            hint={node.store.facet === "files" ? "bucket" : undefined}
             selected={selectedEffectRef === child.effectRef}
             onSelect={onSelect}
           />
@@ -629,21 +591,13 @@ function SqlStoreChildren({
             data-slot="store-tables-toggle"
             render={(props) => (
               <div {...props}>
-                <span
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-md border",
-                    facetWellClass,
-                  )}
-                  aria-hidden
-                >
+                <span className={cn(EXPLORER_WELL_CLASS, facetWellClass)} aria-hidden>
                   <HugeiconsIcon icon={TableIcon} className="size-3" />
                 </span>
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-semibold text-foreground">
                   Tables
                 </span>
-                <span className="shrink-0 rounded border border-border/50 bg-muted/30 px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
-                  {grouped.tables.length}
-                </span>
+                <span className={EXPLORER_COUNT_CLASS}>{grouped.tables.length}</span>
                 <TreeChevron open={tablesOpen} group="store" />
               </div>
             )}
@@ -889,18 +843,91 @@ function TableRlsIcon({ enabled }: { readonly enabled: boolean }): JSX.Element {
  *
  * @param props - Child + facet chrome + selection
  */
+/** Chip for the files driver (`memory` / `fs` / `s3`) with origin tooltip. */
+function FilesDriverChip({ driverId }: { readonly driverId: string | undefined }): JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) => (
+          <span
+            {...props}
+            className="shrink-0 rounded border border-border/50 bg-muted/30 px-1.5 py-px font-mono text-[10px] text-muted-foreground"
+            data-slot="files-driver"
+          >
+            {filesDriverLabel(driverId)}
+          </span>
+        )}
+      />
+      <TooltipContent side="right" className="text-[11px]">
+        {filesDriverOrigin(driverId)}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * One files bucket — the inspectable unit. Singleton stores skip the
+ * `attachments → attachments` folder wrap.
+ */
+function FilesBucketItem({
+  store,
+  child,
+  selected,
+  onSelect,
+}: {
+  readonly store: StoreListStore;
+  readonly child: StoreListChild;
+  readonly selected: boolean;
+  readonly onSelect: (effectRef: string) => void;
+}): JSX.Element {
+  return (
+    <li data-slot="store-files-bucket" data-ref={store.ref}>
+      <button
+        type="button"
+        data-slot="store-child-item"
+        data-effect-ref={child.effectRef}
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(child.effectRef)}
+        className={cn(EXPLORER_ROW_CLASS, "group/child", selected && EXPLORER_ROW_SELECTED_CLASS)}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            EXPLORER_RAIL_CLASS,
+            selected ? EXPLORER_RAIL_ACTIVE_CLASS : "bg-transparent",
+          )}
+        />
+        <span className={cn(EXPLORER_WELL_CLASS, STORE_FACET_SPECS.files.wellClass)} aria-hidden>
+          <HugeiconsIcon icon={Folder01Icon} className="size-3" />
+        </span>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate font-mono transition-colors group-hover/child:text-foreground",
+            selected ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {store.name}
+        </span>
+        <FilesDriverChip driverId={store.driverId} />
+      </button>
+    </li>
+  );
+}
+
 function ChildListItem({
   child,
   wellClass,
   icon,
   selected,
   onSelect,
+  hint,
 }: {
   readonly child: StoreListChild;
   readonly wellClass: string;
   readonly icon: ElementHugeIcon;
   readonly selected: boolean;
   readonly onSelect: (effectRef: string) => void;
+  readonly hint?: string;
 }): JSX.Element {
   return (
     <li>
@@ -910,25 +937,16 @@ function ChildListItem({
         data-effect-ref={child.effectRef}
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(child.effectRef)}
-        className={cn(
-          "group/child relative flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-[11px] transition-colors hover:bg-muted/60",
-          selected && "bg-muted/70 text-foreground",
-        )}
+        className={cn(EXPLORER_ROW_CLASS, "group/child", selected && EXPLORER_ROW_SELECTED_CLASS)}
       >
         <span
           aria-hidden
           className={cn(
-            "absolute inset-y-1 left-0 w-0.5 rounded-full transition-colors",
-            selected ? "bg-sky-500" : "bg-transparent",
+            EXPLORER_RAIL_CLASS,
+            selected ? EXPLORER_RAIL_ACTIVE_CLASS : "bg-transparent",
           )}
         />
-        <span
-          className={cn(
-            "flex size-5 shrink-0 items-center justify-center rounded-md border",
-            wellClass,
-          )}
-          aria-hidden
-        >
+        <span className={cn(EXPLORER_WELL_CLASS, wellClass)} aria-hidden>
           <HugeiconsIcon icon={icon} className="size-3" />
         </span>
         <span
@@ -939,7 +957,12 @@ function ChildListItem({
         >
           {storeChildLabel(child)}
         </span>
-        {child.kind === "table" ? <TableRlsIcon enabled={child.rls === true} /> : null}
+        {hint ? (
+          <span className="shrink-0 text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+            {hint}
+          </span>
+        ) : null}
+        {storeChildShowsRls(child) ? <TableRlsIcon enabled={child.rls === true} /> : null}
       </button>
     </li>
   );

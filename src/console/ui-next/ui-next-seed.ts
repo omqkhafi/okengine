@@ -5,9 +5,9 @@
  * Lives beside the Vite kernel plugin (root `tsc` include) — not under
  * `src/console/ui/**`, which root typecheck excludes as the legacy SPA tree.
  *
- * Seed story (keel): a featured github→create→notify chain, plus ~70
- * operational traces so Traces looks like a live Linear-shaped workspace
- * (50–100 band).
+ * Seed story (keel): a featured github→create→notify chain, a full CRUD +
+ * custom-route HTTP surface, plus ~70 operational traces so Traces looks
+ * like a live Linear-shaped workspace (50–100 band).
  */
 
 import type { RunsStore, WideEvent } from "../../runs/types.ts";

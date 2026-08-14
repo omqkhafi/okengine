@@ -42,6 +42,8 @@ import type {
   StoreDeleteInput,
   StoreEditInput,
   StoreEditResult,
+  StoreFileGetInput,
+  StoreFileObject,
   StoreQueryInput,
   StoreQueryResult,
 } from "./store.ts";
@@ -58,7 +60,15 @@ import {
   type SimulateGatesInput,
   type SimulateGatesResult,
 } from "./gates.ts";
-import type { ConsoleVaultBackend, ConsoleVaultRow, VaultWriteInput } from "./vault.ts";
+import {
+  ConsoleVaultRotateBusyError,
+  type ConsoleVaultAuditVerifyResult,
+  type ConsoleVaultBackend,
+  type ConsoleVaultRotateHandle,
+  type ConsoleVaultRotateMasterResult,
+  type ConsoleVaultRow,
+  type VaultWriteInput,
+} from "./vault.ts";
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
 import type { ChannelRuntime, TemplateCatalog } from "../../elements/channel.ts";
 import type { ConsoleChannelPreview, ConsoleChannelsList, EmailAuthResult } from "./channels.ts";
@@ -222,6 +232,8 @@ export interface ConsoleState {
   }>;
   /** Browse a store facet. */
   queryStore: (input: StoreQueryInput) => Promise<StoreQueryResult>;
+  /** Read one files object (preview / download). */
+  getStoreFile: (input: StoreFileGetInput) => Promise<StoreFileObject>;
   /** Direct edit (not a flow execution). */
   editStore: (
     input: StoreEditInput,
@@ -294,6 +306,17 @@ export interface ConsoleState {
   rotateVault: (
     input: VaultWriteInput,
   ) => Promise<{ readonly name: string; readonly fingerprint: string | null }>;
+  /** Verify the built-in audit chain (sealed). */
+  verifyVaultAudit: () => Promise<ConsoleVaultAuditVerifyResult>;
+  /**
+   * One batch of master-key rotation. Process-global handle — any operator
+   * in this process may continue. Overlapping batches fail busy.
+   */
+  rotateMaster: () => Promise<ConsoleVaultRotateMasterResult>;
+  /** In-flight rotate-master adapter (tests / process lifetime). */
+  vaultRotateHandle: ConsoleVaultRotateHandle | null;
+  /** True while the first rotate-master call is opening the adapter. */
+  vaultRotateStarting: boolean;
   /** User-plane identities available for invoke-as. */
   readonly identities: ConsoleIdentity[];
   /** Whether this process is treated as production (typed confirm). */
@@ -472,6 +495,12 @@ export interface CreateConsoleStateOptions {
   readonly journalStore?: JournalStore | null;
   /** Environment label for vault fingerprints. */
   readonly vaultEnv?: string;
+  /** Env map for builtin adapter open / probe (tests). */
+  readonly vaultProcessEnv?: Readonly<Record<string, string | undefined>>;
+  /** DEKs per rotate-master batch (tests). */
+  readonly vaultKekRewrapBatchSize?: number;
+  /** Test hook: awaited after claiming the batch slot, before adapter work. */
+  readonly rotateBatchHold?: () => Promise<void>;
   /** Injected GateRuntime (tests / host). */
   readonly gateRuntime?: GateRuntime | null;
   /** Injected ClockRuntime (tests / host). */
@@ -542,6 +571,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
     const value = await vault.probeVaultBackend({
       config: state.okeConfig,
       env: state.production ? "prod" : "dev",
+      ...(options.vaultProcessEnv !== undefined ? { processEnv: options.vaultProcessEnv } : {}),
     });
     backendMemo = { at, value };
     return value;
@@ -778,6 +808,13 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       }
       return store.queryStore(state.storeRuntime, state.manifest, input);
     },
+    getStoreFile: async (input) => {
+      const store = await markPanel<typeof import("./store.ts")>("store");
+      if (!state.storeRuntime) {
+        throw new Error("Store runtime not bound");
+      }
+      return store.getStoreFile(state.storeRuntime, input);
+    },
     editStore: async (input, opts) => {
       rejectConsoleAuthMutation(input.ref);
       const store = await markPanel<typeof import("./store.ts")>("store");
@@ -793,7 +830,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       rejectConsoleAuthMutation(input.ref);
       const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) return { deleted: 0 };
-      return store.deleteStore(state.storeRuntime, input);
+      return store.deleteStore(state.storeRuntime, input, state.manifest);
     },
     purgeStoreCache: async (resource) => {
       const store = await markPanel<typeof import("./store.ts")>("store");
@@ -890,6 +927,20 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         throw new Error("Vault runtime not bound");
       }
       return vault.rotateVaultValue(state.vaultRuntime, input);
+    },
+    vaultRotateHandle: null,
+    vaultRotateStarting: false,
+    verifyVaultAudit: async () => {
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      return vault.verifyConsoleVaultAudit({
+        config: state.okeConfig,
+        env: state.production ? "prod" : "dev",
+        ...(options.vaultProcessEnv !== undefined ? { processEnv: options.vaultProcessEnv } : {}),
+      });
+    },
+    rotateMaster: async () => {
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      return runConsoleRotateMaster(state, vault, options);
     },
     identities: [...(options.identities ?? defaultDevIdentities(options.manifest))],
     production: options.production ?? process.env.NODE_ENV === "production",
@@ -1041,6 +1092,97 @@ export function setManifest(state: ConsoleState, manifest: Manifest): void {
   publishLive(state, { type: "manifest", manifest });
   if (before) {
     publishLive(state, { type: "manifest.diff", before, after: manifest });
+  }
+}
+
+/**
+ * One rotate-master batch on the process-global handle.
+ *
+ * @param state - Console state
+ * @param vault - Vault panel module
+ * @param options - Open / hold knobs
+ */
+async function runConsoleRotateMaster(
+  state: ConsoleState,
+  vault: typeof import("./vault.ts"),
+  options: CreateConsoleStateOptions,
+): Promise<ConsoleVaultRotateMasterResult> {
+  const openOpts = {
+    config: state.okeConfig,
+    env: state.production ? ("prod" as const) : ("dev" as const),
+    unseal: true as const,
+    ...(options.vaultProcessEnv !== undefined ? { processEnv: options.vaultProcessEnv } : {}),
+    ...(options.vaultKekRewrapBatchSize === undefined
+      ? {}
+      : { kekRewrapBatchSize: options.vaultKekRewrapBatchSize }),
+  };
+
+  if (state.vaultRotateHandle?.inFlight || state.vaultRotateStarting) {
+    throw new ConsoleVaultRotateBusyError("vault: a master rotation is already in progress");
+  }
+
+  if (state.vaultRotateHandle) {
+    state.vaultRotateHandle.inFlight = true;
+    try {
+      await options.rotateBatchHold?.();
+      const progress = await state.vaultRotateHandle.adapter.continueRotateMaster();
+      if (progress.remaining === 0) {
+        await state.vaultRotateHandle.close();
+        state.vaultRotateHandle = null;
+      }
+      return {
+        kekVersion: progress.kekVersion,
+        remaining: progress.remaining,
+        masterKey: null,
+      };
+    } catch (error) {
+      return vault.mapConsoleVaultError(error);
+    } finally {
+      if (state.vaultRotateHandle) state.vaultRotateHandle.inFlight = false;
+    }
+  }
+
+  state.vaultRotateStarting = true;
+  let opened: Awaited<ReturnType<typeof vault.openConsoleBuiltinAdapter>>;
+  try {
+    opened = await vault.openConsoleBuiltinAdapter(openOpts);
+  } catch (error) {
+    state.vaultRotateStarting = false;
+    return vault.mapConsoleVaultError(error);
+  }
+
+  try {
+    const status = await opened.adapter.status();
+    if (status.rewrapTargetKekVersion !== undefined) {
+      await opened.close();
+      throw new ConsoleVaultRotateBusyError(
+        "vault: resume rotate-master with the new master key (`oke vault rotate-master --new-key`)",
+      );
+    }
+
+    state.vaultRotateHandle = {
+      adapter: opened.adapter,
+      close: () => opened.close(),
+      inFlight: true,
+    };
+    await options.rotateBatchHold?.();
+    const progress = await opened.adapter.rotateMaster();
+    if (progress.remaining === 0) {
+      await opened.close();
+      state.vaultRotateHandle = null;
+    }
+    return {
+      kekVersion: progress.kekVersion,
+      remaining: progress.remaining,
+      masterKey: progress.masterKey ?? null,
+    };
+  } catch (error) {
+    await opened.close().catch(() => undefined);
+    state.vaultRotateHandle = null;
+    return vault.mapConsoleVaultError(error);
+  } finally {
+    state.vaultRotateStarting = false;
+    if (state.vaultRotateHandle) state.vaultRotateHandle.inFlight = false;
   }
 }
 

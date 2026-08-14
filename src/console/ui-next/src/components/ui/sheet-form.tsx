@@ -2,7 +2,7 @@
  * Flat, full-bleed form primitives for Console sheets.
  */
 
-import type { ComponentProps, JSX, ReactNode } from "react";
+import { Children, type ComponentProps, type JSX, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils.ts";
 
@@ -25,6 +25,8 @@ export interface SheetFieldProps {
   readonly className?: string;
   /** Pair inside {@link SheetPair}: start draws the mid rule. */
   readonly split?: "start" | "end";
+  /** One-line label + hint, tighter padding — Call API grid. */
+  readonly dense?: boolean;
   readonly children: ReactNode;
 }
 
@@ -38,23 +40,41 @@ export function SheetField({
   hint,
   className,
   split,
+  dense = false,
   children,
 }: SheetFieldProps): JSX.Element {
   return (
     <label
       className={cn(
-        "block border-b border-border/50",
+        "block min-w-0 border-b border-border/50",
         split === "start" && "border-r border-b-0",
         split === "end" && "border-b-0",
         className,
       )}
     >
-      <span className="block px-4 pt-2.5 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-        {label}
-      </span>
-      {hint ? (
-        <span className="block px-4 font-mono text-[10px] text-muted-foreground/70">{hint}</span>
-      ) : null}
+      {dense ? (
+        <span className="flex items-baseline justify-between gap-2 px-2 pt-1">
+          <span className="min-w-0 truncate text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            {label}
+          </span>
+          {hint ? (
+            <span className="min-w-0 truncate font-mono text-[9px] text-muted-foreground/70">
+              {hint}
+            </span>
+          ) : null}
+        </span>
+      ) : (
+        <>
+          <span className="block truncate px-3 pt-1.5 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+            {label}
+          </span>
+          {hint ? (
+            <span className="block truncate px-3 font-mono text-[10px] text-muted-foreground/70">
+              {hint}
+            </span>
+          ) : null}
+        </>
+      )}
       {children}
     </label>
   );
@@ -150,11 +170,7 @@ export function SheetChoiceRow({
         <p className="shrink-0 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
           {label}
         </p>
-        <div
-          className="flex min-w-0 flex-1 items-stretch"
-          role="group"
-          aria-label={label}
-        >
+        <div className="flex min-w-0 flex-1 items-stretch" role="group" aria-label={label}>
           {children}
         </div>
       </div>
@@ -279,4 +295,43 @@ export interface SheetPairProps {
  */
 export function SheetPair({ children }: SheetPairProps): JSX.Element {
   return <div className="grid grid-cols-2 border-b border-border/50">{children}</div>;
+}
+
+/** Props for {@link SheetGrid}. */
+export interface SheetGridProps {
+  /** Max columns when the container is wide enough. */
+  readonly columns?: 2 | 3 | 4;
+  readonly children: ReactNode;
+}
+
+/**
+ * Field grid — equal columns that fill the row; drops as the dock narrows.
+ *
+ * @param props - Fields + optional column cap
+ */
+export function SheetGrid({ columns = 4, children }: SheetGridProps): JSX.Element {
+  const count = Children.count(children);
+  const max = Math.min(columns, count) as 1 | 2 | 3 | 4;
+  return (
+    <div className="@container w-full min-w-0 max-w-full">
+      <div
+        className={cn(
+          "grid w-full min-w-0 grid-cols-1",
+          max >= 2 && "@min-[18rem]:grid-cols-2",
+          max >= 3 && "@min-[26rem]:grid-cols-3",
+          max >= 4 && "@min-[34rem]:grid-cols-4",
+          "[&>*]:min-w-0 [&>*]:border-r [&>*]:border-border/50",
+          max >= 2 && "@min-[18rem]:[&>*:nth-child(2n)]:border-r-0",
+          max >= 3 &&
+            "@min-[26rem]:[&>*:nth-child(2n)]:border-r @min-[26rem]:[&>*:nth-child(3n)]:border-r-0",
+          max >= 4 &&
+            "@min-[34rem]:[&>*:nth-child(2n)]:border-r @min-[34rem]:[&>*:nth-child(3n)]:border-r @min-[34rem]:[&>*:nth-child(4n)]:border-r-0",
+          max < 2 && "[&>*]:border-r-0",
+          "[&>*:last-child]:border-r-0",
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }

@@ -3,11 +3,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "./data/use-console-live.ts";
 import { useManifest } from "./data/use-manifest.ts";
 import { useRuns } from "./data/use-runs.ts";
 import { FlowGraph } from "./graph/flow-graph.tsx";
+import { useOverviewOrchestra } from "./graph/use-overview-orchestra.ts";
 import { useFlowsSelection } from "./state/flows-selection.ts";
 import { graphFilterForNodeId, type GraphFilter } from "./traces/graph-filter.ts";
 import { activeNodeAt, playbackDurationMs, playbackNodeSteps } from "./traces/replay-playback.ts";
@@ -16,7 +18,7 @@ import { chainFlowIds } from "./traces/trace-chain.ts";
 import { TracesPane } from "./traces/traces-pane.tsx";
 
 /**
- * `/flows` — one composition: activity at the start, structure at the end,
+ * `/overview` — one composition: activity at the start, structure at the end,
  * linked by shared selection.
  */
 export function FlowsPage() {
@@ -42,6 +44,11 @@ export function FlowsPage() {
     [runs.data, visibleFlowIds],
   );
 
+  const orchestra = useOverviewOrchestra({
+    enabled: Boolean(manifest.data) && scopedRuns.length > 0,
+    paused: selectedRunId != null || graphFilter != null,
+  });
+
   // Seed graph filter from `?flow=` deep-link (Units → Open in graph).
   useEffect(() => {
     if (!selectedFlowId) return;
@@ -64,18 +71,27 @@ export function FlowsPage() {
     const fromRun = chainFlowIds(runs.data ?? [], selectedRunId);
     if (fromRun.size > 0) return fromRun;
     if (selectedFlowId) return new Set([selectedFlowId]);
+    if (orchestra?.flowId) return new Set([orchestra.flowId]);
     return fromRun;
-  }, [runs.data, selectedRunId, selectedFlowId]);
+  }, [runs.data, selectedRunId, selectedFlowId, orchestra?.flowId]);
 
-  // Signal nodes between chain flows (emit → consume) also highlight.
+  // 1-hop targets on the selected chain (signals between emit → consume,
+  // plus store / clock / gate / vault / channel / AI the chain declares).
   const highlightedNodeIds = useMemo(() => {
     const out = new Set<string>();
     const flows = manifest.data?.flows ?? {};
     for (const flowId of highlightedFlowIds) {
       const flow = flows[flowId];
       if (!flow) continue;
-      for (const sig of flow.effects?.emits ?? []) out.add(`signal:${sig}`);
       if (flow.trigger?.signal) out.add(`signal:${flow.trigger.signal}`);
+      if (flow.trigger?.cron || flow.trigger?.every) out.add(`clock:${flowId}`);
+      for (const name of flow.gates ?? []) out.add(`gate:${name}`);
+      for (const ref of flow.effects?.reads ?? []) out.add(ref);
+      for (const ref of flow.effects?.writes ?? []) out.add(ref);
+      for (const name of flow.effects?.emits ?? []) out.add(`signal:${name}`);
+      for (const name of flow.effects?.sends ?? []) out.add(`channel:${name}`);
+      for (const name of flow.effects?.asks ?? []) out.add(`ai:${name}`);
+      for (const name of flow.effects?.secrets ?? []) out.add(`vault:${name}`);
     }
     return out;
   }, [highlightedFlowIds, manifest.data]);
@@ -138,9 +154,14 @@ export function FlowsPage() {
   }, [playbackKey, selectedRun, runs.data, manifest.data]);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className={EXPLORER_PAGE_CLASS} data-slot="flows-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="30%" minSize="240px" maxSize="50%" className="min-h-0">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.start.defaultSize}
+          minSize={EXPLORER_SPLIT.start.minSize}
+          maxSize="50%"
+          className="min-h-0"
+        >
           <div className="h-full min-h-0 overflow-hidden">
             <TracesPane
               runs={scopedRuns}
@@ -159,12 +180,19 @@ export function FlowsPage() {
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize="70%" minSize="30%" className="min-h-0">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.end.defaultSize}
+          minSize={EXPLORER_SPLIT.end.minSize}
+          className="min-h-0"
+        >
           <div className="h-full min-h-0 overflow-hidden">
             <FlowGraph
               manifest={manifest.data ?? null}
+              runs={scopedRuns}
+              graphFilter={graphFilter}
               highlightedFlowIds={highlightedFlowIds}
               highlightedNodeIds={highlightedNodeIds}
+              orchestraLabel={orchestra?.flowId ?? null}
               follow={follow}
               activeNodeId={activeNodeId}
               onNodeClick={onGraphNodeClick}

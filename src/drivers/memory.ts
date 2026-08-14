@@ -998,6 +998,14 @@ export const memoryIndexDriver: VectorIndexDriver = {
       async delete(id) {
         return docs.delete(id);
       },
+      async list(limit = 100) {
+        const hits: IndexHit[] = [];
+        for (const [id, doc] of docs) {
+          hits.push({ id, score: 0, ...(doc.meta ? { meta: doc.meta } : {}) });
+          if (hits.length >= limit) break;
+        }
+        return hits;
+      },
       async close() {
         docs.clear();
       },

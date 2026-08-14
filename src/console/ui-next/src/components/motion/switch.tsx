@@ -66,9 +66,9 @@ export function Switch({
           onClick={() => {
             if (!disabled) onCheckedChange(!checked);
           }}
-          onPointerDown={(event) => {
+          onPointerDown={() => {
             setIsPressed(true);
-            setIsPointer(event.pointerType !== "keyboard");
+            setIsPointer(true);
           }}
           onPointerUp={() => setIsPressed(false)}
           onPointerLeave={() => setIsPressed(false)}

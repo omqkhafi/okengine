@@ -13,6 +13,7 @@ import {
   isKnownConsoleSqlGate,
   isStoreSqlWrite,
   projectStoresList,
+  getStoreFile,
   queryStore,
   runStoreSql,
   tenancyDeclared,
@@ -121,6 +122,8 @@ describe("projectStoresList", () => {
 
     const uploads = stores.find((s) => s.facet === "files");
     expect(uploads?.contentAddressed).toBe(true);
+    expect(uploads?.driverId).toBe("memory");
+    expect(uploads?.children[0]?.kind).toBeUndefined();
   });
 
   test("KV namespaces get distinct effectRefs so browse selection is unique", async () => {
@@ -173,6 +176,41 @@ describe("index driver resolution", () => {
     const hits = await handle.search([1, 0, 0], 1);
     expect(hits[0]?.id).toBe("d1");
     expect(hits[0]?.meta).toEqual({ t: 1 });
+    await runtime.close();
+  });
+});
+
+describe("queryStore index", () => {
+  test("lists documents and ranks a human query", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const handle = (await runtime.openRef("index:docs", {
+      effects: { writes: ["index:docs"] },
+    })) as import("../../elements/store.ts").VectorIndexStoreFxHandle;
+    await handle.upsert("iss_eng_184", [1, 0, 0], {
+      identifier: "ENG-184",
+      title: "Pulse graph on selected trace",
+    });
+    await handle.upsert("iss_sup_12", [0, 1, 0], {
+      identifier: "SUP-12",
+      title: "Customer cannot sign in",
+    });
+
+    const listed = await queryStore(runtime, MANIFEST, { ref: "index:docs", limit: 50 });
+    expect(listed.hits?.map((hit) => hit.id).sort()).toEqual(["iss_eng_184", "iss_sup_12"]);
+
+    const text = await queryStore(runtime, MANIFEST, {
+      ref: "index:docs",
+      q: "pulse graph",
+      topK: 5,
+    });
+    expect(text.hits?.[0]?.id).toBe("iss_eng_184");
+
+    const probe = await queryStore(runtime, MANIFEST, {
+      ref: "index:docs",
+      vector: [1, 0, 0],
+      topK: 1,
+    });
+    expect(probe.hits?.[0]?.id).toBe("iss_eng_184");
     await runtime.close();
   });
 });
@@ -706,6 +744,92 @@ describe("queryStore KV metadata", () => {
     );
     expect(await kv.get("drafts:new")).toEqual({ ok: true });
     expect(await kv.ttlMs("drafts:new")).toBeGreaterThan(20 * 60_000);
+  });
+});
+
+describe("queryStore files + object get/put", () => {
+  test("files browse returns sizeBytes; get and put round-trip", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const { files: declareFiles } = await import("../../elements/store.ts");
+    runtime.register(declareFiles("uploads"));
+    const files = (await runtime.openRef("files:uploads", {
+      effects: { writes: ["files:uploads"] },
+    })) as import("../../elements/store.ts").FilesStoreFxHandle;
+    await files.put("docs/readme.txt", "hello files");
+
+    const listed = await queryStore(runtime, MANIFEST, { ref: "files:uploads" });
+    expect(listed.facet).toBe("files");
+    expect(listed.keys?.[0]?.key).toBe("docs/readme.txt");
+    expect(listed.keys?.[0]?.sizeBytes).toBeGreaterThan(0);
+
+    const got = await getStoreFile(runtime, { ref: "files:uploads", key: "docs/readme.txt" });
+    expect(got.encoding).toBe("utf8");
+    expect(got.body).toBe("hello files");
+    expect(got.contentType).toBe("text/plain");
+    expect(got.truncated).toBe(false);
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "files:uploads",
+        key: "docs/readme.txt",
+        patch: { body: "updated", encoding: "utf8" },
+      },
+      { production: false, dryRun: false },
+    );
+    expect(new TextDecoder().decode((await files.get("docs/readme.txt"))!)).toBe("updated");
+
+    const preview = await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "files:uploads",
+        key: "docs/new.txt",
+        patch: { body: "dry", encoding: "utf8" },
+      },
+      { production: false, dryRun: true },
+    );
+    expect(preview.dryRun).toBe(true);
+    expect(await files.get("docs/new.txt")).toBeNull();
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "files:uploads",
+        key: "docs/رخصة عمل.pdf",
+        patch: { body: "pdf-bytes", encoding: "utf8", originalName: "رخصة عمل.pdf" },
+      },
+      { production: false, dryRun: false },
+    );
+    const afterPut = await queryStore(runtime, MANIFEST, { ref: "files:uploads" });
+    const written = afterPut.keys?.find((k) => k.originalName === "رخصة عمل.pdf");
+    expect(written?.key).toBeDefined();
+    expect(written?.key.includes("رخصة")).toBe(false);
+    expect(written?.key.endsWith(".pdf")).toBe(true);
+    expect(await files.get("docs/رخصة عمل.pdf")).toBeNull();
+    expect(afterPut.keys?.some((k) => k.key === ".oke/catalog.json")).toBe(false);
+
+    const gotNamed = await getStoreFile(runtime, { ref: "files:uploads", key: written!.key });
+    expect(gotNamed.originalName).toBe("رخصة عمل.pdf");
+
+    const dryUnsafe = await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "files:uploads",
+        key: "docs/вложения.png",
+        patch: { body: "x", encoding: "utf8", originalName: "вложения.png" },
+      },
+      { production: false, dryRun: true },
+    );
+    expect(dryUnsafe.dryRun).toBe(true);
+    const afterDry = await files.list("");
+    expect(
+      afterDry.some((k) => k.includes("вложения") || /docs\/file-[0-9a-f]{8}\.png$/.test(k)),
+    ).toBe(false);
+    await runtime.close();
   });
 });
 

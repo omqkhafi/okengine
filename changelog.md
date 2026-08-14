@@ -14,6 +14,33 @@ needed).
 
 ### ✨ Added
 
+- `dev:console-next:seed` Units tree is a full Linear-shaped HTTP
+  surface: CRUD on issues, comments, projects, documents, attachments,
+  teams, labels, cycles, members, initiatives, and customer requests,
+  plus custom routes (archive, assign, merge, triage snooze, QUERY
+  search, PUT drafts, HEAD health). Call API binds every HTTP flow.
+
+- Console Vault is a security instrument, not a filter-and-empty-state.
+  Deep search (`is:unset`, `is:blast`, `from:.env.local`, `reader:`,
+  `fp:`) ANDs over name, fingerprint, readers, and winner. Posture chips
+  and a scan board surface unset, blast, shared, dormant, and overdue
+  contracts. Resolution is a lock-path. Security (verify chain, rotate
+  master, fingerprint export, CLI copy) lives in one sheet. Values stay
+  write-only.
+
+- Console Files is a folder browser, not a key table. Slash-separated
+  keys become folders with breadcrumbs, list/grid views, and an
+  inspector that previews text and images. Operators can upload
+  (including drag-and-drop), download, and delete. Browse returns
+  `sizeBytes`; `POST /console/store/object` reads one object;
+  `POST /console/store/edit` `put`s `patch.body` (`utf8` / `base64`).
+
+- Console Files uploads mint a URL-safe object key (`safeFileObjectKey`
+  from `okengine/store`) and keep the original name plus MIME / size in
+  `.oke/catalog.json`. When the Manifest has a `file_objects` SQL table,
+  Console upserts that row too. Non-ASCII keys on `/edit` are rewritten;
+  the old key is deleted. `fx.store(files).put` is unchanged.
+
 - Console Store explorer facet bands (SQL / KV / Files / Index) have a
   show/hide control on each band and an eye menu in the search bar.
   Hidden bands leave the tree; restore them from the menu. The pick
@@ -250,7 +277,7 @@ needed).
   runs list. `POST /console/traces/replay` now re-invokes through `runReplay` (same
   path as `oke replay --request-id`), not a log-only stub.
 
-- ui-next trace detail Sheet (shadcn, side=right): row click keeps graph highlight and
+- ui-next trace detail Sheet (shadcn, side=left): row click keeps graph highlight and
   opens a real breakdown — summary counts from EffectKind + logs, proportional
   waterfall bars from EffectEntry timestamps/durations (EDGE_STROKE colors),
   expandable event list, and REQUEST with Manifest method/path plus Shiki-highlighted
@@ -319,6 +346,21 @@ needed).
 - `motion` (Motion for React) reserved for near-future ui-next animations; import via
   `motion/react`.
 
+- Console **Vault** page (`/vault`): fingerprints-only list + backend
+  status, set / rotate via typed confirm, and master rotation through
+  `POST /console/vault/rotate-master` (one batch, `remaining` honest,
+  `ROTATE_MASTER` + reason). Any operator in the same process may
+  continue; overlapping batches return `VaultRotateBusy`. Generated
+  master key is shown once and never logged. Audit verify is
+  `GET /console/vault/audit/verify` (`ok`, `brokenAt`, `reason`, `row`).
+  Backup stays on the CLI. The Console never accepts a master key in
+  the HTTP body.
+
+- `fx.store(index).list(limit?)` returns stored documents (id + meta,
+  no embeddings) on every index driver. Console Index browse uses it
+  so an empty search lists the catalog.
+
+
 ### 💥 Breaking Changes
 
 - Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
@@ -328,6 +370,95 @@ needed).
   (failure reason `requireSpecial`); do not use `requireSymbol` on password policies.
 
 ### ♻️ Changed
+
+- Console Index browse is a search box, not a vector probe. Type a
+  phrase to rank documents by id and stored meta (Meilisearch uses
+  full-text `q`). Paste `1, 0, 0` to run an ANN probe. Opening the
+  index lists documents immediately.
+
+
+- Seeded Console Call API runs against the same Store as browse.
+  `issues.list` returns rows, `issues.create` inserts, `attachments.delete`
+  returns the deleted object. A leftover `:id` path token is `NotFound`,
+  not a fake 200. Path fields prefill keel seed ids.
+
+- Seeded Console list Call API takes query + pagination: `q`, `teamKey`,
+  `limit`, `offset`, `cursor`, `orderBy`, `order`. The response includes
+  `items`, `count`, `total`, `limit`, `offset`, and `nextCursor`.
+
+- Console Call API Response has an expand control that opens the full
+  JSON in a wide sheet (copy included) so long list payloads are readable.
+
+- Console Call API body fields sit on a container grid that drops from
+  five columns to one as the dock narrows.
+
+- Console Overview graph is a radial hub, not a spaghetti of every
+  flow × effect. OKE sits at the center; the eight elements orbit it;
+  each element's kinds sit on a middle ring (Store SQL/KV/Files/Index,
+  Gate policy/scope/rate/flag, Channel email/SMS/WA/Push, and the
+  rest); units sit on the outer ring with live heat from Traces. Hover a unit
+  to light the elements it touches. Click a unit or flow for a 1-hop
+  neighborhood; click an element disc to fan its resources. Map
+  breadcrumb returns to the hub. Opening Overview runs the orchestra:
+  random notes from the traces ledger land as new rows and light that
+  request's path on the hub (paused while a run or neighborhood is open).
+
+- Console Traces list row no longer shows Replay — that action lives
+  on the trace detail sheet.
+
+- Console Traces list row shows cache status before duration: flash
+  for hit, slashed flash for miss, muted unavailable for not
+  applicable (`run.cache`). The detail sheet repeats the same mark
+  next to the trigger kind.
+
+- Console Traces toolbar uses the same explorer search as Units /
+  Store / Vault (`Search traces…`) instead of a title. The query
+  matches flow, unit, trigger, cache, error, and run id.
+
+- Console Traces filters drop the pill well: All / Errors are flat text
+  toggles and duration is a borderless select. Advanced visualizes
+  applied clauses (`trigger  =  signal`) instead of a raw query dump;
+  presets toggle those clauses. `SelectTrigger` now accepts `flat`.
+
+- Console sidebar: the graph/traces page is **Overview** (`/overview`);
+  the Manifest catalog is **Flows** (`/flows`). `/units` redirects to
+  `/flows`. Sign-in lands on Overview. Legacy `?next=/units` rewrites
+  to `/flows`. The Flows explorer search placeholder is **Search
+  flows…** (was units).
+
+- Schema type badges use one hue per type (string teal, integer blue); rose stays on risk pills.
+
+- Units explorer bands and folders start collapsed (search still expands matches).
+
+- Setup / sign-in footer (`ConsoleChrome`) is brand left, theme toggle
+  center, version right — no hairline rules against the toggle.
+
+- Console Units inspector is a vertical workbench: contract briefing
+  above, Call API docked below (always visible). Request/Response sit
+  side by side; identity, Fields/Raw, Reset, and Call live on the dock
+  toolbar — no more scrolling past a long contract to invoke.
+
+- Console Flows contract no longer lists derived Platform failure
+  modes (401/403/422/429 from gates + schema). Declared Flow errors
+  stay. Gates remain in their own section.
+
+- Console Flows, Units, Store, and Vault share one explorer language:
+  28/72 split, h-8 search toolbar, tinted band headers, sky selection
+  rail, sticky identity header, and the same Empty pane. Vault search
+  and posture chips live in the left explorer (not a page-wide bar).
+
+- Console Files treats the **bucket** as the inspectable unit. A
+  singleton `store.files(name, { buckets: [name] })` is one tree leaf
+  (no `attachments → attachments`). The list payload may include
+  `driverId` (`memory` / `fs` / `s3`) so the tree and header can show
+  where bytes live. Click a file to open a right-side sheet (same
+  chrome as SQL / KV row detail) so the folder list stays full width. The sheet previews images, PDF, video, audio, and text (pretty JSON, CSV table).
+  The toolbar is path + find + view + upload + delete + refresh.
+
+- Console Files upload shows the original name (Unicode OK) and a
+  generated ASCII key. The browser lists and searches by original name.
+  Existing non-ASCII objects keep the `non_ascii_key` warning until
+  they are re-uploaded.
 
 - Console sheets share one flat language: full-bleed fields (no boxed
   inputs), text toggles instead of chips, and a flush Cancel | action
@@ -422,6 +553,26 @@ needed).
 
 ### 🐛 Fixed
 
+- Console Traces Advanced clause and preset labels use stronger ink
+  so they stay readable on the dark pane (no muted-on-muted greys).
+
+- Console Units Call path-param fields show the route token as a
+  placeholder (`:id`) and stamp the path on the Path params chapter.
+
+- Console Traces list always shows relative time in the right column.
+  Failed runs keep the rail / dot; hover still carries the error code.
+
+- Console Flows graph keeps node cards (ships) above effect ribbons.
+  Parent-group edges no longer inherit a child z-index that paints
+  lines over store / signal / AI targets.
+
+- Console setup chrome footer no longer draws hairline rules against
+  the theme toggle. Brand sits left, theme center, version right.
+
+- Console Flow and Store schema MiniMaps were blank: graph nodes only
+  set `style.width` / `style.height`, and xyflow MiniMap skips user
+  nodes without top-level `width` / `height`.
+
 - Console Sign in after an expired session returns to the module you
   were on (`/store`, `/units`, `/flows` plus search) instead of always
   opening Flows. `?next=` only accepts those three paths.
@@ -432,6 +583,10 @@ needed).
 - Console Store RLS policy rows are editable in the grid (`ALTER POLICY`
   for roles / USING / WITH CHECK). Creating a policy with RLS on now
   flips the table shield to emerald.
+
+- Console Store explorer shows the RLS shield only on SQL tables
+  (`pg_class.relrowsecurity`). KV, files, and index children no
+  longer get a muted "RLS disabled" badge.
 
 - Console Store SQL console no longer fails default `SELECT * … LIMIT 50;`
   on the memory driver — trailing semicolons are stripped before parse.

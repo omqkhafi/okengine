@@ -205,10 +205,12 @@ describe("bandUnitTree", () => {
     expect(unitTreeAncestorKeys(bands, "missing")).toEqual([]);
   });
 
-  test("bands and unit folders default open", () => {
-    expect(unitTreeIsOpen("band:http", {})).toBe(true);
-    expect(unitTreeIsOpen("unit:http:billing", {})).toBe(true);
+  test("bands and unit folders default closed unless searching", () => {
+    expect(unitTreeIsOpen("band:http", {})).toBe(false);
+    expect(unitTreeIsOpen("unit:http:billing", {})).toBe(false);
+    expect(unitTreeIsOpen("band:http", {}, true)).toBe(true);
     expect(unitTreeIsOpen("band:http", { "band:http": false })).toBe(false);
+    expect(unitTreeIsOpen("band:http", { "band:http": false }, true)).toBe(false);
     expect(unitTreeIsOpen("unit:http:billing", { "unit:http:billing": true })).toBe(true);
   });
 });

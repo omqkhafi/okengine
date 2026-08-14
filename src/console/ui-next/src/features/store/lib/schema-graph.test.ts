@@ -135,6 +135,7 @@ describe("buildSchemaGraph", () => {
     const tables = schemaGraphTables(STORES, MANIFEST);
     const graph = buildSchemaGraph(tables);
     expect(graph.nodes).toHaveLength(2);
+    expect(graph.nodes.every((n) => (n.width ?? 0) > 0 && (n.height ?? 0) > 0)).toBe(true);
     expect(graph.edges).toHaveLength(1);
     expect(graph.edges[0]?.source).toBe("sql:flights");
     expect(graph.edges[0]?.target).toBe("sql:airports");

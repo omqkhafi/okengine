@@ -3,38 +3,30 @@
  */
 
 import { useState, type MouseEvent } from "react";
-import { ArrowReloadHorizontalIcon, Copy01Icon } from "@hugeicons/core-free-icons";
+import { Copy01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { tracesReplay, type RunRow } from "@/client.ts";
+import type { RunRow } from "@/client.ts";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { cacheIconSpec } from "./cache-icon.ts";
 import { formatDuration } from "./format-duration.ts";
 import { durationClassName } from "./duration-tone.ts";
-import { copyRunIdText, executeTraceReplay } from "./trace-actions.ts";
+import { copyRunIdText } from "./trace-actions.ts";
+import { traceRowMeta } from "./trace-row-meta.ts";
 import { triggerIconSpec } from "./trigger-icon.ts";
-
-function relativeTime(startedAt: number): string {
-  const delta = Date.now() - startedAt;
-  if (delta < 1_000) return "just now";
-  if (delta < 60_000) return `${Math.floor(delta / 1_000)}s ago`;
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
-  return `${Math.floor(delta / 3_600_000)}h ago`;
-}
 
 /** Props for {@link TraceRow}. */
 export type TraceRowProps = {
   readonly run: RunRow;
   readonly selected: boolean;
   readonly onSelect: (id: string) => void;
-  /** Optional inject for tests — defaults to {@link tracesReplay}. */
-  readonly replay?: typeof tracesReplay;
   /** Optional inject for tests — defaults to `navigator.clipboard.writeText`. */
   readonly copyText?: (text: string) => Promise<void>;
 };
 
 /**
- * Trace list row — trigger icon, flow, duration, status tint, hover actions.
+ * Trace list row — trigger, cache, flow, duration, relative time, copy action.
  *
  * @param props - Run, selection state, click handler
  */
@@ -42,34 +34,15 @@ export function TraceRow({
   run,
   selected,
   onSelect,
-  replay = tracesReplay,
   copyText = async (text) => {
     await navigator.clipboard.writeText(text);
   },
 }: TraceRowProps) {
-  const failed = run.error !== null;
+  const meta = traceRowMeta(run);
+  const failed = meta.failed;
   const trigger = triggerIconSpec(run.trigger);
-  const [busy, setBusy] = useState(false);
+  const cache = cacheIconSpec(run.cache);
   const [actionHint, setActionHint] = useState<string | null>(null);
-
-  const onReplay = async (e: MouseEvent) => {
-    e.stopPropagation();
-    if (busy) return;
-    setBusy(true);
-    setActionHint(null);
-    try {
-      const res = await executeTraceReplay(run, replay);
-      if (res.error) {
-        setActionHint(res.error.message ?? res.error.code);
-        return;
-      }
-      setActionHint(res.data?.dryRun ? "Replayed (dry-run)" : "Replayed");
-    } catch (err) {
-      setActionHint(err instanceof Error ? err.message : "Replay failed");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const onCopy = async (e: MouseEvent) => {
     e.stopPropagation();
@@ -87,6 +60,7 @@ export function TraceRow({
       data-run-id={run.id}
       data-selected={selected ? "true" : "false"}
       data-failed={failed ? "true" : "false"}
+      data-cache={run.cache}
       className={cn(
         "group relative flex w-full items-stretch border-b border-border/60 text-xs transition-colors",
         "hover:bg-muted/50 focus-within:bg-muted/50",
@@ -98,7 +72,7 @@ export function TraceRow({
         aria-hidden
         className={cn(
           "absolute inset-y-0 left-0 w-0.5",
-          selected && !failed && "bg-foreground/70",
+          selected && !failed && "bg-sky-500",
           failed && "bg-destructive",
         )}
       />
@@ -119,44 +93,45 @@ export function TraceRow({
           <HugeiconsIcon icon={trigger.icon} className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{run.flow}</span>
+        <Tooltip>
+          <TooltipTrigger
+            render={(props) => (
+              <span
+                {...props}
+                className={cn("flex w-4 shrink-0 items-center justify-center", cache.className)}
+                data-slot="trace-row-cache"
+                data-cache={run.cache}
+                aria-label={cache.label}
+              >
+                <HugeiconsIcon icon={cache.icon} className="size-3" aria-hidden />
+              </span>
+            )}
+          />
+          <TooltipContent side="top">{cache.label}</TooltipContent>
+        </Tooltip>
         <span
-          className={cn("shrink-0 tabular-nums font-medium", durationClassName(run.durationMs))}
+          className={cn(
+            "w-10 shrink-0 text-right tabular-nums font-medium",
+            durationClassName(run.durationMs),
+          )}
         >
           {formatDuration(run.durationMs)}
         </span>
-        <span className="w-16 shrink-0 truncate text-right text-muted-foreground">
-          {failed ? (run.error ?? "error") : relativeTime(run.startedAt)}
+        <span
+          className="w-14 shrink-0 truncate text-right tabular-nums text-muted-foreground"
+          title={meta.title}
+          data-slot="trace-row-meta"
+        >
+          {meta.text}
         </span>
       </button>
       <div
         className={cn(
           "flex shrink-0 items-center gap-0.5 pr-1.5 opacity-0 transition-opacity",
           "group-hover:opacity-100 group-focus-within:opacity-100",
-          (busy || actionHint) && "opacity-100",
+          actionHint && "opacity-100",
         )}
       >
-        <Tooltip>
-          <TooltipTrigger
-            render={(props) => (
-              <Button
-                {...props}
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Replay"
-                disabled={busy}
-                data-slot="trace-replay"
-                onClick={(event) => {
-                  props.onClick?.(event);
-                  void onReplay(event);
-                }}
-              >
-                <HugeiconsIcon icon={ArrowReloadHorizontalIcon} className="size-3" />
-              </Button>
-            )}
-          />
-          <TooltipContent side="top">Replay</TooltipContent>
-        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={(props) => (

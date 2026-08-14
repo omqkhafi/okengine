@@ -289,6 +289,12 @@ export interface VectorIndexStore {
    * @param id - Document id
    */
   delete(id: string): Promise<boolean>;
+  /**
+   * List stored documents (id + meta, no embeddings) for operator browse.
+   *
+   * @param limit - Max documents (default 100)
+   */
+  list(limit?: number): Promise<readonly IndexHit[]>;
   /** Close / release. */
   close(): Promise<void>;
 }
@@ -333,6 +339,12 @@ export interface TextIndexStore {
    * @param id - Document id
    */
   delete(id: string): Promise<boolean>;
+  /**
+   * List stored documents (id + fields as meta) for operator browse.
+   *
+   * @param limit - Max documents (default 100)
+   */
+  list(limit?: number): Promise<readonly IndexHit[]>;
   /** Close / release. */
   close(): Promise<void>;
 }

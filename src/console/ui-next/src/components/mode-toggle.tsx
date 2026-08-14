@@ -38,7 +38,7 @@ export function ModeToggle() {
       <div
         role="group"
         aria-label="Theme"
-        className="flex w-fit flex-row items-center gap-0.5 rounded-3xl bg-muted/50 p-1"
+        className="flex w-fit flex-row items-center gap-0.5 rounded-full bg-muted/50 p-1"
       >
         {options.map((option) => {
           const active = theme === option.value;

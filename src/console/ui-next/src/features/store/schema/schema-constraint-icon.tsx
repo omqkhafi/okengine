@@ -2,13 +2,13 @@
  * Shared PK / FK / unique glyphs for schema cards, rail, and complete.
  */
 
-import { DiamondIcon, Key01Icon, Link02Icon } from "@hugeicons/core-free-icons";
+import { CircleIcon, DiamondIcon, Key01Icon, Link02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
 import { cn } from "@/lib/utils.ts";
 
 /** Constraint kind drawn on a column. */
-export type SchemaConstraintKind = "pk" | "fk" | "unique";
+export type SchemaConstraintKind = "pk" | "fk" | "unique" | "none";
 
 /** Props for {@link SchemaConstraintIcon}. */
 export interface SchemaConstraintIconProps {
@@ -47,6 +47,15 @@ export function SchemaConstraintIcon({
       />
     );
   }
+  if (kind === "none") {
+    return (
+      <HugeiconsIcon
+        icon={CircleIcon}
+        className={cn("size-3 shrink-0 text-muted-foreground/35", className)}
+        aria-label="No key"
+      />
+    );
+  }
   return (
     <HugeiconsIcon
       icon={Link02Icon}
@@ -68,15 +77,25 @@ export function SchemaColumnMarks({
   unique,
   inferred,
   hex,
+  empty = "spacer",
 }: {
   readonly primaryKey?: boolean;
   readonly foreignKey?: boolean;
   readonly unique?: boolean;
   readonly inferred?: boolean;
   readonly hex?: string;
+  /** When no key applies: align with a spacer, or show the `none` glyph. */
+  readonly empty?: "spacer" | "none";
 }): JSX.Element {
   const showUnique = unique === true && primaryKey !== true;
   if (!primaryKey && !foreignKey && !showUnique) {
+    if (empty === "none") {
+      return (
+        <span className="inline-flex shrink-0 items-center" title="None">
+          <SchemaConstraintIcon kind="none" />
+        </span>
+      );
+    }
     return <span className="inline-flex w-3 shrink-0" aria-hidden />;
   }
   return (

@@ -23,6 +23,7 @@ import {
   UI_NEXT_SEEDED_MANIFEST,
   uiNextSeededSummary,
 } from "./ui-next-seed.ts";
+import { KEEL_SURFACE_FLOWS } from "./ui-next-seed-manifest-surface.ts";
 
 describe("ui-next seed", () => {
   test("manifest declares all eight elements", () => {
@@ -64,6 +65,102 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_sessions"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_crons"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_vault_secrets"]).toBeDefined();
+  });
+
+  test("manifest covers full CRUD, custom routes, and every HTTP verb", () => {
+    const flows = UI_NEXT_SEEDED_MANIFEST.flows ?? {};
+    const ids = Object.keys(flows);
+    expect(ids.length).toBeGreaterThanOrEqual(80);
+
+    for (const id of [
+      "issues.get",
+      "issues.delete",
+      "issues.archive",
+      "issues.assign",
+      "issues.duplicate",
+      "issues.merge",
+      "comments.list",
+      "comments.update",
+      "comments.delete",
+      "comments.resolve",
+      "projects.list",
+      "projects.get",
+      "projects.update",
+      "projects.delete",
+      "documents.list",
+      "documents.delete",
+      "attachments.list",
+      "attachments.delete",
+      "teams.list",
+      "labels.create",
+      "cycles.complete",
+      "members.invite",
+      "initiatives.list",
+      "requests.create",
+      "triage.inbox",
+      "triage.snooze",
+      "search.query",
+      "drafts.save",
+      "webhooks.rotate",
+      "slack.ingest",
+      "health.ping",
+      "issues.reserveIdentifier",
+    ]) {
+      expect(flows[id]).toBeDefined();
+    }
+
+    const methods = new Set(
+      ids
+        .map((id) => flows[id]?.trigger?.http?.method)
+        .filter((m): m is NonNullable<typeof m> => m != null),
+    );
+    for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "QUERY"] as const) {
+      expect(methods.has(method)).toBe(true);
+    }
+
+    expect(flows["search.query"]?.trigger?.http).toEqual({ method: "QUERY", path: "/search" });
+    const listIn = flows["issues.list"]?.in;
+    expect(listIn && typeof listIn === "object" ? listIn.properties : null).toMatchObject({
+      q: { type: "string" },
+      limit: { type: "integer", default: 25 },
+      offset: { type: "integer", default: 0 },
+      cursor: { type: "string" },
+      orderBy: { type: "string" },
+      order: { enum: ["asc", "desc"] },
+    });
+    expect(flows["comments.list"]?.in).toEqual(flows["issues.list"]?.in);
+    expect(flows["drafts.save"]?.trigger?.http?.method).toBe("PUT");
+    expect(flows["health.ping"]?.trigger?.http?.method).toBe("HEAD");
+    expect(flows["issues.reserveIdentifier"]?.trigger).toBeUndefined();
+    expect(flows["github.ingest"]?.trigger?.http?.method).toBe("POST");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["issue-reassigned"]?.delivery).toBe("live");
+    expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["daily-digest"]?.cron).toBe("0 8 * * *");
+    expect(UI_NEXT_SEEDED_MANIFEST.vault?.["WEBHOOK_SECRET"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.gates?.["comment:write"]?.kind).toBe("policy");
+
+    const featured = [
+      "github.ingest",
+      "issues.create",
+      "issues.update",
+      "issues.list",
+      "comments.create",
+      "projects.create",
+      "documents.upsert",
+      "attachments.upload",
+      "triage.accept",
+      "triage.suggest",
+      "notify.onIssue",
+      "notify.onComment",
+      "search.index",
+      "issues.onStatus",
+      "cycles.close",
+      "drafts.expire",
+      "sla.watch",
+    ];
+    for (const id of featured) {
+      expect(KEEL_SURFACE_FLOWS[id]).toBeUndefined();
+      expect(flows[id]).toBeDefined();
+    }
   });
 
   test("primary seed run keeps Playwright-stable id and rich ledger", () => {
@@ -140,6 +237,13 @@ describe("ui-next seed", () => {
     expect(flows.has("notify.onIssue")).toBe(true);
     expect(flows.has("github.ingest")).toBe(true);
     expect(flows.has("triage.suggest") || flows.has("drafts.expire")).toBe(true);
+    expect(
+      [...flows].some((id) =>
+        ["issues.get", "issues.archive", "issues.assign", "search.query", "drafts.save"].includes(
+          id,
+        ),
+      ),
+    ).toBe(true);
 
     const failed = a.filter(
       (r) => r.error?.code === "CycleClosed" || r.error?.code === "Duplicate",
@@ -250,6 +354,15 @@ describe("ui-next seed", () => {
         topK: 80,
       });
       expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexIssues);
+
+      const text = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "index:search",
+        child: "issues",
+        q: "pulse graph",
+        topK: 5,
+      });
+      expect(text.hits?.[0]?.id).toBe("iss_eng_184");
+      expect(text.hits?.[0]?.meta).toMatchObject({ identifier: "ENG-184" });
     } finally {
       await runtime.close();
     }

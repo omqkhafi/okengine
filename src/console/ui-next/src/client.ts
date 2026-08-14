@@ -557,6 +557,8 @@ export type StoreListStore = {
     readonly drifted: boolean;
   } | null;
   readonly contentAddressed: boolean;
+  /** Files driver when the Console could open the handle. */
+  readonly driverId?: "memory" | "fs" | "s3";
   readonly warnings: ReadonlyArray<{
     readonly code: string;
     readonly message: string;
@@ -586,6 +588,7 @@ export type StoreQueryInput = {
   readonly prefix?: string;
   readonly limit?: number;
   readonly vector?: readonly number[];
+  readonly q?: string;
   readonly topK?: number;
   /** When true, SQL browse returns PII cleartext (audited). Default masks. */
   readonly revealPii?: boolean;
@@ -600,6 +603,7 @@ export type StoreQueryResult = {
     readonly value?: unknown;
     readonly ttlMs?: number | null;
     readonly sizeBytes?: number;
+    readonly originalName?: string;
     readonly warnings?: ReadonlyArray<{ readonly code: string; readonly message: string }>;
   }>;
   readonly hits?: ReadonlyArray<{
@@ -772,4 +776,208 @@ export async function storeSql(body: StoreSqlInput): Promise<ConsoleApiResult<St
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** Request body for `POST /console/store/object`. */
+export type StoreFileGetInput = {
+  readonly ref: string;
+  readonly key: string;
+  readonly tenant?: string;
+};
+
+/** Success payload from `POST /console/store/object`. */
+export type StoreFileObject = {
+  readonly key: string;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly encoding: "utf8" | "base64";
+  readonly body: string;
+  readonly truncated: boolean;
+  readonly originalName?: string;
+  readonly warnings: ReadonlyArray<{ readonly code: string; readonly message: string }>;
+};
+
+/**
+ * POST /console/store/object — read one files object for preview / download.
+ *
+ * @param body - Store ref + object key
+ */
+export async function storeFileGet(
+  body: StoreFileGetInput,
+): Promise<ConsoleApiResult<StoreFileObject>> {
+  return consoleFetch<StoreFileObject>("/console/store/object", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Resolution layer from `GET /console/vault`. */
+export type VaultResolutionSource =
+  | "process.env"
+  | ".env.local"
+  | ".env.docker"
+  | "driver"
+  | "dev-fallback";
+
+/** One vault contract from `GET /console/vault`. */
+export type VaultListRow = {
+  readonly name: string;
+  readonly kind: "secret" | "config";
+  readonly sensitive: boolean;
+  readonly description?: string;
+  readonly rotate?: string;
+  readonly fingerprints: Readonly<Record<string, string>>;
+  readonly fingerprint: string | null;
+  readonly cleartext: string | null;
+  readonly winner: VaultResolutionSource | null;
+  readonly resolution: ReadonlyArray<{
+    readonly source: VaultResolutionSource;
+    readonly present: boolean;
+    readonly won: boolean;
+  }>;
+  readonly readers: readonly string[];
+  readonly blastRadius: {
+    readonly count: number;
+    readonly longestWakeAt: number | null;
+    readonly longestOutstandingMs: number | null;
+    readonly runIds: readonly string[];
+  };
+  readonly lastReadAt: number | null;
+  readonly sharedFingerprintEnvs: readonly string[];
+};
+
+/** Built-in backend status from `GET /console/vault`. */
+export type VaultBuiltinStatus = {
+  readonly initialized: boolean;
+  readonly sealed: boolean;
+  readonly masterKeyPresent: boolean;
+  readonly kekVersion: number;
+  readonly secretCount: number;
+  readonly sealCount: number;
+  readonly lastSealedAt: number | null;
+  readonly lastUnsealedAt: number | null;
+  readonly rewrapTargetKekVersion: number | null;
+};
+
+/** Backend badge from `GET /console/vault`. */
+export type VaultBackend = {
+  readonly driverId: "env" | "vault" | "managed" | "memory";
+  readonly builtin: boolean;
+  readonly status: VaultBuiltinStatus | null;
+  readonly unavailable: string | null;
+};
+
+/** Vault list payload (`GET /console/vault`). */
+export type VaultListPayload = {
+  readonly secrets: readonly VaultListRow[];
+  readonly env: string;
+  readonly backend: VaultBackend | null;
+};
+
+/**
+ * GET /console/vault — fingerprints only; never secret values.
+ */
+export async function vaultList(): Promise<ConsoleApiResult<VaultListPayload>> {
+  return consoleFetch<VaultListPayload>("/console/vault");
+}
+
+/** Request body for `POST /console/vault/set` and `/rotate`. */
+export type VaultWriteInput = {
+  readonly name: string;
+  readonly value: string;
+  readonly confirmation?: string;
+  readonly reason?: string;
+};
+
+/** Success payload from vault set / rotate. */
+export type VaultWriteResult = {
+  readonly ok: true;
+  readonly name: string;
+  readonly fingerprint: string | null;
+  readonly at: number;
+};
+
+/**
+ * POST /console/vault/set — write a contract value (typed confirm in production).
+ *
+ * @param body - Name + value + confirm
+ */
+export async function vaultSet(body: VaultWriteInput): Promise<ConsoleApiResult<VaultWriteResult>> {
+  return consoleFetch<VaultWriteResult>("/console/vault/set", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/vault/rotate — rotate a contract value (always typed confirm).
+ *
+ * @param body - Name + value + confirm
+ */
+export async function vaultRotate(
+  body: VaultWriteInput,
+): Promise<ConsoleApiResult<VaultWriteResult>> {
+  return consoleFetch<VaultWriteResult>("/console/vault/rotate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/vault/rotate-master`. */
+export type VaultRotateMasterInput = {
+  readonly confirmation?: string;
+  readonly reason?: string;
+};
+
+/** Success payload from `POST /console/vault/rotate-master`. */
+export type VaultRotateMasterResult = {
+  readonly ok: true;
+  readonly kekVersion: number;
+  readonly remaining: number;
+  readonly masterKey: string | null;
+  readonly at: number;
+};
+
+/**
+ * POST /console/vault/rotate-master — one KEK rewrap batch.
+ *
+ * @param body - Typed confirm
+ */
+export async function vaultRotateMaster(
+  body: VaultRotateMasterInput,
+): Promise<ConsoleApiResult<VaultRotateMasterResult>> {
+  return consoleFetch<VaultRotateMasterResult>("/console/vault/rotate-master", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Operator-safe audit row from `GET /console/vault/audit/verify`. */
+export type VaultAuditRow = {
+  readonly id: string;
+  readonly seq: number;
+  readonly action: string;
+  readonly path: string | null;
+  readonly actorType: string;
+  readonly actorId: string | null;
+  readonly success: boolean;
+  readonly errorCode: string | null;
+  readonly errorMessage: string | null;
+  readonly requestId: string | null;
+  readonly createdAt: number;
+};
+
+/** Success payload from `GET /console/vault/audit/verify`. */
+export type VaultAuditVerifyResult = {
+  readonly ok: boolean;
+  readonly brokenAt: string | null;
+  readonly reason: "link" | "payload" | null;
+  readonly row: VaultAuditRow | null;
+};
+
+/**
+ * GET /console/vault/audit/verify — walk the hash chain (sealed).
+ */
+export async function vaultAuditVerify(): Promise<ConsoleApiResult<VaultAuditVerifyResult>> {
+  return consoleFetch<VaultAuditVerifyResult>("/console/vault/audit/verify");
 }

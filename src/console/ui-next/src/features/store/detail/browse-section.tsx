@@ -11,7 +11,6 @@ import {
   PencilEdit01Icon,
   PlusSignIcon,
   PuzzleIcon,
-  Search01Icon,
   SecurityCheckIcon,
   UnfoldMoreIcon,
   UserIcon,
@@ -51,9 +50,11 @@ import { SqlFunctionSheet } from "../grid/sql-function-sheet.tsx";
 import { SqlIndexSheet } from "../grid/sql-index-sheet.tsx";
 import { SqlTriggerSheet } from "../grid/sql-trigger-sheet.tsx";
 import { StoreConfirmSheet } from "../grid/store-confirm-sheet.tsx";
+import { FileExplorer } from "../files/file-explorer.tsx";
 import { StoreDataGrid } from "../grid/store-data-grid.tsx";
-import { ToolbarTip } from "../grid/toolbar-tip.tsx";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { buildStoreGridModel, type StoreGridRow } from "../lib/grid-model.ts";
+import { parseIndexQuery } from "../lib/index-query.ts";
 import { childCatalogKind, groupSqlChildren, isSqlCatalogChild } from "../lib/sql-catalog.ts";
 import { TouchedByLists } from "./touched-by-section.tsx";
 
@@ -89,7 +90,7 @@ export function BrowseSection({
   piiMasked = true,
 }: BrowseSectionProps): JSX.Element {
   const [limit, setLimit] = useState(500);
-  const [vectorText, setVectorText] = useState("");
+  const [indexText, setIndexText] = useState("");
   const [topK, setTopK] = useState(5);
   const [deleting, setDeleting] = useState<readonly StoreGridRow[] | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -99,9 +100,8 @@ export function BrowseSection({
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
 
-  const vector = useMemo(() => parseVector(vectorText), [vectorText]);
+  const indexQuery = useMemo(() => parseIndexQuery(indexText), [indexText]);
   const tenantReady = !tenancyDeclared || (tenant !== null && tenant.length > 0);
-  const indexReady = store.facet !== "index" || (vector !== null && vector.length > 0);
 
   const queryInput = useMemo(() => {
     if (!tenantReady) return null;
@@ -110,12 +110,15 @@ export function BrowseSection({
       child: child.name,
       ...(tenant ? { tenant } : {}),
       limit,
-      ...(store.facet === "index" && vector ? { vector, topK } : {}),
+      ...(store.facet === "index" && indexQuery.kind === "vector"
+        ? { vector: indexQuery.vector, topK }
+        : {}),
+      ...(store.facet === "index" && indexQuery.kind === "text" ? { q: indexQuery.q, topK } : {}),
       ...(store.facet === "sql" && !piiMasked ? { revealPii: true } : {}),
     };
-  }, [store.ref, store.facet, child.name, tenant, tenantReady, limit, vector, topK, piiMasked]);
+  }, [store.ref, store.facet, child.name, tenant, tenantReady, limit, indexQuery, topK, piiMasked]);
 
-  const browse = useStoreQuery(queryInput, tenantReady && (store.facet !== "index" || indexReady));
+  const browse = useStoreQuery(queryInput, tenantReady);
   const deleteMutation = useStoreDelete();
   const catalogKind = childCatalogKind(child);
   const extensionCatalog = catalogKind === "extension";
@@ -244,7 +247,7 @@ export function BrowseSection({
 
   const writerCount = new Set(child.writers).size;
   const readerCount = new Set(child.readers).size;
-  const showToolbar = tenantReady && (store.facet !== "index" || indexReady) && model !== null;
+  const showToolbar = tenantReady && model !== null;
 
   const toolbarExtras = (
     <>
@@ -495,14 +498,14 @@ export function BrowseSection({
         <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2">
           <label className="flex min-w-[14rem] flex-1 items-center gap-2">
             <span className="shrink-0 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-              Probe
+              Search
             </span>
             <Input
-              aria-label="Probe vector"
-              className="h-7 border-border/60 bg-transparent font-mono text-[11px] shadow-none"
-              placeholder="0.1, 0.2, 0.3 — comma-separated"
-              value={vectorText}
-              onChange={(e) => setVectorText(e.target.value)}
+              aria-label="Search this index"
+              className="h-7 border-border/60 bg-transparent text-[11px] shadow-none"
+              placeholder="Find by title or id — or paste 1, 0, 0"
+              value={indexText}
+              onChange={(e) => setIndexText(e.target.value)}
             />
           </label>
           <label className="flex items-center gap-2">
@@ -540,20 +543,6 @@ export function BrowseSection({
             </EmptyHeader>
           </Empty>
         </BrowseGate>
-      ) : store.facet === "index" && !indexReady ? (
-        <BrowseGate>
-          <Empty role="status" data-slot="browse-gate">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <HugeiconsIcon icon={Search01Icon} aria-hidden />
-              </EmptyMedia>
-              <EmptyTitle>Probe this index</EmptyTitle>
-              <EmptyDescription>
-                Enter a comma-separated vector above to find the nearest neighbors.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </BrowseGate>
       ) : browse.isLoading ? (
         <BrowseSkeleton />
       ) : browse.isError ? (
@@ -568,6 +557,17 @@ export function BrowseSection({
             </EmptyHeader>
           </Empty>
         </BrowseGate>
+      ) : store.facet === "files" && browse.data ? (
+        <div className="min-h-0 flex-1">
+          <FileExplorer
+            store={store}
+            child={child}
+            tenant={tenant}
+            data={browse.data}
+            fetching={browse.isFetching}
+            onRefresh={() => void browse.refetch()}
+          />
+        </div>
       ) : model ? (
         <div className="min-h-0 flex-1">
           <StoreDataGrid
@@ -695,22 +695,4 @@ function BrowseSkeleton(): JSX.Element {
       </div>
     </div>
   );
-}
-
-/**
- * Parse comma-separated numbers into a vector, or null when empty / invalid.
- *
- * @param text - Raw input
- */
-export function parseVector(text: string): number[] | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(/[\s,]+/).filter((p) => p.length > 0);
-  const nums: number[] = [];
-  for (const p of parts) {
-    const n = Number(p);
-    if (!Number.isFinite(n)) return null;
-    nums.push(n);
-  }
-  return nums.length > 0 ? nums : null;
 }

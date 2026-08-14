@@ -1,8 +1,8 @@
 /**
- * Recent activity strip — real buffered runs for this flow (honest empty).
+ * Recent activity strip — flush briefing under the Units identity header.
  */
 
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import type { RunRow } from "@/client.ts";
 import {
@@ -18,6 +18,8 @@ export interface FlowActivityStripProps {
   /** Injected clock for tests; defaults to `Date.now()`. */
   readonly nowMs?: number;
   readonly windowMs?: number;
+  /** Plane / durable / live pills sit on the same row. */
+  readonly children?: ReactNode;
 }
 
 /**
@@ -30,19 +32,23 @@ export function FlowActivityStrip({
   runs,
   nowMs = Date.now(),
   windowMs = FLOW_ACTIVITY_WINDOW_MS,
+  children,
 }: FlowActivityStripProps): JSX.Element {
   const summary = flowActivitySummary(runs ?? [], flowId, nowMs, windowMs);
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border/60 bg-muted/15 px-2.5 py-1.5"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 bg-muted/15 px-3 py-1.5"
       data-slot="flow-activity-strip"
       data-kind={summary.kind}
       aria-label="Recent activity"
     >
       <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Recent activity
+        Activity
       </span>
       <ActivityBody summary={summary} nowMs={nowMs} />
+      {children ? (
+        <div className="ml-auto flex flex-wrap items-center gap-1">{children}</div>
+      ) : null}
     </div>
   );
 }
@@ -57,7 +63,7 @@ function ActivityBody({
   if (summary.kind === "empty") {
     return (
       <p className="text-[11px] text-muted-foreground" data-slot="flow-activity-empty">
-        No recent runs in the Console buffer for this flow.
+        No recent runs in the Console buffer.
       </p>
     );
   }
@@ -82,7 +88,7 @@ function ActivityBody({
         {ago}
       </span>
       <Link
-        to="/flows"
+        to="/overview"
         search={{ run: summary.latestRunId }}
         className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         data-slot="flow-activity-open-run"

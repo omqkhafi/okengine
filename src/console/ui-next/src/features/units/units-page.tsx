@@ -1,9 +1,12 @@
 /**
- * Units page — Manifest service catalog + Call API.
+ * Units page — Manifest service catalog + docked Call API.
  */
 
 import { useMemo, type JSX } from "react";
+import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
+import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
 import { useManifest } from "@/features/flows/data/use-manifest.ts";
 import { useRuns } from "@/features/flows/data/use-runs.ts";
@@ -34,9 +37,13 @@ export function UnitsPage(): JSX.Element {
   }, [groups, selectedFlowId]);
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden" data-slot="units-page">
+    <div className={EXPLORER_PAGE_CLASS} data-slot="units-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="28%" minSize="18%" className="min-h-0 overflow-hidden">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.start.defaultSize}
+          minSize={EXPLORER_SPLIT.start.minSize}
+          className="min-h-0 overflow-hidden"
+        >
           <div className="h-full min-h-0 overflow-hidden">
             <UnitsTree
               groups={groups}
@@ -48,26 +55,45 @@ export function UnitsPage(): JSX.Element {
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize="72%" minSize="40%" className="min-h-0 overflow-hidden">
+        <ResizablePanel
+          defaultSize={EXPLORER_SPLIT.end.defaultSize}
+          minSize={EXPLORER_SPLIT.end.minSize}
+          className="min-h-0 overflow-hidden"
+        >
           <div className="h-full min-h-0 overflow-hidden">
-            <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-              {selectedRow ? (
-                <>
+            {selectedRow ? (
+              <ResizablePanelGroup
+                orientation="vertical"
+                className="min-h-0 flex-1"
+                data-slot="units-inspector"
+              >
+                <ResizablePanel defaultSize="56%" minSize="28%" className="min-h-0 overflow-hidden">
                   <FlowContractPanel
                     row={selectedRow}
                     manifest={manifestQuery.data ?? null}
                     runs={runs.data}
                   />
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel
+                  defaultSize="44%"
+                  minSize="220px"
+                  className="min-h-0 overflow-hidden"
+                >
                   <CallApiPanel row={selectedRow} manifest={manifestQuery.data ?? null} />
-                </>
-              ) : (
-                <p className="p-6 text-sm text-muted-foreground">
-                  {manifestQuery.isLoading
-                    ? "Loading Manifest…"
-                    : "Select a flow from the Units tree."}
-                </p>
-              )}
-            </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <ExplorerEmpty
+                icon={ELEMENT_ICONS.flow.icon}
+                title={manifestQuery.isLoading ? "Loading Manifest…" : "Select a flow"}
+                description={
+                  manifestQuery.isLoading
+                    ? "Reading the derived Manifest."
+                    : "Pick a flow from the tree to inspect its contract."
+                }
+              />
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

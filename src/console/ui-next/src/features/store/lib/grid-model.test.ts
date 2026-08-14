@@ -51,6 +51,7 @@ describe("buildStoreGridModel", () => {
     });
     expect(files.editable).toBe(false);
     expect(files.deleteKind).toBe("keys");
+    expect(files.columns.map((c) => c.key)).toEqual(["key", "size", "warnings"]);
 
     const index = buildStoreGridModel({
       facet: "index",

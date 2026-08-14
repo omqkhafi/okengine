@@ -12,7 +12,11 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
-import { Button } from "@/components/ui/button";
+import {
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_TOOLBAR_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
+import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
 import {
   Empty,
   EmptyDescription,
@@ -34,7 +38,12 @@ import { cn } from "@/lib/utils";
 import type { LiveStatus } from "../data/use-console-live.ts";
 import { AdvancedFilters } from "./advanced-filters.tsx";
 import type { DimensionQuery } from "./dimension-query.ts";
-import { applyGraphFilterToQuery, filterRunsByGraph, type GraphFilter } from "./graph-filter.ts";
+import {
+  applyGraphFilterToQuery,
+  filterRunsByGraph,
+  graphFilterLabel,
+  type GraphFilter,
+} from "./graph-filter.ts";
 import {
   DEFAULT_TRACES_FILTERS,
   DURATION_THRESHOLD_OPTIONS,
@@ -44,12 +53,7 @@ import {
   type TracesFilters,
   type TracesStatusFilter,
 } from "./filter-runs.ts";
-import {
-  durationThresholdDotClass,
-  durationThresholdFilterClass,
-  durationTone,
-  durationToneClass,
-} from "./duration-tone.ts";
+import { durationThresholdDotClass, durationTone, durationToneClass } from "./duration-tone.ts";
 import { TraceDetailSheet } from "./trace-detail-sheet.tsx";
 import { TraceRow } from "./trace-row.tsx";
 
@@ -109,9 +113,9 @@ export function TracesPane({
   const [filters, setFilters] = useState<TracesFilters>(DEFAULT_TRACES_FILTERS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // Graph flow clicks upsert a `flow = X` clause into the shared advanced query.
+  // Graph flow / unit clicks upsert a dimension clause into the shared query.
   useEffect(() => {
-    if (graphFilter?.kind === "flow") {
+    if (graphFilter?.kind === "flow" || graphFilter?.kind === "unit") {
       setFilters((prev) => ({
         ...prev,
         advanced: applyGraphFilterToQuery(prev.advanced, graphFilter),
@@ -135,6 +139,10 @@ export function TracesPane({
   );
   const advancedActive = filters.advanced.clauses.length > 0;
 
+  const setQuery = (query: string) => {
+    setFilters((prev) => ({ ...prev, query }));
+  };
+
   const setStatus = (status: TracesStatusFilter) => {
     setFilters((prev) => ({ ...prev, status }));
   };
@@ -148,26 +156,24 @@ export function TracesPane({
   };
 
   return (
-    <div className="flex h-full flex-col" data-slot="traces-pane">
-      <div className="flex flex-col gap-2 border-b border-border/60 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
-            <HugeiconsIcon
-              icon={ELEMENT_ICONS.flow.icon}
-              className="size-3.5 shrink-0 text-muted-foreground"
-            />
-            Traces
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="traces-pane">
+      <div className="shrink-0 border-b border-border/60">
+        <div className={cn(EXPLORER_TOOLBAR_CLASS, "border-b-0")}>
+          <ExplorerSearch
+            value={filters.query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search traces…"
+            aria-label="Search traces"
+            data-slot="traces-search"
+          />
+          <div className="flex shrink-0 items-center gap-1 pr-1.5">
             {runs.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger
                   render={(props) => (
-                    <Button
+                    <button
                       {...props}
                       type="button"
-                      variant="ghost"
-                      size="icon-xs"
                       aria-expanded={advancedOpen}
                       aria-controls="traces-advanced-panel"
                       aria-label={
@@ -181,9 +187,10 @@ export function TracesPane({
                         setAdvancedOpen((open) => !open);
                       }}
                       className={cn(
-                        "relative text-muted-foreground",
+                        EXPLORER_ICON_BUTTON_CLASS,
+                        "relative",
                         (advancedOpen || advancedActive) &&
-                          "bg-background text-foreground shadow-sm",
+                          "border-foreground/25 bg-background text-foreground",
                       )}
                     >
                       <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
@@ -195,16 +202,14 @@ export function TracesPane({
                           {filters.advanced.clauses.length}
                         </span>
                       ) : null}
-                    </Button>
+                    </button>
                   )}
                 />
                 <TooltipContent side="bottom">Advanced</TooltipContent>
               </Tooltip>
             ) : null}
-            {runs.length > 0 ? (
-              <span className="mx-0.5 h-3 w-px bg-border/60" aria-hidden />
-            ) : null}
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            {runs.length > 0 ? <span className="mx-0.5 h-3 w-px bg-border/60" aria-hidden /> : null}
+            <div className="flex items-center gap-1.5 pr-0.5 text-[10px] text-muted-foreground">
               <span
                 className={
                   liveStatus === "open"
@@ -219,30 +224,39 @@ export function TracesPane({
         </div>
 
         {runs.length > 0 ? (
-          <div className="flex items-center gap-1.5" data-slot="traces-filters">
+          <div
+            className="flex h-8 items-center gap-2 border-t border-border/60 px-2"
+            data-slot="traces-filters"
+          >
             <div
-              className="inline-flex h-6 shrink-0 items-center rounded-md bg-muted/60 p-0.5"
+              className="flex shrink-0 items-center gap-2"
               role="group"
               aria-label="Status filter"
             >
-              {STATUS_FILTERS.map(({ value, label, icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={filters.status === value}
-                  onClick={() => setStatus(value)}
-                  className={cn(
-                    "inline-flex h-full items-center gap-1 rounded-[5px] px-2 text-[10px] font-medium whitespace-nowrap transition-colors",
-                    filters.status === value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
-                  {label}
-                </button>
-              ))}
+              {STATUS_FILTERS.map(({ value, label, icon }) => {
+                const active = filters.status === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStatus(value)}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1 rounded-none border-0 bg-transparent text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none transition-colors",
+                      active
+                        ? value === "errors"
+                          ? "text-destructive"
+                          : "text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
+            <span className="h-3 w-px shrink-0 bg-border/60" aria-hidden />
             <div className="min-w-0 flex-1">
               <Select
                 items={DURATION_SELECT_ITEMS}
@@ -255,10 +269,12 @@ export function TracesPane({
                 <SelectTrigger
                   aria-label="Duration threshold"
                   size="sm"
+                  flat
                   className={cn(
-                    "h-6 w-full gap-1 rounded-md border bg-muted/60 py-0 pr-1 pl-1.5 text-[10px] shadow-none dark:bg-muted/60 [&_svg:not([class*='size-'])]:size-3",
-                    durationThresholdFilterClass(filters.minDurationMs),
-                    filters.minDurationMs === null && "border-transparent",
+                    "h-8 w-full gap-1 py-0 pr-0.5 pl-0 text-[10px] font-medium [&_svg:not([class*='size-'])]:size-3",
+                    filters.minDurationMs === null
+                      ? "text-muted-foreground"
+                      : durationToneClass(durationTone(filters.minDurationMs)),
                   )}
                 >
                   <HugeiconsIcon
@@ -320,11 +336,9 @@ export function TracesPane({
             data-slot="traces-graph-filter"
             onClick={() => onGraphFilterChange(null)}
             title="Clear graph filter"
-            className="inline-flex max-w-full items-center gap-1 self-start truncate rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
+            className="mx-2 mb-1.5 inline-flex max-w-full items-center gap-1 self-start truncate rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
           >
-            <span className="truncate">
-              {graphFilter.kind === "flow" ? graphFilter.flowId : `signal:${graphFilter.signal}`}
-            </span>
+            <span className="truncate">{graphFilterLabel(graphFilter)}</span>
             <span aria-hidden>×</span>
           </button>
         ) : null}
@@ -354,7 +368,8 @@ export function TracesPane({
             <EmptyHeader>
               <EmptyTitle>No matching traces</EmptyTitle>
               <EmptyDescription>
-                Nothing in this list matches the current status, duration, or advanced filters.
+                Nothing in this list matches the current search, status, duration, or advanced
+                filters.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

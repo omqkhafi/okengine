@@ -23,6 +23,8 @@ import {
   type ConsoleAppHandle,
   type CreateConsoleAppOptions,
 } from "./app.ts";
+
+export type { ConsoleAppHandle };
 import { createLiveWebsocket, type ConsoleLiveData } from "./live.ts";
 import { openConsolePersistence } from "./operator-db.ts";
 import { handleRunsIngest, RUNS_INGEST_PATH } from "./runs-ingest.ts";

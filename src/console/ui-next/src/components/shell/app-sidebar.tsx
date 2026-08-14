@@ -1,8 +1,13 @@
 /**
- * Authenticated Console sidebar — always icon-collapsed: Flows / Units / Store.
+ * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault.
  */
 
-import { Archive02Icon, Shapes01Icon, WorkflowSquare08Icon } from "@hugeicons/core-free-icons";
+import {
+  AccessIcon,
+  Archive02Icon,
+  Shapes01Icon,
+  WorkflowSquare08Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
@@ -23,19 +28,24 @@ import type { SessionOperator } from "@/client.ts";
 
 const navItems = [
   {
-    title: "Flows",
-    to: "/flows" as const,
+    title: "Overview",
+    to: "/overview" as const,
     icon: WorkflowSquare08Icon,
   },
   {
-    title: "Units",
-    to: "/units" as const,
+    title: "Flows",
+    to: "/flows" as const,
     icon: Shapes01Icon,
   },
   {
     title: "Store",
     to: "/store" as const,
     icon: Archive02Icon,
+  },
+  {
+    title: "Vault",
+    to: "/vault" as const,
+    icon: AccessIcon,
   },
 ] as const;
 

@@ -54,6 +54,17 @@ export function isSqlPolicyChild(child: StoreListChild): boolean {
 }
 
 /**
+ * True when the explorer should show the Postgres RLS badge.
+ *
+ * KV / files / index children reuse `kind: "table"` but have no `rls` flag.
+ *
+ * @param child - Store-list child
+ */
+export function storeChildShowsRls(child: StoreListChild): boolean {
+  return child.kind === "table" && typeof child.rls === "boolean";
+}
+
+/**
  * Tree / header label for a child (`Indexes` instead of `indexes`).
  *
  * @param child - Store-list child

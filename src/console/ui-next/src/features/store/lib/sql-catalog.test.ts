@@ -6,6 +6,7 @@ import {
   isSqlExtensionChild,
   isSqlPolicyChild,
   storeChildLabel,
+  storeChildShowsRls,
 } from "./sql-catalog.ts";
 
 const emptyWillNot = { writerFlowIds: [], signals: [], channels: [] };
@@ -38,6 +39,13 @@ describe("sql catalog children", () => {
     expect(isSqlCatalogChild(child("functions", "function"))).toBe(true);
     expect(isSqlExtensionChild(child("extensions", "extension"))).toBe(true);
     expect(isSqlPolicyChild(child("policies", "policy"))).toBe(true);
+  });
+
+  test("RLS badge is SQL tables only", () => {
+    expect(storeChildShowsRls({ ...child("bookings", "table"), rls: false })).toBe(true);
+    expect(storeChildShowsRls({ ...child("bookings", "table"), rls: true })).toBe(true);
+    expect(storeChildShowsRls(child("sessions", "table"))).toBe(false);
+    expect(storeChildShowsRls(child("policies", "policy"))).toBe(false);
   });
 
   test("splits tables from catalog folders", () => {

@@ -5,6 +5,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
 import type { Effects } from "../../../../../../manifest/types.ts";
+import { SectionHead } from "@/components/explorer/section-head.tsx";
 import {
   effectBarColor,
   effectKindIcon,
@@ -33,9 +34,7 @@ export function EffectsSummary({ effects }: EffectsSummaryProps): JSX.Element | 
 
   return (
     <section className="flex flex-col gap-2" data-slot="effects-summary" aria-label="Effects">
-      <h3 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        Effects
-      </h3>
+      <SectionHead title="Effects" meta={String(chips.length)} />
       <ul className="flex flex-wrap gap-1.5">
         {chips.map((c) => {
           const color = effectBarColor(c.kind);

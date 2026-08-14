@@ -16,18 +16,14 @@ const OPERATOR_PASSWORD = "Password1234!";
  * Assert the authenticated shell is visible for the signed-in operator.
  *
  * @param page - Playwright page
- * @param sectionTitle - Empty-state title for the active section
  */
-async function expectShell(
-  page: import("@playwright/test").Page,
-  sectionTitle: string,
-): Promise<void> {
+async function expectShell(page: import("@playwright/test").Page): Promise<void> {
   const sidebar = page.locator('[data-slot="sidebar"]');
   await expect(sidebar).toBeVisible({ timeout: 15_000 });
+  await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Flows" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Units" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
-  await expect(page.getByText(sectionTitle)).toBeVisible();
+  await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible();
 
   // Sidebar starts collapsed (icon mode) — expand via the brand hover trigger
   // (inset SidebarTrigger is md:hidden on desktop viewports).
@@ -61,8 +57,8 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Create admin account" }).click();
 
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
-  await expectShell(page, "Traces");
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expectShell(page);
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
@@ -131,15 +127,15 @@ test("ui-next login rejects wrong password then succeeds into the shell", async 
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Try again" }).click();
 
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
-  await expectShell(page, "Traces");
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expectShell(page);
 
   const token = await page.evaluate(() => sessionStorage.getItem("oke_console_at"));
   expect(token).toBeTruthy();
 
   await expect(page.locator('[data-slot="flow-graph"]')).toBeVisible();
   await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible();
-  await expect(page.getByText("Traces")).toBeVisible();
+  await expect(page.locator('[data-slot="traces-search"]')).toBeVisible();
 });
 
 test("ui-next unauthenticated shell visit redirects to the pre-auth gate", async ({ page }) => {
@@ -222,7 +218,7 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await page.locator("#email").fill(OPERATOR_EMAIL);
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
 
   const graph = page.locator('[data-slot="flow-graph"]');
   await expect(graph).toBeVisible({ timeout: 15_000 });
@@ -284,7 +280,7 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
 });
 
 /**
- * Sign in and open Flows so the seeded Traces pane is ready.
+ * Sign in and open Overview so the seeded Traces pane is ready.
  *
  * @param page - Playwright page
  */
@@ -297,7 +293,7 @@ async function signInAndOpenFlows(page: import("@playwright/test").Page): Promis
   await page.locator("#email").fill(OPERATOR_EMAIL);
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
   await expect(page.locator('[data-slot="traces-pane"]')).toBeVisible({ timeout: 15_000 });
 }
 
@@ -362,7 +358,7 @@ test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", asyn
   await expect(tip).toBeVisible({ timeout: 5_000 });
 });
 
-test("ui-next Units: Call API invokes for real (non-stub response)", async ({ page, request }) => {
+test("ui-next Flows: Call API invokes for real (non-stub response)", async ({ page, request }) => {
   test.setTimeout(90_000);
 
   const status = await request.get("/console/setup/status");
@@ -393,13 +389,20 @@ test("ui-next Units: Call API invokes for real (non-stub response)", async ({ pa
     await page.getByRole("button", { name: "Sign in" }).click();
   }
 
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
 
-  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Units" }).click();
-  await expect(page).toHaveURL(/\/units/);
+  await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Flows" }).click();
+  await expect(page).toHaveURL(/\/flows/);
   await expect(page.locator('[data-slot="units-page"]')).toBeVisible({ timeout: 15_000 });
 
+  await page
+    .locator(
+      '[data-slot="units-trigger-band"][data-band="http"] [data-slot="units-trigger-band-toggle"]',
+    )
+    .click();
+  await page.locator('[data-slot="unit-group"][data-unit="issues"] button').first().click();
   const createItem = page.locator('[data-slot="unit-flow-item"][data-flow-id="issues.create"]');
+  await createItem.scrollIntoViewIfNeeded();
   await expect(createItem).toBeVisible({ timeout: 15_000 });
   await createItem.click();
 

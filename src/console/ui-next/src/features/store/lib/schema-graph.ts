@@ -531,6 +531,9 @@ function layoutSchemaNodes(
         y: (n?.y ?? 0) - height / 2,
       },
       data: { table, showStore },
+      // Top-level width/height — MiniMap skips nodes that only set style.
+      width: NODE_WIDTH,
+      height,
       style: { width: NODE_WIDTH, height },
     };
   });

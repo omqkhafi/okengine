@@ -1,26 +1,27 @@
 /**
  * Schema field type → badge visual tokens.
  *
- * Colors mirror the TraceDetailSheet payload value tones (string → rose,
- * number → amber, boolean → emerald) so one type reads the same everywhere
- * the product renders JSON-ish fields. Object/array/enum/unknown are neutral.
+ * One hue per type so a contract list is scannable. Rose is reserved for
+ * risk (sensitive / DELETE) — strings use teal, not rose.
  */
 
 /** Badge foreground/background/border classes for a schema field type. */
 export function schemaTypeBadgeClass(type: string): string {
   switch (type) {
     case "string":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
-    case "number":
+      return "border-teal-500/35 bg-teal-500/10 text-teal-800 dark:text-teal-300";
     case "integer":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300";
+      return "border-blue-500/35 bg-blue-500/10 text-blue-800 dark:text-blue-300";
+    case "number":
+      return "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300";
     case "boolean":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      return "border-violet-500/35 bg-violet-500/10 text-violet-800 dark:text-violet-300";
     case "enum":
-      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400";
-    case "object":
+      return "border-indigo-500/35 bg-indigo-500/10 text-indigo-800 dark:text-indigo-300";
     case "array":
-      return "border-border/70 bg-muted/40 text-muted-foreground";
+      return "border-cyan-500/35 bg-cyan-500/10 text-cyan-800 dark:text-cyan-300";
+    case "object":
+      return "border-zinc-500/35 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300";
     default:
       return "border-border/70 bg-muted/40 text-muted-foreground";
   }

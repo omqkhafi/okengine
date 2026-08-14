@@ -10,6 +10,7 @@ import {
   applyGraphFilterToQuery,
   filterRunsByGraph,
   graphFilterForNodeId,
+  graphFilterLabel,
   matchesGraphFilter,
 } from "./graph-filter.ts";
 
@@ -60,7 +61,7 @@ const MANIFEST: Manifest = {
 } as unknown as Manifest;
 
 describe("graphFilterForNodeId", () => {
-  test("maps flow and signal node ids", () => {
+  test("maps flow, signal, unit, element, and resource node ids", () => {
     expect(graphFilterForNodeId("flow:bookings.create")).toEqual({
       kind: "flow",
       flowId: "bookings.create",
@@ -69,12 +70,23 @@ describe("graphFilterForNodeId", () => {
       kind: "signal",
       signal: "order-placed",
     });
+    expect(graphFilterForNodeId("unit:bookings")).toEqual({ kind: "unit", unit: "bookings" });
+    expect(graphFilterForNodeId("element:store")).toEqual({ kind: "element", element: "store" });
+    expect(graphFilterForNodeId("type:store:sql")).toEqual({ kind: "element", element: "store" });
+    expect(graphFilterForNodeId("type:flow:http")).toEqual({ kind: "element", element: "flow" });
+    expect(graphFilterForNodeId("sql:bookings")).toEqual({
+      kind: "resource",
+      nodeId: "sql:bookings",
+    });
+    expect(graphFilterForNodeId("ai:ticket-triage")).toEqual({
+      kind: "resource",
+      nodeId: "ai:ticket-triage",
+    });
   });
 
-  test("returns null for non-filterable node kinds", () => {
+  test("returns null for unknown node kinds", () => {
     expect(graphFilterForNodeId("store:sql:bookings")).toBeNull();
-    expect(graphFilterForNodeId("ai:ticket-triage")).toBeNull();
-    expect(graphFilterForNodeId("unit:bookings")).toBeNull();
+    expect(graphFilterForNodeId("element:nope")).toBeNull();
   });
 });
 
@@ -87,12 +99,28 @@ describe("applyGraphFilterToQuery", () => {
     expect(q.clauses).toEqual([{ dimension: "flow", op: "=", value: "bookings.create" }]);
   });
 
+  test("upserts a unit clause", () => {
+    const q = applyGraphFilterToQuery(EMPTY_DIMENSION_QUERY, {
+      kind: "unit",
+      unit: "bookings",
+    });
+    expect(q.clauses).toEqual([{ dimension: "unit", op: "=", value: "bookings" }]);
+  });
+
   test("leaves the query untouched for signal filters", () => {
     const q = applyGraphFilterToQuery(EMPTY_DIMENSION_QUERY, {
       kind: "signal",
       signal: "order-placed",
     });
     expect(q.clauses).toEqual([]);
+  });
+});
+
+describe("graphFilterLabel", () => {
+  test("names the chip from the filter kind", () => {
+    expect(graphFilterLabel({ kind: "flow", flowId: "bookings.create" })).toBe("bookings.create");
+    expect(graphFilterLabel({ kind: "element", element: "store" })).toBe("Store");
+    expect(graphFilterLabel({ kind: "unit", unit: "bookings" })).toBe("bookings");
   });
 });
 
@@ -103,6 +131,29 @@ describe("matchesGraphFilter", () => {
       true,
     );
     expect(matchesGraphFilter(run, { kind: "flow", flowId: "other.flow" }, MANIFEST)).toBe(false);
+  });
+
+  test("unit filter matches the run unit", () => {
+    const run = sampleRun({ unit: "bookings" });
+    expect(matchesGraphFilter(run, { kind: "unit", unit: "bookings" }, MANIFEST)).toBe(true);
+    expect(matchesGraphFilter(run, { kind: "unit", unit: "payments" }, MANIFEST)).toBe(false);
+  });
+
+  test("element filter matches ledger-touched elements", () => {
+    const run = sampleRun({
+      effects: [
+        {
+          kind: "write",
+          resource: "sql:bookings",
+          timestamp: 1,
+          duration: 2,
+          reversibility: "reversible",
+        },
+      ],
+    });
+    expect(matchesGraphFilter(run, { kind: "element", element: "store" }, MANIFEST)).toBe(true);
+    expect(matchesGraphFilter(run, { kind: "element", element: "vault" }, MANIFEST)).toBe(false);
+    expect(matchesGraphFilter(run, { kind: "element", element: "flow" }, MANIFEST)).toBe(true);
   });
 
   test("signal filter matches emitter and consumer flows", () => {

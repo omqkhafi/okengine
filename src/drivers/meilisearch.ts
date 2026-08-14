@@ -194,6 +194,22 @@ export async function openMeilisearchIndex(
       await waitForTask(task.taskUid);
       return true;
     },
+    async list(limit = 100) {
+      const res = await requestOk(
+        `/indexes/${uid}/documents?limit=${Math.max(1, Math.floor(limit))}`,
+      );
+      const body = (await res.json()) as {
+        readonly results?: ReadonlyArray<Record<string, unknown>>;
+      };
+      return (body.results ?? []).map((doc) => {
+        const meta = Object.fromEntries(Object.entries(doc).filter(([key]) => key !== "id"));
+        return {
+          id: String(doc.id ?? ""),
+          score: 0,
+          ...(Object.keys(meta).length > 0 ? { meta } : {}),
+        };
+      });
+    },
     async close() {
       // Stateless HTTP client — nothing to release.
     },

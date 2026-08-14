@@ -10,7 +10,7 @@ import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
 import { executeTraceReplay, replayRequestForRun } from "./trace-actions.ts";
 import { FLOWS_TEST_MANIFEST } from "../../../../../ui/flows/fixture.ts";
 import { traceRequestMeta } from "./request-meta.ts";
-import { traceGateInfos } from "./trace-gates.ts";
+import { GATE_CHIP_ICONS, gateChipIcon, traceGateInfos } from "./trace-gates.ts";
 import type { RunRow } from "@/client.ts";
 import { describe, expect, test } from "bun:test";
 
@@ -86,6 +86,8 @@ describe("effectBarColor", () => {
     expect(effectBarColor("emit")).toBe(EDGE_STROKE.emits);
     expect(effectBarColor("call")).toBe(EDGE_STROKE.calls);
     expect(effectBarColor("ask")).toBe(EDGE_STROKE.asks);
+    expect(effectBarColor("send")).toBe(EDGE_STROKE.sends);
+    expect(effectBarColor("secret")).toBe(EDGE_STROKE.secrets);
   });
 });
 
@@ -205,15 +207,50 @@ describe("traceGateInfos", () => {
       },
     });
     expect(rows).toEqual([
-      { name: "member", kind: "policy", description: "Signed-in member" },
-      { name: "missing", kind: null, description: null },
+      { name: "member", kind: "policy", variant: "policy", description: "Signed-in member" },
+      { name: "missing", kind: null, variant: null, description: null },
     ]);
+  });
+
+  test("labels policy-with-scopes as scope", () => {
+    const rows = traceGateInfos(["issue:write", "issues.write"], {
+      ...FLOWS_TEST_MANIFEST,
+      gates: {
+        "issue:write": {
+          kind: "policy",
+          description: "May create and update issues",
+          scopes: ["issue:write"],
+        },
+        "issues.write": { kind: "rate", description: "Issue write throttle" },
+      },
+    });
+    expect(rows.map((r) => r.variant)).toEqual(["scope", "rate"]);
+  });
+
+  test("labels flag: and public by name", () => {
+    expect(traceGateInfos(["flag:maintenance", "public"], null).map((r) => r.variant)).toEqual([
+      "flag",
+      "public",
+    ]);
+  });
+
+  test("assigns a distinct icon per gate type", () => {
+    const icons = [
+      gateChipIcon("policy"),
+      gateChipIcon("scope"),
+      gateChipIcon("rate"),
+      gateChipIcon("flag"),
+      gateChipIcon("public"),
+    ];
+    expect(new Set(icons).size).toBe(5);
+    expect(gateChipIcon("scope")).toBe(GATE_CHIP_ICONS.scope);
+    expect(gateChipIcon(null)).toBe(ELEMENT_ICONS.gate.icon);
   });
 
   test("keeps ledger order when Manifest is absent", () => {
     expect(traceGateInfos(["booking:create", "member"], null)).toEqual([
-      { name: "booking:create", kind: null, description: null },
-      { name: "member", kind: null, description: null },
+      { name: "booking:create", kind: null, variant: null, description: null },
+      { name: "member", kind: null, variant: null, description: null },
     ]);
   });
 });

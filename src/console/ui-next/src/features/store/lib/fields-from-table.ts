@@ -65,6 +65,18 @@ function fieldFromColumn(
     ...(col.pii === true ? { pii: true } : {}),
     ...(col.sensitive === true ? { sensitive: true } : {}),
     ...(declared?.primaryKey === true ? { primaryKey: true } : {}),
+    ...(declared?.unique === true && declared.primaryKey !== true ? { unique: true } : {}),
+    ...(declared?.references?.table
+      ? {
+          foreignKey: true,
+          references: {
+            table: declared.references.table,
+            ...(declared.references.column !== undefined
+              ? { column: declared.references.column }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 

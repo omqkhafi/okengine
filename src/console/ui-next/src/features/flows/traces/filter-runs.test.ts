@@ -36,7 +36,10 @@ function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "durationMs
   };
 }
 
-const base: Pick<TracesFilters, "advanced"> = { advanced: EMPTY_DIMENSION_QUERY };
+const base: Pick<TracesFilters, "advanced" | "query"> = {
+  advanced: EMPTY_DIMENSION_QUERY,
+  query: "",
+};
 
 describe("filterScopedRuns", () => {
   const rows = [
@@ -85,11 +88,41 @@ describe("filterScopedRuns", () => {
 
   test("advanced dimension query composes with basic filters", () => {
     const filters: TracesFilters = {
+      ...base,
       status: "all",
       minDurationMs: 10,
       advanced: parseDimensionQuery("trigger = signal"),
     };
     expect(filterScopedRuns(rows, filters).map((r) => r.id)).toEqual(["ok-mid"]);
+  });
+
+  test("free-text query matches flow, trigger, cache, and error", () => {
+    expect(
+      filterScopedRuns(rows, { status: "all", minDurationMs: null, ...base, query: "b" }).map(
+        (r) => r.id,
+      ),
+    ).toEqual(["err-slow"]);
+    expect(
+      filterScopedRuns(rows, {
+        status: "all",
+        minDurationMs: null,
+        ...base,
+        query: "signal",
+      }).map((r) => r.id),
+    ).toEqual(["ok-mid"]);
+    expect(
+      filterScopedRuns(rows, { status: "all", minDurationMs: null, ...base, query: "miss" }).map(
+        (r) => r.id,
+      ),
+    ).toEqual(["err-slow"]);
+    expect(
+      filterScopedRuns(rows, {
+        status: "all",
+        minDurationMs: null,
+        ...base,
+        query: "timeout",
+      }).map((r) => r.id),
+    ).toEqual(["err-slow"]);
   });
 });
 

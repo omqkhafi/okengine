@@ -54,6 +54,13 @@ export function createMeilisearchFakeFetch(opts?: {
       });
     }
 
+    if (url.includes("/documents") && method === "GET" && !url.includes("/documents/")) {
+      const limit = Number(new URL(url).searchParams.get("limit") ?? 100);
+      return json({
+        results: [...documents.values()].slice(0, Number.isFinite(limit) ? limit : 100),
+      });
+    }
+
     if (url.includes("/documents/") && method === "DELETE") {
       const id = decodeURIComponent(url.split("/documents/")[1] ?? "");
       if (!documents.delete(id)) return json({ message: "not found" }, 404);
@@ -128,6 +135,21 @@ describe("meilisearch driver", () => {
     await index.upsert("d1", { title: "x", tag: "a" });
     const found = await index.search("x", { facets: ["tag"] });
     expect(found.facetDistribution).toEqual({ tag: { tagged: 1 } });
+    await index.close();
+  });
+
+  test("list returns stored documents without a query", async () => {
+    const index = await openMeilisearchIndex({
+      name: "kb",
+      dims: 0,
+      url: "http://127.0.0.1:7700",
+      fetch: createMeilisearchFakeFetch(),
+    });
+    await index.upsert("d1", { title: "hello world" });
+    await index.upsert("d2", { title: "goodbye world" });
+    const listed = await index.list(10);
+    expect(listed.map((hit) => hit.id).sort()).toEqual(["d1", "d2"]);
+    expect(listed[0]?.score).toBe(0);
     await index.close();
   });
 

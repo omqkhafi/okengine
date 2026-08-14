@@ -1,19 +1,26 @@
 /**
  * Manifest → React Flow graph (pure).
  *
- * Nodes: flows grouped by unit, plus the store / signal / AI targets each
- * flow's declared effects touch. Edges are declared (from the Manifest), not
- * runtime traffic. Layout is a real LR layered pass via `@dagrejs/dagre`
- * (compound unit parents) — not fixed manual columns.
+ * Nodes: flows grouped by unit, plus the store / signal / AI / clock / gate /
+ * vault / channel targets each flow declares. Edges are declared (from the
+ * Manifest), not runtime traffic. Used for the 1-hop neighborhood; the
+ * default canvas is the eight-element map in `element-map.ts`.
  */
 
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { Flow, Manifest } from "../../../../../../manifest/types.ts";
-import { EDGE_STROKE, NODE_BOX, UNIT_CHROME, type FlowGraphEdgeKind } from "./flow-graph-theme.ts";
+import type { OkeElement } from "@/lib/element-icons.ts";
+import {
+  EDGE_STROKE,
+  GRAPH_Z,
+  NODE_BOX,
+  UNIT_CHROME,
+  type FlowGraphEdgeKind,
+} from "./flow-graph-theme.ts";
 
 /** Node kinds rendered by the Flow graph. */
-export type FlowGraphNodeKind = "unit" | "flow" | "store" | "signal" | "ai";
+export type FlowGraphNodeKind = "unit" | "element" | "law" | OkeElement;
 
 /** Custom data carried on every graph node. */
 export type FlowGraphNodeData = {
@@ -29,6 +36,12 @@ export type FlowGraphNodeData = {
   readonly facet?: string;
   /** Compact metadata badge (count / type). */
   readonly badge?: string;
+  /** Elements this unit chip couples to (overview map). */
+  readonly elements?: readonly OkeElement[];
+  /** Recent-run count painted on map chips / hubs. */
+  readonly live?: number;
+  /** Error-run count painted on map chips / hubs. */
+  readonly errors?: number;
   /** Dimmed when a trace chain is highlighted and this node is not in it. */
   readonly dimmed?: boolean;
   /** Emphasis ring when part of the highlighted chain. */
@@ -106,7 +119,7 @@ export function callersOfFlow(
 
 interface TargetSpec {
   readonly id: string;
-  readonly kind: "store" | "signal" | "ai";
+  readonly kind: "store" | "signal" | "ai" | "clock" | "gate" | "vault" | "channel";
   readonly label: string;
   readonly facet?: string;
 }
@@ -120,6 +133,10 @@ function targetFromRef(ref: string): TargetSpec | null {
     return { id: ref, kind: "store", label: ref.slice(6), facet: "index" };
   if (ref.startsWith("signal:")) return { id: ref, kind: "signal", label: ref.slice(7) };
   if (ref.startsWith("ai:")) return { id: ref, kind: "ai", label: ref.slice(3) };
+  if (ref.startsWith("vault:")) return { id: ref, kind: "vault", label: ref.slice(6) };
+  if (ref.startsWith("channel:")) return { id: ref, kind: "channel", label: ref.slice(8) };
+  if (ref.startsWith("gate:")) return { id: ref, kind: "gate", label: ref.slice(5) };
+  if (ref.startsWith("clock:")) return { id: ref, kind: "clock", label: ref.slice(6) };
   return null;
 }
 
@@ -144,6 +161,7 @@ function styledEdge(
       strokeWidth: kind === "calls" ? 2.5 : 2.25,
     },
     pathOptions: { borderRadius: 28 },
+    zIndex: GRAPH_Z.edge,
     markerEnd: {
       type: MarkerType.ArrowClosed,
       width: 14,
@@ -184,6 +202,24 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
       if (spec) targets.set(ref, spec);
       edges.push(styledEdge(`e:${ref}->flow:${flowId}`, ref, `flow:${flowId}`, "trigger"));
     }
+    if (flow.trigger?.cron || flow.trigger?.every) {
+      const ref = `clock:${flowId}`;
+      const label = flow.trigger.cron ?? flow.trigger.every ?? flowId;
+      targets.set(ref, {
+        id: ref,
+        kind: "clock",
+        label,
+        facet: flow.trigger.cron ? "cron" : "every",
+      });
+      edges.push(styledEdge(`e:${ref}->flow:${flowId}`, ref, `flow:${flowId}`, "trigger"));
+    }
+
+    for (const name of flow.gates ?? []) {
+      const ref = `gate:${name}`;
+      targets.set(ref, { id: ref, kind: "gate", label: name });
+      effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
+      edges.push(styledEdge(`e:flow:${flowId}-gates->${ref}`, `flow:${flowId}`, ref, "gates"));
+    }
 
     const e = flow.effects;
     if (e) {
@@ -216,6 +252,22 @@ export function buildFlowGraph(manifest: Manifest | null | undefined): {
         targets.set(ref, spec);
         effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
         edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "asks"));
+      }
+      for (const s of e.sends ?? []) {
+        const ref = `channel:${s}`;
+        const spec = targetFromRef(ref);
+        if (!spec) continue;
+        targets.set(ref, spec);
+        effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
+        edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "sends"));
+      }
+      for (const s of e.secrets ?? []) {
+        const ref = `vault:${s}`;
+        const spec = targetFromRef(ref);
+        if (!spec) continue;
+        targets.set(ref, spec);
+        effectCount.set(ref, (effectCount.get(ref) ?? 0) + 1);
+        edges.push(styledEdge(`e:flow:${flowId}->${ref}`, `flow:${flowId}`, ref, "secrets"));
       }
       for (const callee of e.calls ?? []) {
         edges.push(
@@ -285,12 +337,18 @@ function layoutWithDagre(
       if (flow.trigger?.signal) {
         link(`signal:${flow.trigger.signal}`, `flow:${flowId}`);
       }
+      if (flow.trigger?.cron || flow.trigger?.every) {
+        link(`clock:${flowId}`, `flow:${flowId}`);
+      }
+      for (const name of flow.gates ?? []) link(`flow:${flowId}`, `gate:${name}`);
       const e = flow.effects;
       if (!e) continue;
       for (const r of e.reads ?? []) link(`flow:${flowId}`, r);
       for (const r of e.writes ?? []) link(`flow:${flowId}`, r);
       for (const s of e.emits ?? []) link(`flow:${flowId}`, `signal:${s}`);
       for (const a of e.asks ?? []) link(`flow:${flowId}`, `ai:${a}`);
+      for (const s of e.sends ?? []) link(`flow:${flowId}`, `channel:${s}`);
+      for (const s of e.secrets ?? []) link(`flow:${flowId}`, `vault:${s}`);
       for (const callee of e.calls ?? []) link(`flow:${flowId}`, `flow:${callee}`);
     }
   }
@@ -328,6 +386,11 @@ function layoutWithDagre(
       },
       selectable: false,
       draggable: false,
+      zIndex: GRAPH_Z.unit,
+      // Top-level width/height — MiniMap reads these on the user node
+      // (`style.width` alone is treated as undimensioned and skipped).
+      width,
+      height,
       style: { width, height },
     });
 
@@ -343,6 +406,7 @@ function layoutWithDagre(
         },
         parentId: unitId,
         extent: "parent",
+        zIndex: GRAPH_Z.leaf,
         data: {
           kind: "flow",
           label: actionOfFlowId(flowId),
@@ -352,6 +416,8 @@ function layoutWithDagre(
           badge: flow.plane ?? "user",
         },
         draggable: false,
+        width: NODE_BOX.flow.width,
+        height: NODE_BOX.flow.height,
         style: { width: NODE_BOX.flow.width, height: NODE_BOX.flow.height },
       });
     });
@@ -379,6 +445,9 @@ function layoutWithDagre(
         badge: spec.facet ?? (count > 0 ? String(count) : spec.kind),
       },
       draggable: false,
+      zIndex: GRAPH_Z.leaf,
+      width: box.width,
+      height: box.height,
       style: { width: box.width, height: box.height },
     });
   }
@@ -403,7 +472,7 @@ export function applyChainHighlight(
 ): FlowGraphNode[] {
   const active = highlightedFlowIds.size > 0 || highlightedNodeIds.size > 0;
   return nodes.map((node) => {
-    if (node.data.kind === "unit") return node;
+    if (node.data.kind === "unit" || node.data.kind === "law") return node;
     const isFlow = node.data.kind === "flow";
     const inChain = isFlow
       ? highlightedFlowIds.has(node.data.refId)

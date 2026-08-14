@@ -10,7 +10,7 @@ import type { StoreListChild, StoreListStore } from "@/client.ts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils.ts";
 import { useStoreQuery } from "../data/use-store-query.ts";
-import { ToolbarTip } from "../grid/toolbar-tip.tsx";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import {
   fieldsFromKvValues,
   querySchemaTables,

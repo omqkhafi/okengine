@@ -43,7 +43,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { cn } from "@/lib/utils.ts";
 import { STORE_QUERY_KEY } from "../data/use-store-query.ts";
 import { useStoreSql } from "../data/use-store-sql.ts";
-import { ToolbarTip } from "../grid/toolbar-tip.tsx";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { formatKvTtl } from "../lib/kv-meta.ts";
 import { kvSetPatch, parseKvQuery } from "../lib/kv-query.ts";
 import {

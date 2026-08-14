@@ -72,12 +72,32 @@ function validateNode(
   } else if (type === "integer") {
     if (typeof value !== "number" || !Number.isInteger(value)) {
       errors.push({ path: path || "/", message: "must be integer" });
+    } else {
+      pushRangeError(schema, value, path, errors);
     }
   } else if (type === "number") {
     if (typeof value !== "number" || Number.isNaN(value)) {
       errors.push({ path: path || "/", message: "must be number" });
+    } else {
+      pushRangeError(schema, value, path, errors);
     }
   } else if (type === "boolean" && typeof value !== "boolean") {
     errors.push({ path: path || "/", message: "must be boolean" });
+  }
+}
+
+function pushRangeError(
+  schema: Record<string, unknown>,
+  value: number,
+  path: string,
+  errors: FieldError[],
+): void {
+  const min = typeof schema.minimum === "number" ? schema.minimum : undefined;
+  const max = typeof schema.maximum === "number" ? schema.maximum : undefined;
+  if (min !== undefined && value < min) {
+    errors.push({ path: path || "/", message: `must be ≥ ${min}` });
+  }
+  if (max !== undefined && value > max) {
+    errors.push({ path: path || "/", message: `must be ≤ ${max}` });
   }
 }
