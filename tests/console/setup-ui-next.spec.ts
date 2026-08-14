@@ -94,9 +94,8 @@ test("ui-next claim succeeds and already-claimed path closes setup", async ({ pa
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(
-    page.getByText("Setup is closed. Sign in with an existing operator account."),
-  ).toBeVisible();
+  await expect(page.getByText("Setup closed")).toBeVisible();
+  await expect(page.getByText("Sign in with an existing operator account.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Create admin account" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 });
@@ -130,7 +129,7 @@ test("ui-next login rejects wrong password then succeeds into the shell", async 
   expect(failedToken).toBeNull();
 
   await page.locator("#password").fill(OPERATOR_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Try again" }).click();
 
   await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
   await expectShell(page, "Traces");
@@ -155,6 +154,29 @@ test("ui-next unauthenticated shell visit redirects to the pre-auth gate", async
     timeout: 15_000,
   });
   await expect(page.locator('[data-slot="sidebar"]')).toHaveCount(0);
+});
+
+test("ui-next expired session returns to the requested module after login", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    sessionStorage.removeItem("oke_console_at");
+    sessionStorage.removeItem("oke_console_operator");
+  });
+  await page.goto("/store?resource=sql:issues&view=query&facet=sql");
+  await expect(page).toHaveURL(/[?&]next=/, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  await page.locator("#email").fill(OPERATOR_EMAIL);
+  await page.locator("#password").fill(OPERATOR_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page).toHaveURL(/\/store/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/resource=sql(%3A|:)issues/);
+  await expect(page).toHaveURL(/view=query/);
+  await expect(page).toHaveURL(/facet=sql/);
+  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({ timeout: 15_000 });
 });
 
 test("ui-next theme toggle flips .dark and persists across reload", async ({ page }) => {
@@ -205,26 +227,20 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   const graph = page.locator('[data-slot="flow-graph"]');
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
-  // Real Manifest nodes (skyport seed) — unit headers + flow actions.
-  await expect(graph.getByText("bookings", { exact: true }).first()).toBeVisible();
-  await expect(page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]')).toBeVisible(
-    {
-      timeout: 15_000,
-    },
-  );
+  // Real Manifest nodes (keel seed) — unit headers + flow actions.
+  await expect(graph.getByText("issues", { exact: true }).first()).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="issues.create"]')).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(
-    page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]'),
+    page.locator('[data-slot="flow-node"][data-flow-id="notify.onIssue"]'),
   ).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="github.ingest"]')).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="cycles.close"]')).toBeVisible();
   await expect(
-    page.locator('[data-slot="flow-node"][data-flow-id="payments.chargeBooking"]'),
+    page.locator('[data-slot="flow-node"][data-flow-id="triage.suggest"]'),
   ).toBeVisible();
-  await expect(
-    page.locator('[data-slot="flow-node"][data-flow-id="ops.nightlyReconcile"]'),
-  ).toBeVisible();
-  await expect(
-    page.locator('[data-slot="flow-node"][data-flow-id="support.triage"]'),
-  ).toBeVisible();
-  await expect(page.locator('[data-slot="flow-node"][data-flow-id="holds.expire"]')).toBeVisible();
+  await expect(page.locator('[data-slot="flow-node"][data-flow-id="drafts.expire"]')).toBeVisible();
   // AI / store / signal targets from declared effects.
   await expect(page.locator('[data-slot="ai-node"]')).toBeVisible();
   await expect(page.locator('[data-slot="store-node"]').first()).toBeVisible();
@@ -234,39 +250,37 @@ test("ui-next Flows graph renders Manifest nodes, shows a seeded run, and highli
   await expect(traces).toBeVisible();
   // Featured (8) + operational (72) = 80.
   await expect(traces.locator('[data-slot="trace-row"]')).toHaveCount(80, { timeout: 15_000 });
-  await expect(traces.locator('[data-run-id="pw-run-fulfillment-on-order"]')).toBeVisible();
-  await expect(traces.locator('[data-run-id="pw-run-bookings-create-fail"]')).toBeVisible();
-  await expect(traces.locator('[data-run-id="pw-run-bookings-create-fail"]')).toHaveAttribute(
+  await expect(traces.locator('[data-run-id="pw-run-notify-on-issue"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-issues-create-fail"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-issues-create-fail"]')).toHaveAttribute(
     "data-failed",
     "true",
   );
-  await expect(traces.locator('[data-run-id="pw-run-support-triage"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-triage-suggest"]')).toBeVisible();
   // Operational bulk is present (scrollable list — count already covers volume).
   await expect(traces.locator('[data-run-id^="pw-ops-"]')).toHaveCount(72);
 
-  const row = traces.locator('[data-run-id="pw-run-bookings-create"]');
+  const row = traces.locator('[data-run-id="pw-run-issues-create"]');
   await expect(row).toBeVisible({ timeout: 15_000 });
 
-  const createNode = page.locator('[data-slot="flow-node"][data-flow-id="bookings.create"]');
-  const fulfillNode = page.locator('[data-slot="flow-node"][data-flow-id="fulfillment.onOrder"]');
-  const paymentsNode = page.locator(
-    '[data-slot="flow-node"][data-flow-id="payments.chargeBooking"]',
-  );
+  const createNode = page.locator('[data-slot="flow-node"][data-flow-id="issues.create"]');
+  const notifyNode = page.locator('[data-slot="flow-node"][data-flow-id="notify.onIssue"]');
+  const ingestNode = page.locator('[data-slot="flow-node"][data-flow-id="github.ingest"]');
   await expect(createNode).toHaveAttribute("data-highlighted", "false");
 
   await row.click();
-  await expect(page).toHaveURL(/run=pw-run-bookings-create/);
+  await expect(page).toHaveURL(/run=pw-run-issues-create/);
   await expect(createNode).toHaveAttribute("data-highlighted", "true", { timeout: 5_000 });
-  await expect(fulfillNode).toHaveAttribute("data-highlighted", "true");
-  await expect(paymentsNode).toHaveAttribute("data-highlighted", "true");
+  await expect(notifyNode).toHaveAttribute("data-highlighted", "true");
+  await expect(ingestNode).toHaveAttribute("data-highlighted", "true");
   await expect(row).toHaveAttribute("data-selected", "true");
   await expect(page.locator('[data-slot="trace-detail-sheet"]')).toBeVisible();
   await expect(page.locator('[data-slot="trace-waterfall"]')).toBeVisible();
   await expect(page.locator('[data-slot="trace-request"]')).toBeVisible();
   await expect(page.locator('[data-slot="trace-request-method"]')).toHaveText("POST");
-  await expect(page.locator('[data-slot="trace-request"]')).toContainText("/bookings");
+  await expect(page.locator('[data-slot="trace-request"]')).toContainText("/issues");
   await expect(page.locator('[data-slot="trace-response"]')).toBeVisible();
-  await expect(page.locator('[data-slot="trace-response"]')).toContainText("bk_8f2a");
+  await expect(page.locator('[data-slot="trace-response"]')).toContainText("ENG-184");
 });
 
 /**
@@ -292,15 +306,15 @@ test("ui-next: failed trace sheet shows error in Response", async ({ page }) => 
   await signInAndOpenFlows(page);
 
   const traces = page.locator('[data-slot="traces-pane"]');
-  const failRow = traces.locator('[data-run-id="pw-run-bookings-create-fail"]');
+  const failRow = traces.locator('[data-run-id="pw-run-issues-create-fail"]');
   await expect(failRow).toBeVisible({ timeout: 15_000 });
   await failRow.locator("button").first().click();
 
   await expect(page.locator('[data-slot="trace-detail-sheet"]')).toBeVisible();
   await expect(page.locator('[data-slot="trace-response-error"]')).toBeVisible();
-  await expect(page.locator('[data-slot="trace-response-error"]')).toContainText("FlightFull");
+  await expect(page.locator('[data-slot="trace-response-error"]')).toContainText("CycleClosed");
   await expect(page.locator('[data-slot="trace-response-error"]')).toContainText(
-    "No seats left on SK-902",
+    "Cycle 24 is completed",
   );
 });
 
@@ -320,8 +334,8 @@ test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", asyn
   const advanced = traces.locator('[data-slot="traces-advanced-filters"]');
   await expect(advanced).toBeVisible();
   await advanced.getByRole("button", { name: "Signal", exact: true }).click();
-  await expect(traces.locator('[data-run-id="pw-run-fulfillment-on-order"]')).toBeVisible();
-  await expect(traces.locator('[data-run-id="pw-run-bookings-create"]')).toHaveCount(0);
+  await expect(traces.locator('[data-run-id="pw-run-notify-on-issue"]')).toBeVisible();
+  await expect(traces.locator('[data-run-id="pw-run-issues-create"]')).toHaveCount(0);
   const signalCount = await traces.locator('[data-slot="trace-row"]').count();
   expect(signalCount).toBeGreaterThan(0);
   expect(signalCount).toBeLessThan(80);
@@ -329,12 +343,12 @@ test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", asyn
   await expect(traces.locator('[data-slot="trace-row"]')).toHaveCount(80);
 
   // 2) Copy run ID writes the real run id to the clipboard.
-  const row = traces.locator('[data-run-id="pw-run-bookings-create"]');
+  const row = traces.locator('[data-run-id="pw-run-issues-create"]');
   await row.hover();
   await row.locator('[data-slot="trace-copy-id"]').click();
   await expect
     .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe("pw-run-bookings-create");
+    .toBe("pw-run-issues-create");
 
   // 3) Waterfall bar hover shows kind · resource · duration · +offset.
   await row.locator("button").first().click();
@@ -343,7 +357,7 @@ test("ui-next Traces: waterfall tooltip, Advanced filter, and Copy run ID", asyn
   await expect(track).toBeVisible();
   await track.hover();
   const tip = page.locator('[data-slot="tooltip-content"]').filter({
-    hasText: "DB query · sql:bookings · 9ms · +3ms",
+    hasText: "DB query · sql:issues · 9ms · +3ms",
   });
   await expect(tip).toBeVisible({ timeout: 5_000 });
 });
@@ -385,7 +399,7 @@ test("ui-next Units: Call API invokes for real (non-stub response)", async ({ pa
   await expect(page).toHaveURL(/\/units/);
   await expect(page.locator('[data-slot="units-page"]')).toBeVisible({ timeout: 15_000 });
 
-  const createItem = page.locator('[data-slot="unit-flow-item"][data-flow-id="bookings.create"]');
+  const createItem = page.locator('[data-slot="unit-flow-item"][data-flow-id="issues.create"]');
   await expect(createItem).toBeVisible({ timeout: 15_000 });
   await createItem.click();
 
@@ -395,12 +409,12 @@ test("ui-next Units: Call API invokes for real (non-stub response)", async ({ pa
   await expect(page.locator('[data-slot="call-api-identity"]')).toBeVisible();
   await expect(page.locator('[data-slot="call-api-submit"]')).toBeEnabled({ timeout: 10_000 });
 
-  const flightInput = page.locator("#body-flightId");
-  await expect(flightInput).toBeVisible();
-  await flightInput.fill("SK1");
-  const seatsInput = page.locator("#body-seats");
-  await expect(seatsInput).toBeVisible();
-  await seatsInput.fill("2");
+  const titleInput = page.locator("#body-title");
+  await expect(titleInput).toBeVisible();
+  await titleInput.fill("Pulse");
+  const teamInput = page.locator("#body-teamKey");
+  await expect(teamInput).toBeVisible();
+  await teamInput.fill("ENG");
 
   const invokeWait = page.waitForResponse(
     (res) => res.url().includes("/console/flows/invoke") && res.request().method() === "POST",
@@ -414,11 +428,11 @@ test("ui-next Units: Call API invokes for real (non-stub response)", async ({ pa
     error?: { code?: string };
   };
   expect(invokeJson.error ?? null).toBeNull();
-  expect(invokeJson.data?.response?.id).toBe("real_SK1_2");
+  expect(invokeJson.data?.response?.id).toBe("real_ENG_Pulse");
 
   const response = page.locator('[data-slot="call-api-response"]');
   await expect(response).toBeVisible({ timeout: 10_000 });
-  await expect(response).toContainText("real_SK1_2");
+  await expect(response).toContainText("real_ENG_Pulse");
   await expect(response).not.toContainText('"echo"');
   await expect(response).not.toContainText("inv_");
 });

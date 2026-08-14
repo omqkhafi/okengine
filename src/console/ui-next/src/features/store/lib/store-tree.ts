@@ -2,10 +2,11 @@
  * Store explorer tree — facet bands → store → children.
  */
 
-import { Database01Icon, File01Icon, Key01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { DatabaseIcon, File01Icon, Key01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import type { StoreFacet, StoreListChild, StoreListStore } from "@/client.ts";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
-import { STORE_FACETS } from "./parse-resource-ref.ts";
+import { isStoreFacet, STORE_FACETS } from "./parse-resource-ref.ts";
+import { isSqlCatalogChild, storeChildLabel } from "./sql-catalog.ts";
 
 /** Facet band label for the left explorer. */
 export const STORE_FACET_LABELS: Record<StoreFacet, string> = {
@@ -30,7 +31,7 @@ export const STORE_FACET_SPECS: Record<
   }
 > = {
   sql: {
-    icon: Database01Icon,
+    icon: DatabaseIcon,
     label: STORE_FACET_LABELS.sql,
     wellClass: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   },
@@ -108,6 +109,7 @@ export function filterStoreTree(
       (c) =>
         storeHit ||
         c.name.toLowerCase().includes(needle) ||
+        storeChildLabel(c).toLowerCase().includes(needle) ||
         c.effectRef.toLowerCase().includes(needle),
     );
     if (storeHit || children.length > 0) {
@@ -139,6 +141,75 @@ export function findByEffectRef(
 }
 
 /**
+ * Open-state key for a facet band in {@link StoreTree}.
+ *
+ * @param facet - Band facet
+ */
+export function storeTreeFacetKey(facet: StoreFacet): string {
+  return `facet:${facet}`;
+}
+
+/**
+ * Open-state key for the Tables folder under a SQL store.
+ *
+ * @param storeRef - Store ref
+ */
+export function storeTreeTablesKey(storeRef: string): string {
+  return `${storeRef}/tables`;
+}
+
+/**
+ * Whether a tree node is open. Facet bands default open; store and Tables folders default closed.
+ *
+ * @param key - {@link storeTreeFacetKey} or a store ref
+ * @param openByKey - Explicit overrides
+ */
+export function storeTreeIsOpen(
+  key: string,
+  openByKey: Readonly<Record<string, boolean>>,
+): boolean {
+  const stored = openByKey[key];
+  if (stored !== undefined) return stored;
+  return key.startsWith("facet:");
+}
+
+/**
+ * Keys for every collapsible node in the filtered tree (bands, then stores).
+ *
+ * @param bands - Visible facet bands
+ */
+export function storeTreeOpenKeys(bands: readonly StoreFacetBand[]): string[] {
+  const keys: string[] = [];
+  for (const band of bands) {
+    keys.push(storeTreeFacetKey(band.facet));
+    for (const node of band.stores) {
+      keys.push(node.store.ref);
+      if (node.store.facet === "sql") keys.push(storeTreeTablesKey(node.store.ref));
+    }
+  }
+  return keys;
+}
+
+/**
+ * Keys that must be open to reveal a selected child.
+ *
+ * @param stores - Projected store rows
+ * @param effectRef - Selected child effectRef
+ */
+export function storeTreeAncestorKeys(
+  stores: readonly StoreListStore[],
+  effectRef: string,
+): string[] {
+  const found = findByEffectRef(stores, effectRef);
+  if (!found) return [];
+  const keys = [storeTreeFacetKey(found.store.facet), found.store.ref];
+  if (found.store.facet === "sql" && !isSqlCatalogChild(found.child)) {
+    keys.push(storeTreeTablesKey(found.store.ref));
+  }
+  return keys;
+}
+
+/**
  * First selectable child effectRef in facet order (for default selection).
  *
  * @param stores - Projected store rows
@@ -147,9 +218,81 @@ export function firstEffectRef(stores: readonly StoreListStore[]): string | null
   for (const facet of STORE_FACETS) {
     for (const store of stores) {
       if (store.facet !== facet) continue;
-      const child = store.children[0];
+      const child = store.children.find((c) => !isSqlCatalogChild(c));
       if (child) return child.effectRef;
     }
   }
   return null;
+}
+
+/** localStorage key for hidden Store explorer facet bands. */
+export const HIDDEN_FACETS_KEY = "oke_store_hidden_facets";
+
+/**
+ * Parse a stored hidden-facet list. Unknown values are dropped.
+ *
+ * @param value - JSON from localStorage
+ */
+export function parseHiddenFacets(value: unknown): ReadonlySet<StoreFacet> {
+  if (!Array.isArray(value)) return new Set();
+  return new Set(
+    value.filter((item): item is StoreFacet => typeof item === "string" && isStoreFacet(item)),
+  );
+}
+
+/**
+ * Load hidden facet bands from localStorage.
+ */
+export function loadHiddenFacets(): ReadonlySet<StoreFacet> {
+  try {
+    if (typeof localStorage === "undefined") return new Set();
+    const raw = localStorage.getItem(HIDDEN_FACETS_KEY);
+    if (!raw) return new Set();
+    return parseHiddenFacets(JSON.parse(raw) as unknown);
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Persist hidden facet bands.
+ *
+ * @param hidden - Facets tucked away in the explorer
+ */
+export function saveHiddenFacets(hidden: ReadonlySet<StoreFacet>): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(HIDDEN_FACETS_KEY, JSON.stringify([...hidden]));
+  } catch {
+    // quota / private mode
+  }
+}
+
+/**
+ * Add or remove a facet from the hidden set.
+ *
+ * @param hidden - Current hidden facets
+ * @param facet - Band to toggle
+ */
+export function toggleHiddenFacet(
+  hidden: ReadonlySet<StoreFacet>,
+  facet: StoreFacet,
+): ReadonlySet<StoreFacet> {
+  const next = new Set(hidden);
+  if (next.has(facet)) next.delete(facet);
+  else next.add(facet);
+  return next;
+}
+
+/**
+ * Bands still listed in the explorer (hidden facets are omitted).
+ *
+ * @param bands - All facet bands after search
+ * @param hidden - Facets the operator tucked away
+ */
+export function visibleFacetBands(
+  bands: readonly StoreFacetBand[],
+  hidden: ReadonlySet<StoreFacet>,
+): StoreFacetBand[] {
+  return bands.filter((band) => !hidden.has(band.facet));
 }

@@ -42,7 +42,18 @@ describe("http.query — RFC 10008", () => {
       }),
     );
     expect(queryRes.status).toBe(200);
+    expect(queryRes.headers.get("accept-query")).toBe('"application/json"');
     expect(await queryRes.json()).toEqual({ data: { n: 7 }, error: null });
+
+    const charsetRes = await app.fetch(
+      new Request("http://localhost/q", {
+        method: "QUERY",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ n: 7 }),
+      }),
+    );
+    expect(charsetRes.status).toBe(200);
+    expect(await charsetRes.json()).toEqual({ data: { n: 7 }, error: null });
 
     const postRes = await app.fetch(
       new Request("http://localhost/p", {
@@ -56,6 +67,66 @@ describe("http.query — RFC 10008", () => {
   });
 });
 
+describe("http.query — RFC 10008 media type", () => {
+  function queryApp(aot = true) {
+    on(
+      http.query("/q"),
+      flow("q.run", {
+        in: z.object({ n: z.number() }),
+        do: (input: { n: number }) => input,
+      }),
+    );
+    return oke({ autoBoot: false, name: aot ? "query-media" : "query-media-dyn", aot });
+  }
+
+  for (const aot of [true, false] as const) {
+    test(`aot=${aot}: missing Content-Type → 400 InvalidQuery + Accept-Query`, async () => {
+      const app = queryApp(aot);
+      const res = await app.fetch(
+        new Request("http://localhost/q", {
+          method: "QUERY",
+          body: JSON.stringify({ n: 7 }),
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(res.headers.get("accept-query")).toBe('"application/json"');
+      const body = (await res.json()) as { error: { code: string; data: { reason: string } } };
+      expect(body.error.code).toBe("InvalidQuery");
+      expect(body.error.data.reason).toBe("missing_content_type");
+    });
+
+    test(`aot=${aot}: unsupported Content-Type → 415 + Accept-Query`, async () => {
+      const app = queryApp(aot);
+      const res = await app.fetch(
+        new Request("http://localhost/q", {
+          method: "QUERY",
+          headers: { "content-type": "text/plain" },
+          body: "n=7",
+        }),
+      );
+      expect(res.status).toBe(415);
+      expect(res.headers.get("accept-query")).toBe('"application/json"');
+      const body = (await res.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("UnsupportedMediaType");
+    });
+
+    test(`aot=${aot}: JSON Content-Type with non-JSON body → 400 (no sniffing)`, async () => {
+      const app = queryApp(aot);
+      const res = await app.fetch(
+        new Request("http://localhost/q", {
+          method: "QUERY",
+          headers: { "content-type": "application/json" },
+          body: "not-json",
+        }),
+      );
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: { code: string; data: { reason: string } } };
+      expect(body.error.code).toBe("InvalidQuery");
+      expect(body.error.data.reason).toBe("inconsistent_content");
+    });
+  }
+});
+
 describe("405 Method Not Allowed + Allow", () => {
   for (const preset of ["default", "edge"] as const) {
     test(`${preset}: POST-only route hit with GET → 405 Allow: POST`, async () => {
@@ -64,6 +135,7 @@ describe("405 Method Not Allowed + Allow", () => {
       const res = await app.fetch(new Request("http://localhost/only-post", { method: "GET" }));
       expect(res.status).toBe(405);
       expect(res.headers.get("allow")).toBe("POST");
+      expect(res.headers.get("accept-query")).toBeNull();
       expect(await res.text()).toBe("Method Not Allowed");
     });
 
@@ -79,6 +151,7 @@ describe("405 Method Not Allowed + Allow", () => {
       );
       expect(res.status).toBe(405);
       expect(res.headers.get("allow")).toBe("QUERY");
+      expect(res.headers.get("accept-query")).toBe('"application/json"');
     });
 
     test(`${preset}: unregistered path still 404s`, async () => {

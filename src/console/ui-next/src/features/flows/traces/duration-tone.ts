@@ -102,6 +102,32 @@ export function durationToneBorderClass(tone: DurationTone): string {
 }
 
 /**
+ * Status-chip fill (border /10 /25) paired with a duration tone.
+ *
+ * @param tone - Severity band
+ */
+export function durationToneChipClass(tone: DurationTone): string {
+  switch (tone) {
+    case "fast":
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+    case "good":
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+    case "ok":
+      return "border-lime-500/25 bg-lime-500/10 text-lime-700 dark:text-lime-400";
+    case "elevated":
+      return "border-yellow-500/25 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400";
+    case "warn":
+      return "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-400";
+    case "slow":
+      return "border-orange-500/25 bg-orange-500/10 text-orange-800 dark:text-orange-400";
+    case "bad":
+      return "border-destructive/25 bg-destructive/10 text-destructive";
+    case "critical":
+      return "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400";
+  }
+}
+
+/**
  * Tailwind background classes for a solid duration-tone dot.
  *
  * @param tone - Severity band

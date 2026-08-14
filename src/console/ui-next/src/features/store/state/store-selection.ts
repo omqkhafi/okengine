@@ -5,10 +5,19 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 
+/** Facets that expose a query console. */
+export type StoreQueryFacet = "sql" | "kv";
+
+/** Right-pane views on `/store` besides resource browse. */
+export type StoreView = "query" | "schema";
+
 /** Search params for `/store`. */
 export interface StoreSearch {
   readonly resource?: string;
   readonly tenant?: string;
+  /** `query` = SQL / KV console; `schema` = SQL schema visualizer. */
+  readonly view?: StoreView;
+  readonly facet?: StoreQueryFacet;
 }
 
 /**
@@ -21,9 +30,13 @@ export function validateStoreSearch(search: Record<string, unknown>): StoreSearc
     typeof search.resource === "string" && search.resource.length > 0 ? search.resource : undefined;
   const tenant =
     typeof search.tenant === "string" && search.tenant.length > 0 ? search.tenant : undefined;
+  const view = search.view === "query" || search.view === "schema" ? search.view : undefined;
+  const facet = search.facet === "sql" || search.facet === "kv" ? search.facet : undefined;
   return {
     ...(resource !== undefined ? { resource } : {}),
     ...(tenant !== undefined ? { tenant } : {}),
+    ...(view !== undefined ? { view } : {}),
+    ...(facet !== undefined ? { facet } : {}),
   };
 }
 
@@ -36,14 +49,50 @@ export function useStoreSelection() {
 
   const selectedResource = typeof search.resource === "string" ? search.resource : null;
   const selectedTenant = typeof search.tenant === "string" ? search.tenant : null;
+  const queryFacet: StoreQueryFacet | null =
+    search.view === "query" && (search.facet === "sql" || search.facet === "kv")
+      ? search.facet
+      : null;
+  const schemaView = search.view === "schema";
 
   const setSelectedResource = useCallback(
-    (resource: string | null) => {
+    (resource: string | null, options?: { readonly keepView?: boolean }) => {
       void navigate({
         to: ".",
         search: (prev: Record<string, unknown>) => ({
           ...prev,
           resource: resource ?? undefined,
+          ...(options?.keepView ? {} : { view: undefined, facet: undefined }),
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const setQueryFacet = useCallback(
+    (next: StoreQueryFacet | null) => {
+      void navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          view: next ? ("query" as const) : undefined,
+          facet: next ?? undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const setSchemaView = useCallback(
+    (open: boolean) => {
+      void navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          view: open ? ("schema" as const) : undefined,
+          facet: undefined,
         }),
         replace: true,
       });
@@ -68,7 +117,11 @@ export function useStoreSelection() {
   return {
     selectedResource,
     selectedTenant,
+    queryFacet,
+    schemaView,
     setSelectedResource,
     setSelectedTenant,
+    setQueryFacet,
+    setSchemaView,
   };
 }

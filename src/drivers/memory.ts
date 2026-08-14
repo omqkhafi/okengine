@@ -3,6 +3,15 @@
  */
 
 import { LuaKvStore } from "./kv-lua.ts";
+import {
+  findPgExtension,
+  isPgExtensionName,
+  isPgExtensionVersion,
+  PG_BUILTIN_EXTENSIONS,
+  PG_DEFAULT_ENABLED_EXTENSIONS,
+  PG_MEMORY_STALE_VERSIONS,
+  type PgExtensionInfo,
+} from "./pg-extensions.ts";
 import type {
   FilesBucket,
   FilesDriver,
@@ -26,8 +35,200 @@ interface MemTable {
   rows: SqlRow[];
 }
 
+/** Console / editor SQL often ends with `;` — real engines accept it. */
+function stripTrailingSemicolons(sql: string): string {
+  return sql.trim().replace(/;+\s*$/, "");
+}
+
+/**
+ * Console DML is typed with literals; the session compiler binds `?`.
+ * Only rewrite when the caller sent no params so compiled SQL stays intact.
+ */
+function prepareSql(
+  sql: string,
+  params: readonly unknown[],
+): { readonly text: string; readonly params: readonly unknown[] } {
+  const text = stripTrailingSemicolons(sql);
+  if (params.length > 0 || !/^(INSERT|UPDATE|DELETE|SELECT)\b/i.test(text)) {
+    return { text, params };
+  }
+  return rewriteSqlLiterals(text);
+}
+
+/**
+ * Turn value-position literals into `?` params (`'x'`, `2`, `TRUE`, `NULL`).
+ * Skips identifiers, comments, and numbers after `+` / `LIMIT`.
+ */
+function rewriteSqlLiterals(sql: string): { readonly text: string; readonly params: unknown[] } {
+  const params: unknown[] = [];
+  let out = "";
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i] ?? "";
+    if (ch === "-" && sql[i + 1] === "-") {
+      const end = sql.indexOf("\n", i);
+      const take = end === -1 ? sql.length : end + 1;
+      out += sql.slice(i, take);
+      i = take;
+      continue;
+    }
+    if (ch === "/" && sql[i + 1] === "*") {
+      const end = sql.indexOf("*/", i + 2);
+      const take = end === -1 ? sql.length : end + 2;
+      out += sql.slice(i, take);
+      i = take;
+      continue;
+    }
+    if (ch === "'") {
+      let j = i + 1;
+      let value = "";
+      while (j < sql.length) {
+        if (sql[j] === "'" && sql[j + 1] === "'") {
+          value += "'";
+          j += 2;
+          continue;
+        }
+        if (sql[j] === "'") {
+          j += 1;
+          break;
+        }
+        value += sql[j] ?? "";
+        j += 1;
+      }
+      params.push(value);
+      out += "?";
+      i = j;
+      continue;
+    }
+    if (ch === '"') {
+      const end = sql.indexOf('"', i + 1);
+      const take = end === -1 ? sql.length : end + 1;
+      out += sql.slice(i, take);
+      i = take;
+      continue;
+    }
+    if (isValuePosition(sql, i)) {
+      const word = /^(TRUE|FALSE|NULL)\b/i.exec(sql.slice(i));
+      if (word) {
+        const token = word[1]?.toUpperCase();
+        params.push(token === "NULL" ? null : token === "TRUE");
+        out += "?";
+        i += word[0].length;
+        continue;
+      }
+      const num = /^-?\d+(?:\.\d+)?/.exec(sql.slice(i));
+      if (num) {
+        params.push(Number(num[0]));
+        out += "?";
+        i += num[0].length;
+        continue;
+      }
+    }
+    out += ch;
+    i += 1;
+  }
+  return { text: out, params };
+}
+
+function isValuePosition(sql: string, index: number): boolean {
+  let k = index - 1;
+  while (k >= 0 && /\s/.test(sql[k] ?? "")) k -= 1;
+  if (k < 0) return false;
+  const two = k >= 1 ? sql.slice(k - 1, k + 1) : "";
+  if (two === "<=" || two === ">=" || two === "<>" || two === "!=") return true;
+  const prev = sql[k] ?? "";
+  return prev === "=" || prev === "<" || prev === ">" || prev === "," || prev === "(";
+}
+
 function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
   const tables = new Map<string, MemTable>();
+  const enabledExtensions = new Set<string>(PG_DEFAULT_ENABLED_EXTENSIONS);
+  const installedVersions = new Map<string, string>();
+  const addedLibrary = new Set<string>();
+  const rlsEnabled = new Set<string>();
+  const policies: {
+    name: string;
+    table: string;
+    command: string;
+    roles: string;
+    permissive: string;
+    using: string | null;
+    withCheck: string | null;
+  }[] = [];
+  for (const name of enabledExtensions) {
+    const spec = findPgExtension(name);
+    if (spec) installedVersions.set(name, spec.version);
+  }
+
+  function catalogExtensions(): PgExtensionInfo[] {
+    const extra = [...addedLibrary]
+      .map((name) => findPgExtension(name))
+      .filter((ext): ext is PgExtensionInfo => ext !== undefined);
+    return [...PG_BUILTIN_EXTENSIONS, ...extra];
+  }
+
+  function syncExtensionCatalog(): void {
+    const catalog = catalogExtensions();
+    tables.set("pg_available_extensions", {
+      columns: ["name", "default_version", "comment", "installed_version"],
+      rows: catalog.map((ext) => ({
+        name: ext.name,
+        default_version: ext.version,
+        comment: ext.comment,
+        installed_version: enabledExtensions.has(ext.name)
+          ? (installedVersions.get(ext.name) ?? ext.version)
+          : null,
+      })),
+    });
+    tables.set("pg_extension", {
+      columns: ["extname", "extversion"],
+      rows: catalog
+        .filter((ext) => enabledExtensions.has(ext.name))
+        .map((ext) => ({
+          extname: ext.name,
+          extversion: installedVersions.get(ext.name) ?? ext.version,
+        })),
+    });
+  }
+  syncExtensionCatalog();
+
+  function syncPolicyCatalog(): void {
+    tables.set("pg_policies", {
+      columns: [
+        "schemaname",
+        "tablename",
+        "policyname",
+        "permissive",
+        "roles",
+        "cmd",
+        "qual",
+        "with_check",
+      ],
+      rows: policies.map((policy) => ({
+        schemaname: "public",
+        tablename: policy.table,
+        policyname: policy.name,
+        permissive: policy.permissive,
+        roles: `{${policy.roles}}`,
+        cmd: policy.command,
+        qual: policy.using,
+        with_check: policy.withCheck,
+      })),
+    });
+  }
+  syncPolicyCatalog();
+
+  function syncRlsCatalog(): void {
+    tables.set("pg_class", {
+      columns: ["relname", "relrowsecurity", "relkind"],
+      rows: [...rlsEnabled].map((name) => ({
+        relname: name,
+        relrowsecurity: true,
+        relkind: "r",
+      })),
+    });
+  }
+  syncRlsCatalog();
 
   function getTable(name: string): MemTable {
     const t = tables.get(name);
@@ -43,7 +244,9 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
     driverId: "memory",
     role,
     async query(sql, params = []) {
-      const text = sql.trim();
+      const prepared = prepareSql(sql, params);
+      const text = prepared.text;
+      params = [...prepared.params];
 
       const countStar =
         /^SELECT\s+COUNT\(\*\)\s+AS\s+"?[a-zA-Z_][a-zA-Z0-9_]*"?\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:WHERE\s+(.+?))?\s*$/i.exec(
@@ -151,7 +354,134 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
       throw new Error(`memory sql: unsupported query: ${sql}`);
     },
     async exec(sql, params = []) {
-      const text = sql.trim();
+      const prepared = prepareSql(sql, params);
+      const text = prepared.text;
+      params = [...prepared.params];
+      const createExt =
+        /^CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?("?[A-Za-z][A-Za-z0-9_-]*"?)\s*$/i.exec(
+          text,
+        );
+      if (createExt) {
+        const name = parseIdent(createExt[1]!);
+        const spec = findPgExtension(name);
+        if (!isPgExtensionName(name) || !spec) {
+          throw new Error(`extension "${name}" is not available`);
+        }
+        if (spec.source === "library") addedLibrary.add(name);
+        const added = !enabledExtensions.has(name);
+        if (added) {
+          installedVersions.set(name, PG_MEMORY_STALE_VERSIONS[name] ?? spec.version);
+        }
+        enabledExtensions.add(name);
+        syncExtensionCatalog();
+        return { changes: added ? 1 : 0 };
+      }
+
+      const dropExt =
+        /^DROP\s+EXTENSION\s+(?:IF\s+EXISTS\s+)?("?[A-Za-z][A-Za-z0-9_-]*"?)\s*$/i.exec(text);
+      if (dropExt) {
+        const name = parseIdent(dropExt[1]!);
+        const removed = enabledExtensions.delete(name);
+        if (removed) installedVersions.delete(name);
+        syncExtensionCatalog();
+        return { changes: removed ? 1 : 0 };
+      }
+
+      const alterExt =
+        /^ALTER\s+EXTENSION\s+("?[A-Za-z][A-Za-z0-9_-]*"?)\s+UPDATE(?:\s+TO\s+'([^']+)')?\s*$/i.exec(
+          text,
+        );
+      if (alterExt) {
+        const name = parseIdent(alterExt[1]!);
+        const spec = findPgExtension(name);
+        if (!isPgExtensionName(name) || !spec) {
+          throw new Error(`extension "${name}" is not available`);
+        }
+        if (!enabledExtensions.has(name)) {
+          throw new Error(`extension "${name}" is not installed`);
+        }
+        const to = alterExt[2];
+        if (to !== undefined) {
+          if (!isPgExtensionVersion(to)) {
+            throw new Error(`invalid extension version "${to}"`);
+          }
+          installedVersions.set(name, to);
+        } else {
+          installedVersions.set(name, spec.version);
+        }
+        syncExtensionCatalog();
+        return { changes: 1 };
+      }
+
+      const createPolicy =
+        /^CREATE\s+POLICY\s+("?[A-Za-z][A-Za-z0-9_ -]*"?)\s+ON\s+("?[A-Za-z][A-Za-z0-9_]*"?)\s+AS\s+(PERMISSIVE|RESTRICTIVE)\s+FOR\s+(ALL|SELECT|INSERT|UPDATE|DELETE)\s+TO\s+(.+?)(?:\s+USING\s*\((.*?)\))?(?:\s+WITH\s+CHECK\s*\((.*)\))?\s*$/is.exec(
+          text,
+        );
+      if (createPolicy) {
+        const name = parseIdent(createPolicy[1]!);
+        const table = parseIdent(createPolicy[2]!);
+        if (policies.some((p) => p.name === name && p.table === table)) {
+          throw new Error(`policy "${name}" already exists on ${table}`);
+        }
+        policies.push({
+          name,
+          table,
+          permissive: createPolicy[3]!.toUpperCase(),
+          command: createPolicy[4]!.toUpperCase(),
+          roles: createPolicy[5]!.replaceAll('"', "").trim(),
+          using: createPolicy[6]?.trim() ?? null,
+          withCheck: createPolicy[7]?.trim() ?? null,
+        });
+        syncPolicyCatalog();
+        return { changes: 1 };
+      }
+
+      const dropPolicy =
+        /^DROP\s+POLICY\s+(?:IF\s+EXISTS\s+)?("?[A-Za-z][A-Za-z0-9_ -]*"?)\s+ON\s+("?[A-Za-z][A-Za-z0-9_]*"?)\s*$/i.exec(
+          text,
+        );
+      if (dropPolicy) {
+        const name = parseIdent(dropPolicy[1]!);
+        const table = parseIdent(dropPolicy[2]!);
+        const before = policies.length;
+        for (let i = policies.length - 1; i >= 0; i--) {
+          const row = policies[i];
+          if (row && row.name === name && row.table === table) policies.splice(i, 1);
+        }
+        syncPolicyCatalog();
+        return { changes: before === policies.length ? 0 : 1 };
+      }
+
+      const alterPolicy =
+        /^ALTER\s+POLICY\s+("?[A-Za-z][A-Za-z0-9_ -]*"?)\s+ON\s+("?[A-Za-z][A-Za-z0-9_]*"?)\s+(?:TO\s+(.+?))?(?:\s*USING\s*\((.*?)\))?(?:\s*WITH\s+CHECK\s*\((.*)\))?\s*$/is.exec(
+          text,
+        );
+      if (alterPolicy) {
+        const name = parseIdent(alterPolicy[1]!);
+        const table = parseIdent(alterPolicy[2]!);
+        const row = policies.find((p) => p.name === name && p.table === table);
+        if (!row) throw new Error(`policy "${name}" does not exist on ${table}`);
+        if (alterPolicy[3] !== undefined) {
+          row.roles = alterPolicy[3].replaceAll('"', "").trim();
+        }
+        if (alterPolicy[4] !== undefined) row.using = alterPolicy[4].trim();
+        if (alterPolicy[5] !== undefined) row.withCheck = alterPolicy[5].trim();
+        syncPolicyCatalog();
+        return { changes: 1 };
+      }
+
+      const alterRls =
+        /^ALTER\s+TABLE\s+("?[A-Za-z][A-Za-z0-9_]*"?)\s+(ENABLE|DISABLE)\s+ROW\s+LEVEL\s+SECURITY\s*$/i.exec(
+          text,
+        );
+      if (alterRls) {
+        const table = parseIdent(alterRls[1]!);
+        if (alterRls[2]!.toUpperCase() === "ENABLE") rlsEnabled.add(table);
+        else rlsEnabled.delete(table);
+        syncRlsCatalog();
+        return { changes: 1 };
+      }
+
       const create =
         /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*\((.+)\)\s*$/i.exec(
           text,
@@ -185,28 +515,12 @@ function createMemorySqlConnection(role: "primary" | "replica"): SqlConnection {
         return { changes: 1 };
       }
 
-      const del =
-        /^DELETE\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*=\s*\?\s*$/i.exec(
-          text,
-        );
+      const del = /^DELETE\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+(.+)\s*$/i.exec(text);
       if (del) {
         const table = getTable(parseIdent(del[1]!));
-        const col = parseIdent(del[2]!);
+        const ast = parseWhere(del[2]!);
         const before = table.rows.length;
-        table.rows = table.rows.filter((r) => r[col] !== params[0]);
-        return { changes: before - table.rows.length };
-      }
-
-      const delLt =
-        /^DELETE\s+FROM\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s+WHERE\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*<\s*\?\s*$/i.exec(
-          text,
-        );
-      if (delLt) {
-        const table = getTable(parseIdent(delLt[1]!));
-        const col = parseIdent(delLt[2]!);
-        const cutoff = Number(params[0]);
-        const before = table.rows.length;
-        table.rows = table.rows.filter((r) => Number(r[col] ?? 0) >= cutoff);
+        table.rows = table.rows.filter((r) => !evalWhere(ast, r, params, { i: 0 }));
         return { changes: before - table.rows.length };
       }
 
@@ -543,7 +857,9 @@ export const memoryKvDriver: KvDriver = {
   facet: "kv",
   async open(options: KvOpenOptions): Promise<KvNamespace> {
     const store = new Map<string, unknown>();
+    const expires = new Map<string, number>();
     const prefix = `${options.name}:`;
+    const nowMs = options.nowMs ?? Date.now;
     const lua = new LuaKvStore(options.nowMs);
     /** Serialize EVAL so concurrent rate checks stay atomic. */
     let evalChain: Promise<unknown> = Promise.resolve();
@@ -552,11 +868,26 @@ export const memoryKvDriver: KvDriver = {
       async get(key) {
         return store.get(prefix + key);
       },
-      async set(key, value) {
-        store.set(prefix + key, value);
+      async set(key, value, ttl) {
+        const full = prefix + key;
+        store.set(full, value);
+        if (ttl) {
+          const ms = ttlStringToMs(ttl);
+          if (ms > 0) expires.set(full, nowMs() + ms);
+          else expires.delete(full);
+        } else {
+          expires.delete(full);
+        }
       },
       async delete(key) {
-        return store.delete(prefix + key);
+        const full = prefix + key;
+        expires.delete(full);
+        return store.delete(full);
+      },
+      async ttlMs(key) {
+        const at = expires.get(prefix + key);
+        if (at === undefined) return null;
+        return Math.max(0, at - nowMs());
       },
       async list(listPrefix = "") {
         const full = prefix + listPrefix;
@@ -585,6 +916,7 @@ export const memoryKvDriver: KvDriver = {
       },
       async close() {
         store.clear();
+        expires.clear();
       },
     };
   },
@@ -672,6 +1004,26 @@ export const memoryIndexDriver: VectorIndexDriver = {
     };
   },
 };
+
+function ttlStringToMs(ttl: string): number {
+  const match = /^(\d+)(ms|s|m|h|d)$/.exec(ttl.trim());
+  if (!match) return 0;
+  const n = Number(match[1]);
+  switch (match[2]) {
+    case "ms":
+      return n;
+    case "s":
+      return n * 1000;
+    case "m":
+      return n * 60_000;
+    case "h":
+      return n * 3_600_000;
+    case "d":
+      return n * 86_400_000;
+    default:
+      return 0;
+  }
+}
 
 /**
  * Convenience bundle of all memory facet drivers.

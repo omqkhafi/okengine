@@ -1,10 +1,9 @@
 /**
- * Store resource detail — identity header (facet well, copyable effectRef,
- * status chips) + browse. Schema lives in column headers; writers/readers
- * surface in the browse toolbar.
+ * Store resource workbench — compact identity chrome + browse/edit surface.
+ * Schema lives in column headers; writers/readers surface in the command strip.
  */
 
-import { useEffect, useRef, useState, type JSX, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
 import {
   Alert02Icon,
   CheckmarkCircle02Icon,
@@ -15,9 +14,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
-import type { StoreListChild, StoreListStore } from "@/client.ts";
+import type { RunRow, StoreListChild, StoreListStore } from "@/client.ts";
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { durationTone, durationToneChipClass } from "@/features/flows/traces/duration-tone.ts";
+import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { cn } from "@/lib/utils";
+import { latestReplicaLagFromRuns } from "../lib/replica-lag.ts";
+import { isSqlCatalogChild, storeChildLabel } from "../lib/sql-catalog.ts";
 import { STORE_FACET_SPECS } from "../lib/store-tree.ts";
 import { BrowseSection } from "./browse-section.tsx";
 
@@ -30,12 +34,14 @@ export interface ResourcePanelProps {
   readonly tenants: readonly string[];
   readonly tenant: string | null;
   readonly onTenantChange: (tenant: string | null) => void;
+  /** Live-merged runs buffer — replica lag follows the newest touching run. */
+  readonly runs?: readonly RunRow[];
 }
 
 /**
- * Right-pane detail for a selected store child (effectRef identity).
+ * Right-pane workbench for a selected store child (effectRef identity).
  *
- * @param props - Selection + Manifest + tenancy
+ * @param props - Selection + Manifest + tenancy + live runs
  */
 export function ResourcePanel({
   store,
@@ -45,58 +51,113 @@ export function ResourcePanel({
   tenants,
   tenant,
   onTenantChange,
+  runs = [],
 }: ResourcePanelProps): JSX.Element {
   const drift = store.migrationDrift;
   const spec = STORE_FACET_SPECS[store.facet];
-  const piiCount = child.piiColumns.length;
+  const catalog = isSqlCatalogChild(child);
+  const piiCount = catalog ? 0 : child.piiColumns.length;
+  const [piiMasked, setPiiMasked] = useState(true);
+
+  useEffect(() => {
+    setPiiMasked(true);
+  }, [child.effectRef]);
+
+  const effectRefs = useMemo(
+    () => new Set(store.children.map((c) => c.effectRef)),
+    [store.children],
+  );
+  const lagMs = latestReplicaLagFromRuns(runs, effectRefs) ?? store.replicaLagMs;
+  const lagTone = lagMs != null ? durationTone(lagMs) : null;
+
+  const showStatus = Boolean(
+    drift || lagMs !== null || store.contentAddressed || piiCount > 0,
+  );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-4" data-slot="resource-panel">
-      <header className="flex shrink-0 flex-col gap-2.5" data-slot="resource-header">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-lg border",
-              spec.wellClass,
-            )}
-            aria-hidden
-          >
-            <HugeiconsIcon icon={spec.icon} className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">
-                {child.name}
-              </h2>
-              <span
-                className={cn(
-                  "inline-flex h-5 shrink-0 items-center rounded border px-1.5 text-[9px] font-semibold tracking-[0.14em] uppercase",
-                  spec.wellClass,
-                )}
-                data-slot="facet-badge"
-              >
-                {spec.label}
-              </span>
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="shrink-0 font-mono">{store.ref}</span>
-              <span aria-hidden className="text-border">
-                ·
-              </span>
-              <code className="min-w-0 truncate font-mono text-foreground/75">
-                {child.effectRef}
-              </code>
-              <CopyButton value={child.effectRef} />
-            </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="resource-panel">
+      <header
+        className="flex shrink-0 items-center gap-3 border-b border-border/60 px-3 py-2"
+        data-slot="resource-header"
+      >
+        <span
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-lg border",
+            spec.wellClass,
+          )}
+          aria-hidden
+        >
+          <HugeiconsIcon icon={spec.icon} className="size-4" />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">
+              {storeChildLabel(child)}
+            </h2>
+            <span
+              className={cn(
+                "inline-flex h-4 shrink-0 items-center rounded px-1.5 font-mono text-[9px] font-semibold tracking-[0.12em] uppercase",
+                spec.wellClass,
+              )}
+              data-slot="facet-badge"
+            >
+              {spec.label}
+            </span>
+            {store.description ? (
+              <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+                {store.description}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="shrink-0 font-mono">{store.ref}</span>
+            <span aria-hidden className="text-border">
+              ·
+            </span>
+            <code className="min-w-0 truncate font-mono text-foreground/70">{child.effectRef}</code>
+            <CopyButton value={child.effectRef} />
           </div>
         </div>
 
-        {store.description ? (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{store.description}</p>
-        ) : null}
-
-        {drift || store.replicaLagMs !== null || store.contentAddressed || piiCount > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5" data-slot="resource-status">
+        {showStatus ? (
+          <div
+            className="flex shrink-0 flex-wrap items-center justify-end gap-1"
+            data-slot="resource-status"
+          >
+            {lagMs !== null && lagTone ? (
+              <StatusChip
+                chipClassName={durationToneChipClass(lagTone)}
+                icon={<HugeiconsIcon icon={Timer01Icon} className="size-3" aria-hidden />}
+                title="Replica lag from the newest run that touched this store"
+                data-slot="replica-lag"
+              >
+                <span className="font-mono tabular-nums">{formatDuration(lagMs)}</span>
+                <span className="opacity-70">lag</span>
+              </StatusChip>
+            ) : null}
+            {store.contentAddressed ? <StatusChip>content-addressed</StatusChip> : null}
+            {piiCount > 0 ? (
+              <StatusChip
+                tone={piiMasked ? "sky" : "amber"}
+                icon={<HugeiconsIcon icon={SecurityCheckIcon} className="size-3" aria-hidden />}
+                title={
+                  piiMasked
+                    ? `PII masked on ${child.piiColumns.join(", ")}. Click to show all cleartext (audited).`
+                    : `PII visible on ${child.piiColumns.join(", ")}. Click to remask.`
+                }
+                pressed={piiMasked}
+                ariaLabel={
+                  piiMasked
+                    ? `PII masking on for ${piiCount} columns. Show all.`
+                    : `PII visible for ${piiCount} columns. Hide all.`
+                }
+                data-slot="pii-toggle"
+                onClick={() => setPiiMasked((on) => !on)}
+              >
+                {piiCount} PII
+              </StatusChip>
+            ) : null}
             {drift ? (
               <StatusChip
                 tone={drift.drifted ? "amber" : "emerald"}
@@ -116,48 +177,29 @@ export function ResourcePanel({
                 <span className="font-mono opacity-70">{shortFp(drift.declared)}</span>
               </StatusChip>
             ) : null}
-            {store.replicaLagMs !== null ? (
-              <StatusChip
-                icon={<HugeiconsIcon icon={Timer01Icon} className="size-3" aria-hidden />}
-                title="Replica lag"
-              >
-                <span className="font-mono tabular-nums">{store.replicaLagMs}ms</span>
-                <span className="opacity-70">lag</span>
-              </StatusChip>
-            ) : null}
-            {store.contentAddressed ? <StatusChip>content-addressed</StatusChip> : null}
-            {piiCount > 0 ? (
-              <StatusChip
-                tone="sky"
-                icon={<HugeiconsIcon icon={SecurityCheckIcon} className="size-3" aria-hidden />}
-                title={`PII-classified columns: ${child.piiColumns.join(", ")}`}
-              >
-                {piiCount} PII {piiCount === 1 ? "column" : "columns"}
-              </StatusChip>
-            ) : null}
-          </div>
-        ) : null}
-
-        {store.warnings.length > 0 ? (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-            <HugeiconsIcon
-              icon={Alert02Icon}
-              className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-              aria-hidden
-            />
-            <ul
-              className="flex flex-col gap-0.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
-              aria-label="Warnings"
-            >
-              {store.warnings.map((w) => (
-                <li key={`${w.key}:${w.code}`}>
-                  <span className="font-mono">{w.key}</span>: {w.message}
-                </li>
-              ))}
-            </ul>
           </div>
         ) : null}
       </header>
+
+      {store.warnings.length > 0 ? (
+        <div className="flex shrink-0 items-start gap-2 border-b border-amber-500/25 bg-amber-500/5 px-3 py-1.5">
+          <HugeiconsIcon
+            icon={Alert02Icon}
+            className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden
+          />
+          <ul
+            className="flex flex-col gap-0.5 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300"
+            aria-label="Warnings"
+          >
+            {store.warnings.map((w) => (
+              <li key={`${w.key}:${w.code}`}>
+                <span className="font-mono">{w.key}</span>: {w.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <BrowseSection
         store={store}
@@ -167,6 +209,7 @@ export function ResourcePanel({
         tenants={tenants}
         tenant={tenant}
         onTenantChange={onTenantChange}
+        piiMasked={piiMasked}
       />
     </div>
   );
@@ -175,10 +218,10 @@ export function ResourcePanel({
 type ChipTone = "neutral" | "emerald" | "amber" | "sky";
 
 const CHIP_TONES: Record<ChipTone, string> = {
-  neutral: "border-border/60 bg-muted/30 text-muted-foreground",
-  emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  amber: "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-  sky: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  neutral: "border-border/50 bg-muted/40 text-muted-foreground",
+  emerald: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  amber: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  sky: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400",
 };
 
 /** Props for {@link StatusChip}. */
@@ -190,10 +233,14 @@ interface StatusChipProps {
   readonly role?: string;
   readonly "data-slot"?: string;
   readonly "data-drifted"?: string;
+  readonly pressed?: boolean;
+  readonly onClick?: () => void;
+  readonly ariaLabel?: string;
+  readonly chipClassName?: string;
 }
 
 /**
- * Small rounded status pill for the resource header cluster.
+ * Compact status pill for the identity chrome. Pass `onClick` to make it a toggle.
  *
  * @param props - Tone + optional leading icon
  */
@@ -205,21 +252,57 @@ function StatusChip({
   role,
   "data-slot": dataSlot,
   "data-drifted": dataDrifted,
+  pressed,
+  onClick,
+  ariaLabel,
+  chipClassName,
 }: StatusChipProps): JSX.Element {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-full border px-2 text-[10px] font-medium whitespace-nowrap",
-        CHIP_TONES[tone],
-      )}
-      title={title}
-      role={role}
+  const className = cn(
+    "inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[10px] font-medium whitespace-nowrap",
+    chipClassName ?? CHIP_TONES[tone],
+    onClick &&
+      "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  );
+
+  const chip = onClick ? (
+    <button
+      type="button"
+      className={className}
+      aria-pressed={pressed}
+      aria-label={ariaLabel}
       data-slot={dataSlot}
       data-drifted={dataDrifted}
+      onClick={onClick}
     >
       {icon}
       {children}
+    </button>
+  ) : (
+    <span className={className} role={role} data-slot={dataSlot} data-drifted={dataDrifted}>
+      {icon}
+      {children}
     </span>
+  );
+
+  if (!title) return chip;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) =>
+          onClick ? (
+            <span {...props} className="inline-flex">
+              {chip}
+            </span>
+          ) : (
+            <span {...props}>{chip}</span>
+          )
+        }
+      />
+      <TooltipContent side="bottom" className="max-w-xs text-[11px]">
+        {title}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -243,12 +326,15 @@ function CopyButton({ value }: { readonly value: string }): JSX.Element {
     <Tooltip>
       <TooltipTrigger
         render={(props) => (
-          <button
+          <Button
             {...props}
             type="button"
+            variant="ghost"
+            size="icon-xs"
             aria-label={`Copy ${value}`}
-            className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => {
+            className="size-4 text-muted-foreground"
+            onClick={(event) => {
+              props.onClick?.(event);
               if (!navigator.clipboard) return;
               navigator.clipboard
                 .writeText(value)
@@ -265,7 +351,7 @@ function CopyButton({ value }: { readonly value: string }): JSX.Element {
               className={copied ? "size-3 text-emerald-600 dark:text-emerald-400" : "size-3"}
               aria-hidden
             />
-          </button>
+          </Button>
         )}
       />
       <TooltipContent side="top" className="text-[11px]">

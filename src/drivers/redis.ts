@@ -49,6 +49,13 @@ export async function openRedisKv(options: KvOpenOptions): Promise<KvNamespace> 
         .map((k) => k.slice(prefix.length))
         .sort();
     },
+    async ttlMs(key) {
+      if (!client.send) return null;
+      const raw = await client.send("PTTL", [prefix + key]);
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) return null;
+      return n;
+    },
     async eval<T = unknown>(
       script: string,
       keys: readonly string[],

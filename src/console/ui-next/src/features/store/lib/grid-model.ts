@@ -3,6 +3,7 @@
  */
 
 import type { StoreQueryResult } from "@/client.ts";
+import { formatByteSize, formatKvTtl, kvValueSizeBytes } from "./kv-meta.ts";
 
 /** One normalized grid row. */
 export interface StoreGridRow {
@@ -16,7 +17,7 @@ export interface StoreGridRow {
 export interface StoreGridColumn {
   readonly key: string;
   /** FormField-ish type used for cell variant + badge. */
-  readonly type: "string" | "integer" | "json" | "number";
+  readonly type: "string" | "integer" | "json" | "number" | "boolean";
   /** Whether the column is editable in place. */
   readonly editable: boolean;
   /** Whether the column is PII-masked (SQL only). */
@@ -25,6 +26,10 @@ export interface StoreGridColumn {
   readonly primaryKey?: boolean;
   /** Optional description from Manifest. */
   readonly description?: string;
+  /** Header label when it should differ from {@link StoreGridColumn.key}. */
+  readonly label?: string;
+  /** Display formatter for derived KV metadata or a name + key badge. */
+  readonly format?: "ttl" | "bytes" | "name-key" | "source";
 }
 
 /** Normalized grid model. */
@@ -93,10 +98,17 @@ export function buildStoreGridModel(options: StoreGridModelOptions): StoreGridMo
       columns: [
         { key: "key", type: "string", editable: false, pii: false },
         { key: "value", type: "json", editable: true, pii: false },
+        { key: "ttl", type: "number", editable: true, pii: false, format: "ttl" },
+        { key: "size", type: "number", editable: false, pii: false, format: "bytes" },
       ],
       rows: keys.map((entry) => ({
         id: entry.key,
-        cells: { key: entry.key, value: entry.value },
+        cells: {
+          key: entry.key,
+          value: entry.value,
+          ttl: entry.ttlMs ?? null,
+          size: entry.sizeBytes ?? kvValueSizeBytes(entry.value),
+        },
       })),
       deleteKind: "keys",
       editable: true,
@@ -140,7 +152,7 @@ export function buildStoreGridModel(options: StoreGridModelOptions): StoreGridMo
 
 /** Extract a stable SQL row id (`id` / `Id`). */
 export function sqlRowId(row: Readonly<Record<string, unknown>>): string {
-  const raw = row.id ?? row.Id;
+  const raw = row.id ?? row.Id ?? row.name;
   if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
     return String(raw);
   }
@@ -157,4 +169,16 @@ export function formatGridCell(value: unknown): string {
   } catch {
     return "[unserializable]";
   }
+}
+
+/**
+ * Format a cell using the column's display hint (TTL / bytes) when set.
+ *
+ * @param col - Column descriptor
+ * @param value - Raw cell
+ */
+export function formatStoreCell(col: StoreGridColumn, value: unknown): string {
+  if (col.format === "ttl") return formatKvTtl(value);
+  if (col.format === "bytes") return formatByteSize(value);
+  return formatGridCell(value);
 }

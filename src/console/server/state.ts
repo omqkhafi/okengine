@@ -67,6 +67,12 @@ import type { PluginRegistry } from "../../kernel/registry.ts";
 import type { ConsolePluginsList } from "./plugins.ts";
 import type { ConsoleDiffProjection } from "./diff.ts";
 import { loadConsolePanel, type ConsolePanelId } from "./panel-load.ts";
+import {
+  isConsoleAuthStoreRef,
+  queryConsoleAuthStore,
+  rejectConsoleAuthMutation,
+  requireConsoleAuthStore,
+} from "./auth-store.ts";
 
 /** How long a built-in Vault backend probe is reused across list polls. */
 const VAULT_BACKEND_TTL_MS = 15_000;
@@ -233,11 +239,14 @@ export interface ConsoleState {
       readonly allowWrite: boolean;
       readonly revealPii?: boolean;
       readonly tenant?: string;
+      readonly asGate?: string;
     },
   ) => Promise<{
     readonly rows: readonly Record<string, unknown>[];
     readonly masked: boolean;
     readonly routedRole: "primary" | "replica";
+    readonly asGate: string | null;
+    readonly gateApplied: boolean;
   }>;
   /**
    * Live Clock runtime. Bound after boot from Manifest clocks
@@ -748,6 +757,21 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     queryStore: async (input) => {
+      if (isConsoleAuthStoreRef(input.ref)) {
+        requireConsoleAuthStore();
+        return queryConsoleAuthStore(
+          {
+            operators: state.operators,
+            sessions: state.sessions,
+            roles: state.roles,
+            apiKeys: state.apiKeys,
+            invites: state.invites,
+            identities: state.identities,
+            roleMembers: state.roleMembers,
+          },
+          input,
+        );
+      }
       const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         return { facet: input.ref.split(":")[0] as "sql", rows: [], masked: true };
@@ -755,6 +779,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       return store.queryStore(state.storeRuntime, state.manifest, input);
     },
     editStore: async (input, opts) => {
+      rejectConsoleAuthMutation(input.ref);
       const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         throw new Error("Store runtime not bound");
@@ -765,6 +790,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     deleteStore: async (input) => {
+      rejectConsoleAuthMutation(input.ref);
       const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) return { deleted: 0 };
       return store.deleteStore(state.storeRuntime, input);
@@ -775,6 +801,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       return store.purgeStoreCache(state.storeRuntime, resource);
     },
     runStoreSql: async (ref, sqlText, options) => {
+      rejectConsoleAuthMutation(ref);
       const store = await markPanel<typeof import("./store.ts")>("store");
       if (!state.storeRuntime) {
         throw new Error("Store runtime not bound");
@@ -864,7 +891,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       }
       return vault.rotateVaultValue(state.vaultRuntime, input);
     },
-    identities: [...(options.identities ?? defaultDevIdentities())],
+    identities: [...(options.identities ?? defaultDevIdentities(options.manifest))],
     production: options.production ?? process.env.NODE_ENV === "production",
     aiRuntime: null,
     evalResults: [],
@@ -1046,15 +1073,26 @@ export async function bindManifestGateRuntime(state: ConsoleState): Promise<void
 
 /**
  * Default development identities for the invoke-as picker.
+ * Demo scopes follow Manifest gate `scopes` when present so Call API
+ * matches the seeded app (keel `issue:write`, skyport `booking:create`).
+ *
+ * @param manifest - Optional Manifest used to derive application scopes
  */
-function defaultDevIdentities(): ConsoleIdentity[] {
+function defaultDevIdentities(manifest?: Manifest | null): ConsoleIdentity[] {
+  const scopes = new Set<string>(["member"]);
+  for (const gate of Object.values(manifest?.gates ?? {})) {
+    for (const scope of gate.scopes ?? []) {
+      scopes.add(scope);
+    }
+  }
+  if (scopes.size === 1) scopes.add("booking:create");
   return [
     {
       id: "user_demo",
       email: "demo@example.com",
       name: "Demo User",
       status: "active",
-      scopes: ["booking:create", "member"],
+      scopes: [...scopes].sort(),
     },
     {
       id: "user_member",

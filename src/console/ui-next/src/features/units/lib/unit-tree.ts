@@ -78,6 +78,74 @@ export function bandUnitTree(groups: readonly UnitGroup[]): readonly UnitTreeBan
 }
 
 /**
+ * Open-state key for a trigger-kind band in the Units tree.
+ *
+ * @param bandId - Trigger kind
+ */
+export function unitTreeBandKey(bandId: FlowTriggerKind): string {
+  return `band:${bandId}`;
+}
+
+/**
+ * Open-state key for a unit folder under a trigger band.
+ *
+ * @param bandId - Trigger kind
+ * @param unit - Unit name
+ */
+export function unitTreeGroupKey(bandId: FlowTriggerKind, unit: string): string {
+  return `unit:${bandId}:${unit}`;
+}
+
+/**
+ * Whether a Units tree node is open. Bands and unit folders default open.
+ *
+ * @param key - {@link unitTreeBandKey} or {@link unitTreeGroupKey}
+ * @param openByKey - Explicit overrides
+ */
+export function unitTreeIsOpen(
+  key: string,
+  openByKey: Readonly<Record<string, boolean>>,
+): boolean {
+  return openByKey[key] !== false;
+}
+
+/**
+ * Keys for every collapsible node in the filtered tree (bands, then units).
+ *
+ * @param bands - Visible trigger-kind bands
+ */
+export function unitTreeOpenKeys(bands: readonly UnitTreeBand[]): string[] {
+  const keys: string[] = [];
+  for (const band of bands) {
+    keys.push(unitTreeBandKey(band.id));
+    for (const group of band.groups) {
+      keys.push(unitTreeGroupKey(band.id, group.unit));
+    }
+  }
+  return keys;
+}
+
+/**
+ * Keys that must be open to reveal a selected flow.
+ *
+ * @param bands - Visible trigger-kind bands
+ * @param flowId - Selected flow id
+ */
+export function unitTreeAncestorKeys(
+  bands: readonly UnitTreeBand[],
+  flowId: string,
+): string[] {
+  for (const band of bands) {
+    for (const group of band.groups) {
+      if (group.flows.some((f) => f.id === flowId)) {
+        return [unitTreeBandKey(band.id), unitTreeGroupKey(band.id, group.unit)];
+      }
+    }
+  }
+  return [];
+}
+
+/**
  * Project Manifest flows into unit groups (sorted).
  *
  * @param manifest - Current Manifest

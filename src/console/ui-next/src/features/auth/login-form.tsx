@@ -1,17 +1,23 @@
 /**
  * Operator login — real POST /console/session/login.
- * Shown when setup is closed; success navigates to the authenticated shell.
+ * Shown when setup is closed; success restores `?next=` or `/flows`.
  */
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { applySession, clientErrorText, sessionLogin } from "../../client.ts";
-import { AuthCard } from "@/components/auth-card";
+import { goAfterAuth, type AfterAuthNavigate } from "./auth-redirect.ts";
+import {
+  AUTH_SUBMIT_SUCCESS_MS,
+  AuthCard,
+  authSubmitClassName,
+  authSubmitState,
+} from "@/components/auth-card";
+import { StatefulButton } from "@/components/motion/button/index.ts";
 import { PasswordInput } from "@/components/password-input";
-import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
@@ -21,7 +27,8 @@ const loginSchema = z.object({
 });
 type LoginValues = z.infer<typeof loginSchema>;
 
-const inputClassName = "h-10 rounded-xl bg-background px-3 md:text-sm";
+const inputClassName =
+  "h-10 rounded-xl border-foreground/10 bg-muted/50 px-3 text-base md:text-sm dark:bg-background/50";
 
 /**
  * Join id tokens for aria-describedby (skips empty).
@@ -51,6 +58,7 @@ function RequiredMark() {
 export function LoginForm() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const search = useSearch({ from: "/" });
   const [formError, setFormError] = useState<string | null>(null);
 
   const login = useMutation({
@@ -64,7 +72,9 @@ export function LoginForm() {
       applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
-      void navigate({ to: "/flows" });
+      window.setTimeout(() => {
+        goAfterAuth(navigate as AfterAuthNavigate, search.next);
+      }, AUTH_SUBMIT_SUCCESS_MS);
     },
     onError: (err: Error) => {
       setFormError(err.message);
@@ -90,24 +100,32 @@ export function LoginForm() {
   return (
     <AuthCard
       title="Sign in"
-      description="Setup is closed. Sign in with an existing operator account."
+      status={{ label: "Setup closed" }}
+      description="Sign in with an existing operator account."
       footer={
-        <Button
+        <StatefulButton
           type="submit"
           form="login-form"
           size="lg"
-          disabled={login.isPending}
-          aria-disabled={login.isPending || undefined}
-          className="h-11 w-full rounded-xl"
+          pressScale={0.98}
+          state={authSubmitState({
+            pending: login.isPending,
+            success: login.isSuccess,
+            error: login.isError || formError !== null,
+          })}
+          loadingText="Signing in"
+          successText="Signed in"
+          errorText="Try again"
+          className={authSubmitClassName}
         >
-          {login.isPending ? "Signing in…" : "Sign in"}
-        </Button>
+          Sign in
+        </StatefulButton>
       }
     >
       {({ titleId, descriptionId }) => (
         <form
           id="login-form"
-          className="flex flex-col gap-5"
+          className="flex flex-col gap-6"
           autoComplete="on"
           noValidate
           aria-labelledby={titleId}
@@ -119,14 +137,14 @@ export function LoginForm() {
             void form.handleSubmit();
           }}
         >
-          <FieldGroup className="gap-4" role="group" aria-label="Operator credentials">
+          <FieldGroup className="gap-5" role="group" aria-label="Operator credentials">
             <form.Field
               name="email"
               children={(field) => {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                 const errorId = `${field.name}-error`;
                 return (
-                  <Field data-invalid={isInvalid || undefined}>
+                  <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                     <FieldLabel htmlFor={field.name}>
                       Email
                       <RequiredMark />
@@ -161,7 +179,7 @@ export function LoginForm() {
                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                 const errorId = `${field.name}-error`;
                 return (
-                  <Field data-invalid={isInvalid || undefined}>
+                  <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                     <FieldLabel htmlFor={field.name}>
                       Password
                       <RequiredMark />

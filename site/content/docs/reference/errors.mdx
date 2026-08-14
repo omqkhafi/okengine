@@ -62,8 +62,10 @@ Returned, not thrown — the request never reached `do`:
 
 | Code              | When                                                                                       |
 | ----------------- | ------------------------------------------------------------------------------------------ |
-| `ValidationError` | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`) |
-| `NotFound`        | A `store.resource` get/update/remove hit a missing row                                     |
+| `ValidationError`       | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`) |
+| `NotFound`              | A `store.resource` get/update/remove hit a missing row                                     |
+| `InvalidQuery`          | QUERY missing `Content-Type` (`reason: missing_content_type`) or body isn't JSON (`inconsistent_content`) — **400** |
+| `UnsupportedMediaType`  | QUERY `Content-Type` is present but not `application/json` — **415**, `Accept-Query` lists JSON |
 
 ## Subsystem errors
 

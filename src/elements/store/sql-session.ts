@@ -263,6 +263,8 @@ export interface SqlStoreHandle {
   increment(table: TableHandle | unknown, id: string, column: string, by?: number): Promise<number>;
   /**
    * Raw SQL — PII masking still applied at the boundary.
+   * DML without `RETURNING` uses `exec` (memory SQL has no generic UPDATE
+   * on `query`); SELECT and `RETURNING` still return masked rows.
    *
    * @param sql - SQL with `?` placeholders
    * @param params - Bound parameters
@@ -315,6 +317,11 @@ export interface SqlPageOptions {
    * `where`. Cannot combine with `offset`.
    */
   readonly after?: unknown;
+}
+
+/** True when `sql` is DML/DDL (not a SELECT). */
+function isSqlDml(sql: string): boolean {
+  return /^(insert|update|delete|create|drop|alter|truncate|replace)\b/i.test(sql.trim());
 }
 
 /**
@@ -697,6 +704,12 @@ export function createSqlStoreHandle(
 
     async raw(sql, params = []) {
       const table = tableFromSql(sql);
+      // Memory SQL (console-next seed) implements DML on `exec`, not `query`.
+      // SELECT / RETURNING still go through `query` so callers get rows.
+      if (isSqlDml(sql) && !/\breturning\b/i.test(sql)) {
+        const result = await exec(sql, params);
+        return [{ changes: result.changes }];
+      }
       const rows = await query(sql, params);
       return mask(rows, table);
     },

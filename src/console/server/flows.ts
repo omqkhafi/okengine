@@ -31,7 +31,7 @@ import type { ConsoleState } from "./state.ts";
 import { consoleFailureMessage } from "./i18n.ts";
 import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
-import { tenancyDeclared } from "./store.ts";
+import { isKnownConsoleSqlGate, tenancyDeclared } from "./store.ts";
 
 export { PUBLIC_CONSOLE_FLOWS };
 
@@ -1294,6 +1294,7 @@ const StoreListOut = z.object({
         z.object({
           name: z.string(),
           effectRef: z.string(),
+          kind: z.enum(["table", "index", "function", "trigger", "extension", "policy"]).optional(),
           writers: z.array(z.string()),
           readers: z.array(z.string()),
           cache: z.object({
@@ -1304,6 +1305,7 @@ const StoreListOut = z.object({
           willNotFire: WillNotFireOut,
           piiColumns: z.array(z.string()),
           columnDescriptions: z.record(z.string(), z.string()),
+          rls: z.boolean().optional(),
         }),
       ),
       replicaLagMs: z.number().nullable(),
@@ -1334,6 +1336,7 @@ const StoreQueryIn = z.object({
   limit: z.number().min(1).max(500).optional(),
   vector: z.array(z.number()).optional(),
   topK: z.number().min(1).max(100).optional(),
+  revealPii: z.boolean().optional(),
 });
 
 const StoreQueryOut = z.object({
@@ -1344,6 +1347,8 @@ const StoreQueryOut = z.object({
       z.object({
         key: z.string(),
         value: z.unknown().optional(),
+        ttlMs: z.number().nullable().optional(),
+        sizeBytes: z.number().optional(),
         warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
       }),
     )
@@ -1435,12 +1440,16 @@ const StoreSqlIn = z.object({
   sql: z.string().min(1),
   tenant: z.string().optional(),
   allowWrite: z.boolean().optional(),
+  revealPii: z.boolean().optional(),
+  asGate: z.string().min(1).optional(),
 });
 
 const StoreSqlOut = z.object({
   rows: z.array(z.record(z.string(), z.unknown())),
   masked: z.boolean(),
   routedRole: z.enum(["primary", "replica"]),
+  asGate: z.string().nullable(),
+  gateApplied: z.boolean(),
 });
 
 const StorePreviewIn = z.object({
@@ -2416,6 +2425,14 @@ function createStoreQuery(state: ConsoleState) {
       if (!fx.operator.id) return fail("AuthFailed", {});
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
       if (tenantFail) return tenantFail;
+      if (input.revealPii === true) {
+        fx.log.info("console.store.query.reveal", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          child: input.child,
+          tenant: input.tenant,
+        });
+      }
       return state.queryStore({
         ref: input.ref as ResourceRef,
         child: input.child,
@@ -2424,6 +2441,7 @@ function createStoreQuery(state: ConsoleState) {
         limit: input.limit,
         vector: input.vector,
         topK: input.topK,
+        revealPii: input.revealPii === true,
       });
     },
   });
@@ -2621,14 +2639,36 @@ function createStoreSql(state: ConsoleState) {
       const tenantFail = requireTenantIfDeclared(state, input.tenant);
       if (tenantFail) return tenantFail;
       try {
+        if (input.revealPii === true) {
+          fx.log.info("console.store.sql.reveal", {
+            operatorId: fx.operator.id,
+            ref: input.ref,
+            tenant: input.tenant,
+          });
+        }
+        if (input.asGate !== undefined && !isKnownConsoleSqlGate(state.manifest, input.asGate)) {
+          return fail("StoreNotFound", { ref: `unknown gate: ${input.asGate}` });
+        }
+        if (input.asGate !== undefined) {
+          fx.log.info("console.store.sql.asGate", {
+            operatorId: fx.operator.id,
+            ref: input.ref,
+            gate: input.asGate,
+            tenant: input.tenant,
+          });
+        }
         const result = await state.runStoreSql(input.ref as ResourceRef, input.sql, {
           allowWrite: input.allowWrite === true,
+          revealPii: input.revealPii === true,
           tenant: input.tenant,
+          ...(input.asGate !== undefined ? { asGate: input.asGate } : {}),
         });
         fx.log.info("console.store.sql", {
           operatorId: fx.operator.id,
           ref: input.ref,
           allowWrite: input.allowWrite === true,
+          revealPii: input.revealPii === true,
+          asGate: input.asGate ?? null,
           rowCount: result.rows.length,
         });
         return result;

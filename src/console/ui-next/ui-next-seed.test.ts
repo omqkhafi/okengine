@@ -9,23 +9,24 @@ import {
   createUiNextSeedRuns,
   isConsoleNextSeeded,
   seedUiNextStoreData,
+  UI_NEXT_SEED_CYCLES_RUN_ID,
+  UI_NEXT_SEED_DRAFTS_RUN_ID,
   UI_NEXT_SEED_FAIL_RUN_ID,
   UI_NEXT_SEED_FEATURED_COUNT,
-  UI_NEXT_SEED_FULFILL_RUN_ID,
-  UI_NEXT_SEED_HOLDS_RUN_ID,
+  UI_NEXT_SEED_INGEST_RUN_ID,
+  UI_NEXT_SEED_NOTIFY_RUN_ID,
   UI_NEXT_SEED_OPERATION_COUNT,
-  UI_NEXT_SEED_PAYMENTS_RUN_ID,
   UI_NEXT_SEED_RUN_ID,
   UI_NEXT_SEED_STORE_COUNTS,
-  UI_NEXT_SEED_SUPPORT_RUN_ID,
   UI_NEXT_SEED_TOTAL_COUNT,
+  UI_NEXT_SEED_TRIAGE_RUN_ID,
   UI_NEXT_SEEDED_MANIFEST,
   uiNextSeededSummary,
 } from "./ui-next-seed.ts";
 
 describe("ui-next seed", () => {
   test("manifest declares all eight elements", () => {
-    expect(UI_NEXT_SEEDED_MANIFEST.app).toBe("skyport");
+    expect(UI_NEXT_SEEDED_MANIFEST.app).toBe("keel");
     expect(UI_NEXT_SEEDED_MANIFEST.flows).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.signals).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores).toBeDefined();
@@ -35,35 +36,52 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.channels).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.ai).toBeDefined();
 
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["support.triage"]?.effects?.asks).toContain(
-      "ticket-triage",
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["triage.suggest"]?.effects?.asks).toContain(
+      "issue-triage",
     );
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["holds.expire"]?.trigger?.every).toBe("10m");
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["drafts.expire"]?.trigger?.every).toBe("10m");
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["issues.onStatus"]?.trigger?.cdc).toEqual({
+      table: "issues",
+      column: "state_id",
+    });
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["cache"]?.facet).toBe("kv");
-    expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["expire-holds"]?.every).toBe("10m");
+    expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["expire-drafts"]?.every).toBe("10m");
     expect(UI_NEXT_SEEDED_MANIFEST.vault?.["OPENAI_KEY"]).toBeDefined();
-    expect(UI_NEXT_SEEDED_MANIFEST.channels?.["support-reply"]?.medium).toBe("email");
-    expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["ticket-triage"]?.version).toBe(3);
-    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["hold-expired"]?.delivery).toBe("broadcast");
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["uploads"]?.facet).toBe("files");
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["docs"]?.facet).toBe("index");
+    expect(UI_NEXT_SEEDED_MANIFEST.vault?.["GITHUB_TOKEN"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.channels?.["mention-reply"]?.medium).toBe("email");
+    expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["issue-triage"]?.version).toBe(3);
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["comment-added"]?.delivery).toBe("live");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["draft-expired"]?.delivery).toBe("broadcast");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["attachments"]?.facet).toBe("files");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["search"]?.facet).toBe("index");
     expect(
-      UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["bookings"]?.columns?.["email"],
+      UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["issues"]?.columns?.["assignee_email"],
     ).toMatchObject({ pii: true });
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["teams"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["cycles"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["customer_requests"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_identities"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_sessions"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_crons"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_vault_secrets"]).toBeDefined();
   });
 
   test("primary seed run keeps Playwright-stable id and rich ledger", () => {
     const run = createUiNextSeedRun(1_700_000_000_000);
     expect(run.id).toBe(UI_NEXT_SEED_RUN_ID);
-    expect(run.flow).toBe("bookings.create");
-    expect(run.unit).toBe("bookings");
-    expect(run.parentId).toBe(UI_NEXT_SEED_PAYMENTS_RUN_ID);
-    expect(run.tenant).toBe("org_skyport");
-    expect(run.gates).toContain("booking:create");
-    expect(run.effects.some((e) => e.kind === "emit" && e.resource === "order-placed")).toBe(true);
+    expect(run.flow).toBe("issues.create");
+    expect(run.unit).toBe("issues");
+    expect(run.parentId).toBe(UI_NEXT_SEED_INGEST_RUN_ID);
+    expect(run.tenant).toBe("ws_keel");
+    expect(run.gates).toContain("issue:write");
+    expect(run.effects.some((e) => e.kind === "emit" && e.resource === "issue-created")).toBe(true);
     expect(run.logs.length).toBeGreaterThan(0);
-    expect(run.input).toEqual({ flightId: "SK-441", seats: 2, cabin: "economy" });
-    expect(run.output).toEqual({ id: "bk_8f2a" });
+    expect(run.input).toEqual({
+      title: "Pulse graph on selected trace",
+      teamKey: "ENG",
+      priority: 2,
+    });
+    expect(run.output).toEqual({ id: "iss_eng_184", identifier: "ENG-184" });
   });
 
   test("featured runs cover chain + AI + clock elements", () => {
@@ -77,30 +95,35 @@ describe("ui-next seed", () => {
 
     const byId = new Map(runs.map((r) => [r.id, r]));
     const create = byId.get(UI_NEXT_SEED_RUN_ID);
-    const fulfill = byId.get(UI_NEXT_SEED_FULFILL_RUN_ID);
-    const payments = byId.get(UI_NEXT_SEED_PAYMENTS_RUN_ID);
+    const notify = byId.get(UI_NEXT_SEED_NOTIFY_RUN_ID);
+    const ingest = byId.get(UI_NEXT_SEED_INGEST_RUN_ID);
     const fail = byId.get(UI_NEXT_SEED_FAIL_RUN_ID);
-    const support = byId.get(UI_NEXT_SEED_SUPPORT_RUN_ID);
-    const holds = byId.get(UI_NEXT_SEED_HOLDS_RUN_ID);
+    const triage = byId.get(UI_NEXT_SEED_TRIAGE_RUN_ID);
+    const drafts = byId.get(UI_NEXT_SEED_DRAFTS_RUN_ID);
+    const cycles = byId.get(UI_NEXT_SEED_CYCLES_RUN_ID);
 
-    expect(payments?.flow).toBe("payments.chargeBooking");
-    expect(payments?.effects.some((e) => e.kind === "call")).toBe(true);
-    expect(payments?.effects.some((e) => e.kind === "secret")).toBe(true);
-    expect(create?.parentId).toBe(UI_NEXT_SEED_PAYMENTS_RUN_ID);
-    expect(fulfill?.parentId).toBe(UI_NEXT_SEED_RUN_ID);
-    expect(fulfill?.trigger).toBe("signal");
-    expect(fulfill?.effects.some((e) => e.kind === "send")).toBe(true);
-    expect(fail?.error?.code).toBe("FlightFull");
+    expect(ingest?.flow).toBe("github.ingest");
+    expect(ingest?.effects.some((e) => e.kind === "call")).toBe(true);
+    expect(ingest?.effects.some((e) => e.kind === "secret")).toBe(true);
+    expect(create?.parentId).toBe(UI_NEXT_SEED_INGEST_RUN_ID);
+    expect(notify?.parentId).toBe(UI_NEXT_SEED_RUN_ID);
+    expect(notify?.trigger).toBe("signal");
+    expect(notify?.effects.some((e) => e.kind === "send")).toBe(true);
+    expect(fail?.error?.code).toBe("CycleClosed");
     expect(fail?.output).toBeUndefined();
-    expect(support?.output).toMatchObject({ replyQueued: true, template: "support-reply" });
-    expect(support?.effects.some((e) => e.kind === "ask")).toBe(true);
-    expect(support?.effects.some((e) => e.kind === "secret" && e.resource === "OPENAI_KEY")).toBe(
+    expect(triage?.output).toMatchObject({ replyQueued: true, template: "mention-reply" });
+    expect(triage?.effects.some((e) => e.kind === "ask")).toBe(true);
+    expect(triage?.effects.some((e) => e.kind === "secret" && e.resource === "OPENAI_KEY")).toBe(
       true,
     );
-    expect(support?.cost).toBeGreaterThan(0);
-    expect(holds?.trigger).toBe("every");
-    expect(holds?.effects.some((e) => e.resource === "kv:holds")).toBe(true);
-    expect(holds?.effects.some((e) => e.kind === "emit" && e.resource === "hold-expired")).toBe(
+    expect(triage?.cost).toBeGreaterThan(0);
+    expect(drafts?.trigger).toBe("every");
+    expect(drafts?.effects.some((e) => e.resource === "kv:drafts")).toBe(true);
+    expect(drafts?.effects.some((e) => e.kind === "emit" && e.resource === "draft-expired")).toBe(
+      true,
+    );
+    expect(cycles?.trigger).toBe("cron");
+    expect(cycles?.effects.some((e) => e.kind === "emit" && e.resource === "cycle-closed")).toBe(
       true,
     );
   });
@@ -112,13 +135,15 @@ describe("ui-next seed", () => {
     expect(a.map((r) => r.id)).toEqual(b.map((r) => r.id));
 
     const flows = new Set(a.map((r) => r.flow));
-    expect(flows.has("bookings.create")).toBe(true);
-    expect(flows.has("bookings.mine")).toBe(true);
-    expect(flows.has("fulfillment.onOrder")).toBe(true);
-    expect(flows.has("payments.chargeBooking")).toBe(true);
-    expect(flows.has("support.triage") || flows.has("holds.expire")).toBe(true);
+    expect(flows.has("issues.create")).toBe(true);
+    expect(flows.has("issues.list")).toBe(true);
+    expect(flows.has("notify.onIssue")).toBe(true);
+    expect(flows.has("github.ingest")).toBe(true);
+    expect(flows.has("triage.suggest") || flows.has("drafts.expire")).toBe(true);
 
-    const failed = a.filter((r) => r.error?.code === "FlightFull");
+    const failed = a.filter(
+      (r) => r.error?.code === "CycleClosed" || r.error?.code === "Duplicate",
+    );
     expect(failed.length).toBeGreaterThan(0);
 
     const chained = a.filter((r) => r.parentId?.startsWith("pw-ops-create-"));
@@ -135,6 +160,7 @@ describe("ui-next seed", () => {
       expect(uiNextSeededSummary()).toContain(UI_NEXT_SEED_RUN_ID);
       expect(uiNextSeededSummary()).toContain(String(UI_NEXT_SEED_TOTAL_COUNT));
       expect(uiNextSeededSummary()).toContain("8 elements");
+      expect(uiNextSeededSummary()).toContain(`${UI_NEXT_SEED_STORE_COUNTS.sqlIssues} issues`);
     } finally {
       if (prev === undefined) delete process.env["OKE_CONSOLE_NEXT_SEEDED"];
       else process.env["OKE_CONSOLE_NEXT_SEEDED"] = prev;
@@ -147,41 +173,83 @@ describe("ui-next seed", () => {
     try {
       await seedUiNextStoreData(runtime);
 
-      const bookings = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+      const issues = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "sql:db",
-        child: "bookings",
+        child: "issues",
         revealPii: true,
+        limit: 2000,
       });
-      expect(bookings.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlBookings);
-      expect(bookings.rows?.[0]?.email).toContain("@skyport.dev");
-      const notes = bookings.rows?.map((r) => r.note) ?? [];
-      expect(notes.some((n) => typeof n === "string" && /[؀-ۿ]/.test(n))).toBe(true);
+      expect(issues.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlIssues);
+      expect(UI_NEXT_SEED_STORE_COUNTS.sqlIssues).toBeGreaterThanOrEqual(500);
+      expect(issues.rows?.[0]?.assignee_email).toContain("@keel.dev");
+      const descriptions = issues.rows?.map((r) => r.description) ?? [];
+      expect(descriptions.some((n) => typeof n === "string" && /[؀-ۿ]/.test(n))).toBe(true);
 
-      const shipments = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+      const teams = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "sql:db",
-        child: "shipments",
+        child: "teams",
+        limit: 2000,
       });
-      expect(shipments.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlShipments);
+      expect(teams.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlTeams);
 
-      const kv = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
-        ref: "kv:cache",
-        child: "holds",
+      const identities = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "oke_identities",
+        revealPii: true,
+        limit: 2000,
       });
-      expect(kv.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.kvHolds);
+      expect(identities.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlIdentities);
+      expect(identities.rows?.length).toBeGreaterThan(0);
+      expect(identities.rows?.some((r) => r.email === "aria@keel.dev")).toBe(true);
+
+      const crons = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "oke_crons",
+        limit: 2000,
+      });
+      expect(crons.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlCrons);
+      expect(crons.rows?.some((r) => r.name === "expire-drafts")).toBe(true);
+
+      const comments = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "comments",
+        revealPii: true,
+        limit: 2000,
+      });
+      expect(comments.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlComments);
+      const bodies = comments.rows?.map((r) => r.body) ?? [];
+      expect(bodies.some((n) => typeof n === "string" && /[؀-ۿ]/.test(n))).toBe(true);
+
+      const drafts = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "kv:cache",
+        child: "drafts",
+        limit: 2000,
+      });
+      const snooze = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "kv:cache",
+        child: "triage-snooze",
+        limit: 2000,
+      });
+      expect((drafts.keys?.length ?? 0) + (snooze.keys?.length ?? 0)).toBe(
+        UI_NEXT_SEED_STORE_COUNTS.kvKeys,
+      );
+      expect(drafts.keys?.every((k) => k.key.startsWith("drafts:"))).toBe(true);
+      expect(snooze.keys?.every((k) => k.key.startsWith("triage-snooze:"))).toBe(true);
 
       const files = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
-        ref: "files:uploads",
-        child: "uploads",
+        ref: "files:attachments",
+        child: "attachments",
+        limit: 2000,
       });
-      expect(files.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.filesUploads);
+      expect(files.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.filesAttachments);
 
       const index = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
-        ref: "index:docs",
-        child: "docs",
+        ref: "index:search",
+        child: "issues",
         vector: [1, 0, 0],
-        topK: 10,
+        topK: 80,
       });
-      expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexDocs);
+      expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexIssues);
     } finally {
       await runtime.close();
     }

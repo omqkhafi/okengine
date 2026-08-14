@@ -1,7 +1,7 @@
 /**
  * Playwright webServer — Console kernel on 6538 serving ui-next/dist.
  *
- * Seeds a real Manifest (FLOWS_TEST_MANIFEST) and one WideEvent so the Flows
+ * Seeds a real Manifest (keel) and WideEvents so the Flows
  * page can assert graph nodes + Traces without inventing client-side mocks.
  * Same seed as `bun run dev:console-next:seed`.
  */

@@ -8,6 +8,7 @@ import {
   durationClassName,
   durationThresholdDotClass,
   durationTone,
+  durationToneChipClass,
   durationToneDotClass,
   type DurationTone,
 } from "./duration-tone.ts";
@@ -66,6 +67,14 @@ describe("durationToneDotClass", () => {
     expect(durationToneDotClass("fast")).toContain("bg-emerald");
     expect(durationToneDotClass("elevated")).toContain("bg-yellow");
     expect(durationToneDotClass("critical")).toContain("bg-rose");
+  });
+});
+
+describe("durationToneChipClass", () => {
+  test("maps tones to chip fills", () => {
+    expect(durationToneChipClass("fast")).toContain("emerald");
+    expect(durationToneChipClass("elevated")).toContain("yellow");
+    expect(durationToneChipClass("critical")).toContain("rose");
   });
 });
 

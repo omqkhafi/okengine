@@ -186,6 +186,9 @@ function restRequest(
         query.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
       }
     }
+  } else if (upper === "QUERY") {
+    // RFC 10008 QUERY always carries JSON content (empty object when only path params).
+    body = JSON.stringify(Object.keys(rest).length > 0 ? rest : {});
   } else if (Object.keys(rest).length > 0 || path === pathOut) {
     body = JSON.stringify(Object.keys(rest).length > 0 ? rest : (input ?? {}));
   }

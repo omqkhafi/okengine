@@ -2,7 +2,14 @@
  * React Flow canvas for the Flow graph (left pane).
  */
 
-import { Background, Controls, ReactFlow, useReactFlow, ReactFlowProvider } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  useReactFlow,
+  ReactFlowProvider,
+} from "@xyflow/react";
 import { useEffect, useMemo } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Manifest } from "../../../../../../manifest/types.ts";
@@ -14,6 +21,7 @@ import {
   type FlowGraphNode,
 } from "./build-flow-graph.ts";
 import { flowGraphNodeTypes } from "./flow-graph-nodes.tsx";
+import { NODE_ACCENT } from "./flow-graph-theme.ts";
 
 interface FlowGraphProps {
   readonly manifest: Manifest | null;
@@ -94,8 +102,28 @@ function Canvas({
         color="color-mix(in oklab, var(--foreground) 14%, transparent)"
       />
       <Controls showInteractive={false} />
+      <MiniMap
+        pannable
+        zoomable
+        maskColor="color-mix(in oklab, var(--background) 72%, transparent)"
+        nodeColor={minimapNodeColor}
+        aria-label="Flow graph overview"
+      />
     </ReactFlow>
   );
+}
+
+/**
+ * MiniMap swatch from the same accents as the canvas nodes.
+ *
+ * @param node - Flow graph node
+ */
+function minimapNodeColor(node: FlowGraphNode): string {
+  const kind = node.data.kind;
+  if (kind === "flow" || kind === "store" || kind === "signal" || kind === "ai") {
+    return NODE_ACCENT[kind].accent;
+  }
+  return "color-mix(in oklab, var(--foreground) 22%, transparent)";
 }
 
 /**

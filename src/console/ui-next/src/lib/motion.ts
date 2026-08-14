@@ -8,6 +8,7 @@ export {
   animate,
   LayoutGroup,
   motion,
+  MotionConfig,
   useMotionValue,
   useReducedMotion,
   useTransform,

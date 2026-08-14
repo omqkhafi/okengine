@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildInsertPatch,
+  defaultInsertDraft,
+  insertFormColumns,
   isStorePiiMask,
   parseStoreCellDraft,
   sanitizeStorePatch,
@@ -48,5 +51,49 @@ describe("parseStoreCellDraft", () => {
 
   test("string passes through unchanged", () => {
     expect(parseStoreCellDraft("string", "SK-902")).toBe("SK-902");
+  });
+
+  test("boolean accepts true / false tokens", () => {
+    expect(parseStoreCellDraft("boolean", "true")).toBe(true);
+    expect(parseStoreCellDraft("boolean", "off")).toBe(false);
+  });
+});
+
+describe("buildInsertPatch", () => {
+  const columns = [
+    { key: "id", type: "string" as const },
+    { key: "seats", type: "integer" as const },
+    { key: "email", type: "string" as const },
+  ];
+
+  test("omits empty fields and parses integers", () => {
+    const result = buildInsertPatch(columns, {
+      id: "b2",
+      seats: "4",
+      email: "",
+    });
+    expect(result).toEqual({ ok: true, patch: { id: "b2", seats: 4 } });
+  });
+
+  test("requires id", () => {
+    expect(buildInsertPatch(columns, { id: "", seats: "2" })).toEqual({
+      ok: false,
+      error: "id is required",
+    });
+  });
+
+  test("defaultInsertDraft seeds a UUID id", () => {
+    const draft = defaultInsertDraft(columns);
+    expect(draft.id?.length).toBeGreaterThan(8);
+    expect(draft.seats).toBe("");
+    expect(draft.email).toBe("");
+  });
+
+  test("insertFormColumns prepends id when missing", () => {
+    expect(insertFormColumns([{ key: "seats", type: "integer" }]).map((c) => c.key)).toEqual([
+      "id",
+      "seats",
+    ]);
+    expect(insertFormColumns(columns)).toEqual(columns);
   });
 });

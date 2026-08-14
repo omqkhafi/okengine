@@ -120,6 +120,13 @@ export interface KvNamespace {
    * @param prefix - Key prefix filter
    */
   list(prefix?: string): Promise<string[]>;
+  /**
+   * Remaining TTL in milliseconds, or `null` when the key has no expiry
+   * (or the backend cannot report one). Does not create or delete the key.
+   *
+   * @param key - Entry key
+   */
+  ttlMs(key: string): Promise<number | null>;
   /** Close / release. */
   close(): Promise<void>;
 }

@@ -10,6 +10,8 @@ import {
   Radio01Icon,
   SecurityCheckIcon,
   Timer01Icon,
+  UnfoldLessIcon,
+  UnfoldMoreIcon,
   UserIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -32,6 +34,11 @@ import {
   countActiveFacets,
   filterUnitTree,
   filterUnitsAdvanced,
+  unitTreeAncestorKeys,
+  unitTreeBandKey,
+  unitTreeGroupKey,
+  unitTreeIsOpen,
+  unitTreeOpenKeys,
   type UnitFlowRow,
   type UnitGroup,
   type UnitTreeBand,
@@ -62,6 +69,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
   const [query, setQuery] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [facets, setFacets] = useState<UnitTreeFacets>({});
+  const [openByKey, setOpenByKey] = useState<Readonly<Record<string, boolean>>>({});
 
   const availableKinds = useMemo(() => {
     const present = new Set<FlowTriggerKind>();
@@ -91,6 +99,38 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
     () => bandUnitTree(filterUnitsAdvanced(filterUnitTree(groups, query), facets)),
     [groups, query, facets],
   );
+  const keys = useMemo(() => unitTreeOpenKeys(bands), [bands]);
+  const allOpen = keys.length > 0 && keys.every((key) => unitTreeIsOpen(key, openByKey));
+
+  useEffect(() => {
+    if (!selectedFlowId) return;
+    const ancestors = unitTreeAncestorKeys(bands, selectedFlowId);
+    if (ancestors.length === 0) return;
+    setOpenByKey((prev) => {
+      let changed = false;
+      const next: Record<string, boolean> = { ...prev };
+      for (const key of ancestors) {
+        if (next[key] === false) {
+          next[key] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedFlowId, bands]);
+
+  const setKeyOpen = (key: string, open: boolean): void => {
+    setOpenByKey((prev) => (prev[key] === open ? prev : { ...prev, [key]: open }));
+  };
+
+  const toggleAll = (): void => {
+    const next = !allOpen;
+    setOpenByKey((prev) => {
+      const out: Record<string, boolean> = { ...prev };
+      for (const key of keys) out[key] = next;
+      return out;
+    });
+  };
 
   const toggleKind = (kind: FlowTriggerKind) =>
     setFacets((prev) => ({ ...prev, triggerKinds: toggleItem(prev.triggerKinds ?? [], kind) }));
@@ -118,7 +158,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
             data-slot="units-advanced-toggle"
             onClick={() => setAdvancedOpen((open) => !open)}
             className={cn(
-              "mr-1.5 shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors",
+              "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors",
               advancedOpen || activeCount > 0
                 ? "border-foreground/25 bg-background text-foreground shadow-sm"
                 : "border-border/70 text-muted-foreground hover:text-foreground",
@@ -135,6 +175,13 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
               </span>
             ) : null}
           </button>
+          <TreeExpandToggle
+            allOpen={allOpen}
+            disabled={keys.length === 0}
+            onToggle={toggleAll}
+            dataSlot="units-tree-expand-toggle"
+            className="mr-1.5"
+          />
         </div>
         {advancedOpen ? (
           <div
@@ -214,14 +261,23 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
           <p className="px-2 py-4 text-sm text-muted-foreground">No flows match.</p>
         ) : (
           <div className="flex flex-col">
-            {bands.map((band) => (
-              <TriggerBand
-                key={band.id}
-                band={band}
-                selectedFlowId={selectedFlowId}
-                onSelect={onSelect}
-              />
-            ))}
+            {bands.map((band) => {
+              const bandKey = unitTreeBandKey(band.id);
+              return (
+                <TriggerBand
+                  key={band.id}
+                  band={band}
+                  open={unitTreeIsOpen(bandKey, openByKey)}
+                  onOpenChange={(open) => setKeyOpen(bandKey, open)}
+                  groupOpen={(unit) => unitTreeIsOpen(unitTreeGroupKey(band.id, unit), openByKey)}
+                  onGroupOpenChange={(unit, open) =>
+                    setKeyOpen(unitTreeGroupKey(band.id, unit), open)
+                  }
+                  selectedFlowId={selectedFlowId}
+                  onSelect={onSelect}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -308,6 +364,76 @@ function toggleItem<T>(list: readonly T[], item: T): T[] {
 }
 
 /**
+ * Unfold control — search bar (all nodes) or a trigger-kind band.
+ *
+ * @param props - Open state + toggle + placement
+ */
+function TreeExpandToggle({
+  allOpen,
+  disabled,
+  onToggle,
+  collapseLabel = "Collapse all",
+  expandLabel = "Expand all",
+  dataSlot,
+  className,
+  disclose = false,
+  bare = false,
+}: {
+  readonly allOpen: boolean;
+  readonly disabled?: boolean;
+  readonly onToggle: () => void;
+  readonly collapseLabel?: string;
+  readonly expandLabel?: string;
+  readonly dataSlot: string;
+  readonly className?: string;
+  /** When true, the button discloses one section (`aria-expanded`). */
+  readonly disclose?: boolean;
+  /** Icon-only — no chrome. Used on trigger-kind bands. */
+  readonly bare?: boolean;
+}): JSX.Element {
+  const label = allOpen ? collapseLabel : expandLabel;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) => (
+          <button
+            {...props}
+            type="button"
+            aria-label={label}
+            aria-expanded={disclose ? allOpen : undefined}
+            data-slot={dataSlot}
+            disabled={disabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onClick?.(event);
+              onToggle();
+            }}
+            className={cn(
+              "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+              "disabled:pointer-events-none disabled:opacity-40",
+              bare
+                ? "border-0 bg-transparent hover:bg-transparent"
+                : "border border-border/70 hover:border-border focus-visible:border-ring",
+              className,
+            )}
+          >
+            <HugeiconsIcon
+              icon={allOpen ? UnfoldLessIcon : UnfoldMoreIcon}
+              className="size-3.5"
+              aria-hidden
+            />
+          </button>
+        )}
+      />
+      <TooltipContent side="bottom" className="text-[11px]">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
  * Top-level trigger-kind category with its unit folders underneath.
  *
  * Separated as a bordered band; header collapses the whole kind.
@@ -316,21 +442,31 @@ function toggleItem<T>(list: readonly T[], item: T): T[] {
  */
 function TriggerBand({
   band,
+  open,
+  onOpenChange,
+  groupOpen,
+  onGroupOpenChange,
   selectedFlowId,
   onSelect,
 }: {
   readonly band: UnitTreeBand;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly groupOpen: (unit: string) => boolean;
+  readonly onGroupOpenChange: (unit: string, open: boolean) => void;
   readonly selectedFlowId: string | null;
   readonly onSelect: (flowId: string) => void;
 }): JSX.Element {
   const kindSpec = FLOW_TRIGGER_KIND_SPECS[band.id];
   const flowCount = band.groups.reduce((n, g) => n + g.flows.length, 0);
-  const containsSelected = band.groups.some((g) => g.flows.some((f) => f.id === selectedFlowId));
-  const [open, setOpen] = useState(true);
+  const units = band.groups.map((g) => g.unit);
+  const unitsOpen = units.length > 0 && units.every((unit) => groupOpen(unit));
 
-  useEffect(() => {
-    if (containsSelected) setOpen(true);
-  }, [containsSelected, selectedFlowId]);
+  const toggleUnits = (): void => {
+    const next = !unitsOpen;
+    for (const unit of units) onGroupOpenChange(unit, next);
+    if (next) onOpenChange(true);
+  };
 
   return (
     <section
@@ -339,44 +475,59 @@ function TriggerBand({
       aria-label={band.label}
       className="overflow-hidden border-b border-border/60 bg-muted/15 last:border-b-0"
     >
-      <Collapsible open={open} onOpenChange={setOpen}>
+      <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
+          nativeButton={false}
           className="group/band flex w-full items-center gap-1.5 border-b border-border/50 bg-muted/25 px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
           data-slot="units-trigger-band-toggle"
-        >
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            className={cn(
-              "size-3 shrink-0 text-muted-foreground transition-transform",
-              !open && "-rotate-90",
-            )}
-            aria-hidden
-          />
-          <span
-            className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded-md border",
-              kindSpec.wellClass,
-            )}
-            aria-hidden
-          >
-            <HugeiconsIcon icon={kindSpec.icon} className="size-3" />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase group-hover/band:text-foreground">
-            {band.label}
-          </span>
-          <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground">
-            {flowCount}
-          </span>
-        </CollapsibleTrigger>
+          render={(props) => (
+            <div {...props}>
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                className={cn(
+                  "size-3 shrink-0 text-muted-foreground transition-transform",
+                  !open && "-rotate-90",
+                )}
+                aria-hidden
+              />
+              <span
+                className={cn(
+                  "flex size-5 shrink-0 items-center justify-center rounded-md border",
+                  kindSpec.wellClass,
+                )}
+                aria-hidden
+              >
+                <HugeiconsIcon icon={kindSpec.icon} className="size-3" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase group-hover/band:text-foreground">
+                {band.label}
+              </span>
+              <span className="shrink-0 rounded border border-border/60 bg-background/50 px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground">
+                {flowCount}
+              </span>
+              <TreeExpandToggle
+                allOpen={unitsOpen}
+                disabled={units.length === 0}
+                onToggle={toggleUnits}
+                collapseLabel={`Collapse all in ${band.label}`}
+                expandLabel={`Expand all in ${band.label}`}
+                dataSlot="units-band-expand-toggle"
+                disclose
+                bare
+              />
+            </div>
+          )}
+        />
         <CollapsibleContent>
           <ul className="flex flex-col gap-0.5 p-1">
             {band.groups.map((g) => (
               <UnitGroupItem
                 key={`${band.id}:${g.unit}`}
                 group={g}
+                open={groupOpen(g.unit)}
+                onOpenChange={(next) => onGroupOpenChange(g.unit, next)}
                 selectedFlowId={selectedFlowId}
                 onSelect={onSelect}
-                defaultOpen
               />
             ))}
           </ul>
@@ -393,25 +544,20 @@ function TriggerBand({
  */
 function UnitGroupItem({
   group,
+  open,
+  onOpenChange,
   selectedFlowId,
   onSelect,
-  defaultOpen,
 }: {
   readonly group: UnitGroup;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
   readonly selectedFlowId: string | null;
   readonly onSelect: (flowId: string) => void;
-  readonly defaultOpen: boolean;
 }): JSX.Element {
-  const containsSelected = group.flows.some((f) => f.id === selectedFlowId);
-  const [open, setOpen] = useState(defaultOpen);
-
-  useEffect(() => {
-    if (containsSelected) setOpen(true);
-  }, [containsSelected, selectedFlowId]);
-
   return (
     <li data-slot="unit-group" data-unit={group.unit}>
-      <Collapsible open={open} onOpenChange={setOpen}>
+      <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger className="group/unit flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/60">
           <HugeiconsIcon
             icon={ArrowDown01Icon}

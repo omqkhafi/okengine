@@ -106,7 +106,7 @@ oke client add https://api.example.com --out ./types/oke-client.d.ts
 
 | Situation                                          | Request                                                                                                  |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| HTTP trigger with method + path on `$routes`       | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise) |
+| HTTP trigger with method + path on `$routes`       | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise). QUERY always sends JSON (`{}` when only path params) |
 | Adopted flow with no HTTP trigger                  | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                          |
 | Incomplete proxy path (`api.notes()` with no flow) | Result error: `Incomplete path: api.notes(…)`                                                            |
 

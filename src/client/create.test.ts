@@ -118,6 +118,42 @@ describe("createClient — same-repo <App>", () => {
     expect(method).toBe("GET");
     expect(url).toBe("http://app.test/notes/n_1");
   });
+
+  test("REST QUERY always sends a JSON body and Content-Type", async () => {
+    type SearchApp = AppOf<{
+      search: {
+        run: {
+          in: { id: string; q?: string };
+          out: { n: number };
+          errors: Record<string, never>;
+        };
+      };
+    }>;
+    let method = "";
+    let url = "";
+    let body: string | undefined;
+    let contentType: string | null = null;
+    const api = createClient<SearchApp>("http://app.test", {
+      routes: {
+        "search.run": { method: "QUERY", path: "/search/:id" },
+      },
+      fetch: async (input, init) => {
+        url = String(input);
+        method = String(init?.method ?? "");
+        body = typeof init?.body === "string" ? init.body : undefined;
+        contentType = new Headers(init?.headers).get("content-type");
+        return Response.json({ data: { n: 1 }, error: null });
+      },
+    });
+    await api.search.run({ id: "x" });
+    expect(method).toBe("QUERY");
+    expect(url).toBe("http://app.test/search/x");
+    expect(body).toBe("{}");
+    expect(contentType).toContain("application/json");
+
+    await api.search.run({ id: "x", q: "ali" });
+    expect(body).toBe('{"q":"ali"}');
+  });
 });
 
 describe("createClient — type helpers", () => {

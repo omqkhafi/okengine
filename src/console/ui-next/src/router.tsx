@@ -14,9 +14,11 @@ import {
   getAccessToken,
   sessionMe,
   setAccessToken,
+  setSessionExpiredHandler,
   setSessionOperator,
   type SessionOperator,
 } from "./client.ts";
+import { authGateSearch, validateAuthSearch } from "./features/auth/auth-redirect.ts";
 import { ClaimPage } from "./features/setup/claim-page.tsx";
 import { FlowsPage } from "./features/flows/flows-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
@@ -28,18 +30,24 @@ import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
 /**
  * Validate `oke_console_at` via `/console/session/me` and return the operator.
- * Clears a stale token and redirects to the pre-auth gate when invalid.
+ * Clears a stale token and redirects to the pre-auth gate when invalid,
+ * keeping the current module in `?next=` so login can restore it.
  */
-async function requireSession(): Promise<{ operator: SessionOperator }> {
+async function requireSession({
+  location,
+}: {
+  location: { pathname: string; searchStr: string };
+}): Promise<{ operator: SessionOperator }> {
+  const search = authGateSearch(`${location.pathname}${location.searchStr}`);
   const token = getAccessToken();
   if (!token) {
-    throw redirect({ to: "/" });
+    throw redirect({ to: "/", search });
   }
 
   const res = await sessionMe();
   if (res.error || !res.data) {
     setAccessToken(null);
-    throw redirect({ to: "/" });
+    throw redirect({ to: "/", search });
   }
 
   const operator: SessionOperator = {
@@ -58,6 +66,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  validateSearch: validateAuthSearch,
   component: ClaimPage,
 });
 
@@ -105,6 +114,12 @@ export const router = createRouter({
   defaultPendingComponent: () => (
     <div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">Loading…</div>
   ),
+});
+
+setSessionExpiredHandler((returnTo) => {
+  const path = returnTo.split("?")[0] ?? "";
+  if (path === "/" || path === "") return;
+  void router.navigate({ to: "/", search: authGateSearch(returnTo) });
 });
 
 declare module "@tanstack/react-router" {

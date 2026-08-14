@@ -1,11 +1,11 @@
 /**
  * Setup gate — claim when open; real login when closed.
- * Claim success navigates to the authenticated shell (`/flows`).
+ * Claim success navigates to `?next=` when present, otherwise `/flows`.
  */
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {
@@ -15,12 +15,19 @@ import {
   setupClaim,
   setupStatus,
 } from "../../client.ts";
+import { goAfterAuth, type AfterAuthNavigate } from "@/features/auth/auth-redirect.ts";
 import { LoginForm } from "@/features/auth/login-form";
-import { AuthCard, AuthCardSkeleton } from "@/components/auth-card";
+import {
+  AUTH_SUBMIT_SUCCESS_MS,
+  AuthCard,
+  AuthCardSkeleton,
+  authSubmitClassName,
+  authSubmitState,
+} from "@/components/auth-card";
 import { ConsoleChrome } from "@/components/console-chrome";
+import { StatefulButton } from "@/components/motion/button/index.ts";
 import { PasswordInput } from "@/components/password-input";
 import { PasswordStrength } from "@/components/password-strength";
-import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { evaluateConsolePasswordRules } from "@console/password-policy";
@@ -38,7 +45,8 @@ const claimSchema = z.object({
 });
 type ClaimValues = z.infer<typeof claimSchema>;
 
-const inputClassName = "h-10 rounded-xl bg-background px-3 md:text-sm";
+const inputClassName =
+  "h-10 rounded-xl border-foreground/10 bg-muted/50 px-3 text-base md:text-sm dark:bg-background/50";
 
 /**
  * Join id tokens for aria-describedby (skips empty).
@@ -72,6 +80,7 @@ function SetupFrame({ children }: { children: ReactNode }) {
 export function ClaimPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const search = useSearch({ from: "/" });
   const [formError, setFormError] = useState<string | null>(null);
 
   const status = useQuery({
@@ -102,7 +111,9 @@ export function ClaimPage() {
       applySession(data);
       setFormError(null);
       void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
-      void navigate({ to: "/flows" });
+      window.setTimeout(() => {
+        goAfterAuth(navigate as AfterAuthNavigate, search.next);
+      }, AUTH_SUBMIT_SUCCESS_MS);
     },
     onError: (err: Error) => {
       setFormError(err.message);
@@ -136,7 +147,11 @@ export function ClaimPage() {
   if (status.isError) {
     return (
       <SetupFrame>
-        <AuthCard title="Console unreachable" description="Could not reach the setup API.">
+        <AuthCard
+          title="Console unreachable"
+          status={{ label: "Offline", tone: "alert" }}
+          description="Could not reach the setup API."
+        >
           <p className="text-sm text-muted-foreground" role="alert">
             {status.error instanceof Error
               ? status.error.message
@@ -161,24 +176,32 @@ export function ClaimPage() {
     <SetupFrame>
       <AuthCard
         title="First admin"
+        status={{ label: "Setup open", tone: "open" }}
         description="Enter the claim code from the Console boot log, or run `oke console claim-code`. This wizard closes permanently after the first operator."
         footer={
-          <Button
+          <StatefulButton
             type="submit"
             form="claim-form"
             size="lg"
-            disabled={claim.isPending}
-            aria-disabled={claim.isPending || undefined}
-            className="h-11 w-full rounded-xl"
+            pressScale={0.98}
+            state={authSubmitState({
+              pending: claim.isPending,
+              success: claim.isSuccess,
+              error: claim.isError || formError !== null,
+            })}
+            loadingText="Creating"
+            successText="Created"
+            errorText="Try again"
+            className={authSubmitClassName}
           >
-            {claim.isPending ? "Creating admin account…" : "Create admin account"}
-          </Button>
+            Create admin account
+          </StatefulButton>
         }
       >
         {({ titleId, descriptionId }) => (
           <form
             id="claim-form"
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-6"
             autoComplete="off"
             noValidate
             aria-labelledby={titleId}
@@ -190,14 +213,14 @@ export function ClaimPage() {
               void form.handleSubmit();
             }}
           >
-            <FieldGroup className="gap-4" role="group" aria-label="First admin details">
+            <FieldGroup className="gap-5" role="group" aria-label="First admin details">
               <form.Field
                 name="claimCode"
                 children={(field) => {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined}>
+                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                       <FieldLabel htmlFor={field.name}>
                         Claim code
                         <RequiredMark />
@@ -235,7 +258,7 @@ export function ClaimPage() {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined}>
+                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                       <FieldLabel htmlFor={field.name}>
                         Name
                         <RequiredMark />
@@ -269,7 +292,7 @@ export function ClaimPage() {
                   const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined}>
+                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                       <FieldLabel htmlFor={field.name}>
                         Email
                         <RequiredMark />
@@ -305,7 +328,7 @@ export function ClaimPage() {
                   const strengthId = `${field.name}-strength`;
                   const errorId = `${field.name}-error`;
                   return (
-                    <Field data-invalid={isInvalid || undefined}>
+                    <Field data-invalid={isInvalid || undefined} className="gap-2.5">
                       <FieldLabel htmlFor={field.name}>
                         Password
                         <RequiredMark />

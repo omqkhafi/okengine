@@ -13,6 +13,46 @@ export const OPERATOR_KEY = "oke_console_operator";
 
 let accessToken: string | null = null;
 
+/** Setup / login / session-probe paths — a 401 here is not a mid-shell expiry. */
+const AUTH_ENTRY_PATHS = new Set([
+  "/console/setup/status",
+  "/console/setup/claim",
+  "/console/session/login",
+  "/console/session/me",
+]);
+
+let sessionExpired = false;
+let onSessionExpired: ((returnTo: string) => void) | null = null;
+
+/**
+ * Register the SPA handler that sends an expired operator back to `/`.
+ *
+ * @param handler - Receives the current `pathname + search`, or null to clear
+ */
+export function setSessionExpiredHandler(handler: ((returnTo: string) => void) | null): void {
+  onSessionExpired = handler;
+}
+
+/**
+ * True when a Console API error means the operator session is gone.
+ * Skips claim/login/`session/me` so the route guard can own that redirect.
+ *
+ * @param path - `/console/...` request path
+ * @param error - API error envelope, if any
+ */
+export function shouldExpireSession(path: string, error: ConsoleApiError | null): boolean {
+  return error?.code === "Unauthorized" && !AUTH_ENTRY_PATHS.has(path);
+}
+
+function expireSessionIfNeeded(path: string, error: ConsoleApiError | null): void {
+  if (sessionExpired || !shouldExpireSession(path, error)) return;
+  sessionExpired = true;
+  setAccessToken(null);
+  const returnTo =
+    typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`;
+  onSessionExpired?.(returnTo);
+}
+
 /**
  * Store the operator access token after a successful claim or login.
  *
@@ -21,6 +61,7 @@ let accessToken: string | null = null;
 export function setAccessToken(token: string | null): void {
   accessToken = token;
   if (token) {
+    sessionExpired = false;
     sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
   } else {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
@@ -187,7 +228,9 @@ async function consoleFetch<T>(path: string, init?: RequestInit): Promise<Consol
     headers.set("authorization", `Bearer ${accessToken}`);
   }
   const res = await fetch(path, { ...init, headers });
-  return (await res.json()) as ConsoleApiResult<T>;
+  const body = (await res.json()) as ConsoleApiResult<T>;
+  expireSessionIfNeeded(path, body.error);
+  return body;
 }
 
 /**
@@ -238,6 +281,39 @@ export type ManifestPayload = {
  */
 export async function manifestGet(): Promise<ConsoleApiResult<ManifestPayload>> {
   return consoleFetch<ManifestPayload>("/console/manifest");
+}
+
+/** One Gate row from `GET /console/gates`. */
+export type GatesListGate = {
+  readonly name: string;
+  readonly description?: string;
+  readonly kind: "policy" | "rate";
+  readonly scopes: readonly string[];
+  readonly roles: readonly string[];
+  readonly attachedTo: readonly string[];
+};
+
+/** One principal row from `GET /console/gates`. */
+export type GatesListPrincipal = {
+  readonly kind: "role" | "key" | "user";
+  readonly id: string;
+  readonly name: string;
+  readonly plane: "user" | "operator";
+  readonly scopes: readonly string[];
+};
+
+/** Gates panel payload (`GET /console/gates`). */
+export type GatesListPayload = {
+  readonly moduleActions: readonly string[];
+  readonly gates: readonly GatesListGate[];
+  readonly principals: readonly GatesListPrincipal[];
+};
+
+/**
+ * GET /console/gates — Module:Action catalog, declared gates, Access principals.
+ */
+export async function gatesList(): Promise<ConsoleApiResult<GatesListPayload>> {
+  return consoleFetch<GatesListPayload>("/console/gates");
 }
 
 /** Effect entry on a run row (matches server `RunsListOut`). */
@@ -456,12 +532,15 @@ export type StoreChildCache = {
 export type StoreListChild = {
   readonly name: string;
   readonly effectRef: string;
+  readonly kind?: "table" | "index" | "function" | "trigger" | "extension" | "policy";
   readonly writers: readonly string[];
   readonly readers: readonly string[];
   readonly cache: StoreChildCache;
   readonly willNotFire: StoreWillNotFire;
   readonly piiColumns: readonly string[];
   readonly columnDescriptions: Readonly<Record<string, string>>;
+  /** Live RLS when the engine reported `pg_class.relrowsecurity`. */
+  readonly rls?: boolean;
 };
 
 /** One store row from `GET /console/store` (matches server `StoreListOut`). */
@@ -508,6 +587,8 @@ export type StoreQueryInput = {
   readonly limit?: number;
   readonly vector?: readonly number[];
   readonly topK?: number;
+  /** When true, SQL browse returns PII cleartext (audited). Default masks. */
+  readonly revealPii?: boolean;
 };
 
 /** Success payload from `QUERY /console/store/query` (matches server `StoreQueryOut`). */
@@ -517,6 +598,8 @@ export type StoreQueryResult = {
   readonly keys?: ReadonlyArray<{
     readonly key: string;
     readonly value?: unknown;
+    readonly ttlMs?: number | null;
+    readonly sizeBytes?: number;
     readonly warnings?: ReadonlyArray<{ readonly code: string; readonly message: string }>;
   }>;
   readonly hits?: ReadonlyArray<{
@@ -529,7 +612,7 @@ export type StoreQueryResult = {
 };
 
 /**
- * QUERY /console/store/query — browse rows / keys / hits (PII masked for SQL).
+ * QUERY /console/store/query — browse rows / keys / hits (PII masked unless `revealPii`).
  *
  * @param body - Store ref + child + browse options
  */
@@ -577,6 +660,7 @@ export type StoreEditInput = {
   readonly ref: string;
   readonly child?: string;
   readonly tenant?: string;
+  /** Existing row id. Omit to INSERT; `patch` must include `id`. */
   readonly id?: string;
   readonly key?: string;
   readonly patch: Record<string, unknown>;
@@ -651,6 +735,40 @@ export async function storeDelete(
   body: StoreDeleteInput,
 ): Promise<ConsoleApiResult<StoreDeleteResult>> {
   return consoleFetch<StoreDeleteResult>("/console/store/delete", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/store/sql`. */
+export type StoreSqlInput = {
+  readonly ref: string;
+  readonly sql: string;
+  readonly tenant?: string;
+  readonly allowWrite?: boolean;
+  /** When true, classified columns return cleartext (audited). Default masks. */
+  readonly revealPii?: boolean;
+  /** View rows as this Gate (`oke.gate` on postgres / pglite). */
+  readonly asGate?: string;
+};
+
+/** Success payload from `POST /console/store/sql` (matches server `StoreSqlOut`). */
+export type StoreSqlResult = {
+  readonly rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly masked: boolean;
+  readonly routedRole: "primary" | "replica";
+  readonly asGate: string | null;
+  readonly gateApplied: boolean;
+};
+
+/**
+ * POST /console/store/sql — raw SQL console (read-only unless `allowWrite`).
+ * PII-classified columns stay masked unless `revealPii` is true.
+ *
+ * @param body - Store ref + SQL
+ */
+export async function storeSql(body: StoreSqlInput): Promise<ConsoleApiResult<StoreSqlResult>> {
+  return consoleFetch<StoreSqlResult>("/console/store/sql", {
     method: "POST",
     body: JSON.stringify(body),
   });

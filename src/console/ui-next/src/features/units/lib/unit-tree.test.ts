@@ -9,6 +9,11 @@ import {
   countActiveFacets,
   filterUnitTree,
   filterUnitsAdvanced,
+  unitTreeAncestorKeys,
+  unitTreeBandKey,
+  unitTreeGroupKey,
+  unitTreeIsOpen,
+  unitTreeOpenKeys,
   type UnitFlowRow,
   type UnitGroup,
 } from "./unit-tree.ts";
@@ -167,5 +172,43 @@ describe("bandUnitTree", () => {
     ]);
     expect(httpOnly.map((b) => b.id)).toEqual(["http"]);
     expect(httpOnly[0]!.groups.map((g) => g.unit)).toEqual(["bookings", "support"]);
+  });
+
+  test("open keys cover each band and unit folder", () => {
+    const bands = bandUnitTree(TREE);
+    expect(unitTreeBandKey("http")).toBe("band:http");
+    expect(unitTreeGroupKey("http", "billing")).toBe("unit:http:billing");
+    expect(unitTreeOpenKeys(bands)).toEqual([
+      "band:http",
+      "unit:http:billing",
+      "band:signal",
+      "unit:signal:orders",
+      "band:cron",
+      "unit:cron:billing",
+      "band:cdc",
+      "unit:cdc:orders",
+      "band:internal",
+      "unit:internal:orders",
+    ]);
+  });
+
+  test("ancestor keys open the band and unit folder for a flow", () => {
+    const bands = bandUnitTree(TREE);
+    expect(unitTreeAncestorKeys(bands, "billing.charge")).toEqual([
+      "band:http",
+      "unit:http:billing",
+    ]);
+    expect(unitTreeAncestorKeys(bands, "orders.helper")).toEqual([
+      "band:internal",
+      "unit:internal:orders",
+    ]);
+    expect(unitTreeAncestorKeys(bands, "missing")).toEqual([]);
+  });
+
+  test("bands and unit folders default open", () => {
+    expect(unitTreeIsOpen("band:http", {})).toBe(true);
+    expect(unitTreeIsOpen("unit:http:billing", {})).toBe(true);
+    expect(unitTreeIsOpen("band:http", { "band:http": false })).toBe(false);
+    expect(unitTreeIsOpen("unit:http:billing", { "unit:http:billing": true })).toBe(true);
   });
 });

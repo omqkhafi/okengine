@@ -7,6 +7,12 @@ import { useEffect, useMemo, useState, type JSX } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  SHEET_CONTROL,
+  SheetError,
+  SheetField,
+  SheetFooterButton,
+} from "@/components/ui/sheet-form.tsx";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -14,6 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils.ts";
 import { useStoreEdit, useStorePreview } from "../data/use-store-edit.ts";
 import { useStoreReveal } from "../data/use-store-reveal.ts";
 import { editConfirmation, validateTypedConfirm } from "../lib/confirmation.ts";
@@ -156,33 +163,27 @@ export function StoreEditSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {editableColumns.map((col) => {
             const raw = row.cells[col.key];
             const masked = col.pii && isStorePiiMask(raw) && revealed[col.key] === undefined;
             return (
-              <label key={col.key} className="flex flex-col gap-1 text-[11px]">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <span className="font-mono">{col.key}</span>
-                  {col.pii ? (
-                    <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1 text-[9px] text-amber-800 dark:text-amber-300">
-                      PII
-                    </span>
-                  ) : null}
-                </span>
+              <SheetField key={col.key} label={col.pii ? `${col.key} · PII` : col.key}>
                 {masked ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center">
                     <Input
                       value=""
                       disabled
                       placeholder="[redacted] — reveal to edit current value"
                       aria-label={`${col.key} masked`}
-                      className="h-8 font-mono text-[11px]"
+                      flat
+                      className={cn(SHEET_CONTROL, "font-mono")}
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="mr-3 shrink-0"
                       disabled={reveal.isPending}
                       onClick={() => {
                         reveal.mutate(
@@ -214,7 +215,7 @@ export function StoreEditSheet({
                     onChange={(e) => setDraft((prev) => ({ ...prev, [col.key]: e.target.value }))}
                     aria-label={col.key}
                     rows={4}
-                    className="min-h-20 w-full rounded-md border border-input bg-transparent px-2 py-1 font-mono text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="min-h-20 w-full rounded-none border-0 bg-transparent px-4 py-1.5 font-mono text-[11px] outline-none"
                   />
                 ) : (
                   <Input
@@ -222,49 +223,40 @@ export function StoreEditSheet({
                     onChange={(e) => setDraft((prev) => ({ ...prev, [col.key]: e.target.value }))}
                     type={col.type === "integer" || col.type === "number" ? "number" : "text"}
                     aria-label={col.key}
-                    className="h-8 font-mono text-[11px]"
+                    flat
+                    className={cn(SHEET_CONTROL, "font-mono")}
                   />
                 )}
                 {col.pii && !masked ? (
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="block px-4 pb-2 text-[10px] text-muted-foreground">
                     Leave empty to keep the current value unchanged.
                   </span>
                 ) : null}
-              </label>
+              </SheetField>
             );
           })}
 
           {preview.data ? (
-            <div
-              className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300"
-              role="status"
-              data-slot="edit-preview"
-            >
-              <p className="font-medium">Dry-run preview — will not fire:</p>
-              <p>
-                signals: {preview.data.willNotFire.signals.join(", ") || "none"} · channels:{" "}
-                {preview.data.willNotFire.channels.join(", ") || "none"}
-              </p>
+            <div className="px-4 py-3">
+              <div
+                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300"
+                role="status"
+                data-slot="edit-preview"
+              >
+                <p className="font-medium">Dry-run preview — will not fire:</p>
+                <p>
+                  signals: {preview.data.willNotFire.signals.join(", ") || "none"} · channels:{" "}
+                  {preview.data.willNotFire.channels.join(", ") || "none"}
+                </p>
+              </div>
             </div>
           ) : null}
-          {preview.isError ? (
-            <p className="text-[11px] text-destructive" role="alert">
-              {preview.error.message}
-            </p>
-          ) : null}
-          {edit.isError ? (
-            <p className="text-[11px] text-destructive" role="alert">
-              {edit.error.message}
-            </p>
-          ) : null}
+          {preview.isError ? <SheetError>{preview.error.message}</SheetError> : null}
+          {edit.isError ? <SheetError>{edit.error.message}</SheetError> : null}
 
           {confirmation.kind === "typed" ? (
             <>
-              <label className="flex flex-col gap-1 text-[11px]">
-                <span className="text-muted-foreground">
-                  Type <span className="font-mono font-semibold text-foreground">{phrase}</span> to
-                  confirm
-                </span>
+              <SheetField label={`Type ${phrase} to confirm`}>
                 <Input
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
@@ -272,17 +264,17 @@ export function StoreEditSheet({
                   placeholder={phrase}
                   aria-label={`Type ${phrase} to confirm`}
                   aria-invalid={errors?.typed ? true : undefined}
-                  className="h-8 font-mono text-[11px]"
+                  flat
+                  className={cn(SHEET_CONTROL, "font-mono")}
                   autoComplete="off"
                 />
                 {errors?.typed ? (
-                  <span className="text-[10px] text-destructive" role="alert">
+                  <span className="block px-4 pb-2 text-[10px] text-destructive" role="alert">
                     {errors.typed}
                   </span>
                 ) : null}
-              </label>
-              <label className="flex flex-col gap-1 text-[11px]">
-                <span className="text-muted-foreground">Reason (min 3 characters)</span>
+              </SheetField>
+              <SheetField label="Reason">
                 <Input
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
@@ -290,17 +282,18 @@ export function StoreEditSheet({
                   placeholder="Why is this change needed?"
                   aria-label="Reason"
                   aria-invalid={errors?.reason ? true : undefined}
-                  className="h-8 text-[11px]"
+                  flat
+                  className={SHEET_CONTROL}
                 />
                 {errors?.reason ? (
-                  <span className="text-[10px] text-destructive" role="alert">
+                  <span className="block px-4 pb-2 text-[10px] text-destructive" role="alert">
                     {errors.reason}
                   </span>
                 ) : null}
-              </label>
+              </SheetField>
             </>
           ) : (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="border-b border-border/50 px-4 py-3 text-[11px] text-muted-foreground">
               Non-production — commit applies immediately (undo window{" "}
               {confirmation.windowMs / 1000}
               s).
@@ -309,32 +302,26 @@ export function StoreEditSheet({
         </div>
 
         <SheetFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={edit.isPending}
-          >
+          <SheetFooterButton split onClick={() => onOpenChange(false)} disabled={edit.isPending}>
             Cancel
-          </Button>
-          <Button
-            type="button"
+          </SheetFooterButton>
+          <SheetFooterButton
             variant="secondary"
+            split
             onClick={runPreview}
             disabled={preview.isPending || edit.isPending}
             data-slot="preview-edit"
           >
             {preview.isPending ? "Previewing…" : "Preview"}
-          </Button>
-          <Button
-            type="button"
+          </SheetFooterButton>
+          <SheetFooterButton
             variant="destructive"
             onClick={commit}
             disabled={!confirmValid || edit.isPending}
             data-slot="commit-edit"
           >
             {edit.isPending ? "Committing…" : "Commit edit"}
-          </Button>
+          </SheetFooterButton>
         </SheetFooter>
       </SheetContent>
     </Sheet>

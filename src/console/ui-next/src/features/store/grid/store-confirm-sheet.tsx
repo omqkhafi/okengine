@@ -3,8 +3,13 @@
  */
 
 import { useEffect, useState, type JSX } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  SHEET_CONTROL,
+  SheetError,
+  SheetField,
+  SheetFooterButton,
+} from "@/components/ui/sheet-form.tsx";
 import {
   Sheet,
   SheetContent,
@@ -13,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils.ts";
 import { validateTypedConfirm } from "../lib/confirmation.ts";
 
 /** Props for {@link StoreConfirmSheet}. */
@@ -78,28 +84,26 @@ export function StoreConfirmSheet({
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-3 px-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {willNotFire && (willNotFire.signals.length > 0 || willNotFire.channels.length > 0) ? (
-            <div
-              className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300"
-              role="status"
-              data-slot="will-not-fire"
-            >
-              <p className="font-medium">This direct edit will not fire:</p>
-              {willNotFire.signals.length > 0 ? (
-                <p>signals: {willNotFire.signals.join(", ")}</p>
-              ) : null}
-              {willNotFire.channels.length > 0 ? (
-                <p>channels: {willNotFire.channels.join(", ")}</p>
-              ) : null}
+            <div className="px-4 py-3">
+              <div
+                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300"
+                role="status"
+                data-slot="will-not-fire"
+              >
+                <p className="font-medium">This direct edit will not fire:</p>
+                {willNotFire.signals.length > 0 ? (
+                  <p>signals: {willNotFire.signals.join(", ")}</p>
+                ) : null}
+                {willNotFire.channels.length > 0 ? (
+                  <p>channels: {willNotFire.channels.join(", ")}</p>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
-          <label className="flex flex-col gap-1 text-[11px]">
-            <span className="text-muted-foreground">
-              Type <span className="font-mono font-semibold text-foreground">{phrase}</span> to
-              confirm
-            </span>
+          <SheetField label={`Type ${phrase} to confirm`}>
             <Input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
@@ -107,18 +111,18 @@ export function StoreConfirmSheet({
               placeholder={phrase}
               aria-label={`Type ${phrase} to confirm`}
               aria-invalid={errors?.typed ? true : undefined}
-              className="h-8 font-mono text-[11px]"
+              flat
+              className={cn(SHEET_CONTROL, "font-mono")}
               autoComplete="off"
             />
             {errors?.typed ? (
-              <span className="text-[10px] text-destructive" role="alert">
+              <span className="block px-4 pb-2 text-[10px] text-destructive" role="alert">
                 {errors.typed}
               </span>
             ) : null}
-          </label>
+          </SheetField>
 
-          <label className="flex flex-col gap-1 text-[11px]">
-            <span className="text-muted-foreground">Reason (min 3 characters)</span>
+          <SheetField label="Reason">
             <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -126,33 +130,24 @@ export function StoreConfirmSheet({
               placeholder="Why is this change needed?"
               aria-label="Reason"
               aria-invalid={errors?.reason ? true : undefined}
-              className="h-8 text-[11px]"
+              flat
+              className={SHEET_CONTROL}
             />
             {errors?.reason ? (
-              <span className="text-[10px] text-destructive" role="alert">
+              <span className="block px-4 pb-2 text-[10px] text-destructive" role="alert">
                 {errors.reason}
               </span>
             ) : null}
-          </label>
+          </SheetField>
 
-          {error ? (
-            <p className="text-[11px] text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
+          {error ? <SheetError>{error}</SheetError> : null}
         </div>
 
         <SheetFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={pending}
-          >
+          <SheetFooterButton split onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
-          </Button>
-          <Button
-            type="button"
+          </SheetFooterButton>
+          <SheetFooterButton
             variant="destructive"
             disabled={!valid || pending}
             onClick={() => {
@@ -163,7 +158,7 @@ export function StoreConfirmSheet({
             data-slot="confirm-action"
           >
             {pending ? "Working…" : `Confirm ${phrase.toLowerCase()}`}
-          </Button>
+          </SheetFooterButton>
         </SheetFooter>
       </SheetContent>
     </Sheet>

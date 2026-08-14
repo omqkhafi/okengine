@@ -36,6 +36,20 @@ import type {
   StoreFacet,
 } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
+import { consoleAuthStoreEnabled, projectConsoleAuthStore } from "./auth-store.ts";
+import {
+  alterSqlPolicy,
+  createSqlPolicy,
+  dropSqlPolicy,
+  applySqlTableRls,
+  listSqlCatalog,
+  listSqlTableRls,
+  setSqlExtension,
+  setSqlRowSecurity,
+  sqlCatalogKind,
+  sqlCatalogStoreChildren,
+  upgradeSqlExtension,
+} from "./sql-catalog.ts";
 
 /** Whether multi-tenancy is declared on the Manifest (off by default). */
 export function tenancyDeclared(manifest: Manifest | null): boolean {
@@ -71,6 +85,8 @@ export interface ConsoleStoreChild {
   readonly name: string;
   /** Effect ref used in Manifest (`sql:bookings`). */
   readonly effectRef: ResourceRef;
+  /** SQL catalog folder when not a table. */
+  readonly kind?: "table" | "index" | "function" | "trigger" | "extension" | "policy";
   readonly writers: readonly string[];
   readonly readers: readonly string[];
   readonly cache: ConsoleStoreCacheView;
@@ -78,6 +94,8 @@ export interface ConsoleStoreChild {
   readonly piiColumns: readonly string[];
   /** Column key → optional human description (SQL tables). */
   readonly columnDescriptions: Readonly<Record<string, string>>;
+  /** Live RLS (`pg_class.relrowsecurity`) when the engine can report it. */
+  readonly rls?: boolean;
 }
 
 /** One row in `console.store.list`. */
@@ -106,6 +124,11 @@ export interface ProjectStoresOptions {
   /** Injected fingerprints for tests. */
   readonly declaredFingerprint?: string;
   readonly appliedFingerprint?: string | null;
+  /**
+   * Surface `sql:oke_console` (operator-plane auth). Default: env
+   * `OKE_CONSOLE_AUTH_STORE=1`.
+   */
+  readonly includeAuthStore?: boolean;
 }
 
 /**
@@ -142,7 +165,12 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
   for (const [name, store] of Object.entries(manifest?.stores ?? {})) {
     const facet = store.facet;
     const ref = `${facet}:${name}` as ResourceRef;
-    const children = childrenOf(manifest!, name, facet, store);
+    const children = await withSqlTableRls(
+      options.runtime,
+      ref,
+      facet,
+      childrenOf(manifest!, name, facet, store),
+    );
     const replicaLagMs = facet === "sql" ? latestReplicaLag(options.runs ?? [], children) : null;
 
     let warnings: ConsoleStoreRow["warnings"] = [];
@@ -169,6 +197,10 @@ export async function projectStoresList(options: ProjectStoresOptions): Promise<
       contentAddressed: facet === "files",
       warnings,
     });
+  }
+
+  if (options.includeAuthStore ?? consoleAuthStoreEnabled()) {
+    stores.push(projectConsoleAuthStore());
   }
 
   stores.sort((a, b) => {
@@ -207,10 +239,8 @@ function childrenOf(
   }
 
   const unique = [...new Set(names)].sort();
-  return unique.map((childName) => {
-    const effectRef = (
-      facet === "sql" ? `sql:${childName}` : `${facet}:${storeName}`
-    ) as ResourceRef;
+  const tables = unique.map((childName) => {
+    const effectRef = `${facet}:${childName}` as ResourceRef;
     const writers = flowsTouching(manifest, effectRef, "writes");
     const readers = flowsTouching(manifest, effectRef, "reads");
     const willNotFire = willNotFireFor(manifest, writers);
@@ -221,6 +251,7 @@ function childrenOf(
     return {
       name: childName,
       effectRef,
+      kind: "table" as const,
       writers,
       readers,
       cache: {
@@ -231,8 +262,26 @@ function childrenOf(
       willNotFire,
       piiColumns,
       columnDescriptions: columnDescriptionsFor(store, childName),
+      ...(facet === "sql" ? { rls: false } : {}),
     };
   });
+  if (facet !== "sql") return tables;
+  return [...tables, ...sqlCatalogStoreChildren(`${facet}:${storeName}` as ResourceRef)];
+}
+
+async function withSqlTableRls(
+  runtime: StoreRuntime | null,
+  ref: ResourceRef,
+  facet: StoreFacet,
+  children: readonly ConsoleStoreChild[],
+): Promise<readonly ConsoleStoreChild[]> {
+  if (facet !== "sql" || runtime === null) return children;
+  try {
+    const sql = (await runtime.openRef(ref, { effects: { reads: [ref] } })) as SqlStoreHandle;
+    return applySqlTableRls(children, await listSqlTableRls(sql));
+  } catch {
+    return children;
+  }
 }
 
 function columnDescriptionsFor(
@@ -348,6 +397,8 @@ export interface StoreQueryResult {
   readonly keys?: ReadonlyArray<{
     readonly key: string;
     readonly value?: unknown;
+    readonly ttlMs?: number | null;
+    readonly sizeBytes?: number;
     readonly warnings?: ReadonlyArray<{
       readonly code: string;
       readonly message: string;
@@ -361,6 +412,39 @@ export interface StoreQueryResult {
   readonly facetDistribution?: Record<string, Record<string, number>>;
   readonly masked: boolean;
   readonly routedRole?: "primary" | "replica";
+}
+
+const KV_TTL_RE = /^(\d+)(ms|s|m|h|d)$/;
+
+/**
+ * Resolve the TTL argument for `kv.set` from a Console patch.
+ * Omitted `ttl` keeps the remaining expiry; `null` / empty clears it.
+ *
+ * @param patch - Edit patch
+ * @param remainingMs - Current remaining TTL, or null
+ */
+function kvTtlFromPatch(
+  patch: Readonly<Record<string, unknown>>,
+  remainingMs: number | null,
+): string | undefined {
+  if (!("ttl" in patch)) {
+    return remainingMs !== null && remainingMs > 0 ? `${Math.ceil(remainingMs)}ms` : undefined;
+  }
+  const raw = patch.ttl;
+  if (raw === null || raw === "") return undefined;
+  if (typeof raw !== "string" || !KV_TTL_RE.test(raw.trim())) {
+    throw new Error("TTL must be a duration like 30m, 1h, or empty to clear");
+  }
+  return raw.trim();
+}
+
+/** UTF-8 byte length of a JSON-serialized KV value. */
+function kvValueSizeBytes(value: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value ?? null)).length;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -387,6 +471,12 @@ export async function queryStore(
     const table = input.child;
     if (!table) {
       return { facet, rows: [], masked: !input.revealPii, routedRole: sql.routedRole };
+    }
+    const catalog = sqlCatalogKind(table);
+    if (catalog) {
+      const storeName = input.ref.split(":")[1] ?? "";
+      const rows = await listSqlCatalog(sql, catalog, manifest, storeName, input.limit ?? 200);
+      return { facet, rows, masked: false, routedRole: sql.routedRole };
     }
     const limit = input.limit ?? 50;
     let sqlText = `SELECT * FROM "${table}"`;
@@ -417,13 +507,18 @@ export async function queryStore(
 
   if (facet === "kv") {
     const kv = handle as KvStoreFxHandle;
-    const keys = await kv.list(input.prefix ?? "");
+    const keys = await kv.list(input.prefix ?? (input.child ? `${input.child}:` : ""));
     const limited = keys.slice(0, input.limit ?? 100);
     const entries = await Promise.all(
-      limited.map(async (key) => ({
-        key,
-        value: await kv.get(key),
-      })),
+      limited.map(async (key) => {
+        const value = await kv.get(key);
+        return {
+          key,
+          value,
+          ttlMs: await kv.ttlMs(key),
+          sizeBytes: kvValueSizeBytes(value),
+        };
+      }),
     );
     return { facet, keys: entries, masked: false };
   }
@@ -471,6 +566,7 @@ export interface StoreEditInput {
   readonly tenant?: string;
   readonly id?: string;
   readonly key?: string;
+  /** Column values. Omit {@link StoreEditInput.id} to INSERT (requires `patch.id`). */
   readonly patch: Record<string, unknown>;
   readonly confirmation?: string;
   readonly reason?: string;
@@ -558,6 +654,7 @@ type EditSnapshot =
       readonly ref: ResourceRef;
       readonly key: string;
       readonly value: unknown;
+      readonly ttlMs: number | null;
     }
   | {
       readonly kind: "sql";
@@ -565,6 +662,19 @@ type EditSnapshot =
       readonly child: string;
       readonly id: string;
       readonly row: Record<string, unknown> | null;
+    }
+  | {
+      readonly kind: "extension";
+      readonly ref: ResourceRef;
+      readonly name: string;
+      readonly enabled: boolean;
+      readonly version: string | null;
+    }
+  | {
+      readonly kind: "policy";
+      readonly ref: ResourceRef;
+      readonly id: string;
+      readonly existed: boolean;
     }
   | { readonly kind: "none" };
 
@@ -582,31 +692,59 @@ async function snapshotEditTarget(
       ref: input.ref,
       key: input.key,
       value: await kv.get(input.key),
+      ttlMs: await kv.ttlMs(input.key),
     };
   }
-  if (facet === "sql" && input.child && input.id) {
+  if (facet === "sql" && input.child && input.id && sqlCatalogKind(input.child) === "policy") {
     const sql = (await runtime.openRef(input.ref, {
       effects: { reads: [input.ref] },
     })) as SqlStoreHandle;
-    try {
-      const rows = await sql.raw(`SELECT * FROM "${input.child}" WHERE "id" = ? LIMIT 1`, [
-        input.id,
-      ]);
-      return {
-        kind: "sql",
-        ref: input.ref,
-        child: input.child,
-        id: input.id,
-        row: rows[0] ?? null,
-      };
-    } catch {
-      return {
-        kind: "sql",
-        ref: input.ref,
-        child: input.child,
-        id: input.id,
-        row: null,
-      };
+    const rows = await listSqlCatalog(sql, "policy", null, "", 500);
+    return {
+      kind: "policy",
+      ref: input.ref,
+      id: input.id,
+      existed: rows.some((r) => String(r.id) === input.id),
+    };
+  }
+  if (facet === "sql" && input.child && input.id && sqlCatalogKind(input.child) === "extension") {
+    const sql = (await runtime.openRef(input.ref, {
+      effects: { reads: [input.ref] },
+    })) as SqlStoreHandle;
+    const rows = await listSqlCatalog(sql, "extension", null, "", 500);
+    const row = rows.find((r) => String(r.name) === input.id);
+    return {
+      kind: "extension",
+      ref: input.ref,
+      name: input.id,
+      enabled: row?.enabled === true,
+      version: typeof row?.version === "string" ? row.version : null,
+    };
+  }
+  if (facet === "sql" && input.child) {
+    const id = input.id ?? sqlInsertRowId(input.patch);
+    if (id) {
+      const sql = (await runtime.openRef(input.ref, {
+        effects: { reads: [input.ref] },
+      })) as SqlStoreHandle;
+      try {
+        const rows = await sql.raw(`SELECT * FROM "${input.child}" WHERE "id" = ? LIMIT 1`, [id]);
+        return {
+          kind: "sql",
+          ref: input.ref,
+          child: input.child,
+          id,
+          row: rows[0] ?? null,
+        };
+      } catch {
+        return {
+          kind: "sql",
+          ref: input.ref,
+          child: input.child,
+          id,
+          row: null,
+        };
+      }
     }
   }
   return { kind: "none" };
@@ -620,7 +758,33 @@ async function restoreEditTarget(runtime: StoreRuntime, snapshot: EditSnapshot):
     if (snapshot.value === undefined) {
       await kv.delete(snapshot.key);
     } else {
-      await kv.set(snapshot.key, snapshot.value);
+      const ttl =
+        snapshot.ttlMs !== null && snapshot.ttlMs > 0
+          ? `${Math.ceil(snapshot.ttlMs)}ms`
+          : undefined;
+      await kv.set(snapshot.key, snapshot.value, ttl);
+    }
+    return;
+  }
+  if (snapshot.kind === "policy") {
+    if (snapshot.existed) return;
+    const sql = (await runtime.openRef(snapshot.ref, {
+      effects: { writes: [snapshot.ref] },
+    })) as SqlStoreHandle;
+    try {
+      await dropSqlPolicy(sql, snapshot.id);
+    } catch {
+      /* best-effort restore */
+    }
+    return;
+  }
+  if (snapshot.kind === "extension") {
+    const sql = (await runtime.openRef(snapshot.ref, {
+      effects: { writes: [snapshot.ref] },
+    })) as SqlStoreHandle;
+    await setSqlExtension(sql, snapshot.name, snapshot.enabled);
+    if (snapshot.enabled && snapshot.version) {
+      await upgradeSqlExtension(sql, snapshot.name, snapshot.version);
     }
     return;
   }
@@ -664,7 +828,13 @@ async function applyEdit(
     const kv = handle as KvStoreFxHandle;
     const key = input.key;
     if (!key) throw new Error("kv edit requires key");
-    await kv.set(key, input.patch.value ?? input.patch);
+    const current = await kv.get(key);
+    const nextValue = "value" in input.patch ? input.patch.value : current;
+    if (nextValue === undefined) {
+      throw new Error("kv edit requires a value for a new key");
+    }
+    const ttl = kvTtlFromPatch(input.patch, await kv.ttlMs(key));
+    await kv.set(key, nextValue, ttl);
     return;
   }
 
@@ -672,7 +842,45 @@ async function applyEdit(
     const sql = handle as SqlStoreHandle;
     const table = input.child;
     const id = input.id;
-    if (!table || !id) throw new Error("sql edit requires child + id");
+    if (!table) throw new Error("sql edit requires child");
+    if (!id && sqlCatalogKind(table) !== null) {
+      throw new Error("sql edit requires child + id");
+    }
+    if (id && sqlCatalogKind(table) === "policy") {
+      if (input.patch.create === true) {
+        await createSqlPolicy(sql, input.patch);
+        return;
+      }
+      if (input.patch.drop === true) {
+        await dropSqlPolicy(sql, id);
+        return;
+      }
+      if (typeof input.patch.rls === "boolean") {
+        const tableName = typeof input.patch.table === "string" ? input.patch.table : id;
+        await setSqlRowSecurity(sql, tableName, input.patch.rls);
+        return;
+      }
+      await alterSqlPolicy(sql, id, input.patch);
+      return;
+    }
+    if (id && sqlCatalogKind(table) === "extension") {
+      if (input.patch.upgrade === true) {
+        const to = typeof input.patch.version === "string" ? input.patch.version : undefined;
+        await setSqlExtension(sql, id, true);
+        await upgradeSqlExtension(sql, id, to);
+        return;
+      }
+      const enabled = input.patch.enabled;
+      if (typeof enabled !== "boolean") {
+        throw new Error("extension edit requires boolean enabled or upgrade");
+      }
+      await setSqlExtension(sql, id, enabled, {
+        ...(typeof input.patch.schema === "string" ? { schema: input.patch.schema } : {}),
+        ...(typeof input.patch.version === "string" ? { version: input.patch.version } : {}),
+        ...(input.patch.cascade === true ? { cascade: true } : {}),
+      });
+      return;
+    }
     const sets = Object.keys(input.patch);
     if (sets.length === 0) return;
     const pii = piiColumnsForRef(runtime, input.ref, table);
@@ -683,6 +891,17 @@ async function applyEdit(
         );
       }
     }
+    if (!id) {
+      const insertId = sqlInsertRowId(input.patch);
+      if (!insertId) throw new Error("sql insert requires an id in the patch");
+      const columns = sets.map((c) => `"${c}"`).join(", ");
+      const placeholders = sets.map(() => "?").join(", ");
+      await sql.raw(
+        `INSERT INTO "${table}" (${columns}) VALUES (${placeholders})`,
+        sets.map((c) => input.patch[c]),
+      );
+      return;
+    }
     const assignments = sets.map((c) => `"${c}" = ?`).join(", ");
     const params = [...sets.map((c) => input.patch[c]), id];
     await sql.raw(`UPDATE "${table}" SET ${assignments} WHERE "id" = ?`, params);
@@ -690,6 +909,18 @@ async function applyEdit(
   }
 
   throw new Error(`direct edit not supported for facet ${facet}`);
+}
+
+/**
+ * Row id for a SQL insert (`patch.id`). Used when `input.id` is omitted.
+ *
+ * @param patch - Insert column values
+ */
+function sqlInsertRowId(patch: Readonly<Record<string, unknown>>): string | undefined {
+  const raw = patch.id;
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  return undefined;
 }
 
 /** PII columns for a SQL child from the Manifest bound to this runtime. */
@@ -790,12 +1021,60 @@ export function purgeStoreCache(
 }
 
 /**
+ * True when `name` is `public` or a declared policy Gate (rate gates excluded).
+ *
+ * @param manifest - Current Manifest
+ * @param name - Gate name from the query console
+ */
+export function isKnownConsoleSqlGate(manifest: Manifest | null, name: string): boolean {
+  if (name === "public") return true;
+  const gate = manifest?.gates?.[name];
+  if (!gate) return false;
+  return gate.kind !== "rate" && !name.startsWith("rate:");
+}
+
+const GATE_CONTEXT_DRIVERS = new Set<SqlStoreHandle["driverId"]>(["postgres", "pglite"]);
+
+/** DML / DDL heads — keep in sync with `isSqlWrite` in the query console. */
+const STORE_SQL_WRITE_HEADS = new Set([
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "DROP",
+  "ALTER",
+  "CREATE",
+  "TRUNCATE",
+  "REPLACE",
+  "GRANT",
+  "REVOKE",
+  "VACUUM",
+  "COMMENT",
+  "COPY",
+  "CALL",
+  "REFRESH",
+  "MERGE",
+]);
+
+/**
+ * True when console SQL mutates the store (DML / DDL / `EXPLAIN ANALYZE`).
+ *
+ * @param sql - One statement (already trimmed)
+ */
+export function isStoreSqlWrite(sql: string): boolean {
+  const trimmed = sql.trim().replace(/;+\s*$/, "");
+  const head = /^([A-Za-z]+)/.exec(trimmed)?.[1]?.toUpperCase() ?? "";
+  if (head === "EXPLAIN") return /\bANALYZE\b/i.test(trimmed);
+  if (head === "ANALYZE") return true;
+  return STORE_SQL_WRITE_HEADS.has(head);
+}
+
+/**
  * Raw SQL console — read-only by default.
  *
  * @param runtime - Store runtime
  * @param ref - SQL store ref
  * @param sqlText - SQL
- * @param options - Write allow + reveal
+ * @param options - Write allow + reveal + optional Gate
  */
 export async function runStoreSql(
   runtime: StoreRuntime,
@@ -805,14 +1084,18 @@ export async function runStoreSql(
     readonly allowWrite: boolean;
     readonly revealPii?: boolean;
     readonly tenant?: string;
+    /** View rows as this Gate (`oke.gate` GUC on postgres / pglite). */
+    readonly asGate?: string;
   },
 ): Promise<{
   readonly rows: readonly Record<string, unknown>[];
   readonly masked: boolean;
   readonly routedRole: "primary" | "replica";
+  readonly asGate: string | null;
+  readonly gateApplied: boolean;
 }> {
-  const trimmed = sqlText.trim();
-  const isWrite = /^(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE)\b/i.test(trimmed);
+  const trimmed = sqlText.trim().replace(/;+\s*$/, "");
+  const isWrite = isStoreSqlWrite(trimmed);
   if (isWrite && !options.allowWrite) {
     throw new Error("SQL console is read-only by default — write requires console:store.sql:write");
   }
@@ -820,12 +1103,53 @@ export async function runStoreSql(
     effects: isWrite ? { writes: [ref] } : { reads: [ref] },
     revealPii: options.revealPii === true,
   })) as SqlStoreHandle;
-  const rows = await handle.raw(trimmed);
-  return {
-    rows,
-    masked: !options.revealPii,
-    routedRole: handle.routedRole,
-  };
+  const asGate = options.asGate?.trim() || null;
+  let gateApplied = false;
+  try {
+    if (asGate) gateApplied = await applySqlGateContext(handle, asGate);
+    const rows = await handle.raw(trimmed);
+    if (gateApplied) await handle.raw("COMMIT");
+    return {
+      rows,
+      masked: !options.revealPii,
+      routedRole: handle.routedRole,
+      asGate,
+      gateApplied,
+    };
+  } catch (err) {
+    if (gateApplied) {
+      try {
+        await handle.raw("ROLLBACK");
+      } catch {
+        // Connection may already be idle after a failed SET.
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * Open a transaction and set `oke.gate` + `row_security` for RLS simulation.
+ * No-op on memory SQL.
+ *
+ * @param handle - Open SQL handle
+ * @param gate - Validated Gate name
+ */
+async function applySqlGateContext(handle: SqlStoreHandle, gate: string): Promise<boolean> {
+  if (!GATE_CONTEXT_DRIVERS.has(handle.driverId)) return false;
+  try {
+    await handle.raw("BEGIN");
+    await handle.raw("SET LOCAL row_security = on");
+    await handle.raw("SELECT set_config('oke.gate', ?, true)", [gate]);
+    return true;
+  } catch {
+    try {
+      await handle.raw("ROLLBACK");
+    } catch {
+      // ignore
+    }
+    return false;
+  }
 }
 
 /**

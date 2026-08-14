@@ -14,83 +14,164 @@ needed).
 
 ### ✨ Added
 
-- `http.query()` — RFC 10008 safe, idempotent HTTP trigger that still carries a JSON body
-  (parsed like POST). CORS default methods include QUERY; CSRF treats QUERY as safe (like GET).
+- Console Store explorer facet bands (SQL / KV / Files / Index) have a
+  show/hide control on each band and an eye menu in the search bar.
+  Hidden bands leave the tree; restore them from the menu. The pick
+  persists in localStorage. Selecting a resource in a hidden facet
+  shows that band again.
+
+- Console Store table rows show live RLS: emerald `ShieldEnergy` when
+  enabled, muted `ShieldOff` when disabled (`pg_class.relrowsecurity`).
+
+
+- Console Store catalog create sheets expose **Advanced** Postgres knobs:
+  Indexes (`CONCURRENTLY`, `INCLUDE`, `NULLS NOT DISTINCT`, `WITH`),
+  Functions (`SECURITY DEFINER`, `STRICT`, `PARALLEL`, `LEAKPROOF`,
+  `SET search_path`, `COST` / `ROWS`), Triggers (`CONSTRAINT`, `UPDATE OF`,
+  transition tables, `TRUNCATE`, function args), and Extensions (`SCHEMA`,
+  `VERSION`, `CASCADE` — `pg_catalog` refused).
+
+
+- Console Store **Create policy** Advanced pairs RLS with Gate **policy**
+  and **scope** (`gate.public`, `gate.policy`, `gate.scope`) — not the
+  Access Module:Action / role catalog. Read / Write / Both stays the
+  default. Picks stay on Gate — `TO public` stays on the SQL.
+
+- Console Store **SQL** and **KV** facet bands open a query console (code icon
+  on the band). SQL runs DML and DDL through `POST /console/store/sql`
+  (`allowWrite` on writes, including `CREATE` / `GRANT` / `EXPLAIN ANALYZE`).
+  The workbench has query tabs, session history, a Manifest schema rail
+  (tables + columns), run current / selection (`⌘Enter`), run all
+  (`⌘⇧Enter`, sequential, stops on the first error), EXPLAIN /
+  EXPLAIN ANALYZE, gutter play marks, Prettify, a No LIMIT hint, elapsed
+  time, and table / JSON / raw results with CSV copy. A multi-statement
+  script opens a result tab per statement. The SQL editor completes Manifest
+  tables, columns, and keywords as you type (context-aware after FROM /
+  SELECT / WHERE, plus CREATE / ALTER / DROP / EXPLAIN); KV completes
+  `list` / `get` / `set` / `delete` / `ttl` and namespaces. Schema collapses
+  to a right-edge strip; results collapse to the status bar (Run expands
+  them again). KV namespaces expand to inferred value fields (same rail as
+  SQL columns). Double-click a tab to rename; Save keeps named queries in
+  localStorage (History → Saved). Tabs persist across sessions. KV
+  `set(key, value, ttl?)` writes through `POST /console/store/edit` (same
+  script Pending Changes emits). `delete` and `ttl` match the `fx.store`
+  handle (`ttlMs`); word and call forms work for every command.
+  `oke_console` stays refused for raw SQL.
+
+- Console SQL query console toolbar can **include PII**. Default stays
+  masked; turning PII on sends `revealPii: true` on
+  `POST /console/store/sql` and re-runs the last read (writes stay
+  untouched). Results meta shows `PII masked` or `PII visible`.
+
+- Console KV query console has the same **Prettify** control as SQL.
+  It rewrites `list` / `get` / `set` / `delete` / `ttl` to call form
+  and indents `set` JSON.
+
+- Console SQL query console can **view data as a Gate** — three cards
+  (Operator, Public, As). Operator bypasses RLS. Public and As set
+  `oke.gate` on postgres / pglite. As picks a user (via their matching
+  policy) or a Manifest policy gate. Policies read
+  `current_setting('oke.gate', true)`. Memory SQL accepts the pick but
+  does not apply session GUCs.
+
+- Console Store SQL band **Schema** opens a visualizer of Manifest tables,
+  columns, and relations — declared `.references()` plus inferred `*_id` columns
+  (search, auto layout, copy as SQL, smart Colorize, PK / FK / unique icons,
+  cardinality icons for many-to-one / one-to-one / many-to-many / self;
+  click a related table to dim the rest).
+
+- Console Store SQL table browse can **insert a row** from the grid toolbar
+  (Insert data). Empty fields stay NULL; `id` defaults to a UUID. Omit `id` on
+  `POST /console/store/edit` to INSERT (`patch.id` required).
+
+- Console Store **Indexes** catalog can **Create index** — the same
+  form-and-preview sheet as RLS Policies (templates, table / columns /
+  method, plus a free highlighted SQL editor), then `CREATE INDEX`
+  through `POST /console/store/sql` (`allowWrite`). Refuses anything
+  that is not `CREATE INDEX`.
+
+- Console Store **Functions** catalog can **New function** — the same
+  form-and-preview sheet as RLS Policies / Triggers (templates, name /
+  args / returns / language, plus a free highlighted SQL editor), then
+  `CREATE FUNCTION` through `POST /console/store/sql` (`allowWrite`).
+  Refuses anything that is not `CREATE FUNCTION`.
+
+- Console Store SQL folders add **Triggers** under each SQL store. Browse
+  uses live `pg_trigger` when the engine has it; otherwise an empty list.
+  **New trigger** uses the same form-and-preview sheet as RLS Policies
+  (templates, table / timing / events, plus a free highlighted SQL editor),
+  then runs `CREATE TRIGGER` through `POST /console/store/sql` (`allowWrite`).
+
+- Console Store tree adds **Expand all / Collapse all** next to search, on each
+  facet band (scoped to that facet's folders), and on each store folder.
+  Facet bands start open; store folders and SQL Tables start collapsed.
+  Selecting a resource re-opens its facet, not the folder. Search still
+  expands matching folders.
+
+- Console Store can list the **`oke_console` auth schema** beside app SQL (`oke_operators`,
+  sessions, roles, API keys, identities) when `OKE_CONSOLE_AUTH_STORE=1`. Hidden by
+  default. Browse is read-only; credential hashes stay masked until audited reveal.
+  Edit / delete / raw SQL are refused so operator-plane rows never join `public`.
+
+- Console Store SQL folders add **Indexes**, **Functions**, and
+  **Extensions** under each SQL store (app `db` and `oke_console`). Browse
+  uses live `pg_*` when the engine has it; otherwise Manifest primary-key /
+  unique indexes. Extensions list built-in contrib packs with an enable /
+  disable toggle (`CREATE` / `DROP EXTENSION`). A Library sheet searches
+  and adds external packs (TimescaleDB, PostGIS, pg_cron, DuckDB, plv8,
+  FDWs, …) by name, alias, or category. Memory keeps the catalog
+  in-process. The SQL editor does not complete these as tables.
+
+- Console Store SQL folders add **RLS Policies** (`__policies`). Browse lists
+  `pg_policies`. Create policy reviews `CREATE POLICY` (and optional
+  `ENABLE ROW LEVEL SECURITY`) before it runs. **Templates** opens a flush
+  rail beside the form (SELECT / INSERT / UPDATE / DELETE / ALL, owner,
+  `oke.gate`, joins, restrictive extra check). `oke_console` stays read-only.
+
+- Console Store Extensions can **upgrade** to the newest packaged version
+  (`ALTER EXTENSION … UPDATE`). The name chip shows the current version and
+  an Upgrade action (pgvector `0.8.0` → `0.8.6`). Names link to the project
+  page or Postgres docs.
+
+- Console Store replica-lag chip follows the newest touching run from the live
+  runs buffer (same `/console/live` merge as Traces) and uses the Traces
+  duration cool→hot palette (emerald → yellow → rose). Falls back to the
+  store-list snapshot when the buffer has no lag.
+
+
+- Console Store **PII chip** toggles masking for every classified column on the
+  current browse page. Off (amber) sends audited `revealPii: true` on
+  `QUERY /console/store/query`; on (sky) remasks. Switching tables remasks.
+
+- Console Store browse **Import / Export** in the grid toolbar. Export downloads
+  the current page (or checked rows) as CSV or JSON. Import parses CSV/TSV/JSON,
+  matches rows by `id`/`key` already on the page, and stages writable cells as
+  uncommitted changes (PII `[redacted]` values are skipped). Does not insert new
+  rows — there is still no `/console/store/add` endpoint.
+
+- Console Store JSON cells (KV `value`, Index `meta`, and JSON strings) show a
+  trailing **Open as table** icon. It opens a sheet with a flattened field table
+  plus a full-height JSON editor. On writable KV/SQL cells, table fields and
+  JSON source both edit in place and stage the reconstructed object as an
+  uncommitted change.
+
+- Console Store KV browse adds **TTL** and **size** columns. TTL is remaining
+  time from the driver (`PTTL` on redis; intended TTL on memory) and is
+  editable in the grid (`30m`, `1h`, or empty to clear). Size is the UTF-8
+  JSON byte length of the value, and updates as you stage edits. **Add key**
+  upserts via `POST /console/store/edit` (no `/console/store/add` endpoint).
+  Value-only edits now preserve remaining TTL instead of wiping it.
+
+
+- `http.query()` — RFC 10008 safe, idempotent HTTP trigger that still carries a JSON body.
+  `Content-Type: application/json` is required (missing → 400 `InvalidQuery`; other types → 415
+  `UnsupportedMediaType`). Invalid JSON is 400 with no sniffing. QUERY responses and 405s that
+  allow QUERY advertise `Accept-Query: "application/json"`. CORS default methods include QUERY;
+  CSRF treats QUERY as safe (like GET). The client always sends a JSON body on QUERY (`{}` when
+  only path params remain).
+
 - Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
   and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
-
-### 💥 Breaking Changes
-
-- Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
-  special character required (`DEFAULT_PASSWORD_POLICY.requireSpecial`). Previous defaults were
-  minLength 12 with letter + number only. Override via `gate.auth.passwordPolicy` /
-  `createOperator({ passwordPolicy })`. The special-character option is named `requireSpecial`
-  (failure reason `requireSpecial`); do not use `requireSymbol` on password policies.
-
-### ♻️ Changed
-
-- ui-next Units tree: trigger bands (HTTP, Signal, …) are bordered, clearly separated sections with chevron + tinted kind-icon headers; unit folders also show chevrons and nest flows under a guide line — both levels collapse/expand (auto-reopen when the selection is inside). Trigger glyphs are now distinct per kind (API / radio / calendar / timer / store / function) with matching icon wells in Traces.
-- ui-next Units Call API is trigger-aware: HTTP keeps method/path + body; call-only keeps
-  `flow.in` with a bypasses-caller note and Manifest callers from `effects.calls`;
-  cron/every prefer lease-gated `/console/clock/run-now` when a Manifest clock soft-joins,
-  otherwise honest empty-input invoke fallback; signal keeps handler invoke with copy that
-  it does not test bus delivery physics.
-- `dev:console-next` / `:seed` boot a fixed operator (`dev@oke.dev` / `Okengine123!`) so restarts skip claim; login form prefills in Vite serve. `dev:console-next:fresh` / `:fresh:seed` keep first-admin claim open. Renamed `dev:console-next:seeded` → `:seed`.
-- ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
-  color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,
-  selection glow + desaturated dim, tighter unit-group bounds.
-- ui-next seeded mode ships a lived-in skyport slice: payments→bookings.create→fulfillment
-  chain (effects, logs, tenants, input), a `FlightFull` failure, `bookings.mine` poll,
-  and `ops.nightlyReconcile` cron — all eight elements (flow · signal · store · clock · gate · vault · channel · ai) plus eight featured story rows and 72 operational traces (~80 total).
-- Console first-operator claim keeps a stricter minLength **12** with the same character classes
-  (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
-- ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
-  out mid-progress in dark mode).
-- ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
-- ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
-- ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
-- ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
-- Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
-- ui-next Store browse adopts a single toolbar + row-detail Sheet layout (SACP-style chrome):
-  Refresh, find-in-results, sort indicator, Writers/Readers popover, tenant, page size, and row
-  count on one row; column headers carry PK/type glyphs from the Manifest; double-click a row for
-  Fields/JSON detail with the existing audited Reveal, edit, and typed-confirm Delete. No Insert /
-  Export / pagination arrows — those have no real backend endpoints. Seed bookings gain an Arabic
-  `note` so mixed RTL/LTR cells render without breaking column alignment.
-
-### 🐛 Fixed
-
-- Wrong-method hits on a registered path return **405** with `Allow` listing bound methods
-  (was a generic 404). CORS preflight still answers first. Raw Console ingest 405s now include
-  `Allow: POST`.
-
-- Console Manifest StoreRuntime now derives SQL `classify` maps from
-  `tables.*.columns` PII/sensitive tags (and `table.column` keys on
-  `store.classifications`), so browse masking matches list `piiColumns` without a
-  hand-registered classify map. Store query/edit/delete/sql paths also bind the
-  panel-lazy runtime (previously only list did).
-
-- Console `GET /console/runs` no longer nests each list response back into the runs
-  store (`console.runs.list` output elided on record; prior list polls filtered from the
-  projection). Live/poll fallbacks were doubling payload size every tick and OOMing the
-  ui-next kernel (~GB RSS).
-
-- `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
-  saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
-
-- First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
-  stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
-  re-wrapping a body already consumed by `parseValidate`.
-- ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
-  DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
-- Password policy special-character rule is canonical as `requireSpecial` on both
-  `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
-  password missing only a special is rejected and that ui-next’s 5 checklist criteria match
-  server validation.
-- Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
-  `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
-
-### ✨ Added
 
 - **Console ui-next Store page (v1)** — read-first browse at `/store`: facet
   tree, schema, masked SQL row browser with audited reveal, KV/files/index
@@ -122,6 +203,7 @@ needed).
   activity strip shows real buffered call count / error rate for the selected
   flow (honest empty when the Console runs buffer has nothing in-window). Units
   subscribes to `useRuns` + `/console/live` like Flows.
+
 - ui-next Units **Platform failure modes**: derived only from this flow's Gates
   - request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
     403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
@@ -133,21 +215,14 @@ needed).
   when the host adapter is unbound. Optional `pathParams`; response includes `status` /
   `failure` / `runId` when the host provides them. Kernel `execute` accepts
   `trustedInvoke` for console-trusted principal injection outside `env: "test"`.
+
 - ui-next **Units** page (`/units`): Manifest flows grouped by unit, contract panel
   (request/response schema rows, typed errors, gates, effects), and session-authenticated
   Call API wired to real invoke-as.
 
-### 🔒 Security
-
-- Console security gate **5c**: default `QUERY /console/store/query` on a table with
-  PII-classified columns never returns unmasked values; `POST /console/store/reveal`
-  returns cleartext and leaves an audited `console.store.reveal` Runs log (operatorId,
-  ref, child, id, column) — same suite class as gate **5b** host-ingest masking.
-- Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
-  scopes; host gates enforce the assumed principal.
-
 - `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
   `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
+
 - nginx image recipe (`nginx:1.27-alpine`) — generated `nginx.conf` reverse proxy on :80;
   companion docs under Recipes → nginx.
 
@@ -155,11 +230,14 @@ needed).
   Traces list (`flow = X` advanced clause), clicking a signal node filters to runs whose flow
   emits or consumes that signal, and clicking the canvas clears the filter (removable chip in
   the filter row).
+
 - ui-next Trace detail sheet supports sticky effect focus — click a waterfall bar, overview
   segment, or event row to pin emphasis (click again to release).
+
 - ui-next Replay is now visible: a Motion playhead sweeps the waterfall while bars grow as it
   crosses them, the hero duration counts up in sync, and
   the Flow graph pulses along the causal chain. All motion respects reduced-motion settings.
+
 - `oke dev` live Traces bridge: host-app WideEvents POST to Console
   `POST /console/runs/ingest` (secret-gated). Console appends into its own
   runs store → existing `feedRun` / `projectRun` PII mask for
@@ -171,6 +249,7 @@ needed).
   Replay + Copy run ID, and All/Errors + duration-threshold filters over the scoped
   runs list. `POST /console/traces/replay` now re-invokes through `runReplay` (same
   path as `oke replay --request-id`), not a log-only stub.
+
 - ui-next trace detail Sheet (shadcn, side=right): row click keeps graph highlight and
   opens a real breakdown — summary counts from EffectKind + logs, proportional
   waterfall bars from EffectEntry timestamps/durations (EDGE_STROKE colors),
@@ -192,9 +271,11 @@ needed).
 
 - ui-next Traces duration filter uses shadcn Base UI `Select` with cool→hot
   colored dots on each threshold (Any / >10ms…>5s), matching row duration tones.
+
 - ui-next Traces **Advanced** filtering: progressive-disclosure dimension query
   (`flow = X AND cache = miss AND duration > 1s`) with presets, chips, and
   expression editor — same language as Runs (§9.11), client-side on the scoped list.
+
 - ui-next eight-element HugeIcons vocabulary (`ELEMENT_ICONS`) aligned with site
   Lucide; Traces trigger icons and Flow graph nodes share Flow / Signal / Store /
   Clock / Gate / Vault / Channel / AI glyphs.
@@ -203,6 +284,7 @@ needed).
   kernel + skyport Manifest + seeded WideEvent chain as the Playwright ui-next fixture,
   so opening http://127.0.0.1:6537 shows a real Flows graph and Traces (click → highlight).
   Terminal prints URL, claim code, and a one-line seed summary.
+
 - `playwright.ui-next.config.ts` always records trace + screenshot + video; after
   `bun run test:console:setup-ui-next`, `bun run test:console:setup-ui-next:report`
   opens the HTML timeline report.
@@ -237,7 +319,197 @@ needed).
 - `motion` (Motion for React) reserved for near-future ui-next animations; import via
   `motion/react`.
 
+### 💥 Breaking Changes
+
+- Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
+  special character required (`DEFAULT_PASSWORD_POLICY.requireSpecial`). Previous defaults were
+  minLength 12 with letter + number only. Override via `gate.auth.passwordPolicy` /
+  `createOperator({ passwordPolicy })`. The special-character option is named `requireSpecial`
+  (failure reason `requireSpecial`); do not use `requireSymbol` on password policies.
+
+### ♻️ Changed
+
+- Console sheets share one flat language: full-bleed fields (no boxed
+  inputs), text toggles instead of chips, and a flush Cancel | action
+  footer. Create policy, index, function, trigger, insert, KV add, edit,
+  confirm, pending changes, and the extension library all use it.
+- Console Store **Create policy** is easier to scan: table and behavior
+  share a row, `FOR` is a compact command strip, Gate / Rows are
+  chaptered, and the SQL preview stays pinned above Create. `USING` and
+  `WITH CHECK` appear only for the commands Postgres accepts.
+- Console Store **Create index**, **New function**, and **New trigger**
+  match that layout: compact template chips, paired fields, chaptered
+  Options, and a pinned editable SQL dock above Create. Choice rows
+  (Language, Method, Timing, FOR) keep the label on the same line as
+  the chips so they do not read as empty field headers.
+- Console Store SQL catalog folders use `sql:db/indexes` (and
+  `functions` / `triggers` / `extensions` / `policies`) instead of the
+  `__indexes` reserved prefix. Query still accepts the old `__` names.
+
+- Console Store **Extension library** Install reviews required extensions and the `CREATE EXTENSION` SQL (requires first) before enabling a pack.
+- Console Store **Extension library** is a marketplace sheet: featured Timescale / Cron / PostGIS cards, search + category select, and an installed badge — not a flat list.
+
+- ui-next auth card is a nested tray: form plate inset on a muted chassis,
+  setup-state LED on the plate, Sign in / claim CTA on the tray.
+
+- ui-next Traces filter chrome: title, Advanced (icon + count), and live status share one header; All/Errors + duration sit on a single non-wrapping row with the duration select filling leftover width — no more wrap that stranded Advanced on a second line.
+
+- ui-next Units tree: trigger bands (HTTP, Signal, …) are bordered, clearly separated sections with chevron + tinted kind-icon headers; unit folders also show chevrons and nest flows under a guide line — both levels collapse/expand (auto-reopen when the selection is inside). Trigger glyphs are now distinct per kind (API / radio / calendar / timer / store / function) with matching icon wells in Traces.
+
+- ui-next Units Call API is trigger-aware: HTTP keeps method/path + body; call-only keeps
+  `flow.in` with a bypasses-caller note and Manifest callers from `effects.calls`;
+  cron/every prefer lease-gated `/console/clock/run-now` when a Manifest clock soft-joins,
+  otherwise honest empty-input invoke fallback; signal keeps handler invoke with copy that
+  it does not test bus delivery physics.
+
+- `dev:console-next` / `:seed` boot a fixed operator (`dev@oke.dev` / `Okengine123!`) so restarts skip claim; login form prefills in Vite serve. `dev:console-next:fresh` / `:fresh:seed` keep first-admin claim open. Renamed `dev:console-next:seeded` → `:seed`.
+
+- ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
+  color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,
+  selection glow + desaturated dim, tighter unit-group bounds, and a pannable MiniMap.
+
+- ui-next seeded mode (`dev:console-next:seed`) is a Linear-shaped **keel** workspace:
+  github.ingest → issues.create → notify.onIssue, `CycleClosed` failure, live
+  `issues.list`, cycle rollover, Triage Intelligence, and draft TTL — all eight
+  elements plus CDC, ~14 SQL tables (teams through customer_requests), KV drafts,
+  file attachments, and issue search. Eight featured rows + 72 ops (~80 traces).
+  Store browse defaults to 500 rows so the 500+ `issues` backlog (plus comments,
+  labels, drafts, attachments) fills the grid. `sql:db` also lists the app Gate
+  auth + `oke schema generate` system tables (`oke_identities`, sessions, roles,
+  crons, vault stubs) — distinct from the Console `oke_console` operator folder.
+
+
+- Console first-operator claim keeps a stricter minLength **12** with the same character classes
+  (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
+
+- ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
+  out mid-progress in dark mode).
+
+- ui-next theme toggle: Motion `layoutId` sliding pill between light/dark/system (respects reduced motion).
+
+- ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
+
+- ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
+
+- ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
+
+- Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
+
+- ui-next Store browse adopts a single toolbar + row-detail Sheet layout (SACP-style chrome):
+  Refresh, find-in-results, sort indicator, Writers/Readers popover, tenant, page size, and row
+  count on one row; column headers carry PK/type glyphs from the Manifest; double-click a row for
+  Fields/JSON detail with the existing audited Reveal, edit, and typed-confirm Delete. No Insert /
+  Export / pagination arrows — those have no real backend endpoints. Seed bookings gain an Arabic
+  `note` so mixed RTL/LTR cells render without breaking column alignment.
+
+- ui-next Store resource pane is now an edge-to-edge explorer workbench: compact identity
+  chrome (status chips on the right, PII copy on the chip tooltip), a command strip with
+  growing find, a spreadsheet grid (PK / PII / numeric headers, cell focus ring, compact
+  audited reveal), and an IDE-style status bar. Instructional banners are gone.
+
+- ui-next Store grid is now the beUI editable Table: inline cell edit (commit on
+  blur/Enter), row-handle delete (typed confirm, no Insert), selection, sort,
+  resize, and reorder. PII-masked cells still use audited Reveal; JSON/RTL/numeric
+  cells keep their formatters. Find, undo/redo, column visibility, and the status
+  bar stay on the command strip.
+
+- ui-next Store grid stages edits locally: dirty cells fill brown with tan
+  text; a selected range is navy with a 2px primary outline on the head cell.
+  Changes opens a Pending Changes sheet (Visual diffs + SQL, Clear All /
+  Commit All, ⌘S). Click selects a cell, click again or type to edit, drag
+  to multi-select (paste/type fills). The row-detail Sheet is gone from
+  browse — edits stay in the grid until Commit All.
+
+### 🐛 Fixed
+
+- Console Sign in after an expired session returns to the module you
+  were on (`/store`, `/units`, `/flows` plus search) instead of always
+  opening Flows. `?next=` only accepts those three paths.
+
+- Console SQL query console **Gate** menu no longer crashes on open
+  (`MenuGroupContext` — label now sits inside `DropdownMenuGroup`).
+
+- Console Store RLS policy rows are editable in the grid (`ALTER POLICY`
+  for roles / USING / WITH CHECK). Creating a policy with RLS on now
+  flips the table shield to emerald.
+
+- Console Store SQL console no longer fails default `SELECT * … LIMIT 50;`
+  on the memory driver — trailing semicolons are stripped before parse.
+
+- Console Store Pending Changes **KV tab** shows `set(key, value, ttl?)`
+  instead of a fake SQL `UPDATE`. Visual diff is unchanged. SQL tables
+  still get the SQL tab.
+
+- Console Store KV namespaces now have unique effect refs (`kv:drafts` vs
+  `kv:triage-snooze`). Selecting one no longer highlights both, and browse
+  lists only that namespace's keys.
+
+
+- ui-next Store cell edit no longer draws a focus ring; pending brown fill
+  covers the whole cell. Escape or clicking empty space clears the cell range.
+
+- Console `storeEdit` / `storeDelete` SQL DML through `sql.raw` now uses `exec`
+  (the memory driver has no generic UPDATE/DELETE on `query`), so ui-next
+  Commit All actually writes rows instead of returning `InternalError`.
+
+- Wrong-method hits on a registered path return **405** with `Allow` listing bound methods
+  (was a generic 404). CORS preflight still answers first. Raw Console ingest 405s now include
+  `Allow: POST`.
+
+- Console Manifest StoreRuntime now derives SQL `classify` maps from
+  `tables.*.columns` PII/sensitive tags (and `table.column` keys on
+  `store.classifications`), so browse masking matches list `piiColumns` without a
+  hand-registered classify map. Store query/edit/delete/sql paths also bind the
+  panel-lazy runtime (previously only list did).
+
+- Console `GET /console/runs` no longer nests each list response back into the runs
+  store (`console.runs.list` output elided on record; prior list polls filtered from the
+  projection). Live/poll fallbacks were doubling payload size every tick and OOMing the
+  ui-next kernel (~GB RSS).
+
+- `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
+  saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
+
+- First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
+  stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
+  re-wrapping a body already consumed by `parseValidate`.
+
+- ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
+  DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
+
+- Password policy special-character rule is canonical as `requireSpecial` on both
+  `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
+  password missing only a special is rejected and that ui-next’s 5 checklist criteria match
+  server validation.
+
+- Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
+  `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
+
+
 ### 🔒 Security
+
+- Console login `?next=` is allow-listed to `/flows`, `/units`, and
+  `/store` (plus their search). Other values are dropped so an expired
+  session cannot be turned into an open redirect.
+
+- Console Store hides `oke_console` (operators, sessions, credential hashes) unless
+  `OKE_CONSOLE_AUTH_STORE=1`. Query is refused when the flag is off.
+
+- Console security gate **5c**: default `QUERY /console/store/query` on a table with
+  PII-classified columns never returns unmasked values; `POST /console/store/reveal`
+  returns cleartext and leaves an audited `console.store.reveal` Runs log (operatorId,
+  ref, child, id, column) — same suite class as gate **5b** host-ingest masking.
+
+- Console security gate **5e**: default `POST /console/store/sql` masks
+  classified columns; `revealPii: true` returns cleartext and writes an
+  audited `console.store.sql.reveal` log (operatorId, ref).
+
+- `POST /console/store/sql` `asGate` must be `public` or a declared policy
+  Gate (rate gates refused). The pick is audited as
+  `console.store.sql.asGate` (operatorId, ref, gate).
+
+- Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
+  scopes; host gates enforce the assumed principal.
 
 - Host → Console runs ingest never returns WideEvent bodies; operator
   reads stay on the masked `projectRun` path (adversarial PII gate covered).

@@ -160,3 +160,58 @@
 .react-flow__controls-button svg {
   fill: currentColor;
 }
+
+@property --oke-changes-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes oke-changes-border-spin {
+  to {
+    --oke-changes-angle: 360deg;
+  }
+}
+
+/**
+ * Traveling outline on the Store "Changes" button while pending edits exist.
+ * Mask punches the fill so only a 1px ring spins around the control.
+ */
+.oke-changes-border-run {
+  --oke-changes-ink: var(--color-amber-500);
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.oke-changes-border-run::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--oke-changes-angle),
+    transparent 0 58%,
+    color-mix(in oklab, var(--oke-changes-ink) 35%, transparent) 72%,
+    var(--oke-changes-ink) 86%,
+    color-mix(in oklab, var(--oke-changes-ink) 35%, transparent) 94%,
+    transparent 100%
+  );
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  animation: oke-changes-border-spin 2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oke-changes-border-run::before {
+    animation: none;
+    background: color-mix(in oklab, var(--oke-changes-ink) 45%, transparent);
+  }
+}

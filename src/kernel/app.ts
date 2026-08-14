@@ -1577,6 +1577,9 @@ export function oke(options: OkeOptions): OkeApp {
       const method = request.method.toUpperCase();
 
       const respond = async (response: Response): Promise<Response> => {
+        if (method === "QUERY" || response.headers.get("allow")?.includes("QUERY")) {
+          response.headers.set("accept-query", '"application/json"');
+        }
         if (shouldLogDevRequests()) {
           logDevRequest({
             surface: currentDevSurface(),
@@ -1665,6 +1668,30 @@ export function oke(options: OkeOptions): OkeApp {
       }
       const { value: binding, params } = matched;
       flowLabel = binding.flow.name;
+
+      if (method === "QUERY") {
+        const ct = request.headers.get("content-type");
+        if (!ct) {
+          return respond(encodeFailure(fail("InvalidQuery", { reason: "missing_content_type" })));
+        }
+        if ((ct.split(";")[0] ?? "").trim().toLowerCase() !== "application/json") {
+          return respond(
+            Response.json(
+              { data: null, error: fail("UnsupportedMediaType", { contentType: ct }).error },
+              { status: 415 },
+            ),
+          );
+        }
+        let text: string;
+        try {
+          text = await request.text();
+          if (text.length === 0) throw 0;
+          JSON.parse(text);
+        } catch {
+          return respond(encodeFailure(fail("InvalidQuery", { reason: "inconsistent_content" })));
+        }
+        request = new Request(request, { method: "QUERY", body: text });
+      }
 
       let route = compiled.get(binding);
       if (!route && binding.trigger.kind === "http") {

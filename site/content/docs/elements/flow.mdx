@@ -103,7 +103,9 @@ Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); 
 
 ### http — a request arrives
 
-`http.get` · `http.post` · `http.put` · `http.patch` · `http.delete` · `http.head` · `http.options` · `http.query`. QUERY (RFC 10008) is a safe, idempotent read that still carries a JSON body — same parse path as POST.
+`http.get` · `http.post` · `http.put` · `http.patch` · `http.delete` · `http.head` · `http.options` · `http.query`. QUERY (RFC 10008) is a safe, idempotent read with a JSON body.
+
+`Content-Type: application/json` is required — missing → **400** `InvalidQuery`, anything else → **415** `UnsupportedMediaType` with `Accept-Query: "application/json"`. Invalid JSON is **400** (no sniffing). Responses advertise `Accept-Query`. okengine does not assign `Location` / `Content-Location` result URIs.
 
 ```typescript
 export const findOrder = on(
@@ -308,7 +310,12 @@ Make it a plain flow with no trigger and `fx.call` it. You keep contracts, the M
 </Accordion>
 <Accordion title="GET on a POST-only path">
 
-The router returns **405 Method Not Allowed** with `Allow` listing every method bound to that path. A path that no flow owns is still 404.
+The router returns **405 Method Not Allowed** with `Allow` listing every method bound to that path. A path that no flow owns is still 404. When QUERY is allowed, the 405 also carries `Accept-Query: "application/json"`.
+
+</Accordion>
+<Accordion title="QUERY without Content-Type">
+
+RFC 10008 forbids sniffing. Send `Content-Type: application/json` and a JSON body. Missing header → `InvalidQuery` **400**; `text/plain` (or any non-JSON type) → `UnsupportedMediaType` **415**.
 
 </Accordion>
 <Accordion title="What happens if a cron flow throws?">

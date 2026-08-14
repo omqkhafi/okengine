@@ -2,7 +2,7 @@
  * Authenticated Console sidebar — always icon-collapsed: Flows / Units / Store.
  */
 
-import { Folder01Icon } from "@hugeicons/core-free-icons";
+import { Archive02Icon, Shapes01Icon, WorkflowSquare08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
@@ -20,23 +20,22 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import type { SessionOperator } from "@/client.ts";
-import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 
 const navItems = [
   {
     title: "Flows",
     to: "/flows" as const,
-    icon: ELEMENT_ICONS.flow.icon,
+    icon: WorkflowSquare08Icon,
   },
   {
     title: "Units",
     to: "/units" as const,
-    icon: Folder01Icon,
+    icon: Shapes01Icon,
   },
   {
     title: "Store",
     to: "/store" as const,
-    icon: ELEMENT_ICONS.store.icon,
+    icon: Archive02Icon,
   },
 ] as const;
 
@@ -69,7 +68,7 @@ export function AppSidebar({
       <SidebarHeader className="h-12 justify-center">
         <SidebarBrand />
       </SidebarHeader>
-      <SidebarContent className="justify-center">
+      <SidebarContent>
         <SidebarGroup className="items-center">
           <SidebarGroupLabel>Console</SidebarGroupLabel>
           <SidebarMenu className="items-center gap-3">

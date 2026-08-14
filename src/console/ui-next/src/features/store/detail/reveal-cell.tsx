@@ -3,7 +3,7 @@
  */
 
 import { useState, type JSX } from "react";
-import { ViewIcon } from "@hugeicons/core-free-icons";
+import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -20,7 +20,7 @@ export interface RevealCellProps {
 }
 
 /**
- * Show masked value with an audited Reveal button; replace with cleartext after success.
+ * Show a compact mask glyph with an audited Reveal control; replace with cleartext after success.
  *
  * @param props - Row/column identity + masked display value
  */
@@ -34,12 +34,11 @@ export function RevealCell({
 }: RevealCellProps): JSX.Element {
   const reveal = useStoreReveal();
   const [clear, setClear] = useState<{ readonly value: unknown } | null>(null);
-  const shown = clear !== null ? clear.value : maskedValue;
 
-  return (
-    <span className="inline-flex max-w-full items-center gap-1.5" data-slot="reveal-cell">
-      <span className="min-w-0 truncate font-mono text-[11px]">{formatCell(shown)}</span>
-      {clear === null ? (
+  if (clear !== null) {
+    return (
+      <span className="inline-flex max-w-full items-center gap-1" data-slot="reveal-cell">
+        <span className="min-w-0 truncate font-mono text-[11px]">{formatCell(clear.value)}</span>
         <Tooltip>
           <TooltipTrigger
             render={(props) => (
@@ -47,43 +46,81 @@ export function RevealCell({
                 {...props}
                 type="button"
                 variant="ghost"
-                size="xs"
-                className="h-5 shrink-0 gap-0.5 px-1 text-[10px]"
-                disabled={reveal.isPending || rowId.length === 0}
-                aria-label={`Reveal ${column}`}
-                data-slot="reveal-button"
-                onClick={() => {
-                  reveal.mutate(
-                    {
-                      ref: refName,
-                      child,
-                      ...(tenant !== undefined ? { tenant } : {}),
-                      id: rowId,
-                      column,
-                    },
-                    {
-                      onSuccess: (data) => {
-                        setClear({ value: data.value });
-                      },
-                    },
-                  );
+                size="icon-xs"
+                className="size-5 text-muted-foreground"
+                aria-label={`Hide ${column}`}
+                data-slot="hide-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.onClick?.(event);
+                  setClear(null);
                 }}
               >
-                <HugeiconsIcon icon={ViewIcon} className="size-3" aria-hidden />
-                Reveal
+                <HugeiconsIcon icon={ViewOffSlashIcon} className="size-3" aria-hidden />
               </Button>
             )}
           />
           <TooltipContent side="top" className="text-[11px]">
-            Audited PII reveal — logged server-side
+            Hide cleartext
           </TooltipContent>
         </Tooltip>
-      ) : null}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex max-w-full items-center gap-1" data-slot="reveal-cell">
+      <span
+        className="rounded-md bg-muted/70 px-1.5 py-px font-mono text-[10px] tracking-[0.22em] text-muted-foreground"
+        aria-label="Masked"
+      >
+        ••••••
+      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={(props) => (
+            <Button
+              {...props}
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-5 text-muted-foreground"
+              disabled={reveal.isPending || rowId.length === 0}
+              aria-label={`Reveal ${column}`}
+              data-slot="reveal-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onClick?.(event);
+                reveal.mutate(
+                  {
+                    ref: refName,
+                    child,
+                    ...(tenant !== undefined ? { tenant } : {}),
+                    id: rowId,
+                    column,
+                  },
+                  {
+                    onSuccess: (data) => {
+                      setClear({ value: data.value });
+                    },
+                  },
+                );
+              }}
+            >
+              <HugeiconsIcon icon={ViewIcon} className="size-3" aria-hidden />
+            </Button>
+          )}
+        />
+        <TooltipContent side="top" className="text-[11px]">
+          Audited PII reveal — logged server-side
+        </TooltipContent>
+      </Tooltip>
       {reveal.isError ? (
         <span className="text-[10px] text-destructive" role="status">
           {reveal.error.message}
         </span>
       ) : null}
+      <span className="sr-only">{formatCell(maskedValue)}</span>
     </span>
   );
 }

@@ -77,31 +77,32 @@ export function StoreRowDetailSheet({
       <SheetContent
         side="right"
         showOverlay={false}
-        className="gap-3 sm:max-w-md"
+        className="gap-0 p-0 sm:max-w-md"
         data-slot="store-row-detail-sheet"
       >
-        <SheetHeader className="gap-1">
-          <SheetTitle className="text-sm">
-            Row <span className="font-mono">{row.id}</span>
-          </SheetTitle>
-          <SheetDescription className="font-mono text-[11px]">
-            {storeRef}
-            {facet === "sql" ? `/${childName}` : ""}
-          </SheetDescription>
+        <SheetHeader className="gap-2 border-b border-border/50">
+          <div className="flex flex-col gap-0.5 pr-8">
+            <SheetTitle className="text-sm">
+              Row <span className="font-mono">{row.id}</span>
+            </SheetTitle>
+            <SheetDescription className="font-mono text-[11px]">
+              {storeRef}
+              {facet === "sql" ? `/${childName}` : ""}
+            </SheetDescription>
+          </div>
+          <div
+            className="flex items-center gap-4"
+            role="tablist"
+            aria-label="Row detail tabs"
+          >
+            <TabButton active={tab === "fields"} onClick={() => setTab("fields")} id="fields">
+              Fields
+            </TabButton>
+            <TabButton active={tab === "json"} onClick={() => setTab("json")} id="json">
+              JSON
+            </TabButton>
+          </div>
         </SheetHeader>
-
-        <div
-          className="mx-4 flex w-fit items-center rounded-md border border-border/60 p-0.5"
-          role="tablist"
-          aria-label="Row detail tabs"
-        >
-          <TabButton active={tab === "fields"} onClick={() => setTab("fields")} id="fields">
-            Fields
-          </TabButton>
-          <TabButton active={tab === "json"} onClick={() => setTab("json")} id="json">
-            JSON
-          </TabButton>
-        </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-2">
           {tab === "fields" ? (
@@ -128,7 +129,7 @@ export function StoreRowDetailSheet({
                         </span>
                       ) : null}
                       {col.pii ? (
-                        <span className="shrink-0 font-mono text-[9px] text-amber-600 dark:text-amber-400">
+                        <span className="shrink-0 font-mono text-[9px] text-sky-600 dark:text-sky-400">
                           PII
                         </span>
                       ) : null}
@@ -165,7 +166,7 @@ export function StoreRowDetailSheet({
           )}
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/50 px-4 py-2.5">
           {canEdit ? (
             <Button
               type="button"
@@ -217,10 +218,8 @@ function TabButton({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "rounded px-3 py-1 text-[11px] font-medium transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
+        "text-[10px] font-semibold tracking-[0.08em] uppercase transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       data-slot={`row-tab-${id}`}
     >

@@ -1,7 +1,7 @@
 /**
  * Seeded host app for Console ui-next invoke-as (Playwright + vite seeded).
  *
- * Real `bookings.create` execution — not stub echo / `inv_*`.
+ * Real `issues.create` execution — not stub echo / `inv_*`.
  */
 
 import { z } from "zod";
@@ -33,12 +33,8 @@ const memoryDrivers = {
 } as const;
 
 const member = gate.policy("member", ({ auth }) => !!auth.verified);
-const bookingCreate = gate.policy("booking:create", ({ auth }) =>
-  auth.scopes.has("booking:create"),
-);
-const bookingsWrite = gate.policy("bookings.write", ({ auth }) =>
-  auth.scopes.has("booking:create"),
-);
+const issueWrite = gate.policy("issue:write", ({ auth }) => auth.scopes.has("issue:write"));
+const issuesWrite = gate.policy("issues.write", ({ auth }) => auth.scopes.has("issue:write"));
 
 function clearElementRegistries(): void {
   storeRegistry.length = 0;
@@ -66,19 +62,21 @@ export async function bootUiNextSeedInvoke(): Promise<{
   resetFlowSeq();
 
   on(
-    http.post("/bookings").gate(member).gate(bookingCreate).gate(bookingsWrite),
-    flow("bookings.create", {
+    http.post("/issues").gate(member).gate(issueWrite).gate(issuesWrite),
+    flow("issues.create", {
       in: z.object({
-        flightId: z.string(),
-        seats: z.number().int().min(1),
-        cabin: z.enum(["economy", "business"]).optional(),
+        title: z.string(),
+        teamKey: z.string(),
+        priority: z.number().int().min(0).max(4).optional(),
       }),
       out: z.object({
         id: z.string(),
+        identifier: z.string(),
         userId: z.string(),
       }),
       do: (input, fx) => ({
-        id: `real_${input.flightId}_${input.seats}`,
+        id: `real_${input.teamKey}_${input.title}`,
+        identifier: `${input.teamKey}-1`,
         userId: fx.auth.userId ?? "missing",
       }),
     }),
@@ -86,7 +84,7 @@ export async function bootUiNextSeedInvoke(): Promise<{
 
   const app = oke({
     name: "ui-next-seed-invoke",
-    gate: { policies: [member, bookingCreate, bookingsWrite] },
+    gate: { policies: [member, issueWrite, issuesWrite] },
     env: "test",
     config: { drivers: memoryDrivers },
     vault: { allowDevFallbacks: true },
@@ -94,7 +92,7 @@ export async function bootUiNextSeedInvoke(): Promise<{
   });
   await app.boot({
     env: "test",
-    gates: [member, bookingCreate, bookingsWrite],
+    gates: [member, issueWrite, issuesWrite],
     startScheduler: false,
     config: app.$options.config,
     vault: { allowDevFallbacks: true },

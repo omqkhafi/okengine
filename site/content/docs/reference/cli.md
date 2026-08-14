@@ -29,8 +29,10 @@ oke doctor                       # verify secrets, ports, drivers, tenancy, sche
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
                                  #   → `bun run dev:console-next` boots kernel + Vite with a fixed
                                  #     operator (`dev@oke.dev` / `Okengine123!`) — Sign in (prefilled)
-                                 #   → `bun run dev:console-next:seed` same + all 8 elements + ~80 traces
-                                 #     (flow/signal/store/clock/gate/vault/channel/ai + ops traffic;
+                                 #   → `bun run dev:console-next:seed` same + keel PM (all 8 elements) + ~80 traces
+                                 #     + 500+ issues + app Gate auth / oke_* system tables
+                                 #     (github→issues.create→notify chain, Linear-shaped
+                                 #     SQL/KV/files/index; `oke_console` is Console operators);
                                  #     click Traces row → highlight chain; click graph node → filter runs;
                                  #     Replay → waterfall playhead + chain pulse on the graph)
                                  #   → `bun run dev:console-next:fresh` / `:fresh:seed` — claim from scratch

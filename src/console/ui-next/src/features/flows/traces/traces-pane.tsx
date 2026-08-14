@@ -12,6 +12,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -27,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
 import type { LiveStatus } from "../data/use-console-live.ts";
@@ -147,155 +149,186 @@ export function TracesPane({
 
   return (
     <div className="flex h-full flex-col" data-slot="traces-pane">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <HugeiconsIcon
-            icon={ELEMENT_ICONS.flow.icon}
-            className="size-3.5 text-muted-foreground"
-          />
-          Traces
-        </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span
-            className={
-              liveStatus === "open"
-                ? "size-1.5 rounded-full bg-emerald-500"
-                : "size-1.5 rounded-full bg-muted-foreground"
-            }
-            aria-hidden
-          />
-          {liveStatus === "open" ? "live" : "polling"}
-        </div>
-      </div>
-
-      {runs.length > 0 ? (
-        <div
-          className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5"
-          data-slot="traces-filters"
-        >
-          <div
-            className="inline-flex rounded-md bg-muted/60 p-0.5"
-            role="group"
-            aria-label="Status filter"
-          >
-            {STATUS_FILTERS.map(({ value, label, icon }) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={filters.status === value}
-                onClick={() => setStatus(value)}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[10px] font-medium transition-colors",
-                  filters.status === value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
-                {label}
-              </button>
-            ))}
+      <div className="flex flex-col gap-2 border-b border-border/60 px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
+            <HugeiconsIcon
+              icon={ELEMENT_ICONS.flow.icon}
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+            Traces
           </div>
-          <Select
-            items={DURATION_SELECT_ITEMS}
-            value={filters.minDurationMs === null ? "any" : String(filters.minDurationMs)}
-            onValueChange={(value) => {
-              if (value == null || Array.isArray(value)) return;
-              setMinDuration(parseDurationSelectValue(String(value)));
-            }}
-          >
-            <SelectTrigger
-              aria-label="Duration threshold"
-              size="sm"
-              className={cn(
-                "h-6 max-w-42 gap-1 rounded-md border bg-transparent py-0 pr-1 pl-1.5 text-[10px] shadow-none dark:bg-transparent [&_svg:not([class*='size-'])]:size-3",
-                durationThresholdFilterClass(filters.minDurationMs),
-              )}
-            >
-              <HugeiconsIcon
-                icon={Timer01Icon}
-                className={cn(
-                  "size-3 shrink-0",
-                  filters.minDurationMs === null
-                    ? "text-muted-foreground"
-                    : durationToneClass(durationTone(filters.minDurationMs)),
-                )}
+          <div className="flex shrink-0 items-center gap-1">
+            {runs.length > 0 ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={(props) => (
+                    <Button
+                      {...props}
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-expanded={advancedOpen}
+                      aria-controls="traces-advanced-panel"
+                      aria-label={
+                        advancedActive
+                          ? `Advanced filters, ${filters.advanced.clauses.length} active`
+                          : "Advanced filters"
+                      }
+                      data-slot="traces-advanced-toggle"
+                      onClick={(event) => {
+                        props.onClick?.(event);
+                        setAdvancedOpen((open) => !open);
+                      }}
+                      className={cn(
+                        "relative text-muted-foreground",
+                        (advancedOpen || advancedActive) &&
+                          "bg-background text-foreground shadow-sm",
+                      )}
+                    >
+                      <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
+                      {advancedActive ? (
+                        <span
+                          className="absolute -top-0.5 -inset-e-0.5 flex size-3.5 items-center justify-center rounded-full bg-foreground text-[8px] font-medium text-background"
+                          aria-hidden
+                        >
+                          {filters.advanced.clauses.length}
+                        </span>
+                      ) : null}
+                    </Button>
+                  )}
+                />
+                <TooltipContent side="bottom">Advanced</TooltipContent>
+              </Tooltip>
+            ) : null}
+            {runs.length > 0 ? (
+              <span className="mx-0.5 h-3 w-px bg-border/60" aria-hidden />
+            ) : null}
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span
+                className={
+                  liveStatus === "open"
+                    ? "size-1.5 rounded-full bg-emerald-500"
+                    : "size-1.5 rounded-full bg-muted-foreground"
+                }
                 aria-hidden
               />
-              <SelectValue>
-                {(raw) => {
-                  const ms = parseDurationSelectValue(String(raw ?? "any"));
-                  return (
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          durationThresholdDotClass(ms),
-                        )}
-                        aria-hidden
-                      />
-                      <span className="truncate">{durationThresholdLabel(ms)}</span>
-                    </span>
-                  );
+              {liveStatus === "open" ? "live" : "polling"}
+            </div>
+          </div>
+        </div>
+
+        {runs.length > 0 ? (
+          <div className="flex items-center gap-1.5" data-slot="traces-filters">
+            <div
+              className="inline-flex h-6 shrink-0 items-center rounded-md bg-muted/60 p-0.5"
+              role="group"
+              aria-label="Status filter"
+            >
+              {STATUS_FILTERS.map(({ value, label, icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={filters.status === value}
+                  onClick={() => setStatus(value)}
+                  className={cn(
+                    "inline-flex h-full items-center gap-1 rounded-[5px] px-2 text-[10px] font-medium whitespace-nowrap transition-colors",
+                    filters.status === value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="min-w-0 flex-1">
+              <Select
+                items={DURATION_SELECT_ITEMS}
+                value={filters.minDurationMs === null ? "any" : String(filters.minDurationMs)}
+                onValueChange={(value) => {
+                  if (value == null || Array.isArray(value)) return;
+                  setMinDuration(parseDurationSelectValue(String(value)));
                 }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start" alignItemWithTrigger={false} className="min-w-42">
-              <SelectGroup>
-                {DURATION_THRESHOLD_OPTIONS.map((ms) => (
-                  <SelectItem
-                    key={ms === null ? "any" : ms}
-                    value={ms === null ? "any" : String(ms)}
-                    className="text-[10px]"
-                  >
-                    <span
-                      className={cn(
-                        "size-1.5 shrink-0 rounded-full",
-                        durationThresholdDotClass(ms),
-                      )}
-                      aria-hidden
-                    />
-                    {durationThresholdLabel(ms)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+              >
+                <SelectTrigger
+                  aria-label="Duration threshold"
+                  size="sm"
+                  className={cn(
+                    "h-6 w-full gap-1 rounded-md border bg-muted/60 py-0 pr-1 pl-1.5 text-[10px] shadow-none dark:bg-muted/60 [&_svg:not([class*='size-'])]:size-3",
+                    durationThresholdFilterClass(filters.minDurationMs),
+                    filters.minDurationMs === null && "border-transparent",
+                  )}
+                >
+                  <HugeiconsIcon
+                    icon={Timer01Icon}
+                    className={cn(
+                      "size-3 shrink-0",
+                      filters.minDurationMs === null
+                        ? "text-muted-foreground"
+                        : durationToneClass(durationTone(filters.minDurationMs)),
+                    )}
+                    aria-hidden
+                  />
+                  <SelectValue>
+                    {(raw) => {
+                      const ms = parseDurationSelectValue(String(raw ?? "any"));
+                      return (
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              durationThresholdDotClass(ms),
+                            )}
+                            aria-hidden
+                          />
+                          <span className="truncate">{durationThresholdLabel(ms)}</span>
+                        </span>
+                      );
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start" alignItemWithTrigger={false} className="min-w-42">
+                  <SelectGroup>
+                    {DURATION_THRESHOLD_OPTIONS.map((ms) => (
+                      <SelectItem
+                        key={ms === null ? "any" : ms}
+                        value={ms === null ? "any" : String(ms)}
+                        className="text-[10px]"
+                      >
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            durationThresholdDotClass(ms),
+                          )}
+                          aria-hidden
+                        />
+                        {durationThresholdLabel(ms)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+
+        {runs.length > 0 && graphFilter ? (
           <button
             type="button"
-            aria-expanded={advancedOpen}
-            aria-controls="traces-advanced-panel"
-            data-slot="traces-advanced-toggle"
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className={cn(
-              "ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors",
-              advancedOpen || advancedActive
-                ? "border-foreground/25 bg-background text-foreground shadow-sm"
-                : "border-border/70 text-muted-foreground hover:text-foreground",
-            )}
+            data-slot="traces-graph-filter"
+            onClick={() => onGraphFilterChange(null)}
+            title="Clear graph filter"
+            className="inline-flex max-w-full items-center gap-1 self-start truncate rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
           >
-            <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
-            Advanced
-            {advancedActive ? (
-              <span className="tabular-nums text-muted-foreground">
-                {filters.advanced.clauses.length}
-              </span>
-            ) : null}
-          </button>
-          {graphFilter ? (
-            <button
-              type="button"
-              data-slot="traces-graph-filter"
-              onClick={() => onGraphFilterChange(null)}
-              title="Clear graph filter"
-              className="inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
-            >
+            <span className="truncate">
               {graphFilter.kind === "flow" ? graphFilter.flowId : `signal:${graphFilter.signal}`}
-              <span aria-hidden>×</span>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+            </span>
+            <span aria-hidden>×</span>
+          </button>
+        ) : null}
+      </div>
 
       {runs.length > 0 && advancedOpen ? (
         <div id="traces-advanced-panel">

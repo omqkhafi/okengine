@@ -128,6 +128,12 @@ export interface KvStoreFxHandle {
    * @param prefix - Optional prefix filter
    */
   list(prefix?: string): Promise<string[]>;
+  /**
+   * Remaining TTL in milliseconds, or `null` when the key has no expiry.
+   *
+   * @param key - Entry key
+   */
+  ttlMs(key: string): Promise<number | null>;
 }
 
 /** Files handle on `fx.store`. */
@@ -369,6 +375,7 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
       set: (key, value, ttl) => ns!.set(key, value, ttl),
       delete: (key) => ns!.delete(key),
       list: (prefix) => ns!.list(prefix),
+      ttlMs: (key) => ns!.ttlMs(key),
     };
   }
 

@@ -10,8 +10,11 @@ import type { Manifest } from "../../manifest/types.ts";
 import {
   createManifestStoreRuntime,
   editStore,
+  isKnownConsoleSqlGate,
+  isStoreSqlWrite,
   projectStoresList,
   queryStore,
+  runStoreSql,
   tenancyDeclared,
   willNotFireFor,
 } from "./store.ts";
@@ -99,6 +102,16 @@ describe("projectStoresList", () => {
     expect(tenants).toContain("t1");
     const db = stores.find((s) => s.ref === "sql:db");
     expect(db).toBeDefined();
+    expect(db!.children.map((c) => c.name)).toEqual([
+      "bookings",
+      "shipments",
+      "indexes",
+      "functions",
+      "triggers",
+      "extensions",
+      "policies",
+    ]);
+    expect(db!.children.find((c) => c.name === "indexes")?.kind).toBe("index");
     const bookings = db!.children.find((c) => c.name === "bookings");
     expect(bookings?.willNotFire.signals).toContain("order-placed");
     expect(bookings?.cache.producedByRead).toBe("computed:sql:bookings");
@@ -108,6 +121,23 @@ describe("projectStoresList", () => {
 
     const uploads = stores.find((s) => s.facet === "files");
     expect(uploads?.contentAddressed).toBe(true);
+  });
+
+  test("KV namespaces get distinct effectRefs so browse selection is unique", async () => {
+    const { stores } = await projectStoresList({
+      manifest: {
+        oke: "1.0",
+        app: "kv-ns",
+        stores: {
+          cache: { facet: "kv", namespaces: ["drafts", "triage-snooze"] },
+        },
+      },
+      runtime: null,
+      declaredFingerprint: "x",
+      appliedFingerprint: null,
+    });
+    const cache = stores.find((s) => s.ref === "kv:cache");
+    expect(cache?.children.map((c) => c.effectRef)).toEqual(["kv:drafts", "kv:triage-snooze"]);
   });
 
   test("no tenancy → empty tenants, flag false", async () => {
@@ -227,6 +257,649 @@ describe("PII masking survives SELECT *", () => {
       revealPii: true,
     });
     expect(after.rows?.[0]?.email).toBe("secret@example.com");
+  });
+});
+
+describe("editStore SQL apply", () => {
+  test("commits a column patch through memory SQL", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      flight_id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+    await sql.insert(bookings).values({ id: "b1", flight_id: "SK-119", seats: 2 });
+
+    const result = await editStore(
+      runtime,
+      MANIFEST,
+      { ref: "sql:db", child: "bookings", id: "b1", patch: { flight_id: "SK-999" } },
+      { production: false, dryRun: false },
+    );
+    expect(result.applied).toBe(true);
+    expect(result.dryRun).toBe(false);
+
+    const after = await queryStore(runtime, MANIFEST, {
+      ref: "sql:db",
+      child: "bookings",
+      revealPii: true,
+    });
+    expect(after.rows?.[0]?.flight_id).toBe("SK-999");
+  });
+
+  test("inserts a row when id is omitted and patch includes id", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      flight_id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+
+    const result = await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "sql:db",
+        child: "bookings",
+        patch: { id: "b2", flight_id: "SK-200", seats: 4 },
+      },
+      { production: false, dryRun: false },
+    );
+    expect(result.applied).toBe(true);
+
+    const after = await queryStore(runtime, MANIFEST, {
+      ref: "sql:db",
+      child: "bookings",
+      revealPii: true,
+    });
+    expect(after.rows).toEqual([{ id: "b2", flight_id: "SK-200", seats: 4 }]);
+  });
+
+  test("dry-run insert does not persist the row", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      flight_id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+
+    const preview = await editStore(
+      runtime,
+      MANIFEST,
+      {
+        ref: "sql:db",
+        child: "bookings",
+        patch: { id: "b-dry", flight_id: "SK-1", seats: 1 },
+      },
+      { production: false, dryRun: true },
+    );
+    expect(preview.applied).toBe(false);
+    expect(preview.dryRun).toBe(true);
+
+    const after = await queryStore(runtime, MANIFEST, {
+      ref: "sql:db",
+      child: "bookings",
+      revealPii: true,
+    });
+    expect(after.rows ?? []).toEqual([]);
+  });
+
+  test("refuses insert without patch.id", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", { id: true, seats: true });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+
+    await expect(
+      editStore(
+        runtime,
+        MANIFEST,
+        { ref: "sql:db", child: "bookings", patch: { seats: 2 } },
+        { production: false, dryRun: false },
+      ),
+    ).rejects.toThrow("sql insert requires an id in the patch");
+  });
+});
+
+describe("queryStore SQL catalog", () => {
+  test("indexes fall back to Manifest primaryKey / unique; extensions list and toggle", async () => {
+    const manifest = {
+      ...MANIFEST,
+      stores: {
+        ...MANIFEST.stores,
+        db: {
+          facet: "sql" as const,
+          tables: {
+            bookings: {
+              columns: {
+                id: { type: "text" as const, primaryKey: true },
+                email: { type: "text" as const, unique: true, pii: true },
+              },
+            },
+          },
+        },
+      },
+    };
+    const runtime = await createManifestStoreRuntime(manifest);
+    const indexes = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "indexes",
+    });
+    expect(indexes.rows?.map((r) => r.name)).toEqual(["bookings_email_key", "bookings_pkey"]);
+    expect(indexes.masked).toBe(false);
+    const indexesAlias = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "__indexes",
+    });
+    expect(indexesAlias.rows?.map((r) => r.name)).toEqual(indexes.rows?.map((r) => r.name));
+
+    const functions = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "functions",
+    });
+    expect(functions.rows).toEqual([]);
+
+    const triggers = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "triggers",
+    });
+    expect(triggers.rows).toEqual([]);
+
+    const policies = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "policies",
+    });
+    expect(policies.rows).toEqual([]);
+
+    await editStore(
+      runtime,
+      manifest,
+      {
+        ref: "sql:db",
+        child: "policies",
+        id: "bookings:read_all",
+        patch: {
+          create: true,
+          name: "read_all",
+          table: "bookings",
+          command: "SELECT",
+          behavior: "PERMISSIVE",
+          roles: "public",
+          using: "true",
+          enableRls: true,
+        },
+      },
+      { production: false, dryRun: false },
+    );
+    const withPolicy = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "policies",
+    });
+    expect(withPolicy.rows?.find((r) => r.name === "read_all")).toMatchObject({
+      table: "bookings",
+      command: "SELECT",
+      roles: "public",
+      using: "true",
+    });
+
+    const listedOn = await projectStoresList({
+      manifest,
+      runtime,
+      declaredFingerprint: "x",
+      appliedFingerprint: "x",
+    });
+    expect(
+      listedOn.stores.find((s) => s.ref === "sql:db")?.children.find((c) => c.name === "bookings")
+        ?.rls,
+    ).toBe(true);
+
+    await editStore(
+      runtime,
+      manifest,
+      {
+        ref: "sql:db",
+        child: "policies",
+        id: "bookings:read_all",
+        patch: { using: "false", roles: "public" },
+      },
+      { production: false, dryRun: false },
+    );
+    const altered = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "policies",
+    });
+    expect(altered.rows?.find((r) => r.name === "read_all")).toMatchObject({
+      using: "false",
+      roles: "public",
+    });
+
+    await editStore(
+      runtime,
+      manifest,
+      {
+        ref: "sql:db",
+        child: "policies",
+        id: "bookings:read_all",
+        patch: { drop: true },
+      },
+      { production: false, dryRun: false },
+    );
+    const afterDrop = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "policies",
+    });
+    expect(afterDrop.rows?.find((r) => r.name === "read_all")).toBeUndefined();
+
+    const extensions = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(extensions.rows?.some((r) => r.name === "plpgsql" && r.enabled === true)).toBe(true);
+    expect(extensions.rows?.some((r) => r.name === "vector" && r.enabled === false)).toBe(true);
+    expect(extensions.rows?.some((r) => r.name === "timescaledb")).toBe(false);
+    expect(extensions.rows?.find((r) => r.name === "plpgsql")?.source).toBe("builtin");
+    expect(extensions.rows?.find((r) => r.name === "plpgsql")?.title).toBe("PL/pgSQL");
+    expect(extensions.rows?.find((r) => r.name === "amcheck")?.title).toBe("AM Check");
+    expect(extensions.rows?.find((r) => r.name === "vector")).toMatchObject({
+      title: "pgvector",
+      version: "0.8.0",
+      available: "0.8.6",
+      upgrade: true,
+      url: "https://github.com/pgvector/pgvector",
+    });
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "timescaledb", patch: { enabled: true } },
+      { production: false, dryRun: false },
+    );
+    const withTs = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(withTs.rows?.find((r) => r.name === "timescaledb")).toMatchObject({
+      enabled: true,
+      source: "library",
+    });
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "vector", patch: { enabled: true } },
+      { production: false, dryRun: false },
+    );
+    const after = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(after.rows?.find((r) => r.name === "vector")?.enabled).toBe(true);
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "vector", patch: { enabled: false } },
+      { production: false, dryRun: false },
+    );
+    const off = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(off.rows?.find((r) => r.name === "vector")?.enabled).toBe(false);
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "vector", patch: { upgrade: true } },
+      { production: false, dryRun: false },
+    );
+    const vectorUp = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(vectorUp.rows?.find((r) => r.name === "vector")).toMatchObject({
+      enabled: true,
+      version: "0.8.6",
+      available: "0.8.6",
+      upgrade: false,
+    });
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "amcheck", patch: { enabled: true } },
+      { production: false, dryRun: false },
+    );
+    const stale = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(stale.rows?.find((r) => r.name === "amcheck")).toMatchObject({
+      enabled: true,
+      version: "1.3",
+      available: "1.4",
+      upgrade: true,
+    });
+
+    const preview = await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "amcheck", patch: { upgrade: true } },
+      { production: false, dryRun: true },
+    );
+    expect(preview.applied).toBe(false);
+    const afterPreview = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(afterPreview.rows?.find((r) => r.name === "amcheck")).toMatchObject({
+      version: "1.3",
+      upgrade: true,
+    });
+
+    await editStore(
+      runtime,
+      manifest,
+      { ref: "sql:db", child: "extensions", id: "amcheck", patch: { upgrade: true } },
+      { production: false, dryRun: false },
+    );
+    const upgraded = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "extensions",
+    });
+    expect(upgraded.rows?.find((r) => r.name === "amcheck")).toMatchObject({
+      enabled: true,
+      version: "1.4",
+      available: "1.4",
+      upgrade: false,
+    });
+    await runtime.close();
+  });
+});
+
+describe("queryStore KV metadata", () => {
+  test("kv browse returns remaining TTL and serialized size", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const { kv: declareKv } = await import("../../elements/store.ts");
+    runtime.register(declareKv("sessions"));
+    const kv = (await runtime.openRef("kv:sessions", {
+      effects: { writes: ["kv:sessions"] },
+    })) as import("../../elements/store.ts").KvStoreFxHandle;
+    await kv.set("drafts:a", { n: 1 }, "1h");
+    await kv.set("drafts:b", { n: 2 });
+
+    const result = await queryStore(runtime, MANIFEST, {
+      ref: "kv:sessions",
+      child: "drafts",
+    });
+    const withTtl = result.keys?.find((e) => e.key === "drafts:a");
+    const noTtl = result.keys?.find((e) => e.key === "drafts:b");
+    expect(withTtl?.ttlMs).toBeGreaterThan(3_000_000);
+    expect(withTtl?.sizeBytes).toBeGreaterThan(0);
+    expect(noTtl?.ttlMs).toBeNull();
+    expect(noTtl?.sizeBytes).toBeGreaterThan(0);
+  });
+
+  test("kv edit can set, preserve, and clear TTL; add creates a key", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const { kv: declareKv } = await import("../../elements/store.ts");
+    runtime.register(declareKv("sessions"));
+    const kv = (await runtime.openRef("kv:sessions", {
+      effects: { writes: ["kv:sessions"] },
+    })) as import("../../elements/store.ts").KvStoreFxHandle;
+    await kv.set("drafts:a", { n: 1 }, "1h");
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      { ref: "kv:sessions", key: "drafts:a", patch: { value: { n: 2 } } },
+      { production: false, dryRun: false },
+    );
+    expect(await kv.get("drafts:a")).toEqual({ n: 2 });
+    expect(await kv.ttlMs("drafts:a")).toBeGreaterThan(3_000_000);
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      { ref: "kv:sessions", key: "drafts:a", patch: { ttl: "10m" } },
+      { production: false, dryRun: false },
+    );
+    const afterTtl = await kv.ttlMs("drafts:a");
+    expect(afterTtl).toBeGreaterThan(8 * 60_000);
+    expect(afterTtl).toBeLessThanOrEqual(10 * 60_000);
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      { ref: "kv:sessions", key: "drafts:a", patch: { ttl: null } },
+      { production: false, dryRun: false },
+    );
+    expect(await kv.ttlMs("drafts:a")).toBeNull();
+
+    await editStore(
+      runtime,
+      MANIFEST,
+      { ref: "kv:sessions", key: "drafts:new", patch: { value: { ok: true }, ttl: "30m" } },
+      { production: false, dryRun: false },
+    );
+    expect(await kv.get("drafts:new")).toEqual({ ok: true });
+    expect(await kv.ttlMs("drafts:new")).toBeGreaterThan(20 * 60_000);
+  });
+});
+
+describe("runStoreSql", () => {
+  test("accepts trailing semicolon and multiline SELECT", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+    await sql.insert(bookings).values({ id: "b1", seats: 2 });
+
+    const result = await runStoreSql(runtime, "sql:db", `SELECT *\nFROM "bookings"\nLIMIT 50;`, {
+      allowWrite: false,
+    });
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.id).toBe("b1");
+    await runtime.close();
+  });
+
+  test("runs INSERT / UPDATE / DELETE with SQL literals when allowWrite", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+
+    const inserted = await runStoreSql(
+      runtime,
+      "sql:db",
+      `INSERT INTO "bookings" ("id", "seats") VALUES ('b2', 4);`,
+      { allowWrite: true },
+    );
+    expect(inserted.rows[0]?.changes).toBe(1);
+
+    const updated = await runStoreSql(
+      runtime,
+      "sql:db",
+      `UPDATE "bookings" SET "seats" = 8 WHERE "id" = 'b2';`,
+      { allowWrite: true },
+    );
+    expect(updated.rows[0]?.changes).toBe(1);
+
+    const read = await runStoreSql(
+      runtime,
+      "sql:db",
+      `SELECT * FROM "bookings" WHERE "id" = 'b2'`,
+      {
+        allowWrite: false,
+      },
+    );
+    expect(read.rows[0]?.seats).toBe(8);
+
+    const deleted = await runStoreSql(
+      runtime,
+      "sql:db",
+      `DELETE FROM "bookings" WHERE "id" = 'b2';`,
+      { allowWrite: true },
+    );
+    expect(deleted.rows[0]?.changes).toBe(1);
+    await runtime.close();
+  });
+
+  test("isStoreSqlWrite matches DML, DDL, and EXPLAIN ANALYZE", () => {
+    expect(isStoreSqlWrite("SELECT 1")).toBe(false);
+    expect(isStoreSqlWrite("EXPLAIN SELECT 1")).toBe(false);
+    expect(isStoreSqlWrite("EXPLAIN ANALYZE SELECT 1")).toBe(true);
+    expect(isStoreSqlWrite("CREATE TABLE t (id text)")).toBe(true);
+    expect(isStoreSqlWrite("GRANT SELECT ON t TO public")).toBe(true);
+    expect(isStoreSqlWrite("ANALYZE t")).toBe(true);
+  });
+
+  test("refuses writes without allowWrite", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    await expect(
+      runStoreSql(runtime, "sql:db", `DELETE FROM "bookings" WHERE "id" = 'x'`, {
+        allowWrite: false,
+      }),
+    ).rejects.toThrow(/read-only/);
+    await runtime.close();
+  });
+
+  test("DDL and EXPLAIN ANALYZE require allowWrite; EXPLAIN does not", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    await expect(
+      runStoreSql(runtime, "sql:db", `CREATE TABLE t (id text)`, { allowWrite: false }),
+    ).rejects.toThrow(/read-only/);
+    await expect(
+      runStoreSql(runtime, "sql:db", `GRANT SELECT ON t TO public`, { allowWrite: false }),
+    ).rejects.toThrow(/read-only/);
+    await expect(
+      runStoreSql(runtime, "sql:db", `EXPLAIN ANALYZE SELECT 1`, { allowWrite: false }),
+    ).rejects.toThrow(/read-only/);
+    try {
+      await runStoreSql(runtime, "sql:db", `EXPLAIN SELECT 1`, { allowWrite: false });
+    } catch (err) {
+      expect(String(err)).not.toMatch(/read-only/);
+    }
+    await runtime.close();
+  });
+
+  test("masks classified columns unless revealPii", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      email: classify({ pii: true }),
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(
+      declareSql("db", {
+        schema: { bookings },
+        classify: { bookings: { email: { pii: true } } },
+      }),
+    );
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+      revealPii: true,
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+    await sql.insert(bookings).values({
+      id: "b1",
+      email: "secret@example.com",
+      seats: 2,
+    });
+
+    const masked = await runStoreSql(runtime, "sql:db", `SELECT * FROM "bookings"`, {
+      allowWrite: false,
+    });
+    expect(masked.rows[0]?.email).toBe("[redacted]");
+    expect(masked.masked).toBe(true);
+
+    const clear = await runStoreSql(runtime, "sql:db", `SELECT * FROM "bookings"`, {
+      allowWrite: false,
+      revealPii: true,
+    });
+    expect(clear.rows[0]?.email).toBe("secret@example.com");
+    expect(clear.masked).toBe(false);
+    await runtime.close();
+  });
+
+  test("asGate is accepted on memory but not applied", async () => {
+    const runtime = await createManifestStoreRuntime(MANIFEST);
+    const bookings = defineTable("bookings", {
+      id: true,
+      seats: true,
+    });
+    const { sql: declareSql } = await import("../../elements/store.ts");
+    runtime.register(declareSql("db", { schema: { bookings } }));
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(bookings);
+    await sql.insert(bookings).values({ id: "b1", seats: 2 });
+
+    const result = await runStoreSql(runtime, "sql:db", `SELECT * FROM "bookings"`, {
+      allowWrite: false,
+      asGate: "public",
+    });
+    expect(result.asGate).toBe("public");
+    expect(result.gateApplied).toBe(false);
+    expect(result.rows).toHaveLength(1);
+    await runtime.close();
+  });
+});
+
+describe("isKnownConsoleSqlGate", () => {
+  test("allows public and policy gates; refuses rate and unknown", () => {
+    const manifest: Manifest = {
+      ...MANIFEST,
+      gates: {
+        public: { kind: "policy" },
+        member: { kind: "policy" },
+        "rate:api": { kind: "rate", max: 10, per: "1m" },
+      },
+    };
+    expect(isKnownConsoleSqlGate(manifest, "public")).toBe(true);
+    expect(isKnownConsoleSqlGate(manifest, "member")).toBe(true);
+    expect(isKnownConsoleSqlGate(manifest, "rate:api")).toBe(false);
+    expect(isKnownConsoleSqlGate(manifest, "missing")).toBe(false);
+    expect(isKnownConsoleSqlGate(null, "public")).toBe(true);
+    expect(isKnownConsoleSqlGate(null, "member")).toBe(false);
   });
 });
 

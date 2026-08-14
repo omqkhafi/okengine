@@ -25,6 +25,65 @@ name).
 
 The relational facet: tables, schema, and typed single-table sessions through `fx.store`.
 
+The Console SQL band opens a query console (`POST /console/store/sql`) for
+DML and DDL. ⌘Enter runs the current statement or selection; ⌘⇧Enter runs
+the whole script sequentially and stops on the first error.
+
+EXPLAIN / EXPLAIN ANALYZE wrap the current statement. A script with more
+than one result opens a tab per statement.
+
+The table grid can insert a row (`POST /console/store/edit` without `id`).
+Double-click a tab to rename; Save keeps named queries. Completions cover
+Manifest tables, columns, and keywords.
+
+Classified PII stays masked unless the toolbar **PII** control is on
+(`revealPii: true`, audited).
+
+**Gate** views the result as Operator (default, bypasses RLS), public, a
+selected user (via their matching policy), or a Manifest policy gate.
+`asGate` sets `oke.gate` on postgres / pglite for `current_setting('oke.gate', true)`.
+
+The SQL band **Schema** control opens a visualizer of Manifest tables and
+relations — declared `.references()` plus inferred `*_id` columns — not the
+query-console Schema rail.
+
+**Colorize** groups tables by prefix and FK family. Click a related table to
+dim the rest; click the canvas to show all again.
+
+Edges mark cardinality with icons (many-to-one, one-to-one, many-to-many,
+self). Cards and the query Schema rail mark primary (key), foreign (link),
+and unique (diamond) columns.
+
+Each SQL store also lists **Indexes**, **Functions**, **Triggers**,
+**Extensions**, and **RLS Policies**.
+
+Indexes, Functions, and Triggers use the same flat form as RLS Policies —
+paired fields, compact templates, and a pinned SQL editor — then run
+`CREATE INDEX` / `CREATE FUNCTION` / `CREATE TRIGGER`.
+
+**Advanced** unlocks the leftover Postgres knobs (`CONCURRENTLY` / `INCLUDE`,
+`SECURITY DEFINER` / `PARALLEL`, `CONSTRAINT` / `UPDATE OF`).
+
+Extensions list built-in contrib plus a **Library** (featured cards, search,
+category filter) for TimescaleDB, PostGIS, and `pg_cron`.
+
+Install reviews the `CREATE EXTENSION` SQL; **Advanced** can set `SCHEMA`,
+`VERSION`, and `CASCADE` (`pg_catalog` is refused).
+
+When a newer packaged version exists, the name chip shows **Upgrade**
+(`ALTER EXTENSION … UPDATE`). Names link to the project or Postgres docs.
+
+Each table row in the Store tree shows whether RLS is on (emerald shield)
+or off (muted shield). Enabling RLS on create flips that shield.
+
+**RLS Policies** lists `pg_policies`. Create policy pins the SQL preview;
+**Templates** slides a flush library beside it (every `FOR` command, owner,
+`oke.gate`). Or edit `roles` / `USING` / `WITH CHECK` in the grid (`ALTER POLICY`).
+
+Create policy picks a Gate posture (Read / Write / Both), or **Policy &
+scope** for `gate.public`, `gate.policy`, and `gate.scope`. `TO public`
+stays on the SQL — those picks are not Postgres roles.
+
 ### Quick start
 
 <Steps>
@@ -419,6 +478,9 @@ SQL-backed index driver `pgvector` shares this facet's connection — see [Advan
 The key-value facet: short-lived cache and session data behind `fx.store`. One namespace per
 declaration; drivers swap `memory` ↔ `redis` per environment.
 
+The Console KV band opens a query console for `list`, `get`, `set`, `delete`, and `ttl`.
+Prettify rewrites commands to call form and indents `set` JSON.
+
 ### Quick start
 
 <Steps>
@@ -452,17 +514,19 @@ do: async ({ userId, data }, fx) => {
 
 ### Handle API
 
-| Call                    | Effect  | Returns    | Notes                                     |
-| ----------------------- | ------- | ---------- | ----------------------------------------- |
-| `get(key)`              | `read`  | `unknown`  | Missing keys resolve per driver           |
-| `set(key, value, ttl?)` | `write` | `void`     | Values should be JSON-serializable        |
-| `delete(key)`           | `write` | `boolean`  | Whether a key was removed                 |
-| `list(prefix?)`         | `read`  | `string[]` | Prefix filter; powers the Console browser |
+| Call                    | Effect  | Returns          | Notes                                                                    |
+| ----------------------- | ------- | ---------------- | ------------------------------------------------------------------------ |
+| `get(key)`              | `read`  | `unknown`        | Missing keys resolve per driver                                          |
+| `set(key, value, ttl?)` | `write` | `void`           | Values should be JSON-serializable                                       |
+| `delete(key)`           | `write` | `boolean`        | Whether a key was removed                                                |
+| `list(prefix?)`         | `read`  | `string[]`       | Prefix filter; Console browse shows TTL and size                         |
+| `ttlMs(key)`            | `read`  | `number \| null` | Remaining expiry; `null` when the key has none. Console command is `ttl` |
 
 ### TTL
 
 Optional third argument on `set` is a duration string: `(\d+)(ms|s|m|h|d)` — e.g. `"30m"`, `"1h"`,
-`"5000ms"`. Same call — opposite physics under each driver:
+`"5000ms"`. Same call — opposite physics under each driver. Console KV browse edits that TTL
+(empty clears expiry) and can add a key through the same `set` path.
 
 <StoreKvTtl />
 

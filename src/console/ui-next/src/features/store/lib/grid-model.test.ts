@@ -36,9 +36,12 @@ describe("buildStoreGridModel", () => {
         masked: false,
       },
     });
-    expect(model.columns.map((c) => c.key)).toEqual(["key", "value"]);
+    expect(model.columns.map((c) => c.key)).toEqual(["key", "value", "ttl", "size"]);
     expect(model.columns.find((c) => c.key === "value")?.editable).toBe(true);
+    expect(model.columns.find((c) => c.key === "ttl")?.editable).toBe(true);
     expect(model.rows[0]?.cells.value).toEqual({ seats: 2 });
+    expect(model.rows[0]?.cells.ttl).toBeNull();
+    expect(typeof model.rows[0]?.cells.size).toBe("number");
   });
 
   test("files and index are read-only with correct delete kind", () => {
@@ -67,6 +70,7 @@ describe("sqlRowId", () => {
   test("prefers id then Id, stringifies primitives", () => {
     expect(sqlRowId({ id: "b1" })).toBe("b1");
     expect(sqlRowId({ Id: 42 })).toBe("42");
+    expect(sqlRowId({ name: "vector" })).toBe("vector");
     expect(sqlRowId({})).toBe("");
   });
 });

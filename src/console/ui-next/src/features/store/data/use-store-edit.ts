@@ -13,10 +13,16 @@ import {
   type StoreEditResult,
 } from "@/client.ts";
 import { STORE_QUERY_KEY } from "./use-store-query.ts";
+import { STORES_LIST_QUERY_KEY } from "./use-stores-list.ts";
 
-function toError(res: { error?: { code: string; data?: unknown } | null }): Error | null {
+function toError(res: {
+  error?: { code: string; message?: string; data?: unknown } | null;
+}): Error | null {
   if (!res.error) return null;
-  const err = new Error(res.error.code) as Error & { code: string; data?: unknown };
+  const err = new Error(res.error.message ?? res.error.code) as Error & {
+    code: string;
+    data?: unknown;
+  };
   err.code = res.error.code;
   err.data = res.error.data;
   return err;
@@ -37,7 +43,10 @@ export function useStoreEdit() {
     },
     onSuccess: async (_data, input) => {
       if (input.commit) {
-        await qc.invalidateQueries({ queryKey: STORE_QUERY_KEY });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: STORE_QUERY_KEY }),
+          qc.invalidateQueries({ queryKey: STORES_LIST_QUERY_KEY }),
+        ]);
       }
     },
   });
@@ -74,7 +83,10 @@ export function useStoreDelete() {
       return res.data;
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: STORE_QUERY_KEY });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: STORE_QUERY_KEY }),
+        qc.invalidateQueries({ queryKey: STORES_LIST_QUERY_KEY }),
+      ]);
     },
   });
 }

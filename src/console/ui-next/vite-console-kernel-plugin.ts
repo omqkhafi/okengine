@@ -3,7 +3,7 @@
  * so `bun run dev:console-next` prints login (or claim) details in the same terminal.
  *
  * Set `OKE_CONSOLE_NEXT_SEEDED=1` (or `bun run dev:console-next:seed`) to
- * load the same FLOWS_TEST_MANIFEST + WideEvent as the Playwright fixture.
+ * load the keel Manifest + WideEvent as the Playwright fixture.
  *
  * Set `OKE_CONSOLE_NEXT_FRESH=1` (or `bun run dev:console-next:fresh`) to
  * skip the fixed operator and keep first-admin claim open.
