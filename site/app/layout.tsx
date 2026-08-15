@@ -2,6 +2,7 @@ import localFont from "next/font/local";
 import { Provider } from "@/components/provider";
 import { Topbar } from "@/components/chrome/topbar";
 import { OkeFaviconCycle } from "@/components/oke-logo-icon";
+import { UnregisterServiceWorkers } from "@/components/unregister-service-workers";
 import { source } from "@/lib/source";
 import type { Metadata } from "next";
 import "./global.css";
@@ -41,6 +42,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
       <body className="flex flex-col min-h-screen">
         <Provider>
           <OkeFaviconCycle />
+          <UnregisterServiceWorkers />
           <Topbar tree={source.getPageTree()} />
           {children}
         </Provider>

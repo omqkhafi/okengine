@@ -1016,6 +1016,10 @@ needed).
   `oklch` / `lab` theme tokens (`stroke` / `fill` stay attributes;
   Motion animates opacity and position only).
 
+- Docs `GET /sw.js` is no longer a 404. A leftover service worker
+  on localhost:3000 was still asking for the script; the site now
+  serves an unregistering worker and drops the registration.
+
 ### 🔒 Security
 
 - Console login `?next=` is allow-listed to `/flows`, `/units`,
