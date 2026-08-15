@@ -8,8 +8,27 @@
 
 import { docsUrl as absoluteDocsUrl } from "../docs-origin.ts";
 import { getActiveDefaultLocale, getActiveLocale } from "../i18n/locale-context.ts";
-import { getMessageCatalogs, translate } from "../i18n/messages.ts";
-import { resolveFailureMessage } from "../i18n/failure-message.ts";
+import { lazyRequire } from "./lazy-require.ts";
+
+/** Catalogs — kept off the edge `fail` / `OKE_ERRORS` static graph. */
+function loadMessages(): typeof import("../i18n/messages.ts") {
+  const stem = ["mes", "sages"].join("");
+  try {
+    return lazyRequire(`${import.meta.dir}/../i18n`, stem);
+  } catch {
+    return lazyRequire(import.meta.dir, stem);
+  }
+}
+
+/** Failure-message helper — same lazy boundary as {@link loadMessages}. */
+function loadFailureMessage(): typeof import("../i18n/failure-message.ts") {
+  const stem = ["failure", "message"].join("-");
+  try {
+    return lazyRequire(`${import.meta.dir}/../i18n`, stem);
+  } catch {
+    return lazyRequire(import.meta.dir, stem);
+  }
+}
 
 /** Numeric OKE error code (permanent once published). */
 export type OkeErrorCode = number;
@@ -226,7 +245,10 @@ export function lookupOkeError(code: OkeErrorCode): OkeErrorDefinition | undefin
  * @param opts - Optional message override
  */
 export function fail<E>(code: string, data: E, opts?: FailOptions): FlowFailure<E> {
-  const message = opts?.message !== undefined ? opts.message : resolveFailureMessage(code, data);
+  const message =
+    opts?.message !== undefined
+      ? opts.message
+      : loadFailureMessage().resolveFailureMessage(code, data);
   const error: FlowErrorValue<E> = message !== undefined ? { code, data, message } : { code, data };
   return { data: null, error };
 }
@@ -272,6 +294,7 @@ function localizeOkePart(
   locale?: string,
 ): string {
   const key = `oke.${code}.${part}`;
+  const { getMessageCatalogs, translate } = loadMessages();
   const catalogs = getMessageCatalogs();
   const active = locale ?? getActiveLocale("en");
   const defaultLocale = getActiveDefaultLocale("en");

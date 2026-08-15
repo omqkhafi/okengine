@@ -175,12 +175,10 @@ function OnceDemo({ live }: { readonly live: boolean }) {
             height="8"
             rx="2"
             fill={BOX}
+            stroke={live && w.wins ? PACKET : BOX_LINE}
             strokeWidth="1"
             initial={false}
-            animate={{
-              stroke: live && w.wins ? PACKET : BOX_LINE,
-              opacity: live ? (w.wins ? 1 : 0.45) : 0.7,
-            }}
+            animate={{ opacity: live ? (w.wins ? 1 : 0.45) : 0.7 }}
             transition={{ duration: 0.3 }}
           />
         </g>
@@ -288,11 +286,9 @@ function LiveDemo({ live }: { readonly live: boolean }) {
         height="10"
         rx="2"
         fill={BOX}
+        stroke={live ? PACKET : BOX_LINE}
         initial={false}
-        animate={{
-          stroke: live ? PACKET : BOX_LINE,
-          opacity: live ? 1 : 0.55,
-        }}
+        animate={{ opacity: live ? 1 : 0.55 }}
         transition={{ duration: 0.3 }}
       />
       {/* Late-join packets settle onto the bus.live() sink. */}

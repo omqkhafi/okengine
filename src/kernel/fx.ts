@@ -10,7 +10,7 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
-import { listPage, type QueryPageSpec } from "./list-page.ts";
+import type { QueryPageSpec } from "./list-page.ts";
 import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type {
   FilesStoreDecl,
@@ -61,7 +61,8 @@ import type { RunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
 import type { RunsRow, WideEvent } from "../runs/types.ts";
 import type { RunWindowStats, SloBreach } from "../runs/window.ts";
-import { translate, type MessageCatalogs } from "../i18n/messages.ts";
+import type { MessageCatalogs } from "../i18n/messages.ts";
+import { lazyRequire } from "./lazy-require.ts";
 import type { AppMessageKey, MessageValues } from "../i18n/types.ts";
 
 /** Lazy runs/window helpers — kept off the cold `oke` static graph. */
@@ -391,6 +392,22 @@ function jsonWith<T>(dataOrPage: T | JsonPage<T>, meta?: Record<string, unknown>
 }
 
 /**
+ * Sync-load the PostgREST list grammar only when `fx.json.withQuery` runs.
+ * A static import would pin ~4 kB gzip on every `createFx` — including the
+ * edge profile and Store-only `oke()` graphs that never page a list.
+ */
+function loadListPage(): typeof import("./list-page.ts") {
+  return lazyRequire(import.meta.dir, ["list", "page"].join("-"));
+}
+
+/**
+ * Sync-load i18n catalogs only when `fx.t` runs.
+ */
+function loadMessages(): typeof import("../i18n/messages.ts") {
+  return lazyRequire(`${import.meta.dir}/../i18n`, ["mes", "sages"].join(""));
+}
+
+/**
  * Page rows from a list query and wrap them as {@link FxJson.with}.
  *
  * @param rows - Already-loaded items
@@ -402,7 +419,7 @@ function jsonWithQuery<T>(
   input: unknown,
   spec?: QueryPageSpec<T>,
 ): JsonResult<T[]> {
-  return jsonWith(listPage(rows, input, spec));
+  return jsonWith(loadListPage().listPage(rows, input, spec));
 }
 
 /** Options for {@link FxVault.set}. */
@@ -1749,7 +1766,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
     },
     log,
     t(key, values) {
-      return translate({
+      return loadMessages().translate({
         locale,
         defaultLocale,
         catalogs,

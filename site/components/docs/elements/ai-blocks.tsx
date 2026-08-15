@@ -228,8 +228,9 @@ function PromptDemo() {
           x="71"
           y="14"
           textAnchor="middle"
+          fill={phase >= 2 ? PACKET : IDLE}
           initial={false}
-          animate={{ fill: phase >= 2 ? PACKET : IDLE, opacity: phase >= 2 ? 1 : 0.45 }}
+          animate={{ opacity: phase >= 2 ? 1 : 0.45 }}
           style={{ fontSize: 6, fontFamily: "ui-monospace, monospace" }}
         >
           out

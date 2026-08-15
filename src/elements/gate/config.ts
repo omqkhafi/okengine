@@ -7,7 +7,8 @@
 
 import type { GateAuthOptions, ResolvedGateAuth } from "../../auth/config.ts";
 import { requirePackageModule } from "../../shared/lazy-src.ts";
-import { flattenGateMembers, isGateAllDecl, type GateAllDecl, type GateDecl } from "./declare.ts";
+import type { GateDecl } from "./declare.ts";
+import { flattenGateMembers, isGateAllDecl, type GateAllDecl } from "./flatten.ts";
 
 /** Rate-limit defaults under Gate. */
 export interface GateRateLimitOptions {

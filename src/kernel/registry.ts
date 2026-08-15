@@ -15,12 +15,8 @@
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
-import {
-  flattenGateMembers,
-  isGateAllDecl,
-  type GateAllDecl,
-  type GateDecl,
-} from "../elements/gate/declare.ts";
+import type { GateAllDecl, GateDecl } from "../elements/gate/declare.ts";
+import { flattenGateMembers, isGateAllDecl } from "../elements/gate/flatten.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";

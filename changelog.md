@@ -1007,6 +1007,15 @@ needed).
   (no Oniguruma WASM / unused C++ bundle), and Overview / Flows /
   Store / Vault are lazy route chunks.
 
+- Kernel edge and Store-only `oke()` no longer statically import
+  PostgREST `listPage`, i18n catalogs, `http.resource`, or auto-cache.
+  Those load through computed `import.meta.require` when the feature
+  actually runs, so unused graphs stay under budget.
+
+- Docs Signal and AI figures no longer ask Motion to interpolate
+  `oklch` / `lab` theme tokens (`stroke` / `fill` stay attributes;
+  Motion animates opacity and position only).
+
 ### 🔒 Security
 
 - Console login `?next=` is allow-listed to `/flows`, `/units`,

@@ -7,6 +7,7 @@
 
 import { flattenGateArgs, GATE_PUBLIC_NAME, type GateAllDecl } from "../elements/gate/flatten.ts";
 import type { NamedRef } from "./fx.ts";
+import { lazyRequire } from "./lazy-require.ts";
 
 /** HTTP methods accepted by {@link http}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD" | "QUERY";
@@ -97,7 +98,7 @@ export type TriggerKind = Trigger["kind"];
  * @param apply - Rebuild the host with the flattened gate list
  * @param current - Gates already attached
  */
-function createGateAttach<T>(
+export function createGateAttach<T>(
   apply: (next: readonly GateRef[]) => T,
   current: readonly GateRef[],
 ): GateAttach<T> {
@@ -112,7 +113,15 @@ function createGateAttach<T>(
   return attach;
 }
 
-function createHttpTrigger<M extends HttpMethod, P extends string>(
+/**
+ * Build an HTTP trigger with `.gate` / `.live`.
+ *
+ * @param method - HTTP verb
+ * @param path - Route path
+ * @param gates - Attached gate refs
+ * @param isLive - Live flag
+ */
+export function createHttpTrigger<M extends HttpMethod, P extends string>(
   method: M,
   path: P,
   gates: readonly GateRef[] = [],
@@ -168,46 +177,6 @@ export interface ResourceMount {
 /** Brand for {@link ResourceMount}. */
 export const resourceMountBrand: unique symbol = Symbol.for("oke.resource.mount");
 
-/**
- * Mount a CRUD resource at `path`: `list`/`create` on the base, `get` /
- * `update` / `remove` on `/:id`. Bind via `on(http.resource(…))`.
- *
- * @param path - Base path (`/notes`)
- * @param ops - The five FlowDefs (usually `resource.all()`)
- * @param gates - Shared gate chain
- * @param isLive - Live on GET list + get
- */
-function httpResource<P extends string>(
-  path: P,
-  ops: ResourceFlowBag,
-  gates: readonly GateRef[] = [],
-  isLive = false,
-): ResourceMount {
-  const id = `${path}/:id` as `${P}/:id`;
-  const verb = <M extends HttpMethod>(
-    method: M,
-    p: P | `${P}/:id`,
-    live: boolean,
-  ): HttpTrigger<M> => createHttpTrigger(method, p, gates, live);
-  const mount: ResourceMount = {
-    [resourceMountBrand]: true,
-    gates,
-    isLive,
-    mounts: [
-      { trigger: verb("GET", path, isLive), flow: ops.list },
-      { trigger: verb("POST", path, false), flow: ops.create },
-      { trigger: verb("GET", id, isLive), flow: ops.get },
-      { trigger: verb("PATCH", id, false), flow: ops.update },
-      { trigger: verb("DELETE", id, false), flow: ops.remove },
-    ],
-    gate: createGateAttach((next) => httpResource(path, ops, next, isLive), gates),
-    live() {
-      return httpResource(path, ops, gates, true);
-    },
-  };
-  return mount;
-}
-
 /** True when `value` is a {@link ResourceMount}. */
 export function isResourceMount(value: unknown): value is ResourceMount {
   return (
@@ -215,6 +184,14 @@ export function isResourceMount(value: unknown): value is ResourceMount {
     value !== null &&
     (value as ResourceMount)[resourceMountBrand] === true
   );
+}
+
+/**
+ * Sync-load `http.resource` only when called. A static import would pin the
+ * five-verb mount on every `http` graph, including edge ping apps.
+ */
+function loadHttpResource(): typeof import("./http-resource.ts") {
+  return lazyRequire(import.meta.dir, ["http", "resource"].join("-"));
 }
 
 /**
@@ -284,7 +261,7 @@ export const http: HttpTriggerNamespace = {
   options: httpVerb("OPTIONS"),
   head: httpVerb("HEAD"),
   query: httpVerb("QUERY"),
-  resource: httpResource,
+  resource: (path, ops) => loadHttpResource().httpResource(path, ops),
 };
 
 /**

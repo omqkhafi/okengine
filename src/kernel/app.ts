@@ -34,7 +34,6 @@ import { requirePackageModule } from "../shared/lazy-src.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import { parseAcceptLanguage } from "../elements/channel/locale.ts";
 import { runWithLocale } from "../i18n/locale-context.ts";
-import { getMessageCatalogs, matchConfiguredLocale } from "../i18n/messages.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
 import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
@@ -124,17 +123,21 @@ import type {
 } from "./triggers.ts";
 import { cacheDimensionOf, createRunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
-import {
-  autoCacheEligible,
-  effectsFromLedger,
-  isStoreResourceRef,
-  parseTtlMs,
-  resolveCacheEffects,
-  tier1DimsByResource,
-  tier1KeysForReads,
-  tier1Lookup,
-} from "../elements/store/cache.ts";
 import type { Effects, ResourceRef } from "../manifest/types.ts";
+
+/**
+ * Auto-cache helpers — loaded only when a Store runtime is bound.
+ * A static import would pin cache eligibility/dims on every `oke()` graph,
+ * including Store-declared apps that never execute a cached flow.
+ */
+function loadStoreCache(): typeof import("../elements/store/cache.ts") {
+  return requirePackageModule("elements/store/cache", "store-cache");
+}
+
+/** i18n catalogs — loaded at execute time, not on the `oke()` construction graph. */
+function loadMessages(): typeof import("../i18n/messages.ts") {
+  return requirePackageModule("i18n/messages", "messages");
+}
 
 /** Options for {@link oke}. */
 export interface OkeOptions {
@@ -1131,7 +1134,7 @@ export function oke(options: OkeOptions): OkeApp {
     const configuredLocales = i18nConfig?.locales ?? ["en"];
     const defaultLocale = i18nConfig?.default ?? "en";
     const acceptLanguage = extras?.request?.headers.get("accept-language") ?? undefined;
-    const resolvedLocale = matchConfiguredLocale(
+    const resolvedLocale = loadMessages().matchConfiguredLocale(
       extras?.locale ?? parseAcceptLanguage(acceptLanguage),
       configuredLocales,
       defaultLocale,
@@ -1305,7 +1308,7 @@ export function oke(options: OkeOptions): OkeApp {
       i18n: {
         locale: resolvedLocale,
         defaultLocale,
-        catalogs: getMessageCatalogs(),
+        catalogs: loadMessages().getMessageCatalogs(),
         ...options.fx?.i18n,
       },
       ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
@@ -1356,29 +1359,32 @@ export function oke(options: OkeOptions): OkeApp {
         try {
           const invoke = async (input: unknown) => {
             const storeRt = booted?.store;
+            const cache = storeRt ? loadStoreCache() : undefined;
             const declaredForCache: Effects | undefined = capability?.open
               ? flowDef.effects
               : (effects ?? {});
-            const cacheEffects = resolveCacheEffects(
-              declaredForCache,
-              learnedTier1Reads.get(flowDef.name),
-            );
+            const cacheEffects = cache
+              ? cache.resolveCacheEffects(declaredForCache, learnedTier1Reads.get(flowDef.name))
+              : undefined;
             // Revealed PII must not hit a prior masked entry or land in cache.
             const reveal = extras?.trustedInvoke === true && extras.revealPii === true;
             const cacheOk =
+              cache !== undefined &&
               storeRt !== undefined &&
+              cacheEffects !== undefined &&
               !reveal &&
-              autoCacheEligible({
+              cache.autoCacheEligible({
                 cache: flowDef.cache,
                 durable: flowDef.durable,
                 effects: cacheEffects,
               });
-            const dims = cacheOk
-              ? tier1DimsByResource(cacheEffects, flowDef.name, input, fx.auth.userId)
-              : undefined;
-            if (cacheOk && dims) {
-              const keys = tier1KeysForReads(cacheEffects, dims);
-              const cached = tier1Lookup((key) => storeRt.cache.get(key), keys);
+            const dims =
+              cacheOk && cache && cacheEffects
+                ? cache.tier1DimsByResource(cacheEffects, flowDef.name, input, fx.auth.userId)
+                : undefined;
+            if (cacheOk && cache && dims && storeRt) {
+              const keys = cache.tier1KeysForReads(cacheEffects, dims);
+              const cached = cache.tier1Lookup((key) => storeRt.cache.get(key), keys);
               if (cached !== undefined) {
                 telemetry.cacheHits += 1;
                 return cached;
@@ -1392,19 +1398,19 @@ export function oke(options: OkeOptions): OkeApp {
               return flowDef.do(input as never, fx);
             };
             const output = await (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
-            if (!isFlowFailure(output)) {
-              const ledgerFx = effectsFromLedger(ledger.entries);
+            if (!isFlowFailure(output) && cache && storeRt && cacheEffects) {
+              const ledgerFx = cache.effectsFromLedger(ledger.entries);
               const writeEffects: Effects = {
                 writes: [
                   ...new Set([...(cacheEffects.writes ?? []), ...(ledgerFx.writes ?? [])]),
-                ].filter(isStoreResourceRef),
+                ].filter(cache.isStoreResourceRef),
               };
-              if (storeRt && (writeEffects.writes?.length ?? 0) > 0) {
+              if ((writeEffects.writes?.length ?? 0) > 0) {
                 storeRt.onWriteEffects(writeEffects);
               }
               const mergedReads = [
                 ...new Set([...(cacheEffects.reads ?? []), ...(ledgerFx.reads ?? [])]),
-              ].filter(isStoreResourceRef);
+              ].filter(cache.isStoreResourceRef);
               if (mergedReads.length > 0) {
                 learnedTier1Reads.set(flowDef.name, mergedReads);
               }
@@ -1415,18 +1421,18 @@ export function oke(options: OkeOptions): OkeApp {
               };
               const storeAfter =
                 !reveal &&
-                autoCacheEligible({
+                cache.autoCacheEligible({
                   cache: flowDef.cache,
                   durable: flowDef.durable,
                   effects: putEffects,
                 });
-              if (storeRt && storeAfter && output !== undefined) {
+              if (storeAfter && output !== undefined) {
                 const ttlMs =
-                  typeof flowDef.cache === "string" ? parseTtlMs(flowDef.cache) : undefined;
+                  typeof flowDef.cache === "string" ? cache.parseTtlMs(flowDef.cache) : undefined;
                 storeRt.putTier1(
                   putEffects,
                   output,
-                  tier1DimsByResource(putEffects, flowDef.name, input, fx.auth.userId),
+                  cache.tier1DimsByResource(putEffects, flowDef.name, input, fx.auth.userId),
                   ttlMs,
                 );
                 if (!cacheOk) telemetry.cacheMisses += 1;
