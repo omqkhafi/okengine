@@ -1,9 +1,9 @@
 /**
  * Post-auth return path — keep the operator on the module they were in
- * after a session expires, instead of always landing on `/overview`.
+ * after a session expires, instead of always landing on `/flows`.
  *
- * Only `/overview`, `/flows`, `/store`, and `/vault` (plus their search) are legal.
- * Legacy `/units` rewrites to `/flows`. Anything else is dropped so `?next=`
+ * Only `/flows`, `/units`, `/store`, and `/vault` (plus their search) are legal.
+ * Legacy `/overview` rewrites to `/flows`. Anything else is dropped so `?next=`
  * cannot be an open redirect.
  */
 
@@ -13,10 +13,10 @@ import { validateUnitsSearch, type UnitsSearch } from "../units/state/units-sele
 import { validateVaultSearch, type VaultSearch } from "../vault/state/vault-selection.ts";
 
 /** Default shell module when no safe return path is present. */
-export const DEFAULT_AFTER_AUTH = "/overview" as const;
+export const DEFAULT_AFTER_AUTH = "/flows" as const;
 
 /** Shell pathnames that may be restored after login. */
-const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault"]);
+const SHELL_PATHS = new Set(["/flows", "/units", "/store", "/vault"]);
 
 /** Upper bound so a crafted `next` cannot bloat the login URL. */
 const MAX_RETURN_TO_LENGTH = 1024;
@@ -28,14 +28,14 @@ export type AuthSearch = {
 
 /** Typed shell location used by `navigate` after claim / login. */
 export type AfterAuthLocation =
-  | { readonly to: "/overview"; readonly search: FlowsSearch }
-  | { readonly to: "/flows"; readonly search: UnitsSearch }
+  | { readonly to: "/flows"; readonly search: FlowsSearch }
+  | { readonly to: "/units"; readonly search: UnitsSearch }
   | { readonly to: "/store"; readonly search: StoreSearch }
   | { readonly to: "/vault"; readonly search: VaultSearch };
 
 /**
- * Keep only an in-console shell href (`/overview` | `/flows` | `/store` | `/vault` + search).
- * `/units` is rewritten to `/flows`.
+ * Keep only an in-console shell href (`/flows` | `/units` | `/store` | `/vault` + search).
+ * `/overview` is rewritten to `/flows`.
  *
  * @param value - Raw `next` search param or `pathname + search`
  */
@@ -52,7 +52,7 @@ export function sanitizeReturnTo(value: unknown): string | undefined {
   try {
     const url = new URL(trimmed, "http://console.local");
     if (url.origin !== "http://console.local") return undefined;
-    pathname = url.pathname === "/units" ? "/flows" : url.pathname;
+    pathname = url.pathname === "/overview" ? "/flows" : url.pathname;
     search = url.search;
   } catch {
     return undefined;
@@ -75,7 +75,7 @@ export function validateAuthSearch(search: Record<string, unknown>): AuthSearch 
 
 /**
  * Search to attach when sending an expired session to the login gate.
- * Omits `next` when the return path is missing or is already `/overview`.
+ * Omits `next` when the return path is missing or is already `/flows`.
  *
  * @param returnTo - Current `pathname + searchStr`
  */
@@ -93,8 +93,8 @@ export function afterAuthLocation(value: unknown): AfterAuthLocation {
   if (next === undefined) return { to: DEFAULT_AFTER_AUTH, search: {} };
   const url = new URL(next, "http://console.local");
   const raw = Object.fromEntries(url.searchParams.entries());
-  if (url.pathname === "/flows") {
-    return { to: "/flows", search: validateUnitsSearch(raw) };
+  if (url.pathname === "/units") {
+    return { to: "/units", search: validateUnitsSearch(raw) };
   }
   if (url.pathname === "/store") {
     return { to: "/store", search: validateStoreSearch(raw) };
@@ -102,13 +102,13 @@ export function afterAuthLocation(value: unknown): AfterAuthLocation {
   if (url.pathname === "/vault") {
     return { to: "/vault", search: validateVaultSearch(raw) };
   }
-  return { to: "/overview", search: validateFlowsSearch(raw) };
+  return { to: "/flows", search: validateFlowsSearch(raw) };
 }
 
 /** `navigate` surface used after claim / login (avoids a `to` union). */
 export type AfterAuthNavigate = {
-  (opts: { to: "/overview"; search: FlowsSearch }): unknown;
-  (opts: { to: "/flows"; search: UnitsSearch }): unknown;
+  (opts: { to: "/flows"; search: FlowsSearch }): unknown;
+  (opts: { to: "/units"; search: UnitsSearch }): unknown;
   (opts: { to: "/store"; search: StoreSearch }): unknown;
   (opts: { to: "/vault"; search: VaultSearch }): unknown;
 };
@@ -122,8 +122,8 @@ export type AfterAuthNavigate = {
 export function goAfterAuth(navigate: AfterAuthNavigate, value: unknown): void {
   const dest = afterAuthLocation(value);
   switch (dest.to) {
-    case "/flows":
-      void navigate({ to: "/flows", search: dest.search });
+    case "/units":
+      void navigate({ to: "/units", search: dest.search });
       return;
     case "/store":
       void navigate({ to: "/store", search: dest.search });
@@ -132,6 +132,6 @@ export function goAfterAuth(navigate: AfterAuthNavigate, value: unknown): void {
       void navigate({ to: "/vault", search: dest.search });
       return;
     default:
-      void navigate({ to: "/overview", search: dest.search });
+      void navigate({ to: "/flows", search: dest.search });
   }
 }

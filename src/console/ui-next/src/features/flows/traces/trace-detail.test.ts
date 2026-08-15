@@ -8,7 +8,7 @@ import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
 import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
 import { executeTraceReplay, replayRequestForRun } from "./trace-actions.ts";
-import { FLOWS_TEST_MANIFEST } from "../../../../../ui/flows/fixture.ts";
+import { FLOWS_TEST_MANIFEST } from "../fixture.ts";
 import { traceRequestMeta } from "./request-meta.ts";
 import { GATE_CHIP_ICONS, gateChipIcon, traceGateInfos } from "./trace-gates.ts";
 import type { RunRow } from "@/client.ts";

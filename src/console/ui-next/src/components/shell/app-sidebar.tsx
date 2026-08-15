@@ -1,5 +1,5 @@
 /**
- * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault.
+ * Authenticated Console sidebar — always icon-collapsed: Flows / Units / Store / Vault.
  */
 
 import {
@@ -28,13 +28,13 @@ import type { SessionOperator } from "@/client.ts";
 
 const navItems = [
   {
-    title: "Overview",
-    to: "/overview" as const,
+    title: "Flows",
+    to: "/flows" as const,
     icon: WorkflowSquare08Icon,
   },
   {
-    title: "Flows",
-    to: "/flows" as const,
+    title: "Units",
+    to: "/units" as const,
     icon: Shapes01Icon,
   },
   {

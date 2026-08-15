@@ -1,6 +1,7 @@
 /**
- * ui-next router — code-based TanStack Router (Vite SPA, same pattern as current Console).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault`.
+ * Console router — code-based TanStack Router (Vite SPA).
+ * Pre-auth `/` and authenticated shell `/flows` | `/units` | `/store` | `/vault`.
+ * `/overview` redirects to `/flows`.
  */
 
 import {
@@ -82,27 +83,27 @@ const authenticatedRoute = createRoute({
   },
 });
 
-const overviewRoute = createRoute({
+const flowsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
-  path: "/overview",
+  path: "/flows",
   validateSearch: validateFlowsSearch,
   component: FlowsPage,
 });
 
-const flowsRoute = createRoute({
+const unitsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
-  path: "/flows",
+  path: "/units",
   validateSearch: validateUnitsSearch,
   component: UnitsPage,
 });
 
-const unitsRedirectRoute = createRoute({
+const overviewRedirectRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
-  path: "/units",
+  path: "/overview",
   beforeLoad: ({ search }) => {
     throw redirect({
       to: "/flows",
-      search: validateUnitsSearch(search as Record<string, unknown>),
+      search: validateFlowsSearch(search as Record<string, unknown>),
       replace: true,
     });
   },
@@ -126,16 +127,16 @@ const vaultRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authenticatedRoute.addChildren([
-    overviewRoute,
     flowsRoute,
-    unitsRedirectRoute,
+    unitsRoute,
+    overviewRedirectRoute,
     storeRoute,
     vaultRoute,
   ]),
 ]);
 
 /**
- * Application router for the parallel Console SPA.
+ * Application router for the Console SPA.
  */
 export const router = createRouter({
   routeTree,

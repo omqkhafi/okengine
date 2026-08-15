@@ -17,7 +17,7 @@ export type HighlightCodeOptions = {
 };
 
 /**
- * Highlight source to React elements (no dangerouslySetInnerHTML).
+ * Highlight source to React elements (JSX runtime, never raw HTML).
  *
  * @param code - Source text
  * @param options - Language / theme, or a bare language id for back-compat

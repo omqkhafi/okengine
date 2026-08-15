@@ -20,6 +20,11 @@ export const LEGACY_SEEDED_MARKER = ".oke/seeded";
 export type ProjectState = {
   /** ISO timestamp when prompted `oke db seed` last succeeded. */
   readonly seededAt?: string;
+  /**
+   * Seed identity (`defineSeed({ name })` or project folder).
+   * A different name re-prompts — not a global "already seeded" flag.
+   */
+  readonly seed?: string;
 };
 
 /**
@@ -40,10 +45,13 @@ export function parseProjectState(raw: unknown): ProjectState {
   if (raw === null || typeof raw !== "object") return {};
   const o = raw as Record<string, unknown>;
   const seededAt = o["seededAt"];
-  if (typeof seededAt === "string" && seededAt.trim().length > 0) {
-    return { seededAt: seededAt.trim() };
-  }
-  return {};
+  const seed = o["seed"];
+  return {
+    ...(typeof seededAt === "string" && seededAt.trim().length > 0
+      ? { seededAt: seededAt.trim() }
+      : {}),
+    ...(typeof seed === "string" && seed.trim().length > 0 ? { seed: seed.trim() } : {}),
+  };
 }
 
 /**
@@ -95,29 +103,37 @@ export async function writeProjectState(cwd: string, state: ProjectState): Promi
   await mkdir(dirname(path), { recursive: true });
   const body: Record<string, string> = {};
   if (state.seededAt) body.seededAt = state.seededAt;
+  if (state.seed) body.seed = state.seed;
   await Bun.write(path, `${JSON.stringify(body, null, 2)}\n`);
 }
 
 /**
- * Whether prompted seed already completed for this project.
+ * Whether prompted seed already completed for this seed identity.
  *
  * @param cwd - Project root
+ * @param seed - Current {@link SeedDef.name} / folder id; a mismatch re-asks
  */
-export async function isProjectSeeded(cwd: string): Promise<boolean> {
+export async function isProjectSeeded(cwd: string, seed?: string): Promise<boolean> {
   const state = await readProjectState(cwd);
-  return typeof state.seededAt === "string" && state.seededAt.length > 0;
+  if (typeof state.seededAt !== "string" || state.seededAt.length === 0) return false;
+  if (seed === undefined) return true;
+  return state.seed === seed;
 }
 
 /**
- * Record a successful prompted seed (ISO timestamp).
+ * Record a successful prompted seed (ISO timestamp + identity).
  *
  * @param cwd - Project root
- * @param at - Optional timestamp (defaults to now)
+ * @param options - Seed id and optional timestamp
  */
 export async function markProjectSeeded(
   cwd: string,
-  at: string = new Date().toISOString(),
+  options: { readonly seed?: string; readonly at?: string } = {},
 ): Promise<void> {
   const prev = await readProjectState(cwd);
-  await writeProjectState(cwd, { ...prev, seededAt: at });
+  await writeProjectState(cwd, {
+    ...prev,
+    seededAt: options.at ?? new Date().toISOString(),
+    ...(options.seed !== undefined ? { seed: options.seed } : {}),
+  });
 }

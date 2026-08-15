@@ -182,7 +182,7 @@ const unsub = await bus.live("order-status", (payload) => {
 
 `once` signals retry automatically. Every attempt keeps a **typed failure reason**, and the full attempt history survives into the DLQ — so when a message lands there you see _why_ each attempt failed, not just that it did.
 
-The **Console** (`:6533` → Signals) shows the topology (which flows emit and consume each signal), per-subscriber delivery stats, and the DLQ contents with replay / discard controls — no separate broker UI to run.
+The **Console** (`:6533` → `/flows`) shows emit and consume on the graph, and delivery attempts in Traces — no separate broker UI to run.
 
 <Callout title="Orphan emits and schema fail loudly">
   Zero subscribers throws **OKE1042** unless `optional: true`. A payload that fails the signal's
@@ -268,7 +268,7 @@ The payload failed the signal's Standard Schema at emit time — nothing was sta
 </Accordion>
 <Accordion title="A message keeps retrying and then disappears">
 
-When `attempts > retries` the message moves to the DLQ (if `deadLetter: true`) — it is not lost. Open Console → Signals, inspect the typed failure reasons, fix the consumer, then replay.
+When `attempts > retries` the message moves to the DLQ (if `deadLetter: true`) — it is not lost. Open Console → Flows, inspect the typed failure on the trace, fix the consumer, then replay.
 
 </Accordion>
 <Accordion title="once vs broadcast vs live — how do I choose?">

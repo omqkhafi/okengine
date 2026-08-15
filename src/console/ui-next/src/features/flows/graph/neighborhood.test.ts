@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { FLOWS_TEST_MANIFEST } from "../../../../../ui/flows/fixture.ts";
+import { FLOWS_TEST_MANIFEST } from "../fixture.ts";
 import { buildFlowGraph } from "./build-flow-graph.ts";
 import { flowTouchesNode, sliceManifestForFocus } from "./neighborhood.ts";
 

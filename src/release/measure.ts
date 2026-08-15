@@ -315,7 +315,7 @@ export interface ConsoleBundleBreakdown {
  * @param distDir - Vite outDir (built if missing)
  */
 export async function measureConsoleInitialGzipBytes(
-  distDir = `${import.meta.dir}/../console/ui/dist`,
+  distDir = `${import.meta.dir}/../console/ui-next/dist`,
 ): Promise<number> {
   const breakdown = await measureConsoleBundleBreakdown(distDir);
   return breakdown.initialGzipBytes;
@@ -325,20 +325,17 @@ export async function measureConsoleInitialGzipBytes(
  * Build the Console SPA and return an initial-vs-lazy breakdown.
  *
  * Initial load is defined as what `index.html` actually references
- * (`<script>`, stylesheet `<link>`, and `modulepreload` hrefs) — not
- * "every asset whose filename lacks `panel-`". That earlier heuristic
- * mis-counted Overview/Gates/Channels lazy chunks and inflated the number.
+ * (`<script>`, stylesheet `<link>`, and `modulepreload` hrefs).
  *
  * @param distDir - Vite outDir
  */
 export async function measureConsoleBundleBreakdown(
-  distDir = `${import.meta.dir}/../console/ui/dist`,
+  distDir = `${import.meta.dir}/../console/ui-next/dist`,
 ): Promise<ConsoleBundleBreakdown> {
   // Force production minify. `bun test` sets NODE_ENV=test, which yields an
-  // unminified SPA (~136 kB gzip) and was the unexplained Prompt-21 (≈90 kB)
-  // vs later (~138 kB) gap — methodology, not a panel leak.
+  // unminified SPA and inflates the gzip number.
   const build = Bun.spawnSync(
-    ["bunx", "vite", "build", "--config", "src/console/ui/vite.config.ts"],
+    ["bunx", "--bun", "vite", "build", "--config", "src/console/ui-next/vite.config.ts"],
     {
       cwd: ROOT,
       stdout: "pipe",

@@ -59,11 +59,10 @@
 - Agents declare `tools` (FlowRef array), `maxSteps`, and `model`.
 
 # ---------- Console UI (React + Vite + Tailwind) ----------
-- Console UI source lives in `src/console/ui/shell/` — separate from backend logic.
-- Console is a Vite SPA built with React, TailwindCSS v4, and CodeMirror.
-- Panels are lazy-loaded chunks named `panel-*` (e.g., `panel-flows`, `panel-store`).
+- Console UI source lives in `src/console/ui-next/` — separate from backend logic.
+- Console is a Vite SPA built with React, TailwindCSS v4, and TanStack Router.
 - Do NOT mix backend Flow logic with Console UI components.
-- Console runs on port `:6533`; dev server on `:6534`.
+- Console runs on port `:6533`; Vite HMR on `:6537` (`bun run dev:console`).
 
 # ---------- Drivers ----------
 - Drivers are protocol-named and keyed by environment in the manifest.
@@ -100,4 +99,4 @@
 - Do NOT use CommonJS (`require`, `module.exports`) anywhere.
 - Do NOT add implicit effects — every read, write, emit, send, ask, secret, or call must be declared.
 - Do NOT pollute the `okengine` public exports with internal utilities.
-- Do NOT modify `src/console/ui/dist/` — it is a build output.
+- Do NOT modify `src/console/ui-next/dist/` — it is a build output.

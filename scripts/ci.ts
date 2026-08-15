@@ -23,6 +23,7 @@ const CHECKS: readonly Check[] = [
   { label: "Lint", command: ["bun", "run", "lint"] },
   { label: "Typecheck", command: ["bun", "run", "typecheck"] },
   { label: "Tests", command: ["bun", "run", "test"] },
+  { label: "Keel example", command: ["bun", "run", "--cwd", "examples/keel", "test"] },
   { label: "Gate", command: ["bun", "run", "gate"] },
   { label: "Site build", command: ["bun", "run", "site:build"] },
 ];

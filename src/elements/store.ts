@@ -91,8 +91,14 @@ export type {
   ResolvedListConfig,
 } from "./store/resource.ts";
 
-export { defineSeed, normalizeSeedFns, resolveSeedCategory } from "./store/seed.ts";
-export type { SeedCategory, SeedDef, SeedFn, SeedFns } from "./store/seed.ts";
+export {
+  defineSeed,
+  normalizeSeedFns,
+  resolveSeedCategory,
+  resolveSeedIdentity,
+  seedPromptMessage,
+} from "./store/seed.ts";
+export type { SeedCategory, SeedDef, SeedFn, SeedFns, SeedIdentity } from "./store/seed.ts";
 
 export { createSqlStoreHandle, resolvePkColumn } from "./store/sql-session.ts";
 export type {

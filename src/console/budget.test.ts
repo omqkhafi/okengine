@@ -1,8 +1,8 @@
 /**
- * Console initial bundle budget — < 300 kB gzipped (console §7).
+ * Console initial bundle budget — gzipped html + entry js/css.
  *
- * Reports a definitive initial-vs-lazy breakdown so the Prompt 21 vs Runs
- * measurement gap cannot recur as an unexplained number.
+ * ui-next is a single SPA (no legacy `panel-*` split). The cap is the
+ * first-navigation download, not a panel-chunk inventory.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -22,15 +22,17 @@ describe("console bundle budget", () => {
           .map((a) => `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`)
           .join("\n"),
     );
-    console.log(
-      "lazy panel chunks:\n" +
-        breakdown.panels
-          .map((a) => `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`)
-          .join("\n"),
-    );
+    if (breakdown.panels.length > 0) {
+      console.log(
+        "lazy chunks:\n" +
+          breakdown.panels
+            .map((a) => `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`)
+            .join("\n"),
+      );
+    }
     if (breakdown.other.length > 0) {
       console.log(
-        "other (not initial, not panel-*):\n" +
+        "other (not initial):\n" +
           breakdown.other
             .map((a) => `  ${a.name}: ${a.gzip} (${(a.gzip / 1024).toFixed(2)} kB)`)
             .join("\n"),
@@ -38,33 +40,5 @@ describe("console bundle budget", () => {
     }
     expect(size).toBeGreaterThan(0);
     expect(size).toBeLessThan(CONSOLE_BUDGET_BYTES);
-    // All 15 feature panels (+ shell) must land as named lazy chunks.
-    const panelIds = breakdown.panels.flatMap((p) => {
-      const m = /^panel-([a-z]+)-/.exec(p.name);
-      return m?.[1] ? [m[1]] : [];
-    });
-    for (const id of [
-      "overview",
-      "flows",
-      "traces",
-      "runs",
-      "signals",
-      "store",
-      "clock",
-      "vault",
-      "ai",
-      "channels",
-      "gates",
-      "diff",
-      "architecture",
-      "access",
-      "plugins",
-    ]) {
-      expect(panelIds).toContain(id);
-    }
-    // No panel chunk may be pulled into the initial navigation set.
-    for (const asset of breakdown.initial) {
-      expect(asset.name.includes("panel-")).toBe(false);
-    }
   });
 });

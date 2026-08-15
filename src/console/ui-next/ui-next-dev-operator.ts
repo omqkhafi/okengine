@@ -1,6 +1,6 @@
 /**
- * Fixed console-next operator for local DX — seeded on every
- * `dev:console-next` / `:seed` boot unless `OKE_CONSOLE_NEXT_FRESH=1`.
+ * Fixed Console operator for local DX — seeded on every
+ * `dev:console` / `:seed` boot unless `OKE_CONSOLE_FRESH=1`.
  *
  * Credentials are intentional and public for local/dev only; never use in prod.
  */
@@ -32,14 +32,14 @@ export const UI_NEXT_DEV_OPERATOR: UiNextDevOperatorCreds = {
 };
 
 /**
- * True when `OKE_CONSOLE_NEXT_FRESH=1` — skip the fixed operator and keep claim open.
+ * True when `OKE_CONSOLE_FRESH=1` — skip the fixed operator and keep claim open.
  */
-export function isConsoleNextFresh(): boolean {
-  return process.env["OKE_CONSOLE_NEXT_FRESH"] === "1";
+export function isConsoleFresh(): boolean {
+  return process.env["OKE_CONSOLE_FRESH"] === "1";
 }
 
 /**
- * Create an {@link OperatorStore} with the fixed console-next dev operator.
+ * Create an {@link OperatorStore} with the fixed Console dev operator.
  * Closing setup (`setupClosed`) follows from `operators.size > 0`.
  *
  * @param store - Optional existing store (defaults to a new empty store)

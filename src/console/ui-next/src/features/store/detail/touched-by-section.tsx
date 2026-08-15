@@ -79,14 +79,14 @@ function FlowIdList({
             >
               <span>{id}</span>
               <Link
-                to="/flows"
+                to="/units"
                 search={{ flow: id }}
                 className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >
-                Flows
+                Units
               </Link>
               <Link
-                to="/overview"
+                to="/flows"
                 search={{ flow: id }}
                 className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >

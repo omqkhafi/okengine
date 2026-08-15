@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
-import { FLOWS_TEST_MANIFEST } from "../../../../../ui/flows/fixture.ts";
+import { FLOWS_TEST_MANIFEST } from "../fixture.ts";
 import {
   applyLiveHeat,
   applyMapHighlight,

@@ -17,7 +17,9 @@ const server = await serveConsole({
   cwd,
   secret: "playwright-console-secret",
   silentClaim: true,
-  env: "dev",
+  // Memory drivers — same as the seeded suite. `env: "dev"` inherits
+  // local REDIS_URL and hard-fails when compose is not up.
+  env: "test",
 });
 
 const claimCode = server.console.state.claim.code;

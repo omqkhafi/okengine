@@ -8,7 +8,7 @@ import {
   createUiNextOperationRuns,
   createUiNextSeedRun,
   createUiNextSeedRuns,
-  isConsoleNextSeeded,
+  isConsoleSeeded,
   seedUiNextStoreData,
   UI_NEXT_SEED_CYCLES_RUN_ID,
   UI_NEXT_SEED_DRAFTS_RUN_ID,
@@ -348,19 +348,19 @@ describe("ui-next seed", () => {
   });
 
   test("seeded env flag and summary are explicit", () => {
-    const prev = process.env["OKE_CONSOLE_NEXT_SEEDED"];
+    const prev = process.env["OKE_CONSOLE_SEEDED"];
     try {
-      delete process.env["OKE_CONSOLE_NEXT_SEEDED"];
-      expect(isConsoleNextSeeded()).toBe(false);
-      process.env["OKE_CONSOLE_NEXT_SEEDED"] = "1";
-      expect(isConsoleNextSeeded()).toBe(true);
+      delete process.env["OKE_CONSOLE_SEEDED"];
+      expect(isConsoleSeeded()).toBe(false);
+      process.env["OKE_CONSOLE_SEEDED"] = "1";
+      expect(isConsoleSeeded()).toBe(true);
       expect(uiNextSeededSummary()).toContain(UI_NEXT_SEED_RUN_ID);
       expect(uiNextSeededSummary()).toContain(String(UI_NEXT_SEED_TOTAL_COUNT));
       expect(uiNextSeededSummary()).toContain("8 elements");
       expect(uiNextSeededSummary()).toContain(`${UI_NEXT_SEED_STORE_COUNTS.sqlIssues} issues`);
     } finally {
-      if (prev === undefined) delete process.env["OKE_CONSOLE_NEXT_SEEDED"];
-      else process.env["OKE_CONSOLE_NEXT_SEEDED"] = prev;
+      if (prev === undefined) delete process.env["OKE_CONSOLE_SEEDED"];
+      else process.env["OKE_CONSOLE_SEEDED"] = prev;
     }
   });
 

@@ -14,6 +14,16 @@ needed).
 
 ### ✨ Added
 
+- `defineSeed({ name, description })` labels this app's seed
+  (template or example). `oke dev` asks `Seed keel (Featured
+  Linear story)?` and `.oke/state.json` stores that id — a
+  different name re-prompts. Not a global seeded flag.
+
+- `examples/keel` is a Linear-shaped OKE app (not a create-oke
+  template) for `oke dev` against Compose — Postgres, Redis,
+  RustFS, Mailpit, and Meilisearch. Featured issue chain, stub
+  GitHub/Slack ingest, `bun run dev:keel`, then `oke db seed`.
+
 - Console Vault **Add** (`+`) creates a secret or config from the
   operator plane as well as from `vault.secret` / `vault.config` in
   source. Metadata lands in `.oke/vault-contracts.json`; the value
@@ -389,6 +399,10 @@ needed).
   is `../.env.local`. `COMPOSE_ENV_REL` is `.env.local`. The
   `.env.docker` file and resolution source are gone.
 
+- Console routes are now `/flows` (graph + Traces), `/units` (explorer),
+  `/store`, and `/vault`. `/overview` redirects to `/flows`. Dev scripts
+  are `dev:console` / `:seed` / `:fresh` (the `-next` suffix is gone).
+
 ### ♻️ Changed
 
 - Console Vault set / rotate drop the typed `SET` / `ROTATE` phrase.
@@ -604,7 +618,23 @@ needed).
   to multi-select (paste/type fills). The row-detail Sheet is gone from
   browse — edits stay in the grid until Commit All.
 
+- Console is the ui-next SPA. `oke dev` / `oke start` serve
+  `src/console/ui-next/dist/`. Initial-load budget is 700 kB gzip
+  (no legacy `panel-*` split).
+
+- Access, Manifest Diff, Plugins, and standalone Runs are not in this
+  Console yet — named backlog, not silently dropped. Backend
+  projections remain.
+
+### 🔥 Removed
+
+- Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
+
 ### 🐛 Fixed
+
+- `store.schema.table` with a `name` column no longer throws
+  `Unable to resolve table name from value` on insert, select,
+  or Drizzle emit.
 
 - Console Traces Advanced clause and preset labels use stronger ink
   so they stay readable on the dark pane (no muted-on-muted greys).
@@ -693,12 +723,16 @@ needed).
 - Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
   `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
 
+- `/flows` renders the graph + Traces page and `/units` renders the
+  explorer — the path names now match the pages.
+
 
 ### 🔒 Security
 
-- Console login `?next=` is allow-listed to `/flows`, `/units`, and
-  `/store` (plus their search). Other values are dropped so an expired
-  session cannot be turned into an open redirect.
+- Console login `?next=` is allow-listed to `/flows`, `/units`,
+  `/store`, and `/vault` (plus their search). `/overview` rewrites to
+  `/flows`. Other values are dropped so an expired session cannot be
+  turned into an open redirect.
 
 - Console Store hides `oke_console` (operators, sessions, credential hashes) unless
   `OKE_CONSOLE_AUTH_STORE=1`. Query is refused when the flag is off.

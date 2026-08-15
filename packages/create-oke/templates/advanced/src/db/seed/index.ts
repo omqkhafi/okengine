@@ -61,6 +61,8 @@ async function sampleNotes(fx: Fx) {
 }
 
 export default defineSeed({
+  name: "notes",
+  description: "Welcome + sample notes",
   essential: welcomeNote,
   dev: sampleNotes,
   // prod: async (fx) => { /* real production-only data, e.g. register a webhook */ },

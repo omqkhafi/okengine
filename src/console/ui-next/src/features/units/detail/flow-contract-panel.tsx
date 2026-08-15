@@ -116,7 +116,7 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
             variant="outline"
             size="sm"
             className="h-7 shrink-0 gap-1 px-2 text-[11px]"
-            render={<Link to="/overview" search={{ flow: row.id }} data-slot="open-in-graph" />}
+            render={<Link to="/flows" search={{ flow: row.id }} data-slot="open-in-graph" />}
           >
             <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
             Open in graph

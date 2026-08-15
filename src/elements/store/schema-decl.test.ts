@@ -82,6 +82,36 @@ describe("store.schema.table + field.*", () => {
     const rows = await handle.select().from(notes);
     expect(rows[0]!.email).toBe(PII_MASK);
   });
+
+  test("a `name` column does not break insert / select / emit", async () => {
+    const teams = store.schema.table("teams", {
+      id: field.text().primaryKey(),
+      key: field.text().notNull(),
+      name: field.text().notNull(),
+    });
+
+    expect(teams.kind).toBe("schema-table");
+    expect(teams.tableName).toBe("teams");
+    expect(typeof teams.name).toBe("object");
+    expect(teams.columns.name.sqlName).toBe("name");
+
+    const src = emitDrizzleSource([teams], "postgres");
+    expect(src).toContain('export const teams = pgTable("teams"');
+
+    const { memorySqlDriver } = await import("../../drivers/index.ts");
+    const decl = store.sql("app", { schema: { teams } });
+    const rt = createStoreRuntime({
+      drivers: { sql: memorySqlDriver },
+      sql: { app: { name: "app", primary: {} } },
+    });
+    rt.register(decl);
+    const handle = (await rt.open(decl, {
+      effects: { writes: ["sql:app"], reads: ["sql:app"] },
+    })) as SqlStoreHandle;
+    await handle.insert(teams).values({ id: "team_eng", key: "ENG", name: "Engineering" });
+    const rows = await handle.select().from(teams);
+    expect(rows).toEqual([{ id: "team_eng", key: "ENG", name: "Engineering" }]);
+  });
 });
 
 describe("emitDrizzleSource — postgres pgTable from one declaration", () => {

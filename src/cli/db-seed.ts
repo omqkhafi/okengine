@@ -9,6 +9,7 @@ import type { ConfigEnv, OkeConfig } from "../config/index.ts";
 import {
   normalizeSeedFns,
   resolveSeedCategory,
+  resolveSeedIdentity,
   type SeedDef,
   type SeedFn,
   type UpsertStatus,
@@ -295,6 +296,12 @@ export async function runSeed(options: SeedOptions = {}): Promise<number> {
   let stop: (() => Promise<void>) | undefined;
   try {
     const def = options.seedDef ?? (await loadSeedDef(cwd, options.seedPath));
+    const identity = resolveSeedIdentity(def, cwd);
+    write(
+      identity.description
+        ? `oke db seed: ${identity.name} — ${identity.description}\n`
+        : `oke db seed: ${identity.name}\n`,
+    );
     const session = options.createFx
       ? await options.createFx()
       : await bootSeedFx(cwd, env, options.entry, loaded?.config);

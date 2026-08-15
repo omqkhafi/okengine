@@ -163,7 +163,7 @@ describe("publish workflow", () => {
 });
 
 describe.skipIf(!PUBLISH_GATE)("npm pack includes Console SPA", () => {
-  test("okengine tarball contains src/console/ui/dist/index.html", async () => {
+  test("okengine tarball contains src/console/ui-next/dist/index.html", async () => {
     const build = Bun.spawn(["bun", "run", "build"], {
       cwd: ROOT,
       stdout: "pipe",
@@ -184,7 +184,7 @@ describe.skipIf(!PUBLISH_GATE)("npm pack includes Console SPA", () => {
     ]);
     expect(code).toBe(0);
     const out = `${stdout}\n${stderr}`;
-    expect(out).toMatch(/src\/console\/ui\/dist\/index\.html/);
+    expect(out).toMatch(/src\/console\/ui-next\/dist\/index\.html/);
   }, 180_000);
 });
 

@@ -769,7 +769,7 @@ export function createSqlStoreHandle(
           return `${quoteIdent(c.name)} ${typ}`;
         })
         .join(", ");
-      await exec(`CREATE TABLE IF NOT EXISTS ${quoteIdent(table.name)} (${colSql})`);
+      await exec(`CREATE TABLE IF NOT EXISTS ${quoteIdent(resolveTableName(table))} (${colSql})`);
     },
   };
 

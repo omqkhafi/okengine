@@ -12,7 +12,7 @@ import { oke } from "../../kernel/app.ts";
 import { flow, resetFlowSeq } from "../../kernel/flow.ts";
 import { on, resetBindings } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
-import { FLOWS_TEST_MANIFEST } from "../ui/flows/fixture.ts";
+import { FLOWS_TEST_MANIFEST } from "../ui-next/src/features/flows/fixture.ts";
 import { bindHostInvokeUserFlow } from "./invoke-user-flow.ts";
 import { startConsoleApp } from "./serve.ts";
 import { setManifest } from "./state.ts";

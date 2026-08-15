@@ -73,6 +73,11 @@ export interface SchemaColumnDecl extends ColumnDef {
 export interface SchemaTableDecl extends TableHandle {
   readonly kind: "schema-table";
   readonly columns: Readonly<Record<string, SchemaColumnDecl>>;
+  /**
+   * SQL table name. Non-enumerable when a column is also named `name`
+   * (spreading columns would otherwise shadow {@link TableHandle.name}).
+   */
+  readonly tableName?: string;
 }
 
 /** Fluent field builder before key finalization. */
@@ -267,13 +272,25 @@ export function finalizeColumnMap(
  * @param value - Unknown
  */
 export function isSchemaTableDecl(value: unknown): value is SchemaTableDecl {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    (value as SchemaTableDecl).kind === "schema-table" &&
-    typeof (value as SchemaTableDecl).name === "string" &&
-    "columns" in value
-  );
+  if (!value || typeof value !== "object") return false;
+  const table = value as SchemaTableDecl;
+  if (table.kind !== "schema-table" || !("columns" in table)) return false;
+  return typeof schemaTableSqlName(table) === "string";
+}
+
+/**
+ * SQL name for a {@link SchemaTableDecl}, including tables whose `name`
+ * column shadows {@link TableHandle.name}.
+ *
+ * @param table - Schema table declaration
+ */
+export function schemaTableSqlName(table: SchemaTableDecl): string | undefined {
+  if (typeof table.tableName === "string") return table.tableName;
+  if (typeof table.name === "string") return table.name;
+  for (const col of Object.values(table.columns ?? {})) {
+    if (typeof col.tableName === "string") return col.tableName;
+  }
+  return undefined;
 }
 
 /**
@@ -309,6 +326,8 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
     columns: stamped,
     ...stamped,
   };
+  // Survive a column named `name` (Linear-style teams/labels/cycles).
+  Object.defineProperty(table, "tableName", { value: name, enumerable: false });
   return table as SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }>;
 }
 

@@ -109,7 +109,7 @@ export async function serveConsole(
   await bindManifestStoreRuntime(handle.state);
   await bindManifestVaultRuntime(handle.state);
 
-  const staticDir = options.staticDir ?? new URL("../ui/dist/", import.meta.url).pathname;
+  const staticDir = options.staticDir ?? new URL("../ui-next/dist/", import.meta.url).pathname;
 
   const live = createLiveWebsocket(handle.state);
   const allowed = resolveAllowedHosts(hostname, options.allowedHosts);

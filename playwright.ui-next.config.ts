@@ -22,7 +22,7 @@ export default defineConfig({
     video: "on",
   },
   webServer: {
-    command: "bun run build:console-next && bun ./tests/console/serve-fixture-ui-next.ts",
+    command: "bun run build && bun ./tests/console/serve-fixture-ui-next.ts",
     url: "http://127.0.0.1:6538/console/setup/status",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

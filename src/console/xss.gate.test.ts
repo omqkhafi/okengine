@@ -3,37 +3,29 @@
  *
  * console §10.2: this is a build gate, not a review convention.
  *
- * The scan walks all of `src/console/ui` recursively (not a hard-coded panel
- * list from Prompt 16). The panel-directory assertion below fails the build
- * if a new `ui/<panel>` folder appears without being covered by that walk.
+ * The scan walks `src/console/ui-next/src` recursively. The feature-directory
+ * assertion fails the build if a new `features/<name>` folder appears without
+ * being covered by that walk.
  */
 
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-const UI_ROOT = `${import.meta.dir}/ui`;
+const UI_ROOT = `${import.meta.dir}/ui-next/src`;
+const FEATURES_ROOT = `${UI_ROOT}/features`;
 
 /**
- * Panel feature directories that must be covered by the XSS scan today.
- * Update this list when a 18th panel lands — the recursive walk already
- * covers it; the list makes coverage explicit in CI output.
+ * Feature directories that must be covered by the XSS scan today.
+ * Update this list when a new Console module lands — the recursive walk
+ * already covers it; the list makes coverage explicit in CI output.
  */
-export const CONSOLE_UI_PANEL_DIRS = [
-  "access",
-  "ai",
-  "architecture",
-  "channels",
-  "clock",
-  "diff",
+export const CONSOLE_UI_FEATURE_DIRS = [
+  "auth",
   "flows",
-  "gates",
-  "overview",
-  "plugins",
-  "runs",
-  "signals",
+  "setup",
   "store",
-  "traces",
+  "units",
   "vault",
 ] as const;
 
@@ -77,18 +69,19 @@ export function findXssViolations(text: string): string[] {
 }
 
 describe("console XSS gate", () => {
-  test("scan glob covers every ui/<panel> directory that exists today", async () => {
-    const entries = await readdir(UI_ROOT, { withFileTypes: true });
+  test("scan glob covers every features/<module> directory that exists today", async () => {
+    const entries = await readdir(FEATURES_ROOT, { withFileTypes: true });
     const dirs = entries
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
-      .filter((name) => name !== "dist" && name !== "shell" && name !== "node_modules")
       .sort();
-    expect(dirs).toEqual([...CONSOLE_UI_PANEL_DIRS].sort());
+    expect(dirs).toEqual([...CONSOLE_UI_FEATURE_DIRS].sort());
 
     const files = await collectSources(UI_ROOT);
-    for (const panel of CONSOLE_UI_PANEL_DIRS) {
-      const hit = files.some((f) => f.includes(`/ui/${panel}/`) || f.includes(`\\ui\\${panel}\\`));
+    for (const feature of CONSOLE_UI_FEATURE_DIRS) {
+      const hit = files.some(
+        (f) => f.includes(`/features/${feature}/`) || f.includes(`\\features\\${feature}\\`),
+      );
       expect(hit).toBe(true);
     }
   });

@@ -4,8 +4,9 @@
 
 import { confirm, isCancel } from "@clack/prompts";
 import type { ConfigEnv } from "../config/index.ts";
+import { resolveSeedIdentity, seedPromptMessage } from "../elements/store/seed.ts";
 import { formatCliChrome } from "../term.ts";
-import { resolveSeedModulePath, runSeed } from "./db-seed.ts";
+import { loadSeedDef, resolveSeedModulePath, runSeed } from "./db-seed.ts";
 import { isProjectSeeded, markProjectSeeded } from "./project-state.ts";
 
 /** @deprecated Use `.oke/state.json` `seededAt` via {@link isProjectSeeded}. */
@@ -26,8 +27,9 @@ export interface AskSeedOptions {
 }
 
 /**
- * After a successful `oke db push`, ask once whether to seed sample data.
- * Skips when non-TTY, already seeded, or no seed module.
+ * After a successful `oke db push`, ask once whether to seed this app
+ * (`defineSeed({ name })` or the project folder). Skips when non-TTY,
+ * already seeded for that identity, or no seed module.
  *
  * @param options - Project / env / injectables
  */
@@ -37,10 +39,12 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
   if (!tty) return;
 
   const cwd = options.cwd;
-  if (await isProjectSeeded(cwd)) return;
-
   const seedPath = await resolveSeedModulePath(cwd);
   if (!(await Bun.file(seedPath).exists())) return;
+
+  const def = await loadSeedDef(cwd).catch(() => undefined);
+  const identity = resolveSeedIdentity(def, cwd);
+  if (await isProjectSeeded(cwd, identity.name)) return;
 
   const write = options.write ?? ((t) => process.stdout.write(t));
   const chromeWrite = (t: string) => write(formatCliChrome(t));
@@ -49,7 +53,7 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
       ? await options.confirmFn()
       : await (async () => {
           const value = await confirm({
-            message: "Run oke db seed (essential + sample data)?",
+            message: seedPromptMessage(identity),
             initialValue: true,
           });
           if (isCancel(value)) return false;
@@ -73,6 +77,6 @@ export async function maybeAskSeed(options: AskSeedOptions): Promise<void> {
       }));
   const code = await seed(cwd, options.env);
   if (code === 0) {
-    await markProjectSeeded(cwd);
+    await markProjectSeeded(cwd, { seed: identity.name });
   }
 }

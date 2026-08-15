@@ -1,7 +1,7 @@
 /**
  * OKE wordmark + icon mark logos (Console chrome).
  *
- * Adapted from `src/console/ui/shell/components/oke-logo.tsx` / site marks —
+ * Console wordmark — site marks.
  * `currentColor` so they follow light/dark foreground tokens.
  */
 

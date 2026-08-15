@@ -88,7 +88,7 @@ function ActivityBody({
         {ago}
       </span>
       <Link
-        to="/overview"
+        to="/flows"
         search={{ run: summary.latestRunId }}
         className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
         data-slot="flow-activity-open-run"

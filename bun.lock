@@ -79,9 +79,12 @@
       "peerDependencies": {
         "@aws-sdk/client-kms": ">=3.0.0",
         "@aws-sdk/client-secrets-manager": ">=3.0.0",
+        "@azure/identity": ">=4.0.0",
+        "@azure/keyvault-secrets": ">=4.0.0",
         "@duckdb/node-api": ">=1.5.0",
         "@electric-sql/pglite": ">=0.5.0",
         "@electric-sql/pglite-pgvector": ">=0.0.5",
+        "@google-cloud/secret-manager": ">=5.0.0",
         "ajv": ">=8.0.0",
         "ajv-formats": ">=3.0.0",
         "drizzle-kit": ">=1.0.0-rc.0",
@@ -93,9 +96,12 @@
       "optionalPeers": [
         "@aws-sdk/client-kms",
         "@aws-sdk/client-secrets-manager",
+        "@azure/identity",
+        "@azure/keyvault-secrets",
         "@duckdb/node-api",
         "@electric-sql/pglite",
         "@electric-sql/pglite-pgvector",
+        "@google-cloud/secret-manager",
         "ajv",
         "ajv-formats",
         "drizzle-kit",
@@ -104,6 +110,22 @@
         "oxc-parser",
         "zod",
       ],
+    },
+    "examples/keel": {
+      "name": "@oke/example-keel",
+      "version": "0.0.1",
+      "dependencies": {
+        "drizzle-orm": "1.0.0-rc.4",
+        "okengine": "file:../..",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "^0.5.4",
+        "@electric-sql/pglite-pgvector": "^0.0.5",
+        "@types/bun": "latest",
+        "drizzle-kit": "1.0.0-rc.4",
+        "typescript": "^7.0.2",
+      },
     },
     "packages/create-oke": {
       "name": "create-oke",
@@ -508,6 +530,8 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
+
+    "@oke/example-keel": ["@oke/example-keel@workspace:examples/keel"],
 
     "@open-draft/deferred-promise": ["@open-draft/deferred-promise@3.0.0", "", {}, "sha512-XW375UK8/9SqUVNVa6M0yEy8+iTi4QN5VZ7aZuRFQmy76LRwI9wy5F4YIBU6T+eTe2/DNDo8tqu8RHlwLHM6RA=="],
 
@@ -1770,6 +1794,8 @@
     "object-inspect": ["object-inspect@1.13.4", "", {}, "sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew=="],
 
     "object-treeify": ["object-treeify@1.1.33", "", {}, "sha512-EFVjAYfzWqWsBMRHPMAXLCDIJnpMhdWAqR7xG6M6a2cs6PMFpl/+Z20w9zDW4vkxOFfddegBKq9Rehd0bxWE7A=="],
+
+    "okengine": ["okengine@root:", {}],
 
     "on-finished": ["on-finished@2.4.1", "", { "dependencies": { "ee-first": "1.1.1" } }, "sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg=="],
 

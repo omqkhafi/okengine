@@ -18,8 +18,8 @@ node_modules
 out
 dist
 # Console SPA is built into the package and must ship on npm/JSR.
-!src/console/ui/dist/
-!src/console/ui/dist/**
+!src/console/ui-next/dist/
+!src/console/ui-next/dist/**
 *.tgz
 
 # docs site (Next.js) — workspace package; never keep a nested lockfile

@@ -327,8 +327,8 @@ Not wired this round — readiness only.
 
 #### Seeding
 
-`oke db seed` loads `defineSeed` from `src/seed/index.ts` — **never at boot**.
-Seed proves existence (bootstrap rows); it does not correct schema-adjacent data over time.
+`oke db seed` loads `defineSeed` from `src/db/seed/index.ts` — **never at boot**.
+`name` is this app's seed (template or example). The prompt and `.oke/state.json` key off it.
 
 <StoreSeeding />
 
@@ -348,6 +348,8 @@ import { db } from "../core";
 import { notes } from "../schema.decl";
 
 export default defineSeed({
+  name: "notes",
+  description: "Welcome + sample notes",
   essential: async (fx: Fx) => {
     await fx
       .store(db)
@@ -379,6 +381,8 @@ import { seedSamples } from "./dev/samples";
 import { seedWebhook } from "./prod/webhook";
 
 export default defineSeed({
+  name: "notes",
+  description: "Welcome + sample notes",
   essential: [seedWelcome],
   dev: [seedSamples],
   prod: [seedWebhook],
@@ -934,6 +938,12 @@ same PII masking — see the Callout under [Querying by hand](#querying-by-hand)
 ## Troubleshooting
 
 <Accordions>
+<Accordion title="Unable to resolve table name from value">
+
+A `store.schema.table` column named `name` used to shadow the SQL table name.
+Inserts and selects now resolve it from the declaration. Keep the `name` column.
+
+</Accordion>
 <Accordion title="OKE1101 — missing table in prod">
 
 Schema DDL never runs automatically in `prod`. Under `oke dev`, `db.autoPush` (default `true`) runs `oke db push`. For production use `oke db generate` + `oke db migrate`.
@@ -977,6 +987,11 @@ Unlike KV/Files, unset `drivers.store.index` does **not** promote to `pgvector` 
 <Accordion title="Console warns Non-ASCII object key">
 
 `fx.store(files).put` stores the key as-is. Console uploads mint an ASCII key and keep the original name in `.oke/catalog.json`. Re-upload to rewrite an existing object.
+
+</Accordion>
+<Accordion title="oke dev skipped the seed prompt">
+
+`.oke/state.json` stores `seededAt` plus this app's `defineSeed({ name })` — notes vs keel are different ids. A new name re-asks. Clear those keys to prompt again.
 
 </Accordion>
 </Accordions>

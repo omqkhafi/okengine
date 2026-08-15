@@ -19,10 +19,12 @@ describe("project-state", () => {
     const dir = mkdtempSync(join(tmpdir(), "oke-state-"));
     try {
       expect(await isProjectSeeded(dir)).toBe(false);
-      await markProjectSeeded(dir, "2026-01-02T03:04:05.000Z");
-      expect(await isProjectSeeded(dir)).toBe(true);
+      await markProjectSeeded(dir, { seed: "keel", at: "2026-01-02T03:04:05.000Z" });
+      expect(await isProjectSeeded(dir, "keel")).toBe(true);
+      expect(await isProjectSeeded(dir, "notes")).toBe(false);
       const state = await readProjectState(dir);
       expect(state.seededAt).toBe("2026-01-02T03:04:05.000Z");
+      expect(state.seed).toBe("keel");
       expect(existsSync(join(dir, PROJECT_STATE_REL))).toBe(true);
       expect(existsSync(join(dir, LEGACY_SEEDED_MARKER))).toBe(false);
     } finally {
@@ -43,6 +45,8 @@ describe("project-state", () => {
         seededAt?: string;
       };
       expect(raw.seededAt).toBe("2025-12-01T00:00:00.000Z");
+      expect(await isProjectSeeded(dir)).toBe(true);
+      expect(await isProjectSeeded(dir, "keel")).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

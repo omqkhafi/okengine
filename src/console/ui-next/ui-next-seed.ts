@@ -1,9 +1,8 @@
 /**
  * Shared ui-next seed — same Manifest + WideEvents used by Playwright and
- * `bun run dev:console-next:seed` so manual browser exploration matches CI.
+ * `bun run dev:console:seed` so manual browser exploration matches CI.
  *
- * Lives beside the Vite kernel plugin (root `tsc` include) — not under
- * `src/console/ui/**`, which root typecheck excludes as the legacy SPA tree.
+ * Lives beside the Vite kernel plugin (root `tsc` include).
  *
  * Seed story (keel): a featured github→create→notify chain, a full CRUD +
  * custom-route HTTP surface, plus ~70 operational traces so Traces looks
@@ -104,10 +103,10 @@ export function applyUiNextSeedVaultEnv(): void {
 }
 
 /**
- * True when `OKE_CONSOLE_NEXT_SEEDED=1` (seeded `dev:console-next:seed` mode).
+ * True when `OKE_CONSOLE_SEEDED=1` (seeded `dev:console:seed` mode).
  */
-export function isConsoleNextSeeded(): boolean {
-  return process.env["OKE_CONSOLE_NEXT_SEEDED"] === "1";
+export function isConsoleSeeded(): boolean {
+  return process.env["OKE_CONSOLE_SEEDED"] === "1";
 }
 
 /**

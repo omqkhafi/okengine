@@ -74,6 +74,16 @@ export function resolveTableName(table: unknown): string {
   if (typeof table === "string") return table;
   if (table && typeof table === "object") {
     const t = table as Record<string, unknown>;
+    if (t.kind === "schema-table") {
+      if (typeof t.tableName === "string") return t.tableName;
+      if (typeof t.name === "string") return t.name;
+      const cols = t.columns;
+      if (cols && typeof cols === "object") {
+        for (const col of Object.values(cols as Record<string, { tableName?: unknown }>)) {
+          if (typeof col?.tableName === "string") return col.tableName;
+        }
+      }
+    }
     if (typeof t.name === "string" && !isDrizzleTable(t)) return t.name;
     // Drizzle stores the name on an internal symbol; also expose via _.name / [Symbol]
     for (const key of Object.getOwnPropertySymbols(t)) {

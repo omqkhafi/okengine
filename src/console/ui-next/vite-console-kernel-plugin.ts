@@ -1,11 +1,11 @@
 /**
  * Vite `apply: "serve"` plugin — boots an ephemeral Console kernel on :6533
- * so `bun run dev:console-next` prints login (or claim) details in the same terminal.
+ * so `bun run dev:console` prints login (or claim) details in the same terminal.
  *
- * Set `OKE_CONSOLE_NEXT_SEEDED=1` (or `bun run dev:console-next:seed`) to
+ * Set `OKE_CONSOLE_SEEDED=1` (or `bun run dev:console:seed`) to
  * load the keel Manifest + WideEvent as the Playwright fixture.
  *
- * Set `OKE_CONSOLE_NEXT_FRESH=1` (or `bun run dev:console-next:fresh`) to
+ * Set `OKE_CONSOLE_FRESH=1` (or `bun run dev:console:fresh`) to
  * skip the fixed operator and keep first-admin claim open.
  *
  * Requires Vite under Bun (`bunx --bun vite`): Node lacks `import.meta.dir`
@@ -17,13 +17,13 @@ import { isPortInUse } from "../../cli/ports.ts";
 import { CONSOLE_PORT } from "../../runtime/types.ts";
 import { serveConsole, type ConsoleServerHandle } from "../server/serve.ts";
 import {
-  isConsoleNextFresh,
+  isConsoleFresh,
   UI_NEXT_DEV_OPERATOR,
   seedUiNextDevOperator,
 } from "./ui-next-dev-operator.ts";
 import {
   appendUiNextSeedRun,
-  isConsoleNextSeeded,
+  isConsoleSeeded,
   UI_NEXT_SEEDED_MANIFEST,
   UI_NEXT_SEED_VAULT_LAYERS,
   uiNextSeededSummary,
@@ -48,7 +48,7 @@ function printConsoleNextBanner(
 ): void {
   const { seeded, fresh, claimCode } = options;
   log("");
-  log(`[oke] console-next ready`);
+  log(`[oke] console ready`);
   log(`      URL:   ${UI_NEXT_DEV_URL}`);
   if (fresh) {
     log(`      Claim: ${claimCode}`);
@@ -64,9 +64,9 @@ function printConsoleNextBanner(
       log(`      Next:  open URL → Sign in → Flows (graph + Traces row already present)`);
     }
   } else if (!fresh) {
-    log(`      Tip:   bun run dev:console-next:seed  — all 8 elements + ~80 lived-in traces`);
+    log(`      Tip:   bun run dev:console:seed  — all 8 elements + ~80 lived-in traces`);
   } else {
-    log(`      Tip:   bun run dev:console-next:fresh:seed  — claim + all 8 elements + ~80 traces`);
+    log(`      Tip:   bun run dev:console:fresh:seed  — claim + all 8 elements + ~80 traces`);
   }
   log("");
 }
@@ -90,22 +90,22 @@ export function okeConsoleKernelPlugin(): Plugin {
   };
 
   return {
-    name: "oke-console-next-kernel",
+    name: "oke-console-kernel",
     apply: "serve",
     async configureServer(server: ViteDevServer) {
       if (typeof Bun === "undefined") {
         server.config.logger.error(
           `\n[oke] Run Vite under Bun:\n` +
             `        bunx --bun vite --config src/console/ui-next/vite.config.ts\n` +
-            `      (package script \`dev:console-next\` already does this)\n`,
+            `      (package script \`dev:console\` already does this)\n`,
         );
         process.exit(1);
       }
 
       const port = CONSOLE_PORT;
       const hostname = "127.0.0.1";
-      const seeded = isConsoleNextSeeded();
-      const fresh = isConsoleNextFresh();
+      const seeded = isConsoleSeeded();
+      const fresh = isConsoleFresh();
 
       if (await isPortInUse(port)) {
         server.config.logger.error(
@@ -113,11 +113,11 @@ export function okeConsoleKernelPlugin(): Plugin {
             `      Stop the other process, then re-run: bun run ${
               fresh
                 ? seeded
-                  ? "dev:console-next:fresh:seed"
-                  : "dev:console-next:fresh"
+                  ? "dev:console:fresh:seed"
+                  : "dev:console:fresh"
                 : seeded
-                  ? "dev:console-next:seed"
-                  : "dev:console-next"
+                  ? "dev:console:seed"
+                  : "dev:console"
             }\n`,
         );
         process.exit(1);
@@ -146,7 +146,7 @@ export function okeConsoleKernelPlugin(): Plugin {
       if (seeded) {
         const runs = handle.console.app.bootResult?.runs;
         if (!runs) {
-          throw new Error("console-next seeded: Console bootResult.runs missing");
+          throw new Error("console seeded: Console bootResult.runs missing");
         }
         await appendUiNextSeedRun(runs);
         if (handle.console.state.storeRuntime) {

@@ -27,9 +27,9 @@ oke mode                         # removed — prints error; use oke dev (Compos
 oke start                        # runs exactly what production runs (this is the Docker CMD)
 oke doctor                       # verify secrets, ports, drivers, tenancy, schema drift
 oke console claim-code           # print setup claim code from .oke/claim-code (after Console boot)
-                                 #   → `bun run dev:console-next` boots kernel + Vite with a fixed
+                                 #   → `bun run dev:console` boots kernel + Vite with a fixed
                                  #     operator (`dev@oke.dev` / `Okengine123!`) — Sign in (prefilled)
-                                 #   → `bun run dev:console-next:seed` same + keel PM (all 8 elements) + ~80 traces
+                                 #   → `bun run dev:console:seed` same + keel PM (all 8 elements) + ~80 traces
                                  #     + 500+ issues + full CRUD / custom HTTP (GET·POST·PUT·PATCH·DELETE·HEAD·QUERY)
                                  #     + app Gate auth / oke_* system tables
                                  #     (github→issues.create→notify chain, Linear-shaped
@@ -37,17 +37,17 @@ oke console claim-code           # print setup claim code from .oke/claim-code (
                                  #     click Traces row → highlight chain on the radial hub;
                                  #     click a unit / element disc → 1-hop neighborhood + filter runs;
                                  #     Replay → waterfall playhead + chain pulse on the graph)
-                                 #   → `bun run dev:console-next:fresh` / `:fresh:seed` — claim from scratch
+                                 #   → `bun run dev:console:fresh` / `:fresh:seed` — claim from scratch
                                  #     (no fixed operator; claim code printed in the boot log)
-                                 #   → after `bun run test:console:setup-ui-next`, open the HTML report:
-                                 #     `bun run test:console:setup-ui-next:report` (trace + screenshots + video)
+                                 #   → after `bun run test:console:setup`, open the HTML report:
+                                 #     `bun run test:console:setup:report` (trace + screenshots + video)
 oke stack                        # preview resolved images/tags/ports — writes nothing
 
 oke schema generate              # core + plugin stubs → .oke/schema/oke.ts (--check in CI)
 oke db push                      # domain schema.ts → live DB (dev; drizzle-kit)
 oke db generate                  # versioned SQL under drizzle/ (review)
 oke db migrate                   # apply migrations (explicit; never auto in prod)
-oke db seed                      # defineSeed (essential + env category); never at boot
+oke db seed                      # this app's defineSeed (name + essential + env); never at boot
 oke db seed --env prod --force   # CI: skip prod confirmation prompt
 oke db studio                    # drizzle-kit Studio (long-running)
 oke vault set STRIPE_KEY         # also: list · import .env · key rotate
@@ -110,8 +110,8 @@ yellow pending/loading · red error · dim idle. Compose health keeps polling
 (`docker compose ps -a`); AI ● tracks model phase while the AI container is up.
 Boot does not wait for the model to become ready. A successful session writes
 `.oke/dev.json` (pid · ports · startedAt) and clears it on stop. Durable local
-markers live in `.oke/state.json` (e.g. `seededAt` after the one-shot seed
-prompt) — not in the session lock. Console session signing uses
+markers live in `.oke/state.json` (`seededAt` + `seed` after the one-shot
+prompt for this app's `defineSeed({ name })`) — not in the session lock. Console session signing uses
 `.oke/console.secret` (or `OKE_CONSOLE_SECRET`); that is not a Vault secret.
 
 On a TTY, Ink keyboard controls stay active after boot (`useInput` — same

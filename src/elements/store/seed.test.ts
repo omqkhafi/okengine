@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { defineSeed, normalizeSeedFns, resolveSeedCategory, type SeedFn } from "./seed.ts";
+import {
+  defineSeed,
+  normalizeSeedFns,
+  resolveSeedCategory,
+  resolveSeedIdentity,
+  seedPromptMessage,
+  type SeedFn,
+} from "./seed.ts";
 
 describe("defineSeed / resolveSeedCategory", () => {
   test("defineSeed returns the same def", () => {
@@ -22,5 +29,19 @@ describe("defineSeed / resolveSeedCategory", () => {
     expect(resolveSeedCategory("dev")).toBe("dev");
     expect(resolveSeedCategory("prod")).toBe("prod");
     expect(resolveSeedCategory("test")).toBe(null);
+  });
+
+  test("resolveSeedIdentity prefers defineSeed name over the folder", () => {
+    expect(
+      resolveSeedIdentity({ name: "keel", description: "Featured Linear story" }, "/tmp/app"),
+    ).toEqual({
+      name: "keel",
+      description: "Featured Linear story",
+    });
+    expect(resolveSeedIdentity(undefined, "/repo/examples/keel")).toEqual({ name: "keel" });
+    expect(seedPromptMessage({ name: "keel", description: "Featured Linear story" })).toBe(
+      "Seed keel (Featured Linear story)?",
+    );
+    expect(seedPromptMessage({ name: "notes" })).toBe("Seed notes?");
   });
 });

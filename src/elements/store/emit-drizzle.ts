@@ -15,6 +15,7 @@ import {
   isSchemaTableDecl,
   relationsFromExports,
   schemaTable,
+  schemaTableSqlName,
   tablesFromExports,
   type RelationColumnRef,
   type SchemaColumnDecl,
@@ -207,7 +208,8 @@ export function emitDrizzleSource(
     const lines = Object.values(table.columns).map(
       (col) => `  ${col.key}: ${emitColumnSource(col, dialect)},`,
     );
-    return `export const ${exportNameForTable(table.name)} = pgTable(${JSON.stringify(table.name)}, {\n${lines.join("\n")}\n});`;
+    const sqlName = schemaTableSqlName(table) ?? table.name;
+    return `export const ${exportNameForTable(sqlName)} = pgTable(${JSON.stringify(sqlName)}, {\n${lines.join("\n")}\n});`;
   });
 
   const relationsBlock = emitRelationsSource(relations);

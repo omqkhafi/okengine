@@ -1,6 +1,6 @@
 /**
  * Setup gate — claim when open; real login when closed.
- * Claim success navigates to `?next=` when present, otherwise `/overview`.
+ * Claim success navigates to `?next=` when present, otherwise `/flows`.
  */
 
 import { useForm } from "@tanstack/react-form";

@@ -18,7 +18,7 @@ import { chainFlowIds } from "./traces/trace-chain.ts";
 import { TracesPane } from "./traces/traces-pane.tsx";
 
 /**
- * `/overview` — one composition: activity at the start, structure at the end,
+ * `/flows` — one composition: activity at the start, structure at the end,
  * linked by shared selection.
  */
 export function FlowsPage() {

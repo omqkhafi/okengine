@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build / runtime
+dist/
+out/
+*.tgz
+.oke/
+
+# docker secrets / optional generated artefacts (compose is committed)
+/docker/Dockerfile
+/docker/pgdog/
+
+# logs & coverage
+logs/
+*.log
+coverage/
+*.lcov
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

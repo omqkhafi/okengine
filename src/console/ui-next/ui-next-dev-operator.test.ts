@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { authenticateOperator } from "../../auth/operator.ts";
 import {
-  isConsoleNextFresh,
+  isConsoleFresh,
   seedUiNextDevOperator,
   UI_NEXT_DEV_OPERATOR,
   UI_NEXT_DEV_OPERATOR_EMAIL,
@@ -15,15 +15,15 @@ import {
 
 describe("ui-next dev operator", () => {
   test("fresh env flag is explicit", () => {
-    const prev = process.env["OKE_CONSOLE_NEXT_FRESH"];
+    const prev = process.env["OKE_CONSOLE_FRESH"];
     try {
-      delete process.env["OKE_CONSOLE_NEXT_FRESH"];
-      expect(isConsoleNextFresh()).toBe(false);
-      process.env["OKE_CONSOLE_NEXT_FRESH"] = "1";
-      expect(isConsoleNextFresh()).toBe(true);
+      delete process.env["OKE_CONSOLE_FRESH"];
+      expect(isConsoleFresh()).toBe(false);
+      process.env["OKE_CONSOLE_FRESH"] = "1";
+      expect(isConsoleFresh()).toBe(true);
     } finally {
-      if (prev === undefined) delete process.env["OKE_CONSOLE_NEXT_FRESH"];
-      else process.env["OKE_CONSOLE_NEXT_FRESH"] = prev;
+      if (prev === undefined) delete process.env["OKE_CONSOLE_FRESH"];
+      else process.env["OKE_CONSOLE_FRESH"] = prev;
     }
   });
 
