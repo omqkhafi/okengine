@@ -2,7 +2,7 @@
  * Format the Vault backend status card (console §9.8).
  *
  * Only the built-in `vault` driver has a seal lifecycle; every other driver
- * shows its id alone so the operator still knows which layer terminates the
+ * shows its id alone so the operator still knows which layer starts the
  * resolution chain.
  */
 

@@ -24,10 +24,10 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
     cleartext: null,
     winner: ".env.local",
     resolution: [
+      { source: "driver", present: false, won: false },
       { source: "process.env", present: false, won: false },
       { source: ".env.local", present: true, won: true },
       { source: ".env.docker", present: false, won: false },
-      { source: "driver", present: false, won: false },
       { source: "dev-fallback", present: false, won: false },
     ],
     readers: ["payments.charge", "payments.refund"],
@@ -50,10 +50,10 @@ export const VAULT_FIXTURE: readonly VaultRecord[] = [
     cleartext: "https://app.example.com",
     winner: "process.env",
     resolution: [
+      { source: "driver", present: false, won: false },
       { source: "process.env", present: true, won: true },
       { source: ".env.local", present: false, won: false },
       { source: ".env.docker", present: false, won: false },
-      { source: "driver", present: false, won: false },
       { source: "dev-fallback", present: false, won: false },
     ],
     readers: ["site.render"],

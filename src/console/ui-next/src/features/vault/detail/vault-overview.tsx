@@ -57,7 +57,7 @@ export function VaultOverview({
               </button>
             </>
           ) : (
-            "Declare a vault.secret or vault.config in the Manifest."
+            "Declare vault.secret (fingerprinted) or vault.config (shown in the Config band) in the Manifest."
           )
         }
       />

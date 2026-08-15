@@ -1,8 +1,8 @@
 /**
  * Vault resolution chain — a probe descends the layers until first hit.
  *
- * Layer ids match `VaultResolutionSource`: process.env → .env.local →
- * .env.docker → driver → dev-fallback. Each run probes one layer per beat;
+ * Layer ids match `VaultResolutionSource`: driver → process.env →
+ * .env.local → .env.docker → dev-fallback. Each run probes one layer per beat;
  * the hit layer cycles 1 → 2 → 3 → 4 → 5 across runs, and every sixth run
  * misses all five so the fail row lights. Layers past the hit read `skipped`
  * — that is the whole semantics of "first hit wins". Deterministic from one
@@ -21,10 +21,10 @@ const LAYERS: ReadonlyArray<{
   readonly source: string;
   readonly content: string;
 }> = [
-  { n: "1", source: "process.env", content: "Real env (CI, hosting)" },
-  { n: "2", source: ".env.local", content: "Local overrides (gitignored)" },
-  { n: "3", source: ".env.docker", content: "Compose credentials (docker/.env.docker)" },
-  { n: "4", source: "driver", content: "Built-in vault / managed bag" },
+  { n: "1", source: "driver", content: "Built-in vault / managed bag" },
+  { n: "2", source: "process.env", content: "Real env (CI, hosting)" },
+  { n: "3", source: ".env.local", content: "Local overrides (gitignored)" },
+  { n: "4", source: ".env.docker", content: "Compose credentials (docker/.env.docker)" },
   { n: "5", source: "dev-fallback", content: "dev: on the contract — never in prod" },
 ];
 
@@ -50,7 +50,7 @@ export function VaultResolution() {
   return (
     <figure
       className="@container not-prose my-0 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-fd-border bg-fd-card"
-      aria-label="Vault resolution chain: process.env, .env.local, .env.docker, driver, then dev-fallback. First hit wins; if every layer misses, boot fails with VaultBootError."
+      aria-label="Vault resolution chain: driver, process.env, .env.local, .env.docker, then dev-fallback. First hit wins; if every layer misses, boot fails with VaultBootError."
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-fd-border px-4 py-2.5 sm:px-5">
         <p className="text-sm font-medium text-fd-foreground">Resolution chain — first hit wins</p>

@@ -83,10 +83,10 @@ export const OVERVIEW_VAULT_FIXTURE = {
       cleartext: null,
       winner: ".env.local" as const,
       resolution: [
+        { source: "driver" as const, present: false, won: false },
         { source: "process.env" as const, present: false, won: false },
         { source: ".env.local" as const, present: true, won: true },
         { source: ".env.docker" as const, present: false, won: false },
-        { source: "driver" as const, present: false, won: false },
         { source: "dev-fallback" as const, present: false, won: false },
       ],
       readers: [],

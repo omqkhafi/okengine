@@ -285,8 +285,8 @@ export function bindManifestAiRuntime(state: ConsoleState): void {
 
 /**
  * Open a VaultRuntime from the Manifest when no host runtime is attached.
- * Uses the standard resolution chain (process.env → .env.local → .env.docker
- * → driver) — Console never parses dotenv itself.
+ * Uses the standard resolution chain (driver → process.env → .env.local →
+ * .env.docker) — Console never parses dotenv itself.
  *
  * @param state - Console state
  */

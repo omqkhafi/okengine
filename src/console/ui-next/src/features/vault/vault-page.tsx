@@ -311,6 +311,7 @@ export function VaultPage(): JSX.Element {
         }}
         mode={action === "rotate" ? "rotate" : "set"}
         name={selected?.name ?? ""}
+        sensitive={selected?.sensitive ?? true}
         pending={writeMut.isPending}
         error={writeError}
         onConfirm={(input) => {

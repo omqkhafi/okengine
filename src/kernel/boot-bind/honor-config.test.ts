@@ -58,12 +58,12 @@ describe("boot binders honour drivers.* config", () => {
     }
   });
 
-  test("vault: drivers.vault vault selects built-in layer behind env", () => {
+  test("vault: drivers.vault vault selects built-in layer in front of env", () => {
     const chain = buildVaultBootChain({
       driverId: "vault",
       env: "test",
     });
-    expect(chain.map((l) => l.driver.id)).toContain("vault");
+    expect(chain[0]?.driver.id).toBe("vault");
     expect(chain.map((l) => l.driver.id)).toContain("env");
   });
 

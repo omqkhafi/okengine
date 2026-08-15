@@ -79,10 +79,10 @@ export const VAULT_SEARCH_CATALOG: readonly VaultSearchSuggestion[] = [
 ];
 
 const RESOLUTION_SOURCES: readonly VaultResolutionSource[] = [
+  "driver",
   "process.env",
   ".env.local",
   ".env.docker",
-  "driver",
   "dev-fallback",
 ];
 

@@ -55,10 +55,10 @@ const SOURCE_SHORT: Readonly<Record<VaultResolutionSource, string>> = {
 };
 
 const RESOLUTION_ORDER: readonly VaultResolutionSource[] = [
+  "driver",
   "process.env",
   ".env.local",
   ".env.docker",
-  "driver",
   "dev-fallback",
 ];
 
@@ -159,7 +159,13 @@ export function VaultDetail({
           <>
             <CopyMenu row={row} />
             {posture.unset ? null : (
-              <ToolbarTip label="Write-only. The new value is never shown again.">
+              <ToolbarTip
+                label={
+                  row.kind === "config"
+                    ? "Updates this vault.config value. Console shows it in the clear."
+                    : "Write-only. The new value is never shown again."
+                }
+              >
                 <Button type="button" variant="outline" size="sm" onClick={onSet}>
                   Set
                 </Button>

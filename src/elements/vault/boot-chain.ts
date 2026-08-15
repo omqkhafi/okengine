@@ -1,8 +1,12 @@
 /**
  * Shared Vault resolution-chain assembly for app boot and Console.
  *
- * Order (first hit wins): process.env → .env.local → compose .env.docker →
- * backend layer (`env` seed / vault / memory / managed).
+ * Spec order (first hit wins): driver (vault / managed) → process.env →
+ * .env.local → compose .env.docker. Runtime appends `dev-fallback` last.
+ *
+ * The `env` driver has no backend bag — its chain stays the env layers
+ * plus a last-resort memory seed, so Console writes persist to `.env.local`.
+ * Same chain for every {@link ConfigEnv}; no per-environment special-casing.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -108,10 +112,9 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
           },
         ];
       }
-      // With a remote provider the bag is remote-only, so the env layers go
-      // in front — an operator override in `process.env` still wins.
+      // Remote provider: the managed bag is first so a value already in
+      // the backend wins over a leftover `process.env` / dotenv pin.
       return [
-        ...envLayers,
         {
           driver: managedVaultDriver,
           source: "driver",
@@ -124,6 +127,7 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
             ...(vaultRegion === undefined ? {} : { region: vaultRegion }),
           },
         },
+        ...envLayers,
       ];
     }
     case "env":
@@ -136,15 +140,15 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
         },
       ];
     case "vault":
-      // The built-in store sits behind the env layers: an operator override
-      // in `process.env` still wins, exactly as it does for every driver.
+      // Built-in store is first: a value already in Vault wins over
+      // `process.env` / dotenv. `put()` lands on this bag.
       return [
-        ...envLayers,
         {
           driver: builtinVaultDriver,
           source: "driver",
           options: { secrets: seed },
         },
+        ...envLayers,
       ];
     default: {
       const _exhaustive: never = options.driverId;

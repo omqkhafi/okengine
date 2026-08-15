@@ -2,6 +2,7 @@
  * Vault list — secrets / config bands with posture marks.
  */
 
+import { SourceCodeIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
 import {
@@ -34,7 +35,12 @@ export interface VaultListProps {
 
 const KIND_WELL: Record<VaultKindGroup["kind"], string> = {
   secret: "border-[color:var(--vault-accent)]/35",
-  config: "border-zinc-500/35 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+  config: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+};
+
+const KIND_HINT: Record<VaultKindGroup["kind"], string> = {
+  secret: "fingerprints only",
+  config: "vault.config · shown in clear",
 };
 
 /**
@@ -84,9 +90,17 @@ export function VaultList({
                 }
                 aria-hidden
               >
-                <HugeiconsIcon icon={ELEMENT_ICONS.vault.icon} className="size-3" />
+                <HugeiconsIcon
+                  icon={group.kind === "config" ? SourceCodeIcon : ELEMENT_ICONS.vault.icon}
+                  className="size-3"
+                />
               </span>
-              <span className={cn(EXPLORER_BAND_LABEL_CLASS, "flex-1")}>{group.label}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className={EXPLORER_BAND_LABEL_CLASS}>{group.label}</span>
+                <span className="truncate text-[10px] text-muted-foreground">
+                  {KIND_HINT[group.kind]}
+                </span>
+              </span>
               <span className={EXPLORER_COUNT_CLASS}>{group.secrets.length}</span>
             </div>
             <ul className="flex flex-col gap-0.5 p-1">
@@ -162,7 +176,7 @@ function VaultListItem({
         </span>
         <span className="flex w-full items-center gap-1.5 pl-7">
           <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
-            {row.name}
+            {row.kind === "config" ? (row.cleartext ?? "unset") : row.name}
           </span>
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {row.readers.length === 0

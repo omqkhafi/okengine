@@ -13,6 +13,8 @@ export interface VaultWriteSheetProps {
   readonly onOpenChange: (open: boolean) => void;
   readonly mode: "set" | "rotate";
   readonly name: string;
+  /** When false, Console will show the new value in the Config band. */
+  readonly sensitive?: boolean;
   readonly pending?: boolean;
   readonly error?: string | null;
   readonly onConfirm: (input: {
@@ -23,7 +25,8 @@ export interface VaultWriteSheetProps {
 }
 
 /**
- * Write-only set / rotate sheet. No preview.
+ * Set / rotate sheet. Secrets stay write-only; config values reappear
+ * in the Config band after submit.
  *
  * @param props - Mode + confirm
  */
@@ -32,6 +35,7 @@ export function VaultWriteSheet({
   onOpenChange,
   mode,
   name,
+  sensitive = true,
   pending = false,
   error,
   onConfirm,
@@ -49,7 +53,11 @@ export function VaultWriteSheet({
       onOpenChange={onOpenChange}
       phrase={phrase}
       title={mode === "set" ? `Set ${name}` : `Rotate ${name}`}
-      description="Write-only. The new value is never shown again after submit."
+      description={
+        sensitive
+          ? "Write-only. The new value is never shown again after submit."
+          : "This vault.config value is shown in the clear on the Config band after submit."
+      }
       pending={pending}
       error={error}
       confirmLabel={mode === "set" ? "Confirm set" : "Confirm rotate"}

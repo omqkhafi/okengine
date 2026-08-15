@@ -93,16 +93,44 @@ Call `.reveal()` once at the provider boundary that needs the credential.
 
 ## Two kinds of contracts
 
-| Declaration                         | Sensitive? | Console shows    | Use for                     |
-| ----------------------------------- | ---------- | ---------------- | --------------------------- |
-| `vault.secret("STRIPE_KEY", …)`     | yes        | fingerprint only | API keys, tokens, passwords |
-| `vault.config("PUBLIC_APP_URL", …)` | no         | cleartext value  | Public URLs, feature flags  |
+| Declaration                         | Sensitive? | Console shows                       | Use for                     |
+| ----------------------------------- | ---------- | ----------------------------------- | --------------------------- |
+| `vault.secret("STRIPE_KEY", …)`     | yes        | fingerprint only                    | API keys, tokens, passwords |
+| `vault.config("PUBLIC_APP_URL", …)` | no         | **Config** band, value in the clear | Public URLs, feature flags  |
 
 `vault(name, …)` is shorthand for `vault.secret(name, …)`.
 
+<Callout title="Config is the one place for non-secret variables">
+  `vault.config()` is the contract the Console **Config** band lists and edits. Declare it once; set
+  the value from Console, `oke vault set`, or the resolution chain. Do not use `vault.env` for
+  values you want to see or change on `/vault`.
+</Callout>
+
+```typescript title="src/vault.ts"
+export const publicAppUrl = vault.config("PUBLIC_APP_URL", {
+  description: "Public site origin",
+  dev: "http://127.0.0.1:6530",
+});
+```
+
+```bash title=".env.local"
+PUBLIC_APP_URL=https://app.example.com
+```
+
+```typescript title="src/flows/site/render.ts"
+do: async (_input, fx) => {
+  const origin = (await fx.vault.get(publicAppUrl)).reveal();
+  return { canonical: `${origin}/` };
+},
+```
+
+**Consequence:** `/vault` lists this under **Config** in the clear. `fx.vault.get` still
+returns `Redacted` — `.reveal()` is the read. `vault.env("PUBLIC_APP_URL")` never appears
+on that page.
+
 ### Plain environment variables
 
-`vault.env` reads `process.env` synchronously for values that need no contract — a port, a feature flag, a log level. It never joins the resolution chain, never gets a fingerprint, and never gets redacted.
+`vault.env` reads `process.env` synchronously for values that need no contract — a port, a feature flag, a log level. It never joins the resolution chain, never appears in the Console, never gets a fingerprint, and never gets redacted.
 
 | Call                             | Returns               | On a missing value                     |
 | -------------------------------- | --------------------- | -------------------------------------- |
@@ -136,7 +164,8 @@ export const dbUrl = vault.secret("DATABASE_URL", {
 
 ## Where values come from
 
-At boot, each contract is resolved through this chain — **first hit wins**:
+At boot, each contract is resolved through this chain — **first hit wins**.
+A value already in the vault / managed backend wins over a leftover env pin.
 
 <VaultResolution />
 
@@ -168,8 +197,9 @@ VaultBootError: 1 secret(s) missing:
 
 Flows can write too, through the same capability gate as reads: `fx.vault.set(path, value, { ttlMs?, metadata? })`, `fx.vault.rotate(path, value)`, `fx.vault.delete(path)`, plus `fx.vault.list(prefix?)` and `fx.vault.status()`. These need the encrypted-at-rest backend (`drivers.vault = "vault"`) and throw without it; `fx.vault.get` works on every app.
 
-The **Console** (`:6533`) **Vault** page (`/vault`) is write-only: a salted
-fingerprint (`sha256:…`) per secret, never the cleartext.
+The **Console** (`:6533`) **Vault** page (`/vault`) groups **Secrets** and
+**Config**. Secrets are write-only: a salted fingerprint (`sha256:…`), never
+the cleartext. Config rows show the value — that is `vault.config()`.
 
 Search matches name, description, fingerprint, reader, and winner. Operators
 AND together. `/` focuses the field.
@@ -224,7 +254,7 @@ accepts a master key in the HTTP body — unseal via `OKE_VAULT_MASTER_KEY`.
 ## Per-environment drivers
 
 Which backend holds your values depends on the environment — configured once in `oke.config.ts`.
-App boot and the Console share the same resolution-chain builder (`env` layers → backend):
+App boot and the Console share the same chain: **backend first**, then env files:
 
 ```typescript title="oke.config.ts"
 drivers: {

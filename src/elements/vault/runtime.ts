@@ -34,7 +34,7 @@ export class VaultBootError extends Error {
 
 /**
  * Named layer in the resolution chain (console §9.8).
- * Spec order: process.env → .env.local → .env.docker → driver → dev-fallback.
+ * Spec order: driver → process.env → .env.local → .env.docker → dev-fallback.
  */
 export type VaultResolutionSource =
   | "process.env"

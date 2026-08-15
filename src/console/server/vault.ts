@@ -591,8 +591,8 @@ export function rotateVaultValue(
 /**
  * Build a VaultRuntime from Manifest contracts when no host runtime is attached.
  *
- * Uses the standard resolution chain: process.env → .env.local → .env.docker
- * → memory driver → (optional) dev fallback. Does not parse dotenv in the UI.
+ * Uses the standard resolution chain: driver → process.env → .env.local →
+ * .env.docker → (optional) dev fallback. Does not parse dotenv in the UI.
  *
  * @param manifest - Manifest snapshot
  * @param options - cwd / env / allowDevFallbacks / seed
