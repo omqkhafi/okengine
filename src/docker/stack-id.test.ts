@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -56,27 +56,18 @@ describe("hostPortForInstance", () => {
 });
 
 describe("loadExistingStackControls", () => {
-  test("seeds OKE_AI_MODEL from .env.local when .env.docker omits it", async () => {
+  test("seeds OKE_AI_MODEL from .env.local", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-stack-ai-"));
     await writeFile(join(dir, ".env.local"), "OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
     const controls = await loadExistingStackControls(dir);
     expect(controls?.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
   });
 
-  test("seeds commented OKE_AI_MODEL from .env.local when .env.docker omits it", async () => {
+  test("seeds commented OKE_AI_MODEL from .env.local", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-stack-ai-"));
     await writeFile(join(dir, ".env.local"), "# OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
     const controls = await loadExistingStackControls(dir);
     expect(controls?.OKE_AI_MODEL).toBe("gemma4:e4b-q4_K_M");
-  });
-
-  test("prefers active OKE_AI_MODEL in docker/.env.docker over .env.local", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oke-stack-ai-"));
-    await mkdir(join(dir, "docker"), { recursive: true });
-    await writeFile(join(dir, "docker", ".env.docker"), "OKE_AI_MODEL=smollm2\n", "utf8");
-    await writeFile(join(dir, ".env.local"), "# OKE_AI_MODEL=gemma4:e4b-q4_K_M\n", "utf8");
-    const controls = await loadExistingStackControls(dir);
-    expect(controls?.OKE_AI_MODEL).toBe("smollm2");
   });
 });
 

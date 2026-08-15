@@ -3,11 +3,12 @@
  */
 
 import type { JSX } from "react";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cn } from "@/lib/utils.ts";
 import type { VaultBackendCard as VaultBackendCardModel } from "../lib/backend.ts";
 import type { RewrapProgressLine } from "../lib/progress.ts";
 import { hasIsToken, toggleIsToken } from "../lib/search.ts";
-import { VAULT_POSTURE_FACETS, type VaultPostureSummary } from "../lib/posture.ts";
+import { postureHint, VAULT_POSTURE_FACETS, type VaultPostureSummary } from "../lib/posture.ts";
 import { VAULT_ACCENT } from "../lib/theme.ts";
 
 /** Props for {@link VaultPostureStrip}. */
@@ -93,23 +94,24 @@ export function VaultPostureStrip({
               const pressed = hasIsToken(query, facet.token);
               if (count === 0 && !pressed) return null;
               return (
-                <button
-                  key={facet.id}
-                  type="button"
-                  aria-pressed={pressed}
-                  onClick={() => onQueryChange(toggleIsToken(query, facet.token))}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                    pressed
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                    facet.tone === "danger" && !pressed && "text-destructive",
-                    facet.tone === "warn" && !pressed && "text-amber-800 dark:text-amber-400",
-                  )}
-                >
-                  {facet.label}
-                  <span className="font-mono tabular-nums">{count}</span>
-                </button>
+                <ToolbarTip key={facet.id} label={postureHint(facet.id)}>
+                  <button
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => onQueryChange(toggleIsToken(query, facet.token))}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                      pressed
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                      facet.tone === "danger" && !pressed && "text-destructive",
+                      facet.tone === "warn" && !pressed && "text-amber-800 dark:text-amber-400",
+                    )}
+                  >
+                    {facet.label}
+                    <span className="font-mono tabular-nums">{count}</span>
+                  </button>
+                </ToolbarTip>
               );
             })}
           </div>

@@ -1,7 +1,6 @@
 /**
- * Typed confirmation for vault set / rotate / rotate-master (console §6 · §9.8).
- *
- * There is no preview affordance for Vault — writes are real.
+ * Confirmation for vault writes. Set / rotate record a reason.
+ * Rotate-master stays a typed phrase (dual-KEK window).
  */
 
 import {
@@ -10,31 +9,32 @@ import {
 } from "../../store/lib/confirmation.ts";
 
 export { validateTypedConfirm };
-export type VaultConfirmationPattern = StoreConfirmationPattern;
+
+/** Confirmation strategy for a vault write. */
+export type VaultConfirmationPattern =
+  | StoreConfirmationPattern
+  | { readonly kind: "reason" };
 
 /**
- * Confirmation for setting a vault value.
+ * Confirmation for setting a vault value — reason only.
  *
- * @param options - Environment
+ * @param _options - Reserved for environment flags
  */
 export function setConfirmation(
-  options: { readonly production: boolean } = { production: true },
+  _options: { readonly production: boolean } = { production: true },
 ): VaultConfirmationPattern {
-  if (options.production) {
-    return { kind: "typed", phrase: "SET", requireReason: true };
-  }
-  return { kind: "undo", windowMs: 15_000 };
+  return { kind: "reason" };
 }
 
 /**
- * Confirmation for rotating a vault value — always typed (blast radius).
+ * Confirmation for rotating a vault value — reason only (blast radius).
  *
  * @param _options - Reserved for environment flags
  */
 export function rotateConfirmation(
   _options: { readonly production: boolean } = { production: true },
 ): VaultConfirmationPattern {
-  return { kind: "typed", phrase: "ROTATE", requireReason: true };
+  return { kind: "reason" };
 }
 
 /**

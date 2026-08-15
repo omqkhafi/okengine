@@ -4,7 +4,7 @@ description: "Every environment variable OKE reads — connection URLs, driver o
 icon: "Terminal"
 ---
 
-OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes these into `docker/.env.docker`; this page is the full map.
+OKE reads environment variables at boot for connection detail and secrets — never for behavior you could declare in `oke.config.ts`. Under `oke dev`, Compose writes these into `.env.local`; this page is the full map.
 
 <Callout title="Precedence">
   For anything with both an `OKE_*` variable and a conventional one (like `DATABASE_URL`), the
@@ -54,17 +54,17 @@ OKE reads environment variables at boot for connection detail and secrets — ne
 
 ## Vault
 
-Built-in store uses `OKE_VAULT_MASTER_KEY` (or `--key` / stdin on CLI). Managed AWS Secrets Manager
-uses the provider + region vars below.
+Built-in store uses `OKE_VAULT_MASTER_KEY` (or `--key` / stdin on CLI). Managed providers use the
+vars below — see [Vault](/docs/elements/vault) for which each id needs.
 
-| Variable               | Used for                                     | Default when unset    |
-| ---------------------- | -------------------------------------------- | --------------------- |
-| `OKE_VAULT_PROVIDER`   | Managed backend (`aws-secrets-manager`)      | — (platform-injected) |
-| `OKE_VAULT_REGION`     | Cloud region for AWS Secrets Manager         | —                     |
-| `OKE_VAULT_MOUNT`      | Secret-name prefix for AWS SM (`oke/prod/`)  | —                     |
-| `OKE_VAULT_MASTER_KEY` | Built-in vault master key (base64)           | —                     |
-| `OKE_VAULT_URL`        | Optional remote URL for community adapters   | —                     |
-| `OKE_VAULT_TOKEN`      | Optional remote token for community adapters | —                     |
+| Variable               | Used for                                                                                         | Default when unset    |
+| ---------------------- | ------------------------------------------------------------------------------------------------ | --------------------- |
+| `OKE_VAULT_PROVIDER`   | Managed backend (`aws-secrets-manager` · `azure-key-vault` · `gcp-secret-manager` · `doppler` · `1password`) | — (platform-injected) |
+| `OKE_VAULT_REGION`     | Cloud region (AWS Secrets Manager; GCP user-managed replication)                                 | —                     |
+| `OKE_VAULT_MOUNT`      | Scope: AWS/Azure prefix, GCP `project[/prefix]`, Doppler `project/config`, 1Password vault name  | —                     |
+| `OKE_VAULT_MASTER_KEY` | Built-in vault master key (base64)                                                               | —                     |
+| `OKE_VAULT_URL`        | Azure Key Vault URI, 1Password Connect host, optional Doppler origin                             | —                     |
+| `OKE_VAULT_TOKEN`      | Doppler service/personal token, 1Password Connect token                                          | —                     |
 
 ## Channel (email) — boot binder
 

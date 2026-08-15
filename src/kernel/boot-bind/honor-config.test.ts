@@ -49,7 +49,7 @@ describe("boot binders honour drivers.* config", () => {
         expect(result.vault).toBeDefined();
         expect(result.vault!.chainDriverIds).toContain("env");
         expect(result.vault!.chainDriverIds).toContain("memory");
-        expect(result.vault!.chainDriverIds[0]).toBe("env");
+        expect(result.vault!.chainDriverIds[0]).toBe("memory");
       } finally {
         await result.close();
       }

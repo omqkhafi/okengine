@@ -2,9 +2,16 @@
  * Vault list — secrets / config bands with posture marks.
  */
 
-import { SourceCodeIcon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  ArrowDown01Icon,
+  Clock01Icon,
+  SourceCodeIcon,
+  UnavailableIcon,
+  UserMultipleIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import {
   EXPLORER_BAND_CLASS,
   EXPLORER_BAND_HEADER_CLASS,
@@ -16,10 +23,18 @@ import {
   EXPLORER_ROW_SELECTED_CLASS,
   EXPLORER_WELL_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
-import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
+import { ELEMENT_ICONS, type ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils.ts";
-import { contractPosture, postureLabel, type VaultPosture } from "../lib/posture.ts";
-import { VAULT_ACCENT, VAULT_WELL } from "../lib/theme.ts";
+import {
+  contractPosture,
+  isRotateCadence,
+  postureHint,
+  postureLabel,
+  type VaultPosture,
+} from "../lib/posture.ts";
+import { VAULT_ACCENT } from "../lib/theme.ts";
 import type { VaultKindGroup, VaultRecord } from "../lib/types.ts";
 
 /** Props for {@link VaultList}. */
@@ -34,13 +49,48 @@ export interface VaultListProps {
 }
 
 const KIND_WELL: Record<VaultKindGroup["kind"], string> = {
-  secret: "border-[color:var(--vault-accent)]/35",
+  secret: "border-indigo-500/40 bg-indigo-500/12 text-indigo-600 dark:text-indigo-300",
   config: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+};
+
+const KIND_ICON: Record<VaultKindGroup["kind"], ElementHugeIcon> = {
+  secret: ELEMENT_ICONS.vault.icon,
+  config: SourceCodeIcon,
 };
 
 const KIND_HINT: Record<VaultKindGroup["kind"], string> = {
   secret: "fingerprints only",
   config: "vault.config · shown in clear",
+};
+
+const POSTURE_WELL: Record<VaultPosture["primary"], string> = {
+  blast: "border-destructive/40 bg-destructive/10 text-destructive",
+  unset: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  overdue: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  shared: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  dormant: "border-zinc-500/35 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400",
+  healthy: KIND_WELL.secret,
+  config: KIND_WELL.config,
+};
+
+const POSTURE_ICON: Record<VaultPosture["primary"], ElementHugeIcon> = {
+  blast: Alert02Icon,
+  unset: UnavailableIcon,
+  overdue: Clock01Icon,
+  shared: UserMultipleIcon,
+  dormant: UnavailableIcon,
+  healthy: ELEMENT_ICONS.vault.icon,
+  config: SourceCodeIcon,
+};
+
+const POSTURE_MARK: Record<VaultPosture["primary"], string> = {
+  blast: "border-destructive/30 text-destructive",
+  unset: "border-amber-500/30 text-amber-800 dark:text-amber-400",
+  overdue: "border-amber-500/30 text-amber-800 dark:text-amber-400",
+  shared: "border-amber-500/30 text-amber-800 dark:text-amber-400",
+  dormant: "border-border/60 text-muted-foreground",
+  healthy: "border-indigo-500/30 text-indigo-600 dark:text-indigo-300",
+  config: "border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
 };
 
 /**
@@ -57,6 +107,17 @@ export function VaultList({
   now,
   onSelect,
 }: VaultListProps): JSX.Element {
+  const [openByKind, setOpenByKind] = useState<Readonly<Record<string, boolean>>>({
+    secret: true,
+    config: true,
+  });
+
+  useEffect(() => {
+    const group = groups.find((g) => g.secrets.some((row) => row.name === selectedName));
+    if (!group) return;
+    setOpenByKind((prev) => (prev[group.kind] === false ? { ...prev, [group.kind]: true } : prev));
+  }, [groups, selectedName]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="vault-list">
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -68,54 +129,65 @@ export function VaultList({
             No contracts match. Try <span className="font-mono">is:unset</span> or clear the search.
           </p>
         ) : null}
-        {groups.map((group) => (
-          <section
-            key={group.kind}
-            aria-label={group.label}
-            className={EXPLORER_BAND_CLASS}
-            data-slot="vault-kind-band"
-            data-kind={group.kind}
-          >
-            <div className={EXPLORER_BAND_HEADER_CLASS}>
-              <span
-                className={cn(EXPLORER_WELL_CLASS, KIND_WELL[group.kind])}
-                style={
-                  group.kind === "secret"
-                    ? {
-                        backgroundColor: VAULT_WELL,
-                        color: VAULT_ACCENT,
-                        ["--vault-accent" as string]: VAULT_ACCENT,
-                      }
-                    : undefined
-                }
-                aria-hidden
+        {groups.map((group) => {
+          const open = openByKind[group.kind] !== false;
+          return (
+            <section
+              key={group.kind}
+              aria-label={group.label}
+              className={EXPLORER_BAND_CLASS}
+              data-slot="vault-kind-band"
+              data-kind={group.kind}
+            >
+              <Collapsible
+                open={open}
+                onOpenChange={(next) => setOpenByKind((prev) => ({ ...prev, [group.kind]: next }))}
               >
-                <HugeiconsIcon
-                  icon={group.kind === "config" ? SourceCodeIcon : ELEMENT_ICONS.vault.icon}
-                  className="size-3"
+                <CollapsibleTrigger
+                  nativeButton={false}
+                  className={EXPLORER_BAND_HEADER_CLASS}
+                  data-slot="vault-kind-band-toggle"
+                  render={(props) => (
+                    <div {...props}>
+                      <span
+                        className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover/band:bg-muted/80 group-hover/band:text-foreground"
+                        aria-hidden
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowDown01Icon}
+                          className={cn("size-3 transition-transform", !open && "-rotate-90")}
+                        />
+                      </span>
+                      <span className={cn(EXPLORER_WELL_CLASS, KIND_WELL[group.kind])} aria-hidden>
+                        <HugeiconsIcon icon={KIND_ICON[group.kind]} className="size-3" />
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className={EXPLORER_BAND_LABEL_CLASS}>{group.label}</span>
+                        <span className="truncate text-[10px] text-muted-foreground">
+                          {KIND_HINT[group.kind]}
+                        </span>
+                      </span>
+                      <span className={EXPLORER_COUNT_CLASS}>{group.secrets.length}</span>
+                    </div>
+                  )}
                 />
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className={EXPLORER_BAND_LABEL_CLASS}>{group.label}</span>
-                <span className="truncate text-[10px] text-muted-foreground">
-                  {KIND_HINT[group.kind]}
-                </span>
-              </span>
-              <span className={EXPLORER_COUNT_CLASS}>{group.secrets.length}</span>
-            </div>
-            <ul className="flex flex-col gap-0.5 p-1">
-              {group.secrets.map((row) => (
-                <VaultListItem
-                  key={row.name}
-                  row={row}
-                  selected={row.name === selectedName}
-                  now={now}
-                  onSelect={onSelect}
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
+                <CollapsibleContent>
+                  <ul className="flex flex-col gap-0.5 p-1">
+                    {group.secrets.map((row) => (
+                      <VaultListItem
+                        key={row.name}
+                        row={row}
+                        selected={row.name === selectedName}
+                        now={now}
+                        onSelect={onSelect}
+                      />
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
+            </section>
+          );
+        })}
       </div>
       {groups.length > 0 ? (
         <p className="sr-only">
@@ -164,15 +236,21 @@ function VaultListItem({
           style={{ ["--vault-accent" as string]: VAULT_ACCENT }}
         />
         <span className="flex w-full items-center gap-2">
-          <span
-            className={EXPLORER_WELL_CLASS}
-            style={{ backgroundColor: VAULT_WELL, color: VAULT_ACCENT }}
-            aria-hidden
-          >
-            <HugeiconsIcon icon={ELEMENT_ICONS.vault.icon} className="size-3" />
+          <span className={cn(EXPLORER_WELL_CLASS, POSTURE_WELL[posture.primary])} aria-hidden>
+            <HugeiconsIcon icon={POSTURE_ICON[posture.primary]} className="size-3" />
           </span>
           <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
-          <PostureMark posture={posture} />
+          {row.origin === "console" ? (
+            <span className="shrink-0 rounded-md border border-border/60 px-1.5 py-px text-[10px] text-muted-foreground">
+              console
+            </span>
+          ) : null}
+          {row.kind === "secret" && !isRotateCadence(row.rotate) ? (
+            <span className="shrink-0 rounded-md border border-border/60 px-1.5 py-px text-[10px] text-muted-foreground">
+              no rotate
+            </span>
+          ) : null}
+          <PostureMark posture={posture} rotate={row.rotate} />
         </span>
         <span className="flex w-full items-center gap-1.5 pl-7">
           <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
@@ -189,24 +267,24 @@ function VaultListItem({
   );
 }
 
-function PostureMark({ posture }: { readonly posture: VaultPosture }): JSX.Element {
-  const label = postureLabel(posture.primary);
+function PostureMark({
+  posture,
+  rotate,
+}: {
+  readonly posture: VaultPosture;
+  readonly rotate?: string;
+}): JSX.Element {
   return (
-    <span
-      role="status"
-      className={cn(
-        "shrink-0 text-[10px]",
-        posture.primary === "blast" && "text-destructive",
-        posture.primary === "unset" && "text-amber-800 dark:text-amber-400",
-        posture.primary === "overdue" && "text-amber-800 dark:text-amber-400",
-        posture.primary === "shared" && "text-amber-800 dark:text-amber-400",
-        (posture.primary === "dormant" ||
-          posture.primary === "healthy" ||
-          posture.primary === "config") &&
-          "text-muted-foreground",
-      )}
-    >
-      {label}
-    </span>
+    <ToolbarTip label={postureHint(posture.primary, rotate)}>
+      <span
+        role="status"
+        className={cn(
+          "shrink-0 rounded-md border px-1.5 py-px text-[10px]",
+          POSTURE_MARK[posture.primary],
+        )}
+      >
+        {postureLabel(posture.primary)}
+      </span>
+    </ToolbarTip>
   );
 }

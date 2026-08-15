@@ -26,7 +26,7 @@ function redisUrlFor(docker: boolean): string | undefined {
   const url = process.env.REDIS_URL ?? process.env.OKE_STORE_KV_URL ?? undefined;
   if (!url && docker) {
     throw new Error(
-      "oke boot: signal redis driver needs REDIS_URL (did `oke dev -d` write docker/.env.docker?)",
+      "oke boot: signal redis driver needs REDIS_URL (did `oke dev -d` write .env.local?)",
     );
   }
   return url;

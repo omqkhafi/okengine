@@ -37,7 +37,7 @@ images: {
 <Step>
 ### Keys written by oke docker
 
-```bash title="docker/.env.docker"
+```bash title=".env.local"
 OKE_STORE_INDEX_URL=http://127.0.0.1:7700
 OKE_STORE_INDEX_KEY=…          # also accepted as MEILI_MASTER_KEY
 ```
@@ -78,7 +78,7 @@ Writes wait on Meilisearch tasks before returning.
 **Backup means:** snapshot/restore that named volume (or Meilisearch dumps). Recreating
 the container **keeps** data if the volume remains; deleting the volume wipes every index.
 
-The master key is **not** inside the volume — it lives in `.env.docker` / secrets.
+The master key is **not** inside the volume — it lives in `.env.local` / secrets.
 Losing the key without a backup blocks admin API access even if data remains.
 
 ## Production note
@@ -104,7 +104,7 @@ not FTS. See [Store · Index](/docs/elements/store#index).
 <Accordion title="oke boot: meilisearch index needs OKE_STORE_INDEX_URL">
 
 No silent memory fallback. Re-run `oke dev` or export `OKE_STORE_INDEX_URL`.
-Docker-mode wording asks whether `docker/.env.docker` was written.
+Docker-mode wording asks whether `.env.local` was written.
 
 </Accordion>
 <Accordion title="meilisearch index: GET/POST … failed (403) — or master key errors">

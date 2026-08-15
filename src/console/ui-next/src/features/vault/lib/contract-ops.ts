@@ -2,7 +2,8 @@
  * Operator snippets for one vault contract — never include secret values.
  */
 
-import type { VaultResolutionSource } from "./types.ts";
+import { vaultDriverHint, vaultDriverShortLabel } from "./backend.ts";
+import type { VaultBackend, VaultResolutionSource } from "./types.ts";
 
 /** One copyable fill recipe for a resolution layer. */
 export interface VaultLayerFill {
@@ -53,8 +54,13 @@ export function vaultDotenvLine(name: string): string {
  *
  * @param source - Layer
  * @param name - Contract name
+ * @param backend - Active vault backend (names the driver layer)
  */
-export function vaultLayerFill(source: VaultResolutionSource, name: string): VaultLayerFill {
+export function vaultLayerFill(
+  source: VaultResolutionSource,
+  name: string,
+  backend?: VaultBackend | null,
+): VaultLayerFill {
   switch (source) {
     case "process.env":
       return {
@@ -70,19 +76,12 @@ export function vaultLayerFill(source: VaultResolutionSource, name: string): Vau
         command: vaultDotenvLine(name),
         hint: "Write to .env.local (gitignored)",
       };
-    case ".env.docker":
-      return {
-        source,
-        label: "docker",
-        command: vaultDotenvLine(name),
-        hint: "Write to docker/.env.docker",
-      };
     case "driver":
       return {
         source,
-        label: "driver",
+        label: vaultDriverShortLabel(backend),
         command: vaultSetCli(name),
-        hint: "Encrypted backend — same as Console Set",
+        hint: vaultDriverHint(backend),
       };
     case "dev-fallback":
       return {

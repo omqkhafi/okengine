@@ -103,7 +103,7 @@ async function ensureDockerStack(
   await writeDerivedFiles(derived, resolve(cwd, DEFAULT_DOCKER_DIR), { writeStackEnv: true });
   if (!quietComposeReady) {
     write(
-      "oke: docker compose env ready under docker/.env.docker (start containers with `oke dev` or docker compose up)\n",
+      "oke: docker compose env ready under .env.local (start containers with `oke dev` or docker compose up)\n",
     );
   }
 }
@@ -111,7 +111,7 @@ async function ensureDockerStack(
 /**
  * Ensure artefacts, emit for the active dialect, and push schema for an env.
  * Returns a one-line summary outcome. Docker mode also ensures compose env
- * exists (writes `docker/.env.docker`) before pushing to the live DB.
+ * exists (merges stack keys into `.env.local`) before pushing to the live DB.
  *
  * @param cwd - Project root
  * @param env - Target {@link ConfigEnv} (`dev` for compose, `test` for laptop)

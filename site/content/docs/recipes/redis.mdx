@@ -32,7 +32,7 @@ images: {
 <Step>
 ### Required password
 
-```bash title="docker/.env.docker (written by oke docker)"
+```bash title=".env.local (written by oke docker)"
 OKE_STORE_KV_PASSWORD=…
 REDIS_URL=redis://:…@127.0.0.1:6379
 ```
@@ -100,7 +100,7 @@ Multi-replica Gate rate counters and Signal need a **shared** Redis URL — an i
 
 Missing `REDIS_URL` fails boot loudly — never a silent fallback to `memory`. Re-run
 `oke dev` or export `REDIS_URL` when using a managed host. Under Compose the
-message asks whether `oke dev -d` wrote `docker/.env.docker`.
+message asks whether `oke dev -d` wrote `.env.local`.
 
 </Accordion>
 <Accordion title="NOAUTH Authentication required">

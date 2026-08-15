@@ -92,7 +92,7 @@ describe("bindChannel driver resolution", () => {
   test("missing SMTP_URL includes docker recovery hint", () => {
     delete process.env.SMTP_URL;
     delete process.env.OKE_CHANNEL_EMAIL_URL;
-    expect(() => smtpOptionsFromEnv(true)).toThrow("docker/.env.docker");
+    expect(() => smtpOptionsFromEnv(true)).toThrow(".env.local");
   });
 
   test("resend and sndr env helpers", () => {

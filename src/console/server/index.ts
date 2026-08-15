@@ -52,8 +52,10 @@ export {
 export {
   blastRadiusOf,
   createManifestVaultRuntime,
+  overlayVaultLayers,
   projectVaultList,
   readersOf,
+  createVaultContract,
   rotateVaultValue,
   setVaultValue,
   verifyConsoleVaultAudit,
@@ -62,7 +64,9 @@ export {
   type ConsoleVaultBlastRadius,
   type ConsoleVaultRotateMasterResult,
   type ConsoleVaultRow,
+  type VaultLayerSeed,
   type ProjectVaultOptions,
+  type VaultCreateInput,
   type VaultWriteInput,
 } from "./vault.ts";
 export {

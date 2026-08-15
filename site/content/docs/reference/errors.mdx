@@ -74,7 +74,7 @@ Thrown by specific subsystems — each names its own cause:
 | Error                         | Thrown when                                                        | What to do                                             |
 | ----------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
 | `VaultBootError`              | A vault contract has no value in any resolution layer              | Set the missing names — the error lists every gap      |
-| `VaultError` (`UNSUPPORTED`)  | Managed provider unknown or not implemented in core                | Use `aws-secrets-manager`, built-in `vault`, or `env`  |
+| `VaultError` (`UNSUPPORTED`)  | Managed provider unknown                                           | Use an official id, built-in `vault`, or `env`         |
 | `VaultSealed`                 | Console rotate-master while this process holds no master key       | Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal` |
 | `VaultRotateBusy`             | Master-rotation lease held or a batch is already in flight         | Wait and continue, or resume with `oke vault rotate-master --new-key` |
 | `VaultUnsupported`            | Console vault action on a non-builtin backend or missing SQL       | Use `drivers.vault = "vault"` and set `DATABASE_URL`   |

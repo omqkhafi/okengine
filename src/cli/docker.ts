@@ -183,7 +183,7 @@ export async function dockerCli(args: readonly string[]): Promise<number> {
 Derive production-grade Docker artefacts under docker/ (default).
 
 Layouts (mutually exclusive; default --single):
-  --single          docker-compose.yml + Dockerfile (+ .env.docker via oke dev)
+  --single          docker-compose.yml + Dockerfile (+ .env.local via oke dev)
   --split           compose.yml + compose.<role>.yml (+ compose.prod.yml)
   --stack           docker-stack.yml for docker stack deploy
 

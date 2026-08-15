@@ -95,6 +95,30 @@ export function parseRotateHintMs(rotate: string | undefined): number {
   }
 }
 
+const NEVER_ROTATE = new Set(["never", "none", "off"]);
+
+/**
+ * Whether `rotate` is a cadence (`90d`), not `never` / omitted.
+ *
+ * @param rotate - Contract `rotate` option
+ */
+export function isRotateCadence(rotate: string | undefined): boolean {
+  return parseRotateHintMs(rotate) > 0;
+}
+
+/**
+ * Chip for the rotate policy. Cadence stays `90d`; `never` / omit is
+ * `no rotate` so a stable secret is not silent.
+ *
+ * @param rotate - Contract `rotate` option
+ */
+export function rotatePolicyLabel(rotate: string | undefined): string {
+  if (isRotateCadence(rotate)) return rotate!.trim();
+  const raw = rotate?.trim().toLowerCase() ?? "";
+  if (raw.length === 0 || NEVER_ROTATE.has(raw)) return "no rotate";
+  return rotate!.trim();
+}
+
 /**
  * Whether this contract currently has a value in the active environment.
  *
@@ -220,5 +244,32 @@ export function postureLabel(primary: VaultPosture["primary"]): string {
       return "config";
     case "healthy":
       return "set";
+  }
+}
+
+/**
+ * Hover copy for a posture chip. Overdue names the rotate window.
+ *
+ * @param primary - Worst risk or healthy/config
+ * @param rotate - Contract rotate hint (`90d`)
+ */
+export function postureHint(primary: VaultPosture["primary"], rotate?: string): string {
+  switch (primary) {
+    case "blast":
+      return "In-flight durable runs hold this secret";
+    case "unset":
+      return "No value in this environment";
+    case "overdue":
+      return rotate
+        ? `Last read older than rotate ${rotate} — never-read counts`
+        : "Last read older than the rotate hint — never-read counts";
+    case "shared":
+      return "Fingerprint matches another environment";
+    case "dormant":
+      return "Unread for 90 days, or never";
+    case "config":
+      return "vault.config — shown in the clear";
+    case "healthy":
+      return "Set, no blast, no shared, not dormant";
   }
 }

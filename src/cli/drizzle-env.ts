@@ -22,7 +22,7 @@ export interface DrizzleKitEnvContext {
 }
 
 /**
- * Load `docker/.env.docker` (or legacy `.env.docker`) as a name→value map.
+ * Load `.env.local` as a name→value map.
  *
  * @param cwd - Project root
  */
@@ -38,7 +38,7 @@ export async function readComposeEnv(cwd: string): Promise<Map<string, string>> 
 }
 
 /**
- * Fill unset `process.env` keys from compose `.env.docker` (never overwrites).
+ * Fill unset `process.env` keys from `.env.local` (never overwrites).
  *
  * SQL / Redis binders read `process.env` directly — Vault can resolve the
  * same file, but `oke db seed` must hydrate env before `app.boot()`.

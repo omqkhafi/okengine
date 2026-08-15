@@ -6,7 +6,6 @@
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.docker"
   | "driver"
   | "dev-fallback";
 
@@ -65,6 +64,8 @@ export interface VaultBackend {
   readonly builtin: boolean;
   readonly status: VaultBuiltinStatus | null;
   readonly unavailable: string | null;
+  /** Managed provider id (`aws-secrets-manager`); `null` for other drivers. */
+  readonly provider?: string | null;
 }
 
 /** `console.vault.list` response. */

@@ -2,7 +2,17 @@
  * Vault contract inspector — one action path, selectable lock-path, copy menu.
  */
 
-import { MoreHorizontalCircle01Icon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  Award01Icon,
+  Clock01Icon,
+  File01Icon,
+  Key01Icon,
+  MoreHorizontalCircle01Icon,
+  SourceCodeIcon,
+  UnavailableIcon,
+  UserMultipleIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type JSX } from "react";
@@ -20,10 +30,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
-import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
+import { ELEMENT_ICONS, type ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils.ts";
 import { formatBlastRadius, formatDuration } from "../lib/blast-radius.ts";
-import { rotateConfirmation, setConfirmation } from "../lib/confirmation.ts";
 import {
   vaultDotenvLine,
   vaultFxSnippet,
@@ -32,43 +41,77 @@ import {
   vaultSetCli,
 } from "../lib/contract-ops.ts";
 import { exportSafeRow } from "../lib/export-safe.ts";
-import { contractPosture, formatRelativeTime, postureLabel } from "../lib/posture.ts";
+import {
+  contractPosture,
+  formatRelativeTime,
+  isRotateCadence,
+  postureHint,
+  postureLabel,
+  rotatePolicyLabel,
+} from "../lib/posture.ts";
+import { vaultDriverKind, vaultDriverTitle } from "../lib/backend.ts";
 import { VAULT_ACCENT, VAULT_WELL } from "../lib/theme.ts";
-import type { VaultRecord, VaultResolutionSource, VaultResolutionStep } from "../lib/types.ts";
+import type {
+  VaultBackend,
+  VaultRecord,
+  VaultResolutionSource,
+  VaultResolutionStep,
+} from "../lib/types.ts";
 
 /** Props for {@link VaultDetail}. */
 export interface VaultDetailProps {
   readonly row: VaultRecord;
   readonly env: string;
   readonly now: number;
+  readonly backend?: VaultBackend | null;
   readonly onSet: () => void;
   readonly onRotate: () => void;
   readonly onQueryChange?: (query: string) => void;
 }
 
 const SOURCE_SHORT: Readonly<Record<VaultResolutionSource, string>> = {
+  driver: "driver",
   "process.env": "env",
   ".env.local": "local",
-  ".env.docker": "docker",
-  driver: "driver",
   "dev-fallback": "fallback",
 };
+
+const SOURCE_ICON: Readonly<Record<VaultResolutionSource, ElementHugeIcon>> = {
+  driver: Key01Icon,
+  "process.env": SourceCodeIcon,
+  ".env.local": File01Icon,
+  "dev-fallback": UnavailableIcon,
+};
+
+const WON_INK = "text-emerald-700 dark:text-emerald-400";
+const WON_WASH = "bg-emerald-500/10";
+const WON_WASH_ACTIVE = "bg-emerald-500/15";
 
 const RESOLUTION_ORDER: readonly VaultResolutionSource[] = [
   "driver",
   "process.env",
   ".env.local",
-  ".env.docker",
   "dev-fallback",
 ];
 
 function resolutionSteps(row: VaultRecord): readonly VaultResolutionStep[] {
-  if (row.resolution.length > 0) return row.resolution;
-  return RESOLUTION_ORDER.map((source) => ({
-    source,
-    present: false,
-    won: row.winner === source,
-  }));
+  const raw =
+    row.resolution.length > 0
+      ? row.resolution
+      : RESOLUTION_ORDER.map((source) => ({
+          source,
+          present: false,
+          won: row.winner === source,
+        }));
+  const bySource = new Map(raw.map((step) => [step.source, step]));
+  return RESOLUTION_ORDER.map(
+    (source) =>
+      bySource.get(source) ?? {
+        source,
+        present: false,
+        won: row.winner === source,
+      },
+  );
 }
 
 function defaultLayer(steps: readonly VaultResolutionStep[]): VaultResolutionSource {
@@ -86,6 +129,7 @@ export function VaultDetail({
   row,
   env,
   now,
+  backend = null,
   onSet,
   onRotate,
   onQueryChange,
@@ -104,10 +148,7 @@ export function VaultDetail({
   }, [row.name]);
 
   const selected = steps.find((s) => s.source === layer) ?? steps[0]!;
-  const fill = vaultLayerFill(selected.source, row.name);
-  const setPhrase = setConfirmation({ production: true });
-  const rotatePhrase = rotateConfirmation();
-
+  const fill = vaultLayerFill(selected.source, row.name, backend);
   return (
     <div
       className="flex h-full min-h-0 flex-col overflow-y-auto"
@@ -126,9 +167,17 @@ export function VaultDetail({
             <span className="font-mono text-[10px] text-muted-foreground uppercase">
               {row.kind}
             </span>
-            {row.rotate ? (
-              <span className="font-mono text-[10px] text-muted-foreground">{row.rotate}</span>
+            {row.kind === "secret" ? (
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {rotatePolicyLabel(row.rotate)}
+              </span>
             ) : null}
+            {row.origin === "console" ? (
+              <span className="font-mono text-[10px] text-muted-foreground">console</span>
+            ) : null}
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {vaultDriverKind(backend)}
+            </span>
           </>
         }
         subtitle={
@@ -138,20 +187,21 @@ export function VaultDetail({
             </code>
             <CopyInlineButton value={row.name} label={`Copy ${row.name}`} />
             {posture.risks.map((risk) => (
-              <button
-                key={risk}
-                type="button"
-                className={cn(
-                  "rounded-md border px-1.5 py-px text-[10px] hover:bg-muted/60",
-                  risk === "blast" && "border-destructive/30 text-destructive",
-                  (risk === "unset" || risk === "overdue" || risk === "shared") &&
-                    "border-amber-500/30 text-amber-800 dark:text-amber-400",
-                  risk === "dormant" && "border-border/60 text-muted-foreground",
-                )}
-                onClick={() => onQueryChange?.(`is:${risk}`)}
-              >
-                {postureLabel(risk)}
-              </button>
+              <ToolbarTip key={risk} label={postureHint(risk, row.rotate)}>
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-md border px-1.5 py-px text-[10px] hover:bg-muted/60",
+                    risk === "blast" && "border-destructive/30 text-destructive",
+                    (risk === "unset" || risk === "overdue" || risk === "shared") &&
+                      "border-amber-500/30 text-amber-800 dark:text-amber-400",
+                    risk === "dormant" && "border-border/60 text-muted-foreground",
+                  )}
+                  onClick={() => onQueryChange?.(`is:${risk}`)}
+                >
+                  {postureLabel(risk)}
+                </button>
+              </ToolbarTip>
             ))}
           </div>
         }
@@ -177,7 +227,7 @@ export function VaultDetail({
                   ? "Set a value before rotate"
                   : blast.warn
                     ? blast.summary
-                    : "Re-encrypt with a new value. Always typed ROTATE."
+                    : "Re-encrypt with a new value. Pick a reason."
               }
             >
               <Button
@@ -210,10 +260,18 @@ export function VaultDetail({
         data-slot="vault-briefing"
       >
         <Brief
+          icon={Award01Icon}
           label="Winner"
           value={row.winner ?? "none"}
-          hint={winnerStep ? "First layer that had a value" : "No layer provided a value"}
+          hint={
+            winnerStep
+              ? row.winner === "driver"
+                ? vaultDriverTitle(backend)
+                : "First layer that had a value"
+              : "No layer provided a value"
+          }
           warn={!row.winner}
+          won={Boolean(row.winner)}
           onClick={
             onQueryChange
               ? () => onQueryChange(row.winner ? `from:${row.winner}` : "is:unset")
@@ -221,6 +279,7 @@ export function VaultDetail({
           }
         />
         <Brief
+          icon={Clock01Icon}
           label="Last read"
           value={row.lastReadAt != null ? formatRelativeTime(row.lastReadAt, now) : "never"}
           hint={
@@ -230,6 +289,7 @@ export function VaultDetail({
           onClick={onQueryChange ? () => onQueryChange("is:dormant") : undefined}
         />
         <Brief
+          icon={UserMultipleIcon}
           label="Readers"
           value={String(row.readers.length)}
           hint={row.readers.length === 0 ? "No Flow declares a read" : row.readers.join(", ")}
@@ -240,6 +300,7 @@ export function VaultDetail({
           }
         />
         <Brief
+          icon={Alert02Icon}
           label="Blast"
           value={
             row.blastRadius.count === 0
@@ -260,7 +321,7 @@ export function VaultDetail({
       <div className="flex flex-col gap-4 px-3 py-3">
         <section className="flex flex-col gap-2" aria-label="Resolution chain">
           <SectionHead title="Resolution" meta="first hit wins · pick a layer to fill" />
-          <ol className="grid grid-cols-5 gap-1" data-slot="vault-lock-path">
+          <ol className="grid grid-cols-4 gap-1" data-slot="vault-lock-path">
             {steps.map((step, index) => {
               const active = step.source === selected.source;
               return (
@@ -271,39 +332,64 @@ export function VaultDetail({
                     onClick={() => setLayer(step.source)}
                     className={cn(
                       "flex w-full flex-col gap-1 rounded-md px-1 py-1.5 text-left hover:bg-muted/50",
-                      active && "bg-muted/70",
+                      step.won && WON_WASH,
+                      active && !step.won && "bg-muted/70",
+                      active && step.won && WON_WASH_ACTIVE,
                     )}
                   >
                     <span className="flex items-center gap-1">
                       <span
                         className={cn(
                           "size-2 shrink-0 rounded-full border",
-                          step.won && "border-transparent",
+                          step.won && "border-emerald-500 bg-emerald-500",
                           !step.won &&
                             step.present &&
                             "border-muted-foreground/50 bg-muted-foreground/40",
                           !step.won && !step.present && "border-border bg-transparent",
                         )}
-                        style={
-                          step.won
-                            ? { backgroundColor: VAULT_ACCENT, borderColor: VAULT_ACCENT }
-                            : undefined
-                        }
                         aria-hidden
                       />
                       {index < steps.length - 1 ? (
-                        <span className="h-px min-w-0 flex-1 bg-border/70" aria-hidden />
+                        <span
+                          className={cn(
+                            "h-px min-w-0 flex-1",
+                            step.won ? "bg-emerald-500/40" : "bg-border/70",
+                          )}
+                          aria-hidden
+                        />
                       ) : null}
                     </span>
                     <span
                       className={cn(
-                        "font-mono text-[11px]",
-                        step.won ? "text-foreground" : "text-muted-foreground",
+                        "flex min-w-0 items-center gap-1 font-mono text-[11px]",
+                        step.won ? WON_INK : "text-muted-foreground",
                       )}
                     >
+                      <HugeiconsIcon
+                        icon={SOURCE_ICON[step.source]}
+                        className="size-3 shrink-0"
+                        aria-hidden
+                      />
                       {SOURCE_SHORT[step.source]}
+                      {step.source === "driver" ? (
+                        <span
+                          className={cn(
+                            "ml-auto truncate font-sans text-[10px] font-medium",
+                            step.won
+                              ? "text-emerald-800 dark:text-emerald-300"
+                              : "text-foreground/75",
+                          )}
+                        >
+                          {vaultDriverKind(backend)}
+                        </span>
+                      ) : null}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-[10px]",
+                        step.won ? WON_INK : "text-muted-foreground",
+                      )}
+                    >
                       {step.won ? "won" : step.present ? "lost" : "absent"}
                     </span>
                   </button>
@@ -311,9 +397,23 @@ export function VaultDetail({
               );
             })}
           </ol>
-          <div className="flex items-center gap-2 rounded-md border border-border/60 px-2.5 py-2">
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-md border px-2.5 py-2",
+              selected.won
+                ? "border-emerald-500/30 bg-emerald-500/5"
+                : "border-border/60",
+            )}
+          >
+            <HugeiconsIcon
+              icon={SOURCE_ICON[selected.source]}
+              className={cn("size-3.5 shrink-0", selected.won ? WON_INK : "text-muted-foreground")}
+              aria-hidden
+            />
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-[11px] text-foreground">{selected.source}</p>
+              <p className={cn("font-mono text-[11px]", selected.won ? WON_INK : "text-foreground")}>
+                {selected.source === "driver" ? vaultDriverTitle(backend) : selected.source}
+              </p>
               <p className="truncate text-[10px] text-muted-foreground">{fill.hint}</p>
               <p className="truncate font-mono text-[11px] text-muted-foreground">{fill.command}</p>
             </div>
@@ -353,21 +453,14 @@ export function VaultDetail({
           <CollapsibleContent className="flex flex-col gap-3 pt-2">
             <p className="text-[11px] text-muted-foreground">
               <span className="font-medium text-foreground">Set</span>
-              {posture.unset ? " closes the boot gap." : " overwrites the winning layer."} Confirm{" "}
-              <span className="font-mono">
-                {setPhrase.kind === "typed" ? setPhrase.phrase : "SET"}
-              </span>
-              . <span className="font-medium text-foreground">Rotate</span>
+              {posture.unset ? " closes the boot gap." : " overwrites the winning layer."}{" "}
+              <span className="font-medium text-foreground">Rotate</span>
               {posture.unset
                 ? " stays disabled until a value exists."
                 : blast.warn
                   ? ` — ${blast.summary}`
                   : " — in-flight durable runs wake on the new key."}{" "}
-              Confirm{" "}
-              <span className="font-mono">
-                {rotatePhrase.kind === "typed" ? rotatePhrase.phrase : "ROTATE"}
-              </span>
-              . No preview.
+              Both ask for a reason. No preview.
             </p>
             <dl className="flex flex-col">
               {(
@@ -523,7 +616,7 @@ function NextAction({
       </section>
     );
   }
-  if (overdue && row.rotate) {
+  if (overdue && isRotateCadence(row.rotate)) {
     return (
       <section
         className="shrink-0 border-b border-amber-500/25 bg-amber-500/5 px-3 py-2.5"
@@ -541,27 +634,32 @@ function NextAction({
 }
 
 function Brief({
+  icon,
   label,
   value,
   hint,
   warn = false,
+  won = false,
   onClick,
 }: {
+  readonly icon: ElementHugeIcon;
   readonly label: string;
   readonly value: string;
   readonly hint: string;
   readonly warn?: boolean;
+  readonly won?: boolean;
   readonly onClick?: () => void;
 }): JSX.Element {
   const inner = (
     <>
-      <dt className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <dt className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        <HugeiconsIcon icon={icon} className="size-3 shrink-0" aria-hidden />
         {label}
       </dt>
       <dd
         className={cn(
           "truncate font-mono text-[12px]",
-          warn ? "text-amber-800 dark:text-amber-400" : "text-foreground",
+          warn ? "text-amber-800 dark:text-amber-400" : won ? WON_INK : "text-foreground",
         )}
       >
         {value}

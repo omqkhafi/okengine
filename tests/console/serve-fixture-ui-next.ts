@@ -15,6 +15,7 @@ import {
   appendUiNextSeedRun,
   seedUiNextStoreData,
   UI_NEXT_SEEDED_MANIFEST,
+  UI_NEXT_SEED_VAULT_LAYERS,
 } from "../../src/console/ui-next/ui-next-seed.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,7 @@ const server = await serveConsole({
   env: "test",
   staticDir: uiNextDist,
   manifest: UI_NEXT_SEEDED_MANIFEST,
+  vaultLayerSeed: UI_NEXT_SEED_VAULT_LAYERS,
 });
 
 const runs = server.console.app.bootResult?.runs;

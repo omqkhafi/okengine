@@ -131,7 +131,7 @@ export function aiUrlFor(docker = false): string {
   if (raw) return normalizeOllamaBaseUrl(raw);
   if (docker) {
     throw new Error(
-      "oke boot: ollama driver needs OKE_AI_URL (did `oke dev -d` write docker/.env.docker?)",
+      "oke boot: ollama driver needs OKE_AI_URL (did `oke dev -d` write .env.local?)",
     );
   }
   return OLLAMA_DEFAULT_BASE_URL;

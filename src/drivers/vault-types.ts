@@ -9,7 +9,8 @@
  * Protocol ids for vault drivers.
  *
  * `vault` is okengine's own encrypted-at-rest store; `managed` selects a
- * remote provider (official: `aws-secrets-manager`) or a platform-injected bag.
+ * remote provider (AWS / Azure / GCP / Doppler / 1Password) or a
+ * platform-injected bag.
  */
 export type VaultDriverId = "env" | "vault" | "managed" | "memory";
 
@@ -27,17 +28,18 @@ export interface VaultOpenOptions {
   /** Injected env map for tests (defaults to `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /**
-   * Backend behind the `managed` driver — official: `aws-secrets-manager`.
-   * Omit for platform-injected secrets. Community adapters may accept other ids.
+   * Backend behind the `managed` driver — official: `aws-secrets-manager`,
+   * `azure-key-vault`, `gcp-secret-manager`, `doppler`, `1password`.
+   * Omit for platform-injected secrets.
    */
   readonly provider?: string;
-  /** Base URL for remote managed providers (community adapters). */
+  /** Base URL — Azure Key Vault URI, 1Password Connect host, Doppler origin. */
   readonly url?: string;
-  /** Token / API key for remote vaults. */
+  /** Token / API key — Doppler service token, 1Password Connect token. */
   readonly token?: string;
   /**
-   * Mount / project path for remote vaults. Doubles as the secret-name prefix
-   * for `aws-secrets-manager` (`oke/prod/` → `oke/prod/STRIPE_KEY`).
+   * Provider scope: AWS/Azure name prefix, GCP `project` or `project/prefix`,
+   * Doppler `project/config`, 1Password vault name or UUID.
    */
   readonly mount?: string;
   /** Cloud region for regional managed providers. */

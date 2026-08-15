@@ -15,6 +15,11 @@
  */
 
 import { VaultError } from "../elements/vault/errors.ts";
+import {
+  openRemoteSecretBag,
+  remoteErrorCode,
+  type RemoteSecretClient,
+} from "./vault-remote-bag.ts";
 import type { VaultBag } from "./vault-types.ts";
 
 /** Package name of the optional peer, resolved at call time. */
@@ -24,36 +29,12 @@ const AWS_SM_PACKAGE = "@aws-sdk/client-secrets-manager";
 const NOT_FOUND = "ResourceNotFoundException";
 
 /**
- * Secret-name-addressed client the bag talks to.
+ * Secret-name-addressed AWS Secrets Manager client the bag talks to.
  *
  * Names are bag names (`STRIPE_KEY`), never fully-qualified AWS secret ids —
  * the prefix belongs to the client, so the bag stays prefix-agnostic.
  */
-export interface AwsSecretsManagerClient {
-  /** Bag names visible to this credential under the configured prefix. */
-  list(): Promise<readonly string[]>;
-  /**
-   * Read one secret's string value.
-   *
-   * @param name - Bag name
-   */
-  get(name: string): Promise<string | undefined>;
-  /**
-   * Create or overwrite one secret.
-   *
-   * @param name - Bag name
-   * @param value - Cleartext
-   */
-  put(name: string, value: string): Promise<void>;
-  /**
-   * Delete one secret. A missing secret is not an error.
-   *
-   * @param name - Bag name
-   */
-  remove(name: string): Promise<void>;
-  /** Release the underlying SDK client. */
-  close?(): Promise<void>;
-}
+export type AwsSecretsManagerClient = RemoteSecretClient;
 
 /** Options for {@link openAwsSecretsManagerBag}. */
 export interface OpenAwsSecretsManagerOptions {
@@ -85,71 +66,12 @@ export async function openAwsSecretsManagerBag(
   options: OpenAwsSecretsManagerOptions = {},
 ): Promise<VaultBag> {
   const client = options.client ?? (await connectSecretsManager(options.region, options.prefix));
-  const map = new Map<string, string>(
-    Object.entries(options.secrets ?? {}).filter(
-      (e): e is [string, string] => typeof e[1] === "string",
-    ),
-  );
-
-  let listed: readonly string[] = [];
-  try {
-    listed = await client.list();
-  } catch (error) {
-    // ListSecrets is commonly denied on least-privilege roles; only fail when
-    // there is no declared read set to fall back to.
-    if (map.size === 0) throw asVaultError(error, "vault: aws secrets manager list failed");
-  }
-
-  const names = listed.length > 0 ? listed : [...map.keys()];
-  for (const name of names) {
-    let value: string | undefined;
-    try {
-      value = await client.get(name);
-    } catch (error) {
-      throw asVaultError(error, `vault: aws secrets manager read of "${name}" failed`);
-    }
-    if (value !== undefined) map.set(name, value);
-  }
-
-  const pending: Promise<void>[] = [];
-  let failure: VaultError | undefined;
-  /**
-   * Run a write in the background, holding its failure for `close`.
-   *
-   * @param work - In-flight API call
-   * @param message - Safe message when it rejects
-   */
-  function track(work: Promise<void>, message: string): void {
-    pending.push(
-      work.catch((error: unknown) => {
-        failure ??= asVaultError(error, message);
-      }),
-    );
-  }
-
-  return {
-    driverId: "managed",
-    get(name) {
-      return map.get(name);
-    },
-    names() {
-      return [...map.keys()];
-    },
-    set(name, value) {
-      map.set(name, value);
-      track(client.put(name, value), `vault: aws secrets manager write of "${name}" failed`);
-    },
-    delete(name) {
-      const had = map.delete(name);
-      track(client.remove(name), `vault: aws secrets manager delete of "${name}" failed`);
-      return had;
-    },
-    async close() {
-      await Promise.all(pending);
-      await client.close?.();
-      if (failure) throw failure;
-    },
-  };
+  return openRemoteSecretBag({
+    client,
+    ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+    label: "aws secrets manager",
+    asError: asVaultError,
+  });
 }
 
 /** Response fields this module reads off the SDK. */
@@ -312,9 +234,8 @@ async function loadSecretsManager(): Promise<SecretsManagerBindings> {
  * @param error - Thrown value
  */
 function errorName(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const name = (error as { name?: unknown }).name;
-  return typeof name === "string" ? name : undefined;
+  const code = remoteErrorCode(error);
+  return typeof code === "string" ? code : undefined;
 }
 
 /**

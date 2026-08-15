@@ -215,7 +215,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<{
       // protection the moment DB + env are stolen together.
       severity: "error",
       message:
-        'vault master key comes from an environment variable in prod — set vault.encryption.masterKey = { kind: "kms", keyId } (or use managed aws-secrets-manager) so the key is never readable from the process environment',
+        'vault master key comes from an environment variable in prod — set vault.encryption.masterKey = { kind: "kms", keyId } (or use a managed provider) so the key is never readable from the process environment',
     });
   }
 

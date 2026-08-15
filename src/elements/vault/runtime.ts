@@ -34,14 +34,21 @@ export class VaultBootError extends Error {
 
 /**
  * Named layer in the resolution chain (console §9.8).
- * Spec order: driver → process.env → .env.local → .env.docker → dev-fallback.
+ * Spec order: driver → process.env → .env.local → dev-fallback.
  */
 export type VaultResolutionSource =
+  | "driver"
   | "process.env"
   | ".env.local"
-  | ".env.docker"
-  | "driver"
   | "dev-fallback";
+
+/** Spec lock-path — first hit wins. */
+export const VAULT_RESOLUTION_ORDER: readonly VaultResolutionSource[] = [
+  "driver",
+  "process.env",
+  ".env.local",
+  "dev-fallback",
+];
 
 /** One layer in the resolution chain. */
 export interface VaultChainLayer {
@@ -281,7 +288,7 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
       if (!booted) {
         throw new Error(`vault: put("${name}") before boot`);
       }
-      const idx = bags.findIndex((b) => typeof b.set === "function");
+      const idx = writableBagIndex(bags, layerSources);
       if (idx < 0) {
         throw new Error("vault: no mutable bag for put()");
       }
@@ -355,7 +362,10 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
           won: winner === "dev-fallback",
         });
       }
-      return steps;
+      return [...steps].sort(
+        (a, b) =>
+          VAULT_RESOLUTION_ORDER.indexOf(a.source) - VAULT_RESOLUTION_ORDER.indexOf(b.source),
+      );
     },
     lastReadAt(name) {
       return lastReads.get(name);
@@ -411,6 +421,32 @@ export function requiredEnvGaps(
 }
 
 /**
+ * Prefer a real backend bag; for `env` driver write `.env.local` so the
+ * front memory seed does not swallow Console / `oke vault set`.
+ *
+ * @param bags - Opened bags (same order as {@link layerSources})
+ * @param layerSources - Spec source id per bag
+ */
+function writableBagIndex(
+  bags: readonly VaultBag[],
+  layerSources: readonly VaultResolutionSource[],
+): number {
+  const hasEnvLayer = bags.some((b) => b.driverId === "env");
+  const driverIdx = layerSources.findIndex(
+    (source, i) => source === "driver" && typeof bags[i]?.set === "function",
+  );
+  const localIdx = layerSources.findIndex(
+    (source, i) => source === ".env.local" && typeof bags[i]?.set === "function",
+  );
+  const driverBag = driverIdx >= 0 ? bags[driverIdx] : undefined;
+  if (driverIdx >= 0 && !(hasEnvLayer && driverBag?.driverId === "memory")) {
+    return driverIdx;
+  }
+  if (localIdx >= 0) return localIdx;
+  return bags.findIndex((b) => typeof b.set === "function");
+}
+
+/**
  * Infer the Console source id for a chain layer.
  *
  * @param layer - Chain layer
@@ -421,9 +457,6 @@ export function resolveLayerSource(layer: VaultChainLayer): VaultResolutionSourc
   if (typeof path === "string") {
     if (path.endsWith(".env.local") || path.includes("/.env.local")) {
       return ".env.local";
-    }
-    if (path.endsWith(".env.docker") || path.includes("/.env.docker")) {
-      return ".env.docker";
     }
   }
   if (layer.driver.id === "env" && path === undefined) {

@@ -3,7 +3,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { OkeConfig } from "../config/index.ts";
@@ -39,11 +39,7 @@ describe("resolveDrizzleKitEnv", () => {
 
   test("dev env → postgresql dialect + DATABASE_URL from compose env", async () => {
     const dir = await tempDir();
-    await mkdir(join(dir, "docker"), { recursive: true });
-    await writeFile(
-      join(dir, "docker", ".env.docker"),
-      "DATABASE_URL=postgres://u:p@127.0.0.1:5432/oke\n",
-    );
+    await writeFile(join(dir, ".env.local"), "DATABASE_URL=postgres://u:p@127.0.0.1:5432/oke\n");
     const prevDb = process.env["DATABASE_URL"];
     delete process.env["DATABASE_URL"];
     try {
@@ -72,11 +68,10 @@ describe("resolveDrizzleKitEnv", () => {
 });
 
 describe("applyComposeEnvToProcess", () => {
-  test("fills unset keys from docker/.env.docker without overwriting", async () => {
+  test("fills unset keys from .env.local without overwriting", async () => {
     const dir = await tempDir();
-    await mkdir(join(dir, "docker"), { recursive: true });
     await writeFile(
-      join(dir, "docker", ".env.docker"),
+      join(dir, ".env.local"),
       "DATABASE_URL=postgres://u:p@127.0.0.1:5432/oke\nREDIS_URL=redis://127.0.0.1:6379\n",
     );
     const prevDb = process.env["DATABASE_URL"];

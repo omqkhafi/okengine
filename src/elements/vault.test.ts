@@ -126,6 +126,7 @@ describe("resolution chain", () => {
     expect(runtime.read("KEY")).toBe("from-a");
     expect(runtime.resolution("KEY")).toBe("process.env");
     const chain = runtime.resolutionChain("KEY");
+    expect(chain.map((s) => s.source)).toEqual(["driver", "process.env"]);
     expect(chain.find((s) => s.source === "process.env")?.won).toBe(true);
     expect(chain.find((s) => s.source === "driver")?.present).toBe(true);
     expect(chain.find((s) => s.source === "driver")?.won).toBe(false);

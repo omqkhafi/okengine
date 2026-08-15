@@ -5,7 +5,7 @@
  * config cleartext. Operators AND together; unknown `key:value` stays text.
  */
 
-import { contractPosture, type VaultIsFilter } from "./posture.ts";
+import { contractPosture, isRotateCadence, type VaultIsFilter } from "./posture.ts";
 import type { VaultRecord, VaultResolutionSource } from "./types.ts";
 
 /** Operator kinds the parser understands. */
@@ -66,14 +66,15 @@ export const VAULT_SEARCH_CATALOG: readonly VaultSearchSuggestion[] = [
   { token: "is:blast", label: "In-flight durable runs hold this secret" },
   { token: "is:shared", label: "Fingerprint matches another environment" },
   { token: "is:dormant", label: "Unread for 90 days, or never" },
-  { token: "is:overdue", label: "Past the contract rotate hint" },
+  { token: "is:overdue", label: "Last read older than rotate — never-read counts" },
   { token: "is:healthy", label: "Set, no blast, no shared, not dormant" },
   { token: "kind:secret", label: "Sensitive contracts only" },
   { token: "kind:config", label: "Non-sensitive config only" },
   { token: "from:.env.local", label: "Winner is .env.local" },
-  { token: "from:driver", label: "Winner is the vault driver" },
+  { token: "from:driver", label: "Winner is the vault backend (built-in / managed / memory)" },
   { token: "has:readers", label: "At least one Flow declares a read" },
-  { token: "has:rotate", label: "Contract declares a rotate hint" },
+  { token: "has:rotate", label: "Contract declares a rotate cadence" },
+  { token: "rotate:never", label: "No rotate cadence (stable secret)" },
   { token: "reader:", label: "Flow id contains…" },
   { token: "fp:", label: "Fingerprint contains…" },
 ];
@@ -82,7 +83,6 @@ const RESOLUTION_SOURCES: readonly VaultResolutionSource[] = [
   "driver",
   "process.env",
   ".env.local",
-  ".env.docker",
   "dev-fallback",
 ];
 
@@ -213,7 +213,10 @@ export function vaultSearchSuggestions(
     return filterCatalog(
       RESOLUTION_SOURCES.map((source) => ({
         token: `from:${source}`,
-        label: `Winner is ${source}`,
+        label:
+          source === "driver"
+            ? "Winner is the vault backend (built-in / managed / memory)"
+            : `Winner is ${source}`,
       })),
       trailing,
     );
@@ -259,8 +262,9 @@ export function vaultSearchSuggestions(
   if (lower.startsWith("rotate:") || lower === "rotate") {
     return filterCatalog(
       [
-        { token: "rotate:due", label: "Past the contract rotate hint" },
-        { token: "has:rotate", label: "Contract declares a rotate hint" },
+        { token: "rotate:due", label: "Last read older than rotate — never-read counts" },
+        { token: "has:rotate", label: "Contract declares a rotate cadence" },
+        { token: "rotate:never", label: "No rotate cadence (stable secret)" },
       ],
       trailing,
     );
@@ -344,10 +348,13 @@ function matchToken(
       return fingerprintHaystack(row).some((fp) => fp.includes(token.value));
     case "has":
       if (token.value === "readers") return row.readers.length > 0;
-      if (token.value === "rotate") return (row.rotate ?? "").length > 0;
+      if (token.value === "rotate") return isRotateCadence(row.rotate);
       if (token.value === "blast") return row.blastRadius.count > 0;
       return row.sharedFingerprintEnvs.length > 0;
     case "rotate":
+      if (token.value === "never") {
+        return row.kind === "secret" && !isRotateCadence(row.rotate);
+      }
       return (row.rotate ?? "").toLowerCase() === token.value;
     case "text":
       return textHaystack(row).includes(token.value.toLowerCase());

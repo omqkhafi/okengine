@@ -13,7 +13,6 @@ out/
 .oke/
 
 # docker secrets / optional generated artefacts (compose is committed)
-/docker/.env.docker
 /docker/Dockerfile
 /docker/pgdog/
 

@@ -9,39 +9,41 @@
  * own protocol id — `managed` is a selector, not a protocol. Backends load
  * dynamically so a project on one provider never pays for the others.
  *
- * Official provider: `aws-secrets-manager`. Community plugins can implement
- * additional adapters; unknown ids fail loud with {@link VaultError} `UNSUPPORTED`.
+ * Official providers: AWS Secrets Manager, Azure Key Vault, GCP Secret
+ * Manager, Doppler, 1Password Connect. Unknown ids fail loud with
+ * {@link VaultError} `UNSUPPORTED`.
  */
 
 import { VaultError } from "../elements/vault/errors.ts";
-import type { AwsSecretsManagerClient } from "./vault-aws-secrets-manager.ts";
+import type { RemoteSecretClient } from "./vault-remote-bag.ts";
 import type { VaultBag, VaultDriver, VaultOpenOptions } from "./vault-types.ts";
 
 /** Official backends `managed` ships today. */
-export type ManagedVaultProviderId = "aws-secrets-manager";
-
-/** Providers named in config but not implemented in core — reported, not guessed. */
-const DEFERRED_PROVIDERS: readonly string[] = [
+export const MANAGED_VAULT_PROVIDER_IDS = [
+  "aws-secrets-manager",
   "azure-key-vault",
   "gcp-secret-manager",
   "doppler",
   "1password",
-];
+] as const;
+
+/** Official backends `managed` ships today. */
+export type ManagedVaultProviderId = (typeof MANAGED_VAULT_PROVIDER_IDS)[number];
 
 /** Supported provider ids, for error messages. */
-const SUPPORTED_PROVIDERS = "aws-secrets-manager";
+export const MANAGED_VAULT_PROVIDER_LIST = MANAGED_VAULT_PROVIDER_IDS.join(" · ");
 
 /** Options for {@link createManagedVaultBag}. */
 export interface ManagedVaultOptions extends VaultOpenOptions {
-  /** Injected AWS Secrets Manager client for tests. */
-  readonly client?: AwsSecretsManagerClient;
+  /** Injected remote client for tests. */
+  readonly client?: RemoteSecretClient;
 }
 
 /**
  * Open the bag for the selected managed provider.
  *
  * @param options - Provider id plus that provider's connection options
- * @throws VaultError `UNSUPPORTED` for a deferred or unknown provider
+ * @throws VaultError `UNSUPPORTED` for an unknown provider
  */
 export async function createManagedVaultBag(options: ManagedVaultOptions = {}): Promise<VaultBag> {
   const provider = options.provider?.trim().toLowerCase();
@@ -58,18 +60,54 @@ export async function createManagedVaultBag(options: ManagedVaultOptions = {}): 
     });
   }
 
-  if (DEFERRED_PROVIDERS.includes(provider)) {
-    throw new VaultError(
-      "UNSUPPORTED",
-      `vault: managed provider "${provider}" is not implemented yet — official: ${SUPPORTED_PROVIDERS}. ` +
-        "Community adapters can implement ManagedAdapter / open via a plugin.",
-    );
+  if (provider === "azure-key-vault") {
+    const { openAzureKeyVaultBag } = await import("./vault-azure-key-vault.ts");
+    return openAzureKeyVaultBag({
+      ...(options.url === undefined ? {} : { url: options.url }),
+      ...(options.mount === undefined ? {} : { prefix: options.mount }),
+      ...(options.client === undefined ? {} : { client: options.client }),
+      ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+    });
+  }
+
+  if (provider === "gcp-secret-manager") {
+    const { openGcpSecretManagerBag } = await import("./vault-gcp-secret-manager.ts");
+    return openGcpSecretManagerBag({
+      ...(options.mount === undefined ? {} : { mount: options.mount }),
+      ...(options.region === undefined ? {} : { region: options.region }),
+      ...(options.client === undefined ? {} : { client: options.client }),
+      ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+    });
+  }
+
+  if (provider === "doppler") {
+    const { openDopplerBag } = await import("./vault-doppler.ts");
+    return openDopplerBag({
+      ...(options.token === undefined ? {} : { token: options.token }),
+      ...(options.url === undefined ? {} : { url: options.url }),
+      ...(options.mount === undefined ? {} : { mount: options.mount }),
+      ...(options.client === undefined ? {} : { client: options.client }),
+      ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    });
+  }
+
+  if (provider === "1password") {
+    const { openOnePasswordBag } = await import("./vault-1password.ts");
+    return openOnePasswordBag({
+      ...(options.url === undefined ? {} : { url: options.url }),
+      ...(options.token === undefined ? {} : { token: options.token }),
+      ...(options.mount === undefined ? {} : { mount: options.mount }),
+      ...(options.client === undefined ? {} : { client: options.client }),
+      ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    });
   }
 
   throw new VaultError(
     "UNSUPPORTED",
-    `vault: unknown managed provider "${provider}" (expected ${SUPPORTED_PROVIDERS}). ` +
-      'Official backends: aws-secrets-manager or built-in vault (drivers.vault: "vault").',
+    `vault: unknown managed provider "${provider}" (expected ${MANAGED_VAULT_PROVIDER_LIST}). ` +
+      'Official backends: managed providers above, or built-in vault (drivers.vault: "vault").',
   );
 }
 

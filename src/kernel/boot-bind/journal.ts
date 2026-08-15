@@ -67,7 +67,7 @@ export async function bindJournal(
     if (!url) {
       throw new Error(
         env === "dev"
-          ? 'oke boot: journal driver "postgres" needs DATABASE_URL (did `oke dev` write docker/.env.docker?)'
+          ? 'oke boot: journal driver "postgres" needs DATABASE_URL (did `oke dev` write .env.local?)'
           : 'oke boot: journal driver "postgres" needs DATABASE_URL',
       );
     }

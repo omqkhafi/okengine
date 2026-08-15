@@ -38,12 +38,12 @@ Pin **one** proxy image — never two. `create-oke` asks **Add a reverse proxy�
 <Step>
 ### Set the public host and ACME email
 
-```bash title="docker/.env.docker"
+```bash title=".env.local"
 OKE_PROXY_HOST=app.example.com
 OKE_PROXY_ACME_EMAIL=admin@example.com
 ```
 
-`.env.docker` is preserved across regeneration. Point DNS `A`/`AAAA` at the host.
+`.env.local` is preserved across regeneration. Point DNS `A`/`AAAA` at the host.
 
 </Step>
 
@@ -92,12 +92,12 @@ Emits `docker/Caddyfile`:
 | Setting                | What it does                                                                                                                                  |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `OKE_PROXY_HOST`       | Site address. `localhost` → local TLS; a public DNS name → Let's Encrypt HTTP-01                                                              |
-| `OKE_PROXY_ACME_EMAIL` | Written into `.env.docker` for the proxy role. Traefik consumes it; for Caddy, add a global `email` block if you want a specific ACME contact |
+| `OKE_PROXY_ACME_EMAIL` | Written into `.env.local` for the proxy role. Traefik consumes it; for Caddy, add a global `email` block if you want a specific ACME contact |
 
 Custom domain:
 
 1. DNS for `app.example.com` → this host
-2. `OKE_PROXY_HOST=app.example.com` in `docker/.env.docker`
+2. `OKE_PROXY_HOST=app.example.com` in `.env.local`
 3. Ports `80`/`443` reachable from the public internet
 4. `allowedHosts` includes `app.example.com`
 
@@ -204,7 +204,7 @@ Serve validates `Host`. Add your public hostname to `allowedHosts`
 <Accordion title="Caddy serves localhost certs on my public host">
 
 `OKE_PROXY_HOST` is still `localhost` (or unset). Set the public DNS name in
-`docker/.env.docker` and recreate the proxy container so it reloads the Caddyfile.
+`.env.local` and recreate the proxy container so it reloads the Caddyfile.
 
 </Accordion>
 </Accordions>

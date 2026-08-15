@@ -6,6 +6,7 @@ import {
   FileExportIcon,
   Key01Icon,
   MoreHorizontalCircle01Icon,
+  PlusSignIcon,
   SecurityCheckIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -14,6 +15,7 @@ import { useEffect, useMemo, useState, type JSX } from "react";
 import {
   clientErrorText,
   vaultAuditVerify,
+  vaultCreate,
   vaultRotate,
   vaultRotateMaster,
   vaultSet,
@@ -51,6 +53,7 @@ import { VaultMasterKeySheet } from "./sheets/vault-master-key-sheet.tsx";
 import { VaultRotateMasterSheet } from "./sheets/vault-rotate-master-sheet.tsx";
 import { VaultSecuritySheet } from "./sheets/vault-security-sheet.tsx";
 import { VaultVerifySheet } from "./sheets/vault-verify-sheet.tsx";
+import { VaultCreateSheet } from "./sheets/vault-create-sheet.tsx";
 import { VaultWriteSheet } from "./sheets/vault-write-sheet.tsx";
 import { useVaultSelection } from "./state/vault-selection.ts";
 
@@ -118,7 +121,6 @@ export function VaultPage(): JSX.Element {
       readonly mode: "set" | "rotate";
       readonly name: string;
       readonly value: string;
-      readonly confirmation: string;
       readonly reason: string;
     }) => {
       if (input.value.trim().length === 0) throw new Error("New value is required");
@@ -126,7 +128,6 @@ export function VaultPage(): JSX.Element {
       const res = await call({
         name: input.name,
         value: input.value,
-        confirmation: input.confirmation,
         reason: input.reason,
       });
       if (res.error) throw new Error(clientErrorText(res.error));
@@ -135,6 +136,37 @@ export function VaultPage(): JSX.Element {
     onSuccess: async () => {
       setWriteError(null);
       setAction(null);
+      await invalidate();
+    },
+    onError: (err: Error) => {
+      setWriteError(err.message);
+    },
+  });
+
+  const createMut = useMutation({
+    mutationFn: async (input: {
+      readonly name: string;
+      readonly value: string;
+      readonly kind: "secret" | "config";
+      readonly description: string;
+      readonly rotate: string;
+    }) => {
+      if (input.name.trim().length === 0) throw new Error("Name is required");
+      if (input.value.trim().length === 0) throw new Error("Value is required");
+      const res = await vaultCreate({
+        name: input.name,
+        value: input.value,
+        kind: input.kind,
+        ...(input.description.length > 0 ? { description: input.description } : {}),
+        ...(input.rotate.length > 0 ? { rotate: input.rotate } : {}),
+      });
+      if (res.error) throw new Error(clientErrorText(res.error));
+      return res.data;
+    },
+    onSuccess: async (data) => {
+      setWriteError(null);
+      setAction(null);
+      if (data?.name) setSelectedName(data.name);
       await invalidate();
     },
     onError: (err: Error) => {
@@ -198,6 +230,16 @@ export function VaultPage(): JSX.Element {
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className={cn(EXPLORER_TOOLBAR_CLASS, "relative z-20 pr-1.5")}>
               <VaultSearch query={query} secrets={secrets} onQueryChange={setQuery} />
+              <ToolbarTip label="Add secret or config">
+                <button
+                  type="button"
+                  aria-label="Add secret or config"
+                  onClick={() => setAction("create")}
+                  className={EXPLORER_ICON_BUTTON_CLASS}
+                >
+                  <HugeiconsIcon icon={PlusSignIcon} className="size-3.5" />
+                </button>
+              </ToolbarTip>
               {exportNote ? (
                 <span className="sr-only" role="status">
                   {exportNote}
@@ -286,6 +328,7 @@ export function VaultPage(): JSX.Element {
               row={selected}
               env={env}
               now={now}
+              backend={backend}
               onSet={() => setAction("set")}
               onRotate={() => setAction("rotate")}
               onQueryChange={setQuery}
@@ -301,6 +344,19 @@ export function VaultPage(): JSX.Element {
         </ResizablePanel>
       </ResizablePanelGroup>
 
+      <VaultCreateSheet
+        open={action === "create"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWriteError(null);
+            setAction(null);
+          }
+        }}
+        pending={createMut.isPending}
+        error={action === "create" ? writeError : null}
+        onSubmit={(input) => createMut.mutate(input)}
+      />
+
       <VaultWriteSheet
         open={action === "set" || action === "rotate"}
         onOpenChange={(open) => {
@@ -314,7 +370,7 @@ export function VaultPage(): JSX.Element {
         sensitive={selected?.sensitive ?? true}
         pending={writeMut.isPending}
         error={writeError}
-        onConfirm={(input) => {
+        onSubmit={(input) => {
           if (!selected) return;
           writeMut.mutate({
             mode: action === "rotate" ? "rotate" : "set",

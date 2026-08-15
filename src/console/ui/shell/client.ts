@@ -468,9 +468,9 @@ interface ConsoleClient {
         fingerprints: Record<string, string>;
         fingerprint: string | null;
         cleartext: string | null;
-        winner: "process.env" | ".env.local" | ".env.docker" | "driver" | "dev-fallback" | null;
+        winner: "process.env" | ".env.local" | "driver" | "dev-fallback" | null;
         resolution: Array<{
-          source: "process.env" | ".env.local" | ".env.docker" | "driver" | "dev-fallback";
+          source: "process.env" | ".env.local" | "driver" | "dev-fallback";
           present: boolean;
           won: boolean;
         }>;
@@ -488,6 +488,7 @@ interface ConsoleClient {
       backend: {
         driverId: "env" | "vault" | "managed" | "memory";
         builtin: boolean;
+        provider: string | null;
         status: {
           initialized: boolean;
           sealed: boolean;

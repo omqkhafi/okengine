@@ -735,7 +735,7 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     gates: MEMBER,
     in: SEARCH_IN,
     out: KEEL_LIST_OUT,
-    effects: { reads: ["index:issues", "sql:issues"] },
+    effects: { reads: ["index:issues", "sql:issues"], secrets: ["PUBLIC_DOCS_URL"] },
     source: "src/flows/search/query.ts:6",
   }),
   "search.suggest": httpFlow({
@@ -899,6 +899,7 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     plane: "operator",
     gates: MEMBER,
     out: OK,
+    effects: { secrets: ["PUBLIC_API_URL"] },
     source: "src/flows/health/ping.ts:2",
   }),
 
@@ -1066,7 +1067,7 @@ export const KEEL_SURFACE_GATES: NonNullable<Manifest["gates"]> = {
  * Extra vault contracts used by webhooks / Slack ingest.
  */
 export const KEEL_SURFACE_VAULT: NonNullable<Manifest["vault"]> = {
-  WEBHOOK_SECRET: { description: "Outbound webhook HMAC", rotate: "90d" },
+  WEBHOOK_SECRET: { description: "Outbound webhook HMAC signing key", rotate: "never" },
   SLACK_BOT: { description: "Slack ask-intake bot token", rotate: "90d" },
 };
 

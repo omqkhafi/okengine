@@ -67,6 +67,8 @@ import {
   type ConsoleVaultRotateHandle,
   type ConsoleVaultRotateMasterResult,
   type ConsoleVaultRow,
+  type VaultLayerSeed,
+  type VaultCreateInput,
   type VaultWriteInput,
 } from "./vault.ts";
 import type { ChannelInbox } from "../../drivers/channel-types.ts";
@@ -288,6 +290,8 @@ export interface ConsoleState {
    * or host injection.
    */
   vaultRuntime: VaultRuntime | null;
+  /** Per-layer seed bag for Manifest vault boot (seeded Console). */
+  vaultLayerSeed: VaultLayerSeed | null;
   /** Durable journal for rotation blast radius + Clock waiting-on. */
   journalStore: JournalStore | null;
   /** Current environment label for fingerprint columns. */
@@ -301,6 +305,10 @@ export interface ConsoleState {
   /** Set a vault value (write-only). */
   setVault: (
     input: VaultWriteInput,
+  ) => Promise<{ readonly name: string; readonly fingerprint: string | null }>;
+  /** Declare a contract from Console and write its value. */
+  createVault: (
+    input: VaultCreateInput,
   ) => Promise<{ readonly name: string; readonly fingerprint: string | null }>;
   /** Rotate a vault value (write-only; distinct confirm phrase). */
   rotateVault: (
@@ -491,6 +499,8 @@ export interface CreateConsoleStateOptions {
   readonly accessTtlMs?: number;
   /** Injected vault runtime (tests / host). */
   readonly vaultRuntime?: VaultRuntime | null;
+  /** Per-layer seed bag for Manifest vault boot (seeded Console). */
+  readonly vaultLayerSeed?: VaultLayerSeed | null;
   /** Injected journal store for blast-radius / waiting-on queries. */
   readonly journalStore?: JournalStore | null;
   /** Environment label for vault fingerprints. */
@@ -899,6 +909,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       };
     },
     vaultRuntime: options.vaultRuntime ?? null,
+    vaultLayerSeed: options.vaultLayerSeed ?? null,
     journalStore: options.journalStore ?? null,
     vaultEnv: options.vaultEnv ?? "dev",
     listVault: async () => {
@@ -911,6 +922,7 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         journal: state.journalStore,
         env: state.vaultEnv,
         now: state.now,
+        cwd: state.cwd,
         backend: await vaultBackend(vault),
       });
     },
@@ -920,6 +932,27 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         throw new Error("Vault runtime not bound");
       }
       return vault.setVaultValue(state.vaultRuntime, input);
+    },
+    createVault: async (input) => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "vault");
+      const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      if (!state.vaultRuntime) {
+        state.vaultRuntime = await vault.createManifestVaultRuntime(
+          state.manifest ?? { oke: "1.0", app: "app" },
+          {
+            cwd: state.cwd,
+            env: state.production ? "prod" : "dev",
+            allowDevFallbacks: !state.production,
+            now: state.now,
+            driverId: vault.resolveVaultDriverId(state.okeConfig, state.production ? "prod" : "dev"),
+          },
+        );
+      }
+      if (!state.vaultRuntime) {
+        throw new Error("Vault runtime not bound");
+      }
+      return vault.createVaultContract(state.vaultRuntime, state.cwd, state.manifest, input);
     },
     rotateVault: async (input) => {
       const vault = await markPanel<typeof import("./vault.ts")>("vault");

@@ -19,7 +19,7 @@ describe("formatVaultBackend", () => {
       status: null,
       unavailable: null,
     });
-    expect(card?.title).toBe("Backend managed");
+    expect(card?.title).toBe("Managed vault");
     expect(card?.badges).toEqual([]);
     expect(card?.facts).toEqual([]);
     expect(card?.hint).toBeNull();

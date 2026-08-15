@@ -5,7 +5,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { OLLAMA_IMAGE } from "../../docker/recipes/index.ts";
-import { DEFAULT_DOCKER_DIR } from "../../docker/types.ts";
 
 /** Choices applied to the project. */
 export type AiSetupApplyInput = {
@@ -70,10 +69,8 @@ export function applyAiSetup(
     : existsSync(envExample)
       ? readFileSync(envExample, "utf8")
       : "";
-  // Driver / URL / model stay commented so docker mode can hydrate from
-  // `docker/.env.docker` without being shadowed. The chosen model is still
-  // written into `.env.local` as a hint (and into `.env.docker` when present);
-  // `loadExistingStackControls` seeds commented `OKE_AI_MODEL` on first boot.
+  // Driver / URL / model stay commented so `oke dev --docker` can write
+  // the live compose URL into `.env.local` without a leftover pin winning.
   env = upsertEnv(env, "OKE_AI_DRIVER", input.driver, { comment: true });
   if (input.baseUrl) env = upsertEnv(env, "OKE_AI_URL", input.baseUrl, { comment: true });
   if (input.chatModel) {
@@ -93,18 +90,6 @@ export function applyAiSetup(
     }
   }
   writeFileSync(envPath, env.endsWith("\n") ? env : `${env}\n`, "utf8");
-
-  // `docker/.env.docker` is regenerated from `.env.local` only on its first
-  // boot (existing values there are treated as durable, possibly hand-edited
-  // pins — see stack-id.ts). Once it exists, a later `oke ai setup` run must
-  // update it directly, or the docker profile keeps the old model forever.
-  if (input.chatModel) {
-    const dockerEnvPath = join(cwd, DEFAULT_DOCKER_DIR, ".env.docker");
-    if (existsSync(dockerEnvPath)) {
-      const dockerEnv = readFileSync(dockerEnvPath, "utf8");
-      writeFileSync(dockerEnvPath, upsertEnv(dockerEnv, "OKE_AI_MODEL", input.chatModel), "utf8");
-    }
-  }
 
   const aiTsPath = writeAiModels(cwd, input);
 
@@ -162,7 +147,7 @@ export function upsertImage(source: string, key: string, image: string): string 
 export type UpsertEnvOptions = {
   /**
    * When true, write `# KEY=value` (opt-in override). Used for AI stack keys
-   * so they do not shadow `docker/.env.docker`.
+   * so `oke dev --docker` can write the live compose URL into `.env.local`.
    */
   readonly comment?: boolean;
 };

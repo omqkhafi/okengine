@@ -346,7 +346,6 @@ const ConfirmRequired = z.object({
     "EDIT",
     "DELETE",
     "PURGE",
-    "SET",
     "ROTATE",
     "ROTATE_MASTER",
     "REVOKE",
@@ -604,7 +603,7 @@ const ClockWakeEarlyOut = z.object({
 });
 
 const VaultResolutionStepOut = z.object({
-  source: z.enum(["process.env", ".env.local", ".env.docker", "driver", "dev-fallback"]),
+  source: z.enum(["process.env", ".env.local", "driver", "dev-fallback"]),
   present: z.boolean(),
   won: z.boolean(),
 });
@@ -625,12 +624,13 @@ const VaultRowOut = z.object({
   fingerprints: z.record(z.string(), z.string()),
   fingerprint: z.string().nullable(),
   cleartext: z.string().nullable(),
-  winner: z.enum(["process.env", ".env.local", ".env.docker", "driver", "dev-fallback"]).nullable(),
+  winner: z.enum(["process.env", ".env.local", "driver", "dev-fallback"]).nullable(),
   resolution: z.array(VaultResolutionStepOut),
   readers: z.array(z.string()),
   blastRadius: VaultBlastRadiusOut,
   lastReadAt: z.number().nullable(),
   sharedFingerprintEnvs: z.array(z.string()),
+  origin: z.enum(["source", "console"]).optional(),
 });
 
 const VaultBuiltinStatusOut = z.object({
@@ -650,6 +650,7 @@ const VaultBackendOut = z.object({
   builtin: z.boolean(),
   status: VaultBuiltinStatusOut.nullable(),
   unavailable: z.string().nullable(),
+  provider: z.string().nullable(),
 });
 
 const VaultListOut = z.object({
@@ -662,8 +663,18 @@ const VaultWriteIn = z.object({
   name: z.string().min(1),
   value: z.string().min(1),
   confirmation: z.string().optional(),
-  reason: z.string().optional(),
+  reason: z.string().min(3),
 });
+
+const VaultCreateIn = z.object({
+  name: z.string().min(1),
+  value: z.string().min(1),
+  kind: z.enum(["secret", "config"]),
+  description: z.string().optional(),
+  rotate: z.string().optional(),
+});
+
+const VaultExists = z.object({ name: z.string() });
 
 const VaultWriteOut = z.object({
   ok: z.literal(true),
@@ -1582,6 +1593,7 @@ export function createConsoleBindings(state: ConsoleState): {
     readonly vault: {
       readonly list: AnyFlowDef;
       readonly set: AnyFlowDef;
+      readonly create: AnyFlowDef;
       readonly rotate: AnyFlowDef;
       readonly rotateMaster: AnyFlowDef;
       readonly auditVerify: AnyFlowDef;
@@ -1652,6 +1664,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const storePreview = createStorePreview(state);
   const vaultList = createVaultList(state);
   const vaultSet = createVaultSet(state);
+  const vaultCreate = createVaultCreate(state);
   const vaultRotate = createVaultRotate(state);
   const vaultRotateMaster = createVaultRotateMaster(state);
   const vaultAuditVerify = createVaultAuditVerify(state);
@@ -1707,6 +1720,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/store/preview"), storePreview),
     bindHttp(http.get("/console/vault"), vaultList),
     bindHttp(http.post("/console/vault/set"), vaultSet),
+    bindHttp(http.post("/console/vault/create"), vaultCreate),
     bindHttp(http.post("/console/vault/rotate"), vaultRotate),
     bindHttp(http.post("/console/vault/rotate-master"), vaultRotateMaster),
     bindHttp(http.get("/console/vault/audit/verify"), vaultAuditVerify),
@@ -1766,6 +1780,7 @@ export function createConsoleBindings(state: ConsoleState): {
       vault: {
         list: vaultList,
         set: vaultSet,
+        create: vaultCreate,
         rotate: vaultRotate,
         rotateMaster: vaultRotateMaster,
         auditVerify: vaultAuditVerify,
@@ -2850,24 +2865,55 @@ function createVaultList(state: ConsoleState) {
   });
 }
 
+function createVaultCreate(state: ConsoleState) {
+  return flow("console.vault.create", {
+    plane: "operator",
+    in: VaultCreateIn,
+    out: VaultWriteOut,
+    errors: { AuthFailed, VaultExists, VaultNotFound },
+    do: async (input: z.infer<typeof VaultCreateIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      try {
+        const result = await state.createVault({
+          name: input.name,
+          value: input.value,
+          kind: input.kind,
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.rotate !== undefined ? { rotate: input.rotate } : {}),
+        });
+        fx.log.info("console.vault.create", {
+          operatorId: fx.operator.id,
+          name: result.name,
+          kind: input.kind,
+          fingerprint: result.fingerprint,
+        });
+        return {
+          ok: true as const,
+          name: result.name,
+          fingerprint: result.fingerprint,
+          at: state.now(),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("already declared")) {
+          return fail("VaultExists", { name: input.name });
+        }
+        return fail("VaultNotFound", { name: `${input.name}: ${message}` });
+      }
+    },
+  });
+}
+
 function createVaultSet(state: ConsoleState) {
   return flow("console.vault.set", {
     plane: "operator",
     in: VaultWriteIn,
     out: VaultWriteOut,
-    errors: { AuthFailed, VaultNotFound, ConfirmRequired },
+    errors: { AuthFailed, VaultNotFound },
     do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (!(await vaultNameKnown(state, input.name))) {
         return fail("VaultNotFound", { name: input.name });
-      }
-      if (state.production) {
-        if (input.confirmation !== "SET" || !input.reason || input.reason.length < 3) {
-          return fail("ConfirmRequired", {
-            phrase: "SET" as const,
-            reason: "Type SET and provide a reason to write a secret in production",
-          });
-        }
       }
       try {
         const result = await state.setVault({
@@ -2901,19 +2947,11 @@ function createVaultRotate(state: ConsoleState) {
     plane: "operator",
     in: VaultWriteIn,
     out: VaultWriteOut,
-    errors: { AuthFailed, VaultNotFound, ConfirmRequired },
+    errors: { AuthFailed, VaultNotFound },
     do: async (input: z.infer<typeof VaultWriteIn>, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       if (!(await vaultNameKnown(state, input.name))) {
         return fail("VaultNotFound", { name: input.name });
-      }
-      // Rotate always requires typed confirm (console §6 · §9.8).
-      if (input.confirmation !== "ROTATE" || !input.reason || input.reason.length < 3) {
-        return fail("ConfirmRequired", {
-          phrase: "ROTATE" as const,
-          reason:
-            "Type ROTATE and provide a reason — in-flight durable runs may wake holding the new key",
-        });
       }
       try {
         const result = await state.rotateVault({
@@ -3024,7 +3062,6 @@ function mapVaultOperatorError(err: unknown) {
 async function vaultNameKnown(state: ConsoleState, name: string): Promise<boolean> {
   if (state.manifest?.vault?.[name]) return true;
   if (state.vaultRuntime?.contracts.has(name)) return true;
-  if (state.vaultRuntime?.names().includes(name)) return true;
   const listed = await state.listVault();
   return listed.secrets.some((s) => s.name === name);
 }

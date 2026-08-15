@@ -150,6 +150,8 @@ export {
 export {
   managedVaultDriver,
   createManagedVaultBag,
+  MANAGED_VAULT_PROVIDER_IDS,
+  MANAGED_VAULT_PROVIDER_LIST,
   type ManagedVaultOptions,
   type ManagedVaultProviderId,
 } from "./vault-managed.ts";
@@ -158,6 +160,29 @@ export {
   type AwsSecretsManagerClient,
   type OpenAwsSecretsManagerOptions,
 } from "./vault-aws-secrets-manager.ts";
+export {
+  openAzureKeyVaultBag,
+  toAzureName,
+  fromAzureName,
+  type OpenAzureKeyVaultOptions,
+} from "./vault-azure-key-vault.ts";
+export {
+  openGcpSecretManagerBag,
+  type OpenGcpSecretManagerOptions,
+} from "./vault-gcp-secret-manager.ts";
+export { openDopplerBag, type OpenDopplerOptions } from "./vault-doppler.ts";
+export { openOnePasswordBag, type OpenOnePasswordOptions } from "./vault-1password.ts";
+export {
+  openRemoteSecretBag,
+  asRemoteVaultError,
+  vaultHttpJson,
+  remoteErrorCode,
+  type RemoteSecretClient,
+  type OpenRemoteSecretBagOptions,
+  type VaultErrorTranslator,
+  type VaultHttpJsonOptions,
+  type VaultHttpJsonResult,
+} from "./vault-remote-bag.ts";
 
 export type {
   ChannelDriverId,

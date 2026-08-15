@@ -37,7 +37,7 @@ export interface ServiceSpec {
   readonly port: number;
   /** Host port published in compose (dev defaults). */
   readonly hostPort: number;
-  /** Credential placeholders (values live in `.env.docker`, not YAML). */
+  /** Credential placeholders (values live in `.env.local`, not YAML). */
   readonly credentials: ServiceCredentials;
 }
 
@@ -178,8 +178,8 @@ export interface DeriveOptions {
   readonly includeApp?: boolean;
   /**
    * Compose artefact directory relative to the project root (default `docker`).
-   * Controls generated `env_file` / `build.context` paths (`.env.docker` lives
-   * beside compose under this directory).
+   * Controls generated `env_file` / `build.context` paths (`.env.local` lives
+   * at the project root; compose under `docker/` uses `../.env.local`).
    * Pass `"."` for legacy root-level layout.
    */
   readonly composeDir?: string;
@@ -191,7 +191,7 @@ export interface DeriveOptions {
   readonly host?: string;
   /** Extra image recipes (plugins). */
   readonly recipes?: readonly ImageRecipe[];
-  /** Preserved optional controls from an existing `.env.docker`. */
+  /** Preserved optional controls from an existing `.env.local`. */
   readonly controls?: Readonly<Record<string, string>>;
   /**
    * Local stack instance id (6-hex). When set, host ports are offset so two
@@ -218,7 +218,7 @@ export interface DeriveResult {
   /** Generated files (Dockerfile + compose layers). */
   readonly files: readonly GeneratedFile[];
   /**
-   * Stack env contents for `.env.docker` — written by `oke dev --docker`,
+   * Stack env contents merged into `.env.local` by `oke dev --docker`,
    * never embedded in YAML.
    */
   readonly stackEnv: Readonly<Record<string, string>>;

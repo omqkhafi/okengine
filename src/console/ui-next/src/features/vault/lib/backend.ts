@@ -35,10 +35,108 @@ export interface VaultBackendCard {
 /** What each driver id means, in one line. */
 const DRIVER_DESCRIPTION: Readonly<Record<string, string>> = {
   vault: "okengine's own store — encrypted at rest, sealed until unsealed with the master key",
-  env: "Environment layers only — process.env, .env.local, docker/.env.docker",
+  env: "No remote store — values come from process.env and .env.local",
   managed: "Managed KMS / provider secret store",
   memory: "In-memory bag — test only, nothing survives restart",
 };
+
+const PROVIDER_TITLE: Readonly<Record<string, string>> = {
+  "aws-secrets-manager": "AWS Secrets Manager",
+  "azure-key-vault": "Azure Key Vault",
+  "gcp-secret-manager": "GCP Secret Manager",
+  doppler: "Doppler",
+  "1password": "1Password",
+};
+
+const PROVIDER_KIND: Readonly<Record<string, string>> = {
+  "aws-secrets-manager": "aws",
+  "azure-key-vault": "azure",
+  "gcp-secret-manager": "gcp",
+  doppler: "doppler",
+  "1password": "1password",
+};
+
+/**
+ * Lock-path label — always `driver`. Kind (built-in vs managed) lives in
+ * {@link vaultDriverTitle} / {@link vaultDriverHint}.
+ *
+ * @param _backend - Unused; kept so call sites stay typed
+ */
+export function vaultDriverShortLabel(_backend?: VaultBackend | null): string {
+  return "driver";
+}
+
+/**
+ * Headline for the backend card and the selected lock-path layer.
+ *
+ * @param backend - Server-reported backend
+ */
+export function vaultDriverTitle(backend: VaultBackend | null | undefined): string {
+  if (!backend) return "Vault backend";
+  switch (backend.driverId) {
+    case "vault":
+      return "Built-in vault";
+    case "managed": {
+      const id = backend.provider?.trim() ?? "";
+      if (id.length === 0) return "Managed vault";
+      return PROVIDER_TITLE[id] ?? `Managed · ${id}`;
+    }
+    case "memory":
+      return "Memory bag";
+    case "env":
+      return "Simulated env";
+  }
+}
+
+/**
+ * Kind on the lock-path driver step — built-in, managed, or neither.
+ *
+ * @param backend - Server-reported backend
+ */
+export function vaultDriverKind(backend: VaultBackend | null | undefined): string {
+  if (!backend) return "unknown";
+  switch (backend.driverId) {
+    case "vault":
+      return "built-in";
+    case "managed": {
+      const id = backend.provider?.trim() ?? "";
+      const kind = PROVIDER_KIND[id];
+      if (kind !== undefined) return `managed · ${kind}`;
+      if (id.length > 0) return `managed · ${id.length > 8 ? id.slice(0, 8) : id}`;
+      return "managed";
+    }
+    case "memory":
+      return "memory";
+    case "env":
+      return "simulate";
+  }
+}
+
+/**
+ * One-line explanation of the driver layer.
+ *
+ * @param backend - Server-reported backend
+ */
+export function vaultDriverHint(backend: VaultBackend | null | undefined): string {
+  if (!backend) return "Set drivers.vault to built-in vault or a managed provider";
+  switch (backend.driverId) {
+    case "vault":
+      return "Built-in vault — encrypted at rest, sealed until unsealed with the master key";
+    case "managed": {
+      const id = backend.provider?.trim() ?? "";
+      const title = PROVIDER_TITLE[id];
+      if (title !== undefined) return `Managed provider — ${title}`;
+      if (id.length > 0) return `Managed provider — ${id}`;
+      return "Managed provider — platform-injected secrets (no remote provider id)";
+    }
+    case "memory":
+      return "In-memory driver — test only, nothing survives restart";
+    case "env":
+      return "No built-in vault or managed provider — values come from process.env and .env.local";
+    default:
+      return DRIVER_DESCRIPTION[backend.driverId] ?? "Custom vault backend";
+  }
+}
 
 /**
  * Build the status card for a backend.
@@ -48,8 +146,8 @@ const DRIVER_DESCRIPTION: Readonly<Record<string, string>> = {
 export function formatVaultBackend(backend: VaultBackend | null): VaultBackendCard | null {
   if (!backend) return null;
 
-  const title = `Backend ${backend.driverId}`;
-  const description = DRIVER_DESCRIPTION[backend.driverId] ?? "Custom vault backend";
+  const title = vaultDriverTitle(backend);
+  const description = vaultDriverHint(backend);
 
   if (!backend.builtin) {
     return { title, description, badges: [], facts: [], hint: null };

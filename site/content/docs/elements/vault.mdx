@@ -147,7 +147,7 @@ Every name passed to `vault.env.required` is registered, so boot reports missing
 | Option        | Type                  | Meaning                                                                  |
 | ------------- | --------------------- | ------------------------------------------------------------------------ |
 | `description` | string                | Human title in boot-gap listings and the Console (falls back to the key) |
-| `rotate`      | string                | Rotation hint (`"90d"`) — drives the rotation-due signal in the Console  |
+| `rotate`      | string                | Cadence (`"90d"`) or `"never"` when the secret must not rotate. Omit is the same as `"never"`. Console shows `no rotate` and skips `is:overdue`. |
 | `schema`      | zod / Standard Schema | Validated at boot; a bad value fails boot like a missing one             |
 | `dev`         | string                | Local-only fallback when no source provides a value (never used in prod) |
 | `sensitive`   | boolean               | Override the default (`true` for secrets, `false` for config)            |
@@ -201,6 +201,9 @@ The **Console** (`:6533`) **Vault** page (`/vault`) groups **Secrets** and
 **Config**. Secrets are write-only: a salted fingerprint (`sha256:…`), never
 the cleartext. Config rows show the value — that is `vault.config()`.
 
+Add (`+`) creates a contract from Console as well as from source. Those rows
+show `console` until you declare the same name in the Manifest.
+
 Search matches name, description, fingerprint, reader, and winner. Operators
 AND together. `/` focuses the field.
 
@@ -222,7 +225,8 @@ sheet.
 
 | Action               | Confirm                                | HTTP                                                                   |
 | -------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| Set / rotate a value | `SET` (production) / `ROTATE` (always) | `POST /console/vault/set` · `/rotate`                                  |
+| Add a contract       | session only                           | `POST /console/vault/create` — lists as `console` until declared in source |
+| Set / rotate a value | reason (min 3)                         | `POST /console/vault/set` · `/rotate`                                  |
 | Rotate master key    | `ROTATE_MASTER` + reason ≥ 3           | `POST /console/vault/rotate-master` — one batch; `remaining` is honest |
 | Verify audit chain   | session only                           | `GET /console/vault/audit/verify` → `{ ok, brokenAt, reason, row }`    |
 
@@ -272,33 +276,44 @@ Defaults are `env` / `memory` / `vault`. create-oke templates pin the built-in s
 | --------- | ------------------------------------------------------------------- | ---------------------------------- |
 | `env`     | process env                                                         | Local pins — no encryption at rest |
 | `vault`   | Postgres/PGlite envelope (AES-256-GCM)                              | Default prod — no extra container  |
-| `managed` | AWS Secrets Manager (`OKE_VAULT_PROVIDER`) or platform-injected env | Cloud SM / Fly / Railway / K8s     |
+| `managed` | Official SM (`OKE_VAULT_PROVIDER`) or platform-injected env  | Cloud SM / Fly / Railway / K8s     |
 | `memory`  | in-process map                                                      | Tests                              |
 
 ### Threat model (honest)
 
 Built-in Vault protects a **database dump** (ciphertext + wrapped DEKs). It does **not** equal a separate process-isolated vault:
 
-| Threat                                        | Built-in `vault`                   | Managed AWS SM / remote vault |
+| Threat                                        | Built-in `vault`                   | Managed remote vault          |
 | --------------------------------------------- | ---------------------------------- | ----------------------------- |
 | Postgres dump / backup leak                   | Protected (need master/KEK)        | Protected                     |
 | App RCE / memory dump                         | Game over (same process)           | Better if vault is isolated   |
 | Master key only in `.env` next to app secrets | Weak — use KMS auto-unseal in prod | Prefer non-exportable KEK     |
 | JS `Buffer.fill(0)` vs remote `mlock`         | Hygiene only — not claimed         | Stronger outside the app      |
 
-For production built-in stores, set `vault.encryption.masterKey` to a KMS source (optional peer `@aws-sdk/client-kms`) or use `managed` + AWS Secrets Manager. `oke doctor` warns when prod would take the master key from the environment.
+For production built-in stores, set `vault.encryption.masterKey` to a KMS source (optional peer
+`@aws-sdk/client-kms`) or use `managed` with a provider below. `oke doctor` warns when prod would
+take the master key from the environment.
 
 ## Managed providers (official)
 
-Official managed provider: **AWS Secrets Manager** — set `drivers.vault` to `"managed"` and
-`OKE_VAULT_PROVIDER=aws-secrets-manager` (optional peer `@aws-sdk/client-secrets-manager`).
-Omit the provider when the platform already injects secrets as env vars.
+Set `drivers.vault` to `"managed"` and `OKE_VAULT_PROVIDER` to an id below. Omit the provider when
+the platform already injects secrets as env vars (Fly, Railway, Kubernetes).
+
+| Provider | `OKE_VAULT_PROVIDER` | Connection | Optional peer |
+| -------- | -------------------- | ---------- | ------------- |
+| AWS Secrets Manager | `aws-secrets-manager` | `OKE_VAULT_REGION`, `OKE_VAULT_MOUNT` (name prefix) | `@aws-sdk/client-secrets-manager` |
+| Azure Key Vault | `azure-key-vault` | `OKE_VAULT_URL` (vault URI), `OKE_VAULT_MOUNT` (prefix) | `@azure/keyvault-secrets` + `@azure/identity` |
+| GCP Secret Manager | `gcp-secret-manager` | `OKE_VAULT_MOUNT` (`project` or `project/prefix`) | `@google-cloud/secret-manager` |
+| Doppler | `doppler` | `OKE_VAULT_TOKEN`; `OKE_VAULT_MOUNT` as `project/config` for personal tokens | — |
+| 1Password Connect | `1password` | `OKE_VAULT_URL` (Connect host), `OKE_VAULT_TOKEN`, `OKE_VAULT_MOUNT` (vault name) | — |
+
+AWS, Azure, and GCP use that cloud's default credential chain. Azure names allow only letters,
+numbers, and hyphens — OKE maps `_` in the contract name to `-` on the wire.
 
 ## Community / plugin
 
-OpenBao, HashiCorp Vault, Azure Key Vault, GCP Secret Manager, Doppler, and 1Password are not
-shipped in core. Implement a community adapter for the `managed` driver surface, or keep using
-built-in `vault` / `env`.
+OpenBao and HashiCorp Vault are not shipped in core. Implement a community adapter for the
+`managed` driver surface, or keep using built-in `vault` / `env`.
 
 ## Troubleshooting
 
@@ -309,14 +324,14 @@ A contract has no value in any layer of the chain. Fix by providing it in exactl
 
 - locally: add `NAME=value` to `.env.local` (or run `oke vault set NAME value`)
 - built-in store: `oke vault init` then unseal, or set via Console (write-only)
-- CI / hosting: set a real environment variable (or AWS SM when `managed`)
+- CI / hosting: set a real environment variable (or the managed provider when `managed`)
 
 </Accordion>
 <Accordion title="How do I rotate a key safely?">
 
 Set the new value (`oke vault set` or the Console). The Console shows blast
-radius before you confirm rotate, and `is:overdue` when a secret is past its
-`rotate: "90d"` hint.
+radius before you rotate, and `is:overdue` when a secret is past its
+`rotate: "90d"` hint. `rotate: "never"` (or omit `rotate`) shows `no rotate`.
 
 </Accordion>
 <Accordion title="How do I pass the builtin master key without shell history?">

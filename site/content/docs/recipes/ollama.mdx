@@ -37,7 +37,7 @@ Or run `oke ai setup --provider ollama --yes`.
 <Step>
 ### Env written by the stack
 
-```bash title="docker/.env.docker"
+```bash title=".env.local"
 OKE_AI_URL=http://127.0.0.1:11434
 OKE_AI_MODEL=qwen3.5:9b
 ```
@@ -114,7 +114,7 @@ PII egress rules treat `ollama` as local — see [AI · PII](/docs/elements/ai).
 <Accordions>
 <Accordion title="oke boot: ollama driver needs OKE_AI_URL">
 
-Docker mode expects `OKE_AI_URL` from `docker/.env.docker` when `images.ai` is pinned.
+Docker mode expects `OKE_AI_URL` from `.env.local` when `images.ai` is pinned.
 Locally the default is `http://127.0.0.1:11434`. Prefer `oke ai setup` to wire everything
 in one pass.
 

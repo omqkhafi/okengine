@@ -37,7 +37,7 @@ images: {
 <Step>
 ### Connect the smtp driver
 
-```bash title="docker/.env.docker (written by oke docker)"
+```bash title=".env.local (written by oke docker)"
 SMTP_URL=smtp://127.0.0.1:1025
 MAILPIT_UI_URL=http://127.0.0.1:8025
 ```
@@ -100,7 +100,7 @@ if SMTP still accepts mail.
 <Accordion title="oke boot: smtp driver needs SMTP_URL">
 
 The smtp binder refuses to start without `SMTP_URL` (or `OKE_CHANNEL_EMAIL_URL`). In
-under `oke dev` the error asks whether Compose wrote `docker/.env.docker`. Also rejects
+under `oke dev` the error asks whether Compose wrote `.env.local`. Also rejects
 non-`smtp://` schemes: `oke boot: SMTP_URL must use smtp://`.
 
 </Accordion>

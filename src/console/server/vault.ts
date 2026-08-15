@@ -8,12 +8,14 @@
 
 import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../../config/index.ts";
 import { VAULT_DEFAULTS } from "../../config/driver-defaults.ts";
+import { memoryVaultDriver } from "../../drivers/index.ts";
 import type { VaultDriverId } from "../../drivers/vault-types.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "../../elements/vault/boot-chain.ts";
 import {
   createVaultRuntime,
   VaultError,
   vault as declareVault,
+  type VaultChainLayer,
   type VaultResolutionSource,
   type VaultResolutionStep,
   type VaultRuntime,
@@ -23,6 +25,12 @@ import type { VaultStatus } from "../../elements/vault/types.ts";
 import type { AuditChainBreakReason, VaultAuditRecord } from "../../elements/vault/storage.ts";
 import type { JournalRun, JournalStore } from "../../kernel/journal.ts";
 import type { Manifest } from "../../manifest/types.ts";
+import {
+  isVaultContractName,
+  loadVaultOverlay,
+  upsertVaultOverlay,
+  type VaultOverlayContract,
+} from "./vault-overlay.ts";
 
 /** Environment label for fingerprint columns. */
 export type VaultEnvLabel = ConfigEnv | "staging" | (string & {});
@@ -74,6 +82,11 @@ export interface ConsoleVaultRow {
    * not error (may be deliberate).
    */
   readonly sharedFingerprintEnvs: readonly VaultEnvLabel[];
+  /**
+   * `"source"` is Manifest / `vault.secret`. `"console"` is an operator
+   * Add that is not in the Manifest yet.
+   */
+  readonly origin?: "source" | "console";
 }
 
 /**
@@ -123,6 +136,53 @@ export interface ConsoleVaultBackend {
   readonly status: ConsoleVaultBuiltinStatus | null;
   /** Why {@link status} is missing for a builtin backend; `null` otherwise. */
   readonly unavailable: string | null;
+  /** Managed provider id (`aws-secrets-manager`); `null` otherwise. */
+  readonly provider: string | null;
+}
+
+/**
+ * Per-layer values for Manifest vault boot (seeded Console).
+ *
+ * `driver` lands on the backend bag. File / env overlays are memory bags
+ * with the spec source ids so resolution can show a winner per layer
+ * without writing the project's `.env.local`.
+ */
+export interface VaultLayerSeed {
+  readonly driver?: Readonly<Record<string, string>>;
+  readonly processEnv?: Readonly<Record<string, string>>;
+  readonly envLocal?: Readonly<Record<string, string>>;
+  readonly devFallback?: Readonly<Record<string, string>>;
+}
+
+/** Overlay sources that sit after the driver in the spec chain. */
+const VAULT_OVERLAY_SOURCES = ["process.env", ".env.local"] as const;
+
+/**
+ * Insert memory bags for seeded file / env layers (same source ids).
+ *
+ * @param chain - Boot chain from {@link buildVaultBootChain}
+ * @param overlays - Values keyed by spec source
+ */
+export function overlayVaultLayers(
+  chain: readonly VaultChainLayer[],
+  overlays: Partial<
+    Record<(typeof VAULT_OVERLAY_SOURCES)[number], Readonly<Record<string, string>>>
+  >,
+): VaultChainLayer[] {
+  const out = [...chain];
+  for (const source of VAULT_OVERLAY_SOURCES) {
+    const secrets = overlays[source];
+    if (secrets === undefined || Object.keys(secrets).length === 0) continue;
+    const layer: VaultChainLayer = {
+      driver: memoryVaultDriver,
+      source,
+      options: { secrets },
+    };
+    const idx = out.findIndex((l) => l.source === source);
+    if (idx === -1) out.push(layer);
+    else out.splice(idx, 0, layer);
+  }
+  return out;
 }
 
 /** Options when projecting the vault list. */
@@ -141,6 +201,10 @@ export interface ProjectVaultOptions {
   /** Durable journal — blast radius is queried, not estimated. */
   readonly journal?: JournalStore | null;
   readonly now?: () => number;
+  /** Project root — loads `.oke/vault-contracts.json` when set. */
+  readonly cwd?: string;
+  /** Preloaded Console overlay (tests). */
+  readonly overlay?: readonly VaultOverlayContract[];
 }
 
 /**
@@ -155,14 +219,16 @@ export async function projectVaultList(options: ProjectVaultOptions): Promise<{
 }> {
   const env = options.env ?? "dev";
   const now = options.now ?? (() => Date.now());
-  const names = collectNames(options.manifest, options.runtime);
+  const overlay =
+    options.overlay ?? (options.cwd !== undefined ? await loadVaultOverlay(options.cwd) : []);
+  const names = collectNames(options.manifest, options.runtime, overlay);
   const journalRuns = options.journal
     ? await options.journal.list()
     : ([] as readonly JournalRun[]);
 
   const secrets: ConsoleVaultRow[] = [];
   for (const name of names) {
-    const contract = contractOf(name, options.manifest, options.runtime);
+    const contract = contractOf(name, options.manifest, options.runtime, overlay);
     const sensitive = contract.sensitive;
     const readers = readersOf(options.manifest, name);
     const blastRadius = blastRadiusOf(journalRuns, readers, now());
@@ -204,6 +270,9 @@ export async function projectVaultList(options: ProjectVaultOptions): Promise<{
       blastRadius,
       lastReadAt,
       sharedFingerprintEnvs,
+      origin: options.manifest?.vault?.[name] ? "source" : overlay.some((c) => c.name === name)
+        ? "console"
+        : "source",
     });
   }
 
@@ -268,11 +337,12 @@ export async function probeVaultBackend(
 ): Promise<ConsoleVaultBackend> {
   const env = options.env ?? "dev";
   const driverId = resolveVaultDriverId(options.config, env);
+  const processEnv = options.processEnv ?? process.env;
+  const provider = managedProviderOf(driverId, processEnv);
   if (driverId !== "vault") {
-    return { driverId, builtin: false, status: null, unavailable: null };
+    return { driverId, builtin: false, status: null, unavailable: null, provider };
   }
 
-  const processEnv = options.processEnv ?? process.env;
   const keyHeld = (processEnv[VAULT_MASTER_KEY_ENV] ?? "").trim().length > 0;
 
   const load = options.loadStatus ?? defaultBuiltinStatusLoader(processEnv);
@@ -282,6 +352,7 @@ export async function probeVaultBackend(
       builtin: true,
       status: null,
       unavailable: "No SQL URL configured — set DATABASE_URL or OKE_STORE_SQL_URL",
+      provider,
     };
   }
 
@@ -292,6 +363,7 @@ export async function probeVaultBackend(
       builtin: true,
       status: { ...toConsoleVaultStatus(status), sealed: !keyHeld },
       unavailable: null,
+      provider,
     };
   } catch (error) {
     // Uninitialized / unreachable is an ordinary operator state, not a crash.
@@ -300,8 +372,24 @@ export async function probeVaultBackend(
       builtin: true,
       status: null,
       unavailable: error instanceof Error ? error.message : String(error),
+      provider,
     };
   }
+}
+
+/**
+ * Provider id for the managed driver, when set.
+ *
+ * @param driverId - Resolved vault driver
+ * @param processEnv - Process environment
+ */
+function managedProviderOf(
+  driverId: VaultDriverId,
+  processEnv: Readonly<Record<string, string | undefined>>,
+): string | null {
+  if (driverId !== "managed") return null;
+  const raw = processEnv.OKE_VAULT_PROVIDER?.trim();
+  return raw && raw.length > 0 ? raw : null;
 }
 
 /** Operator-safe audit row (epoch-ms timestamps, no chain hashes). */
@@ -558,6 +646,69 @@ export interface VaultWriteInput {
   readonly value: string;
 }
 
+/** Input for Console Add (new contract + value). */
+export interface VaultCreateInput {
+  readonly name: string;
+  readonly value: string;
+  readonly kind: "secret" | "config";
+  readonly description?: string;
+  readonly rotate?: string;
+}
+
+/**
+ * Declare a contract from Console and write its value.
+ *
+ * Persists metadata under `.oke/vault-contracts.json`. The value goes
+ * through {@link VaultRuntime.put} (same as Set). Does not invent
+ * undeclared `process.env` names.
+ *
+ * @param runtime - Bound vault runtime
+ * @param cwd - Project root
+ * @param manifest - Manifest (rejects names already declared in source)
+ * @param input - Name + kind + value
+ */
+export async function createVaultContract(
+  runtime: VaultRuntime,
+  cwd: string,
+  manifest: Manifest | null,
+  input: VaultCreateInput,
+): Promise<{ readonly name: string; readonly fingerprint: string | null }> {
+  const name = input.name.trim();
+  if (!isVaultContractName(name)) {
+    throw new Error(`vault: invalid contract name "${input.name}"`);
+  }
+  if (manifest?.vault?.[name] || runtime.contracts.has(name)) {
+    throw new Error(`vault: "${name}" is already declared — use Set`);
+  }
+  const overlay = await loadVaultOverlay(cwd);
+  if (overlay.some((c) => c.name === name)) {
+    throw new Error(`vault: "${name}" is already declared — use Set`);
+  }
+  const rotate = input.rotate?.trim();
+  const description = input.description?.trim();
+  const contract: VaultOverlayContract = {
+    name,
+    kind: input.kind,
+    ...(description !== undefined && description.length > 0 ? { description } : {}),
+    ...(rotate !== undefined && rotate.length > 0 ? { rotate } : {}),
+  };
+  await upsertVaultOverlay(cwd, contract);
+  const decl: VaultSecretDecl =
+    input.kind === "config"
+      ? declareVault.config(name, {
+          ...(description !== undefined && description.length > 0 ? { description } : {}),
+          ...(rotate !== undefined && rotate.length > 0 ? { rotate } : {}),
+          sensitive: false,
+        })
+      : declareVault.secret(name, {
+          ...(description !== undefined && description.length > 0 ? { description } : {}),
+          ...(rotate !== undefined && rotate.length > 0 ? { rotate } : {}),
+          sensitive: true,
+        });
+  (runtime.contracts as Map<string, VaultSecretDecl>).set(name, decl);
+  return setVaultValue(runtime, { name, value: input.value });
+}
+
 /**
  * Set a vault value via the runtime (write-only — never returns the value).
  *
@@ -592,18 +743,27 @@ export function rotateVaultValue(
  * Build a VaultRuntime from Manifest contracts when no host runtime is attached.
  *
  * Uses the standard resolution chain: driver → process.env → .env.local →
- * .env.docker → (optional) dev fallback. Does not parse dotenv in the UI.
+ * (optional) dev fallback. Does not parse dotenv in the UI.
  *
- * @param manifest - Manifest snapshot
- * @param options - cwd / env / allowDevFallbacks / seed
+ * @param manifest - Manifest snapshot (null when only Console overlay exists)
+ * @param options - cwd / env / allowDevFallbacks / seed / overlays
  */
 export async function createManifestVaultRuntime(
-  manifest: Manifest,
+  manifest: Manifest | null,
   options: {
     readonly cwd?: string;
     readonly env?: ConfigEnv;
     readonly allowDevFallbacks?: boolean;
     readonly seed?: Readonly<Record<string, string>>;
+    /**
+     * Memory bags inserted at the spec source (seeded Console). Does not
+     * write `.env.local` on disk.
+     */
+    readonly overlays?: Partial<
+      Record<(typeof VAULT_OVERLAY_SOURCES)[number], Readonly<Record<string, string>>>
+    >;
+    /** `dev` fallbacks for `vault.config` contracts (dev-fallback layer). */
+    readonly devFallbacks?: Readonly<Record<string, string>>;
     readonly now?: () => number;
     /**
      * Backend driver for the terminal layer. Defaults to the built-in
@@ -612,18 +772,23 @@ export async function createManifestVaultRuntime(
     readonly driverId?: VaultDriverId;
   } = {},
 ): Promise<VaultRuntime | null> {
-  const entries = Object.entries(manifest.vault ?? {});
-  if (entries.length === 0) return null;
-
   const cwd = options.cwd ?? process.cwd();
+  const overlay = await loadVaultOverlay(cwd);
+  const entries = Object.entries(manifest?.vault ?? {});
+  if (entries.length === 0 && overlay.length === 0) return null;
+
+  const seen = new Set<string>();
   const secrets: VaultSecretDecl[] = entries.map(([name, c]) => {
+    seen.add(name);
     const sensitive = c.sensitive !== false;
+    const dev = options.devFallbacks?.[name];
     if (sensitive) {
       return declareVault.secret(name, {
         description: c.description,
         rotate: c.rotate,
         schema: c.schema,
         sensitive: true,
+        ...(dev !== undefined ? { dev } : {}),
       });
     }
     return declareVault.config(name, {
@@ -631,8 +796,28 @@ export async function createManifestVaultRuntime(
       rotate: c.rotate,
       schema: c.schema,
       sensitive: false,
+      ...(dev !== undefined ? { dev } : {}),
     });
   });
+  for (const row of overlay) {
+    if (seen.has(row.name)) continue;
+    const dev = options.devFallbacks?.[row.name];
+    secrets.push(
+      row.kind === "config"
+        ? declareVault.config(row.name, {
+            description: row.description,
+            rotate: row.rotate,
+            sensitive: false,
+            ...(dev !== undefined ? { dev } : {}),
+          })
+        : declareVault.secret(row.name, {
+            description: row.description,
+            rotate: row.rotate,
+            sensitive: true,
+            ...(dev !== undefined ? { dev } : {}),
+          }),
+    );
+  }
 
   const seed = options.seed ?? {};
   const env = options.env ?? "dev";
@@ -642,12 +827,15 @@ export async function createManifestVaultRuntime(
     secrets,
     allowDevFallbacks: options.allowDevFallbacks ?? env !== "prod",
     now: options.now,
-    chain: buildVaultBootChain({
-      cwd,
-      driverId: options.driverId ?? "vault",
-      env: env === "dev" || env === "test" || env === "prod" ? env : "dev",
-      seed,
-    }),
+    chain: overlayVaultLayers(
+      buildVaultBootChain({
+        cwd,
+        driverId: options.driverId ?? "vault",
+        env: env === "dev" || env === "test" || env === "prod" ? env : "dev",
+        seed,
+      }),
+      options.overlays ?? {},
+    ),
   });
   await runtime.boot();
   return runtime;
@@ -710,13 +898,17 @@ export function readersOf(manifest: Manifest | null, name: string): readonly str
  * @param manifest - Manifest
  * @param runtime - Runtime
  */
-function collectNames(manifest: Manifest | null, runtime: VaultRuntime | null): readonly string[] {
+function collectNames(
+  manifest: Manifest | null,
+  runtime: VaultRuntime | null,
+  overlay: readonly VaultOverlayContract[] = [],
+): readonly string[] {
   const set = new Set<string>();
   for (const name of Object.keys(manifest?.vault ?? {})) set.add(name);
   if (runtime) {
     for (const name of runtime.contracts.keys()) set.add(name);
-    for (const name of runtime.names()) set.add(name);
   }
+  for (const row of overlay) set.add(row.name);
   return [...set].sort();
 }
 
@@ -729,6 +921,7 @@ function contractOf(
   name: string,
   manifest: Manifest | null,
   runtime: VaultRuntime | null,
+  overlay: readonly VaultOverlayContract[] = [],
 ): {
   readonly kind: "secret" | "config";
   readonly sensitive: boolean;
@@ -745,13 +938,25 @@ function contractOf(
     };
   }
   const fromManifest = manifest?.vault?.[name];
-  const sensitive = fromManifest?.sensitive !== false;
-  return {
-    kind: sensitive ? "secret" : "config",
-    sensitive,
-    ...(fromManifest?.description !== undefined ? { description: fromManifest.description } : {}),
-    ...(fromManifest?.rotate !== undefined ? { rotate: fromManifest.rotate } : {}),
-  };
+  if (fromManifest) {
+    const sensitive = fromManifest.sensitive !== false;
+    return {
+      kind: sensitive ? "secret" : "config",
+      sensitive,
+      ...(fromManifest.description !== undefined ? { description: fromManifest.description } : {}),
+      ...(fromManifest.rotate !== undefined ? { rotate: fromManifest.rotate } : {}),
+    };
+  }
+  const fromOverlay = overlay.find((c) => c.name === name);
+  if (fromOverlay) {
+    return {
+      kind: fromOverlay.kind,
+      sensitive: fromOverlay.kind === "secret",
+      ...(fromOverlay.description !== undefined ? { description: fromOverlay.description } : {}),
+      ...(fromOverlay.rotate !== undefined ? { rotate: fromOverlay.rotate } : {}),
+    };
+  }
+  return { kind: "secret", sensitive: true };
 }
 
 /**

@@ -263,6 +263,9 @@ export interface Gate {
 /** Vault secret / config contract (never a secret value). */
 export interface SecretContract {
   description?: string;
+  /**
+   * Rotation cadence (`"90d"`) or `"never"`. Omit is the same as `"never"`.
+   */
   rotate?: string;
   schema?: JsonSchema;
   /**

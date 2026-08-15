@@ -815,7 +815,6 @@ export async function storeFileGet(
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.docker"
   | "driver"
   | "dev-fallback";
 
@@ -844,6 +843,7 @@ export type VaultListRow = {
   };
   readonly lastReadAt: number | null;
   readonly sharedFingerprintEnvs: readonly string[];
+  readonly origin?: "source" | "console";
 };
 
 /** Built-in backend status from `GET /console/vault`. */
@@ -865,6 +865,7 @@ export type VaultBackend = {
   readonly builtin: boolean;
   readonly status: VaultBuiltinStatus | null;
   readonly unavailable: string | null;
+  readonly provider: string | null;
 };
 
 /** Vault list payload (`GET /console/vault`). */
@@ -885,8 +886,8 @@ export async function vaultList(): Promise<ConsoleApiResult<VaultListPayload>> {
 export type VaultWriteInput = {
   readonly name: string;
   readonly value: string;
+  readonly reason: string;
   readonly confirmation?: string;
-  readonly reason?: string;
 };
 
 /** Success payload from vault set / rotate. */
@@ -898,9 +899,9 @@ export type VaultWriteResult = {
 };
 
 /**
- * POST /console/vault/set — write a contract value (typed confirm in production).
+ * POST /console/vault/set — write a contract value (reason required).
  *
- * @param body - Name + value + confirm
+ * @param body - Name + value + reason
  */
 export async function vaultSet(body: VaultWriteInput): Promise<ConsoleApiResult<VaultWriteResult>> {
   return consoleFetch<VaultWriteResult>("/console/vault/set", {
@@ -909,10 +910,33 @@ export async function vaultSet(body: VaultWriteInput): Promise<ConsoleApiResult<
   });
 }
 
+/** Request body for `POST /console/vault/create`. */
+export type VaultCreateInput = {
+  readonly name: string;
+  readonly value: string;
+  readonly kind: "secret" | "config";
+  readonly description?: string;
+  readonly rotate?: string;
+};
+
 /**
- * POST /console/vault/rotate — rotate a contract value (always typed confirm).
+ * POST /console/vault/create — declare a contract from Console and set its value.
  *
- * @param body - Name + value + confirm
+ * @param body - Kind + name + value
+ */
+export async function vaultCreate(
+  body: VaultCreateInput,
+): Promise<ConsoleApiResult<VaultWriteResult>> {
+  return consoleFetch<VaultWriteResult>("/console/vault/create", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * POST /console/vault/rotate — rotate a contract value (reason required).
+ *
+ * @param body - Name + value + reason
  */
 export async function vaultRotate(
   body: VaultWriteInput,

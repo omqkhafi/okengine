@@ -8,7 +8,6 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type { ServiceCredentials } from "./types.ts";
-import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { defaultHostPort, envPrefix } from "./helpers.ts";
 
 /**
@@ -86,7 +85,7 @@ export function extraHostPortForInstance(
 }
 
 /**
- * Parse role credentials from an existing `.env.docker` body (reuse on restart).
+ * Parse role credentials from an existing `.env.local` body (reuse on restart).
  *
  * @param text - Dotenv contents
  * @param roles - Roles to look up
@@ -114,7 +113,7 @@ export function parseStackCredentials(
   return out;
 }
 
-/** Optional `.env.docker` keys preserved when generated files refresh. */
+/** Optional `.env.local` keys preserved when generated files refresh. */
 export const STACK_CONTROL_KEYS = [
   "PGDATA",
   "POSTGRES_INITDB_ARGS",
@@ -134,7 +133,7 @@ export const STACK_CONTROL_KEYS = [
 ] as const;
 
 /**
- * Read supported user controls from an existing `.env.docker`.
+ * Read supported user controls from an existing `.env.local`.
  *
  * @param text - Dotenv contents
  */
@@ -149,9 +148,7 @@ export function parseStackControls(text: string): Record<string, string> {
 }
 
 /**
- * Load credentials from `docker/.env.docker` when present.
- *
- * Soft-compat: also reads legacy project-root `.env.docker`.
+ * Load credentials from `.env.local` when present.
  *
  * @param cwd - Project root
  * @param roles - Image roles
@@ -160,43 +157,27 @@ export async function loadExistingStackCredentials(
   cwd: string,
   roles: readonly string[],
 ): Promise<Readonly<Record<string, ServiceCredentials>> | undefined> {
-  const candidates = [resolve(cwd, DEFAULT_DOCKER_DIR, ".env.docker"), resolve(cwd, ".env.docker")];
-  for (const path of candidates) {
-    const file = Bun.file(path);
-    if (!(await file.exists())) continue;
-    const parsed = parseStackCredentials(await file.text(), roles);
-    if (Object.keys(parsed).length > 0) return parsed;
-  }
-  return undefined;
+  const file = Bun.file(resolve(cwd, ".env.local"));
+  if (!(await file.exists())) return undefined;
+  const parsed = parseStackCredentials(await file.text(), roles);
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
 
 /**
- * Load optional controls from `docker/.env.docker` when present.
+ * Load optional controls from `.env.local` when present.
  *
  * @param cwd - Project root
  */
 export async function loadExistingStackControls(
   cwd: string,
 ): Promise<Readonly<Record<string, string>> | undefined> {
-  const candidates = [resolve(cwd, DEFAULT_DOCKER_DIR, ".env.docker"), resolve(cwd, ".env.docker")];
-  let controls: Record<string, string> = {};
-  for (const path of candidates) {
-    const file = Bun.file(path);
-    if (!(await file.exists())) continue;
-    controls = parseStackControls(await file.text());
-    break;
-  }
-  // create-oke / `oke ai setup` write the chosen model into `.env.local` as a
-  // commented hint (active would shadow `docker/.env.docker`). Seed active or
-  // commented `OKE_AI_MODEL` on first docker boot so `LLAMA_ARG_DOCKER_REPO`
-  // is not stuck on the recipe default (`granite3.3:2b`).
-  if (!controls.OKE_AI_MODEL) {
-    const localEnv = Bun.file(resolve(cwd, ".env.local"));
-    if (await localEnv.exists()) {
-      const model = readEnvAssignment(await localEnv.text(), "OKE_AI_MODEL");
-      if (model) controls = { ...controls, OKE_AI_MODEL: model };
-    }
-  }
+  const file = Bun.file(resolve(cwd, ".env.local"));
+  if (!(await file.exists())) return undefined;
+  const text = await file.text();
+  const parsed = parseStackControls(text);
+  const model = readEnvAssignment(text, "OKE_AI_MODEL");
+  const controls =
+    model && !parsed.OKE_AI_MODEL ? { ...parsed, OKE_AI_MODEL: model } : parsed;
   return Object.keys(controls).length > 0 ? controls : undefined;
 }
 

@@ -154,7 +154,7 @@ export function smtpOptionsFromEnv(docker = false): ChannelOpenOptions {
   if (!raw) {
     throw new Error(
       docker
-        ? "oke boot: smtp driver needs SMTP_URL (did `oke dev -d` write docker/.env.docker?)"
+        ? "oke boot: smtp driver needs SMTP_URL (did `oke dev -d` write .env.local?)"
         : "oke boot: smtp driver needs SMTP_URL",
     );
   }

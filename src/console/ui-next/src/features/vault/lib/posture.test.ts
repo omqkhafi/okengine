@@ -5,7 +5,11 @@ import {
   contractPosture,
   formatRelativeTime,
   isContractSet,
+  isRotateCadence,
   parseRotateHintMs,
+  postureHint,
+  postureLabel,
+  rotatePolicyLabel,
   summarizePosture,
 } from "./posture.ts";
 import type { VaultRecord } from "./types.ts";
@@ -17,7 +21,19 @@ describe("parseRotateHintMs", () => {
     expect(parseRotateHintMs("90d")).toBe(90 * 86_400_000);
     expect(parseRotateHintMs("12h")).toBe(12 * 3_600_000);
     expect(parseRotateHintMs("bad")).toBe(0);
+    expect(parseRotateHintMs("never")).toBe(0);
     expect(parseRotateHintMs(undefined)).toBe(0);
+  });
+});
+
+describe("rotate policy", () => {
+  test("cadence vs never vs omit", () => {
+    expect(isRotateCadence("90d")).toBe(true);
+    expect(isRotateCadence("never")).toBe(false);
+    expect(isRotateCadence(undefined)).toBe(false);
+    expect(rotatePolicyLabel("90d")).toBe("90d");
+    expect(rotatePolicyLabel("never")).toBe("no rotate");
+    expect(rotatePolicyLabel(undefined)).toBe("no rotate");
   });
 });
 
@@ -65,6 +81,10 @@ describe("contractPosture", () => {
     expect(p.overdue).toBe(true);
     expect(p.dormant).toBe(true);
     expect(p.primary).toBe("overdue");
+    expect(postureLabel("overdue")).toBe("overdue");
+    expect(postureHint("overdue", "90d")).toBe(
+      "Last read older than rotate 90d — never-read counts",
+    );
   });
 
   test("healthy secret has no risks", () => {

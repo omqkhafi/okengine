@@ -70,10 +70,8 @@ export function applyAiSetup(
     : existsSync(envExample)
       ? readFileSync(envExample, "utf8")
       : "";
-  // Driver / URL / model stay commented so docker mode can hydrate from
-  // `docker/.env.docker` without being shadowed. The chosen model is still
-  // written into `.env.local` as a hint (and into `.env.docker` when present);
-  // `loadExistingStackControls` seeds commented `OKE_AI_MODEL` on first boot.
+  // Driver / URL / model stay commented so `oke dev --docker` can write
+  // the live compose URL into `.env.local` without a leftover pin winning.
   env = upsertEnv(env, "OKE_AI_DRIVER", input.driver, { comment: true });
   if (input.baseUrl) env = upsertEnv(env, "OKE_AI_URL", input.baseUrl, { comment: true });
   if (input.chatModel) {
@@ -146,7 +144,7 @@ export function upsertImage(source: string, key: string, image: string): string 
 export type UpsertEnvOptions = {
   /**
    * When true, write `# KEY=value` (opt-in override). Used for AI stack keys
-   * so they do not shadow `docker/.env.docker`.
+   * so `oke dev --docker` can write the live compose URL into `.env.local`.
    */
   readonly comment?: boolean;
 };

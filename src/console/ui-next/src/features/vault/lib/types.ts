@@ -6,7 +6,6 @@
 export type VaultResolutionSource =
   | "process.env"
   | ".env.local"
-  | ".env.docker"
   | "driver"
   | "dev-fallback";
 
@@ -41,6 +40,8 @@ export interface VaultRecord {
   readonly blastRadius: VaultBlastRadius;
   readonly lastReadAt: number | null;
   readonly sharedFingerprintEnvs: readonly string[];
+  /** `"console"` is an operator Add not yet in the Manifest. */
+  readonly origin?: "source" | "console";
 }
 
 /** Vault backend driver id — matches `drivers.vault`. */
@@ -65,6 +66,8 @@ export interface VaultBackend {
   readonly builtin: boolean;
   readonly status: VaultBuiltinStatus | null;
   readonly unavailable: string | null;
+  /** Managed provider id (`aws-secrets-manager`); `null` for other drivers. */
+  readonly provider?: string | null;
 }
 
 /** `console.vault.list` response. */

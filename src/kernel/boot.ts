@@ -76,7 +76,7 @@ export interface BootOptions {
   readonly env?: ConfigEnv;
   /**
    * Docker mode (`oke dev -d` / `OKE_DOCKER=1`): force driver maps to the
-   * `docker` profile and prefer compose URLs (`docker/.env.docker`).
+   * `docker` profile and prefer compose URLs (`.env.local`).
    * When unset, derived from `process.env.OKE_DOCKER`.
    */
   readonly docker?: boolean;

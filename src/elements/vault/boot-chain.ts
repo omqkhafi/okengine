@@ -2,10 +2,11 @@
  * Shared Vault resolution-chain assembly for app boot and Console.
  *
  * Spec order (first hit wins): driver (vault / managed) → process.env →
- * .env.local → compose .env.docker. Runtime appends `dev-fallback` last.
+ * .env.local. Runtime appends `dev-fallback` last.
  *
- * The `env` driver has no backend bag — its chain stays the env layers
- * plus a last-resort memory seed, so Console writes persist to `.env.local`.
+ * The `env` driver has no backend bag — a read-only memory seed sits in
+ * front (same `driver` source id) so the lock-path matches vault/managed.
+ * Console writes still persist to `.env.local` (first writable env file).
  * Same chain for every {@link ConfigEnv}; no per-environment special-casing.
  */
 
@@ -52,7 +53,7 @@ export function normalizeVaultDriverId(raw: string): VaultDriverId {
   throw new Error(
     `oke boot: unknown vault driver "${raw}" (expected env · vault · memory · managed). ` +
       'Official backends: built-in vault (drivers.vault: "vault"), ENV, or managed with ' +
-      'provider "aws-secrets-manager".',
+      "aws-secrets-manager · azure-key-vault · gcp-secret-manager · doppler · 1password.",
   );
 }
 
@@ -83,11 +84,6 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
       driver: envVaultDriver,
       source: ".env.local",
       options: { path: resolve(cwd, ".env.local") },
-    },
-    {
-      driver: envVaultDriver,
-      source: composeEnv.source,
-      options: { path: composeEnv.path },
     },
   ];
 
@@ -132,12 +128,12 @@ export function buildVaultBootChain(options: BuildVaultBootChainOptions): VaultC
     }
     case "env":
       return [
-        ...envLayers,
         {
           driver: memoryVaultDriver,
           source: "driver",
           options: { secrets: seed },
         },
+        ...envLayers,
       ];
     case "vault":
       // Built-in store is first: a value already in Vault wins over

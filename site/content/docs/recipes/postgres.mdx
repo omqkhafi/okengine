@@ -37,7 +37,7 @@ oke dev
 ```
 
 `oke docker` writes `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` into
-`docker/.env.docker` as `${OKE_STORE_SQL_USER}` / `${OKE_STORE_SQL_PASSWORD}` /
+`.env.local` as `${OKE_STORE_SQL_USER}` / `${OKE_STORE_SQL_PASSWORD}` /
 `${OKE_STORE_SQL_DB}` refs — never literal secrets in compose YAML.
 
 </Step>
@@ -105,7 +105,7 @@ Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exha
 <Accordion title="oke boot: postgres driver needs DATABASE_URL">
 
 The `postgres` driver fails boot when neither `DATABASE_URL` nor `OKE_STORE_SQL_URL` is
-set. Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
+set. Re-run `oke dev` so the stack writes `.env.local`, or export
 `DATABASE_URL` yourself when pointing at a managed host.
 
 </Accordion>
@@ -114,7 +114,7 @@ set. Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
 Wrong `POSTGRES_USER` or the container is still initializing. Check
 `docker compose … logs store-sql` for `database system is ready to accept connections`.
 
-Credential refs must resolve in `.env.docker` — empty `${OKE_STORE_SQL_PASSWORD}` leaves
+Credential refs must resolve in `.env.local` — empty `${OKE_STORE_SQL_PASSWORD}` leaves
 Postgres refusing auth.
 
 </Accordion>

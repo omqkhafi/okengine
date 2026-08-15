@@ -3,7 +3,8 @@
  */
 
 import { mkdirSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { mergeDotenvAssignments } from "../drivers/vault-dotenv-parse.ts";
 import {
   assertNoCredentialsInYaml,
   buildSpecs,
@@ -30,8 +31,8 @@ import { APP_PORT } from "../runtime/types.ts";
 /**
  * Derive infrastructure files from normalised image pins.
  *
- * Credentials land only in the returned `stackEnv` (for `.env.docker`) and
- * in `pgdog/users.toml` when PgDog is present — never in generated YAML.
+ * Credentials land only in the returned `stackEnv` (merged into `.env.local`)
+ * and in `pgdog/users.toml` when PgDog is present — never in generated YAML.
  * User-owned overrides are listed in `composeFiles` but never written.
  *
  * @param options - Images / app / prod / layout flags
@@ -108,7 +109,7 @@ function llamaCppEntrypointFiles(specs: DeriveResult["specs"]): GeneratedFile[] 
  * Emit PgDog TOML configs when both `pgdog` and `store.sql` are in the stack.
  *
  * `pgdog/pgdog.toml` has no secrets; `pgdog/users.toml` mirrors store.sql
- * credentials (same trust boundary as `.env.docker` — do not commit).
+ * credentials (same trust boundary as `.env.local` — do not commit).
  *
  * @param specs - Normalised services
  */
@@ -163,7 +164,7 @@ function proxyConfigFiles(
 /**
  * Write derived files to disk. Never writes user overrides or credential
  * values into YAML. Prunes stale generated compose / PgDog artefacts from a
- * previous layout. Optionally writes `docker/.env.docker`.
+ * previous layout. Optionally merges stack keys into project `.env.local`.
  *
  * @param result - Derive result
  * @param outDir - Destination for Dockerfile / compose (usually `docker/`)
@@ -189,11 +190,32 @@ export async function writeDerivedFiles(
     written.push(path);
   }
   if (options.writeStackEnv) {
-    const envPath = `${root}/.env.docker`;
-    await Bun.write(envPath, formatStackEnv(result.stackEnv));
+    const envPath = join(stackEnvProjectRoot(root), ".env.local");
+    let existing = "";
+    try {
+      existing = await Bun.file(envPath).text();
+    } catch {
+      existing = "";
+    }
+    const next =
+      existing.trim().length === 0
+        ? formatStackEnv(result.stackEnv)
+        : mergeDotenvAssignments(existing, result.stackEnv);
+    await Bun.write(envPath, next);
     written.push(envPath);
   }
   return written;
+}
+
+/**
+ * Project root that owns `.env.local` — parent of `docker/` or the compose
+ * dir itself when the layout is flat.
+ *
+ * @param composeOutDir - Derive output directory
+ */
+function stackEnvProjectRoot(composeOutDir: string): string {
+  const base = composeOutDir.replace(/\/$/, "");
+  return basename(base) === DEFAULT_DOCKER_DIR ? dirname(base) : base;
 }
 
 /** Generated compose / companion paths safe to delete when absent from a derive. */
@@ -230,7 +252,7 @@ function pruneLlamaEntrypoint(root: string, keep: ReadonlySet<string>): void {
 
 /**
  * Remove previously generated artefacts that the current layout no longer emits.
- * Never touches user overrides or `.env.docker`.
+ * Never touches user overrides or project `.env.local`.
  *
  * @param root - Compose directory
  * @param keep - Relative paths that will be rewritten
@@ -244,7 +266,6 @@ function pruneStaleGenerated(root: string, keep: ReadonlySet<string>): void {
   }
   for (const name of entries) {
     if (name === COMPOSE_OVERRIDE || name === DOCKER_COMPOSE_OVERRIDE) continue;
-    if (name === ".env.docker") continue;
     const abs = join(root, name);
     let st: ReturnType<typeof statSync>;
     try {

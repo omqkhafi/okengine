@@ -109,6 +109,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
         storePreview: routes.store.preview,
         vaultList: routes.vault.list,
         vaultSet: routes.vault.set,
+        vaultCreate: routes.vault.create,
         vaultRotate: routes.vault.rotate,
         vaultRotateMaster: routes.vault.rotateMaster,
         vaultAuditVerify: routes.vault.auditVerify,
@@ -285,24 +286,38 @@ export function bindManifestAiRuntime(state: ConsoleState): void {
 
 /**
  * Open a VaultRuntime from the Manifest when no host runtime is attached.
- * Uses the standard resolution chain (driver → process.env → .env.local →
- * .env.docker) — Console never parses dotenv itself.
+ * Uses the standard resolution chain (driver → process.env → .env.local)
+ * — Console never parses dotenv itself.
  *
  * @param state - Console state
  */
 export async function bindManifestVaultRuntime(state: ConsoleState): Promise<void> {
   if (state.vaultRuntime) return;
-  if (!state.manifest?.vault || Object.keys(state.manifest.vault).length === 0) {
+  const { loadVaultOverlay } = await import("./vault-overlay.ts");
+  const overlay = await loadVaultOverlay(state.cwd);
+  const hasManifest = Boolean(state.manifest?.vault && Object.keys(state.manifest.vault).length > 0);
+  if (!hasManifest && overlay.length === 0) {
     return;
   }
   const env = state.production ? "prod" : "dev";
   try {
+    const layers = state.vaultLayerSeed;
     state.vaultRuntime = await createManifestVaultRuntime(state.manifest, {
       cwd: state.cwd,
       env,
       allowDevFallbacks: !state.production,
       now: state.now,
       driverId: resolveVaultDriverId(state.okeConfig, env),
+      ...(layers?.driver !== undefined ? { seed: layers.driver } : {}),
+      ...(layers === null
+        ? {}
+        : {
+            overlays: {
+              ...(layers.processEnv !== undefined ? { "process.env": layers.processEnv } : {}),
+              ...(layers.envLocal !== undefined ? { ".env.local": layers.envLocal } : {}),
+            },
+            ...(layers.devFallback !== undefined ? { devFallbacks: layers.devFallback } : {}),
+          }),
     });
   } catch (err) {
     // Gaps are a doctor concern — Console still lists contracts from Manifest.

@@ -42,7 +42,7 @@ describe("oke docker CLI", () => {
     expect(await Bun.file(join(dir, "docker/docker-compose.yml")).exists()).toBe(true);
     const yml = await Bun.file(join(dir, "docker/docker-compose.yml")).text();
     expect(yml).not.toContain("test-password-not-in-yaml");
-    expect(yml).toContain(".env.docker");
+    expect(yml).toContain(".env.local");
     expect(yml).toContain("/_/ready");
     expect(logs.join("")).toContain("docker-compose.override.yml");
   });

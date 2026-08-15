@@ -26,7 +26,7 @@ import type { BootOptions } from "../boot.ts"; // type-only — no cycle at runt
  * Construct a Store runtime and register facet declarations.
  *
  * With compose infra (`OKE_DOCKER=1` / `oke dev`), SQL/KV URLs come from
- * `docker/.env.docker`. `env: "test"` uses PGLite (`memory://` by default).
+ * `.env.local`. `env: "test"` uses PGLite (`memory://` by default).
  *
  * @param options - Boot options
  * @param env - Active environment
@@ -254,7 +254,7 @@ function sqlUrlFor(sqlId: string, docker: boolean, env: ConfigEnv): string {
     if (!url) {
       throw new Error(
         docker
-          ? "oke boot: postgres driver needs DATABASE_URL (did `oke dev` write docker/.env.docker?)"
+          ? "oke boot: postgres driver needs DATABASE_URL (did `oke dev` write .env.local?)"
           : "oke boot: postgres driver needs DATABASE_URL",
       );
     }
@@ -274,7 +274,7 @@ function kvUrlFor(kvId: string, docker: boolean): string | undefined {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: redis driver needs REDIS_URL (did `oke dev` write docker/.env.docker?)"
+        ? "oke boot: redis driver needs REDIS_URL (did `oke dev` write .env.local?)"
         : "oke boot: redis driver needs REDIS_URL",
     );
   }
@@ -292,7 +292,7 @@ function indexUrlFor(docker: boolean): string {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: meilisearch index needs OKE_STORE_INDEX_URL (did `oke dev` write docker/.env.docker?)"
+        ? "oke boot: meilisearch index needs OKE_STORE_INDEX_URL (did `oke dev` write .env.local?)"
         : "oke boot: meilisearch index needs OKE_STORE_INDEX_URL",
     );
   }

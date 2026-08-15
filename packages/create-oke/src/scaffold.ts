@@ -405,7 +405,7 @@ services:
     ports:
       - "6530:6530"
     env_file:
-      - .env.docker
+      - ../.env.local
     depends_on:
       store-sql:
         condition: service_healthy
@@ -439,7 +439,7 @@ services:
     networks:
       - oke
     env_file:
-      - .env.docker
+      - ../.env.local
     environment:
       POSTGRES_USER: \${OKE_STORE_SQL_USER}
       POSTGRES_PASSWORD: \${OKE_STORE_SQL_PASSWORD}
@@ -465,7 +465,7 @@ services:
     networks:
       - oke
     env_file:
-      - .env.docker
+      - ../.env.local
     command:
       - sh
       - -c

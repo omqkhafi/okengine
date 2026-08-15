@@ -10,7 +10,10 @@ import { requiredEnvRegistry, secretRegistry } from "../../kernel/element-regist
 export interface VaultSecretOptions {
   /** Human description shown in boot-gap listings. */
   readonly description?: string;
-  /** Rotation hint (`"90d"`, …). */
+  /**
+   * Rotation cadence (`"90d"`) or `"never"` when the secret must not
+   * rotate. Omit is the same as `"never"`.
+   */
   readonly rotate?: string;
   /** Optional schema validator (Standard Schema / zod / …). */
   readonly schema?: unknown;
@@ -264,7 +267,7 @@ export const vaultEnvApi: VaultEnvApi = Object.assign(envValue, {
 
 /**
  * Marker prefix for {@link vault.fromDocker} local fallbacks.
- * Resolved from `docker/.env.docker` by `oke dev --docker` / vault boot.
+ * Resolved from the compose stack env by `oke dev --docker` / vault boot.
  */
 export const FROM_DOCKER_PREFIX = "__oke_from_docker__:";
 

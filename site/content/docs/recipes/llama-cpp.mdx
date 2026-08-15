@@ -39,7 +39,7 @@ for `granite3.3:2b`.
 <Step>
 ### Env written by the stack
 
-```bash title="docker/.env.docker"
+```bash title=".env.local"
 OKE_AI_URL=http://127.0.0.1:8080/v1
 OKE_AI_MODEL=granite3.3:2b
 ```
@@ -126,7 +126,7 @@ First start Hub-pulls the curated `ai/` model into the named cache volume
 (see logs: `oke ai: ensuring…` / download %). Prefer `oke ai setup` tiers
 (Ultra Fast → `granite3.3:2b`) for smoke tests.
 
-Confirm `OKE_AI_MODEL` in `docker/.env.docker` (keep the `.env.local` hint commented so it does not shadow compose). Watch `oke
+Confirm `OKE_AI_MODEL` in `.env.local`. Watch `oke
 dev` until AI status is `ready`.
 
 If status stays `loading` on Compose that still uses `--models-preset`,

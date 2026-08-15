@@ -10,6 +10,7 @@ import type { Manifest } from "../../manifest/types.ts";
 import {
   assertNoSecretLeak,
   blastRadiusOf,
+  createVaultContract,
   probeVaultBackend,
   projectVaultList,
   readersOf,
@@ -239,6 +240,39 @@ describe("backend badge", () => {
     ).toBe("env");
   });
 
+  test("managed backend reports the provider id", async () => {
+    const backend = await probeVaultBackend({
+      config: { drivers: { vault: { dev: "managed" } } },
+      env: "dev",
+      processEnv: { OKE_VAULT_PROVIDER: "aws-secrets-manager" },
+    });
+    expect(backend.provider).toBe("aws-secrets-manager");
+  });
+
+  test("list stays on declared contracts — not every process.env key", async () => {
+    const rt = createVaultRuntime({
+      secrets: [vault.config("PUBLIC_APP_URL")],
+      chain: [
+        {
+          driver: memoryVaultDriver,
+          source: "process.env",
+          options: { secrets: { PUBLIC_APP_URL: "https://app.example.com", PATH: "/usr/bin" } },
+        },
+      ],
+    });
+    await rt.boot();
+    const { secrets } = await projectVaultList({
+      manifest: {
+        oke: "1.0",
+        app: "vault-test",
+        vault: { PUBLIC_APP_URL: { sensitive: false } },
+      },
+      runtime: rt,
+      env: "test",
+    });
+    expect(secrets.map((s) => s.name)).toEqual(["PUBLIC_APP_URL"]);
+  });
+
   test("non-builtin driver reports its id and no status", async () => {
     const backend = await probeVaultBackend({
       config: { drivers: { vault: { dev: "managed" } } },
@@ -250,6 +284,7 @@ describe("backend badge", () => {
       builtin: false,
       status: null,
       unavailable: null,
+      provider: null,
     });
   });
 
@@ -345,5 +380,45 @@ describe("set / rotate", () => {
       value: "sk_new",
     });
     expect(result.fingerprint).toBe(fingerprintSecretSync("sk_new"));
+  });
+});
+
+describe("create from Console", () => {
+  test("adds an overlay contract without leaking the value", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = await mkdtemp(join(tmpdir(), "oke-vault-create-"));
+    const rt = await runtime();
+    const result = await createVaultContract(rt, dir, manifest(), {
+      name: "ISSUE_PEPPER",
+      kind: "secret",
+      value: "pepper_do_not_leak",
+      rotate: "never",
+      description: "Id pepper",
+    });
+    expect(result.name).toBe("ISSUE_PEPPER");
+    expect(result.fingerprint).toBe(fingerprintSecretSync("pepper_do_not_leak"));
+    expect(JSON.stringify(result)).not.toContain("pepper_do_not_leak");
+    const listed = await projectVaultList({
+      manifest: manifest(),
+      runtime: rt,
+      cwd: dir,
+      env: "test",
+    });
+    const row = listed.secrets.find((s) => s.name === "ISSUE_PEPPER");
+    expect(row).toMatchObject({
+      kind: "secret",
+      origin: "console",
+      rotate: "never",
+    });
+    expect(listed.secrets.some((s) => s.name === "STRIPE_KEY" && s.origin === "source")).toBe(true);
+    await expect(
+      createVaultContract(rt, dir, manifest(), {
+        name: "STRIPE_KEY",
+        kind: "secret",
+        value: "nope",
+      }),
+    ).rejects.toThrow(/already declared/);
   });
 });

@@ -94,7 +94,7 @@ not multi-region HA. For managed multi-region, use the
 <Accordions>
 <Accordion title="oke boot: postgres driver needs DATABASE_URL">
 
-Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
+Re-run `oke dev` so the stack writes `.env.local`, or export
 `DATABASE_URL` yourself when pointing at a remote Cockroach host.
 
 </Accordion>
@@ -102,7 +102,7 @@ Re-run `oke dev` so the stack writes `docker/.env.docker`, or export
 
 First boot can take longer than Postgres. Check
 `docker compose … logs store-sql` for SQL ready. Empty `${OKE_STORE_SQL_PASSWORD}`
-in `.env.docker` leaves the init user broken — regenerate the stack env.
+in `.env.local` leaves the init user broken — regenerate the stack env.
 
 </Accordion>
 </Accordions>

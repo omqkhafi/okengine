@@ -37,7 +37,7 @@ function kvUrlFor(docker: boolean): string {
   if (!url) {
     throw new Error(
       docker
-        ? "oke boot: gate redis kv needs REDIS_URL (did `oke dev` write docker/.env.docker?)"
+        ? "oke boot: gate redis kv needs REDIS_URL (did `oke dev` write .env.local?)"
         : "oke boot: gate redis kv needs REDIS_URL — declare drivers.store.kv memory for test, or set REDIS_URL",
     );
   }

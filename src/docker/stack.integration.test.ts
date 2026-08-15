@@ -121,11 +121,11 @@ describe("oke dev --docker postgres integration", () => {
           await sql.close();
         }
 
-        // Prove credentials live in docker/.env.docker, not YAML.
+        // Prove credentials live in .env.local, not YAML.
         const yml = await Bun.file(join(dockerDir, "docker-compose.yml")).text();
         expect(yml).not.toContain("stack-integration-pass");
         expect(formatStackEnv(derived.stackEnv)).toContain("stack-integration-pass");
-        expect(await Bun.file(join(dockerDir, ".env.docker")).exists()).toBe(true);
+        expect(await Bun.file(join(dir, ".env.local")).exists()).toBe(true);
       } finally {
         await Bun.spawn(
           ["docker", "compose", "-p", project, "-f", "docker-compose.yml", "down", "-v"],

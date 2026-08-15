@@ -3,11 +3,83 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { formatVaultBackend } from "./backend.ts";
+import {
+  formatVaultBackend,
+  vaultDriverHint,
+  vaultDriverKind,
+  vaultDriverShortLabel,
+  vaultDriverTitle,
+} from "./backend.ts";
 import { VAULT_BACKEND_FIXTURE } from "./fixture.ts";
 import type { VaultBackend } from "./types.ts";
 
 describe("formatVaultBackend", () => {
+  test("lock-path says driver; title names built-in vs managed provider", () => {
+    expect(vaultDriverShortLabel(VAULT_BACKEND_FIXTURE)).toBe("driver");
+    expect(vaultDriverKind(VAULT_BACKEND_FIXTURE)).toBe("built-in");
+    expect(vaultDriverTitle(VAULT_BACKEND_FIXTURE)).toBe("Built-in vault");
+    expect(
+      vaultDriverTitle({
+        driverId: "managed",
+        builtin: false,
+        status: null,
+        unavailable: null,
+        provider: "aws-secrets-manager",
+      }),
+    ).toBe("AWS Secrets Manager");
+    expect(
+      vaultDriverKind({
+        driverId: "managed",
+        builtin: false,
+        status: null,
+        unavailable: null,
+        provider: "aws-secrets-manager",
+      }),
+    ).toBe("managed · aws");
+    expect(
+      vaultDriverKind({
+        driverId: "env",
+        builtin: false,
+        status: null,
+        unavailable: null,
+      }),
+    ).toBe("simulate");
+    expect(
+      vaultDriverTitle({
+        driverId: "env",
+        builtin: false,
+        status: null,
+        unavailable: null,
+      }),
+    ).toBe("Simulated env");
+    expect(
+      vaultDriverShortLabel({
+        driverId: "env",
+        builtin: false,
+        status: null,
+        unavailable: null,
+      }),
+    ).toBe("driver");
+    expect(vaultDriverHint(VAULT_BACKEND_FIXTURE)).toContain("Built-in vault");
+    expect(
+      vaultDriverHint({
+        driverId: "managed",
+        builtin: false,
+        status: null,
+        unavailable: null,
+        provider: "aws-secrets-manager",
+      }),
+    ).toBe("Managed provider — AWS Secrets Manager");
+    expect(
+      vaultDriverHint({
+        driverId: "env",
+        builtin: false,
+        status: null,
+        unavailable: null,
+      }),
+    ).toContain("No built-in vault or managed provider");
+  });
+
   test("null backend renders no card", () => {
     expect(formatVaultBackend(null)).toBeNull();
   });
@@ -19,7 +91,7 @@ describe("formatVaultBackend", () => {
       status: null,
       unavailable: null,
     });
-    expect(card?.title).toBe("Backend managed");
+    expect(card?.title).toBe("Managed vault");
     expect(card?.badges).toEqual([]);
     expect(card?.facts).toEqual([]);
     expect(card?.hint).toBeNull();

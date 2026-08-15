@@ -29,7 +29,7 @@ import {
  * | store   | sql teams…customer_requests + Gate auth / oke_* system · kv drafts/snooze · files attachments · index issues |
  * | clock   | `close-cycles` cron · `expire-drafts` every · `watch-sla` every |
  * | gate    | member · issue:write · project:admin · triage:accept · issues.write |
- * | vault   | GITHUB_TOKEN · OPENAI_KEY · SLACK_WEBHOOK |
+ * | vault   | keel secrets + public config (origin, API, docs, workspace) |
  * | channel | issue-assigned · mention-reply · cycle-digest · sla-alert · project-update |
  * | ai      | issue-triage@3 · cycle-summary@1 · triage agent |
  */
@@ -112,7 +112,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       gates: ["member"],
       in: KEEL_LIST_IN,
       out: KEEL_LIST_OUT,
-      effects: { reads: ["sql:issues"] },
+      effects: { reads: ["sql:issues"], secrets: ["PUBLIC_APP_URL", "KEEL_WORKSPACE"] },
       source: "src/flows/issues/index.ts:88",
     },
     "comments.create": {
@@ -502,9 +502,25 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
     ...KEEL_SURFACE_GATES,
   },
   vault: {
-    GITHUB_TOKEN: { description: "GitHub Issues Sync", rotate: "90d" },
-    OPENAI_KEY: { description: "Triage Intelligence", rotate: "90d" },
-    SLACK_WEBHOOK: { description: "Project / cycle digest webhook", rotate: "90d" },
+    GITHUB_TOKEN: { description: "GitHub Issues sync token", rotate: "90d" },
+    OPENAI_KEY: { description: "Issue triage model key", rotate: "90d" },
+    SLACK_WEBHOOK: { description: "Cycle digest incoming webhook", rotate: "90d" },
+    PUBLIC_APP_URL: {
+      description: "Public Keel origin",
+      sensitive: false,
+    },
+    PUBLIC_API_URL: {
+      description: "Public API origin",
+      sensitive: false,
+    },
+    PUBLIC_DOCS_URL: {
+      description: "Public docs origin",
+      sensitive: false,
+    },
+    KEEL_WORKSPACE: {
+      description: "Workspace slug",
+      sensitive: false,
+    },
     ...KEEL_SURFACE_VAULT,
   },
   channels: {

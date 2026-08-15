@@ -54,3 +54,35 @@ export function formatDotenv(map: ReadonlyMap<string, string>): string {
       .join("\n") + (map.size > 0 ? "\n" : "")
   );
 }
+
+/**
+ * Replace or append one `KEY=value` line. Other lines stay as-is.
+ *
+ * @param env - Existing dotenv text
+ * @param key - Variable name
+ * @param value - Cleartext
+ */
+export function upsertDotenvAssignment(env: string, key: string, value: string): string {
+  const line = `${key}=${escapeDotenvValue(value)}`;
+  const re = new RegExp(`^#?\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=.*$`, "m");
+  if (re.test(env)) return env.replace(re, line);
+  const trimmed = env.trimEnd();
+  return trimmed.length === 0 ? `${line}\n` : `${trimmed}\n${line}\n`;
+}
+
+/**
+ * Upsert many assignments into dotenv text without dropping unknown keys.
+ *
+ * @param env - Existing dotenv text
+ * @param values - Keys to write
+ */
+export function mergeDotenvAssignments(
+  env: string,
+  values: Readonly<Record<string, string>>,
+): string {
+  let out = env;
+  for (const [key, value] of Object.entries(values)) {
+    out = upsertDotenvAssignment(out, key, value);
+  }
+  return out.endsWith("\n") || out.length === 0 ? out : `${out}\n`;
+}

@@ -14,6 +14,19 @@ needed).
 
 ### ✨ Added
 
+- Console Vault **Add** (`+`) creates a secret or config from the
+  operator plane as well as from `vault.secret` / `vault.config` in
+  source. Metadata lands in `.oke/vault-contracts.json`; the value
+  uses the same write path as Set. No typed confirm — set and rotate
+  still require `SET` / `ROTATE`. Rows show a `console` chip until
+  the name is declared in the Manifest.
+
+- Official managed vault providers now include Azure Key Vault,
+  GCP Secret Manager, Doppler, and 1Password Connect alongside
+  AWS Secrets Manager. Set `drivers.vault` to `"managed"` and
+  `OKE_VAULT_PROVIDER` to the id. Cloud SDKs stay optional peers;
+  Doppler and 1Password use `fetch`.
+
 - `dev:console-next:seed` Units tree is a full Linear-shaped HTTP
   surface: CRUD on issues, comments, projects, documents, attachments,
   teams, labels, cycles, members, initiatives, and customer requests,
@@ -369,7 +382,44 @@ needed).
   `createOperator({ passwordPolicy })`. The special-character option is named `requireSpecial`
   (failure reason `requireSpecial`); do not use `requireSymbol` on password policies.
 
+- Stack env is project `.env.local` only. Vault resolution is
+  driver → `process.env` → `.env.local` → (optional) `dev-fallback`.
+  `oke docker` merges stack keys into `.env.local`; compose `env_file`
+  is `../.env.local`. `COMPOSE_ENV_REL` is `.env.local`. The
+  `.env.docker` file and resolution source are gone.
+
 ### ♻️ Changed
+
+- Console Vault set / rotate drop the typed `SET` / `ROTATE` phrase.
+  Pick a reason chip (`scheduled`, `leak`, `provider`, …) or **other**
+  and type a note. Rotate-master still types `ROTATE_MASTER`.
+
+- The `env` vault driver lock-path matches vault/managed: driver →
+  `process.env` → `.env.local` → (optional) `dev-fallback`. Console
+  writes still persist to `.env.local`.
+
+- Console Vault lock-path paints the winning layer emerald (same hit
+  tone as the docs figure). Winner / last-read / readers / blast
+  briefing rows carry icons. The first lock-path step is always
+  `driver`; its chip shows `built-in`, `managed · aws`, or
+  `simulate` (env driver) on the same line.
+
+- Console Vault lock-path `simulate` / driver-kind chip uses emerald
+  ink on the won wash (not muted-foreground) so contrast holds in
+  dark mode.
+
+- Console Vault list bands (Secrets / Config) collapse like Store and
+  Units. Row wells use posture color and icon (overdue clock, blast
+  alert, config source) instead of one gray key.
+
+- Console Vault lists declared contracts only — undeclared
+  `process.env` keys no longer appear as secrets. Seeded keel vault
+  is five secrets plus four public config values (origin, API, docs,
+  workspace) with winners across driver / process.env / .env.local.
+  Overdue chips say `overdue`; hover explains the rotate window
+  (`Last read older than rotate 90d — never-read counts`). Secrets
+  that must not rotate declare `rotate: "never"` (omit is the same);
+  Console shows `no rotate`.
 
 - Console Index browse is a search box, not a vector probe. Type a
   phrase to rank documents by id and stored meta (Meilisearch uses

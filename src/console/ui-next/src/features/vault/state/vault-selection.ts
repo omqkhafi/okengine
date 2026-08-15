@@ -6,7 +6,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 
 /** Write action opened from the URL. */
-export type VaultAction = "set" | "rotate" | "rotate-master";
+export type VaultAction = "set" | "rotate" | "rotate-master" | "create";
 
 /** Search params for `/vault`. */
 export interface VaultSearch {
@@ -24,7 +24,10 @@ export function validateVaultSearch(search: Record<string, unknown>): VaultSearc
   const q = typeof search.q === "string" && search.q.length > 0 ? search.q : undefined;
   const name = typeof search.name === "string" && search.name.length > 0 ? search.name : undefined;
   const action =
-    search.action === "set" || search.action === "rotate" || search.action === "rotate-master"
+    search.action === "set" ||
+    search.action === "rotate" ||
+    search.action === "rotate-master" ||
+    search.action === "create"
       ? search.action
       : undefined;
   return {

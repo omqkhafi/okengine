@@ -80,7 +80,7 @@ export async function bindClock(
     if (!url) {
       throw new Error(
         env === "dev"
-          ? 'oke boot: clock driver "postgres" needs DATABASE_URL (did `oke dev` write docker/.env.docker?)'
+          ? 'oke boot: clock driver "postgres" needs DATABASE_URL (did `oke dev` write .env.local?)'
           : 'oke boot: clock driver "postgres" needs DATABASE_URL',
       );
     }

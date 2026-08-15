@@ -242,7 +242,7 @@ def main() -> None:
     # KV cache for that is allocated up front and can be many times the
     # model's own file size, OOM-killing the container even with generous
     # Docker memory — independent of how small the model itself is.
-    # OKE_AI_CTX_SIZE (docker/.env.docker) overrides this default.
+    # OKE_AI_CTX_SIZE (.env.local) overrides this default.
     ctx_size = (os.environ.get("OKE_AI_CTX_SIZE") or "4096").strip() or "4096"
     print(f"oke ai: serving {model} from {gguf} (ctx={ctx_size})", flush=True)
     os.execv(
@@ -274,7 +274,7 @@ export const llamaCpp: ImageRecipe = {
   port: 8080,
   match: (i) => /llama\.cpp|llamacpp/i.test(i),
   apply: (s) => ({
-    // OKE_AI_MODEL comes from compose `env_file` (`.env.docker`). Do not
+    // OKE_AI_MODEL comes from compose `env_file` (`.env.local`). Do not
     // re-declare it as `${OKE_AI_MODEL:-granite3.3:2b}` here — Compose interpolates
     // that from the *host* shell and can override the stack file with the
     // default. Never set LLAMA_ARG_MODELS_PRESET / LLAMA_ARG_DOCKER_REPO

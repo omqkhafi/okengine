@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  applyUiNextSeedVaultEnv,
   createUiNextOperationRuns,
   createUiNextSeedRun,
   createUiNextSeedRuns,
@@ -16,6 +17,9 @@ import {
   UI_NEXT_SEED_INGEST_RUN_ID,
   UI_NEXT_SEED_NOTIFY_RUN_ID,
   UI_NEXT_SEED_OPERATION_COUNT,
+  UI_NEXT_SEED_PUBLIC_APP_URL,
+  UI_NEXT_SEED_VAULT_CONFIG,
+  UI_NEXT_SEED_VAULT_LAYERS,
   UI_NEXT_SEED_RUN_ID,
   UI_NEXT_SEED_STORE_COUNTS,
   UI_NEXT_SEED_TOTAL_COUNT,
@@ -49,6 +53,28 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["expire-drafts"]?.every).toBe("10m");
     expect(UI_NEXT_SEEDED_MANIFEST.vault?.["OPENAI_KEY"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.vault?.["GITHUB_TOKEN"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.vault?.["PUBLIC_APP_URL"]).toMatchObject({
+      sensitive: false,
+      description: "Public Keel origin",
+    });
+    expect(UI_NEXT_SEEDED_MANIFEST.vault?.["PUBLIC_API_URL"]).toMatchObject({
+      sensitive: false,
+      description: "Public API origin",
+    });
+    expect(Object.keys(UI_NEXT_SEEDED_MANIFEST.vault ?? {}).sort()).toEqual([
+      "GITHUB_TOKEN",
+      "KEEL_WORKSPACE",
+      "OPENAI_KEY",
+      "PUBLIC_API_URL",
+      "PUBLIC_APP_URL",
+      "PUBLIC_DOCS_URL",
+      "SLACK_BOT",
+      "SLACK_WEBHOOK",
+      "WEBHOOK_SECRET",
+    ]);
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["issues.list"]?.effects?.secrets).toContain(
+      "PUBLIC_APP_URL",
+    );
     expect(UI_NEXT_SEEDED_MANIFEST.channels?.["mention-reply"]?.medium).toBe("email");
     expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["issue-triage"]?.version).toBe(3);
     expect(UI_NEXT_SEEDED_MANIFEST.signals?.["comment-added"]?.delivery).toBe("live");
@@ -252,6 +278,73 @@ describe("ui-next seed", () => {
 
     const chained = a.filter((r) => r.parentId?.startsWith("pw-ops-create-"));
     expect(chained.length).toBeGreaterThan(0);
+  });
+
+  test("seed vault config is non-sensitive and projects in the clear", async () => {
+    const { createManifestVaultRuntime, projectVaultList } = await import("../server/vault.ts");
+    const layers = UI_NEXT_SEED_VAULT_LAYERS;
+    const runtime = await createManifestVaultRuntime(UI_NEXT_SEEDED_MANIFEST, {
+      env: "dev",
+      driverId: "memory",
+      seed: layers.driver,
+      overlays: {
+        ...(layers.processEnv !== undefined ? { "process.env": layers.processEnv } : {}),
+        ...(layers.envLocal !== undefined ? { ".env.local": layers.envLocal } : {}),
+      },
+      ...(layers.devFallback !== undefined ? { devFallbacks: layers.devFallback } : {}),
+    });
+    const listed = await projectVaultList({
+      manifest: UI_NEXT_SEEDED_MANIFEST,
+      runtime,
+      env: "dev",
+    });
+    const byName = Object.fromEntries(listed.secrets.map((row) => [row.name, row]));
+    expect(byName["PUBLIC_APP_URL"]).toMatchObject({
+      kind: "config",
+      sensitive: false,
+      cleartext: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_APP_URL,
+      winner: "process.env",
+      readers: ["issues.list"],
+    });
+    expect(byName["PUBLIC_API_URL"]).toMatchObject({
+      kind: "config",
+      cleartext: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_API_URL,
+      winner: "driver",
+      readers: ["health.ping"],
+    });
+    expect(byName["PUBLIC_DOCS_URL"]).toMatchObject({
+      kind: "config",
+      cleartext: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_DOCS_URL,
+      winner: ".env.local",
+      readers: ["search.query"],
+    });
+    expect(byName["KEEL_WORKSPACE"]).toMatchObject({
+      kind: "config",
+      cleartext: UI_NEXT_SEED_VAULT_CONFIG.KEEL_WORKSPACE,
+      winner: "process.env",
+      readers: ["issues.list"],
+    });
+    expect(byName["GITHUB_TOKEN"]).toMatchObject({ kind: "secret", winner: "driver" });
+    expect(byName["OPENAI_KEY"]).toMatchObject({ kind: "secret", winner: "driver" });
+    expect(byName["WEBHOOK_SECRET"]).toMatchObject({ kind: "secret", winner: "process.env" });
+    expect(byName["SLACK_WEBHOOK"]).toMatchObject({ kind: "secret", winner: ".env.local" });
+    expect(byName["SLACK_BOT"]).toMatchObject({ kind: "secret", winner: "dev-fallback" });
+    expect(listed.secrets).toHaveLength(9);
+  });
+
+  test("applyUiNextSeedVaultEnv pins PUBLIC_APP_URL without clobbering", () => {
+    const prev = process.env["PUBLIC_APP_URL"];
+    try {
+      delete process.env["PUBLIC_APP_URL"];
+      applyUiNextSeedVaultEnv();
+      expect(process.env["PUBLIC_APP_URL"]).toBe(UI_NEXT_SEED_PUBLIC_APP_URL);
+      process.env["PUBLIC_APP_URL"] = "https://app.example.com";
+      applyUiNextSeedVaultEnv();
+      expect(process.env["PUBLIC_APP_URL"]).toBe("https://app.example.com");
+    } finally {
+      if (prev === undefined) delete process.env["PUBLIC_APP_URL"];
+      else process.env["PUBLIC_APP_URL"] = prev;
+    }
   });
 
   test("seeded env flag and summary are explicit", () => {

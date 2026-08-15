@@ -4,6 +4,9 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { VaultOpenOptions } from "../../drivers/vault-types.ts";
 import { createVaultRuntime, vault } from "../vault.ts";
 import { buildVaultBootChain, normalizeVaultDriverId } from "./boot-chain.ts";
@@ -36,11 +39,7 @@ describe("managed vault boot chain", () => {
     const chain = buildVaultBootChain({ driverId: "managed", env: "prod" });
     expect(chain[0]?.driver.id).toBe("managed");
     expect(chain[0]?.source).toBe("driver");
-    expect(chain.slice(1).map((l) => l.source)).toEqual([
-      "process.env",
-      ".env.local",
-      ".env.docker",
-    ]);
+    expect(chain.slice(1).map((l) => l.source)).toEqual(["process.env", ".env.local"]);
     const options = chain[0]?.options as VaultOpenOptions;
     expect(options.provider).toBe("aws-secrets-manager");
     expect(options.region).toBe("eu-central-1");
@@ -57,15 +56,59 @@ describe("managed vault boot chain", () => {
     expect(options.mount).toBeUndefined();
   });
 
+  test("azure-key-vault forwards url without inventing a token", () => {
+    process.env.OKE_VAULT_PROVIDER = "azure-key-vault";
+    process.env.OKE_VAULT_URL = "https://app.vault.azure.net";
+
+    const chain = buildVaultBootChain({ driverId: "managed", env: "prod" });
+    const options = chain[0]?.options as VaultOpenOptions;
+    expect(options.provider).toBe("azure-key-vault");
+    expect(options.url).toBe("https://app.vault.azure.net");
+    expect(options.token).toBeUndefined();
+  });
+
+  test("doppler and 1password forward token and mount", () => {
+    process.env.OKE_VAULT_PROVIDER = "1password";
+    process.env.OKE_VAULT_URL = "http://connect:8080";
+    process.env.OKE_VAULT_TOKEN = "connect-token";
+    process.env.OKE_VAULT_MOUNT = "Production";
+
+    const chain = buildVaultBootChain({ driverId: "managed", env: "prod" });
+    const options = chain[0]?.options as VaultOpenOptions;
+    expect(options.provider).toBe("1password");
+    expect(options.url).toBe("http://connect:8080");
+    expect(options.token).toBe("connect-token");
+    expect(options.mount).toBe("Production");
+  });
+
+  test("env driver puts the memory seed in front of env layers", () => {
+    const chain = buildVaultBootChain({ driverId: "env", env: "dev", seed: { A: "1" } });
+    expect(chain.map((l) => l.source)).toEqual(["driver", "process.env", ".env.local"]);
+    expect(chain[0]?.driver.id).toBe("memory");
+    expect(chain.slice(1).map((l) => l.driver.id)).toEqual(["env", "env"]);
+  });
+
+  test("env driver put writes .env.local, not the front memory seed", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-vault-env-put-"));
+    await writeFile(join(dir, ".env.local"), "", "utf8");
+    const name = "OKE_TEST_VAULT_ENV_PUT";
+    const runtime = createVaultRuntime({
+      secrets: [vault.config(name, { dev: "seed" })],
+      allowDevFallbacks: true,
+      chain: buildVaultBootChain({ driverId: "env", cwd: dir, env: "dev" }),
+    });
+    await runtime.boot();
+    runtime.put(name, "written");
+    expect(runtime.read(name)).toBe("written");
+    expect(runtime.resolution(name)).toBe(".env.local");
+    expect(await Bun.file(join(dir, ".env.local")).text()).toContain(`${name}=written`);
+  });
+
   test("built-in vault sits in front of env layers", () => {
     const chain = buildVaultBootChain({ driverId: "vault", env: "prod" });
     expect(chain[0]?.driver.id).toBe("vault");
     expect(chain[0]?.source).toBe("driver");
-    expect(chain.slice(1).map((l) => l.source)).toEqual([
-      "process.env",
-      ".env.local",
-      ".env.docker",
-    ]);
+    expect(chain.slice(1).map((l) => l.source)).toEqual(["process.env", ".env.local"]);
   });
 
   test("built-in vault wins over a conflicting process.env value", async () => {

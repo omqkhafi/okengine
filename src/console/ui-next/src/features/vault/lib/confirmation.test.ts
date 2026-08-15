@@ -7,20 +7,12 @@ import {
 } from "./confirmation.ts";
 
 describe("vault confirmation", () => {
-  test("set requires typed confirm in production", () => {
-    expect(setConfirmation({ production: true })).toEqual({
-      kind: "typed",
-      phrase: "SET",
-      requireReason: true,
-    });
+  test("set records a reason, not a typed phrase", () => {
+    expect(setConfirmation({ production: true })).toEqual({ kind: "reason" });
   });
 
-  test("rotate always requires typed confirm", () => {
-    expect(rotateConfirmation({ production: false })).toEqual({
-      kind: "typed",
-      phrase: "ROTATE",
-      requireReason: true,
-    });
+  test("rotate records a reason, not a typed phrase", () => {
+    expect(rotateConfirmation({ production: false })).toEqual({ kind: "reason" });
   });
 
   test("rotate-master always requires typed confirm", () => {

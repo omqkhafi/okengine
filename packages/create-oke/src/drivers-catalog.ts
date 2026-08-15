@@ -89,7 +89,7 @@ export const JOURNAL_CHOICES: readonly DriverChoice[] = [
  * Vault backends. `vault` is okengine's own encrypted-at-rest store: it lives
  * in the app's Postgres, so it needs no extra container, and it is the only
  * backend with `oke vault init` / `seal` / `audit`. `managed` reads from a
- * provider secret store (e.g. AWS Secrets Manager).
+ * provider secret store (AWS, Azure, GCP, Doppler, 1Password).
  */
 export const VAULT_CHOICES: readonly DriverChoice[] = [
   { value: "env", label: "env (dotenv layers only)" },

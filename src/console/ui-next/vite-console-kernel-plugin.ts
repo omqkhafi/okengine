@@ -25,6 +25,7 @@ import {
   appendUiNextSeedRun,
   isConsoleNextSeeded,
   UI_NEXT_SEEDED_MANIFEST,
+  UI_NEXT_SEED_VAULT_LAYERS,
   uiNextSeededSummary,
 } from "./ui-next-seed.ts";
 
@@ -137,7 +138,9 @@ export function okeConsoleKernelPlugin(): Plugin {
         env: "test",
         secret: process.env.OKE_CONSOLE_SECRET ?? "oke-console-next-dev-secret",
         ...(operators ? { operators } : {}),
-        ...(seeded ? { manifest: UI_NEXT_SEEDED_MANIFEST } : {}),
+        ...(seeded
+          ? { manifest: UI_NEXT_SEEDED_MANIFEST, vaultLayerSeed: UI_NEXT_SEED_VAULT_LAYERS }
+          : {}),
       });
 
       if (seeded) {
