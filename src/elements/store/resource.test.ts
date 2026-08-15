@@ -134,7 +134,6 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
         filter: "all",
         order: "all",
       },
-      unit: "contacts",
       breaking: true,
     });
 
@@ -204,6 +203,14 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
     expect(listBody.data).toHaveLength(1);
     expectExactContactKeys(listBody.data[0]!);
     expect(listBody.data[0]!.email).toBe(PII_MASK);
+    const listMeta = JSON.parse(listText) as {
+      meta: {
+        next: { cursor: string } | null;
+        prev: { cursor: string } | null;
+      };
+    };
+    expect(listMeta.meta.next).toBeNull();
+    expect(listMeta.meta.prev).toBeNull();
 
     // update → 200
     const updated = await app.fetch(
@@ -221,6 +228,60 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
     const updatedBody = JSON.parse(updatedText) as { data: Record<string, unknown> };
     expectExactContactKeys(updatedBody.data);
     expect(updatedBody.data.email).toBe(PII_MASK);
+
+    await t.close();
+  });
+
+  test("list cursor meta walks next and previous", async () => {
+    const app = buildApp();
+    const t = await createTestApp(app);
+    for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
+      const created = await app.fetch(
+        new Request("http://localhost/contacts", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        }),
+      );
+      expect(created.status).toBe(201);
+    }
+
+    type ListBody = {
+      data: Array<{ id: string }>;
+      meta: {
+        next: { cursor: string } | null;
+        prev: { cursor: string } | null;
+      };
+    };
+
+    const page1 = (await (
+      await app.fetch(new Request("http://localhost/contacts?limit=1"))
+    ).json()) as ListBody;
+    expect(page1.data).toHaveLength(1);
+    expect(page1.meta.next?.cursor).toBeString();
+    expect(page1.meta.prev).toBeNull();
+
+    const page2 = (await (
+      await app.fetch(
+        new Request(
+          `http://localhost/contacts?limit=1&cursor=${encodeURIComponent(page1.meta.next!.cursor)}`,
+        ),
+      )
+    ).json()) as ListBody;
+    expect(page2.data).toHaveLength(1);
+    expect(page2.data[0]!.id).not.toBe(page1.data[0]!.id);
+    expect(page2.meta.prev?.cursor).toBeString();
+
+    const back = (await (
+      await app.fetch(
+        new Request(
+          `http://localhost/contacts?limit=1&cursor=${encodeURIComponent(page2.meta.prev!.cursor)}`,
+        ),
+      )
+    ).json()) as ListBody;
+    expect(back.data[0]!.id).toBe(page1.data[0]!.id);
+    expect(back.meta.prev).toBeNull();
+    expect(back.meta.next).not.toBeNull();
 
     await t.close();
   });
@@ -245,7 +306,6 @@ describe("resource HTTP — exact keys + PII with differing TS/SQL names", () =>
       }),
       update: z.object({ email: z.string().email() }).partial(),
       list: { mode: "offset", limit: 20 },
-      unit: "people",
       breaking: true,
     });
 

@@ -5,6 +5,7 @@
 
 import {
   assertPasswordPolicy,
+  generatePassword,
   passwordHasSpecial,
   resolvePasswordPolicy,
   type PasswordPolicyOptions,
@@ -78,4 +79,11 @@ export function consolePasswordMeetsPolicy(password: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Random operator password that satisfies {@link CONSOLE_PASSWORD_POLICY}.
+ */
+export function generateConsolePassword(): string {
+  return generatePassword(CONSOLE_PASSWORD_POLICY);
 }

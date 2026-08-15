@@ -205,6 +205,10 @@ export type IndexStoreFxHandle = VectorIndexStoreFxHandle | TextIndexStoreFxHand
 export interface StoreRuntime {
   /** Shared multi-tier cache. */
   readonly cache: StoreCache;
+  /** Configured KV driver id — `fx.store(kv).driverId` before first I/O. */
+  readonly kvDriverId?: KvStoreFxHandle["driverId"];
+  /** Configured index driver id — `fx.store(index).driverId` before first I/O. */
+  readonly indexDriverId?: IndexStoreFxHandle["driverId"];
   /**
    * Open a handle for a store declaration under the given invoke context.
    *
@@ -239,11 +243,13 @@ export interface StoreRuntime {
    * @param effects - Read effects
    * @param value - Cached payload
    * @param dimsByResource - Optional key dimensions
+   * @param ttlMs - Optional TTL; omit / `null` for invalidate-only
    */
   putTier1(
     effects: Effects,
     value: unknown,
     dimsByResource?: Readonly<Record<string, readonly string[]>>,
+    ttlMs?: number | null,
   ): string[];
   /** Close all open connections. */
   close(): Promise<void>;
@@ -465,6 +471,8 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
 
   const runtime: StoreRuntime = {
     cache,
+    kvDriverId: options.drivers.kv?.id,
+    indexDriverId: options.drivers.index?.id,
     declarations,
     register(decl) {
       declarations.set(`${decl.facet}:${decl.name}`, decl);
@@ -493,16 +501,17 @@ export function createStoreRuntime(options: CreateStoreRuntimeOptions): StoreRun
     onWriteEffects(effects) {
       return cache.invalidateFromEffects(effects);
     },
-    putTier1(effects, value, dimsByResource) {
+    putTier1(effects, value, dimsByResource, ttlMs) {
       const keys = tier1KeysForReads(effects, dimsByResource);
       const resources = (effects.reads ?? []).filter((r): r is ResourceRef => r !== "runs");
+      const expiresAt = ttlMs !== undefined && ttlMs !== null && ttlMs > 0 ? now() + ttlMs : null;
       for (const key of keys) {
         cache.set({
           tier: 1,
           key,
           value,
           resources,
-          expiresAt: null,
+          expiresAt,
         });
       }
       return keys;

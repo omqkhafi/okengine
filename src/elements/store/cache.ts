@@ -162,6 +162,182 @@ export function createStoreCache(now: () => number = () => Date.now()): StoreCac
   };
 }
 
+/** Store resource refs that participate in the automatic cache cycle. */
+const STORE_REF = /^(sql|kv|files|index):/;
+
+/**
+ * Whether `ref` is a store resource the tier-1 cycle can key off.
+ *
+ * @param ref - Effect resource
+ */
+export function isStoreResourceRef(ref: string): ref is ResourceRef {
+  return STORE_REF.test(ref) && ref !== "runs";
+}
+
+/**
+ * Store reads / writes / asks recorded on one invocation's ledger.
+ *
+ * Used when the flow has no stamped `effects` (open capability token) so
+ * the cache cycle still runs from what `fx.store` actually touched.
+ *
+ * @param entries - Ledger entries from the invocation
+ */
+export function effectsFromLedger(
+  entries: readonly { readonly kind: string; readonly resource: string }[],
+): Effects {
+  const reads: ResourceRef[] = [];
+  const writes: ResourceRef[] = [];
+  const asks: string[] = [];
+  const seenRead = new Set<string>();
+  const seenWrite = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind === "ask") {
+      asks.push(entry.resource);
+      continue;
+    }
+    if (!isStoreResourceRef(entry.resource)) continue;
+    if (entry.kind === "read" && !seenRead.has(entry.resource)) {
+      seenRead.add(entry.resource);
+      reads.push(entry.resource);
+    }
+    if (entry.kind === "write" && !seenWrite.has(entry.resource)) {
+      seenWrite.add(entry.resource);
+      writes.push(entry.resource);
+    }
+  }
+  return {
+    ...(reads.length > 0 ? { reads } : {}),
+    ...(writes.length > 0 ? { writes } : {}),
+    ...(asks.length > 0 ? { asks } : {}),
+  };
+}
+
+/**
+ * Effects the auto-cache lookup should use: stamped reads when present,
+ * otherwise reads learned from a previous run's ledger.
+ *
+ * @param declared - Flow or capability effects (empty when the token is open)
+ * @param learnedReads - Store reads observed on an earlier invocation
+ */
+export function resolveCacheEffects(
+  declared: Effects | undefined,
+  learnedReads: readonly ResourceRef[] | undefined,
+): Effects {
+  const declaredReads = (declared?.reads ?? []).filter((r) => r !== "runs");
+  if (declaredReads.length > 0 || (declared?.writes?.length ?? 0) > 0) {
+    return declared ?? {};
+  }
+  if (learnedReads !== undefined && learnedReads.length > 0) {
+    return { reads: [...learnedReads] };
+  }
+  return declared ?? {};
+}
+
+/**
+ * Tier-1 hit only when every key is still present (a write to any
+ * contributing resource must miss).
+ *
+ * @param get - Cache getter
+ * @param keys - Keys from {@link tier1KeysForReads}
+ */
+export function tier1Lookup<T>(
+  get: (key: string) => T | undefined,
+  keys: readonly string[],
+): T | undefined {
+  const first = keys[0];
+  if (first === undefined) return undefined;
+  const value = get(first);
+  if (value === undefined) return undefined;
+  for (let i = 1; i < keys.length; i++) {
+    const key = keys[i];
+    if (key === undefined || get(key) === undefined) return undefined;
+  }
+  return value;
+}
+
+/**
+ * Whether a flow should use automatic tier-1 cache.
+ *
+ * Read-only flows (inferred, declared, or ledgered `reads`, no `writes`)
+ * cache by default. Opt out with `cache: false`. Mutations, AI asks,
+ * durable flows, and empty effect sets stay uncached — no `cache: "30s"`
+ * or hand-declared `effects` required on the flow.
+ *
+ * @param options - Flow cache flag, durability, and effect set
+ */
+export function autoCacheEligible(options: {
+  readonly cache?: boolean | string;
+  readonly durable?: boolean;
+  readonly effects?: Effects;
+}): boolean {
+  if (options.cache === false) return false;
+  if (options.durable === true) return false;
+  const effects = options.effects ?? {};
+  if ((effects.asks?.length ?? 0) > 0) return false;
+  if ((effects.writes?.length ?? 0) > 0) return false;
+  const reads = (effects.reads ?? []).filter((r) => r !== "runs");
+  return reads.length > 0;
+}
+
+/**
+ * Dimension suffixes for a flow-scoped tier-1 key.
+ *
+ * Format after {@link computedCacheKey}: `computed:{resource}/{flow}/{input}[/{userId}]`.
+ * Invalidation still keys off the resource segment.
+ *
+ * @param flowName - Flow id
+ * @param input - Validated flow input
+ * @param userId - Caller id when present (per-user lists)
+ */
+export function tier1FlowDims(
+  flowName: string,
+  input: unknown,
+  userId?: string | null,
+): readonly string[] {
+  const dims = [flowName, fingerprintInput(input)];
+  if (userId) dims.push(userId);
+  return dims;
+}
+
+/**
+ * Per-resource dim map for {@link tier1KeysForReads} / `putTier1`.
+ *
+ * @param effects - Read effects
+ * @param flowName - Flow id
+ * @param input - Validated flow input
+ * @param userId - Caller id when present
+ */
+export function tier1DimsByResource(
+  effects: Effects,
+  flowName: string,
+  input: unknown,
+  userId?: string | null,
+): Readonly<Record<string, readonly string[]>> {
+  const dims = tier1FlowDims(flowName, input, userId);
+  const out: Record<string, readonly string[]> = {};
+  for (const resource of effects.reads ?? []) {
+    if (resource === "runs") continue;
+    out[resource] = dims;
+  }
+  return out;
+}
+
+/**
+ * Stable-enough input fingerprint for a cache dim.
+ *
+ * @param input - Validated flow input
+ */
+function fingerprintInput(input: unknown): string {
+  if (input === undefined || input === null) return "-";
+  const t = typeof input;
+  if (t === "string" || t === "number" || t === "boolean") return String(input);
+  try {
+    return JSON.stringify(input);
+  } catch {
+    return "-";
+  }
+}
+
 /**
  * Parse a short TTL string (`"5m"`, `"1h"`, `"30s"`) to milliseconds.
  *

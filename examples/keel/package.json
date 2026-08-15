@@ -6,6 +6,7 @@
   "dependencies": {
     "okengine": "file:../..",
     "drizzle-orm": "1.0.0-rc.4",
+    "drizzle-zod": "^0.8.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -19,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "oke test",
     "dev": "oke dev",
-    "seed": "oke db seed"
+    "seed": "oke db seed",
+    "reset": "bun scripts/reset.ts"
   }
 }

@@ -1,38 +1,43 @@
 ---
 title: "llms.txt"
-description: "Machine-readable documentation — the index, the full concatenated text, and per-page markdown endpoints this site serves for agents."
+description: "Machine-readable documentation — the index, the JSON catalogue, the full dump, per-page markdown, and the agent contract this site serves."
 icon: "FileText"
 source: "docs/spec/unified-theory.md"
 ---
 
-This documentation site serves machine-readable twins of every page, following the `llms.txt` convention — so an agent can pull exactly the docs it needs (or all of them) instead of scraping HTML. Three endpoints, three granularities:
+This documentation site serves machine-readable twins of every page, following the `llms.txt` convention — so an agent can pull exactly the docs it needs (or all of them) instead of scraping HTML.
 
-| Endpoint                | Contains                                            | Pull it when                                  |
-| ----------------------- | --------------------------------------------------- | --------------------------------------------- |
-| `/llms.txt`             | Index of every docs page (title, link, description) | The agent needs the map — what exists, where  |
-| `/llms-full.txt`        | All pages concatenated as one markdown document     | You want the whole docs in one context window |
-| `/llms.mdx/docs/⟨slug⟩` | One page as markdown                                | The agent needs just the Vault page, say      |
+| Endpoint                | Contains                                                          | Pull it when                                 |
+| ----------------------- | ----------------------------------------------------------------- | -------------------------------------------- |
+| `/llms.txt`             | Spec map — H1, summary, curated links, Optional rest              | The agent needs the map                      |
+| `/llms.json`            | Same catalogue as JSON (`slug`, `html`, `markdown`)               | Structured clients                           |
+| `/llms-full.txt`        | All pages concatenated; teaching figures as blockquotes           | Whole-docs context                           |
+| `/llms.mdx/docs/⟨slug⟩` | One page as source markdown                                       | One page — e.g. Vault                        |
+| `/llms/agents`          | The `AGENTS.md` contract                                          | Session bootstrap                            |
+| `/robots.txt`           | Allow-all, including named AI crawlers                            | Crawler policy                               |
+| `/sitemap.xml`          | HTML pages plus the machine endpoints                             | Crawler map                                  |
 
 ## Use them
 
 ```bash
-# the map
 curl https://oke.omqkhafi.dev/llms.txt
-
-# everything, for stuffing into context
+curl https://oke.omqkhafi.dev/llms.json
 curl https://oke.omqkhafi.dev/llms-full.txt
-
-# one page — e.g. the Vault element
 curl https://oke.omqkhafi.dev/llms.mdx/docs/elements/vault
+curl https://oke.omqkhafi.dev/llms/agents
 ```
 
 <Callout title="Which one first?">
-  Start with `/llms.txt` — it is small and tells the agent which slugs exist. Fetch `/llms-full.txt`
-  only when breadth matters more than tokens; per-page `/llms.mdx` is the precise instrument.
+  Start with `/llms.txt`. Fetch `/llms-full.txt` only when breadth matters more than tokens.
+  Per-page `/llms.mdx` is the precise instrument. `/llms.mdx/docs/⟨slug⟩/content.md` still works.
 </Callout>
 
 The homepage **Onboard AI** button copies a one-line prompt that points an agent at
-`/llms.txt` plus the repo-root `AGENTS.md` — project-wide context, not a single docs page.
+`/llms.txt` plus `/llms/agents` on this origin — project-wide context, not a single docs page.
+
+HTML docs pages advertise `rel="alternate"` `type="text/markdown"` to the twin. Crawlers
+that honor `robots.txt` are allowed; `/sitemap.xml` lists the handbook and the machine
+entry points.
 
 ## How it pairs with the docs MCP
 

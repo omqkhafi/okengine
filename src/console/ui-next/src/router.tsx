@@ -1,13 +1,15 @@
 /**
  * Console router — code-based TanStack Router (Vite SPA).
- * Pre-auth `/` and authenticated shell `/flows` | `/units` | `/store` | `/vault`.
- * `/overview` redirects to `/flows`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault`.
+ * Authenticated pages are `lazyRouteComponent` so Vite splits them out of the entry.
+ * Any other path is a 404 — no legacy rewrites.
  */
 
 import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
   redirect,
 } from "@tanstack/react-router";
@@ -20,14 +22,11 @@ import {
   type SessionOperator,
 } from "./client.ts";
 import { authGateSearch, validateAuthSearch } from "./features/auth/auth-redirect.ts";
+import { NotFoundPage } from "./features/not-found/not-found-page.tsx";
 import { ClaimPage } from "./features/setup/claim-page.tsx";
-import { FlowsPage } from "./features/flows/flows-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
-import { StorePage } from "./features/store/store-page.tsx";
 import { validateStoreSearch } from "./features/store/state/store-selection.ts";
-import { UnitsPage } from "./features/units/units-page.tsx";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
-import { VaultPage } from "./features/vault/vault-page.tsx";
 import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -83,56 +82,37 @@ const authenticatedRoute = createRoute({
   },
 });
 
+const overviewRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/overview",
+  validateSearch: validateFlowsSearch,
+  component: lazyRouteComponent(() => import("./features/flows/flows-page.tsx"), "FlowsPage"),
+});
+
 const flowsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/flows",
-  validateSearch: validateFlowsSearch,
-  component: FlowsPage,
-});
-
-const unitsRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: "/units",
   validateSearch: validateUnitsSearch,
-  component: UnitsPage,
-});
-
-const overviewRedirectRoute = createRoute({
-  getParentRoute: () => authenticatedRoute,
-  path: "/overview",
-  beforeLoad: ({ search }) => {
-    throw redirect({
-      to: "/flows",
-      search: validateFlowsSearch(search as Record<string, unknown>),
-      replace: true,
-    });
-  },
-  component: () => null,
+  component: lazyRouteComponent(() => import("./features/units/units-page.tsx"), "UnitsPage"),
 });
 
 const storeRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/store",
   validateSearch: validateStoreSearch,
-  component: StorePage,
+  component: lazyRouteComponent(() => import("./features/store/store-page.tsx"), "StorePage"),
 });
 
 const vaultRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: "/vault",
   validateSearch: validateVaultSearch,
-  component: VaultPage,
+  component: lazyRouteComponent(() => import("./features/vault/vault-page.tsx"), "VaultPage"),
 });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  authenticatedRoute.addChildren([
-    flowsRoute,
-    unitsRoute,
-    overviewRedirectRoute,
-    storeRoute,
-    vaultRoute,
-  ]),
+  authenticatedRoute.addChildren([overviewRoute, flowsRoute, storeRoute, vaultRoute]),
 ]);
 
 /**
@@ -140,6 +120,7 @@ const routeTree = rootRoute.addChildren([
  */
 export const router = createRouter({
   routeTree,
+  defaultNotFoundComponent: NotFoundPage,
   defaultPendingComponent: () => (
     <div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">Loading…</div>
   ),

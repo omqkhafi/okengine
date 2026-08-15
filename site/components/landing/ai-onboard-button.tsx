@@ -1,5 +1,5 @@
 /**
- * Homepage-only: copy a project-wide AI onboarding prompt (llms.txt + AGENTS.md).
+ * Homepage-only: copy a project-wide AI onboarding prompt (llms.txt + /llms/agents).
  * Distinct from per-page DocsPageActions copy-prompt.
  */
 

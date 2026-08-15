@@ -49,9 +49,17 @@ export async function generateMetadata(props: PageProps<"/docs/[[...slug]]">): P
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
+  const markdownUrl = getPageMarkdownUrl(page).url;
+
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: {
+      canonical: page.url,
+      types: {
+        "text/markdown": markdownUrl,
+      },
+    },
     openGraph: {
       images: getPageImageUrl(page).url,
     },

@@ -16,8 +16,10 @@ import {
   formatRequestLine,
   formatStackSummary,
   countTermLines,
+  createAnchoredBoard,
   formatStatusDot,
   formatStatusLine,
+  grownBoardTail,
   termStyle,
 } from "./term.ts";
 
@@ -60,9 +62,17 @@ describe("term", () => {
     expect(out).toContain("postgres");
     expect(out).toContain("● flow");
     expect(out).toContain("● ai");
+    expect(out).toContain("Starting");
+    expect(out).not.toContain("Ready");
     expect(out).not.toContain("on(Trigger)");
     expect(out).not.toContain("O·K·E");
     expect(out).not.toMatch(/\u001b\[/);
+  });
+
+  test("formatDevBanner phase ready says Ready", () => {
+    const out = formatDevBanner({ color: false, phase: "ready", version: "0.2.4" });
+    expect(out).toContain("Ready");
+    expect(out).not.toContain("Starting");
   });
 
   test("formatStatusDot colors by status", () => {
@@ -77,6 +87,38 @@ describe("term", () => {
   test("countTermLines counts rows", () => {
     expect(countTermLines("a\nb\n")).toBe(2);
     expect(countTermLines("")).toBe(0);
+  });
+
+  test("grownBoardTail returns only the new rows", () => {
+    expect(grownBoardTail("a\nb\n", "a\nb\nCLAIM\n")).toBe("CLAIM\n");
+    expect(grownBoardTail("a\nb\n", "a\nb\n")).toBe("");
+  });
+
+  test("createAnchoredBoard appends growth when rewrite is off", () => {
+    const chunks: string[] = [];
+    const board = createAnchoredBoard((t) => {
+      chunks.push(t);
+    }, false);
+    board.paint("one\ntwo\n");
+    board.paint("one\ntwo\nCLAIM\n");
+    expect(chunks.join("")).toBe("one\ntwo\nCLAIM\n");
+  });
+
+  test("createAnchoredBoard inserts rows when the board grows under output", () => {
+    const chunks: string[] = [];
+    const board = createAnchoredBoard((t) => {
+      chunks.push(t);
+    }, true);
+    board.paint("A\nB\n");
+    const wrapped = board.wrapWrite((t) => {
+      chunks.push(t);
+    });
+    wrapped("url\n");
+    board.paint("A\nB\nCLAIM\n");
+    const out = chunks.join("");
+    expect(out).toContain("\x1b[1L");
+    expect(out).toContain("CLAIM");
+    expect(out).toContain("url\n");
   });
 
   test("formatServiceLine / formatAppReadyLine include URL", () => {
@@ -119,8 +161,16 @@ describe("term", () => {
     const out = formatClaimNote(code, false);
     expect(out).toContain(code);
     expect(out).toContain("Claim code");
+    expect(out).toContain("oke console claim-code");
     expect(out).toContain("owns the server");
     expect(out).not.toMatch(/\u001b\[/);
+  });
+
+  test("formatClaimNote can point at the Console URL", () => {
+    const out = formatClaimNote("aabbccddeeff00112233445566778899", false, {
+      consoleUrl: "http://127.0.0.1:6533",
+    });
+    expect(out).toContain("Paste at http://127.0.0.1:6533");
   });
 
   test("formatStatusLine keeps message", () => {

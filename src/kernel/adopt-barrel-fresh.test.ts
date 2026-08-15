@@ -12,7 +12,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gate } from "../elements/gate.ts";
 import { assertAdoptBarrelFresh, resetStaleAdoptBarrelWarnForTests } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
 import { on, resetBindings } from "./on.ts";
@@ -90,7 +89,7 @@ describe("boot-level: stale barrel through a real oke() boot", () => {
         effects: {},
         do: () => ({ ok: true as const }),
       });
-      on(http.get("/health").gate(gate.public), mainFlow);
+      on(http.get("/health").gate.public, mainFlow);
       const app = oke({ name: "stale-barrel", gate: { unguardedHttp: "allow" } });
 
       await expect(

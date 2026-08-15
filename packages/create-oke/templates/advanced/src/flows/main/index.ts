@@ -1,9 +1,9 @@
-import { on, flow, http, gate } from "okengine";
+import { on, flow, http } from "okengine";
 import { z } from "zod";
 
 /** First-run welcome — visit :6530/ after `oke dev`. */
 export const root = on(
-  http.get("/").gate(gate.public),
+  http.get("/").gate.public,
   flow("main.root", {
     out: z.object({
       ok: z.literal(true),
@@ -22,7 +22,7 @@ export const root = on(
 
 /** Liveness for probes and `bun test`. */
 export const health = on(
-  http.get("/health").gate(gate.public),
+  http.get("/health").gate.public,
   flow("main.health", {
     out: z.object({ ok: z.literal(true) }),
     do: () => ({ ok: true as const }),

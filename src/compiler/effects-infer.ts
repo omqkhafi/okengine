@@ -106,6 +106,7 @@ const READ_METHODS = new Set([
   "findFirst",
   "find",
   "list",
+  "ttlMs",
 ]);
 
 const WRITE_METHODS = new Set([
@@ -427,10 +428,18 @@ function tableFromStoreChain(
     if (!link || link.rootMethod !== "store") break;
     const leaf = link.methods[link.methods.length - 1]!;
     if (TABLE_ARG_METHODS.has(leaf)) {
-      const id = identifierName(c.arguments[0]);
-      if (id) {
-        const binding = bindings.get(id);
-        return binding?.kind === "table" ? binding.ref : id;
+      // KV / files / index take a key, not a table. Treating `delete(key)` as
+      // `delete(table)` stamps `kv:key` instead of `kv:drafts` and the runtime
+      // then throws OKE1002 on the real namespace.
+      const storeBinding = resolveBinding(link.rootCall.arguments[0], bindings);
+      if (storeBinding?.facet !== undefined && storeBinding.facet !== "sql") {
+        // keep walking — no table on this link
+      } else {
+        const id = identifierName(c.arguments[0]);
+        if (id) {
+          const binding = bindings.get(id);
+          return binding?.kind === "table" ? binding.ref : id;
+        }
       }
     }
     const callee = c.callee;

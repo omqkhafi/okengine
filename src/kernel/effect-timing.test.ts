@@ -33,6 +33,22 @@ describe("per-effect timing (EffectEntry, not RunTelemetry / hooks)", () => {
     expect(ledger.entries[0]!.duration).toBe(41);
   });
 
+  test("frozen clock still records high-res duration", async () => {
+    const ledger = createEffectLedger();
+    await recordEffect(
+      ledger,
+      "read",
+      "sql:notes",
+      () => 1_000,
+      async () => {
+        await Bun.sleep(2);
+        return "ok";
+      },
+    );
+    expect(ledger.entries[0]!.timestamp).toBe(1_000);
+    expect(ledger.entries[0]!.duration).toBeGreaterThan(1);
+  });
+
   test("gated fx.store / fx.emit / fx.send populate EffectEntry timing", async () => {
     const telemetry = createRunTelemetry();
     let t = 5000;

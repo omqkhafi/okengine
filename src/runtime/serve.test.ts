@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { gate } from "../elements/gate.ts";
 import { oke } from "../kernel/app.ts";
 import { flow, resetFlowSeq } from "../kernel/flow.ts";
 import { on, resetBindings } from "../kernel/on.ts";
 import { http } from "../kernel/triggers.ts";
-import { createBunRuntime } from "./bun.ts";
+import { buildBunRoutes, createBunRuntime, serveBunHttp } from "./bun.ts";
 import { createWebStandardRuntime } from "./web-standard.ts";
 import type { ServerHandle } from "./types.ts";
 
@@ -56,13 +55,13 @@ function rawHttp(port: number, payload: string): Promise<string> {
 
 function buildApp() {
   on(
-    http.get("/ping").gate(gate.public),
+    http.get("/ping").gate.public,
     flow("ping", {
       do: () => ({ ok: true as const, n: 1 }),
     }),
   );
   on(
-    http.get("/notes/:id").gate(gate.public),
+    http.get("/notes/:id").gate.public,
     flow("notes.get", {
       do: ({ id }: { id: string }) => ({ id }),
     }),
@@ -136,6 +135,52 @@ describe("Bun.serve — real HTTP", () => {
       }),
     );
     expect(bad.status).toBe(403);
+  });
+
+  test("invalid native routes fall back to fetch — no Bun HTML example thrown", () => {
+    const server = serveBunHttp({
+      port: 0,
+      hostname: "127.0.0.1",
+      routes: {
+        "/search": {
+          QUERY: async () => new Response("native"),
+        },
+      },
+      fetch: async () => new Response("fetch"),
+    });
+    try {
+      expect(server.port).toBeGreaterThan(0);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("QUERY is omitted from native routes so Bun.serve still boots", async () => {
+    on(
+      http.query("/search").gate.public,
+      flow("search.query", {
+        do: () => ({ hits: 1 }),
+      }),
+    );
+    on(
+      http.get("/search/suggest").gate.public,
+      flow("search.suggest", {
+        do: () => ({ hits: 0 }),
+      }),
+    );
+    const app = oke({ name: "runtime-query" });
+    const routes = buildBunRoutes(app, async () => new Response("ok"));
+    expect(routes["/search"]).toBeUndefined();
+    expect(routes["/search/suggest"]?.GET).toBeTypeOf("function");
+
+    handle = createBunRuntime().serve(app, { port: 0, hostname: "127.0.0.1" });
+    const res = await fetch(new URL("/search", handle.url), {
+      method: "QUERY",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ data: { hits: 1 }, error: null });
   });
 
   test("param route serves through Bun native routes + app pipeline", async () => {

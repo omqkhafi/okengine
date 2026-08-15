@@ -5,6 +5,8 @@
  * the journal, tests, runs store, and capability check all read.
  */
 
+import { resolveDurationMs } from "./elapsed.ts";
+
 /** The seven load-bearing effect kinds (manifest `effects` keys, singular). */
 export type EffectKind = "read" | "write" | "emit" | "send" | "ask" | "secret" | "call";
 
@@ -34,7 +36,7 @@ export interface EffectEntry {
   readonly resource: string;
   /** Epoch-ms when the call started. */
   readonly timestamp: number;
-  /** Wall duration in milliseconds. */
+  /** Duration in milliseconds (high-res; may be fractional). */
   readonly duration: number;
   /** Reversibility tier for {@link kind}. */
   readonly reversibility: ReversibilityTier;
@@ -95,6 +97,9 @@ export function createEffectLedger(): EffectLedger {
 /**
  * Record an effect around an async (or sync) body, measuring duration.
  *
+ * Timestamp comes from `now` (epoch-ms). Duration prefers `performance.now()`
+ * so a frozen / same-millisecond clock does not record 0.
+ *
  * @param ledger - Target ledger
  * @param kind - Effect kind
  * @param resource - Resource ref
@@ -109,6 +114,7 @@ export async function recordEffect<T>(
   body: () => T | Promise<T>,
 ): Promise<T> {
   const timestamp = now();
+  const t0 = performance.now();
   try {
     return await body();
   } finally {
@@ -116,7 +122,7 @@ export async function recordEffect<T>(
       kind,
       resource,
       timestamp,
-      duration: Math.max(0, now() - timestamp),
+      duration: resolveDurationMs(now() - timestamp, performance.now() - t0),
       reversibility: reversibilityOf(kind),
     });
   }

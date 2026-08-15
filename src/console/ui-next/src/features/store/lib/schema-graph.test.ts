@@ -266,6 +266,69 @@ describe("inferred *_id relations", () => {
   });
 });
 
+describe("inferred camelCase *Id relations", () => {
+  const seed = seedStores([
+    "teams",
+    "workflow_states",
+    "project_milestones",
+    "cycles",
+    "issues",
+    "comments",
+    "documents",
+  ]);
+  const manifest = seedManifest({
+    teams: ["id", "parentId", "name"],
+    workflow_states: ["id", "teamId", "name"],
+    project_milestones: ["id", "projectId", "name"],
+    cycles: ["id", "teamId", "name"],
+    issues: ["id", "teamId", "stateId", "milestoneId", "parentId", "title"],
+    comments: ["id", "issueId", "body"],
+    documents: ["id", "parentKind", "parentId", "title"],
+  });
+
+  test("infers teamId / issueId / parentId the same as snake_case", () => {
+    const tables = schemaGraphTables(seed, manifest);
+    expect(
+      tables.find((t) => t.name === "comments")?.columns.find((c) => c.name === "issueId"),
+    ).toMatchObject({
+      references: { table: "issues", column: "id" },
+      inferredRef: true,
+    });
+    expect(
+      tables.find((t) => t.name === "cycles")?.columns.find((c) => c.name === "teamId"),
+    ).toMatchObject({
+      references: { table: "teams", column: "id" },
+      inferredRef: true,
+    });
+    expect(
+      tables.find((t) => t.name === "issues")?.columns.find((c) => c.name === "stateId")
+        ?.references,
+    ).toEqual({
+      table: "workflow_states",
+      column: "id",
+    });
+    expect(
+      tables.find((t) => t.name === "issues")?.columns.find((c) => c.name === "parentId")
+        ?.references,
+    ).toEqual({
+      table: "issues",
+      column: "id",
+    });
+    expect(
+      tables.find((t) => t.name === "documents")?.columns.find((c) => c.name === "parentId")
+        ?.references,
+    ).toBeUndefined();
+  });
+
+  test("draws inferred edges for camelCase FKs", () => {
+    const graph = buildSchemaGraph(schemaGraphTables(seed, manifest));
+    const ids = graph.edges.map((e) => e.id).sort();
+    expect(ids).toContain("sql:comments.issueId->sql:issues.id");
+    expect(ids).toContain("sql:cycles.teamId->sql:teams.id");
+    expect(ids).toContain("sql:issues.parentId->sql:issues.id");
+  });
+});
+
 function seedStores(names: readonly string[]): readonly StoreListStore[] {
   return [
     {

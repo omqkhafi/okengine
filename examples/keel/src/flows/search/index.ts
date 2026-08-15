@@ -1,34 +1,34 @@
 import { on, flow, http, fail } from "okengine";
-import { z } from "zod";
 
-import { db, issueIndex, member, openaiKey, publicDocsUrl } from "@/core";
-import { comments, issues } from "@/db/schema.decl";
+import { db, member, openaiKey, publicDocsUrl, taskIndex } from "@/core";
+import { comments, tasks } from "@/db/schema.decl";
+import { tasksZod } from "@/db/zod";
+import { listIn, pageOut, queryPage } from "@/lib/http";
 import { Ok } from "@/lib/shapes";
-import { commentAdded } from "@/flows/comments/signals";
-import { issueCreated, issueUpdated } from "@/flows/issues/signals";
+import { commentChanged } from "@/flows/comments/signals";
+import { formChanged } from "@/flows/forms/signals";
+import { projectChanged } from "@/flows/projects/signals";
+import { taskCompleted, taskCreated } from "@/flows/tasks/signals";
 
-const SearchIn = z.object({
-  q: z.string().min(1),
-  limit: z.number().int().min(1).max(50).optional(),
+const SearchHit = tasksZod.select.pick({
+  id: true,
+  title: true,
+  identifier: true,
 });
 
-const SearchOut = z.object({
-  items: z.array(z.object({ id: z.string(), title: z.string(), identifier: z.string() })),
-  count: z.number(),
-});
+const SearchIn = listIn({ mode: "offset", maxLimit: 50 });
+const SearchOut = pageOut(SearchHit);
 
-async function upsertIssue(
+async function upsertTask(
   fx: {
-    store: typeof import("@/core").db extends infer _D
-      ? (ref: unknown) => {
-          driverId?: string;
-          upsert: (...args: never[]) => Promise<void>;
-        }
-      : never;
+    store: (ref: unknown) => {
+      driverId?: string;
+      upsert: (...args: never[]) => Promise<void>;
+    };
   },
   row: Record<string, unknown>,
 ): Promise<void> {
-  const idx = fx.store(issueIndex) as {
+  const idx = fx.store(taskIndex) as {
     driverId: string;
     upsert: (id: string, doc: unknown, meta?: Record<string, unknown>) => Promise<void>;
   };
@@ -51,8 +51,11 @@ export const query = on(
     in: SearchIn,
     out: SearchOut,
     do: async (input, fx) => {
+      if (!input.q?.trim()) {
+        return fx.json.with(queryPage([], input, { mode: "offset", maxLimit: 50 }));
+      }
       await fx.vault.get(publicDocsUrl);
-      const idx = fx.store(issueIndex) as {
+      const idx = fx.store(taskIndex) as {
         driverId: string;
         search: (q: unknown, opts?: { limit?: number }) => Promise<unknown>;
       };
@@ -66,23 +69,23 @@ export const query = on(
           title: String(h.title ?? ""),
           identifier: String(h.identifier ?? ""),
         }));
-        return { items, count: items.length };
+        return fx.json.with(
+          queryPage(items, { ...input, q: undefined }, { mode: "offset", maxLimit: 50 }),
+        );
       }
-      const rows = await fx.store(db).select().from(issues);
-      const q = input.q.toLowerCase();
-      const items = rows
-        .filter(
-          (r) =>
-            String(r.title).toLowerCase().includes(q) ||
-            String(r.identifier).toLowerCase().includes(q),
-        )
-        .slice(0, limit)
-        .map((r) => ({
-          id: String(r.id),
-          title: String(r.title),
-          identifier: String(r.identifier),
-        }));
-      return { items, count: items.length };
+      const rows = await fx.store(db).select().from(tasks);
+      const items = rows.map((r) => ({
+        id: String(r.id),
+        title: String(r.title),
+        identifier: String(r.identifier),
+      }));
+      return fx.json.with(
+        queryPage(items, input, {
+          mode: "offset",
+          search: ["title", "identifier"],
+          maxLimit: 50,
+        }),
+      );
     },
   }),
 );
@@ -91,19 +94,20 @@ export const query = on(
 export const suggest = on(
   http.get("/search/suggest").gate(member),
   flow("search.suggest", {
-    in: z.object({ q: z.string().optional(), limit: z.number().int().optional() }),
+    in: SearchIn,
     out: SearchOut,
     do: async (input, fx) => {
-      if (!input.q) return { items: [], count: 0 };
-      return (await fx.call(query, { q: input.q, limit: input.limit ?? 8 })) as {
-        items: { id: string; title: string; identifier: string }[];
-        count: number;
-      };
+      if (!input.q) {
+        return fx.json.with(
+          queryPage([], { ...input, limit: input.limit ?? 8 }, { mode: "offset", maxLimit: 50 }),
+        );
+      }
+      return await fx.call(query, { q: input.q, limit: input.limit ?? 8 });
     },
   }),
 );
 
-/** Reindex every issue. */
+/** Reindex every task. */
 export const reindex = on(
   http.post("/search/reindex").gate(member),
   flow("search.reindex", {
@@ -111,62 +115,89 @@ export const reindex = on(
     durable: true,
     out: Ok,
     do: async (_input, fx) => {
-      const rows = await fx.store(db).select().from(issues);
+      const rows = await fx.store(db).select().from(tasks);
       for (const row of rows) {
-        await fx.call(embedIssue, { id: String(row.id) });
+        await fx.call(embedTask, { id: String(row.id) });
       }
       return { ok: true as const };
     },
   }),
 );
 
-/** Index one issue (call-only). */
-export const embedIssue = flow("search.embedIssue", {
+/** Index one task (call-only). */
+export const embedTask = flow("search.embedTask", {
   plane: "operator",
-  in: z.object({ id: z.string() }),
+  in: tasksZod.select.pick({ id: true }),
   out: Ok,
   do: async (input, fx) => {
     await fx.vault.get(openaiKey);
-    const row = await fx.store(db).findById(issues, input.id);
+    const row = await fx.store(db).findById(tasks, input.id);
     if (!row) return fail("NotFound", { id: input.id });
-    await upsertIssue(fx as never, row as Record<string, unknown>);
+    await upsertTask(fx as never, row as Record<string, unknown>);
     return { ok: true as const };
   },
 });
 
 /** On create → index. */
 export const indexOnCreate = on(
-  issueCreated,
+  taskCreated,
   flow("search.index", {
     plane: "operator",
     do: async (payload, fx) => {
-      const row = await fx.store(db).findById(issues, payload.id);
-      if (row) await upsertIssue(fx as never, row as Record<string, unknown>);
+      const row = await fx.store(db).findById(tasks, payload.id);
+      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
     },
   }),
 );
 
-/** On update → index. */
-export const onUpdated = on(
-  issueUpdated,
-  flow("search.onUpdated", {
-    plane: "operator",
-    do: async (payload, fx) => {
-      const row = await fx.store(db).findById(issues, payload.id);
-      if (row) await upsertIssue(fx as never, row as Record<string, unknown>);
-    },
-  }),
-);
-
-/** On comment → touch the issue index. */
+/** On comment change → touch the task index. */
 export const onComment = on(
-  commentAdded,
+  commentChanged,
   flow("search.onComment", {
     plane: "operator",
     do: async (payload, fx) => {
       await fx.store(db).findById(comments, payload.id);
-      const row = await fx.store(db).findById(issues, payload.issueId);
-      if (row) await upsertIssue(fx as never, row as Record<string, unknown>);
+      const row = await fx.store(db).findById(tasks, payload.taskId);
+      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+    },
+  }),
+);
+
+/** On complete → refresh the task index. */
+export const onComplete = on(
+  taskCompleted,
+  flow("search.onComplete", {
+    plane: "operator",
+    do: async (payload, fx) => {
+      const row = await fx.store(db).findById(tasks, payload.id);
+      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+    },
+  }),
+);
+
+/** On form change → index the created task. */
+export const onForm = on(
+  formChanged,
+  flow("search.onForm", {
+    plane: "operator",
+    do: async (payload, fx) => {
+      const row = await fx.store(db).findById(tasks, payload.taskId);
+      if (row) await upsertTask(fx as never, row as Record<string, unknown>);
+    },
+  }),
+);
+
+/** On project change → reindex tasks in the project. */
+export const onProject = on(
+  projectChanged,
+  flow("search.onProject", {
+    plane: "operator",
+    do: async (payload, fx) => {
+      const rows = await fx.store(db).select().from(tasks);
+      for (const row of rows) {
+        if (String(row.projectId) !== payload.projectId) continue;
+        await upsertTask(fx as never, row as Record<string, unknown>);
+      }
     },
   }),
 );

@@ -10,10 +10,15 @@
 import { describe, expect, test } from "bun:test";
 import type { Effects } from "../../manifest/types.ts";
 import {
+  autoCacheEligible,
   computedCacheKey,
   createStoreCache,
+  effectsFromLedger,
   isInvalidatedByWrite,
+  resolveCacheEffects,
+  tier1DimsByResource,
   tier1KeysForReads,
+  tier1Lookup,
 } from "./cache.ts";
 
 describe("tier-1 cache — exact per-resource invalidation (path b)", () => {
@@ -70,5 +75,79 @@ describe("tier-1 cache — exact per-resource invalidation (path b)", () => {
     // A write to "notes" itself still invalidates.
     expect(cache.invalidateFromEffects({ writes: ["sql:notes"] }).keys).toEqual(keys);
     expect(cache.get(keys[0]!)).toBeUndefined();
+  });
+});
+
+describe("autoCacheEligible", () => {
+  test("read-only flows cache by default; mutations / asks / durable / cache:false do not", () => {
+    expect(autoCacheEligible({ effects: { reads: ["sql:notes"] } })).toBe(true);
+    expect(autoCacheEligible({ cache: true, effects: { reads: ["sql:notes"] } })).toBe(true);
+    expect(autoCacheEligible({ cache: "30s", effects: { reads: ["sql:notes"] } })).toBe(true);
+    expect(autoCacheEligible({ cache: false, effects: { reads: ["sql:notes"] } })).toBe(false);
+    expect(autoCacheEligible({ durable: true, effects: { reads: ["sql:notes"] } })).toBe(false);
+    expect(autoCacheEligible({ effects: { reads: ["sql:notes"], writes: ["sql:notes"] } })).toBe(
+      false,
+    );
+    expect(autoCacheEligible({ effects: { reads: ["sql:notes"], asks: ["task-suggest"] } })).toBe(
+      false,
+    );
+    expect(autoCacheEligible({ effects: { reads: ["runs"] } })).toBe(false);
+    expect(autoCacheEligible({ effects: {} })).toBe(false);
+  });
+
+  test("flow+input dims keep list and get from colliding; invalidation still uses the resource", () => {
+    const effects: Effects = { reads: ["sql:views"] };
+    const listDims = tier1DimsByResource(effects, "views.list", {});
+    const getDims = tier1DimsByResource(effects, "views.get", { id: "v1" });
+    const listKeys = tier1KeysForReads(effects, listDims);
+    const getKeys = tier1KeysForReads(effects, getDims);
+    expect(listKeys[0]).not.toEqual(getKeys[0]);
+    expect(isInvalidatedByWrite(listKeys[0]!, { writes: ["sql:views"] })).toBe(true);
+    expect(isInvalidatedByWrite(getKeys[0]!, { writes: ["sql:views"] })).toBe(true);
+  });
+
+  test("effectsFromLedger keeps store reads/writes and asks; drops runs", () => {
+    expect(
+      effectsFromLedger([
+        { kind: "read", resource: "sql:views" },
+        { kind: "read", resource: "sql:views" },
+        { kind: "read", resource: "runs" },
+        { kind: "write", resource: "sql:views" },
+        { kind: "ask", resource: "summarize" },
+        { kind: "emit", resource: "view-changed" },
+      ]),
+    ).toEqual({
+      reads: ["sql:views"],
+      writes: ["sql:views"],
+      asks: ["summarize"],
+    });
+  });
+
+  test("resolveCacheEffects prefers stamped reads, then learned reads", () => {
+    expect(resolveCacheEffects({ reads: ["sql:views"] }, ["sql:tasks"])).toEqual({
+      reads: ["sql:views"],
+    });
+    expect(resolveCacheEffects({}, ["sql:views"])).toEqual({ reads: ["sql:views"] });
+    expect(resolveCacheEffects(undefined, undefined)).toEqual({});
+  });
+
+  test("tier1Lookup misses when any contributing key is gone", () => {
+    const cache = createStoreCache();
+    cache.set({
+      tier: 1,
+      key: "a",
+      value: 1,
+      resources: ["sql:views"],
+      expiresAt: null,
+    });
+    expect(tier1Lookup((key) => cache.get<number>(key), ["a", "b"])).toBeUndefined();
+    cache.set({
+      tier: 1,
+      key: "b",
+      value: 1,
+      resources: ["sql:sections"],
+      expiresAt: null,
+    });
+    expect(tier1Lookup((key) => cache.get<number>(key), ["a", "b"])).toBe(1);
   });
 });

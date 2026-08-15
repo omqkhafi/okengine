@@ -1,0 +1,56 @@
+import { describe, expect, test } from "bun:test";
+import {
+  FEATURED_MEMBERS,
+  FEATURED_PROJECTS,
+  FEATURED_SECTIONS,
+  FEATURED_SPACES,
+  FEATURED_TASKS,
+} from "./featured.ts";
+import { GENERATED, generateKeelVolume, KEEL_SEED_COUNTS, KEEL_VOLUME } from "./volume.ts";
+
+describe("keel volume seed", () => {
+  test("featured story keeps ENG-12 and Harbor spaces", () => {
+    expect(FEATURED_TASKS.some((task) => task.id === "tsk_eng_12")).toBe(true);
+    expect(FEATURED_MEMBERS.map((m) => m.id)).toEqual([
+      "mem_aria",
+      "mem_ben",
+      "mem_cai",
+      "mem_dia",
+      "mem_eli",
+    ]);
+    expect(FEATURED_SPACES.map((s) => s.key)).toEqual(["ENG", "DES", "GTM"]);
+    const projectIds = new Set<string>(FEATURED_PROJECTS.map((project) => project.id));
+    expect(FEATURED_SECTIONS.length).toBeGreaterThan(0);
+    for (const section of FEATURED_SECTIONS) {
+      expect(projectIds.has(section.projectId)).toBe(true);
+    }
+    expect(FEATURED_MEMBERS.find((m) => m.id === "mem_aria")?.role).toBe("project_manager");
+    expect(FEATURED_MEMBERS.find((m) => m.id === "mem_ben")?.role).toBe("developer");
+  });
+
+  test("generated volume matches Console-scale counts", () => {
+    expect(KEEL_VOLUME.members).toHaveLength(GENERATED.members);
+    expect(KEEL_VOLUME.projects).toHaveLength(GENERATED.projects);
+    expect(KEEL_VOLUME.tasks).toHaveLength(GENERATED.tasks);
+    expect(KEEL_VOLUME.comments).toHaveLength(GENERATED.comments);
+    expect(KEEL_VOLUME.drafts.length + KEEL_VOLUME.reminders.length).toBe(GENERATED.kvKeys);
+    expect(KEEL_VOLUME.files).toHaveLength(GENERATED.files);
+    expect(KEEL_VOLUME.index).toHaveLength(GENERATED.index);
+    expect(KEEL_SEED_COUNTS.tasks).toBeGreaterThanOrEqual(500);
+    expect(KEEL_SEED_COUNTS.tasks).toBe(FEATURED_TASKS.length + GENERATED.tasks);
+  });
+
+  test("volume ids stay off the featured identifiers", () => {
+    const featuredIds = new Set<string>(FEATURED_TASKS.map((task) => task.id));
+    expect(KEEL_VOLUME.tasks.some((task) => featuredIds.has(task.id))).toBe(false);
+    expect(KEEL_VOLUME.tasks[0]?.id).toMatch(/^tsk_(eng|des|gtm)_200$/);
+    expect(KEEL_VOLUME.files[0]?.key.startsWith("attachments/tsk_")).toBe(true);
+  });
+
+  test("generator is deterministic", () => {
+    const again = generateKeelVolume();
+    expect(again.tasks[0]).toEqual(KEEL_VOLUME.tasks[0]);
+    expect(again.tasks.at(-1)).toEqual(KEEL_VOLUME.tasks.at(-1));
+    expect(again.comments[10]).toEqual(KEEL_VOLUME.comments[10]);
+  });
+});

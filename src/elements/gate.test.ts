@@ -14,9 +14,11 @@ import {
   assertHttpGatePosture,
   createGateRuntime,
   deriveModuleActions,
+  flattenGateMembers,
   formatGatesList,
   gate,
   GateBootError,
+  resolveGateConfig,
   takeRate,
 } from "./gate.ts";
 
@@ -71,6 +73,24 @@ describe("gate declaration", () => {
   test("defaults strategy to sliding-window-counter", () => {
     const r = gate.rate({ max: 10, per: "1s" });
     expect(r.strategy).toBe("sliding-window-counter");
+  });
+
+  test("all flattens nested handles and rejects empty", () => {
+    const member = gate.policy("member", ({ auth }) => !!auth.verified);
+    const canBook = gate.scope("booking:create");
+    const fair = gate.rate({ max: 60, per: "1m" });
+    const write = gate.all(member, canBook, fair);
+    expect(write.kind).toBe("all");
+    expect(write.members).toEqual([member, canBook, fair]);
+
+    const nested = gate.all(write, gate.scope("extra"));
+    expect(flattenGateMembers(nested.members).map((g) => g.name)).toEqual([
+      "member",
+      "booking:create",
+      "rate:sliding-window-counter:60/1m",
+      "extra",
+    ]);
+    expect(() => gate.all()).toThrow(/at least one member/);
   });
 });
 
@@ -218,5 +238,17 @@ describe("gate runtime", () => {
     });
     expect(ok).toBe(true);
     await kv.close();
+  });
+
+  test("policies: [all] expands members into the runtime", async () => {
+    const member = gate.policy("member", ({ auth }) => !!auth.verified);
+    const canBook = gate.scope("booking:create");
+    const write = gate.all(member, canBook);
+    const resolved = resolveGateConfig({ gate: { policies: [write] } });
+    expect(resolved.policies.map((g) => g.name)).toEqual(["member", "booking:create"]);
+
+    const rt = createGateRuntime({ gates: [write] });
+    expect(rt.gates.has("member")).toBe(true);
+    expect(rt.gates.has("booking:create")).toBe(true);
   });
 });

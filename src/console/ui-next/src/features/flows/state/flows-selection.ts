@@ -8,7 +8,7 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useCallback } from "react";
 
-/** Search params accepted by the `/flows` route. */
+/** Search params accepted by the `/overview` route. */
 export interface FlowsSearch {
   readonly run?: string;
   /** Structural deep-link — seeds graph filter + fitView for this flow id. */

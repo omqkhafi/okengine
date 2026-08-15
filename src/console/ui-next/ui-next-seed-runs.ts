@@ -1,33 +1,33 @@
 /**
  * Featured + operational WideEvents for the keel Console seed.
  *
- * Featured chain: github.ingest → issues.create → notify.onIssue.
+ * Featured chain: github.ingest → tasks.create → notify.onTask.
  * Ops traffic is deterministic (mulberry32) and stays older than the
  * featured cluster so Playwright-stable rows sit near the top.
  */
 
 import type { WideEvent } from "../../runs/types.ts";
 
-/** Stable run id for the successful `issues.create` WideEvent (Playwright). */
-export const UI_NEXT_SEED_RUN_ID = "pw-run-issues-create";
+/** Stable run id for the successful `tasks.create` WideEvent (Playwright). */
+export const UI_NEXT_SEED_RUN_ID = "pw-run-tasks-create";
 
 /** Child notify run linked via `parentId` to {@link UI_NEXT_SEED_RUN_ID}. */
-export const UI_NEXT_SEED_NOTIFY_RUN_ID = "pw-run-notify-on-issue";
+export const UI_NEXT_SEED_NOTIFY_RUN_ID = "pw-run-notify-on-task";
 
 /** Parent GitHub ingest run that `call`s into {@link UI_NEXT_SEED_RUN_ID}. */
 export const UI_NEXT_SEED_INGEST_RUN_ID = "pw-run-github-ingest";
 
-/** Failed sibling `issues.create` (`CycleClosed`). */
-export const UI_NEXT_SEED_FAIL_RUN_ID = "pw-run-issues-create-fail";
+/** Failed sibling `tasks.create` (`Forbidden`). */
+export const UI_NEXT_SEED_FAIL_RUN_ID = "pw-run-tasks-create-fail";
 
-/** Recent live `issues.list` poll. */
-export const UI_NEXT_SEED_LIST_RUN_ID = "pw-run-issues-list";
+/** Recent live `tasks.list` poll. */
+export const UI_NEXT_SEED_LIST_RUN_ID = "pw-run-tasks-list";
 
-/** Monday cycle rollover (cron / clock). */
-export const UI_NEXT_SEED_CYCLES_RUN_ID = "pw-run-cycles-close";
+/** Morning inbox + goal digest (cron / clock). */
+export const UI_NEXT_SEED_DIGEST_RUN_ID = "pw-run-digest-daily";
 
-/** Triage Intelligence with Vault secret + AI ask + channel send. */
-export const UI_NEXT_SEED_TRIAGE_RUN_ID = "pw-run-triage-suggest";
+/** Planner Intelligence with Vault secret + AI ask + channel send. */
+export const UI_NEXT_SEED_PLAN_RUN_ID = "pw-run-my-plan";
 
 /** Draft expiry driven by a named Clock (`every: 10m`). */
 export const UI_NEXT_SEED_DRAFTS_RUN_ID = "pw-run-drafts-expire";
@@ -47,14 +47,14 @@ export const UI_NEXT_SEED_TOTAL_COUNT = UI_NEXT_SEED_FEATURED_COUNT + UI_NEXT_SE
 const BUILD = "0.11.2";
 const OPS_TENANTS = ["ws_keel", "ws_harbor", "ws_atlas", "ws_nova"] as const;
 const OPS_USERS = ["user_aria", "user_ben", "user_cai", "user_dia", "user_eli"] as const;
-const OPS_TEAMS = ["ENG", "DES", "SUP"] as const;
+const OPS_SPACES = ["ENG", "DES", "GTM"] as const;
 const OPS_TITLES = [
-  "Pulse graph on selected trace",
-  "Store grid range select",
-  "RTL cell polish",
+  "SSO login fails",
+  "Billing webhook",
+  "RTL checkout labels",
   "Replica lag banner",
-  "Cycle digest email",
-  "Dimension query presets",
+  "Weekly launch review",
+  "Checkout polish",
 ] as const;
 
 /**
@@ -74,7 +74,7 @@ function mulberry32(seed: number): () => number {
 
 /**
  * Build the seeded WideEvent chain (ingest → create → notify, plus
- * fail / list / cycles / triage / drafts siblings).
+ * fail / list / digest / plan / drafts siblings).
  *
  * @param now - Clock ms (defaults to `Date.now()`)
  */
@@ -89,8 +89,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
   const failEnd = failStart + 31;
   const listStart = now - 8_000;
   const listEnd = listStart + 14;
-  const cyclesStart = now - 3 * 60 * 60_000;
-  const cyclesEnd = cyclesStart + 890;
+  const digestStart = now - 3 * 60 * 60_000;
+  const digestEnd = digestStart + 890;
 
   const ingest: WideEvent = {
     id: UI_NEXT_SEED_INGEST_RUN_ID,
@@ -108,10 +108,10 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     input: {
       repo: "keel/okengine",
       action: "opened",
-      title: "Pulse graph on selected trace",
-      teamKey: "ENG",
+      title: "SSO login fails",
+      spaceKey: "ENG",
     },
-    output: { identifier: "ENG-184", issueId: "iss_eng_184", status: "synced" },
+    output: { identifier: "ENG-12", taskId: "tsk_eng_12", status: "synced" },
     effects: [
       {
         kind: "secret",
@@ -122,7 +122,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
       },
       {
         kind: "call",
-        resource: "issues.create",
+        resource: "tasks.create",
         timestamp: ingestStart + 8,
         duration: createEnd - createStart,
         reversibility: "portal",
@@ -137,8 +137,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
       },
       {
         level: "info",
-        message: "synced issue from pull request",
-        data: { identifier: "ENG-184" },
+        message: "synced task from pull request",
+        data: { identifier: "ENG-12" },
         at: ingestEnd - 4,
       },
     ],
@@ -158,41 +158,41 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
   const createOk: WideEvent = {
     id: UI_NEXT_SEED_RUN_ID,
     parentId: UI_NEXT_SEED_INGEST_RUN_ID,
-    flow: "issues.create",
-    unit: "issues",
+    flow: "tasks.create",
+    unit: "tasks",
     trigger: "http",
     plane: "user",
     tenant: "ws_keel",
     principal: "user_aria",
     subjectId: "user_aria",
-    gates: ["member", "issue:write"],
+    gates: ["member", "task:write"],
     cache: "hit",
     replica: "primary",
     buildVersion: BUILD,
     input: {
-      title: "Pulse graph on selected trace",
-      teamKey: "ENG",
-      priority: 2,
+      title: "SSO login fails",
+      spaceKey: "ENG",
+      priority: 1,
     },
-    output: { id: "iss_eng_184", identifier: "ENG-184" },
+    output: { id: "tsk_eng_12", identifier: "ENG-12" },
     effects: [
       {
         kind: "read",
-        resource: "sql:issues",
+        resource: "sql:tasks",
         timestamp: createStart + 3,
         duration: 9,
         reversibility: "none",
       },
       {
         kind: "write",
-        resource: "sql:issues",
+        resource: "sql:tasks",
         timestamp: createStart + 14,
         duration: 18,
         reversibility: "reversible",
       },
       {
         kind: "emit",
-        resource: "issue-created",
+        resource: "task-created",
         timestamp: createStart + 36,
         duration: 5,
         reversibility: "deferred",
@@ -201,19 +201,19 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "info",
-        message: "issue create started",
-        data: { teamKey: "ENG", title: "Pulse graph on selected trace" },
+        message: "task create started",
+        data: { spaceKey: "ENG", title: "SSO login fails" },
         at: createStart + 1,
       },
       {
         level: "info",
-        message: "issue reserved",
-        data: { identifier: "ENG-184" },
+        message: "task reserved",
+        data: { identifier: "ENG-12" },
         at: createStart + 32,
       },
       {
         level: "debug",
-        message: "emitted issue-created",
+        message: "emitted task-created",
         at: createStart + 40,
       },
     ],
@@ -221,13 +221,13 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: createStart,
     endedAt: createEnd,
     dimensions: {
-      flow: "issues.create",
-      unit: "issues",
+      flow: "tasks.create",
+      unit: "tasks",
       tenant: "ws_keel",
       cache: "hit",
-      team_key: "ENG",
-      identifier: "ENG-184",
-      priority: 2,
+      space_key: "ENG",
+      identifier: "ENG-12",
+      priority: 1,
       duration_ms: createEnd - createStart,
       build_version: BUILD,
     },
@@ -236,7 +236,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
   const notify: WideEvent = {
     id: UI_NEXT_SEED_NOTIFY_RUN_ID,
     parentId: UI_NEXT_SEED_RUN_ID,
-    flow: "notify.onIssue",
+    flow: "notify.onTask",
     unit: "notify",
     trigger: "signal",
     plane: "user",
@@ -246,19 +246,19 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     gates: [],
     cache: "none",
     buildVersion: BUILD,
-    input: { signal: "issue-created", identifier: "ENG-184" },
-    output: { identifier: "ENG-184", assigned: true, template: "issue-assigned" },
+    input: { signal: "task-created", identifier: "ENG-12" },
+    output: { identifier: "ENG-12", assigned: true, template: "task-assigned" },
     effects: [
       {
         kind: "write",
-        resource: "sql:issues",
+        resource: "sql:inbox",
         timestamp: notifyStart + 8,
         duration: 22,
         reversibility: "reversible",
       },
       {
         kind: "send",
-        resource: "issue-assigned",
+        resource: "task-assigned",
         timestamp: notifyStart + 40,
         duration: 78,
         reversibility: "irreversible",
@@ -267,14 +267,14 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "info",
-        message: "notify consumed issue-created",
-        data: { identifier: "ENG-184" },
+        message: "notify consumed task-created",
+        data: { identifier: "ENG-12" },
         at: notifyStart + 2,
       },
       {
         level: "info",
         message: "assignment email queued",
-        data: { template: "issue-assigned", locale: "en" },
+        data: { template: "task-assigned", locale: "en" },
         at: notifyStart + 110,
       },
     ],
@@ -282,11 +282,11 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: notifyStart,
     endedAt: notifyEnd,
     dimensions: {
-      flow: "notify.onIssue",
+      flow: "notify.onTask",
       unit: "notify",
       tenant: "ws_keel",
       cache: "none",
-      signal: "issue-created",
+      signal: "task-created",
       duration_ms: notifyEnd - notifyStart,
       build_version: BUILD,
     },
@@ -294,31 +294,31 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
 
   const createFail: WideEvent = {
     id: UI_NEXT_SEED_FAIL_RUN_ID,
-    flow: "issues.create",
-    unit: "issues",
+    flow: "tasks.create",
+    unit: "tasks",
     trigger: "http",
     plane: "user",
     tenant: "ws_harbor",
     principal: "user_ben",
     subjectId: "user_ben",
-    gates: ["member", "issue:write"],
+    gates: ["member", "task:write"],
     cache: "miss",
     replica: "replica",
     replicaLagMs: 180,
     buildVersion: BUILD,
     error: {
-      code: "CycleClosed",
-      message: "Cycle 24 is completed — issues cannot be added",
+      code: "Forbidden",
+      message: "Guest cannot create tasks in this space",
     },
     input: {
-      title: "Late cycle 24 leftover",
-      teamKey: "ENG",
+      title: "Late leftover",
+      spaceKey: "ENG",
       priority: 3,
     },
     effects: [
       {
         kind: "read",
-        resource: "sql:issues",
+        resource: "sql:tasks",
         timestamp: failStart + 4,
         duration: 21,
         reversibility: "none",
@@ -327,8 +327,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "warn",
-        message: "cycle closed",
-        data: { code: "CycleClosed", cycle: 24 },
+        message: "forbidden",
+        data: { code: "Forbidden", spaceKey: "ENG" },
         at: failStart + 26,
       },
     ],
@@ -336,14 +336,14 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: failStart,
     endedAt: failEnd,
     dimensions: {
-      flow: "issues.create",
-      unit: "issues",
+      flow: "tasks.create",
+      unit: "tasks",
       tenant: "ws_harbor",
       cache: "miss",
-      error_code: "CycleClosed",
+      error_code: "Forbidden",
       replica: "replica",
       replica_lag_ms: 180,
-      team_key: "ENG",
+      space_key: "ENG",
       duration_ms: failEnd - failStart,
       build_version: BUILD,
     },
@@ -351,8 +351,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
 
   const list: WideEvent = {
     id: UI_NEXT_SEED_LIST_RUN_ID,
-    flow: "issues.list",
-    unit: "issues",
+    flow: "tasks.list",
+    unit: "tasks",
     trigger: "http",
     plane: "user",
     tenant: "ws_keel",
@@ -365,16 +365,16 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     buildVersion: BUILD,
     output: {
       count: 3,
-      issues: [
-        { id: "iss_eng_184", identifier: "ENG-184" },
-        { id: "iss_eng_185", identifier: "ENG-185" },
-        { id: "iss_eng_186", identifier: "ENG-186" },
+      tasks: [
+        { id: "tsk_eng_12", identifier: "ENG-12" },
+        { id: "tsk_eng_13", identifier: "ENG-13" },
+        { id: "tsk_eng_8", identifier: "ENG-8" },
       ],
     },
     effects: [
       {
         kind: "read",
-        resource: "sql:issues",
+        resource: "sql:tasks",
         timestamp: listStart + 2,
         duration: 8,
         reversibility: "none",
@@ -383,7 +383,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "debug",
-        message: "listed issues for principal",
+        message: "listed tasks for principal",
         data: { count: 3 },
         at: listStart + 10,
       },
@@ -392,8 +392,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: listStart,
     endedAt: listEnd,
     dimensions: {
-      flow: "issues.list",
-      unit: "issues",
+      flow: "tasks.list",
+      unit: "tasks",
       tenant: "ws_keel",
       cache: "hit",
       replica: "replica",
@@ -402,10 +402,10 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     },
   };
 
-  const cycles: WideEvent = {
-    id: UI_NEXT_SEED_CYCLES_RUN_ID,
-    flow: "cycles.close",
-    unit: "cycles",
+  const digest: WideEvent = {
+    id: UI_NEXT_SEED_DIGEST_RUN_ID,
+    flow: "digest.daily",
+    unit: "digest",
     trigger: "cron",
     plane: "operator",
     tenant: null,
@@ -416,47 +416,33 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     cost: 0.004,
     promptVersion: 1,
     buildVersion: BUILD,
-    output: { closed: 24, rolled: 3, next: 25 },
+    output: { open: 24, at: digestStart },
     effects: [
       {
         kind: "read",
-        resource: "sql:cycles",
-        timestamp: cyclesStart + 20,
+        resource: "sql:tasks",
+        timestamp: digestStart + 20,
         duration: 210,
         reversibility: "none",
       },
       {
-        kind: "write",
-        resource: "sql:issues",
-        timestamp: cyclesStart + 280,
-        duration: 410,
-        reversibility: "reversible",
-      },
-      {
         kind: "secret",
         resource: "SLACK_WEBHOOK",
-        timestamp: cyclesStart + 700,
+        timestamp: digestStart + 700,
         duration: 1,
         reversibility: "capability",
       },
       {
         kind: "ask",
-        resource: "cycle-summary@1",
-        timestamp: cyclesStart + 710,
+        resource: "weekly-summary@1",
+        timestamp: digestStart + 710,
         duration: 80,
         reversibility: "irreversible",
       },
       {
-        kind: "emit",
-        resource: "cycle-closed",
-        timestamp: cyclesStart + 800,
-        duration: 12,
-        reversibility: "deferred",
-      },
-      {
         kind: "send",
-        resource: "cycle-digest",
-        timestamp: cyclesStart + 820,
+        resource: "daily-digest",
+        timestamp: digestStart + 820,
         duration: 40,
         reversibility: "irreversible",
       },
@@ -464,36 +450,36 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "info",
-        message: "cycle rollover started",
-        at: cyclesStart + 1,
+        message: "daily digest started",
+        at: digestStart + 1,
       },
       {
         level: "info",
-        message: "rolled open issues into next cycle",
-        data: { closed: 24, rolled: 3 },
-        at: cyclesEnd - 20,
+        message: "morning inbox + goal digest queued",
+        data: { open: 24 },
+        at: digestEnd - 20,
       },
     ],
-    durationMs: cyclesEnd - cyclesStart,
-    startedAt: cyclesStart,
-    endedAt: cyclesEnd,
+    durationMs: digestEnd - digestStart,
+    startedAt: digestStart,
+    endedAt: digestEnd,
     dimensions: {
-      flow: "cycles.close",
-      unit: "cycles",
+      flow: "digest.daily",
+      unit: "digest",
       plane: "operator",
       cache: "none",
-      clock: "close-cycles",
-      duration_ms: cyclesEnd - cyclesStart,
+      clock: "daily-digest",
+      duration_ms: digestEnd - digestStart,
       build_version: BUILD,
     },
   };
 
-  const triageStart = now - 95_000;
-  const triageEnd = triageStart + 420;
-  const triage: WideEvent = {
-    id: UI_NEXT_SEED_TRIAGE_RUN_ID,
-    flow: "triage.suggest",
-    unit: "triage",
+  const planStart = now - 95_000;
+  const planEnd = planStart + 420;
+  const plan: WideEvent = {
+    id: UI_NEXT_SEED_PLAN_RUN_ID,
+    flow: "my.plan",
+    unit: "my",
     trigger: "http",
     plane: "user",
     tenant: "ws_keel",
@@ -502,45 +488,45 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     gates: ["member"],
     cache: "none",
     cost: 0.014,
-    promptVersion: 3,
+    promptVersion: 1,
     buildVersion: BUILD,
     input: {
-      identifier: "SUP-12",
-      message: "Customer cannot sign in after claim rotate",
+      identifier: "ENG-12",
+      message: "Classify the Harbor Logistics form intake",
     },
     output: {
-      assignee: "dia@keel.dev",
-      labels: ["bug", "customer"],
-      duplicates: ["ENG-189"],
+      title: "SSO login fails",
+      roleNeeded: "developer",
+      priority: 1,
       replyQueued: true,
       template: "mention-reply",
     },
     effects: [
       {
         kind: "read",
-        resource: "sql:issues",
-        timestamp: triageStart + 4,
+        resource: "sql:inbox",
+        timestamp: planStart + 4,
         duration: 12,
         reversibility: "none",
       },
       {
         kind: "secret",
         resource: "OPENAI_KEY",
-        timestamp: triageStart + 18,
+        timestamp: planStart + 18,
         duration: 1,
         reversibility: "capability",
       },
       {
         kind: "ask",
-        resource: "issue-triage@3",
-        timestamp: triageStart + 22,
+        resource: "form-classify@1",
+        timestamp: planStart + 22,
         duration: 340,
         reversibility: "irreversible",
       },
       {
         kind: "send",
         resource: "mention-reply",
-        timestamp: triageStart + 370,
+        timestamp: planStart + 370,
         duration: 40,
         reversibility: "irreversible",
       },
@@ -548,35 +534,35 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     logs: [
       {
         level: "info",
-        message: "triage started",
-        data: { identifier: "SUP-12" },
-        at: triageStart + 2,
+        message: "plan started",
+        data: { identifier: "ENG-12" },
+        at: planStart + 2,
       },
       {
         level: "info",
-        message: "prompt issue-triage@3 answered",
-        data: { via: "smart", cost: 0.014 },
-        at: triageStart + 360,
+        message: "prompt form-classify@1 answered",
+        data: { via: "fast", cost: 0.014 },
+        at: planStart + 360,
       },
       {
         level: "info",
         message: "mention-reply queued",
         data: { template: "mention-reply", locale: "en" },
-        at: triageStart + 400,
+        at: planStart + 400,
       },
     ],
-    durationMs: triageEnd - triageStart,
-    startedAt: triageStart,
-    endedAt: triageEnd,
+    durationMs: planEnd - planStart,
+    startedAt: planStart,
+    endedAt: planEnd,
     dimensions: {
-      flow: "triage.suggest",
-      unit: "triage",
+      flow: "my.plan",
+      unit: "my",
       tenant: "ws_keel",
       cache: "none",
-      prompt: "issue-triage",
-      prompt_version: 3,
+      prompt: "form-classify",
+      prompt_version: 1,
       cost: 0.014,
-      duration_ms: triageEnd - triageStart,
+      duration_ms: planEnd - planStart,
       build_version: BUILD,
     },
   };
@@ -585,7 +571,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
   const draftsEnd = draftsStart + 55;
   const drafts: WideEvent = {
     id: UI_NEXT_SEED_DRAFTS_RUN_ID,
-    flow: "drafts.expire",
+    flow: "drafts.expire-drafts",
     unit: "drafts",
     trigger: "every",
     plane: "operator",
@@ -630,7 +616,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: draftsStart,
     endedAt: draftsEnd,
     dimensions: {
-      flow: "drafts.expire",
+      flow: "drafts.expire-drafts",
       unit: "drafts",
       plane: "operator",
       cache: "none",
@@ -646,8 +632,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     notify,
     createFail,
     list,
-    cycles,
-    triage,
+    digest,
+    plan,
     drafts,
     ...createUiNextOperationRuns(now, UI_NEXT_SEED_OPERATION_COUNT),
   ];
@@ -678,10 +664,10 @@ export function createUiNextOperationRuns(
     const startedAt = now - age;
     const tenant = OPS_TENANTS[Math.floor(rand() * OPS_TENANTS.length)]!;
     const principal = OPS_USERS[Math.floor(rand() * OPS_USERS.length)]!;
-    const teamKey = OPS_TEAMS[Math.floor(rand() * OPS_TEAMS.length)]!;
+    const spaceKey = OPS_SPACES[Math.floor(rand() * OPS_SPACES.length)]!;
     const title = OPS_TITLES[Math.floor(rand() * OPS_TITLES.length)]!;
     const seq = String(i).padStart(3, "0");
-    const identifier = `${teamKey}-${100 + i}`;
+    const identifier = `${spaceKey}-${100 + i}`;
 
     if (roll < 0.22) {
       const durationMs = 8 + Math.floor(rand() * 40);
@@ -689,8 +675,8 @@ export function createUiNextOperationRuns(
       const cache = rand() < 0.7 ? "hit" : "miss";
       out.push({
         id: `pw-ops-list-${seq}`,
-        flow: "issues.list",
-        unit: "issues",
+        flow: "tasks.list",
+        unit: "tasks",
         trigger: "http",
         plane: "user",
         tenant,
@@ -704,7 +690,7 @@ export function createUiNextOperationRuns(
         effects: [
           {
             kind: "read",
-            resource: "sql:issues",
+            resource: "sql:tasks",
             timestamp: startedAt + 2,
             duration: Math.max(2, durationMs - 4),
             reversibility: "none",
@@ -713,7 +699,7 @@ export function createUiNextOperationRuns(
         logs: [
           {
             level: "debug",
-            message: "listed issues for principal",
+            message: "listed tasks for principal",
             data: { count: 1 + Math.floor(rand() * 8) },
             at: startedAt + 3,
           },
@@ -722,8 +708,8 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "issues.list",
-          unit: "issues",
+          flow: "tasks.list",
+          unit: "tasks",
           tenant,
           cache,
           duration_ms: durationMs,
@@ -740,21 +726,21 @@ export function createUiNextOperationRuns(
       const kind = rand();
       const flowId =
         kind < 0.4
-          ? "issues.get"
+          ? "tasks.get"
           : kind < 0.65
             ? "projects.list"
             : kind < 0.85
               ? "comments.list"
-              : "teams.list";
+              : "spaces.list";
       const unit = flowId.split(".")[0]!;
       const resource =
-        unit === "issues"
-          ? "sql:issues"
+        unit === "tasks"
+          ? "sql:tasks"
           : unit === "projects"
             ? "sql:projects"
             : unit === "comments"
               ? "sql:comments"
-              : "sql:teams";
+              : "sql:spaces";
       out.push({
         id: `pw-ops-read-${seq}`,
         flow: flowId,
@@ -769,8 +755,8 @@ export function createUiNextOperationRuns(
         replica: "replica",
         replicaLagMs: 6 + Math.floor(rand() * 20),
         buildVersion: BUILD,
-        input: flowId === "issues.get" ? { id: `iss_ops_${seq}` } : { teamKey },
-        output: flowId === "issues.get" ? { id: `iss_ops_${seq}`, identifier } : { items: [] },
+        input: flowId === "tasks.get" ? { id: `tsk_ops_${seq}` } : { spaceKey },
+        output: flowId === "tasks.get" ? { id: `tsk_ops_${seq}`, identifier } : { items: [] },
         effects: [
           {
             kind: "read",
@@ -811,37 +797,37 @@ export function createUiNextOperationRuns(
       const priority = 1 + Math.floor(rand() * 4);
       out.push({
         id: createId,
-        flow: "issues.create",
-        unit: "issues",
+        flow: "tasks.create",
+        unit: "tasks",
         trigger: "http",
         plane: "user",
         tenant,
         principal,
         subjectId: principal,
-        gates: ["member", "issue:write"],
+        gates: ["member", "task:write"],
         cache: rand() < 0.55 ? "hit" : "miss",
         replica: "primary",
         buildVersion: BUILD,
-        input: { title, teamKey, priority },
-        output: { id: `iss_ops_${seq}`, identifier },
+        input: { title, spaceKey, priority },
+        output: { id: `tsk_ops_${seq}`, identifier },
         effects: [
           {
             kind: "read",
-            resource: "sql:issues",
+            resource: "sql:tasks",
             timestamp: startedAt + 2,
             duration: 6 + Math.floor(rand() * 12),
             reversibility: "none",
           },
           {
             kind: "write",
-            resource: "sql:issues",
+            resource: "sql:tasks",
             timestamp: startedAt + 12,
             duration: 10 + Math.floor(rand() * 20),
             reversibility: "reversible",
           },
           {
             kind: "emit",
-            resource: "issue-created",
+            resource: "task-created",
             timestamp: endedAt - 8,
             duration: 3 + Math.floor(rand() * 6),
             reversibility: "deferred",
@@ -850,13 +836,13 @@ export function createUiNextOperationRuns(
         logs: [
           {
             level: "info",
-            message: "issue create started",
-            data: { teamKey, title },
+            message: "task create started",
+            data: { spaceKey, title },
             at: startedAt + 1,
           },
           {
             level: "info",
-            message: "issue reserved",
+            message: "task reserved",
             data: { identifier },
             at: endedAt - 10,
           },
@@ -865,11 +851,11 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "issues.create",
-          unit: "issues",
+          flow: "tasks.create",
+          unit: "tasks",
           tenant,
           cache: "hit",
-          team_key: teamKey,
+          space_key: spaceKey,
           identifier,
           priority,
           duration_ms: durationMs,
@@ -884,7 +870,7 @@ export function createUiNextOperationRuns(
         out.push({
           id: `pw-ops-notify-${seq}`,
           parentId: createId,
-          flow: "notify.onIssue",
+          flow: "notify.onTask",
           unit: "notify",
           trigger: "signal",
           plane: "user",
@@ -894,19 +880,19 @@ export function createUiNextOperationRuns(
           gates: [],
           cache: "none",
           buildVersion: BUILD,
-          input: { signal: "issue-created", identifier },
+          input: { signal: "task-created", identifier },
           output: { identifier, assigned: true },
           effects: [
             {
               kind: "write",
-              resource: "sql:issues",
+              resource: "sql:inbox",
               timestamp: fStart + 6,
               duration: 12 + Math.floor(rand() * 20),
               reversibility: "reversible",
             },
             {
               kind: "send",
-              resource: "issue-assigned",
+              resource: "task-assigned",
               timestamp: fStart + 30,
               duration: 40 + Math.floor(rand() * 50),
               reversibility: "irreversible",
@@ -916,7 +902,7 @@ export function createUiNextOperationRuns(
             {
               level: "info",
               message: "assignment email queued",
-              data: { template: "issue-assigned" },
+              data: { template: "task-assigned" },
               at: fStart + fDur - 8,
             },
           ],
@@ -924,11 +910,11 @@ export function createUiNextOperationRuns(
           startedAt: fStart,
           endedAt: fStart + fDur,
           dimensions: {
-            flow: "notify.onIssue",
+            flow: "notify.onTask",
             unit: "notify",
             tenant,
             cache: "none",
-            signal: "issue-created",
+            signal: "task-created",
             duration_ms: fDur,
             build_version: BUILD,
           },
@@ -944,26 +930,26 @@ export function createUiNextOperationRuns(
       const duplicate = rand() < 0.35;
       out.push({
         id: `pw-ops-fail-${seq}`,
-        flow: "issues.create",
-        unit: "issues",
+        flow: "tasks.create",
+        unit: "tasks",
         trigger: "http",
         plane: "user",
         tenant,
         principal,
         subjectId: principal,
-        gates: ["member", "issue:write"],
+        gates: ["member", "task:write"],
         cache: "miss",
         replica: "replica",
         replicaLagMs: 80 + Math.floor(rand() * 200),
         buildVersion: BUILD,
         error: duplicate
-          ? { code: "Duplicate", message: `${identifier} is a duplicate of ENG-184` }
-          : { code: "CycleClosed", message: `Cycle 24 is completed — cannot add ${identifier}` },
-        input: { title, teamKey, priority: 3 },
+          ? { code: "Duplicate", message: `${identifier} is a duplicate of ENG-12` }
+          : { code: "Forbidden", message: `Guest cannot create ${identifier}` },
+        input: { title, spaceKey, priority: 3 },
         effects: [
           {
             kind: "read",
-            resource: "sql:issues",
+            resource: "sql:tasks",
             timestamp: startedAt + 3,
             duration: Math.max(4, durationMs - 6),
             reversibility: "none",
@@ -972,8 +958,8 @@ export function createUiNextOperationRuns(
         logs: [
           {
             level: "warn",
-            message: duplicate ? "duplicate issue" : "cycle closed",
-            data: { code: duplicate ? "Duplicate" : "CycleClosed", teamKey },
+            message: duplicate ? "duplicate task" : "forbidden",
+            data: { code: duplicate ? "Duplicate" : "Forbidden", spaceKey },
             at: endedAt - 4,
           },
         ],
@@ -981,12 +967,12 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "issues.create",
-          unit: "issues",
+          flow: "tasks.create",
+          unit: "tasks",
           tenant,
           cache: "miss",
-          error_code: duplicate ? "Duplicate" : "CycleClosed",
-          team_key: teamKey,
+          error_code: duplicate ? "Duplicate" : "Forbidden",
+          space_key: spaceKey,
           duration_ms: durationMs,
           build_version: BUILD,
         },
@@ -1011,7 +997,7 @@ export function createUiNextOperationRuns(
         cache: "miss",
         replica: "primary",
         buildVersion: BUILD,
-        input: { repo: "keel/okengine", action: "opened", title, teamKey },
+        input: { repo: "keel/okengine", action: "opened", title, spaceKey },
         output: { identifier, status: "synced" },
         effects: [
           {
@@ -1023,7 +1009,7 @@ export function createUiNextOperationRuns(
           },
           {
             kind: "call",
-            resource: "issues.create",
+            resource: "tasks.create",
             timestamp: startedAt + 8,
             duration: Math.max(10, durationMs - 20),
             reversibility: "portal",
@@ -1033,7 +1019,7 @@ export function createUiNextOperationRuns(
           {
             level: "info",
             message: "github webhook accepted",
-            data: { teamKey },
+            data: { spaceKey },
             at: startedAt + 1,
           },
         ],
@@ -1065,7 +1051,7 @@ export function createUiNextOperationRuns(
         tenant,
         principal,
         subjectId: principal,
-        gates: ["member", "issue:write"],
+        gates: ["member", "comment:write"],
         cache: "none",
         buildVersion: BUILD,
         input: { identifier, body: "Looks good — ship it." },
@@ -1117,19 +1103,19 @@ export function createUiNextOperationRuns(
       const kind = rand();
       const flowId =
         kind < 0.35
-          ? "issues.archive"
+          ? "tasks.archive"
           : kind < 0.6
-            ? "issues.assign"
+            ? "tasks.assign"
             : kind < 0.8
               ? "search.query"
               : "drafts.save";
       const unit = flowId.split(".")[0]!;
       const resource =
         flowId === "search.query"
-          ? "index:issues"
+          ? "index:tasks"
           : flowId === "drafts.save"
             ? "kv:drafts"
-            : "sql:issues";
+            : "sql:tasks";
       out.push({
         id: `pw-ops-custom-${seq}`,
         flow: flowId,
@@ -1139,19 +1125,19 @@ export function createUiNextOperationRuns(
         tenant,
         principal,
         subjectId: principal,
-        gates: flowId.startsWith("issues.") ? ["member", "issue:write"] : ["member"],
+        gates: flowId.startsWith("tasks.") ? ["member", "task:write"] : ["member"],
         cache: "none",
         buildVersion: BUILD,
         input:
           flowId === "search.query"
             ? { q: title }
-            : flowId === "issues.assign"
+            : flowId === "tasks.assign"
               ? { assigneeEmail: "aria@keel.dev" }
               : { identifier },
         output: { ok: true, identifier },
         effects: [
           {
-            kind: flowId === "drafts.save" || flowId.startsWith("issues.") ? "write" : "read",
+            kind: flowId === "drafts.save" || flowId.startsWith("tasks.") ? "write" : "read",
             resource,
             timestamp: startedAt + 3,
             duration: Math.max(4, durationMs - 6),
@@ -1187,9 +1173,9 @@ export function createUiNextOperationRuns(
       const endedAt = startedAt + durationMs;
       const cost = 0.008 + rand() * 0.02;
       out.push({
-        id: `pw-ops-triage-${seq}`,
-        flow: "triage.suggest",
-        unit: "triage",
+        id: `pw-ops-plan-${seq}`,
+        flow: "my.plan",
+        unit: "my",
         trigger: "http",
         plane: "user",
         tenant,
@@ -1198,7 +1184,7 @@ export function createUiNextOperationRuns(
         gates: ["member"],
         cache: "none",
         cost,
-        promptVersion: 3,
+        promptVersion: 1,
         buildVersion: BUILD,
         input: { identifier, message: "Need a suggested assignee" },
         output: { replyQueued: true, template: "mention-reply" },
@@ -1212,7 +1198,7 @@ export function createUiNextOperationRuns(
           },
           {
             kind: "ask",
-            resource: "issue-triage@3",
+            resource: "form-classify@1",
             timestamp: startedAt + 8,
             duration: Math.max(80, durationMs - 60),
             reversibility: "irreversible",
@@ -1228,8 +1214,8 @@ export function createUiNextOperationRuns(
         logs: [
           {
             level: "info",
-            message: "prompt issue-triage@3 answered",
-            data: { via: "smart", cost },
+            message: "prompt form-classify@1 answered",
+            data: { via: "fast", cost },
             at: endedAt - 40,
           },
         ],
@@ -1237,10 +1223,10 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "triage.suggest",
-          unit: "triage",
+          flow: "my.plan",
+          unit: "my",
           tenant,
-          prompt: "issue-triage",
+          prompt: "form-classify",
           cost,
           duration_ms: durationMs,
           build_version: BUILD,
@@ -1256,7 +1242,7 @@ export function createUiNextOperationRuns(
         const endedAt = startedAt + durationMs;
         out.push({
           id: `pw-ops-drafts-${seq}`,
-          flow: "drafts.expire",
+          flow: "drafts.expire-drafts",
           unit: "drafts",
           trigger: "every",
           plane: "operator",
@@ -1301,7 +1287,7 @@ export function createUiNextOperationRuns(
           startedAt,
           endedAt,
           dimensions: {
-            flow: "drafts.expire",
+            flow: "drafts.expire-drafts",
             unit: "drafts",
             plane: "operator",
             clock: "expire-drafts",
@@ -1316,9 +1302,9 @@ export function createUiNextOperationRuns(
       const durationMs = 40 + Math.floor(rand() * 80);
       const endedAt = startedAt + durationMs;
       out.push({
-        id: `pw-ops-sla-${seq}`,
-        flow: "sla.watch",
-        unit: "sla",
+        id: `pw-ops-overdue-${seq}`,
+        flow: "overdue.watch-overdue",
+        unit: "overdue",
         trigger: "every",
         plane: "operator",
         tenant: null,
@@ -1326,25 +1312,18 @@ export function createUiNextOperationRuns(
         gates: [],
         cache: "none",
         buildVersion: BUILD,
-        output: { breaching: 1 + Math.floor(rand() * 3) },
+        output: { overdue: 1 + Math.floor(rand() * 3) },
         effects: [
           {
             kind: "read",
-            resource: "sql:issues",
+            resource: "sql:tasks",
             timestamp: startedAt + 4,
             duration: 16,
             reversibility: "none",
           },
           {
-            kind: "emit",
-            resource: "sla-breaching",
-            timestamp: endedAt - 12,
-            duration: 5,
-            reversibility: "deferred",
-          },
-          {
             kind: "send",
-            resource: "sla-alert",
+            resource: "task-overdue",
             timestamp: endedAt - 8,
             duration: 6,
             reversibility: "irreversible",
@@ -1353,8 +1332,8 @@ export function createUiNextOperationRuns(
         logs: [
           {
             level: "warn",
-            message: "sla watch tick",
-            data: { clock: "watch-sla" },
+            message: "overdue watch tick",
+            data: { clock: "watch-overdue" },
             at: startedAt + 1,
           },
         ],
@@ -1362,10 +1341,10 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "sla.watch",
-          unit: "sla",
+          flow: "overdue.watch-overdue",
+          unit: "overdue",
           plane: "operator",
-          clock: "watch-sla",
+          clock: "watch-overdue",
           duration_ms: durationMs,
           build_version: BUILD,
         },
@@ -1378,8 +1357,8 @@ export function createUiNextOperationRuns(
     const endedAt = startedAt + durationMs;
     out.push({
       id: `pw-ops-cron-${seq}`,
-      flow: "cycles.close",
-      unit: "cycles",
+      flow: "digest.daily",
+      unit: "digest",
       trigger: "cron",
       plane: "operator",
       tenant: null,
@@ -1391,31 +1370,24 @@ export function createUiNextOperationRuns(
       effects: [
         {
           kind: "read",
-          resource: "sql:cycles",
+          resource: "sql:tasks",
           timestamp: startedAt + 20,
           duration: 100 + Math.floor(rand() * 200),
           reversibility: "none",
         },
         {
-          kind: "write",
-          resource: "sql:issues",
-          timestamp: startedAt + 200,
-          duration: 150 + Math.floor(rand() * 300),
-          reversibility: "reversible",
-        },
-        {
-          kind: "emit",
-          resource: "cycle-closed",
+          kind: "send",
+          resource: "daily-digest",
           timestamp: endedAt - 20,
           duration: 8,
-          reversibility: "deferred",
+          reversibility: "irreversible",
         },
       ],
       logs: [
         {
           level: "info",
-          message: "rolled open issues into next cycle",
-          data: { rolled: Math.floor(rand() * 6) },
+          message: "morning inbox + goal digest queued",
+          data: { open: Math.floor(rand() * 6) },
           at: endedAt - 15,
         },
       ],
@@ -1423,11 +1395,11 @@ export function createUiNextOperationRuns(
       startedAt,
       endedAt,
       dimensions: {
-        flow: "cycles.close",
-        unit: "cycles",
+        flow: "digest.daily",
+        unit: "digest",
         plane: "operator",
         cache: "none",
-        clock: "close-cycles",
+        clock: "daily-digest",
         duration_ms: durationMs,
         build_version: BUILD,
       },
@@ -1439,7 +1411,7 @@ export function createUiNextOperationRuns(
 }
 
 /**
- * Build the primary seeded WideEvent (`issues.create` success).
+ * Build the primary seeded WideEvent (`tasks.create` success).
  *
  * @param now - Clock ms (defaults to `Date.now()`)
  */
@@ -1447,7 +1419,7 @@ export function createUiNextSeedRun(now: number = Date.now()): WideEvent {
   const runs = createUiNextSeedRuns(now);
   const primary = runs.find((r) => r.id === UI_NEXT_SEED_RUN_ID);
   if (!primary) {
-    throw new Error("ui-next seed: primary issues.create run missing");
+    throw new Error("ui-next seed: primary tasks.create run missing");
   }
   return primary;
 }

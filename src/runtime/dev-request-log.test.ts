@@ -30,6 +30,10 @@ describe("dev-request-log", () => {
     expect(isSilentDevRequest("GET", "/assets/index.js")).toBe(true);
     expect(isSilentDevRequest("GET", "/_oke/client.json")).toBe(true);
     expect(isSilentDevRequest("POST", "/console/flows")).toBe(false);
+    expect(isSilentDevRequest("GET", "/", "MCP")).toBe(true);
+    expect(isSilentDevRequest("GET", "/json/version", "MCP")).toBe(true);
+    expect(isSilentDevRequest("GET", "/json/version", "Backend")).toBe(true);
+    expect(isSilentDevRequest("GET", "/", "Backend")).toBe(false);
   });
 
   test("failureDetailFromResponse reads error.message from envelope", async () => {

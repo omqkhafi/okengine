@@ -651,6 +651,7 @@ describe("scaffold structure", () => {
       }
       const notes = readFileSync(join(result.targetDir, "src/flows/notes/index.ts"), "utf8");
       expect(notes).toContain('flow("notes.create"');
+      expect(notes).toContain("fx.json.withQuery");
       expect(notes).not.toContain('flow("notes.digest"');
       expect(existsSync(join(result.targetDir, "src/locales/ar.ts"))).toBe(false);
       expect(readFileSync(join(result.targetDir, "oke.config.ts"), "utf8")).toContain(

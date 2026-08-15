@@ -3,6 +3,7 @@
  */
 
 import type { StoreQueryResult } from "@/client.ts";
+import { expandPiiNames } from "../../../../../../elements/store/classify.ts";
 import { formatByteSize, formatKvTtl, kvValueSizeBytes } from "./kv-meta.ts";
 
 /** One normalized grid row. */
@@ -67,7 +68,7 @@ export function buildStoreGridModel(options: StoreGridModelOptions): StoreGridMo
     columnDescriptions = {},
     primaryKeyColumns = [],
   } = options;
-  const pii = new Set(piiColumns);
+  const pii = expandPiiNames(piiColumns);
   const primaryKeys = new Set(primaryKeyColumns);
 
   if (facet === "sql") {
@@ -137,19 +138,51 @@ export function buildStoreGridModel(options: StoreGridModelOptions): StoreGridMo
   }
 
   const hits = data.hits ?? [];
+  const metaKeys = indexHitMetaKeys(hits);
   return {
     columns: [
       { key: "id", type: "string", editable: false, pii: false },
+      ...metaKeys.map((key) => ({
+        key,
+        type: "string" as const,
+        editable: false,
+        pii: false,
+      })),
       { key: "score", type: "number", editable: false, pii: false },
-      { key: "meta", type: "json", editable: false, pii: false },
+      ...(metaKeys.length === 0
+        ? ([{ key: "meta", type: "json", editable: false, pii: false }] as const)
+        : []),
     ],
     rows: hits.map((hit) => ({
       id: hit.id,
-      cells: { id: hit.id, score: hit.score, meta: hit.meta },
+      cells: {
+        id: hit.id,
+        score: hit.score,
+        ...(metaKeys.length === 0 ? { meta: hit.meta } : {}),
+        ...Object.fromEntries(metaKeys.map((key) => [key, hit.meta?.[key]])),
+      },
     })),
     deleteKind: "ids",
     editable: false,
   };
+}
+
+/** Scalar meta fields to promote — skip vector-as-object keys (`0`,`1`,`2`). */
+const INDEX_META_FIRST = ["identifier", "title", "description"] as const;
+
+function indexHitMetaKeys(
+  hits: ReadonlyArray<{ readonly meta?: Readonly<Record<string, unknown>> }>,
+): readonly string[] {
+  const keys = new Set<string>();
+  for (const hit of hits) {
+    for (const [key, value] of Object.entries(hit.meta ?? {})) {
+      if (key === "id" || /^\d+$/.test(key)) continue;
+      if (value !== null && typeof value === "object") continue;
+      keys.add(key);
+    }
+  }
+  const rest = [...keys].filter((key) => !INDEX_META_FIRST.includes(key as never)).sort();
+  return [...INDEX_META_FIRST.filter((key) => keys.has(key)), ...rest];
 }
 
 /** Extract a stable SQL row id (`id` / `Id`). */

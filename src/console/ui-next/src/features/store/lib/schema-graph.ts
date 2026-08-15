@@ -11,6 +11,7 @@ import type {
   Table,
 } from "../../../../../../manifest/types.ts";
 import type { StoreListStore } from "@/client.ts";
+import { expandPiiNames } from "../../../../../../elements/store/classify.ts";
 import type { SchemaSwatch } from "./schema-color.ts";
 import { isSqlCatalogChild } from "./sql-catalog.ts";
 
@@ -296,11 +297,12 @@ function columnsForChild(
 ): SchemaGraphColumn[] {
   const table = manifest?.stores?.[store.name]?.tables?.[tableName];
   if (table?.columns) return columnsFromManifest(table.columns, piiColumns);
+  const pii = expandPiiNames(piiColumns);
   const names = [...new Set([...Object.keys(descriptions), ...piiColumns])];
   return names.map((name) => ({
     name,
     type: "unknown",
-    ...(piiColumns.includes(name) ? { pii: true } : {}),
+    ...(pii.has(name) ? { pii: true } : {}),
   }));
 }
 
@@ -308,11 +310,12 @@ function columnsFromManifest(
   columns: NonNullable<Table["columns"]>,
   piiColumns: readonly string[],
 ): SchemaGraphColumn[] {
+  const piiSet = expandPiiNames(piiColumns);
   return Object.entries(columns).map(([name, col]) => {
     const declared = isDeclaredColumn(col) ? col : null;
     const type =
       declared?.type === "integer" ? "integer" : declared?.type === "text" ? "text" : "unknown";
-    const pii = col.pii === true || piiColumns.includes(name);
+    const pii = col.pii === true || piiSet.has(name);
     const ref = declared?.references;
     return {
       name,
@@ -371,16 +374,27 @@ function inferColumnReference(
   const pkOf = (table: SchemaGraphTable): string =>
     table.columns.find((c) => c.primaryKey)?.name ?? "id";
 
-  if (column === "parent_id") {
-    if (from.columns.some((c) => c.name === "parent_kind")) return null;
+  if (column === "parent_id" || column === "parentId") {
+    if (from.columns.some((c) => c.name === "parent_kind" || c.name === "parentKind")) return null;
     return { table: from.name, column: pkOf(from) };
   }
-  if (!column.endsWith("_id") || column === "id") return null;
-  const stem = column.slice(0, -3);
-  if (stem.length === 0) return null;
+  const stem = fkColumnStem(column);
+  if (!stem) return null;
   const target = matchTableForStem(stem, from, peers);
   if (!target) return null;
   return { table: target.name, column: pkOf(target) };
+}
+
+/**
+ * Stem of a conventional FK column (`team_id` / `teamId` → `team`).
+ *
+ * @param column - Column name
+ */
+export function fkColumnStem(column: string): string | null {
+  if (column === "id" || column === "Id") return null;
+  if (column.endsWith("_id") && column.length > 3) return column.slice(0, -3);
+  if (column.endsWith("Id") && column.length > 2) return column.slice(0, -2);
+  return null;
 }
 
 function matchTableForStem(

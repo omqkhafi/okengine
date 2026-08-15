@@ -182,7 +182,7 @@ const unsub = await bus.live("order-status", (payload) => {
 
 `once` signals retry automatically. Every attempt keeps a **typed failure reason**, and the full attempt history survives into the DLQ — so when a message lands there you see _why_ each attempt failed, not just that it did.
 
-The **Console** (`:6533` → `/flows`) shows emit and consume on the graph, and delivery attempts in Traces — no separate broker UI to run.
+The **Console** (`:6533` → `/overview`) shows emit and consume on the graph, and delivery attempts in Traces — no separate broker UI to run.
 
 <Callout title="Orphan emits and schema fail loudly">
   Zero subscribers throws **OKE1042** unless `optional: true`. A payload that fails the signal's

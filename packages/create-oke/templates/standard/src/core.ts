@@ -26,9 +26,21 @@ export const db = store.sql("app", { schema });
  * export const notesWrite = gate.policy("notes:write", ({ auth }) =>
  *   auth.scopes.has("notes:write"),
  * );
+ * export const notesMutate = gate.all(notesWrite, notesWriteRate);
  * ```
  */
 export const notesWrite = gate.policy("notes:write", () => true);
+
+/** Note write throttle. */
+export const notesWriteRate = gate.rate({
+  max: 60,
+  per: "1m",
+  keyBy: "ip",
+  description: "Note write throttle",
+});
+
+/** Reuse on every notes mutate route. */
+export const notesMutate = gate.all(notesWrite, notesWriteRate);
 
 // --- Vault -------------------------------------------------------------------
 

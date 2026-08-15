@@ -8,9 +8,17 @@
  * @module
  */
 
-export { gate, GATE_PUBLIC_NAME } from "./gate/declare.ts";
+export {
+  gate,
+  GATE_PUBLIC_NAME,
+  flattenGateArgs,
+  flattenGateMembers,
+  isGateAllDecl,
+} from "./gate/declare.ts";
 export type {
+  GateAllDecl,
   GateDecl,
+  GateMember,
   GatePolicyContext,
   PolicyGateDecl,
   PolicyGateOptions,

@@ -1,8 +1,8 @@
 /**
  * Lived-in keel Store rows for Console ui-next seed.
  *
- * Workspace ENG / DES / SUP — teams, cycles, issues, comments, documents,
- * plus KV drafts, file attachments, and semantic issue index.
+ * Workspace ENG / DES / GTM — spaces, goals, projects, sections, tasks,
+ * comments, plus KV drafts/reminders, file attachments, and semantic task index.
  */
 
 import { defineTable } from "../../elements/store.ts";
@@ -20,69 +20,67 @@ import type {
   VectorIndexStoreFxHandle,
 } from "../../elements/store/runtime.ts";
 
-/** Extra generated volume on top of the featured Linear story rows. */
+/** Extra generated volume on top of the featured Harbor story rows. */
 const GENERATED = {
   members: 12,
   projects: 6,
-  cycles: 4,
-  issues: 500,
-  issueLabels: 520,
+  tasks: 500,
   comments: 220,
   documents: 20,
-  customerRequests: 30,
   kvKeys: 40,
   files: 24,
   index: 44,
 } as const;
 
-const SEED_TEAMS = [
-  { id: "team_eng", key: "ENG", name: "Engineering", parent_id: null as string | null },
-  { id: "team_des", key: "DES", name: "Design", parent_id: "team_eng" },
-  { id: "team_sup", key: "SUP", name: "Support", parent_id: null },
+const SEED_SPACES = [
+  { id: "space_eng", key: "ENG", name: "Engineering", color: "#2563eb" },
+  { id: "space_des", key: "DES", name: "Design", color: "#db2777" },
+  { id: "space_gtm", key: "GTM", name: "Go-to-market", color: "#059669" },
 ] as const;
 
 const SEED_MEMBERS = [
-  { id: "mem_aria", team_id: "team_eng", name: "Aria Chen", email: "aria@keel.dev", role: "admin" },
+  {
+    id: "mem_aria",
+    space_id: "space_eng",
+    name: "Aria Chen",
+    email: "aria@keel.dev",
+    role: "project_manager",
+  },
   {
     id: "mem_ben",
-    team_id: "team_eng",
+    space_id: "space_eng",
     name: "Ben Okonkwo",
     email: "ben@keel.dev",
+    role: "developer",
+  },
+  {
+    id: "mem_cai",
+    space_id: "space_des",
+    name: "Cai Moreno",
+    email: "cai@keel.dev",
     role: "member",
   },
-  { id: "mem_cai", team_id: "team_des", name: "Cai Moreno", email: "cai@keel.dev", role: "member" },
-  { id: "mem_dia", team_id: "team_sup", name: "Dia Farouk", email: "dia@keel.dev", role: "member" },
-  { id: "mem_eli", team_id: "team_eng", name: "Eli Park", email: "eli@keel.dev", role: "member" },
-] as const;
-
-const SEED_STATES = [
-  { id: "st_eng_triage", team_id: "team_eng", name: "Triage", type: "triage", position: 0 },
-  { id: "st_eng_backlog", team_id: "team_eng", name: "Backlog", type: "backlog", position: 1 },
-  { id: "st_eng_todo", team_id: "team_eng", name: "Todo", type: "unstarted", position: 2 },
-  { id: "st_eng_progress", team_id: "team_eng", name: "In Progress", type: "started", position: 3 },
-  { id: "st_eng_review", team_id: "team_eng", name: "In Review", type: "started", position: 4 },
-  { id: "st_eng_done", team_id: "team_eng", name: "Done", type: "completed", position: 5 },
-  { id: "st_eng_canceled", team_id: "team_eng", name: "Canceled", type: "canceled", position: 6 },
-  { id: "st_eng_dup", team_id: "team_eng", name: "Duplicate", type: "canceled", position: 7 },
-  { id: "st_sup_triage", team_id: "team_sup", name: "Triage", type: "triage", position: 0 },
-  { id: "st_sup_todo", team_id: "team_sup", name: "Todo", type: "unstarted", position: 1 },
-  { id: "st_sup_done", team_id: "team_sup", name: "Done", type: "completed", position: 2 },
-] as const;
-
-const SEED_LABELS = [
-  { id: "lab_bug", team_id: null as string | null, name: "bug", group_name: "type" },
-  { id: "lab_feature", team_id: null, name: "feature", group_name: "type" },
-  { id: "lab_frontend", team_id: "team_eng", name: "frontend", group_name: "area" },
-  { id: "lab_regression", team_id: "team_eng", name: "regression", group_name: "type" },
-  { id: "lab_customer", team_id: "team_sup", name: "customer", group_name: "source" },
-  { id: "lab_design", team_id: "team_des", name: "design", group_name: "area" },
-] as const;
-
-const SEED_INITIATIVES = [
   {
-    id: "init_console",
-    name: "Ship Console Next",
-    status: "active",
+    id: "mem_dia",
+    space_id: "space_gtm",
+    name: "Dia Farouk",
+    email: "dia@keel.dev",
+    role: "guest",
+  },
+  {
+    id: "mem_eli",
+    space_id: "space_eng",
+    name: "Eli Park",
+    email: "eli@keel.dev",
+    role: "developer",
+  },
+] as const;
+
+const SEED_GOALS = [
+  {
+    id: "goal_harbor",
+    name: "Harbor GA",
+    status: "at_risk",
     owner_email: "aria@keel.dev",
     target_date: "2026-09-30",
   },
@@ -90,455 +88,349 @@ const SEED_INITIATIVES = [
 
 const SEED_PROJECTS = [
   {
-    id: "proj_traces",
-    initiative_id: "init_console",
-    name: "Traces pane",
-    status: "started",
-    lead_email: "aria@keel.dev",
-    target_date: "2026-08-29",
-    progress: 62,
-  },
-  {
-    id: "proj_store",
-    initiative_id: "init_console",
-    name: "Store grid",
+    id: "proj_api",
+    space_id: "space_eng",
+    goal_id: "goal_harbor",
+    name: "Harbor API",
     status: "started",
     lead_email: "ben@keel.dev",
+    start_date: "2026-07-01",
+    target_date: "2026-08-29",
+    color: "#2563eb",
+  },
+  {
+    id: "proj_web",
+    space_id: "space_eng",
+    goal_id: "goal_harbor",
+    name: "Harbor Web",
+    status: "started",
+    lead_email: "eli@keel.dev",
+    start_date: "2026-07-08",
     target_date: "2026-09-12",
-    progress: 41,
+    color: "#7c3aed",
+  },
+  {
+    id: "proj_launch",
+    space_id: "space_gtm",
+    goal_id: "goal_harbor",
+    name: "Launch checklist",
+    status: "planned",
+    lead_email: "aria@keel.dev",
+    start_date: "2026-08-01",
+    target_date: "2026-09-30",
+    color: "#059669",
   },
 ] as const;
 
-const SEED_MILESTONES = [
-  {
-    id: "ms_alpha",
-    project_id: "proj_traces",
-    name: "Alpha",
-    target_date: "2026-08-15",
-    sort_order: 1,
-  },
-  {
-    id: "ms_beta",
-    project_id: "proj_traces",
-    name: "Beta",
-    target_date: "2026-08-29",
-    sort_order: 2,
-  },
-  {
-    id: "ms_store_ga",
-    project_id: "proj_store",
-    name: "GA",
-    target_date: "2026-09-12",
-    sort_order: 1,
-  },
+const SECTIONS = ["Backlog", "Ready", "Doing", "Review", "Done"] as const;
+
+const SEED_SECTIONS = [
+  ...SECTIONS.map((name, i) => ({
+    id: `sec_api_${i}`,
+    project_id: "proj_api",
+    name,
+    sort_order: i,
+  })),
+  ...SECTIONS.map((name, i) => ({
+    id: `sec_web_${i}`,
+    project_id: "proj_web",
+    name,
+    sort_order: i,
+  })),
+  ...SECTIONS.map((name, i) => ({
+    id: `sec_launch_${i}`,
+    project_id: "proj_launch",
+    name,
+    sort_order: i,
+  })),
+] as const;
+
+const SEED_TAGS = [
+  { id: "tag_bug", name: "bug", group_name: "type" },
+  { id: "tag_feature", name: "feature", group_name: "type" },
+  { id: "tag_customer", name: "customer", group_name: "source" },
+  { id: "tag_design", name: "design", group_name: "area" },
+] as const;
+
+type TaskRow = {
+  id: string;
+  identifier: string;
+  title: string;
+  description: string;
+  kind: string;
+  priority: number;
+  estimate: number | null;
+  status: string;
+  space_id: string;
+  project_id: string | null;
+  section_id: string | null;
+  parent_id: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
+  creator_email: string;
+  role_needed: string | null;
+};
+
+function task(row: Omit<TaskRow, "kind" | "estimate" | "parent_id" | "due_date" | "completed_at" | "archived_at" | "role_needed"> & Partial<TaskRow>): TaskRow {
+  return {
+    kind: "task",
+    estimate: null,
+    parent_id: null,
+    due_date: null,
+    completed_at: null,
+    archived_at: null,
+    role_needed: null,
+    ...row,
+  };
+}
+
+const SEED_TASKS: readonly TaskRow[] = [
+  task({
+    id: "tsk_eng_12",
+    identifier: "ENG-12",
+    title: "SSO login fails",
+    description: "Customer cannot sign in after rotating the claim code.",
+    priority: 1,
+    estimate: 5,
+    status: "doing",
+    space_id: "space_eng",
+    project_id: "proj_api",
+    section_id: "sec_api_2",
+    due_date: "2026-08-08",
+    creator_email: "aria@keel.dev",
+    role_needed: "developer",
+  }),
+  task({
+    id: "tsk_eng_13",
+    identifier: "ENG-13",
+    title: "Billing webhook",
+    description: "Stripe → Harbor invoice settled.",
+    priority: 2,
+    estimate: 8,
+    status: "doing",
+    space_id: "space_eng",
+    project_id: "proj_api",
+    section_id: "sec_api_2",
+    creator_email: "ben@keel.dev",
+    role_needed: "developer",
+  }),
+  task({
+    id: "tsk_eng_14",
+    identifier: "ENG-14",
+    title: "Checkout polish",
+    description: "Blocked on billing webhook.",
+    priority: 2,
+    estimate: 5,
+    status: "ready",
+    space_id: "space_eng",
+    project_id: "proj_web",
+    section_id: "sec_web_1",
+    creator_email: "eli@keel.dev",
+    role_needed: "developer",
+  }),
+  task({
+    id: "tsk_eng_10",
+    identifier: "ENG-10",
+    title: "API freeze",
+    description: "No breaking changes after this date.",
+    kind: "milestone",
+    priority: 2,
+    status: "ready",
+    space_id: "space_eng",
+    project_id: "proj_api",
+    section_id: "sec_api_1",
+    due_date: "2026-08-20",
+    creator_email: "aria@keel.dev",
+    role_needed: "project_manager",
+  }),
+  task({
+    id: "tsk_eng_9",
+    identifier: "ENG-9",
+    title: "Weekly launch review",
+    description: "Recurring PM + eng sync.",
+    priority: 3,
+    status: "todo",
+    space_id: "space_gtm",
+    project_id: "proj_launch",
+    section_id: "sec_launch_1",
+    creator_email: "aria@keel.dev",
+    role_needed: "project_manager",
+  }),
+  task({
+    id: "tsk_des_4",
+    identifier: "DES-4",
+    title: "RTL checkout labels",
+    description: "ملاحظة التصميم — identifiers stay LTR.",
+    priority: 3,
+    estimate: 3,
+    status: "todo",
+    space_id: "space_des",
+    project_id: "proj_web",
+    section_id: "sec_web_1",
+    due_date: "2026-08-10",
+    creator_email: "cai@keel.dev",
+  }),
+  task({
+    id: "tsk_eng_8",
+    identifier: "ENG-8",
+    title: "Replica lag banner",
+    description: "Overdue — store browse showed stale rows.",
+    priority: 1,
+    estimate: 3,
+    status: "todo",
+    space_id: "space_eng",
+    project_id: "proj_web",
+    section_id: "sec_web_0",
+    due_date: "2026-08-01",
+    creator_email: "eli@keel.dev",
+    role_needed: "developer",
+  }),
+];
+
+const SEED_ASSIGNEES = [
+  { id: "asg_1", task_id: "tsk_eng_12", assignee_email: "ben@keel.dev" },
+  { id: "asg_2", task_id: "tsk_eng_13", assignee_email: "ben@keel.dev" },
+  { id: "asg_3", task_id: "tsk_eng_14", assignee_email: "eli@keel.dev" },
+  { id: "asg_4", task_id: "tsk_eng_8", assignee_email: "eli@keel.dev" },
+  { id: "asg_5", task_id: "tsk_eng_9", assignee_email: "aria@keel.dev" },
 ] as const;
 
 const SEED_UPDATES = [
   {
-    id: "upd_traces_1",
-    project_id: "proj_traces",
-    health: "on_track",
-    body: "Chain highlight + waterfall tip landed. Beta is the remaining risk.",
-    author_email: "aria@keel.dev",
-  },
-  {
-    id: "upd_store_1",
-    project_id: "proj_store",
+    id: "upd_web_1",
+    project_id: "proj_web",
     health: "at_risk",
-    body: "Pending-edits sheet slipped; RTL cell polish still open.",
-    author_email: "ben@keel.dev",
+    body: "Checkout polish blocked on billing webhook.",
+    author_email: "eli@keel.dev",
   },
-] as const;
-
-const SEED_CYCLES = [
-  {
-    id: "cyc_24",
-    team_id: "team_eng",
-    number: 24,
-    name: "Cycle 24",
-    starts_at: "2026-07-13T00:00:00Z",
-    ends_at: "2026-07-26T23:59:59Z",
-    state: "completed",
-  },
-  {
-    id: "cyc_25",
-    team_id: "team_eng",
-    number: 25,
-    name: "Cycle 25",
-    starts_at: "2026-07-27T00:00:00Z",
-    ends_at: "2026-08-09T23:59:59Z",
-    state: "active",
-  },
-  {
-    id: "cyc_26",
-    team_id: "team_eng",
-    number: 26,
-    name: "Cycle 26",
-    starts_at: "2026-08-10T00:00:00Z",
-    ends_at: "2026-08-23T23:59:59Z",
-    state: "upcoming",
-  },
-] as const;
-
-const SEED_ISSUES = [
-  {
-    id: "iss_eng_184",
-    identifier: "ENG-184",
-    title: "Pulse graph on selected trace",
-    description: "Highlight the github → create → notify chain when a Traces row is selected.",
-    priority: 2,
-    estimate: 5,
-    state_id: "st_eng_progress",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: "ms_beta",
-    cycle_id: "cyc_25",
-    parent_id: null as string | null,
-    assignee_email: "aria@keel.dev",
-    creator_email: "ben@keel.dev",
-    due_date: "2026-08-08",
-    sla_breaches_at: null as string | null,
-    triaged_at: "2026-07-28T09:12:00Z",
-    archived_at: null as string | null,
-  },
-  {
-    id: "iss_eng_185",
-    identifier: "ENG-185",
-    title: "Waterfall tooltip copy",
-    description: "Kind · resource · duration · +offset on hover.",
-    priority: 2,
-    estimate: 2,
-    state_id: "st_eng_todo",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: "ms_beta",
-    cycle_id: "cyc_25",
-    parent_id: "iss_eng_184",
-    assignee_email: "eli@keel.dev",
-    creator_email: "aria@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-07-29T11:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_186",
-    identifier: "ENG-186",
-    title: "Store grid range select",
-    description: "Shift-click cell range + pending edits sheet.",
-    priority: 3,
-    estimate: 8,
-    state_id: "st_eng_progress",
-    team_id: "team_eng",
-    project_id: "proj_store",
-    milestone_id: "ms_store_ga",
-    cycle_id: "cyc_25",
-    parent_id: null,
-    assignee_email: "ben@keel.dev",
-    creator_email: "aria@keel.dev",
-    due_date: "2026-08-12",
-    sla_breaches_at: null,
-    triaged_at: "2026-07-27T08:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_170",
-    identifier: "ENG-170",
-    title: "Traces pane skeleton",
-    description: "Shipped in cycle 24.",
-    priority: 3,
-    estimate: 5,
-    state_id: "st_eng_done",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: "ms_alpha",
-    cycle_id: "cyc_24",
-    parent_id: null,
-    assignee_email: "aria@keel.dev",
-    creator_email: "aria@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-07-14T10:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_171",
-    identifier: "ENG-171",
-    title: "Legacy runs CSV export",
-    description: "Won't fix — use Copy run ID.",
-    priority: 4,
-    estimate: null as number | null,
-    state_id: "st_eng_canceled",
-    team_id: "team_eng",
-    project_id: null as string | null,
-    milestone_id: null as string | null,
-    cycle_id: "cyc_24",
-    parent_id: null,
-    assignee_email: null as string | null,
-    creator_email: "eli@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-07-15T12:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_190",
-    identifier: "ENG-190",
-    title: "Dimension query presets",
-    description: "Save Advanced filter chips as views — later.",
-    priority: 4,
-    estimate: 3,
-    state_id: "st_eng_backlog",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: null,
-    cycle_id: null,
-    parent_id: null,
-    assignee_email: null,
-    creator_email: "ben@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: null,
-    archived_at: null,
-  },
-  {
-    id: "iss_des_22",
-    identifier: "DES-22",
-    title: "RTL cell polish",
-    description: "ملاحظة التصميم — mixed LTR identifiers in RTL notes.",
-    priority: 3,
-    estimate: 3,
-    state_id: "st_eng_todo",
-    team_id: "team_des",
-    project_id: "proj_store",
-    milestone_id: "ms_store_ga",
-    cycle_id: "cyc_25",
-    parent_id: null,
-    assignee_email: "cai@keel.dev",
-    creator_email: "cai@keel.dev",
-    due_date: "2026-08-10",
-    sla_breaches_at: null,
-    triaged_at: "2026-07-30T14:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_sup_12",
-    identifier: "SUP-12",
-    title: "Customer cannot sign in",
-    description: "Asks intake — session cleared after claim.",
-    priority: 1,
-    estimate: 2,
-    state_id: "st_sup_triage",
-    team_id: "team_sup",
-    project_id: null,
-    milestone_id: null,
-    cycle_id: null,
-    parent_id: null,
-    assignee_email: "dia@keel.dev",
-    creator_email: "dia@keel.dev",
-    due_date: "2026-08-06",
-    sla_breaches_at: "2026-08-05T18:00:00Z",
-    triaged_at: null,
-    archived_at: null,
-  },
-  {
-    id: "iss_sup_13",
-    identifier: "SUP-13",
-    title: "Replica lag banner missing",
-    description: "Support saw stale SQL rows; SLA already breached.",
-    priority: 1,
-    estimate: 3,
-    state_id: "st_sup_todo",
-    team_id: "team_sup",
-    project_id: "proj_store",
-    milestone_id: null,
-    cycle_id: null,
-    parent_id: null,
-    assignee_email: "dia@keel.dev",
-    creator_email: "eli@keel.dev",
-    due_date: "2026-08-04",
-    sla_breaches_at: "2026-08-03T12:00:00Z",
-    triaged_at: "2026-08-03T09:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_188",
-    identifier: "ENG-188",
-    title: "Copy run ID affordance",
-    description: "Hover-only copy on trace rows.",
-    priority: 3,
-    estimate: 2,
-    state_id: "st_eng_review",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: "ms_beta",
-    cycle_id: "cyc_25",
-    parent_id: null,
-    assignee_email: "eli@keel.dev",
-    creator_email: "aria@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-07-31T16:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_189",
-    identifier: "ENG-189",
-    title: "Highlight bookings.create chain",
-    description: "Duplicate of ENG-184 — skyport leftover.",
-    priority: 2,
-    estimate: null,
-    state_id: "st_eng_dup",
-    team_id: "team_eng",
-    project_id: "proj_traces",
-    milestone_id: null,
-    cycle_id: "cyc_25",
-    parent_id: null,
-    assignee_email: null,
-    creator_email: "ben@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-08-01T10:00:00Z",
-    archived_at: null,
-  },
-  {
-    id: "iss_eng_192",
-    identifier: "ENG-192",
-    title: "Cycle digest email",
-    description: "Planned for cycle 26.",
-    priority: 3,
-    estimate: 5,
-    state_id: "st_eng_todo",
-    team_id: "team_eng",
-    project_id: null,
-    milestone_id: null,
-    cycle_id: "cyc_26",
-    parent_id: null,
-    assignee_email: "aria@keel.dev",
-    creator_email: "aria@keel.dev",
-    due_date: null,
-    sla_breaches_at: null,
-    triaged_at: "2026-08-02T08:00:00Z",
-    archived_at: null,
-  },
-] as const;
-
-const SEED_ISSUE_LABELS = [
-  { id: "il_1", issue_id: "iss_eng_184", label_id: "lab_feature" },
-  { id: "il_2", issue_id: "iss_eng_184", label_id: "lab_frontend" },
-  { id: "il_3", issue_id: "iss_eng_185", label_id: "lab_frontend" },
-  { id: "il_4", issue_id: "iss_eng_186", label_id: "lab_feature" },
-  { id: "il_5", issue_id: "iss_des_22", label_id: "lab_design" },
-  { id: "il_6", issue_id: "iss_sup_12", label_id: "lab_bug" },
-  { id: "il_7", issue_id: "iss_sup_12", label_id: "lab_customer" },
-  { id: "il_8", issue_id: "iss_eng_188", label_id: "lab_frontend" },
 ] as const;
 
 const SEED_COMMENTS = [
   {
     id: "cmt_1",
-    issue_id: "iss_eng_184",
-    author_email: "ben@keel.dev",
-    body: "PR keel/okengine#441 — ingest now calls issues.create.",
+    task_id: "tsk_eng_12",
+    author_email: "aria@keel.dev",
+    body: "Form intake — assign to a developer. @ben@keel.dev can you take this?",
   },
   {
     id: "cmt_2",
-    issue_id: "iss_eng_184",
-    author_email: "aria@keel.dev",
-    body: "Keep the +3ms / 9ms read so the waterfall tip stays stable.",
+    task_id: "tsk_eng_12",
+    author_email: "ben@keel.dev",
+    body: "Repro'd — session cleared after claim rotate.",
   },
   {
     id: "cmt_3",
-    issue_id: "iss_des_22",
+    task_id: "tsk_des_4",
     author_email: "cai@keel.dev",
     body: "ملاحظة التصميم — identifiers stay LTR inside RTL notes.",
-  },
-  {
-    id: "cmt_4",
-    issue_id: "iss_sup_12",
-    author_email: "dia@keel.dev",
-    body: "Snoozed until the customer replies with the claim code.",
-  },
-  {
-    id: "cmt_5",
-    issue_id: "iss_eng_186",
-    author_email: "eli@keel.dev",
-    body: "Range select conflicts with column reorder — need a modifier.",
-  },
-  {
-    id: "cmt_6",
-    issue_id: "iss_eng_188",
-    author_email: "aria@keel.dev",
-    body: "Copy is hover-only; keyboard users get the sheet action.",
   },
 ] as const;
 
 const SEED_DOCUMENTS = [
   {
-    id: "doc_prd_traces",
-    title: "Traces pane PRD",
-    body: "Select a run → pulse the github → create → notify chain on the graph.",
+    id: "doc_prd_api",
+    title: "Harbor API PRD",
+    body: "SSO + billing webhook before freeze.",
     parent_kind: "project",
-    parent_id: "proj_traces",
+    parent_id: "proj_api",
   },
   {
-    id: "doc_spec_184",
-    title: "ENG-184 implementation spec",
-    body: "WideEvent parentId links ingest → create → notify. Do not invent output on fail.",
-    parent_kind: "issue",
-    parent_id: "iss_eng_184",
-  },
-  {
-    id: "doc_cycle_25",
-    title: "Cycle 25 notes",
-    body: "Rollover leftovers Monday 03:00 UTC. Cooldown issues stay off the next cycle.",
-    parent_kind: "cycle",
-    parent_id: "cyc_25",
+    id: "doc_spec_12",
+    title: "ENG-12 implementation spec",
+    body: "Claim rotate must keep the session cookie.",
+    parent_kind: "task",
+    parent_id: "tsk_eng_12",
   },
 ] as const;
 
-const SEED_CUSTOMERS = [
+const SEED_VIEWS = [
   {
-    id: "cr_1",
-    issue_id: "iss_sup_12",
-    customer_name: "Harbor Logistics",
-    body: "Operator stuck on Sign in after rotating the claim code.",
+    id: "view_web_board",
+    project_id: "proj_web",
+    name: "Web board",
+    kind: "board",
+    filters_json: "{}",
+    owner_email: "aria@keel.dev",
   },
   {
-    id: "cr_2",
-    issue_id: "iss_sup_13",
-    customer_name: "Atlas Labs",
-    body: "Store browse showed yesterday's bookings after a write.",
+    id: "view_api_list",
+    project_id: "proj_api",
+    name: "API list",
+    kind: "list",
+    filters_json: "{}",
+    owner_email: "ben@keel.dev",
+  },
+  {
+    id: "view_launch_tl",
+    project_id: "proj_launch",
+    name: "Launch timeline",
+    kind: "timeline",
+    filters_json: "{}",
+    owner_email: "aria@keel.dev",
+  },
+] as const;
+
+const SEED_FORMS = [
+  {
+    id: "form_customer",
+    project_id: "proj_api",
+    name: "Customer request",
+    schema_json: '{"title":"string","body":"string"}',
+  },
+] as const;
+
+const SEED_SUBMISSIONS = [
+  {
+    id: "sub_1",
+    form_id: "form_customer",
+    task_id: "tsk_eng_12",
+    payload_json: '{"title":"SSO login fails"}',
+    customer_name: "Harbor Logistics",
+  },
+] as const;
+
+const SEED_INBOX = [
+  {
+    id: "inb_1",
+    member_email: "aria@keel.dev",
+    kind: "form-submitted",
+    title: "Harbor Logistics",
+    ref_id: "tsk_eng_12",
+    read_at: null as string | null,
+  },
+  {
+    id: "inb_2",
+    member_email: "ben@keel.dev",
+    kind: "task-assigned",
+    title: "SSO login fails",
+    ref_id: "tsk_eng_12",
+    read_at: null,
   },
 ] as const;
 
 const SEED_KV: ReadonlyArray<{ key: string; value: unknown; ttl?: string }> = [
   {
-    key: "drafts:ENG-184",
+    key: "drafts:ENG-12",
     value: {
-      identifier: "ENG-184",
-      title: "Pulse graph on selected trace",
+      identifier: "ENG-12",
+      title: "SSO login fails",
       expiresAt: "2026-08-14T01:00:00Z",
     },
     ttl: "2h",
   },
   {
-    key: "drafts:ENG-186",
+    key: "drafts:ENG-14",
     value: {
-      identifier: "ENG-186",
-      title: "Store grid range select",
+      identifier: "ENG-14",
+      title: "Checkout polish",
       expiresAt: "2026-08-14T01:10:00Z",
     },
     ttl: "45m",
   },
   {
-    key: "drafts:DES-22",
-    value: { identifier: "DES-22", title: "RTL cell polish", expiresAt: "2026-08-14T01:20:00Z" },
-    ttl: "1d",
-  },
-  {
-    key: "triage-snooze:SUP-12",
-    value: { identifier: "SUP-12", until: "2026-08-15T12:00:00Z", reason: "waiting on customer" },
+    key: "reminders:ENG-8",
+    value: { identifier: "ENG-8", until: "2026-08-15T12:00:00Z", reason: "overdue banner" },
     ttl: "12h",
   },
 ];
@@ -556,14 +448,9 @@ const SEED_FILES: ReadonlyArray<{
   originalName: string;
   data: string | Uint8Array;
 }> = [
-  { key: "attachments/ENG-184/spec.pdf", originalName: "spec.pdf", data: "spec-bytes:ENG-184" },
+  { key: "attachments/tsk_eng_12/spec.pdf", originalName: "spec.pdf", data: "spec-bytes:ENG-12" },
   {
-    key: "attachments/ENG-184/pr-diff.patch",
-    originalName: "pr-diff.patch",
-    data: "diff-bytes:ENG-184",
-  },
-  {
-    key: "attachments/SUP-12/screenshot.png",
+    key: "attachments/tsk_eng_12/screenshot.png",
     originalName: "screenshot.png",
     data: SEED_PNG,
   },
@@ -575,47 +462,26 @@ const SEED_INDEX: ReadonlyArray<{
   meta: Record<string, unknown>;
 }> = [
   {
-    id: "iss_eng_184",
+    id: "tsk_eng_12",
     vector: [1, 0, 0],
-    meta: { identifier: "ENG-184", title: "Pulse graph on selected trace" },
+    meta: { identifier: "ENG-12", title: "SSO login fails" },
   },
   {
-    id: "iss_eng_185",
+    id: "tsk_eng_13",
     vector: [0, 1, 0],
-    meta: { identifier: "ENG-185", title: "Waterfall tooltip copy" },
+    meta: { identifier: "ENG-13", title: "Billing webhook" },
   },
   {
-    id: "iss_des_22",
+    id: "tsk_des_4",
     vector: [0, 0, 1],
-    meta: { identifier: "DES-22", title: "RTL cell polish" },
+    meta: { identifier: "DES-4", title: "RTL checkout labels" },
   },
   {
-    id: "iss_sup_12",
+    id: "tsk_eng_8",
     vector: [1, 1, 0],
-    meta: { identifier: "SUP-12", title: "Customer cannot sign in" },
+    meta: { identifier: "ENG-8", title: "Replica lag banner" },
   },
 ];
-
-type IssueRow = {
-  id: string;
-  identifier: string;
-  title: string;
-  description: string;
-  priority: number;
-  estimate: number | null;
-  state_id: string;
-  team_id: string;
-  project_id: string | null;
-  milestone_id: string | null;
-  cycle_id: string | null;
-  parent_id: string | null;
-  assignee_email: string | null;
-  creator_email: string;
-  due_date: string | null;
-  sla_breaches_at: string | null;
-  triaged_at: string | null;
-  archived_at: string | null;
-};
 
 /**
  * Deterministic PRNG so volume seed is stable across boots/tests.
@@ -632,24 +498,24 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-const ISSUE_TITLES = [
-  "Fix flaky waterfall hover",
-  "Cycle capacity dial",
-  "Triage snooze persist",
+const TASK_TITLES = [
+  "Fix flaky checkout hover",
+  "Goal capacity dial",
+  "Reminder persist",
   "PRD document template",
-  "SLA banner on support issues",
-  "Sub-issue auto-complete parent",
-  "GitHub merge moves to Done",
+  "Overdue banner on tasks",
+  "Subtask auto-complete parent",
+  "GitHub PR moves to Done",
   "Mention reply locale",
   "Draft TTL sweep",
   "Project health update",
-  "Label group for area",
+  "Tag group for area",
   "Replica lag chip",
   "Keyboard copy run id",
   "Index stale after rename",
-  "Customer request attach",
-  "Milestone progress rollup",
-  "Cooldown blocks assignment",
+  "Form attach",
+  "Section progress rollup",
+  "Role needed blocks assignment",
   "Duplicate reserved status",
   "Inbox live comment",
   "Ask intake from Slack",
@@ -658,82 +524,58 @@ const ISSUE_TITLES = [
 const COMMENT_BODIES = [
   "Ship it — matches the spec.",
   "Need a screenshot before we accept.",
-  "Rolled to the next cycle.",
-  "Duplicate of the traces work.",
+  "Moved to the next section.",
+  "Duplicate of the SSO work.",
   "ملاحظة المراجعة — keep identifiers LTR.",
-  "Assignee swapped after triage.",
+  "Assignee swapped after form intake.",
 ] as const;
 
 const EXTRA_PEOPLE = [
-  { id: "nora", name: "Nora Singh", team_id: "team_eng" },
-  { id: "omar", name: "Omar Haddad", team_id: "team_eng" },
-  { id: "priya", name: "Priya Shah", team_id: "team_eng" },
-  { id: "quin", name: "Quin Walsh", team_id: "team_eng" },
-  { id: "rosa", name: "Rosa Alvarez", team_id: "team_eng" },
-  { id: "samir", name: "Samir Cole", team_id: "team_eng" },
-  { id: "tess", name: "Tess Nguyen", team_id: "team_eng" },
-  { id: "uma", name: "Uma Berg", team_id: "team_eng" },
-  { id: "vik", name: "Vik Noor", team_id: "team_des" },
-  { id: "wen", name: "Wen Li", team_id: "team_des" },
-  { id: "yael", name: "Yael Cohen", team_id: "team_sup" },
-  { id: "zio", name: "Zio Hart", team_id: "team_sup" },
+  { id: "nora", name: "Nora Singh", space_id: "space_eng" },
+  { id: "omar", name: "Omar Haddad", space_id: "space_eng" },
+  { id: "priya", name: "Priya Shah", space_id: "space_eng" },
+  { id: "quin", name: "Quin Walsh", space_id: "space_eng" },
+  { id: "rosa", name: "Rosa Alvarez", space_id: "space_eng" },
+  { id: "samir", name: "Samir Cole", space_id: "space_eng" },
+  { id: "tess", name: "Tess Nguyen", space_id: "space_eng" },
+  { id: "uma", name: "Uma Berg", space_id: "space_eng" },
+  { id: "vik", name: "Vik Noor", space_id: "space_des" },
+  { id: "wen", name: "Wen Li", space_id: "space_des" },
+  { id: "yael", name: "Yael Cohen", space_id: "space_gtm" },
+  { id: "zio", name: "Zio Hart", space_id: "space_gtm" },
 ] as const;
 
-const ENG_STATES = [
-  "st_eng_triage",
-  "st_eng_backlog",
-  "st_eng_todo",
-  "st_eng_progress",
-  "st_eng_review",
-  "st_eng_done",
-  "st_eng_canceled",
-] as const;
-
-const SUP_STATES = ["st_sup_triage", "st_sup_todo", "st_sup_done"] as const;
+const STATUSES = ["backlog", "todo", "ready", "doing", "review", "done"] as const;
 const ESTIMATES = [1, 2, 3, 5, 8, 13, null] as const;
-const LABEL_IDS = [
-  "lab_bug",
-  "lab_feature",
-  "lab_frontend",
-  "lab_regression",
-  "lab_customer",
-  "lab_design",
-] as const;
+const KINDS = ["task", "task", "task", "subtask", "milestone"] as const;
+const ROLES = ["developer", "project_manager", "member", null] as const;
 
 /**
- * Build the high-volume tail so Store browse looks like a live Linear org.
+ * Build the high-volume tail so Store browse looks like a live work-management org.
  */
 function generateKeelVolume(): {
   readonly members: ReadonlyArray<{
     id: string;
-    team_id: string;
+    space_id: string;
     name: string;
     email: string;
     role: string;
   }>;
   readonly projects: ReadonlyArray<{
     id: string;
-    initiative_id: string;
+    space_id: string;
+    goal_id: string;
     name: string;
     status: string;
     lead_email: string;
+    start_date: string;
     target_date: string;
-    progress: number;
+    color: string;
   }>;
-  readonly cycles: ReadonlyArray<{
-    id: string;
-    team_id: string;
-    number: number;
-    name: string;
-    starts_at: string;
-    ends_at: string;
-    state: string;
-  }>;
-  readonly issues: readonly IssueRow[];
-  readonly issueLabels: ReadonlyArray<{ id: string; issue_id: string; label_id: string }>;
+  readonly tasks: readonly TaskRow[];
   readonly comments: ReadonlyArray<{
     id: string;
-    issue_id: string;
+    task_id: string;
     author_email: string;
     body: string;
   }>;
@@ -744,13 +586,7 @@ function generateKeelVolume(): {
     parent_kind: string;
     parent_id: string;
   }>;
-  readonly customerRequests: ReadonlyArray<{
-    id: string;
-    issue_id: string;
-    customer_name: string;
-    body: string;
-  }>;
-  readonly kv: ReadonlyArray<{ key: string; value: unknown }>;
+  readonly kv: ReadonlyArray<{ key: string; value: unknown; ttl?: string }>;
   readonly files: ReadonlyArray<{ key: string; originalName: string; data: string }>;
   readonly index: ReadonlyArray<{
     id: string;
@@ -763,7 +599,7 @@ function generateKeelVolume(): {
 
   const members = EXTRA_PEOPLE.map((p) => ({
     id: `mem_${p.id}`,
-    team_id: p.team_id,
+    space_id: p.space_id,
     name: p.name,
     email: `${p.id}@keel.dev`,
     role: "member",
@@ -779,114 +615,80 @@ function generateKeelVolume(): {
 
   const projects = Array.from({ length: GENERATED.projects }, (_, i) => ({
     id: `proj_g_${String(i + 1).padStart(2, "0")}`,
-    initiative_id: "init_console",
+    space_id: pick(["space_eng", "space_des", "space_gtm"] as const),
+    goal_id: "goal_harbor",
     name: `${pick(["Inbox", "Agents", "Replay", "Access", "Vault", "Clock"])} ${i + 1}`,
     status: pick(["backlog", "started", "completed"]),
     lead_email: pick(emails),
+    start_date: `2026-0${(i % 9) + 1}-01`,
     target_date: `2026-0${(i % 9) + 1}-15`,
-    progress: Math.floor(rand() * 100),
+    color: "#64748b",
   }));
-  const projectIds = ["proj_traces", "proj_store", ...projects.map((p) => p.id), null];
+  const projectIds = ["proj_api", "proj_web", "proj_launch", ...projects.map((p) => p.id), null];
 
-  const cycles = Array.from({ length: GENERATED.cycles }, (_, i) => {
-    const number = 20 + i;
-    return {
-      id: `cyc_${number}`,
-      team_id: "team_eng",
-      number,
-      name: `Cycle ${number}`,
-      starts_at: `2026-0${5 + i}-16T00:00:00Z`,
-      ends_at: `2026-0${5 + i}-29T23:59:59Z`,
-      state: "completed" as const,
-    };
-  });
-  const cycleIds = ["cyc_24", "cyc_25", "cyc_26", ...cycles.map((c) => c.id), null];
-
-  const issues: IssueRow[] = [];
-  for (let i = 0; i < GENERATED.issues; i += 1) {
+  const tasks: TaskRow[] = [];
+  for (let i = 0; i < GENERATED.tasks; i += 1) {
     const roll = rand();
-    const team = roll < 0.72 ? ("ENG" as const) : roll < 0.9 ? ("DES" as const) : ("SUP" as const);
+    const space = roll < 0.72 ? ("ENG" as const) : roll < 0.9 ? ("DES" as const) : ("GTM" as const);
     const n = 200 + i;
-    const identifier = `${team}-${n}`;
-    const title = `${pick(ISSUE_TITLES)} (${identifier})`;
+    const identifier = `${space}-${n}`;
+    const title = `${pick(TASK_TITLES)} (${identifier})`;
     const rtl = rand() < 0.06;
-    issues.push({
-      id: `iss_${team.toLowerCase()}_${n}`,
+    tasks.push({
+      id: `tsk_${space.toLowerCase()}_${n}`,
       identifier,
       title,
       description: rtl
         ? `ملاحظة ${identifier} — ${title}`
         : `${title} filed from the lived-in keel backlog.`,
+      kind: pick(KINDS),
       priority: Math.floor(rand() * 5),
       estimate: pick(ESTIMATES),
-      state_id: team === "SUP" ? pick(SUP_STATES) : pick(ENG_STATES),
-      team_id: team === "ENG" ? "team_eng" : team === "DES" ? "team_des" : "team_sup",
+      status: pick(STATUSES),
+      space_id: space === "ENG" ? "space_eng" : space === "DES" ? "space_des" : "space_gtm",
       project_id: pick(projectIds),
-      milestone_id: rand() < 0.25 ? pick(["ms_alpha", "ms_beta", "ms_store_ga", null]) : null,
-      cycle_id: pick(cycleIds),
+      section_id: rand() < 0.4 ? pick(["sec_api_0", "sec_api_2", "sec_web_1", null]) : null,
       parent_id:
-        i > 8 && rand() < 0.08 ? (issues[i - 1 - Math.floor(rand() * 4)]?.id ?? null) : null,
-      assignee_email: rand() < 0.18 ? null : pick(emails),
+        i > 8 && rand() < 0.08 ? (tasks[i - 1 - Math.floor(rand() * 4)]?.id ?? null) : null,
       creator_email: pick(emails),
+      role_needed: pick(ROLES),
       due_date:
         rand() < 0.35 ? `2026-08-${String(1 + Math.floor(rand() * 28)).padStart(2, "0")}` : null,
-      sla_breaches_at: team === "SUP" && rand() < 0.25 ? "2026-08-04T12:00:00Z" : null,
-      triaged_at: rand() < 0.7 ? "2026-07-20T10:00:00Z" : null,
+      completed_at: rand() < 0.12 ? "2026-08-01T00:00:00Z" : null,
       archived_at: rand() < 0.04 ? "2026-08-01T00:00:00Z" : null,
     });
   }
 
-  const issueLabels: Array<{ id: string; issue_id: string; label_id: string }> = [];
-  for (let i = 0; i < GENERATED.issueLabels; i += 1) {
-    const issue = issues[i % issues.length]!;
-    issueLabels.push({
-      id: `il_g_${i}`,
-      issue_id: issue.id,
-      label_id: pick(LABEL_IDS),
-    });
-  }
-
-  const comments: Array<{ id: string; issue_id: string; author_email: string; body: string }> = [];
+  const comments: Array<{ id: string; task_id: string; author_email: string; body: string }> = [];
   for (let i = 0; i < GENERATED.comments; i += 1) {
-    const issue = issues[Math.floor(rand() * issues.length)]!;
+    const row = tasks[Math.floor(rand() * tasks.length)]!;
     comments.push({
       id: `cmt_g_${i}`,
-      issue_id: issue.id,
+      task_id: row.id,
       author_email: pick(emails),
       body: pick(COMMENT_BODIES),
     });
   }
 
   const documents = Array.from({ length: GENERATED.documents }, (_, i) => {
-    const issue = issues[i]!;
+    const row = tasks[i]!;
     return {
       id: `doc_g_${i}`,
-      title: `Notes ${issue.identifier}`,
-      body: `Working notes for ${issue.title}.`,
-      parent_kind: "issue",
-      parent_id: issue.id,
-    };
-  });
-
-  const customers = ["Harbor Logistics", "Atlas Labs", "Nova Retail", "Delta Health"];
-  const customerRequests = Array.from({ length: GENERATED.customerRequests }, (_, i) => {
-    const issue = issues[issues.length - 1 - i]!;
-    return {
-      id: `cr_g_${i}`,
-      issue_id: issue.id,
-      customer_name: pick(customers),
-      body: `Customer ping on ${issue.identifier}.`,
+      title: `Notes ${row.identifier}`,
+      body: `Working notes for ${row.title}.`,
+      parent_kind: "task",
+      parent_id: row.id,
     };
   });
 
   const kv = Array.from({ length: GENERATED.kvKeys }, (_, i) => {
-    const issue = issues[i]!;
+    const row = tasks[i]!;
     const ttls = ["30m", "2h", "12h", "1d"] as const;
     return {
-      key: i % 7 === 0 ? `triage-snooze:${issue.identifier}` : `drafts:${issue.identifier}`,
+      key: i % 7 === 0 ? `reminders:${row.identifier}` : `drafts:${row.identifier}`,
       value: {
-        identifier: issue.identifier,
-        title: issue.title,
+        identifier: row.identifier,
+        title: row.title,
         expiresAt: "2026-08-14T02:00:00Z",
       },
       ...(i % 5 === 0 ? {} : { ttl: ttls[i % ttls.length] }),
@@ -894,35 +696,32 @@ function generateKeelVolume(): {
   });
 
   const files = Array.from({ length: GENERATED.files }, (_, i) => {
-    const issue = issues[i]!;
+    const row = tasks[i]!;
     return {
-      key: `attachments/${issue.identifier}/note-${i}.txt`,
+      key: `attachments/${row.identifier}/note-${i}.txt`,
       originalName: `note-${i}.txt`,
-      data: `bytes:${issue.identifier}`,
+      data: `bytes:${row.identifier}`,
     };
   });
 
   const index = Array.from({ length: GENERATED.index }, (_, i) => {
-    const issue = issues[i]!;
+    const row = tasks[i]!;
     const a = i % 3 === 0 ? 1 : 0;
     const b = i % 3 === 1 ? 1 : 0;
     const c = i % 3 === 2 ? 1 : 0;
     return {
-      id: issue.id,
+      id: row.id,
       vector: [a, b, c] as const,
-      meta: { identifier: issue.identifier, title: issue.title },
+      meta: { identifier: row.identifier, title: row.title },
     };
   });
 
   return {
     members,
     projects,
-    cycles,
-    issues,
-    issueLabels,
+    tasks,
     comments,
     documents,
-    customerRequests,
     kv,
     files,
     index,
@@ -933,23 +732,17 @@ const KEEL_VOLUME = generateKeelVolume();
 
 /** Seeded facet / table counts (verifiable in tests). */
 export const UI_NEXT_SEED_STORE_COUNTS = {
-  sqlTeams: SEED_TEAMS.length,
+  sqlSpaces: SEED_SPACES.length,
   sqlMembers: SEED_MEMBERS.length + KEEL_VOLUME.members.length,
-  sqlWorkflowStates: SEED_STATES.length,
-  sqlLabels: SEED_LABELS.length,
-  sqlInitiatives: SEED_INITIATIVES.length,
+  sqlGoals: SEED_GOALS.length,
   sqlProjects: SEED_PROJECTS.length + KEEL_VOLUME.projects.length,
-  sqlMilestones: SEED_MILESTONES.length,
-  sqlProjectUpdates: SEED_UPDATES.length,
-  sqlCycles: SEED_CYCLES.length + KEEL_VOLUME.cycles.length,
-  sqlIssues: SEED_ISSUES.length + KEEL_VOLUME.issues.length,
-  sqlIssueLabels: SEED_ISSUE_LABELS.length + KEEL_VOLUME.issueLabels.length,
+  sqlSections: SEED_SECTIONS.length,
+  sqlTasks: SEED_TASKS.length + KEEL_VOLUME.tasks.length,
   sqlComments: SEED_COMMENTS.length + KEEL_VOLUME.comments.length,
   sqlDocuments: SEED_DOCUMENTS.length + KEEL_VOLUME.documents.length,
-  sqlCustomerRequests: SEED_CUSTOMERS.length + KEEL_VOLUME.customerRequests.length,
   kvKeys: SEED_KV.length + KEEL_VOLUME.kv.length,
   filesAttachments: SEED_FILES.length + KEEL_VOLUME.files.length,
-  indexIssues: SEED_INDEX.length + KEEL_VOLUME.index.length,
+  indexTasks: SEED_INDEX.length + KEEL_VOLUME.index.length,
   sqlIdentities: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_identities?.length ?? 0,
   sqlAppSessions: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_sessions?.length ?? 0,
   sqlCrons: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_crons?.length ?? 0,
@@ -967,33 +760,20 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     revealPii: true,
   })) as SqlStoreHandle;
 
-  const teams = defineTable("teams", {
+  const spaces = defineTable("spaces", {
     id: true,
     key: true,
     name: true,
-    parent_id: true,
+    color: true,
   });
   const members = defineTable("members", {
     id: true,
-    team_id: true,
+    space_id: true,
     name: true,
     email: classify({ pii: true }),
     role: true,
   });
-  const workflowStates = defineTable("workflow_states", {
-    id: true,
-    team_id: true,
-    name: true,
-    type: true,
-    position: true,
-  });
-  const labels = defineTable("labels", {
-    id: true,
-    team_id: true,
-    name: true,
-    group_name: true,
-  });
-  const initiatives = defineTable("initiatives", {
+  const goals = defineTable("goals", {
     id: true,
     name: true,
     status: true,
@@ -1002,64 +782,48 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
   });
   const projects = defineTable("projects", {
     id: true,
-    initiative_id: true,
+    space_id: true,
+    goal_id: true,
     name: true,
     status: true,
     lead_email: classify({ pii: true }),
+    start_date: true,
     target_date: true,
-    progress: true,
+    color: true,
   });
-  const milestones = defineTable("project_milestones", {
+  const sections = defineTable("sections", {
     id: true,
     project_id: true,
     name: true,
-    target_date: true,
     sort_order: true,
   });
-  const updates = defineTable("project_updates", {
-    id: true,
-    project_id: true,
-    health: true,
-    body: true,
-    author_email: classify({ pii: true }),
-  });
-  const cycles = defineTable("cycles", {
-    id: true,
-    team_id: true,
-    number: true,
-    name: true,
-    starts_at: true,
-    ends_at: true,
-    state: true,
-  });
-  const issues = defineTable("issues", {
+  const tasks = defineTable("tasks", {
     id: true,
     identifier: true,
     title: true,
     description: true,
+    kind: true,
     priority: true,
     estimate: true,
-    state_id: true,
-    team_id: true,
+    status: true,
+    space_id: true,
     project_id: true,
-    milestone_id: true,
-    cycle_id: true,
+    section_id: true,
     parent_id: true,
-    assignee_email: classify({ pii: true }),
-    creator_email: classify({ pii: true }),
     due_date: true,
-    sla_breaches_at: true,
-    triaged_at: true,
+    completed_at: true,
     archived_at: true,
+    creator_email: classify({ pii: true }),
+    role_needed: true,
   });
-  const issueLabels = defineTable("issue_labels", {
+  const assignees = defineTable("task_assignees", {
     id: true,
-    issue_id: true,
-    label_id: true,
+    task_id: true,
+    assignee_email: classify({ pii: true }),
   });
   const comments = defineTable("comments", {
     id: true,
-    issue_id: true,
+    task_id: true,
     author_email: classify({ pii: true }),
     body: true,
   });
@@ -1078,28 +842,64 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     size_bytes: true,
     store_ref: true,
   });
-  const customerRequests = defineTable("customer_requests", {
+  const updates = defineTable("project_updates", {
     id: true,
-    issue_id: true,
-    customer_name: true,
+    project_id: true,
+    health: true,
     body: true,
+    author_email: classify({ pii: true }),
+  });
+  const views = defineTable("views", {
+    id: true,
+    project_id: true,
+    name: true,
+    kind: true,
+    filters_json: true,
+    owner_email: classify({ pii: true }),
+  });
+  const forms = defineTable("forms", {
+    id: true,
+    project_id: true,
+    name: true,
+    schema_json: true,
+  });
+  const submissions = defineTable("form_submissions", {
+    id: true,
+    form_id: true,
+    task_id: true,
+    payload_json: true,
+    customer_name: true,
+  });
+  const inbox = defineTable("inbox", {
+    id: true,
+    member_email: classify({ pii: true }),
+    kind: true,
+    title: true,
+    ref_id: true,
+    read_at: true,
+  });
+  const tags = defineTable("tags", {
+    id: true,
+    name: true,
+    group_name: true,
   });
 
   const tables: ReadonlyArray<readonly [ReturnType<typeof defineTable>, readonly SqlRow[]]> = [
-    [teams, SEED_TEAMS],
+    [spaces, SEED_SPACES],
     [members, [...SEED_MEMBERS, ...KEEL_VOLUME.members]],
-    [workflowStates, SEED_STATES],
-    [labels, SEED_LABELS],
-    [initiatives, SEED_INITIATIVES],
+    [goals, SEED_GOALS],
     [projects, [...SEED_PROJECTS, ...KEEL_VOLUME.projects]],
-    [milestones, SEED_MILESTONES],
-    [updates, SEED_UPDATES],
-    [cycles, [...SEED_CYCLES, ...KEEL_VOLUME.cycles]],
-    [issues, [...SEED_ISSUES, ...KEEL_VOLUME.issues]],
-    [issueLabels, [...SEED_ISSUE_LABELS, ...KEEL_VOLUME.issueLabels]],
+    [sections, SEED_SECTIONS],
+    [tags, SEED_TAGS],
+    [tasks, [...SEED_TASKS, ...KEEL_VOLUME.tasks]],
+    [assignees, SEED_ASSIGNEES],
     [comments, [...SEED_COMMENTS, ...KEEL_VOLUME.comments]],
     [documents, [...SEED_DOCUMENTS, ...KEEL_VOLUME.documents]],
-    [customerRequests, [...SEED_CUSTOMERS, ...KEEL_VOLUME.customerRequests]],
+    [updates, SEED_UPDATES],
+    [views, SEED_VIEWS],
+    [forms, SEED_FORMS],
+    [submissions, SEED_SUBMISSIONS],
+    [inbox, SEED_INBOX],
     [
       fileObjects,
       [...SEED_FILES, ...KEEL_VOLUME.files].map((entry) => ({

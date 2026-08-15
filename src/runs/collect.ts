@@ -30,6 +30,11 @@ export interface CollectWideEventInput {
   readonly startedAt: number;
   /** Epoch-ms when the run ended. */
   readonly endedAt: number;
+  /**
+   * High-res handler duration. When omitted, falls back to
+   * `endedAt - startedAt` (integer ms).
+   */
+  readonly durationMs?: number;
   /** Pipeline failure when present. */
   readonly failure?: FlowFailure | null;
   /** Validated flow input (for local replay). */
@@ -66,7 +71,10 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     input.telemetry.gates.length > 0 ? [...input.telemetry.gates] : httpGates(input.trigger);
 
   const error = failureToRunError(input.failure);
-  const durationMs = Math.max(0, input.endedAt - input.startedAt);
+  const durationMs =
+    input.durationMs !== undefined && Number.isFinite(input.durationMs)
+      ? Math.max(0, input.durationMs)
+      : Math.max(0, input.endedAt - input.startedAt);
 
   const dimensions: WideEvent["dimensions"] = {
     flow: input.flow.name,

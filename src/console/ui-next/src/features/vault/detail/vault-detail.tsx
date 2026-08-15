@@ -385,10 +385,7 @@ export function VaultDetail({
                       ) : null}
                     </span>
                     <span
-                      className={cn(
-                        "text-[10px]",
-                        step.won ? WON_INK : "text-muted-foreground",
-                      )}
+                      className={cn("text-[10px]", step.won ? WON_INK : "text-muted-foreground")}
                     >
                       {step.won ? "won" : step.present ? "lost" : "absent"}
                     </span>
@@ -400,9 +397,7 @@ export function VaultDetail({
           <div
             className={cn(
               "flex items-center gap-2 rounded-md border px-2.5 py-2",
-              selected.won
-                ? "border-emerald-500/30 bg-emerald-500/5"
-                : "border-border/60",
+              selected.won ? "border-emerald-500/30 bg-emerald-500/5" : "border-border/60",
             )}
           >
             <HugeiconsIcon
@@ -411,7 +406,9 @@ export function VaultDetail({
               aria-hidden
             />
             <div className="min-w-0 flex-1">
-              <p className={cn("font-mono text-[11px]", selected.won ? WON_INK : "text-foreground")}>
+              <p
+                className={cn("font-mono text-[11px]", selected.won ? WON_INK : "text-foreground")}
+              >
                 {selected.source === "driver" ? vaultDriverTitle(backend) : selected.source}
               </p>
               <p className="truncate text-[10px] text-muted-foreground">{fill.hint}</p>
@@ -793,14 +790,14 @@ function VaultReaders({
                 </button>
               ) : null}
               <Link
-                to="/units"
+                to="/flows"
                 search={{ flow: id }}
                 className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >
-                Units
+                Flows
               </Link>
               <Link
-                to="/flows"
+                to="/overview"
                 search={{ flow: id }}
                 className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >

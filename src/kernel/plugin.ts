@@ -17,7 +17,7 @@
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
-import type { GateDecl } from "../elements/gate/declare.ts";
+import type { GateAllDecl, GateDecl } from "../elements/gate/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
@@ -280,9 +280,9 @@ export interface PluginApi {
   /**
    * Contribute a gate declaration (merged into boot gates).
    *
-   * @param decl - Gate from `gate.policy` / `gate.scope` / `gate.rate` / `gate.public`
+   * @param decl - Gate from `gate.policy` / `gate.scope` / `gate.rate` / `gate.public` / `gate.all`
    */
-  gate(decl: GateDecl): PluginApi;
+  gate(decl: GateDecl | GateAllDecl): PluginApi;
   /**
    * Contribute a channel template (merged into boot channel templates).
    *
@@ -471,8 +471,8 @@ export interface PluginDef<D extends Record<string, unknown> = {}> {
   clock(decl: ClockDecl): PluginDef<D>;
   /** Queue a signal declaration. */
   signal(decl: SignalDecl): PluginDef<D>;
-  /** Queue a gate declaration. */
-  gate(decl: GateDecl): PluginDef<D>;
+  /** Queue a gate declaration (or `gate.all` handle). */
+  gate(decl: GateDecl | GateAllDecl): PluginDef<D>;
   /** Queue a channel template. */
   channelTemplate(decl: ChannelTemplateDecl): PluginDef<D>;
   /** Queue channel template body catalog entries. */

@@ -2,7 +2,14 @@
  * Runtime adapters: Bun (primary) · Web Standards (Node / Deno / edge).
  */
 
-export { createBunRuntime, buildBunRoutes, isBunNativePath, type BunRuntime } from "./bun.ts";
+export {
+  createBunRuntime,
+  buildBunRoutes,
+  isBunNativePath,
+  isBunNativeMethod,
+  serveBunHttp,
+  type BunRuntime,
+} from "./bun.ts";
 
 export {
   createEnv,

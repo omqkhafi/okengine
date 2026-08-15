@@ -59,9 +59,9 @@ function printConsoleNextBanner(
   if (seeded) {
     log(`      Seed:  ${uiNextSeededSummary()}`);
     if (fresh) {
-      log(`      Next:  open URL → claim → Flows (graph + Traces row already present)`);
+      log(`      Next:  open URL → claim → Overview (graph + Traces row already present)`);
     } else {
-      log(`      Next:  open URL → Sign in → Flows (graph + Traces row already present)`);
+      log(`      Next:  open URL → Sign in → Overview (graph + Traces row already present)`);
     }
   } else if (!fresh) {
     log(`      Tip:   bun run dev:console:seed  — all 8 elements + ~80 lived-in traces`);

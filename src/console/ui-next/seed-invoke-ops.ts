@@ -29,7 +29,7 @@ export interface ExecuteSeedInvokeInput {
 }
 
 /**
- * Classify a flow id into a store verb (`issues.list` → `list`).
+ * Classify a flow id into a store verb (`tasks.list` → `list`).
  *
  * @param flowId - Manifest flow id
  */
@@ -53,7 +53,7 @@ export function isPlaceholderId(id: string | undefined): boolean {
 }
 
 /**
- * First SQL table named in writes, then reads (`sql:issues` → `issues`).
+ * First SQL table named in writes, then reads (`sql:tasks` → `tasks`).
  *
  * @param decl - Manifest flow
  */
@@ -133,9 +133,9 @@ export async function executeSeedInvoke(
     return deleteRow(runtime, manifest, table, filesRef, id, flowId);
   }
 
-  if (decl.effects?.calls?.includes("issues.create") && stringField(input, "title")) {
-    const issue = await createRow(runtime, manifest, "issues", input, userId);
-    return { ok: true, flow: flowId, userId, called: ["issues.create"], issue };
+  if (decl.effects?.calls?.includes("tasks.create") && stringField(input, "title")) {
+    const task = await createRow(runtime, manifest, "tasks", input, userId);
+    return { ok: true, flow: flowId, userId, called: ["tasks.create"], task };
   }
 
   if (!table || id === undefined) {
@@ -160,9 +160,9 @@ async function listRows(
   const params: unknown[] = [];
 
   if (parent) {
-    if (table === "file_objects" && parent.column === "issue_id") {
-      const issue = await getRow(runtime, "issues", parent.value);
-      const ident = typeof issue?.identifier === "string" ? issue.identifier : parent.value;
+    if (table === "file_objects" && parent.column === "task_id") {
+      const task = await getRow(runtime, "tasks", parent.value);
+      const ident = typeof task?.identifier === "string" ? task.identifier : parent.value;
       where.push(`"object_key" LIKE ?`);
       params.push(`attachments/${ident}/%`);
     } else {
@@ -170,12 +170,12 @@ async function listRows(
       params.push(parent.value);
     }
   }
-  const teamKey = stringField(input, "teamKey", "team_key");
-  if (teamKey && TEAM_FILTER_TABLES.has(table)) {
-    const team = await getRowBy(runtime, "teams", "key", teamKey);
-    if (team && typeof team.id === "string") {
-      where.push(`"team_id" = ?`);
-      params.push(team.id);
+  const spaceKey = stringField(input, "spaceKey", "space_key");
+  if (spaceKey && SPACE_FILTER_TABLES.has(table)) {
+    const space = await getRowBy(runtime, "spaces", "key", spaceKey);
+    if (space && typeof space.id === "string") {
+      where.push(`"space_id" = ?`);
+      params.push(space.id);
     }
   }
   if (q) {
@@ -313,7 +313,7 @@ async function applyAction(
     const kv = (await runtime.openRef("kv:cache", {
       effects: { writes: ["kv:cache"] },
     })) as KvStoreFxHandle;
-    await kv.set(`triage-snooze:${ident}`, { until, reason: input.reason ?? null });
+    await kv.set(`reminders:${ident}`, { until, reason: input.reason ?? null });
     return { ok: true, id, until, ...existing };
   }
 
@@ -351,12 +351,12 @@ function actionPatch(
   }
   if (verb === "move" || verb === "transfer") {
     const out: Record<string, unknown> = {};
-    const teamKey = stringField(input, "teamKey", "team_key");
-    if (teamKey) out.team_key = teamKey;
+    const spaceKey = stringField(input, "spaceKey", "space_key");
+    if (spaceKey) out.space_key = spaceKey;
     const projectId = stringField(input, "projectId", "project_id");
     if (projectId) out.project_id = projectId;
-    const cycleId = stringField(input, "cycleId", "cycle_id");
-    if (cycleId) out.cycle_id = cycleId;
+    const sectionId = stringField(input, "sectionId", "section_id");
+    if (sectionId) out.section_id = sectionId;
     return out;
   }
   return omitId(snakeRecord(input));
@@ -373,15 +373,18 @@ async function columnsForInsert(
     (typeof mapped.id === "string" && mapped.id.length > 0 ? mapped.id : undefined) ??
     `${table.replace(/s$/, "")}_${tinyId()}`;
   mapped.id = id;
-  if (table === "issues") {
-    const teamKey =
-      stringField(input, "teamKey", "team_key") ??
-      (typeof mapped.team_id === "string" ? mapped.team_id : "ENG");
+  if (table === "tasks") {
+    const spaceKey =
+      stringField(input, "spaceKey", "space_key") ??
+      (typeof mapped.space_id === "string" ? mapped.space_id : "ENG");
     if (!mapped.identifier) {
-      mapped.identifier = `${teamKey}-${tinyId()}`;
+      mapped.identifier = `${spaceKey}-${tinyId()}`;
     }
     if (!mapped.title) mapped.title = stringField(input, "title") ?? "Untitled";
     if (!mapped.creator_email) mapped.creator_email = userId;
+    if (!mapped.kind) mapped.kind = "task";
+    if (mapped.status === undefined) mapped.status = "todo";
+    if (mapped.priority === undefined) mapped.priority = 3;
   }
   return mapped;
 }
@@ -392,12 +395,12 @@ async function mapColumns(
   input: Readonly<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> {
   const mapped = snakeRecord(input);
-  const teamKey = stringField(input, "teamKey", "team_key");
-  if (teamKey && (table === "issues" || table === "teams")) {
-    const team = await getRowBy(runtime, "teams", "key", teamKey);
-    if (team && typeof team.id === "string") {
-      mapped.team_id = team.id;
-      delete mapped.team_key;
+  const spaceKey = stringField(input, "spaceKey", "space_key");
+  if (spaceKey && (table === "tasks" || table === "spaces")) {
+    const space = await getRowBy(runtime, "spaces", "key", spaceKey);
+    if (space && typeof space.id === "string") {
+      mapped.space_id = space.id;
+      delete mapped.space_key;
     }
   }
   return mapped;
@@ -439,7 +442,7 @@ async function openSql(
 }
 
 /**
- * Nested collection filter (`/issues/:id/comments` → `issue_id`).
+ * Nested collection filter (`/tasks/:id/comments` → `task_id`).
  *
  * @param path - HTTP path pattern
  * @param input - Assembled params + body
@@ -501,18 +504,21 @@ function plainInput(input: Readonly<Record<string, unknown>>): Record<string, un
   return out;
 }
 
-const TEAM_FILTER_TABLES = new Set(["issues", "cycles", "labels", "members"]);
+const SPACE_FILTER_TABLES = new Set(["tasks", "members", "projects"]);
 
 const SEARCH_COLUMNS: Readonly<Record<string, readonly string[]>> = {
-  issues: ["title", "identifier", "description", "id"],
+  tasks: ["title", "identifier", "description", "id"],
   comments: ["body", "id", "author_email"],
   projects: ["name", "id"],
   documents: ["title", "body", "id"],
   file_objects: ["object_key", "original_name", "id"],
-  teams: ["key", "name", "id"],
-  labels: ["name", "group_name", "id"],
-  cycles: ["name", "id"],
+  spaces: ["key", "name", "id"],
+  tags: ["name", "group_name", "id"],
+  goals: ["name", "id"],
   members: ["name", "email", "id"],
+  forms: ["name", "id"],
+  views: ["name", "id"],
+  inbox: ["title", "id"],
 };
 
 /**

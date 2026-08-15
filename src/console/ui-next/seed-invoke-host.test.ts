@@ -7,16 +7,16 @@ import { userPrincipal } from "../../auth/planes.ts";
 import { bootUiNextSeedInvoke } from "./seed-invoke-host.ts";
 
 describe("bootUiNextSeedInvoke", () => {
-  test("issues.list returns store rows; placeholder delete is NotFound", async () => {
+  test("tasks.list returns store rows; placeholder delete is NotFound", async () => {
     const host = await bootUiNextSeedInvoke();
     try {
       const principal = userPrincipal({
         userId: "user_demo",
-        scopes: ["issue:write", "files:write"],
+        scopes: ["task:write", "files:write"],
         verified: true,
       });
       const listed = await host.invokeUserFlow({
-        flowId: "issues.list",
+        flowId: "tasks.list",
         body: {},
         principal,
         operatorId: "op_test",
@@ -29,7 +29,7 @@ describe("bootUiNextSeedInvoke", () => {
       };
       expect(payload.items.length).toBeGreaterThan(0);
       expect(payload.total).toBeGreaterThan(payload.items.length);
-      expect(payload).not.toMatchObject({ ok: true, flow: "issues.list" });
+      expect(payload).not.toMatchObject({ ok: true, flow: "tasks.list" });
 
       const denied = await host.invokeUserFlow({
         flowId: "attachments.delete",

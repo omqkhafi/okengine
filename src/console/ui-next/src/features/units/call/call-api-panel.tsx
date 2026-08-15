@@ -15,7 +15,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
-import type { FlowIdentity } from "@/client.ts";
 import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { EXPLORER_TOOLBAR_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
@@ -37,8 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SHEET_CONTROL, SheetField, SheetGrid } from "@/components/ui/sheet-form.tsx";
+import { CallIdentityMenu, callInvokeAsReady, type CallInvokeAs } from "./call-identity-menu.tsx";
+import { CallPiiButton } from "./call-pii-button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { RunCache } from "@/features/flows/traces/cache-icon.ts";
+import { CacheGlyph } from "@/features/flows/traces/cache-glyph.tsx";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { useStoreQuery } from "@/features/store/data/use-store-query.ts";
 import { useClockRunNow, useFlowsIdentities, useFlowsInvoke } from "../data/use-flows-invoke.ts";
@@ -54,28 +57,17 @@ import { fkOptionsFromRows, resolveFkLookup, type FkOption } from "../lib/fk-loo
 import { flowTriggerKind } from "../lib/flow-trigger.ts";
 import { pathParamNames, pathParamPlaceholder, seedPathValues } from "../lib/path-params.ts";
 import { resolveClockForFlow, type ClockResolveResult } from "../lib/resolve-clock.ts";
+import { callTiming } from "../lib/call-timing.ts";
+import { formatCallApiResponseJson, formatInvokeResponseJson } from "../lib/invoke-response.ts";
+import { shouldRefetchCallOnPiiReveal } from "../lib/call-read-safe.ts";
 import { validateContract } from "../lib/validate-contract.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
+import { piiFieldNamesFromManifest } from "../../../../../../console/server/runs-pii.ts";
 
 /** Props for {@link CallApiPanel}. */
 export interface CallApiPanelProps {
   readonly row: UnitFlowRow;
   readonly manifest: Manifest | null;
-}
-
-/**
- * Closed-trigger label — name only so the dock toolbar stays one line.
- *
- * @param identities - Available identities
- * @param id - Selected identity id (API key)
- */
-function identityTriggerLabel(
-  identities: readonly FlowIdentity[],
-  id: string | null | undefined,
-): string {
-  if (!id) return "";
-  const match = identities.find((row) => row.id === id);
-  return match ? match.name : id;
 }
 
 /** Body editor mode — structured fields or raw JSON (matches Trace Request). */
@@ -122,7 +114,7 @@ function ClockRunPanel({
   const clockRun = useClockRunNow();
   const identities = useFlowsIdentities();
   const invoke = useFlowsInvoke();
-  const [asUserId, setAsUserId] = useState("");
+  const [invokeAs, setInvokeAs] = useState<CallInvokeAs>({ asGate: null, asUserId: null });
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [pathUsed, setPathUsed] = useState<"clock" | "invoke" | null>(null);
 
@@ -132,11 +124,6 @@ function ClockRunPanel({
     setPathUsed(null);
     setStartedAt(null);
   }, [row.id]);
-
-  useEffect(() => {
-    const first = identities.data?.find((i) => i.status === "active");
-    if (first && !asUserId) setAsUserId(first.id);
-  }, [identities.data, asUserId]);
 
   const matched = resolve.kind === "matched";
 
@@ -151,13 +138,14 @@ function ClockRunPanel({
       }
       return;
     }
-    if (!asUserId) return;
+    if (!callInvokeAsReady(invokeAs)) return;
     setPathUsed("invoke");
     try {
       await invoke.mutateAsync({
         flowId: row.id,
         body: {},
-        asUserId,
+        ...(invokeAs.asUserId ? { asUserId: invokeAs.asUserId } : {}),
+        ...(invokeAs.asGate ? { asGate: invokeAs.asGate } : {}),
       });
     } catch {
       // Error surface via mutation
@@ -176,16 +164,7 @@ function ClockRunPanel({
       return JSON.stringify(clockRun.data, null, 2);
     }
     if (!matched && invoke.data) {
-      return JSON.stringify(
-        {
-          status: invoke.data.status,
-          failure: invoke.data.failure ?? null,
-          response: invoke.data.response,
-          path: "flows.invoke",
-        },
-        null,
-        2,
-      );
+      return formatInvokeResponseJson(invoke.data);
     }
     return null;
   }, [matched, clockRun.data, invoke.data]);
@@ -201,10 +180,11 @@ function ClockRunPanel({
         <>
           {!matched ? (
             <>
-              <IdentitySelect
+              <CallIdentityMenu
+                manifest={manifest}
                 identities={identities.data ?? []}
-                value={asUserId}
-                onChange={setAsUserId}
+                value={invokeAs}
+                onChange={setInvokeAs}
               />
               <DockSep />
             </>
@@ -212,7 +192,7 @@ function ClockRunPanel({
           <Button
             type="button"
             data-slot="call-api-submit"
-            disabled={pending || (!matched && !asUserId)}
+            disabled={pending || (!matched && !callInvokeAsReady(invokeAs))}
             onClick={() => void onRun()}
             className={DOCK_SUBMIT}
           >
@@ -276,6 +256,7 @@ function ClockRunPanel({
           failed={Boolean(failed)}
           success={Boolean(success)}
           elapsed={elapsed}
+          handlerMs={matched ? null : invoke.data?.durationMs}
           statusCode={matched ? (clockRun.data?.ran ? 200 : 409) : invoke.data?.status}
           errorMessage={
             matched
@@ -293,6 +274,7 @@ function ClockRunPanel({
               : "Run handler once to invoke with empty input."
           }
           pathUsed={pathUsed}
+          cache={matched ? undefined : invoke.data?.cache}
         />
       </div>
     </CallDock>
@@ -322,7 +304,8 @@ function InvokeBodyPanel({
     [kind, row.path],
   );
 
-  const [asUserId, setAsUserId] = useState("");
+  const [invokeAs, setInvokeAs] = useState<CallInvokeAs>({ asGate: null, asUserId: null });
+  const [piiMasked, setPiiMasked] = useState(true);
   const [pathValues, setPathValues] = useState<Record<string, string>>(() =>
     seedPathValues(row.path, params),
   );
@@ -336,6 +319,7 @@ function InvokeBodyPanel({
   const [rawError, setRawError] = useState<string | null>(null);
   const [localErrors, setLocalErrors] = useState<readonly { path: string; message: string }[]>([]);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
 
   const seedBody = useMemo(
     () => (seedFromSchema(inSchema) as Record<string, unknown>) ?? {},
@@ -350,13 +334,10 @@ function InvokeBodyPanel({
     setBodyView("fields");
     setPathValues(seedPathValues(row.path, params));
     setLocalErrors([]);
+    setElapsedMs(null);
+    setStartedAt(null);
     invoke.reset();
   }, [row.id]);
-
-  useEffect(() => {
-    const first = identities.data?.find((i) => i.status === "active");
-    if (first && !asUserId) setAsUserId(first.id);
-  }, [identities.data, asUserId]);
 
   /**
    * Parse Raw JSON into the body object. Returns false on failure.
@@ -396,7 +377,7 @@ function InvokeBodyPanel({
     setBodyView("fields");
   }
 
-  async function onCall(): Promise<void> {
+  async function onCall(includePii = !piiMasked): Promise<void> {
     let nextBody = body;
     if (bodyView === "raw") {
       if (!commitRawText(rawText)) return;
@@ -412,14 +393,16 @@ function InvokeBodyPanel({
       return;
     }
     setLocalErrors([]);
-    if (!asUserId) return;
+    if (!callInvokeAsReady(invokeAs)) return;
     setStartedAt(performance.now());
     try {
       await invoke.mutateAsync({
         flowId: row.id,
         body: nextBody,
-        asUserId,
+        ...(invokeAs.asUserId ? { asUserId: invokeAs.asUserId } : {}),
+        ...(invokeAs.asGate ? { asGate: invokeAs.asGate } : {}),
         ...(params.length > 0 ? { pathParams: pathValues } : {}),
+        ...(includePii ? { revealPii: true } : {}),
       });
     } catch {
       // Error surface via invoke.isError
@@ -434,25 +417,19 @@ function InvokeBodyPanel({
     setLocalErrors([]);
   }
 
-  const elapsed =
-    startedAt !== null && (invoke.isSuccess || invoke.isError)
-      ? performance.now() - startedAt
-      : null;
+  useEffect(() => {
+    if (startedAt === null || invoke.isPending) return;
+    if (invoke.isSuccess || invoke.isError) {
+      setElapsedMs(performance.now() - startedAt);
+    }
+  }, [invoke.isSuccess, invoke.isError, invoke.isPending, startedAt]);
 
   const responseJson = useMemo(() => {
     if (!invoke.data) return null;
-    return JSON.stringify(
-      {
-        status: invoke.data.status,
-        failure: invoke.data.failure ?? null,
-        response: invoke.data.response,
-      },
-      null,
-      2,
-    );
-  }, [invoke.data]);
+    return formatCallApiResponseJson(invoke.data, piiMasked, piiFieldNamesFromManifest(manifest));
+  }, [invoke.data, piiMasked, manifest]);
 
-  const failed = invoke.isSuccess && invoke.data?.failure != null;
+  const failed = invoke.data?.failure != null;
   const statusCode = invoke.data?.status;
   const actionTitle = kind === "http" ? "Call API" : kind === "signal" ? "Run handler" : "Invoke";
   const submitLabel = actionTitle;
@@ -463,10 +440,26 @@ function InvokeBodyPanel({
       dataTrigger={kind}
       actions={
         <>
-          <IdentitySelect
+          <CallIdentityMenu
+            manifest={manifest}
             identities={identities.data ?? []}
-            value={asUserId}
-            onChange={setAsUserId}
+            value={invokeAs}
+            onChange={setInvokeAs}
+          />
+          <CallPiiButton
+            piiMasked={piiMasked}
+            disabled={invoke.isPending}
+            onToggle={() => {
+              const nextMasked = !piiMasked;
+              setPiiMasked(nextMasked);
+              if (
+                invoke.data &&
+                !invoke.isPending &&
+                shouldRefetchCallOnPiiReveal(row, nextMasked)
+              ) {
+                void onCall(true);
+              }
+            }}
           />
           <DockSep />
           <BodyViewToggle view={bodyView} onChange={onBodyViewChange} />
@@ -496,7 +489,7 @@ function InvokeBodyPanel({
           <Button
             type="button"
             data-slot="call-api-submit"
-            disabled={invoke.isPending || !asUserId}
+            disabled={invoke.isPending || !callInvokeAsReady(invokeAs)}
             onClick={() => void onCall()}
             className={DOCK_SUBMIT}
           >
@@ -645,13 +638,15 @@ function InvokeBodyPanel({
 
         <ResponseBlock
           failed={Boolean(failed)}
-          success={invoke.isSuccess && !failed}
-          elapsed={elapsed}
+          success={Boolean(invoke.data) && !failed}
+          elapsed={elapsedMs}
+          handlerMs={invoke.data?.durationMs}
           statusCode={statusCode}
           errorMessage={invoke.isError ? (invoke.error as Error).message : null}
           responseJson={responseJson}
           emptyHint="Call to see a real host response."
           pathUsed={null}
+          cache={invoke.data?.cache}
         />
       </div>
     </CallDock>
@@ -665,20 +660,24 @@ function ResponseBlock({
   failed,
   success,
   elapsed,
+  handlerMs,
   statusCode,
   errorMessage,
   responseJson,
   emptyHint,
   pathUsed,
+  cache,
 }: {
   readonly failed: boolean;
   readonly success: boolean;
   readonly elapsed: number | null;
+  readonly handlerMs?: number | null;
   readonly statusCode?: number;
   readonly errorMessage: string | null;
   readonly responseJson: string | null;
   readonly emptyHint: string;
   readonly pathUsed: "clock" | "invoke" | null;
+  readonly cache?: RunCache;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const status = (
@@ -686,8 +685,10 @@ function ResponseBlock({
       failed={failed}
       success={success}
       elapsed={elapsed}
+      handlerMs={handlerMs}
       statusCode={statusCode}
       pathUsed={pathUsed}
+      cache={cache}
     />
   );
 
@@ -797,15 +798,21 @@ function ResponseStatus({
   failed,
   success,
   elapsed,
+  handlerMs,
   statusCode,
   pathUsed,
+  cache,
 }: {
   readonly failed: boolean;
   readonly success: boolean;
   readonly elapsed: number | null;
+  readonly handlerMs?: number | null;
   readonly statusCode?: number;
   readonly pathUsed: "clock" | "invoke" | null;
+  readonly cache?: RunCache;
 }): JSX.Element {
+  const settled = success || failed;
+  const timing = settled ? callTiming({ handlerMs, rttMs: elapsed }) : null;
   return (
     <>
       {pathUsed ? (
@@ -817,7 +824,7 @@ function ResponseStatus({
           via {pathUsed === "clock" ? "clock.run-now" : "flows.invoke"}
         </span>
       ) : null}
-      {success || failed ? (
+      {settled ? (
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[9px] font-semibold tracking-wide uppercase",
@@ -832,9 +839,35 @@ function ResponseStatus({
           {statusCode ?? (failed ? "error" : "ok")}
         </span>
       ) : null}
-      {elapsed !== null ? (
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-          {formatDuration(elapsed)}
+      {settled ? <CacheGlyph cache={cache ?? "none"} dataSlot="call-api-cache" /> : null}
+      {timing ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={(props) => (
+              <span
+                {...props}
+                className="font-mono text-[10px] tabular-nums text-muted-foreground"
+                data-slot="call-api-duration"
+                data-kind={timing.primaryKind}
+              >
+                {formatDuration(timing.primaryMs)}
+              </span>
+            )}
+          />
+          <TooltipContent side="bottom" className="max-w-xs text-[11px]">
+            {timing.primaryKind === "handler"
+              ? "Handler time — same clock as Traces."
+              : "Browser round-trip. Handler time is on the Traces row."}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      {timing?.primaryKind === "handler" && timing.rttMs !== null ? (
+        <span
+          className="font-mono text-[10px] tabular-nums text-muted-foreground/70"
+          data-slot="call-api-rtt"
+          title="Browser round-trip"
+        >
+          {formatDuration(timing.rttMs)} rtt
         </span>
       ) : null}
     </>
@@ -873,60 +906,8 @@ function CallDock({
         </div>
         <div className="ml-auto flex h-full min-w-0 items-stretch">{actions}</div>
       </div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {children}
-      </div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
-  );
-}
-
-/**
- * Compact identity picker for the dock toolbar.
- */
-function IdentitySelect({
-  identities,
-  value,
-  onChange,
-}: {
-  readonly identities: readonly FlowIdentity[];
-  readonly value: string;
-  readonly onChange: (id: string) => void;
-}): JSX.Element {
-  return (
-    <Select
-      value={value || null}
-      onValueChange={(next) => {
-        if (next == null || Array.isArray(next)) return;
-        onChange(String(next));
-      }}
-    >
-      <SelectTrigger
-        className="h-8 max-w-40 min-w-0 rounded-none border-0 bg-transparent px-2 text-[11px] shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent *:data-[slot=select-value]:truncate"
-        data-slot="call-api-identity"
-        aria-label="Identity"
-      >
-        <SelectValue placeholder="Identity…">
-          {(raw) => identityTriggerLabel(identities, raw == null ? null : String(raw))}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent
-        align="end"
-        alignItemWithTrigger={false}
-        sideOffset={4}
-        className="min-w-64 p-1"
-      >
-        {identities.map((id) => (
-          <SelectItem key={id.id} value={id.id} disabled={id.status !== "active"}>
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate text-[12px] leading-tight">{id.name}</span>
-              <span className="truncate text-[10px] leading-tight text-muted-foreground">
-                {id.email}
-              </span>
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -1186,7 +1167,7 @@ function BodyField({
     );
   }
   return (
-        <SheetField label={field.name} hint={hint} dense className={fieldClass}>
+    <SheetField label={field.name} hint={hint} dense className={fieldClass}>
       <Input
         id={id}
         flat
@@ -1212,10 +1193,7 @@ function useFkFieldOptions(field: FormField, manifest: Manifest | null) {
   return { lookup, options, isLoading: query.isFetching };
 }
 
-function mergeCurrentFkOption(
-  options: readonly FkOption[],
-  current: string,
-): readonly FkOption[] {
+function mergeCurrentFkOption(options: readonly FkOption[], current: string): readonly FkOption[] {
   if (!current || options.some((opt) => opt.value === current)) return options;
   return [{ value: current, label: current }, ...options];
 }

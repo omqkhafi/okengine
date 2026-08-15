@@ -12,7 +12,6 @@ import {
   issueSession,
   PasswordPolicyError,
   scopesForRoles,
-  userPrincipal,
   type IssuedSession,
 } from "../../auth/index.ts";
 import { DryRunWriteIsolationError } from "../../kernel/dry-run.ts";
@@ -24,13 +23,14 @@ import type { WideEvent } from "../../runs/types.ts";
 import { bindHttp } from "./bind.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
-import { maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
+import { maskPiiValue, maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
 import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
 import { consoleFailureMessage } from "./i18n.ts";
 import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
+import { resolveInvokeAs } from "./invoke-user-flow.ts";
 import { isKnownConsoleSqlGate, StoreFileNotFoundError, tenancyDeclared } from "./store.ts";
 
 export { PUBLIC_CONSOLE_FLOWS };
@@ -298,21 +298,29 @@ const IdentitiesOut = z.object({
 const InvokeIn = z.object({
   flowId: z.string().min(1),
   body: z.unknown(),
-  asUserId: z.string().min(1),
+  /** Seeded identity when Invoke As → User. Omit for Operator / Public / policy. */
+  asUserId: z.string().min(1).optional(),
+  /** `public` or a policy Gate. Omit for Operator bypass. */
+  asGate: z.string().min(1).optional(),
   /** Path params for HTTP routes with `:param` segments. */
   pathParams: z.record(z.string(), z.string()).optional(),
   /** Typed confirmation phrase for irreversible production invokes. */
   confirmation: z.string().optional(),
   /** Recorded reason for irreversible production invokes. */
   reason: z.string().optional(),
+  /** Return classified PII in the handler response (audited). */
+  revealPii: z.boolean().optional(),
 });
 
 const InvokeOut = z.object({
   ok: z.literal(true),
   flowId: z.string(),
   asUserId: z.string(),
+  asGate: z.string().nullable().optional(),
   trigger: z.enum(["http", "signal", "clock", "internal", "durable"]),
   response: z.unknown(),
+  /** True when classified PII keys were redacted. */
+  masked: z.boolean(),
   /** HTTP-ish status from the host when available (200 / 4xx). */
   status: z.number().optional(),
   /** Host typed failure when the target flow returned `fail(...)`. */
@@ -324,6 +332,10 @@ const InvokeOut = z.object({
     })
     .optional(),
   runId: z.string().optional(),
+  /** Host telemetry cache dimension when the invoke adapter reported one. */
+  cache: z.enum(["hit", "miss", "none"]).optional(),
+  /** Handler duration from the host execute (high-res ms). */
+  durationMs: z.number().optional(),
   peakTier: z.enum(["none", "reads", "writes", "emits", "external", "capabilities"]),
   auditedAt: z.number(),
 });
@@ -493,7 +505,10 @@ const ChannelSendTestOut = z.object({
   at: z.number(),
 });
 
-const VaultNotFound = z.object({ name: z.string() });
+const VaultNotFound = z.object({
+  name: z.string(),
+  reason: z.string().optional(),
+});
 const VaultSealed = z.object({ reason: z.string() });
 const VaultRotateBusy = z.object({ reason: z.string() });
 const VaultUnsupported = z.object({ reason: z.string() });
@@ -2348,19 +2363,17 @@ function createFlowsInvoke(state: ConsoleState) {
         return fail("NotFound", { flowId: input.flowId });
       }
 
-      const identity = state.identities.find((i) => i.id === input.asUserId);
-      if (!identity || identity.status !== "active") {
-        return fail("InvokeDenied", { reason: "identity not found or disabled" });
+      const assumed = resolveInvokeAs(
+        {
+          ...(input.asUserId !== undefined ? { asUserId: input.asUserId } : {}),
+          ...(input.asGate !== undefined ? { asGate: input.asGate } : {}),
+        },
+        state.identities,
+        manifest ?? null,
+      );
+      if (!assumed.ok) {
+        return fail("InvokeDenied", { reason: assumed.reason });
       }
-
-      // Operators hold no application scopes — `console:flows:invoke-as`
-      // (covered by session `console:*`) is the grant to assume a user principal.
-      // Scopes come only from the selected identity (never from another row).
-      const assumed = userPrincipal({
-        userId: identity.id,
-        scopes: identity.scopes,
-        verified: true,
-      });
 
       const peakTier = peakTierOf(declared);
       if (peakTier === "external" && state.production) {
@@ -2382,32 +2395,61 @@ function createFlowsInvoke(state: ConsoleState) {
         flowId: input.flowId,
         body: input.body,
         ...(input.pathParams !== undefined ? { pathParams: input.pathParams } : {}),
-        principal: assumed,
+        principal: assumed.principal,
         operatorId: fx.operator.id,
+        ...(assumed.bypassGates ? { bypassGates: true } : {}),
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
+        ...(input.revealPii === true ? { revealPii: true } : {}),
       });
+
+      const reveal = input.revealPii === true;
+      const piiFields = piiFieldNamesFromManifest(manifest);
+      if (reveal) {
+        fx.log.info("console.flows.invoke.reveal", {
+          operatorId: fx.operator.id,
+          flowId: input.flowId,
+        });
+      }
+      const response = reveal ? host.output : maskPiiValue(host.output, piiFields);
+      const failure =
+        host.failure === undefined
+          ? undefined
+          : {
+              ...host.failure,
+              ...(host.failure.data !== undefined
+                ? {
+                    data: reveal ? host.failure.data : maskPiiValue(host.failure.data, piiFields),
+                  }
+                : {}),
+            };
 
       fx.log.info("console.flows.invoke", {
         operatorId: fx.operator.id,
         flowId: input.flowId,
-        asUserId: assumed.userId,
-        scopes: [...assumed.scopes],
+        asUserId: assumed.asUserId,
+        asGate: assumed.asGate,
+        scopes: [...assumed.principal.scopes],
         peakTier,
         reason: input.reason,
         status: host.status,
         failure: host.failure?.code,
         runId: host.runId,
+        revealPii: reveal,
       });
 
       return {
         ok: true as const,
         flowId: input.flowId,
-        asUserId: input.asUserId,
+        asUserId: assumed.asUserId,
+        asGate: assumed.asGate,
         trigger,
-        response: host.output,
+        response,
+        masked: !reveal,
         ...(host.status !== undefined ? { status: host.status } : {}),
-        ...(host.failure !== undefined ? { failure: host.failure } : {}),
+        ...(failure !== undefined ? { failure } : {}),
         ...(host.runId !== undefined ? { runId: host.runId } : {}),
+        ...(host.cache !== undefined ? { cache: host.cache } : {}),
+        ...(host.durationMs !== undefined ? { durationMs: host.durationMs } : {}),
         peakTier,
         auditedAt: state.now(),
       };
@@ -2935,7 +2977,8 @@ function createVaultSet(state: ConsoleState) {
         };
       } catch (err) {
         return fail("VaultNotFound", {
-          name: `${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+          name: input.name,
+          reason: err instanceof Error ? err.message : String(err),
         });
       }
     },
@@ -2972,7 +3015,8 @@ function createVaultRotate(state: ConsoleState) {
         };
       } catch (err) {
         return fail("VaultNotFound", {
-          name: `${input.name}: ${err instanceof Error ? err.message : String(err)}`,
+          name: input.name,
+          reason: err instanceof Error ? err.message : String(err),
         });
       }
     },

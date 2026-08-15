@@ -125,6 +125,8 @@ export type DevHeroMeta = {
   readonly version?: string;
   readonly color?: boolean;
   readonly watching?: boolean;
+  /** Banner verb — `Starting` during boot, `Ready` after surfaces bind. */
+  readonly phase?: "starting" | "ready";
 };
 
 /**
@@ -201,7 +203,7 @@ export function formatDevBanner(options: DevHeroMeta = {}): string {
     `${s.cyan}${s.bold}┌${s.reset}  ${s.bold}oke dev${s.reset}` +
       (options.version ? `  ${s.dim}v${options.version}${s.reset}` : ""),
     bar,
-    `${s.green}◇${s.reset}  Starting`,
+    `${s.green}◇${s.reset}  ${options.phase === "ready" ? "Ready" : "Starting"}`,
   ];
   if (options.watching !== false) {
     lines.push(`${bar}  ${s.dim}watching — client types regenerate on save${s.reset}`);
@@ -343,7 +345,10 @@ export function createBootProgress(
 
 /** Live elements/Docker board that can rewrite after content is printed below. */
 export type AnchoredBoard = {
-  /** Paint or rewrite the board (same height preferred). */
+  /**
+   * Paint or rewrite the board. A taller body (claim code, extra Docker
+   * rows) inserts lines so Backend / Logs below are pushed down, not overwritten.
+   */
   readonly paint: (text: string) => void;
   /** Wrap a writer so post-board output is tracked for cursor math. */
   readonly wrapWrite: (inner: (text: string) => void) => (text: string) => void;
@@ -357,10 +362,26 @@ export type AnchoredBoard = {
 };
 
 /**
+ * Rows added when an anchored board grows (claim pane, extra Docker rows).
+ *
+ * @param previous - Last painted body
+ * @param next - Next painted body
+ */
+export function grownBoardTail(previous: string, next: string): string {
+  const prevBody = previous.endsWith("\n") ? previous.slice(0, -1) : previous;
+  const nextBody = next.endsWith("\n") ? next.slice(0, -1) : next;
+  const prevLines = prevBody.length === 0 ? 0 : prevBody.split("\n").length;
+  const nextRows = nextBody.length === 0 ? [] : nextBody.split("\n");
+  if (nextRows.length <= prevLines) return "";
+  return `${nextRows.slice(prevLines).join("\n")}\n`;
+}
+
+/**
  * Anchored status board — rewrites in place even after Backend / Logs lines.
  *
- * Uses saved cursor + line offsets. Soft-reload full-screen clears can desync;
- * later paints then append instead.
+ * Growing inserts rows (`CSI n L`) so content below shifts down. Shrinking
+ * deletes the leftover rows. Soft-reload full-screen clears can desync;
+ * {@link AnchoredBoard.reset} then paints fresh at the cursor.
  *
  * @param write - stdout writer
  * @param enabled - TTY rewrite on/off
@@ -380,7 +401,12 @@ export function createAnchoredBoard(
       const body = text.endsWith("\n") ? text : `${text}\n`;
       const nextLines = countTermLines(body);
       if (!enabled) {
-        if (boardLines === 0) write(body);
+        if (boardLines === 0) {
+          write(body);
+        } else if (body !== lastBody) {
+          const tail = grownBoardTail(lastBody, body);
+          if (tail.length > 0) write(tail);
+        }
         boardLines = nextLines;
         lastBody = body;
         return;
@@ -392,14 +418,21 @@ export function createAnchoredBoard(
         return;
       }
       if (body === lastBody) return;
-      // Move to board start, replace rows, restore cursor.
-      write("\x1b[s");
-      write(`\x1b[${belowLines + boardLines}A`);
+      const grew = nextLines - boardLines;
+      // Cursor sits after the below-board output. Move onto the first
+      // below line (or stay after the board when nothing is below).
+      if (belowLines > 0) write(`\x1b[${belowLines}A`);
+      if (grew > 0 && belowLines > 0) {
+        write(`\x1b[${grew}L`);
+      }
       eraseTermLines(write, boardLines);
       write(body);
+      if (grew < 0 && belowLines > 0) {
+        write(`\x1b[${-grew}M`);
+      }
+      if (belowLines > 0) write(`\x1b[${belowLines}B`);
       boardLines = nextLines;
       lastBody = body;
-      write("\x1b[u");
     },
     wrapWrite(inner: (text: string) => void) {
       return (text: string) => {
@@ -456,7 +489,8 @@ export function clearTerminalScreen(): string {
 }
 
 /**
- * Compact hero reprinted on soft reload — URLs stay, request logs do not.
+ * Compact hero (banner + URLs + Logs). Tests use this; the `bun --hot`
+ * child must not print it — a full reprint would wipe the claim pane.
  *
  * @param options - Surface base URLs + meta
  */
@@ -726,25 +760,33 @@ export function formatStackSummary(options: {
 
 /**
  * First-admin claim code note (clack `note`-style box).
+ * Stays on the `oke dev` board — never sent to the Console HTTP API.
  *
  * @param code - Hex claim code
  * @param color - Color on/off
+ * @param options - Optional Console URL for the paste hint
  */
-export function formatClaimNote(code: string, color: boolean = termColorEnabled()): string {
+export function formatClaimNote(
+  code: string,
+  color: boolean = termColorEnabled(),
+  options: { readonly consoleUrl?: string } = {},
+): string {
   const s = termStyle(color);
   const bar = `${s.dim}│${s.reset}`;
   const title = "Claim code";
   const hint = "expires in 30 min";
+  const paste = options.consoleUrl
+    ? `Paste at ${options.consoleUrl}  ·  oke console claim-code`
+    : "oke console claim-code";
   const ownership = "Whoever can read this log already owns the server.";
   const lines = [
-    "",
     `${s.magenta}◆${s.reset}  ${s.bold}${title}${s.reset}  ${s.dim}${hint}${s.reset}`,
     bar,
     `${bar}  ${s.bold}${code}${s.reset}`,
     bar,
+    `${bar}  ${s.dim}${paste}${s.reset}`,
     `${bar}  ${s.dim}${ownership}${s.reset}`,
     `${s.dim}└${s.reset}`,
-    "",
   ];
   return `${lines.join("\n")}\n`;
 }

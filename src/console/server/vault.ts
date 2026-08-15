@@ -270,9 +270,11 @@ export async function projectVaultList(options: ProjectVaultOptions): Promise<{
       blastRadius,
       lastReadAt,
       sharedFingerprintEnvs,
-      origin: options.manifest?.vault?.[name] ? "source" : overlay.some((c) => c.name === name)
-        ? "console"
-        : "source",
+      origin: options.manifest?.vault?.[name]
+        ? "source"
+        : overlay.some((c) => c.name === name)
+          ? "console"
+          : "source",
     });
   }
 
@@ -826,6 +828,8 @@ export async function createManifestVaultRuntime(
   const runtime = createVaultRuntime({
     secrets,
     allowDevFallbacks: options.allowDevFallbacks ?? env !== "prod",
+    // Console Set writes the first value — boot must not refuse unset contracts.
+    allowGaps: true,
     now: options.now,
     chain: overlayVaultLayers(
       buildVaultBootChain({

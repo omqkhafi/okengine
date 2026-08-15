@@ -10,6 +10,7 @@
  */
 
 import type { Effects, ResourceRef } from "../manifest/types.ts";
+import { listPage, type QueryPageSpec } from "./list-page.ts";
 import { schemaTableName, sqlTableRef } from "../manifest/sql-resource.ts";
 import type {
   FilesStoreDecl,
@@ -34,6 +35,7 @@ import type { AiRuntime } from "../elements/ai.ts";
 import { parseDurationMs } from "../elements/clock/duration.ts";
 import { createCapabilityToken, type CapabilityToken } from "./capability.ts";
 import { createEffectLedger, recordEffect, reversibilityOf, type EffectLedger } from "./effects.ts";
+import { resolveDurationMs } from "./elapsed.ts";
 import {
   DryRunWriteIsolationError,
   isDryRun,
@@ -329,6 +331,16 @@ export function isJsonResult(value: unknown): value is JsonResult {
 }
 
 /**
+ * Paginated JSON page — `data` is Flow `out`; `meta` is the HTTP pager.
+ *
+ * Pass this to {@link FxJson.with} instead of splitting the fields.
+ */
+export type JsonPage<T> = {
+  readonly data: T;
+  readonly meta: Record<string, unknown>;
+};
+
+/**
  * JSON response helpers. `fx.json.create` answers 201; `fx.json.ok` can carry
  * a top-level `meta` (Stripe-style `{ data, meta?, error }`);
  * `fx.json.empty` answers 204.
@@ -340,8 +352,57 @@ export interface FxJson {
   create<T>(value: T): JsonResult<T>;
   /** 204 — no body. */
   empty(): JsonResult<never>;
+  /** 200 — body `{ data, meta, error: null }` from a {@link JsonPage}. */
+  with<T>(page: JsonPage<T>): JsonResult<T>;
   /** 200 — body `{ data, meta, error: null }` (paginated lists). */
   with<T>(data: T, meta: Record<string, unknown>): JsonResult<T>;
+  /**
+   * 200 — page an in-memory list from `input`. Zero-config: `q` searches
+   * every string field; extra keys auto-eq except `id`.
+   */
+  withQuery<T>(rows: readonly T[], input: unknown, spec?: QueryPageSpec<T>): JsonResult<T[]>;
+}
+
+/**
+ * Build a branded 200 result with required `meta`.
+ *
+ * @param dataOrPage - Item array, or `{ data, meta }`
+ * @param meta - Pager when using the two-arg form
+ */
+function jsonWith<T>(dataOrPage: T | JsonPage<T>, meta?: Record<string, unknown>): JsonResult<T> {
+  if (meta !== undefined) {
+    return { [jsonResultBrand]: true, status: 200, value: dataOrPage as T, meta } as JsonResult<T>;
+  }
+  if (
+    typeof dataOrPage !== "object" ||
+    dataOrPage === null ||
+    !("data" in dataOrPage) ||
+    !("meta" in dataOrPage)
+  ) {
+    throw new TypeError("fx.json.with: pass (data, meta) or ({ data, meta })");
+  }
+  const page = dataOrPage as JsonPage<T>;
+  return {
+    [jsonResultBrand]: true,
+    status: 200,
+    value: page.data,
+    meta: page.meta,
+  } as JsonResult<T>;
+}
+
+/**
+ * Page rows from a list query and wrap them as {@link FxJson.with}.
+ *
+ * @param rows - Already-loaded items
+ * @param input - List query / path fields
+ * @param spec - Optional mode, keyset, or column lock
+ */
+function jsonWithQuery<T>(
+  rows: readonly T[],
+  input: unknown,
+  spec?: QueryPageSpec<T>,
+): JsonResult<T[]> {
+  return jsonWith(listPage(rows, input, spec));
 }
 
 /** Options for {@link FxVault.set}. */
@@ -1202,7 +1263,14 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         get(_t, prop) {
           if (prop === "ref") return baseRef;
           if (prop === "then") return undefined;
-          const isRead = prop === "get" || prop === "search" || prop === "list";
+          if (prop === "driverId") {
+            const opened = cache.handle;
+            if (opened && "driverId" in opened) return opened.driverId;
+            if (decl.facet === "index") return runtime.indexDriverId ?? "memory";
+            if (decl.facet === "kv") return runtime.kvDriverId ?? "memory";
+            return "memory";
+          }
+          const isRead = prop === "get" || prop === "search" || prop === "list" || prop === "ttlMs";
           return (...args: unknown[]) =>
             gated(isRead ? "read" : "write", baseRef, async () => {
               if (!isRead && isDryRun()) {
@@ -1329,6 +1397,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
   async function gatedSecret<T>(name: string, body: () => T | Promise<T>): Promise<T> {
     capability.assert("secret", name);
     const timestamp = now();
+    const t0 = performance.now();
     try {
       return await body();
     } finally {
@@ -1336,7 +1405,7 @@ export function createFxContext(options: CreateFxOptions): FxContext {
         kind: "secret",
         resource: name,
         timestamp,
-        duration: Math.max(0, now() - timestamp),
+        duration: resolveDurationMs(now() - timestamp, performance.now() - t0),
         reversibility: reversibilityOf("secret"),
       });
     }
@@ -1712,9 +1781,8 @@ export function createFxContext(options: CreateFxOptions): FxContext {
       empty(): JsonResult<never> {
         return { [jsonResultBrand]: true, status: 204 } as JsonResult<never>;
       },
-      with<T>(data: T, meta: Record<string, unknown>): JsonResult<T> {
-        return { [jsonResultBrand]: true, status: 200, value: data, meta } as JsonResult<T>;
-      },
+      with: jsonWith,
+      withQuery: jsonWithQuery,
     },
     async step<T>(name: string, fn: () => T | Promise<T>, opts?: StepOptions<T>): Promise<T> {
       if (journal) {

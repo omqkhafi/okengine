@@ -3,6 +3,7 @@
  */
 
 import type { Manifest } from "../../../../../../manifest/types.ts";
+import { expandPiiNames } from "../../../../../../elements/store/classify.ts";
 import type { StoreListChild, StoreListStore } from "@/client.ts";
 import type { FormField } from "@/features/units/lib/fields-from-schema.ts";
 import { fieldsFromTable } from "./fields-from-table.ts";
@@ -47,6 +48,7 @@ export function schemaColumnsForChild(
     );
     if (fromManifest.length > 0) return fromManifest;
   }
+  const pii = expandPiiNames(child.piiColumns);
   const names = [...new Set([...Object.keys(child.columnDescriptions), ...child.piiColumns])];
   return names.map((name) => ({
     path: `/${name}`,
@@ -56,7 +58,7 @@ export function schemaColumnsForChild(
     ...(child.columnDescriptions[name] !== undefined
       ? { description: child.columnDescriptions[name] }
       : {}),
-    ...(child.piiColumns.includes(name) ? { pii: true } : {}),
+    ...(pii.has(name) ? { pii: true } : {}),
   }));
 }
 

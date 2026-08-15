@@ -345,4 +345,25 @@ describe("PII masking at the driver boundary", () => {
     });
     expect(masked[0]).toEqual({ id: "1", phone: PII_MASK, name: "Ada" });
   });
+
+  test("maskRows aliases ownerEmail / owner_email so raw SQL cannot leak", () => {
+    const fromJs = buildClassificationMap({
+      views: { ownerEmail: classify({ pii: true }) },
+    });
+    const fromSql = buildClassificationMap({
+      views: { owner_email: classify({ pii: true }) },
+    });
+    expect(
+      maskRows([{ id: "v1", owner_email: "aria@keel.dev" }], {
+        classifications: fromJs,
+        table: "views",
+      })[0],
+    ).toEqual({ id: "v1", owner_email: PII_MASK });
+    expect(
+      maskRows([{ id: "v1", ownerEmail: "ben@keel.dev" }], {
+        classifications: fromSql,
+        table: "views",
+      })[0],
+    ).toEqual({ id: "v1", ownerEmail: PII_MASK });
+  });
 });

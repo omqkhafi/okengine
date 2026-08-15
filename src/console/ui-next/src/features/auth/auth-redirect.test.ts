@@ -9,9 +9,9 @@ import {
 
 describe("sanitizeReturnTo", () => {
   test("keeps shell modules and their search", () => {
-    expect(sanitizeReturnTo("/flows")).toBe("/flows");
+    expect(sanitizeReturnTo("/overview")).toBe("/overview");
+    expect(sanitizeReturnTo("/overview?flow=issues.create")).toBe("/overview?flow=issues.create");
     expect(sanitizeReturnTo("/flows?flow=issues.create")).toBe("/flows?flow=issues.create");
-    expect(sanitizeReturnTo("/units?flow=issues.create")).toBe("/units?flow=issues.create");
     expect(sanitizeReturnTo("/store?resource=sql:issues&view=query&facet=sql")).toBe(
       "/store?resource=sql:issues&view=query&facet=sql",
     );
@@ -20,11 +20,9 @@ describe("sanitizeReturnTo", () => {
     );
   });
 
-  test("rewrites legacy /overview to /flows", () => {
-    expect(sanitizeReturnTo("/overview")).toBe("/flows");
-    expect(sanitizeReturnTo("/overview?run=pw-run-issues-create")).toBe(
-      "/flows?run=pw-run-issues-create",
-    );
+  test("rejects unknown paths including /units", () => {
+    expect(sanitizeReturnTo("/units")).toBeUndefined();
+    expect(sanitizeReturnTo("/units?flow=issues.create")).toBeUndefined();
   });
 
   test("rejects open redirects and non-shell paths", () => {
@@ -32,7 +30,7 @@ describe("sanitizeReturnTo", () => {
     expect(sanitizeReturnTo("//evil.example")).toBeUndefined();
     expect(sanitizeReturnTo("/\\evil.example")).toBeUndefined();
     expect(sanitizeReturnTo("/dashboard")).toBeUndefined();
-    expect(sanitizeReturnTo("/overview/../store")).toBe("/store");
+    expect(sanitizeReturnTo("/units/../store")).toBe("/store");
     expect(sanitizeReturnTo("/")).toBeUndefined();
     expect(sanitizeReturnTo("")).toBeUndefined();
     expect(sanitizeReturnTo(null)).toBeUndefined();
@@ -44,25 +42,26 @@ describe("sanitizeReturnTo", () => {
 });
 
 describe("validateAuthSearch / authGateSearch", () => {
-  test("omits the default Flows landing", () => {
-    expect(validateAuthSearch({ next: "/flows" })).toEqual({});
-    expect(authGateSearch("/flows")).toEqual({});
+  test("omits the default Overview landing", () => {
+    expect(validateAuthSearch({ next: "/overview" })).toEqual({});
     expect(authGateSearch("/overview")).toEqual({});
-    expect(authGateSearch("/flows?run=pw-run-issues-create")).toEqual({
-      next: "/flows?run=pw-run-issues-create",
+    expect(authGateSearch("/units")).toEqual({});
+    expect(authGateSearch("/overview?run=pw-run-issues-create")).toEqual({
+      next: "/overview?run=pw-run-issues-create",
     });
   });
 
-  test("keeps a Store, Units, or Flows return path", () => {
+  test("keeps a Store, Flows, or Overview return path", () => {
     expect(authGateSearch("/store?resource=sql:issues")).toEqual({
       next: "/store?resource=sql:issues",
+    });
+    expect(authGateSearch("/overview?flow=issues.create")).toEqual({
+      next: "/overview?flow=issues.create",
     });
     expect(authGateSearch("/flows?flow=issues.create")).toEqual({
       next: "/flows?flow=issues.create",
     });
-    expect(authGateSearch("/units?flow=issues.create")).toEqual({
-      next: "/units?flow=issues.create",
-    });
+    expect(authGateSearch("/units?flow=issues.create")).toEqual({});
     expect(authGateSearch("/vault?name=STRIPE_KEY")).toEqual({
       next: "/vault?name=STRIPE_KEY",
     });
@@ -74,23 +73,23 @@ describe("validateAuthSearch / authGateSearch", () => {
 });
 
 describe("afterAuthLocation", () => {
-  test("falls back to Flows", () => {
+  test("falls back to Overview", () => {
     expect(afterAuthLocation(undefined)).toEqual({ to: DEFAULT_AFTER_AUTH, search: {} });
-    expect(afterAuthLocation("/dashboard")).toEqual({ to: "/flows", search: {} });
+    expect(afterAuthLocation("/dashboard")).toEqual({ to: "/overview", search: {} });
   });
 
   test("rehydrates typed search on each module", () => {
     expect(afterAuthLocation("/overview?run=pw-run-issues-create&flow=issues.create")).toEqual({
-      to: "/flows",
+      to: "/overview",
       search: { run: "pw-run-issues-create", flow: "issues.create" },
     });
-    expect(afterAuthLocation("/flows?run=pw-run-issues-create&flow=issues.create")).toEqual({
+    expect(afterAuthLocation("/flows?flow=issues.create")).toEqual({
       to: "/flows",
-      search: { run: "pw-run-issues-create", flow: "issues.create" },
+      search: { flow: "issues.create" },
     });
     expect(afterAuthLocation("/units?flow=issues.create")).toEqual({
-      to: "/units",
-      search: { flow: "issues.create" },
+      to: "/overview",
+      search: {},
     });
     expect(afterAuthLocation("/store?resource=sql:issues&view=query&facet=sql")).toEqual({
       to: "/store",

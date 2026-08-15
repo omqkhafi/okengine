@@ -444,10 +444,15 @@ export async function flowsIdentities(): Promise<ConsoleApiResult<FlowsIdentitie
 export type FlowsInvokeInput = {
   readonly flowId: string;
   readonly body: unknown;
-  readonly asUserId: string;
+  /** Seeded identity id when Invoke As → User. Omit for Operator / Public / policy. */
+  readonly asUserId?: string;
+  /** `public` or a policy Gate name. Omit for Operator bypass. */
+  readonly asGate?: string;
   readonly pathParams?: Readonly<Record<string, string>>;
   readonly confirmation?: string;
   readonly reason?: string;
+  /** Return classified PII in the handler response (audited). */
+  readonly revealPii?: boolean;
 };
 
 /** Success payload from `POST /console/flows/invoke`. */
@@ -455,8 +460,11 @@ export type FlowsInvokeResult = {
   readonly ok: true;
   readonly flowId: string;
   readonly asUserId: string;
+  readonly asGate?: string | null;
   readonly trigger: string;
   readonly response: unknown;
+  /** True when classified PII keys were redacted. */
+  readonly masked: boolean;
   readonly status?: number;
   readonly failure?: {
     readonly code: string;
@@ -464,6 +472,10 @@ export type FlowsInvokeResult = {
     readonly message?: string;
   };
   readonly runId?: string;
+  /** Host telemetry cache dimension when the invoke adapter reported one. */
+  readonly cache?: "hit" | "miss" | "none";
+  /** Handler duration from the host execute (high-res ms). */
+  readonly durationMs?: number;
   readonly peakTier: string;
   readonly auditedAt: number;
 };
@@ -812,11 +824,7 @@ export async function storeFileGet(
 }
 
 /** Resolution layer from `GET /console/vault`. */
-export type VaultResolutionSource =
-  | "process.env"
-  | ".env.local"
-  | "driver"
-  | "dev-fallback";
+export type VaultResolutionSource = "process.env" | ".env.local" | "driver" | "dev-fallback";
 
 /** One vault contract from `GET /console/vault`. */
 export type VaultListRow = {

@@ -48,6 +48,7 @@ export function deriveModuleActions(manifest: Manifest): string[] {
   }
 
   for (const [gateId, gate] of Object.entries(manifest.gates ?? {})) {
+    if (gate.kind === "all") continue;
     if (gate.kind === "policy" || gateId.includes(":")) {
       if (!gateId.startsWith("rate:")) pairs.add(gateId);
     }

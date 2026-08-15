@@ -8,6 +8,7 @@ import {
 import {
   assertPasswordPolicy,
   DEFAULT_PASSWORD_POLICY,
+  generatePassword,
   PasswordPolicyError,
   resolvePasswordPolicy,
 } from "./password-policy.ts";
@@ -15,6 +16,7 @@ import {
   CONSOLE_PASSWORD_POLICY,
   consolePasswordMeetsPolicy,
   evaluateConsolePasswordRules,
+  generateConsolePassword,
 } from "../console/password-policy.ts";
 import { createBunCrypto } from "../runtime/primitives.ts";
 import { ARGON2ID_MEMORY_COST_FLOOR } from "../runtime/types.ts";
@@ -136,6 +138,21 @@ describe("password policy", () => {
         );
       }
     }
+  });
+
+  test("generatePassword always satisfies the requested policy", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 64; i++) {
+      const password = generatePassword(CONSOLE_PASSWORD_POLICY);
+      expect(password.length).toBeGreaterThanOrEqual(CONSOLE_PASSWORD_POLICY.minLength);
+      expect(() => assertPasswordPolicy(password, CONSOLE_PASSWORD_POLICY)).not.toThrow();
+      expect(consolePasswordMeetsPolicy(password)).toBe(true);
+      expect(evaluateConsolePasswordRules(password).every((rule) => rule.met)).toBe(true);
+      seen.add(password);
+    }
+    expect(seen.size).toBe(64);
+    expect(() => assertPasswordPolicy(generatePassword(), DEFAULT_PASSWORD_POLICY)).not.toThrow();
+    expect(generateConsolePassword()).toHaveLength(16);
   });
 
   test("createOperator rejects weak passwords by default without passwordPolicy", async () => {

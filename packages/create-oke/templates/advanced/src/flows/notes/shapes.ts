@@ -13,9 +13,8 @@ export const NoteOut = z.object({
   createdAt: z.number(),
 });
 
-export const NoteListOut = z.object({
-  notes: z.array(NoteOut),
-});
+/** List `data` is the item array. Pagination lives in HTTP `meta`. */
+export const NoteListOut = z.array(NoteOut);
 
 export const NoteIdIn = z.object({
   id: z.string().min(1),

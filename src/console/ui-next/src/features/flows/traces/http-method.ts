@@ -2,8 +2,49 @@
  * HTTP method accent for the REQUEST section badge.
  */
 
+import {
+  Add01Icon,
+  ApiIcon,
+  Delete02Icon,
+  Edit02Icon,
+  File01Icon,
+  PencilEdit01Icon,
+  Search01Icon,
+  Settings01Icon,
+  ViewIcon,
+} from "@hugeicons/core-free-icons";
+import type { ElementHugeIcon } from "@/lib/element-icons.ts";
+
 /** Known HTTP methods from Manifest `HttpTrigger.method`. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "QUERY";
+
+/**
+ * CRUD-shaped glyph per HTTP method — Units tree wells.
+ *
+ * @param method - HTTP method string (case-insensitive)
+ */
+export function httpMethodIcon(method: string): ElementHugeIcon {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return ViewIcon;
+    case "QUERY":
+      return Search01Icon;
+    case "POST":
+      return Add01Icon;
+    case "PUT":
+      return Edit02Icon;
+    case "PATCH":
+      return PencilEdit01Icon;
+    case "DELETE":
+      return Delete02Icon;
+    case "HEAD":
+      return File01Icon;
+    case "OPTIONS":
+      return Settings01Icon;
+    default:
+      return ApiIcon;
+  }
+}
 
 /**
  * Tailwind classes for a method badge — distinct accents per verb, matching

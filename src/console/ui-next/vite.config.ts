@@ -24,8 +24,7 @@ const pkg = JSON.parse(readFileSync(resolve(here, "../../../package.json"), "utf
 };
 
 export default defineConfig(({ command }) => {
-  const injectDevOperator =
-    command === "serve" && !isConsoleFresh() ? UI_NEXT_DEV_OPERATOR : null;
+  const injectDevOperator = command === "serve" && !isConsoleFresh() ? UI_NEXT_DEV_OPERATOR : null;
 
   return {
     root: here,
@@ -45,6 +44,19 @@ export default defineConfig(({ command }) => {
       emptyOutDir: true,
       sourcemap: false,
       target: "esnext",
+      // Keep minified chunks under Vite's 500 kB warning. Route pages are
+      // lazy; these groups pull the remaining heavy static vendors out of
+      // the entry (Shiki is already a slim core + five grammars).
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: "react-dom", test: /[\\/]node_modules[\\/]react-dom[\\/]/ },
+              { name: "xyflow", test: /[\\/]node_modules[\\/]@xyflow[\\/]/ },
+            ],
+          },
+        },
+      },
     },
     server: {
       port: 6537,

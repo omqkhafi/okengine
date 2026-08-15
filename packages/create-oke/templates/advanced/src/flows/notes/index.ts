@@ -1,7 +1,7 @@
-import { on, flow, http, every, gate, fail } from "okengine";
+import { on, flow, http, every, fail } from "okengine";
 import { eq, isNull } from "drizzle-orm";
 
-import { db, files, noteCreatedMail, webhookSecret } from "@/core";
+import { db, files, noteCreatedMail, notesMutate, webhookSecret } from "@/core";
 import { notes } from "@/db/schema.decl";
 import {
   NoteAttachIn,
@@ -64,28 +64,28 @@ function unwrapSummaryText(text: string): string {
 
 /** List active (non-archived) notes, newest first. */
 export const list = on(
-  http.get("/notes").gate(gate.public),
+  http.get("/notes").gate.public,
   flow("notes.list", {
     out: NoteListOut,
-    do: async (_input, fx) => {
+    do: async (input, fx) => {
       const rows = await fx.store(db).select().from(notes).where(isNull(notes.archivedAt));
-      const sorted = [...rows].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-      return {
-        notes: sorted.map((r) => ({
+      const data = [...rows]
+        .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+        .map((r) => ({
           id: String(r.id),
           title: String(r.title),
           body: String(r.body),
           archivedAt: r.archivedAt == null ? null : Number(r.archivedAt),
           createdAt: Number(r.createdAt),
-        })),
-      };
+        }));
+      return fx.json.withQuery(data, input);
     },
   }),
 );
 
 /** Create a note, emit `note-created`, touch vault. */
 export const create = on(
-  http.post("/notes").gate(gate.public),
+  http.post("/notes").gate(notesMutate),
   flow("notes.create", {
     in: NoteCreateIn,
     out: NoteOut,
@@ -115,7 +115,7 @@ export const create = on(
 
 /** Fetch one note by id. */
 export const get = on(
-  http.get("/notes/:id").gate(gate.public),
+  http.get("/notes/:id").gate.public,
   flow("notes.get", {
     in: NoteIdIn,
     out: NoteOut,
@@ -136,7 +136,7 @@ export const get = on(
 
 /** Soft-archive a note. */
 export const archive = on(
-  http.post("/notes/:id/archive").gate(gate.public),
+  http.post("/notes/:id/archive").gate(notesMutate),
   flow("notes.archive", {
     in: NoteIdIn,
     out: NoteOut,
@@ -176,7 +176,7 @@ export const onCreated = on(
 
 /** Store a text attachment next to a note (`files:uploads`). */
 export const attach = on(
-  http.post("/notes/:id/attach").gate(gate.public),
+  http.post("/notes/:id/attach").gate(notesMutate),
   flow("notes.attach", {
     in: NoteAttachIn,
     out: NoteAttachOut,
@@ -208,7 +208,7 @@ export const digest = on(
  * Exhausted / failed asks surface as Unavailable — never a body excerpt.
  */
 export const summarize = on(
-  http.post("/notes/:id/summarize").gate(gate.public),
+  http.post("/notes/:id/summarize").gate(notesMutate),
   flow("notes.summarize", {
     in: NoteSummarizeIn,
     out: NoteSummarizeOut,

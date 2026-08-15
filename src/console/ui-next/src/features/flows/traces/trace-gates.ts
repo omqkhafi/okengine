@@ -20,7 +20,7 @@ export type TraceGateInfo = {
   /** Gate name from the run ledger. */
   readonly name: string;
   /** Manifest kind, or `null` when undeclared. */
-  readonly kind: "policy" | "rate" | null;
+  readonly kind: "policy" | "rate" | "all" | null;
   /** Display kind — `scope` when `scopes` are set. */
   readonly variant: GateChipKind | null;
   /** Manifest description, or `null` when undeclared. */
@@ -45,14 +45,14 @@ export const GATE_CHIP_ICONS: Readonly<Record<GateChipKind, ElementHugeIcon>> = 
  */
 export function gateChipKind(
   name: string,
-  kind: "policy" | "rate" | undefined,
+  kind: "policy" | "rate" | "all" | undefined,
   scopes: readonly string[] | undefined,
 ): GateChipKind | null {
   if (kind === "rate" || name.startsWith("rate:")) return "rate";
   if (name.startsWith("flag:")) return "flag";
   if (name === "public") return "public";
   if ((scopes?.length ?? 0) > 0) return "scope";
-  if (kind === "policy") return "policy";
+  if (kind === "policy" || kind === "all") return "policy";
   return null;
 }
 

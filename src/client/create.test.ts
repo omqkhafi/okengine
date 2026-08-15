@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { createClient } from "./create.ts";
 import { isErrorCode, isOk, isTransportError } from "./errors.ts";
-import type { AppOf, ClientError, ClientResult } from "./types.ts";
+import type { AppOf, ClientEnvelope, ClientError } from "./types.ts";
 
 /** Fixture App matching Notes / bookings (`FlightFull`). */
 type BookingsApp = AppOf<{
@@ -166,7 +166,7 @@ describe("createClient — type helpers", () => {
     const ok: _Codes = true;
     expect(ok).toBe(true);
 
-    const sample: ClientResult<{ id: string }, { FlightFull: { seatsLeft: number } }> = {
+    const sample: ClientEnvelope<{ id: string }, { FlightFull: { seatsLeft: number } }> = {
       data: null,
       error: { code: "FlightFull", data: { seatsLeft: 0 } },
     };

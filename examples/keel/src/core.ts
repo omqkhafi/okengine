@@ -18,19 +18,22 @@ export const db = store.sql("db", { schema, description: "Primary keel SQL" });
 /** Compose drafts. */
 export const draftsKv = store.kv("drafts", { description: "Compose drafts" });
 
-/** Triage snooze until timestamps. */
-export const snoozeKv = store.kv("triage-snooze", { description: "Triage snooze" });
+/** Saved view preferences. */
+export const viewPrefsKv = store.kv("view-prefs", { description: "Saved view preferences" });
+
+/** Due-date reminder snoozes. */
+export const remindersKv = store.kv("reminders", { description: "Due-date reminders" });
 
 /** Outbound webhook registrations. */
 export const webhooksKv = store.kv("webhooks", { description: "Outbound webhooks" });
 
-/** Issue attachments. */
+/** Task attachments. */
 export const attachments = store.files("attachments", {
-  description: "Issue attachments (specs, screenshots)",
+  description: "Task attachments (specs, screenshots)",
 });
 
-/** Semantic / full-text issue search. */
-export const issueIndex = store.index("issues", { description: "Issue search" });
+/** Semantic / full-text task search. */
+export const taskIndex = store.index("tasks", { description: "Task search" });
 
 // --- Gate --------------------------------------------------------------------
 
@@ -40,17 +43,11 @@ export const member = gate.policy("member", {
   check: ({ auth }) => !!auth.verified,
 });
 
-/** May create and update issues. */
-export const issueWrite = gate.scope("issue:write");
+/** May create and update tasks. */
+export const taskWrite = gate.scope("task:write");
 
-/** May create projects. */
+/** May create projects, views, and forms. */
 export const projectAdmin = gate.scope("project:admin");
-
-/** May accept issues out of triage. */
-export const triageAccept = gate.scope("triage:accept");
-
-/** May create teams and close cycles. */
-export const teamAdmin = gate.scope("team:admin");
 
 /** May edit and resolve comments. */
 export const commentWrite = gate.scope("comment:write");
@@ -64,13 +61,13 @@ export const memberAdmin = gate.scope("member:admin");
 /** May manage outbound webhooks. */
 export const webhookAdmin = gate.scope("webhook:admin");
 
-/** Issue write throttle. */
-export const issuesWriteRate = gate.rate({
+/** Task write throttle. */
+export const tasksWriteRate = gate.rate({
   strategy: "sliding-window-counter",
   max: 60,
   per: "1m",
   keyBy: "user",
-  description: "Issue write throttle",
+  description: "Task write throttle",
 });
 
 /** Comment write throttle. */
@@ -82,57 +79,75 @@ export const commentsWriteRate = gate.rate({
   description: "Comment write throttle",
 });
 
-/** Label mutation throttle. */
-export const labelsWriteRate = gate.rate({
+/** Form / view mutation throttle. */
+export const pmWriteRate = gate.rate({
   strategy: "token-bucket",
   max: 40,
   per: "1m",
   keyBy: "user",
-  description: "Label mutation throttle",
+  description: "PM mutation throttle",
 });
+
+/** Developer + PM task mutate chain. */
+export const tasksWrite = gate.all(member, taskWrite, tasksWriteRate);
+
+/** Comment edit / resolve chain (guests included when they hold the scope). */
+export const commentsWrite = gate.all(member, commentWrite, commentsWriteRate);
+
+/** Project / view / form / goal admin write chain. */
+export const projectAdminWrite = gate.all(member, projectAdmin, pmWriteRate);
+
+/** Member invite / admin write chain. */
+export const memberAdminWrite = gate.all(member, memberAdmin);
+
+/** Webhook admin write chain. */
+export const webhookAdminWrite = gate.all(member, webhookAdmin);
 
 /** Policies + rates passed to `oke({ gate })`. */
 export const KEEL_GATES = [
   member,
-  issueWrite,
+  taskWrite,
   projectAdmin,
-  triageAccept,
-  teamAdmin,
   commentWrite,
   filesWrite,
   memberAdmin,
   webhookAdmin,
-  issuesWriteRate,
+  tasksWriteRate,
   commentsWriteRate,
-  labelsWriteRate,
+  pmWriteRate,
+  tasksWrite,
+  commentsWrite,
+  projectAdminWrite,
+  memberAdminWrite,
+  webhookAdminWrite,
 ] as const;
 
 // --- Vault -------------------------------------------------------------------
 
-/** GitHub Issues sync token (stub ingest — never called outbound). */
+/** GitHub PR / issue intake token (stub ingest — never called outbound). */
 export const githubToken = vault.secret("GITHUB_TOKEN", {
-  description: "GitHub Issues sync token",
+  description: "GitHub PR intake token",
   rotate: "90d",
   dev: "ghp_dev_keel_github_sync",
 });
 
-/** Issue triage model key. */
+/** Task suggest / planner model key. */
 export const openaiKey = vault.secret("OPENAI_KEY", {
-  description: "Issue triage model key",
+  description: "Task planner model key",
   rotate: "90d",
-  dev: "sk-dev-keel-triage",
+  dev: "sk-dev-keel-planner",
 });
 
-/** Cycle digest incoming webhook. */
+/** Goal digest incoming webhook. */
 export const slackWebhook = vault.secret("SLACK_WEBHOOK", {
-  description: "Cycle digest incoming webhook",
+  description: "Goal digest incoming webhook",
   rotate: "90d",
-  dev: "https://hooks.slack.test/keel/cycle-digest",
+  dev: "https://hooks.slack.test/keel/goal-digest",
 });
 
-/** Slack ask-intake bot token (stub ingest). */
+/** Slack form-intake bot token (stub ingest). */
 export const slackBot = vault.secret("SLACK_BOT", {
-  description: "Slack ask-intake bot token",
+  description: "Slack form-intake bot token",
   rotate: "90d",
   dev: "xoxb-dev-keel-intake",
 });
@@ -168,12 +183,25 @@ export const keelWorkspace = vault.config("KEEL_WORKSPACE", {
   dev: "keel",
 });
 
+/** Vault contracts passed to `oke({ secrets })`. */
+export const KEEL_VAULT = [
+  githubToken,
+  openaiKey,
+  slackWebhook,
+  slackBot,
+  webhookSecret,
+  publicAppUrl,
+  publicApiUrl,
+  publicDocsUrl,
+  keelWorkspace,
+] as const;
+
 // --- Channel -----------------------------------------------------------------
 
 const mail = channel.email({ from: "Keel <keel@localhost>" });
 
 /** Assignee notification. */
-export const issueAssignedMail = mail.template("issue-assigned", {
+export const taskAssignedMail = mail.template("task-assigned", {
   locales: ["en"],
   description: "Assignee notification",
   schema: z.object({
@@ -190,58 +218,15 @@ export const mentionReplyMail = mail.template("mention-reply", {
   description: "Comment mention reply",
   schema: z.object({
     id: z.string(),
-    issueId: z.string(),
+    taskId: z.string(),
     body: z.string(),
   }),
 });
 
-/** Cycle close digest. */
-export const cycleDigestMail = mail.template("cycle-digest", {
+/** Overdue task. */
+export const taskOverdueMail = mail.template("task-overdue", {
   locales: ["en"],
-  description: "Cycle close digest",
-  schema: z.object({
-    cycleId: z.string(),
-    name: z.string(),
-    leftover: z.number(),
-    summary: z.string(),
-  }),
-});
-
-/** Project health update. */
-export const projectUpdateMail = mail.template("project-update", {
-  locales: ["en"],
-  description: "Project health update",
-  schema: z.object({
-    projectId: z.string(),
-    name: z.string(),
-    health: z.string(),
-  }),
-});
-
-/** Morning inbox + cycle digest. */
-export const dailyDigestMail = mail.template("daily-digest", {
-  locales: ["en", "ar"],
-  description: "Morning inbox + cycle digest",
-  schema: z.object({
-    open: z.number(),
-    at: z.number(),
-  }),
-});
-
-/** New subscriber confirmation. */
-export const issueSubscribedMail = mail.template("issue-subscribed", {
-  locales: ["en"],
-  description: "New subscriber confirmation",
-  schema: z.object({
-    id: z.string(),
-    identifier: z.string(),
-  }),
-});
-
-/** SLA high-risk / breached (email — push has no default driver). */
-export const slaAlertMail = mail.template("sla-alert", {
-  locales: ["en"],
-  description: "SLA high-risk / breached",
+  description: "Overdue task",
   schema: z.object({
     id: z.string(),
     identifier: z.string(),
@@ -249,38 +234,49 @@ export const slaAlertMail = mail.template("sla-alert", {
   }),
 });
 
-/** Vault contracts passed to `oke({ secrets })` — configs are not auto-registered. */
-export const KEEL_VAULT = [
-  githubToken,
-  openaiKey,
-  slackWebhook,
-  slackBot,
-  webhookSecret,
-  publicAppUrl,
-  publicApiUrl,
-  publicDocsUrl,
-  keelWorkspace,
-] as const;
+/** Morning inbox + goal digest. */
+export const dailyDigestMail = mail.template("daily-digest", {
+  locales: ["en", "ar"],
+  description: "Morning inbox + goal digest",
+  schema: z.object({
+    open: z.number(),
+    at: z.number(),
+  }),
+});
 
-/** Channel templates passed to `oke({ channel })` so the test harness sees them. */
+/** Form intake received. */
+export const formReceivedMail = mail.template("form-received", {
+  locales: ["en"],
+  description: "Form intake received",
+  schema: z.object({
+    formId: z.string(),
+    taskId: z.string(),
+    customerName: z.string(),
+  }),
+});
+
+/** Goal health at risk. */
+export const goalAtRiskMail = mail.template("goal-at-risk", {
+  locales: ["en"],
+  description: "Goal health at risk",
+  schema: z.object({
+    goalId: z.string(),
+    name: z.string(),
+    status: z.string(),
+  }),
+});
+
+/** Channel templates passed to `oke({ channel })`. */
 export const KEEL_TEMPLATES = [
-  issueAssignedMail,
+  taskAssignedMail,
   mentionReplyMail,
-  cycleDigestMail,
-  projectUpdateMail,
+  taskOverdueMail,
   dailyDigestMail,
-  issueSubscribedMail,
-  slaAlertMail,
+  formReceivedMail,
+  goalAtRiskMail,
 ] as const;
 
 // --- Clock -------------------------------------------------------------------
-
-/** Monday cycle rollover. */
-export const closeCyclesClock = clock("close-cycles", {
-  cron: "0 3 * * 1",
-  timezone: "UTC",
-  description: "Monday cycle rollover",
-});
 
 /** Expire stale compose drafts. */
 export const expireDraftsClock = clock("expire-drafts", {
@@ -290,72 +286,103 @@ export const expireDraftsClock = clock("expire-drafts", {
   description: "Expire stale compose drafts",
 });
 
-/** Scan issue SLA high-risk / breached. */
-export const watchSlaClock = clock("watch-sla", {
+/** Scan overdue tasks. */
+export const watchOverdueClock = clock("watch-overdue", {
   every: "15m",
   timezone: "UTC",
-  description: "Scan issue SLA high-risk / breached",
+  description: "Scan overdue tasks",
 });
 
-/** Morning cycle + inbox digest. */
+/** Morning inbox + goal digest. */
 export const dailyDigestClock = clock("daily-digest", {
   cron: "0 8 * * *",
+  every: "1d",
   timezone: "UTC",
-  description: "Morning cycle + inbox digest",
+  description: "Morning inbox + goal digest",
 });
 
-/** Nudge issues idle past SLA warn. */
-export const nudgeStaleClock = clock("nudge-stale", {
+/** Spawn recurring task occurrences. */
+export const spawnRecurringClock = clock("spawn-recurring", {
   every: "1h",
   timezone: "UTC",
-  description: "Nudge issues idle past SLA warn",
+  description: "Spawn recurring task occurrences",
 });
 
-/** Reconcile GitHub Issues drift (stub). */
-export const reconcileGithubClock = clock("reconcile-github", {
-  cron: "0 */6 * * *",
+/** Weekly goal rollup. */
+export const rollupGoalsClock = clock("rollup-goals", {
+  cron: "0 9 * * 1",
+  every: "7d",
   timezone: "UTC",
-  description: "Reconcile GitHub Issues drift",
+  description: "Weekly goal rollup",
 });
 
-/** Clocks passed to `oke()` — no auto-registry. */
+/** Clocks passed to `oke()` — wired as `on(every(interval), flow("unit.clock-name"))`. */
 export const KEEL_CLOCKS = [
-  closeCyclesClock,
   expireDraftsClock,
-  watchSlaClock,
+  watchOverdueClock,
   dailyDigestClock,
-  nudgeStaleClock,
-  reconcileGithubClock,
+  spawnRecurringClock,
+  rollupGoalsClock,
 ] as const;
 
 /** KV / index facets — not auto-registered. */
-export const KEEL_EXTRA_STORES = [draftsKv, snoozeKv, webhooksKv, issueIndex] as const;
+export const KEEL_EXTRA_STORES = [
+  draftsKv,
+  viewPrefsKv,
+  remindersKv,
+  webhooksKv,
+  taskIndex,
+] as const;
 
 // --- AI ----------------------------------------------------------------------
 
-const smart = ai.model("smart", { provider: "mock", tier: "smart", model: "gpt-4.1" });
-const fast = ai.model("fast", { provider: "mock", tier: "fast", model: "gpt-4.1-mini" });
+const chatModel = process.env.OKE_AI_MODEL?.trim() || "granite3.3:2b";
 
-/** Issue triage prompt. */
-export const issueTriagePrompt = smart.prompt("issue-triage", {
-  version: 3,
+const smart = ai.model("smart", {
+  provider: "openai-compatible",
+  tier: "smart",
+  model: chatModel,
+});
+const fast = ai.model("fast", {
+  provider: "openai-compatible",
+  tier: "fast",
+  model: chatModel,
+});
+
+/** Task suggest — priority, section, role needed. */
+export const taskSuggestPrompt = smart.prompt("task-suggest", {
+  version: 1,
   via: ["smart", "fast"],
   timeout: "30s",
   budget: { maxCostPerCall: 0.02 },
   out: z.object({
-    state: z.string(),
     priority: z.number(),
+    section: z.string(),
+    roleNeeded: z.string(),
     summary: z.string(),
   }),
 });
 
-/** Cycle close summary. */
-export const cycleSummaryPrompt = fast.prompt("cycle-summary", {
+/** Weekly workspace summary. */
+export const weeklySummaryPrompt = fast.prompt("weekly-summary", {
   version: 1,
   via: ["fast"],
   timeout: "15s",
   budget: { maxCostPerCall: 0.005 },
   out: z.object({ summary: z.string() }),
+});
+
+/** Form intake classify. */
+export const formClassifyPrompt = fast.prompt("form-classify", {
+  version: 1,
+  via: ["fast"],
+  timeout: "20s",
+  budget: { maxCostPerCall: 0.008 },
+  out: z.object({
+    title: z.string(),
+    roleNeeded: z.string(),
+    priority: z.number(),
+  }),
 });
 
 /** Document summary. */
@@ -367,17 +394,15 @@ export const documentSummaryPrompt = fast.prompt("document-summary", {
   out: z.object({ summary: z.string() }),
 });
 
-/** Triage agent — tools are keel flows. */
-export const triageAgent = ai.agent("triage", {
+/** Planner agent — tools are keel flows. */
+export const plannerAgent = ai.agent("planner", {
   tools: [
-    "issues.list",
-    "issues.get",
-    "issues.create",
-    "issues.update",
-    "issues.assign",
+    "tasks.list",
+    "tasks.get",
+    "tasks.create",
+    "tasks.assign",
     "comments.create",
-    "comments.list",
-    "triage.inbox",
+    "inbox.list",
     "search.query",
   ],
   maxSteps: 8,

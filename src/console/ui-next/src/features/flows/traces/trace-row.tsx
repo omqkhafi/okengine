@@ -9,7 +9,7 @@ import type { RunRow } from "@/client.ts";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { cacheIconSpec } from "./cache-icon.ts";
+import { CacheGlyph } from "./cache-glyph.tsx";
 import { formatDuration } from "./format-duration.ts";
 import { durationClassName } from "./duration-tone.ts";
 import { copyRunIdText } from "./trace-actions.ts";
@@ -41,7 +41,7 @@ export function TraceRow({
   const meta = traceRowMeta(run);
   const failed = meta.failed;
   const trigger = triggerIconSpec(run.trigger);
-  const cache = cacheIconSpec(run.cache);
+  const cache = run.cache;
   const [actionHint, setActionHint] = useState<string | null>(null);
 
   const onCopy = async (e: MouseEvent) => {
@@ -93,22 +93,7 @@ export function TraceRow({
           <HugeiconsIcon icon={trigger.icon} className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{run.flow}</span>
-        <Tooltip>
-          <TooltipTrigger
-            render={(props) => (
-              <span
-                {...props}
-                className={cn("flex w-4 shrink-0 items-center justify-center", cache.className)}
-                data-slot="trace-row-cache"
-                data-cache={run.cache}
-                aria-label={cache.label}
-              >
-                <HugeiconsIcon icon={cache.icon} className="size-3" aria-hidden />
-              </span>
-            )}
-          />
-          <TooltipContent side="top">{cache.label}</TooltipContent>
-        </Tooltip>
+        <CacheGlyph cache={cache} dataSlot="trace-row-cache" />
         <span
           className={cn(
             "w-10 shrink-0 text-right tabular-nums font-medium",

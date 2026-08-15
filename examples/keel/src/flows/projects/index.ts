@@ -1,57 +1,59 @@
-import { on, flow, http, fail, table } from "okengine";
+import { on, flow, http, fail } from "okengine";
 import { z } from "zod";
 
-import { db, member, projectAdmin, projectUpdateMail } from "@/core";
-import { initiatives, projectMilestones, projects, projectUpdates } from "@/db/schema.decl";
+import { db, member, projectAdminWrite } from "@/core";
+import { projectUpdates, projects, sections } from "@/db/schema.decl";
+import { projectUpdatesZod, projectsZod, sectionsZod } from "@/db/zod";
+import { listIn, pageOut, queryPage } from "@/lib/http";
 import { IdIn, IdOut, NotFound, Ok } from "@/lib/shapes";
-import { bindNamedTableCrud } from "@/lib/resource";
-import { projectUpdated } from "./signals";
+import { bindCrud } from "@/lib/resource";
+import { projectChanged, projectHealth, projectUpdated } from "./signals";
 
 import "./signals";
 
-const ProjectIn = z.object({
-  initiativeId: z.string().min(1),
+const createIn = z.object({
+  spaceId: z.string().min(1),
+  goalId: z.string().optional(),
   name: z.string().min(1).max(200),
   status: z.string().optional(),
   leadEmail: z.string().optional(),
+  startDate: z.string().optional(),
   targetDate: z.string().optional(),
-  progress: z.number().int().optional(),
+  color: z.string().optional(),
 });
 
-const bound = bindNamedTableCrud({
+export const { list, get, update, remove } = bindCrud({
   unit: "projects",
   path: "/projects",
   table: projects,
-  read: [member],
-  write: [member, projectAdmin],
+  read: member,
+  write: projectAdminWrite,
   liveList: true,
-  defaults: { status: "planned", progress: 0 },
+  createIn,
+  out: projectsZod.select,
+  defaults: { status: "planned" },
+  search: ["name", "status"],
+  skipCreate: true,
 });
 
-export const list = bound.list;
-export const get = bound.get;
-export const update = bound.update;
-export const remove = bound.remove;
-
-/** Create a project under an initiative. */
+/** Create a project. */
 export const create = on(
-  http.post("/projects").gate(member, projectAdmin),
+  http.post("/projects").gate(projectAdminWrite),
   flow("projects.create", {
-    in: ProjectIn,
+    in: createIn.extend({ spaceId: z.string().min(1), name: z.string().min(1).max(200) }),
     out: IdOut,
-    errors: { NotFound },
     do: async (input, fx) => {
-      const initiative = await fx.store(db).findById(initiatives, input.initiativeId);
-      if (!initiative) return fail("NotFound", { id: input.initiativeId });
       const id = fx.id();
       await fx.store(db).insert(projects).values({
         id,
-        initiativeId: input.initiativeId,
+        spaceId: input.spaceId,
+        goalId: input.goalId ?? null,
         name: input.name,
         status: input.status ?? "planned",
         leadEmail: input.leadEmail ?? null,
+        startDate: input.startDate ?? null,
         targetDate: input.targetDate ?? null,
-        progress: input.progress ?? 0,
+        color: input.color ?? null,
       });
       return { id };
     },
@@ -60,19 +62,27 @@ export const create = on(
 
 /** Archive a project. */
 export const archive = on(
-  http.post("/projects/:id/archive").gate(member, projectAdmin),
+  http.post("/projects/:id/archive").gate(projectAdminWrite),
   flow("projects.archive", {
     in: IdIn,
     out: Ok,
     do: async (input, fx) => {
       const row = await fx.store(db).findById(projects, input.id);
       if (!row) return { ok: true as const };
-      await fx.store(db).update(projects).set({ status: "archived" }).where({ id: input.id } as never);
-      await fx.emit(projectUpdated, {
+      await fx
+        .store(db)
+        .update(projects)
+        .set({ status: "archived" })
+        .where({ id: input.id } as never);
+      const payload = {
         projectId: input.id,
         name: String(row.name),
         health: "archived",
-      });
+        actorEmail: fx.auth.userId,
+      };
+      await fx.emit(projectUpdated, payload, { key: input.id });
+      await fx.emit(projectChanged, payload);
+      await fx.emit(projectHealth, payload);
       return { ok: true as const };
     },
   }),
@@ -80,10 +90,15 @@ export const archive = on(
 
 /** Post a health update. */
 export const postUpdate = on(
-  http.post("/projects/:id/updates").gate(member, projectAdmin),
+  http.post("/projects/:id/updates").gate(projectAdminWrite),
   flow("projects.postUpdate", {
-    in: z.object({ id: z.string(), body: z.string().min(1), health: z.string().optional() }),
+    in: projectUpdatesZod.insert.pick({ body: true, health: true }).extend({
+      id: z.string(),
+      body: z.string().min(1),
+      health: z.string().optional(),
+    }),
     out: IdOut,
+    errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(projects, input.id);
       if (!row) return fail("NotFound", { id: input.id });
@@ -96,11 +111,15 @@ export const postUpdate = on(
         body: input.body,
         authorEmail: fx.auth.userId ?? "ops@keel.dev",
       });
-      await fx.emit(projectUpdated, { projectId: input.id, name: String(row.name), health });
-      await fx.send(projectUpdateMail, {
-        to: String(row.leadEmail ?? "ops@keel.dev"),
-        data: { projectId: input.id, name: String(row.name), health },
-      });
+      const payload = {
+        projectId: input.id,
+        name: String(row.name),
+        health,
+        actorEmail: fx.auth.userId,
+      };
+      await fx.emit(projectUpdated, payload, { key: input.id });
+      await fx.emit(projectChanged, payload);
+      await fx.emit(projectHealth, payload);
       return { id };
     },
   }),
@@ -110,90 +129,63 @@ export const postUpdate = on(
 export const listUpdates = on(
   http.get("/projects/:id/updates").gate(member),
   flow("projects.listUpdates", {
-    in: IdIn,
-    out: z.object({ items: z.array(z.object({ id: z.string(), body: z.string() })) }),
+    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+    out: pageOut(projectUpdatesZod.select.pick({ id: true, body: true, health: true })),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(projectUpdates);
       const items = rows
         .filter((r) => String(r.projectId) === input.id)
-        .map((r) => ({ id: String(r.id), body: String(r.body) }));
-      return { items };
+        .map((r) => ({
+          id: String(r.id),
+          body: String(r.body),
+          health: String(r.health),
+        }));
+      return fx.json.with(queryPage(items, input, { mode: "offset", search: ["body"] }));
     },
   }),
 );
 
-/** List milestones. */
-export const listMilestones = on(
-  http.get("/projects/:id/milestones").gate(member),
-  flow("projects.listMilestones", {
-    in: IdIn,
-    out: z.object({ items: z.array(z.object({ id: z.string(), name: z.string() })) }),
+/** List sections (board columns). */
+export const listSections = on(
+  http.get("/projects/:id/sections").gate(member),
+  flow("projects.listSections", {
+    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+    out: pageOut(sectionsZod.select.pick({ id: true, name: true, sortOrder: true })),
     do: async (input, fx) => {
-      const rows = await fx.store(db).select().from(projectMilestones);
+      const rows = await fx.store(db).select().from(sections);
       const items = rows
         .filter((r) => String(r.projectId) === input.id)
-        .map((r) => ({ id: String(r.id), name: String(r.name) }));
-      return { items };
+        .map((r) => ({
+          id: String(r.id),
+          name: String(r.name),
+          sortOrder: Number(r.sortOrder),
+        }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      return fx.json.with(queryPage(items, input, { mode: "offset", search: ["name"] }));
     },
   }),
 );
 
-/** Add a milestone. */
-export const addMilestone = on(
-  http.post("/projects/:id/milestones").gate(member, projectAdmin),
-  flow("projects.addMilestone", {
-    in: z.object({ id: z.string(), title: z.string().min(1) }),
+/** Add a section. */
+export const addSection = on(
+  http.post("/projects/:id/sections").gate(projectAdminWrite),
+  flow("projects.addSection", {
+    in: z.object({ id: z.string(), name: z.string().min(1) }),
     out: IdOut,
+    errors: { NotFound },
     do: async (input, fx) => {
       const project = await fx.store(db).findById(projects, input.id);
       if (!project) return fail("NotFound", { id: input.id });
+      const existing = await fx.store(db).select().from(sections);
+      const sortOrder = existing.filter((r) => String(r.projectId) === input.id).length;
       const id = fx.id();
-      await fx.store(db).insert(projectMilestones).values({
+      await fx.store(db).insert(sections).values({
         id,
         projectId: input.id,
-        name: input.title,
-        targetDate: null,
-        sortOrder: 0,
+        name: input.name,
+        sortOrder,
       });
       return { id };
-    },
-  }),
-);
-
-/** Patch a milestone. */
-export const updateMilestone = on(
-  http.patch("/projects/:id/milestones/:mid").gate(member, projectAdmin),
-  flow("projects.updateMilestone", {
-    in: z.object({ id: z.string(), mid: z.string(), title: z.string().min(1) }),
-    out: IdOut,
-    do: async (input, fx) => {
-      const row = await fx.store(db).findById(projectMilestones, input.mid);
-      if (!row) return fail("NotFound", { id: input.mid });
-      await fx
-        .store(db)
-        .update(projectMilestones)
-        .set({ name: input.title })
-        .where({ id: input.mid } as never);
-      return { id: input.mid };
-    },
-  }),
-);
-
-/** CDC — project update health. */
-export const onHealth = on(
-  table("project_updates").changed("health"),
-  flow("projects.onHealth", {
-    plane: "operator",
-    do: async (input, fx) => {
-      const id = String((input as { id?: string }).id ?? "");
-      if (!id) return;
-      const row = await fx.store(db).findById(projectUpdates, id);
-      if (!row) return;
-      await fx.emit(projectUpdated, {
-        projectId: String(row.projectId),
-        name: String(row.projectId),
-        health: String(row.health),
-      });
     },
   }),
 );

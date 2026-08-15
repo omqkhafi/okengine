@@ -68,7 +68,7 @@ export function effectSummaryChips(
       label: formatDuration(run.durationMs),
       shortLabel: formatDuration(run.durationMs),
       variant: "duration",
-      detail: `Wall-clock duration from the run ledger (${run.durationMs}ms).`,
+      detail: `Handler duration from the run ledger (${formatDuration(run.durationMs)}).`,
     },
   ];
 

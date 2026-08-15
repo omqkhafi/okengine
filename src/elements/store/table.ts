@@ -318,7 +318,13 @@ export function mapRowToJs(
 export function classificationsFromTable(table: TableHandle): Record<string, ColumnClassification> {
   const out: Record<string, ColumnClassification> = {};
   for (const [key, col] of Object.entries(table.columns)) {
-    if (col.classification) out[key] = col.classification;
+    if (!col.classification) continue;
+    out[key] = col.classification;
+    const sqlName =
+      "sqlName" in col && typeof (col as { sqlName?: unknown }).sqlName === "string"
+        ? (col as { sqlName: string }).sqlName
+        : col.name;
+    if (sqlName && sqlName !== key) out[sqlName] = col.classification;
   }
   return out;
 }

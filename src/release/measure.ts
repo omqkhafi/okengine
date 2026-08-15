@@ -201,7 +201,7 @@ export async function measureHttpPingAppBytes(): Promise<HttpPingBudgetSample> {
   await Bun.write(
     anchor,
     `import { on, flow, http, gate, oke, createBunRuntime } from ${JSON.stringify(httpEntry)};\n` +
-      `on(http.get("/").gate(gate.public), flow("ping", { do: () => "Hi" }));\n` +
+      `on(http.get("/").gate.public, flow("ping", { do: () => "Hi" }));\n` +
       `export const app = oke({ name: "ping" });\n` +
       `export const rt = createBunRuntime;\n`,
   );
@@ -362,7 +362,7 @@ const t0 = performance.now();
 const { createBunRuntime, oke, on, flow, http, gate } = await import(${JSON.stringify(httpEntry)});
 const { resetBindings } = await import(${JSON.stringify(`${import.meta.dir}/../kernel/on.ts`)});
 resetBindings();
-on(http.get("/ping").gate(gate.public), flow("ping", { do: () => ({ ok: true }) }));
+on(http.get("/ping").gate.public, flow("ping", { do: () => ({ ok: true }) }));
 const app = oke({ name: "cold-start" });
 const rt = createBunRuntime();
 const server = rt.serve(app, { port: 0, hostname: "127.0.0.1" });

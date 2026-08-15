@@ -65,6 +65,14 @@ describe("gateDenialFailure", () => {
   });
 });
 
+describe("http trigger — .gate.public", () => {
+  test("attaches the public sentinel without calling gate()", () => {
+    const trigger = http.get("/health").gate.public;
+    expect(trigger.gates.map((g) => (typeof g === "string" ? g : g.name))).toEqual(["public"]);
+    expect(trigger.live().isLive).toBe(true);
+  });
+});
+
 describe("pipeline — Unauthorized for anonymous", () => {
   test("flow with .gate(member) returns typed Unauthorized", async () => {
     resetBindings();
@@ -137,6 +145,52 @@ describe("pipeline — Unauthorized for anonymous", () => {
       },
     );
     expect(res.failure?.error.code).toBe("Forbidden");
+    await app.bootResult?.close();
+  });
+
+  test("flow with .gate(write) flattens gate.all in registration order", async () => {
+    resetBindings();
+    resetFlowSeq();
+
+    const write = gate.all(member, canOrder);
+    on(
+      http.post("/orders").gate(write),
+      flow("orders.createAll", {
+        in: z.object({ sku: z.string() }),
+        do: () => ({ ok: true }),
+      }),
+    );
+
+    const app = oke({
+      name: "gates-all",
+      gate: { policies: [write] },
+      env: "test",
+    });
+    await app.boot({ env: "test" });
+
+    const anon = await app.execute(
+      app.flow("orders.createAll")!,
+      { sku: "X" },
+      http.post("/orders").gate(write),
+    );
+    expect((anon as { failure?: { error: { code: string } } }).failure?.error.code).toBe(
+      "Unauthorized",
+    );
+
+    const forbid = await app.execute(
+      app.flow("orders.createAll")!,
+      { sku: "X" },
+      http.post("/orders").gate(write),
+      {
+        principal: {
+          plane: "user",
+          userId: "u1",
+          scopes: new Set(),
+          verified: true,
+        },
+      },
+    );
+    expect(forbid.failure?.error.code).toBe("Forbidden");
     await app.bootResult?.close();
   });
 });
@@ -404,6 +458,60 @@ describe("pipeline — Bearer cryptographic verification", () => {
     );
     expect(result.failure).toBeUndefined();
     expect(result.output).toEqual({ userId: "console-assumed" });
+
+    await app.stop();
+  });
+
+  test("extras.bypassGates skips the gate chain only with trustedInvoke", async () => {
+    resetBindings();
+    resetFlowSeq();
+
+    on(
+      http.post("/orders").gate(member),
+      flow("orders.bypass", {
+        in: z.object({ sku: z.string() }),
+        do: (_input, fx) => ({ userId: fx.auth.userId }),
+      }),
+    );
+
+    const app = oke({
+      name: "trusted-bypass",
+      gate: { policies: [member] },
+      env: "dev",
+      config: {
+        drivers: {
+          store: { kv: { dev: "memory", test: "memory", prod: "memory" } },
+          signal: { dev: "memory", test: "memory", prod: "memory" },
+          clock: { dev: "memory", test: "frozen", prod: "memory" },
+          journal: { dev: "memory", test: "memory", prod: "memory" },
+          channel: { email: { dev: "console", test: "console", prod: "console" } },
+        },
+      },
+      startScheduler: false,
+    });
+    await app.boot({
+      env: "dev",
+      gates: [member],
+      startScheduler: false,
+      config: app.$options.config,
+    });
+
+    const flowDef = app.bindings.find((b) => b.flow.name === "orders.bypass")!.flow;
+    const trigger = http.post("/orders").gate(member);
+
+    const denied = await app.execute(flowDef, { sku: "X" }, trigger, {
+      trustedInvoke: true,
+      principal: { plane: "user", userId: null, verified: false },
+    });
+    expect(denied.failure?.error.code).toBe("Unauthorized");
+
+    const bypassed = await app.execute(flowDef, { sku: "X" }, trigger, {
+      trustedInvoke: true,
+      bypassGates: true,
+      principal: { plane: "user", userId: "console:operator", verified: true },
+    });
+    expect(bypassed.failure).toBeUndefined();
+    expect(bypassed.output).toEqual({ userId: "console:operator" });
 
     await app.stop();
   });

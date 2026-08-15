@@ -9,7 +9,6 @@ import { flow, type AnyFlowDef } from "./flow.ts";
 import { createMemoryJournalStore, hasJournalLease } from "./journal.ts";
 import type { Binding } from "./on.ts";
 import { http } from "./triggers.ts";
-import { gate } from "../elements/gate.ts";
 
 describe("GET /_/ready", () => {
   test("returns 503 booting before boot, 200 ready after boot without journal", async () => {
@@ -39,7 +38,7 @@ describe("GET /_/ready", () => {
     });
     const bindings: Binding[] = [
       {
-        trigger: http.post("/charge").gate(gate.public),
+        trigger: http.post("/charge").gate.public,
         flow: charge as AnyFlowDef,
       },
     ];
@@ -70,6 +69,27 @@ describe("GET /_/ready", () => {
     expect(app.readyState).toBe("ready");
     const res = await app.fetch(new Request("http://127.0.0.1/_/ready"));
     expect(res.status).toBe(200);
+    await app.stop();
+  });
+});
+
+describe("GET /_oke/client.json", () => {
+  test("wraps the runtime route map as { routes }", async () => {
+    const ping = flow("ping", { do: () => ({ ok: true }) });
+    const app = oke({
+      name: "client-json",
+      autoBoot: false,
+      startScheduler: false,
+      env: "test",
+      gate: { unguardedHttp: "allow" },
+      bindings: [{ trigger: http.get("/ping").gate.public, flow: ping as AnyFlowDef }],
+    });
+    await app.boot();
+    const res = await app.fetch(new Request("http://127.0.0.1/_oke/client.json"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { routes: Record<string, unknown> };
+    expect(body.routes).toBeDefined();
+    expect(typeof body.routes).toBe("object");
     await app.stop();
   });
 });

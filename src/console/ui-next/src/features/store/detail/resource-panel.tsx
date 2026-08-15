@@ -13,6 +13,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
+import { piiLogicalCount } from "../../../../../../elements/store/classify.ts";
 import type { RunRow, StoreListChild, StoreListStore } from "@/client.ts";
 import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { DetailHeader } from "@/components/explorer/detail-header.tsx";
@@ -57,7 +58,7 @@ export function ResourcePanel({
   const drift = store.migrationDrift;
   const spec = STORE_FACET_SPECS[store.facet];
   const catalog = isSqlCatalogChild(child);
-  const piiCount = catalog ? 0 : child.piiColumns.length;
+  const piiCount = catalog ? 0 : piiLogicalCount(child.piiColumns);
   const [piiMasked, setPiiMasked] = useState(true);
 
   useEffect(() => {

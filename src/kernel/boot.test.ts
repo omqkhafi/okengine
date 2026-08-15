@@ -79,7 +79,7 @@ describe("boot — lazy element needs", () => {
     expect(needs.signal).toBe(false);
   });
 
-  test("oke() Store-only graph stays under the prior 39 kB baseline", async () => {
+  test("oke() Store-only graph stays under the prior 42 kB baseline", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-store-only-"));
     const entry = join(dir, "entry.ts");
     const appPath = join(import.meta.dir, "app.ts");
@@ -116,9 +116,9 @@ describe("boot — lazy element needs", () => {
         if (raw.byteLength === 0) continue;
         total += Bun.gzipSync(new Uint8Array(raw)).byteLength;
       }
-      // Rebased after lazy `gate.auth` / auth-config chunks + `gate.public`
-      // decoupling from kv-lua strategies (~38.9 kB gzip with export externals).
-      expect(total).toBeLessThan(40_000);
+      // Rebased after `.gate.public` + `gate.all` flatten on HTTP triggers
+      // (~41.5 kB gzip with export externals).
+      expect(total).toBeLessThan(42_000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -225,9 +225,8 @@ describe("boot — HTTP gate wiring on the default path", () => {
   test("bare oke().fetch() with gate.public boots and serves", async () => {
     resetBindings();
     resetFlowSeq();
-    const { gate } = await import("../elements/gate.ts");
     on(
-      http.get("/ping").gate(gate.public),
+      http.get("/ping").gate.public,
       flow("ping-public", {
         do: () => ({ ok: true }),
       }),

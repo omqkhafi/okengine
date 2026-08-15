@@ -65,8 +65,9 @@ bunx create-oke@latest my-app --yes
 Two Notes starters: **standard** and **advanced** (adds `store.index` + optional AI).
 Both are Docker-first; `test` uses PGLite / memory.
 
-The okengine repo also ships `examples/keel` — a Linear-shaped app, not a template.
-Run it with `bun run dev:keel` against Compose (Postgres, Redis, RustFS, Mailpit, Meilisearch).
+The okengine repo also ships `examples/keel` — a work-management app, not a template.
+Run it with `bun run dev:keel` against Compose (Postgres, Redis, RustFS, Mailpit,
+Meilisearch, llama.cpp). Wipe with `bun run dev:keel:reset`.
 
 On a TTY: pick a template, then **recommended defaults**, **customize**, or
 **reuse** (`~/.oke/create-defaults.json`). Reuse applies saved locales / PgDog /
@@ -93,12 +94,10 @@ Four ports come up together (mnemonic: **O·K·E = 6·5·3**):
 
 <Surfaces />
 
-Open `http://localhost:6533`. Claim the Console with the **claim code** printed
-once under the `oke dev` hero, then create the first operator.
-
-Password policy matches Gate auth: **≥ 12 characters, with a letter and a
-number.** If the Console lists your flows, the install worked — **derived, not
-configured.**
+Open `http://localhost:6533`. Paste the **claim code** from the `oke dev` board
+(or `oke console claim-code`). Password: **≥ 12** with upper, lower, number, and
+special, or **Generate** (copies it). Flows listed means the install worked —
+**derived, not configured.**
 
 </Step>
 
@@ -168,9 +167,11 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Create first operator fails (password / claim code)">
-  Password: ≥ 12 chars with upper, lower, number, and special. Copy the claim code from the current
-  `oke dev` boot log (30 min TTL; restart mints a new one). The form and request log show the reason
-  — not a bare `TransportError` / `500`.
+  Password: ≥ 12 chars with upper, lower, number, and special — or **Generate** to fill and copy.
+  Copy the claim code from the `oke dev` board (30 min TTL; restart mints a new
+  one), or run `oke console claim-code`. The form never receives the code over
+  HTTP. The form and request log show the reason — not a bare `TransportError` /
+  `500`.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">
@@ -182,6 +183,12 @@ See [Migrating environments](/docs/reference/migrating-environments).
   Each project gets its own `oke-dev-<id>` compose project; `oke dev` stop keeps volumes. Run
   `oke docker clean` (TTY picker) or `oke docker clean --all --yes` from anywhere to remove
   leftover containers, networks, and volumes.
+</Accordion>
+
+<Accordion title="Want a clean keel stack?">
+  Stop `bun run dev:keel`, then `bun run dev:keel:reset`. That wipes Compose
+  (`oke docker clean --yes`), `.oke/`, Docker extras, and writes `.env.local` from
+  `.env.example`. Next `dev:keel` regenerates stack keys; then `bun run dev:keel:seed`.
 </Accordion>
 
 </Accordions>

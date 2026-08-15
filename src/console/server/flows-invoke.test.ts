@@ -12,6 +12,9 @@ import { oke } from "../../kernel/app.ts";
 import { flow, resetFlowSeq } from "../../kernel/flow.ts";
 import { on, resetBindings } from "../../kernel/on.ts";
 import { http } from "../../kernel/triggers.ts";
+import { field, store } from "../../elements/store.ts";
+import { PII_MASK } from "../../elements/store/classify.ts";
+import { createTestApp } from "../../test/create-test-app.ts";
 import { FLOWS_TEST_MANIFEST } from "../ui-next/src/features/flows/fixture.ts";
 import { bindHostInvokeUserFlow } from "./invoke-user-flow.ts";
 import { startConsoleApp } from "./serve.ts";
@@ -183,6 +186,7 @@ describe("console flows invoke", () => {
           status?: number;
           failure?: unknown;
           peakTier: string;
+          durationMs?: number;
         };
         error: null;
       };
@@ -196,6 +200,7 @@ describe("console flows invoke", () => {
       expect(invokeBody.data.response).not.toHaveProperty("echo");
       expect(invokeBody.data.response.userId).toBe(asUserId);
       expect(invokeBody.data.peakTier).toBe("emits");
+      expect(invokeBody.data.durationMs).toBeGreaterThan(0);
     } finally {
       await host.stop();
       await handle.app.stop();
@@ -345,6 +350,62 @@ describe("console flows invoke", () => {
     }
   });
 
+  test("Operator bypasses gates; public is denied on member flows", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-flows-gate-"));
+    const handle = await startConsoleApp({
+      cwd,
+      secret: "test-secret-flows-gate",
+      silentClaim: true,
+      production: false,
+      manifest: FLOWS_TEST_MANIFEST,
+    });
+    const host = await bootInvokeHost();
+    try {
+      setManifest(handle.state, FLOWS_TEST_MANIFEST);
+      handle.state.invokeUserFlow = bindHostInvokeUserFlow(host);
+      const auth = await claimOperator(handle);
+
+      const asOperator = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({
+            flowId: "bookings.create",
+            body: { flightId: "OP1", seats: 1 },
+          }),
+        }),
+      );
+      expect(asOperator.status).toBe(200);
+      const operatorBody = (await asOperator.json()) as {
+        data: { asUserId: string; asGate: string | null; response: { id: string } };
+      };
+      expect(operatorBody.data.asUserId).toBe("console:operator");
+      expect(operatorBody.data.asGate).toBeNull();
+      expect(operatorBody.data.response.id).toBe("real_OP1_1");
+
+      const asPublic = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({
+            flowId: "bookings.create",
+            body: { flightId: "PUB1", seats: 1 },
+            asGate: "public",
+          }),
+        }),
+      );
+      expect(asPublic.status).toBe(200);
+      const publicBody = (await asPublic.json()) as {
+        data: { failure?: { code: string }; status?: number };
+      };
+      expect(publicBody.data.failure?.code).toBe("Unauthorized");
+      expect(publicBody.data.status).toBe(401);
+    } finally {
+      await host.stop();
+      await handle.app.stop();
+    }
+  });
+
   test("production irreversible invoke requires typed confirmation", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "oke-console-flows-prod-"));
     const handle = await startConsoleApp({
@@ -397,6 +458,307 @@ describe("console flows invoke", () => {
       expect(okBody.data.failure?.code).toBe("NotFound");
     } finally {
       await host.stop();
+      await handle.app.stop();
+    }
+  });
+
+  test("masks classified PII on invoke unless revealPii", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-flows-pii-"));
+    const manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      stores: {
+        db: {
+          facet: "sql" as const,
+          tables: {
+            bookings: {
+              columns: { email: { pii: true } },
+            },
+          },
+        },
+      },
+    };
+    const handle = await startConsoleApp({
+      cwd,
+      secret: "test-secret-flows-pii",
+      silentClaim: true,
+      production: false,
+      manifest,
+    });
+    try {
+      setManifest(handle.state, manifest);
+      handle.state.invokeUserFlow = async () => ({
+        output: { id: "b1", email: "leak@oke.com" },
+        status: 200,
+      });
+      const auth = await claimOperator(handle);
+
+      const maskedRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({
+            flowId: "bookings.mine",
+            body: {},
+            asUserId: "user_demo",
+          }),
+        }),
+      );
+      expect(maskedRes.status).toBe(200);
+      const maskedBody = (await maskedRes.json()) as {
+        data: { response: { id: string; email: string }; masked: boolean };
+      };
+      expect(maskedBody.data.masked).toBe(true);
+      expect(maskedBody.data.response.id).toBe("b1");
+      expect(maskedBody.data.response.email).toBe(PII_MASK);
+
+      const revealedRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({
+            flowId: "bookings.mine",
+            body: {},
+            asUserId: "user_demo",
+            revealPii: true,
+          }),
+        }),
+      );
+      expect(revealedRes.status).toBe(200);
+      const revealedBody = (await revealedRes.json()) as {
+        data: { response: { id: string; email: string }; masked: boolean };
+      };
+      expect(revealedBody.data.masked).toBe(false);
+      expect(revealedBody.data.response.email).toBe("leak@oke.com");
+    } finally {
+      await handle.app.stop();
+    }
+  });
+
+  test("revealPii unmasks store-classified columns the handler reads", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-flows-store-pii-"));
+    const views = store.schema.table("views", {
+      id: field.text().primaryKey(),
+      name: field.text().notNull(),
+      ownerEmail: field.text().pii(),
+    });
+    const db = store.sql("db", { schema: { views } });
+    resetBindings();
+    resetFlowSeq();
+    on(
+      http.post("/views").gate(member),
+      flow("views.seed", {
+        in: z.object({
+          id: z.string(),
+          name: z.string(),
+          ownerEmail: z.string(),
+        }),
+        out: z.object({ id: z.string() }),
+        do: async (input, fx) => {
+          await fx.store(db).insert(views).values(input);
+          return { id: input.id };
+        },
+      }),
+    );
+    on(
+      http.get("/views").gate(member),
+      flow("views.list", {
+        in: z.object({}),
+        out: z.object({
+          items: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              ownerEmail: z.string().nullable(),
+            }),
+          ),
+        }),
+        do: async (_input, fx) => {
+          const items = await fx.store(db).select().from(views);
+          return {
+            items: items.map((row) => ({
+              id: String(row.id),
+              name: String(row.name),
+              ownerEmail: typeof row.ownerEmail === "string" ? row.ownerEmail : null,
+            })),
+          };
+        },
+      }),
+    );
+    const host = oke({
+      name: "invoke-store-pii-host",
+      gate: { policies: [member] },
+      env: "test",
+      stores: [db],
+      config: { drivers: { store: { sql: { test: "pglite" } } } },
+      startScheduler: false,
+    });
+    const harness = await createTestApp(host);
+    const seedFlow = host.bindings.find((b) => b.flow.name === "views.seed")?.flow;
+    expect(seedFlow).toBeDefined();
+    const seeded = await host.execute(
+      seedFlow!,
+      { id: "view_web_board", name: "Web board", ownerEmail: "aria@keel.dev" },
+      { kind: "internal" },
+      { trustedInvoke: true, bypassGates: true },
+    );
+    expect(seeded.failure).toBeUndefined();
+
+    const manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      flows: {
+        ...FLOWS_TEST_MANIFEST.flows,
+        "views.list": {
+          trigger: { http: { method: "GET" as const, path: "/views" } },
+          effects: { reads: ["sql:db" as const] },
+          source: "src/flows/views/index.ts:1",
+        },
+      },
+      stores: {
+        db: {
+          facet: "sql" as const,
+          tables: {
+            views: {
+              columns: { ownerEmail: { pii: true } },
+            },
+          },
+        },
+      },
+    };
+    const handle = await startConsoleApp({
+      cwd,
+      secret: "test-secret-flows-store-pii",
+      silentClaim: true,
+      production: false,
+      manifest,
+    });
+    try {
+      setManifest(handle.state, manifest);
+      handle.state.invokeUserFlow = bindHostInvokeUserFlow(host);
+      const auth = await claimOperator(handle);
+
+      const maskedRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ flowId: "views.list", body: {} }),
+        }),
+      );
+      expect(maskedRes.status).toBe(200);
+      const maskedBody = (await maskedRes.json()) as {
+        data: { response: { items: Array<{ ownerEmail: string }> }; masked: boolean };
+      };
+      expect(maskedBody.data.masked).toBe(true);
+      expect(maskedBody.data.response.items[0]?.ownerEmail).toBe(PII_MASK);
+
+      const revealedRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ flowId: "views.list", body: {}, revealPii: true }),
+        }),
+      );
+      expect(revealedRes.status).toBe(200);
+      const revealedBody = (await revealedRes.json()) as {
+        data: { response: { items: Array<{ ownerEmail: string }> }; masked: boolean };
+      };
+      expect(revealedBody.data.masked).toBe(false);
+      expect(revealedBody.data.response.items[0]?.ownerEmail).toBe("aria@keel.dev");
+    } finally {
+      await harness.close();
+      await handle.app.stop();
+    }
+  });
+
+  test("invoke envelope reports host cache without inventing a hit", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-flows-cache-"));
+    const notes = store.schema.table("notes", {
+      id: field.text().primaryKey(),
+      title: field.text().notNull(),
+    });
+    const db = store.sql("app", { schema: { notes } });
+    resetBindings();
+    resetFlowSeq();
+    on(
+      http.get("/notes").gate(member),
+      flow("notes.list", {
+        in: z.object({}),
+        out: z.array(z.object({ id: z.string(), title: z.string() })),
+        effects: { reads: ["sql:notes"] },
+        do: () => [{ id: "n1", title: "Harbor" }],
+      }),
+    );
+    const host = oke({
+      name: "invoke-cache-host",
+      gate: { policies: [member] },
+      env: "test",
+      stores: [db],
+      config: { drivers: { store: { sql: { test: "pglite" } } } },
+      startScheduler: false,
+    });
+    const harness = await createTestApp(host);
+    const manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      flows: {
+        ...FLOWS_TEST_MANIFEST.flows,
+        "notes.list": {
+          trigger: { http: { method: "GET" as const, path: "/notes" } },
+          effects: { reads: ["sql:notes" as const] },
+          source: "src/flows/notes/index.ts:1",
+        },
+      },
+    };
+    const handle = await startConsoleApp({
+      cwd,
+      secret: "test-secret-flows-cache",
+      silentClaim: true,
+      production: false,
+      manifest,
+    });
+    try {
+      setManifest(handle.state, manifest);
+      handle.state.invokeUserFlow = bindHostInvokeUserFlow(host);
+      const auth = await claimOperator(handle);
+
+      const firstRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ flowId: "notes.list", body: {} }),
+        }),
+      );
+      expect(firstRes.status).toBe(200);
+      const firstBody = (await firstRes.json()) as {
+        data: { cache?: "hit" | "miss" | "none" };
+      };
+      expect(firstBody.data.cache).not.toBe("hit");
+
+      const secondRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ flowId: "notes.list", body: {} }),
+        }),
+      );
+      expect(secondRes.status).toBe(200);
+      const secondBody = (await secondRes.json()) as {
+        data: { cache?: "hit" | "miss" | "none" };
+      };
+      expect(secondBody.data.cache).toBe("hit");
+
+      const revealedRes = await handle.app.fetch(
+        new Request("http://console.test/console/flows/invoke", {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ flowId: "notes.list", body: {}, revealPii: true }),
+        }),
+      );
+      expect(revealedRes.status).toBe(200);
+      const revealedBody = (await revealedRes.json()) as {
+        data: { cache?: "hit" | "miss" | "none" };
+      };
+      expect(revealedBody.data.cache).not.toBe("hit");
+    } finally {
+      await harness.close();
       await handle.app.stop();
     }
   });

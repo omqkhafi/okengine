@@ -73,6 +73,11 @@ describe("graphFilterForNodeId", () => {
     expect(graphFilterForNodeId("unit:bookings")).toEqual({ kind: "unit", unit: "bookings" });
     expect(graphFilterForNodeId("element:store")).toEqual({ kind: "element", element: "store" });
     expect(graphFilterForNodeId("type:store:sql")).toEqual({ kind: "element", element: "store" });
+    expect(graphFilterForNodeId("type:store:kv")).toEqual({ kind: "element", element: "store" });
+    expect(graphFilterForNodeId("kv:cache")).toEqual({
+      kind: "resource",
+      nodeId: "kv:cache",
+    });
     expect(graphFilterForNodeId("type:flow:http")).toEqual({ kind: "element", element: "flow" });
     expect(graphFilterForNodeId("sql:bookings")).toEqual({
       kind: "resource",

@@ -4,8 +4,9 @@
  * @see https://beui.dev/components/agents/file-diff
  */
 
-import { type CSSProperties, Fragment, useEffect, useState, type JSX } from "react";
-import { createHighlighter, type Highlighter } from "shiki/bundle/web";
+import { Fragment, useEffect, useState, type JSX } from "react";
+import { useTheme } from "@/components/theme-provider";
+import { CONSOLE_SHIKI_LANGS, getConsoleHighlighter } from "@/lib/shiki.ts";
 import { cn } from "@/lib/utils.ts";
 
 /** Languages File Diff can highlight. */
@@ -36,30 +37,48 @@ export interface AgentCodeLineProps {
   readonly className?: string;
 }
 
-const LIGHT_THEME = "github-light-high-contrast";
-const DARK_THEME = "github-dark-high-contrast";
-const HIGHLIGHT_LANGS = ["bash", "json", "sql", "tsx", "typescript"] as const;
-type HighlightLang = (typeof HIGHLIGHT_LANGS)[number];
+const LIGHT_THEME = "github-light";
+const DARK_THEME = "github-dark";
+type HighlightLang = (typeof CONSOLE_SHIKI_LANGS)[number];
 
 function isHighlightLang(language: AgentCodeLanguage): language is HighlightLang {
-  return (HIGHLIGHT_LANGS as readonly string[]).includes(language);
+  return (CONSOLE_SHIKI_LANGS as readonly string[]).includes(language);
 }
 
-let agentCodeHighlighter: Promise<Highlighter> | null = null;
 const tokenCache = new Map<string, AgentCodeTokenLines>();
-
-function getAgentCodeHighlighter(): Promise<Highlighter> {
-  if (!agentCodeHighlighter) {
-    agentCodeHighlighter = createHighlighter({
-      themes: [LIGHT_THEME, DARK_THEME],
-      langs: [...HIGHLIGHT_LANGS],
-    });
-  }
-  return agentCodeHighlighter;
-}
 
 function tokenCacheKey(code: string, language: AgentCodeLanguage): string {
   return `${language}\u0000${code}`;
+}
+
+/**
+ * Whether the Console is currently painting a dark surface.
+ */
+function useAgentCodeDark(): boolean {
+  const { theme } = useTheme();
+  const [dark, setDark] = useState(() => theme === "dark");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = (): void => {
+      if (theme === "dark") {
+        setDark(true);
+        return;
+      }
+      if (theme === "light") {
+        setDark(false);
+        return;
+      }
+      setDark(root.classList.contains("dark"));
+    };
+    sync();
+    if (theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [theme]);
+
+  return dark;
 }
 
 /**
@@ -93,17 +112,19 @@ export function useAgentCodeTokens(
     }
 
     let cancelled = false;
-    void getAgentCodeHighlighter().then((highlighter) => {
-      if (cancelled) return;
-      const lines = highlighter
-        .codeToTokensWithThemes(code, {
+    void getConsoleHighlighter()
+      .then((highlighter) =>
+        highlighter.codeToTokensWithThemes(code, {
           lang: language,
           themes: {
             light: LIGHT_THEME,
             dark: DARK_THEME,
           },
-        })
-        .map((line) =>
+        }),
+      )
+      .then((tokenLines) => {
+        if (cancelled) return;
+        const lines = tokenLines.map((line) =>
           line.map((token) => ({
             content: token.content,
             offset: token.offset,
@@ -111,9 +132,12 @@ export function useAgentCodeTokens(
             dark: token.variants.dark?.color,
           })),
         );
-      tokenCache.set(key, lines);
-      setResult({ key, code, language, lines });
-    });
+        tokenCache.set(key, lines);
+        setResult({ key, code, language, lines });
+      })
+      .catch(() => {
+        if (!cancelled) setResult({ key, code, language, lines: [] });
+      });
     return () => {
       cancelled = true;
     };
@@ -132,19 +156,16 @@ export function useAgentCodeTokens(
  * @param props - Line source + optional tokens
  */
 export function AgentCodeLine({ code, tokens, className }: AgentCodeLineProps): JSX.Element {
+  const dark = useAgentCodeDark();
   return (
     <code className={cn("font-mono text-[inherit]", className)}>
       {tokens
         ? tokens.map((token) => (
             <span
               key={`${token.offset}-${token.content}`}
-              style={
-                {
-                  "--agent-code-light": token.light ?? "currentColor",
-                  "--agent-code-dark": token.dark ?? token.light ?? "currentColor",
-                } as CSSProperties
-              }
-              className="text-[var(--agent-code-light)] dark:text-[var(--agent-code-dark)]"
+              style={{
+                color: (dark ? token.dark : token.light) ?? token.light ?? token.dark,
+              }}
             >
               {token.content}
             </span>

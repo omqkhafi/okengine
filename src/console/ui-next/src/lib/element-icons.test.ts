@@ -21,7 +21,18 @@ describe("ELEMENT_ICONS", () => {
     expect(icons.size).toBe(8);
     for (const e of elements) {
       expect(elementIcon(e).label.length).toBeGreaterThan(0);
+      expect(elementIcon(e).symbol).toHaveLength(2);
       expect(elementIcon(e).icon).toBe(ELEMENT_ICONS[e].icon);
     }
+    expect(elements.map((e) => ELEMENT_ICONS[e].symbol)).toEqual([
+      "Fl",
+      "Sg",
+      "St",
+      "Ck",
+      "Gt",
+      "Vt",
+      "Ch",
+      "Ai",
+    ]);
   });
 });

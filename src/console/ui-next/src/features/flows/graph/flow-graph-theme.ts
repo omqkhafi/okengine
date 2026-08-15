@@ -105,7 +105,7 @@ export const NODE_BOX = {
 /** Overview map boxes — law disc, element discs, type pills, unit chips. */
 export const MAP_BOX = {
   law: { width: 140, height: 140 },
-  hub: { width: 76, height: 76 },
+  hub: { width: 56, height: 56 },
   type: { width: 64, height: 26 },
   unit: { width: 128, height: 40 },
 } as const;

@@ -104,6 +104,83 @@ export function assertPasswordPolicy(password: string, options: PasswordPolicyOp
   }
 }
 
+/** Extra options for {@link generatePassword}. */
+export interface GeneratePasswordOptions extends PasswordPolicyOptions {
+  /** Output length (default `max(minLength, 16)`). */
+  readonly length?: number;
+}
+
+const GEN_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const GEN_LOWER = "abcdefghijkmnpqrstuvwxyz";
+const GEN_DIGITS = "23456789";
+const GEN_SPECIAL = "!@#$%^&*-_=+?";
+
+/**
+ * Cryptographically random password that satisfies {@link assertPasswordPolicy}.
+ * Ambiguous glyphs (`0O1Il`) are omitted so a revealed value is easy to retype.
+ *
+ * @param options - Policy + optional length
+ */
+export function generatePassword(options: GeneratePasswordOptions = {}): string {
+  const policy = resolvePasswordPolicy(options);
+  const length = options.length ?? Math.max(policy.minLength, 16);
+  if (length < policy.minLength) {
+    throw new Error(`generatePassword: length ${length} is below minLength ${policy.minLength}`);
+  }
+
+  const classes: string[] = [];
+  if (policy.requireUppercase) classes.push(GEN_UPPER);
+  if (policy.requireLowercase) classes.push(GEN_LOWER);
+  if (policy.requireLetter && !policy.requireUppercase && !policy.requireLowercase) {
+    classes.push(GEN_UPPER + GEN_LOWER);
+  }
+  if (policy.requireNumber) classes.push(GEN_DIGITS);
+  if (policy.requireSpecial) classes.push(GEN_SPECIAL);
+  const pool = classes.length > 0 ? classes.join("") : GEN_UPPER + GEN_LOWER + GEN_DIGITS;
+  if (length < classes.length) {
+    throw new Error(`generatePassword: length ${length} cannot cover ${classes.length} classes`);
+  }
+
+  const chars: string[] = classes.map((set) => pickChar(set));
+  while (chars.length < length) chars.push(pickChar(pool));
+  shuffleInPlace(chars);
+  const password = chars.join("");
+  assertPasswordPolicy(password, policy);
+  return password;
+}
+
+function pickChar(set: string): string {
+  return set[randomInt(set.length)] ?? set[0]!;
+}
+
+function shuffleInPlace(items: string[]): void {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    const a = items[i]!;
+    items[i] = items[j]!;
+    items[j] = a;
+  }
+}
+
+/** Unbiased `0 .. maxExclusive-1` from `crypto.getRandomValues`. */
+function randomInt(maxExclusive: number): number {
+  if (!Number.isInteger(maxExclusive) || maxExclusive <= 0) {
+    throw new Error("randomInt: maxExclusive must be a positive integer");
+  }
+  const bytes = maxExclusive <= 256 ? 1 : 2;
+  const range = bytes === 1 ? 256 : 65536;
+  if (maxExclusive > range) {
+    throw new Error(`randomInt: maxExclusive ${maxExclusive} exceeds ${range}`);
+  }
+  const limit = range - (range % maxExclusive);
+  const buf = new Uint8Array(bytes);
+  for (;;) {
+    crypto.getRandomValues(buf);
+    const value = bytes === 1 ? (buf[0] ?? 0) : ((buf[0] ?? 0) << 8) | (buf[1] ?? 0);
+    if (value < limit) return value % maxExclusive;
+  }
+}
+
 /** Password failed policy checks. */
 export class PasswordPolicyError extends Error {
   readonly reasons: readonly string[];

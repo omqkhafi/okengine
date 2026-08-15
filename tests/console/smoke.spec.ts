@@ -20,8 +20,8 @@ const OPERATOR_PASSWORD = "Password1234!";
 async function expectShell(page: import("@playwright/test").Page): Promise<void> {
   const sidebar = page.locator('[data-slot="sidebar"]');
   await expect(sidebar).toBeVisible({ timeout: 15_000 });
+  await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Flows" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Units" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Store" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Vault" })).toBeVisible();
 }
@@ -51,7 +51,7 @@ test("claim succeeds, login restores the shell, and each module loads", async ({
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Create admin account" }).click();
 
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
   await expectShell(page);
   await expect(page.locator('[data-slot="flows-page"]')).toBeVisible();
   await expect(page.locator('[data-slot="flow-graph"]')).toBeVisible();
@@ -78,9 +78,14 @@ test("claim succeeds, login restores the shell, and each module loads", async ({
   const reopenBody = (await reopen.json()) as { error: { code: string } };
   expect(reopenBody.error.code).toBe("SetupClosed");
 
-  await page.goto("/units");
-  await expect(page).toHaveURL(/\/units/);
+  await page.goto("/flows");
+  await expect(page).toHaveURL(/\/flows/);
   await expect(page.locator('[data-slot="units-page"]')).toBeVisible({ timeout: 15_000 });
+
+  const missing = await page.goto("/units");
+  expect(missing?.status()).toBe(404);
+  await expect(page).toHaveURL(/\/units/);
+  await expect(page.locator('[data-slot="not-found"]')).toBeVisible({ timeout: 15_000 });
 
   await page.goto("/store");
   await expect(page).toHaveURL(/\/store/);
@@ -91,7 +96,7 @@ test("claim succeeds, login restores the shell, and each module loads", async ({
   await expect(page.locator('[data-slot="vault-page"]')).toBeVisible({ timeout: 15_000 });
 
   await page.goto("/overview");
-  await expect(page).toHaveURL(/\/flows/);
+  await expect(page).toHaveURL(/\/overview/);
   await expect(page.locator('[data-slot="flows-page"]')).toBeVisible({ timeout: 15_000 });
 
   await page.evaluate(() => sessionStorage.removeItem("oke_console_at"));
@@ -105,7 +110,7 @@ test("claim succeeds, login restores the shell, and each module loads", async ({
   await page.locator("#password").fill(OPERATOR_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page).toHaveURL(/\/flows$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
   await expectShell(page);
   await expect(page.locator('[data-slot="flows-page"]')).toBeVisible();
 });

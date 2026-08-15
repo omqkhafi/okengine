@@ -1,6 +1,6 @@
 /**
  * Setup gate — claim when open; real login when closed.
- * Claim success navigates to `?next=` when present, otherwise `/flows`.
+ * Claim success navigates to `?next=` when present, otherwise `/overview`.
  */
 
 import { useForm } from "@tanstack/react-form";
@@ -26,6 +26,7 @@ import {
 } from "@/components/auth-card";
 import { ConsoleChrome } from "@/components/console-chrome";
 import { StatefulButton } from "@/components/motion/button/index.ts";
+import { GeneratePasswordButton } from "@/components/generate-password-button";
 import { PasswordInput } from "@/components/password-input";
 import { PasswordStrength } from "@/components/password-strength";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -82,6 +83,7 @@ export function ClaimPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/" });
   const [formError, setFormError] = useState<string | null>(null);
+  const [passwordRevealNonce, setPasswordRevealNonce] = useState(0);
 
   const status = useQuery({
     queryKey: ["console.setup.status"],
@@ -177,7 +179,7 @@ export function ClaimPage() {
       <AuthCard
         title="First admin"
         status={{ label: "Setup open", tone: "open" }}
-        description="Enter the claim code from the Console boot log, or run `oke console claim-code`. This wizard closes permanently after the first operator."
+        description="Enter the claim code from the `oke dev` board, or run `oke console claim-code`. This wizard closes permanently after the first operator."
         footer={
           <StatefulButton
             type="submit"
@@ -329,16 +331,26 @@ export function ClaimPage() {
                   const errorId = `${field.name}-error`;
                   return (
                     <Field data-invalid={isInvalid || undefined} className="gap-2.5">
-                      <FieldLabel htmlFor={field.name}>
-                        Password
-                        <RequiredMark />
-                      </FieldLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FieldLabel htmlFor={field.name}>
+                          Password
+                          <RequiredMark />
+                        </FieldLabel>
+                        <GeneratePasswordButton
+                          disabled={claim.isPending}
+                          onGenerate={(password) => {
+                            field.handleChange(password);
+                            setPasswordRevealNonce((n) => n + 1);
+                          }}
+                        />
+                      </div>
                       <PasswordInput
                         id={field.name}
                         name={field.name}
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
+                        revealNonce={passwordRevealNonce}
                         minLength={12}
                         autoComplete="new-password"
                         placeholder="Password"

@@ -36,6 +36,8 @@ export type ElementHugeIcon = ComponentProps<typeof HugeiconsIcon>["icon"];
 export type ElementIconSpec = {
   readonly icon: ElementHugeIcon;
   readonly label: string;
+  /** Two-letter lattice symbol — presentation only, not an API name. */
+  readonly symbol: string;
 };
 
 /**
@@ -53,14 +55,14 @@ export type ElementIconSpec = {
  * | ai | Sparkles | AiMagic |
  */
 export const ELEMENT_ICONS: Record<OkeElement, ElementIconSpec> = {
-  flow: { icon: FlowCircleIcon, label: "Flow" },
-  signal: { icon: Radio01Icon, label: "Signal" },
-  store: { icon: Database01Icon, label: "Store" },
-  clock: { icon: Clock01Icon, label: "Clock" },
-  gate: { icon: SecurityCheckIcon, label: "Gate" },
-  vault: { icon: Key01Icon, label: "Vault" },
-  channel: { icon: Mail01Icon, label: "Channel" },
-  ai: { icon: AiMagicIcon, label: "AI" },
+  flow: { icon: FlowCircleIcon, label: "Flow", symbol: "Fl" },
+  signal: { icon: Radio01Icon, label: "Signal", symbol: "Sg" },
+  store: { icon: Database01Icon, label: "Store", symbol: "St" },
+  clock: { icon: Clock01Icon, label: "Clock", symbol: "Ck" },
+  gate: { icon: SecurityCheckIcon, label: "Gate", symbol: "Gt" },
+  vault: { icon: Key01Icon, label: "Vault", symbol: "Vt" },
+  channel: { icon: Mail01Icon, label: "Channel", symbol: "Ch" },
+  ai: { icon: AiMagicIcon, label: "AI", symbol: "Ai" },
 };
 
 /**

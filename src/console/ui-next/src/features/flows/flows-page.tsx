@@ -18,7 +18,7 @@ import { chainFlowIds } from "./traces/trace-chain.ts";
 import { TracesPane } from "./traces/traces-pane.tsx";
 
 /**
- * `/flows` — one composition: activity at the start, structure at the end,
+ * `/overview` — one composition: activity at the start, structure at the end,
  * linked by shared selection.
  */
 export function FlowsPage() {
@@ -49,7 +49,7 @@ export function FlowsPage() {
     paused: selectedRunId != null || graphFilter != null,
   });
 
-  // Seed graph filter from `?flow=` deep-link (Units → Open in graph).
+  // Seed graph filter from `?flow=` deep-link (Flows → Open in graph).
   useEffect(() => {
     if (!selectedFlowId) return;
     setGraphFilter((prev) => {

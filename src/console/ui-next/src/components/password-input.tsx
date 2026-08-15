@@ -4,19 +4,25 @@
 
 import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useId, useState, type ComponentProps } from "react";
+import { useEffect, useId, useState, type ComponentProps } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type PasswordInputProps = Omit<ComponentProps<"input">, "type">;
+type PasswordInputProps = Omit<ComponentProps<"input">, "type"> & {
+  /** Increment after generate so the value is shown (operator can hide again). */
+  revealNonce?: number;
+};
 
 /**
  * Text field that toggles between `password` and `text` input types.
  *
  * @param props - Standard input props (`type` is owned by this control)
  */
-export function PasswordInput({ className, id, ...props }: PasswordInputProps) {
+export function PasswordInput({ className, id, revealNonce, ...props }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (revealNonce !== undefined && revealNonce > 0) setVisible(true);
+  }, [revealNonce]);
   const reactId = useId();
   const inputId = id ?? `password-${reactId}`;
   const statusId = `${inputId}-visibility`;

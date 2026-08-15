@@ -63,6 +63,15 @@ describe("meilisearch live — arabic + typo tolerance", () => {
     expect(found.hits.map((h) => h.id)).toContain("d1");
   });
 
+  live("re-open of an existing index does not fail", async () => {
+    const name = `reopen-${crypto.randomUUID().slice(0, 8)}`;
+    const first = await liveIndex(name);
+    await first.upsert("d1", { title: "already here" });
+    const second = await liveIndex(name);
+    const listed = await second.list(10);
+    expect(listed.map((h) => h.id)).toContain("d1");
+  });
+
   live("filter + facets aggregate real results", async () => {
     const index = await liveIndex(`fac-${crypto.randomUUID().slice(0, 8)}`);
     await index.upsert("d1", { title: "red apple", color: "red" });

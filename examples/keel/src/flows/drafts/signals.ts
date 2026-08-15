@@ -1,11 +1,10 @@
 import { signal } from "okengine";
 import { z } from "zod";
 
-/** Compose-draft TTL elapsed. */
+/** Compose draft expired. */
 export const draftExpired = signal("draft-expired", {
-  delivery: "broadcast",
-  retries: 3,
+  delivery: "once",
+  retries: 1,
   deadLetter: true,
-  optional: true,
   schema: z.object({ id: z.string() }),
 });

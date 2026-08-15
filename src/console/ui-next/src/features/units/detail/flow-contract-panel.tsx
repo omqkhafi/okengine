@@ -12,8 +12,8 @@ import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import { SectionHead } from "@/components/explorer/section-head.tsx";
 import { GateList } from "@/components/gate-list";
 import { HttpMethodBadge } from "@/components/http-method-badge";
+import { SignalDeliveryBadge } from "@/components/signal-delivery-badge";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { callersOfFlow } from "@/features/flows/graph/build-flow-graph.ts";
 import { traceGateInfos } from "@/features/flows/traces/trace-gates.ts";
@@ -102,6 +102,16 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
                 {meta.path}
               </code>
             </div>
+          ) : kind === "signal" && signalDecl ? (
+            <div
+              className="mt-0.5 flex min-w-0 items-center gap-2"
+              data-slot="signal-endpoint-line"
+            >
+              <SignalDeliveryBadge delivery={signalDecl.delivery} />
+              <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground select-all">
+                {row.flow.trigger?.signal}
+              </code>
+            </div>
           ) : (
             <p
               className="mt-0.5 font-mono text-[11px] text-muted-foreground"
@@ -112,15 +122,15 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
           )
         }
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 shrink-0 gap-1 px-2 text-[11px]"
-            render={<Link to="/flows" search={{ flow: row.id }} data-slot="open-in-graph" />}
+          <Link
+            to="/overview"
+            search={{ flow: row.id }}
+            data-slot="open-in-graph"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-sky-500/35 bg-sky-500/10 px-2 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
           >
             <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
             Open in graph
-          </Button>
+          </Link>
         }
       />
 
@@ -143,11 +153,16 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
           <EffectsSummary effects={row.flow.effects} />
           <GateList gates={gates} />
           <ErrorsSection errors={row.flow.errors} />
-          {kind === "signal" && signalDecl ? (
+          {kind === "signal" &&
+          signalDecl &&
+          (signalDecl.retries !== undefined || signalDecl.deadLetter) ? (
             <p className="text-[11px] text-muted-foreground" data-slot="signal-delivery">
-              Delivery · {signalDecl.delivery}
-              {signalDecl.retries !== undefined ? ` · retries ${signalDecl.retries}` : ""}
-              {signalDecl.deadLetter ? " · dead-letter" : ""}
+              {[
+                signalDecl.retries !== undefined ? `retries ${signalDecl.retries}` : null,
+                signalDecl.deadLetter ? "dead-letter" : null,
+              ]
+                .filter((part): part is string => part !== null)
+                .join(" · ")}
             </p>
           ) : null}
           {(kind === "cron" || kind === "every") && clockMatch?.kind === "matched" ? (
@@ -195,8 +210,7 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
           ) : null}
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {showInput &&
-            (inputSplit.fields.length > 0 || inputSplit.parameters.length === 0) ? (
+            {showInput && (inputSplit.fields.length > 0 || inputSplit.parameters.length === 0) ? (
               <section className="flex flex-col gap-2" aria-label={inputLabel} data-slot="request">
                 <SectionHead title={inputLabel} meta={String(inputSplit.fields.length)} />
                 <SchemaFields

@@ -35,48 +35,48 @@ async function seededRuntime() {
 
 describe("seedInvokeOp", () => {
   test("classifies CRUD + search", () => {
-    expect(seedInvokeOp("issues.list")).toBe("list");
-    expect(seedInvokeOp("issues.get")).toBe("get");
-    expect(seedInvokeOp("issues.create")).toBe("create");
+    expect(seedInvokeOp("tasks.list")).toBe("list");
+    expect(seedInvokeOp("tasks.get")).toBe("get");
+    expect(seedInvokeOp("tasks.create")).toBe("create");
     expect(seedInvokeOp("attachments.upload")).toBe("create");
-    expect(seedInvokeOp("issues.update")).toBe("update");
+    expect(seedInvokeOp("tasks.update")).toBe("update");
     expect(seedInvokeOp("attachments.delete")).toBe("delete");
-    expect(seedInvokeOp("issues.archive")).toBe("action");
+    expect(seedInvokeOp("tasks.archive")).toBe("action");
   });
 });
 
 describe("primarySqlTable / parentFilter / placeholder", () => {
   test("reads the first sql table from effects", () => {
-    expect(primarySqlTable(decl("issues.list"))).toBe("issues");
+    expect(primarySqlTable(decl("tasks.list"))).toBe("tasks");
     expect(primarySqlTable(decl("attachments.delete"))).toBe("file_objects");
   });
 
   test("maps nested collection paths to a parent column", () => {
-    expect(parentFilter("/issues/:id/comments", { id: "iss_eng_184" })).toEqual({
-      column: "issue_id",
-      value: "iss_eng_184",
+    expect(parentFilter("/tasks/:id/comments", { id: "tsk_eng_12" })).toEqual({
+      column: "task_id",
+      value: "tsk_eng_12",
     });
     expect(parentFilter("/attachments/:id", { id: "x" })).toBeNull();
-    expect(parentFilter("/issues/:id/comments", { id: ":id" })).toBeNull();
+    expect(parentFilter("/tasks/:id/comments", { id: ":id" })).toBeNull();
   });
 
   test("treats :token as missing", () => {
     expect(isPlaceholderId(":id")).toBe(true);
     expect(isPlaceholderId("")).toBe(true);
-    expect(isPlaceholderId("iss_eng_184")).toBe(false);
+    expect(isPlaceholderId("tsk_eng_12")).toBe(false);
   });
 });
 
 describe("executeSeedInvoke", () => {
-  test("lists real issue rows with a total, not an ok echo", async () => {
+  test("lists real task rows with a total, not an ok echo", async () => {
     const runtime = await seededRuntime();
     try {
       const out = await executeSeedInvoke({
         runtime,
         manifest: UI_NEXT_SEEDED_MANIFEST,
-        flowId: "issues.list",
-        path: pathOf("issues.list"),
-        decl: decl("issues.list"),
+        flowId: "tasks.list",
+        path: pathOf("tasks.list"),
+        decl: decl("tasks.list"),
         input: {},
         userId: "user_demo",
       });
@@ -88,7 +88,7 @@ describe("executeSeedInvoke", () => {
       };
       expect(data.items.length).toBe(SEED_INVOKE_LIST_LIMIT);
       expect(data.count).toBe(SEED_INVOKE_LIST_LIMIT);
-      expect(data.total).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlIssues);
+      expect(data.total).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlTasks);
       expect((out as { limit: number; offset: number }).limit).toBe(SEED_INVOKE_LIST_LIMIT);
       expect((out as { offset: number }).offset).toBe(0);
       expect(decodeListCursor((out as { nextCursor: string }).nextCursor)).toBe(
@@ -105,31 +105,31 @@ describe("executeSeedInvoke", () => {
     const get = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.get",
-      path: pathOf("issues.get"),
-      decl: decl("issues.get"),
-      input: { id: "iss_eng_184" },
+      flowId: "tasks.get",
+      path: pathOf("tasks.get"),
+      decl: decl("tasks.get"),
+      input: { id: "tsk_eng_12" },
       userId: "user_demo",
     });
     expect(get).toMatchObject({
-      id: "iss_eng_184",
-      identifier: "ENG-184",
-      title: "Pulse graph on selected trace",
+      id: "tsk_eng_12",
+      identifier: "ENG-12",
+      title: "SSO login fails",
     });
 
     const updated = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.update",
-      path: pathOf("issues.update"),
-      decl: decl("issues.update"),
-      input: { id: "iss_eng_184", title: "Pulse graph (edited)" },
+      flowId: "tasks.update",
+      path: pathOf("tasks.update"),
+      decl: decl("tasks.update"),
+      input: { id: "tsk_eng_12", title: "SSO login fails (edited)" },
       userId: "user_demo",
     });
     expect(updated).toMatchObject({
-      id: "iss_eng_184",
-      title: "Pulse graph (edited)",
-      identifier: "ENG-184",
+      id: "tsk_eng_12",
+      title: "SSO login fails (edited)",
+      identifier: "ENG-12",
     });
 
     const deleted = await executeSeedInvoke({
@@ -138,12 +138,12 @@ describe("executeSeedInvoke", () => {
       flowId: "attachments.delete",
       path: pathOf("attachments.delete"),
       decl: decl("attachments.delete"),
-      input: { id: "attachments/ENG-184/spec.pdf" },
+      input: { id: "attachments/tsk_eng_12/spec.pdf" },
       userId: "user_demo",
     });
     expect(deleted).toMatchObject({
       ok: true,
-      id: "attachments/ENG-184/spec.pdf",
+      id: "attachments/tsk_eng_12/spec.pdf",
     });
     expect((deleted as { deleted: { original_name?: string } }).deleted.original_name).toBe(
       "spec.pdf",
@@ -164,20 +164,20 @@ describe("executeSeedInvoke", () => {
     });
   });
 
-  test("create inserts an issue and returns the new row", async () => {
+  test("create inserts a task and returns the new row", async () => {
     const runtime = await seededRuntime();
     const created = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.create",
-      path: pathOf("issues.create"),
-      decl: decl("issues.create"),
-      input: { title: "From Call API", teamKey: "ENG", priority: 1 },
+      flowId: "tasks.create",
+      path: pathOf("tasks.create"),
+      decl: decl("tasks.create"),
+      input: { title: "From Call API", spaceKey: "ENG", priority: 1 },
       userId: "user_demo",
     });
     expect(created).toMatchObject({
       title: "From Call API",
-      team_id: "team_eng",
+      space_id: "space_eng",
       creator_email: "user_demo",
     });
     expect(typeof (created as { id: string }).id).toBe("string");
@@ -186,24 +186,24 @@ describe("executeSeedInvoke", () => {
     const again = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.get",
-      path: pathOf("issues.get"),
-      decl: decl("issues.get"),
+      flowId: "tasks.get",
+      path: pathOf("tasks.get"),
+      decl: decl("tasks.get"),
       input: { id: (created as { id: string }).id },
       userId: "user_demo",
     });
     expect(again).toMatchObject({ title: "From Call API" });
   });
 
-  test("list honors q, teamKey, limit, offset, and cursor", async () => {
+  test("list honors q, spaceKey, limit, offset, and cursor", async () => {
     const runtime = await seededRuntime();
     const filtered = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.list",
-      path: pathOf("issues.list"),
-      decl: decl("issues.list"),
-      input: { q: "ENG-184", limit: 10 },
+      flowId: "tasks.list",
+      path: pathOf("tasks.list"),
+      decl: decl("tasks.list"),
+      input: { q: "ENG-12", limit: 10 },
       userId: "user_demo",
     });
     const found = filtered as {
@@ -211,16 +211,16 @@ describe("executeSeedInvoke", () => {
       total: number;
       nextCursor?: string;
     };
-    expect(found.items.some((row) => row.id === "iss_eng_184")).toBe(true);
-    expect(found.total).toBeLessThan(UI_NEXT_SEED_STORE_COUNTS.sqlIssues);
+    expect(found.items.some((row) => row.id === "tsk_eng_12")).toBe(true);
+    expect(found.total).toBeLessThan(UI_NEXT_SEED_STORE_COUNTS.sqlTasks);
     expect(found.nextCursor).toBeUndefined();
 
     const page1 = (await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.list",
-      path: pathOf("issues.list"),
-      decl: decl("issues.list"),
+      flowId: "tasks.list",
+      path: pathOf("tasks.list"),
+      decl: decl("tasks.list"),
       input: { limit: 5, orderBy: "id", order: "asc" },
       userId: "user_demo",
     })) as {
@@ -235,9 +235,9 @@ describe("executeSeedInvoke", () => {
     const page2 = (await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.list",
-      path: pathOf("issues.list"),
-      decl: decl("issues.list"),
+      flowId: "tasks.list",
+      path: pathOf("tasks.list"),
+      decl: decl("tasks.list"),
       input: { limit: 5, cursor: page1.nextCursor, orderBy: "id", order: "asc" },
       userId: "user_demo",
     })) as { items: Array<{ id: string }>; offset: number };
@@ -248,32 +248,32 @@ describe("executeSeedInvoke", () => {
     const eng = (await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.list",
-      path: pathOf("issues.list"),
-      decl: decl("issues.list"),
-      input: { teamKey: "ENG", limit: 20 },
+      flowId: "tasks.list",
+      path: pathOf("tasks.list"),
+      decl: decl("tasks.list"),
+      input: { spaceKey: "ENG", limit: 20 },
       userId: "user_demo",
-    })) as { items: Array<{ team_id?: string }>; total: number };
+    })) as { items: Array<{ space_id?: string }>; total: number };
     expect(eng.items.length).toBeGreaterThan(0);
-    expect(eng.items.every((row) => row.team_id === "team_eng")).toBe(true);
+    expect(eng.items.every((row) => row.space_id === "space_eng")).toBe(true);
     expect(encodeListCursor(5)).toBe(page1.nextCursor);
   });
 
-  test("archive returns the updated issue, not ok-only", async () => {
+  test("archive returns the updated task, not ok-only", async () => {
     const runtime = await seededRuntime();
     const archived = await executeSeedInvoke({
       runtime,
       manifest: UI_NEXT_SEEDED_MANIFEST,
-      flowId: "issues.archive",
-      path: pathOf("issues.archive"),
-      decl: decl("issues.archive"),
-      input: { id: "iss_eng_184" },
+      flowId: "tasks.archive",
+      path: pathOf("tasks.archive"),
+      decl: decl("tasks.archive"),
+      input: { id: "tsk_eng_12" },
       userId: "user_demo",
     });
     expect(archived).toMatchObject({
       ok: true,
-      id: "iss_eng_184",
-      identifier: "ENG-184",
+      id: "tsk_eng_12",
+      identifier: "ENG-12",
     });
     expect(typeof (archived as { archived_at: string }).archived_at).toBe("string");
   });

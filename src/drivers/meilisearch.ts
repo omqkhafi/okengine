@@ -34,13 +34,65 @@ export class MeilisearchUnavailableError extends Error {
 interface MeiliTask {
   readonly taskUid: number;
   readonly status: "enqueued" | "processing" | "succeeded" | "failed" | "canceled";
-  readonly error?: { readonly message?: string } | null;
+  readonly error?: { readonly message?: string; readonly code?: string } | null;
 }
 
 /** Search response hit shape we consume. */
 interface MeiliSearchResponse {
   readonly hits?: ReadonlyArray<Record<string, unknown> & { readonly _rankingScore?: number }>;
   readonly facetDistribution?: Record<string, Record<string, number>>;
+}
+
+/** True when a failed task is an accepted no-op (create raced / already present). */
+function isOkTaskError(task: MeiliTask, okErrorCodes: readonly string[] | undefined): boolean {
+  if (!okErrorCodes || okErrorCodes.length === 0) return false;
+  const code = task.error?.code;
+  if (code !== undefined && okErrorCodes.includes(code)) return true;
+  const message = task.error?.message ?? "";
+  return okErrorCodes.includes("index_already_exists") && /already exists/i.test(message);
+}
+
+/**
+ * GET the index; create only on 404. A concurrent create that loses the race
+ * finishes as `index_already_exists` — that is success, not an outage.
+ */
+async function ensureIndex(
+  request: (path: string, init?: RequestInit) => Promise<Response>,
+  waitForTask: (
+    taskUid: number,
+    opts?: { readonly okErrorCodes?: readonly string[] },
+  ) => Promise<void>,
+  name: string,
+  uid: string,
+): Promise<void> {
+  const existing = await request(`/indexes/${uid}`);
+  if (existing.ok) {
+    await existing.json().catch(() => null);
+    return;
+  }
+  if (existing.status !== 404) {
+    const detail = await existing.text().catch(() => "");
+    throw new MeilisearchUnavailableError(
+      `meilisearch index: GET /indexes/${uid} failed (${existing.status})${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
+    );
+  }
+  await existing.text().catch(() => "");
+  const created = await request("/indexes", {
+    method: "POST",
+    body: JSON.stringify({ uid: name, primaryKey: "id" }),
+  });
+  if (created.status === 409) {
+    await created.text().catch(() => "");
+    return;
+  }
+  if (!created.ok) {
+    const detail = await created.text().catch(() => "");
+    throw new MeilisearchUnavailableError(
+      `meilisearch index: POST /indexes failed (${created.status})${detail ? ` — ${detail.slice(0, 200)}` : ""}`,
+    );
+  }
+  const task = (await created.json()) as MeiliTask;
+  await waitForTask(task.taskUid, { okErrorCodes: ["index_already_exists"] });
 }
 
 /** Options for opening a Meilisearch-backed text index. */
@@ -106,7 +158,10 @@ export async function openMeilisearchIndex(
     return (await res.json()) as MeiliTask;
   }
 
-  async function waitForTask(taskUid: number): Promise<void> {
+  async function waitForTask(
+    taskUid: number,
+    opts?: { readonly okErrorCodes?: readonly string[] },
+  ): Promise<void> {
     const deadline = Date.now() + taskTimeoutMs;
     // Poll the task until it leaves the queue; treat a failed/canceled task as
     // a loud error rather than an optimistic write.
@@ -114,6 +169,7 @@ export async function openMeilisearchIndex(
       const res = await requestOk(`/tasks/${taskUid}`);
       const task = (await res.json()) as MeiliTask;
       if (task.status === "succeeded") return;
+      if (task.status === "failed" && isOkTaskError(task, opts?.okErrorCodes)) return;
       if (task.status === "failed" || task.status === "canceled") {
         throw new MeilisearchUnavailableError(
           `meilisearch index: task ${taskUid} ${task.status}${task.error?.message ? ` — ${task.error.message}` : ""}`,
@@ -129,13 +185,10 @@ export async function openMeilisearchIndex(
   }
 
   // Fail loud up front: server must be healthy and the index must exist
-  // (created if absent) before we hand back a usable handle.
+  // (created if absent) before we hand back a usable handle. Re-open is
+  // idempotent — Meilisearch fails a second create with index_already_exists.
   await requestOk("/health");
-  const created = await enqueue("/indexes", {
-    method: "POST",
-    body: JSON.stringify({ uid: options.name, primaryKey: "id" }),
-  });
-  await waitForTask(created.taskUid);
+  await ensureIndex(request, waitForTask, options.name, uid);
 
   const scoreOf = (hit: { readonly _rankingScore?: unknown }): number =>
     typeof hit._rankingScore === "number" ? hit._rankingScore : 0;

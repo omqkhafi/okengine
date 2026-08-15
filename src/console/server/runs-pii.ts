@@ -7,7 +7,7 @@
  * leak in every panel that reads `console.runs.list` (console §6 · §9.5 · §9.11).
  */
 
-import { PII_MASK } from "../../elements/store/classify.ts";
+import { addPiiFieldName, PII_MASK } from "../../elements/store/classify.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
 
@@ -28,7 +28,7 @@ export function piiFieldNamesFromManifest(
   for (const store of Object.values(manifest.stores)) {
     for (const table of Object.values(store.tables ?? {})) {
       for (const [col, tags] of Object.entries(table.columns ?? {})) {
-        if (tags?.pii) names.add(col);
+        if (tags?.pii) addPiiFieldName(names, col);
       }
     }
     for (const [key, tags] of Object.entries(store.classifications ?? {})) {
@@ -40,7 +40,7 @@ export function piiFieldNamesFromManifest(
         (tags as { pii?: boolean }).pii
       ) {
         const col = key.includes(".") ? key.slice(key.lastIndexOf(".") + 1) : key;
-        names.add(col);
+        addPiiFieldName(names, col);
       }
     }
   }
@@ -65,6 +65,32 @@ export function maskPiiRecord<T extends Record<string, unknown>>(
     out[key] = piiFields.has(key) ? mask : value;
   }
   return out as T;
+}
+
+/**
+ * Recursively mask PII-classified keys in a JSON value (Call API responses).
+ *
+ * @param value - Handler output or failure data
+ * @param piiFields - Classified field names
+ * @param mask - Mask token
+ */
+export function maskPiiValue(
+  value: unknown,
+  piiFields: ReadonlySet<string>,
+  mask: string = PII_MASK,
+): unknown {
+  if (piiFields.size === 0 || value === null || value === undefined) return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => maskPiiValue(item, piiFields, mask));
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = piiFields.has(key) ? mask : maskPiiValue(child, piiFields, mask);
+    }
+    return out;
+  }
+  return value;
 }
 
 /**

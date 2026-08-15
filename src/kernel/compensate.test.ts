@@ -10,7 +10,8 @@ import { flow } from "./flow.ts";
 import { oke } from "./app.ts";
 import { createRunsRuntime } from "../runs/runtime.ts";
 import { runDurable } from "../elements/clock/durable.ts";
-import { fail } from "./errors.ts";
+import { fail, OkeError, OKE_ERRORS } from "./errors.ts";
+import { failureCodeOf, failureFromUnknown } from "./compensate.ts";
 
 function memoryJournal(store = createMemoryJournalStore()): JournalRuntime {
   return {
@@ -411,5 +412,37 @@ describe("durable compensate", () => {
     } catch (err) {
       expect(String(err)).toMatch(/duplicate step name/);
     }
+  });
+});
+
+describe("failureFromUnknown", () => {
+  test("OkeError keeps OKE#### code and cause text", () => {
+    const err = new OkeError(OKE_ERRORS.UNDECLARED_WRITE, {
+      flow: "drafts.expire",
+      resource: "kv:drafts",
+    });
+    expect(failureCodeOf(err)).toBe("OKE1002");
+    expect(failureFromUnknown(err)).toEqual({
+      data: null,
+      error: {
+        code: "OKE1002",
+        data: { flow: "drafts.expire", resource: "kv:drafts" },
+        message: 'Flow "drafts.expire" writes "kv:drafts" without declaring it.',
+      },
+    });
+  });
+
+  test("plain Error keeps its message", () => {
+    const err = new Error("card_declined");
+    expect(failureFromUnknown(err).error).toEqual({
+      code: "card_declined",
+      data: {},
+      message: "card_declined",
+    });
+  });
+
+  test("FlowFailure passes through", () => {
+    const failure = fail("CycleClosed", { cycleId: "c1" }, { message: "already closed" });
+    expect(failureFromUnknown(failure)).toBe(failure);
   });
 });

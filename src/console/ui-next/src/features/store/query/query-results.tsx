@@ -16,7 +16,6 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { AgentCode } from "@/components/agents/agent-code.tsx";
 import { HighlightedJson } from "@/components/highlighted-json";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +31,8 @@ import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cellExportText, rowsToCsv } from "../lib/grid-transfer.ts";
 import { formatGridCell } from "../lib/grid-model.ts";
 import { asInspectableJson } from "../lib/json-value.ts";
+import type { QueryHighlightLanguage } from "../lib/query-highlight.ts";
+import { QueryHighlightView } from "./query-highlight-view.tsx";
 
 /** One result row. */
 export type QueryResultRow = Readonly<Record<string, unknown>>;
@@ -53,7 +54,7 @@ export interface QueryResultsProps {
   readonly meta?: string | null;
   /** Statement that produced the current result (raw view). */
   readonly executed?: string | null;
-  readonly executedLanguage?: "sql" | "bash";
+  readonly executedLanguage?: QueryHighlightLanguage;
   readonly storeRef?: string;
   readonly collapsed?: boolean;
   readonly onToggleCollapse?: () => void;
@@ -263,7 +264,7 @@ export function QueryResults({
           ) : view === "raw" ? (
             executed ? (
               <div className="p-3" data-slot="store-query-raw">
-                <AgentCode
+                <QueryHighlightView
                   code={executed}
                   language={executedLanguage}
                   className="text-xs leading-5"

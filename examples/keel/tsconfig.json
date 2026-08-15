@@ -22,5 +22,11 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "oke.config.ts", "drizzle.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "oke.config.ts",
+    "drizzle.config.ts"
+  ]
 }

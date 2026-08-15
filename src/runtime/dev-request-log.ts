@@ -61,12 +61,22 @@ export type DevRequestLogInput = {
  *
  * @param method - HTTP method
  * @param path - URL pathname
+ * @param surface - Optional surface (MCP hides Chrome inspector probes)
  */
-export function isSilentDevRequest(method: string, path: string): boolean {
+export function isSilentDevRequest(
+  method: string,
+  path: string,
+  surface?: DevLogSurface,
+): boolean {
   if (path === "/console/live") return true;
   // Client-types regen — lands between hero and Logs and breaks the separator.
   if (path === "/_oke/client.json") return true;
   if (method === "GET" && (path === "/health" || path.endsWith("/health"))) {
+    return true;
+  }
+  // Chrome / Cursor DevTools probe MCP (and sometimes Backend) as CDP.
+  if (surface === "MCP" && method === "GET" && path === "/") return true;
+  if (method === "GET" && (path === "/json" || path.startsWith("/json/"))) {
     return true;
   }
   return /\.(?:js|css|map|svg|png|ico|woff2?|ttf|webp)$/i.test(path);
@@ -112,7 +122,15 @@ export async function failureDetailFromResponse(response: Response): Promise<str
  */
 export function logDevRequest(input: DevRequestLogInput): void {
   if (!shouldLogDevRequests()) return;
-  if (isSilentDevRequest(input.method.toUpperCase(), input.path)) return;
+  if (
+    isSilentDevRequest(
+      input.method.toUpperCase(),
+      input.path,
+      input.surface ?? currentDevSurface(),
+    )
+  ) {
+    return;
+  }
   process.stdout.write(
     formatRequestLine({
       surface: input.surface ?? currentDevSurface(),

@@ -7,7 +7,7 @@
 
 import type { GateAuthOptions, ResolvedGateAuth } from "../../auth/config.ts";
 import { requirePackageModule } from "../../shared/lazy-src.ts";
-import type { GateDecl } from "./declare.ts";
+import { flattenGateMembers, isGateAllDecl, type GateAllDecl, type GateDecl } from "./declare.ts";
 
 /** Rate-limit defaults under Gate. */
 export interface GateRateLimitOptions {
@@ -23,8 +23,8 @@ export interface GateRateLimitOptions {
 export interface GateOptions {
   /** Builtin hybrid-session auth + core Flows under `basePath`. */
   readonly auth?: GateAuthOptions;
-  /** Named policy / rate declarations for the Gate runtime. */
-  readonly policies?: readonly GateDecl[];
+  /** Named policy / rate declarations (or `gate.all` handles) for the Gate runtime. */
+  readonly policies?: readonly (GateDecl | GateAllDecl)[];
   /** Global rate-limit posture (auth path presets). */
   readonly rateLimit?: GateRateLimitOptions;
   /**
@@ -46,6 +46,20 @@ export interface ResolvedGateConfig {
 export interface ResolveGateConfigOptions {
   readonly gate?: GateOptions;
   readonly env?: string;
+}
+
+/**
+ * Expand `gate.all` handles in a policies bag to policy / rate decls.
+ *
+ * @param policies - Mixed decls and `all` handles
+ */
+export function flattenGatePolicies(policies: readonly (GateDecl | GateAllDecl)[]): GateDecl[] {
+  const out: GateDecl[] = [];
+  for (const item of policies) {
+    if (isGateAllDecl(item)) out.push(...flattenGateMembers(item.members));
+    else out.push(item);
+  }
+  return out;
 }
 
 /**
@@ -72,7 +86,7 @@ export function resolveGateConfig(options: ResolveGateConfigOptions = {}): Resol
 
   return {
     auth,
-    policies: bag.policies ?? [],
+    policies: flattenGatePolicies(bag.policies ?? []),
     rateLimitEnabled,
     unguardedHttp: bag.unguardedHttp ?? "deny",
   };

@@ -101,6 +101,10 @@
     }
   },
   "gates": {
+    "book": {
+      "kind": "all",
+      "members": ["member", "booking:create", "rate:sliding-window-counter:300/1m"]
+    },
     "booking:create": {
       "kind": "policy",
       "roles": ["booking:create"]

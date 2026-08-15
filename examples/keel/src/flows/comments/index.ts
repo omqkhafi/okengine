@@ -2,74 +2,72 @@ import { on, flow, http, fail } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { commentWrite, commentsWriteRate, db, issueWrite, member } from "@/core";
-import { comments, issues } from "@/db/schema.decl";
+import { commentsWrite, db, member, tasksWrite } from "@/core";
+import { comments, tasks } from "@/db/schema.decl";
+import { commentsZod } from "@/db/zod";
+import { listIn, pageOut } from "@/lib/http";
 import { IdIn, NotFound, Ok } from "@/lib/shapes";
-import { commentAdded, commentResolved } from "./signals";
+import { commentAdded, commentChanged, commentThread } from "./signals";
 
 import "./signals";
+
+const CommentOut = commentsZod.select.pick({
+  id: true,
+  taskId: true,
+  authorEmail: true,
+  body: true,
+});
 
 const CommentIn = z.object({
   id: z.string().min(1),
   body: z.string().min(1).max(20_000),
 });
 
-const CommentOut = z.object({
-  id: z.string(),
-  issueId: z.string(),
-  authorEmail: z.string().nullable(),
-  body: z.string(),
-});
-
-const CommentListOut = z.object({
-  items: z.array(CommentOut),
-  count: z.number(),
-});
-
-const WRITE = [member, commentWrite, commentsWriteRate] as const;
-
-/** List comments on an issue. */
+/** List comments on a task. */
 export const list = on(
-  http.get("/issues/:id/comments").gate(member).live(),
+  http.get("/tasks/:id/comments").gate(member).live(),
   flow("comments.list", {
-    in: IdIn,
-    out: CommentListOut,
+    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+    out: pageOut(CommentOut),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(comments);
       const items = rows
-        .filter((r) => String(r.issueId) === input.id)
+        .filter((r) => String(r.taskId) === input.id)
         .map((r) => ({
           id: String(r.id),
-          issueId: String(r.issueId),
+          taskId: String(r.taskId),
           authorEmail: r.authorEmail == null ? null : String(r.authorEmail),
           body: String(r.body),
         }));
-      return { items, count: items.length };
+      return fx.json.withQuery(items, input);
     },
   }),
 );
 
 /** Create a comment. */
 export const create = on(
-  http.post("/issues/:id/comments").gate(member, issueWrite, commentsWriteRate),
+  http.post("/tasks/:id/comments").gate(tasksWrite),
   flow("comments.create", {
     in: CommentIn,
     out: CommentOut,
     errors: { NotFound },
     do: async (input, fx) => {
-      const issue = await fx.store(db).findById(issues, input.id);
-      if (!issue) return fail("NotFound", { id: input.id });
+      const task = await fx.store(db).findById(tasks, input.id);
+      if (!task) return fail("NotFound", { id: input.id });
       const id = fx.id();
       const authorEmail = fx.auth.userId ?? "member@keel.dev";
       await fx.store(db).insert(comments).values({
         id,
-        issueId: input.id,
+        taskId: input.id,
         authorEmail,
         body: input.body,
         resolvedAt: null,
       });
-      await fx.emit(commentAdded, { id, issueId: input.id, body: input.body }, { key: id });
-      return { id, issueId: input.id, authorEmail, body: input.body };
+      const payload = { id, taskId: input.id, body: input.body };
+      await fx.emit(commentAdded, payload, { key: id });
+      await fx.emit(commentChanged, payload);
+      await fx.emit(commentThread, payload);
+      return { id, taskId: input.id, authorEmail, body: input.body };
     },
   }),
 );
@@ -86,7 +84,7 @@ export const get = on(
       if (!row) return fail("NotFound", { id: input.id });
       return {
         id: String(row.id),
-        issueId: String(row.issueId),
+        taskId: String(row.taskId),
         authorEmail: row.authorEmail == null ? null : String(row.authorEmail),
         body: String(row.body),
       };
@@ -96,18 +94,21 @@ export const get = on(
 
 /** Edit a comment. */
 export const update = on(
-  http.patch("/comments/:id").gate(...WRITE),
+  http.patch("/comments/:id").gate(commentsWrite),
   flow("comments.update", {
-    in: z.object({ id: z.string(), body: z.string().min(1) }),
+    in: CommentIn,
     out: CommentOut,
     errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return fail("NotFound", { id: input.id });
       await fx.store(db).update(comments).set({ body: input.body }).where(eq(comments.id, input.id));
+      const payload = { id: input.id, taskId: String(row.taskId), body: input.body };
+      await fx.emit(commentChanged, payload);
+      await fx.emit(commentThread, payload);
       return {
         id: input.id,
-        issueId: String(row.issueId),
+        taskId: payload.taskId,
         authorEmail: row.authorEmail == null ? null : String(row.authorEmail),
         body: input.body,
       };
@@ -117,7 +118,7 @@ export const update = on(
 
 /** Delete a comment. */
 export const remove = on(
-  http.delete("/comments/:id").gate(...WRITE),
+  http.delete("/comments/:id").gate(commentsWrite),
   flow("comments.delete", {
     in: IdIn,
     out: Ok,
@@ -133,7 +134,7 @@ export const remove = on(
 
 /** Mark resolved. */
 export const resolve = on(
-  http.post("/comments/:id/resolve").gate(...WRITE),
+  http.post("/comments/:id/resolve").gate(commentsWrite),
   flow("comments.resolve", {
     in: IdIn,
     out: Ok,
@@ -142,24 +143,9 @@ export const resolve = on(
       if (!row) return { ok: true as const };
       const resolvedAt = new Date(fx.clock.now()).toISOString();
       await fx.store(db).update(comments).set({ resolvedAt }).where(eq(comments.id, input.id));
-      await fx.emit(commentResolved, {
-        id: input.id,
-        issueId: String(row.issueId),
-        body: String(row.body),
-      });
-      return { ok: true as const };
-    },
-  }),
-);
-
-/** Clear resolved. */
-export const unresolve = on(
-  http.post("/comments/:id/unresolve").gate(...WRITE),
-  flow("comments.unresolve", {
-    in: IdIn,
-    out: Ok,
-    do: async (input, fx) => {
-      await fx.store(db).update(comments).set({ resolvedAt: null }).where(eq(comments.id, input.id));
+      const payload = { id: input.id, taskId: String(row.taskId), body: String(row.body) };
+      await fx.emit(commentChanged, payload);
+      await fx.emit(commentThread, payload);
       return { ok: true as const };
     },
   }),

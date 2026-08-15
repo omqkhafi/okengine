@@ -13,6 +13,7 @@ import {
   createBuiltinVaultAdapter,
   sqlConnectionAsExec,
 } from "../../elements/vault/builtin-adapter.ts";
+import type { Manifest } from "../../manifest/types.ts";
 import { startConsoleApp, type ConsoleAppHandle } from "./serve.ts";
 
 const PASSWORD = "Password1234!";
@@ -378,4 +379,45 @@ describe("console vault HTTP — sealed rotate-master", () => {
       await rm(datadir, { recursive: true, force: true });
     }
   }, 30_000);
+});
+
+describe("console vault HTTP — set without a pre-bound runtime", () => {
+  test("binds the env driver and writes the value", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "oke-console-vault-set-"));
+    const handle = await startConsoleApp({
+      cwd,
+      silentClaim: true,
+      secret: "vault-http-set",
+      manifest: {
+        oke: "1.0",
+        app: "keel",
+        vault: {
+          GITHUB_TOKEN: { description: "GitHub Issues sync token", rotate: "90d" },
+        },
+      } as Manifest,
+    });
+    try {
+      expect(handle.state.vaultRuntime).toBeNull();
+      const { token } = await claimOperator(handle, "ops@example.com", "Ops");
+      const res = await handle.app.fetch(
+        new Request("http://console.test/console/vault/set", {
+          method: "POST",
+          headers: authHeaders(token),
+          body: JSON.stringify({
+            name: "GITHUB_TOKEN",
+            value: "ghp_dev_keel_github_sync",
+            reason: "first",
+          }),
+        }),
+      );
+      const body = (await res.json()) as Json;
+      expect(body.error).toBeFalsy();
+      expect(body.data?.ok).toBe(true);
+      expect(body.data?.name).toBe("GITHUB_TOKEN");
+      expect(handle.state.vaultRuntime).toBeTruthy();
+    } finally {
+      await handle.app.stop();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

@@ -47,7 +47,7 @@ const CreateOut = z.object({ ok: z.boolean() });
 
 function buildUnannotatedCreateFlow(db: ReturnType<typeof store.sql>) {
   return on(
-    http.post("/notes").gate(gate.public),
+    http.post("/notes").gate.public,
     flow("notes.create", {
       in: CreateIn,
       out: CreateOut,
@@ -140,7 +140,7 @@ describe("boot-level: table-ref resolution stays backward compatible", () => {
     resetFlowSeq();
     const db = store.sql("app", { schema: { notes } });
     const create = on(
-      http.post("/notes").gate(gate.public),
+      http.post("/notes").gate.public,
       flow("notes.create", {
         in: CreateIn,
         out: CreateOut,
@@ -193,7 +193,7 @@ import { on, flow, http, gate } from "okengine";
 const db = {} as any;
 const notes = {} as any;
 export const create = on(
-  http.post("/notes").gate(gate.public),
+  http.post("/notes").gate.public,
   flow("notes.create", {
     do: async (input, fx) => {
       await fx.store(db).insert(notes).values({ id: input.id, title: input.title, createdAt: 1 });

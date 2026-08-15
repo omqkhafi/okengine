@@ -90,6 +90,9 @@ describe("resource-list-docs fixtures — documented behaviors stay real", () =>
       expect(typeof exactBody.meta.total).toBe("number");
       expect(exactBody.meta.total).toBeGreaterThanOrEqual(1);
       expect(exactBody.meta.offset).toBe(0);
+      expect(exactBody.meta.prev).toBeNull();
+      expect("next" in exactBody.meta).toBe(true);
+      expect("prev" in exactBody.meta).toBe(true);
       expect(exactBody.data.some((row) => row.title === "one")).toBe(true);
 
       await t.close();

@@ -9,6 +9,30 @@ networks:
     external: false
 
 services:
+  # ai — local inference (llama.cpp / Ollama / vLLM / SGLang)
+  ai:
+    image: "ghcr.io/ggml-org/llama.cpp:server-b10290"
+    ports:
+      - "127.0.0.1:23850:8080"
+    networks:
+      - "oke"
+    env_file:
+      - "../.env.local"
+    entrypoint:
+      - "/usr/bin/python3"
+      - "/oke/llama-entrypoint.py"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"
+      interval: "5s"
+      timeout: "5s"
+      retries: 24
+      start_period: "900s"
+    volumes:
+      - "ai-models:/root/.cache"
+      - "../.oke/llama-entrypoint.py:/oke/llama-entrypoint.py:ro"
+
   # channel.email — Mailpit (SMTP + UI)
   channel-email:
     image: "axllent/mailpit:v1.22.3"
@@ -124,5 +148,6 @@ services:
       retries: 10
 
 volumes:
+  ai-models: {}
   store-files-data: {}
   store-index-data: {}

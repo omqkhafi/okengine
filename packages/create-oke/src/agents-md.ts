@@ -90,6 +90,8 @@ App \`:6530\` · Console \`:6533\` · MCP \`:6535\`.
 - ✅ New capability = new **driver** on an existing element, or a new Flow
 - ❌ Untyped HTTP handlers that skip \`on\` / \`flow\` / contracts
 - ✅ \`on(http.get("/…"), flow(name, { in, out, do }))\`
+- ❌ Returning \`{ items, count }\` from a list \`do\` (nests the pager inside \`data\`)
+- ✅ \`out: z.array(Item)\` + \`fx.json.withQuery(rows, input)\` — or any other \`out\` you declare
 
 ## Learn more
 

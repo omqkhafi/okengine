@@ -104,11 +104,11 @@ oke client add https://api.example.com --out ./types/oke-client.d.ts
 
 ## REST vs RPC
 
-| Situation                                          | Request                                                                                                  |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Situation                                          | Request                                                                                                                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | HTTP trigger with method + path on `$routes`       | That method and path (`:id` filled from input; leftover fields → query on GET/HEAD, JSON body otherwise). QUERY always sends JSON (`{}` when only path params) |
-| Adopted flow with no HTTP trigger                  | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                          |
-| Incomplete proxy path (`api.notes()` with no flow) | Result error: `Incomplete path: api.notes(…)`                                                            |
+| Adopted flow with no HTTP trigger                  | `POST {base}/_oke/{unit}/{flow}` with JSON body                                                                                                                |
+| Incomplete proxy path (`api.notes()` with no flow) | Result error: `Incomplete path: api.notes(…)`                                                                                                                  |
 
 ```typescript
 // REST — createClient(app, url) saw method/path from on(http.get("/notes/:id"), …)
@@ -223,16 +223,32 @@ core today: cookie jars or plugin `.client()` decorations. Browser apps: also se
 Mount a resource, adopt the returned ops, then call the five Flows like any other:
 
 ```typescript
-const notesR = store.resource(db, notes, {/* in, out, list, unit: "notes" */});
-const mounted = on(http.resource("/notes", notesR.all()));
+const notesR = store.resource(db, notes, {/* in, out, list */});
+const mounted = on(http.resource("/notes", notesR.all()).gate.public.live());
 // .adopt({ notes: mounted }) →
-await api.notes.list({ limit: 20 }); // GET /notes?limit=20 — meta may carry nextCursor
+const page = await api.notes.list({ limit: 20 });
+const more = await page.next();
+for await (const page of api.notes.list({ limit: 20 })) page.data;
 await api.notes.get({ id }); // GET /notes/:id — NotFound when missing
 await api.notes.remove({ id }); // DELETE → 204, data undefined
 ```
 
-See [Store](/docs/elements/store) for the list query language and schemas. Auth posture for HTTP
-triggers is covered under [Gate](/docs/elements/gate).
+`meta.next` / `meta.prev` are `{ cursor }` bags — spread them, or use `page.next()`. TanStack
+`useInfiniteQuery` takes the bag, not the methods:
+
+```typescript
+useInfiniteQuery({
+  queryKey: ["notes", q],
+  queryFn: ({ pageParam }) => api.notes.list({ limit: 20, q, ...pageParam }),
+  initialPageParam: {} as { cursor?: string },
+  getNextPageParam: (last) => last.meta.next ?? undefined,
+  getPreviousPageParam: (last) => last.meta.prev ?? undefined,
+});
+```
+
+See [Store](/docs/elements/store) for the list query language and schemas. Handwritten lists use
+`fx.json.withQuery(rows, input)` for the same envelope. Auth posture for HTTP triggers is
+covered under [Gate](/docs/elements/gate).
 
 ### Signal and live queries
 
@@ -249,7 +265,7 @@ Flow that returns the current state.
 | `createTransport`                            | function  | Low-level HTTP transport (timeout / retry / auth) |
 | `isOk` / `isFail`                            | function  | Envelope predicates                               |
 | `isErrorCode` / `isTransportError`           | function  | Error narrowing                                   |
-| `Client`, `ClientOptions`, `ClientResult`, … | types     | Contracts and options                             |
+| `Client`, `ClientCall`, `ClientResult`, …    | types     | Contracts, `page.next()` / `for await` of `list()` |
 | `Register`                                   | interface | Module-augmentation slot for ambient App types    |
 | `AppOf`                                      | type      | Brand a bare route map as an App                  |
 

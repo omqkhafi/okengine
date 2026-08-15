@@ -3,6 +3,7 @@
  */
 
 import { release } from "node:os";
+import { resolveEffectiveDrivers } from "../config/driver-defaults.ts";
 import {
   resolveDriverId,
   type ConfigEnv,
@@ -163,11 +164,14 @@ export function resolveHeroElements(
   const drivers = config?.drivers;
   // `-d` reads the `docker` profile for every element (not a store-only override).
   const configEnv: ConfigEnv = options.configEnv ?? (options.docker ? "dev" : "test");
+  // Sparse `oke.config.ts` (create-oke / keel) only pins overrides — boot still
+  // uses DRIVER_DEFAULTS. The hero must show that same effective map.
+  const effective = resolveEffectiveDrivers(drivers);
 
   // Gate rates share `drivers.store.kv` (no separate drivers.gate).
   const gateKv =
     options.kvDriver ??
-    resolveDriverId(drivers?.store?.kv, configEnv) ??
+    resolveDriverId(effective.store.kv, configEnv) ??
     (options.docker ? "redis" : "memory");
 
   const aiDriver = resolveDriverId(drivers?.ai, configEnv);
@@ -177,15 +181,32 @@ export function resolveHeroElements(
   const byName: Record<string, string> = {
     // Status ● is rendered separately — flow has no driver id.
     flow: "",
-    signal: resolveDriverId(drivers?.signal, configEnv) ?? "—",
-    store: storeDetail(drivers?.store, configEnv, {
-      sql: options.sqlDriver,
-      kv: options.kvDriver,
-    }),
-    clock: resolveDriverId(drivers?.clock, configEnv) ?? "—",
+    signal: resolveDriverId(effective.signal, configEnv) ?? "—",
+    store: storeDetail(
+      {
+        sql: effective.store.sql,
+        kv: effective.store.kv,
+        files: effective.store.files,
+        index: drivers?.store?.index,
+      },
+      configEnv,
+      {
+        sql: options.sqlDriver,
+        kv: options.kvDriver,
+      },
+    ),
+    clock: resolveDriverId(effective.clock, configEnv) ?? "—",
     gate: gateKv,
-    vault: resolveDriverId(drivers?.vault, configEnv) ?? "—",
-    channel: channelDetail(drivers?.channel, configEnv),
+    vault: resolveDriverId(effective.vault, configEnv) ?? "—",
+    channel: channelDetail(
+      {
+        email: effective.channel.email,
+        sms: effective.channel.sms,
+        whatsapp: drivers?.channel?.whatsapp,
+        push: drivers?.channel?.push,
+      },
+      configEnv,
+    ),
     ai: aiDetail,
   };
 

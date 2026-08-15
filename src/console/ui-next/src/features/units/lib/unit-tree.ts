@@ -2,7 +2,12 @@
  * Group Manifest flows by derived unit for the Units tree.
  */
 
-import type { Flow, FlowPlane, Manifest } from "../../../../../../manifest/types.ts";
+import type {
+  Flow,
+  FlowPlane,
+  Manifest,
+  SignalDelivery,
+} from "../../../../../../manifest/types.ts";
 import { unitOfFlowId } from "@/features/flows/graph/build-flow-graph.ts";
 import {
   FLOW_TRIGGER_KIND_SPECS,
@@ -19,6 +24,10 @@ export interface UnitFlowRow {
   readonly flow: Flow;
   readonly method: string | null;
   readonly path: string | null;
+  /** Triggering signal name when the flow is signal-triggered. */
+  readonly signal: string | null;
+  /** Delivery physics of {@link signal}, joined from `manifest.signals`. */
+  readonly delivery: SignalDelivery | null;
 }
 
 /** One collapsible unit group. */
@@ -136,10 +145,7 @@ export function unitTreeOpenKeys(bands: readonly UnitTreeBand[]): string[] {
  * @param bands - Visible trigger-kind bands
  * @param flowId - Selected flow id
  */
-export function unitTreeAncestorKeys(
-  bands: readonly UnitTreeBand[],
-  flowId: string,
-): string[] {
+export function unitTreeAncestorKeys(bands: readonly UnitTreeBand[], flowId: string): string[] {
   for (const band of bands) {
     for (const group of band.groups) {
       if (group.flows.some((f) => f.id === flowId)) {
@@ -164,6 +170,7 @@ export function buildUnitTree(manifest: Manifest | null | undefined): readonly U
     const unit = unitOfFlowId(id);
     const action = id.includes(".") ? id.slice(id.indexOf(".") + 1) : id;
     const http = flow.trigger?.http;
+    const signal = flow.trigger?.signal ?? null;
     const row: UnitFlowRow = {
       id,
       unit,
@@ -171,6 +178,8 @@ export function buildUnitTree(manifest: Manifest | null | undefined): readonly U
       flow,
       method: http?.method ?? null,
       path: http?.path ?? null,
+      signal,
+      delivery: signal ? (manifest.signals?.[signal]?.delivery ?? null) : null,
     };
     const list = byUnit.get(unit) ?? [];
     list.push(row);
@@ -186,7 +195,7 @@ export function buildUnitTree(manifest: Manifest | null | undefined): readonly U
 }
 
 /**
- * Filter unit groups by a case-insensitive needle (unit, id, method, path).
+ * Filter unit groups by a case-insensitive needle (unit, id, method, path, signal, delivery).
  *
  * @param groups - Full tree
  * @param needle - Search text
@@ -204,7 +213,9 @@ export function filterUnitTree(groups: readonly UnitGroup[], needle: string): re
               f.id.toLowerCase().includes(q) ||
               f.action.toLowerCase().includes(q) ||
               (f.method?.toLowerCase().includes(q) ?? false) ||
-              (f.path?.toLowerCase().includes(q) ?? false),
+              (f.path?.toLowerCase().includes(q) ?? false) ||
+              (f.signal?.toLowerCase().includes(q) ?? false) ||
+              (f.delivery?.toLowerCase().includes(q) ?? false),
           );
       return flows.length > 0 ? { unit: g.unit, flows } : null;
     })
@@ -226,6 +237,8 @@ export interface UnitTreeFacets {
   readonly durableOnly?: boolean;
   /** Keep only live flows. */
   readonly liveOnly?: boolean;
+  /** Signal delivery physics to keep — empty/undefined keeps all. */
+  readonly deliveries?: readonly SignalDelivery[];
 }
 
 /**
@@ -237,13 +250,14 @@ export function countActiveFacets(facets: UnitTreeFacets): number {
   return (
     (facets.triggerKinds?.length ?? 0) +
     (facets.planes?.length ?? 0) +
+    (facets.deliveries?.length ?? 0) +
     (facets.durableOnly ? 1 : 0) +
     (facets.liveOnly ? 1 : 0)
   );
 }
 
 /**
- * Filter unit groups by advanced facets — trigger kind, plane, durable, live.
+ * Filter unit groups by advanced facets — trigger kind, plane, delivery, durable, live.
  *
  * Facets AND together and intersect with {@link filterUnitTree} results.
  * A flow without an explicit `plane` counts as `"user"` (Manifest default).
@@ -258,14 +272,16 @@ export function filterUnitsAdvanced(
 ): readonly UnitGroup[] {
   const kinds = facets.triggerKinds?.length ? new Set(facets.triggerKinds) : null;
   const planes = facets.planes?.length ? new Set(facets.planes) : null;
+  const deliveries = facets.deliveries?.length ? new Set(facets.deliveries) : null;
   const durableOnly = facets.durableOnly === true;
   const liveOnly = facets.liveOnly === true;
-  if (!kinds && !planes && !durableOnly && !liveOnly) return groups;
+  if (!kinds && !planes && !deliveries && !durableOnly && !liveOnly) return groups;
   return groups
     .map((g): UnitGroup | null => {
       const flows = g.flows.filter((f) => {
         if (kinds && !kinds.has(flowTriggerKind(f.flow.trigger))) return false;
         if (planes && !planes.has(f.flow.plane ?? "user")) return false;
+        if (deliveries && (f.delivery === null || !deliveries.has(f.delivery))) return false;
         if (durableOnly && !f.flow.durable) return false;
         if (liveOnly && !f.flow.live) return false;
         return true;

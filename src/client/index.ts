@@ -8,6 +8,8 @@
 export { createClient, flattenRoutes } from "./create.ts";
 export type { AppWithRoutes } from "./create.ts";
 export { isErrorCode, isFail, isOk, isTransportError } from "./errors.ts";
+export { isPagerMeta, pagerLink } from "./pager.ts";
+export type { ClientPager, PagerLink } from "./pager.ts";
 export { createTransport } from "./transport.ts";
 export type { Transport } from "./transport.ts";
 export type {
@@ -21,7 +23,11 @@ export type {
   ClientFromRoutes,
   ClientHeaders,
   ClientOptions,
+  ClientEnvelope,
+  ClientListMeta,
+  ClientPagerLink,
   ClientResult,
+  ClientThenableIterable,
   ClientRouteMap,
   FlowContract,
   Register,

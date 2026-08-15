@@ -1,117 +1,142 @@
-import { store, field, id } from "okengine";
+import { store, field, id, now } from "okengine";
 
 /**
- * Linear-shaped keel domain — abstract declarations, emitted to
- * `src/db/schema.drizzle.ts` by `oke db` / `oke dev`.
+ * Keel work-management domain — Asana / ClickUp / Monday shaped.
+ * Abstract declarations, emitted to `src/db/schema.drizzle.ts` by `oke db`.
  */
 
-export const teams = store.schema.table("teams", {
+export const spaces = store.schema.table("spaces", {
   id: field.text().primaryKey().defaultFn(id),
-  key: field.text().notNull(),
+  key: field.text().notNull().unique(),
   name: field.text().notNull(),
-  parentId: field.text(),
+  color: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
 });
 
 export const members = store.schema.table("members", {
   id: field.text().primaryKey().defaultFn(id),
-  teamId: field.text().notNull(),
+  spaceId: field.text().references(() => spaces.id, { onDelete: "set null" }),
   name: field.text().notNull(),
   email: field.text().notNull().pii(),
   role: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
 });
 
-export const workflowStates = store.schema.table("workflow_states", {
-  id: field.text().primaryKey().defaultFn(id),
-  teamId: field.text().notNull(),
-  name: field.text().notNull(),
-  type: field.text().notNull(),
-  position: field.integer().notNull(),
-});
-
-export const labels = store.schema.table("labels", {
-  id: field.text().primaryKey().defaultFn(id),
-  teamId: field.text(),
-  name: field.text().notNull(),
-  groupName: field.text(),
-});
-
-export const initiatives = store.schema.table("initiatives", {
+export const goals = store.schema.table("goals", {
   id: field.text().primaryKey().defaultFn(id),
   name: field.text().notNull(),
   status: field.text().notNull(),
   ownerEmail: field.text().pii(),
   targetDate: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+  updatedAt: field.integer().notNull().defaultFn(now),
 });
 
 export const projects = store.schema.table("projects", {
   id: field.text().primaryKey().defaultFn(id),
-  initiativeId: field.text().notNull(),
+  spaceId: field.text().notNull().references(() => spaces.id),
+  goalId: field.text().references(() => goals.id, { onDelete: "set null" }),
   name: field.text().notNull(),
   status: field.text().notNull(),
   leadEmail: field.text().pii(),
+  startDate: field.text(),
   targetDate: field.text(),
-  progress: field.integer().notNull(),
+  color: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+  updatedAt: field.integer().notNull().defaultFn(now),
 });
 
-export const projectMilestones = store.schema.table("project_milestones", {
+export const sections = store.schema.table("sections", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull(),
+  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
-  targetDate: field.text(),
   sortOrder: field.integer().notNull(),
 });
 
-export const projectUpdates = store.schema.table("project_updates", {
+export const tasks = store.schema.table("tasks", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull(),
-  health: field.text().notNull(),
-  body: field.text().notNull(),
-  authorEmail: field.text().pii(),
-});
-
-export const cycles = store.schema.table("cycles", {
-  id: field.text().primaryKey().defaultFn(id),
-  teamId: field.text().notNull(),
-  number: field.integer().notNull(),
-  name: field.text().notNull(),
-  startsAt: field.text().notNull(),
-  endsAt: field.text().notNull(),
-  state: field.text().notNull(),
-});
-
-export const issues = store.schema.table("issues", {
-  id: field.text().primaryKey().defaultFn(id),
-  identifier: field.text().notNull(),
+  identifier: field.text().notNull().unique(),
   title: field.text().notNull(),
   description: field.text(),
+  kind: field.text().notNull(),
   priority: field.integer().notNull(),
   estimate: field.integer(),
-  stateId: field.text().notNull(),
-  teamId: field.text().notNull(),
-  projectId: field.text(),
-  milestoneId: field.text(),
-  cycleId: field.text(),
+  status: field.text().notNull(),
+  spaceId: field.text().notNull().references(() => spaces.id),
+  projectId: field.text().references(() => projects.id, { onDelete: "set null" }),
+  sectionId: field.text().references(() => sections.id, { onDelete: "set null" }),
   parentId: field.text(),
-  assigneeEmail: field.text().pii(),
-  creatorEmail: field.text().pii(),
+  startDate: field.text(),
   dueDate: field.text(),
-  slaBreachesAt: field.text(),
-  triagedAt: field.text(),
+  completedAt: field.text(),
   archivedAt: field.text(),
+  creatorEmail: field.text().pii(),
+  roleNeeded: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+  updatedAt: field.integer().notNull().defaultFn(now),
 });
 
-export const issueLabels = store.schema.table("issue_labels", {
+export const taskAssignees = store.schema.table("task_assignees", {
   id: field.text().primaryKey().defaultFn(id),
-  issueId: field.text().notNull(),
-  labelId: field.text().notNull(),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  assigneeEmail: field.text().notNull(),
+});
+
+export const taskFollowers = store.schema.table("task_followers", {
+  id: field.text().primaryKey().defaultFn(id),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  followerEmail: field.text().notNull(),
+});
+
+export const taskDependencies = store.schema.table("task_dependencies", {
+  id: field.text().primaryKey().defaultFn(id),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  blocksTaskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+});
+
+export const tags = store.schema.table("tags", {
+  id: field.text().primaryKey().defaultFn(id),
+  name: field.text().notNull(),
+  groupName: field.text(),
+});
+
+export const taskTags = store.schema.table("task_tags", {
+  id: field.text().primaryKey().defaultFn(id),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  tagId: field.text().notNull().references(() => tags.id, { onDelete: "cascade" }),
+});
+
+export const customFields = store.schema.table("custom_fields", {
+  id: field.text().primaryKey().defaultFn(id),
+  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: field.text().notNull(),
+  type: field.text().notNull(),
+});
+
+export const customFieldValues = store.schema.table("custom_field_values", {
+  id: field.text().primaryKey().defaultFn(id),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  fieldId: field.text().notNull().references(() => customFields.id, { onDelete: "cascade" }),
+  value: field.text().notNull(),
 });
 
 export const comments = store.schema.table("comments", {
   id: field.text().primaryKey().defaultFn(id),
-  issueId: field.text().notNull(),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
   authorEmail: field.text().pii(),
   body: field.text().notNull(),
   resolvedAt: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const activity = store.schema.table("activity", {
+  id: field.text().primaryKey().defaultFn(id),
+  parentKind: field.text().notNull(),
+  parentId: field.text().notNull(),
+  actorEmail: field.text().pii(),
+  kind: field.text().notNull(),
+  body: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
 });
 
 export const documents = store.schema.table("documents", {
@@ -120,6 +145,7 @@ export const documents = store.schema.table("documents", {
   body: field.text().notNull(),
   parentKind: field.text().notNull(),
   parentId: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
 });
 
 export const fileObjects = store.schema.table("file_objects", {
@@ -131,9 +157,133 @@ export const fileObjects = store.schema.table("file_objects", {
   storeRef: field.text().notNull(),
 });
 
-export const customerRequests = store.schema.table("customer_requests", {
+export const projectUpdates = store.schema.table("project_updates", {
   id: field.text().primaryKey().defaultFn(id),
-  issueId: field.text().notNull(),
-  customerName: field.text().notNull(),
+  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  health: field.text().notNull(),
   body: field.text().notNull(),
+  authorEmail: field.text().pii(),
+  createdAt: field.integer().notNull().defaultFn(now),
 });
+
+export const views = store.schema.table("views", {
+  id: field.text().primaryKey().defaultFn(id),
+  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: field.text().notNull(),
+  kind: field.text().notNull(),
+  filtersJson: field.text(),
+  ownerEmail: field.text().pii(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const forms = store.schema.table("forms", {
+  id: field.text().primaryKey().defaultFn(id),
+  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: field.text().notNull(),
+  schemaJson: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const formSubmissions = store.schema.table("form_submissions", {
+  id: field.text().primaryKey().defaultFn(id),
+  formId: field.text().notNull().references(() => forms.id, { onDelete: "cascade" }),
+  taskId: field.text().references(() => tasks.id, { onDelete: "set null" }),
+  payloadJson: field.text().notNull(),
+  customerName: field.text().notNull(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const inbox = store.schema.table("inbox", {
+  id: field.text().primaryKey().defaultFn(id),
+  memberEmail: field.text().notNull(),
+  kind: field.text().notNull(),
+  title: field.text().notNull(),
+  refId: field.text().notNull(),
+  readAt: field.text(),
+  createdAt: field.integer().notNull().defaultFn(now),
+});
+
+export const recurrence = store.schema.table("recurrence", {
+  id: field.text().primaryKey().defaultFn(id),
+  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  every: field.text().notNull(),
+  nextAt: field.text().notNull(),
+});
+
+/** RQB v2 relations — keys match emitted Drizzle export names. */
+export const keelRelations = store.schema.relations(
+  {
+    spaces,
+    members,
+    goals,
+    projects,
+    sections,
+    tasks,
+    task_assignees: taskAssignees,
+    task_followers: taskFollowers,
+    task_dependencies: taskDependencies,
+    tags,
+    task_tags: taskTags,
+    custom_fields: customFields,
+    custom_field_values: customFieldValues,
+    comments,
+    activity,
+    documents,
+    file_objects: fileObjects,
+    project_updates: projectUpdates,
+    views,
+    forms,
+    form_submissions: formSubmissions,
+    inbox,
+    recurrence,
+  },
+  (r) => ({
+    spaces: {
+      members: r.many.members({ from: r.spaces.id, to: r.members.spaceId }),
+      projects: r.many.projects({ from: r.spaces.id, to: r.projects.spaceId }),
+    },
+    members: {
+      space: r.one.spaces({ from: r.members.spaceId, to: r.spaces.id }),
+    },
+    goals: {
+      projects: r.many.projects({ from: r.goals.id, to: r.projects.goalId }),
+    },
+    projects: {
+      space: r.one.spaces({ from: r.projects.spaceId, to: r.spaces.id, optional: false }),
+      goal: r.one.goals({ from: r.projects.goalId, to: r.goals.id }),
+      sections: r.many.sections({ from: r.projects.id, to: r.sections.projectId }),
+      tasks: r.many.tasks({ from: r.projects.id, to: r.tasks.projectId }),
+      updates: r.many.project_updates({ from: r.projects.id, to: r.project_updates.projectId }),
+      views: r.many.views({ from: r.projects.id, to: r.views.projectId }),
+      forms: r.many.forms({ from: r.projects.id, to: r.forms.projectId }),
+    },
+    sections: {
+      project: r.one.projects({ from: r.sections.projectId, to: r.projects.id, optional: false }),
+      tasks: r.many.tasks({ from: r.sections.id, to: r.tasks.sectionId }),
+    },
+    tasks: {
+      space: r.one.spaces({ from: r.tasks.spaceId, to: r.spaces.id, optional: false }),
+      project: r.one.projects({ from: r.tasks.projectId, to: r.projects.id }),
+      section: r.one.sections({ from: r.tasks.sectionId, to: r.sections.id }),
+      parent: r.one.tasks({ from: r.tasks.parentId, to: r.tasks.id }),
+      assignees: r.many.task_assignees({ from: r.tasks.id, to: r.task_assignees.taskId }),
+      followers: r.many.task_followers({ from: r.tasks.id, to: r.task_followers.taskId }),
+      comments: r.many.comments({ from: r.tasks.id, to: r.comments.taskId }),
+      tags: r.many.task_tags({ from: r.tasks.id, to: r.task_tags.taskId }),
+    },
+    task_assignees: {
+      task: r.one.tasks({ from: r.task_assignees.taskId, to: r.tasks.id, optional: false }),
+    },
+    comments: {
+      task: r.one.tasks({ from: r.comments.taskId, to: r.tasks.id, optional: false }),
+    },
+    forms: {
+      project: r.one.projects({ from: r.forms.projectId, to: r.projects.id, optional: false }),
+      submissions: r.many.form_submissions({ from: r.forms.id, to: r.form_submissions.formId }),
+    },
+    form_submissions: {
+      form: r.one.forms({ from: r.form_submissions.formId, to: r.forms.id, optional: false }),
+      task: r.one.tasks({ from: r.form_submissions.taskId, to: r.tasks.id }),
+    },
+  }),
+);

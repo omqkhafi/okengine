@@ -73,7 +73,7 @@ const GROUPS: readonly ShortcutGroup[] = [
     title: "General",
     rows: [
       ["Ctrl+Z / Ctrl+Shift+Z", "Undo / redo edit"],
-      ["Ctrl+F", "Find in results"],
+      ["Ctrl+F", "Find / search index"],
       ["Ctrl+/", "Toggle this reference"],
     ],
   },

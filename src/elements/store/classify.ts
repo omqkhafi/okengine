@@ -24,6 +24,10 @@ export function classify(classification: ColumnClassification): ColumnClassifica
 /**
  * Build a classification map from a nested table → column → tags structure.
  *
+ * Each classified column is registered under both JS and SQL spellings
+ * (`ownerEmail` / `owner_email`) so raw `SELECT *` and query-builder rows
+ * hit the same tags.
+ *
  * @param tables - Per-table column classifications
  */
 export function buildClassificationMap(
@@ -32,14 +36,79 @@ export function buildClassificationMap(
   const map = new Map<string, ColumnClassification>();
   for (const [table, cols] of Object.entries(tables)) {
     for (const [column, tags] of Object.entries(cols)) {
-      map.set(classificationKey(table, column), tags);
+      for (const name of piiNameAliases(column)) {
+        map.set(classificationKey(table, name), tags);
+      }
     }
   }
   return map;
 }
 
 /**
+ * JS and SQL spellings of a classified field (`ownerEmail` ↔ `owner_email`).
+ *
+ * Store rows remap to camelCase; Manifest extract / seed tables and raw
+ * `SELECT *` often keep snake_case. Masking and Console PII flags must hit both.
+ *
+ * @param col - Column / field name
+ */
+export function piiNameAliases(col: string): readonly string[] {
+  const names = [col];
+  const snake = camelToSnake(col);
+  const camel = snakeToCamel(col);
+  if (snake !== col) names.push(snake);
+  if (camel !== col) names.push(camel);
+  return names;
+}
+
+/**
+ * Register a classified field under both JS and SQL spellings.
+ *
+ * @param names - Accumulator
+ * @param col - Column / field name from the Manifest or schema
+ */
+export function addPiiFieldName(names: Set<string>, col: string): void {
+  for (const name of piiNameAliases(col)) names.add(name);
+}
+
+/**
+ * Expand classified names so a Set lookup matches either spelling.
+ *
+ * @param cols - Manifest / list PII column names
+ */
+export function expandPiiNames(cols: Iterable<string>): Set<string> {
+  const names = new Set<string>();
+  for (const col of cols) addPiiFieldName(names, col);
+  return names;
+}
+
+/**
+ * Count distinct classified columns, treating JS / SQL spellings as one.
+ *
+ * @param cols - Manifest / list PII column names
+ */
+export function piiLogicalCount(cols: Iterable<string>): number {
+  const seen = new Set<string>();
+  for (const col of cols) seen.add(camelToSnake(col));
+  return seen.size;
+}
+
+function camelToSnake(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function snakeToCamel(key: string): string {
+  return key.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase());
+}
+
+/**
  * Whether a column is classified as PII.
+ *
+ * Matches the given name and its camelCase / snake_case alias so a classify
+ * map keyed `ownerEmail` still masks raw SQL `owner_email` (and the reverse).
  *
  * @param map - Classification map
  * @param table - Table name (may be unknown for opaque queries)
@@ -50,13 +119,19 @@ export function isPiiColumn(
   table: string | undefined,
   column: string,
 ): boolean {
+  const names = piiNameAliases(column);
   if (table) {
-    const direct = map.get(classificationKey(table, column));
-    if (direct?.pii) return true;
+    for (const name of names) {
+      const direct = map.get(classificationKey(table, name));
+      if (direct?.pii) return true;
+    }
   }
   // Survive raw SQL when only the column name is known: match any table.
   for (const [key, tags] of map) {
-    if (tags.pii && key.endsWith(`.${column}`)) return true;
+    if (!tags.pii) continue;
+    for (const name of names) {
+      if (key.endsWith(`.${name}`)) return true;
+    }
   }
   return false;
 }

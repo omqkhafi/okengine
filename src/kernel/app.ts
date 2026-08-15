@@ -37,7 +37,7 @@ import { runWithLocale } from "../i18n/locale-context.ts";
 import { getMessageCatalogs, matchConfiguredLocale } from "../i18n/messages.ts";
 import { runDurable } from "../elements/clock/durable.ts";
 import { isFlow, type AnyFlowDef } from "./flow.ts";
-import { failureCodeOf, runCompensationPhase } from "./compensate.ts";
+import { failureFromUnknown, runCompensationPhase } from "./compensate.ts";
 import { fxRetry } from "./concurrency.ts";
 import {
   createFxContext,
@@ -56,7 +56,8 @@ import {
   logDevRequest,
   shouldLogDevRequests,
 } from "../runtime/dev-request-log.ts";
-import { fail, type FlowFailure } from "./errors.ts";
+import { resolveDurationMs } from "./elapsed.ts";
+import { fail } from "./errors.ts";
 import {
   isFlowFailure,
   mergeHooks,
@@ -121,8 +122,19 @@ import type {
   SignalAsTrigger,
   Trigger,
 } from "./triggers.ts";
-import { createRunTelemetry } from "./run-telemetry.ts";
+import { cacheDimensionOf, createRunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
+import {
+  autoCacheEligible,
+  effectsFromLedger,
+  isStoreResourceRef,
+  parseTtlMs,
+  resolveCacheEffects,
+  tier1DimsByResource,
+  tier1KeysForReads,
+  tier1Lookup,
+} from "../elements/store/cache.ts";
+import type { Effects, ResourceRef } from "../manifest/types.ts";
 
 /** Options for {@link oke}. */
 export interface OkeOptions {
@@ -249,6 +261,10 @@ export interface ExecuteResult {
   readonly response: Response | undefined;
   readonly ctx: InvocationContext;
   readonly fx: Fx;
+  /** Wide-event cache dimension from this invocation's telemetry. */
+  readonly cache: "hit" | "miss" | "none";
+  /** Handler duration in milliseconds (high-res; may be fractional). */
+  readonly durationMs: number;
 }
 
 /**
@@ -398,6 +414,16 @@ export interface OkeApp<D extends Record<string, unknown> = {}, R extends AppRou
        * Must never be set from public HTTP request handling.
        */
       readonly trustedInvoke?: boolean;
+      /**
+       * Console Operator invoke — skip the flow's gate chain.
+       * Honoured only with {@link trustedInvoke}.
+       */
+      readonly bypassGates?: boolean;
+      /**
+       * Console Call API — open store handles with cleartext PII.
+       * Honoured only with {@link trustedInvoke}.
+       */
+      readonly revealPii?: boolean;
       /** Parent WideEvent id when this execution was caused by another. */
       readonly parentId?: string;
       /** Explicit run / WideEvent id (defaults to a new UUID). */
@@ -761,6 +787,8 @@ export function oke(options: OkeOptions): OkeApp {
   // processes, but same-holder renew cannot distinguish two overlapping
   // sessions inside one process (boot orphan scan vs. scheduler tick).
   const inflightRuns = new Set<string>();
+  /** Store reads observed on open (unstamped) flows — next lookup uses these. */
+  const learnedTier1Reads = new Map<string, readonly ResourceRef[]>();
   const EMPTY_CAPABILITIES: ReadonlyMap<string, CapabilityToken> = new Map();
 
   /** Active journal: the boot-bound store once available, else the fallback. */
@@ -1083,6 +1111,10 @@ export function oke(options: OkeOptions): OkeApp {
       readonly principal?: ResolvedPrincipal;
       /** Console invoke-as / trusted in-process callers only. */
       readonly trustedInvoke?: boolean;
+      /** Console Operator invoke — skip gates. Requires {@link trustedInvoke}. */
+      readonly bypassGates?: boolean;
+      /** Console Call API — cleartext store PII. Requires {@link trustedInvoke}. */
+      readonly revealPii?: boolean;
       /** Frozen origin identity for {@link Fx.principal} across `fx.call`. */
       readonly originPrincipal?: FxPrincipal;
       /** Explicit locale override for {@link Fx.t} / channel sends. */
@@ -1129,6 +1161,8 @@ export function oke(options: OkeOptions): OkeApp {
       readonly operator?: FxOperator;
       readonly principal?: ResolvedPrincipal;
       readonly trustedInvoke?: boolean;
+      readonly bypassGates?: boolean;
+      readonly revealPii?: boolean;
       readonly originPrincipal?: FxPrincipal;
       readonly locale?: string;
       readonly parentId?: string;
@@ -1166,6 +1200,7 @@ export function oke(options: OkeOptions): OkeApp {
 
     const now = options.fx?.now ?? booted?.clock?.now ?? (() => Date.now());
     const startedAt = now();
+    const startedHr = performance.now();
     const telemetry = createRunTelemetry();
     const inboundId =
       extras?.request?.headers.get("x-request-id")?.trim() ||
@@ -1213,6 +1248,9 @@ export function oke(options: OkeOptions): OkeApp {
         principals,
         telemetry,
         allowTestPrincipals: allowInjectedPrincipals,
+        ...(extras?.bypassGates === true && extras.trustedInvoke === true
+          ? { bypassGates: true }
+          : {}),
         verifyBearer:
           binding && verifyBearer ? async (token) => verifyBearer(binding, token) : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
@@ -1256,10 +1294,11 @@ export function oke(options: OkeOptions): OkeApp {
       }
     }
 
+    const effects = flowDef.effects ?? capability?.declared;
     const { fx, ledger } = createFxContext({
       ...options.fx,
       flow: flowDef.name,
-      effects: flowDef.effects,
+      effects,
       runTelemetry: telemetry,
       runId,
       now,
@@ -1271,6 +1310,7 @@ export function oke(options: OkeOptions): OkeApp {
       },
       ...(principals ? { auth: principals.auth as FxAuth, operator: principals.operator } : {}),
       ...(extras?.originPrincipal ? { principal: extras.originPrincipal } : {}),
+      ...(extras?.trustedInvoke === true && extras.revealPii === true ? { revealPii: true } : {}),
       ...(capability ? { capability } : {}),
       ...(booted
         ? {
@@ -1296,6 +1336,9 @@ export function oke(options: OkeOptions): OkeApp {
             originPrincipal: freezePrincipal(fx.principal),
             locale: resolvedLocale,
             parentId: runId,
+            ...(extras?.trustedInvoke === true && extras.revealPii === true
+              ? { trustedInvoke: true, revealPii: true }
+              : {}),
           },
         );
         if (inner.failure) return inner.failure;
@@ -1312,13 +1355,84 @@ export function oke(options: OkeOptions): OkeApp {
       async () => {
         try {
           const invoke = async (input: unknown) => {
+            const storeRt = booted?.store;
+            const declaredForCache: Effects | undefined = capability?.open
+              ? flowDef.effects
+              : (effects ?? {});
+            const cacheEffects = resolveCacheEffects(
+              declaredForCache,
+              learnedTier1Reads.get(flowDef.name),
+            );
+            // Revealed PII must not hit a prior masked entry or land in cache.
+            const reveal = extras?.trustedInvoke === true && extras.revealPii === true;
+            const cacheOk =
+              storeRt !== undefined &&
+              !reveal &&
+              autoCacheEligible({
+                cache: flowDef.cache,
+                durable: flowDef.durable,
+                effects: cacheEffects,
+              });
+            const dims = cacheOk
+              ? tier1DimsByResource(cacheEffects, flowDef.name, input, fx.auth.userId)
+              : undefined;
+            if (cacheOk && dims) {
+              const keys = tier1KeysForReads(cacheEffects, dims);
+              const cached = tier1Lookup((key) => storeRt.cache.get(key), keys);
+              if (cached !== undefined) {
+                telemetry.cacheHits += 1;
+                return cached;
+              }
+              telemetry.cacheMisses += 1;
+            }
             const run = () => {
               // Flow-level retry re-enters `do` on the same journal session —
               // rewind so completed steps/effects replay instead of re-executing.
               journalSession?.rewind();
               return flowDef.do(input as never, fx);
             };
-            return flowDef.retry ? fxRetry(run, flowDef.retry) : run();
+            const output = await (flowDef.retry ? fxRetry(run, flowDef.retry) : run());
+            if (!isFlowFailure(output)) {
+              const ledgerFx = effectsFromLedger(ledger.entries);
+              const writeEffects: Effects = {
+                writes: [
+                  ...new Set([...(cacheEffects.writes ?? []), ...(ledgerFx.writes ?? [])]),
+                ].filter(isStoreResourceRef),
+              };
+              if (storeRt && (writeEffects.writes?.length ?? 0) > 0) {
+                storeRt.onWriteEffects(writeEffects);
+              }
+              const mergedReads = [
+                ...new Set([...(cacheEffects.reads ?? []), ...(ledgerFx.reads ?? [])]),
+              ].filter(isStoreResourceRef);
+              if (mergedReads.length > 0) {
+                learnedTier1Reads.set(flowDef.name, mergedReads);
+              }
+              const putEffects: Effects = {
+                reads: mergedReads,
+                ...(ledgerFx.writes ? { writes: ledgerFx.writes } : {}),
+                ...(ledgerFx.asks ? { asks: ledgerFx.asks } : {}),
+              };
+              const storeAfter =
+                !reveal &&
+                autoCacheEligible({
+                  cache: flowDef.cache,
+                  durable: flowDef.durable,
+                  effects: putEffects,
+                });
+              if (storeRt && storeAfter && output !== undefined) {
+                const ttlMs =
+                  typeof flowDef.cache === "string" ? parseTtlMs(flowDef.cache) : undefined;
+                storeRt.putTier1(
+                  putEffects,
+                  output,
+                  tier1DimsByResource(putEffects, flowDef.name, input, fx.auth.userId),
+                  ttlMs,
+                );
+                if (!cacheOk) telemetry.cacheMisses += 1;
+              }
+            }
+            return output;
           };
           if (!alreadyValidated) {
             const parsed = await validate(flowDef.in, ctx.input);
@@ -1353,6 +1467,7 @@ export function oke(options: OkeOptions): OkeApp {
     });
 
     const endedAt = now();
+    const durationMs = resolveDurationMs(endedAt - startedAt, performance.now() - startedHr);
 
     if (journalSession) {
       inflightRuns.delete(journalSession.runId);
@@ -1398,6 +1513,7 @@ export function oke(options: OkeOptions): OkeApp {
           telemetry,
           startedAt,
           endedAt,
+          durationMs,
           failure: recordFailure,
           id: runId,
           input: replayInput,
@@ -1414,6 +1530,8 @@ export function oke(options: OkeOptions): OkeApp {
       response: result.response,
       ctx: result.ctx,
       fx,
+      cache: cacheDimensionOf(telemetry),
+      durationMs,
     };
   }
 
@@ -1614,7 +1732,7 @@ export function oke(options: OkeOptions): OkeApp {
 
       if (method === "GET" && url.pathname === "/_oke/client.json") {
         return respond(
-          new Response(JSON.stringify(routes), {
+          new Response(JSON.stringify({ routes }), {
             headers: { "content-type": "application/json" },
           }),
         );
@@ -1805,12 +1923,6 @@ function compileHttpBinding(binding: Binding, aot: boolean): CompiledRoute {
 function isTerminalFailure(result: PipelineResult): boolean {
   if (result.failure) return true;
   return result.ctx.error !== undefined && !isJournalSuspend(result.ctx.error);
-}
-
-/** Coerce a thrown value into a FlowFailure for Runs wide events. */
-function failureFromUnknown(err: unknown): FlowFailure {
-  if (isFlowFailure(err)) return err;
-  return fail(failureCodeOf(err), {});
 }
 
 /**

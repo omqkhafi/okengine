@@ -62,6 +62,25 @@ export function isBunNativePath(path: string): boolean {
   return true;
 }
 
+/**
+ * Methods Bun.serve `routes` accepts. QUERY (RFC 10008) is not among
+ * them — registering it throws `ERR_INVALID_ARG_TYPE`. Those verbs stay
+ * on the `fetch` fallback, which the app router already handles.
+ *
+ * @param method - HTTP method
+ */
+export function isBunNativeMethod(method: string): boolean {
+  return (
+    method === "GET" ||
+    method === "POST" ||
+    method === "PUT" ||
+    method === "PATCH" ||
+    method === "DELETE" ||
+    method === "HEAD" ||
+    method === "OPTIONS"
+  );
+}
+
 type MethodHandlers = Partial<Record<string, (req: Request) => Response | Promise<Response>>>;
 
 /**
@@ -82,11 +101,49 @@ export function buildBunRoutes(
     const path = b.trigger.path;
     const method = b.trigger.method;
     if (typeof path !== "string" || typeof method !== "string") continue;
-    if (!isBunNativePath(path)) continue;
+    if (!isBunNativePath(path) || !isBunNativeMethod(method)) continue;
     const methods = routes[path] ?? (routes[path] = {});
     methods[method] = (req) => fetchHandler(req);
   }
   return routes;
+}
+
+function isBunInvalidRoutesError(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  const code = (err as { code?: unknown }).code;
+  return code === "ERR_INVALID_ARG_TYPE" || err.message.includes("'routes' expects");
+}
+
+/**
+ * Open {@link Bun.serve}. Native `routes` is best-effort — Bun rejects
+ * verbs it does not know (QUERY) with a long HTML-bundling example.
+ * Fall back to `fetch` only; do not surface that dump.
+ *
+ * @param options - Listen options
+ */
+export function serveBunHttp(options: {
+  readonly port: number;
+  readonly hostname: string;
+  readonly fetch: (request: Request) => Response | Promise<Response>;
+  readonly routes?: Record<string, MethodHandlers>;
+  readonly id?: string;
+}): ReturnType<typeof Bun.serve> {
+  const base = {
+    port: options.port,
+    hostname: options.hostname,
+    fetch: options.fetch,
+    ...(options.id !== undefined ? { id: options.id } : {}),
+  };
+  const table = options.routes;
+  if (table === undefined || Object.keys(table).length === 0) {
+    return Bun.serve(base);
+  }
+  try {
+    return Bun.serve({ ...base, routes: table });
+  } catch (err) {
+    if (!isBunInvalidRoutesError(err)) throw err;
+    return Bun.serve(base);
+  }
 }
 
 function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
@@ -95,12 +152,12 @@ function listenBun(app: FetchApp, options?: ServeOptions): ServerHandle {
   const fetchHandler = secureFetch((req) => app.fetch(req), options, hostname);
   const routes = buildBunRoutes(app, fetchHandler);
 
-  const server = Bun.serve({
+  const server = serveBunHttp({
     port,
     hostname,
-    ...(options?.id !== undefined ? { id: options.id } : {}),
-    routes: Object.keys(routes).length > 0 ? routes : undefined,
     fetch: fetchHandler,
+    routes,
+    ...(options?.id !== undefined ? { id: options.id } : {}),
   });
 
   const boundPort = server.port ?? port;

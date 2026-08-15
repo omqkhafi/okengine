@@ -1,11 +1,15 @@
 /**
- * Gate declaration — policy · rate.
+ * Gate declaration — policy · rate · all.
  *
  * Physics: auth · session · ABAC · rate limit · quota · feature flag.
  */
 
 import type { RateStrategy } from "../../manifest/types.ts";
 import { DEFAULT_RATE_STRATEGY } from "./constants.ts";
+import { GATE_PUBLIC_NAME, type GateAllDecl, type GateMember } from "./flatten.ts";
+
+export { flattenGateArgs, flattenGateMembers, GATE_PUBLIC_NAME, isGateAllDecl } from "./flatten.ts";
+export type { GateAllDecl, GateMember } from "./flatten.ts";
 
 /** Context passed to policy predicates at evaluation time. */
 export interface GatePolicyContext {
@@ -118,13 +122,17 @@ export interface GateNamespace {
    * @param options - Strategy / max / per / keyBy
    */
   rate(options: RateOptions): RateGateDecl;
+  /**
+   * Reusable chain — every member must pass, left to right.
+   * Attach with `.gate(write)`. Nested `all` handles flatten.
+   *
+   * @param members - Policy / rate / nested `all` handles
+   */
+  all(...members: GateMember[]): GateAllDecl;
 }
 
-/** Reserved policy name for {@link gate.public}. */
-export const GATE_PUBLIC_NAME = "public";
-
 /**
- * Gate element namespace — `gate.policy` · `gate.scope` · `gate.public` · `gate.rate`.
+ * Gate element namespace — `gate.policy` · `gate.scope` · `gate.public` · `gate.rate` · `gate.all`.
  */
 export const gate: GateNamespace = {
   /**
@@ -203,5 +211,17 @@ export const gate: GateNamespace = {
       overridable: options.overridable ?? false,
       ...(options.description !== undefined ? { description: options.description } : {}),
     };
+  },
+
+  /**
+   * Reusable chain — every member must pass, left to right.
+   *
+   * @param members - Policy / rate / nested `all` handles
+   */
+  all(...members: GateMember[]): GateAllDecl {
+    if (members.length === 0) {
+      throw new TypeError("gate.all: at least one member is required");
+    }
+    return { kind: "all", members };
   },
 };

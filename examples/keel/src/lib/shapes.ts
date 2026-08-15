@@ -16,14 +16,14 @@ export const Duplicate = z.object({
   identifier: z.string().optional(),
 });
 
-/** Cycle is closed — cannot add or move work into it. */
-export const CycleClosed = z.object({
-  cycleId: z.string(),
-});
-
 /** AI / integration unavailable. */
 export const Unavailable = z.object({
   message: z.string(),
+});
+
+/** Forbidden for the caller's role. */
+export const Forbidden = z.object({
+  role: z.string().optional(),
 });
 
 /** Id-only input (path `:id`). */

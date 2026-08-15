@@ -3,9 +3,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { Flow } from "../../../../../../manifest/types.ts";
+import type { Flow, Manifest, SignalDelivery } from "../../../../../../manifest/types.ts";
 import {
   bandUnitTree,
+  buildUnitTree,
   countActiveFacets,
   filterUnitTree,
   filterUnitsAdvanced,
@@ -24,7 +25,7 @@ import {
  * @param id - Dotted flow id (`unit.action`)
  * @param flow - Manifest flow
  */
-function row(id: string, flow: Flow): UnitFlowRow {
+function row(id: string, flow: Flow, delivery: SignalDelivery | null = null): UnitFlowRow {
   const unit = id.includes(".") ? id.slice(0, id.indexOf(".")) : id;
   const action = id.includes(".") ? id.slice(id.indexOf(".") + 1) : id;
   return {
@@ -34,6 +35,8 @@ function row(id: string, flow: Flow): UnitFlowRow {
     flow,
     method: flow.trigger?.http?.method ?? null,
     path: flow.trigger?.http?.path ?? null,
+    signal: flow.trigger?.signal ?? null,
+    delivery,
   };
 }
 
@@ -60,7 +63,7 @@ const TREE: readonly UnitGroup[] = [
     }),
   ]),
   group("orders", [
-    row("orders.onPlaced", { trigger: { signal: "order-placed" }, live: true }),
+    row("orders.onPlaced", { trigger: { signal: "order-placed" }, live: true }, "once"),
     row("orders.sync", { trigger: { cdc: { table: "orders" } }, plane: "operator" }),
     row("orders.helper", {}),
   ]),
@@ -130,6 +133,47 @@ describe("filterUnitsAdvanced", () => {
     expect(flowIds(filterUnitsAdvanced(pathHit, { planes: ["user"] }))).toEqual(["billing.charge"]);
     expect(flowIds(filterUnitsAdvanced(pathHit, { planes: ["operator"] }))).toEqual([]);
   });
+
+  test("filters by signal delivery physics and drops rows without a join", () => {
+    expect(flowIds(filterUnitsAdvanced(TREE, { deliveries: ["once"] }))).toEqual([
+      "orders.onPlaced",
+    ]);
+    expect(filterUnitsAdvanced(TREE, { deliveries: ["broadcast"] })).toEqual([]);
+  });
+});
+
+describe("filterUnitTree", () => {
+  test("matches signal name and delivery physics", () => {
+    expect(flowIds(filterUnitTree(TREE, "order-placed"))).toEqual(["orders.onPlaced"]);
+    expect(flowIds(filterUnitTree(TREE, "once"))).toEqual(["orders.onPlaced"]);
+    expect(flowIds(filterUnitTree(TREE, "broadcast"))).toEqual([]);
+  });
+});
+
+describe("buildUnitTree", () => {
+  test("joins trigger.signal onto manifest.signals.delivery", () => {
+    const manifest = {
+      oke: "1.0",
+      app: "test",
+      flows: {
+        "notify.onTask": { trigger: { signal: "task-changed" } },
+        "notify.onComment": { trigger: { signal: "comment-added" } },
+        "billing.charge": { trigger: { http: { method: "POST", path: "/charge" } } },
+      },
+      signals: {
+        "task-changed": { delivery: "broadcast" },
+        "comment-added": { delivery: "once" },
+      },
+    } as Manifest;
+    const groups = buildUnitTree(manifest);
+    const notify = groups.find((g) => g.unit === "notify");
+    expect(notify?.flows.map((f) => [f.action, f.signal, f.delivery])).toEqual([
+      ["onComment", "comment-added", "once"],
+      ["onTask", "task-changed", "broadcast"],
+    ]);
+    const billing = groups.find((g) => g.unit === "billing");
+    expect(billing?.flows[0]).toMatchObject({ signal: null, delivery: null, method: "POST" });
+  });
 });
 
 describe("countActiveFacets", () => {
@@ -137,6 +181,7 @@ describe("countActiveFacets", () => {
     expect(countActiveFacets({})).toBe(0);
     expect(countActiveFacets({ triggerKinds: ["http", "cron"] })).toBe(2);
     expect(countActiveFacets({ planes: ["user"], durableOnly: true, liveOnly: true })).toBe(3);
+    expect(countActiveFacets({ deliveries: ["once", "live"] })).toBe(2);
     expect(countActiveFacets({ triggerKinds: [], durableOnly: false })).toBe(0);
   });
 });

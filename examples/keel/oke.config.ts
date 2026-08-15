@@ -1,7 +1,7 @@
 import { defineConfig } from "okengine/config";
 
 /**
- * Keel — Linear-shaped project-management example.
+ * Keel — work-management example (Asana / ClickUp / Monday shaped).
  * `oke dev` always uses Docker Compose (dev). Tests use PGLite / memory.
  */
 export default defineConfig({
@@ -12,12 +12,18 @@ export default defineConfig({
   drivers: {
     store: {
       index: {
+        dev: "meilisearch",
         test: "memory",
         prod: "meilisearch",
       },
     },
     vault: {
       dev: "vault",
+    },
+    ai: {
+      dev: "openai-compatible",
+      test: "mock",
+      prod: "openai-compatible",
     },
   },
   images: {
@@ -30,6 +36,7 @@ export default defineConfig({
     channel: {
       email: "axllent/mailpit:v1.22.3",
     },
+    ai: "ghcr.io/ggml-org/llama.cpp:server-b10290",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

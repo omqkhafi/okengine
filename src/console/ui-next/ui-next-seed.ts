@@ -6,7 +6,7 @@
  *
  * Seed story (keel): a featured github→create→notify chain, a full CRUD +
  * custom-route HTTP surface, plus ~70 operational traces so Traces looks
- * like a live Linear-shaped workspace (50–100 band).
+ * like a live Asana/ClickUp/Monday-shaped workspace (50–100 band).
  */
 
 import type { VaultLayerSeed } from "../server/vault.ts";
@@ -23,7 +23,7 @@ export {
   createUiNextOperationRuns,
   createUiNextSeedRun,
   createUiNextSeedRuns,
-  UI_NEXT_SEED_CYCLES_RUN_ID,
+  UI_NEXT_SEED_DIGEST_RUN_ID,
   UI_NEXT_SEED_DRAFTS_RUN_ID,
   UI_NEXT_SEED_FAIL_RUN_ID,
   UI_NEXT_SEED_FEATURED_COUNT,
@@ -31,9 +31,9 @@ export {
   UI_NEXT_SEED_LIST_RUN_ID,
   UI_NEXT_SEED_NOTIFY_RUN_ID,
   UI_NEXT_SEED_OPERATION_COUNT,
+  UI_NEXT_SEED_PLAN_RUN_ID,
   UI_NEXT_SEED_RUN_ID,
   UI_NEXT_SEED_TOTAL_COUNT,
-  UI_NEXT_SEED_TRIAGE_RUN_ID,
 } from "./ui-next-seed-runs.ts";
 export { seedUiNextStoreData, UI_NEXT_SEED_STORE_COUNTS } from "./ui-next-seed-store.ts";
 
@@ -74,7 +74,7 @@ export const UI_NEXT_SEED_PUBLIC_APP_URL = UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_APP_
 export const UI_NEXT_SEED_VAULT_LAYERS: VaultLayerSeed = {
   driver: {
     GITHUB_TOKEN: "ghp_seed_keel_github_sync",
-    OPENAI_KEY: "sk-seed-keel-triage",
+    OPENAI_KEY: "sk-seed-keel-planner",
     PUBLIC_API_URL: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_API_URL,
   },
   processEnv: {
@@ -83,7 +83,7 @@ export const UI_NEXT_SEED_VAULT_LAYERS: VaultLayerSeed = {
     WEBHOOK_SECRET: "whsec_seed_keel_outbound",
   },
   envLocal: {
-    SLACK_WEBHOOK: "https://hooks.slack.test/keel/cycle-digest",
+    SLACK_WEBHOOK: "https://hooks.slack.test/keel/goal-digest",
     PUBLIC_DOCS_URL: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_DOCS_URL,
   },
   devFallback: {
@@ -115,8 +115,8 @@ export function isConsoleSeeded(): boolean {
 export function uiNextSeededSummary(): string {
   return (
     `keel graph (all 8 elements) + ${UI_NEXT_SEED_TOTAL_COUNT} traces ` +
-    `(featured chain + AI triage + clocks + ${UI_NEXT_SEED_OPERATION_COUNT} ops) + ` +
-    `${UI_NEXT_SEED_STORE_COUNTS.sqlIssues} issues — ` +
+    `(featured chain + AI planner + clocks + ${UI_NEXT_SEED_OPERATION_COUNT} ops) + ` +
+    `${UI_NEXT_SEED_STORE_COUNTS.sqlTasks} tasks — ` +
     `click ${UI_NEXT_SEED_RUN_ID} to highlight the chain`
   );
 }

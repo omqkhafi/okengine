@@ -481,6 +481,7 @@ function projectGateDefs(
 
   const rows: ConsoleGateDefRow[] = [];
   for (const [name, def] of Object.entries(manifest?.gates ?? {})) {
+    if (def.kind === "all") continue;
     const kind: "policy" | "rate" =
       def.kind === "rate" || name.startsWith("rate:") ? "rate" : "policy";
     rows.push({

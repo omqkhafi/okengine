@@ -1,0 +1,228 @@
+/**
+ * Call API invoke-as picker — same Operator / Public / As cards as Store Gate.
+ */
+
+import { useMemo, useState, type JSX } from "react";
+import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import type { Manifest } from "../../../../../../manifest/types.ts";
+import type { FlowIdentity } from "@/client.ts";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils.ts";
+import { useGates } from "@/features/store/data/use-gates.ts";
+import {
+  queryGateMode,
+  queryGatePolicyChoices,
+  queryGateUserChoices,
+  type QueryGateMode,
+} from "@/features/store/lib/query-gate.ts";
+import { mergeRlsGateCatalog, rlsGateCatalog } from "@/features/store/lib/rls-gate-catalog.ts";
+import {
+  GateAsPicker,
+  GateModeCard,
+  GateModeDetail,
+  type GateAsTab,
+} from "@/features/store/query/query-gate-parts.tsx";
+
+/** Current Call API invoke-as pick. */
+export type CallInvokeAs = {
+  readonly asGate: string | null;
+  readonly asUserId: string | null;
+};
+
+/** Props for {@link CallIdentityMenu}. */
+export interface CallIdentityMenuProps {
+  readonly manifest: Manifest | null;
+  readonly identities: readonly FlowIdentity[];
+  readonly value: CallInvokeAs;
+  readonly onChange: (next: CallInvokeAs) => void;
+}
+
+/**
+ * Toolbar label for the current invoke-as pick.
+ *
+ * @param value - Gate + optional user
+ * @param identities - Seeded identities
+ */
+export function callInvokeAsToolbarLabel(
+  value: CallInvokeAs,
+  identities: readonly FlowIdentity[],
+): string {
+  const mode = queryGateMode(value.asGate);
+  if (mode === "operator") return "Operator";
+  if (mode === "public") return "Public";
+  if (value.asUserId) {
+    const user = identities.find((row) => row.id === value.asUserId);
+    return user?.name ?? value.asUserId;
+  }
+  return value.asGate ? `As · ${value.asGate}` : "As";
+}
+
+/**
+ * Whether Call API can submit for this pick.
+ *
+ * @param value - Gate + optional user
+ */
+export function callInvokeAsReady(value: CallInvokeAs): boolean {
+  const mode = queryGateMode(value.asGate);
+  if (mode === "operator" || mode === "public") return true;
+  return Boolean(value.asUserId || value.asGate);
+}
+
+/**
+ * Toolbar control: invoke the flow as Operator, public, a user, or a Gate.
+ *
+ * @param props - Manifest + identities + current pick
+ */
+export function CallIdentityMenu({
+  manifest,
+  identities,
+  value,
+  onChange,
+}: CallIdentityMenuProps): JSX.Element {
+  const gatesQuery = useGates(true);
+  const catalog = useMemo(
+    () => mergeRlsGateCatalog(rlsGateCatalog(manifest), gatesQuery.data ?? null),
+    [manifest, gatesQuery.data],
+  );
+  const policies = useMemo(() => queryGatePolicyChoices(catalog), [catalog]);
+  const users = useMemo(() => queryGateUserChoices(identities, catalog), [identities, catalog]);
+  const publicDetail =
+    catalog.gates.find((gate) => gate.kind === "public")?.description ??
+    "Intentionally unauthenticated.";
+  const mode = queryGateMode(value.asGate);
+  const active = value.asGate !== null;
+  const [asTab, setAsTab] = useState<GateAsTab>(value.asUserId ? "user" : "policy");
+  const selectedPolicy = policies.find((policy) => policy.id === value.asGate) ?? null;
+  const selectedUser =
+    users.find((user) => user.id === value.asUserId && user.gate === value.asGate) ?? null;
+  const asEnabled = policies.length > 0 || users.length > 0;
+
+  const selectMode = (next: QueryGateMode): void => {
+    if (next === "operator") {
+      onChange({ asGate: null, asUserId: null });
+      return;
+    }
+    if (next === "public") {
+      onChange({ asGate: "public", asUserId: null });
+      return;
+    }
+    if (mode === "as") return;
+    const fallback = selectedPolicy?.id ?? policies[0]?.id ?? users[0]?.gate ?? null;
+    if (fallback === null) return;
+    if (users[0] && fallback === users[0].gate && policies.length === 0) {
+      setAsTab("user");
+      onChange({ asGate: users[0].gate, asUserId: users[0].id });
+      return;
+    }
+    setAsTab("policy");
+    onChange({ asGate: fallback, asUserId: null });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={(props) => (
+          <Button
+            {...props}
+            type="button"
+            variant={active ? "secondary" : "ghost"}
+            size="sm"
+            className={cn(
+              "h-8 max-w-44 min-w-0 rounded-none px-2 text-[11px]",
+              active && "text-sky-800 dark:text-sky-300",
+            )}
+            aria-label={
+              active ? `Invoke as Gate ${value.asGate}` : "Invoke as Operator (bypass gates)"
+            }
+            data-slot="call-api-identity"
+          >
+            <HugeiconsIcon icon={SecurityCheckIcon} data-icon="inline-start" className="size-3.5" />
+            <span className="truncate">{callInvokeAsToolbarLabel(value, identities)}</span>
+          </Button>
+        )}
+      />
+      <DropdownMenuContent align="end" className="w-[26rem] p-2.5">
+        <p className="px-0.5 pb-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          Invoke as a Gate
+        </p>
+        <div role="radiogroup" aria-label="Invoke as" className="grid grid-cols-3 gap-1.5">
+          <GateModeCard
+            mode="operator"
+            title="Operator"
+            caption="Bypass"
+            selected={mode === "operator"}
+            onSelect={() => selectMode("operator")}
+          />
+          <GateModeCard
+            mode="public"
+            title="Public"
+            caption="Anonymous"
+            selected={mode === "public"}
+            onSelect={() => selectMode("public")}
+          />
+          <GateModeCard
+            mode="as"
+            title="As"
+            caption={selectedUser ? selectedUser.label : (selectedPolicy?.label ?? "User / policy")}
+            selected={mode === "as"}
+            disabled={!asEnabled}
+            onSelect={() => selectMode("as")}
+          />
+        </div>
+        <div className="mt-2.5 border-t border-border/60 pt-2.5">
+          {mode === "operator" ? (
+            <GateModeDetail title="Full admin access" badge="Default">
+              Operator bypasses application Gates. The handler runs without the flow&apos;s gate
+              chain.
+            </GateModeDetail>
+          ) : null}
+          {mode === "public" ? (
+            <GateModeDetail title="Public">
+              {publicDetail} Anonymous principal — unverified, no scopes. Only{" "}
+              <span className="font-mono">gate.public</span> flows succeed.
+            </GateModeDetail>
+          ) : null}
+          {mode === "as" ? (
+            <GateAsPicker
+              tab={asTab}
+              onTabChange={setAsTab}
+              policies={policies}
+              users={users}
+              asGate={value.asGate}
+              asUserId={selectedUser?.id ?? null}
+              onSelectPolicy={(policy) => {
+                setAsTab("policy");
+                onChange({ asGate: policy.id, asUserId: null });
+              }}
+              onSelectUser={(user) => {
+                setAsTab("user");
+                onChange({ asGate: user.gate, asUserId: user.id });
+              }}
+              hint={
+                selectedUser ? (
+                  <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                    Calls the flow as{" "}
+                    <span className="font-medium text-foreground">{selectedUser.label}</span> via{" "}
+                    <span className="font-mono">{value.asGate}</span>. Sets the user principal for
+                    gates.
+                  </p>
+                ) : selectedPolicy ? (
+                  <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                    {selectedPolicy.detail} Sets the user principal scopes for{" "}
+                    <span className="font-mono">{selectedPolicy.id}</span>.
+                  </p>
+                ) : null
+              }
+            />
+          ) : null}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

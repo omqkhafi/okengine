@@ -33,6 +33,7 @@ import {
   devStatusFromAiPhase,
   formatAppReadyLine,
   formatBootWarn,
+  formatClaimNote,
   formatCliChrome,
   formatDevBanner,
   formatDevHeroDetails,
@@ -202,7 +203,7 @@ export interface DevOptions {
   readonly secret?: string;
   /** Seed Manifest into Console (and therefore MCP). */
   readonly manifest?: Manifest | null;
-  /** Suppress claim-code print (tests). */
+  /** Suppress kernel stdout claim print (default true — the live board owns it). */
   readonly silentClaim?: boolean;
   /** Port overrides (use `0` for ephemeral in tests). */
   readonly appPort?: number;
@@ -331,10 +332,17 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     options.composeHealthRun ??
     (options.composeHealth ? async (): Promise<string> => "[]" : undefined);
   const previousWarn = console.warn;
+  const bootNotices: string[] = [];
+  const noticeSeen = new Set<string>();
+  let chromeReady = false;
   console.warn = (...args: unknown[]) => {
     const msg = args.map(String).join(" ");
     if (/^oke boot:/i.test(msg.trim())) {
-      write(formatBootWarn(msg.trim()));
+      const key = msg.trim().replace(/\s+/g, " ");
+      if (noticeSeen.has(key)) return;
+      noticeSeen.add(key);
+      if (chromeReady) write(formatBootWarn(msg.trim()));
+      else bootNotices.push(msg.trim());
       return;
     }
     previousWarn.apply(console, args as Parameters<typeof console.warn>);
@@ -841,6 +849,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
   };
 
+  let consoleState: ConsoleState | null = null;
+  let claimConsoleUrl: string | undefined;
+
   const paintBootBoard = (aiStatus: DevStatus | undefined) => {
     const aiSt = aiStatus ?? heroAiStatus;
     const elements = heroSnapshot.elements.map((row) => {
@@ -892,9 +903,13 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
           appDrivers: pendingStackSummary.appDrivers,
         })
       : "";
-    // Breath between elements and Docker — they read as two panes, not one block.
-    const gap = elementsBlock && stackBlock ? "\n" : "";
-    return `${elementsBlock}${gap}${stackBlock}`;
+    const claim =
+      consoleState && !consoleState.setupClosed
+        ? formatClaimNote(consoleState.claim.code, termColorEnabled(), {
+            ...(claimConsoleUrl !== undefined ? { consoleUrl: claimConsoleUrl } : {}),
+          })
+        : "";
+    return `${elementsBlock}${stackBlock}${claim}`;
   };
 
   // Drop ephemeral progress — final elements + Docker board replaces it.
@@ -950,25 +965,6 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     });
     // Let the first probe repaint AI ● (yellow loading) before we print below.
     await Promise.race([firstAiPaint, Bun.sleep(2_500)]);
-  }
-
-  // Live ● for the whole session — catch Docker Desktop stops / crashes.
-  // Updates the board only (no redis stopped / starting / ready log spam).
-  if (dockerStarted && composeFiles) {
-    const { startComposeHealthWatch } = await import("../docker/compose-health.ts");
-    const started = dockerStarted;
-    stopComposeHealthWatch = startComposeHealthWatch({
-      files: started.files,
-      cwd: started.cwd,
-      env: started.env,
-      run: composeHealthRun,
-      intervalMs: 2_000,
-      onChange: (map) => {
-        liveComposeHealth = map;
-        if (map.get("ai") === "error") heroAiStatus = "error";
-        repaintBoard();
-      },
-    });
   }
 
   /** Snapshot keys we mutate so `stop()` can leave the parent shell clean. */
@@ -1085,7 +1081,8 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         hostname: "127.0.0.1",
         cwd,
         env: "dev",
-        silentClaim: options.silentClaim ?? false,
+        // CLI paints the claim on the live board — do not dump it to raw stdout.
+        silentClaim: options.silentClaim ?? true,
         runsIngestSecret,
         ...(options.secret !== undefined ? { secret: options.secret } : {}),
         ...(seedManifest !== undefined && seedManifest !== null ? { manifest: seedManifest } : {}),
@@ -1162,6 +1159,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   // Console before host so ingest URL/secret are real when the child boots.
   const consoleServer = await serveConsole(consolePort);
   const boundConsolePort = consoleServer.port ?? consolePort;
+  consoleState = consoleServer.console?.state ?? null;
+  claimConsoleUrl = `http://127.0.0.1:${boundConsolePort}`;
+  if (consoleState && !consoleState.setupClosed && process.stdout.isTTY !== true) {
+    repaintBoard();
+  }
   env.OKE_DEV_HERO_CONSOLE = `http://127.0.0.1:${boundConsolePort}`;
   const ingestSecret = consoleServer.console?.state.runsIngestSecret;
   if (ingestSecret) {
@@ -1173,13 +1175,35 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const boundAppPort = app.port ?? appPort;
 
   let mcpServer: DevMcpHandle | null = null;
-  let consoleState: ConsoleState | null = null;
   let secret: string | null = null;
   let sessions: SessionStore | null = null;
+  let attachedHost: { readonly stop: () => Promise<void> } | null = null;
 
   if (consoleServer.console) {
     const state = consoleServer.console.state;
     consoleState = state;
+    try {
+      const { attachHostToConsole } = await import("./attach-host-console.ts");
+      attachedHost = await attachHostToConsole({
+        entry: plan.entry,
+        cwd,
+        state,
+        ...(ingestSecret
+          ? {
+              runsBridge: {
+                url: `http://127.0.0.1:${boundConsolePort}${RUNS_INGEST_PATH}`,
+                secret: ingestSecret,
+              },
+            }
+          : {}),
+      });
+    } catch (err) {
+      write(
+        formatStatusLine(
+          `host attach skipped — ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
     secret = state.secret;
     sessions = state.sessions;
     mcpServer = await serveMcpSurface({
@@ -1234,13 +1258,57 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     }
   });
 
-  // Initial sync so local DB matches schema.ts without a prior manual push.
-  if (autoPushEnabled) {
-    lastSchemaFilename = "src/schema.ts";
-    autoPushRunner.trigger();
-  }
+  const paintReadyChrome = (): void => {
+    const tty = process.stdout.isTTY === true;
+    if (tty) {
+      write(clearTerminalScreen());
+      bootBoard.reset();
+      write(
+        formatDevBanner({
+          profile: earlyProfile,
+          runtimeEnv: resolveDevRuntimeEnv(earlyProfile),
+          system: formatHeroSystemLine(),
+          version: okeVersion,
+          phase: "ready",
+        }),
+      );
+    }
+    bootBoard.paint(paintBootBoard(heroAiStatus));
+    for (const notice of bootNotices) {
+      write(formatBootWarn(notice));
+    }
+    bootNotices.length = 0;
+    write(formatAppReadyLine(`http://127.0.0.1:${boundAppPort}`));
+    write(formatServiceLine("Console", `http://127.0.0.1:${boundConsolePort}`));
+    if (mcpServer) {
+      write(formatServiceLine("MCP", `http://127.0.0.1:${boundMcpPort}`));
+    }
+    if (docsMcpServer) {
+      write(formatServiceLine("Docs MCP", `http://127.0.0.1:${boundDocsMcpPort}`));
+    }
+    write(formatDevLogSeparator());
+    chromeReady = true;
+  };
+  paintReadyChrome();
 
-  write(formatDevLogSeparator());
+  // Live ● after the ready board — mid-boot health ticks were rewriting
+  // elements/Docker on top of db-push lines and tearing the claim box.
+  if (dockerStarted && composeFiles) {
+    const { startComposeHealthWatch } = await import("../docker/compose-health.ts");
+    const started = dockerStarted;
+    stopComposeHealthWatch = startComposeHealthWatch({
+      files: started.files,
+      cwd: started.cwd,
+      env: started.env,
+      run: composeHealthRun,
+      intervalMs: 2_000,
+      onChange: (map) => {
+        liveComposeHealth = map;
+        if (map.get("ai") === "error") heroAiStatus = "error";
+        repaintBoard();
+      },
+    });
+  }
 
   const watchFs: DevWatchFn =
     options.watchFs ?? ((path, watchOptions, listener) => watch(path, watchOptions, listener));
@@ -1272,6 +1340,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     bootBoard.stop();
     autoPushRunner.cancel();
     watcher.close();
+    const host = attachedHost;
+    attachedHost = null;
+    void host?.stop();
     app.stop();
     consoleServer.stop();
     mcpServer?.stop();
@@ -1368,26 +1439,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     };
     const refreshChrome = async (): Promise<void> => {
       await syncComposeBoard();
-      write(clearTerminalScreen());
-      bootBoard.reset();
-      write(
-        formatDevBanner({
-          profile: earlyProfile,
-          runtimeEnv: resolveDevRuntimeEnv(earlyProfile),
-          system: formatHeroSystemLine(),
-          version: okeVersion,
-        }),
-      );
-      bootBoard.paint(paintBootBoard(heroAiStatus));
-      write(formatAppReadyLine(`http://127.0.0.1:${boundAppPort}`));
-      write(formatServiceLine("Console", `http://127.0.0.1:${boundConsolePort}`));
-      if (mcpServer) {
-        write(formatServiceLine("MCP", `http://127.0.0.1:${boundMcpPort}`));
-      }
-      if (docsMcpServer) {
-        write(formatServiceLine("Docs MCP", `http://127.0.0.1:${boundDocsMcpPort}`));
-      }
-      write(formatDevLogSeparator());
+      paintReadyChrome();
     };
     const composeAction = async (action: DevComposeControlAction): Promise<void> => {
       const files = started.files;
@@ -1577,8 +1629,8 @@ async function startAppHot(
     OKE_DEV_SURFACE: "Backend",
   };
 
-  // `--no-clear-screen`: Bun must not wipe the hero; the runner clears only
-  // request logs on soft reload and reprints Backend / Console / MCP URLs.
+  // `--no-clear-screen`: Bun must not wipe the parent board (claim + Docker).
+  // The runner reprints only the Backend ready line on soft reload.
   const proc = Bun.spawn(["bun", "--hot", "--no-clear-screen", runner], {
     cwd,
     env,

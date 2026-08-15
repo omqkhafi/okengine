@@ -5,7 +5,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useEffect, useRef, useState, type ComponentProps, type CSSProperties } from "react";
-import { OkeLogoIcon } from "@/components/oke-logo.tsx";
+import { OkeLogo } from "@/components/oke-logo.tsx";
 import { motion, useReducedMotion } from "@/lib/motion";
 import { ELEMENT_ICONS, type OkeElement } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -173,7 +173,8 @@ function CenterHandle({ type }: { readonly type: "source" | "target" }) {
       id="center"
       type={type}
       position={type === "source" ? Position.Right : Position.Left}
-      className="!top-1/2 !left-1/2 !size-1.5 !-translate-x-1/2 !-translate-y-1/2 !border-0 !bg-transparent"
+      isConnectable={false}
+      className="oke-center-handle !top-1/2 !left-1/2 !size-px !-translate-x-1/2 !-translate-y-1/2 !border-0 !bg-transparent !opacity-0"
     />
   );
 }
@@ -183,7 +184,7 @@ function LiveDot({ live, errors }: { readonly live: number; readonly errors: num
   return (
     <span
       className={cn(
-        "size-1.5 shrink-0 rounded-full",
+        "size-2 shrink-0 rounded-full",
         errors > 0 ? "bg-rose-400" : "bg-emerald-400",
         live > 0 && "animate-pulse",
       )}
@@ -273,7 +274,6 @@ export function UnitChipNode({ data }: NodeProps<GraphNode>) {
 export function ElementHubNode({ data }: NodeProps<GraphNode>) {
   const element = accentKindOf(data.refId) ?? "flow";
   const accent = NODE_ACCENT[element];
-  const resources = Number(data.badge ?? 0);
   return (
     <NodeShell
       data={data}
@@ -293,14 +293,11 @@ export function ElementHubNode({ data }: NodeProps<GraphNode>) {
     >
       <CenterHandle type="target" />
       <CenterHandle type="source" />
-      <div className="flex items-center justify-center gap-1">
-        <span className="text-[10px] font-semibold tracking-tight text-foreground">
-          {data.label}
-        </span>
-        <LiveDot live={data.live ?? 0} errors={data.errors ?? 0} />
-      </div>
-      <span className="text-[9px] tabular-nums text-muted-foreground">
-        {(data.live ?? 0) > 0 ? `${data.live} live` : `${resources}`}
+      <span
+        className="text-[18px] font-semibold tracking-tight text-foreground"
+        title={ELEMENT_ICONS[element].label}
+      >
+        {data.label}
       </span>
     </NodeShell>
   );
@@ -362,7 +359,7 @@ export function LawNode({ data }: NodeProps<GraphNode>) {
         <span key={hits} aria-hidden className="oke-law-hit" style={{ color: ink }} />
       ) : null}
       <motion.div
-        className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-full border-4 bg-card px-5 py-6 text-center"
+        className="flex h-full w-full items-center justify-center rounded-full border-4 bg-card px-4 text-center"
         style={{
           borderColor: "color-mix(in oklab, var(--foreground) 82%, var(--border))",
           boxShadow: data.highlighted
@@ -376,8 +373,7 @@ export function LawNode({ data }: NodeProps<GraphNode>) {
             : { duration: period, repeat: Infinity, ease: "easeInOut" }
         }
       >
-        <OkeLogoIcon className="size-8 text-foreground" />
-        <div className="text-[12px] font-semibold tracking-[0.22em] text-foreground">OKE</div>
+        <OkeLogo className="h-7 w-auto text-foreground" />
       </motion.div>
     </div>
   );

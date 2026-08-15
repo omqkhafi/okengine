@@ -314,9 +314,14 @@ export interface SqlPageOptions {
   /**
    * Keyset mode — a Drizzle SQL condition describing "rows strictly after
    * the cursor" (composed by the caller / `store.resource`); ANDed onto
-   * `where`. Cannot combine with `offset`.
+   * `where`. Cannot combine with `offset` or `before`.
    */
   readonly after?: unknown;
+  /**
+   * Keyset mode — rows strictly before the cursor. Caller flips `orderBy`
+   * and reverses the result. Cannot combine with `offset` or `after`.
+   */
+  readonly before?: unknown;
 }
 
 /** True when `sql` is DML/DDL (not a SELECT). */
@@ -731,15 +736,22 @@ export function createSqlStoreHandle(
     },
 
     async page(table, options) {
-      if (options.offset !== undefined && options.after !== undefined) {
-        throw new Error("page(): offset and after (keyset) cannot combine");
+      if (options.after !== undefined && options.before !== undefined) {
+        throw new Error("page(): after and before (keyset) cannot combine");
       }
+      if (
+        options.offset !== undefined &&
+        (options.after !== undefined || options.before !== undefined)
+      ) {
+        throw new Error("page(): offset and keyset (after/before) cannot combine");
+      }
+      const keyset = options.after ?? options.before;
       const where =
-        options.after === undefined
+        keyset === undefined
           ? options.where
           : options.where === undefined
-            ? options.after
-            : andWhere(options.where, options.after);
+            ? keyset
+            : andWhere(options.where, keyset);
       return runSelect(table, null, {
         where,
         orders: options.orderBy,

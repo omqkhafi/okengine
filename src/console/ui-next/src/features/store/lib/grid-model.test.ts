@@ -27,6 +27,30 @@ describe("buildStoreGridModel", () => {
     expect(model.rows[0]?.id).toBe("b1");
   });
 
+  test("pii flag attaches when row keys and piiColumns use opposite spellings", () => {
+    const fromJs = buildStoreGridModel({
+      facet: "sql",
+      data: {
+        facet: "sql",
+        rows: [{ id: "v1", owner_email: "[redacted]" }],
+        masked: true,
+      },
+      piiColumns: ["ownerEmail"],
+    });
+    expect(fromJs.columns.find((c) => c.key === "owner_email")?.pii).toBe(true);
+
+    const fromSql = buildStoreGridModel({
+      facet: "sql",
+      data: {
+        facet: "sql",
+        rows: [{ id: "v1", ownerEmail: "[redacted]" }],
+        masked: true,
+      },
+      piiColumns: ["owner_email"],
+    });
+    expect(fromSql.columns.find((c) => c.key === "ownerEmail")?.pii).toBe(true);
+  });
+
   test("kv keys map to key + editable json value", () => {
     const model = buildStoreGridModel({
       facet: "kv",
@@ -64,6 +88,32 @@ describe("buildStoreGridModel", () => {
     expect(index.editable).toBe(false);
     expect(index.deleteKind).toBe("ids");
     expect(index.rows[0]?.cells.score).toBe(0.9);
+    expect(index.columns.map((c) => c.key)).toEqual(["id", "t", "score"]);
+    expect(index.rows[0]?.cells.t).toBe(1);
+  });
+
+  test("index hits promote title / identifier and drop vector-shaped meta", () => {
+    const index = buildStoreGridModel({
+      facet: "index",
+      data: {
+        facet: "index",
+        hits: [
+          {
+            id: "tsk_eng_12",
+            score: 0,
+            meta: { identifier: "ENG-12", title: "SSO login fails", "0": 1, "1": 0 },
+          },
+        ],
+        masked: false,
+      },
+    });
+    expect(index.columns.map((c) => c.key)).toEqual(["id", "identifier", "title", "score"]);
+    expect(index.rows[0]?.cells).toEqual({
+      id: "tsk_eng_12",
+      identifier: "ENG-12",
+      title: "SSO login fails",
+      score: 0,
+    });
   });
 });
 

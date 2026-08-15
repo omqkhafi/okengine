@@ -6,7 +6,7 @@ import { effectSummaryChips, effectEventLabel } from "./effect-summary.ts";
 import { effectBarColor, effectKindIcon, effectKindSummaryLabel } from "./effect-kind.ts";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
-import { httpMethodBadgeClass, httpMethodRailClass } from "./http-method.ts";
+import { httpMethodBadgeClass, httpMethodIcon, httpMethodRailClass } from "./http-method.ts";
 import { executeTraceReplay, replayRequestForRun } from "./trace-actions.ts";
 import { FLOWS_TEST_MANIFEST } from "../fixture.ts";
 import { traceRequestMeta } from "./request-meta.ts";
@@ -110,6 +110,13 @@ describe("httpMethodBadgeClass", () => {
     expect(httpMethodBadgeClass("POST")).toContain("sky");
     expect(httpMethodBadgeClass("PUT")).toContain("amber");
     expect(httpMethodBadgeClass("DELETE")).toContain("rose");
+  });
+});
+
+describe("httpMethodIcon", () => {
+  test("uses a distinct CRUD glyph per verb", () => {
+    const icons = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"].map(httpMethodIcon);
+    expect(new Set(icons).size).toBe(6);
   });
 });
 

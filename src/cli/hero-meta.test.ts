@@ -83,6 +83,45 @@ describe("hero-meta", () => {
     expect(decodeHeroSnapshot(encodeHeroSnapshot(snap))).toEqual(snap);
   });
 
+  test("sparse config (create-oke without --ai) still shows default compose drivers", () => {
+    const rows = resolveHeroElements(
+      {
+        drivers: {
+          store: { index: { test: "memory", prod: "meilisearch" } },
+          vault: { dev: "vault" },
+        },
+      },
+      { docker: true, sqlDriver: "postgres", kvDriver: "redis" },
+    );
+    const store = rows.find((r) => r.element === "store")?.detail ?? "";
+    expect(store).toContain("postgres");
+    expect(store).toContain("redis");
+    expect(store).toContain("files s3");
+    expect(store).toContain("index meilisearch");
+    expect(rows.find((r) => r.element === "signal")?.detail).toBe("redis");
+    expect(rows.find((r) => r.element === "clock")?.detail).toBe("postgres");
+    expect(rows.find((r) => r.element === "channel")?.detail).toContain("smtp");
+    expect(rows.find((r) => r.element === "vault")?.detail).toBe("vault");
+    expect(rows.find((r) => r.element === "ai")?.detail).toBe("—");
+  });
+
+  test("keel-shaped config with drivers.ai lights the eighth element", () => {
+    const rows = resolveHeroElements(
+      {
+        drivers: {
+          store: { index: { test: "memory", prod: "meilisearch" } },
+          vault: { dev: "vault" },
+          ai: { dev: "openai-compatible", test: "mock", prod: "openai-compatible" },
+        },
+      },
+      { docker: true, sqlDriver: "postgres", kvDriver: "redis", aiModel: "granite3.3:2b" },
+    );
+    expect(rows.find((r) => r.element === "ai")?.detail).toBe(
+      "openai-compatible · granite3.3:2b",
+    );
+    expect(rows.find((r) => r.element === "ai")?.status).not.toBe("idle");
+  });
+
   test("hero AI row includes configured model id", () => {
     const snap = buildDevHeroSnapshot({
       config: SAMPLE,

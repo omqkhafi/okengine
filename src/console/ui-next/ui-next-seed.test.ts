@@ -10,20 +10,20 @@ import {
   createUiNextSeedRuns,
   isConsoleSeeded,
   seedUiNextStoreData,
-  UI_NEXT_SEED_CYCLES_RUN_ID,
+  UI_NEXT_SEED_DIGEST_RUN_ID,
   UI_NEXT_SEED_DRAFTS_RUN_ID,
   UI_NEXT_SEED_FAIL_RUN_ID,
   UI_NEXT_SEED_FEATURED_COUNT,
   UI_NEXT_SEED_INGEST_RUN_ID,
   UI_NEXT_SEED_NOTIFY_RUN_ID,
   UI_NEXT_SEED_OPERATION_COUNT,
+  UI_NEXT_SEED_PLAN_RUN_ID,
   UI_NEXT_SEED_PUBLIC_APP_URL,
   UI_NEXT_SEED_VAULT_CONFIG,
   UI_NEXT_SEED_VAULT_LAYERS,
   UI_NEXT_SEED_RUN_ID,
   UI_NEXT_SEED_STORE_COUNTS,
   UI_NEXT_SEED_TOTAL_COUNT,
-  UI_NEXT_SEED_TRIAGE_RUN_ID,
   UI_NEXT_SEEDED_MANIFEST,
   uiNextSeededSummary,
 } from "./ui-next-seed.ts";
@@ -41,13 +41,11 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.channels).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.ai).toBeDefined();
 
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["triage.suggest"]?.effects?.asks).toContain(
-      "issue-triage",
-    );
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["drafts.expire"]?.trigger?.every).toBe("10m");
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["issues.onStatus"]?.trigger?.cdc).toEqual({
-      table: "issues",
-      column: "state_id",
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["my.plan"]?.effects?.asks).toContain("form-classify");
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["drafts.expire-drafts"]?.trigger?.every).toBe("10m");
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["tasks.onStatus"]?.trigger?.cdc).toEqual({
+      table: "tasks",
+      column: "status",
     });
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["cache"]?.facet).toBe("kv");
     expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["expire-drafts"]?.every).toBe("10m");
@@ -72,21 +70,28 @@ describe("ui-next seed", () => {
       "SLACK_WEBHOOK",
       "WEBHOOK_SECRET",
     ]);
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["issues.list"]?.effects?.secrets).toContain(
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["tasks.list"]?.effects?.secrets).toContain(
       "PUBLIC_APP_URL",
     );
     expect(UI_NEXT_SEEDED_MANIFEST.channels?.["mention-reply"]?.medium).toBe("email");
-    expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["issue-triage"]?.version).toBe(3);
-    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["comment-added"]?.delivery).toBe("live");
-    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["draft-expired"]?.delivery).toBe("broadcast");
+    expect(UI_NEXT_SEEDED_MANIFEST.ai?.prompts?.["form-classify"]?.version).toBe(1);
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["task-created"]?.delivery).toBe("once");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["task-completed"]?.delivery).toBe("broadcast");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["task-assigned"]?.delivery).toBe("live");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["comment-added"]?.delivery).toBe("once");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["draft-expired"]?.delivery).toBe("once");
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["attachments"]?.facet).toBe("files");
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["search"]?.facet).toBe("index");
     expect(
-      UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["issues"]?.columns?.["assignee_email"],
+      UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["tasks"]?.columns?.["creator_email"],
     ).toMatchObject({ pii: true });
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["teams"]).toBeDefined();
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["cycles"]).toBeDefined();
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["customer_requests"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["spaces"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["goals"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["forms"]).toBeDefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["teams"]).toBeUndefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["cycles"]).toBeUndefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["issues"]).toBeUndefined();
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["customer_requests"]).toBeUndefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_identities"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_sessions"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["oke_crons"]).toBeDefined();
@@ -99,12 +104,15 @@ describe("ui-next seed", () => {
     expect(ids.length).toBeGreaterThanOrEqual(80);
 
     for (const id of [
-      "issues.get",
-      "issues.delete",
-      "issues.archive",
-      "issues.assign",
-      "issues.duplicate",
-      "issues.merge",
+      "tasks.get",
+      "tasks.delete",
+      "tasks.archive",
+      "tasks.assign",
+      "tasks.complete",
+      "tasks.follow",
+      "tasks.duplicate",
+      "tasks.move",
+      "tasks.depend",
       "comments.list",
       "comments.update",
       "comments.delete",
@@ -117,20 +125,19 @@ describe("ui-next seed", () => {
       "documents.delete",
       "attachments.list",
       "attachments.delete",
-      "teams.list",
-      "labels.create",
-      "cycles.complete",
+      "spaces.list",
+      "tags.create",
+      "goals.list",
       "members.invite",
-      "initiatives.list",
-      "requests.create",
-      "triage.inbox",
-      "triage.snooze",
+      "views.list",
+      "forms.create",
+      "inbox.list",
+      "my.tasks",
       "search.query",
       "drafts.save",
       "webhooks.rotate",
       "slack.ingest",
-      "health.ping",
-      "issues.reserveIdentifier",
+      "main.health",
     ]) {
       expect(flows[id]).toBeDefined();
     }
@@ -145,7 +152,7 @@ describe("ui-next seed", () => {
     }
 
     expect(flows["search.query"]?.trigger?.http).toEqual({ method: "QUERY", path: "/search" });
-    const listIn = flows["issues.list"]?.in;
+    const listIn = flows["tasks.list"]?.in;
     expect(listIn && typeof listIn === "object" ? listIn.properties : null).toMatchObject({
       q: { type: "string" },
       limit: { type: "integer", default: 25 },
@@ -154,34 +161,31 @@ describe("ui-next seed", () => {
       orderBy: { type: "string" },
       order: { enum: ["asc", "desc"] },
     });
-    expect(flows["comments.list"]?.in).toEqual(flows["issues.list"]?.in);
+    expect(flows["comments.list"]?.in).toEqual(flows["tasks.list"]?.in);
     expect(flows["drafts.save"]?.trigger?.http?.method).toBe("PUT");
-    expect(flows["health.ping"]?.trigger?.http?.method).toBe("HEAD");
-    expect(flows["issues.reserveIdentifier"]?.trigger).toBeUndefined();
+    expect(flows["main.health"]?.trigger?.http?.method).toBe("HEAD");
     expect(flows["github.ingest"]?.trigger?.http?.method).toBe("POST");
-    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["issue-reassigned"]?.delivery).toBe("live");
+    expect(UI_NEXT_SEEDED_MANIFEST.signals?.["task-assigned"]?.delivery).toBe("live");
     expect(UI_NEXT_SEEDED_MANIFEST.clocks?.["daily-digest"]?.cron).toBe("0 8 * * *");
     expect(UI_NEXT_SEEDED_MANIFEST.vault?.["WEBHOOK_SECRET"]).toBeDefined();
     expect(UI_NEXT_SEEDED_MANIFEST.gates?.["comment:write"]?.kind).toBe("policy");
 
     const featured = [
       "github.ingest",
-      "issues.create",
-      "issues.update",
-      "issues.list",
+      "tasks.create",
+      "tasks.update",
+      "tasks.list",
       "comments.create",
       "projects.create",
       "documents.upsert",
       "attachments.upload",
-      "triage.accept",
-      "triage.suggest",
-      "notify.onIssue",
+      "forms.submit",
+      "notify.onTask",
       "notify.onComment",
       "search.index",
-      "issues.onStatus",
-      "cycles.close",
-      "drafts.expire",
-      "sla.watch",
+      "tasks.onStatus",
+      "drafts.expire-drafts",
+      "overdue.watch-overdue",
     ];
     for (const id of featured) {
       expect(KEEL_SURFACE_FLOWS[id]).toBeUndefined();
@@ -192,19 +196,19 @@ describe("ui-next seed", () => {
   test("primary seed run keeps Playwright-stable id and rich ledger", () => {
     const run = createUiNextSeedRun(1_700_000_000_000);
     expect(run.id).toBe(UI_NEXT_SEED_RUN_ID);
-    expect(run.flow).toBe("issues.create");
-    expect(run.unit).toBe("issues");
+    expect(run.flow).toBe("tasks.create");
+    expect(run.unit).toBe("tasks");
     expect(run.parentId).toBe(UI_NEXT_SEED_INGEST_RUN_ID);
     expect(run.tenant).toBe("ws_keel");
-    expect(run.gates).toContain("issue:write");
-    expect(run.effects.some((e) => e.kind === "emit" && e.resource === "issue-created")).toBe(true);
+    expect(run.gates).toContain("task:write");
+    expect(run.effects.some((e) => e.kind === "emit" && e.resource === "task-created")).toBe(true);
     expect(run.logs.length).toBeGreaterThan(0);
     expect(run.input).toEqual({
-      title: "Pulse graph on selected trace",
-      teamKey: "ENG",
-      priority: 2,
+      title: "SSO login fails",
+      spaceKey: "ENG",
+      priority: 1,
     });
-    expect(run.output).toEqual({ id: "iss_eng_184", identifier: "ENG-184" });
+    expect(run.output).toEqual({ id: "tsk_eng_12", identifier: "ENG-12" });
   });
 
   test("featured runs cover chain + AI + clock elements", () => {
@@ -221,9 +225,9 @@ describe("ui-next seed", () => {
     const notify = byId.get(UI_NEXT_SEED_NOTIFY_RUN_ID);
     const ingest = byId.get(UI_NEXT_SEED_INGEST_RUN_ID);
     const fail = byId.get(UI_NEXT_SEED_FAIL_RUN_ID);
-    const triage = byId.get(UI_NEXT_SEED_TRIAGE_RUN_ID);
+    const plan = byId.get(UI_NEXT_SEED_PLAN_RUN_ID);
     const drafts = byId.get(UI_NEXT_SEED_DRAFTS_RUN_ID);
-    const cycles = byId.get(UI_NEXT_SEED_CYCLES_RUN_ID);
+    const digest = byId.get(UI_NEXT_SEED_DIGEST_RUN_ID);
 
     expect(ingest?.flow).toBe("github.ingest");
     expect(ingest?.effects.some((e) => e.kind === "call")).toBe(true);
@@ -232,21 +236,21 @@ describe("ui-next seed", () => {
     expect(notify?.parentId).toBe(UI_NEXT_SEED_RUN_ID);
     expect(notify?.trigger).toBe("signal");
     expect(notify?.effects.some((e) => e.kind === "send")).toBe(true);
-    expect(fail?.error?.code).toBe("CycleClosed");
+    expect(fail?.error?.code).toBe("Forbidden");
     expect(fail?.output).toBeUndefined();
-    expect(triage?.output).toMatchObject({ replyQueued: true, template: "mention-reply" });
-    expect(triage?.effects.some((e) => e.kind === "ask")).toBe(true);
-    expect(triage?.effects.some((e) => e.kind === "secret" && e.resource === "OPENAI_KEY")).toBe(
+    expect(plan?.output).toMatchObject({ replyQueued: true, template: "mention-reply" });
+    expect(plan?.effects.some((e) => e.kind === "ask")).toBe(true);
+    expect(plan?.effects.some((e) => e.kind === "secret" && e.resource === "OPENAI_KEY")).toBe(
       true,
     );
-    expect(triage?.cost).toBeGreaterThan(0);
+    expect(plan?.cost).toBeGreaterThan(0);
     expect(drafts?.trigger).toBe("every");
     expect(drafts?.effects.some((e) => e.resource === "kv:drafts")).toBe(true);
     expect(drafts?.effects.some((e) => e.kind === "emit" && e.resource === "draft-expired")).toBe(
       true,
     );
-    expect(cycles?.trigger).toBe("cron");
-    expect(cycles?.effects.some((e) => e.kind === "emit" && e.resource === "cycle-closed")).toBe(
+    expect(digest?.trigger).toBe("cron");
+    expect(digest?.effects.some((e) => e.kind === "send" && e.resource === "daily-digest")).toBe(
       true,
     );
   });
@@ -258,22 +262,18 @@ describe("ui-next seed", () => {
     expect(a.map((r) => r.id)).toEqual(b.map((r) => r.id));
 
     const flows = new Set(a.map((r) => r.flow));
-    expect(flows.has("issues.create")).toBe(true);
-    expect(flows.has("issues.list")).toBe(true);
-    expect(flows.has("notify.onIssue")).toBe(true);
+    expect(flows.has("tasks.create")).toBe(true);
+    expect(flows.has("tasks.list")).toBe(true);
+    expect(flows.has("notify.onTask")).toBe(true);
     expect(flows.has("github.ingest")).toBe(true);
-    expect(flows.has("triage.suggest") || flows.has("drafts.expire")).toBe(true);
+    expect(flows.has("my.plan") || flows.has("drafts.expire-drafts")).toBe(true);
     expect(
       [...flows].some((id) =>
-        ["issues.get", "issues.archive", "issues.assign", "search.query", "drafts.save"].includes(
-          id,
-        ),
+        ["tasks.get", "tasks.archive", "tasks.assign", "search.query", "drafts.save"].includes(id),
       ),
     ).toBe(true);
 
-    const failed = a.filter(
-      (r) => r.error?.code === "CycleClosed" || r.error?.code === "Duplicate",
-    );
+    const failed = a.filter((r) => r.error?.code === "Forbidden" || r.error?.code === "Duplicate");
     expect(failed.length).toBeGreaterThan(0);
 
     const chained = a.filter((r) => r.parentId?.startsWith("pw-ops-create-"));
@@ -304,13 +304,13 @@ describe("ui-next seed", () => {
       sensitive: false,
       cleartext: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_APP_URL,
       winner: "process.env",
-      readers: ["issues.list"],
+      readers: ["tasks.list"],
     });
     expect(byName["PUBLIC_API_URL"]).toMatchObject({
       kind: "config",
       cleartext: UI_NEXT_SEED_VAULT_CONFIG.PUBLIC_API_URL,
       winner: "driver",
-      readers: ["health.ping"],
+      readers: ["main.health"],
     });
     expect(byName["PUBLIC_DOCS_URL"]).toMatchObject({
       kind: "config",
@@ -322,7 +322,7 @@ describe("ui-next seed", () => {
       kind: "config",
       cleartext: UI_NEXT_SEED_VAULT_CONFIG.KEEL_WORKSPACE,
       winner: "process.env",
-      readers: ["issues.list"],
+      readers: ["tasks.list"],
     });
     expect(byName["GITHUB_TOKEN"]).toMatchObject({ kind: "secret", winner: "driver" });
     expect(byName["OPENAI_KEY"]).toMatchObject({ kind: "secret", winner: "driver" });
@@ -357,7 +357,7 @@ describe("ui-next seed", () => {
       expect(uiNextSeededSummary()).toContain(UI_NEXT_SEED_RUN_ID);
       expect(uiNextSeededSummary()).toContain(String(UI_NEXT_SEED_TOTAL_COUNT));
       expect(uiNextSeededSummary()).toContain("8 elements");
-      expect(uiNextSeededSummary()).toContain(`${UI_NEXT_SEED_STORE_COUNTS.sqlIssues} issues`);
+      expect(uiNextSeededSummary()).toContain(`${UI_NEXT_SEED_STORE_COUNTS.sqlTasks} tasks`);
     } finally {
       if (prev === undefined) delete process.env["OKE_CONSOLE_SEEDED"];
       else process.env["OKE_CONSOLE_SEEDED"] = prev;
@@ -370,24 +370,33 @@ describe("ui-next seed", () => {
     try {
       await seedUiNextStoreData(runtime);
 
-      const issues = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+      const tasks = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "sql:db",
-        child: "issues",
+        child: "tasks",
         revealPii: true,
         limit: 2000,
       });
-      expect(issues.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlIssues);
-      expect(UI_NEXT_SEED_STORE_COUNTS.sqlIssues).toBeGreaterThanOrEqual(500);
-      expect(issues.rows?.[0]?.assignee_email).toContain("@keel.dev");
-      const descriptions = issues.rows?.map((r) => r.description) ?? [];
+      expect(tasks.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlTasks);
+      expect(UI_NEXT_SEED_STORE_COUNTS.sqlTasks).toBeGreaterThanOrEqual(500);
+      expect(typeof tasks.rows?.[0]?.identifier).toBe("string");
+      expect(String(tasks.rows?.[0]?.identifier).length).toBeGreaterThan(0);
+      const descriptions = tasks.rows?.map((r) => r.description) ?? [];
       expect(descriptions.some((n) => typeof n === "string" && /[؀-ۿ]/.test(n))).toBe(true);
 
-      const teams = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+      const spaces = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "sql:db",
-        child: "teams",
+        child: "spaces",
         limit: 2000,
       });
-      expect(teams.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlTeams);
+      expect(spaces.rows?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.sqlSpaces);
+
+      const members = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "sql:db",
+        child: "members",
+        revealPii: true,
+        limit: 2000,
+      });
+      expect(members.rows?.some((r) => String(r.email).endsWith("@keel.dev"))).toBe(true);
 
       const identities = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "sql:db",
@@ -422,16 +431,16 @@ describe("ui-next seed", () => {
         child: "drafts",
         limit: 2000,
       });
-      const snooze = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+      const reminders = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "kv:cache",
-        child: "triage-snooze",
+        child: "reminders",
         limit: 2000,
       });
-      expect((drafts.keys?.length ?? 0) + (snooze.keys?.length ?? 0)).toBe(
+      expect((drafts.keys?.length ?? 0) + (reminders.keys?.length ?? 0)).toBe(
         UI_NEXT_SEED_STORE_COUNTS.kvKeys,
       );
       expect(drafts.keys?.every((k) => k.key.startsWith("drafts:"))).toBe(true);
-      expect(snooze.keys?.every((k) => k.key.startsWith("triage-snooze:"))).toBe(true);
+      expect(reminders.keys?.every((k) => k.key.startsWith("reminders:"))).toBe(true);
 
       const files = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "files:attachments",
@@ -442,20 +451,20 @@ describe("ui-next seed", () => {
 
       const index = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "index:search",
-        child: "issues",
+        child: "tasks",
         vector: [1, 0, 0],
         topK: 80,
       });
-      expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexIssues);
+      expect(index.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexTasks);
 
       const text = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "index:search",
-        child: "issues",
-        q: "pulse graph",
+        child: "tasks",
+        q: "SSO login",
         topK: 5,
       });
-      expect(text.hits?.[0]?.id).toBe("iss_eng_184");
-      expect(text.hits?.[0]?.meta).toMatchObject({ identifier: "ENG-184" });
+      expect(text.hits?.[0]?.id).toBe("tsk_eng_12");
+      expect(text.hits?.[0]?.meta).toMatchObject({ identifier: "ENG-12" });
     } finally {
       await runtime.close();
     }

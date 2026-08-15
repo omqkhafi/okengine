@@ -90,7 +90,12 @@ export {
 export {
   gate,
   GATE_PUBLIC_NAME,
+  flattenGateArgs,
+  flattenGateMembers,
+  isGateAllDecl,
+  type GateAllDecl,
   type GateDecl,
+  type GateMember,
   type RateOptions,
 } from "./elements/gate/declare.ts";
 export {

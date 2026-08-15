@@ -94,10 +94,10 @@ export interface BootOptions {
   readonly gates?: readonly GateDecl[];
   /**
    * HTTP auth-posture enforcement at boot.
-   * - `"deny"` (default) — every HTTP trigger must carry a gate or `gate.public`
+   * - `"deny"` (default) — every HTTP trigger must carry a gate or `.gate.public`
    * - `"allow"` — skips the audit **only** when {@link env} is `"test"`;
    *   ignored in local/prod/docker (never a production-wide bypass).
-   *   Migrate real apps with per-trigger `gate.public`.
+   *   Migrate real apps with per-trigger `.gate.public`.
    */
   readonly unguardedHttp?: "deny" | "allow";
   /** Signal declarations. */

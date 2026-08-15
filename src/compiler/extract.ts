@@ -31,6 +31,7 @@ import type {
   Store,
   Trigger,
 } from "../manifest/types.ts";
+import { sqlTableRef } from "../manifest/sql-resource.ts";
 import {
   identifierName,
   inferEffects,
@@ -78,6 +79,10 @@ interface ProjectScope {
   gates: Record<string, Gate>;
   /** Local binding name → gate manifest id (policy name or rate expression). */
   gateIds: Map<string, string>;
+  /** Local binding name → member binding names (`gate.all` or a const array). */
+  gateAllIds: Map<string, string[]>;
+  /** Bindings declared with `gate.all(...)` (catalogued; arrays are not). */
+  gateAllDecls: Set<string>;
   vault: Record<string, SecretContract>;
   channels: Record<string, Channel>;
   ai: Ai;
@@ -91,10 +96,7 @@ interface ProjectScope {
   /** Export name → flow id (for agent tools). */
   flowExports: Map<string, string>;
   /** Local binding name → store.resource declaration (for on(http.resource)). */
-  resources: Map<
-    string,
-    { storeName: string; storeRef: string; unit?: string; breaking?: boolean }
-  >;
+  resources: Map<string, { storeName: string; storeRef: string; breaking?: boolean }>;
   /** Local binding name → medium, for `const x = channel.email(…)` binders. */
   channelMediumBindings: Map<string, ChannelMedium>;
 }
@@ -118,6 +120,8 @@ export async function extractManifest(options: ExtractManifestOptions = {}): Pro
     clocks: {},
     gates: {},
     gateIds: new Map(),
+    gateAllIds: new Map(),
+    gateAllDecls: new Set(),
     vault: {},
     channels: {},
     ai: {},
@@ -268,10 +272,27 @@ function visitDeclarator(decl: AstNode, scope: ProjectScope): void {
     if (binding) scope.bindings.set(name, binding);
     const gateId = scope.gateIds.get(target);
     if (gateId) scope.gateIds.set(name, gateId);
+    const allIds = scope.gateAllIds.get(target);
+    if (allIds) scope.gateAllIds.set(name, allIds);
+    if (scope.gateAllDecls.has(target)) scope.gateAllDecls.add(name);
+  }
+
+  const arrayInit = unwrapTsExpr(init);
+  if (arrayInit.type === "ArrayExpression") {
+    const members = arrayMemberNames(arrayInit);
+    if (members.length > 0) scope.gateAllIds.set(name, members);
   }
 }
 
 function finalizeRefs(scope: ProjectScope): void {
+  for (const binding of scope.gateAllDecls) {
+    const members = scope.gateAllIds.get(binding);
+    if (!members) continue;
+    scope.gates[binding] = {
+      kind: "all",
+      members: expandGateNames(members, scope, new Set()),
+    };
+  }
   if (scope.ai.agents) {
     for (const agent of Object.values(scope.ai.agents)) {
       if (!agent.tools) continue;
@@ -619,11 +640,24 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const storeOpts = objectArg(call.arguments[1]);
         const description = stringProp(storeOpts, "description");
         scope.stores[storeName] = scope.stores[storeName] ?? { facet };
+        const storeEntry = scope.stores[storeName]!;
         if (description) {
-          scope.stores[storeName]!.description = description;
+          storeEntry.description = description;
         }
         if (facet === "sql") {
-          attachSchemaOption(call.arguments[1], scope.stores[storeName]!, scope);
+          attachSchemaOption(call.arguments[1], storeEntry, scope);
+        } else if (facet === "kv") {
+          const namespaces = new Set(storeEntry.namespaces ?? []);
+          namespaces.add(storeName);
+          storeEntry.namespaces = [...namespaces].sort();
+        } else if (facet === "files") {
+          const buckets = new Set(storeEntry.buckets ?? []);
+          buckets.add(storeName);
+          storeEntry.buckets = [...buckets].sort();
+        } else {
+          const indexes = new Set(storeEntry.indexes ?? []);
+          indexes.add(storeName);
+          storeEntry.indexes = [...indexes].sort();
         }
         if (bindingName) {
           scope.bindings.set(bindingName, {
@@ -642,14 +676,12 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
         const ref =
           storeBinding?.kind === "store" ? storeBinding.ref : (`sql:${dbName ?? "store"}` as const);
         const storeName = ref.split(":")[1] ?? dbName ?? "store";
-        const unit = stringProp(objectArg(call.arguments[2]) ?? ({} as never), "unit");
         const opts = objectArg(call.arguments[2]);
         const breaking = opts ? boolProp(opts, "breaking") === true : false;
         if (bindingName) {
           scope.resources.set(bindingName, {
             storeName,
             storeRef: ref,
-            unit,
             ...(breaking ? { breaking: true } : {}),
           });
         }
@@ -701,6 +733,17 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             ref: scopeName,
           });
         }
+      }
+    }
+
+    if (obj === "gate" && prop === "all") {
+      const members = call.arguments
+        .map((arg) => identifierName(unwrapTsExpr(arg)))
+        .filter((id): id is string => Boolean(id));
+      const bindingName = enclosingConstName(call, program);
+      if (bindingName && members.length > 0) {
+        scope.gateAllIds.set(bindingName, members);
+        scope.gateAllDecls.add(bindingName);
       }
     }
 
@@ -850,7 +893,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
       }
     }
 
-    if (obj === "vault" && (prop === "secret" || prop === "define")) {
+    if (obj === "vault" && (prop === "secret" || prop === "define" || prop === "config")) {
       const secretName = stringArg(call.arguments[0]);
       const opts = objectArg(call.arguments[1]);
       if (secretName) {
@@ -859,6 +902,7 @@ function visitDeclarationCall(call: CallExpression, program: AstNode, scope: Pro
             ? { description: stringProp(opts, "description") }
             : {}),
           ...(stringProp(opts, "rotate") ? { rotate: stringProp(opts, "rotate") } : {}),
+          ...(prop === "config" ? { sensitive: false } : {}),
         };
         const bindingName = enclosingConstName(call, program);
         if (bindingName) {
@@ -1144,6 +1188,12 @@ function collectFlows(file: SourceFile, program: AstNode, scope: ProjectScope): 
         scope,
         exportName,
       });
+      return;
+    }
+
+    // bindNamedTableCrud / bindCrud({ unit, path, table }) — expand like http.resource.
+    if (callee === "bindNamedTableCrud" || callee === "bindCrud") {
+      registerNamedTableCrud(call, file, scope);
     }
   });
 }
@@ -1184,6 +1234,10 @@ function registerFlow(args: {
 }): void {
   const opts = objectArg(args.flowCall.arguments[1]);
   if (!opts) return;
+
+  // `flow(\`${unit}.list\`)` inside a helper — name is only known at the
+  // call site (`bindNamedTableCrud`). Do not register as `list` / `create`.
+  if (isInterpolatedTemplate(args.flowCall.arguments[0])) return;
 
   const name =
     stringArg(args.flowCall.arguments[0]) ??
@@ -1338,6 +1392,62 @@ function registerFlow(args: {
 }
 
 /**
+ * `http.resource(path, bag).gate(...).live()` — find the resource call and
+ * collect the same chain {@link parseHttpTrigger} reads on a single verb.
+ *
+ * @param node - First argument to `on(…)`
+ * @param scope - Project scope (gate name expansion)
+ */
+function unwrapResourceMount(
+  node: AstNode,
+  scope: ProjectScope,
+): { httpCall: CallExpression; gates?: string[]; live?: boolean } | undefined {
+  const chain = flattenMemberCallChain(node);
+  let httpCall: CallExpression | undefined;
+  const gateNames: string[] = [];
+  let live = false;
+  for (const item of chain) {
+    if (item.type === "CallExpression") {
+      const c = item as CallExpression;
+      const callee = c.callee;
+      if (callee.type !== "MemberExpression") continue;
+      const member = callee as AstNode & { object: AstNode; property: AstNode };
+      const prop = identifierName(member.property);
+      const obj = member.object;
+      if (obj.type === "Identifier" && identifierName(obj) === "http" && prop === "resource") {
+        httpCall = c;
+        continue;
+      }
+      if (prop === "gate") {
+        for (const arg of c.arguments) {
+          gateNames.push(...gateNamesFromArg(arg, scope));
+        }
+        continue;
+      }
+      if (prop === "live") live = true;
+      continue;
+    }
+    if (item.type === "MemberExpression") {
+      const member = item as AstNode & { object: AstNode; property: AstNode };
+      if (identifierName(member.property) !== "public") continue;
+      const obj = member.object;
+      if (
+        obj.type === "MemberExpression" &&
+        identifierName((obj as AstNode & { property: AstNode }).property) === "gate"
+      ) {
+        gateNames.push("public");
+      }
+    }
+  }
+  if (!httpCall) return undefined;
+  return {
+    httpCall,
+    gates: gateNames.length > 0 ? gateNames : undefined,
+    live: live || undefined,
+  };
+}
+
+/**
  * Expand `on(http.resource(path, bag))` into the five CRUD flows.
  *
  * The flows are synthesized at runtime by `store.resource(…)`; statically we
@@ -1357,13 +1467,9 @@ function registerResourceMount(
   program: AstNode,
   scope: ProjectScope,
 ): void {
-  if (triggerNode.type !== "CallExpression") return;
-  const httpCall = triggerNode as CallExpression;
-  const callee = httpCall.callee;
-  if (callee.type !== "MemberExpression") return;
-  const member = callee as AstNode & { object: AstNode; property: AstNode };
-  if (identifierName(member.object) !== "http") return;
-  if (identifierName(member.property) !== "resource") return;
+  const parsed = unwrapResourceMount(triggerNode, scope);
+  if (!parsed) return;
+  const { httpCall, gates, live } = parsed;
 
   const path = stringArg(httpCall.arguments[0]);
   if (!path) return;
@@ -1381,7 +1487,6 @@ function registerResourceMount(
   }
   const resource = baseName ? scope.resources.get(baseName) : undefined;
 
-  const unit = resource?.unit;
   const storeRef: ResourceRef | undefined =
     resource?.storeRef !== undefined ? (resource.storeRef as ResourceRef) : undefined;
   const effects: Effects | undefined = storeRef
@@ -1410,6 +1515,8 @@ function registerResourceMount(
     const flow: Flow = {
       trigger: { http: { method: v.method as never, path: v.p } },
       ...(v.eff ? { effects: v.eff as Effects } : {}),
+      ...(gates && gates.length > 0 ? { gates } : {}),
+      ...(live && v.method === "GET" ? { live: true } : {}),
       ...(resource?.breaking ? { breaking: true } : {}),
       source: `${file.path}:${line}`,
     };
@@ -1419,7 +1526,67 @@ function registerResourceMount(
 
   const exportName = enclosingConstName(onCall, program);
   if (exportName) {
-    scope.bindings.set(exportName, { kind: "flow", ref: unit ?? baseName ?? exportName });
+    scope.bindings.set(exportName, { kind: "flow", ref: baseName ?? exportName });
+  }
+}
+
+/**
+ * Expand `bindNamedTableCrud` / `bindCrud({ unit, path, table })` into the
+ * five CRUD flows. The helper builds `flow(\`${unit}.list\`)` at runtime;
+ * statically we register the same names + inferred table effects so
+ * docker/prod can stamp tokens without a hand-declared `effects` object.
+ *
+ * @param call - The `bindNamedTableCrud` / `bindCrud(…)` call
+ * @param file - Source file
+ * @param scope - Project scope
+ */
+function registerNamedTableCrud(call: CallExpression, file: SourceFile, scope: ProjectScope): void {
+  const opts = objectArg(call.arguments[0]);
+  if (!opts) return;
+  const unit = stringProp(opts, "unit");
+  const path = stringProp(opts, "path");
+  if (!unit || !path) return;
+
+  const tableId = identifierName(objectProp(opts, "table"));
+  const tableBinding = tableId ? scope.bindings.get(tableId) : undefined;
+  const tableName = tableBinding?.kind === "table" ? tableBinding.ref : tableId;
+  const storeRef: ResourceRef | undefined = tableName ? sqlTableRef(tableName) : undefined;
+  const both: Effects | undefined = storeRef
+    ? { reads: [storeRef], writes: [storeRef] }
+    : undefined;
+  const idPath = `${path}/:id`;
+  const line = lineAt(file.source, call.start ?? 0);
+  const live = boolProp(opts, "liveList") === true;
+
+  const verbs = [
+    {
+      op: "list",
+      method: "GET",
+      p: path,
+      eff: storeRef ? { reads: [storeRef] } : undefined,
+      live,
+    },
+    { op: "create", method: "POST", p: path, eff: storeRef ? { writes: [storeRef] } : undefined },
+    { op: "get", method: "GET", p: idPath, eff: storeRef ? { reads: [storeRef] } : undefined },
+    { op: "update", method: "PATCH", p: idPath, eff: both },
+    {
+      op: "delete",
+      method: "DELETE",
+      p: idPath,
+      eff: storeRef ? { reads: [storeRef], writes: [storeRef] } : undefined,
+    },
+  ] as const;
+
+  for (const v of verbs) {
+    const name = `${unit}.${v.op}`;
+    const flow: Flow = {
+      trigger: { http: { method: v.method as never, path: v.p } },
+      ...(v.eff ? { effects: v.eff as Effects } : {}),
+      ...("live" in v && v.live ? { live: true } : {}),
+      source: `${file.path}:${line}`,
+    };
+    scope.flows[name] = flow;
+    scope.bindings.set(name, { kind: "flow", ref: name });
   }
 }
 
@@ -1442,7 +1609,7 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
       return { trigger: {} };
     }
 
-    // http.post("/x").gate(...).live()
+    // http.post("/x").gate(...).live() / http.get("/x").gate.public
     const http = parseHttpTrigger(call, scope);
     if (http) return http;
 
@@ -1451,6 +1618,11 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
     if (cdc) return { trigger: { cdc } };
 
     // on(signalHandle, …) — Identifier referring to a signal binding
+  }
+
+  if (node.type === "MemberExpression") {
+    const http = parseHttpTrigger(node, scope);
+    if (http) return http;
   }
 
   if (node.type === "Identifier") {
@@ -1467,55 +1639,50 @@ function parseTrigger(node: AstNode, scope: ProjectScope): ParsedTrigger | undef
   return undefined;
 }
 
-function parseHttpTrigger(call: CallExpression, scope: ProjectScope): ParsedTrigger | undefined {
-  // Walk the chain: http.METHOD(path).gate(...).live()
-  let current: AstNode = call;
+function parseHttpTrigger(leaf: AstNode, scope: ProjectScope): ParsedTrigger | undefined {
+  // Walk: http.METHOD(path).gate(...).live() / .gate.public
+  const chain = flattenMemberCallChain(leaf);
   let method: string | undefined;
   let path: string | undefined;
   let live = false;
   const gateNames: string[] = [];
 
-  // Flatten chain from leaf to root
-  const chain: CallExpression[] = [];
-  while (current.type === "CallExpression") {
-    chain.unshift(current as CallExpression);
-    const callee = (current as CallExpression).callee;
-    if (callee.type === "MemberExpression") {
-      const obj = (callee as AstNode & { object: AstNode }).object;
-      current = obj;
-      continue;
-    }
-    break;
-  }
+  for (const node of chain) {
+    if (node.type === "CallExpression") {
+      const c = node as CallExpression;
+      const callee = c.callee;
+      if (callee.type !== "MemberExpression") continue;
+      const member = callee as AstNode & { object: AstNode; property: AstNode };
+      const prop = identifierName(member.property);
+      const obj = member.object;
 
-  for (const c of chain) {
-    const callee = c.callee;
-    if (callee.type !== "MemberExpression") continue;
-    const member = callee as AstNode & {
-      object: AstNode;
-      property: AstNode;
-    };
-    const prop = identifierName(member.property);
-    const obj = member.object;
-
-    if (obj.type === "Identifier" && (obj as Identifier).name === "http" && prop) {
-      method = prop.toUpperCase();
-      path = stringArg(c.arguments[0]);
-      continue;
-    }
-
-    if (prop === "gate") {
-      for (const arg of c.arguments) {
-        const id = identifierName(arg);
-        if (!id) continue;
-        const resolved = scope.gateIds.get(id) ?? id;
-        gateNames.push(resolved);
+      if (obj.type === "Identifier" && (obj as Identifier).name === "http" && prop) {
+        method = prop.toUpperCase();
+        path = stringArg(c.arguments[0]);
+        continue;
       }
+
+      if (prop === "gate") {
+        for (const arg of c.arguments) {
+          gateNames.push(...gateNamesFromArg(arg, scope));
+        }
+        continue;
+      }
+
+      if (prop === "live") live = true;
       continue;
     }
 
-    if (prop === "live") {
-      live = true;
+    if (node.type === "MemberExpression") {
+      const member = node as AstNode & { object: AstNode; property: AstNode };
+      if (identifierName(member.property) !== "public") continue;
+      const obj = member.object;
+      if (
+        obj.type === "MemberExpression" &&
+        identifierName((obj as AstNode & { property: AstNode }).property) === "gate"
+      ) {
+        gateNames.push("public");
+      }
     }
   }
 
@@ -1653,6 +1820,89 @@ function schemaProp(obj: AstNode | undefined, key: string): string | undefined {
 
 // ── AST helpers ────────────────────────────────────────────────────────────
 
+/** Leaf-to-root walk of `http.get("/x").gate.public.live()`. */
+function flattenMemberCallChain(leaf: AstNode): AstNode[] {
+  const chain: AstNode[] = [];
+  let current: AstNode = leaf;
+  while (true) {
+    if (current.type === "CallExpression") {
+      chain.unshift(current);
+      const callee = (current as CallExpression).callee;
+      if (callee.type === "MemberExpression") {
+        current = (callee as AstNode & { object: AstNode }).object;
+        continue;
+      }
+      break;
+    }
+    if (current.type === "MemberExpression") {
+      chain.unshift(current);
+      current = (current as AstNode & { object: AstNode }).object;
+      continue;
+    }
+    break;
+  }
+  return chain;
+}
+
+function unwrapTsExpr(node: AstNode): AstNode {
+  if (node.type === "TSAsExpression" || node.type === "TSTypeAssertion") {
+    const expr = (node as AstNode & { expression?: AstNode }).expression;
+    if (expr) return unwrapTsExpr(expr);
+  }
+  return node;
+}
+
+function arrayMemberNames(node: AstNode): string[] {
+  const elements = (node as AstNode & { elements?: readonly (AstNode | null)[] }).elements ?? [];
+  const names: string[] = [];
+  for (const el of elements) {
+    if (!el) continue;
+    const id = identifierName(unwrapTsExpr(el));
+    if (id) names.push(id);
+  }
+  return names;
+}
+
+function expandGateNames(
+  members: readonly string[],
+  scope: ProjectScope,
+  seen: Set<string>,
+): string[] {
+  const out: string[] = [];
+  for (const member of members) {
+    if (seen.has(member)) continue;
+    seen.add(member);
+    const nested = scope.gateAllIds.get(member);
+    if (nested) {
+      out.push(...expandGateNames(nested, scope, seen));
+      continue;
+    }
+    out.push(scope.gateIds.get(member) ?? member);
+  }
+  return out;
+}
+
+function gateNamesFromArg(arg: AstNode, scope: ProjectScope): string[] {
+  if (arg.type === "SpreadElement") {
+    const inner = (arg as AstNode & { argument?: AstNode }).argument;
+    if (!inner) return [];
+    return gateNamesFromArg(unwrapTsExpr(inner), scope);
+  }
+  const unwrapped = unwrapTsExpr(arg);
+  if (unwrapped.type === "ArrayExpression") {
+    return expandGateNames(arrayMemberNames(unwrapped), scope, new Set());
+  }
+  if (unwrapped.type === "MemberExpression") {
+    const member = unwrapped as AstNode & { object: AstNode; property: AstNode };
+    if (identifierName(member.object) === "gate" && identifierName(member.property) === "public") {
+      return ["public"];
+    }
+  }
+  const id = identifierName(unwrapped);
+  if (!id) return [];
+  return expandGateNames([id], scope, new Set());
+}
+
 function enclosingConstName(call: CallExpression, program: AstNode): string | undefined {
   const targetStart = call.start;
   if (targetStart === undefined) return undefined;
@@ -1676,6 +1926,12 @@ function containsOffset(root: AstNode, start: number): boolean {
     if (node.start === start) found = true;
   });
   return found;
+}
+
+function isInterpolatedTemplate(node: AstNode | undefined): boolean {
+  if (!node || node.type !== "TemplateLiteral") return false;
+  const exprs = (node as AstNode & { expressions?: readonly AstNode[] }).expressions;
+  return (exprs?.length ?? 0) > 0;
 }
 
 function objectArg(node: AstNode | undefined): AstNode | undefined {

@@ -2,6 +2,7 @@ import { on, flow, http, every } from "okengine";
 import { z } from "zod";
 
 import { draftsKv, member } from "@/core";
+import { listIn, pageOut } from "@/lib/http";
 import { IdIn, IdOut, Ok } from "@/lib/shapes";
 import { draftExpired } from "./signals";
 
@@ -17,18 +18,16 @@ const DraftIn = z.object({
 export const list = on(
   http.get("/drafts").gate(member),
   flow("drafts.list", {
-    out: z.object({
-      items: z.array(z.object({ id: z.string(), title: z.string() })),
-      count: z.number(),
-    }),
-    do: async (_input, fx) => {
+    in: listIn({ mode: "offset" }),
+    out: pageOut(z.object({ id: z.string(), title: z.string() })),
+    do: async (input, fx) => {
       const keys = await fx.store(draftsKv).list();
       const items: { id: string; title: string }[] = [];
       for (const key of keys) {
         const value = (await fx.store(draftsKv).get(key)) as { title?: string } | null;
         items.push({ id: key, title: value?.title ?? key });
       }
-      return { items, count: items.length };
+      return fx.json.withQuery(items, input);
     },
   }),
 );
@@ -59,10 +58,10 @@ export const discard = on(
   }),
 );
 
-/** Expire stale drafts (KV TTL + signal). */
+/** Expire stale drafts — named clock `expire-drafts`. */
 export const expire = on(
   every("10m"),
-  flow("drafts.expire", {
+  flow("drafts.expire-drafts", {
     plane: "operator",
     do: async (_input, fx) => {
       const keys = await fx.store(draftsKv).list();
@@ -70,7 +69,7 @@ export const expire = on(
         const ttl = await fx.store(draftsKv).ttlMs(key);
         if (ttl !== null && ttl <= 0) {
           await fx.store(draftsKv).delete(key);
-          await fx.emit(draftExpired, { id: key });
+          await fx.emit(draftExpired, { id: key }, { key });
         }
       }
     },

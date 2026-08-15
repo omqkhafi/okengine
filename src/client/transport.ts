@@ -5,7 +5,7 @@
  * Optional `routes` map switches to REST (`method` + path template).
  */
 
-import type { ClientFetch, ClientOptions, ClientResult } from "./types.ts";
+import type { ClientEnvelope, ClientFetch, ClientOptions } from "./types.ts";
 
 /** Internal transport handle. */
 export interface Transport {
@@ -15,7 +15,7 @@ export interface Transport {
    * @param key - `unit/flow`
    * @param input - JSON body / path-param source
    */
-  call(key: string, input: unknown): Promise<ClientResult>;
+  call(key: string, input: unknown): Promise<ClientEnvelope>;
 }
 
 /**
@@ -132,7 +132,7 @@ async function once(
  *
  * @param res - HTTP response (body consumed)
  */
-async function decodeIfEnvelope(res: Response): Promise<ClientResult | null> {
+async function decodeIfEnvelope(res: Response): Promise<ClientEnvelope | null> {
   const text = await res.text();
   if (!text) return null;
   let json: unknown;
@@ -142,7 +142,7 @@ async function decodeIfEnvelope(res: Response): Promise<ClientResult | null> {
     return null;
   }
   if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
-    return json as ClientResult;
+    return json as ClientEnvelope;
   }
   return null;
 }
@@ -197,7 +197,7 @@ function restRequest(
   return { url: `${base}${pathOut}${qs}`, method: upper, body };
 }
 
-async function decode(res: Response): Promise<ClientResult> {
+async function decode(res: Response): Promise<ClientEnvelope> {
   if (res.status === 204) {
     return { data: undefined, error: null };
   }
@@ -231,7 +231,7 @@ async function decode(res: Response): Promise<ClientResult> {
   }
 
   if (json !== null && typeof json === "object" && "data" in json && "error" in json) {
-    return json as ClientResult;
+    return json as ClientEnvelope;
   }
 
   if (res.ok) {

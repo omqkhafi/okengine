@@ -65,6 +65,11 @@ export interface PipelineDeps {
    * for production HTTP request handling.
    */
   readonly allowTestPrincipals?: boolean;
+  /**
+   * Console Operator invoke — skip the flow's gate chain.
+   * Honoured only when {@link allowTestPrincipals} is also true.
+   */
+  readonly bypassGates?: boolean;
   /** Per-invocation principal bag (same object passed into createFx). */
   readonly principals: PrincipalBag;
   /** Telemetry collector for the current run (gates dimension). */
@@ -208,6 +213,7 @@ export function createElementPipelineHooks(deps: PipelineDeps): {
     // explicit `autoBoot: false` escape hatch. Public sentinel is a normal
     // named gate in `names`.
     if (names.length === 0 || !deps.gates) return;
+    if (deps.bypassGates === true && deps.allowTestPrincipals === true) return;
 
     const policyCtx = policyContextOf(fxOrErr as Fx, ctx);
     const evaluations = await deps.gates.check(names, policyCtx);

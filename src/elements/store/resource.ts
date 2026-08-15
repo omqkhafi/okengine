@@ -9,8 +9,9 @@
  *
  * List URL (PostgREST-shaped, UTF-8 values — English, Arabic, …):
  * `?cursor=` / `?offset=` / `?limit=` · `?search=` (`?q=` alias) ·
- * `?col=eq.x|neq|gt|gte|lt|lte|like.*p*|ilike.*p*|in.(a,b)|is.true|false|null` ·
- * `?or=(…)` / `?and=(…)` · `?order=col.desc,…` · `?select=id,title`.
+ * `?col=eq.x|neq|gt|gte|lt|lte|like.*p*|ilike.*p*|in.(a,b)|is.null|not_null|true|false` ·
+ * `?col=not.eq.x` · `?or=(…)` / `?and=(…)` (nested `not.and` / `not.or`) ·
+ * `?order=col.desc,…` · `?select=id,title`.
  * Every surface is whitelisted by a ColumnScope (`"all" | Column[] | "none"`).
  */
 
@@ -52,8 +53,6 @@ export interface ResourceOptions {
   readonly id?: unknown;
   /** List surface. */
   readonly list?: ResourceListOptions;
-  /** Flow unit scope (default: table name). Client namespace still comes from `adopt`. */
-  readonly unit?: string;
   /**
    * Acknowledge intentional Manifest contract breaks for the five flows
    * (`breaking: true` on each). Use when migrating a handwritten CRUD unit
@@ -199,17 +198,79 @@ function keysetAfter(
 
 /* —————————————————————————————— cursor codec —————————————————————————— */
 
-function encodeCursor(values: readonly unknown[]): string {
-  return btoa(JSON.stringify(values));
+/** Keyset token direction — `?cursor=` carries either side. */
+type CursorDir = "after" | "before";
+
+function encodeOffsetCursor(offset: number): string {
+  return btoa(JSON.stringify({ k: "off", o: offset }));
 }
-function decodeCursor(raw: string, arity: number): readonly unknown[] | null {
+
+function decodeOffsetCursor(raw: string): number | null {
   try {
     const value: unknown = JSON.parse(atob(raw));
-    if (!Array.isArray(value) || value.length !== arity) return null;
-    return value as readonly unknown[];
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      "k" in value &&
+      value.k === "off" &&
+      "o" in value &&
+      typeof value.o === "number" &&
+      Number.isInteger(value.o) &&
+      value.o >= 0
+    ) {
+      return value.o;
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+function encodeCursor(values: readonly unknown[], dir: CursorDir): string {
+  return btoa(JSON.stringify({ v: values, d: dir }));
+}
+function decodeCursor(
+  raw: string,
+  arity: number,
+): { readonly values: readonly unknown[]; readonly dir: CursorDir } | null {
+  try {
+    const value: unknown = JSON.parse(atob(raw));
+    if (Array.isArray(value) && value.length === arity) {
+      return { values: value, dir: "after" };
+    }
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      "v" in value &&
+      "d" in value &&
+      Array.isArray(value.v) &&
+      value.v.length === arity &&
+      (value.d === "after" || value.d === "before")
+    ) {
+      return { values: value.v as unknown[], dir: value.d };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function flipOrder(op: SqlOp): SqlOp {
+  return {
+    queryChunks: op.queryChunks.map((chunk) => {
+      if (
+        chunk !== null &&
+        typeof chunk === "object" &&
+        "value" in chunk &&
+        Array.isArray((chunk as { value: unknown }).value)
+      ) {
+        const text = (chunk as { value: string[] }).value[0];
+        if (text === " asc") return strChunk(" desc");
+        if (text === " desc") return strChunk(" asc");
+      }
+      return chunk;
+    }),
+  };
 }
 
 /* —————————————————————————————— URL parsing ——————————————————————————— */
@@ -232,77 +293,201 @@ function badInput(message: string, path: string) {
   return validationFailure([{ message, path: [path] }]);
 }
 
-/** Parse `eq.x` / `in.(a,b)` / `is.null` into a drizzle op over `column`. */
+function parseGroupLead(
+  t: string,
+): { readonly negated: boolean; readonly joiner: "and" | "or"; readonly body: string } | undefined {
+  if (t.startsWith("not.and(")) return { negated: true, joiner: "and", body: t.slice(7) };
+  if (t.startsWith("not.or(")) return { negated: true, joiner: "or", body: t.slice(6) };
+  if (t.startsWith("and(")) return { negated: false, joiner: "and", body: t.slice(3) };
+  if (t.startsWith("or(")) return { negated: false, joiner: "or", body: t.slice(2) };
+  return undefined;
+}
+
+function negateTermString(term: string): string {
+  const t = term.trim();
+  if (t.startsWith("not.and(")) return `and${t.slice(7)}`;
+  if (t.startsWith("not.or(")) return `or${t.slice(6)}`;
+  if (t.startsWith("and(")) return `not.and${t.slice(3)}`;
+  if (t.startsWith("or(")) return `not.or${t.slice(2)}`;
+  const dot = t.indexOf(".");
+  if (dot <= 0) return t;
+  return `${t.slice(0, dot)}.${invertOpString(t.slice(dot + 1))}`;
+}
+
+/** Invert a PostgREST op string (`not.eq.x` → `neq.x`) so SQL stays a leaf. */
+function invertOpString(raw: string): string {
+  let rest = raw.trim();
+  if (rest.startsWith("not.")) return rest.slice(4);
+  const dot = rest.indexOf(".");
+  if (dot <= 0) return raw;
+  const op = rest.slice(0, dot);
+  const value = rest.slice(dot + 1);
+  if (op === "eq") return `neq.${value}`;
+  if (op === "neq") return `eq.${value}`;
+  if (op === "gt") return `lte.${value}`;
+  if (op === "gte") return `lt.${value}`;
+  if (op === "lt") return `gte.${value}`;
+  if (op === "lte") return `gt.${value}`;
+  if (op === "is" && (value === "null" || value === "unknown")) return "is.not_null";
+  if (op === "is" && value === "not_null") return "is.null";
+  if (op === "is" && value === "true") return "is.false";
+  if (op === "is" && value === "false") return "is.true";
+  return raw;
+}
+
+function splitTopLevel(inner: string): string[] {
+  const parts: string[] = [];
+  let buf = "";
+  let depth = 0;
+  let quote = false;
+  for (const ch of inner) {
+    if (quote) {
+      if (ch === '"') quote = false;
+      buf += ch;
+      continue;
+    }
+    if (ch === '"') {
+      quote = true;
+      buf += ch;
+      continue;
+    }
+    if (ch === "(") {
+      depth += 1;
+      buf += ch;
+      continue;
+    }
+    if (ch === ")") {
+      depth -= 1;
+      buf += ch;
+      continue;
+    }
+    if (ch === "," && depth === 0) {
+      parts.push(buf.trim());
+      buf = "";
+      continue;
+    }
+    buf += ch;
+  }
+  if (buf.trim().length > 0) parts.push(buf.trim());
+  return parts;
+}
+
+function unquote(raw: string): string {
+  const t = raw.trim();
+  if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1);
+  return t;
+}
+
+/** Parse `eq.x` / `not.eq.x` / `in.(a,"b,c")` / `is.null` into a drizzle op. */
 function filterOp(
   column: unknown,
   key: string,
   raw: string,
 ): SqlOp | { failure: ReturnType<typeof badInput> } {
-  const dot = raw.indexOf(".");
+  let rest = raw.trim();
+  if (rest.startsWith("not.")) rest = invertOpString(rest);
+  const dot = rest.indexOf(".");
   if (dot <= 0) return { failure: badInput(`expected "op.value" (e.g. ${key}=eq.x)`, key) };
-  const op = raw.slice(0, dot);
-  const value = raw.slice(dot + 1);
+  const op = rest.slice(0, dot);
+  const value = rest.slice(dot + 1);
   if (!FILTER_OPS.has(op)) {
     return { failure: badInput(`unsupported filter op "${op}"`, key) };
   }
+  let leaf: SqlOp | { failure: ReturnType<typeof badInput> };
   switch (op) {
     case "eq":
-      return leafOp(column, "=", value);
+      leaf = leafOp(column, "=", unquote(value));
+      break;
     case "neq":
-      return leafOp(column, "!=", value);
+      leaf = leafOp(column, "!=", unquote(value));
+      break;
     case "gt":
-      return leafOp(column, ">", value);
+      leaf = leafOp(column, ">", unquote(value));
+      break;
     case "gte":
-      return leafOp(column, ">=", value);
+      leaf = leafOp(column, ">=", unquote(value));
+      break;
     case "lt":
-      return leafOp(column, "<", value);
+      leaf = leafOp(column, "<", unquote(value));
+      break;
     case "lte":
-      return leafOp(column, "<=", value);
+      leaf = leafOp(column, "<=", unquote(value));
+      break;
     case "like":
-      return leafOp(column, "like", value.replaceAll("*", "%"));
+      leaf = leafOp(column, "like", unquote(value).replaceAll("*", "%"));
+      break;
     case "ilike":
-      return leafOp(column, "ilike", value.replaceAll("*", "%"));
+      leaf = leafOp(column, "ilike", unquote(value).replaceAll("*", "%"));
+      break;
     case "is": {
-      if (value === "null") return leafOp(column, "is null", undefined);
-      if (value === "true") return leafOp(column, "=", true);
-      if (value === "false") return leafOp(column, "=", false);
-      return { failure: badInput(`is expects null|true|false`, key) };
+      if (value === "null" || value === "unknown") leaf = leafOp(column, "is null", undefined);
+      else if (value === "not_null") leaf = leafOp(column, "is not null", undefined);
+      else if (value === "true") leaf = leafOp(column, "=", true);
+      else if (value === "false") leaf = leafOp(column, "=", false);
+      else leaf = { failure: badInput(`is expects null|not_null|true|false|unknown`, key) };
+      break;
     }
     case "in": {
       const match = /^\((.*)\)$/.exec(value);
-      if (!match) return { failure: badInput(`in expects (a,b,c)`, key) };
+      if (!match) {
+        leaf = { failure: badInput(`in expects (a,b,c)`, key) };
+        break;
+      }
       const inner = match[1]!.trim();
-      const values = inner.length === 0 ? [] : inner.split(",");
-      if (values.length === 0) return { failure: badInput(`in expects at least one value`, key) };
-      return leafOp(column, "in", values);
+      const values = inner.length === 0 ? [] : splitTopLevel(inner).map(unquote);
+      if (values.length === 0) {
+        leaf = { failure: badInput(`in expects at least one value`, key) };
+        break;
+      }
+      leaf = leafOp(column, "in", values);
+      break;
     }
+    default:
+      leaf = { failure: badInput(`unsupported filter op "${op}"`, key) };
   }
-  return { failure: badInput(`unsupported filter op "${op}"`, key) };
+  return leaf;
 }
 
-/** Split `or=(a.ilike.*x*,b.eq.1)` inner list on commas. */
+/** Split `or=(a.ilike.*x*,b.eq.1)` inner list on commas (nested-safe). */
 function groupInner(raw: string): readonly string[] | null {
   const match = /^\((.*)\)$/.exec(raw.trim());
   if (!match) return null;
   const inner = match[1]!.trim();
-  return inner.length === 0 ? [] : inner.split(",");
+  return inner.length === 0 ? [] : splitTopLevel(inner);
 }
 
-/** One `col.op.value` term inside an `or=(…)` / `and=(…)` group. */
+/** One `col.op.value` or nested `not.and(…)` term inside `or=` / `and=`. */
 function groupedFilterTerm(
   tableColumns: Readonly<Record<string, unknown>>,
   term: string,
   joiner: "or" | "and",
 ): SqlOp | { failure: ReturnType<typeof badInput> } {
-  const dot = term.indexOf(".");
+  const t = term.trim();
+  const group = parseGroupLead(t);
+  if (group) {
+    const inner = groupInner(group.body);
+    if (inner === null || inner.length === 0) {
+      return { failure: badInput(`${group.joiner} expects (col.op.value,…)`, joiner) };
+    }
+    const innerJoiner = group.negated ? (group.joiner === "and" ? "or" : "and") : group.joiner;
+    const parts: SqlOp[] = [];
+    for (const piece of inner) {
+      const next = group.negated ? negateTermString(piece) : piece;
+      const op = groupedFilterTerm(tableColumns, next, innerJoiner);
+      if ("failure" in op) return op;
+      parts.push(op);
+    }
+    return parts.length === 1 ? parts[0]! : groupOp(innerJoiner, parts);
+  }
+  const dot = t.indexOf(".");
   if (dot <= 0) {
     return { failure: badInput(`expected "col.op.value" inside ${joiner}=(…)`, joiner) };
   }
-  const col = tableColumns[term.slice(0, dot)];
+  const col = tableColumns[t.slice(0, dot)];
   if (col === undefined) {
-    return { failure: badInput(`unknown column "${term.slice(0, dot)}"`, joiner) };
+    return { failure: badInput(`unknown column "${t.slice(0, dot)}"`, joiner) };
   }
-  return filterOp(col, joiner, term.slice(dot + 1));
+  return filterOp(col, joiner, t.slice(dot + 1));
 }
 
 /* —————————————————————————————— the factory ——————————————————————————— */
@@ -338,7 +523,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   const tableName = resolveTableName(table);
   const columns = resolveColumns(table);
   const tableColumns = table as Readonly<Record<string, unknown>>;
-  const unit = options.unit ?? tableName;
 
   const pk = columns.find((c) => c.primary) ?? columns[0];
   const idColumn =
@@ -408,6 +592,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         page: SqlPageOptions;
         meta: Record<string, unknown>;
         select?: readonly ResolvedColumn[];
+        cursorDir?: CursorDir;
       }
     | { ok: false; failure: unknown } {
     const query = (input ?? {}) as Record<string, unknown>;
@@ -494,7 +679,7 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     }
 
     // order
-    let orders: unknown[] | undefined;
+    let orders: SqlOp[] | undefined;
     const rawOrder = str("order");
     if (rawOrder !== undefined) {
       if (config.order === "none") {
@@ -547,9 +732,19 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     // pagination
     let offset: number | undefined;
     let after: unknown;
+    let before: unknown;
+    let cursorDir: CursorDir | undefined;
+    let orderBy = orders;
     if (mode === "offset") {
+      const rawCursor = str("cursor");
       const rawOffset = str("offset");
-      if (rawOffset !== undefined) {
+      if (rawCursor !== undefined) {
+        const fromCursor = decodeOffsetCursor(rawCursor);
+        if (fromCursor === null) {
+          return { ok: false, failure: badInput("invalid cursor", "cursor") };
+        }
+        offset = fromCursor;
+      } else if (rawOffset !== undefined) {
         const n = Number(rawOffset);
         if (!Number.isInteger(n) || n < 0) {
           return {
@@ -565,15 +760,18 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         if (resolvedCursor.length === 0) {
           return { ok: false, failure: badInput("cursor pagination is not configured", "cursor") };
         }
-        const values = decodeCursor(rawCursor, resolvedCursor.length);
-        if (values === null) {
+        const decoded = decodeCursor(rawCursor, resolvedCursor.length);
+        if (decoded === null) {
           return { ok: false, failure: badInput("invalid cursor", "cursor") };
         }
-        after = keysetAfter(
-          resolvedCursor.map((c) => tableColumns[c.key]),
-          values,
-          direction === "desc",
-        );
+        cursorDir = decoded.dir;
+        const cols = resolvedCursor.map((c) => tableColumns[c.key]);
+        if (decoded.dir === "before") {
+          before = keysetAfter(cols, decoded.values, direction !== "desc");
+          orderBy = (orders ?? []).map(flipOrder);
+        } else {
+          after = keysetAfter(cols, decoded.values, direction === "desc");
+        }
         meta.cursor = rawCursor;
       }
     }
@@ -588,13 +786,15 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
       ok: true,
       page: {
         where,
-        orderBy: orders,
+        orderBy,
         limit: pageLimit + (mode === "cursor" ? 1 : 0),
         offset,
         after,
+        before,
       },
       meta: { mode, limit: pageLimit, ...meta },
       ...(select !== undefined ? { select } : {}),
+      ...(cursorDir !== undefined ? { cursorDir } : {}),
     };
   }
 
@@ -622,20 +822,42 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     let data: SqlRow[] = rows;
     if (mode === "cursor") {
       const pageSize = Number(parsed.meta.limit);
-      const hasNextPage = rows.length > pageSize;
-      const pageRows = hasNextPage ? rows.slice(0, pageSize) : rows;
-      const last = hasNextPage && pageRows.length > 0 ? pageRows[pageRows.length - 1] : undefined;
-      meta.hasNextPage = hasNextPage;
-      meta.nextCursor =
-        last === undefined
-          ? null
-          : encodeCursor(resolvedCursor.map((c) => last[c.key] ?? last[c.sqlName]));
+      const extra = rows.length > pageSize;
+      const sliced = extra ? rows.slice(0, pageSize) : rows;
+      const pageRows = parsed.cursorDir === "before" ? [...sliced].reverse() : sliced;
+      const first = pageRows[0];
+      const last = pageRows[pageRows.length - 1];
+      const cursorValues = (row: SqlRow) => resolvedCursor.map((c) => row[c.key] ?? row[c.sqlName]);
+      const hasNext = parsed.cursorDir === "before" ? pageRows.length > 0 : extra;
+      const hasPrevious = parsed.cursorDir === "before" ? extra : parsed.cursorDir === "after";
+      meta.next =
+        hasNext && last !== undefined
+          ? { cursor: encodeCursor(cursorValues(last), "after") }
+          : null;
+      meta.prev =
+        hasPrevious && first !== undefined
+          ? { cursor: encodeCursor(cursorValues(first), "before") }
+          : null;
       data = pageRows;
     } else if (countMode === "exact") {
       meta.total = await store.count(table, parsed.page.where);
       meta.offset = parsed.page.offset ?? 0;
+      const pageLimit = Number(parsed.meta.limit);
+      const hasPrevious = Number(meta.offset) > 0;
+      const hasNext = Number(meta.offset) + data.length < Number(meta.total);
+      meta.next = hasNext ? { cursor: encodeOffsetCursor(Number(meta.offset) + pageLimit) } : null;
+      meta.prev = hasPrevious
+        ? { cursor: encodeOffsetCursor(Math.max(0, Number(meta.offset) - pageLimit)) }
+        : null;
     } else {
       meta.offset = parsed.page.offset ?? 0;
+      const pageLimit = Number(parsed.meta.limit);
+      const hasPrevious = Number(meta.offset) > 0;
+      const hasNext = data.length === pageLimit;
+      meta.next = hasNext ? { cursor: encodeOffsetCursor(Number(meta.offset) + pageLimit) } : null;
+      meta.prev = hasPrevious
+        ? { cursor: encodeOffsetCursor(Math.max(0, Number(meta.offset) - pageLimit)) }
+        : null;
     }
 
     if (parsed.select !== undefined) {
@@ -650,7 +872,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   }
 
   const listFlow = flow("list", {
-    unit,
     ...(breaking ? { breaking: true as const } : {}),
     // Loose record so the HTTP AoT infers `query` and lets every list URL
     // key through; real validation happens in parseList (PostgREST grammar).
@@ -659,12 +880,11 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
     do: async (input, fx) => {
       const result = await runList(input, fx);
       if ("failure" in result) return result.failure;
-      return fx.json.with(result.data, result.meta);
+      return fx.json.with(result);
     },
   });
 
   const createFlow = flow("create", {
-    unit,
     ...(breaking ? { breaking: true as const } : {}),
     in: options.in as never,
     effects: { writes: [db.ref] },
@@ -681,7 +901,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   });
 
   const getFlow = flow("get", {
-    unit,
     ...(breaking ? { breaking: true as const } : {}),
     errors,
     effects: { reads: [db.ref] },
@@ -707,7 +926,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
         ? patchSchema.extend({ [idKey]: z.string() })
         : patchSchema;
   const updateFlow = flow("update", {
-    unit,
     ...(breaking ? { breaking: true as const } : {}),
     in: updateIn as never,
     errors,
@@ -733,7 +951,6 @@ export function resource(db: SqlStoreDecl, table: unknown, options: ResourceOpti
   });
 
   const removeFlow = flow("remove", {
-    unit,
     ...(breaking ? { breaking: true as const } : {}),
     errors,
     effects: { writes: [db.ref] },

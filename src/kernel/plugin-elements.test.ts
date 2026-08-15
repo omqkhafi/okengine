@@ -32,7 +32,7 @@ describe("plugin element contributions", () => {
       .table("otp_codes")
       .needs("store.sql");
 
-    on(http.get("/ok").gate(gate.public), flow("ok", { do: () => ({ ok: true }) }));
+    on(http.get("/ok").gate.public, flow("ok", { do: () => ({ ok: true }) }));
 
     const app = oke({
       name: "plugin-elements",

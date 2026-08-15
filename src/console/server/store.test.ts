@@ -259,6 +259,78 @@ describe("PII masking survives SELECT *", () => {
     expect(clear.rows?.[0]?.email).toBe("secret@example.com");
   });
 
+  test("browse masks owner_email / ownerEmail unless revealPii", async () => {
+    const { field, sql: declareSql, store } = await import("../../elements/store.ts");
+    const views = store.schema.table("views", {
+      id: field.text().primaryKey(),
+      ownerEmail: field.text().pii(),
+    });
+    const manifest: Manifest = {
+      oke: "1.0",
+      app: "pii-alias-browse",
+      stores: {
+        db: {
+          facet: "sql",
+          tables: {
+            views: {
+              columns: {
+                ownerEmail: { type: "text", pii: true, sqlName: "owner_email" },
+              },
+            },
+          },
+        },
+      },
+    };
+    const runtime = await createManifestStoreRuntime(manifest);
+    runtime.register(
+      declareSql("db", {
+        schema: { views },
+        classify: { views: { ownerEmail: { pii: true } } },
+      }),
+    );
+    const sql = (await runtime.openRef("sql:db", {
+      effects: { writes: ["sql:db"] },
+      revealPii: true,
+    })) as import("../../elements/store.ts").SqlStoreHandle;
+    await sql.ensureTable(views);
+    await sql.insert(views).values({ id: "view_web_board", ownerEmail: "aria@keel.dev" });
+
+    const { stores } = await projectStoresList({
+      manifest,
+      runtime,
+      declaredFingerprint: "x",
+      appliedFingerprint: "x",
+    });
+    const child = stores
+      .find((s) => s.ref === "sql:db")
+      ?.children.find((c) => c.name === "views");
+    expect(child?.piiColumns).toContain("ownerEmail");
+    expect(child?.piiColumns).toContain("owner_email");
+
+    const masked = await queryStore(runtime, manifest, { ref: "sql:db", child: "views" });
+    expect(masked.masked).toBe(true);
+    expect(masked.rows?.[0]?.owner_email ?? masked.rows?.[0]?.ownerEmail).toBe("[redacted]");
+
+    const clear = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "views",
+      revealPii: true,
+    });
+    expect(clear.masked).toBe(false);
+    expect(clear.rows?.[0]?.owner_email ?? clear.rows?.[0]?.ownerEmail).toBe("aria@keel.dev");
+
+    // A prior reveal open on this runtime must not leave browse unmasked.
+    const afterReveal = await queryStore(runtime, manifest, {
+      ref: "sql:db",
+      child: "views",
+    });
+    expect(afterReveal.masked).toBe(true);
+    expect(afterReveal.rows?.[0]?.owner_email ?? afterReveal.rows?.[0]?.ownerEmail).toBe(
+      "[redacted]",
+    );
+    await runtime.close();
+  });
+
   test("edit rejects PII mask placeholder over classified column", async () => {
     const runtime = await createManifestStoreRuntime(MANIFEST);
     const bookings = defineTable("bookings", {
@@ -698,6 +770,31 @@ describe("queryStore KV metadata", () => {
     expect(withTtl?.sizeBytes).toBeGreaterThan(0);
     expect(noTtl?.ttlMs).toBeNull();
     expect(noTtl?.sizeBytes).toBeGreaterThan(0);
+  });
+
+  test("singleton kv store lists root keys, not child: prefix", async () => {
+    const runtime = await createManifestStoreRuntime({
+      oke: "1.0",
+      app: "keel",
+      stores: { drafts: { facet: "kv", namespaces: ["drafts"] } },
+    });
+    const { kv: declareKv } = await import("../../elements/store.ts");
+    runtime.register(declareKv("drafts"));
+    const kv = (await runtime.openRef("kv:drafts", {
+      effects: { writes: ["kv:drafts"] },
+    })) as import("../../elements/store.ts").KvStoreFxHandle;
+    await kv.set("ENG-184", { title: "Pulse graph" }, "2h");
+
+    const result = await queryStore(
+      runtime,
+      { oke: "1.0", app: "keel" },
+      {
+        ref: "kv:drafts",
+        child: "drafts",
+      },
+    );
+    expect(result.keys?.map((e) => e.key)).toEqual(["ENG-184"]);
+    await runtime.close();
   });
 
   test("kv edit can set, preserve, and clear TTL; add creates a key", async () => {

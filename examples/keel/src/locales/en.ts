@@ -4,14 +4,15 @@ export const en = defineMessages({
   errors: {
     notFound: "Not found",
     unauthorized: "Unauthorized",
-    cycleClosed: "That cycle is closed.",
     duplicate: "Already exists.",
     unavailable: "AI service unavailable. Try again later.",
+    forbidden: "Your role cannot do that.",
   },
-  issues: {
-    created: "Issue {identifier} was created.",
-    assigned: "Issue {identifier} assigned to {email}.",
-    archived: "Issue archived.",
+  tasks: {
+    created: "Task {identifier} was created.",
+    assigned: "Task {identifier} assigned to {email}.",
+    completed: "Task completed.",
+    archived: "Task archived.",
   },
 });
 

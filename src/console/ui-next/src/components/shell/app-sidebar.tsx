@@ -1,5 +1,5 @@
 /**
- * Authenticated Console sidebar — always icon-collapsed: Flows / Units / Store / Vault.
+ * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault.
  */
 
 import {
@@ -25,29 +25,19 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import type { SessionOperator } from "@/client.ts";
+import { lastSearchFor, type ConsoleModulePath } from "@/lib/last-module-search.ts";
+import { useLastModuleSearch } from "@/lib/use-last-module-search.ts";
 
-const navItems = [
-  {
-    title: "Flows",
-    to: "/flows" as const,
-    icon: WorkflowSquare08Icon,
-  },
-  {
-    title: "Units",
-    to: "/units" as const,
-    icon: Shapes01Icon,
-  },
-  {
-    title: "Store",
-    to: "/store" as const,
-    icon: Archive02Icon,
-  },
-  {
-    title: "Vault",
-    to: "/vault" as const,
-    icon: AccessIcon,
-  },
-] as const;
+const navItems: ReadonlyArray<{
+  readonly title: string;
+  readonly to: ConsoleModulePath;
+  readonly icon: typeof WorkflowSquare08Icon;
+}> = [
+  { title: "Overview", to: "/overview", icon: WorkflowSquare08Icon },
+  { title: "Flows", to: "/flows", icon: Shapes01Icon },
+  { title: "Store", to: "/store", icon: Archive02Icon },
+  { title: "Vault", to: "/vault", icon: AccessIcon },
+];
 
 /**
  * Icon-only brand mark for the always-collapsed sidebar header.
@@ -72,6 +62,7 @@ export function AppSidebar({
   readonly operator: SessionOperator;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const memory = useLastModuleSearch();
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -85,7 +76,7 @@ export function AppSidebar({
             {navItems.map((item) => (
               <SidebarMenuItem key={item.to}>
                 <SidebarMenuButton
-                  render={<Link to={item.to} />}
+                  render={<Link to={item.to} search={lastSearchFor(memory, item.to) as never} />}
                   isActive={pathname === item.to}
                   tooltip={item.title}
                 >

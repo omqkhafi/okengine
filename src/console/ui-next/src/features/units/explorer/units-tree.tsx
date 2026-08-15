@@ -13,7 +13,7 @@ import {
   UserIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { FlowPlane } from "../../../../../../manifest/types.ts";
+import type { FlowPlane, SignalDelivery } from "../../../../../../manifest/types.ts";
 import {
   EXPLORER_BAND_CLASS,
   EXPLORER_BAND_HEADER_CLASS,
@@ -32,6 +32,7 @@ import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
 import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { HttpMethodBadge } from "@/components/http-method-badge";
+import { httpMethodBadgeClass, httpMethodIcon } from "@/features/flows/traces/http-method.ts";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ import {
   flowTriggerSpec,
   type FlowTriggerKind,
 } from "../lib/flow-trigger.ts";
+import { SIGNAL_DELIVERIES, SIGNAL_DELIVERY_SPECS } from "../lib/signal-delivery.ts";
 import {
   bandUnitTree,
   countActiveFacets,
@@ -96,15 +98,21 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
     return FLOW_PLANES.filter((p) => present.has(p));
   }, [groups]);
 
-  const { hasDurable, hasLive } = useMemo(() => {
+  const { hasDurable, hasLive, availableDeliveries } = useMemo(() => {
     let durable = false;
     let live = false;
+    const present = new Set<SignalDelivery>();
     for (const g of groups)
       for (const f of g.flows) {
         if (f.flow.durable) durable = true;
         if (f.flow.live) live = true;
+        if (f.delivery) present.add(f.delivery);
       }
-    return { hasDurable: durable, hasLive: live };
+    return {
+      hasDurable: durable,
+      hasLive: live,
+      availableDeliveries: SIGNAL_DELIVERIES.filter((d) => present.has(d)),
+    };
   }, [groups]);
 
   const activeCount = countActiveFacets(facets);
@@ -152,6 +160,11 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
     setFacets((prev) => ({ ...prev, planes: toggleItem(prev.planes ?? [], plane) }));
   const toggleFlag = (flag: "durableOnly" | "liveOnly") =>
     setFacets((prev) => ({ ...prev, [flag]: !prev[flag] }));
+  const toggleDelivery = (delivery: SignalDelivery) =>
+    setFacets((prev) => ({
+      ...prev,
+      deliveries: toggleItem(prev.deliveries ?? [], delivery),
+    }));
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="units-tree">
@@ -217,6 +230,23 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
                 );
               })}
             </FacetRow>
+            {availableDeliveries.length > 0 ? (
+              <FacetRow label="Delivery" groupLabel="Signal delivery filter">
+                {availableDeliveries.map((delivery) => {
+                  const spec = SIGNAL_DELIVERY_SPECS[delivery];
+                  return (
+                    <FacetChip
+                      key={delivery}
+                      icon={spec.icon}
+                      label={spec.label}
+                      pressed={facets.deliveries?.includes(delivery) ?? false}
+                      onToggle={() => toggleDelivery(delivery)}
+                      dataFacet={`delivery:${delivery}`}
+                    />
+                  );
+                })}
+              </FacetRow>
+            ) : null}
             {availablePlanes.length > 0 ? (
               <FacetRow label="Plane" groupLabel="Plane filter">
                 {availablePlanes.map((plane) => {
@@ -316,7 +346,7 @@ function FacetRow({
 }): JSX.Element {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-[9px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+      <span className="w-14 shrink-0 text-[9px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
         {label}
       </span>
       <div
@@ -531,7 +561,7 @@ function UnitGroupItem({
 }
 
 /**
- * One selectable flow row (method badge or trigger icon + action).
+ * One selectable flow row — icon well, action, trailing method badge.
  *
  * @param props - Flow + selection
  */
@@ -545,12 +575,24 @@ function FlowListItem({
   readonly onSelect: (flowId: string) => void;
 }): JSX.Element {
   const trigger = flowTriggerSpec(flow.flow.trigger);
+  const delivery = flow.delivery ? SIGNAL_DELIVERY_SPECS[flow.delivery] : null;
+  const wellIcon = delivery?.icon ?? (flow.method ? httpMethodIcon(flow.method) : trigger.icon);
+  const wellClass =
+    delivery?.wellClass ?? (flow.method ? httpMethodBadgeClass(flow.method) : trigger.wellClass);
+  const wellTitle = delivery
+    ? flow.signal
+      ? `${delivery.title} · ${flow.signal}`
+      : delivery.title
+    : trigger.detail
+      ? `${trigger.label} · ${trigger.detail}`
+      : trigger.label;
   return (
     <li>
       <button
         type="button"
         data-slot="unit-flow-item"
         data-flow-id={flow.id}
+        data-delivery={flow.delivery ?? undefined}
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(flow.id)}
         className={cn(EXPLORER_ROW_CLASS, "group/flow", selected && EXPLORER_ROW_SELECTED_CLASS)}
@@ -562,22 +604,18 @@ function FlowListItem({
             selected ? EXPLORER_RAIL_ACTIVE_CLASS : "bg-transparent",
           )}
         />
-        {flow.method ? (
-          <HttpMethodBadge method={flow.method} />
-        ) : (
-          <Tooltip>
-            <TooltipTrigger
-              render={(props) => (
-                <span {...props} className={cn(EXPLORER_WELL_CLASS, trigger.wellClass)} aria-hidden>
-                  <HugeiconsIcon icon={trigger.icon} className="size-3" />
-                </span>
-              )}
-            />
-            <TooltipContent side="right" className="text-[11px]">
-              {trigger.detail ? `${trigger.label} · ${trigger.detail}` : trigger.label}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={(props) => (
+              <span {...props} className={cn(EXPLORER_WELL_CLASS, wellClass)} aria-hidden>
+                <HugeiconsIcon icon={wellIcon} className="size-3" />
+              </span>
+            )}
+          />
+          <TooltipContent side="right" className="text-[11px]">
+            {wellTitle}
+          </TooltipContent>
+        </Tooltip>
         <span
           className={cn(
             "min-w-0 flex-1 truncate font-mono transition-colors group-hover/flow:text-foreground",
@@ -586,6 +624,12 @@ function FlowListItem({
         >
           {flow.action}
         </span>
+        {flow.method ? (
+          <HttpMethodBadge
+            method={flow.method}
+            className="ml-auto h-3.5 px-1 text-[8px] leading-none"
+          />
+        ) : null}
       </button>
     </li>
   );

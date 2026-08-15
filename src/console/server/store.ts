@@ -30,7 +30,7 @@ import {
   type StoreRuntime,
 } from "../../elements/store.ts";
 import { DryRunWriteIsolationError, withDryRun } from "../../kernel/dry-run.ts";
-import { PII_MASK } from "../../elements/store/classify.ts";
+import { addPiiFieldName, piiNameAliases, PII_MASK } from "../../elements/store/classify.ts";
 import { rankIndexHits } from "./index-search.ts";
 import type {
   ColumnClassification,
@@ -351,10 +351,16 @@ export function willNotFireFor(
 }
 
 function piiColumnsFor(store: NonNullable<Manifest["stores"]>[string], table: string): string[] {
-  const cols: string[] = [];
+  const cols = new Set<string>();
   const tableMeta = store.tables?.[table];
   for (const [col, tags] of Object.entries(tableMeta?.columns ?? {})) {
-    if (tags?.pii) cols.push(col);
+    if (!tags?.pii) continue;
+    addPiiFieldName(cols, col);
+    const sqlName =
+      "sqlName" in tags && typeof (tags as { sqlName?: unknown }).sqlName === "string"
+        ? (tags as { sqlName: string }).sqlName
+        : undefined;
+    if (sqlName) addPiiFieldName(cols, sqlName);
   }
   for (const [key, tags] of Object.entries(store.classifications ?? {})) {
     if (
@@ -365,10 +371,10 @@ function piiColumnsFor(store: NonNullable<Manifest["stores"]>[string], table: st
       "pii" in tags &&
       (tags as { pii?: boolean }).pii
     ) {
-      cols.push(key.slice(table.length + 1));
+      addPiiFieldName(cols, key.slice(table.length + 1));
     }
   }
-  return [...new Set(cols)].sort();
+  return [...cols].sort();
 }
 
 function latestReplicaLag(
@@ -433,6 +439,29 @@ export interface StoreQueryResult {
 }
 
 const KV_TTL_RE = /^(\d+)(ms|s|m|h|d)$/;
+
+/**
+ * Prefix for `kv.list` when Console browse does not pass an explicit one.
+ *
+ * A dedicated `store.kv("drafts")` keeps keys at the namespace root
+ * (`ENG-184`). `${child}:` is only for a shared KV store whose children
+ * are key prefixes (`kv:cache` / `drafts:…`).
+ *
+ * @param ref - Store ref (`kv:drafts`)
+ * @param child - Selected child / namespace
+ * @param explicit - Operator-supplied list prefix
+ */
+function kvBrowsePrefix(
+  ref: string,
+  child: string | undefined,
+  explicit: string | undefined,
+): string {
+  if (explicit !== undefined) return explicit;
+  if (!child) return "";
+  const storeName = ref.split(":")[1] ?? "";
+  if (child === storeName) return "";
+  return `${child}:`;
+}
 
 /**
  * Resolve the TTL argument for `kv.set` from a Console patch.
@@ -525,7 +554,7 @@ export async function queryStore(
 
   if (facet === "kv") {
     const kv = handle as KvStoreFxHandle;
-    const keys = await kv.list(input.prefix ?? (input.child ? `${input.child}:` : ""));
+    const keys = await kv.list(kvBrowsePrefix(input.ref, input.child, input.prefix));
     const limited = keys.slice(0, input.limit ?? 100);
     const entries = await Promise.all(
       limited.map(async (key) => {
@@ -1550,18 +1579,44 @@ function sqlClassifyFromManifest(
     if (column.length === 0) continue;
     const tags = classificationFromValue(value);
     if (!tags) continue;
-    nested[table] = { ...(nested[table] ?? {}), [column]: tags };
+    putClassifyAliases(nested, table, column, tags);
   }
 
   for (const [table, meta] of Object.entries(store.tables ?? {})) {
     for (const [column, tags] of Object.entries(meta.columns ?? {})) {
       const normalized = classificationFromValue(tags);
       if (!normalized) continue;
-      nested[table] = { ...(nested[table] ?? {}), [column]: normalized };
+      putClassifyAliases(nested, table, column, normalized);
+      const sqlName =
+        "sqlName" in tags && typeof (tags as { sqlName?: unknown }).sqlName === "string"
+          ? (tags as { sqlName: string }).sqlName
+          : undefined;
+      if (sqlName) putClassifyAliases(nested, table, sqlName, normalized);
     }
   }
 
   return nested;
+}
+
+/**
+ * Register classify tags under JS and SQL spellings of a column.
+ *
+ * @param nested - table → column → tags
+ * @param table - Table name
+ * @param column - Manifest or SQL column name
+ * @param tags - Classification tags
+ */
+function putClassifyAliases(
+  nested: Record<string, Record<string, ColumnClassification>>,
+  table: string,
+  column: string,
+  tags: ColumnClassification,
+): void {
+  const row = { ...(nested[table] ?? {}) };
+  for (const name of piiNameAliases(column)) {
+    row[name] = tags;
+  }
+  nested[table] = row;
 }
 
 /**

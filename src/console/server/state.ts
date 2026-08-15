@@ -489,7 +489,7 @@ export interface CreateConsoleStateOptions {
   readonly now?: () => number;
   readonly cwd?: string;
   readonly manifest?: Manifest | null;
-  /** Skip printing the claim code (tests). */
+  /** Skip stdout claim print (`oke dev` paints the board; tests). Artifact still written. */
   readonly silentClaim?: boolean;
   /** Seed identities for the invoke-as picker. */
   readonly identities?: readonly ConsoleIdentity[];
@@ -927,7 +927,24 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     setVault: async (input) => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "vault");
       const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      if (!state.vaultRuntime) {
+        state.vaultRuntime = await vault.createManifestVaultRuntime(
+          state.manifest ?? { oke: "1.0", app: "app" },
+          {
+            cwd: state.cwd,
+            env: state.production ? "prod" : "dev",
+            allowDevFallbacks: !state.production,
+            now: state.now,
+            driverId: vault.resolveVaultDriverId(
+              state.okeConfig,
+              state.production ? "prod" : "dev",
+            ),
+          },
+        );
+      }
       if (!state.vaultRuntime) {
         throw new Error("Vault runtime not bound");
       }
@@ -945,7 +962,10 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
             env: state.production ? "prod" : "dev",
             allowDevFallbacks: !state.production,
             now: state.now,
-            driverId: vault.resolveVaultDriverId(state.okeConfig, state.production ? "prod" : "dev"),
+            driverId: vault.resolveVaultDriverId(
+              state.okeConfig,
+              state.production ? "prod" : "dev",
+            ),
           },
         );
       }
@@ -955,7 +975,24 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       return vault.createVaultContract(state.vaultRuntime, state.cwd, state.manifest, input);
     },
     rotateVault: async (input) => {
+      const { ensureConsolePanelRuntimes } = await import("./app.ts");
+      await ensureConsolePanelRuntimes(state, "vault");
       const vault = await markPanel<typeof import("./vault.ts")>("vault");
+      if (!state.vaultRuntime) {
+        state.vaultRuntime = await vault.createManifestVaultRuntime(
+          state.manifest ?? { oke: "1.0", app: "app" },
+          {
+            cwd: state.cwd,
+            env: state.production ? "prod" : "dev",
+            allowDevFallbacks: !state.production,
+            now: state.now,
+            driverId: vault.resolveVaultDriverId(
+              state.okeConfig,
+              state.production ? "prod" : "dev",
+            ),
+          },
+        );
+      }
       if (!state.vaultRuntime) {
         throw new Error("Vault runtime not bound");
       }

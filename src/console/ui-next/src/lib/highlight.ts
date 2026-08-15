@@ -1,19 +1,18 @@
 /**
- * Shiki SPA helper — client-side highlight via web bundle + JSX runtime.
+ * Shiki SPA helper — client-side highlight via the slim Console highlighter.
  */
 
 import type { JSX } from "react";
-import type { BundledLanguage, BundledTheme } from "shiki/bundle/web";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-import { codeToHast } from "shiki/bundle/web";
+import { getConsoleHighlighter, type ConsoleShikiLang, type ConsoleShikiTheme } from "./shiki.ts";
 
 /** Options for {@link highlightCode}. */
 export type HighlightCodeOptions = {
-  /** Bundled language id (default `typescript`). */
-  readonly lang?: BundledLanguage;
-  /** Bundled theme id (default `github-light`). */
-  readonly theme?: BundledTheme;
+  /** Console language id (default `typescript`). */
+  readonly lang?: ConsoleShikiLang;
+  /** Console theme id (default `github-light`). */
+  readonly theme?: ConsoleShikiTheme;
 };
 
 /**
@@ -24,10 +23,11 @@ export type HighlightCodeOptions = {
  */
 export async function highlightCode(
   code: string,
-  options: HighlightCodeOptions | BundledLanguage = {},
+  options: HighlightCodeOptions | ConsoleShikiLang = {},
 ): Promise<JSX.Element> {
   const opts: HighlightCodeOptions = typeof options === "string" ? { lang: options } : options;
-  const hast = await codeToHast(code, {
+  const highlighter = await getConsoleHighlighter();
+  const hast = highlighter.codeToHast(code, {
     lang: opts.lang ?? "typescript",
     theme: opts.theme ?? "github-light",
   });

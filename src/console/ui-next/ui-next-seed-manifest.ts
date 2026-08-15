@@ -1,8 +1,8 @@
 /**
  * Standalone keel Manifest for Console ui-next seed.
  *
- * Linear-faithful project-management backend — all eight OKE elements,
- * all five trigger kinds. Not an overlay of the skyport flows fixture.
+ * Asana / ClickUp / Monday-shaped work-management backend — all eight OKE
+ * elements, all five trigger kinds. Not an overlay of the skyport flows fixture.
  */
 
 import type { Manifest } from "../../manifest/types.ts";
@@ -19,19 +19,19 @@ import {
 } from "./ui-next-seed-manifest-surface.ts";
 
 /**
- * Manifest seeded into the Console — a Linear-shaped workspace so the
+ * Manifest seeded into the Console — a work-management workspace so the
  * Flows graph + Traces ledger + Store browse look like a real PM system.
  *
  * | Element | Seed surface |
  * | ------- | ------------ |
- * | flow    | featured github→create→notify plus full CRUD + custom routes (archive, assign, merge, QUERY search, …) |
- * | signal  | `issue-created` · `comment-added` · `cycle-closed` · `sla-breaching` · `draft-expired` |
- * | store   | sql teams…customer_requests + Gate auth / oke_* system · kv drafts/snooze · files attachments · index issues |
- * | clock   | `close-cycles` cron · `expire-drafts` every · `watch-sla` every |
- * | gate    | member · issue:write · project:admin · triage:accept · issues.write |
+ * | flow    | featured github→create→notify plus full CRUD + custom routes (archive, assign, QUERY search, …) |
+ * | signal  | `task-created` · `task-completed` · `task-assigned` · `comment-added` · `form-submitted` · `goal-at-risk` · `draft-expired` |
+ * | store   | sql spaces…form_submissions + Gate auth / oke_* system · kv drafts/reminders · files attachments · index tasks |
+ * | clock   | `expire-drafts` every · `watch-overdue` every · `daily-digest` cron |
+ * | gate    | member · task:write · project:admin · comment:write |
  * | vault   | keel secrets + public config (origin, API, docs, workspace) |
- * | channel | issue-assigned · mention-reply · cycle-digest · sla-alert · project-update |
- * | ai      | issue-triage@3 · cycle-summary@1 · triage agent |
+ * | channel | task-assigned · mention-reply · task-overdue · daily-digest · form-received · goal-at-risk |
+ * | ai      | task-suggest · weekly-summary · form-classify · document-summary · planner agent |
  */
 export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
   oke: "1.0",
@@ -49,20 +49,27 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       gates: ["member"],
       effects: {
         secrets: ["GITHUB_TOKEN"],
-        calls: ["issues.create"],
+        calls: ["tasks.create"],
       },
-      source: "src/flows/github/index.ts:8",
+      source: "src/flows/github/index.ts:16",
     },
-    "issues.create": {
-      trigger: { http: { method: "POST", path: "/issues" } },
+    "tasks.create": {
+      trigger: { http: { method: "POST", path: "/tasks" } },
       plane: "user",
-      gates: ["member", "issue:write", "issues.write"],
+      gates: ["member", "task:write"],
       in: {
         type: "object",
-        required: ["title", "teamKey"],
+        required: ["title", "spaceKey"],
         properties: {
           title: { type: "string" },
-          teamKey: { type: "string" },
+          spaceKey: {
+            type: "string",
+            oneOf: [
+              { const: "ENG", title: "Engineering" },
+              { const: "DES", title: "Design" },
+              { const: "GTM", title: "Go-to-market" },
+            ],
+          },
           priority: {
             type: "integer",
             minimum: 0,
@@ -87,54 +94,54 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
           userId: { type: "string" },
         },
       },
-      errors: ["CycleClosed", "Duplicate"],
+      errors: ["Forbidden", "Duplicate"],
       effects: {
-        reads: ["sql:issues", "sql:cycles"],
-        writes: ["sql:issues"],
-        emits: ["issue-created"],
+        reads: ["sql:tasks", "sql:spaces"],
+        writes: ["sql:tasks"],
+        emits: ["task-created"],
       },
-      source: "src/flows/issues/index.ts:18",
+      source: "src/flows/tasks/index.ts:90",
     },
-    "issues.update": {
-      trigger: { http: { method: "PATCH", path: "/issues/:id" } },
+    "tasks.update": {
+      trigger: { http: { method: "PATCH", path: "/tasks/:id" } },
       plane: "user",
-      gates: ["member", "issue:write", "issues.write"],
+      gates: ["member", "task:write"],
       effects: {
-        reads: ["sql:issues"],
-        writes: ["sql:issues"],
+        reads: ["sql:tasks"],
+        writes: ["sql:tasks"],
       },
-      source: "src/flows/issues/index.ts:64",
+      source: "src/flows/tasks/index.ts:147",
     },
-    "issues.list": {
-      trigger: { http: { method: "GET", path: "/issues" } },
+    "tasks.list": {
+      trigger: { http: { method: "GET", path: "/tasks" } },
       live: true,
       plane: "user",
       gates: ["member"],
       in: KEEL_LIST_IN,
       out: KEEL_LIST_OUT,
-      effects: { reads: ["sql:issues"], secrets: ["PUBLIC_APP_URL", "KEEL_WORKSPACE"] },
-      source: "src/flows/issues/index.ts:88",
+      effects: { reads: ["sql:tasks"], secrets: ["PUBLIC_APP_URL", "KEEL_WORKSPACE"] },
+      source: "src/flows/tasks/index.ts:174",
     },
     "comments.create": {
-      trigger: { http: { method: "POST", path: "/issues/:id/comments" } },
+      trigger: { http: { method: "POST", path: "/tasks/:id/comments" } },
       plane: "user",
-      gates: ["member", "issue:write"],
+      gates: ["member", "comment:write"],
       effects: {
-        reads: ["sql:issues"],
+        reads: ["sql:tasks"],
         writes: ["sql:comments"],
         emits: ["comment-added"],
       },
-      source: "src/flows/comments/index.ts:6",
+      source: "src/flows/comments/index.ts:48",
     },
     "projects.create": {
       trigger: { http: { method: "POST", path: "/projects" } },
       plane: "user",
       gates: ["member", "project:admin"],
       effects: {
-        reads: ["sql:initiatives"],
+        reads: ["sql:goals"],
         writes: ["sql:projects"],
       },
-      source: "src/flows/projects/index.ts:10",
+      source: "src/flows/projects/index.ts:40",
     },
     "documents.upsert": {
       trigger: { http: { method: "POST", path: "/documents" } },
@@ -143,48 +150,41 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       effects: {
         writes: ["sql:documents"],
       },
-      source: "src/flows/documents/index.ts:4",
+      source: "src/flows/documents/index.ts:37",
     },
     "attachments.upload": {
       trigger: { http: { method: "POST", path: "/attachments" } },
       plane: "user",
-      gates: ["member", "issue:write"],
+      gates: ["member", "task:write"],
       effects: {
-        reads: ["sql:issues"],
+        reads: ["sql:tasks"],
         writes: ["files:attachments"],
       },
-      source: "src/flows/attachments/index.ts:7",
+      source: "src/flows/attachments/index.ts:22",
     },
-    "triage.accept": {
-      trigger: { http: { method: "POST", path: "/triage/:id/accept" } },
+    "forms.submit": {
+      trigger: { http: { method: "POST", path: "/forms/:id/submit" } },
       plane: "user",
-      gates: ["member", "triage:accept"],
-      effects: {
-        reads: ["sql:issues", "sql:workflow_states"],
-        writes: ["sql:issues"],
-      },
-      source: "src/flows/triage/index.ts:12",
-    },
-    "triage.suggest": {
-      trigger: { http: { method: "POST", path: "/triage/:id/suggest" } },
-      plane: "user",
+      durable: true,
       gates: ["member"],
       effects: {
-        reads: ["sql:issues"],
+        reads: ["sql:forms", "sql:spaces"],
+        writes: ["sql:form_submissions", "sql:tasks"],
+        emits: ["form-submitted"],
+        asks: ["form-classify"],
         secrets: ["OPENAI_KEY"],
-        asks: ["issue-triage"],
-        sends: ["mention-reply"],
+        calls: ["tasks.create"],
       },
-      source: "src/flows/triage/index.ts:36",
+      source: "src/flows/forms/index.ts:59",
     },
-    "notify.onIssue": {
-      trigger: { signal: "issue-created" },
+    "notify.onTask": {
+      trigger: { signal: "task-created" },
       plane: "user",
       effects: {
-        writes: ["sql:issues"],
-        sends: ["issue-assigned"],
+        writes: ["sql:inbox"],
+        sends: ["task-assigned"],
       },
-      source: "src/flows/notify/index.ts:4",
+      source: "src/flows/notify/index.ts:42",
     },
     "notify.onComment": {
       trigger: { signal: "comment-added" },
@@ -193,40 +193,27 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
         reads: ["sql:comments"],
         sends: ["mention-reply"],
       },
-      source: "src/flows/notify/index.ts:22",
+      source: "src/flows/notify/index.ts:63",
     },
     "search.index": {
-      trigger: { signal: "issue-created" },
+      trigger: { signal: "task-created" },
       plane: "operator",
       effects: {
-        reads: ["sql:issues"],
-        writes: ["index:issues"],
+        reads: ["sql:tasks"],
+        writes: ["index:tasks"],
       },
-      source: "src/flows/search/index.ts:4",
+      source: "src/flows/search/index.ts:140",
     },
-    "issues.onStatus": {
-      trigger: { cdc: { table: "issues", column: "state_id" } },
+    "tasks.onStatus": {
+      trigger: { cdc: { table: "tasks", column: "status" } },
       plane: "operator",
       effects: {
-        reads: ["sql:issues"],
-        writes: ["sql:issues"],
+        reads: ["sql:tasks"],
+        writes: ["sql:tasks"],
       },
-      source: "src/flows/issues/cdc.ts:3",
+      source: "src/flows/tasks/index.ts:461",
     },
-    "cycles.close": {
-      trigger: { cron: "0 3 * * 1" },
-      plane: "operator",
-      effects: {
-        reads: ["sql:cycles", "sql:issues"],
-        writes: ["sql:cycles", "sql:issues"],
-        emits: ["cycle-closed"],
-        asks: ["cycle-summary"],
-        sends: ["cycle-digest"],
-        secrets: ["SLACK_WEBHOOK"],
-      },
-      source: "src/flows/cycles/index.ts:8",
-    },
-    "drafts.expire": {
+    "drafts.expire-drafts": {
       trigger: { every: "10m" },
       plane: "operator",
       effects: {
@@ -234,47 +221,59 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
         writes: ["kv:drafts"],
         emits: ["draft-expired"],
       },
-      source: "src/flows/drafts/index.ts:6",
+      source: "src/flows/drafts/index.ts:62",
     },
-    "sla.watch": {
+    "overdue.watch-overdue": {
       trigger: { every: "15m" },
       plane: "operator",
       effects: {
-        reads: ["sql:issues"],
-        emits: ["sla-breaching"],
-        sends: ["sla-alert"],
+        reads: ["sql:tasks"],
+        emits: ["task-created"],
+        sends: ["task-overdue"],
       },
-      source: "src/flows/sla/index.ts:5",
+      source: "src/flows/overdue/index.ts:7",
     },
     ...KEEL_SURFACE_FLOWS,
   },
   signals: {
-    "issue-created": {
+    "task-created": {
       delivery: "once",
       retries: 5,
       deadLetter: true,
-      description: "Issue created — wake notify + search",
+      description: "Task created — wake notify + search",
     },
-    "comment-added": {
+    "task-completed": {
+      delivery: "broadcast",
+      retries: 3,
+      deadLetter: true,
+      description: "Task marked complete — rollover dependents",
+    },
+    "task-assigned": {
       delivery: "live",
       retries: 3,
       deadLetter: true,
-      description: "Comment posted — realtime inbox",
+      description: "Assignee changed — realtime inbox",
     },
-    "cycle-closed": {
-      delivery: "broadcast",
-      retries: 3,
-      deadLetter: true,
-      description: "Cycle completed — rollover leftovers",
-    },
-    "sla-breaching": {
+    "comment-added": {
       delivery: "once",
       retries: 3,
       deadLetter: true,
-      description: "Issue SLA high-risk or breached",
+      description: "Comment posted — mention reply",
+    },
+    "form-submitted": {
+      delivery: "once",
+      retries: 3,
+      deadLetter: true,
+      description: "Customer form intake received",
+    },
+    "goal-at-risk": {
+      delivery: "once",
+      retries: 3,
+      deadLetter: true,
+      description: "Goal health slipped to at-risk",
     },
     "draft-expired": {
-      delivery: "broadcast",
+      delivery: "once",
       retries: 3,
       deadLetter: true,
       description: "Compose-draft TTL elapsed",
@@ -286,41 +285,24 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       facet: "sql",
       description: "Primary keel SQL",
       tables: {
-        teams: {
+        spaces: {
           columns: {
             id: { type: "text", primaryKey: true },
             key: { type: "text" },
             name: { type: "text" },
-            parent_id: { type: "text", nullable: true },
+            color: { type: "text", nullable: true },
           },
         },
         members: {
           columns: {
             id: { type: "text", primaryKey: true },
-            team_id: { type: "text" },
+            space_id: { type: "text" },
             name: { type: "text" },
             email: { type: "text", pii: true, description: "Member contact (masked by default)" },
             role: { type: "text" },
           },
         },
-        workflow_states: {
-          columns: {
-            id: { type: "text", primaryKey: true },
-            team_id: { type: "text" },
-            name: { type: "text" },
-            type: { type: "text" },
-            position: { type: "integer" },
-          },
-        },
-        labels: {
-          columns: {
-            id: { type: "text", primaryKey: true },
-            team_id: { type: "text", nullable: true },
-            name: { type: "text" },
-            group_name: { type: "text", nullable: true },
-          },
-        },
-        initiatives: {
+        goals: {
           columns: {
             id: { type: "text", primaryKey: true },
             name: { type: "text" },
@@ -332,78 +314,102 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
         projects: {
           columns: {
             id: { type: "text", primaryKey: true },
-            initiative_id: { type: "text" },
+            space_id: { type: "text" },
+            goal_id: { type: "text", nullable: true },
             name: { type: "text" },
             status: { type: "text" },
             lead_email: { type: "text", pii: true },
+            start_date: { type: "text", nullable: true },
             target_date: { type: "text" },
-            progress: { type: "integer" },
+            color: { type: "text", nullable: true },
           },
         },
-        project_milestones: {
+        sections: {
           columns: {
             id: { type: "text", primaryKey: true },
             project_id: { type: "text" },
             name: { type: "text" },
-            target_date: { type: "text" },
             sort_order: { type: "integer" },
           },
         },
-        project_updates: {
-          columns: {
-            id: { type: "text", primaryKey: true },
-            project_id: { type: "text" },
-            health: { type: "text" },
-            body: { type: "text" },
-            author_email: { type: "text", pii: true },
-          },
-        },
-        cycles: {
-          columns: {
-            id: { type: "text", primaryKey: true },
-            team_id: { type: "text" },
-            number: { type: "integer" },
-            name: { type: "text" },
-            starts_at: { type: "text" },
-            ends_at: { type: "text" },
-            state: { type: "text" },
-          },
-        },
-        issues: {
+        tasks: {
           columns: {
             id: { type: "text", primaryKey: true },
             identifier: { type: "text" },
             title: { type: "text" },
-            description: { type: "text", description: "Issue body (mixed RTL/LTR sample)" },
+            description: { type: "text", description: "Task body (mixed RTL/LTR sample)" },
+            kind: { type: "text" },
             priority: { type: "integer" },
             estimate: { type: "integer", nullable: true },
-            state_id: { type: "text" },
-            team_id: { type: "text" },
+            status: { type: "text" },
+            space_id: { type: "text" },
             project_id: { type: "text", nullable: true },
-            milestone_id: { type: "text", nullable: true },
-            cycle_id: { type: "text", nullable: true },
+            section_id: { type: "text", nullable: true },
             parent_id: { type: "text", nullable: true },
-            assignee_email: { type: "text", pii: true },
-            creator_email: { type: "text", pii: true },
             due_date: { type: "text", nullable: true },
-            sla_breaches_at: { type: "text", nullable: true },
-            triaged_at: { type: "text", nullable: true },
+            completed_at: { type: "text", nullable: true },
             archived_at: { type: "text", nullable: true },
+            creator_email: { type: "text", pii: true },
+            role_needed: { type: "text", nullable: true },
           },
         },
-        issue_labels: {
+        task_assignees: {
           columns: {
             id: { type: "text", primaryKey: true },
-            issue_id: { type: "text" },
-            label_id: { type: "text" },
+            task_id: { type: "text" },
+            assignee_email: { type: "text", pii: true },
           },
         },
         comments: {
           columns: {
             id: { type: "text", primaryKey: true },
-            issue_id: { type: "text" },
+            task_id: { type: "text" },
             author_email: { type: "text", pii: true },
             body: { type: "text", description: "Comment body (mixed RTL/LTR sample)" },
+          },
+        },
+        forms: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            project_id: { type: "text" },
+            name: { type: "text" },
+            schema_json: { type: "text" },
+          },
+        },
+        form_submissions: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            form_id: { type: "text" },
+            task_id: { type: "text", nullable: true },
+            payload_json: { type: "text" },
+            customer_name: { type: "text" },
+          },
+        },
+        inbox: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            member_email: { type: "text", pii: true },
+            kind: { type: "text" },
+            title: { type: "text" },
+            ref_id: { type: "text" },
+            read_at: { type: "text", nullable: true },
+          },
+        },
+        views: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            project_id: { type: "text" },
+            name: { type: "text" },
+            kind: { type: "text" },
+            filters_json: { type: "text" },
+            owner_email: { type: "text", pii: true },
+          },
+        },
+        tags: {
+          columns: {
+            id: { type: "text", primaryKey: true },
+            name: { type: "text" },
+            group_name: { type: "text", nullable: true },
           },
         },
         documents: {
@@ -425,12 +431,13 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
             store_ref: { type: "text" },
           },
         },
-        customer_requests: {
+        project_updates: {
           columns: {
             id: { type: "text", primaryKey: true },
-            issue_id: { type: "text" },
-            customer_name: { type: "text" },
+            project_id: { type: "text" },
+            health: { type: "text" },
             body: { type: "text" },
+            author_email: { type: "text", pii: true },
           },
         },
         ...UI_NEXT_SEED_APP_SYSTEM_TABLES,
@@ -438,36 +445,46 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
     },
     cache: {
       facet: "kv",
-      description: "Compose drafts + triage snooze",
-      namespaces: ["drafts", "triage-snooze"],
+      description: "Compose drafts + view prefs + due-date reminders",
+      namespaces: ["drafts", "view-prefs", "reminders"],
     },
     attachments: {
       facet: "files",
-      description: "Issue attachments (specs, screenshots)",
+      description: "Task attachments (specs, screenshots)",
       buckets: ["attachments"],
     },
     search: {
       facet: "index",
-      description: "Semantic issue search",
-      indexes: ["issues"],
+      description: "Semantic task search",
+      indexes: ["tasks"],
     },
   },
   clocks: {
-    "close-cycles": {
-      cron: "0 3 * * 1",
-      timezone: "UTC",
-      description: "Monday cycle rollover",
-    },
     "expire-drafts": {
       every: "10m",
       timezone: "UTC",
       overridable: true,
       description: "Expire stale compose drafts",
     },
-    "watch-sla": {
+    "watch-overdue": {
       every: "15m",
       timezone: "UTC",
-      description: "Scan issue SLA high-risk / breached",
+      description: "Scan overdue tasks",
+    },
+    "daily-digest": {
+      cron: "0 8 * * *",
+      timezone: "UTC",
+      description: "Morning inbox + goal digest",
+    },
+    "spawn-recurring": {
+      every: "1h",
+      timezone: "UTC",
+      description: "Spawn recurring task occurrences",
+    },
+    "rollup-goals": {
+      cron: "0 9 * * 1",
+      timezone: "UTC",
+      description: "Weekly goal rollup",
     },
     ...KEEL_SURFACE_CLOCKS,
   },
@@ -476,35 +493,27 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       kind: "policy",
       description: "Signed-in workspace member",
     },
-    "issue:write": {
+    "task:write": {
       kind: "policy",
-      description: "May create and update issues",
-      scopes: ["issue:write"],
+      description: "May create and update tasks",
+      scopes: ["task:write"],
     },
     "project:admin": {
       kind: "policy",
-      description: "May create projects",
+      description: "May create projects, views, and forms",
       scopes: ["project:admin"],
     },
-    "triage:accept": {
+    "comment:write": {
       kind: "policy",
-      description: "May accept issues out of triage",
-      scopes: ["triage:accept"],
-    },
-    "issues.write": {
-      kind: "rate",
-      strategy: "sliding-window-counter",
-      max: 60,
-      per: "1m",
-      keyBy: "user",
-      description: "Issue write throttle",
+      description: "May edit and resolve comments",
+      scopes: ["comment:write"],
     },
     ...KEEL_SURFACE_GATES,
   },
   vault: {
-    GITHUB_TOKEN: { description: "GitHub Issues sync token", rotate: "90d" },
-    OPENAI_KEY: { description: "Issue triage model key", rotate: "90d" },
-    SLACK_WEBHOOK: { description: "Cycle digest incoming webhook", rotate: "90d" },
+    GITHUB_TOKEN: { description: "GitHub PR intake token", rotate: "90d" },
+    OPENAI_KEY: { description: "Task planner model key", rotate: "90d" },
+    SLACK_WEBHOOK: { description: "Goal digest incoming webhook", rotate: "90d" },
     PUBLIC_APP_URL: {
       description: "Public Keel origin",
       sensitive: false,
@@ -524,7 +533,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
     ...KEEL_SURFACE_VAULT,
   },
   channels: {
-    "issue-assigned": {
+    "task-assigned": {
       medium: "email",
       locales: ["en"],
       description: "Assignee notification",
@@ -534,20 +543,25 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       locales: ["en", "ar"],
       description: "Comment mention reply",
     },
-    "cycle-digest": {
+    "task-overdue": {
       medium: "email",
       locales: ["en"],
-      description: "Cycle close digest",
+      description: "Overdue task",
     },
-    "sla-alert": {
-      medium: "push",
-      locales: ["en"],
-      description: "SLA high-risk / breached",
+    "daily-digest": {
+      medium: "email",
+      locales: ["en", "ar"],
+      description: "Morning inbox + goal digest",
     },
-    "project-update": {
+    "form-received": {
       medium: "email",
       locales: ["en"],
-      description: "Project health update",
+      description: "Form intake received",
+    },
+    "goal-at-risk": {
+      medium: "email",
+      locales: ["en"],
+      description: "Goal health at risk",
     },
     ...KEEL_SURFACE_CHANNELS,
   },
@@ -557,20 +571,26 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       fast: { provider: "openai", tier: "fast", model: "gpt-4.1-mini" },
     },
     prompts: {
-      "issue-triage": {
-        version: 3,
+      "task-suggest": {
+        version: 1,
         model: "smart",
         via: ["smart", "fast"],
         timeout: "30s",
         budget: { maxCostPerCall: 0.02 },
-        evals: "./evals/triage.jsonl",
       },
-      "cycle-summary": {
+      "weekly-summary": {
         version: 1,
         model: "fast",
         via: ["fast"],
         timeout: "15s",
         budget: { maxCostPerCall: 0.005 },
+      },
+      "form-classify": {
+        version: 1,
+        model: "fast",
+        via: ["fast"],
+        timeout: "20s",
+        budget: { maxCostPerCall: 0.008 },
       },
       "document-summary": {
         version: 1,
@@ -581,16 +601,14 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       },
     },
     agents: {
-      triage: {
+      planner: {
         tools: [
-          "issues.list",
-          "issues.get",
-          "issues.create",
-          "issues.update",
-          "issues.assign",
+          "tasks.list",
+          "tasks.get",
+          "tasks.create",
+          "tasks.assign",
           "comments.create",
-          "comments.list",
-          "triage.inbox",
+          "inbox.list",
           "search.query",
         ],
         maxSteps: 8,

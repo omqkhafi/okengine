@@ -104,6 +104,20 @@ describe("managed vault boot chain", () => {
     expect(await Bun.file(join(dir, ".env.local")).text()).toContain(`${name}=written`);
   });
 
+  test("allowGaps boots with an unset secret so put can write the first value", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-vault-gaps-put-"));
+    const name = "OKE_TEST_VAULT_GAPS_PUT";
+    const runtime = createVaultRuntime({
+      secrets: [vault.secret(name, { description: "unset until Console set" })],
+      allowGaps: true,
+      chain: buildVaultBootChain({ driverId: "env", cwd: dir, env: "dev" }),
+    });
+    await runtime.boot();
+    runtime.put(name, "first-value");
+    expect(runtime.read(name)).toBe("first-value");
+    expect(await Bun.file(join(dir, ".env.local")).text()).toContain(`${name}=first-value`);
+  });
+
   test("built-in vault sits in front of env layers", () => {
     const chain = buildVaultBootChain({ driverId: "vault", env: "prod" });
     expect(chain[0]?.driver.id).toBe("vault");

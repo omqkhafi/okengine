@@ -14,15 +14,46 @@ needed).
 
 ### ✨ Added
 
+- `http.resource(path, ops)` chains `.gate(...)` and `.live()`
+  like `http.get`. Gates apply to every verb; live marks list and get.
+
+- `gate.all(...members)` reuses a gate chain. `.gate(write)` flattens
+  the handle (and plain arrays) left to right. The compiler expands
+  `.gate(write)` and `.gate(...WRITE)` onto `flow.gates`.
+
+- `.gate.public` is the unauthenticated sentinel — same as
+  `.gate(gate.public)`, without importing `gate`.
+
+- Keel lists speak PostgREST v16 read grammar: `col=eq|neq|gt|gte|lt|lte|like|ilike|in|is|match|imatch`,
+  `not.`, `like(any).{…}`, nested `or=` / `and=` / `not.and`, `order=col.desc.nullslast`,
+  `select=id,alias:col`. `store.resource` now accepts `not.`, `is.not_null`, quoted `in.()`,
+  and nested `or`/`and` groups.
+
+- Handwritten HTTP lists prefer the Stripe envelope (`out` is the item
+  array, `fx.json.withQuery(rows, input)`). Extra keys auto-eq except
+  path `id`. `fx.json.with(page)` stays for an already-built pager.
+  Any other declared `out` is still valid.
+
+- Call API **PII** matches Store Query: handler responses mask classified
+  fields by default. Toggle includes audited cleartext (`revealPii`).
+
+- Console claim **Generate** mints a first-operator password that
+  meets Console policy (12+ upper, lower, number, special) and
+  copies it to the clipboard.
+
+- `bun run dev:keel:reset` tears down the keel Compose stack
+  (`oke docker clean --yes`) and deletes `.oke/`, `.env.local`, and
+  generated Docker extras so the next `dev:keel` is a first boot.
+
 - `defineSeed({ name, description })` labels this app's seed
   (template or example). `oke dev` asks `Seed keel (Featured
-  Linear story)?` and `.oke/state.json` stores that id — a
+  Harbor GA story + volume)?` and `.oke/state.json` stores that id — a
   different name re-prompts. Not a global seeded flag.
 
-- `examples/keel` is a Linear-shaped OKE app (not a create-oke
+- `examples/keel` is a work-management OKE app (not a create-oke
   template) for `oke dev` against Compose — Postgres, Redis,
-  RustFS, Mailpit, and Meilisearch. Featured issue chain, stub
-  GitHub/Slack ingest, `bun run dev:keel`, then `oke db seed`.
+  RustFS, Mailpit, and Meilisearch. Featured Harbor GA task chain,
+  stub GitHub/Slack ingest, `bun run dev:keel`, then `oke db seed`.
 
 - Console Vault **Add** (`+`) creates a secret or config from the
   operator plane as well as from `vault.secret` / `vault.config` in
@@ -38,10 +69,10 @@ needed).
   `OKE_VAULT_PROVIDER` to the id. Cloud SDKs stay optional peers;
   Doppler and 1Password use `fetch`.
 
-- `dev:console-next:seed` Units tree is a full Linear-shaped HTTP
-  surface: CRUD on issues, comments, projects, documents, attachments,
-  teams, labels, cycles, members, initiatives, and customer requests,
-  plus custom routes (archive, assign, merge, triage snooze, QUERY
+- `dev:console-next:seed` Units tree is a full work-management HTTP
+  surface: CRUD on tasks, comments, projects, documents, attachments,
+  spaces, tags, goals, members, views, and forms,
+  plus custom routes (archive, assign, complete, follow, QUERY
   search, PUT drafts, HEAD health). Call API binds every HTTP flow.
 
 - Console Vault is a security instrument, not a filter-and-empty-state.
@@ -385,6 +416,16 @@ needed).
   so an empty search lists the catalog.
 
 
+- Docs site machine surfaces for agents: spec-compliant
+  `/llms.txt` (absolute links, curated sections, Optional rest),
+  `/llms.json`, `/llms-full.txt` with teaching-figure fallbacks,
+  `/llms/agents` (the AGENTS.md contract), `/robots.txt` (allow-all
+  including named AI crawlers), and `/sitemap.xml`. Per-page markdown
+  is `/llms.mdx/docs/⟨slug⟩`; `/content.md` and `.md` still resolve.
+  HTML docs pages advertise `rel="alternate"` `type="text/markdown"`.
+
+
+
 ### 💥 Breaking Changes
 
 - Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
@@ -399,11 +440,84 @@ needed).
   is `../.env.local`. `COMPOSE_ENV_REL` is `.env.local`. The
   `.env.docker` file and resolution source are gone.
 
-- Console routes are now `/flows` (graph + Traces), `/units` (explorer),
-  `/store`, and `/vault`. `/overview` redirects to `/flows`. Dev scripts
-  are `dev:console` / `:seed` / `:fresh` (the `-next` suffix is gone).
+- Console routes are now `/overview` (graph + Traces), `/flows` (explorer),
+  `/store`, and `/vault`. Unknown paths (including `/units`) are 404 —
+  no legacy rewrite. Dev scripts are `dev:console` / `:seed` / `:fresh`
+  (the `-next` suffix is gone).
 
 ### ♻️ Changed
+
+- Console index browse Search / topK lives on the grid toolbar
+  (one strip — no second search row). Sidebar nav idle icons sit
+  at 40% ink; the active module is a solid accent chip.
+
+- `fx.store(index).driverId` is the configured driver before first
+  I/O (was a gated function, so seed treated Meilisearch as memory
+  and wrote one vector blob). Keel `dev` pins `meilisearch`.
+  Index browse promotes title / identifier columns.
+
+- `examples/keel` now picks Signal delivery per job: comments,
+  projects, forms, and goals emit `once` + `broadcast` + `live`
+  (notify / search / late-subscriber feed). Tasks add
+  `task-changed` broadcast; `task-assigned` is `live` optional.
+
+- Console overview Store spoke shows only SQL / KV / Cache /
+  Files / Index. Named KV namespaces (`drafts`, `reminders`,
+  `view-prefs`, `webhooks`) fan when Store is focused.
+
+- Call API Response status uses the same traces cache glyph as
+  the Traces list (`CacheGlyph`: sky flash / amber flash-off /
+  muted unavailable) beside `200`, then duration. Reveal-PII
+  invokes skip auto-cache and do not invent a hit.
+
+- Keel Compose now starts llama.cpp so all eight elements are live.
+  `drivers.ai` is `openai-compatible` in dev/prod (`mock` in test);
+  the hero shows `openai-compatible · granite3.3:2b` instead of `—`.
+
+- `examples/keel` and Console ui-next seed are work management
+  (spaces, goals, projects, sections, tasks, forms, views) with
+  first-class `project_manager` / `developer` roles — not a Linear
+  issue tracker. Featured walkable id is `ENG-12`. Seed volume is
+  ~500 tasks across SQL, KV, files, and index.
+
+- `/llms.txt` is a curated llmstxt.org index instead of the raw
+  Fumadocs nav dump. Onboard AI copies `/llms.txt` plus `/llms/agents`
+  on the current origin. The documented Vault curl no longer 404s.
+
+- Keel list responses put the item array in `data` and pagination in
+  `meta` (Stripe envelope). `out` is `z.array(Item)`, not `{ items, count }`.
+  create-oke Notes `notes.list` uses the same envelope. Store / Flow docs
+  teach it as the preferred handwritten list, not a requirement.
+
+- `fx.json.with` accepts a `{ data, meta }` page (`fx.json.with(page)`)
+  as well as the two-arg form. Flow `out` stays the item array — do not
+  put the page object on `out`.
+
+- List `meta.next` / `meta.prev` are the next request (`{ cursor }`),
+  not flags. The typed client walks with `page.next()` or
+  `for await (const page of api.notes.list({ limit: 20 }))` — no
+  `.pages()`, no `if (mode)`, no `hasNext`. `meta.next` /
+  `meta.prev` are typed `{ cursor }` bags for TanStack `pageParam`.
+  Offset and keyset tokens share `?cursor=`. `hasNext` /
+  `nextCursor` / `hasNextPage` / `ClientCall.pages` are gone
+  (unreleased).
+
+- `examples/keel` flow `in` / `out` schemas now come from `drizzle-zod`
+  (`createSelectSchema` / insert / update on generated tables) instead of
+  hand-copied `z.object` column lists.
+
+- S3 files (`RustFS` / MinIO) create the configured bucket on first
+  open when `S3_ENDPOINT` is set, so `oke db seed` and uploads no
+  longer fail with `The specified bucket does not exist`.
+
+- Console sidebar hops restore the last Flows / Units / Store / Vault
+  URL (selected trace, flow, resource, contract) instead of wiping
+  the module back to its empty landing.
+
+- `examples/keel` `oke db seed` now writes the same lived-in Linear
+  story as Console ui-next seed — featured ENG-184 chain plus ~500
+  generated issues, comments, labels, drafts, attachments, and
+  search index documents.
 
 - Console Vault set / rotate drop the typed `SET` / `ROTATE` phrase.
   Pick a reason chip (`scheduled`, `leak`, `provider`, …) or **other**
@@ -628,9 +742,161 @@ needed).
 
 ### 🔥 Removed
 
+- `store.resource({ unit })` — unit comes from `flow("notes.list")`
+  and `.adopt({ notes })`, not a resource option.
+
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
 ### 🐛 Fixed
+
+- Console index browse keeps focus while typing. Search no
+  longer sits inside a tooltip trigger, the grid stays mounted
+  across keystrokes, and the query waits 280ms of quiet.
+
+- Console icon-rail selection is readable: idle icons sit
+  at 30% ink, the active chip uses a stronger
+  `--sidebar-accent`, and hover no longer clears the
+  selected fill.
+
+- Console Overview no longer paints Cache as a fifth Store type.
+  Store kinds are `sql` · `kv` · `files` · `index`. Cache is a
+  KV namespace (and HTTP read cache), not a facet.
+
+- Console Overview element discs are name-only: no `N live`
+  caption and no live-heat pulse. Center edge handles stay
+  invisible. Hubs are 56px and show the two-letter lattice
+  symbol (`Fl` · `Sg` · `St` · `Ck` · `Gt` · `Vt` · `Ch` ·
+  `Ai`). Hover still names the element.
+
+- Console Store browse no longer shows classified emails in
+  cleartext. `ownerEmail` / `owner_email` (and the same JS/SQL
+  spelling split) mask as `[redacted]` unless the operator
+  enables Include PII.
+
+- Call API Response no longer flashes cleartext then remasks, or drops
+  the 200 chip on a PII toggle. Hide PII remasks in place; reveal
+  refetches. The JSON viewer never paints a stale highlight.
+
+- Call API **PII** now opens the host store session with cleartext when
+  Include PII is on, and skips auto-cache so a prior masked list is not
+  reused. Classified columns the handler reads (`ownerEmail`) were
+  already `[redacted]` at the driver.
+
+- `bun run dev:keel:reset` writes a fresh `.env.local` from `.env.example`
+  (PUBLIC_APP_URL and the other vault / app defaults). The next
+  `dev:keel` regenerates stack passwords. Keel now passes KV / index
+  stores, vault configs, and clocks into `oke()` so Call API and KV
+  Query resolve after a wipe.
+
+- `oke dev` under Compose no longer refuses keel CRUD with OKE1008.
+  `bindCrud` stamps `sql:<table>` on each verb; extract expands the
+  same. Authors do not declare `effects` at the call site.
+- Read-only flows cache automatically from inferred or ledgered
+  `reads` — no `cache: "30s"` and no `fx.cache`. The first GET is a
+  miss; the next identical GET is a hit. `cache: false` opts out; a
+  duration string adds a TTL. Writes invalidate matching keys.
+
+- A fresh `oke dev` hero now shows the effective driver map
+  (signal Redis, clock Postgres, files S3, channel SMTP) even when
+  `oke.config.ts` only pins overrides. `dev:keel:reset` SIGTERMs
+  leftover listeners on `:6530` / `:6533` / `:6535`. Chrome inspector
+  probes on MCP (`GET /`, `/json/version`) no longer paint as 404s.
+
+- `oke dev` keeps the first-admin claim code on the live board
+  (paste URL + `oke console claim-code`). The code is TTY-only —
+  never returned from `GET /console/setup/status`. After surfaces
+  bind, the TTY reprints one Ready board (elements, Docker, claim,
+  notices, Backend / Console / MCP) so mid-boot db-push lines and
+  health ticks cannot tear the claim box. The `bun --hot` child
+  no longer clears the screen on schema reload. The pane drops
+  after the first operator.
+
+- Keel `oke db seed` no longer inserts sections before projects
+  (`sections_project_id` FK). Essential seed is spaces / members /
+  tags; sections land with projects in the volume step.
+
+- `GET /_oke/client.json` wraps the runtime route map as
+  `{ routes }` so `oke dev` can regenerate `oke-client.d.ts`.
+  Chrome `GET /json/version` probes are silent on Backend as well
+  as MCP.
+
+- Store Query editors paint SQL and KV with their own token colors
+  (keywords / commands, strings, keys, numbers, comments) instead of
+  a single gray overlay. KV is no longer highlighted as bash.
+
+- Overview Store spoke always shows **Cache** (engine `fx.cache` — not a
+  Call API / trace) and fans declared KV namespaces (`drafts`,
+  `triage-snooze`, `webhooks`) so keel does not hide them behind a
+  Store click.
+
+- Console Store KV browse on a dedicated namespace (`store.kv("drafts")`)
+  lists root keys (`ENG-184`) instead of looking for `drafts:*`. Extract
+  stamps `namespaces` so Overview Store resources include KV.
+
+- Call API **PII** now renders on the toolbar. The panel imported
+  `runs-pii` from a path Vite could not resolve, so `:6533` kept
+  the last bundle without the control.
+
+- Clock traces like `drafts.expire` no longer fail with a bare
+  `OkeError` and no message. `fx.store(kv).delete(key)` now
+  extracts `kv:<namespace>` (not `kv:key`), `ttlMs` is a read,
+  and thrown `OkeError`s record as `OKE1002` plus the cause.
+
+- Tables with a `name` column (teams, labels, cycles, …) no longer
+  fail Call API with OKE1001 `sql:db`. The kernel now reads
+  `tableName` so the capability matches extracted `sql:<table>`.
+
+- Console Traces now lists Call API invokes (`issues.list` and
+  other host flows). The in-process attach used by `oke dev`
+  posts WideEvents to the same ingest bridge as the app child,
+  so they sit next to clock ticks like `drafts.expire`.
+
+- Console Vault **Set** on Simulated env no longer returns
+  `VaultNotFound`. The panel boots with gaps so the first
+  write can land in `.env.local`.
+
+- Console Units Call no longer paints a thrown host error as
+  `200` + `response: null`. A 500 envelope or `OkeError`
+  (including OKE1006 undeclared secret) shows as a failure.
+  Extract now binds `vault.config` so `fx.vault.get(publicAppUrl)`
+  declares `PUBLIC_APP_URL`, and list flows can return the
+  seeded rows Store SQL already shows.
+
+- Console Units Call **Invoke as** uses the same Operator / Public / As
+  Gate cards as Store Query. Operator bypasses the flow's gate chain;
+  Public is anonymous; As picks a user or policy.
+
+- Console Store schema graph infers camelCase FKs (`teamId`,
+  `issueId`, `parentId`) the same as `*_id`, so keel tables
+  draw relation edges instead of a single unlinked column.
+
+- Console SQL query editor applies Shiki token colors with
+  inline theme ink (`github-light` / `github-dark`) so
+  `SELECT` / `FROM` are not a flat grey overlay.
+
+- Console Units Call identity picker uses the same card menu
+  as Store Query Gate (name, email, scopes) instead of a
+  plain select.
+
+- Console Units Call Response shows the handler output JSON
+  on success. Invoke-as also unwraps `fx.json` and HTTP
+  `{ data }` envelopes when `execute` left `output` empty.
+
+- `oke dev` Console Call API and Store SQL now use the live host
+  app (compose Postgres / Redis), not the empty Manifest memory
+  sandbox. Invoke-as no longer returns `InvokeDenied: host invoke
+  not configured`.
+
+- `oke dev` no longer crashes when an app binds `http.query`
+  (RFC 10008). Bun.serve native `routes` reject QUERY; those
+  verbs stay on the fetch fallback. An invalid route table
+  retries fetch-only — Bun's HTML-bundling example is not
+  printed.
+
+- `bun run dev:keel` no longer dies with OKE1008 on
+  `cycles.list`. Extract expands `bindNamedTableCrud` into
+  unit-prefixed CRUD flows so effects are inferred, not
+  hand-declared.
 
 - `store.schema.table` with a `name` column no longer throws
   `Unable to resolve table name from value` on insert, select,
@@ -726,6 +992,20 @@ needed).
 - `/flows` renders the graph + Traces page and `/units` renders the
   explorer — the path names now match the pages.
 
+- Traces no longer show `0μs` for a handler that finished in the
+  same millisecond. Duration uses `performance.now()` when the app
+  clock did not tick. Call API shows that handler time (same clock
+  as Traces) and labels the browser round-trip as `rtt`.
+
+- Console Store browse of a Meilisearch index no longer fails with
+  InternalError after the index already exists. Open is idempotent
+  (GET then create; `index_already_exists` / HTTP 409 is success).
+  Browse errors show the driver message, not a bare code.
+
+- `bun run build` no longer warns that Console chunks exceed
+  500 kB. Highlighting loads five grammars through the JS engine
+  (no Oniguruma WASM / unused C++ bundle), and Overview / Flows /
+  Store / Vault are lazy route chunks.
 
 ### 🔒 Security
 

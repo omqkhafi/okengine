@@ -1,7 +1,7 @@
 import { on, flow, http } from "okengine";
 import { eq } from "drizzle-orm";
 import { db } from "../../core.ts";
-import { member, canBook, fair } from "../../gates.ts";
+import { book, member } from "../../gates.ts";
 import { bookings } from "../../schema.ts";
 import { orderPlaced, seatFeed } from "./signals.ts";
 
@@ -14,7 +14,7 @@ void 0;
 void 0;
 
 export const create = on(
-  http.post("/bookings").gate(member, canBook, fair),
+  http.post("/bookings").gate(book),
   flow("bookings.create", {
     in: BookingIn,
     out: BookingOut,

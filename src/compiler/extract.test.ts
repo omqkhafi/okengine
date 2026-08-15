@@ -292,6 +292,7 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
     });
     expect(manifest.stores?.embeddings?.description).toBe("Document embeddings");
     expect(manifest.stores?.sessions?.description).toBe("Session cache");
+    expect(manifest.stores?.sessions?.namespaces).toEqual(["sessions"]);
     expect(manifest.signals?.["order-placed"]?.description).toBe("Order placed event");
     expect(manifest.channels?.["booking-confirmed"]?.description).toBe(
       "Booking confirmation email",
@@ -302,6 +303,85 @@ export const stripeKey = vault.secret("STRIPE_KEY", {
   });
 });
 
+describe("extractManifest — bindNamedTableCrud(...)", () => {
+  test("expands the helper into unit-prefixed CRUD flows with table effects", async () => {
+    const source = `
+import { store } from "okengine";
+
+export const cycles = store.schema.table("cycles", {});
+
+export const { list, create, get, update, remove } = bindNamedTableCrud({
+  unit: "cycles",
+  path: "/cycles",
+  table: cycles,
+  liveList: true,
+});
+`;
+    const helper = `
+export function bindNamedTableCrud(spec) {
+  const unit = spec.unit;
+  const list = on(http.get("/x"), flow(\`\${unit}.list\`, { do: () => ({}) }));
+}
+`;
+    const manifest = await extractFromSources({
+      "src/lib/resource.ts": helper,
+      "src/flows/cycles/index.ts": source,
+    });
+
+    expect(manifest.flows?.["cycles.list"]?.trigger).toEqual({
+      http: { method: "GET", path: "/cycles" },
+    });
+    expect(manifest.flows?.["cycles.list"]?.live).toBe(true);
+    expect(manifest.flows?.["cycles.create"]?.trigger).toEqual({
+      http: { method: "POST", path: "/cycles" },
+    });
+    expect(manifest.flows?.["cycles.get"]?.trigger).toEqual({
+      http: { method: "GET", path: "/cycles/:id" },
+    });
+    expect(manifest.flows?.["cycles.update"]?.trigger).toEqual({
+      http: { method: "PATCH", path: "/cycles/:id" },
+    });
+    expect(manifest.flows?.["cycles.delete"]?.trigger).toEqual({
+      http: { method: "DELETE", path: "/cycles/:id" },
+    });
+    expect(manifest.flows?.["cycles.list"]?.effects?.reads).toEqual(["sql:cycles"]);
+    expect(manifest.flows?.["cycles.create"]?.effects?.writes).toEqual(["sql:cycles"]);
+    expect(manifest.flows?.list).toBeUndefined();
+  });
+
+  test("expands bindCrud the same as bindNamedTableCrud", async () => {
+    const source = `
+import { store } from "okengine";
+
+export const documents = store.schema.table("documents", {});
+
+export const { list, get, update, remove } = bindCrud({
+  unit: "documents",
+  path: "/documents",
+  table: documents,
+});
+`;
+    const helper = `
+export function bindCrud(spec) {
+  const unit = spec.unit;
+  const list = on(http.get("/x"), flow(\`\${unit}.list\`, { do: () => ({}) }));
+}
+`;
+    const manifest = await extractFromSources({
+      "src/lib/resource.ts": helper,
+      "src/flows/documents/index.ts": source,
+    });
+
+    expect(manifest.flows?.["documents.list"]?.effects?.reads).toEqual(["sql:documents"]);
+    expect(manifest.flows?.["documents.get"]?.effects?.reads).toEqual(["sql:documents"]);
+    expect(manifest.flows?.["documents.update"]?.effects).toEqual({
+      reads: ["sql:documents"],
+      writes: ["sql:documents"],
+    });
+    expect(manifest.flows?.list).toBeUndefined();
+  });
+});
+
 describe("extractManifest — on(http.resource(...))", () => {
   test("expands the mount into five CRUD bindings with store effects", async () => {
     const source = `
@@ -309,7 +389,7 @@ import { on, http, store } from "okengine";
 
 export const db = store.sql("notes", { schema: {} });
 
-const notesR = store.resource(db, {}, { unit: "notes", breaking: true });
+const notesR = store.resource(db, {}, { breaking: true });
 
 const mounted = on(http.resource("/notes", notesR.all()));
 
@@ -340,6 +420,71 @@ export const remove = mounted.remove;
     expect(manifest.flows?.create?.effects?.writes).toEqual(["sql:notes"]);
     expect(manifest.flows?.list?.breaking).toBe(true);
   });
+
+  test("chains .gate(...) and .live() onto the five verbs", async () => {
+    const source = `
+import { on, http, store, gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const db = store.sql("notes", { schema: {} });
+
+const notesR = store.resource(db, {}, {});
+
+const mounted = on(http.resource("/notes", notesR.all()).gate(member).live());
+
+export const list = mounted.list;
+export const create = mounted.create;
+export const get = mounted.get;
+export const update = mounted.update;
+export const remove = mounted.remove;
+`;
+    const manifest = await extractFromSources({ "src/flows/notes.ts": source });
+
+    expect(manifest.flows?.list?.gates).toEqual(["member"]);
+    expect(manifest.flows?.create?.gates).toEqual(["member"]);
+    expect(manifest.flows?.get?.gates).toEqual(["member"]);
+    expect(manifest.flows?.update?.gates).toEqual(["member"]);
+    expect(manifest.flows?.remove?.gates).toEqual(["member"]);
+    expect(manifest.flows?.list?.live).toBe(true);
+    expect(manifest.flows?.get?.live).toBe(true);
+    expect(manifest.flows?.create?.live).toBeUndefined();
+    expect(manifest.flows?.update?.live).toBeUndefined();
+    expect(manifest.flows?.remove?.live).toBeUndefined();
+  });
+});
+
+describe("extractManifest — vault.config", () => {
+  test("fx.vault.get(config) infers the contract name, not the binding id", async () => {
+    const core = `
+export const publicAppUrl = vault.config("PUBLIC_APP_URL", {
+  description: "Public origin",
+  dev: "http://127.0.0.1:6530",
+});
+`;
+    const source = `
+import { publicAppUrl } from "@/core";
+
+export const list = on(
+  http.get("/issues").gate(member),
+  flow("issues.list", {
+    do: async (_input, fx) => {
+      await fx.vault.get(publicAppUrl);
+      return { items: [] };
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({
+      "src/core.ts": core,
+      "src/flows/issues/index.ts": source,
+    });
+
+    expect(manifest.vault?.PUBLIC_APP_URL).toMatchObject({
+      description: "Public origin",
+      sensitive: false,
+    });
+    expect(manifest.flows?.["issues.list"]?.effects?.secrets).toEqual(["PUBLIC_APP_URL"]);
+  });
 });
 
 describe("extractManifest — files-store write methods", () => {
@@ -350,7 +495,7 @@ import { on, flow, http, gate, store } from "okengine";
 export const files = store.files("uploads");
 
 export const attach = on(
-  http.post("/attach").gate(gate.public),
+  http.post("/attach").gate.public,
   flow("notes.attach", {
     do: async (input, fx) => {
       await fx.store(files).put("key", input.text);
@@ -371,7 +516,7 @@ import { on, flow, http, gate, store } from "okengine";
 export const files = store.files("uploads");
 
 export const attach = on(
-  http.post("/attach").gate(gate.public),
+  http.post("/attach").gate.public,
   flow("notes.attachImage", {
     do: async (input, fx) => {
       await fx.store(files).putImage("key", input.bytes);
@@ -407,6 +552,38 @@ export const sweep = on(
   });
 });
 
+describe("extractManifest — kv key methods", () => {
+  test("fx.store(kv).delete(key) writes kv:<namespace>, not kv:<identifier>", async () => {
+    const source = `
+import { on, flow, every, store, signal } from "okengine";
+
+export const draftsKv = store.kv("drafts");
+export const draftExpired = signal("draft-expired", { delivery: "broadcast", retries: 0, deadLetter: false });
+
+export const expire = on(
+  every("10m"),
+  flow("drafts.expire", {
+    do: async (_input, fx) => {
+      const keys = await fx.store(draftsKv).list();
+      for (const key of keys) {
+        const ttl = await fx.store(draftsKv).ttlMs(key);
+        if (ttl !== null && ttl <= 0) {
+          await fx.store(draftsKv).delete(key);
+          await fx.emit(draftExpired, { id: key });
+        }
+      }
+    },
+  }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/drafts.ts": source });
+    const effects = manifest.flows?.["drafts.expire"]?.effects;
+    expect(effects?.reads).toEqual(["kv:drafts"]);
+    expect(effects?.writes).toEqual(["kv:drafts"]);
+    expect(effects?.emits).toEqual(["draft-expired"]);
+  });
+});
+
 describe("extractManifest — channel medium binder aliasing", () => {
   test("mail.template(...) resolves through `const mail = channel.email(...)`", async () => {
     const source = `
@@ -419,7 +596,7 @@ export const noteCreatedMail = mail.template("note-created", {
 });
 
 export const onCreated = on(
-  http.post("/hook").gate(gate.public),
+  http.post("/hook").gate.public,
   flow("notes.onCreated", {
     do: async (payload, fx) => {
       await fx.send(noteCreatedMail, { to: "you@localhost", data: payload });
@@ -442,7 +619,7 @@ const otp = channel.sms({});
 export const otpTemplate = otp.template("otp-code", {});
 
 export const send = on(
-  http.post("/otp").gate(gate.public),
+  http.post("/otp").gate.public,
   flow("notes.sendOtp", {
     do: async (payload, fx) => {
       await fx.send(otpTemplate, { to: "+10000000000", data: payload });
@@ -522,5 +699,66 @@ export const decoy = flow("checkout.realName", {
 
     expect(manifest.flows?.["checkout.realName"]).toBeDefined();
     expect(manifest.flows?.["checkout.decoyName"]).toBeUndefined();
+  });
+});
+
+describe("extractManifest — .gate.public", () => {
+  test("reads the public sentinel from a member chain", async () => {
+    const source = `
+import { on, flow, http } from "okengine";
+
+export const health = on(
+  http.get("/health").gate.public,
+  flow("health.check", { do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/health.ts": source });
+    expect(manifest.flows?.["health.check"]?.gates).toEqual(["public"]);
+  });
+});
+
+describe("extractManifest — gate.all", () => {
+  test("catalogues the handle and expands .gate(write) onto the flow", async () => {
+    const source = `
+import { on, flow, http, gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const canBook = gate.scope("booking:create");
+export const fair = gate.rate({ max: 60, per: "1m", keyBy: "ip" });
+export const write = gate.all(member, canBook, fair);
+
+export const create = on(
+  http.post("/bookings").gate(write),
+  flow("bookings.create", { do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/bookings.ts": source });
+    expect(manifest.gates?.write).toEqual({
+      kind: "all",
+      members: ["member", "booking:create", "rate:sliding-window-counter:60/1m"],
+    });
+    expect(manifest.flows?.["bookings.create"]?.gates).toEqual([
+      "member",
+      "booking:create",
+      "rate:sliding-window-counter:60/1m",
+    ]);
+  });
+
+  test("expands .gate(...WRITE) from a const array", async () => {
+    const source = `
+import { on, flow, http, gate } from "okengine";
+
+export const member = gate.policy("member", ({ auth }) => !!auth.verified);
+export const canBook = gate.scope("booking:create");
+const WRITE = [member, canBook] as const;
+
+export const create = on(
+  http.post("/bookings").gate(...WRITE),
+  flow("bookings.create", { do: () => ({ ok: true }) }),
+);
+`;
+    const manifest = await extractFromSources({ "src/flows/bookings.ts": source });
+    expect(manifest.flows?.["bookings.create"]?.gates).toEqual(["member", "booking:create"]);
+    expect(manifest.gates?.WRITE).toBeUndefined();
   });
 });

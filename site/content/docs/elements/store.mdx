@@ -175,24 +175,25 @@ const notesR = store.resource(db, notes, {
     filter: "all", // ?col=op.value — "all" | Column[] | "none"
     order: "all", // ?order=col.desc
   },
-  unit: "notes",
 });
 
-const mounted = on(http.resource("/notes", notesR.all()));
+const mounted = on(http.resource("/notes", notesR.all()).gate.public.live());
 ```
+
+`.gate(...)` / `.live()` chain like `http.get` — gates on every verb, live on list and get.
 
 The list endpoint's URL is the whole query language:
 
-| Param                               | Meaning                                             | Example                 |
-| ----------------------------------- | --------------------------------------------------- | ----------------------- |
-| `?cursor=` / `?offset=` / `?limit=` | paginate (keyset when `cursor` columns are set)     | `?limit=20&cursor=eyJ…` |
-| `?search=` (`?q=`)                  | substring match over `search` columns               | `?q=invoice`            |
-| `?col=op.value`                     | filter — ops `eq ne gt gte lt lte like ilike in is` | `?title=like.%draft%`   |
-| `?or=(…)` / `?and=(…)`              | grouped boolean filters                             | `?or=(a.eq.1,b.eq.2)`   |
-| `?order=`                           | sort                                                | `?order=createdAt.desc` |
-| `?select=`                          | project columns                                     | `?select=id,title`      |
+| Param                               | Meaning                                                   | Example                               |
+| ----------------------------------- | --------------------------------------------------------- | ------------------------------------- |
+| `?cursor=` / `?offset=` / `?limit=` | paginate (keyset when `cursor` columns are set)           | `?limit=20&cursor=eyJ…`               |
+| `?search=` (`?q=`)                  | substring match over `search` columns                     | `?q=invoice`                          |
+| `?col=op.value`                     | filter — `eq neq gt gte lt lte like ilike in is` + `not.` | `?title=like.*draft*`                 |
+| `?or=(…)` / `?and=(…)`              | grouped filters, nested `not.and` / `not.or`              | `?or=(a.eq.1,not.and(b.gt.2,c.lt.9))` |
+| `?order=`                           | sort (`col.desc`, comma-separated)                        | `?order=createdAt.desc`               |
+| `?select=`                          | project columns                                           | `?select=id,title`                    |
 
-Responses follow the Stripe-style envelope: `{ data, meta: { nextCursor, hasNextPage }, error }`. `create` answers **201**, `remove` answers **204**, and a missing row is a typed `NotFound` — never a crash.
+Responses follow the Stripe-style envelope: `{ data, meta, error }`. Clients page with `page.next()` or `for await (const page of api.notes.list({ limit: 20 }))` — `meta.next` / `meta.prev` are the next request (`{ cursor }`), not flags. `mode` is diagnostic. `create` answers **201**, `remove` answers **204**, and a missing row is a typed `NotFound` — never a crash.
 
 #### An admin table
 
@@ -218,9 +219,37 @@ list: { mode: "offset", filter: "none", limit: 20 },
 
 **Consequence:** a request that filters on a forbidden column — `?secret=eq.x` — fails with **422** and the exact message `unknown list param "secret"`. Filterable columns are a whitelist, never an accident.
 
+### Handwritten HTTP lists
+
+`store.resource` is the usual CRUD path. When you write the list Flow yourself, prefer the same Stripe envelope — `out` is the item array, pagination sits on `meta`:
+
+```typescript
+export const list = on(
+  http.get("/notes").gate.public,
+  flow("notes.list", {
+    out: z.array(Note),
+    do: async (input, fx) => {
+      const rows = await fx.store(db).select().from(notes);
+      return fx.json.withQuery(rows, input);
+    },
+  }),
+);
+```
+
+Zero-config: `?q=` searches every string field, extra keys auto-eq except path `id`, and PostgREST `?col=op.value` / `?order=` / `?select=` are open. Nested lists filter the parent in the load — `input.id` is not a column eq.
+
+<Callout title="Preferred, not required">
+  Any declared `out` is valid — `{ notes: […] }` still works. The array + `fx.json.withQuery`
+  shape matches `store.resource` and the typed client (`data` is the page, `meta` is the pager).
+</Callout>
+
+**Consequence:** returning `{ items, count }` from `do` nests as `{ data: { items, count }, error: null }` — the pager is no longer top-level `meta`.
+
+`fx.json.with({ data, meta })` stays for a page you already built. A third argument locks the surface or switches to keyset (`mode: "cursor"`, `cursor: ["createdAt", "id"]`).
+
 ### Querying by hand
 
-When `store.resource` is too conventional, `fx.store(db)` is the full single-table session:
+When the list is not conventional CRUD, `fx.store(db)` is the full single-table session:
 
 ```typescript
 // select — chain where / orderBy / limit / offset in any order
@@ -668,12 +697,12 @@ await files.delete("docs/readme.txt");
 
 Keys are opaque strings the driver stores as-is. Prefer path-like prefixes (`photos/`, `exports/`).
 
-| Helper / rule               | Meaning                                                                  |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `contentAddressedKey(data)` | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly) |
-| `safeFileObjectKey(name, prefix?)` | URL-safe ASCII key (`file-a1b2c3d4.pdf`). Keep the original name in the catalog. |
-| Leading `/` or `..`         | Rejected by the `fs` driver (`Invalid object key`)                       |
-| Non-ASCII keys              | Console warns `non_ascii_key`. Console puts rewrite the key and store `originalName` in `.oke/catalog.json` (and `file_objects` when that table exists). |
+| Helper / rule                      | Meaning                                                                                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contentAddressedKey(data)`        | From `okengine/store` — stable sha256 hex of the bytes (dedupe-friendly)                                                                                 |
+| `safeFileObjectKey(name, prefix?)` | URL-safe ASCII key (`file-a1b2c3d4.pdf`). Keep the original name in the catalog.                                                                         |
+| Leading `/` or `..`                | Rejected by the `fs` driver (`Invalid object key`)                                                                                                       |
+| Non-ASCII keys                     | Console warns `non_ascii_key`. Console puts rewrite the key and store `originalName` in `.oke/catalog.json` (and `file_objects` when that table exists). |
 
 ### Per-environment Files drivers
 
@@ -704,9 +733,8 @@ images: {
 **Known limit:** `fs` is single-host. Under horizontal scale each replica sees its own filesystem (silently inconsistent object views). Boot prints a one-shot warning when `drivers.store.files` is `fs`. Use `s3` for `dev`/`prod` (create-oke templates already do).
 
 <Callout title="Console Files is a folder browser">
-  Inspect the **bucket**. Click a file to preview in a sheet. Uploads
-  use a URL-safe key; the original name lives in the object catalog.
-  Bytes live on `memory`, `fs`, or `s3`.
+  Inspect the **bucket**. Click a file to preview in a sheet. Uploads use a URL-safe key; the
+  original name lives in the object catalog. Bytes live on `memory`, `fs`, or `s3`.
 </Callout>
 
 ### Images — `image` / `putImage`
@@ -804,16 +832,16 @@ One declaration shape — two search physics. The handle is a **discriminated un
 
 <StoreIndexModes />
 
-| Call (both)     | Effect  | Returns                     |
-| --------------- | ------- | --------------------------- |
-| `upsert(…)`     | `write` | `void`                      |
-| `search(…)`     | `read`  | hits / result               |
-| `list(limit?)`  | `read`  | documents (id + meta)       |
-| `delete(id)`    | `write` | `boolean`                   |
+| Call (both)    | Effect  | Returns               |
+| -------------- | ------- | --------------------- |
+| `upsert(…)`    | `write` | `void`                |
+| `search(…)`    | `read`  | hits / result         |
+| `list(limit?)` | `read`  | documents (id + meta) |
+| `delete(id)`   | `write` | `boolean`             |
 
 <Callout title="Console Index is a search box">
-Type a phrase to find documents by id and stored meta. A comma-separated vector still runs an ANN
-probe. Meilisearch uses full-text `q`.
+  Type a phrase to find documents by id and stored meta. A comma-separated vector still runs an ANN
+  probe. Meilisearch uses full-text `q`.
 </Callout>
 
 TypeScript rejects a vector query against a text index (and vice versa) at compile time — never at
@@ -962,6 +990,11 @@ You are on offset paging. Switch `list` to keyset by setting `cursor` columns wi
 <Accordion title="meta.total is slow on a big table">
 
 `count: "exact"` runs `COUNT(*)` per page. Set `count: "none"` in the `list` options to skip it, or use keyset mode where totals are rarely needed.
+
+</Accordion>
+<Accordion title="List data is { items, count } instead of an array">
+
+Success already wraps `{ data, error: null }`. Returning a page object from `do` nests the pager inside `data`. Prefer `out: z.array(Item)` and `return fx.json.withQuery(rows, input)`. Any other declared `out` is still valid.
 
 </Accordion>
 <Accordion title="KV TTL never expires in tests">

@@ -1,13 +1,12 @@
 /**
- * Gate: `/llms.txt` (Fumadocs `llms(source).index()`) lists every real nav
- * page and introduces no orphan links. Nav is the meta.json tree written by
- * handbook navigation.
+ * Gate: `/llms.txt` (`buildLlmsTxt`) lists every real nav page and
+ * introduces no orphan handbook links. Nav is the meta.json tree.
  */
 
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { llms } from "fumadocs-core/source";
+import { buildLlmsTxt, LLMS_EXTRA_LINKS } from "../lib/llms-index.ts";
 import { source } from "../lib/source.ts";
 
 const DOCS = join(import.meta.dir, "..", "content", "docs");
@@ -122,6 +121,7 @@ function parseLlmsLinks(body: string): string[] {
  */
 function toDocsUrl(href: string): string {
   let path = href.split("#")[0] ?? href;
+  path = path.replace(/^https?:\/\/[^/]+/, "");
   path = path.replace(/\/llms\.mdx/, "");
   path = path.replace(/\/content\.md$/, "");
   if (path.endsWith(".md")) path = path.slice(0, -3);
@@ -145,25 +145,24 @@ describe("llms.txt ↔ nav structure", () => {
     }
   });
 
-  test("llms(source).index() covers every nav page with no orphan links", async () => {
+  test("buildLlmsTxt covers every nav page; extras are the declared machine links", async () => {
     const navSlugs = await collectNavSlugs(DOCS);
     const navUrls = new Set(navSlugs.map(docsUrl));
-    const index = llms(source).index();
+    const index = buildLlmsTxt();
+    const extraPaths = new Set(LLMS_EXTRA_LINKS.map((e) => e.path));
     const linkSet = new Set(parseLlmsLinks(index).map(toDocsUrl));
 
-    // Source pages and nav must agree with the live index.
     expect(source.getPages().length).toBe(navUrls.size);
-    expect(linkSet.size).toBe(navUrls.size);
 
     for (const url of navUrls) {
       expect(linkSet.has(url)).toBe(true);
     }
     for (const url of linkSet) {
+      if (extraPaths.has(url)) continue;
       expect(navUrls.has(url)).toBe(true);
     }
 
-    // Route must keep generating from the live source (not a hand file).
     const route = await Bun.file(join(import.meta.dir, "..", "app", "llms.txt", "route.ts")).text();
-    expect(route).toContain("llms(source).index()");
+    expect(route).toContain("buildLlmsTxt()");
   });
 });

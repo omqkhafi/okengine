@@ -107,6 +107,7 @@
     "dev:console:fresh:seed": "OKE_CONSOLE_FRESH=1 OKE_CONSOLE_SEEDED=1 bunx --bun vite --config src/console/ui-next/vite.config.ts",
     "dev:keel": "bun run --cwd examples/keel dev",
     "dev:keel:seed": "bun run --cwd examples/keel seed",
+    "dev:keel:reset": "bun run --cwd examples/keel reset",
     "test:keel": "bun run --cwd examples/keel test",
     "test:keel:docker": "OKE_TEST_DOCKER=1 bun run --cwd examples/keel test",
     "build:lib": "bun src/release/build-lib.ts",

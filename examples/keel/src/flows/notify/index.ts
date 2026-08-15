@@ -1,29 +1,53 @@
 import { on, flow } from "okengine";
 
 import {
-  cycleDigestMail,
-  dailyDigestMail,
   db,
-  issueAssignedMail,
-  issueSubscribedMail,
+  formReceivedMail,
+  goalAtRiskMail,
   mentionReplyMail,
-  projectUpdateMail,
+  taskAssignedMail,
 } from "@/core";
-import { comments, cycles, issues, members, projects } from "@/db/schema.decl";
+import { comments, inbox, taskAssignees } from "@/db/schema.decl";
 import { commentAdded } from "@/flows/comments/signals";
-import { cycleClosed } from "@/flows/cycles/signals";
-import { issueArchived, issueCreated, issueReassigned, issueUpdated } from "@/flows/issues/signals";
+import { draftExpired } from "@/flows/drafts/signals";
+import { formSubmitted } from "@/flows/forms/signals";
+import { goalAtRisk, goalChanged } from "@/flows/goals/signals";
 import { projectUpdated } from "@/flows/projects/signals";
+import { taskChanged, taskCompleted } from "@/flows/tasks/signals";
 
-/** On issue create → assignee email. */
-export const onIssue = on(
-  issueCreated,
-  flow("notify.onIssue", {
+async function pushInbox(
+  fx: {
+    id: () => string;
+    clock: { now: () => number };
+    store: (ref: unknown) => {
+      insert: (t: unknown) => { values: (row: Record<string, unknown>) => Promise<unknown> };
+    };
+  },
+  memberEmail: string,
+  kind: string,
+  title: string,
+  refId: string,
+): Promise<void> {
+  if (!memberEmail) return;
+  await fx.store(db).insert(inbox).values({
+    id: fx.id(),
+    memberEmail,
+    kind,
+    title,
+    refId,
+    readAt: null,
+    createdAt: fx.clock.now(),
+  });
+}
+
+/** On task change → assignee email + inbox. */
+export const onTask = on(
+  taskChanged,
+  flow("notify.onTask", {
     do: async (payload, fx) => {
-      const row = await fx.store(db).findById(issues, payload.id);
-      const email = payload.assigneeEmail ?? (row ? String(row.assigneeEmail ?? "") : "");
+      const email = payload.assigneeEmail;
       if (!email) return;
-      await fx.send(issueAssignedMail, {
+      await fx.send(taskAssignedMail, {
         to: email,
         data: {
           id: payload.id,
@@ -32,125 +56,114 @@ export const onIssue = on(
           email,
         },
       });
+      await pushInbox(fx as never, email, "task-created", payload.title, payload.id);
     },
   }),
 );
 
-/** On comment → mention reply. */
+/** On comment → mention reply + inbox. */
 export const onComment = on(
   commentAdded,
   flow("notify.onComment", {
     do: async (payload, fx) => {
       await fx.store(db).findById(comments, payload.id);
+      const mentions = payload.body.match(/@([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/gi) ?? [];
+      const to = mentions[0]?.slice(1) ?? "ops@keel.dev";
       await fx.send(mentionReplyMail, {
-        to: "ops@keel.dev",
-        data: { id: payload.id, issueId: payload.issueId, body: payload.body },
+        to,
+        data: { id: payload.id, taskId: payload.taskId, body: payload.body },
       });
+      await pushInbox(fx as never, to, "mention", payload.body.slice(0, 80), payload.taskId);
     },
   }),
 );
 
-/** On issue update. */
-export const onUpdated = on(
-  issueUpdated,
-  flow("notify.onUpdated", {
+/** On form submit → intake mail + inbox. */
+export const onForm = on(
+  formSubmitted,
+  flow("notify.onForm", {
     do: async (payload, fx) => {
-      const row = await fx.store(db).findById(issues, payload.id);
-      const email = row ? String(row.assigneeEmail ?? "") : "";
-      if (!email) return;
-      await fx.send(issueAssignedMail, {
-        to: email,
+      await fx.send(formReceivedMail, {
+        to: "ops@keel.dev",
         data: {
-          id: payload.id,
-          identifier: payload.identifier,
-          title: payload.title,
-          email,
+          formId: payload.formId,
+          taskId: payload.taskId,
+          customerName: payload.customerName,
         },
       });
+      await pushInbox(
+        fx as never,
+        "aria@keel.dev",
+        "form-submitted",
+        payload.customerName,
+        payload.taskId,
+      );
     },
   }),
 );
 
-/** On archive. */
-export const onArchived = on(
-  issueArchived,
-  flow("notify.onArchived", {
+/** On goal at-risk → mail. */
+export const onGoal = on(
+  goalAtRisk,
+  flow("notify.onGoal", {
     do: async (payload, fx) => {
-      await fx.send(projectUpdateMail, {
-        to: "ops@keel.dev",
-        data: { projectId: payload.id, name: payload.title, health: "archived" },
-      });
-    },
-  }),
-);
-
-/** On reassign. */
-export const onAssigned = on(
-  issueReassigned,
-  flow("notify.onAssigned", {
-    do: async (payload, fx) => {
-      await fx.store(db).findById(issues, payload.id);
-      await fx.send(issueAssignedMail, {
-        to: payload.email,
-        data: {
-          id: payload.id,
-          identifier: payload.identifier,
-          title: payload.title,
-          email: payload.email,
-        },
-      });
-      await fx.send(issueSubscribedMail, {
-        to: payload.email,
-        data: { id: payload.id, identifier: payload.identifier },
-      });
-    },
-  }),
-);
-
-/** On cycle close → digest email. */
-export const onCycle = on(
-  cycleClosed,
-  flow("notify.onCycle", {
-    do: async (payload, fx) => {
-      await fx.store(db).findById(cycles, payload.cycleId);
-      await fx.send(cycleDigestMail, {
+      await fx.send(goalAtRiskMail, {
         to: "ops@keel.dev",
         data: {
-          cycleId: payload.cycleId,
+          goalId: payload.goalId,
           name: payload.name,
-          leftover: payload.leftover,
-          summary: payload.summary,
+          status: payload.status,
         },
       });
     },
   }),
 );
 
-/** On project update. */
+/** On goal change → ops inbox. */
+export const onGoalChanged = on(
+  goalChanged,
+  flow("notify.onGoalChanged", {
+    do: async (payload, fx) => {
+      await pushInbox(fx as never, "ops@keel.dev", "goal-changed", payload.name, payload.goalId);
+    },
+  }),
+);
+
+/** On task complete → assignee inbox. */
+export const onComplete = on(
+  taskCompleted,
+  flow("notify.onComplete", {
+    do: async (payload, fx) => {
+      const rows = await fx.store(db).select().from(taskAssignees);
+      const email =
+        rows.find((r) => String(r.taskId) === payload.id)?.assigneeEmail ?? "ops@keel.dev";
+      await pushInbox(fx as never, String(email), "task-completed", payload.title, payload.id);
+    },
+  }),
+);
+
+/** On project health/archive → lead inbox. */
 export const onProject = on(
   projectUpdated,
   flow("notify.onProject", {
     do: async (payload, fx) => {
-      await fx.store(db).findById(projects, payload.projectId);
-      await fx.send(projectUpdateMail, {
-        to: "ops@keel.dev",
-        data: {
-          projectId: payload.projectId,
-          name: payload.name,
-          health: payload.health ?? "updated",
-        },
-      });
+      await pushInbox(
+        fx as never,
+        payload.actorEmail ?? "ops@keel.dev",
+        "project-updated",
+        payload.name,
+        payload.projectId,
+      );
     },
   }),
 );
 
-/** On member invite — morning digest ping. */
-export const onMember = flow("notify.onMember", {
-  do: async (_payload, fx) => {
-    const people = await fx.store(db).select().from(members);
-    await fx.send(dailyDigestMail, {
-      to: "ops@keel.dev",
-      data: { open: people.length, at: fx.clock.now() },
-    });
-  },
-});
+/** On draft expire → ops inbox. */
+export const onDraft = on(
+  draftExpired,
+  flow("notify.onDraft", {
+    do: async (payload, fx) => {
+      await pushInbox(fx as never, "ops@keel.dev", "draft-expired", payload.id, payload.id);
+    },
+  }),
+);

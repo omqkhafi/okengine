@@ -34,6 +34,18 @@ import {
   withConsoleSecurityHeaders,
 } from "./security-headers.ts";
 
+/** Console SPA pathnames that receive `index.html`. Anything else is 404. */
+export const CONSOLE_SPA_PATHS = ["/", "/overview", "/flows", "/store", "/vault"] as const;
+
+/**
+ * Whether `pathname` is a real Console page (not a legacy alias).
+ *
+ * @param pathname - Request pathname
+ */
+export function isConsoleSpaPath(pathname: string): boolean {
+  return (CONSOLE_SPA_PATHS as readonly string[]).includes(pathname);
+}
+
 /** Options for {@link serveConsole}. */
 export interface ServeConsoleOptions extends CreateConsoleAppOptions {
   readonly port?: number;
@@ -145,17 +157,20 @@ export async function serveConsole(
       return withConsoleSecurityHeaders(staticResponse);
     }
 
+    const spa = isConsoleSpaPath(url.pathname);
     const index = Bun.file(`${staticDir}index.html`);
     if (await index.exists()) {
       return withConsoleSecurityHeaders(
         new Response(index, {
+          status: spa ? 200 : 404,
           headers: { "Content-Type": "text/html; charset=utf-8" },
         }),
       );
     }
 
     return withConsoleSecurityHeaders(
-      new Response(fallbackShellHtml(), {
+      new Response(spa ? fallbackShellHtml() : notFoundHtml(), {
+        status: spa ? 200 : 404,
         headers: { "Content-Type": "text/html; charset=utf-8" },
       }),
     );
@@ -347,6 +362,23 @@ window.addEventListener("message", (ev) => {
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
+}
+
+function notFoundHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>404 — oke Console</title>
+</head>
+<body>
+<main>
+  <h1>404</h1>
+  <p>This URL is not a Console page.</p>
+</main>
+</body>
+</html>`;
 }
 
 function fallbackShellHtml(): string {

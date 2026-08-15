@@ -10,6 +10,7 @@ import {
   createStoreRuntime,
   field,
   id,
+  isSchemaTableDecl,
   maskRows,
   now,
   PII_MASK,
@@ -52,6 +53,14 @@ describe("store.schema.table + field.*", () => {
     // Direct read — no Drizzle duck-typing.
     const fromTable = classificationsFromTable(notes);
     expect(fromTable.email?.pii).toBe(true);
+
+    const views = store.schema.table("views", {
+      id: field.text().primaryKey(),
+      ownerEmail: field.text().pii(),
+    });
+    const fromViews = classificationsFromTable(views);
+    expect(fromViews.ownerEmail?.pii).toBe(true);
+    expect(fromViews.owner_email?.pii).toBe(true);
 
     const decl = store.sql("notes", { schema: { notes } });
     const runtime = createStoreRuntime({
@@ -111,6 +120,16 @@ describe("store.schema.table + field.*", () => {
     await handle.insert(teams).values({ id: "team_eng", key: "ENG", name: "Engineering" });
     const rows = await handle.select().from(teams);
     expect(rows).toEqual([{ id: "team_eng", key: "ENG", name: "Engineering" }]);
+  });
+
+  test("a `kind` column does not hide the table discriminant", () => {
+    const tasks = store.schema.table("tasks", {
+      id: field.text().primaryKey(),
+      kind: field.text().notNull(),
+    });
+    expect(isSchemaTableDecl(tasks)).toBe(true);
+    expect(tasks.kind).toBe("schema-table");
+    expect(tasks.columns.kind.sqlName).toBe("kind");
   });
 });
 

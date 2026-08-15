@@ -1,20 +1,22 @@
 import { on, flow, every } from "okengine";
 
-import { cycleSummaryPrompt, dailyDigestMail, db, slackWebhook } from "@/core";
-import { cycles, issues } from "@/db/schema.decl";
+import { dailyDigestMail, db, slackWebhook, weeklySummaryPrompt } from "@/core";
+import { goals, tasks } from "@/db/schema.decl";
 
-/** Morning inbox + cycle digest. */
+/** Morning inbox + goal digest — named clock `daily-digest`. */
 export const daily = on(
   every("1d"),
-  flow("digest.daily", {
+  flow("digest.daily-digest", {
     plane: "operator",
     do: async (_input, fx) => {
       await fx.vault.get(slackWebhook);
-      const open = (await fx.store(db).select().from(issues)).filter((r) => r.archivedAt == null);
-      await fx.store(db).select().from(cycles);
-      let summary = `${open.length} open issues`;
+      const open = (await fx.store(db).select().from(tasks)).filter(
+        (r) => r.archivedAt == null && r.completedAt == null,
+      );
+      await fx.store(db).select().from(goals);
+      let summary = `${open.length} open tasks`;
       try {
-        const out = await fx.ask(cycleSummaryPrompt, { open: open.length });
+        const out = await fx.ask(weeklySummaryPrompt, { open: open.length });
         if (out && typeof out === "object" && "summary" in out) {
           summary = String((out as { summary: unknown }).summary);
         }

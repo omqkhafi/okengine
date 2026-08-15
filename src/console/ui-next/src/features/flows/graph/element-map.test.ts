@@ -149,6 +149,20 @@ describe("typesOfElement", () => {
       "Files",
       "Index",
     ]);
+    const keelLike: Manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      stores: {
+        ...FLOWS_TEST_MANIFEST.stores,
+        drafts: { facet: "kv", namespaces: ["drafts"] },
+        "triage-snooze": { facet: "kv", namespaces: ["triage-snooze"] },
+      },
+    };
+    expect(typesOfElement(keelLike, "store").map((t) => t.id)).toEqual([
+      "type:store:sql",
+      "type:store:kv",
+      "type:store:files",
+      "type:store:index",
+    ]);
     expect(typesOfElement(FLOWS_TEST_MANIFEST, "gate").map((t) => t.label)).toEqual([
       "policy",
       "scope",
@@ -207,6 +221,27 @@ describe("resourcesOfElement", () => {
       "channel:booking-confirmed",
     ]);
   });
+
+  test("a kv namespace named cache is a KV resource, not a store type", () => {
+    const withCacheKv: Manifest = {
+      ...FLOWS_TEST_MANIFEST,
+      stores: {
+        ...FLOWS_TEST_MANIFEST.stores,
+        cache: { facet: "kv", namespaces: ["cache"] },
+      },
+    };
+    expect(typesOfElement(withCacheKv, "store").map((t) => t.id)).toEqual([
+      "type:store:sql",
+      "type:store:kv",
+      "type:store:files",
+      "type:store:index",
+    ]);
+    expect(resourcesOfElement(withCacheKv, "store").map((r) => r.id).sort()).toEqual([
+      "kv:cache",
+      "sql:bookings",
+      "sql:shipments",
+    ]);
+  });
 });
 
 describe("applyLiveHeat", () => {
@@ -241,6 +276,16 @@ describe("buildElementMap", () => {
     const { nodes, edges } = buildElementMap(FLOWS_TEST_MANIFEST);
     expect(nodes.some((n) => n.id === "law:oke")).toBe(true);
     expect(nodes.filter((n) => n.type === "element")).toHaveLength(8);
+    expect(nodes.filter((n) => n.type === "element").map((n) => n.data.label)).toEqual([
+      "Fl",
+      "Sg",
+      "St",
+      "Ck",
+      "Gt",
+      "Vt",
+      "Ch",
+      "Ai",
+    ]);
     expect(nodes.filter((n) => n.data.kind === "unit").map((n) => n.id)).toEqual([
       "unit:bookings",
       "unit:fulfillment",
@@ -257,6 +302,8 @@ describe("buildElementMap", () => {
     expect(edges.some((e) => e.id === "couple:unit:bookings->element:store")).toBe(false);
     expect(edges.some((e) => e.id === "couple:element:store->law:oke")).toBe(true);
     expect(nodes.some((n) => n.type === "typeChip" && n.id === "type:store:sql")).toBe(true);
+    expect(nodes.some((n) => n.type === "typeChip" && n.id === "type:store:kv")).toBe(true);
+    expect(nodes.some((n) => n.id === "type:store:cache")).toBe(false);
     expect(nodes.some((n) => n.type === "typeChip" && n.id === "type:gate:policy")).toBe(true);
     expect(nodes.some((n) => n.type === "typeChip" && n.id === "type:channel:whatsapp")).toBe(true);
     expect(edges.some((e) => e.id === "couple:type:store:sql->element:store")).toBe(true);
@@ -324,6 +371,12 @@ describe("ringAngles / radialPoint", () => {
     expect(fan[1]).toBeCloseTo(home);
     expect(fan[0]!).toBeLessThan(home);
     expect(fan[2]!).toBeGreaterThan(home);
+  });
+
+  test("element hubs are a tight disc — one label, not a two-line card", () => {
+    expect(MAP_BOX.hub).toEqual({ width: 56, height: 56 });
+    expect(MAP_BOX.hub.width).toBeLessThan(MAP_BOX.law.width);
+    expect(MAP_BOX.hub.height).toBeGreaterThan(MAP_BOX.type.height);
   });
 
   test("typeClusterSlots pack 4+ kinds on two rows around the heading", () => {

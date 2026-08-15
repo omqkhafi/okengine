@@ -36,11 +36,7 @@ export class VaultBootError extends Error {
  * Named layer in the resolution chain (console §9.8).
  * Spec order: driver → process.env → .env.local → dev-fallback.
  */
-export type VaultResolutionSource =
-  | "driver"
-  | "process.env"
-  | ".env.local"
-  | "dev-fallback";
+export type VaultResolutionSource = "driver" | "process.env" | ".env.local" | "dev-fallback";
 
 /** Spec lock-path — first hit wins. */
 export const VAULT_RESOLUTION_ORDER: readonly VaultResolutionSource[] = [
@@ -92,6 +88,11 @@ export interface CreateVaultRuntimeOptions {
    * Never enable in production boot.
    */
   readonly allowDevFallbacks?: boolean;
+  /**
+   * When true, boot succeeds with missing contracts so Console can `put`
+   * the first value. App boot must leave this off.
+   */
+  readonly allowGaps?: boolean;
   /** Clock for last-read timestamps (tests). */
   readonly now?: () => number;
 }
@@ -252,7 +253,7 @@ export function createVaultRuntime(options: CreateVaultRuntimeOptions = {}): Vau
       }
     }
     gaps.push(...requiredEnvGaps(options.requiredEnv ?? [], new Set(contracts.keys())));
-    if (gaps.length > 0) {
+    if (gaps.length > 0 && options.allowGaps !== true) {
       throw new VaultBootError(gaps);
     }
 

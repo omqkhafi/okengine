@@ -15,7 +15,12 @@
 import type { ChannelTemplateDecl } from "../elements/channel/declare.ts";
 import type { TemplateCatalog } from "../elements/channel/runtime.ts";
 import type { ClockDecl } from "../elements/clock/declare.ts";
-import type { GateDecl } from "../elements/gate/declare.ts";
+import {
+  flattenGateMembers,
+  isGateAllDecl,
+  type GateAllDecl,
+  type GateDecl,
+} from "../elements/gate/declare.ts";
 import type { SignalDecl } from "../elements/signal/declare.ts";
 import type { VaultSecretDecl } from "../elements/vault/declare.ts";
 import type { SchemaInput } from "../validation/standard-schema.ts";
@@ -196,9 +201,12 @@ export function createRecordingApi(identity: { readonly name: string; readonly v
       pushDeclare(`signal:${decl.name}`);
       return api;
     },
-    gate(decl) {
-      gates.push(decl);
-      pushDeclare(`gate:${decl.name}`);
+    gate(decl: GateDecl | GateAllDecl) {
+      const members = isGateAllDecl(decl) ? flattenGateMembers(decl.members) : [decl];
+      for (const member of members) {
+        gates.push(member);
+        pushDeclare(`gate:${member.name}`);
+      }
       return api;
     },
     channelTemplate(decl) {

@@ -33,14 +33,14 @@ describe("defineSeed / resolveSeedCategory", () => {
 
   test("resolveSeedIdentity prefers defineSeed name over the folder", () => {
     expect(
-      resolveSeedIdentity({ name: "keel", description: "Featured Linear story" }, "/tmp/app"),
+      resolveSeedIdentity({ name: "keel", description: "Featured Harbor story" }, "/tmp/app"),
     ).toEqual({
       name: "keel",
-      description: "Featured Linear story",
+      description: "Featured Harbor story",
     });
     expect(resolveSeedIdentity(undefined, "/repo/examples/keel")).toEqual({ name: "keel" });
-    expect(seedPromptMessage({ name: "keel", description: "Featured Linear story" })).toBe(
-      "Seed keel (Featured Linear story)?",
+    expect(seedPromptMessage({ name: "keel", description: "Featured Harbor story" })).toBe(
+      "Seed keel (Featured Harbor story)?",
     );
     expect(seedPromptMessage({ name: "notes" })).toBe("Seed notes?");
   });

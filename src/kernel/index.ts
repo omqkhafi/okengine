@@ -134,10 +134,26 @@ export {
   type FxStoreHandle,
   type FxTenant,
   type FxThunk,
+  type JsonPage,
   type JsonResult,
   type NamedRef,
   type StepOptions,
 } from "./fx.ts";
+
+export { listPage } from "./list-page.ts";
+export type {
+  CursorMeta,
+  CursorPage,
+  ListQuery,
+  OffsetMeta,
+  OffsetPage,
+  Page,
+  PageMeta,
+  PageMetaBase,
+  PageMode,
+  PagerLink as ListPagerLink,
+  QueryPageSpec,
+} from "./list-page.ts";
 
 export {
   abortError,
@@ -200,6 +216,7 @@ export {
 
 export {
   failureCodeOf,
+  failureFromUnknown,
   forwardCompletedSteps,
   rebindUndosFromDo,
   runCompensationPhase,

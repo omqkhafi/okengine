@@ -78,6 +78,7 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 | `out`        | Output contract — the return value is checked against it                   |
 | `errors`     | Typed failures — **returned** with `fx.fail`, never thrown                 |
 | `retry`      | Optional whole-`do` backoff on thrown errors (same journal)                |
+| `cache`      | Optional — `false` opts out; `"30s"` adds a TTL. Read-only flows cache by default |
 | `do`         | The work — every read, write, emit, and call goes through `fx`             |
 | `compensate` | Durable only — optional hook after auto per-step `{ undo }` (same journal) |
 
@@ -96,6 +97,12 @@ do: async (input, fx) => {
 Every response follows one envelope — success `{ data, error: null }`, failure
 `{ data: null, error: { code, data, message? } }` — clients switch on `error.code`.
 Built-in codes attach a localized `message` ([Errors](/docs/reference/errors)); custom codes stay message-less unless registered or `{ message }` is passed.
+
+<Callout title="List pages">
+  Prefer `out` as the item array and `return fx.json.withQuery(rows, input)` so the pager is
+  top-level `meta`. Do not put `{ data, meta }` on `out`. See
+  [Store](/docs/elements/store#handwritten-http-lists).
+</Callout>
 
 ## The five triggers
 
@@ -207,6 +214,21 @@ Everything a flow may touch, on one object:
   send PII to a model — without you declaring any of it. That one graph drives the Console panels,
   cache invalidation, least-privilege tokens, and durable replay.
 </Callout>
+
+## Cache — automatic for reads
+
+Read-only flows cache automatically from those inferred `reads`. A write to the same
+resource invalidates the entry. You do not declare `effects` or set `cache: "30s"`
+unless you want a TTL or to opt out.
+
+| On the flow | What happens |
+| --- | --- |
+| omitted / `true` | Tier-1 cache when the flow only `reads` |
+| `cache: "30s"` | Same, plus a TTL |
+| `cache: false` | Skip cache (live SQL every time) |
+
+Mutations, `fx.ask`, and `durable: true` stay uncached. Console Traces shows **hit** /
+**miss** on cached reads, and **not applicable** only when the flow never used the cache.
 
 ## Durability — flows that survive the process
 
@@ -321,6 +343,13 @@ RFC 10008 forbids sniffing. Send `Content-Type: application/json` and a JSON bod
 <Accordion title="What happens if a cron flow throws?">
 
 Only that run fails — the schedule keeps firing and the process does not exit. The failed run lands in Console → Flows (Traces) with its trace.
+
+</Accordion>
+<Accordion title="Console shows Cache not applicable on a GET">
+
+The flow is not a read-only cache candidate — it writes, asks a model, is durable, or set
+`cache: false`. Leave `cache` omitted. The first identical GET is a **miss**; the second is
+a **hit**. A matching write turns the next read into a miss.
 
 </Accordion>
 </Accordions>

@@ -2,7 +2,7 @@
  * Browse section — SACP-style toolbar + virtualized grid.
  */
 
-import { useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import {
   Alert02Icon,
   ArrowReloadHorizontalIcon,
@@ -39,7 +39,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/motion/select.tsx";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStoreDelete } from "../data/use-store-edit.ts";
@@ -60,6 +59,24 @@ import { TouchedByLists } from "./touched-by-section.tsx";
 
 /** Browse page sizes offered in the Rows select. */
 const BROWSE_LIMITS = [10, 25, 50, 100, 250, 500] as const;
+
+/** Delay before an index keystroke becomes a store query. */
+const INDEX_SEARCH_DEBOUNCE_MS = 280;
+
+/**
+ * Latest `value` after `ms` of quiet. The live value stays on the input.
+ *
+ * @param value - Immediate value
+ * @param ms - Quiet window
+ */
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value), ms);
+    return () => window.clearTimeout(id);
+  }, [value, ms]);
+  return debounced;
+}
 
 /** Props for {@link BrowseSection}. */
 export interface BrowseSectionProps {
@@ -100,7 +117,8 @@ export function BrowseSection({
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [insertOpen, setInsertOpen] = useState(false);
 
-  const indexQuery = useMemo(() => parseIndexQuery(indexText), [indexText]);
+  const debouncedIndexText = useDebouncedValue(indexText, INDEX_SEARCH_DEBOUNCE_MS);
+  const indexQuery = useMemo(() => parseIndexQuery(debouncedIndexText), [debouncedIndexText]);
   const tenantReady = !tenancyDeclared || (tenant !== null && tenant.length > 0);
 
   const queryInput = useMemo(() => {
@@ -494,40 +512,6 @@ export function BrowseSection({
         </p>
       ) : null}
 
-      {store.facet === "index" ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 px-3 py-2">
-          <label className="flex min-w-[14rem] flex-1 items-center gap-2">
-            <span className="shrink-0 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-              Search
-            </span>
-            <Input
-              aria-label="Search this index"
-              className="h-7 border-border/60 bg-transparent text-[11px] shadow-none"
-              placeholder="Find by title or id — or paste 1, 0, 0"
-              value={indexText}
-              onChange={(e) => setIndexText(e.target.value)}
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <span className="text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
-              topK
-            </span>
-            <Input
-              type="number"
-              min={1}
-              max={100}
-              aria-label="topK"
-              className="h-7 w-16 border-border/60 bg-transparent font-mono text-[11px] tabular-nums shadow-none"
-              value={topK}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n) && n >= 1 && n <= 100) setTopK(n);
-              }}
-            />
-          </label>
-        </div>
-      ) : null}
-
       {!tenantReady ? (
         <BrowseGate>
           <Empty role="status" data-slot="browse-gate">
@@ -543,7 +527,7 @@ export function BrowseSection({
             </EmptyHeader>
           </Empty>
         </BrowseGate>
-      ) : browse.isLoading ? (
+      ) : browse.isLoading && !browse.data ? (
         <BrowseSkeleton />
       ) : browse.isError ? (
         <BrowseGate>
@@ -580,6 +564,16 @@ export function BrowseSection({
             routedRole={browse.data?.routedRole}
             limit={limit}
             toolbarExtras={showToolbar ? toolbarExtras : undefined}
+            indexSearch={
+              store.facet === "index"
+                ? {
+                    value: indexText,
+                    onChange: setIndexText,
+                    topK,
+                    onTopKChange: setTopK,
+                  }
+                : undefined
+            }
             insertOpen={insertOpen}
             onInsertOpenChange={setInsertOpen}
             onDeleteRows={

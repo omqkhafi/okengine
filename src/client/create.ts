@@ -13,6 +13,7 @@
  */
 
 import { createTransport, type Transport } from "./transport.ts";
+import { asThenableIterable, attachPager } from "./pager.ts";
 import type { Client, ClientOptions, ClientRouteMap, ResolveApp } from "./types.ts";
 
 /** App-shaped value that carries a runtime `$routes` table from typed adopt. */
@@ -115,30 +116,34 @@ export function flattenRoutes(
  * @param path - Accumulated property path
  */
 function proxy(transport: Transport, path: readonly string[]): unknown {
-  const call = (input?: unknown) => {
+  const invoke = async (input?: unknown) => {
     if (path.length < 2) {
-      return Promise.resolve({
-        data: null,
-        error: {
-          code: "TransportError" as const,
-          data: {
-            message: `Incomplete path: api.${path.join(".") || "?"}(…)`,
+      return attachPager(
+        {
+          data: null,
+          error: {
+            code: "TransportError" as const,
+            data: {
+              message: `Incomplete path: api.${path.join(".") || "?"}(…)`,
+            },
           },
         },
-      });
+        invoke,
+        input,
+      );
     }
-    // `api.bookings.create` → unit `bookings`, flow `create`
     const unit = path[0]!;
     const flow = path.slice(1).join(".");
-    return transport.call(`${unit}/${flow}`, input);
+    const result = await transport.call(`${unit}/${flow}`, input);
+    return attachPager(result, invoke, input);
   };
+  const call = (input?: unknown) => asThenableIterable(invoke, input);
 
   return new Proxy(call, {
     get(_target, prop, receiver) {
       if (typeof prop === "symbol") {
         return Reflect.get(_target, prop, receiver);
       }
-      // Prevent `await api.notes` from treating the proxy as a Thenable.
       if (prop === "then") return undefined;
       return proxy(transport, [...path, prop]);
     },

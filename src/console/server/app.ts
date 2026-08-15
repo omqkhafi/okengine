@@ -49,11 +49,13 @@ export interface ConsoleAppHandle {
  */
 export function createConsoleApp(options: CreateConsoleAppOptions = {}): ConsoleAppHandle {
   const state = createConsoleState(options);
-  // Spec §2.5 — claim prints only while setup is open (no operators yet).
+  // Spec §2.5 — claim is TTY-only while setup is open (no operators yet).
+  // `silentClaim` skips stdout (oke dev paints the board itself; tests).
+  // The `.oke/claim-code` mirror is always written so `oke console claim-code` works.
   if (!state.setupClosed) {
+    writeClaimCodeArtifact(state.cwd, state.claim);
     if (!options.silentClaim) {
       printClaimCodeOnce(state.claim);
-      writeClaimCodeArtifact(state.cwd, state.claim);
     }
   } else {
     clearClaimCodeArtifact(state.cwd);

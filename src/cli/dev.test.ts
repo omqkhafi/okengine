@@ -297,6 +297,42 @@ describe("oke dev MCP live wiring", () => {
     await expect(fetch(`${mcpBase}/health`, { headers: { host } })).rejects.toThrow();
   });
 
+  test("paints the first-admin claim on the board after Console boots", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-claim-board-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    await Bun.write(join(dir, "oke.manifest.json"), JSON.stringify(LIVE_MANIFEST));
+
+    const writes: string[] = [];
+    const result = await runDev({
+      stdinIsTTY: false,
+      cwd: dir,
+      secret: SECRET,
+      silentClaim: true,
+      keepAlive: false,
+      consolePort: 0,
+      mcpPort: 0,
+      appPort: 0,
+      ...stubCompose(),
+      startApp: async () => ({ stop() {} }),
+      regenClient: async () => {},
+      write: (t) => {
+        writes.push(t);
+      },
+      serveConsole: async (port) => serveTestConsole(port, dir),
+    });
+
+    expect(result.code).toBe(0);
+    session = result.session;
+    const code = session?.consoleState?.claim.code;
+    expect(code).toBeTruthy();
+    const plain = writes.join("").replace(/\x1b\[[0-9;]*m/g, "");
+    expect(plain).toContain("Claim code");
+    expect(plain).toContain("oke console claim-code");
+    expect(plain).toContain(code ?? "");
+    expect(plain).toContain("Console");
+    expect(plain).not.toMatch(/"claimCode"\s*:/);
+  });
+
   test("shutdown stops Console and MCP together", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oke-dev-stop-"));
     await Bun.write(join(dir, "src/app.ts"), "export {}\n");
@@ -483,11 +519,11 @@ async function writePingApp(dir: string, version: string): Promise<void> {
     join(dir, "src/flows/ping.ts"),
     `import { on, flow, http, gate } from ${JSON.stringify(OKE_INDEX)};
 
-export const ping = on(http.get("/ping").gate(gate.public), flow("ping", {
+export const ping = on(http.get("/ping").gate.public, flow("ping", {
   do: () => ({ version: ${JSON.stringify(version)} as const }),
 }));
 
-export const slow = on(http.get("/slow").gate(gate.public), flow("slow", {
+export const slow = on(http.get("/slow").gate.public, flow("slow", {
   do: async () => {
     const started = ${JSON.stringify(version)};
     await Bun.sleep(800);

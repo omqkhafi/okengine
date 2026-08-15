@@ -3,7 +3,15 @@
  */
 
 import { parseDurationMs } from "../clock/duration.ts";
-import { gate, type GateDecl, type GatePolicyContext, type RateGateDecl } from "./declare.ts";
+import {
+  flattenGateMembers,
+  gate,
+  isGateAllDecl,
+  type GateAllDecl,
+  type GateDecl,
+  type GatePolicyContext,
+  type RateGateDecl,
+} from "./declare.ts";
 import { takeRate } from "./strategies.ts";
 
 /** KV surface required for rate gates. */
@@ -16,7 +24,7 @@ export interface GateKv {
 /** Options for {@link createGateRuntime}. */
 export interface CreateGateRuntimeOptions {
   /** Registered gate declarations. */
-  readonly gates?: readonly GateDecl[];
+  readonly gates?: readonly (GateDecl | GateAllDecl)[];
   /** KV namespace for rate strategies (required when any rate gate exists). */
   readonly kv?: GateKv;
   /** Injectable clock. */
@@ -62,10 +70,14 @@ export interface GateRuntime {
  */
 export function createGateRuntime(options: CreateGateRuntimeOptions = {}): GateRuntime {
   const map = new Map<string, GateDecl>();
-  // Built-in sentinel — `.gate(gate.public)` works without listing it in `oke({ gates })`.
+  // Built-in sentinel — `.gate.public` works without listing it in `oke({ gates })`.
   map.set(gate.public.name, gate.public);
   for (const g of options.gates ?? []) {
-    map.set(g.name, g);
+    if (isGateAllDecl(g)) {
+      for (const member of flattenGateMembers(g.members)) map.set(member.name, member);
+    } else {
+      map.set(g.name, g);
+    }
   }
   const now = options.now ?? (() => Date.now());
   const kvDriverId = options.kv?.driverId;

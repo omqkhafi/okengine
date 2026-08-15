@@ -2,32 +2,36 @@ import { on, flow, http, fail } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { attachments, db, filesWrite, issueWrite, member } from "@/core";
-import { fileObjects, issues } from "@/db/schema.decl";
+import { attachments, db, filesWrite, member, taskWrite } from "@/core";
+import { fileObjects, tasks } from "@/db/schema.decl";
+import { fileObjectsZod } from "@/db/zod";
+import { listIn, pageOut } from "@/lib/http";
 import { IdIn, IdOut, NotFound, Ok } from "@/lib/shapes";
 
+const FileRef = fileObjectsZod.select.pick({ id: true, objectKey: true });
+
 const UploadIn = z.object({
-  issueId: z.string().min(1).optional(),
+  taskId: z.string().min(1).optional(),
   id: z.string().optional(),
   name: z.string().min(1),
   text: z.string().min(1),
   contentType: z.string().optional(),
 });
 
-/** Upload an attachment (featured). */
+/** Upload an attachment. */
 export const upload = on(
-  http.post("/attachments").gate(member, issueWrite),
+  http.post("/attachments").gate(member, taskWrite),
   flow("attachments.upload", {
     in: UploadIn,
     out: IdOut,
     errors: { NotFound },
     do: async (input, fx) => {
-      const issueId = input.issueId ?? input.id;
-      if (!issueId) return fail("NotFound", { id: "issue" });
-      const issue = await fx.store(db).findById(issues, issueId);
-      if (!issue) return fail("NotFound", { id: issueId });
+      const taskId = input.taskId ?? input.id;
+      if (!taskId) return fail("NotFound", { id: "task" });
+      const task = await fx.store(db).findById(tasks, taskId);
+      if (!task) return fail("NotFound", { id: taskId });
       const id = fx.id();
-      const key = `attachments/${issueId}/${input.name}`;
+      const key = `attachments/${taskId}/${input.name}`;
       await fx.store(attachments).put(key, input.text);
       await fx.store(db).insert(fileObjects).values({
         id,
@@ -42,19 +46,19 @@ export const upload = on(
   }),
 );
 
-/** List attachments for an issue. */
+/** List attachments for a task. */
 export const list = on(
-  http.get("/issues/:id/attachments").gate(member),
+  http.get("/tasks/:id/attachments").gate(member),
   flow("attachments.list", {
-    in: IdIn,
-    out: z.object({ items: z.array(z.object({ id: z.string(), objectKey: z.string() })) }),
+    in: listIn({ mode: "offset" }, { id: z.string().min(1) }),
+    out: pageOut(FileRef),
     do: async (input, fx) => {
       const rows = await fx.store(db).select().from(fileObjects);
       const prefix = `attachments/${input.id}/`;
       const items = rows
         .filter((r) => String(r.objectKey).startsWith(prefix))
         .map((r) => ({ id: String(r.id), objectKey: String(r.objectKey) }));
-      return { items };
+      return fx.json.withQuery(items, input);
     },
   }),
 );
@@ -64,7 +68,7 @@ export const get = on(
   http.get("/attachments/:id").gate(member),
   flow("attachments.get", {
     in: IdIn,
-    out: z.object({ id: z.string(), objectKey: z.string() }),
+    out: FileRef,
     errors: { NotFound },
     do: async (input, fx) => {
       const row = await fx.store(db).findById(fileObjects, input.id);

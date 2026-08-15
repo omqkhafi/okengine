@@ -12,3 +12,5 @@ export const fair = gate.rate({
   per: "1m",
   keyBy: "user",
 });
+
+export const book = gate.all(member, canBook, fair);

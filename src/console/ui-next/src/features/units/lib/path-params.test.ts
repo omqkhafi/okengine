@@ -26,9 +26,9 @@ describe("pathParamPlaceholder", () => {
 
 describe("pathParamExample", () => {
   test("prefills keel seed ids from the preceding segment", () => {
-    expect(pathParamExample("/attachments/:id", "id")).toBe("attachments/ENG-184/spec.pdf");
-    expect(pathParamExample("/issues/:id", "id")).toBe("iss_eng_184");
-    expect(pathParamExample("/issues/:id/labels/:labelId", "labelId")).toBe("lab_feature");
+    expect(pathParamExample("/attachments/:id", "id")).toBe("attachments/tsk_eng_12/spec.pdf");
+    expect(pathParamExample("/tasks/:id", "id")).toBe("tsk_eng_12");
+    expect(pathParamExample("/tasks/:id/tags/:tagId", "tagId")).toBe("tag_feature");
     expect(pathParamExample("/unknown/:id", "id")).toBeUndefined();
   });
 });
@@ -36,7 +36,7 @@ describe("pathParamExample", () => {
 describe("seedPathValues", () => {
   test("fills known params and skips the rest", () => {
     expect(seedPathValues("/attachments/:id", ["id"])).toEqual({
-      id: "attachments/ENG-184/spec.pdf",
+      id: "attachments/tsk_eng_12/spec.pdf",
     });
     expect(seedPathValues("/nope/:id", ["id"])).toEqual({});
   });

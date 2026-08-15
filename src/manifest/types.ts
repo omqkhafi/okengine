@@ -246,9 +246,9 @@ export interface Clock {
   description?: string;
 }
 
-/** Named gate — policy or rate strategy. */
+/** Named gate — policy, rate, or a flattened `gate.all` handle. */
 export interface Gate {
-  kind?: "policy" | "rate";
+  kind?: "policy" | "rate" | "all";
   policy?: string;
   strategy?: RateStrategy;
   max?: number;
@@ -256,6 +256,8 @@ export interface Gate {
   keyBy?: string;
   scopes?: string[];
   roles?: string[];
+  /** Member gate ids when {@link kind} is `"all"`. */
+  members?: string[];
   /** Optional human description (falls back to the gate map key). */
   description?: string;
 }

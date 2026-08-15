@@ -39,6 +39,70 @@ describe("fx — capability enforcement", () => {
     expect(oke.message).toBe(formatOkeMessage(1001, oke.causeText, oke.fix, oke.docsUrl));
   });
 
+  test("SQL table with a name column gates as sql:<table>, not sql:<store>", async () => {
+    const { createStoreRuntime, field, store } = await import("../elements/store.ts");
+    const { memorySqlDriver } = await import("../drivers/index.ts");
+    const teams = store.schema.table("teams", {
+      id: field.text().primaryKey(),
+      name: field.text().notNull(),
+    });
+    const decl = store.sql("db", { schema: { teams } });
+    const rt = createStoreRuntime({
+      drivers: { sql: memorySqlDriver },
+      sql: { db: { name: "db", primary: {} } },
+    });
+    rt.register(decl);
+    const fx = createFx({
+      flow: "teams.list",
+      effects: { reads: ["sql:teams"], writes: ["sql:teams"] },
+      storeRuntime: rt,
+    });
+    await fx.store(decl).insert(teams).values({ id: "t1", name: "Eng" });
+    const rows = await fx.store(decl).select().from(teams);
+    expect(rows).toEqual([{ id: "t1", name: "Eng" }]);
+  });
+
+  test("kv ttlMs is a read of kv:<namespace>", async () => {
+    const { createStoreRuntime, store } = await import("../elements/store.ts");
+    const { memoryKvDriver } = await import("../drivers/index.ts");
+    const decl = store.kv("drafts");
+    const rt = createStoreRuntime({
+      drivers: { kv: memoryKvDriver },
+      kv: { drafts: {} },
+    });
+    rt.register(decl);
+    const writer = createFx({
+      flow: "drafts.save",
+      effects: { writes: ["kv:drafts"] },
+      storeRuntime: rt,
+    });
+    await writer.store(decl).set("ENG-1", { title: "Draft" }, "7d");
+    const reader = createFx({
+      flow: "drafts.expire",
+      effects: { reads: ["kv:drafts"] },
+      storeRuntime: rt,
+    });
+    const ttl = await reader.store(decl).ttlMs("ENG-1");
+    expect(ttl).toBeGreaterThan(0);
+  });
+
+  test("index driverId is meilisearch before first I/O (not a function, not memory)", async () => {
+    const { createStoreRuntime, store } = await import("../elements/store.ts");
+    const { meilisearchDriver } = await import("../drivers/index.ts");
+    const decl = store.index("tasks");
+    const rt = createStoreRuntime({
+      drivers: { index: meilisearchDriver },
+      index: { tasks: { url: "http://127.0.0.1:7700" } },
+    });
+    rt.register(decl);
+    const fx = createFx({
+      flow: "search.seed",
+      effects: { writes: ["index:tasks"] },
+      storeRuntime: rt,
+    });
+    expect(fx.store(decl).driverId).toBe("meilisearch");
+  });
+
   test("declared store read succeeds", async () => {
     const fx = createFx({
       flow: "bookings.create",
@@ -341,8 +405,15 @@ describe("fx — wholesale swap", () => {
         empty() {
           return { [jsonResultBrand]: true, status: 204 };
         },
-        with(data, meta) {
-          return { [jsonResultBrand]: true, status: 200, value: data, meta };
+        with(dataOrPage: unknown, meta?: Record<string, unknown>) {
+          if (meta !== undefined) {
+            return { [jsonResultBrand]: true, status: 200, value: dataOrPage, meta };
+          }
+          const page = dataOrPage as { data: unknown; meta: Record<string, unknown> };
+          return { [jsonResultBrand]: true, status: 200, value: page.data, meta: page.meta };
+        },
+        withQuery(rows) {
+          return { [jsonResultBrand]: true, status: 200, value: [...rows], meta: {} };
         },
       },
       async step(_name, fn) {
@@ -404,6 +475,40 @@ describe("fx.t — catalogs", () => {
     expect(fx.t("errors.notFound")).toBe("Not found");
     expect(fx.t("items", { count: 2 })).toBe("2 items");
     expect(fx.t("missing")).toBe("missing");
+  });
+});
+
+describe("fx.json", () => {
+  test("with accepts a page or (data, meta)", () => {
+    const fx = createFx({ flow: "x", effects: {} });
+    const items = [{ id: "n_1" }];
+    const meta = { mode: "offset", total: 1, limit: 1, offset: 0 };
+    const fromPage = fx.json.with({ data: items, meta });
+    const fromArgs = fx.json.with(items, meta);
+    expect(fromPage).toMatchObject({ status: 200, value: items, meta });
+    expect(fromArgs).toMatchObject({ status: 200, value: items, meta });
+    expect(() => fx.json.with(items as never)).toThrow(/pass \(data, meta\)/);
+  });
+
+  test("withQuery pages rows and skips auto-eq on id", () => {
+    const fx = createFx({ flow: "x", effects: {} });
+    const rows = [
+      { id: "c_1", issueId: "iss_1", title: "Ship" },
+      { id: "c_2", issueId: "iss_1", title: "Later" },
+      { id: "c_3", issueId: "iss_2", title: "Ship docs" },
+    ];
+    const page = fx.json.withQuery(rows, { id: "c_1", q: "ship", limit: 10 });
+    expect(page).toMatchObject({
+      status: 200,
+      value: [
+        { id: "c_1", issueId: "iss_1", title: "Ship" },
+        { id: "c_3", issueId: "iss_2", title: "Ship docs" },
+      ],
+    });
+    expect(page.meta).toMatchObject({ mode: "offset", total: 2, next: null });
+
+    const filtered = fx.json.withQuery(rows, { issueId: "iss_1", limit: 10 });
+    expect(filtered.value).toEqual(rows.slice(0, 2));
   });
 });
 

@@ -300,7 +300,7 @@ export type SchemaTableWithColumns<
   C extends Record<string, SchemaColumnDecl> = Record<string, SchemaColumnDecl>,
 > = Omit<SchemaTableDecl, "columns"> & {
   readonly columns: Readonly<C>;
-} & C;
+} & Omit<C, "kind" | "tableName">;
 
 /**
  * Declare an abstract schema table (ORM-agnostic).
@@ -321,12 +321,13 @@ export function schemaTable<C extends Record<string, SchemaColumnInput>>(
     stamped[key] = { ...col, tableName: name };
   }
   const table = {
-    kind: "schema-table" as const,
     name,
     columns: stamped,
     ...stamped,
   };
-  // Survive a column named `name` (Linear-style teams/labels/cycles).
+  // Survive columns named `name` or `kind` (they would otherwise shadow
+  // the table discriminant / SQL name).
+  Object.defineProperty(table, "kind", { value: "schema-table", enumerable: false });
   Object.defineProperty(table, "tableName", { value: name, enumerable: false });
   return table as SchemaTableWithColumns<{ [K in keyof C]: SchemaColumnDecl }>;
 }

@@ -11,7 +11,7 @@ import type { SessionOperator } from "@/client.ts";
 /**
  * Shell chrome around authenticated panel routes.
  *
- * `/flows`, `/units`, `/store`, and `/vault` render full-bleed (no padding / gap); other
+ * `/overview`, `/flows`, `/store`, and `/vault` render full-bleed (no padding / gap); other
  * sections keep the padded inset. Desktop sidebar stays icon-collapsed; mobile
  * still uses the sheet trigger.
  *
@@ -20,8 +20,8 @@ import type { SessionOperator } from "@/client.ts";
 export function ShellLayout({ operator }: { readonly operator: SessionOperator }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const fullBleed =
+    pathname === "/overview" ||
     pathname === "/flows" ||
-    pathname === "/units" ||
     pathname === "/store" ||
     pathname === "/vault";
 

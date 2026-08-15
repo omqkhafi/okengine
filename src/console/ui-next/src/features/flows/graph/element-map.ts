@@ -273,12 +273,14 @@ export function resourcesOfElement(
       }
       break;
     case "store":
-      for (const store of Object.values(manifest.stores ?? {})) {
+      for (const [storeName, store] of Object.entries(manifest.stores ?? {})) {
         const facet = store.facet;
         for (const table of Object.keys(store.tables ?? {}).sort()) {
           add(`${facet}:${table}`, table, facet);
         }
-        for (const name of [...(store.namespaces ?? [])].sort()) add(`kv:${name}`, name, "kv");
+        const namespaces = store.namespaces && store.namespaces.length > 0 ? store.namespaces : [];
+        if (facet === "kv" && namespaces.length === 0) add(`kv:${storeName}`, storeName, "kv");
+        for (const name of [...namespaces].sort()) add(`kv:${name}`, name, "kv");
         for (const name of [...(store.buckets ?? [])].sort()) add(`files:${name}`, name, "files");
         for (const name of [...(store.indexes ?? [])].sort()) add(`index:${name}`, name, "index");
       }
@@ -405,9 +407,12 @@ export const ELEMENT_TYPE_KINDS: Record<OkeElement, readonly ElementTypeKind[]> 
 
 /**
  * Types an element owns — the element's kind vocabulary, always.
- * Named instances stay on {@link resourcesOfElement} (element focus).
  *
- * @param _manifest - Live Manifest (kinds are fixed; unused)
+ * Named catalogue rows (KV namespaces, tables, prompts) stay off this
+ * orbit and fan only when the element is focused. Store kinds are the
+ * four facets (`sql` · `kv` · `files` · `index`) — cache lives on KV.
+ *
+ * @param _manifest - Live Manifest (kinds are fixed per element)
  * @param element - Element to list
  */
 export function typesOfElement(
@@ -698,7 +703,7 @@ export function buildElementMap(
       position: radialPoint(angle, HUB_LAYOUT.elementRing, box),
       data: {
         kind: "element",
-        label: ELEMENT_ICONS[row.element].label,
+        label: ELEMENT_ICONS[row.element].symbol,
         refId: row.element,
         badge: String(row.resourceCount),
         live: row.live,

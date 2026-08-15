@@ -3,8 +3,8 @@
  */
 
 import { useRef, type JSX, type KeyboardEvent } from "react";
-import { AgentCode } from "@/components/agents/agent-code.tsx";
 import { cn } from "@/lib/utils.ts";
+import { QueryHighlightView } from "./query-highlight-view.tsx";
 
 /** Props for {@link SqlStyleEditor}. */
 export interface SqlStyleEditorProps {
@@ -16,7 +16,7 @@ export interface SqlStyleEditorProps {
 }
 
 /**
- * Free SQL editor with Shiki colors. ⌘/Ctrl+Enter submits when `onSubmit` is set.
+ * Free SQL editor with keyword colors. ⌘/Ctrl+Enter submits when `onSubmit` is set.
  *
  * @param props - Buffer + label
  */
@@ -49,7 +49,7 @@ export function SqlStyleEditor({
   return (
     <div className={cn("relative min-h-56 bg-muted/15", className)}>
       <div ref={highRef} className="pointer-events-none absolute inset-0 overflow-hidden">
-        <AgentCode
+        <QueryHighlightView
           code={highlight}
           language="sql"
           className="overflow-visible whitespace-pre-wrap break-words px-4 py-3 text-[11px] leading-5"

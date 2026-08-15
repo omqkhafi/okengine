@@ -190,11 +190,11 @@ const charge = flow("horizontal.charge", {
 });
 
 const bindings: Binding[] = [
-  { trigger: http.get("/ping").gate(gate.public), flow: ping as AnyFlowDef },
+  { trigger: http.get("/ping").gate.public, flow: ping as AnyFlowDef },
   { trigger: http.get("/rate").gate(rateGate), flow: rate as AnyFlowDef },
-  { trigger: http.post("/write").gate(gate.public), flow: write as AnyFlowDef },
-  { trigger: http.post("/emit").gate(gate.public), flow: emit as AnyFlowDef },
-  { trigger: http.post("/charge").gate(gate.public), flow: charge as AnyFlowDef },
+  { trigger: http.post("/write").gate.public, flow: write as AnyFlowDef },
+  { trigger: http.post("/emit").gate.public, flow: emit as AnyFlowDef },
+  { trigger: http.post("/charge").gate.public, flow: charge as AnyFlowDef },
 ];
 
 const app = oke({

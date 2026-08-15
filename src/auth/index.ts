@@ -113,10 +113,12 @@ export {
 
 export {
   assertPasswordPolicy,
+  generatePassword,
   resolvePasswordPolicy,
   PasswordPolicyError,
   DEFAULT_PASSWORD_MIN_LENGTH,
   DEFAULT_PASSWORD_POLICY,
+  type GeneratePasswordOptions,
   type PasswordPolicyOptions,
   type ResolvedPasswordPolicy,
 } from "./password-policy.ts";

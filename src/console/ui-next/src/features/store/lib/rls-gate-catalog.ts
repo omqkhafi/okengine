@@ -72,7 +72,7 @@ export function rlsGateCatalog(manifest: Manifest | null): RlsGateCatalog {
   ];
 
   for (const [name, gate] of Object.entries(source.gates ?? {})) {
-    if (gate.kind === "rate" || name.startsWith("rate:")) continue;
+    if (gate.kind === "rate" || gate.kind === "all" || name.startsWith("rate:")) continue;
     const scopes = gate.scopes ?? [];
     const roles = gate.roles ?? [];
     if (name === RLS_GATE_PUBLIC) {

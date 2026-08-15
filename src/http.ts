@@ -8,7 +8,7 @@
  * ```ts
  * import { on, flow, http, gate, oke, createBunRuntime } from "okengine/http";
  *
- * on(http.get("/").gate(gate.public), flow("ping", { do: () => "Hi" }));
+ * on(http.get("/").gate.public, flow("ping", { do: () => "Hi" }));
  * const app = oke({ name: "ping" });
  * createBunRuntime().serve(app);
  * ```

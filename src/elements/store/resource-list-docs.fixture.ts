@@ -45,7 +45,6 @@ export const docsAdminTableResource = store.resource(docsListItemsStore, docsIte
   in: inSchema,
   out: outSchema,
   list: { mode: "offset", count: "exact", limit: 20 },
-  unit: "docs-admin",
   breaking: true,
 });
 
@@ -57,6 +56,5 @@ export const docsRestrictedResource = store.resource(docsListItemsStore, docsIte
   in: inSchema,
   out: outSchema,
   list: { mode: "offset", filter: "none", limit: 20 },
-  unit: "docs-restricted",
   breaking: true,
 });

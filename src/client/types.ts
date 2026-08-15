@@ -120,10 +120,43 @@ export interface TransportError {
   readonly message?: string;
 }
 
+/** Next / previous list request — TanStack `pageParam` / URL bag. */
+export type ClientPagerLink = {
+  readonly cursor: string;
+};
+
 /**
- * Client call result — errors are values, never thrown for flow failures.
- * Success may carry an optional top-level `meta` (Stripe-style envelope,
- * e.g. paginated lists).
+ * Optional list pager on success `meta`. `next` / `prev` are request bags.
+ */
+export type ClientListMeta = {
+  readonly mode?: "offset" | "cursor";
+  readonly limit?: number;
+  readonly next?: ClientPagerLink | null;
+  readonly prev?: ClientPagerLink | null;
+  readonly total?: number;
+  readonly offset?: number;
+};
+
+/**
+ * Wire envelope — `{ data, error, meta? }` before pager methods attach.
+ *
+ * @typeParam O - Success data
+ * @typeParam E - Declared error map
+ */
+export type ClientEnvelope<
+  O = unknown,
+  E extends Record<string, unknown> = Record<string, unknown>,
+> =
+  | {
+      readonly data: O;
+      readonly error: null;
+      readonly meta?: ClientListMeta;
+    }
+  | { readonly data: null; readonly error: ClientError<E> | TransportError };
+
+/**
+ * Client call result — envelope plus always-callable `next` / `prev`.
+ * Async-iterable: this page, then `next()`, stop when `meta.next` is null.
  *
  * @typeParam O - Success data
  * @typeParam E - Declared error map
@@ -131,13 +164,12 @@ export interface TransportError {
 export type ClientResult<
   O = unknown,
   E extends Record<string, unknown> = Record<string, unknown>,
-> =
-  | {
-      readonly data: O;
-      readonly error: null;
-      readonly meta?: Record<string, unknown>;
-    }
-  | { readonly data: null; readonly error: ClientError<E> | TransportError };
+> = ClientEnvelope<O, E> & {
+  /** Next list page, or an empty success when there isn't one. */
+  readonly next: () => Promise<ClientResult<O, E>>;
+  /** Previous list page, or an empty success when there isn't one. */
+  readonly prev: () => Promise<ClientResult<O, E>>;
+} & AsyncIterable<ClientResult<O, E>>;
 
 /** Minimal fetch signature (avoids DOM `HeadersInit` / `preconnect` coupling). */
 export type ClientFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -188,17 +220,33 @@ export interface ClientOptions {
 }
 
 /**
- * Call signature for one flow.
+ * `await list()` is one page; `for await (const page of list())` walks.
+ *
+ * @typeParam T - Page result
+ */
+export type ClientThenableIterable<T> = PromiseLike<T> & AsyncIterable<T>;
+
+/**
+ * Call signature for one flow — thenable (one page) and async-iterable (walk).
  *
  * @typeParam I - Input
  * @typeParam O - Output
  * @typeParam E - Errors
  */
-export type ClientCall<I, O, E extends Record<string, unknown>> = [I] extends [void]
-  ? () => Promise<ClientResult<O, E>>
+type ClientCallFn<I, O, E extends Record<string, unknown>> = [I] extends [void]
+  ? () => ClientThenableIterable<ClientResult<O, E>>
   : Partial<I> extends I
-    ? (input?: I) => Promise<ClientResult<O, E>>
-    : (input: I) => Promise<ClientResult<O, E>>;
+    ? (input?: I) => ClientThenableIterable<ClientResult<O, E>>
+    : (input: I) => ClientThenableIterable<ClientResult<O, E>>;
+
+/**
+ * Call signature for one flow. No `.pages()` — iterate the call or the page.
+ *
+ * @typeParam I - Input
+ * @typeParam O - Output
+ * @typeParam E - Errors
+ */
+export type ClientCall<I, O, E extends Record<string, unknown>> = ClientCallFn<I, O, E>;
 
 /**
  * Pull input from a contract shape (supports required or phantom-optional `in`).

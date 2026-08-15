@@ -74,7 +74,7 @@
   --sidebar-foreground: oklch(0.141 0.005 285.823);
   --sidebar-primary: oklch(0.21 0.006 285.885);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent: oklch(0.945 0.002 286.32);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(0.705 0.015 286.067);
@@ -108,7 +108,7 @@
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.19 0.006 285.885);
+  --sidebar-accent: oklch(0.22 0.008 285.885);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
@@ -162,6 +162,24 @@
 
 .react-flow__node-law {
   overflow: visible !important;
+}
+
+/* Overview hubs — keep edge anchors, never paint the xyflow handle square. */
+.react-flow__handle.oke-center-handle,
+.react-flow__node-element .react-flow__handle,
+.react-flow__node-typeChip .react-flow__handle,
+.react-flow__node-unitChip .react-flow__handle,
+.react-flow__node-law .react-flow__handle {
+  opacity: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  pointer-events: none !important;
 }
 
 .react-flow__minimap {

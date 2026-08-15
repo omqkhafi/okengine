@@ -462,6 +462,17 @@ describe("console serve security", () => {
     }
   });
 
+  test("unknown Console paths are 404, not rewritten", async () => {
+    const headers = { host: "127.0.0.1" };
+    const overview = await server.fetch(new Request(`${server.url}overview`, { headers }));
+    expect(overview.status).toBe(200);
+    const units = await server.fetch(new Request(`${server.url}units`, { headers }));
+    expect(units.status).toBe(404);
+    expect(await units.text()).toMatch(/404|not a Console page|<!doctype html>/i);
+    const junk = await server.fetch(new Request(`${server.url}nope`, { headers }));
+    expect(junk.status).toBe(404);
+  });
+
   test("plugin iframe sandbox omits allow-same-origin", () => {
     expect(PLUGIN_IFRAME_SANDBOX.includes("allow-same-origin")).toBe(false);
     expect(PLUGIN_IFRAME_SANDBOX).toContain("allow-scripts");

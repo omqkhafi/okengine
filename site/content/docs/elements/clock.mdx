@@ -156,7 +156,7 @@ drivers: {
 
 ## Operating schedules from the Console
 
-The Console (`:6533` → `/units`) lists clock-triggered flows in the cron / every bands. Named clocks still carry health — drift, overdue, missed runs + catch-up `"one"`, and which replica holds the leader lease.
+The Console (`:6533` → `/flows`) lists clock-triggered flows in the cron / every bands. Named clocks still carry health — drift, overdue, missed runs + catch-up `"one"`, and which replica holds the leader lease.
 
 From there you can **pause** any cron, **wake early** a sleeping durable run, or **edit the schedule** when `overridable: true`. Edit on a locked clock throws `ScheduleNotOverridableError` (`clock "…" is not overridable`).
 

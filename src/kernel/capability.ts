@@ -39,6 +39,12 @@ const EFFECTS_FIELD: Readonly<Record<EffectKind, keyof Effects>> = {
 export interface CapabilityToken {
   /** Flow id this token was issued for. */
   readonly flow: string;
+  /**
+   * `true` when the compiler has not stamped effects (`declared` was
+   * `undefined` at mint). Open tokens allow every access; empty
+   * `declared` is then "unknown", not least-privilege deny.
+   */
+  readonly open: boolean;
   /** Declared effects that minted this token. */
   readonly declared: Effects;
   /**
@@ -83,6 +89,7 @@ export function createCapabilityToken(flow: string, declared?: Effects): Capabil
 
   return {
     flow,
+    open,
     declared: effects,
     allows(kind: EffectKind, resource: string): boolean {
       if (open) return true;

@@ -178,6 +178,11 @@ Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`.
 
 ## Cache
 
+Read-only flows cache automatically from inferred or ledgered `reads` — no `fx.cache`
+call and no `cache:` default on the flow. Writes invalidate those keys. Use
+`cache: false` to opt out, or `cache: "30s"` for a TTL. `fx.cache` is the manual
+(tier-3) surface:
+
 | Signature                              | Notes                                     |
 | -------------------------------------- | ----------------------------------------- |
 | `fx.cache.get(key)`                    | Value or `undefined`                      |
@@ -186,12 +191,13 @@ Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`.
 
 ## Responses
 
-| Helper                         | Status | Body                           |
-| ------------------------------ | ------ | ------------------------------ |
-| `fx.json.ok(value, { meta? })` | 200    | `{ data, meta?, error: null }` |
-| `fx.json.create(value)`        | 201    | `{ data, error: null }`        |
-| `fx.json.empty()`              | 204    | no body                        |
-| `fx.json.with(data, meta)`     | 200    | paginated envelope             |
+| Helper                         | Status | Body                                                 |
+| ------------------------------ | ------ | ---------------------------------------------------- |
+| `fx.json.ok(value, { meta? })` | 200    | `{ data, meta?, error: null }`                       |
+| `fx.json.create(value)`        | 201    | `{ data, error: null }`                              |
+| `fx.json.empty()`              | 204    | no body                                              |
+| `fx.json.with(page)` / `with(data, meta)` | 200 | `{ data, meta, error: null }` — already-built pager |
+| `fx.json.withQuery(rows, input, spec?)` | 200 | In-memory list page — zero-config `q` / auto-eq / PostgREST |
 
 Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control.
 

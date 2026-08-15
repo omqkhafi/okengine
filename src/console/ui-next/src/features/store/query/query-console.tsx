@@ -936,7 +936,7 @@ export function QueryConsole({
             <QueryEditor
               value={text}
               onChange={setText}
-              language={isSql ? "sql" : "bash"}
+              language={isSql ? "sql" : "kv"}
               onRun={run}
               onRunAll={isSql ? runAll : undefined}
               onRunLine={isSql ? runLine : undefined}
@@ -976,7 +976,7 @@ export function QueryConsole({
                 pending={pending}
                 meta={meta}
                 executed={executed}
-                executedLanguage={isSql ? "sql" : "bash"}
+                executedLanguage={isSql ? "sql" : "kv"}
                 storeRef={store?.ref}
                 sets={sets}
                 activeSet={activeSet}
@@ -994,7 +994,7 @@ export function QueryConsole({
           pending={pending}
           meta={meta}
           executed={executed}
-          executedLanguage={isSql ? "sql" : "bash"}
+          executedLanguage={isSql ? "sql" : "kv"}
           storeRef={store?.ref}
           sets={sets}
           activeSet={activeSet}

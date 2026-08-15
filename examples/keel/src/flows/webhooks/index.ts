@@ -1,7 +1,8 @@
 import { on, flow, http } from "okengine";
 import { z } from "zod";
 
-import { member, webhookAdmin, webhookSecret, webhooksKv } from "@/core";
+import { webhookAdminWrite, webhookSecret, webhooksKv } from "@/core";
+import { listIn, pageOut } from "@/lib/http";
 import { IdIn, IdOut, Ok } from "@/lib/shapes";
 
 const WebhookIn = z.object({
@@ -11,13 +12,11 @@ const WebhookIn = z.object({
 
 /** List outbound webhooks. */
 export const list = on(
-  http.get("/webhooks").gate(member, webhookAdmin),
+  http.get("/webhooks").gate(webhookAdminWrite),
   flow("webhooks.list", {
-    out: z.object({
-      items: z.array(z.object({ id: z.string(), url: z.string() })),
-      count: z.number(),
-    }),
-    do: async (_input, fx) => {
+    in: listIn({ mode: "offset" }),
+    out: pageOut(z.object({ id: z.string(), url: z.string() })),
+    do: async (input, fx) => {
       await fx.vault.get(webhookSecret);
       const keys = await fx.store(webhooksKv).list();
       const items: { id: string; url: string }[] = [];
@@ -25,14 +24,14 @@ export const list = on(
         const value = (await fx.store(webhooksKv).get(key)) as { url?: string } | null;
         items.push({ id: key, url: value?.url ?? "" });
       }
-      return { items, count: items.length };
+      return fx.json.withQuery(items, input);
     },
   }),
 );
 
 /** Register a webhook. */
 export const create = on(
-  http.post("/webhooks").gate(member, webhookAdmin),
+  http.post("/webhooks").gate(webhookAdminWrite),
   flow("webhooks.create", {
     in: WebhookIn,
     out: IdOut,
@@ -47,7 +46,7 @@ export const create = on(
 
 /** Delete a webhook. */
 export const remove = on(
-  http.delete("/webhooks/:id").gate(member, webhookAdmin),
+  http.delete("/webhooks/:id").gate(webhookAdminWrite),
   flow("webhooks.delete", {
     in: IdIn,
     out: Ok,
@@ -61,7 +60,7 @@ export const remove = on(
 
 /** Rotate the signing secret (reads the contract — no outbound call). */
 export const rotate = on(
-  http.post("/webhooks/:id/rotate").gate(member, webhookAdmin),
+  http.post("/webhooks/:id/rotate").gate(webhookAdminWrite),
   flow("webhooks.rotate", {
     in: IdIn,
     out: Ok,

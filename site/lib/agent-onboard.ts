@@ -3,8 +3,6 @@
  * in one shot (docs index + agent contract). Distinct from per-page copy-prompt.
  */
 
-import { gitConfig } from "@/lib/shared";
-
 /** Canonical public docs origin (matches `metadataBase` / llms.txt examples). */
 export const DOCS_ORIGIN = "https://oke.omqkhafi.dev" as const;
 
@@ -18,10 +16,12 @@ export function llmsTxtUrl(origin: string = DOCS_ORIGIN): string {
 }
 
 /**
- * Fetchable URL for the repo-root `AGENTS.md` contract (plain text, not HTML).
+ * Fetchable URL for the agent contract served by this site (`/llms/agents`).
+ *
+ * @param origin - Site origin; defaults to the live docs host
  */
-export function agentsMdUrl(): string {
-  return `https://raw.githubusercontent.com/${gitConfig.user}/${gitConfig.repo}/${gitConfig.branch}/AGENTS.md`;
+export function agentsMdUrl(origin: string = DOCS_ORIGIN): string {
+  return `${origin.replace(/\/$/, "")}/llms/agents`;
 }
 
 /**
@@ -30,5 +30,5 @@ export function agentsMdUrl(): string {
  * @param origin - Docs origin for `/llms.txt` (use `window.location.origin` in the browser)
  */
 export function agentOnboardPrompt(origin: string = DOCS_ORIGIN): string {
-  return `Read ${llmsTxtUrl(origin)} and ${agentsMdUrl()}…`;
+  return `Read ${llmsTxtUrl(origin)} and ${agentsMdUrl(origin)}…`;
 }

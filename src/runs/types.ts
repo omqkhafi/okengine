@@ -85,7 +85,7 @@ export interface WideEvent {
    * `fx.log` lines — a field on the run, not a parallel stream.
    */
   readonly logs: readonly RunLogLine[];
-  /** Wall duration in milliseconds. */
+  /** Handler duration in milliseconds (high-res; may be fractional). */
   readonly durationMs: number;
   /** Epoch-ms start. */
   readonly startedAt: number;

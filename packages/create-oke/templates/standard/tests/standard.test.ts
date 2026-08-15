@@ -33,7 +33,8 @@ test("notes create → list → archive", async () => {
 
   const listed = await t.api.notes!.list!({});
   expect(listed.error).toBeNull();
-  const notes = (listed.data as { notes: { id: string }[] }).notes;
+  const notes = listed.data as { id: string }[];
+  expect(listed.meta).toMatchObject({ mode: "offset", offset: 0, next: null, prev: null });
   expect(notes.some((n) => n.id === row.id)).toBe(true);
 
   const archived = await t.api.notes!.archive!({ id: row.id });
@@ -41,7 +42,7 @@ test("notes create → list → archive", async () => {
   expect((archived.data as { archivedAt: number }).archivedAt).toBeTypeOf("number");
 
   const after = await t.api.notes!.list!({});
-  const afterNotes = (after.data as { notes: { id: string }[] }).notes;
+  const afterNotes = after.data as { id: string }[];
   expect(afterNotes.some((n) => n.id === row.id)).toBe(false);
 });
 

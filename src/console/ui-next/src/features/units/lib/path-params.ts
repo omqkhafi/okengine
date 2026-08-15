@@ -24,20 +24,20 @@ export function pathParamPlaceholder(name: string): string {
 
 /** Keel seed ids so Call API path fields are callable without guessing. */
 const SEED_PATH_EXAMPLES: Readonly<Record<string, string>> = {
-  "attachments:id": "attachments/ENG-184/spec.pdf",
-  "issues:id": "iss_eng_184",
+  "attachments:id": "attachments/tsk_eng_12/spec.pdf",
+  "tasks:id": "tsk_eng_12",
   "comments:id": "cmt_1",
-  "projects:id": "proj_traces",
-  "teams:id": "team_eng",
-  "labels:id": "lab_bug",
-  "labels:labelId": "lab_feature",
-  "cycles:id": "cyc_25",
-  "documents:id": "doc_prd_traces",
+  "projects:id": "proj_api",
+  "spaces:id": "space_eng",
+  "tags:id": "tag_bug",
+  "tags:tagId": "tag_feature",
+  "goals:id": "goal_harbor",
+  "documents:id": "doc_prd_api",
   "members:id": "mem_aria",
-  "triage:id": "iss_sup_12",
-  "drafts:id": "ENG-184",
-  "milestones:mid": "ms_alpha",
-  "initiatives:id": "init_console",
+  "forms:id": "form_customer",
+  "drafts:id": "ENG-12",
+  "views:id": "view_web_board",
+  "inbox:id": "inb_1",
 };
 
 /**

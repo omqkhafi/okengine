@@ -19,16 +19,32 @@ import type { ResourceRef } from "./types.ts";
  * The declared name a real `store.schema.table(name, columns)` object
  * carries at runtime — the same string that was the first argument to
  * `store.schema.table(...)` in source, regardless of what the JS binding
- * is called. `undefined` for anything else (raw ORM tables, plain
- * objects, missing/optional table arguments).
+ * is called. A column named `name` shadows `table.name`; prefer
+ * non-enumerable `tableName`. `undefined` for anything else (raw ORM
+ * tables, plain objects, missing/optional table arguments).
  *
  * @param value - Value passed where a table argument is expected
  */
 export function schemaTableName(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const v = value as { kind?: unknown; name?: unknown };
+  const v = value as {
+    kind?: unknown;
+    name?: unknown;
+    tableName?: unknown;
+    columns?: unknown;
+  };
   if (v.kind !== "schema-table") return undefined;
-  return typeof v.name === "string" ? v.name : undefined;
+  // `store.schema.table` copies columns onto the table object. A column
+  // named `name` (teams, labels, cycles, …) shadows the SQL name — the
+  // declare site stamps non-enumerable `tableName` for this case.
+  if (typeof v.tableName === "string") return v.tableName;
+  if (typeof v.name === "string") return v.name;
+  if (v.columns && typeof v.columns === "object") {
+    for (const col of Object.values(v.columns as Record<string, { tableName?: unknown }>)) {
+      if (typeof col?.tableName === "string") return col.tableName;
+    }
+  }
+  return undefined;
 }
 
 /**

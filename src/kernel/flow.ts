@@ -55,7 +55,11 @@ export interface FlowOptions<I = unknown, O = unknown, E extends FlowErrorMap = 
   readonly retry?: FxRetryOptions;
   /** Live-query / push result. */
   readonly live?: boolean;
-  /** Cache TTL (`true` = default policy, or a duration string). */
+  /**
+   * Cache policy. Read-only flows cache automatically from inferred
+   * effects (`true` / omitted). `false` opts out; a duration string
+   * (`"30s"`) adds a TTL on top of write invalidation.
+   */
   readonly cache?: boolean | string;
   /** Declared service-level objective. */
   readonly slo?: Slo;

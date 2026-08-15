@@ -5,6 +5,7 @@
  */
 
 import type { FilesBucket, FilesDriver, FilesOpenOptions, S3ClientLike } from "./types.ts";
+import { ensureS3Bucket, isMissingS3BucketError } from "./s3-ensure-bucket.ts";
 
 /**
  * Open a files bucket over the S3 protocol.
@@ -12,14 +13,25 @@ import type { FilesBucket, FilesDriver, FilesOpenOptions, S3ClientLike } from ".
  * @param options - Bucket name / injected client
  */
 export async function openS3Bucket(options: FilesOpenOptions): Promise<FilesBucket> {
-  const client: S3ClientLike = options.client ?? createBunS3Client(options.root ?? options.name);
+  const bucketName = options.root ?? options.name;
+  const client: S3ClientLike = options.client ?? createBunS3Client(bucketName);
+  if (!options.client) await ensureS3BucketFromEnv(bucketName);
 
   const prefix = "";
 
   return {
     driverId: "s3",
     async put(key, data) {
-      await client.file(prefix + key).write(data);
+      try {
+        await client.file(prefix + key).write(data);
+      } catch (err) {
+        if (!options.client && isMissingS3BucketError(err)) {
+          await ensureS3BucketFromEnv(bucketName);
+          await client.file(prefix + key).write(data);
+          return;
+        }
+        throw err;
+      }
     },
     async get(key) {
       const file = client.file(prefix + key);
@@ -43,6 +55,26 @@ export async function openS3Bucket(options: FilesOpenOptions): Promise<FilesBuck
       /* S3 clients are stateless */
     },
   };
+}
+
+/**
+ * CreateBucket on a custom S3 endpoint (Compose RustFS / MinIO).
+ * Skipped without `S3_ENDPOINT` so real AWS is not auto-provisioned.
+ *
+ * @param bucket - Bucket name (`S3_BUCKET` / store name)
+ */
+export async function ensureS3BucketFromEnv(bucket: string): Promise<void> {
+  const endpoint = process.env.S3_ENDPOINT?.trim();
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY?.trim();
+  if (!endpoint || !accessKeyId || !secretAccessKey) return;
+  await ensureS3Bucket({
+    bucket,
+    endpoint,
+    accessKeyId,
+    secretAccessKey,
+    region: process.env.S3_REGION?.trim() || "us-east-1",
+  });
 }
 
 function createBunS3Client(bucket: string): S3ClientLike {

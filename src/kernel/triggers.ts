@@ -5,6 +5,7 @@
  * `table.changed()` · `internal`. All bind the same {@link FlowDef} species.
  */
 
+import { flattenGateArgs, GATE_PUBLIC_NAME, type GateAllDecl } from "../elements/gate/flatten.ts";
 import type { NamedRef } from "./fx.ts";
 
 /** HTTP methods accepted by {@link http}. */
@@ -12,6 +13,19 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS"
 
 /** Gate reference attached via `.gate(...)`. */
 export type GateRef = NamedRef;
+
+/** One `.gate(...)` argument — a named ref, an `all` handle, or an array. */
+export type GateArg = GateRef | GateAllDecl | readonly GateArg[];
+
+/**
+ * Attach function on an HTTP trigger / resource mount.
+ * Call it with members, or use `.public` for the unauthenticated sentinel.
+ */
+export interface GateAttach<T> {
+  (...gates: GateArg[]): T;
+  /** Attach {@link gate.public} — same as `.gate(gate.public)`. */
+  readonly public: T;
+}
 
 /**
  * HTTP trigger value. Method and path are literal type parameters so
@@ -28,11 +42,10 @@ export interface HttpTrigger<M extends HttpMethod = HttpMethod, P extends string
   /** Whether `.live()` was applied. */
   readonly isLive: boolean;
   /**
-   * Attach gates (registration order).
-   *
-   * @param gates - Gate refs
+   * Attach gates (registration order). `gate.all` handles and arrays flatten.
+   * `.gate.public` is the unauthenticated sentinel.
    */
-  gate(...gates: GateRef[]): HttpTrigger<M, P>;
+  readonly gate: GateAttach<HttpTrigger<M, P>>;
   /**
    * Mark the HTTP trigger as live (push result to subscribers).
    */
@@ -78,6 +91,27 @@ export type Trigger = HttpTrigger | EveryTrigger | SignalAsTrigger | CdcTrigger 
 /** Trigger kind string. */
 export type TriggerKind = Trigger["kind"];
 
+/**
+ * Callable `.gate(...)` plus `.gate.public` on a trigger or resource mount.
+ *
+ * @param apply - Rebuild the host with the flattened gate list
+ * @param current - Gates already attached
+ */
+function createGateAttach<T>(
+  apply: (next: readonly GateRef[]) => T,
+  current: readonly GateRef[],
+): GateAttach<T> {
+  const attach = ((...next: GateArg[]) =>
+    apply([...current, ...flattenGateArgs(next)])) as GateAttach<T>;
+  Object.defineProperty(attach, "public", {
+    get() {
+      return apply([...current, GATE_PUBLIC_NAME]);
+    },
+    enumerable: true,
+  });
+  return attach;
+}
+
 function createHttpTrigger<M extends HttpMethod, P extends string>(
   method: M,
   path: P,
@@ -90,9 +124,7 @@ function createHttpTrigger<M extends HttpMethod, P extends string>(
     path,
     gates,
     isLive,
-    gate(...next) {
-      return createHttpTrigger(method, path, [...gates, ...next], isLive);
-    },
+    gate: createGateAttach((next) => createHttpTrigger(method, path, next, isLive), gates),
     live() {
       return createHttpTrigger(method, path, gates, true);
     },
@@ -115,10 +147,23 @@ export interface ResourceFlowBag {
 /**
  * A mounted resource — the single argument to the `on(http.resource(…))`
  * overload. Branded so `on` can tell it apart from a plain trigger.
+ * Same chain as {@link HttpTrigger}: `.gate(...)` / `.live()`.
  */
 export interface ResourceMount {
   readonly [resourceMountBrand]: true;
   readonly mounts: ReadonlyArray<{ readonly trigger: HttpTrigger; readonly flow: unknown }>;
+  readonly gates: readonly GateRef[];
+  /** Whether `.live()` was applied (GET list + get). */
+  readonly isLive: boolean;
+  /**
+   * Attach gates to every verb (registration order). `gate.all` and arrays flatten.
+   * `.gate.public` is the unauthenticated sentinel.
+   */
+  readonly gate: GateAttach<ResourceMount>;
+  /**
+   * Mark list and get as live (GET mounts). Mutations stay request/response.
+   */
+  live(): ResourceMount;
 }
 /** Brand for {@link ResourceMount}. */
 export const resourceMountBrand: unique symbol = Symbol.for("oke.resource.mount");
@@ -129,19 +174,38 @@ export const resourceMountBrand: unique symbol = Symbol.for("oke.resource.mount"
  *
  * @param path - Base path (`/notes`)
  * @param ops - The five FlowDefs (usually `resource.all()`)
+ * @param gates - Shared gate chain
+ * @param isLive - Live on GET list + get
  */
-function httpResource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount {
-  const id = `${path}/:id`;
-  return {
+function httpResource<P extends string>(
+  path: P,
+  ops: ResourceFlowBag,
+  gates: readonly GateRef[] = [],
+  isLive = false,
+): ResourceMount {
+  const id = `${path}/:id` as `${P}/:id`;
+  const verb = <M extends HttpMethod>(
+    method: M,
+    p: P | `${P}/:id`,
+    live: boolean,
+  ): HttpTrigger<M> => createHttpTrigger(method, p, gates, live);
+  const mount: ResourceMount = {
     [resourceMountBrand]: true,
+    gates,
+    isLive,
     mounts: [
-      { trigger: http.get(path), flow: ops.list },
-      { trigger: http.post(path), flow: ops.create },
-      { trigger: http.get(id), flow: ops.get },
-      { trigger: http.patch(id), flow: ops.update },
-      { trigger: http.delete(id), flow: ops.remove },
+      { trigger: verb("GET", path, isLive), flow: ops.list },
+      { trigger: verb("POST", path, false), flow: ops.create },
+      { trigger: verb("GET", id, isLive), flow: ops.get },
+      { trigger: verb("PATCH", id, false), flow: ops.update },
+      { trigger: verb("DELETE", id, false), flow: ops.remove },
     ],
+    gate: createGateAttach((next) => httpResource(path, ops, next, isLive), gates),
+    live() {
+      return httpResource(path, ops, gates, true);
+    },
   };
+  return mount;
 }
 
 /** True when `value` is a {@link ResourceMount}. */
@@ -195,7 +259,8 @@ export interface HttpTriggerNamespace {
   query<P extends string>(path: P): HttpTrigger<"QUERY", P>;
   /**
    * Mount a CRUD resource (list/create on `path`, get/update/remove on
-   * `path/:id`) for the `on(http.resource(…))` overload.
+   * `path/:id`) for the `on(http.resource(…))` overload. Chain `.gate(...)`
+   * and `.live()` like {@link HttpTrigger}.
    */
   resource<P extends string>(path: P, ops: ResourceFlowBag): ResourceMount;
 }

@@ -116,6 +116,16 @@ export interface StoreDataGridProps {
   readonly limit: number;
   /** Toolbar controls rendered left of the find input (Refresh, Writers/Readers, …). */
   readonly toolbarExtras?: ReactNode;
+  /**
+   * Server-side index query. When set, the toolbar find field queries the
+   * index (and shows topK) instead of filtering this page.
+   */
+  readonly indexSearch?: {
+    readonly value: string;
+    readonly onChange: (value: string) => void;
+    readonly topK: number;
+    readonly onTopKChange: (topK: number) => void;
+  };
   /** Controlled SQL insert sheet (button lives in {@link toolbarExtras}). */
   readonly insertOpen?: boolean;
   readonly onInsertOpenChange?: (open: boolean) => void;
@@ -215,6 +225,7 @@ export function StoreDataGrid({
   routedRole,
   limit,
   toolbarExtras,
+  indexSearch,
   insertOpen = false,
   onInsertOpenChange,
   onDeleteRows,
@@ -265,8 +276,11 @@ export function StoreDataGrid({
     return pending.get(pendingKey(row.id, key))?.next ?? row.cells[key];
   };
 
+  const indexMode = indexSearch !== undefined;
+  const findValue = indexMode ? indexSearch.value : findText;
+
   const filteredRows = useMemo(() => {
-    if (!findText.trim()) return model.rows;
+    if (indexMode || !findText.trim()) return model.rows;
     const q = findText.trim().toLowerCase();
     return model.rows.filter((row) =>
       model.columns.some((col) => {
@@ -281,7 +295,7 @@ export function StoreDataGrid({
         );
       }),
     );
-  }, [model.rows, model.columns, findText, pending]);
+  }, [model.rows, model.columns, findText, pending, indexMode]);
 
   const viewRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -724,6 +738,11 @@ export function StoreDataGrid({
     target instanceof Node &&
     (findRef.current === target || findRef.current?.contains(target) === true);
 
+  const isToolbarField = (target: EventTarget | null): boolean =>
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement;
+
   const nativeTextSelected = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement))
       return false;
@@ -814,6 +833,7 @@ export function StoreDataGrid({
       findRef.current?.focus();
       return;
     }
+    if (isFindInput(event.target) || isToolbarField(event.target)) return;
     if (meta && event.key.toLowerCase() === "enter") {
       if (pendingRef.current.size > 0) {
         event.preventDefault();
@@ -927,28 +947,52 @@ export function StoreDataGrid({
       onCopy={onCopy}
       onPaste={onPaste}
     >
-      <div className="relative z-20 flex h-9 shrink-0 flex-wrap items-center gap-1.5 border-b border-border/60 bg-muted/15 px-2">
+      <div className="relative z-20 flex h-9 shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-border/60 bg-muted/15 px-2">
         {toolbarExtras}
         {toolbarExtras ? (
           <Separator orientation="vertical" className="mx-0.5 my-2 h-4 self-center" />
         ) : null}
-        <ToolbarTip label="Find in this page (Ctrl+F)" className="min-w-40 flex-1">
-          <div className="relative w-full min-w-0">
-            <HugeiconsIcon
-              icon={Search01Icon}
-              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
+        <div
+          className="relative min-w-40 flex-1"
+          title={indexMode ? "Search this index (Ctrl+F)" : "Find in this page (Ctrl+F)"}
+        >
+          <HugeiconsIcon
+            icon={Search01Icon}
+            className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            ref={findRef}
+            value={findValue}
+            onChange={(e) =>
+              indexMode ? indexSearch.onChange(e.target.value) : setFindText(e.target.value)
+            }
+            placeholder={
+              indexMode ? "Find by title or id — or paste 1, 0, 0" : "Find in results…"
+            }
+            aria-label={indexMode ? "Search this index" : "Find in results"}
+            data-slot={indexMode ? "index-search" : "grid-find"}
+            className="h-6 border-0 bg-transparent pl-7 text-[11px] shadow-none focus-visible:border-transparent focus-visible:bg-muted/40 focus-visible:ring-0 md:text-[11px] dark:bg-transparent"
+          />
+        </div>
+        {indexMode ? (
+          <div className="flex items-center gap-1 text-[11px]" title="Hits to return">
+            <span className="text-muted-foreground">topK</span>
             <Input
-              ref={findRef}
-              value={findText}
-              onChange={(e) => setFindText(e.target.value)}
-              placeholder="Find in results…"
-              aria-label="Find in results"
-              className="h-6 border-0 bg-transparent pl-7 text-[11px] shadow-none focus-visible:border-transparent focus-visible:bg-muted/40 focus-visible:ring-0 md:text-[11px] dark:bg-transparent"
+              type="number"
+              min={1}
+              max={100}
+              aria-label="topK"
+              data-slot="index-topk"
+              className="h-6 w-10 border-0 bg-transparent px-1 text-center font-mono text-[11px] tabular-nums shadow-none focus-visible:border-transparent focus-visible:bg-muted/40 focus-visible:ring-0 md:text-[11px] dark:bg-transparent"
+              value={indexSearch.topK}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n) && n >= 1 && n <= 100) indexSearch.onTopKChange(n);
+              }}
             />
           </div>
-        </ToolbarTip>
+        ) : null}
         {sort ? (
           <span
             className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground"
@@ -1246,9 +1290,11 @@ export function StoreDataGrid({
           rowHeight={rowHeightPx}
           height={viewportHeight}
           emptyState={
-            findText.trim()
-              ? "No matches on this page — increase Limit to search more rows."
-              : "No rows."
+            indexMode && findValue.trim()
+              ? "No hits — try a different query or raise topK."
+              : findText.trim()
+                ? "No matches on this page — increase Limit to search more rows."
+                : "No rows."
           }
           className="h-full rounded-none border-0"
         />
@@ -1382,7 +1428,11 @@ export function StoreDataGrid({
             {editError}
           </span>
         ) : null}
-        {findText.trim() ? (
+        {indexMode && findValue.trim() ? (
+          <span className="ml-auto truncate" role="status" data-slot="find-scope">
+            Index query · topK {indexSearch.topK}
+          </span>
+        ) : findText.trim() ? (
           <span className="ml-auto truncate" role="status" data-slot="find-scope">
             This page only · limit {limit}
           </span>

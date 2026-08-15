@@ -26,6 +26,7 @@ import { createAiRuntime, type AiPromptDecl, type AiRuntime } from "../elements/
 import { createChannelRuntime, type DeliveryReceipt } from "../elements/channel.ts";
 import { createTestClockRuntime } from "../elements/clock.ts";
 import type { GateDecl } from "../elements/gate.ts";
+import { flattenGatePolicies } from "../elements/gate/config.ts";
 import type { SignalDecl } from "../elements/signal.ts";
 import type { VaultSecretDecl } from "../elements/vault.ts";
 import type { OkeApp } from "../kernel/app.ts";
@@ -227,6 +228,7 @@ export async function createTestApp<App extends OkeApp>(
       },
     },
   };
+  const rawGates = options.gates ?? options.boot?.gates ?? appOpts.gate?.policies;
 
   await app.boot({
     ...(options.boot ?? {}),
@@ -236,7 +238,7 @@ export async function createTestApp<App extends OkeApp>(
     // boots never skip posture via this flag.
     unguardedHttp: options.boot?.unguardedHttp ?? appOpts.gate?.unguardedHttp ?? "allow",
     startScheduler: options.startScheduler ?? options.boot?.startScheduler ?? false,
-    gates: options.gates ?? options.boot?.gates ?? appOpts.gate?.policies,
+    gates: rawGates === undefined ? undefined : flattenGatePolicies(rawGates),
     secrets: options.secrets ?? options.boot?.secrets ?? appOpts.secrets,
     signals: options.signals ?? options.boot?.signals ?? appOpts.signals,
     stores: options.boot?.stores ?? appOpts.stores,

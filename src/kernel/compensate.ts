@@ -6,6 +6,7 @@
  */
 
 import type { AnyFlowDef } from "./flow.ts";
+import { fail, OkeError, type FlowFailure } from "./errors.ts";
 import type { Fx } from "./fx.ts";
 import { isFlowFailure } from "./hooks.ts";
 import { JOURNAL_UNDO_PREFIX, type JournalSession, type JournalStepEntry } from "./journal.ts";
@@ -17,9 +18,27 @@ import { JOURNAL_UNDO_PREFIX, type JournalSession, type JournalStepEntry } from 
  */
 export function failureCodeOf(err: unknown): string {
   if (isFlowFailure(err)) return err.error.code;
+  if (err instanceof OkeError) return `OKE${err.code}`;
   if (err instanceof Error && err.name && err.name !== "Error") return err.name;
   if (err instanceof Error && err.message) return err.message.slice(0, 120);
   return "Error";
+}
+
+/**
+ * Coerce a thrown value into a {@link FlowFailure} for Runs wide events.
+ *
+ * {@link OkeError} keeps its numeric code and cause so Traces can show
+ * `OKE1002` instead of a bare `OkeError` with no message.
+ *
+ * @param err - Thrown value or {@link FlowFailure}
+ */
+export function failureFromUnknown(err: unknown): FlowFailure {
+  if (isFlowFailure(err)) return err;
+  if (err instanceof OkeError) {
+    return fail(`OKE${err.code}`, { ...err.params }, { message: err.causeText });
+  }
+  const message = err instanceof Error ? err.message : undefined;
+  return fail(failureCodeOf(err), {}, message !== undefined ? { message } : undefined);
 }
 
 /** Forward step names only (excludes journaled `undo:*` entries). */
