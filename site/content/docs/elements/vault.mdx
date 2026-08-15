@@ -225,8 +225,8 @@ sheet.
 
 | Action               | Confirm                                | HTTP                                                                   |
 | -------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| Add a contract       | session only                           | `POST /console/vault/create` — lists as `console` until declared in source |
-| Set / rotate a value | reason (min 3)                         | `POST /console/vault/set` · `/rotate`                                  |
+| Add a contract       | review dialog                          | `POST /console/vault/create` — lists as `console` until declared in source |
+| Set / rotate a value | reason + review dialog                 | `POST /console/vault/set` · `/rotate`                                  |
 | Rotate master key    | `ROTATE_MASTER` + reason ≥ 3           | `POST /console/vault/rotate-master` — one batch; `remaining` is honest |
 | Verify audit chain   | session only                           | `GET /console/vault/audit/verify` → `{ ok, brokenAt, reason, row }`    |
 

@@ -227,7 +227,7 @@ export function VaultDetail({
                   ? "Set a value before rotate"
                   : blast.warn
                     ? blast.summary
-                    : "Re-encrypt with a new value. Pick a reason."
+                    : "Re-encrypt with a new value. Review the fingerprint before it writes."
               }
             >
               <Button
@@ -460,7 +460,7 @@ export function VaultDetail({
                 : blast.warn
                   ? ` — ${blast.summary}`
                   : " — in-flight durable runs wake on the new key."}{" "}
-              Both ask for a reason. No preview.
+              Both ask for a reason, then a review dialog. No secret preview.
             </p>
             <dl className="flex flex-col">
               {(

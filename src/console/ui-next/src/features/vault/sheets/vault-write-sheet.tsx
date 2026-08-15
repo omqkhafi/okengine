@@ -1,5 +1,5 @@
 /**
- * Set / rotate a vault value — reason chips, no typed phrase.
+ * Set / rotate a vault value — reason chips, then a review dialog.
  */
 
 import { useEffect, useState, type JSX } from "react";
@@ -20,6 +20,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  cancelVaultWrite,
+  confirmVaultWrite,
+  openVaultWriteReview,
+  type VaultWriteReview,
+} from "../lib/write-review.ts";
+import { VaultWriteReviewDialog } from "./vault-write-review-dialog.tsx";
 
 type ReasonId = "scheduled" | "leak" | "provider" | "first" | "fix" | "other";
 
@@ -51,11 +58,7 @@ function defaultReasonId(mode: "set" | "rotate"): ReasonId {
   return mode === "rotate" ? "scheduled" : "first";
 }
 
-function resolveReason(
-  mode: "set" | "rotate",
-  id: ReasonId,
-  custom: string,
-): string {
+function resolveReason(mode: "set" | "rotate", id: ReasonId, custom: string): string {
   if (id === "other") return custom.trim();
   return reasonsFor(mode).find((item) => item.id === id)?.text ?? "";
 }
@@ -93,6 +96,7 @@ export function VaultWriteSheet({
   const [reasonId, setReasonId] = useState<ReasonId>(() => defaultReasonId(mode));
   const [customReason, setCustomReason] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [review, setReview] = useState<VaultWriteReview | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -100,6 +104,7 @@ export function VaultWriteSheet({
       setReasonId(defaultReasonId(mode));
       setCustomReason("");
       setLocalError(null);
+      setReview(null);
     }
   }, [open, mode]);
 
@@ -107,17 +112,21 @@ export function VaultWriteSheet({
   const ready = value.trim().length > 0 && reason.length >= 3 && !pending;
   const choices = reasonsFor(mode);
 
-  const submit = (): void => {
-    if (value.trim().length === 0) {
-      setLocalError("New value is required");
-      return;
-    }
-    if (reason.length < 3) {
-      setLocalError("Reason is required");
+  const requestReview = async (): Promise<void> => {
+    const next = await openVaultWriteReview({
+      action: mode,
+      name,
+      value,
+      sensitive,
+      reason,
+      kind: sensitive ? "secret" : "config",
+    });
+    if ("error" in next) {
+      setLocalError(next.error);
       return;
     }
     setLocalError(null);
-    onSubmit({ value, reason });
+    setReview(next);
   };
 
   return (
@@ -187,13 +196,29 @@ export function VaultWriteSheet({
           <SheetFooterButton
             variant={mode === "rotate" ? "destructive" : "default"}
             disabled={!ready}
-            onClick={submit}
+            onClick={() => {
+              void requestReview();
+            }}
             data-slot="vault-write-submit"
           >
-            {pending ? "Working…" : mode === "set" ? "Set value" : "Rotate"}
+            {mode === "set" ? "Review set" : "Review rotate"}
           </SheetFooterButton>
         </SheetFooter>
       </SheetContent>
+
+      <VaultWriteReviewDialog
+        review={review}
+        pending={pending}
+        onCancel={() => setReview(cancelVaultWrite())}
+        onConfirm={() => {
+          confirmVaultWrite(review, (next) => {
+            onSubmit({
+              value: next.commit.value,
+              reason: next.commit.reason ?? reason,
+            });
+          });
+        }}
+      />
     </Sheet>
   );
 }

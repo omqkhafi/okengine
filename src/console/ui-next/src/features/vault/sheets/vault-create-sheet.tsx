@@ -21,6 +21,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils.ts";
+import {
+  cancelVaultWrite,
+  confirmVaultWrite,
+  openVaultWriteReview,
+  type VaultWriteReview,
+} from "../lib/write-review.ts";
+import { VaultWriteReviewDialog } from "./vault-write-review-dialog.tsx";
 
 /** Props for {@link VaultCreateSheet}. */
 export interface VaultCreateSheetProps {
@@ -55,6 +62,7 @@ export function VaultCreateSheet({
   const [rotate, setRotate] = useState("90d");
   const [value, setValue] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [review, setReview] = useState<VaultWriteReview | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -64,28 +72,28 @@ export function VaultCreateSheet({
       setRotate("90d");
       setValue("");
       setLocalError(null);
+      setReview(null);
     }
   }, [open]);
 
   const ready = name.trim().length > 0 && value.trim().length > 0 && !pending;
 
-  const submit = (): void => {
-    if (name.trim().length === 0) {
-      setLocalError("Name is required");
-      return;
-    }
-    if (value.trim().length === 0) {
-      setLocalError("Value is required");
-      return;
-    }
-    setLocalError(null);
-    onSubmit({
+  const requestReview = async (): Promise<void> => {
+    const next = await openVaultWriteReview({
+      action: "create",
       name: name.trim(),
       value,
+      sensitive: kind === "secret",
       kind,
       description: description.trim(),
       rotate: kind === "secret" ? rotate : "never",
     });
+    if ("error" in next) {
+      setLocalError(next.error);
+      return;
+    }
+    setLocalError(null);
+    setReview(next);
   };
 
   return (
@@ -170,13 +178,32 @@ export function VaultCreateSheet({
           <SheetFooterButton
             variant="default"
             disabled={!ready}
-            onClick={submit}
+            onClick={() => {
+              void requestReview();
+            }}
             data-slot="vault-create-submit"
           >
-            {pending ? "Adding…" : kind === "secret" ? "Add secret" : "Add config"}
+            {kind === "secret" ? "Review secret" : "Review config"}
           </SheetFooterButton>
         </SheetFooter>
       </SheetContent>
+
+      <VaultWriteReviewDialog
+        review={review}
+        pending={pending}
+        onCancel={() => setReview(cancelVaultWrite())}
+        onConfirm={() => {
+          confirmVaultWrite(review, (next) => {
+            onSubmit({
+              name: next.commit.name,
+              value: next.commit.value,
+              kind: next.commit.kind,
+              description: next.commit.description,
+              rotate: next.commit.rotate,
+            });
+          });
+        }}
+      />
     </Sheet>
   );
 }

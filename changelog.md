@@ -17,9 +17,10 @@ needed).
 - Console Vault **Add** (`+`) creates a secret or config from the
   operator plane as well as from `vault.secret` / `vault.config` in
   source. Metadata lands in `.oke/vault-contracts.json`; the value
-  uses the same write path as Set. No typed confirm — set and rotate
-  still require `SET` / `ROTATE`. Rows show a `console` chip until
-  the name is declared in the Manifest.
+  uses the same write path as Set. A review dialog (name +
+  fingerprint) pauses before the write — same as set / rotate.
+  Rows show a `console` chip until the name is declared in the
+  Manifest.
 
 - Official managed vault providers now include Azure Key Vault,
   GCP Secret Manager, Doppler, and 1Password Connect alongside
@@ -392,7 +393,9 @@ needed).
 
 - Console Vault set / rotate drop the typed `SET` / `ROTATE` phrase.
   Pick a reason chip (`scheduled`, `leak`, `provider`, …) or **other**
-  and type a note. Rotate-master still types `ROTATE_MASTER`.
+  and type a note. Submit opens a review dialog (name, fingerprint,
+  reason) — Cancel aborts; Confirm is the write. Add uses the same
+  dialog. Rotate-master still types `ROTATE_MASTER`.
 
 - The `env` vault driver lock-path matches vault/managed: driver →
   `process.env` → `.env.local` → (optional) `dev-fallback`. Console

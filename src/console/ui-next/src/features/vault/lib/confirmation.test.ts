@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  createConfirmation,
   rotateConfirmation,
   rotateMasterConfirmation,
   setConfirmation,
@@ -7,12 +8,10 @@ import {
 } from "./confirmation.ts";
 
 describe("vault confirmation", () => {
-  test("set records a reason, not a typed phrase", () => {
-    expect(setConfirmation({ production: true })).toEqual({ kind: "reason" });
-  });
-
-  test("rotate records a reason, not a typed phrase", () => {
-    expect(rotateConfirmation({ production: false })).toEqual({ kind: "reason" });
+  test("create / set / rotate use a review dialog, not a typed phrase", () => {
+    expect(createConfirmation()).toEqual({ kind: "review" });
+    expect(setConfirmation({ production: true })).toEqual({ kind: "review" });
+    expect(rotateConfirmation({ production: false })).toEqual({ kind: "review" });
   });
 
   test("rotate-master always requires typed confirm", () => {

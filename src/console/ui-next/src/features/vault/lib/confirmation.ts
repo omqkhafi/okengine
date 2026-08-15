@@ -13,28 +13,35 @@ export { validateTypedConfirm };
 /** Confirmation strategy for a vault write. */
 export type VaultConfirmationPattern =
   | StoreConfirmationPattern
-  | { readonly kind: "reason" };
+  | { readonly kind: "review" };
 
 /**
- * Confirmation for setting a vault value — reason only.
+ * Confirmation for adding a contract from Console — review dialog.
+ */
+export function createConfirmation(): VaultConfirmationPattern {
+  return { kind: "review" };
+}
+
+/**
+ * Confirmation for setting a vault value — reason + review dialog.
  *
  * @param _options - Reserved for environment flags
  */
 export function setConfirmation(
   _options: { readonly production: boolean } = { production: true },
 ): VaultConfirmationPattern {
-  return { kind: "reason" };
+  return { kind: "review" };
 }
 
 /**
- * Confirmation for rotating a vault value — reason only (blast radius).
+ * Confirmation for rotating a vault value — reason + review dialog.
  *
  * @param _options - Reserved for environment flags
  */
 export function rotateConfirmation(
   _options: { readonly production: boolean } = { production: true },
 ): VaultConfirmationPattern {
-  return { kind: "reason" };
+  return { kind: "review" };
 }
 
 /**
