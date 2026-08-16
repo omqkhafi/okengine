@@ -596,7 +596,7 @@ describe("scaffold structure", () => {
         expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']\s*\}\)/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
-          dependencies: { okengine: string };
+          dependencies: { okengine: string; "@duckdb/node-api"?: string };
           scripts: { typecheck?: string; test?: string };
           devDependencies: {
             typescript?: string;
@@ -606,6 +606,7 @@ describe("scaffold structure", () => {
         };
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
+        expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.2");
         expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
         expect(pkg.scripts.test).toBe("oke test");
         expect(pkg.devDependencies.typescript).toBeTruthy();

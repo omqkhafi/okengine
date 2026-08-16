@@ -14,6 +14,14 @@ needed).
 
 ### ✨ Added
 
+- Boot wires `drivers.runs` (`files` in `dev`/`prod` at
+  `.oke/runs`, `memory` in `test`). `oke replay` and host
+  recording share that root. create-oke templates install
+  `@duckdb/node-api`. `runs.keep` deletes old Parquet
+  partitions (`7d` in `dev`, `30d` in `prod`). Console
+  `listRuns` unions live ingest with disk so Traces survive
+  a Console restart.
+
 - `http.resource(path, ops)` chains `.gate(...)` and `.live()`
   like `http.get`. Gates apply to every verb; live marks list and get.
 
@@ -446,6 +454,11 @@ needed).
   (the `-next` suffix is gone).
 
 ### ♻️ Changed
+
+- The `files` runs driver no longer uses a deleted tmpdir:
+  default root is `.oke/runs`, `all()` reads every Parquet
+  file (not just this process's catalog), and the memory
+  driver opens DuckDB only when `query()` runs.
 
 - Console index browse Search / topK lives on the grid toolbar
   (one strip — no second search row). Sidebar nav idle icons sit

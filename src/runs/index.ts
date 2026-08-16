@@ -55,6 +55,12 @@ export {
 
 export { openDuckDB, duckQuery, duckPath, duckLiteral } from "./duckdb.ts";
 
+export { DEFAULT_RUNS_LOCAL_ROOT } from "./types.ts";
+
+export { retentionKeepMs, partitionDayFromKey, shouldDropPartition } from "./retention.ts";
+
+export { readPersistedRuns, mergeLiveAndPersistedRuns } from "./history.ts";
+
 export {
   createRunsRuntime,
   resolveRunsDriver,

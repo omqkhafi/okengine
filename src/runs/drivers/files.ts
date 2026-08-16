@@ -6,9 +6,9 @@
  * The user never declares archive tiers.
  */
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { fsDriver } from "../../drivers/fs.ts";
 import type { FilesBucket } from "../../drivers/types.ts";
@@ -20,7 +20,15 @@ import {
   wideEventToRow,
   writeParquet,
 } from "../parquet.ts";
-import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
+import { retentionKeepMs, shouldDropPartition } from "../retention.ts";
+import {
+  DEFAULT_RUNS_LOCAL_ROOT,
+  type RunsDriver,
+  type RunsOpenOptions,
+  type RunsRow,
+  type RunsStore,
+  type WideEvent,
+} from "../types.ts";
 
 /** Default hot window — 7 days. Older writes go to object storage when present. */
 const DEFAULT_HOT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,10 +40,12 @@ export const filesRunsDriver: RunsDriver = {
   id: "files",
   async open(options: RunsOpenOptions = {}): Promise<RunsStore> {
     const hotWindowMs = options.hotWindowMs ?? DEFAULT_HOT_WINDOW_MS;
-    const clock = () => Date.now();
+    const clock = options.now ?? (() => Date.now());
 
-    const localRoot = options.localRoot ?? (await mkdtemp(join(tmpdir(), "oke-runs-")));
-    const ownsLocalRoot = options.localRoot === undefined && !options.localBucket;
+    const localRoot = options.localRoot ?? resolve(process.cwd(), DEFAULT_RUNS_LOCAL_ROOT);
+    if (!options.localBucket) {
+      await mkdir(localRoot, { recursive: true });
+    }
 
     const local: FilesBucket =
       options.localBucket ?? (await fsDriver.open({ name: "runs-local", root: localRoot }));
@@ -44,7 +54,6 @@ export const filesRunsDriver: RunsDriver = {
     const remotePrefix = options.remote?.prefix ?? "";
 
     const buffer: WideEvent[] = [];
-    const catalog: WideEvent[] = [];
     let queryScratch: string | undefined;
     const session: DuckSession = await openDuckDB();
 
@@ -94,7 +103,6 @@ export const filesRunsDriver: RunsDriver = {
           );
           const bytes = new Uint8Array(await Bun.file(tmp).arrayBuffer());
           await target.bucket.put(objectKey, bytes);
-          for (const e of events) catalog.push(e);
         } finally {
           await rm(tmpDir, { recursive: true, force: true });
         }
@@ -130,6 +138,24 @@ export const filesRunsDriver: RunsDriver = {
       return paths;
     }
 
+    async function applyRetention(): Promise<void> {
+      const keepMs = retentionKeepMs(options.retention?.keep);
+      if (keepMs == null) return;
+      const now = clock();
+      const dropFrom = async (bucket: FilesBucket, prefix: string): Promise<void> => {
+        const keys = (await bucket.list(`${prefix}runs/`)).filter((k) => k.endsWith(".parquet"));
+        for (const key of keys) {
+          if (shouldDropPartition(key, now, keepMs)) {
+            await bucket.delete(key);
+          }
+        }
+      };
+      await dropFrom(local, "");
+      if (remote) await dropFrom(remote, remotePrefix);
+    }
+
+    await applyRetention();
+
     return {
       driverId: "files",
       async append(event: WideEvent): Promise<void> {
@@ -138,9 +164,11 @@ export const filesRunsDriver: RunsDriver = {
       },
       async flush(): Promise<void> {
         await flushBuffer();
+        await applyRetention();
       },
       async query(sql: string): Promise<RunsRow[]> {
         await flushBuffer();
+        await applyRetention();
         const paths = await materialiseAllParquet();
         if (paths.length === 0) return [];
         const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
@@ -152,7 +180,7 @@ export const filesRunsDriver: RunsDriver = {
       },
       async all(): Promise<WideEvent[]> {
         await flushBuffer();
-        if (catalog.length > 0) return [...catalog];
+        await applyRetention();
         const paths = await materialiseAllParquet();
         if (paths.length === 0) return [];
         const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
@@ -170,9 +198,6 @@ export const filesRunsDriver: RunsDriver = {
         }
         await local.close();
         await remote?.close();
-        if (ownsLocalRoot) {
-          await rm(localRoot, { recursive: true, force: true }).catch(() => undefined);
-        }
       },
     };
   },

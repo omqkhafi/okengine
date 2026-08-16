@@ -41,6 +41,7 @@ function flattenEffectiveDrivers(
     ["vault", drivers.vault],
     ["channel.email", drivers.channel.email],
     ["channel.sms", drivers.channel.sms],
+    ["runs", drivers.runs],
   ];
 }
 

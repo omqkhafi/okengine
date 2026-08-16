@@ -14,6 +14,7 @@ import {
 import { runWithDevSurface } from "../../runtime/dev-request-log.ts";
 import { CONSOLE_PORT, type ServerHandle } from "../../runtime/types.ts";
 import {
+  bindConsoleListRuns,
   bindManifestSignalBus,
   bindManifestStoreRuntime,
   bindManifestVaultRuntime,
@@ -112,11 +113,7 @@ export async function serveConsole(
     docker: false,
   });
   wrapConsoleRunsForLive(handle);
-  handle.state.listRuns = async () => {
-    const runs = handle.app.bootResult?.runs;
-    if (!runs) return [];
-    return runs.all();
-  };
+  bindConsoleListRuns(handle);
   await bindManifestSignalBus(handle.state);
   await bindManifestStoreRuntime(handle.state);
   await bindManifestVaultRuntime(handle.state);

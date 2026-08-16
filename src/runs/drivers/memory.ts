@@ -16,8 +16,13 @@ import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from 
 export const memoryRunsDriver: RunsDriver = {
   id: "memory",
   async open(_options: RunsOpenOptions = {}): Promise<RunsStore> {
-    const session: DuckSession = await openDuckDB();
     const events: WideEvent[] = [];
+    let session: DuckSession | undefined;
+
+    async function ensureConn(): Promise<DuckSession["conn"]> {
+      session ??= await openDuckDB();
+      return session.conn;
+    }
 
     return {
       driverId: "memory",
@@ -28,15 +33,16 @@ export const memoryRunsDriver: RunsDriver = {
         /* nothing buffered */
       },
       async query(sql: string): Promise<RunsRow[]> {
-        await materialiseRunsTable(session.conn, events);
-        return duckQuery(session.conn, sql);
+        const conn = await ensureConn();
+        await materialiseRunsTable(conn, events);
+        return duckQuery(conn, sql);
       },
       async all(): Promise<WideEvent[]> {
         return [...events];
       },
       async close(): Promise<void> {
         events.length = 0;
-        session.close();
+        session?.close();
       },
     };
   },

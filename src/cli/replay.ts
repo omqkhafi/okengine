@@ -6,7 +6,12 @@ import { resolve } from "node:path";
 import { withDryRun } from "../kernel/dry-run.ts";
 import type { AnyFlowDef } from "../kernel/flow.ts";
 import type { InternalTrigger } from "../kernel/triggers.ts";
-import { createRunsRuntime, type RunsRuntime, type WideEvent } from "../runs/index.ts";
+import {
+  createRunsRuntime,
+  DEFAULT_RUNS_LOCAL_ROOT,
+  type RunsRuntime,
+  type WideEvent,
+} from "../runs/index.ts";
 import { resolveStartEntry } from "./start.ts";
 import { flagValue, hasFlag } from "./args.ts";
 import { EXIT_OK, EXIT_USAGE } from "./exit.ts";
@@ -134,7 +139,7 @@ export async function runReplay(options: ReplayOptions): Promise<number> {
       options.runs ??
       createRunsRuntime({
         driver: "files",
-        localRoot: resolve(cwd, ".oke/runs"),
+        localRoot: resolve(cwd, DEFAULT_RUNS_LOCAL_ROOT),
       });
     if (!runs.store) await runs.open();
 

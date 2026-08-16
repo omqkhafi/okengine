@@ -82,8 +82,10 @@ Console first, mints a loopback ingest secret, and sets `OKE_RUNS_INGEST_URL` /
 `OKE_RUNS_INGEST_SECRET` on the host child so every recorded run POSTs to
 `POST /console/runs/ingest`. Console appends into its own runs store (live
 `feedRun` → PII-masked `projectRun` for `GET /console/runs` and
-`/console/live`). Production stays opt-in — `oke start` does not enable the
-bridge; set `oke({ runs })` (or future `drivers.runs`) explicitly.
+`/console/live`). `listRuns` also reads host Parquet at `.oke/runs`, so
+Traces survive a Console restart. Production recording stays opt-in —
+`oke start` does not enable the bridge; set `oke({ runs })` or
+`drivers.runs` explicitly. `oke replay` reads the same `.oke/runs` tree.
 
 In development, app, Console, MCP, and docs MCP prefer the canonical ports and move upward
 when occupied. Docker infrastructure uses stable per-project offsets in disjoint ranges for

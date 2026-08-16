@@ -85,6 +85,17 @@ export const CHANNEL_EMAIL_DEFAULTS: EnvDriverMap = {
  */
 export const CHANNEL_SMS_DEFAULTS: EnvDriverMap = {};
 
+/**
+ * `drivers.runs` — Parquet + DuckDB for `dev`/`prod` (`.oke/runs`);
+ * in-memory for `test`. Recording stays opt-in in prod; this is the
+ * driver when a runs store is bound.
+ */
+export const RUNS_DEFAULTS: EnvDriverMap = {
+  dev: "files",
+  test: "memory",
+  prod: "files",
+};
+
 /** Every driver map with one established default table, grouped by element. */
 export const DRIVER_DEFAULTS = {
   store: {
@@ -100,6 +111,7 @@ export const DRIVER_DEFAULTS = {
     email: CHANNEL_EMAIL_DEFAULTS,
     sms: CHANNEL_SMS_DEFAULTS,
   },
+  runs: RUNS_DEFAULTS,
 } as const;
 
 /**
@@ -123,6 +135,7 @@ export interface EffectiveDriversConfig {
     readonly email: EnvDriverMap;
     readonly sms: EnvDriverMap;
   };
+  readonly runs: EnvDriverMap;
 }
 
 /**
@@ -152,5 +165,6 @@ export function resolveEffectiveDrivers(
       email: merge(drivers?.channel?.email, CHANNEL_EMAIL_DEFAULTS),
       sms: merge(drivers?.channel?.sms, CHANNEL_SMS_DEFAULTS),
     },
+    runs: merge(drivers?.runs, RUNS_DEFAULTS),
   };
 }

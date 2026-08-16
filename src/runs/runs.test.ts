@@ -29,6 +29,7 @@ import {
   revealArchived,
   seedOutlierDataset,
   subjectKeyName,
+  type WideEvent,
 } from "./index.ts";
 
 const temps: string[] = [];
@@ -61,6 +62,7 @@ describe("zero-instrumentation dimensions", () => {
       http.get("/book").gate(member),
       flow("bookings.create", {
         plane: "user",
+        cache: false,
         effects: { reads: ["sql:bookings"] },
         do: async (_input, fx) => {
           fx.log.info("booking started", { step: 1 });
@@ -267,6 +269,104 @@ describe("crypto-shredding erasure", () => {
 
     await runs.close();
     await bucket.close();
+  });
+});
+
+describe("files persistence — reopen + retention", () => {
+  function sample(id: string, startedAt: number): WideEvent {
+    return {
+      id,
+      flow: "ping",
+      trigger: "http",
+      plane: "user",
+      gates: [],
+      cache: "none",
+      effects: [],
+      logs: [],
+      error: null,
+      durationMs: 4,
+      startedAt,
+      endedAt: startedAt + 4,
+      dimensions: { flow: "ping" },
+    };
+  }
+
+  test("reopen the same localRoot sees prior Parquet (not just in-process catalog)", async () => {
+    const root = await tmpDir();
+    const first = createRunsRuntime({ driver: "files", localRoot: root });
+    await first.open();
+    await first.append(sample("keep-me", Date.now()));
+    await first.flush();
+    await first.close();
+
+    const second = createRunsRuntime({ driver: "files", localRoot: root });
+    await second.open();
+    const rows = await second.query("SELECT id FROM runs");
+    expect(rows.map((r) => String(r.id))).toEqual(["keep-me"]);
+    const all = await second.all();
+    expect(all.map((e) => e.id)).toEqual(["keep-me"]);
+    await second.close();
+  });
+
+  test("all() includes older Parquet after a new write in the same process", async () => {
+    const root = await tmpDir();
+    const first = createRunsRuntime({ driver: "files", localRoot: root });
+    await first.open();
+    await first.append(sample("old", Date.now() - 1000));
+    await first.flush();
+    await first.close();
+
+    const second = createRunsRuntime({ driver: "files", localRoot: root });
+    await second.open();
+    await second.append(sample("new", Date.now()));
+    await second.flush();
+    const ids = (await second.all()).map((e) => e.id).sort();
+    expect(ids).toEqual(["new", "old"]);
+    await second.close();
+  });
+
+  test("retention.keep deletes partitions older than the window", async () => {
+    const root = await tmpDir();
+    const now = Date.parse("2026-08-16T12:00:00.000Z");
+    const runs = createRunsRuntime({
+      driver: "files",
+      localRoot: root,
+      retention: { keep: "7d" },
+      now: () => now,
+    });
+    await runs.open();
+    await runs.append(sample("stale", Date.parse("2026-08-01T12:00:00.000Z")));
+    await runs.append(sample("fresh", Date.parse("2026-08-15T12:00:00.000Z")));
+    await runs.flush();
+    const ids = (await runs.all()).map((e) => e.id);
+    expect(ids).toEqual(["fresh"]);
+    await runs.close();
+  });
+});
+
+describe("memory driver — lazy DuckDB", () => {
+  test("all() works without opening DuckDB; query() still works", async () => {
+    const runs = createRunsRuntime({ driver: "memory" });
+    await runs.open();
+    await runs.append({
+      id: "m1",
+      flow: "x",
+      trigger: "internal",
+      plane: "user",
+      gates: [],
+      cache: "none",
+      effects: [],
+      logs: [],
+      error: null,
+      durationMs: 1,
+      startedAt: 1,
+      endedAt: 2,
+      dimensions: { flow: "x" },
+    });
+    expect((await runs.all()).map((e) => e.id)).toEqual(["m1"]);
+    const rows = await runs.query("SELECT id FROM runs");
+    expect(rows.map((r) => String(r.id))).toEqual(["m1"]);
+    await runs.close();
   });
 });
 

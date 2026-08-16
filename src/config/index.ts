@@ -171,6 +171,11 @@ export interface ConsoleConfig {
  * Distinct from {@link DriversConfig.runs} (driver map under `drivers`).
  */
 export interface RunsConfig {
+  /**
+   * How long to keep Parquet partitions (`"7d"`, `"30d"`, `"forever"`).
+   * Distinct from {@link redact} (PII field policy, not deletion).
+   */
+  readonly keep?: string | "forever";
   /** Field → retention duration for redaction (privacy on when present). */
   readonly redact?: Readonly<Record<string, string>>;
 }

@@ -11,6 +11,7 @@ import {
   CLOCK_DEFAULTS,
   JOURNAL_DEFAULTS,
   resolveEffectiveDrivers,
+  RUNS_DEFAULTS,
   SIGNAL_DEFAULTS,
   STORE_FILES_DEFAULTS,
   STORE_KV_DEFAULTS,
@@ -64,6 +65,7 @@ describe("resolveEffectiveDrivers", () => {
     expect(effective.vault).toEqual(VAULT_DEFAULTS);
     expect(effective.channel.email).toEqual(CHANNEL_EMAIL_DEFAULTS);
     expect(effective.channel.sms).toEqual(CHANNEL_SMS_DEFAULTS);
+    expect(effective.runs).toEqual(RUNS_DEFAULTS);
   });
 
   test("overriding one driver's map has zero effect on a sibling driver's defaults", () => {
@@ -110,6 +112,7 @@ describe("resolveEffectiveDrivers", () => {
         email: CHANNEL_EMAIL_DEFAULTS,
         sms: CHANNEL_SMS_DEFAULTS,
       },
+      runs: RUNS_DEFAULTS,
     });
   });
 });

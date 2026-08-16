@@ -350,6 +350,73 @@ describe("boot binders honour drivers.* config", () => {
     ).rejects.toThrow(/signal driver "postgres"/);
   });
 
+  test("runs: drivers.runs unset in test binds memory", async () => {
+    const result = await bootApplication({
+      env: "test",
+      runs: {},
+    });
+    try {
+      expect(result.runs?.store?.driverId).toBe("memory");
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("runs: drivers.runs unset in dev writes .oke/runs", async () => {
+    tmp = await mkdtemp(join(tmpdir(), "oke-runs-dev-"));
+    const result = await bootApplication({
+      env: "dev",
+      rootDir: tmp,
+      runs: {},
+      config: {},
+    });
+    try {
+      expect(result.runs?.store?.driverId).toBe("files");
+      const startedAt = Date.now();
+      await result.runs!.append({
+        id: "boot-persist",
+        flow: "ping",
+        trigger: "internal",
+        plane: "user",
+        gates: [],
+        cache: "none",
+        effects: [],
+        logs: [],
+        error: null,
+        durationMs: 1,
+        startedAt,
+        endedAt: startedAt + 1,
+        dimensions: { flow: "ping" },
+      });
+      await result.runs!.flush();
+      const parquet = new Bun.Glob("**/*.parquet");
+      const keys: string[] = [];
+      for await (const match of parquet.scan({ cwd: join(tmp, ".oke/runs"), onlyFiles: true })) {
+        keys.push(match);
+      }
+      expect(keys.length).toBeGreaterThan(0);
+    } finally {
+      await result.close();
+    }
+  });
+
+  test("runs: drivers.runs memory pin wins over RUNS_DEFAULTS in dev", async () => {
+    const result = await bootApplication({
+      env: "dev",
+      runs: {},
+      config: {
+        drivers: {
+          runs: { dev: "memory" },
+        },
+      },
+    });
+    try {
+      expect(result.runs?.store?.driverId).toBe("memory");
+    } finally {
+      await result.close();
+    }
+  });
+
   test("signal: drivers.signal nats fails loud", async () => {
     await expect(
       bootApplication({

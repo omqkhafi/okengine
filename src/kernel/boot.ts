@@ -70,13 +70,14 @@ export interface ElementRuntimes {
 /** Declarations + options consumed by {@link bootApplication}. */
 export interface BootOptions {
   /**
-   * Active environment (defaults to `local`, or `docker` when
-   * {@link docker} / `OKE_DOCKER=1`).
+   * Active {@link ConfigEnv} (`dev` · `test` · `prod`).
+   * Default: `prod` when `NODE_ENV=production`; `dev` when Compose is up
+   * ({@link docker} / `OKE_DOCKER=1`); otherwise `test`.
    */
   readonly env?: ConfigEnv;
   /**
-   * Docker mode (`oke dev -d` / `OKE_DOCKER=1`): force driver maps to the
-   * `docker` profile and prefer compose URLs (`.env.local`).
+   * Compose infra is up (`oke dev` / `OKE_DOCKER=1`): prefer compose URLs
+   * (`.env.local`) and resolve {@link env} to `dev` when unset.
    * When unset, derived from `process.env.OKE_DOCKER`.
    */
   readonly docker?: boolean;
@@ -114,9 +115,10 @@ export interface BootOptions {
   readonly runs?: RunsRuntime | CreateRunsRuntimeOptions;
   /**
    * Push recorded WideEvents to Console ingest (`oke dev` live Traces bridge).
-   * When set (or via `OKE_RUNS_INGEST_*` env), boot enables a memory runs
-   * store automatically. `false` disables env lookup. Prod stays opt-in —
-   * only `oke dev` sets the env.
+   * When set (or via `OKE_RUNS_INGEST_*` env), boot enables a runs store
+   * automatically (`files` in `dev`/`prod`, `memory` in `test`). `false`
+   * disables env lookup. Prod recording stays opt-in — only `oke dev`
+   * sets the env.
    */
   readonly runsBridge?: RunsConsoleBridgeTarget | false;
   /** Adopted bindings (for every→cron + signal consumers). */
@@ -495,7 +497,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
           const m = await loadBind<RunsBind>("runs");
           runsBind = m;
         }
-        runs = await runsBind!.bindRuns(runsOpts);
+        runs = await runsBind!.bindRuns(options, env, runsOpts);
       }
     } else if (!runs.store) {
       await runs.open();

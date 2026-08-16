@@ -2,11 +2,16 @@
  * ConsoleApp — operator-plane app built on `createClient<ConsoleApp>`.
  */
 
+import { resolve } from "node:path";
 import { memorySignalDriver } from "../../drivers/signal-memory.ts";
 import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
-import type { RunsRuntime } from "../../runs/index.ts";
+import {
+  DEFAULT_RUNS_LOCAL_ROOT,
+  mergeLiveAndPersistedRuns,
+  type RunsRuntime,
+} from "../../runs/index.ts";
 import { createManifestAiRuntime } from "./ai.ts";
 import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";
@@ -151,14 +156,24 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
 export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> {
   await handle.app.boot({ env: "test" });
   wrapConsoleRunsForLive(handle);
-  handle.state.listRuns = async () => {
-    const runs = handle.app.bootResult?.runs;
-    if (!runs) return [];
-    return runs.all();
-  };
+  bindConsoleListRuns(handle);
   // Element runtimes bind lazily on first panel access (see ensure* below
   // via list* methods / bindManifest* callers) — not all seventeen at boot.
   return handle.app;
+}
+
+/**
+ * `listRuns` = live Console memory ∪ host Parquet at `.oke/runs`.
+ * Live ingest stays in-process; disk keeps host traces across Console restart.
+ *
+ * @param handle - Console app handle
+ */
+export function bindConsoleListRuns(handle: ConsoleAppHandle): void {
+  handle.state.listRuns = async () => {
+    const live = handle.app.bootResult?.runs ? await handle.app.bootResult.runs.all() : [];
+    const root = resolve(handle.state.cwd, DEFAULT_RUNS_LOCAL_ROOT);
+    return mergeLiveAndPersistedRuns(live, root);
+  };
 }
 
 /**

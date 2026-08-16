@@ -103,11 +103,15 @@ export interface WideEvent {
   readonly dimensions: RunDimensions;
 }
 
+/** Default on-disk root for the `files` runs driver (gitignored under `.oke/`). */
+export const DEFAULT_RUNS_LOCAL_ROOT = ".oke/runs";
+
 /** Retention / redaction policy (lifecycle — not locality). */
 export interface RunsRetention {
   /**
-   * Keep operational runs for this duration, or `"forever"` (default).
-   * Deletion is a compliance action, not a cleanup job.
+   * Keep operational Parquet partitions for this duration, or `"forever"`.
+   * Driver default is `"forever"`; `bindRuns` applies `7d` (`dev`) / `30d`
+   * (`prod`) when the app does not set `runs.keep`.
    */
   readonly keep?: string | "forever";
   /** Redact personal fields older than these durations. */
@@ -175,6 +179,8 @@ export interface RunsOpenOptions {
   readonly hotWindowMs?: number;
   /** Retention policy (compliance). */
   readonly retention?: RunsRetention;
+  /** Clock for retention / locality (tests). Default `Date.now`. */
+  readonly now?: () => number;
   /** Postgres connection URL or injected client. */
   readonly url?: string;
   /** Injected client for postgres / clickhouse fakes. */

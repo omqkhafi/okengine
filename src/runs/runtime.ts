@@ -158,6 +158,7 @@ export function createRunsRuntime(options: CreateRunsRuntimeOptions = {}): RunsR
         ...(archived !== undefined ? { archived } : {}),
       });
       await s.append(event);
+      await s.flush();
       return event;
     },
     async append(event) {
