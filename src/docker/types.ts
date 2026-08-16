@@ -99,6 +99,14 @@ export interface RecipeApplyResult {
    * (e.g. Traefik routing labels on `app`).
    */
   readonly services?: Readonly<Record<string, Record<string, unknown>>>;
+  /**
+   * Compose `build` for locally derived images (opt-in advisor Postgres).
+   * `dockerfile` is relative to the compose directory.
+   */
+  readonly build?: {
+    readonly context: string;
+    readonly dockerfile: string;
+  };
 }
 
 /**

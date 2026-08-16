@@ -89,6 +89,12 @@ tag; the image is large and cold-start is slower than Postgres.
 | Command        | `bin/yugabyted start --base_dir=… --background=false` |
 | Healthcheck    | `ysqlsh … SELECT 1` (90s `start_period`)              |
 | Connection URL | `postgres://user:pass@host:5432/db`                   |
+| Preload        | Vendor — recipe does **not** replace `yugabyted`      |
+
+## Query performance
+
+YSQL already preloads `pg_stat_statements`. Create the extension, then open Store →
+**Performance**. Do not add a Postgres `command` overlay.
 
 ## Troubleshooting
 

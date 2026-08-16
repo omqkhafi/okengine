@@ -50,6 +50,7 @@ const LIBRARY_VENDORS: Record<string, string> = {
   pg_search: "ParadeDB",
   pgmq: "pgmq",
   pg_net: "Supabase",
+  index_advisor: "Supabase",
   wrappers: "Supabase",
   pg_graphql: "Supabase",
   age: "Apache",

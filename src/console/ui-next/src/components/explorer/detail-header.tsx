@@ -26,7 +26,7 @@ export interface DetailHeaderProps {
 }
 
 /**
- * Compact identity row: bare tinted icon, title, optional badge / subtitle / actions.
+ * Monitoring-style identity strip: centered identity, stretch actions.
  *
  * @param props - Identity + actions
  */
@@ -47,25 +47,27 @@ export function DetailHeader({
       className={cn(DETAIL_HEADER_CLASS, sticky && "sticky top-0 z-10", className)}
       data-slot={dataSlot}
     >
-      <span
-        className={cn(
-          EXPLORER_ICON_CLASS,
-          "flex size-4 items-center justify-center",
-          explorerIconInk(wellClassName ?? "text-muted-foreground"),
-        )}
-        style={wellStyle?.color ? { color: wellStyle.color } : undefined}
-        aria-hidden
-      >
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <h2 className={DETAIL_TITLE_CLASS}>{title}</h2>
-          {badge}
-        </div>
-        {subtitle}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span
+          className={cn(
+            EXPLORER_ICON_CLASS,
+            "flex shrink-0 items-center justify-center",
+            explorerIconInk(wellClassName ?? "text-muted-foreground"),
+          )}
+          style={wellStyle?.color ? { color: wellStyle.color } : undefined}
+          aria-hidden
+        >
+          {icon}
+        </span>
+        <h2 className={cn(DETAIL_TITLE_CLASS, "leading-none")}>{title}</h2>
+        {badge ? (
+          <div className="flex min-w-0 shrink-0 items-center gap-2 leading-none">{badge}</div>
+        ) : null}
+        {subtitle ? (
+          <div className="flex min-w-0 items-center gap-1.5 leading-none">{subtitle}</div>
+        ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+      {actions ? <div className="flex h-full shrink-0 items-stretch">{actions}</div> : null}
     </header>
   );
 }

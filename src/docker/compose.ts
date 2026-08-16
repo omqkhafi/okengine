@@ -169,6 +169,7 @@ export function emitComposeLayers(
       env_file: [paths.envFile],
     };
     if (applied.environment) service.environment = applied.environment;
+    if (applied.build) service.build = applied.build;
     if (applied.command) service.command = applied.command;
     if (applied.entrypoint) service.entrypoint = applied.entrypoint;
     if (applied.healthcheck) service.healthcheck = applied.healthcheck;

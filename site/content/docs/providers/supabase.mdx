@@ -53,6 +53,23 @@ not support prepared statements — turn them off in the client if you see relat
 **IPv6 gotcha:** Direct (and dedicated pooler) are IPv6 unless you buy the IPv4 add-on.
 IPv4-only app hosts must use the shared pooler hostnames.
 
+## Query performance
+
+<Callout title="Use the direct port for engine views">
+  `pg_stat_statements` is preloaded. Create the extension, then open Store →
+  **Performance** on the **direct** `:5432` URL — not the transaction pooler.
+</Callout>
+
+| Step    | What you do                                         |
+| ------- | --------------------------------------------------- |
+| Preload | Platform (already on)                               |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements` |
+| Locks   | Direct `db.[ref].supabase.co:5432`                  |
+| Advisor | Dashboard **Database → Extensions** or `CASCADE`    |
+
+Transaction pooler (`:6543`) is fine for app traffic. Live lock pairs and
+advisor DDL need a session on the database host.
+
 ## pgvector
 
 Available on every plan. Enable from the dashboard **Database → Extensions** (or

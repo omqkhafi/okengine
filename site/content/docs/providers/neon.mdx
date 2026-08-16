@@ -67,6 +67,22 @@ deliberately) when you need `pgvector` setup from that role.
 Hitting CU-hours or storage **suspends compute** until the next billing period or an
 upgrade. Always-on production needs Launch/Scale with scale-to-zero disabled.
 
+## Query performance
+
+<Callout title="Create the extension — do not set command">
+  Neon already preloads `pg_stat_statements`. `CREATE EXTENSION` is enough. There is no
+  oke `command` overlay and no `online_advisor` shim.
+</Callout>
+
+| Step    | What you do                                         |
+| ------- | --------------------------------------------------- |
+| Preload | Neon compute (already on)                           |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements` |
+| Console | Store → SQL band → **Performance**                  |
+
+Scale-to-zero **wipes** statement stats when compute sleeps. Index Advisor is
+not in the default Neon catalog — Performance shows a CTA, not a failing Enable.
+
 ## Real gotcha — cold start
 
 After scale-to-zero, the first query pays a wake-up (hundreds of ms to a few seconds).
@@ -81,6 +97,12 @@ disable scale-to-zero; Free cannot.
 Too many **direct** connections, or pooler server pool exhausted for your compute size.
 Move runtime traffic to the `-pooler` hostname; keep a small number of direct admin
 sessions. Neon reserves connections for the superuser account on each compute size.
+
+</Accordion>
+<Accordion title="Performance KPIs reset after idle">
+
+Free (and any scale-to-zero) compute drops `pg_stat_statements` memory when the
+endpoint sleeps. Re-run traffic after wake — this is not a Console bug.
 
 </Accordion>
 <Accordion title='permission denied to create extension "vector"'>

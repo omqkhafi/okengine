@@ -45,6 +45,21 @@ No Neon-style pooled hostname toggle — connection limits and load balancing ar
 cluster/VPC topology concerns. Smart drivers want a peered VPC; otherwise they probe
 unreachable nodes first and add latency.
 
+## Query performance
+
+<Callout title="Already preloaded">
+  YSQL exposes `pg_stat_statements` without an oke `command`. Create the extension,
+  then open Store → **Performance**.
+</Callout>
+
+| Step    | What you do                                         |
+| ------- | --------------------------------------------------- |
+| Preload | Yugabyte (already on)                               |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements` |
+| Advisor | Not in the default catalog — CTA only               |
+
+Do not invent a Postgres `command` overlay for Aeon or the Docker recipe.
+
 ## Real gotcha — wrong API tab
 
 Copying **YCQL** parameters (port **9042**) into `DATABASE_URL` fails immediately —

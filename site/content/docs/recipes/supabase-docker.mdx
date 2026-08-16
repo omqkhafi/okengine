@@ -98,10 +98,34 @@ cloud pausing does not apply to this Docker image — you own uptime.
 | Container port | `5432`                                               |
 | Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
 | Connection URL | `postgres://user:pass@host:5432/db`                  |
+| Preload        | Image config — recipe does **not** set `command`     |
+
+## Query performance
+
+<Callout title="Do not overwrite command">
+  `supabase/postgres` already preloads `pg_stat_statements`. This recipe leaves
+  `command` unset so vendor startup stays intact.
+</Callout>
+
+| Step    | What you do                                         |
+| ------- | --------------------------------------------------- |
+| Preload | Image `postgresql.conf` (not an oke `command`)      |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements` |
+| Advisor | `CREATE EXTENSION IF NOT EXISTS index_advisor CASCADE` when listed |
+
+Console **Performance** then reads engine stats. Enable Index Advisor from the
+same view when `pg_available_extensions` lists it.
 
 ## Troubleshooting
 
 <Accordions>
+<Accordion title="PgStatStatementsNotPreloaded after a custom command">
+
+Do not replace the image entrypoint with a generic `postgres -c
+shared_preload_libraries=pg_stat_statements`. Restore the vendor command, create
+the extension, then open Store → **Performance**.
+
+</Accordion>
 <Accordion title='Extension "vector" is not available'>
 
 You pinned a plain `postgres:` image, not `supabase/postgres`, or the tag predates the

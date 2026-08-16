@@ -88,6 +88,12 @@ not multi-region HA. For managed multi-region, use the
 | Command        | `start-single-node --accept-sql-without-tls` |
 | Healthcheck    | `GET /health?ready=1` on `:8080`             |
 | Connection URL | `postgres://…?sslmode=require`               |
+| Stats          | `pg_stat_statements` unsupported             |
+
+## Query performance
+
+Store → **Performance** returns `PgStatStatementsUnsupported`. oke does not shim
+Cockroach `statement_statistics`.
 
 ## Troubleshooting
 

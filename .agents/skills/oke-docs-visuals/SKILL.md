@@ -93,7 +93,7 @@ House motion rules:
    - [`site/lib/prose-density.gate.test.ts`](../../../site/lib/prose-density.gate.test.ts)
    - [oke-docs SKILL.md](../oke-docs/SKILL.md) scanner + Components table
 4. Use in MDX: `<StoreKvTtl />` / `<FlowDurable />` under the matching heading.
-5. Changelog under `## Unreleased` → Changed (via oke-ship when closing work).
+5. Changelog under `## Unreleased` → `### ♻️ Changed` → `#### Docs` (via oke-ship when closing work).
 
 ### 6. Placement
 

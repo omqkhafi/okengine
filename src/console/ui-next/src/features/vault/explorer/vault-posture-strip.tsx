@@ -29,7 +29,7 @@ export interface VaultPostureStripProps {
 }
 
 /**
- * Status + filter chips under the search bar (Units advanced-filter rhythm).
+ * Status + filter tokens under the search bar (Monitoring health-strip rhythm).
  *
  * @param props - Backend card + counts
  */
@@ -49,84 +49,70 @@ export function VaultPostureStrip({
       className="shrink-0 border-b border-border/60"
       data-slot="vault-posture-strip"
     >
-      <div className="flex flex-col gap-1 px-2 py-1.5">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenSecurity}
-            aria-label="Open vault security"
-            className="min-w-0 truncate text-left text-xs font-medium text-foreground hover:underline"
+      <div className="flex min-h-10 flex-wrap items-stretch">
+        <button
+          type="button"
+          onClick={onOpenSecurity}
+          aria-label="Open vault security"
+          className="flex items-center px-2 text-left text-xs font-medium text-foreground hover:bg-muted/50"
+        >
+          {card?.title ?? "Vault backend"}
+        </button>
+        <span className="flex items-center px-2 font-mono text-[10px] text-muted-foreground">
+          {env}
+        </span>
+        {card?.badges.map((badge) => (
+          <span
+            key={badge.id}
+            role={badge.tone === "warn" ? "alert" : "status"}
+            className={cn(
+              "flex items-center gap-1.5 px-2 text-[10px]",
+              badge.tone === "warn"
+                ? "text-amber-800 dark:text-amber-400"
+                : "text-muted-foreground",
+              badge.id === "rewrap" && "text-[color:var(--vault-accent)]",
+            )}
+            style={
+              badge.id === "rewrap" ? { ["--vault-accent" as string]: VAULT_ACCENT } : undefined
+            }
           >
-            {card?.title ?? "Vault backend"}
-          </button>
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{env}</span>
-          {card?.badges.map((badge) => (
             <span
-              key={badge.id}
-              role={badge.tone === "warn" ? "alert" : "status"}
+              aria-hidden
               className={cn(
-                "inline-flex items-center gap-1 text-[10px]",
-                badge.tone === "warn"
-                  ? "text-amber-800 dark:text-amber-400"
-                  : "text-muted-foreground",
-                badge.id === "rewrap" && "text-[color:var(--vault-accent)]",
+                "size-1.5 shrink-0 rounded-full",
+                badge.tone === "warn" ? "bg-amber-500" : "bg-muted-foreground/50",
+                badge.id === "rewrap" && "bg-[var(--vault-accent)]",
               )}
-              style={
-                badge.id === "rewrap" ? { ["--vault-accent" as string]: VAULT_ACCENT } : undefined
-              }
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "size-1.5 rounded-full",
-                  badge.tone === "warn" ? "bg-amber-500" : "bg-muted-foreground/50",
-                  badge.id === "rewrap" && "bg-[var(--vault-accent)]",
-                )}
-              />
-              {badge.label}
-            </span>
-          ))}
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-            {verifyNote ?? `${summary.secrets}s · ${summary.config}c`}
+            />
+            {badge.label}
           </span>
-        </div>
-        {VAULT_POSTURE_FACETS.some(
-          (facet) => summary[facet.id] > 0 || hasIsToken(query, facet.token),
-        ) ? (
-          <div
-            className="-mx-2 flex min-h-7 flex-wrap items-stretch"
-            role="group"
-            aria-label="Posture filter"
-          >
-            {VAULT_POSTURE_FACETS.map((facet) => {
-              const count = summary[facet.id];
-              const pressed = hasIsToken(query, facet.token);
-              if (count === 0 && !pressed) return null;
-              return (
-                <ToolbarTip
-                  key={facet.id}
-                  label={postureHint(facet.id)}
-                  className="flex self-stretch"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={pressed}
-                    onClick={() => onQueryChange(toggleIsToken(query, facet.token))}
-                    className={cn(
-                      EXPLORER_STRIP_TOKEN_CLASS,
-                      pressed ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
-                      facet.tone === "danger" && !pressed && "text-destructive",
-                      facet.tone === "warn" && !pressed && "text-amber-800 dark:text-amber-400",
-                    )}
-                  >
-                    {facet.label}
-                    <span className="font-mono tabular-nums">{count}</span>
-                  </button>
-                </ToolbarTip>
-              );
-            })}
-          </div>
-        ) : null}
+        ))}
+        {VAULT_POSTURE_FACETS.map((facet) => {
+          const count = summary[facet.id];
+          const pressed = hasIsToken(query, facet.token);
+          if (count === 0 && !pressed) return null;
+          return (
+            <ToolbarTip key={facet.id} label={postureHint(facet.id)} className="flex self-stretch">
+              <button
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => onQueryChange(toggleIsToken(query, facet.token))}
+                className={cn(
+                  EXPLORER_STRIP_TOKEN_CLASS,
+                  pressed ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                  facet.tone === "danger" && !pressed && "text-destructive",
+                  facet.tone === "warn" && !pressed && "text-amber-800 dark:text-amber-400",
+                )}
+              >
+                {facet.label}
+                <span className="font-mono tabular-nums">{count}</span>
+              </button>
+            </ToolbarTip>
+          );
+        })}
+        <span className="ml-auto flex items-center px-2 font-mono text-[10px] text-muted-foreground">
+          {verifyNote ?? `${summary.secrets}s · ${summary.config}c`}
+        </span>
       </div>
       {progress ? (
         <p

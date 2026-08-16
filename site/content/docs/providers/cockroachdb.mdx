@@ -42,6 +42,19 @@ CockroachDB Software License (since Nov 2024): Core open-source discontinued; fr
 orgs under $10M ARR with community support; paid tiers add dedicated support. Not OSI
 open source.
 
+## Query performance
+
+<Callout title="Unsupported">
+  CockroachDB does not expose `pg_stat_statements`. Store → **Performance** returns
+  `PgStatStatementsUnsupported`. oke does not shim `statement_statistics`.
+</Callout>
+
+| Step    | What you do                                      |
+| ------- | ------------------------------------------------ |
+| Preload | Not applicable                                   |
+| Create  | Not applicable                                   |
+| Console | Structured unavailable — use Cockroach's console |
+
 ## Real gotcha — CA cert path
 
 Copying the connection string without downloading the CA yields TLS verify failures

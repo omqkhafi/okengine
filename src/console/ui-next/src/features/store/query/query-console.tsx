@@ -682,7 +682,7 @@ export function QueryConsole({
       </header>
 
       <div
-        className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-border/60"
+        className={`${EXPLORER_STRIP_CLASS} overflow-x-auto`}
         role="tablist"
         aria-label="Query tabs"
       >
@@ -690,7 +690,7 @@ export function QueryConsole({
           <div
             key={tab.id}
             className={cn(
-              "group/tab flex h-8 items-center gap-0.5 border-b-2 px-1",
+              "group/tab flex h-full items-center gap-0.5 border-b-2 px-1",
               tab.id === activeId
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground",
@@ -772,7 +772,7 @@ export function QueryConsole({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 rounded-none px-2 text-[11px]"
+          className="h-full rounded-none px-2 text-[11px]"
           onClick={() => setText(isSql ? prettifySql(text) : prettifyKv(text))}
           data-slot="store-query-prettify"
         >
@@ -783,7 +783,7 @@ export function QueryConsole({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-8 rounded-none px-2 text-[11px]"
+          className="h-full rounded-none px-2 text-[11px]"
           onClick={saveActive}
           data-slot="store-query-save"
         >
@@ -811,7 +811,7 @@ export function QueryConsole({
           variant="ghost"
           size="sm"
           className={cn(
-            "h-8 rounded-none px-2 text-[11px]",
+            "h-full rounded-none px-2 text-[11px]",
             schemaOpen && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
           )}
           aria-pressed={schemaOpen}
@@ -835,7 +835,7 @@ export function QueryConsole({
               variant="ghost"
               size="sm"
               className={cn(
-                "h-8 rounded-none px-2 text-[11px]",
+                "h-full rounded-none px-2 text-[11px]",
                 !piiMasked && "text-amber-800 dark:text-amber-300",
               )}
               aria-pressed={!piiMasked}
@@ -889,7 +889,7 @@ export function QueryConsole({
             <Button
               type="button"
               size="sm"
-              className="h-8 gap-1.5 rounded-none"
+              className="h-full gap-1.5 rounded-none"
               disabled={!store || pending}
               onClick={run}
               data-slot="store-query-run"
@@ -911,7 +911,7 @@ export function QueryConsole({
                     {...props}
                     type="button"
                     size="sm"
-                    className="h-8 rounded-none border-l border-primary-foreground/20 px-1.5"
+                    className="h-full rounded-none border-l border-primary-foreground/20 px-1.5"
                     disabled={!store || pending}
                     aria-label="More run options"
                     data-slot="store-query-run-menu"
@@ -1073,7 +1073,7 @@ function HistoryMenu({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 rounded-none px-2 text-[11px]"
+            className="h-full rounded-none px-2 text-[11px]"
             data-slot="store-query-history"
           >
             <HugeiconsIcon icon={Clock01Icon} data-icon="inline-start" className="size-3.5" />

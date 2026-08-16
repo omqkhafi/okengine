@@ -24,6 +24,10 @@ describe("validateStoreSearch", () => {
     expect(validateStoreSearch({ view: "schema" })).toEqual({ view: "schema" });
   });
 
+  test("accepts the query performance view", () => {
+    expect(validateStoreSearch({ view: "performance" })).toEqual({ view: "performance" });
+  });
+
   test("drops unknown view / facet", () => {
     expect(validateStoreSearch({ view: "browse", facet: "files" })).toEqual({});
   });

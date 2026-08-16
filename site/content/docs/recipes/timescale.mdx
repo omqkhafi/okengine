@@ -92,10 +92,34 @@ Managed time-series hosts still use `DATABASE_URL` and
 | Container port | `5432`                                  |
 | Healthcheck    | `pg_isready -U $POSTGRES_USER`          |
 | Connection URL | `postgres://user:pass@host:5432/db`     |
+| Preload        | `timescaledb,pg_stat_statements` — Timescale **first** |
+
+## Query performance
+
+<Callout title="Keep timescaledb first">
+  Overwriting `command` with only `pg_stat_statements` breaks hypertables. This recipe
+  preloads `timescaledb,pg_stat_statements`. Then `CREATE EXTENSION pg_stat_statements`.
+</Callout>
+
+| Step    | What you do                                                                 |
+| ------- | --------------------------------------------------------------------------- |
+| Preload | Recipe sets `shared_preload_libraries=timescaledb,pg_stat_statements`       |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`                         |
+| Console | Store → SQL band → **Performance**                                          |
+
+Index Advisor is not in the Timescale image. Pin
+`oke-postgres-advisor:18-alpine` only if you drop Timescale — or enable
+`index_advisor` on an image that ships it.
 
 ## Troubleshooting
 
 <Accordions>
+<Accordion title="hypertables missing after a custom command">
+
+If you override compose `command`, keep `timescaledb` first in
+`shared_preload_libraries`. A `pg_stat_statements`-only preload unloads Timescale.
+
+</Accordion>
 <Accordion title='extension "timescaledb" is not available'>
 
 You pinned a plain `postgres:` image. Confirm the reference contains `timescale`,

@@ -4,7 +4,13 @@
 
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
-import { SectionHead } from "@/components/explorer/section-head.tsx";
+import {
+  EXPLORER_COUNT_CLASS,
+  EXPLORER_ICON_CLASS,
+  EXPLORER_ROW_CLASS,
+  EXPLORER_STRIP_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { gateChipIcon, type TraceGateInfo } from "@/features/flows/traces/trace-gates.ts";
 
 const GATE_ACCENT = "#A78BFA";
@@ -17,7 +23,7 @@ export interface GateListProps {
 }
 
 /**
- * One Gate chip — kind + name; description on hover.
+ * One Gate row — kind + name; description on hover.
  *
  * @param props - Resolved gate info
  */
@@ -25,15 +31,17 @@ export function GateRow({ gate }: { readonly gate: TraceGateInfo }): JSX.Element
   const label = gate.variant ?? "undeclared";
   const meta = [gate.variant, gate.description].filter(Boolean).join(" · ") || "undeclared";
   return (
-    <li
-      className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px]"
-      style={{ borderColor: `${GATE_ACCENT}55`, color: GATE_ACCENT }}
-      title={meta}
-      data-slot="trace-gate-row"
-    >
-      <HugeiconsIcon icon={gateChipIcon(gate.variant)} className="size-3" aria-hidden />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground/90">{gate.name}</span>
+    <li className={EXPLORER_ROW_CLASS} title={meta} data-slot="trace-gate-row">
+      <HugeiconsIcon
+        icon={gateChipIcon(gate.variant)}
+        className={EXPLORER_ICON_CLASS}
+        style={{ color: GATE_ACCENT }}
+        aria-hidden
+      />
+      <span className="min-w-0 flex-1 truncate font-mono text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-foreground/90"> {gate.name}</span>
+      </span>
     </li>
   );
 }
@@ -46,9 +54,12 @@ export function GateRow({ gate }: { readonly gate: TraceGateInfo }): JSX.Element
 export function GateList({ gates, heading = "Gates" }: GateListProps): JSX.Element | null {
   if (gates.length === 0) return null;
   return (
-    <section className="flex flex-col gap-2" data-slot="gate-list" aria-label={heading}>
-      <SectionHead title={heading} meta={String(gates.length)} />
-      <ul className="flex flex-wrap gap-1.5">
+    <section className="flex flex-col" data-slot="gate-list" aria-label={heading}>
+      <div className={`${EXPLORER_STRIP_CLASS} justify-between px-2`}>
+        <h3 className={SECTION_HEAD_CLASS}>{heading}</h3>
+        <span className={EXPLORER_COUNT_CLASS}>{gates.length}</span>
+      </div>
+      <ul>
         {gates.map((g) => (
           <GateRow key={g.name} gate={g} />
         ))}

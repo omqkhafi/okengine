@@ -275,6 +275,20 @@ export interface ConsoleState {
     readonly asGate: string | null;
     readonly gateApplied: boolean;
   }>;
+  /** Engine-native pg_stat_statements + KPIs. */
+  queryStoreSqlStats: (
+    ref: ResourceRef,
+  ) => Promise<import("./store-stats.ts").StoreSqlStatsResult>;
+  /** Live lock blocking (query text collapsed unless reveal). */
+  queryStoreSqlLocks: (
+    ref: ResourceRef,
+    options?: { readonly revealPii?: boolean },
+  ) => Promise<import("./store-stats.ts").StoreSqlLocksResult>;
+  /** `index_advisor(query)` on a dedicated handle. */
+  adviseStoreSqlIndex: (
+    ref: ResourceRef,
+    query: string,
+  ) => Promise<import("./store-stats.ts").StoreSqlAdviseResult>;
   /**
    * Live Clock runtime. Bound after boot from Manifest clocks
    * or host injection (A — reuse reconciliation / lease / DST).
@@ -880,6 +894,39 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
         throw new Error("Store runtime not bound");
       }
       return store.runStoreSql(state.storeRuntime, ref, sqlText, options);
+    },
+    queryStoreSqlStats: async (ref) => {
+      const stats = await import("./store-stats.ts");
+      await markPanel<typeof import("./store.ts")>("store");
+      if (!state.storeRuntime) {
+        throw new stats.StoreSqlStatsError(
+          stats.PG_STAT_STATEMENTS_UNSUPPORTED,
+          "Store runtime not bound",
+        );
+      }
+      return stats.queryStoreSqlStats(state.storeRuntime, ref);
+    },
+    queryStoreSqlLocks: async (ref, options) => {
+      const stats = await import("./store-stats.ts");
+      await markPanel<typeof import("./store.ts")>("store");
+      if (!state.storeRuntime) {
+        throw new stats.StoreSqlStatsError(
+          stats.PG_STAT_STATEMENTS_UNSUPPORTED,
+          "Store runtime not bound",
+        );
+      }
+      return stats.queryStoreSqlLocks(state.storeRuntime, ref, options);
+    },
+    adviseStoreSqlIndex: async (ref, query) => {
+      const stats = await import("./store-stats.ts");
+      await markPanel<typeof import("./store.ts")>("store");
+      if (!state.storeRuntime) {
+        throw new stats.StoreSqlStatsError(
+          stats.PG_STAT_STATEMENTS_UNSUPPORTED,
+          "Store runtime not bound",
+        );
+      }
+      return stats.adviseStoreSqlIndex(state.storeRuntime, ref, query);
     },
     clockRuntime: options.clockRuntime ?? null,
     listClocks: async () => {

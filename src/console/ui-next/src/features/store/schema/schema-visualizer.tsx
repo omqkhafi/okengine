@@ -18,6 +18,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import "@xyflow/react/dist/style.css";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { StoreListStore } from "@/client.ts";
+import { EXPLORER_STRIP_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { Input } from "@/components/ui/input";
 import { SHEET_SEARCH, SheetTextToggle } from "@/components/ui/sheet-form.tsx";
 import { useTheme } from "@/components/theme-provider";
@@ -120,7 +121,7 @@ function Canvas({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-stretch border-b border-border/60">
+      <div className={EXPLORER_STRIP_CLASS}>
         <span className="flex items-center px-3 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
           Schema
         </span>

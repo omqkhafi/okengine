@@ -34,7 +34,7 @@ Task:
 - [ ] 3. Edit ranges — only real upgrades
 - [ ] 4. Install — bun install from repo root
 - [ ] 5. Verify — lockfile + smoke (typecheck / targeted tests)
-- [ ] 6. Ship — changelog via oke-ship (Unreleased); docs only if public
+- [ ] 6. Ship — changelog via oke-ship (`Unreleased` → `Changed` → `####` area); docs only if public
 ```
 
 ### 1. Scope
@@ -118,7 +118,15 @@ If install pulled an unwanted canary for a pinned RC, reinstall the exact versio
 
 ### 6. Changelog
 
-Per [oke-ship](../oke-ship/SKILL.md): append under `## Unreleased` → `### ♻️ Changed`, short bullets (root vs site vs others).  
+Per [oke-ship](../oke-ship/SKILL.md): append under `## Unreleased` → `### ♻️ Changed` → the matching `####` area, short bullets (root vs site vs others).
+
+| Workspace    | `####` area            |
+| ------------ | ---------------------- |
+| root         | Runtime                |
+| site         | Docs                   |
+| create-oke   | Dev, Keel & create-oke |
+| templates    | Dev, Keel & create-oke |
+
 If the user says merge into a shipped `## v…` section, do that only when they explicitly ask.
 
 Docs: skip unless a dependency change alters a documented install/peer story.

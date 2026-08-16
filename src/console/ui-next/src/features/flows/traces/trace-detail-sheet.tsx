@@ -25,8 +25,20 @@ import {
   useTransform,
   type MotionValue,
 } from "@/lib/motion";
+import {
+  EXPLORER_CHEVRON_CLASS,
+  EXPLORER_COUNT_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_ICON_CLASS,
+  EXPLORER_RAIL_ACTIVE_CLASS,
+  EXPLORER_RAIL_CLASS,
+  EXPLORER_ROW_CLASS,
+  EXPLORER_ROW_SELECTED_CLASS,
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sheet,
@@ -88,11 +100,7 @@ export type TraceDetailSheetProps = {
   readonly onReplayStart?: () => void;
 };
 
-const sectionClassName =
-  "flex flex-col gap-2.5 border-b border-border/60 px-3 py-3 last:border-b-0";
-
-/** Bordered control button style for the sheet chrome. */
-const sheetControlButtonClass = "border border-border bg-background shadow-none hover:bg-muted";
+const sectionClassName = "border-b border-border/60 last:border-b-0";
 
 /**
  * Start-side Sheet opened by selecting a Traces row.
@@ -254,14 +262,10 @@ export function TraceDetailSheet({
       >
         {run && trigger ? (
           <>
-            <SheetHeader className="gap-2 border-b border-border px-3 py-3 pr-12">
-              <div className="flex items-start gap-2.5">
-                <span
-                  className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background text-foreground shadow-sm"
-                  title={trigger.label}
-                  aria-hidden
-                >
-                  <HugeiconsIcon icon={trigger.icon} className="size-4" />
+            <SheetHeader className="gap-1.5 border-b border-border/60 px-2 py-2 pr-12">
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 text-muted-foreground" title={trigger.label} aria-hidden>
+                  <HugeiconsIcon icon={trigger.icon} className={EXPLORER_ICON_CLASS} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <SheetTitle className="truncate font-mono text-base font-semibold tracking-tight">
@@ -329,16 +333,15 @@ export function TraceDetailSheet({
               ) : null}
 
               <section className={sectionClassName} data-slot="trace-waterfall">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                    Waterfall
-                  </h3>
-                  <div className="flex items-center gap-0.5" data-slot="trace-waterfall-zoom">
-                    <Button
+                <div className={EXPLORER_STRIP_CLASS}>
+                  <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Waterfall</h3>
+                  <div
+                    className="ml-auto flex h-full items-stretch"
+                    data-slot="trace-waterfall-zoom"
+                  >
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon-xs"
-                      className={sheetControlButtonClass}
+                      className={EXPLORER_ICON_BUTTON_CLASS}
                       aria-label="Pan left"
                       disabled={zoom <= 1 || view.startRatio <= 0}
                       onClick={() =>
@@ -348,13 +351,11 @@ export function TraceDetailSheet({
                         )
                       }
                     >
-                      <HugeiconsIcon icon={ArrowLeft01Icon} />
-                    </Button>
-                    <Button
+                      <HugeiconsIcon icon={ArrowLeft01Icon} className="size-3.5" />
+                    </button>
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon-xs"
-                      className={sheetControlButtonClass}
+                      className={EXPLORER_ICON_BUTTON_CLASS}
                       aria-label="Zoom out"
                       disabled={zoom <= 1}
                       onClick={() => {
@@ -363,16 +364,14 @@ export function TraceDetailSheet({
                         setViewStart((s) => timelineView(next, s).startRatio);
                       }}
                     >
-                      <HugeiconsIcon icon={MinusSignIcon} />
-                    </Button>
-                    <span className="min-w-8 text-center font-mono text-[10px] tabular-nums text-muted-foreground">
+                      <HugeiconsIcon icon={MinusSignIcon} className="size-3.5" />
+                    </button>
+                    <span className="flex min-w-8 items-center justify-center font-mono text-[10px] tabular-nums text-muted-foreground">
                       {zoom}×
                     </span>
-                    <Button
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon-xs"
-                      className={sheetControlButtonClass}
+                      className={EXPLORER_ICON_BUTTON_CLASS}
                       aria-label="Zoom in"
                       disabled={zoom >= 8}
                       onClick={() => {
@@ -381,13 +380,11 @@ export function TraceDetailSheet({
                         setViewStart((s) => timelineView(next, s).startRatio);
                       }}
                     >
-                      <HugeiconsIcon icon={PlusSignIcon} />
-                    </Button>
-                    <Button
+                      <HugeiconsIcon icon={PlusSignIcon} className="size-3.5" />
+                    </button>
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon-xs"
-                      className={sheetControlButtonClass}
+                      className={EXPLORER_ICON_BUTTON_CLASS}
                       aria-label="Pan right"
                       disabled={zoom <= 1 || view.startRatio + view.widthRatio >= 1}
                       onClick={() =>
@@ -396,14 +393,14 @@ export function TraceDetailSheet({
                         )
                       }
                     >
-                      <HugeiconsIcon icon={ArrowRight01Icon} />
-                    </Button>
+                      <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />
+                    </button>
                   </div>
                 </div>
                 {bars.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">No effects recorded</p>
+                  <p className="px-2 py-2 text-[11px] text-muted-foreground">No effects recorded</p>
                 ) : (
-                  <div className="relative flex flex-col gap-1.5">
+                  <div className="relative flex flex-col gap-1.5 px-2 py-2">
                     <TimelineRuler ticks={ticks} />
                     <OverviewTrack
                       bars={bars}
@@ -450,53 +447,47 @@ export function TraceDetailSheet({
 
               <section className={sectionClassName} data-slot="trace-events-section">
                 <Collapsible open={eventsOpen} onOpenChange={setEventsOpen}>
-                  <div className="flex items-center gap-2">
+                  <div className={EXPLORER_STRIP_CLASS}>
                     <CollapsibleTrigger
-                      className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-medium text-foreground"
+                      className={cn(EXPLORER_STRIP_TOKEN_CLASS, "min-w-0 flex-1 justify-start")}
                       data-slot="trace-events-toggle"
                     >
                       <HugeiconsIcon
                         icon={ArrowDown01Icon}
-                        className={cn(
-                          "size-3.5 shrink-0 text-muted-foreground transition-transform",
-                          !eventsOpen && "-rotate-90",
-                        )}
+                        className={cn(EXPLORER_CHEVRON_CLASS, !eventsOpen && "-rotate-90")}
                       />
-                      <span className="truncate">
-                        Event Details ({run.effects.length}{" "}
-                        {run.effects.length === 1 ? "event" : "events"})
+                      <span className="truncate">Event Details</span>
+                      <span className={EXPLORER_COUNT_CLASS}>
+                        {run.effects.length} {run.effects.length === 1 ? "event" : "events"}
                       </span>
                     </CollapsibleTrigger>
-                    <Button
+                    <button
                       type="button"
-                      variant="outline"
-                      size="xs"
-                      className={cn("shrink-0", sheetControlButtonClass)}
+                      className={EXPLORER_STRIP_TOKEN_CLASS}
                       disabled={busy}
                       data-slot="trace-sheet-replay"
                       onClick={(event) => void onReplay(event)}
                     >
-                      <HugeiconsIcon icon={ArrowReloadHorizontalIcon} data-icon="inline-start" />
+                      <HugeiconsIcon icon={ArrowReloadHorizontalIcon} className="size-3.5" />
                       Replay
-                    </Button>
+                    </button>
                   </div>
-                  <CollapsibleContent className="pt-2">
-                    <ul className="flex flex-col gap-1" data-slot="trace-events">
+                  <CollapsibleContent>
+                    <ul className="flex flex-col" data-slot="trace-events">
                       {run.effects.map((effect, index) => {
                         const bar = bars[index];
+                        const focused = focusEffectIndex === index;
                         return (
                           <li
                             key={`${effect.kind}:${effect.resource}:${index}`}
                             data-slot="trace-event-row"
                             data-index={index}
-                            data-focused={focusEffectIndex === index ? "true" : "false"}
+                            data-focused={focused ? "true" : "false"}
                             className={cn(
-                              "flex cursor-pointer flex-col gap-1 rounded-md px-1.5 py-1.5 text-[11px] transition-colors",
-                              focusEffectIndex === index
-                                ? "bg-muted ring-1 ring-foreground/20"
-                                : hoverIndex === index
-                                  ? "bg-muted"
-                                  : "hover:bg-muted/60",
+                              EXPLORER_ROW_CLASS,
+                              "cursor-pointer flex-col items-stretch gap-1 text-[11px]",
+                              focused && EXPLORER_ROW_SELECTED_CLASS,
+                              hoverIndex === index && !focused && "bg-muted/50",
                             )}
                             onClick={() =>
                               onFocusEffectChange?.(focusEffectIndex === index ? null : index)
@@ -504,6 +495,13 @@ export function TraceDetailSheet({
                             onMouseEnter={() => setHoverIndex(index)}
                             onMouseLeave={() => setHoverIndex(null)}
                           >
+                            <span
+                              aria-hidden
+                              className={cn(
+                                EXPLORER_RAIL_CLASS,
+                                focused && EXPLORER_RAIL_ACTIVE_CLASS,
+                              )}
+                            />
                             <div className="flex items-center gap-2">
                               <EffectKindGlyph kind={effect.kind} />
                               <span className="w-[4.5rem] shrink-0 font-medium text-foreground/90">
@@ -569,16 +567,8 @@ export function TraceDetailSheet({
 function EffectKindGlyph({ kind }: { readonly kind: RunEffectKind }): JSX.Element {
   const color = effectBarColor(kind);
   return (
-    <span
-      className="flex size-5 shrink-0 items-center justify-center rounded-md border"
-      style={{
-        color,
-        background: `color-mix(in oklab, ${color} 16%, transparent)`,
-        borderColor: `color-mix(in oklab, ${color} 40%, transparent)`,
-      }}
-      aria-hidden
-    >
-      <HugeiconsIcon icon={effectKindIcon(kind)} className="size-3" />
+    <span className={EXPLORER_ICON_CLASS} style={{ color }} aria-hidden>
+      <HugeiconsIcon icon={effectKindIcon(kind)} className="size-3.5" />
     </span>
   );
 }
@@ -603,7 +593,7 @@ function TraceSummaryStrip({
   const label = useTransform(durationValue, (v) => formatDuration(Math.round(v)));
   return (
     <div
-      className="flex items-center gap-3"
+      className={EXPLORER_STRIP_CLASS}
       data-slot="trace-summary-strip"
       role="group"
       aria-label="Run summary"
@@ -614,7 +604,7 @@ function TraceSummaryStrip({
             render={(props) => (
               <div
                 {...props}
-                className="flex shrink-0 items-center gap-1.5"
+                className="flex h-full shrink-0 items-center gap-1.5 px-2"
                 data-slot="trace-summary-duration"
               >
                 <HugeiconsIcon
@@ -624,7 +614,7 @@ function TraceSummaryStrip({
                 />
                 <motion.span
                   className={cn(
-                    "font-mono text-xl font-semibold tracking-tight tabular-nums leading-none",
+                    "font-mono text-sm font-semibold tracking-tight tabular-nums leading-none",
                     durationClassName(durationMs),
                   )}
                 >
@@ -641,8 +631,8 @@ function TraceSummaryStrip({
 
       {metrics.length > 0 ? (
         <>
-          <div className="h-7 w-px shrink-0 bg-border/60" aria-hidden />
-          <ul className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+          <ul className="flex h-full min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {metrics.map((chip) => (
               <li key={chip.key} className="list-none shrink-0">
                 <SummaryChip chip={chip} />
@@ -669,7 +659,7 @@ function SummaryChip({ chip }: { readonly chip: EffectSummaryChip }): JSX.Elemen
         render={(props) => (
           <span
             {...props}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-border/50 bg-muted/30 px-1.5 text-[11px] text-foreground/90 transition-colors hover:bg-muted/55"
+            className={cn(EXPLORER_STRIP_TOKEN_CLASS, "text-foreground/90")}
             data-slot="trace-summary-chip"
             data-variant={chip.variant}
           >
@@ -735,7 +725,7 @@ function TimelineRuler({
 }): JSX.Element {
   return (
     <div
-      className="relative h-4 w-full border-b border-border/50"
+      className="relative h-4 w-full border-b border-border/60"
       data-slot="trace-waterfall-ruler"
     >
       {ticks.map((tick) => (

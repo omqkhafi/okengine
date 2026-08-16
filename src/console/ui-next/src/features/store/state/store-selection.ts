@@ -9,13 +9,13 @@ import { useCallback } from "react";
 export type StoreQueryFacet = "sql" | "kv";
 
 /** Right-pane views on `/store` besides resource browse. */
-export type StoreView = "query" | "schema";
+export type StoreView = "query" | "schema" | "performance";
 
 /** Search params for `/store`. */
 export interface StoreSearch {
   readonly resource?: string;
   readonly tenant?: string;
-  /** `query` = SQL / KV console; `schema` = SQL schema visualizer. */
+  /** `query` = SQL / KV console; `schema` = ER; `performance` = engine stats. */
   readonly view?: StoreView;
   readonly facet?: StoreQueryFacet;
 }
@@ -30,7 +30,10 @@ export function validateStoreSearch(search: Record<string, unknown>): StoreSearc
     typeof search.resource === "string" && search.resource.length > 0 ? search.resource : undefined;
   const tenant =
     typeof search.tenant === "string" && search.tenant.length > 0 ? search.tenant : undefined;
-  const view = search.view === "query" || search.view === "schema" ? search.view : undefined;
+  const view =
+    search.view === "query" || search.view === "schema" || search.view === "performance"
+      ? search.view
+      : undefined;
   const facet = search.facet === "sql" || search.facet === "kv" ? search.facet : undefined;
   return {
     ...(resource !== undefined ? { resource } : {}),
@@ -54,6 +57,7 @@ export function useStoreSelection() {
       ? search.facet
       : null;
   const schemaView = search.view === "schema";
+  const performanceView = search.view === "performance";
 
   const setSelectedResource = useCallback(
     (resource: string | null, options?: { readonly keepView?: boolean }) => {
@@ -100,6 +104,21 @@ export function useStoreSelection() {
     [navigate],
   );
 
+  const setPerformanceView = useCallback(
+    (open: boolean) => {
+      void navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          view: open ? ("performance" as const) : undefined,
+          facet: undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
   const setSelectedTenant = useCallback(
     (tenant: string | null) => {
       void navigate({
@@ -119,9 +138,11 @@ export function useStoreSelection() {
     selectedTenant,
     queryFacet,
     schemaView,
+    performanceView,
     setSelectedResource,
     setSelectedTenant,
     setQueryFacet,
     setSchemaView,
+    setPerformanceView,
   };
 }

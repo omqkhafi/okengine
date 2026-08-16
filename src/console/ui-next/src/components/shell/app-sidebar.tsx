@@ -68,7 +68,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="h-12 justify-center">
+      <SidebarHeader className="h-10 justify-center border-b border-border/60 p-0">
         <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>

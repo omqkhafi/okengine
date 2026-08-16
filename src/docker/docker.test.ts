@@ -27,6 +27,9 @@ import {
   nginx,
   pgdog,
   postgres,
+  postgresAdvisor,
+  POSTGRES_ADVISOR_DOCKERFILE,
+  POSTGRES_ADVISOR_IMAGE,
   recipeFor,
   redis,
   resolveStack,
@@ -259,6 +262,109 @@ describe("image recipes", () => {
     const sqlYml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
     expect(sqlYml).toContain("POSTGRES_USER");
     expect(derived.stackEnv.DATABASE_URL).toContain("postgres://");
+  });
+
+  test("postgres preloads pg_stat_statements at postmaster start", () => {
+    const spec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image: "postgres:18-alpine",
+      port: 5432,
+      hostPort: 5432,
+      credentials: fixedCreds["store.sql"],
+    };
+    const applied = postgres.apply(spec);
+    expect(applied.command).toEqual([
+      "postgres",
+      "-c",
+      "shared_preload_libraries=pg_stat_statements",
+    ]);
+    const derived = deriveInfrastructure({
+      images: { "store.sql": spec.image },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    const yml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
+    expect(yml).toContain("shared_preload_libraries=pg_stat_statements");
+  });
+
+  test("timescale preload keeps timescaledb first so hypertables still load", () => {
+    const spec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image: "timescale/timescaledb:latest-pg17",
+      port: 5432,
+      hostPort: 5432,
+      credentials: fixedCreds["store.sql"],
+    };
+    const applied = timescale.apply(spec);
+    expect(applied.command).toEqual([
+      "postgres",
+      "-c",
+      "shared_preload_libraries=timescaledb,pg_stat_statements",
+    ]);
+    const joined = Array.isArray(applied.command) ? applied.command.join(" ") : String(applied.command);
+    expect(joined.indexOf("timescaledb")).toBeGreaterThanOrEqual(0);
+    expect(joined.indexOf("timescaledb")).toBeLessThan(joined.indexOf("pg_stat_statements"));
+    const derived = deriveInfrastructure({
+      images: { "store.sql": spec.image },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    const yml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
+    expect(yml).toContain("timescaledb,pg_stat_statements");
+    expect(yml).not.toMatch(/shared_preload_libraries=pg_stat_statements[^-]/);
+  });
+
+  test("supabase and yugabyte recipes do not overwrite vendor preload commands", () => {
+    const supabaseSpec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image: "supabase/postgres:15.8.1.049",
+      port: 5432,
+      hostPort: 5432,
+      credentials: fixedCreds["store.sql"],
+    };
+    expect(recipeFor(supabaseSpec.image).apply(supabaseSpec).command).toBeUndefined();
+    const ybSpec: ServiceSpec = {
+      role: "store.sql",
+      serviceName: "store-sql",
+      image: "yugabytedb/yugabyte:2024.2.2.1-b6",
+      port: 5433,
+      hostPort: 5433,
+      credentials: fixedCreds["store.sql"],
+    };
+    expect(recipeFor(ybSpec.image).apply(ybSpec).command).toEqual([
+      "bin/yugabyted",
+      "start",
+      "--base_dir=/home/yugabyte/yb_data",
+      "--background=false",
+    ]);
+  });
+
+  test("oke-postgres-advisor matches ahead of generic postgres and emits a local build", () => {
+    expect(postgres.match(POSTGRES_ADVISOR_IMAGE)).toBe(true);
+    expect(recipeFor(POSTGRES_ADVISOR_IMAGE).id).toBe("postgres-advisor");
+    expect(postgresAdvisor.match("postgres:18-alpine")).toBe(false);
+    const derived = deriveInfrastructure({
+      images: { "store.sql": POSTGRES_ADVISOR_IMAGE },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    const yml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
+    expect(yml).toContain("dockerfile: \"Dockerfile.postgres-advisor\"");
+    expect(yml).toContain("shared_preload_libraries=pg_stat_statements");
+    const dockerfile = derived.files.find((f) => f.path === POSTGRES_ADVISOR_DOCKERFILE);
+    expect(dockerfile?.content).toContain("FROM postgres:18-alpine");
+    expect(dockerfile?.content).toContain("HypoPG/hypopg");
+    expect(dockerfile?.content).toContain("supabase/index_advisor");
+    expect(dockerfile?.content).toContain("$DOCKER_PG_LLVM_DEPS");
+    expect(dockerfile?.content).not.toContain("postgresql-dev");
+    const alpine = deriveInfrastructure({
+      images: { "store.sql": "postgres:18-alpine" },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+    });
+    expect(alpine.files.some((f) => f.path === POSTGRES_ADVISOR_DOCKERFILE)).toBe(false);
+    expect(alpine.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "").not.toContain(
+      "Dockerfile.postgres-advisor",
+    );
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {

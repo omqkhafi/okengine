@@ -36,6 +36,35 @@ describe("parseChangelog", () => {
     expect(release.date).toBe("2026-01-02");
     expect(release.groups.map((g) => g.label)).toEqual(["Added", "Fixed"]);
     expect(release.groups[0]!.items).toEqual(["One thing.", "Another thing."]);
+    expect(release.groups[0]!.subgroups).toEqual([]);
+  });
+
+  test("nests #### area headings under the current ### group", () => {
+    const releases = parseChangelog(
+      [
+        "## v1.0.0 — 2026-01-01",
+        "",
+        "### Added",
+        "",
+        "#### Console — Store",
+        "",
+        "- Browse grid.",
+        "",
+        "#### Runtime",
+        "",
+        "- `http.query()`.",
+        "",
+      ].join("\n"),
+    );
+
+    expect(releases[0]!.groups).toHaveLength(1);
+    expect(releases[0]!.groups[0]!.items).toEqual([]);
+    expect(releases[0]!.groups[0]!.subgroups.map((g) => g.label)).toEqual([
+      "Console — Store",
+      "Runtime",
+    ]);
+    expect(releases[0]!.groups[0]!.subgroups[0]!.items).toEqual(["Browse grid."]);
+    expect(releases[0]!.groups[0]!.subgroups[1]!.items).toEqual(["`http.query()`."]);
   });
 
   test("folds wrapped bullet lines into one entry", () => {

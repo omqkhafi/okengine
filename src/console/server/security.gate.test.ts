@@ -441,6 +441,29 @@ describe("console security gates (whole surface)", () => {
     expect(audit!.data?.operatorId).toBe(operatorId);
   });
 
+  test("5f. store SQL lock reveal is audited as console.store.sql.stats.reveal", async () => {
+    const res = await handle.app.fetch(
+      new Request("http://console.test/console/store/sql/locks", {
+        method: "QUERY",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${operatorToken}`,
+        },
+        body: JSON.stringify({ ref: "sql:db", revealPii: true }),
+      }),
+    );
+    expect(res.status).not.toBe(401);
+    const runs = await handle.state.listRuns();
+    const lockRuns = runs.filter((r: WideEvent) => r.flow === "console.store.sql.locks");
+    const auditRun = lockRuns.find((r: WideEvent) =>
+      r.logs.some((l) => l.message === "console.store.sql.stats.reveal"),
+    );
+    expect(auditRun).toBeDefined();
+    const audit = auditRun!.logs.find((l) => l.message === "console.store.sql.stats.reveal");
+    expect(audit!.data?.ref).toBe("sql:db");
+    expect(audit!.data?.operatorId).toBe(operatorId);
+  });
+
   test("7. every registered console.* flow leaves a Runs entry when executed", async () => {
     const flows = consoleFlows(handle);
     const before = new Set((await handle.state.listRuns()).map((r: WideEvent) => r.flow));

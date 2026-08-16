@@ -981,10 +981,10 @@ function BodyViewToggleButton({
 }
 
 const DOCK_TOOL =
-  "h-8 rounded-none border-0 bg-transparent px-2 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none hover:bg-muted/50";
+  "h-full rounded-none border-0 bg-transparent px-2 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none hover:bg-muted/50";
 
 const DOCK_SUBMIT =
-  "h-8 rounded-none border-0 px-3 text-[10px] font-semibold tracking-[0.14em] uppercase shadow-none";
+  "h-full rounded-none border-0 px-3 text-[10px] font-semibold tracking-[0.14em] uppercase shadow-none";
 
 function DockSep(): JSX.Element {
   return <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />;

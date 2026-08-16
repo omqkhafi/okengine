@@ -943,6 +943,136 @@ export async function storeSql(body: StoreSqlInput): Promise<ConsoleApiResult<St
   });
 }
 
+/** Named limitation for engine-native query text. */
+export const STORE_SQL_STATS_PII_GAP = "StoreSqlStatsQueryTextGap" as const;
+
+/** Request body for `QUERY /console/store/sql/stats`. */
+export type StoreSqlStatsInput = {
+  readonly ref: string;
+  readonly tenant?: string;
+};
+
+/** One pg_stat_statements row from the stats endpoint. */
+export type StoreSqlStatementRow = {
+  readonly queryid: string | null;
+  readonly query: string | null;
+  readonly calls: number;
+  readonly totalExecMs: number;
+  readonly meanExecMs: number;
+  readonly minExecMs: number;
+  readonly maxExecMs: number;
+  readonly rows: number;
+  readonly sharedBlksHit: number;
+  readonly sharedBlksRead: number;
+  readonly cacheHitRate: number | null;
+};
+
+/** Success payload from `QUERY /console/store/sql/stats`. */
+export type StoreSqlStatsResult = {
+  readonly statements: readonly StoreSqlStatementRow[];
+  readonly kpis: {
+    readonly slowQueries: number;
+    readonly cacheHitRate: number | null;
+    readonly avgRowsPerCall: number | null;
+  };
+  readonly limitation: typeof STORE_SQL_STATS_PII_GAP;
+  readonly rowCount: number;
+  readonly truncated: boolean;
+  readonly advisor: {
+    readonly available: boolean;
+    readonly installed: boolean;
+    readonly hypopgAvailable: boolean;
+  };
+};
+
+/**
+ * QUERY /console/store/sql/stats — pg_stat_statements + KPIs.
+ *
+ * @param body - SQL store ref
+ */
+export async function storeSqlStats(
+  body: StoreSqlStatsInput,
+): Promise<ConsoleApiResult<StoreSqlStatsResult>> {
+  return consoleFetch<StoreSqlStatsResult>("/console/store/sql/stats", {
+    method: "QUERY",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `QUERY /console/store/sql/locks`. */
+export type StoreSqlLocksInput = {
+  readonly ref: string;
+  readonly tenant?: string;
+  readonly revealPii?: boolean;
+};
+
+/** One blocking pair from the locks endpoint. */
+export type StoreSqlLockRow = {
+  readonly blockedPid: number | null;
+  readonly blockedUser: string | null;
+  readonly blockedQuery: string | null;
+  readonly blockedAt: string | null;
+  readonly blockingPid: number | null;
+  readonly blockingUser: string | null;
+  readonly blockingQuery: string | null;
+  readonly blockingState: string | null;
+  readonly waitEventType: string | null;
+  readonly waitEvent: string | null;
+};
+
+/** Success payload from `QUERY /console/store/sql/locks`. */
+export type StoreSqlLocksResult = {
+  readonly rows: readonly StoreSqlLockRow[];
+  readonly masked: boolean;
+  readonly limitation: typeof STORE_SQL_STATS_PII_GAP;
+  readonly pollingMs: number;
+};
+
+/**
+ * QUERY /console/store/sql/locks — who's blocking whom.
+ *
+ * @param body - SQL store ref + optional reveal
+ */
+export async function storeSqlLocks(
+  body: StoreSqlLocksInput,
+): Promise<ConsoleApiResult<StoreSqlLocksResult>> {
+  return consoleFetch<StoreSqlLocksResult>("/console/store/sql/locks", {
+    method: "QUERY",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Request body for `POST /console/store/sql/advise`. */
+export type StoreSqlAdviseInput = {
+  readonly ref: string;
+  readonly query: string;
+  readonly tenant?: string;
+};
+
+/** Success payload from `POST /console/store/sql/advise`. */
+export type StoreSqlAdviseResult = {
+  readonly startupCostBefore: unknown;
+  readonly startupCostAfter: unknown;
+  readonly totalCostBefore: unknown;
+  readonly totalCostAfter: unknown;
+  readonly indexStatements: readonly string[];
+  readonly errors: readonly string[];
+};
+
+/**
+ * POST /console/store/sql/advise — `index_advisor(query)`.
+ *
+ * @param body - Store ref + captured statement text
+ */
+export async function storeSqlAdvise(
+  body: StoreSqlAdviseInput,
+): Promise<ConsoleApiResult<StoreSqlAdviseResult>> {
+  return consoleFetch<StoreSqlAdviseResult>("/console/store/sql/advise", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 /** Request body for `POST /console/store/object`. */
 export type StoreFileGetInput = {
   readonly ref: string;

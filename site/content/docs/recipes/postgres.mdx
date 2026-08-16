@@ -98,6 +98,32 @@ Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exha
 | Container port | `5432`                                               |
 | Healthcheck    | `pg_isready -U $POSTGRES_USER`, every 5s, 10 retries |
 | Connection URL | `postgres://user:pass@host:5432/db`                  |
+| Preload        | `postgres -c shared_preload_libraries=pg_stat_statements` |
+
+## Query performance
+
+<Callout title="Preload, then create">
+  `pg_stat_statements` must load at postmaster start. `CREATE EXTENSION` alone is not
+  enough. Recreate `store-sql` after a recipe change — the data volume can stay.
+</Callout>
+
+| Step    | What you do                                                                 |
+| ------- | --------------------------------------------------------------------------- |
+| Preload | Recipe already sets `shared_preload_libraries=pg_stat_statements`           |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`                         |
+| Console | Store → SQL band → **Performance**                                          |
+
+Default `postgres:18-alpine` does **not** ship `hypopg` / `index_advisor`. Pin the
+opt-in image when you want Suggest indexes:
+
+```typescript title="oke.config.ts"
+images: {
+  "store.sql": "oke-postgres-advisor:18-alpine",
+},
+```
+
+`oke docker` writes `Dockerfile.postgres-advisor` and a compose `build:`. Driver id
+stays `postgres`. Suggest copies `CREATE INDEX` DDL — it does not create indexes.
 
 ## Troubleshooting
 
@@ -107,6 +133,16 @@ Scale out with [PgDog](/docs/recipes/pgdog) so `N × Bun.SQL pool` does not exha
 The `postgres` driver fails boot when neither `DATABASE_URL` nor `OKE_STORE_SQL_URL` is
 set. Re-run `oke dev` so the stack writes `.env.local`, or export
 `DATABASE_URL` yourself when pointing at a managed host.
+
+</Accordion>
+<Accordion title="PgStatStatementsNotPreloaded">
+
+The Console Performance view needs the library preloaded **and** the extension
+created. Recreate `store-sql` so the new `command` applies, then run
+`CREATE EXTENSION IF NOT EXISTS pg_stat_statements`.
+
+Existing clusters that started before this recipe change keep the old
+postmaster flags until recreate.
 
 </Accordion>
 <Accordion title="pg_isready fails / store-sql unhealthy">

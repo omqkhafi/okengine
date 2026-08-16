@@ -40,7 +40,7 @@ export function CallPiiButton({ piiMasked, disabled, onToggle }: CallPiiButtonPr
         size="sm"
         disabled={disabled}
         className={cn(
-          "h-8 rounded-none px-2 text-[11px]",
+          "h-full rounded-none px-2 text-[11px]",
           !piiMasked && "text-amber-800 dark:text-amber-300",
         )}
         aria-pressed={!piiMasked}

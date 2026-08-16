@@ -13,6 +13,8 @@ import { join } from "node:path";
 export interface ChangelogGroup {
   readonly label: string;
   readonly items: ReadonlyArray<string>;
+  /** `####` area headings nested under this group. */
+  readonly subgroups: ReadonlyArray<ChangelogGroup>;
 }
 
 /** One published release. */
@@ -33,6 +35,7 @@ const RELEASE_HEADING = /^##\s+v(\d+\.\d+\.\d+[^\s]*)\s+[—-]\s+(\d{4}-\d{2}-\d
 /** Upcoming work — skipped by the site parser; `bun run bump` promotes it. */
 const UNRELEASED_HEADING = /^##\s+Unreleased\s*$/;
 const GROUP_HEADING = /^###\s+(.+?)\s*$/;
+const SUBGROUP_HEADING = /^####\s+(.+?)\s*$/;
 const BULLET = /^-\s+(.*)$/;
 
 /** Repo-relative path to the canonical file. */
@@ -44,20 +47,24 @@ export const CHANGELOG_SOURCE = "changelog.md";
  * Continuation lines of a bullet (indented under it) are folded into that
  * bullet, so the markdown can wrap at 80 columns without splitting entries.
  * A leading `## Unreleased` section is ignored here — it is staging for the
- * next bump, not a published release.
+ * next bump, not a published release. `####` area headings nest under the
+ * current `###` group.
  *
  * @param raw - Full `changelog.md` text
  * @throws If a bullet or prose line appears before any release heading
  */
 export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
   const releases: ChangelogRelease[] = [];
+  type MutableGroup = { label: string; items: string[]; subgroups: MutableGroup[] };
   let release: {
     version: string;
     tag: string;
     date: string;
     summary: string[];
-    groups: { label: string; items: string[] }[];
+    groups: MutableGroup[];
   } | null = null;
+  /** Current `###` group — `####` headings nest under it. */
+  let currentGroup: MutableGroup | null = null;
   /** Set while a bullet is open, so wrapped lines append to it. */
   let openBullet: { items: string[] } | null = null;
   /** True while skipping the upcoming-work section. */
@@ -66,6 +73,7 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
   const commit = (): void => {
     if (release) releases.push(release);
     release = null;
+    currentGroup = null;
     openBullet = null;
   };
 
@@ -92,10 +100,22 @@ export function parseChangelog(raw: string): ReadonlyArray<ChangelogRelease> {
 
     if (skippingUnreleased || !release) continue;
 
+    const subgroup = SUBGROUP_HEADING.exec(line);
+    if (subgroup) {
+      if (!currentGroup) {
+        throw new Error(`changelog: #### heading outside a ### group in v${release.version}`);
+      }
+      const entry: MutableGroup = { label: subgroup[1]!, items: [], subgroups: [] };
+      currentGroup.subgroups.push(entry);
+      openBullet = entry;
+      continue;
+    }
+
     const group = GROUP_HEADING.exec(line);
     if (group) {
-      const entry = { label: group[1]!, items: [] as string[] };
+      const entry: MutableGroup = { label: group[1]!, items: [], subgroups: [] };
       release.groups.push(entry);
+      currentGroup = entry;
       openBullet = entry;
       continue;
     }

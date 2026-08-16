@@ -312,6 +312,24 @@ needed).
   - No server-side column WHERE filters yet — v1 find/sort are client-side on
     the fetched page only.
 
+
+- Console Store SQL band **Performance** view — slow queries, cache hit
+  rate, and live lock blocking from `pg_stat_statements` / `pg_locks`
+  (`QUERY /console/store/sql/stats` and `/locks`). Structured
+  `PgStatStatementsNotPreloaded` / `Unsupported` / `NotCreated` instead
+  of a generic 500. Index Advisor is opt-in: Enable when
+  `pg_available_extensions` lists `index_advisor`, otherwise a CTA to
+  pin `oke-postgres-advisor:18-alpine`. Suggest copies `CREATE INDEX`
+  DDL and does not create indexes.
+
+- Local `postgres` / `pgvector` recipes preload `pg_stat_statements` at
+  postmaster start. Timescale keeps `timescaledb` first
+  (`timescaledb,pg_stat_statements`). `supabase/postgres` and Yugabyte
+  commands are unchanged. Opt-in `oke-postgres-advisor:18-alpine` emits
+  `Dockerfile.postgres-advisor` (hypopg + index_advisor). Default
+  `postgres:18-alpine` is unchanged.
+
+
 - ui-next seed now fills all four Store facets with real data (previously
   schema-only): SQL `bookings` 5 rows / `shipments` 3 rows (with a PII
   `email` column), KV `holds` 4 keys, Files `uploads` 3 objects (one
@@ -418,6 +436,7 @@ needed).
   and prints the claim code in the same terminal (also mirrored to `.oke/claim-code`).
   Uses `bunx --bun vite` so the Console graph runs under Bun (not Node).
 
+
 - ui-next operator login when setup is closed: Email + Password (TanStack Form + Zod +
   shadcn Field) posts to real `POST /console/session/login`, stores `oke_console_at` on
   success, and surfaces `AuthFailed` / `AuthRateLimited` errors. Same ConsoleChrome
@@ -464,6 +483,12 @@ needed).
   HTML docs pages advertise `rel="alternate"` `type="text/markdown"`.
 
 
+- Store query performance: preload vs `CREATE EXTENSION` vs unsupported
+  on Postgres / Timescale / Supabase Docker / Neon / Supabase / Yugabyte
+  / Cockroach pages. Index Advisor opt-in image documented on the
+  Postgres recipe.
+
+
 
 ### 💥 Breaking Changes
 
@@ -502,9 +527,18 @@ needed).
 
 - Console Vault detail drops the resolution winner box and filled
   layer chips. Readers are flush rows with hover-reveal actions.
+  Identity headers (Vault / Store / Units) drop blur and the
+  translucent fill. Set / Rotate are square strip actions.
+
+- Console inspector identity (Vault / Store / Units) matches
+  the Monitoring Query / Metrics header: one h-8 strip.
+  Title, kind, and env / copy sit on one centered baseline;
+  risk, PII, Set, and Rotate stay full-height strip tokens.
+  Vault posture and Units activity use the same stretch bar.
 
 - Console lookback and facet tokens are flat text (15m / 1h / 24h /
   7d, Vault posture, Flows filters) — no muted segment well.
+  Selected lookback fills the strip (`bg-muted/70`).
   Filter tokens hover-fill the strip (Traces All / Errors / duration,
   Call dock, schema toolbar, sheet tabs).
 
@@ -530,6 +564,9 @@ needed).
 - Console Monitoring Metrics / SQL tabs and the Query header
   are flush strips (no pill tabs, no blur header). Sidebar
   module icons are flush in the rail — hover fill, no chip.
+  The brand cell and explorer search / identity / command
+  headers share h-10 — between the old 32px strip and a
+  full 48px rail square.
 
 - Console Units tree lists HTTP flows by method:
   GET, POST, QUERY, PATCH/PUT, DELETE (then name).
@@ -1143,6 +1180,13 @@ needed).
 - `POST /console/store/sql` `asGate` must be `public` or a declared policy
   Gate (rate gates refused). The pick is audited as
   `console.store.sql.asGate` (operatorId, ref, gate).
+
+
+- Store SQL performance query text is a named limitation
+  `StoreSqlStatsQueryTextGap` — engine-native fingerprints, not Store
+  browse masking. Live `pg_stat_activity.query` is collapsed until
+  `revealPii: true`, which writes `console.store.sql.stats.reveal`.
+  Documented in security.md §10.4.
 
 - Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
   scopes; host gates enforce the assumed principal.

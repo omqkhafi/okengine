@@ -9,16 +9,20 @@ import { Link } from "@tanstack/react-router";
 import type { Manifest, Signal } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
 import { DetailHeader } from "@/components/explorer/detail-header.tsx";
+import {
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { SectionHead } from "@/components/explorer/section-head.tsx";
 import { GateList } from "@/components/gate-list";
 import { HttpMethodBadge } from "@/components/http-method-badge";
 import { SignalDeliveryBadge } from "@/components/signal-delivery-badge";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { callersOfFlow } from "@/features/flows/graph/build-flow-graph.ts";
 import { traceGateInfos } from "@/features/flows/traces/trace-gates.ts";
 import { traceRequestMeta } from "@/features/flows/traces/request-meta.ts";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
+import { cn } from "@/lib/utils.ts";
 import type { UnitFlowRow } from "../lib/unit-tree.ts";
 import { splitContractInput } from "../lib/contract-input.ts";
 import { fieldsFromSchema, schemaObject } from "../lib/fields-from-schema.ts";
@@ -86,39 +90,35 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
         wellClassName={trigger.wellClass}
         title={<span className="font-mono">{row.id}</span>}
         badge={
-          <Badge
-            variant="outline"
-            className="h-5 shrink-0 px-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+          <span
+            className="font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase"
             data-slot="trigger-kind-badge"
           >
             {trigger.label}
-          </Badge>
+          </span>
         }
         subtitle={
           kind === "http" && meta.method && meta.path ? (
-            <div className="mt-0.5 flex min-w-0 items-center gap-2" data-slot="http-endpoint-line">
+            <span className="flex min-w-0 items-center gap-2" data-slot="http-endpoint-line">
               <HttpMethodBadge method={meta.method} />
-              <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground select-all">
+              <code className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground select-all">
                 {meta.path}
               </code>
-            </div>
+            </span>
           ) : kind === "signal" && signalDecl ? (
-            <div
-              className="mt-0.5 flex min-w-0 items-center gap-2"
-              data-slot="signal-endpoint-line"
-            >
+            <span className="flex min-w-0 items-center gap-2" data-slot="signal-endpoint-line">
               <SignalDeliveryBadge delivery={signalDecl.delivery} />
-              <code className="min-w-0 truncate font-mono text-[11px] text-muted-foreground select-all">
+              <code className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground select-all">
                 {row.flow.trigger?.signal}
               </code>
-            </div>
+            </span>
           ) : (
-            <p
-              className="mt-0.5 font-mono text-[11px] text-muted-foreground"
+            <span
+              className="truncate font-mono text-[11px] leading-none text-muted-foreground"
               data-slot="trigger-headline"
             >
               {meta.headline}
-            </p>
+            </span>
           )
         }
         actions={
@@ -126,7 +126,7 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
             to="/overview"
             search={{ flow: row.id }}
             data-slot="open-in-graph"
-            className="inline-flex h-7 shrink-0 items-center gap-1 px-1.5 text-[11px] font-medium text-sky-700 transition-colors hover:bg-muted/50 dark:text-sky-400"
+            className={cn(EXPLORER_STRIP_TOKEN_CLASS, "text-sky-700 dark:text-sky-400")}
           >
             <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
             Open in graph
@@ -261,16 +261,14 @@ function PlaneBadge({ plane }: { readonly plane: string }): JSX.Element {
     <Tooltip>
       <TooltipTrigger
         render={(props) => (
-          <span {...props} className="inline-flex">
-            <Badge
-              variant="outline"
-              className="h-5 cursor-help gap-1 border-foreground/20 px-1.5 text-[10px] font-medium"
-              data-slot="plane-badge"
-              data-plane={plane}
-            >
-              <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
-              {label}
-            </Badge>
+          <span
+            {...props}
+            className={cn(EXPLORER_STRIP_TOKEN_CLASS, "cursor-help")}
+            data-slot="plane-badge"
+            data-plane={plane}
+          >
+            <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
+            {label}
           </span>
         )}
       />
@@ -299,14 +297,16 @@ function MetaPill({
     <Tooltip>
       <TooltipTrigger
         render={(props) => (
-          <span {...props} className="inline-flex">
-            <Badge
-              variant="outline"
-              className="h-5 cursor-help gap-1 px-1.5 text-[10px] font-medium text-muted-foreground"
-            >
-              <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
-              {label}
-            </Badge>
+          <span
+            {...props}
+            className={cn(
+              EXPLORER_STRIP_TOKEN_CLASS,
+              EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+              "cursor-help",
+            )}
+          >
+            <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
+            {label}
           </span>
         )}
       />

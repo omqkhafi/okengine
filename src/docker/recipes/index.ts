@@ -12,6 +12,7 @@ import { meilisearch } from "./meilisearch.ts";
 import { nginx } from "./nginx.ts";
 import { ollama } from "./ollama.ts";
 import { pgdog } from "./pgdog.ts";
+import { postgresAdvisor } from "./postgres-advisor.ts";
 import { postgres } from "./postgres.ts";
 import { redis } from "./redis.ts";
 import { rustfs } from "./rustfs.ts";
@@ -29,6 +30,7 @@ export const builtinRecipes: readonly ImageRecipe[] = [
   yugabyte,
   timescale,
   supabase,
+  postgresAdvisor,
   postgres,
   pgdog,
   dragonfly,
@@ -57,6 +59,7 @@ export {
   ollama,
   pgdog,
   postgres,
+  postgresAdvisor,
   redis,
   rustfs,
   sglang,
@@ -79,6 +82,13 @@ export {
 export { OLLAMA_IMAGE, OLLAMA_MIN_SAFE_VERSION } from "./ollama.ts";
 export { SGLANG_IMAGE } from "./sglang.ts";
 export { VLLM_IMAGE } from "./vllm.ts";
+export {
+  emitPostgresAdvisorDockerfile,
+  HYPOPG_GIT_TAG,
+  INDEX_ADVISOR_GIT_TAG,
+  POSTGRES_ADVISOR_DOCKERFILE,
+  POSTGRES_ADVISOR_IMAGE,
+} from "./postgres-advisor.ts";
 
 /**
  * Resolve the recipe for an image reference.

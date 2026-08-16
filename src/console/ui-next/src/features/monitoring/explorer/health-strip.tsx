@@ -5,9 +5,9 @@
 import { Link } from "@tanstack/react-router";
 import type { JSX } from "react";
 import {
-  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
   EXPLORER_STRIP_TOKEN_CLASS,
   EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+  EXPLORER_STRIP_TOKEN_SELECTED_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cn } from "@/lib/utils.ts";
@@ -42,7 +42,7 @@ export function HealthStrip({
       className="shrink-0 border-b border-border/60 bg-background"
       data-slot="monitoring-health-strip"
     >
-      <div className="flex min-h-8 flex-wrap items-stretch">
+      <div className="flex min-h-10 flex-wrap items-stretch">
         {cells.map((cell) => (
           <HealthChip
             key={cell.id}
@@ -62,7 +62,7 @@ export function HealthStrip({
                   className={cn(
                     EXPLORER_STRIP_TOKEN_CLASS,
                     "tabular-nums",
-                    pressed ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                    pressed ? EXPLORER_STRIP_TOKEN_SELECTED_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                   )}
                 >
                   {token}

@@ -17,8 +17,9 @@ import { piiLogicalCount } from "../../../../../../elements/store/classify.ts";
 import type { RunRow, StoreListChild, StoreListStore } from "@/client.ts";
 import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { DetailHeader } from "@/components/explorer/detail-header.tsx";
+import { EXPLORER_STRIP_TOKEN_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { durationTone, durationToneChipClass } from "@/features/flows/traces/duration-tone.ts";
+import { durationTone, durationToneClass } from "@/features/flows/traces/duration-tone.ts";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { cn } from "@/lib/utils";
 import { filesDriverLabel, filesDriverOrigin } from "../lib/files-origin.ts";
@@ -91,52 +92,55 @@ export function ResourcePanel({
               {files ? "Bucket" : spec.label}
             </span>
             {store.description ? (
-              <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                 {store.description}
-              </p>
+              </span>
             ) : null}
           </>
         }
         subtitle={
-          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <>
             {files ? (
               <>
-                <span className="shrink-0 font-mono">{filesDriverLabel(store.driverId)}</span>
+                <span className="shrink-0 font-mono text-[11px] leading-none text-muted-foreground">
+                  {filesDriverLabel(store.driverId)}
+                </span>
                 <span aria-hidden className="text-border">
                   ·
                 </span>
-                <span className="shrink-0">{filesDriverOrigin(store.driverId)}</span>
+                <span className="shrink-0 text-[11px] leading-none text-muted-foreground">
+                  {filesDriverOrigin(store.driverId)}
+                </span>
                 <span aria-hidden className="text-border">
                   ·
                 </span>
-                <code className="min-w-0 truncate font-mono text-foreground/70">
+                <code className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/70">
                   {child.effectRef}
                 </code>
                 <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
               </>
             ) : (
               <>
-                <span className="shrink-0 font-mono">{store.ref}</span>
+                <span className="shrink-0 font-mono text-[11px] leading-none text-muted-foreground">
+                  {store.ref}
+                </span>
                 <span aria-hidden className="text-border">
                   ·
                 </span>
-                <code className="min-w-0 truncate font-mono text-foreground/70">
+                <code className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/70">
                   {child.effectRef}
                 </code>
                 <CopyInlineButton value={child.effectRef} label="Copy effect ref" />
               </>
             )}
-          </div>
+          </>
         }
         actions={
           showStatus ? (
-            <div
-              className="flex shrink-0 flex-wrap items-center justify-end gap-1"
-              data-slot="resource-status"
-            >
+            <div className="flex h-full shrink-0 items-stretch" data-slot="resource-status">
               {lagMs !== null && lagTone ? (
                 <StatusChip
-                  chipClassName={durationToneChipClass(lagTone)}
+                  chipClassName={durationToneClass(lagTone)}
                   icon={<HugeiconsIcon icon={Timer01Icon} className="size-3" aria-hidden />}
                   title="Replica lag from the newest run that touched this store"
                   data-slot="replica-lag"
@@ -228,10 +232,10 @@ export function ResourcePanel({
 type ChipTone = "neutral" | "emerald" | "amber" | "sky";
 
 const CHIP_TONES: Record<ChipTone, string> = {
-  neutral: "border-border/50 bg-muted/40 text-muted-foreground",
-  emerald: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  amber: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-  sky: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  neutral: "text-muted-foreground",
+  emerald: "text-emerald-700 dark:text-emerald-400",
+  amber: "text-amber-800 dark:text-amber-300",
+  sky: "text-sky-700 dark:text-sky-400",
 };
 
 /** Props for {@link StatusChip}. */
@@ -250,7 +254,7 @@ interface StatusChipProps {
 }
 
 /**
- * Compact status pill for the identity chrome. Pass `onClick` to make it a toggle.
+ * Status token in the identity strip. Pass `onClick` to make it a toggle.
  *
  * @param props - Tone + optional leading icon
  */
@@ -268,10 +272,10 @@ function StatusChip({
   chipClassName,
 }: StatusChipProps): JSX.Element {
   const className = cn(
-    "inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[10px] font-medium whitespace-nowrap",
+    EXPLORER_STRIP_TOKEN_CLASS,
+    "whitespace-nowrap",
     chipClassName ?? CHIP_TONES[tone],
-    onClick &&
-      "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+    onClick && "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
   );
 
   const chip = onClick ? (
@@ -299,15 +303,11 @@ function StatusChip({
   return (
     <Tooltip>
       <TooltipTrigger
-        render={(props) =>
-          onClick ? (
-            <span {...props} className="inline-flex">
-              {chip}
-            </span>
-          ) : (
-            <span {...props}>{chip}</span>
-          )
-        }
+        render={(props) => (
+          <span {...props} className="flex self-stretch">
+            {chip}
+          </span>
+        )}
       />
       <TooltipContent side="bottom" className="max-w-xs text-[11px]">
         {title}

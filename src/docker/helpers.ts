@@ -32,6 +32,26 @@ export const postgresHealth = {
   retries: 10,
 } as const;
 
+/**
+ * Postmaster flags so `pg_stat_statements` can load (shared memory).
+ * Official `postgres` / `pgvector` images — do not use on Supabase/Yugabyte.
+ */
+export const POSTGRES_STAT_STATEMENTS_COMMAND = [
+  "postgres",
+  "-c",
+  "shared_preload_libraries=pg_stat_statements",
+] as const;
+
+/**
+ * Timescale images already require `timescaledb` in preload.
+ * Keep it first — dropping it breaks `CREATE EXTENSION timescaledb` / hypertables.
+ */
+export const TIMESCALE_STAT_STATEMENTS_COMMAND = [
+  "postgres",
+  "-c",
+  "shared_preload_libraries=timescaledb,pg_stat_statements",
+] as const;
+
 /** CockroachDB single-node env (`COCKROACH_*`) — used only when the data dir is empty. */
 export function cockroachEnv(s: ServiceSpec): Record<string, string> {
   return {

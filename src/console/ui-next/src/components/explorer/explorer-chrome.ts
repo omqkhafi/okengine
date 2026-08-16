@@ -16,10 +16,10 @@ export const EXPLORER_SEARCH_CLASS =
   "h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 text-xs shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent";
 
 /** Search + icon-action row at the top of every left pane. */
-export const EXPLORER_TOOLBAR_CLASS = "flex h-8 shrink-0 items-stretch border-b border-border/60";
+export const EXPLORER_TOOLBAR_CLASS = "flex h-10 shrink-0 items-stretch border-b border-border/60";
 
-/** h-8 filter / command / results bar — tokens stretch to fill. */
-export const EXPLORER_STRIP_CLASS = "flex h-8 shrink-0 items-stretch border-b border-border/60";
+/** h-10 filter / command / results bar — tokens stretch to fill. */
+export const EXPLORER_STRIP_CLASS = "flex h-10 shrink-0 items-stretch border-b border-border/60";
 
 /** Full-height token in {@link EXPLORER_STRIP_CLASS} — hover fills the bar. */
 export const EXPLORER_STRIP_TOKEN_CLASS =
@@ -27,6 +27,9 @@ export const EXPLORER_STRIP_TOKEN_CLASS =
 
 /** Pressed strip token — ink only, no well. */
 export const EXPLORER_STRIP_TOKEN_ACTIVE_CLASS = "text-foreground";
+
+/** Pressed strip token with a full-height wash (lookback, toggles). */
+export const EXPLORER_STRIP_TOKEN_SELECTED_CLASS = "bg-muted/70 text-foreground";
 
 /** Idle strip token ink. */
 export const EXPLORER_STRIP_TOKEN_IDLE_CLASS = "text-muted-foreground";
@@ -101,9 +104,8 @@ export function explorerIconInk(wellClass: string): string {
     .join(" ");
 }
 
-/** Inspector identity header. */
-export const DETAIL_HEADER_CLASS =
-  "flex shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur-sm";
+/** Inspector identity header — same h-10 strip as Monitoring Query / Metrics. */
+export const DETAIL_HEADER_CLASS = `${EXPLORER_STRIP_CLASS} gap-2 px-2`;
 
 /** Size-8 rounded-lg well in a detail header. */
 export const DETAIL_WELL_CLASS =

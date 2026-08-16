@@ -100,7 +100,7 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
             variant="ghost"
             size="sm"
             className={cn(
-              "h-8 max-w-44 min-w-0 rounded-none px-2 text-[11px]",
+              "h-full max-w-44 min-w-0 rounded-none px-2 text-[11px]",
               active && "text-sky-800 dark:text-sky-300",
             )}
             aria-label={active ? `View data as Gate ${asGate}` : "View data as Operator (default)"}

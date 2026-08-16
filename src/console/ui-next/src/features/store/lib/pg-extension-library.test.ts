@@ -20,6 +20,23 @@ describe("pg-extension-library", () => {
     expect(names).toContain("pg_duckdb");
     expect(names).toContain("plv8");
     expect(names).toContain("anon");
+    expect(names).toContain("index_advisor");
+    expect(names).toContain("hypopg");
+  });
+
+  test("index_advisor install plan requires hypopg and uses CASCADE on Enable", () => {
+    const advisor = PG_LIBRARY_EXTENSIONS.find((e) => e.name === "index_advisor");
+    expect(advisor?.requires).toEqual(["hypopg"]);
+    const plan = extensionInstallPlan(advisor!, new Set(), { cascade: true });
+    expect(plan.items.map((i) => i.name)).toEqual(["hypopg", "index_advisor"]);
+    expect(plan.sql).toBe(
+      [
+        'CREATE EXTENSION IF NOT EXISTS "hypopg";',
+        'CREATE EXTENSION IF NOT EXISTS "index_advisor" WITH CASCADE;',
+      ].join("\n"),
+    );
+    expect(libraryExtensionVendor("index_advisor")).toBe("Supabase");
+    expect(libraryExtensionTitle("index_advisor")).toBe("Index Advisor");
   });
 
   test("hides extensions already on the catalog page", () => {

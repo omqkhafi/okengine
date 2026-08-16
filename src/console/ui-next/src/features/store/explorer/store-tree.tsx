@@ -8,6 +8,7 @@ import {
   FileSpreadsheetIcon,
   Folder01Icon,
   FunctionIcon,
+  Activity03Icon,
   HierarchySquare10Icon,
   Key01Icon,
   PuzzleIcon,
@@ -98,6 +99,9 @@ export interface StoreTreeProps {
   /** SQL schema visualizer is the right pane. */
   readonly schemaActive?: boolean;
   readonly onOpenSchema?: () => void;
+  /** SQL query performance is the right pane. */
+  readonly performanceActive?: boolean;
+  readonly onOpenPerformance?: () => void;
 }
 
 /**
@@ -113,6 +117,8 @@ export function StoreTree({
   onOpenQuery,
   schemaActive = false,
   onOpenSchema,
+  performanceActive = false,
+  onOpenPerformance,
 }: StoreTreeProps): JSX.Element {
   const [query, setQuery] = useState("");
   const [openByKey, setOpenByKey] = useState<Readonly<Record<string, boolean>>>({});
@@ -236,6 +242,8 @@ export function StoreTree({
                   }
                   schemaActive={band.facet === "sql" && schemaActive}
                   onOpenSchema={band.facet === "sql" ? onOpenSchema : undefined}
+                  performanceActive={band.facet === "sql" && performanceActive}
+                  onOpenPerformance={band.facet === "sql" ? onOpenPerformance : undefined}
                 />
               );
             })}
@@ -341,6 +349,8 @@ function FacetBand({
   onOpenQuery,
   schemaActive,
   onOpenSchema,
+  performanceActive,
+  onOpenPerformance,
 }: {
   readonly band: StoreFacetBand;
   readonly onHide: () => void;
@@ -354,6 +364,8 @@ function FacetBand({
   readonly onOpenQuery?: () => void;
   readonly schemaActive: boolean;
   readonly onOpenSchema?: () => void;
+  readonly performanceActive: boolean;
+  readonly onOpenPerformance?: () => void;
 }): JSX.Element {
   const facetSpec = STORE_FACET_SPECS[band.facet];
   const childCount = band.stores.reduce((n, s) => {
@@ -402,11 +414,14 @@ function FacetBand({
               <span
                 className={cn(
                   EXPLORER_BAND_ACTIONS_CLASS,
-                  (schemaActive || queryActive) && "opacity-100",
+                  (schemaActive || queryActive || performanceActive) && "opacity-100",
                 )}
               >
                 {onOpenSchema ? (
                   <SchemaBandButton active={schemaActive} onOpen={onOpenSchema} />
+                ) : null}
+                {onOpenPerformance ? (
+                  <PerformanceBandButton active={performanceActive} onOpen={onOpenPerformance} />
                 ) : null}
                 {onOpenQuery ? (
                   <QueryBandButton
@@ -731,6 +746,50 @@ function SchemaBandButton({
       />
       <TooltipContent side="bottom" className="text-[11px]">
         Schema visualizer
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Open SQL query performance from the SQL facet band.
+ *
+ * @param props - Active + open
+ */
+function PerformanceBandButton({
+  active,
+  onOpen,
+}: {
+  readonly active: boolean;
+  readonly onOpen: () => void;
+}): JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={(props) => (
+          <button
+            {...props}
+            type="button"
+            aria-label="Query performance"
+            aria-pressed={active}
+            data-slot="store-facet-performance"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onClick?.(event);
+              onOpen();
+            }}
+            className={cn(
+              "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors",
+              "hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+              active && "bg-muted text-foreground",
+            )}
+          >
+            <HugeiconsIcon icon={Activity03Icon} className="size-3.5" aria-hidden />
+          </button>
+        )}
+      />
+      <TooltipContent side="bottom" className="text-[11px]">
+        Query performance
       </TooltipContent>
     </Tooltip>
   );

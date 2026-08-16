@@ -40,7 +40,7 @@ export function RunsQueryPanel(): JSX.Element {
         <Button
           type="button"
           size="sm"
-          className="ml-auto h-8 rounded-none"
+          className="ml-auto h-full rounded-none"
           disabled={query.isPending || sql.trim().length === 0}
           onClick={() => query.mutate({ sql, ...(piiMasked ? {} : { revealPii: true }) })}
           data-slot="runs-query-run"

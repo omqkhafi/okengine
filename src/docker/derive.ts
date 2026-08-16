@@ -24,6 +24,11 @@ import {
   llamaCpp,
 } from "./recipes/llama-cpp.ts";
 import { buildPgDogToml, buildPgDogUsersToml, PGDOG_CONFIG_DIR } from "./recipes/pgdog.ts";
+import {
+  emitPostgresAdvisorDockerfile,
+  POSTGRES_ADVISOR_DOCKERFILE,
+  postgresAdvisor,
+} from "./recipes/postgres-advisor.ts";
 import type { DeriveOptions, DeriveResult, GeneratedFile } from "./types.ts";
 import { DEFAULT_DOCKER_DIR } from "./types.ts";
 import { APP_PORT } from "../runtime/types.ts";
@@ -72,10 +77,11 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
     ...pgdogConfigFiles(specs),
     ...proxyConfigFiles(specs, normalised.appPort),
     ...llamaCppEntrypointFiles(specs),
+    ...postgresAdvisorDockerfileFiles(specs),
   ];
 
   for (const f of files) {
-    if (f.path.endsWith(".yml") || f.path === "Dockerfile") {
+    if (f.path.endsWith(".yml") || f.path === "Dockerfile" || f.path === POSTGRES_ADVISOR_DOCKERFILE) {
       assertNoCredentialsInYaml(
         f.content,
         specs.map((s) => s.credentials),
@@ -84,6 +90,22 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   }
 
   return { specs, files, stackEnv, composeFiles };
+}
+
+/**
+ * Emit `Dockerfile.postgres-advisor` when `store.sql` pins the opt-in advisor image.
+ *
+ * @param specs - Normalised services
+ */
+function postgresAdvisorDockerfileFiles(specs: DeriveResult["specs"]): GeneratedFile[] {
+  const sql = specs.find((s) => s.role === "store.sql");
+  if (!sql || !postgresAdvisor.match(sql.image)) return [];
+  return [
+    {
+      path: POSTGRES_ADVISOR_DOCKERFILE,
+      content: emitPostgresAdvisorDockerfile(),
+    },
+  ];
 }
 
 /**
@@ -221,6 +243,7 @@ function stackEnvProjectRoot(composeOutDir: string): string {
 /** Generated compose / companion paths safe to delete when absent from a derive. */
 const PRUNE_ROOT_FILES = new Set([
   "Dockerfile",
+  POSTGRES_ADVISOR_DOCKERFILE,
   "docker-compose.yml",
   "docker-stack.yml",
   "compose.yml",

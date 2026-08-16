@@ -20,8 +20,10 @@ import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import {
   EXPLORER_BAND_ACTIONS_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
   EXPLORER_ROW_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
   SECTION_HEAD_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
 import { SectionHead } from "@/components/explorer/section-head.tsx";
@@ -167,7 +169,7 @@ export function VaultDetail({
         title={label}
         badge={
           <>
-            <span className="font-mono text-[10px] text-muted-foreground uppercase">
+            <span className="font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
               {row.kind}
             </span>
             {row.kind === "secret" ? (
@@ -184,17 +186,25 @@ export function VaultDetail({
           </>
         }
         subtitle={
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-            <code className="min-w-0 truncate font-mono text-[11px] text-foreground/80">
+          <>
+            <code className="min-w-0 truncate font-mono text-[11px] leading-none text-foreground/80">
               {row.name}
             </code>
             <CopyInlineButton value={row.name} label={`Copy ${row.name}`} />
+          </>
+        }
+        actions={
+          <>
             {posture.risks.map((risk) => (
-              <ToolbarTip key={risk} label={postureHint(risk, row.rotate)}>
+              <ToolbarTip
+                key={risk}
+                label={postureHint(risk, row.rotate)}
+                className="flex self-stretch"
+              >
                 <button
                   type="button"
                   className={cn(
-                    "px-1 text-[10px] font-medium hover:bg-muted/50",
+                    EXPLORER_STRIP_TOKEN_CLASS,
                     risk === "blast" && "text-destructive",
                     (risk === "unset" || risk === "overdue" || risk === "shared") &&
                       "text-amber-800 dark:text-amber-400",
@@ -206,10 +216,6 @@ export function VaultDetail({
                 </button>
               </ToolbarTip>
             ))}
-          </div>
-        }
-        actions={
-          <>
             <CopyMenu row={row} />
             {posture.unset ? null : (
               <ToolbarTip
@@ -218,8 +224,15 @@ export function VaultDetail({
                     ? "Updates this vault.config value. Console shows it in the clear."
                     : "Write-only. The new value is never shown again."
                 }
+                className="flex self-stretch"
               >
-                <Button type="button" variant="outline" size="sm" onClick={onSet}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-full rounded-none"
+                  onClick={onSet}
+                >
                   Set
                 </Button>
               </ToolbarTip>
@@ -232,11 +245,13 @@ export function VaultDetail({
                     ? blast.summary
                     : "Re-encrypt with a new value. Review the fingerprint before it writes."
               }
+              className="flex self-stretch"
             >
               <Button
                 type="button"
                 variant="destructive"
                 size="sm"
+                className="h-full rounded-none"
                 disabled={posture.unset}
                 onClick={onRotate}
               >
@@ -523,12 +538,17 @@ function CopyMenu({ row }: { readonly row: VaultRecord }): JSX.Element {
   ] as const;
   return (
     <DropdownMenu>
-      <ToolbarTip label="Copy snippets (no secret values)">
+      <ToolbarTip label="Copy snippets (no secret values)" className="flex self-stretch">
         <DropdownMenuTrigger
           render={(props) => (
-            <Button {...props} type="button" variant="ghost" size="icon-xs" aria-label="Copy">
-              <HugeiconsIcon icon={MoreHorizontalCircle01Icon} />
-            </Button>
+            <button
+              {...props}
+              type="button"
+              aria-label="Copy"
+              className={EXPLORER_ICON_BUTTON_CLASS}
+            >
+              <HugeiconsIcon icon={MoreHorizontalCircle01Icon} className="size-3.5" />
+            </button>
           )}
         />
       </ToolbarTip>

@@ -6,6 +6,13 @@ import type { JSX, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import type { RunRow } from "@/client.ts";
 import {
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
+import { cn } from "@/lib/utils.ts";
+import {
   FLOW_ACTIVITY_WINDOW_MS,
   flowActivitySummary,
   type FlowActivitySummary,
@@ -18,7 +25,7 @@ export interface FlowActivityStripProps {
   /** Injected clock for tests; defaults to `Date.now()`. */
   readonly nowMs?: number;
   readonly windowMs?: number;
-  /** Plane / durable / live pills sit on the same row. */
+  /** Plane / durable / live tokens sit on the same row. */
   readonly children?: ReactNode;
 }
 
@@ -37,18 +44,14 @@ export function FlowActivityStrip({
   const summary = flowActivitySummary(runs ?? [], flowId, nowMs, windowMs);
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5"
+      className={cn(EXPLORER_STRIP_CLASS, "px-2")}
       data-slot="flow-activity-strip"
       data-kind={summary.kind}
       aria-label="Recent activity"
     >
-      <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-        Activity
-      </span>
+      <span className={cn(SECTION_HEAD_CLASS, "flex items-center")}>Activity</span>
       <ActivityBody summary={summary} nowMs={nowMs} />
-      {children ? (
-        <div className="ml-auto flex flex-wrap items-center gap-1">{children}</div>
-      ) : null}
+      {children ? <div className="ml-auto flex h-full items-stretch">{children}</div> : null}
     </div>
   );
 }
@@ -62,7 +65,10 @@ function ActivityBody({
 }): JSX.Element {
   if (summary.kind === "empty") {
     return (
-      <p className="text-[11px] text-muted-foreground" data-slot="flow-activity-empty">
+      <p
+        className="flex items-center text-[11px] text-muted-foreground"
+        data-slot="flow-activity-empty"
+      >
         No recent runs in the Console buffer.
       </p>
     );
@@ -71,7 +77,7 @@ function ActivityBody({
   const pct = Math.round(summary.errorRate * 100);
   const ago = formatAgo(summary.lastStartedAt, nowMs);
   return (
-    <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-[11px] text-foreground/85">
+    <p className="flex min-w-0 items-center gap-x-2 text-[11px] text-foreground/85">
       <span className="tabular-nums" data-slot="flow-activity-calls">
         {summary.calls} call{summary.calls === 1 ? "" : "s"}
       </span>
@@ -90,7 +96,7 @@ function ActivityBody({
       <Link
         to="/overview"
         search={{ run: summary.latestRunId }}
-        className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        className={cn(EXPLORER_STRIP_TOKEN_CLASS, EXPLORER_STRIP_TOKEN_IDLE_CLASS)}
         data-slot="flow-activity-open-run"
       >
         Open latest

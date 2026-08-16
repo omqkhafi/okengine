@@ -12,9 +12,19 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  EXPLORER_CHEVRON_CLASS,
+  EXPLORER_ICON_BUTTON_BARE_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_ROW_CLASS,
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+  SECTION_HEAD_CLASS,
+  explorerIconInk,
+} from "@/components/explorer/explorer-chrome.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -56,8 +66,6 @@ export type TraceRequestSectionProps = {
 
 type BodyView = "fields" | "raw";
 
-const sheetControlButtonClass = "border border-border bg-background shadow-none hover:bg-muted";
-
 /**
  * Request + Response — method rail + endpoint, then return-value frame.
  *
@@ -81,27 +89,21 @@ export function TraceRequestSection({
 
   return (
     <>
-      <section
-        className="flex flex-col gap-2 border-b border-border/60 px-3 py-3 last:border-b-0"
-        data-slot="trace-request"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[10px] font-semibold tracking-wider text-foreground/75 uppercase">
-            Request
-          </h3>
+      <section className="border-b border-border/60 last:border-b-0" data-slot="trace-request">
+        <div className={EXPLORER_STRIP_CLASS}>
+          <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Request</h3>
           {endpoint ? (
-            <CopyIconButton
-              label="Copy endpoint"
-              text={endpoint}
-              dataSlot="trace-request-copy-endpoint"
-            />
+            <div className="ml-auto flex h-full items-stretch">
+              <CopyIconButton
+                label="Copy endpoint"
+                text={endpoint}
+                dataSlot="trace-request-copy-endpoint"
+              />
+            </div>
           ) : null}
         </div>
 
-        <div
-          className="overflow-hidden rounded-md border border-border/55 bg-muted/15"
-          data-slot="trace-request-frame"
-        >
+        <div data-slot="trace-request-frame">
           <div className="flex min-w-0">
             <MethodRail method={method} />
             <div className="flex min-w-0 flex-1 flex-col">
@@ -123,36 +125,29 @@ export function TraceRequestSection({
         </div>
       </section>
 
-      <section
-        className="flex flex-col gap-2 border-b border-border/60 px-3 py-3 last:border-b-0"
-        data-slot="trace-response"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[10px] font-semibold tracking-wider text-foreground/75 uppercase">
-            Response
-          </h3>
-          {!failed && output !== null && output !== undefined ? (
-            <CopyIconButton
-              label="Copy response JSON"
-              text={JSON.stringify(output, null, 2)}
-              dataSlot="trace-response-copy"
-            />
-          ) : null}
-          {failed ? (
-            <CopyIconButton
-              label="Copy error"
-              text={[error, errorMessage].filter(Boolean).join("\n")}
-              dataSlot="trace-response-copy-error"
-            />
-          ) : null}
+      <section className="border-b border-border/60 last:border-b-0" data-slot="trace-response">
+        <div className={EXPLORER_STRIP_CLASS}>
+          <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Response</h3>
+          <div className="ml-auto flex h-full items-stretch">
+            {!failed && output !== null && output !== undefined ? (
+              <CopyIconButton
+                label="Copy response JSON"
+                text={JSON.stringify(output, null, 2)}
+                dataSlot="trace-response-copy"
+              />
+            ) : null}
+            {failed ? (
+              <CopyIconButton
+                label="Copy error"
+                text={[error, errorMessage].filter(Boolean).join("\n")}
+                dataSlot="trace-response-copy-error"
+              />
+            ) : null}
+          </div>
         </div>
 
         {failed ? (
-          <div
-            className="overflow-hidden rounded-md border border-destructive/35 bg-destructive/8"
-            data-slot="trace-response-error"
-            role="alert"
-          >
+          <div data-slot="trace-response-error" role="alert">
             <div className="flex min-w-0">
               <div
                 className="w-1 shrink-0 self-stretch bg-destructive"
@@ -179,10 +174,7 @@ export function TraceRequestSection({
             </div>
           </div>
         ) : (
-          <div
-            className="overflow-hidden rounded-md border border-border/55 bg-muted/15"
-            data-slot="trace-response-frame"
-          >
+          <div data-slot="trace-response-frame">
             <div className="flex min-w-0">
               <div
                 className="w-1 shrink-0 self-stretch bg-emerald-500"
@@ -252,7 +244,7 @@ function PayloadPanel({
 
   if (!hasValue) {
     return (
-      <p className="border-t border-border/45 px-2.5 py-2 text-[11px] text-muted-foreground">
+      <p className="border-t border-border/60 px-2 py-2 text-[11px] text-muted-foreground">
         {empty}
       </p>
     );
@@ -260,17 +252,14 @@ function PayloadPanel({
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
-      <div className="flex items-center gap-1 border-t border-border/45 px-2 py-1">
+      <div className={cn(EXPLORER_STRIP_CLASS, "border-t")}>
         <CollapsibleTrigger
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[11px] font-medium text-foreground/85 hover:text-foreground"
+          className={cn(EXPLORER_STRIP_TOKEN_CLASS, "min-w-0 flex-1 justify-start")}
           data-slot={toggleSlot}
         >
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-              !open && "-rotate-90",
-            )}
+            className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
           />
           <span>{label}</span>
           {shapeHint ? (
@@ -286,7 +275,7 @@ function PayloadPanel({
         <CopyIconButton label={copyLabel} text={json} dataSlot={copySlot} />
       </div>
       <CollapsibleContent>
-        <div className="border-t border-border/40">
+        <div className="border-t border-border/60">
           {view === "fields" && rows ? (
             <FieldsTable rows={rows} dataSlot={fieldsSlot} />
           ) : (
@@ -336,16 +325,15 @@ function RequestEndpoint({
         className="flex min-w-0 items-center gap-2 px-2.5 py-2"
         data-slot="trace-request-endpoint"
       >
-        <Badge
-          variant="outline"
+        <span
           className={cn(
-            "h-5 shrink-0 rounded-md px-1.5 font-mono text-[10px] font-semibold tracking-wide uppercase",
-            httpMethodBadgeClass(method),
+            "shrink-0 font-mono text-[10px] font-semibold tracking-[0.08em] uppercase",
+            explorerIconInk(httpMethodBadgeClass(method)),
           )}
           data-slot="trace-request-method"
         >
           {method}
-        </Badge>
+        </span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground select-all">
           {path}
         </span>
@@ -376,7 +364,7 @@ function BodyViewToggle({
 }): JSX.Element {
   return (
     <div
-      className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/60 p-0.5"
+      className="flex h-full shrink-0 items-stretch"
       role="group"
       aria-label="Body view"
       data-slot="trace-request-view-toggle"
@@ -412,8 +400,9 @@ function ViewToggleButton({
     <button
       type="button"
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-[5px] px-1.5 text-[10px] font-medium transition-colors",
-        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+        EXPLORER_STRIP_TOKEN_CLASS,
+        "font-semibold tracking-[0.08em] uppercase",
+        active ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
       )}
       aria-pressed={active}
       aria-label={label}
@@ -438,11 +427,11 @@ function FieldsTable({
   readonly dataSlot: string;
 }): JSX.Element {
   return (
-    <ul className="divide-y divide-border/40" data-slot={dataSlot}>
+    <ul data-slot={dataSlot}>
       {rows.map((row) => (
         <li
           key={row.key}
-          className="group/field flex items-start gap-2 px-2.5 py-1.5 hover:bg-muted/40"
+          className={cn(EXPLORER_ROW_CLASS, "group/field items-start")}
           data-slot="trace-payload-field"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
@@ -467,6 +456,7 @@ function FieldsTable({
               label={`Copy ${row.key}`}
               text={fieldCopyText(row.value)}
               dataSlot="trace-payload-copy-field"
+              bare
             />
           </div>
         </li>
@@ -499,10 +489,12 @@ function CopyIconButton({
   text,
   label,
   dataSlot,
+  bare = false,
 }: {
   readonly text: string;
   readonly label: string;
   readonly dataSlot: string;
+  readonly bare?: boolean;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -521,12 +513,10 @@ function CopyIconButton({
     <Tooltip>
       <TooltipTrigger
         render={(props) => (
-          <Button
+          <button
             {...props}
             type="button"
-            variant="outline"
-            size="icon-xs"
-            className={sheetControlButtonClass}
+            className={bare ? EXPLORER_ICON_BUTTON_BARE_CLASS : EXPLORER_ICON_BUTTON_CLASS}
             aria-label={copied ? "Copied" : label}
             data-slot={dataSlot}
             onClick={(event) => {
@@ -534,8 +524,8 @@ function CopyIconButton({
               void onCopy(event);
             }}
           >
-            <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} />
-          </Button>
+            <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} className="size-3.5" />
+          </button>
         )}
       />
       <TooltipContent side="bottom" className="text-[11px]">

@@ -25,7 +25,7 @@ After any implementation that changes behavior, API surface, CLI, plugins, drive
 ```
 Task:
 - [ ] 1. Diff the change — list user-visible impact
-- [ ] 2. Changelog — append under ## Unreleased (create it if missing)
+- [ ] 2. Changelog — append under ## Unreleased → ### group + #### area
 - [ ] 3. Site docs — update or create pages via oke-docs when the surface changed
 - [ ] 4. Gates — changelog + docs tests green
 ```
@@ -53,8 +53,9 @@ If documentation would invent an API the source does not support — **stop and 
 If ## Unreleased is missing (right after the preamble, before the newest ## v…):
   Insert it.
 
-Append bullets under the matching ### group inside Unreleased
-(create the group if missing).
+Append bullets under the matching ### group and #### area
+inside Unreleased (create the group / area if missing).
+Do not dump a new bullet at the top of a large group.
 ```
 
 **Version bump is separate** — when cutting a release:
@@ -73,6 +74,23 @@ Site gate: the newest **versioned** release (`## v…`) must equal `package.json
 Rules:
 
 - Groups only when non-empty, in order: `### ✨ Added` · `### 💥 Breaking Changes` · `### ♻️ Changed` · `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🐛 Fixed` · `### 🔒 Security`
+- Large groups add `####` area headings (only when that area has bullets), in order: `Console — Chrome` · `Console — Monitoring` · `Console — Store` · `Console — Vault` · `Console — Flows & traces` · `Console — Units & Call API` · `Console — Auth & shell` · `Runtime` · `Dev, Keel & create-oke` · `Docs`
+- Pick the area from where the change lives (do not invent new area names):
+
+  | Change lives in…                                      | `####` area              |
+  | ----------------------------------------------------- | ------------------------ |
+  | Console chrome, sidebar, theme, explorer tokens, sheets | Console — Chrome       |
+  | `/monitoring`, runs SQL, fleet / instances            | Console — Monitoring     |
+  | Store browse, query, files, schema, RLS, catalog      | Console — Store          |
+  | Vault page / lock-path                                | Console — Vault          |
+  | Flows graph, traces, overview hub                     | Console — Flows & traces |
+  | Units tree, Call API, invoke-as                       | Console — Units & Call API |
+  | Claim, login, shell, ui-next SPA                      | Console — Auth & shell   |
+  | Kernel, `fx`, HTTP, gate, drivers, runs               | Runtime                  |
+  | `oke` CLI, create-oke, keel, examples, Playwright     | Dev, Keel & create-oke   |
+  | site docs, `/llms.txt`, teaching figures              | Docs                     |
+
+- Small groups (a few bullets) stay flat — no `####` until the group needs scanning.
 - Bullets: user/product impact, not a file dump. Match existing voice (short, wrapped lines OK).
 - One idea per bullet.
 
@@ -108,7 +126,7 @@ Fix every failure before finishing.
 
 ## Done checklist
 
-- [ ] Notes under `## Unreleased`, not under a released `## v…` section
+- [ ] Notes under `## Unreleased` → matching `###` group and `####` area, not under a released `## v…` section
 - [ ] User-facing surfaces documented (or explicitly N/A)
 - [ ] Docs authored via oke-docs when pages were created/rewritten
 - [ ] Changelog + docs gates pass

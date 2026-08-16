@@ -34,6 +34,13 @@ import { CONSOLE_PASSWORD_POLICY } from "../password-policy.ts";
 import { PUBLIC_CONSOLE_FLOWS } from "./public-flows.ts";
 import { resolveInvokeAs } from "./invoke-user-flow.ts";
 import { isKnownConsoleSqlGate, StoreFileNotFoundError, tenancyDeclared } from "./store.ts";
+import {
+  PG_STAT_STATEMENTS_NOT_CREATED,
+  PG_STAT_STATEMENTS_NOT_PRELOADED,
+  STORE_SQL_LOCKS_POLL_MS,
+  STORE_SQL_STATS_PII_GAP,
+  StoreSqlStatsError,
+} from "./store-stats.ts";
 
 export { PUBLIC_CONSOLE_FLOWS };
 
@@ -1573,6 +1580,87 @@ const StoreSqlOut = z.object({
   gateApplied: z.boolean(),
 });
 
+const StoreSqlStatsIn = z.object({
+  ref: z.string().min(1),
+  tenant: z.string().optional(),
+});
+
+const StoreSqlStatsOut = z.object({
+  statements: z.array(
+    z.object({
+      queryid: z.string().nullable(),
+      query: z.string().nullable(),
+      calls: z.number(),
+      totalExecMs: z.number(),
+      meanExecMs: z.number(),
+      minExecMs: z.number(),
+      maxExecMs: z.number(),
+      rows: z.number(),
+      sharedBlksHit: z.number(),
+      sharedBlksRead: z.number(),
+      cacheHitRate: z.number().nullable(),
+    }),
+  ),
+  kpis: z.object({
+    slowQueries: z.number(),
+    cacheHitRate: z.number().nullable(),
+    avgRowsPerCall: z.number().nullable(),
+  }),
+  limitation: z.literal(STORE_SQL_STATS_PII_GAP),
+  rowCount: z.number(),
+  truncated: z.boolean(),
+  advisor: z.object({
+    available: z.boolean(),
+    installed: z.boolean(),
+    hypopgAvailable: z.boolean(),
+  }),
+});
+
+const StoreSqlLocksIn = z.object({
+  ref: z.string().min(1),
+  tenant: z.string().optional(),
+  revealPii: z.boolean().optional(),
+});
+
+const StoreSqlLocksOut = z.object({
+  rows: z.array(
+    z.object({
+      blockedPid: z.number().nullable(),
+      blockedUser: z.string().nullable(),
+      blockedQuery: z.string().nullable(),
+      blockedAt: z.string().nullable(),
+      blockingPid: z.number().nullable(),
+      blockingUser: z.string().nullable(),
+      blockingQuery: z.string().nullable(),
+      blockingState: z.string().nullable(),
+      waitEventType: z.string().nullable(),
+      waitEvent: z.string().nullable(),
+    }),
+  ),
+  masked: z.boolean(),
+  limitation: z.literal(STORE_SQL_STATS_PII_GAP),
+  pollingMs: z.literal(STORE_SQL_LOCKS_POLL_MS),
+});
+
+const StoreSqlAdviseIn = z.object({
+  ref: z.string().min(1),
+  query: z.string().min(1),
+  tenant: z.string().optional(),
+});
+
+const StoreSqlAdviseOut = z.object({
+  startupCostBefore: z.unknown(),
+  startupCostAfter: z.unknown(),
+  totalCostBefore: z.unknown(),
+  totalCostAfter: z.unknown(),
+  indexStatements: z.array(z.string()),
+  errors: z.array(z.string()),
+});
+
+const PgStatStatementsNotPreloaded = z.object({ reason: z.string() });
+const PgStatStatementsUnsupported = z.object({ reason: z.string() });
+const PgStatStatementsNotCreated = z.object({ reason: z.string() });
+
 const RunsQueryIn = z.object({
   sql: z.string().min(1),
   revealPii: z.boolean().optional(),
@@ -1656,6 +1744,9 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly purgeCache: AnyFlowDef;
       readonly sql: AnyFlowDef;
       readonly preview: AnyFlowDef;
+      readonly stats: AnyFlowDef;
+      readonly locks: AnyFlowDef;
+      readonly advise: AnyFlowDef;
     };
     readonly vault: {
       readonly list: AnyFlowDef;
@@ -1733,6 +1824,9 @@ export function createConsoleBindings(state: ConsoleState): {
   const storePurgeCache = createStorePurgeCache(state);
   const storeSql = createStoreSql(state);
   const storePreview = createStorePreview(state);
+  const storeStats = createStoreSqlStats(state);
+  const storeLocks = createStoreSqlLocks(state);
+  const storeAdvise = createStoreSqlAdvise(state);
   const vaultList = createVaultList(state);
   const vaultSet = createVaultSet(state);
   const vaultCreate = createVaultCreate(state);
@@ -1791,6 +1885,9 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/store/purge-cache"), storePurgeCache),
     bindHttp(http.post("/console/store/sql"), storeSql),
     bindHttp(http.post("/console/store/preview"), storePreview),
+    bindHttp(http.query("/console/store/sql/stats"), storeStats),
+    bindHttp(http.query("/console/store/sql/locks"), storeLocks),
+    bindHttp(http.post("/console/store/sql/advise"), storeAdvise),
     bindHttp(http.get("/console/vault"), vaultList),
     bindHttp(http.post("/console/vault/set"), vaultSet),
     bindHttp(http.post("/console/vault/create"), vaultCreate),
@@ -1850,6 +1947,9 @@ export function createConsoleBindings(state: ConsoleState): {
         purgeCache: storePurgeCache,
         sql: storeSql,
         preview: storePreview,
+        stats: storeStats,
+        locks: storeLocks,
+        advise: storeAdvise,
       },
       vault: {
         list: vaultList,
@@ -2944,6 +3044,127 @@ function createStoreSql(state: ConsoleState) {
         return fail("StoreNotFound", {
           ref: `${input.ref}: ${err instanceof Error ? err.message : String(err)}`,
         });
+      }
+    },
+  });
+}
+
+function failStoreSqlStats(err: unknown) {
+  if (err instanceof StoreSqlStatsError) {
+    if (err.code === PG_STAT_STATEMENTS_NOT_PRELOADED) {
+      return fail("PgStatStatementsNotPreloaded", { reason: err.message });
+    }
+    if (err.code === PG_STAT_STATEMENTS_NOT_CREATED) {
+      return fail("PgStatStatementsNotCreated", { reason: err.message });
+    }
+    return fail("PgStatStatementsUnsupported", { reason: err.message });
+  }
+  return fail("PgStatStatementsUnsupported", {
+    reason: err instanceof Error ? err.message : String(err),
+  });
+}
+
+function createStoreSqlStats(state: ConsoleState) {
+  return flow("console.store.sql.stats", {
+    plane: "operator",
+    in: StoreSqlStatsIn,
+    out: StoreSqlStatsOut,
+    errors: {
+      AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated,
+    },
+    do: async (input: z.infer<typeof StoreSqlStatsIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const tenantFail = requireTenantIfDeclared(state, input.tenant);
+      if (tenantFail) return tenantFail;
+      try {
+        const result = await state.queryStoreSqlStats(input.ref as ResourceRef);
+        fx.log.info("console.store.sql.stats", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          rowCount: result.rowCount,
+        });
+        return result;
+      } catch (err) {
+        return failStoreSqlStats(err);
+      }
+    },
+  });
+}
+
+function createStoreSqlLocks(state: ConsoleState) {
+  return flow("console.store.sql.locks", {
+    plane: "operator",
+    in: StoreSqlLocksIn,
+    out: StoreSqlLocksOut,
+    errors: {
+      AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated,
+    },
+    do: async (input: z.infer<typeof StoreSqlLocksIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const tenantFail = requireTenantIfDeclared(state, input.tenant);
+      if (tenantFail) return tenantFail;
+      if (input.revealPii === true) {
+        fx.log.info("console.store.sql.stats.reveal", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          tenant: input.tenant,
+        });
+      }
+      try {
+        const result = await state.queryStoreSqlLocks(input.ref as ResourceRef, {
+          revealPii: input.revealPii === true,
+        });
+        fx.log.info("console.store.sql.locks", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          revealPii: input.revealPii === true,
+          rowCount: result.rows.length,
+        });
+        return result;
+      } catch (err) {
+        return failStoreSqlStats(err);
+      }
+    },
+  });
+}
+
+function createStoreSqlAdvise(state: ConsoleState) {
+  return flow("console.store.sql.advise", {
+    plane: "operator",
+    in: StoreSqlAdviseIn,
+    out: StoreSqlAdviseOut,
+    errors: {
+      AuthFailed,
+      TenantRequired,
+      StoreNotFound,
+      PgStatStatementsNotPreloaded,
+      PgStatStatementsUnsupported,
+      PgStatStatementsNotCreated,
+    },
+    do: async (input: z.infer<typeof StoreSqlAdviseIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      const tenantFail = requireTenantIfDeclared(state, input.tenant);
+      if (tenantFail) return tenantFail;
+      try {
+        const result = await state.adviseStoreSqlIndex(input.ref as ResourceRef, input.query);
+        fx.log.info("console.store.sql.advise", {
+          operatorId: fx.operator.id,
+          ref: input.ref,
+          suggestionCount: result.indexStatements.length,
+        });
+        return result;
+      } catch (err) {
+        return failStoreSqlStats(err);
       }
     },
   });

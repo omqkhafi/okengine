@@ -47,6 +47,12 @@ The SQL band **Schema** control opens a visualizer of Manifest tables and
 relations — declared `.references()` plus inferred `*_id` columns — not the
 query-console Schema rail.
 
+<Callout title="Query performance">
+  The SQL band **Performance** view reads `pg_stat_statements` and live locks
+  (`QUERY /console/store/sql/stats` and `/locks`). Alpine needs preload plus
+  `CREATE EXTENSION`; Index Advisor is opt-in on [Postgres](/docs/recipes/postgres#query-performance).
+</Callout>
+
 **Colorize** groups tables by prefix and FK family. Click a related table to
 dim the rest; click the canvas to show all again.
 

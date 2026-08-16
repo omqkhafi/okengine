@@ -52,7 +52,7 @@ Task:
 - **Do not** `--no-verify`, skip hooks, or delete/weaken gates to get green.
 - **Do not** expand test skips to hide regressions. Integration skips stay skip-visible (`console.log("skip: …")` + `test.skip`).
 - Budgets / Gate / Site failures are real — treat them like test failures.
-- After user-facing fixes land, still run [oke-ship](../oke-ship/SKILL.md) if changelog/docs were not updated yet (oke-ci does not own ship).
+- After user-facing fixes land, still run [oke-ship](../oke-ship/SKILL.md) if changelog/docs were not updated yet (oke-ci does not own ship). oke-ship places notes under the matching `###` group and `####` area.
 
 ### When a check needs a long run
 

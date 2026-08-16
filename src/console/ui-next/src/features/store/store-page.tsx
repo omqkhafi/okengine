@@ -14,6 +14,7 @@ import { useStoresList } from "./data/use-stores-list.ts";
 import { ResourcePanel } from "./detail/resource-panel.tsx";
 import { StoreTree } from "./explorer/store-tree.tsx";
 import { findByEffectRef, firstEffectRef } from "./lib/store-tree.ts";
+import { PerformancePanel } from "./performance/performance-panel.tsx";
 import { QueryConsole } from "./query/query-console.tsx";
 import { SchemaVisualizer } from "./schema/schema-visualizer.tsx";
 import { useStoreSelection } from "./state/store-selection.ts";
@@ -31,10 +32,12 @@ export function StorePage(): JSX.Element {
     selectedTenant,
     queryFacet,
     schemaView,
+    performanceView,
     setSelectedResource,
     setSelectedTenant,
     setQueryFacet,
     setSchemaView,
+    setPerformanceView,
   } = useStoreSelection();
 
   const stores = list.data?.stores ?? [];
@@ -57,15 +60,21 @@ export function StorePage(): JSX.Element {
               stores={stores}
               selectedEffectRef={effectRef}
               onSelect={(ref) => {
-                setSelectedResource(ref);
+                setSelectedResource(ref, {
+                  keepView: schemaView || performanceView,
+                });
               }}
               queryFacet={queryFacet}
               schemaActive={schemaView}
+              performanceActive={performanceView}
               onOpenQuery={(facet) => {
                 setQueryFacet(queryFacet === facet ? null : facet);
               }}
               onOpenSchema={() => {
                 setSchemaView(!schemaView);
+              }}
+              onOpenPerformance={() => {
+                setPerformanceView(!performanceView);
               }}
             />
           </div>
@@ -84,6 +93,12 @@ export function StorePage(): JSX.Element {
                   manifest={manifestQuery.data ?? null}
                   selectedEffectRef={effectRef}
                   onSelectTable={(ref) => setSelectedResource(ref, { keepView: true })}
+                />
+              ) : performanceView ? (
+                <PerformancePanel
+                  stores={stores}
+                  selectedEffectRef={effectRef}
+                  tenant={selectedTenant}
                 />
               ) : queryFacet ? (
                 <QueryConsole

@@ -14,6 +14,7 @@ import {
   CHANGELOG_SOURCE,
   loadChangelog,
   splitInlineCode,
+  type ChangelogGroup,
   type ChangelogRelease,
 } from "@/lib/changelog";
 import { githubBlobUrl } from "@/lib/shared";
@@ -48,6 +49,37 @@ function Bullet({ text }: { text: string }) {
   );
 }
 
+/** One `###` group, with optional `####` area subgroups. */
+function GroupBlock({ group }: { group: ChangelogGroup }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <h3 className="flex items-center gap-3 font-mono text-[11px] tracking-[0.16em] text-fd-foreground/70 uppercase">
+        {group.label}
+        <span aria-hidden className="h-px flex-1 bg-fd-border" />
+      </h3>
+      {group.items.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {group.items.map((item) => (
+            <Bullet key={item} text={item} />
+          ))}
+        </ul>
+      ) : null}
+      {group.subgroups.map((sub) => (
+        <div key={sub.label} className="flex flex-col gap-2">
+          <h4 className="font-mono text-[11px] tracking-[0.12em] text-fd-muted-foreground">
+            {sub.label}
+          </h4>
+          <ul className="flex flex-col gap-2">
+            {sub.items.map((item) => (
+              <Bullet key={item} text={item} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** One release block: tag, date, optional summary, then grouped bullets. */
 function Release({ release }: { release: ChangelogRelease }) {
   return (
@@ -70,17 +102,7 @@ function Release({ release }: { release: ChangelogRelease }) {
 
       <div className="flex flex-col gap-6">
         {release.groups.map((group) => (
-          <section key={group.label} className="flex flex-col gap-2.5">
-            <h3 className="flex items-center gap-3 font-mono text-[11px] tracking-[0.16em] text-fd-foreground/70 uppercase">
-              {group.label}
-              <span aria-hidden className="h-px flex-1 bg-fd-border" />
-            </h3>
-            <ul className="flex flex-col gap-2">
-              {group.items.map((item) => (
-                <Bullet key={item} text={item} />
-              ))}
-            </ul>
-          </section>
+          <GroupBlock key={group.label} group={group} />
         ))}
       </div>
     </article>
