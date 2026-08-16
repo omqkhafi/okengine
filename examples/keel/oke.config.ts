@@ -30,14 +30,14 @@ export default defineConfig({
     store: {
       sql: "postgres:18-alpine",
       kv: "redis:8-alpine",
-      files: "rustfs/rustfs:1.0.0-beta.11",
-      index: "getmeili/meilisearch:v1.37",
+      files: "rustfs/rustfs:1.0.0-rc.2",
+      index: "getmeili/meilisearch:v1.53",
     },
-    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
     channel: {
-      email: "axllent/mailpit:v1.22.3",
+      email: "axllent/mailpit:v1.30.7",
     },
-    ai: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+    ai: "ghcr.io/ggml-org/llama.cpp:server-b10450",
   },
   i18n: { locales: ["en", "ar"], default: "en", dir: { ar: "rtl" } },
 });

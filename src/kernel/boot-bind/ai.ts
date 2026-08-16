@@ -112,6 +112,11 @@ export function openDefaultsFor(id: string, docker = false): AiOpenOptions {
   if (id === "openai-compatible") {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     const baseUrl = process.env.OPENAI_BASE_URL?.trim() || process.env.OKE_AI_URL?.trim();
+    if (docker && !baseUrl) {
+      throw new Error(
+        "oke boot: openai-compatible driver needs OKE_AI_URL (did `oke dev` write .env.local?)",
+      );
+    }
     return {
       ...(apiKey ? { apiKey } : {}),
       ...(baseUrl ? { baseUrl } : {}),

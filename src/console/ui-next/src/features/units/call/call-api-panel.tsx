@@ -7,6 +7,8 @@ import {
   Alert02Icon,
   ArrowExpand01Icon,
   ArrowReloadHorizontalIcon,
+  Cancel01Icon,
+  Copy01Icon,
   ListViewIcon,
   Loading03Icon,
   PlayIcon,
@@ -15,8 +17,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
-import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import {
+  EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_STRIP_CLASS,
   EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
   EXPLORER_STRIP_TOKEN_CLASS,
@@ -28,6 +30,7 @@ import { HighlightedJson } from "@/components/highlighted-json";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -701,78 +704,75 @@ function ResponseBlock({
 
   return (
     <section
-      className="flex min-h-56 min-w-0 flex-1 flex-col gap-2 overflow-hidden px-3 py-2.5"
+      className="flex min-h-56 min-w-0 flex-1 flex-col overflow-hidden"
       aria-label="Response"
+      data-slot="call-api-response-block"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-          Response
-        </h4>
-        <div className="flex items-center gap-2">
+      <div className={EXPLORER_STRIP_CLASS}>
+        <h4 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Response</h4>
+        <div className="ml-auto flex h-full items-stretch">
           {status}
           {responseJson ? (
-            <ToolbarTip label="Expand response">
-              <Button
+            <ToolbarTip label="Expand response" className="flex self-stretch">
+              <button
                 type="button"
-                variant="ghost"
-                size="icon-xs"
                 aria-label="Expand response"
                 data-slot="call-api-response-expand"
-                className="size-5 text-muted-foreground"
+                className={EXPLORER_ICON_BUTTON_CLASS}
                 onClick={() => setExpanded(true)}
               >
                 <HugeiconsIcon icon={ArrowExpand01Icon} className="size-3.5" aria-hidden />
-              </Button>
+              </button>
             </ToolbarTip>
           ) : null}
         </div>
       </div>
       {errorMessage ? (
-        <p role="alert" className="text-sm text-destructive" data-slot="call-api-error">
+        <p role="alert" className="px-2 py-2 text-sm text-destructive" data-slot="call-api-error">
           {errorMessage}
         </p>
       ) : null}
       {responseJson ? (
-        <div
-          className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-border/55 bg-muted/15"
-          data-slot="call-api-response-frame"
-        >
-          <div className="flex min-h-0 min-w-0 flex-1">
-            <div
-              className={cn(
-                "w-1 shrink-0 self-stretch",
-                failed ? "bg-destructive" : "bg-emerald-500",
-              )}
-              aria-hidden
-              data-slot="call-api-response-rail"
-            />
-            <HighlightedJson
-              json={responseJson}
-              dataSlot="call-api-response"
-              className="flex min-h-0 flex-1 overflow-auto"
-            />
-          </div>
+        <div className="flex min-h-0 flex-1 overflow-hidden" data-slot="call-api-response-frame">
+          <div
+            className={cn("w-1 shrink-0 self-stretch", failed ? "bg-destructive" : "bg-emerald-500")}
+            aria-hidden
+            data-slot="call-api-response-rail"
+          />
+          <HighlightedJson
+            json={responseJson}
+            dataSlot="call-api-response"
+            className="flex min-h-0 flex-1 overflow-auto"
+          />
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">{emptyHint}</p>
+        <p className="px-2 py-3 text-xs text-muted-foreground">{emptyHint}</p>
       )}
       {responseJson ? (
         <Sheet open={expanded} onOpenChange={setExpanded}>
           <SheetContent
             side="right"
+            showCloseButton={false}
             className="gap-0 p-0 data-[side=right]:w-[min(48rem,calc(100vw-2rem))] data-[side=right]:sm:max-w-[min(48rem,calc(100vw-2rem))]"
             data-slot="call-api-response-dialog"
           >
-            <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 pr-12">
-              <div className="min-w-0">
-                <SheetTitle className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                  Response
-                </SheetTitle>
-                <SheetDescription className="sr-only">Full Call API response JSON</SheetDescription>
-              </div>
-              <div className="flex items-center gap-2">
+            <SheetHeader className={cn(EXPLORER_STRIP_CLASS, "flex-row gap-0 border-border/60 p-0")}>
+              <SheetTitle className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>
+                Response
+              </SheetTitle>
+              <SheetDescription className="sr-only">Full Call API response JSON</SheetDescription>
+              <div className="ml-auto flex h-full items-stretch">
                 {status}
-                <CopyInlineButton value={responseJson} label="Copy response" />
+                <ResponseSheetCopy json={responseJson} />
+                <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+                <SheetClose
+                  aria-label="Close"
+                  className={EXPLORER_ICON_BUTTON_CLASS}
+                  data-slot="call-api-response-close"
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} className="size-3.5" aria-hidden />
+                  <span className="sr-only">Close</span>
+                </SheetClose>
               </div>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-hidden">
@@ -799,7 +799,35 @@ function ResponseBlock({
 }
 
 /**
- * Status + duration chips shared by the dock and the expand dialog.
+ * Stretch copy token for the expanded Response sheet header.
+ *
+ * @param props - JSON payload
+ */
+function ResponseSheetCopy({ json }: { readonly json: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  return (
+    <ToolbarTip label={copied ? "Copied" : "Copy response"} className="flex self-stretch">
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : "Copy response"}
+        data-slot="call-api-response-copy"
+        className={EXPLORER_ICON_BUTTON_CLASS}
+        onClick={() => {
+          if (!navigator.clipboard) return;
+          void navigator.clipboard.writeText(json).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+          });
+        }}
+      >
+        <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} className="size-3.5" aria-hidden />
+      </button>
+    </ToolbarTip>
+  );
+}
+
+/**
+ * Status + duration tokens shared by the dock and the expand dialog.
  */
 function ResponseStatus({
   failed,
@@ -824,7 +852,7 @@ function ResponseStatus({
     <>
       {pathUsed ? (
         <span
-          className="font-mono text-[9px] tracking-wide text-muted-foreground uppercase"
+          className="flex h-full items-center px-2 font-mono text-[10px] text-muted-foreground"
           data-slot="call-api-path-used"
           data-path={pathUsed}
         >
@@ -834,10 +862,8 @@ function ResponseStatus({
       {settled ? (
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[9px] font-semibold tracking-wide uppercase",
-            failed
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+            "inline-flex h-full items-center gap-1 px-2 font-mono text-[10px] font-semibold",
+            failed ? "text-destructive" : "text-emerald-700 dark:text-emerald-400",
           )}
           data-slot="call-api-status"
           data-failed={failed ? "true" : "false"}
@@ -846,14 +872,18 @@ function ResponseStatus({
           {statusCode ?? (failed ? "error" : "ok")}
         </span>
       ) : null}
-      {settled ? <CacheGlyph cache={cache ?? "none"} dataSlot="call-api-cache" /> : null}
+      {settled ? (
+        <span className="flex h-full items-center px-2">
+          <CacheGlyph cache={cache ?? "none"} dataSlot="call-api-cache" />
+        </span>
+      ) : null}
       {timing ? (
         <Tooltip>
           <TooltipTrigger
             render={(props) => (
               <span
                 {...props}
-                className="font-mono text-[10px] tabular-nums text-muted-foreground"
+                className="flex h-full items-center px-2 font-mono text-[10px] tabular-nums text-muted-foreground"
                 data-slot="call-api-duration"
                 data-kind={timing.primaryKind}
               >
@@ -870,7 +900,7 @@ function ResponseStatus({
       ) : null}
       {timing?.primaryKind === "handler" && timing.rttMs !== null ? (
         <span
-          className="font-mono text-[10px] tabular-nums text-muted-foreground/70"
+          className="flex h-full items-center px-2 font-mono text-[10px] tabular-nums text-muted-foreground/70"
           data-slot="call-api-rtt"
           title="Browser round-trip"
         >
@@ -1004,12 +1034,12 @@ function DockChapter({
   readonly hint?: string;
 }): JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-muted/15 px-3 py-1.5">
-      <h4 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {title}
-      </h4>
+    <div className={EXPLORER_STRIP_CLASS}>
+      <h4 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>{title}</h4>
       {hint ? (
-        <span className="text-[9px] tracking-wide text-muted-foreground/80 uppercase">{hint}</span>
+        <span className="ml-auto flex items-center px-2 text-[10px] text-muted-foreground">
+          {hint}
+        </span>
       ) : null}
     </div>
   );

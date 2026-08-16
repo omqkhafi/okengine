@@ -11,6 +11,7 @@ import {
   EXPLORER_STRIP_CLASS,
   SECTION_HEAD_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
+import { cn } from "@/lib/utils.ts";
 import { gateChipIcon, type TraceGateInfo } from "@/features/flows/traces/trace-gates.ts";
 
 const GATE_ACCENT = "#A78BFA";
@@ -55,9 +56,9 @@ export function GateList({ gates, heading = "Gates" }: GateListProps): JSX.Eleme
   if (gates.length === 0) return null;
   return (
     <section className="flex flex-col" data-slot="gate-list" aria-label={heading}>
-      <div className={`${EXPLORER_STRIP_CLASS} justify-between px-2`}>
-        <h3 className={SECTION_HEAD_CLASS}>{heading}</h3>
-        <span className={EXPLORER_COUNT_CLASS}>{gates.length}</span>
+      <div className={EXPLORER_STRIP_CLASS}>
+        <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>{heading}</h3>
+        <span className={cn(EXPLORER_COUNT_CLASS, "flex items-center")}>{gates.length}</span>
       </div>
       <ul>
         {gates.map((g) => (

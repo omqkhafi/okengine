@@ -199,6 +199,42 @@ describe("fx — effect ledger", () => {
       expect(entry.reversibility).toBe(reversibilityOf(entry.kind));
     }
   });
+
+  test("fx.ask with a prompt handle matches effects.asks name@version", async () => {
+    const fx = createFx({
+      flow: "documents.summarize",
+      effects: { asks: ["document-summary@1"] },
+      aiRuntime: {
+        prompts: new Map(),
+        agents: new Map(),
+        embeds: new Map(),
+        autoCacheDisabled: true,
+        journalingForced: false,
+        denials: [],
+        agentRuns: [],
+        journal: [],
+        async ask() {
+          return { summary: "ok" };
+        },
+        async runAgent() {
+          return { ok: true, steps: 0, denials: [], output: {} };
+        },
+        async *stream() {
+          /* no tokens */
+        },
+        async search() {
+          return [];
+        },
+        async embed() {
+          return { vectors: [] };
+        },
+      } as never,
+    });
+
+    await expect(fx.ask({ name: "document-summary", version: 1 }, {})).resolves.toEqual({
+      summary: "ok",
+    });
+  });
 });
 
 describe("fx.vault — object surface", () => {

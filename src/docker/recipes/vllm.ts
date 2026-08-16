@@ -9,7 +9,7 @@
 import type { ImageRecipe } from "../types.ts";
 
 /** Pinned vLLM OpenAI server image — never `latest`. */
-export const VLLM_IMAGE = "vllm/vllm-openai:v0.26.0";
+export const VLLM_IMAGE = "vllm/vllm-openai:v0.27.1";
 
 /** vLLM — OpenAI-compatible HTTP on 8000; GPU reservation; loopback publish. */
 export const vllm: ImageRecipe = {

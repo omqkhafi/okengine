@@ -12,6 +12,8 @@ import {
   EXPLORER_STRIP_TOKEN_IDLE_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
+import { ExplorerStartToggle } from "@/components/explorer/explorer-start-toggle.tsx";
+import { useExplorerStartPanel } from "@/components/explorer/use-explorer-start-panel.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
 import { useRuns } from "@/features/flows/data/use-runs.ts";
@@ -62,6 +64,16 @@ export function ObservabilityPage(): JSX.Element {
     setView,
   } = useObservabilitySelection();
   const [fleetOpen, setFleetOpen] = useState(false);
+  const start = useExplorerStartPanel();
+  const startToggle = (
+    <ExplorerStartToggle
+      open={start.open}
+      onToggle={start.toggle}
+      noun="errors"
+      controlsId="observability-errors"
+      dataSlot="observability-errors-toggle"
+    />
+  );
 
   const nowMs = Date.now();
   const windowMs = OBSERVABILITY_WINDOWS[window];
@@ -121,11 +133,19 @@ export function ObservabilityPage(): JSX.Element {
       />
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
+          panelRef={start.panelRef}
+          collapsible
+          collapsedSize={0}
           defaultSize={EXPLORER_SPLIT.start.defaultSize}
           minSize={EXPLORER_SPLIT.start.minSize}
+          onResize={start.onResize}
           className="min-h-0 overflow-hidden"
         >
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div
+            id="observability-errors"
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+            data-slot="observability-errors"
+          >
             <ErrorList
               errors={errors}
               query={query}
@@ -136,7 +156,7 @@ export function ObservabilityPage(): JSX.Element {
             />
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        {start.open ? <ResizableHandle withHandle /> : null}
         <ResizablePanel
           defaultSize={EXPLORER_SPLIT.end.defaultSize}
           minSize={EXPLORER_SPLIT.end.minSize}
@@ -144,6 +164,8 @@ export function ObservabilityPage(): JSX.Element {
         >
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className={EXPLORER_STRIP_CLASS} role="tablist" aria-label="Observability detail">
+              {startToggle}
+              <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
               <button
                 type="button"
                 role="tab"

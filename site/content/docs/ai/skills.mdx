@@ -16,6 +16,7 @@ Tools alone don't make a good operator — an agent also needs to know the _voca
 | **Docs skill**     | `.agents/skills/oke-docs/` | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
 | **Ship skill**     | `.agents/skills/oke-ship/` | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`            |
 | **Deps skill**     | `.agents/skills/oke-deps/` | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)       |
+| **Images skill**   | `.agents/skills/oke-images/` | Updating Compose image pins                    | Registry probe, pin style, catalog + recipes + Keel + docs lockstep   |
 
 ## AGENTS.md — the root contract
 
@@ -30,7 +31,8 @@ Skills are `SKILL.md` packages an agent loads when the work matches their descri
 | `oke`      | App work — flows, elements, drivers          | The agent contract, element patterns, the fx invariants                   |
 | `oke-docs` | Docs work — new pages, rewrites              | The page skeleton, verification sources, the density gate                 |
 | `oke-ship` | Closing an implementation — changelog + docs | Append under `## Unreleased`; `bun run bump` promotes it into `## vX.Y.Z` |
-| `oke-deps` | Dependency updates — one package or all      | Scope map, `ncu` + Bun, reject downgrades / protect RC and aliases        |
+| `oke-deps`   | Dependency updates — one package or all      | Scope map, `ncu` + Bun, reject downgrades / protect RC and aliases        |
+| `oke-images` | Compose image pins — one image or all        | Registry probe, keep pin style, never `:latest`, sync catalog → docs      |
 
 All live in the repo under `.agents/skills/`, so they travel with the code and stay versioned with what they describe.
 

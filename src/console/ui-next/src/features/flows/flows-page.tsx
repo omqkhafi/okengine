@@ -3,7 +3,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ExplorerStartToggle } from "@/components/explorer/explorer-start-toggle.tsx";
 import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
+import { useExplorerStartPanel } from "@/components/explorer/use-explorer-start-panel.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "./data/use-console-live.ts";
 import { useManifest } from "./data/use-manifest.ts";
@@ -27,6 +29,16 @@ export function FlowsPage() {
   const liveStatus = useConsoleLive(true);
   const { selectedRunId, selectedFlowId, follow, setSelectedRun, setSelectedFlow } =
     useFlowsSelection();
+  const start = useExplorerStartPanel();
+  const startToggle = (
+    <ExplorerStartToggle
+      open={start.open}
+      onToggle={start.toggle}
+      noun="traces"
+      controlsId="overview-traces"
+      dataSlot="overview-traces-toggle"
+    />
+  );
 
   const [graphFilter, setGraphFilter] = useState<GraphFilter | null>(null);
   const [focusEffectIndex, setFocusEffectIndex] = useState<number | null>(null);
@@ -157,12 +169,20 @@ export function FlowsPage() {
     <div className={EXPLORER_PAGE_CLASS} data-slot="flows-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
+          panelRef={start.panelRef}
+          collapsible
+          collapsedSize={0}
           defaultSize={EXPLORER_SPLIT.start.defaultSize}
           minSize={EXPLORER_SPLIT.start.minSize}
           maxSize="50%"
+          onResize={start.onResize}
           className="min-h-0"
         >
-          <div className="h-full min-h-0 overflow-hidden">
+          <div
+            id="overview-traces"
+            className="h-full min-h-0 overflow-hidden"
+            data-slot="overview-traces"
+          >
             <TracesPane
               runs={scopedRuns}
               selectedRunId={selectedRunId}
@@ -179,7 +199,7 @@ export function FlowsPage() {
             />
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        {start.open ? <ResizableHandle withHandle /> : null}
         <ResizablePanel
           defaultSize={EXPLORER_SPLIT.end.defaultSize}
           minSize={EXPLORER_SPLIT.end.minSize}
@@ -197,6 +217,7 @@ export function FlowsPage() {
               activeNodeId={activeNodeId}
               onNodeClick={onGraphNodeClick}
               onPaneClick={onGraphPaneClick}
+              leading={startToggle}
             />
           </div>
         </ResizablePanel>

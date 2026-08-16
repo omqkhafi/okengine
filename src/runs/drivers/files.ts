@@ -192,8 +192,7 @@ export const filesRunsDriver: RunsDriver = {
         return [];
       }
       const scan = await parquetUnionSql(session.conn, paths);
-      await session.conn.run(`DROP VIEW IF EXISTS runs`);
-      await session.conn.run(`CREATE VIEW runs AS ${scan}`);
+      await session.conn.run(`CREATE OR REPLACE VIEW runs AS ${scan}`);
       viewReady = true;
       return paths;
     }

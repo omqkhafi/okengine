@@ -135,13 +135,13 @@ host port bind. Then pick one:
 | Choice                          | Best for                                  | How routing works                                                  |
 | ------------------------------- | ----------------------------------------- | ------------------------------------------------------------------ |
 | **Caddy** (`caddy:2-alpine`)    | Single instance, simplest automatic HTTPS | Generated `Caddyfile` → `reverse_proxy app:6530`                   |
-| **Traefik** (`traefik:v3.3`)    | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
-| **nginx** (`nginx:1.27-alpine`) | Static HTTP edge; TLS elsewhere           | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
+| **Traefik** (`traefik:v3.7`)    | `docker compose up --scale app=N`         | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **nginx** (`nginx:1.31-alpine`) | Static HTTP edge; TLS elsewhere           | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
 
 ```typescript title="oke.config.ts"
 images: {
   // …
-  proxy: "caddy:2-alpine", // or "traefik:v3.3" / "nginx:1.27-alpine"
+  proxy: "caddy:2-alpine", // or "traefik:v3.7" / "nginx:1.31-alpine"
 },
 ```
 

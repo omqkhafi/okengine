@@ -10,10 +10,11 @@ import {
   useReactFlow,
   ReactFlowProvider,
 } from "@xyflow/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
+import { EXPLORER_STRIP_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { useTheme } from "@/components/theme-provider";
 import type { OkeElement } from "@/lib/element-icons.ts";
 import {
@@ -47,6 +48,8 @@ interface FlowGraphProps {
   readonly onNodeClick?: (nodeId: string) => void;
   /** Called when the empty canvas is clicked. */
   readonly onPaneClick?: () => void;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 function neighborhoodFocusOf(filter: GraphFilter | null): NeighborhoodFocus | null {
@@ -246,11 +249,20 @@ function minimapNodeStroke(node: FlowGraphNode): string {
  * @param props - Manifest, runs, highlight sets, follow-camera flag
  */
 export function FlowGraph(props: FlowGraphProps) {
+  const { leading, ...canvas } = props;
   return (
-    <div className="h-full w-full" data-slot="flow-graph">
-      <ReactFlowProvider>
-        <Canvas {...props} />
-      </ReactFlowProvider>
+    <div className="flex h-full min-h-0 w-full flex-col" data-slot="flow-graph">
+      {leading ? (
+        <header className={EXPLORER_STRIP_CLASS}>
+          {leading}
+          <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+        </header>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        <ReactFlowProvider>
+          <Canvas {...canvas} />
+        </ReactFlowProvider>
+      </div>
     </div>
   );
 }

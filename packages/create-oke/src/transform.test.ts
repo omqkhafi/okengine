@@ -72,7 +72,7 @@ describe("applyCreateAnswers images", () => {
 
   test("index meilisearch pins store.index image without comment leakage", () => {
     const next = applyCreateAnswers(templateConfig(), defaultsWithIndex("meilisearch"));
-    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bindex: "getmeili\/meilisearch:v1.37"/s);
+    expect(next).toMatch(/images:\s*\{\s*store:\s*\{[^}]*\bindex: "getmeili\/meilisearch:v1.53"/s);
     expect(next).not.toMatch(/images:\s*\{[^}]*\btest:\s*"memory"/s);
   });
 });
@@ -150,7 +150,7 @@ describe("upsertAiDrivers", () => {
     expect(config.drivers?.ai).toEqual(ollamaPins);
     expect(config.drivers?.channel?.ai).toBeUndefined();
     // Sparse templates omit drivers.channel — images.channel stays a string pin.
-    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.22.3");
+    expect(config.images?.channel?.email).toBe("axllent/mailpit:v1.30.7");
     expect(config.images?.ai).toBeUndefined();
   });
 
@@ -188,7 +188,7 @@ describe("upsertAiDrivers", () => {
         prod: "openai-compatible",
       });
       expect(config.drivers?.channel?.ai, id).toBeUndefined();
-      expect(config.images?.ai, id).toBe("ghcr.io/ggml-org/llama.cpp:server-b10290");
+      expect(config.images?.ai, id).toBe("ghcr.io/ggml-org/llama.cpp:server-b10450");
     }
   });
 });

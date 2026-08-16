@@ -2,7 +2,7 @@
  * Vault empty pane — only when the list has nothing to inspect.
  */
 
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 
@@ -12,6 +12,8 @@ export interface VaultOverviewProps {
   readonly hasContracts: boolean;
   readonly query: string;
   readonly onClearQuery: () => void;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -24,6 +26,7 @@ export function VaultOverview({
   hasContracts,
   query,
   onClearQuery,
+  leading,
 }: VaultOverviewProps): JSX.Element {
   if (loading) {
     return (
@@ -33,6 +36,7 @@ export function VaultOverview({
           iconClassName="border-border/70"
           title="Loading vault…"
           description="Reading contracts and posture."
+          leading={leading}
         />
       </div>
     );
@@ -44,6 +48,7 @@ export function VaultOverview({
         icon={ELEMENT_ICONS.vault.icon}
         iconClassName="border-border/70"
         title={hasContracts ? "No contracts match" : "No contracts"}
+        leading={leading}
         description={
           hasContracts ? (
             <>

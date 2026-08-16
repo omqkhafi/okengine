@@ -26,6 +26,8 @@ import {
   EXPLORER_SPLIT,
   EXPLORER_TOOLBAR_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
+import { ExplorerStartToggle } from "@/components/explorer/explorer-start-toggle.tsx";
+import { useExplorerStartPanel } from "@/components/explorer/use-explorer-start-panel.ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +66,16 @@ export function VaultPage(): JSX.Element {
   const list = useVaultList();
   const qc = useQueryClient();
   const { query, selectedName, action, setQuery, setSelectedName, setAction } = useVaultSelection();
+  const start = useExplorerStartPanel();
+  const startToggle = (
+    <ExplorerStartToggle
+      open={start.open}
+      onToggle={start.toggle}
+      noun="vault"
+      controlsId="vault-list"
+      dataSlot="vault-list-toggle"
+    />
+  );
   const [now] = useState(() => Date.now());
   const [securityOpen, setSecurityOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
@@ -223,11 +235,19 @@ export function VaultPage(): JSX.Element {
     <div className={EXPLORER_PAGE_CLASS} data-slot="vault-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
+          panelRef={start.panelRef}
+          collapsible
+          collapsedSize={0}
           defaultSize={EXPLORER_SPLIT.start.defaultSize}
           minSize={EXPLORER_SPLIT.start.minSize}
+          onResize={start.onResize}
           className="min-h-0 overflow-hidden"
         >
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div
+            id="vault-list"
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+            data-slot="vault-list"
+          >
             <div className={cn(EXPLORER_TOOLBAR_CLASS, "relative z-20 pr-1.5")}>
               <VaultSearch query={query} secrets={secrets} onQueryChange={setQuery} />
               <ToolbarTip label="Add secret or config" className="flex self-stretch">
@@ -317,7 +337,7 @@ export function VaultPage(): JSX.Element {
             />
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        {start.open ? <ResizableHandle withHandle /> : null}
         <ResizablePanel
           defaultSize={EXPLORER_SPLIT.end.defaultSize}
           minSize={EXPLORER_SPLIT.end.minSize}
@@ -332,6 +352,7 @@ export function VaultPage(): JSX.Element {
               onSet={() => setAction("set")}
               onRotate={() => setAction("rotate")}
               onQueryChange={setQuery}
+              leading={startToggle}
             />
           ) : (
             <VaultOverview
@@ -339,6 +360,7 @@ export function VaultPage(): JSX.Element {
               hasContracts={secrets.length > 0}
               query={query}
               onClearQuery={() => setQuery("")}
+              leading={startToggle}
             />
           )}
         </ResizablePanel>

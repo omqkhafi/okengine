@@ -3,12 +3,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert02Icon,
-  FilterHorizontalIcon,
-  Menu01Icon,
-  Timer01Icon,
-} from "@hugeicons/core-free-icons";
+import { Alert02Icon, FilterHorizontalIcon, Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
@@ -28,14 +23,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils";
@@ -50,32 +37,12 @@ import {
 } from "./graph-filter.ts";
 import {
   DEFAULT_TRACES_FILTERS,
-  DURATION_THRESHOLD_OPTIONS,
-  durationThresholdLabel,
   filterScopedRuns,
-  type TracesDurationThresholdMs,
   type TracesFilters,
   type TracesStatusFilter,
 } from "./filter-runs.ts";
-import { durationThresholdDotClass, durationTone, durationToneClass } from "./duration-tone.ts";
 import { TraceDetailSheet } from "./trace-detail-sheet.tsx";
 import { TraceRow } from "./trace-row.tsx";
-
-/** Select item values for {@link DURATION_THRESHOLD_OPTIONS} (`any` = no threshold). */
-const DURATION_SELECT_ITEMS = DURATION_THRESHOLD_OPTIONS.map((ms) => ({
-  value: ms === null ? "any" : String(ms),
-  label: durationThresholdLabel(ms),
-}));
-
-/**
- * Parse a duration-select value back to a threshold preset.
- *
- * @param raw - Select value string
- */
-function parseDurationSelectValue(raw: string): TracesDurationThresholdMs {
-  if (raw === "any") return null;
-  return Number(raw) as TracesDurationThresholdMs;
-}
 
 const STATUS_FILTERS = [
   { value: "all" as const, label: "All", icon: Menu01Icon },
@@ -149,10 +116,6 @@ export function TracesPane({
 
   const setStatus = (status: TracesStatusFilter) => {
     setFilters((prev) => ({ ...prev, status }));
-  };
-
-  const setMinDuration = (minDurationMs: TracesDurationThresholdMs) => {
-    setFilters((prev) => ({ ...prev, minDurationMs }));
   };
 
   const setAdvanced = (advanced: DimensionQuery) => {
@@ -256,78 +219,6 @@ export function TracesPane({
                 );
               })}
             </div>
-            <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
-            <div className="min-w-0 flex-1">
-              <Select
-                items={DURATION_SELECT_ITEMS}
-                value={filters.minDurationMs === null ? "any" : String(filters.minDurationMs)}
-                onValueChange={(value) => {
-                  if (value == null || Array.isArray(value)) return;
-                  setMinDuration(parseDurationSelectValue(String(value)));
-                }}
-              >
-                <SelectTrigger
-                  aria-label="Duration threshold"
-                  size="sm"
-                  flat
-                  className={cn(
-                    EXPLORER_STRIP_TOKEN_CLASS,
-                    "h-full w-full justify-start py-0 pr-2 pl-2 hover:bg-muted/50! [&_svg:not([class*='size-'])]:size-3",
-                    filters.minDurationMs === null
-                      ? EXPLORER_STRIP_TOKEN_IDLE_CLASS
-                      : durationToneClass(durationTone(filters.minDurationMs)),
-                  )}
-                >
-                  <HugeiconsIcon
-                    icon={Timer01Icon}
-                    className={cn(
-                      "size-3 shrink-0",
-                      filters.minDurationMs === null
-                        ? "text-muted-foreground"
-                        : durationToneClass(durationTone(filters.minDurationMs)),
-                    )}
-                    aria-hidden
-                  />
-                  <SelectValue>
-                    {(raw) => {
-                      const ms = parseDurationSelectValue(String(raw ?? "any"));
-                      return (
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "size-1.5 shrink-0 rounded-full",
-                              durationThresholdDotClass(ms),
-                            )}
-                            aria-hidden
-                          />
-                          <span className="truncate">{durationThresholdLabel(ms)}</span>
-                        </span>
-                      );
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent align="start" alignItemWithTrigger={false} className="min-w-42">
-                  <SelectGroup>
-                    {DURATION_THRESHOLD_OPTIONS.map((ms) => (
-                      <SelectItem
-                        key={ms === null ? "any" : ms}
-                        value={ms === null ? "any" : String(ms)}
-                        className="text-[10px]"
-                      >
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            durationThresholdDotClass(ms),
-                          )}
-                          aria-hidden
-                        />
-                        {durationThresholdLabel(ms)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         ) : null}
 
@@ -369,8 +260,7 @@ export function TracesPane({
             <EmptyHeader>
               <EmptyTitle>No matching traces</EmptyTitle>
               <EmptyDescription>
-                Nothing in this list matches the current search, status, duration, or advanced
-                filters.
+                Nothing in this list matches the current search, status, or advanced filters.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

@@ -4,9 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
-  DURATION_THRESHOLD_OPTIONS,
   durationClassName,
-  durationThresholdDotClass,
   durationTone,
   durationToneChipClass,
   durationToneDotClass,
@@ -56,12 +54,6 @@ describe("durationClassName", () => {
   });
 });
 
-describe("DURATION_THRESHOLD_OPTIONS", () => {
-  test("includes expanded presets from 10ms through 5s", () => {
-    expect(DURATION_THRESHOLD_OPTIONS).toEqual([null, 10, 25, 50, 100, 250, 500, 1_000, 5_000]);
-  });
-});
-
 describe("durationToneDotClass", () => {
   test("maps tones to solid fills", () => {
     expect(durationToneDotClass("fast")).toContain("bg-emerald");
@@ -75,13 +67,5 @@ describe("durationToneChipClass", () => {
     expect(durationToneChipClass("fast")).toContain("emerald");
     expect(durationToneChipClass("elevated")).toContain("yellow");
     expect(durationToneChipClass("critical")).toContain("rose");
-  });
-});
-
-describe("durationThresholdDotClass", () => {
-  test("neutral for any; ladder for thresholds", () => {
-    expect(durationThresholdDotClass(null)).toContain("muted-foreground");
-    expect(durationThresholdDotClass(10)).toContain("bg-emerald");
-    expect(durationThresholdDotClass(5_000)).toContain("bg-rose");
   });
 });

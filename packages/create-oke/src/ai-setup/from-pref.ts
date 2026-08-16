@@ -3,7 +3,7 @@
  */
 
 import type { CreateAiPref } from "../create-defaults.ts";
-import { LLAMA_CPP_IMAGE } from "../drivers-catalog.ts";
+import { LLAMA_CPP_IMAGE, OLLAMA_IMAGE, SGLANG_IMAGE, VLLM_IMAGE } from "../drivers-catalog.ts";
 import type { AiSetupApplyInput } from "./apply.ts";
 
 /**
@@ -81,7 +81,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       chatModel: "gemma4:e4b",
       visionModel: "qwen3-vl:4b",
       embedModel: "nomic-embed-text",
-      image: "ollama/ollama:0.32.6",
+      image: OLLAMA_IMAGE,
     };
   }
   if (provider === "vllm") {
@@ -91,7 +91,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       chatModel: "Qwen/Qwen3-0.6B",
       visionModel: null,
       embedModel: null,
-      image: "vllm/vllm-openai:v0.26.0",
+      image: VLLM_IMAGE,
     };
   }
   if (provider === "sglang") {
@@ -101,7 +101,7 @@ export function nonInteractiveAiApply(provider: string): AiSetupApplyInput {
       chatModel: "Qwen/Qwen3-0.6B",
       visionModel: null,
       embedModel: null,
-      image: "lmsysorg/sglang:v0.5.16-runtime",
+      image: SGLANG_IMAGE,
     };
   }
   if (provider === "anthropic") {

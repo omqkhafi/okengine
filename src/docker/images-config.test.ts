@@ -60,42 +60,42 @@ describe("ImagesConfig nesting — recipe coverage", () => {
       },
       // store.files / store.index
       {
-        images: { store: { files: "rustfs/rustfs:1.0.0-beta.11" } },
+        images: { store: { files: "rustfs/rustfs:1.0.0-rc.2" } },
         role: "store.files",
-        image: "rustfs/rustfs:1.0.0-beta.11",
+        image: "rustfs/rustfs:1.0.0-rc.2",
       },
       {
-        images: { store: { index: "getmeili/meilisearch:v1.37" } },
+        images: { store: { index: "getmeili/meilisearch:v1.53" } },
         role: "store.index",
-        image: "getmeili/meilisearch:v1.37",
+        image: "getmeili/meilisearch:v1.53",
       },
       // channel.email
       {
-        images: { channel: { email: "axllent/mailpit:v1.22.3" } },
+        images: { channel: { email: "axllent/mailpit:v1.30.7" } },
         role: "channel.email",
-        image: "axllent/mailpit:v1.22.3",
+        image: "axllent/mailpit:v1.30.7",
       },
       // flat roles — no driver counterpart in DriversConfig
       {
-        images: { ai: "ghcr.io/ggml-org/llama.cpp:server-b10290" },
+        images: { ai: "ghcr.io/ggml-org/llama.cpp:server-b10450" },
         role: "ai",
-        image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+        image: "ghcr.io/ggml-org/llama.cpp:server-b10450",
       },
-      { images: { ai: "vllm/vllm-openai:v0.26.0" }, role: "ai", image: "vllm/vllm-openai:v0.26.0" },
+      { images: { ai: "vllm/vllm-openai:v0.27.1" }, role: "ai", image: "vllm/vllm-openai:v0.27.1" },
       {
-        images: { ai: "lmsysorg/sglang:v0.5.16-runtime" },
+        images: { ai: "lmsysorg/sglang:v0.5.17-runtime" },
         role: "ai",
-        image: "lmsysorg/sglang:v0.5.16-runtime",
+        image: "lmsysorg/sglang:v0.5.17-runtime",
       },
-      { images: { ai: "ollama/ollama:0.32.6" }, role: "ai", image: "ollama/ollama:0.32.6" },
+      { images: { ai: "ollama/ollama:0.32.13" }, role: "ai", image: "ollama/ollama:0.32.13" },
       {
-        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51" },
+        images: { pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53" },
         role: "pgdog",
-        image: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+        image: "ghcr.io/pgdogdev/pgdog:v0.1.53",
       },
       { images: { proxy: "caddy:2-alpine" }, role: "proxy", image: "caddy:2-alpine" },
       { images: { proxy: "traefik:v3.1" }, role: "proxy", image: "traefik:v3.1" },
-      { images: { proxy: "nginx:1.27-alpine" }, role: "proxy", image: "nginx:1.27-alpine" },
+      { images: { proxy: "nginx:1.31-alpine" }, role: "proxy", image: "nginx:1.31-alpine" },
     ];
 
     const matchedIds = new Set<string>();
@@ -114,22 +114,22 @@ describe("ImagesConfig nesting — compose output parity", () => {
   test("nested config derives byte-identical output to its flat-shape equivalent", () => {
     const flatImages: Readonly<Record<string, string>> = {
       "store.sql": "postgres:18-alpine",
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
       "store.kv": "redis:8-alpine",
-      "store.files": "rustfs/rustfs:1.0.0-beta.11",
-      "store.index": "getmeili/meilisearch:v1.37",
-      "channel.email": "axllent/mailpit:v1.22.3",
+      "store.files": "rustfs/rustfs:1.0.0-rc.2",
+      "store.index": "getmeili/meilisearch:v1.53",
+      "channel.email": "axllent/mailpit:v1.30.7",
     };
 
     const nestedImages: ImagesConfig = {
       store: {
         sql: "postgres:18-alpine",
         kv: "redis:8-alpine",
-        files: "rustfs/rustfs:1.0.0-beta.11",
-        index: "getmeili/meilisearch:v1.37",
+        files: "rustfs/rustfs:1.0.0-rc.2",
+        index: "getmeili/meilisearch:v1.53",
       },
-      channel: { email: "axllent/mailpit:v1.22.3" },
-      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      channel: { email: "axllent/mailpit:v1.30.7" },
+      pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
     };
 
     // Same nested→flat set, written in a different field order — proves the

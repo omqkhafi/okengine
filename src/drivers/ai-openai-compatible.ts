@@ -102,7 +102,7 @@ export async function openOpenaiCompatible(options: AiOpenOptions = {}): Promise
       if (opts.temperature !== undefined) body.temperature = opts.temperature;
       if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
       if (opts.responseFormat !== undefined) {
-        body.response_format = opts.responseFormat;
+        body.response_format = wireOpenaiResponseFormat(opts.responseFormat);
       }
       if (opts.tools !== undefined && opts.tools.length > 0) {
         body.tools = opts.tools.map((t) => ({
@@ -198,6 +198,24 @@ export const openaiCompatibleAiDriver: AiDriver = {
   id: "openai-compatible",
   open: openOpenaiCompatible,
 };
+
+/**
+ * llama.cpp granite empties `content` on `json_schema`; `json_object` plus
+ * the ask-time schema instruction is the portable contract.
+ *
+ * @param responseFormat - Runtime format (may be json_schema)
+ */
+function wireOpenaiResponseFormat(responseFormat: unknown): unknown {
+  if (
+    responseFormat &&
+    typeof responseFormat === "object" &&
+    "type" in responseFormat &&
+    (responseFormat as { type?: unknown }).type === "json_schema"
+  ) {
+    return { type: "json_object" };
+  }
+  return responseFormat;
+}
 
 function serializeMessage(m: AiCompleteOptions["messages"][number]): Record<string, unknown> {
   const out: Record<string, unknown> = {

@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { mockAiDriver } from "../../drivers/ai-mock.ts";
 import { ollamaAiDriver } from "../../drivers/ai-ollama.ts";
-import { aiDriverFor, aiUrlFor, bindAi, resolveAiDriverId } from "./ai.ts";
+import { aiDriverFor, aiUrlFor, bindAi, openDefaultsFor, resolveAiDriverId } from "./ai.ts";
 
 describe("ai boot binder", () => {
   test("aiDriverFor maps protocol ids; unknown / reserved throw", () => {
@@ -28,6 +28,19 @@ describe("ai boot binder", () => {
     } finally {
       if (prev === undefined) delete process.env.OKE_AI_DRIVER;
       else process.env.OKE_AI_DRIVER = prev;
+    }
+  });
+
+  test("openDefaultsFor openai-compatible fails loud in docker without OKE_AI_URL", () => {
+    const prevUrl = process.env.OKE_AI_URL;
+    const prevBase = process.env.OPENAI_BASE_URL;
+    delete process.env.OKE_AI_URL;
+    delete process.env.OPENAI_BASE_URL;
+    try {
+      expect(() => openDefaultsFor("openai-compatible", true)).toThrow(/OKE_AI_URL/);
+    } finally {
+      if (prevUrl !== undefined) process.env.OKE_AI_URL = prevUrl;
+      if (prevBase !== undefined) process.env.OPENAI_BASE_URL = prevBase;
     }
   });
 

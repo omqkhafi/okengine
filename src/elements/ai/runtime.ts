@@ -22,6 +22,8 @@ import {
 import {
   AiSchemaValidationError,
   coerceModelObject,
+  promptOutJsonSchema,
+  promptResponseFormat,
   validatePromptOut,
   type AiSchemaMismatch,
 } from "./schema.ts";
@@ -292,6 +294,19 @@ export function promptContentFromInput(input: unknown): string {
   const masked = maskRedactedDeep(input);
   if (typeof masked === "string") return masked;
   return JSON.stringify(masked ?? {});
+}
+
+/**
+ * User message plus a JSON-only contract when `out` is declared.
+ *
+ * @param input - Ask input
+ * @param out - Prompt output schema
+ */
+function askUserContent(input: unknown, out: unknown): string {
+  const base = promptContentFromInput(input);
+  const schema = promptOutJsonSchema(out);
+  if (!schema) return base;
+  return `${base}\nReply with JSON only matching this schema: ${JSON.stringify(schema)}`;
 }
 
 /**
@@ -583,7 +598,8 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
       let lastSchema: AiSchemaMismatch | undefined;
       let totalCost = 0;
       const totalTokens: { inputTokens?: number; outputTokens?: number } = {};
-      const userContent = promptContentFromInput(input);
+      const userContent = askUserContent(input, decl.out);
+      const responseFormat = promptResponseFormat(prompt, decl.out);
 
       const pushJournal = (entry: Omit<AiJournalEntry, "inputTokens" | "outputTokens">): void => {
         journal.push({
@@ -611,7 +627,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
                 tools,
                 maxSteps: opts?.maxSteps ?? AI_DEFAULT_MAX_STEPS,
                 agentLabel: prompt,
-                responseFormat: decl.out,
+                ...(responseFormat !== undefined ? { responseFormat } : {}),
                 callTool: opts?.callTool,
                 ...(signal !== undefined ? { signal } : {}),
               });
@@ -629,7 +645,7 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
               const result = await client.complete({
                 model: wireModel(modelName, client),
                 messages: [{ role: "user", content: userContent }],
-                responseFormat: decl.out,
+                ...(responseFormat !== undefined ? { responseFormat } : {}),
                 ...(signal !== undefined ? { signal } : {}),
               });
               attemptCost = result.usage?.cost ?? 0;

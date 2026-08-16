@@ -1,6 +1,7 @@
 /**
  * Setup gate — claim when open; real login when closed.
- * Claim success navigates to `?next=` when present, otherwise `/overview`.
+ * First-admin success stays on this plate (Created) then enters the shell —
+ * setup closing must not flash Sign in.
  */
 
 import { useForm } from "@tanstack/react-form";
@@ -17,6 +18,7 @@ import {
 } from "../../client.ts";
 import { goAfterAuth, type AfterAuthNavigate } from "@/features/auth/auth-redirect.ts";
 import { LoginForm } from "@/features/auth/login-form";
+import { authGateSurface } from "@/features/setup/auth-gate.ts";
 import {
   AUTH_SUBMIT_SUCCESS_MS,
   AuthCard,
@@ -114,7 +116,10 @@ export function ClaimPage() {
     onSuccess: (data) => {
       applySession(data);
       setFormError(null);
-      void qc.invalidateQueries({ queryKey: ["console.setup.status"] });
+      qc.setQueryData(["console.setup.status"], {
+        setupClosed: true,
+        claimRequired: false,
+      });
       window.setTimeout(() => {
         goAfterAuth(navigate as AfterAuthNavigate, search.next);
       }, AUTH_SUBMIT_SUCCESS_MS);
@@ -166,7 +171,12 @@ export function ClaimPage() {
     );
   }
 
-  if (status.data?.setupClosed) {
+  if (
+    authGateSurface({
+      setupClosed: status.data?.setupClosed === true,
+      claimSucceeded: claim.isSuccess,
+    }) === "login"
+  ) {
     return (
       <SetupFrame>
         <LoginForm />

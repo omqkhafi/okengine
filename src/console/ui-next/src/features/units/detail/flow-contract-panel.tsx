@@ -1,8 +1,8 @@
 /**
- * Units contract briefing — identity, activity, effects, gates, errors, schemas, validation.
+ * Flows contract briefing — identity, activity, effects, gates, errors, schemas, validation.
  */
 
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 import { Radio01Icon, SecurityCheckIcon, Timer01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
@@ -39,16 +39,23 @@ import { ValidationSection } from "./validation-section.tsx";
 export interface FlowContractPanelProps {
   readonly row: UnitFlowRow;
   readonly manifest: Manifest | null;
-  /** Live runs buffer (Units live hookup); may be undefined while loading. */
+  /** Live runs buffer (Flows live hookup); may be undefined while loading. */
   readonly runs?: readonly RunRow[];
+  /** Start-panel collapse control for the Flows catalog. */
+  readonly leading?: ReactNode;
 }
 
 /**
  * Top inspector pane for a selected flow.
  *
- * @param props - Flow row + Manifest + optional runs buffer
+ * @param props - Flow row + Manifest + optional runs buffer + tree toggle
  */
-export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProps): JSX.Element {
+export function FlowContractPanel({
+  row,
+  manifest,
+  runs,
+  leading,
+}: FlowContractPanelProps): JSX.Element {
   const kind = flowTriggerKind(row.flow.trigger);
   const trigger = flowTriggerSpec(row.flow.trigger);
   const meta = traceRequestMeta(
@@ -82,6 +89,7 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
     >
       <DetailHeader
         dataSlot="endpoint-header"
+        leading={leading}
         icon={
           <span data-slot="trigger-kind-icon" data-kind={kind}>
             <HugeiconsIcon icon={trigger.icon} className="size-4" />

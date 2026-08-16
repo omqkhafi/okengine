@@ -518,6 +518,16 @@ needed).
   (`StoreKvStatsServerWideGap`). SLOWLOG args collapse until reveal
   (`StoreKvStatsSlowlogArgsGap`). No `MONITOR`, no invented hot-keys.
 
+- Console explorer pages (Overview, Flows, Store, Observability,
+  Vault) share a start-panel collapse / expand control on the
+  inspector header.
+
+
+- `oke-images` skill (`.agents/skills/oke-images/`) — probe
+  registries and bump Compose pins in catalog, recipes,
+  templates, Keel, and docs without inventing tags.
+
+
 ### 💥 Breaking Changes
 
 - Global password policy defaults are now minLength **8** with uppercase, lowercase, number, and
@@ -958,6 +968,41 @@ needed).
   so Call API asks reach `GET /console/ai`. Child-process HTTP asks
   still have a separate journal (no ingest bridge).
 
+- Console Store Query / KV performance headers use the shared
+  identity strip: one baseline for title, ref, and actions. The
+  Index Advisor pin note lives in the limitation banner, not the
+  h-10 chrome.
+
+- Console Store Schema find is the explorer search field
+  (flush, no magnifying-glass overlay). Table count stays
+  tabular and unclipped.
+
+- Console Store SQL / KV Query identity uses the shared
+  header strip: one baseline for title, ref, and statement
+  hint. Store / tenant pickers are flush tokens, not pills.
+
+- Console Trace / Flows Gates heading matches Waterfall:
+  title and count sit together on the strip, not
+  justify-between.
+
+- Console Call API Response (and Body / Path params
+  chapters) use the shared explorer strip: 0.08em
+  heading, ink status, flush JSON rail — no padded well
+  or status chip.
+
+- Console Call API expanded Response sheet header is the
+  same strip: stretch copy / close, hairline before close,
+  no absolute icon-sm well or pr-12 dodge.
+
+
+- Default Compose image pins: RustFS `1.0.0-rc.2`, Mailpit
+  `v1.30.7`, PgDog `v0.1.53`, Meilisearch `v1.53`, llama.cpp
+  `server-b10450`, Ollama `0.32.13`, vLLM `v0.27.1`, SGLang
+  `v0.5.17-runtime`, Traefik `v3.7`, nginx `1.31-alpine`.
+  Floating tags (`postgres:18-alpine`, `redis:8-alpine`,
+  `caddy:2-alpine`) stay.
+
+
 ### 🔥 Removed
 
 - `store.resource({ unit })` — unit comes from `flow("notes.list")`
@@ -965,7 +1010,27 @@ needed).
 
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
+- Console Traces duration-threshold select (Any / >10ms…>5s). Status
+  (All / Errors) and Advanced (`duration > 100ms`) remain.
+
 ### 🐛 Fixed
+
+- OKE1005 no longer fires when a flow asks a prompt by name
+  and the Manifest stamped `effects.asks` as `name@version`
+  (compiler pin). `documents.summarize` → `document-summary`
+  matches `document-summary@1`. Distinct pins still deny.
+
+- `fx.ask` now converts Zod / shorthand `out` to JSON Schema
+  (validate + `response_format`). Mock fills that shape
+  instead of `{ ok, echo }`, so Call API
+  `documents.summarize` returns a summary instead of
+  generic Unavailable. Docker openai-compatible fails
+  loud without `OKE_AI_URL`. Concurrent `/console/ai`
+  no longer 500s on a duplicate DuckDB `runs` view.
+
+- Console Gates list no longer 500s on apps that use
+  `gate.public`. Reconstructing the Manifest used
+  `gate.policy("public")`, which is reserved.
 
 - Tier-1 cache hits record the real `computed:…` lookup on
   the effect ledger. Trace Waterfall shows that cache read
@@ -1285,6 +1350,11 @@ needed).
 - Console fields stay transparent when the browser autofills.
   `html` uses Tailwind `scheme-light` / `scheme-dark`; autofill
   ink follows `--foreground` with no UA wash.
+
+- First-admin claim no longer flashes Sign in before
+  Overview. Setup closes the instant the operator exists;
+  the gate keeps the Created plate and uses the new
+  session instead of swapping to login.
 
 ### 🔒 Security
 

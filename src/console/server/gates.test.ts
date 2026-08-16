@@ -9,6 +9,7 @@ import { createGateRuntime, gate, type GateRuntime } from "../../elements/gate.t
 import type { Manifest } from "../../manifest/types.ts";
 import {
   createDefaultGateAuthStores,
+  declsFromManifest,
   isApplicationScope,
   projectGatesPanel,
   simulateGates,
@@ -150,6 +151,31 @@ describe("projectGatesPanel", () => {
     });
     expect(projection.audit.orphanPermissions).toContain("booking:create");
     expect(projection.audit.orphanPermissions).not.toContain("member");
+  });
+});
+
+describe("declsFromManifest", () => {
+  test("reconstructs gate.public instead of calling reserved gate.policy", () => {
+    const catalogued = declsFromManifest({
+      oke: "1.0",
+      app: "public-catalog",
+      flows: {
+        "health.check": { plane: "user", gates: ["public"] },
+      },
+      gates: {
+        public: { kind: "policy" },
+      },
+    });
+    expect(catalogued.find((d) => d.name === "public")).toBe(gate.public);
+
+    const flowOnly = declsFromManifest({
+      oke: "1.0",
+      app: "public-flow",
+      flows: {
+        "health.check": { plane: "user", gates: ["public"] },
+      },
+    });
+    expect(flowOnly.find((d) => d.name === "public")).toBe(gate.public);
   });
 });
 
@@ -320,5 +346,38 @@ describe("simulateGates — evaluate only", () => {
     } finally {
       await close();
     }
+  });
+
+  test("public flow reconstructs from Manifest without a live runtime", async () => {
+    const auth = createDefaultGateAuthStores();
+    const result = await simulateGates({
+      flowId: "health.check",
+      principal: { kind: "user", id: "user_demo" },
+      manifest: {
+        oke: "1.0",
+        app: "public-sim",
+        flows: {
+          "health.check": { plane: "user", gates: ["public"] },
+        },
+        gates: {
+          public: { kind: "policy" },
+        },
+      },
+      gateRuntime: null,
+      roles: auth.roles,
+      apiKeys: auth.apiKeys,
+      identities: [
+        {
+          id: "user_demo",
+          email: "demo@example.com",
+          name: "Demo",
+          status: "active",
+          scopes: ["member"],
+        },
+      ],
+      now: () => 5_000,
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.evaluations.map((e) => e.name)).toEqual(["public"]);
   });
 });

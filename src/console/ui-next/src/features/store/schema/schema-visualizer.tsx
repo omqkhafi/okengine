@@ -2,7 +2,7 @@
  * SQL schema visualizer — table cards + declared / inferred FK edges.
  */
 
-import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX, type ReactNode } from "react";
 import {
   Background,
   Controls,
@@ -13,14 +13,18 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { ColorsIcon, Copy01Icon, Search01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { ColorsIcon, Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import "@xyflow/react/dist/style.css";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { StoreListStore } from "@/client.ts";
-import { EXPLORER_STRIP_CLASS } from "@/components/explorer/explorer-chrome.ts";
-import { Input } from "@/components/ui/input";
-import { SHEET_SEARCH, SheetTextToggle } from "@/components/ui/sheet-form.tsx";
+import {
+  EXPLORER_COUNT_CLASS,
+  EXPLORER_TOOLBAR_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
+import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
+import { SheetTextToggle } from "@/components/ui/sheet-form.tsx";
 import { useTheme } from "@/components/theme-provider";
 import { useReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils.ts";
@@ -45,6 +49,8 @@ export interface SchemaVisualizerProps {
   readonly manifest: Manifest | null;
   readonly selectedEffectRef: string | null;
   readonly onSelectTable: (effectRef: string) => void;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -70,6 +76,7 @@ function Canvas({
   manifest,
   selectedEffectRef,
   onSelectTable,
+  leading,
 }: SchemaVisualizerProps): JSX.Element {
   const { fitView } = useReactFlow();
   const { theme } = useTheme();
@@ -121,30 +128,27 @@ function Canvas({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className={EXPLORER_STRIP_CLASS}>
-        <span className="flex items-center px-3 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          Schema
+      <div className={EXPLORER_TOOLBAR_CLASS} data-slot="store-schema-toolbar">
+        {leading ? (
+          <>
+            {leading}
+            <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+          </>
+        ) : null}
+        <span className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Schema</span>
+        <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+        <ExplorerSearch
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Find table…"
+          aria-label="Find table"
+          data-slot="store-schema-find"
+        />
+        <span className={cn(EXPLORER_COUNT_CLASS, "flex items-center px-2")}>
+          {tables.length} {tables.length === 1 ? "table" : "tables"}
         </span>
-        <label className="relative min-w-0 flex-1">
-          <HugeiconsIcon
-            icon={Search01Icon}
-            className="pointer-events-none absolute top-1/2 left-0 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find table…"
-            aria-label="Find table"
-            flat
-            className={cn(SHEET_SEARCH, "pl-5")}
-            data-slot="store-schema-find"
-          />
-        </label>
-        <span className="flex items-center px-2 tabular-nums text-[10px] text-muted-foreground">
-          {tables.length} table{tables.length === 1 ? "" : "s"}
-        </span>
-        <div className="ml-auto flex items-stretch">
+        <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+        <div className="flex shrink-0 items-stretch">
           <SheetTextToggle
             active={colorize}
             aria-pressed={colorize}

@@ -75,12 +75,13 @@ export const RUNS_RESOURCE = "runs";
 
 export type { FxRetryOptions, FxThunk } from "./concurrency.ts";
 
-/** Named ref: plain string or `{ name }` element handle. */
-export type NamedRef = string | { readonly name: string };
+/** Named ref: plain string or `{ name }` element handle (optional pin). */
+export type NamedRef = string | { readonly name: string; readonly version?: number };
 
-/** Resolve a {@link NamedRef} to its string id. */
+/** Resolve a {@link NamedRef} to its string id (`name@version` when pinned). */
 export function resolveName(ref: NamedRef): string {
-  return typeof ref === "string" ? ref : ref.name;
+  if (typeof ref === "string") return ref;
+  return ref.version !== undefined ? `${ref.name}@${ref.version}` : ref.name;
 }
 
 /** Resolve a store argument to a `facet:name` resource ref. */

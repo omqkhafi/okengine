@@ -93,11 +93,11 @@ export function createCapabilityToken(flow: string, declared?: Effects): Capabil
     declared: effects,
     allows(kind: EffectKind, resource: string): boolean {
       if (open) return true;
-      return sets[kind].has(resource);
+      return allowsResource(kind, sets[kind], resource);
     },
     assert(kind: EffectKind, resource: string): void {
       if (open) return;
-      if (sets[kind].has(resource)) return;
+      if (allowsResource(kind, sets[kind], resource)) return;
       throwOke(UNDECLARED_KEY[kind], { flow, resource });
     },
   };
@@ -110,4 +110,39 @@ export function createCapabilityToken(flow: string, declared?: Effects): Capabil
  */
 export function effectsFieldOf(kind: EffectKind): keyof Effects {
   return EFFECTS_FIELD[kind];
+}
+
+/**
+ * Exact match for every kind. `ask` also treats PromptRef pins as
+ * interchangeable: declared `name@version` allows asking `name`, and
+ * declared `name` allows asking `name@version`. Distinct pins do not match.
+ */
+function allowsResource(
+  kind: EffectKind,
+  declared: ReadonlySet<string>,
+  resource: string,
+): boolean {
+  if (declared.has(resource)) return true;
+  return kind === "ask" && promptPinAllows(declared, resource);
+}
+
+/** Prompt refs are `name` or `name@version` — either side may omit the pin. */
+function promptPinAllows(declared: ReadonlySet<string>, resource: string): boolean {
+  const asked = parsePromptPin(resource);
+  for (const entry of declared) {
+    const pin = parsePromptPin(entry);
+    if (pin.name !== asked.name) continue;
+    if (pin.version === undefined || asked.version === undefined || pin.version === asked.version) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parsePromptPin(ref: string): { readonly name: string; readonly version?: number } {
+  const at = ref.lastIndexOf("@");
+  if (at <= 0) return { name: ref };
+  const tail = ref.slice(at + 1);
+  if (!/^\d+$/.test(tail)) return { name: ref };
+  return { name: ref.slice(0, at), version: Number(tail) };
 }

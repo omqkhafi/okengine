@@ -168,7 +168,7 @@ describe("QUERY passthrough — Caddy + Traefik", () => {
             "host.docker.internal:host-gateway",
             "-v",
             `${traefikPath}:/etc/traefik/dynamic.yml:ro`,
-            "traefik:v3.3",
+            "traefik:v3.7",
             "--entrypoints.web.address=:80",
             "--providers.file.filename=/etc/traefik/dynamic.yml",
             "--ping=true",

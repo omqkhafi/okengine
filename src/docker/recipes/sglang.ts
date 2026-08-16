@@ -10,7 +10,7 @@
 import type { ImageRecipe } from "../types.ts";
 
 /** Pinned SGLang runtime image — never `latest`. */
-export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.16-runtime";
+export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.17-runtime";
 
 /** SGLang — OpenAI-compatible HTTP on 30000; GPU reservation; loopback publish. */
 export const sglang: ImageRecipe = {

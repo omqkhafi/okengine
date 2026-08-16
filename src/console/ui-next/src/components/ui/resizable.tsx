@@ -7,7 +7,7 @@
 
 import { GripVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
@@ -67,5 +67,8 @@ function ResizableHandle({
     </Separator>
   );
 }
+
+/** Imperative handle for a {@link ResizablePanel} (collapse / expand). */
+export { usePanelRef };
 
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle };

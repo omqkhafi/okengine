@@ -11,7 +11,8 @@ description: >-
 # OKE Deps — smart dependency updates
 
 Run this when updating dependencies. Prefer Bun. Never invent versions —
-query the registry, then edit ranges and install.
+query the registry, then edit ranges and install. Compose image tags are
+[oke-images](../oke-images/SKILL.md), not this skill.
 
 ## Package map
 

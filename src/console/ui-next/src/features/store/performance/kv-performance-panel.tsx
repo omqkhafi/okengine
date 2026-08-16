@@ -2,8 +2,9 @@
  * Store KV engine telemetry — INFO KPIs, commandstats, SLOWLOG (no hot-keys).
  */
 
-import { useMemo, useState, type JSX } from "react";
+import { useMemo, useState, type JSX, type ReactNode } from "react";
 import { Activity03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   STORE_KV_STATS_SERVER_WIDE_GAP,
   STORE_KV_STATS_SLOWLOG_ARGS_GAP,
@@ -11,9 +12,9 @@ import {
   type StoreKvSlowlogRow,
   type StoreListStore,
 } from "@/client.ts";
+import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
-import { EXPLORER_STRIP_CLASS, SECTION_HEAD_CLASS } from "@/components/explorer/explorer-chrome.ts";
-import { cn } from "@/lib/utils.ts";
+import { EXPLORER_STRIP_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { CallPiiButton } from "@/features/units/call/call-pii-button.tsx";
 import { QueryResults } from "../query/query-results.tsx";
 import { pickQueryStore } from "../lib/query-defaults.ts";
@@ -24,6 +25,8 @@ export interface KvPerformancePanelProps {
   readonly stores: readonly StoreListStore[];
   readonly selectedEffectRef: string | null;
   readonly tenant: string | null;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -35,6 +38,7 @@ export function KvPerformancePanel({
   stores,
   selectedEffectRef,
   tenant,
+  leading,
 }: KvPerformancePanelProps): JSX.Element {
   const store = pickQueryStore(stores, "kv", selectedEffectRef);
   const [reveal, setReveal] = useState(false);
@@ -60,6 +64,7 @@ export function KvPerformancePanel({
         icon={Activity03Icon}
         title="No KV store"
         description="KV performance reads INFO / COMMANDSTATS / SLOWLOG on a redis-backed namespace."
+        leading={leading}
       />
     );
   }
@@ -67,6 +72,7 @@ export function KvPerformancePanel({
   if (statsCode === "KvStatsUnsupported") {
     return (
       <ExplorerEmpty
+        leading={leading}
         icon={Activity03Icon}
         title="Engine telemetry unavailable"
         description={
@@ -81,18 +87,29 @@ export function KvPerformancePanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="store-kv-performance">
-      <header className={EXPLORER_STRIP_CLASS}>
-        <h2 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>KV performance</h2>
-        <span className="font-mono text-[11px] text-muted-foreground">{store.ref}</span>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {stats.data?.engine ?? "—"}
-        </span>
-        <CallPiiButton
-          piiMasked={!reveal}
-          disabled={stats.isPending}
-          onToggle={() => setReveal((v) => !v)}
-        />
-      </header>
+      <DetailHeader
+        dataSlot="store-kv-performance-header"
+        leading={leading}
+        icon={<HugeiconsIcon icon={Activity03Icon} className="size-4" />}
+        title="KV performance"
+        badge={
+          <span className="font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground">
+            {store.ref}
+          </span>
+        }
+        subtitle={
+          <span className="font-mono text-[11px] leading-none text-muted-foreground">
+            {stats.data?.engine ?? "—"}
+          </span>
+        }
+        actions={
+          <CallPiiButton
+            piiMasked={!reveal}
+            disabled={stats.isPending}
+            onToggle={() => setReveal((v) => !v)}
+          />
+        }
+      />
       <p
         className="shrink-0 border-b border-border/60 bg-amber-500/8 px-3 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200"
         data-slot="store-kv-stats-gap"

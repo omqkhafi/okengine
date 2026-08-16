@@ -16,7 +16,7 @@ import type { ImageRecipe } from "../types.ts";
 export const OLLAMA_MIN_SAFE_VERSION = "0.17.1";
 
 /** Pinned default Ollama image — verified ≥ {@link OLLAMA_MIN_SAFE_VERSION}; never `latest`. */
-export const OLLAMA_IMAGE = "ollama/ollama:0.32.6";
+export const OLLAMA_IMAGE = "ollama/ollama:0.32.13";
 
 /** Ollama local model server. API on 11434; loopback publish only. */
 export const ollama: ImageRecipe = {

@@ -2,16 +2,22 @@
  * Store SQL query performance — pg_stat_statements, lock blocking, Index Advisor.
  */
 
-import { useMemo, useState, type JSX } from "react";
+import { useMemo, useState, type JSX, type ReactNode } from "react";
 import { Activity03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   STORE_SQL_STATS_PII_GAP,
   type StoreListStore,
   type StoreSqlAdviseResult,
   type StoreSqlStatementRow,
 } from "@/client.ts";
+import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
-import { EXPLORER_STRIP_CLASS, SECTION_HEAD_CLASS } from "@/components/explorer/explorer-chrome.ts";
+import {
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils.ts";
 import { CallPiiButton } from "@/features/units/call/call-pii-button.tsx";
@@ -32,6 +38,8 @@ export interface PerformancePanelProps {
   readonly tenant: string | null;
   /** Which facet opened the performance pane (`kv` vs SQL default). */
   readonly facet?: "sql" | "kv";
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -44,10 +52,16 @@ export function PerformancePanel({
   selectedEffectRef,
   tenant,
   facet = "sql",
+  leading,
 }: PerformancePanelProps): JSX.Element {
   if (facet === "kv") {
     return (
-      <KvPerformancePanel stores={stores} selectedEffectRef={selectedEffectRef} tenant={tenant} />
+      <KvPerformancePanel
+        stores={stores}
+        selectedEffectRef={selectedEffectRef}
+        tenant={tenant}
+        leading={leading}
+      />
     );
   }
   const store = pickQueryStore(stores, "sql", selectedEffectRef);
@@ -77,6 +91,7 @@ export function PerformancePanel({
         icon={Activity03Icon}
         title="No SQL store"
         description="Query performance reads pg_stat_statements on a postgres-backed SQL store."
+        leading={leading}
       />
     );
   }
@@ -84,6 +99,7 @@ export function PerformancePanel({
   if (statsCode === "PgStatStatementsNotPreloaded") {
     return (
       <ExplorerEmpty
+        leading={leading}
         icon={Activity03Icon}
         title="pg_stat_statements is not preloaded"
         description={
@@ -101,6 +117,7 @@ export function PerformancePanel({
   if (statsCode === "PgStatStatementsUnsupported") {
     return (
       <ExplorerEmpty
+        leading={leading}
         icon={Activity03Icon}
         title="Engine telemetry unavailable"
         description={
@@ -112,36 +129,54 @@ export function PerformancePanel({
   }
 
   const advisor = stats.data?.advisor;
+  const advisorMode = indexAdvisorEnableMode(advisor);
   const kpis = stats.data?.kpis;
+  const advisorCataloged = PG_LIBRARY_EXTENSIONS.some((ext) => ext.name === "index_advisor");
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="store-performance">
-      <header className={EXPLORER_STRIP_CLASS}>
-        <h2 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Query performance</h2>
-        <span className="font-mono text-[11px] text-muted-foreground">{store.ref}</span>
-        <span className="text-[11px] text-muted-foreground" data-slot="locks-polling">
-          locks polling
-        </span>
-        <CallPiiButton
-          piiMasked={!lockReveal}
-          disabled={locks.isPending}
-          onToggle={() => setLockReveal((v) => !v)}
-        />
-        <AdvisorEnable
-          advisor={advisor}
-          pending={enableSql.isPending}
-          onEnable={() => {
-            void enableSql
-              .mutateAsync({
-                ref: store.ref,
-                sql: extensionInstallSql("index_advisor", { cascade: true }),
-                allowWrite: true,
-                ...(tenant ? { tenant } : {}),
-              })
-              .then(() => stats.refetch());
-          }}
-        />
-      </header>
+      <DetailHeader
+        dataSlot="store-performance-header"
+        leading={leading}
+        icon={<HugeiconsIcon icon={Activity03Icon} className="size-4" />}
+        title="Query performance"
+        badge={
+          <span className="font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground">
+            {store.ref}
+          </span>
+        }
+        subtitle={
+          <span
+            className="text-[11px] leading-none text-muted-foreground"
+            data-slot="locks-polling"
+          >
+            locks polling
+          </span>
+        }
+        actions={
+          <>
+            <CallPiiButton
+              piiMasked={!lockReveal}
+              disabled={locks.isPending}
+              onToggle={() => setLockReveal((v) => !v)}
+            />
+            <AdvisorEnable
+              advisor={advisor}
+              pending={enableSql.isPending}
+              onEnable={() => {
+                void enableSql
+                  .mutateAsync({
+                    ref: store.ref,
+                    sql: extensionInstallSql("index_advisor", { cascade: true }),
+                    allowWrite: true,
+                    ...(tenant ? { tenant } : {}),
+                  })
+                  .then(() => stats.refetch());
+              }}
+            />
+          </>
+        }
+      />
       <p
         className="shrink-0 border-b border-border/60 bg-amber-500/8 px-3 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200"
         data-slot="store-sql-stats-pii-gap"
@@ -152,6 +187,15 @@ export function PerformancePanel({
         <span className="font-mono">pg_stat_activity.query</span> can contain literals — collapsed
         until reveal. Limitation: {STORE_SQL_STATS_PII_GAP}. Not the Store browse / projectRun
         guarantee.
+        {advisorMode === "cta" ? (
+          <>
+            {" "}
+            Index Advisor is not in <span className="font-mono">pg_available_extensions</span>
+            {advisorCataloged
+              ? " — pin oke-postgres-advisor:18-alpine (or supabase/postgres)."
+              : "."}
+          </>
+        ) : null}
       </p>
       <div className={EXPLORER_STRIP_CLASS}>
         <KpiChip
@@ -246,30 +290,22 @@ function AdvisorEnable({
   const mode = indexAdvisorEnableMode(advisor);
   if (mode === "on") {
     return (
-      <span className="ml-auto text-[11px] text-muted-foreground" data-slot="index-advisor-on">
+      <span
+        className={cn(EXPLORER_STRIP_TOKEN_CLASS, EXPLORER_STRIP_TOKEN_IDLE_CLASS)}
+        data-slot="index-advisor-on"
+      >
         Index Advisor on
       </span>
     );
   }
-  if (mode === "cta") {
-    const cataloged = PG_LIBRARY_EXTENSIONS.some((ext) => ext.name === "index_advisor");
-    return (
-      <p
-        className="ml-auto max-w-sm text-right text-[11px] leading-snug text-muted-foreground"
-        data-slot="index-advisor-cta"
-        role="note"
-      >
-        Index Advisor is not in <span className="font-mono">pg_available_extensions</span>
-        {cataloged ? " — pin oke-postgres-advisor:18-alpine (or supabase/postgres)." : "."}
-      </p>
-    );
-  }
+  if (mode === "cta") return null;
   if (mode !== "enable") return null;
   return (
     <Button
       type="button"
+      variant="ghost"
       size="sm"
-      className="ml-auto h-full rounded-none"
+      className="h-full rounded-none px-2 text-[11px]"
       disabled={pending}
       onClick={onEnable}
       data-slot="index-advisor-enable"

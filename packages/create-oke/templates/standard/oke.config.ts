@@ -22,13 +22,13 @@ export default defineConfig({
     store: {
       sql: "postgres:18-alpine",
       kv: "redis:8-alpine",
-      files: "rustfs/rustfs:1.0.0-beta.11",
+      files: "rustfs/rustfs:1.0.0-rc.2",
     },
     channel: {
-      email: "axllent/mailpit:v1.22.3",
+      email: "axllent/mailpit:v1.30.7",
     },
-    // pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51", // create-oke wizard / --pgdog
-    // proxy: "caddy:2-alpine", // or traefik:v3.3 / nginx:1.27-alpine
+    // pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53", // create-oke wizard / --pgdog
+    // proxy: "caddy:2-alpine", // or traefik:v3.7 / nginx:1.31-alpine
   },
   i18n: { locales: ["en"], default: "en" },
 });

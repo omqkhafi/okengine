@@ -205,7 +205,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       chatModel: args.chat ?? "granite3.3:2b",
       visionModel: null,
       embedModel: null,
-      image: "ghcr.io/ggml-org/llama.cpp:server-b10290",
+      image: "ghcr.io/ggml-org/llama.cpp:server-b10450",
     };
   }
   if (provider === "ollama") {
@@ -215,7 +215,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       chatModel: args.chat ?? "gemma4:e4b",
       visionModel: args.vision === undefined ? "qwen3-vl:4b" : args.vision || null,
       embedModel: args.embed ?? "nomic-embed-text",
-      image: "ollama/ollama:0.32.6",
+      image: "ollama/ollama:0.32.13",
     };
   }
   if (provider === "vllm") {
@@ -225,7 +225,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
       visionModel: null,
       embedModel: null,
-      image: "vllm/vllm-openai:v0.26.0",
+      image: "vllm/vllm-openai:v0.27.1",
     };
   }
   if (provider === "sglang") {
@@ -235,7 +235,7 @@ function nonInteractiveInput(args: AiSetupCliArgs): AiSetupApplyInput {
       chatModel: args.chat ?? "Qwen/Qwen3-0.6B",
       visionModel: null,
       embedModel: null,
-      image: "lmsysorg/sglang:v0.5.16-runtime",
+      image: "lmsysorg/sglang:v0.5.17-runtime",
     };
   }
   if (provider === "anthropic") {

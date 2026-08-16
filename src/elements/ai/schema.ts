@@ -83,20 +83,78 @@ export function isObjectSchema(schema: unknown): schema is {
  */
 export function coerceModelObject(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
+    const fromEnvelope = textFromChatEnvelope(value);
+    if (fromEnvelope !== undefined) return coerceModelObject(fromEnvelope);
     return value as Record<string, unknown>;
   }
   if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      return { text: value };
-    }
-    return { text: value };
+    const parsed = parseJsonObject(value);
+    return parsed ?? { text: value };
   }
   return { value };
+}
+
+/**
+ * Normalize a prompt `out` (Zod, JSON Schema, or `{ field: "string" }`
+ * shorthand) into a JSON Schema object for validation and `response_format`.
+ *
+ * @param out - Declared prompt output
+ */
+export function promptOutJsonSchema(out: unknown): Record<string, unknown> | undefined {
+  if (out == null || typeof out !== "object" || Array.isArray(out)) return undefined;
+  if (hasToJSONSchema(out)) {
+    try {
+      const json = out.toJSONSchema();
+      if (isObjectSchema(json) && json.properties) return json as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+  if (isObjectSchema(out) && out.properties) return out as Record<string, unknown>;
+  const shorthand = shorthandProperties(out);
+  if (shorthand) {
+    return { type: "object", properties: shorthand, required: Object.keys(shorthand) };
+  }
+  return undefined;
+}
+
+/**
+ * Driver `response_format` for a declared `out` — JSON Schema wrapper.
+ * OpenAI-compatible wires this as `json_object` (llama.cpp granite empties
+ * `content` on `json_schema`).
+ *
+ * @param prompt - Prompt name (schema id)
+ * @param out - Declared output
+ */
+export function promptResponseFormat(
+  prompt: string,
+  out: unknown,
+): { readonly type: "json_schema"; readonly json_schema: Record<string, unknown> } | undefined {
+  const schema = promptOutJsonSchema(out);
+  if (!schema) return undefined;
+  const name = prompt.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64) || "out";
+  return {
+    type: "json_schema",
+    json_schema: { name, schema, strict: true },
+  };
+}
+
+/**
+ * Deterministic object that satisfies a JSON Schema's required properties.
+ *
+ * @param schema - JSON Schema object
+ */
+export function fixtureFromJsonSchema(schema: unknown): Record<string, unknown> | undefined {
+  const json = promptOutJsonSchema(schema) ?? (isObjectSchema(schema) ? schema : undefined);
+  if (!json?.properties || typeof json.properties !== "object") return undefined;
+  const props = json.properties as Record<string, unknown>;
+  const required = Array.isArray(json.required) ? json.required : Object.keys(props);
+  const out: Record<string, unknown> = {};
+  for (const key of required) {
+    if (typeof key !== "string" || !(key in props)) continue;
+    out[key] = fixtureValue(props[key]);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -109,13 +167,17 @@ export function matchOutSchema(
   schema: unknown,
   value: Record<string, unknown>,
 ): AiSchemaMismatch | null {
-  if (!isObjectSchema(schema)) return null;
+  const resolved = promptOutJsonSchema(schema) ?? schema;
+  if (!isObjectSchema(resolved)) return null;
 
-  const props = (schema.properties ?? {}) as Record<string, unknown>;
-  const required = Array.isArray(schema.required) ? [...schema.required] : Object.keys(props);
+  const props = (resolved.properties ?? {}) as Record<string, unknown>;
+  const required = Array.isArray(resolved.required) ? [...resolved.required] : Object.keys(props);
   const keys = new Set(Object.keys(value));
   const missing = required.filter((k) => !keys.has(k));
-  const extra = Object.keys(props).length > 0 ? [...keys].filter((k) => !(k in props)) : [];
+  const extra =
+    Object.keys(props).length > 0
+      ? [...keys].filter((k) => k !== "via" && !(k in props))
+      : [];
   const typeMismatches: string[] = [];
   for (const [key, propSchema] of Object.entries(props)) {
     if (!(key in value)) continue;
@@ -160,6 +222,87 @@ export function validatePromptOut(
     throw new AiSchemaValidationError(prompt, version, mismatch, raw);
   }
   return object;
+}
+
+function hasToJSONSchema(value: object): value is { toJSONSchema: () => unknown } {
+  return (
+    "toJSONSchema" in value && typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function"
+  );
+}
+
+function shorthandProperties(out: object): Record<string, { type: string }> | undefined {
+  const entries = Object.entries(out);
+  if (entries.length === 0) return undefined;
+  if (hasToJSONSchema(out) || isObjectSchema(out)) return undefined;
+  const properties: Record<string, { type: string }> = {};
+  for (const [key, value] of entries) {
+    if (typeof value !== "string") return undefined;
+    properties[key] = { type: value };
+  }
+  return properties;
+}
+
+function textFromChatEnvelope(value: object): string | undefined {
+  if (!("choices" in value) || !Array.isArray((value as { choices?: unknown }).choices)) {
+    return undefined;
+  }
+  const choice = (value as { choices: unknown[] }).choices[0];
+  if (!choice || typeof choice !== "object") return undefined;
+  const message = (choice as { message?: { content?: unknown; reasoning_content?: unknown } })
+    .message;
+  if (!message) return undefined;
+  if (typeof message.content === "string" && message.content.trim().length > 0) {
+    return message.content;
+  }
+  if (typeof message.reasoning_content === "string" && message.reasoning_content.trim().length > 0) {
+    return message.reasoning_content;
+  }
+  return undefined;
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  const trimmed = text.trim();
+  const candidates = [trimmed];
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  if (fenced?.[1]) candidates.unshift(fenced[1].trim());
+  const braced = /\{[\s\S]*\}/.exec(trimmed);
+  if (braced?.[0] && braced[0] !== trimmed) candidates.push(braced[0]);
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return undefined;
+}
+
+function fixtureValue(propSchema: unknown): unknown {
+  const type =
+    propSchema &&
+    typeof propSchema === "object" &&
+    !Array.isArray(propSchema) &&
+    "type" in propSchema
+      ? String((propSchema as { type?: unknown }).type)
+      : "string";
+  switch (type) {
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return true;
+    case "array":
+      return [];
+    case "object":
+      return {};
+    case "null":
+      return null;
+    default:
+      return "ok";
+  }
 }
 
 function matchesJsonType(value: unknown, type: string): boolean {

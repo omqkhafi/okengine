@@ -250,7 +250,7 @@ async function askSelfHostedGpuPath(
 ): Promise<AiSetupApplyInput | null> {
   const port = provider === "vllm" ? 8000 : 30000;
   const image =
-    provider === "vllm" ? "vllm/vllm-openai:v0.26.0" : "lmsysorg/sglang:v0.5.16-runtime";
+    provider === "vllm" ? "vllm/vllm-openai:v0.27.1" : "lmsysorg/sglang:v0.5.17-runtime";
   const model = await text({
     message: "Hugging Face model id",
     placeholder: "Qwen/Qwen3-0.6B",

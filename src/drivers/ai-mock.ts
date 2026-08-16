@@ -50,7 +50,10 @@ export const mockAiDriver: AiDriver = {
           }
         }
         if (payload === undefined) {
-          payload = canned["*"] ?? { ok: true, echo: last };
+          payload =
+            canned["*"] ??
+            fixtureFromResponseFormat(opts.responseFormat) ??
+            { ok: true, echo: last };
         }
 
         // Scripted tool calls: `{ __toolCalls: [...] }` or MockToolCallScript shape
@@ -123,6 +126,43 @@ export const mockAiDriver: AiDriver = {
     };
   },
 };
+
+/**
+ * Build a schema-shaped payload from `response_format.json_schema`.
+ *
+ * @param responseFormat - Runtime response format
+ */
+function fixtureFromResponseFormat(responseFormat: unknown): Record<string, unknown> | undefined {
+  if (!responseFormat || typeof responseFormat !== "object") return undefined;
+  const wrapped = (responseFormat as { json_schema?: { schema?: unknown } }).json_schema?.schema;
+  const schema =
+    wrapped && typeof wrapped === "object"
+      ? wrapped
+      : "properties" in responseFormat
+        ? responseFormat
+        : undefined;
+  if (!schema || typeof schema !== "object" || !("properties" in schema)) return undefined;
+  const props = (schema as { properties?: Record<string, unknown> }).properties ?? {};
+  const requiredRaw = (schema as { required?: unknown }).required;
+  const required = Array.isArray(requiredRaw) ? (requiredRaw as string[]) : Object.keys(props);
+  const out: Record<string, unknown> = {};
+  for (const key of required) {
+    const spec = props[key];
+    const type =
+      spec && typeof spec === "object" && "type" in spec ? String((spec as { type?: unknown }).type) : "string";
+    out[key] =
+      type === "number" || type === "integer"
+        ? 0
+        : type === "boolean"
+          ? true
+          : type === "array"
+            ? []
+            : type === "object"
+              ? {}
+              : "ok";
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 /**
  * Register a mock response helper for tests.

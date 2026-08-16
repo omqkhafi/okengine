@@ -11,7 +11,7 @@ networks:
 services:
   # ai — local inference (llama.cpp / Ollama / vLLM / SGLang)
   ai:
-    image: "ghcr.io/ggml-org/llama.cpp:server-b10290"
+    image: "ghcr.io/ggml-org/llama.cpp:server-b10450"
     ports:
       - "127.0.0.1:23850:8080"
     networks:
@@ -35,7 +35,7 @@ services:
 
   # channel.email — Mailpit (SMTP + UI)
   channel-email:
-    image: "axllent/mailpit:v1.22.3"
+    image: "axllent/mailpit:v1.30.7"
     ports:
       - "20850:1025"
       - "21850:8025"
@@ -53,7 +53,7 @@ services:
 
   # pgdog — connection pooler (in front of Postgres)
   pgdog:
-    image: "ghcr.io/pgdogdev/pgdog:v0.1.51"
+    image: "ghcr.io/pgdogdev/pgdog:v0.1.53"
     ports:
       - "24850:6432"
     networks:
@@ -77,7 +77,7 @@ services:
 
   # store.files — object storage (S3)
   store-files:
-    image: "rustfs/rustfs:1.0.0-beta.11"
+    image: "rustfs/rustfs:1.0.0-rc.2"
     ports:
       - "18850:9000"
       - "19850:9001"
@@ -105,7 +105,7 @@ services:
 
   # store.index — search index
   store-index:
-    image: "getmeili/meilisearch:v1.37"
+    image: "getmeili/meilisearch:v1.53"
     ports:
       - "8550:7700"
     networks:

@@ -70,19 +70,22 @@ export const summarize = on(
       await fx.vault.get(openaiKey);
       try {
         const out = await fx.ask(documentSummaryPrompt, {
+          instruction: 'Summarize this document. Reply with JSON only: {"summary":"..."}',
           title: String(row.title),
           body: String(row.body),
         });
         const summary =
-          out && typeof out === "object" && "summary" in out
-            ? String((out as { summary: unknown }).summary)
+          out && typeof out === "object" && typeof (out as { summary?: unknown }).summary === "string"
+            ? (out as { summary: string }).summary.trim()
             : "";
         if (!summary) {
-          return fail("Unavailable", { message: "AI service unavailable. Try again later." });
+          return fail("Unavailable", { message: "AI returned no summary." });
         }
         return { summary };
-      } catch {
-        return fail("Unavailable", { message: "AI service unavailable. Try again later." });
+      } catch (err) {
+        return fail("Unavailable", {
+          message: err instanceof Error ? err.message : "AI service unavailable. Try again later.",
+        });
       }
     },
   }),

@@ -73,6 +73,8 @@ export interface VaultDetailProps {
   readonly onSet: () => void;
   readonly onRotate: () => void;
   readonly onQueryChange?: (query: string) => void;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 const SOURCE_SHORT: Readonly<Record<VaultResolutionSource, string>> = {
@@ -148,6 +150,7 @@ export function VaultDetail({
   onSet,
   onRotate,
   onQueryChange,
+  leading,
 }: VaultDetailProps): JSX.Element {
   const blast = formatBlastRadius(row.blastRadius);
   const posture = contractPosture(row, now);
@@ -175,6 +178,7 @@ export function VaultDetail({
     >
       <DetailHeader
         dataSlot="vault-detail-header"
+        leading={leading}
         icon={<HugeiconsIcon icon={ELEMENT_ICONS.vault.icon} className="size-4" />}
         wellStyle={{ color: VAULT_ACCENT }}
         title={label}

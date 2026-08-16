@@ -22,6 +22,7 @@ import {
   createGateRuntime,
   deriveModuleActions,
   gate,
+  GATE_PUBLIC_NAME,
   type GateDecl,
   type GateEvaluation,
   type GatePolicyContext,
@@ -779,12 +780,7 @@ export function declsFromManifest(manifest: Manifest): GateDecl[] {
           overridable: false,
         } satisfies RateGateDecl);
       } else {
-        decls.push(
-          gate.policy(name, (ctx) => {
-            if (name.includes(":")) return ctx.auth.scopes.has(name);
-            return Boolean(ctx.auth.verified);
-          }),
-        );
+        decls.push(policyDeclFromName(name));
       }
     }
   }
@@ -792,7 +788,20 @@ export function declsFromManifest(manifest: Manifest): GateDecl[] {
   return decls;
 }
 
+/** Reconstruct a policy handle; `public` is the reserved sentinel, not `gate.policy`. */
+function policyDeclFromName(name: string, scopes: readonly string[] = []): GateDecl {
+  if (name === GATE_PUBLIC_NAME) return gate.public;
+  return gate.policy(name, (ctx) => {
+    if (scopes.length > 0) {
+      return scopes.every((s) => ctx.auth.scopes.has(s));
+    }
+    if (name.includes(":")) return ctx.auth.scopes.has(name);
+    return Boolean(ctx.auth.verified);
+  });
+}
+
 function declFromManifestGate(name: string, def: ManifestGate): GateDecl {
+  if (name === GATE_PUBLIC_NAME) return gate.public;
   if (def.kind === "rate" || name.startsWith("rate:")) {
     const parsed = name.startsWith("rate:")
       ? parseRateName(name)
@@ -812,14 +821,7 @@ function declFromManifestGate(name: string, def: ManifestGate): GateDecl {
     };
   }
 
-  const scopes = def.scopes ?? [];
-  return gate.policy(name, (ctx) => {
-    if (scopes.length > 0) {
-      return scopes.every((s) => ctx.auth.scopes.has(s));
-    }
-    if (name.includes(":")) return ctx.auth.scopes.has(name);
-    return Boolean(ctx.auth.verified);
-  });
+  return policyDeclFromName(name, def.scopes ?? []);
 }
 
 /** Parse `rate:{strategy}:{max}/{per}`. */

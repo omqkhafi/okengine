@@ -53,6 +53,7 @@ export async function attachHostToConsole(
   const docker = process.env.OKE_DOCKER === "1";
   await host.boot({
     env: docker ? "dev" : "test",
+    docker,
     startScheduler: false,
     rootDir: options.cwd,
     ...(options.runsBridge !== undefined ? { runsBridge: options.runsBridge } : {}),

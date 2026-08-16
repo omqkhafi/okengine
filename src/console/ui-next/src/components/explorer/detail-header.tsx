@@ -1,5 +1,5 @@
 /**
- * Inspector identity header — Store / Vault / Units share one chrome.
+ * Inspector identity header — Store / Vault / Flows share one chrome.
  */
 
 import type { CSSProperties, JSX, ReactNode } from "react";
@@ -19,6 +19,8 @@ export interface DetailHeaderProps {
   readonly title: ReactNode;
   readonly badge?: ReactNode;
   readonly subtitle?: ReactNode;
+  /** First control — typically collapse / expand the start explorer. */
+  readonly leading?: ReactNode;
   readonly actions?: ReactNode;
   readonly sticky?: boolean;
   readonly className?: string;
@@ -37,6 +39,7 @@ export function DetailHeader({
   title,
   badge,
   subtitle,
+  leading,
   actions,
   sticky = false,
   className,
@@ -47,6 +50,12 @@ export function DetailHeader({
       className={cn(DETAIL_HEADER_CLASS, sticky && "sticky top-0 z-10", className)}
       data-slot={dataSlot}
     >
+      {leading ? (
+        <div className="-ml-2 flex h-full shrink-0 items-stretch">
+          {leading}
+          <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span
           className={cn(

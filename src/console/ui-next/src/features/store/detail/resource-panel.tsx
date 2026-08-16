@@ -39,6 +39,8 @@ export interface ResourcePanelProps {
   readonly onTenantChange: (tenant: string | null) => void;
   /** Live-merged runs buffer — replica lag follows the newest touching run. */
   readonly runs?: readonly RunRow[];
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -55,6 +57,7 @@ export function ResourcePanel({
   tenant,
   onTenantChange,
   runs = [],
+  leading,
 }: ResourcePanelProps): JSX.Element {
   const drift = store.migrationDrift;
   const spec = STORE_FACET_SPECS[store.facet];
@@ -80,6 +83,7 @@ export function ResourcePanel({
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-slot="resource-panel">
       <DetailHeader
         dataSlot="resource-header"
+        leading={leading}
         icon={<HugeiconsIcon icon={files ? Folder01Icon : spec.icon} className="size-4" />}
         wellClassName={spec.wellClass}
         title={storeChildLabel(child)}

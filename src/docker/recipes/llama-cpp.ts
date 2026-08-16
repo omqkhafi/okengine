@@ -23,7 +23,7 @@ import type { ImageRecipe } from "../types.ts";
 export const LLAMA_CPP_MIN_SAFE_BUILD = 8146;
 
 /** Pinned default image — verified ≥ {@link LLAMA_CPP_MIN_SAFE_BUILD}; never `latest`. */
-export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10290";
+export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10450";
 
 /**
  * Basename of the generated entrypoint.

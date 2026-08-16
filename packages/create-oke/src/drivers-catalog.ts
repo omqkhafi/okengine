@@ -112,13 +112,13 @@ export const EMAIL_CHOICES: readonly DriverChoice[] = [
  * Pinned local-inference images — must match `src/docker/recipes/*` pins.
  * Never `latest` (GGUF-parser CVE floors: llama.cpp ≥ b8146, Ollama ≥ 0.17.1).
  */
-export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10290";
+export const LLAMA_CPP_IMAGE = "ghcr.io/ggml-org/llama.cpp:server-b10450";
 /** @see LLAMA_CPP_IMAGE */
-export const OLLAMA_IMAGE = "ollama/ollama:0.32.6";
+export const OLLAMA_IMAGE = "ollama/ollama:0.32.13";
 /** @see LLAMA_CPP_IMAGE */
-export const VLLM_IMAGE = "vllm/vllm-openai:v0.26.0";
+export const VLLM_IMAGE = "vllm/vllm-openai:v0.27.1";
 /** @see LLAMA_CPP_IMAGE */
-export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.16-runtime";
+export const SGLANG_IMAGE = "lmsysorg/sglang:v0.5.17-runtime";
 
 /** AI menu providers → protocol driver. */
 export const AI_PROVIDERS = [
@@ -230,11 +230,11 @@ export function aiDriverForProvider(provider: string): string {
 /** Default image pins keyed by role (standard template). */
 export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
   "store.sql": "postgres:18-alpine",
-  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+  pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
   "store.kv": "redis:8-alpine",
-  "store.files": "rustfs/rustfs:1.0.0-beta.11",
-  "channel.email": "axllent/mailpit:v1.22.3",
-  "store.index": "getmeili/meilisearch:v1.37",
+  "store.files": "rustfs/rustfs:1.0.0-rc.2",
+  "channel.email": "axllent/mailpit:v1.30.7",
+  "store.index": "getmeili/meilisearch:v1.53",
   ai: LLAMA_CPP_IMAGE,
   proxy: "caddy:2-alpine",
 };
@@ -242,6 +242,6 @@ export const DEFAULT_IMAGES: Readonly<Record<string, string>> = {
 /** Default `images.proxy` pins by wizard id (excluding `none`). */
 export const PROXY_IMAGES: Readonly<Record<"caddy" | "traefik" | "nginx", string>> = {
   caddy: "caddy:2-alpine",
-  traefik: "traefik:v3.3",
-  nginx: "nginx:1.27-alpine",
+  traefik: "traefik:v3.7",
+  nginx: "nginx:1.31-alpine",
 };

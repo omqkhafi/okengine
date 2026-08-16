@@ -151,7 +151,7 @@ export default defineConfig({
 
       const config = readFileSync(join(dir, "oke.config.ts"), "utf8");
       expect(config).toContain('dev: "ollama"');
-      expect(config).toContain('ai: "ollama/ollama:0.32.6"');
+      expect(config).toContain('ai: "ollama/ollama:0.32.13"');
       const env = readFileSync(join(dir, ".env.local"), "utf8");
       expect(env).toContain("# OKE_AI_DRIVER=ollama");
       expect(env).toMatch(/^#\s*OKE_AI_MODEL=gemma4:e4b$/m);

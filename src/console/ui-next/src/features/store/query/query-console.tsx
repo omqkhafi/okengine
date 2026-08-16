@@ -3,7 +3,7 @@
  * run current / selection / all, EXPLAIN, per-statement result sets.
  */
 
-import { useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Alert02Icon,
@@ -30,10 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/motion/select.tsx";
+import { DetailHeader } from "@/components/explorer/detail-header.tsx";
 import {
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_STRIP_CLASS,
   EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  SECTION_HEAD_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +111,8 @@ export interface QueryConsoleProps {
   readonly tenant: string | null;
   readonly onTenantChange: (tenant: string | null) => void;
   readonly manifest?: Manifest | null;
+  /** Start-panel collapse control. */
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -125,6 +129,7 @@ export function QueryConsole({
   tenant,
   onTenantChange,
   manifest = null,
+  leading,
 }: QueryConsoleProps): JSX.Element {
   const spec = STORE_FACET_SPECS[facet];
   const ofFacet = useMemo(() => stores.filter((s) => s.facet === facet), [stores, facet]);
@@ -606,23 +611,21 @@ export function QueryConsole({
         }
       }}
     >
-      <header className="relative z-30 flex shrink-0 items-center gap-3 border-b border-border/60 px-3 py-2">
-        <span
-          className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-lg border",
-            spec.wellClass,
-          )}
-          aria-hidden
-        >
-          <HugeiconsIcon icon={spec.icon} className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            {isSql ? "SQL Query" : "KV Query"}
-          </h2>
-          <p className="truncate font-mono text-[11px] text-muted-foreground">
+      <DetailHeader
+        dataSlot="store-query-header"
+        className="relative z-30"
+        leading={leading}
+        icon={<HugeiconsIcon icon={spec.icon} className="size-4" />}
+        wellClassName={spec.wellClass}
+        title={isSql ? "SQL Query" : "KV Query"}
+        badge={
+          <span className="font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground">
             {store?.ref ?? "No store"}
-            {isSql ? " · DML / DDL" : " · list / get / set / delete / ttl"}
+          </span>
+        }
+        subtitle={
+          <span className="truncate font-mono text-[11px] leading-none text-muted-foreground">
+            {isSql ? "DML / DDL" : "list / get / set / delete / ttl"}
             {selected
               ? ` · selection${pendingBatch.length > 1 ? ` (${pendingBatch.length})` : ""}`
               : isSql
@@ -630,56 +633,62 @@ export function QueryConsole({
                   ? ` · ${statements.length} statements`
                   : " · current statement"
                 : ""}
-          </p>
-        </div>
-        {ofFacet.length > 1 ? (
-          <div
-            className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-            data-slot="store-query-store"
-          >
-            <span>Store</span>
-            <Select
-              value={store?.ref ?? ""}
-              onValueChange={changeStore}
-              className="z-40 inline-flex min-w-[8rem]"
-            >
-              <SelectTrigger
-                aria-label="Query store"
-                className="h-7 px-2 py-0 font-mono text-[11px]"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ofFacet.map((s) => (
-                  <SelectItem key={s.ref} value={s.ref} className="font-mono text-[11px]">
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-        {tenancyDeclared ? (
-          <div data-slot="store-query-tenant">
-            <Select
-              value={tenant ?? ""}
-              onValueChange={(next) => onTenantChange(next.length > 0 ? next : null)}
-              className="z-40 inline-flex min-w-[8rem]"
-            >
-              <SelectTrigger aria-label="Tenant" className="h-7 px-2 py-0 font-mono text-[11px]">
-                <SelectValue placeholder="Select tenant…" />
-              </SelectTrigger>
-              <SelectContent>
-                {tenants.map((t) => (
-                  <SelectItem key={t} value={t} className="font-mono text-[11px]">
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-      </header>
+          </span>
+        }
+        actions={
+          <>
+            {ofFacet.length > 1 ? (
+              <div className="flex h-full items-stretch" data-slot="store-query-store">
+                <span className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Store</span>
+                <Select
+                  value={store?.ref ?? ""}
+                  onValueChange={changeStore}
+                  className="z-40 inline-flex h-full min-w-[8rem]"
+                >
+                  <SelectTrigger
+                    flat
+                    aria-label="Query store"
+                    className="h-full w-auto px-2 font-mono text-[11px] hover:bg-muted/50"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ofFacet.map((s) => (
+                      <SelectItem key={s.ref} value={s.ref} className="font-mono text-[11px]">
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            {tenancyDeclared ? (
+              <div className="flex h-full items-stretch" data-slot="store-query-tenant">
+                <Select
+                  value={tenant ?? ""}
+                  onValueChange={(next) => onTenantChange(next.length > 0 ? next : null)}
+                  className="z-40 inline-flex h-full min-w-[8rem]"
+                >
+                  <SelectTrigger
+                    flat
+                    aria-label="Tenant"
+                    className="h-full w-auto px-2 font-mono text-[11px] hover:bg-muted/50"
+                  >
+                    <SelectValue placeholder="Select tenant…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((t) => (
+                      <SelectItem key={t} value={t} className="font-mono text-[11px]">
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+          </>
+        }
+      />
 
       <div
         className={`${EXPLORER_STRIP_CLASS} overflow-x-auto`}

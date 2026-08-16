@@ -26,7 +26,7 @@ is for the compose recipes.
 images: {
   "store.sql": "postgres:18-alpine",
   // …
-  proxy: "caddy:2-alpine", // or "traefik:v3.3" / "nginx:1.27-alpine"
+  proxy: "caddy:2-alpine", // or "traefik:v3.7" / "nginx:1.31-alpine"
 },
 ```
 
@@ -71,8 +71,8 @@ Add your public hostname to serve `allowedHosts`
 | Choice                          | Best for                                                   | How routing works                                                  |
 | ------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
 | **Caddy** (`caddy:2-alpine`)    | hello / minimal / standard — single instance, simplest TLS | Generated `Caddyfile` → `reverse_proxy app:6530`; automatic HTTPS  |
-| **Traefik** (`traefik:v3.3`)    | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
-| **nginx** (`nginx:1.27-alpine`) | Static HTTP edge; TLS elsewhere                            | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
+| **Traefik** (`traefik:v3.7`)    | Horizontally scaled plain compose                          | Docker labels on `app`; replicas auto-discovered and load-balanced |
+| **nginx** (`nginx:1.31-alpine`) | Static HTTP edge; TLS elsewhere                            | Generated `nginx.conf` → `proxy_pass` to `app:6530` on `:80`       |
 | _(omit `images.proxy`)_         | Local / private networks                                   | App publishes `6530` — **default, unchanged**                      |
 
 **Consequence:** Caddy is the recommended default when you just need a certificate.

@@ -368,12 +368,12 @@ describe("image recipes", () => {
   });
 
   test("pgdog matches the official image and waits on store-sql", () => {
-    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.51").id).toBe("pgdog");
+    expect(recipeFor("ghcr.io/pgdogdev/pgdog:v0.1.53").id).toBe("pgdog");
     expect(pgdog.match("ghcr.io/pgdogdev/pgdog:main")).toBe(true);
     const applied = pgdog.apply({
       role: "pgdog",
       serviceName: "pgdog",
-      image: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+      image: "ghcr.io/pgdogdev/pgdog:v0.1.53",
       port: 6432,
       hostPort: 6432,
       credentials: fixedCreds["store.sql"],
@@ -408,11 +408,11 @@ describe("image recipes", () => {
   });
 
   test("meilisearch matches the official image and emits a http URL", () => {
-    expect(recipeFor("getmeili/meilisearch:v1.37").id).toBe("meilisearch");
+    expect(recipeFor("getmeili/meilisearch:v1.53").id).toBe("meilisearch");
     const spec: ServiceSpec = {
       role: "store.index",
       serviceName: "store-index",
-      image: "getmeili/meilisearch:v1.37",
+      image: "getmeili/meilisearch:v1.53",
       port: 7700,
       hostPort: 7700,
       credentials: { user: "oke", password: "meili-master-key", database: "oke" },
@@ -641,12 +641,12 @@ describe("image recipes", () => {
   });
 
   test("nginx matches official images and emits nginx.conf reverse_proxy", () => {
-    expect(recipeFor("nginx:1.27-alpine").id).toBe("nginx");
+    expect(recipeFor("nginx:1.31-alpine").id).toBe("nginx");
     expect(nginx.match("library/nginx:1.27")).toBe(true);
     const spec: ServiceSpec = {
       role: "proxy",
       serviceName: "proxy",
-      image: "nginx:1.27-alpine",
+      image: "nginx:1.31-alpine",
       port: 80,
       hostPort: 80,
       credentials: { user: "oke", password: "unused-proxy", database: "oke" },
@@ -663,12 +663,12 @@ describe("image recipes", () => {
   });
 
   test("traefik matches official images, labels app, and uses socket-proxy", () => {
-    expect(recipeFor("traefik:v3.3").id).toBe("traefik");
+    expect(recipeFor("traefik:v3.7").id).toBe("traefik");
     expect(traefik.match("traefik:v3.1")).toBe(true);
     const applied = traefik.apply({
       role: "proxy",
       serviceName: "proxy",
-      image: "traefik:v3.3",
+      image: "traefik:v3.7",
       port: 80,
       hostPort: 80,
       credentials: { user: "oke", password: "unused-proxy", database: "oke" },
@@ -789,8 +789,8 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         ai: "ghcr.io/ggml-org/llama.cpp:server",
-        "channel.email": "axllent/mailpit:v1.22.3",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+        "channel.email": "axllent/mailpit:v1.30.7",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
         "store.sql": "postgres:16",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
@@ -893,7 +893,7 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:18-alpine",
-        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
+        pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.53",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       prod: true,
@@ -908,7 +908,7 @@ describe("deriveInfrastructure", () => {
     expect(result.stackEnv.OKE_STORE_SQL_URL).toContain(":5432/");
 
     const pgdogYml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.51");
+    expect(pgdogYml).toContain("ghcr.io/pgdogdev/pgdog:v0.1.53");
     expect(pgdogYml).toContain("store-sql");
     expect(pgdogYml).toContain("service_healthy");
     expect(pgdogYml).not.toContain(fixedCreds["store.sql"].password);
@@ -975,14 +975,14 @@ describe("deriveInfrastructure", () => {
 
   test("store.index meilisearch emits its own URL + master key env", () => {
     const result = deriveInfrastructure({
-      images: { "store.index": "getmeili/meilisearch:v1.37" },
+      images: { "store.index": "getmeili/meilisearch:v1.53" },
       credentials: {
         "store.index": { user: "oke", password: "meili-master-key", database: "oke" },
       },
       app: "skyport",
     });
     const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
-    expect(yml).toContain("getmeili/meilisearch:v1.37");
+    expect(yml).toContain("getmeili/meilisearch:v1.53");
     expect(yml).toContain("${OKE_STORE_INDEX_KEY}");
     expect(yml).toContain("meili_data");
     expect(yml).not.toContain("meili-master-key");
@@ -1051,8 +1051,8 @@ describe("deriveInfrastructure", () => {
       images: {
         "store.sql": "postgres:18-alpine",
         "store.kv": "redis:8-alpine",
-        "store.files": "rustfs/rustfs:1.0.0-beta.11",
-        "channel.email": "axllent/mailpit:v1.22.3",
+        "store.files": "rustfs/rustfs:1.0.0-rc.2",
+        "channel.email": "axllent/mailpit:v1.30.7",
       },
       credentials: {
         ...fixedCreds,
@@ -1095,8 +1095,8 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const result = deriveInfrastructure({
       images: {
-        "channel.email": "axllent/mailpit:v1.22.3",
-        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+        "channel.email": "axllent/mailpit:v1.30.7",
+        "store.files": "rustfs/rustfs:1.0.0-rc.2",
       },
       instanceId: id,
       credentials: {
@@ -1134,8 +1134,8 @@ describe("deriveInfrastructure", () => {
     const n = Number.parseInt(id.slice(0, 4), 16) % 1000;
     const rows = resolveStack({
       images: {
-        "channel.email": "axllent/mailpit:v1.22.3",
-        "store.files": "rustfs/rustfs:1.0.0-beta.11",
+        "channel.email": "axllent/mailpit:v1.30.7",
+        "store.files": "rustfs/rustfs:1.0.0-rc.2",
       },
       instanceId: id,
       credentials: {
@@ -1192,7 +1192,7 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:16",
-        proxy: "traefik:v3.3",
+        proxy: "traefik:v3.7",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       app: "skyport",
@@ -1200,7 +1200,7 @@ describe("deriveInfrastructure", () => {
     });
     const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).not.toContain("6530:6530");
-    expect(yml).toContain("traefik:v3.3");
+    expect(yml).toContain("traefik:v3.7");
     expect(yml).toContain(SOCKET_PROXY_IMAGE);
     expect(yml).toContain(SOCKET_PROXY_SERVICE);
     expect(yml).toContain("/var/run/docker.sock:/var/run/docker.sock:ro");
@@ -1210,7 +1210,7 @@ describe("deriveInfrastructure", () => {
     expect(yml).toContain("loadbalancer.server.port");
     // Raw socket must not be on the Traefik service itself.
     const traefikBlock = yml.split("socket-proxy:")[0]!;
-    expect(traefikBlock).toContain("traefik:v3.3");
+    expect(traefikBlock).toContain("traefik:v3.7");
     expect(traefikBlock).not.toContain("docker.sock");
 
     expect(result.files.some((f) => f.path === "Caddyfile")).toBe(false);
@@ -1222,14 +1222,14 @@ describe("deriveInfrastructure", () => {
     const result = deriveInfrastructure({
       images: {
         "store.sql": "postgres:16",
-        proxy: "nginx:1.27-alpine",
+        proxy: "nginx:1.31-alpine",
       },
       credentials: { "store.sql": fixedCreds["store.sql"] },
       app: "skyport",
     });
     const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
     expect(yml).not.toContain("6530:6530");
-    expect(yml).toContain("nginx:1.27-alpine");
+    expect(yml).toContain("nginx:1.31-alpine");
     expect(yml).toContain("./nginx.conf:/etc/nginx/nginx.conf:ro");
     const conf = result.files.find((f) => f.path === "nginx.conf")!.content;
     expect(conf).toContain("proxy_pass http://oke_app");
@@ -1254,7 +1254,7 @@ describe("deriveInfrastructure", () => {
       images: {
         "store.sql": "postgres:16",
         "store.kv": "redis:8-alpine",
-        proxy: "traefik:v3.3",
+        proxy: "traefik:v3.7",
       },
       credentials: {
         "store.sql": fixedCreds["store.sql"],

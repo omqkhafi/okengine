@@ -4,18 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>oke Console</title>
-    <script type="module" crossorigin src="/assets/index-CGdRy4yh.js"></script>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("oke-console-theme");
+          var dark =
+            stored === "dark" ||
+            ((stored == null || stored === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.add(dark ? "dark" : "light");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BsFpWXh3.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
     <link rel="modulepreload" crossorigin href="/assets/react-dom-Bph1y7z7.js">
     <link rel="modulepreload" crossorigin href="/assets/xyflow-D7n4g6go.js">
-    <link rel="modulepreload" crossorigin href="/assets/sheet-dRKCAirF.js">
-    <link rel="modulepreload" crossorigin href="/assets/shortcut-keys-BENVXcGL.js">
-    <link rel="modulepreload" crossorigin href="/assets/skeleton-eU6ilIxB.js">
+    <link rel="modulepreload" crossorigin href="/assets/sheet-BEfGVEcQ.js">
+    <link rel="modulepreload" crossorigin href="/assets/shortcut-keys-CjUI0BK-.js">
+    <link rel="modulepreload" crossorigin href="/assets/skeleton-DR4F7Tl8.js">
     <link rel="modulepreload" crossorigin href="/assets/react-B1ML8gxg.js">
-    <link rel="modulepreload" crossorigin href="/assets/preload-helper-BLNNzA5H.js">
+    <link rel="modulepreload" crossorigin href="/assets/preload-helper-oH4irX4C.js">
     <link rel="modulepreload" crossorigin href="/assets/shortcut-Cgzuv4k1.js">
     <link rel="stylesheet" crossorigin href="/assets/xyflow-DZ0Ws1xk.css">
-    <link rel="stylesheet" crossorigin href="/assets/index-Cz74JIRZ.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-BiqRMP9s.css">
   </head>
   <body>
     <div id="root"></div>

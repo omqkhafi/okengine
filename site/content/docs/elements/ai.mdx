@@ -233,7 +233,7 @@ export default defineConfig({
     ai: { dev: "openai-compatible", test: "mock", prod: "anthropic" },
   },
   images: {
-    ai: "ghcr.io/ggml-org/llama.cpp:server-b10290", // ≥ b8146; never :latest
+    ai: "ghcr.io/ggml-org/llama.cpp:server-b10450", // ≥ b8146; never :latest
   },
 });
 ```
@@ -252,7 +252,7 @@ export const smart = ai.model("smart", {
 ### Ollama (fully supported alternative)
 
 Native `ollama` driver — `complete`, `stream`, `embed` without an OpenAI shim.
-Pin `ollama/ollama:0.32.6` or newer (≥ **0.17.1**). See
+Pin `ollama/ollama:0.32.13` or newer (≥ **0.17.1**). See
 [Ollama recipe](/docs/recipes/ollama).
 
 ### OpenAI-compatible endpoints (one driver)

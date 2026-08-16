@@ -4,7 +4,9 @@
 
 import { useMemo, type JSX } from "react";
 import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
+import { ExplorerStartToggle } from "@/components/explorer/explorer-start-toggle.tsx";
 import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
+import { useExplorerStartPanel } from "@/components/explorer/use-explorer-start-panel.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
@@ -20,7 +22,7 @@ import { SchemaVisualizer } from "./schema/schema-visualizer.tsx";
 import { useStoreSelection } from "./state/store-selection.ts";
 
 /**
- * Store explorer page (Units layout: ~28% tree / ~72% detail).
+ * Store explorer page (~28% tree / ~72% detail).
  */
 export function StorePage(): JSX.Element {
   const list = useStoresList();
@@ -40,6 +42,16 @@ export function StorePage(): JSX.Element {
     setSchemaView,
     setPerformanceView,
   } = useStoreSelection();
+  const start = useExplorerStartPanel();
+  const startToggle = (
+    <ExplorerStartToggle
+      open={start.open}
+      onToggle={start.toggle}
+      noun="store"
+      controlsId="store-tree"
+      dataSlot="store-tree-toggle"
+    />
+  );
 
   const stores = list.data?.stores ?? [];
   const effectRef = selectedResource ?? firstEffectRef(stores);
@@ -52,11 +64,15 @@ export function StorePage(): JSX.Element {
     <div className={EXPLORER_PAGE_CLASS} data-slot="store-page">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
+          panelRef={start.panelRef}
+          collapsible
+          collapsedSize={0}
           defaultSize={EXPLORER_SPLIT.start.defaultSize}
           minSize={EXPLORER_SPLIT.start.minSize}
+          onResize={start.onResize}
           className="min-h-0 overflow-hidden"
         >
-          <div className="h-full min-h-0 overflow-hidden">
+          <div id="store-tree" className="h-full min-h-0 overflow-hidden" data-slot="store-tree">
             <StoreTree
               stores={stores}
               selectedEffectRef={effectRef}
@@ -86,7 +102,7 @@ export function StorePage(): JSX.Element {
             />
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        {start.open ? <ResizableHandle withHandle /> : null}
         <ResizablePanel
           defaultSize={EXPLORER_SPLIT.end.defaultSize}
           minSize={EXPLORER_SPLIT.end.minSize}
@@ -100,6 +116,7 @@ export function StorePage(): JSX.Element {
                   manifest={manifestQuery.data ?? null}
                   selectedEffectRef={effectRef}
                   onSelectTable={(ref) => setSelectedResource(ref, { keepView: true })}
+                  leading={startToggle}
                 />
               ) : performanceView ? (
                 <PerformancePanel
@@ -107,6 +124,7 @@ export function StorePage(): JSX.Element {
                   selectedEffectRef={effectRef}
                   tenant={selectedTenant}
                   facet={performanceFacet ?? "sql"}
+                  leading={startToggle}
                 />
               ) : queryFacet ? (
                 <QueryConsole
@@ -119,6 +137,7 @@ export function StorePage(): JSX.Element {
                   tenant={selectedTenant}
                   onTenantChange={setSelectedTenant}
                   manifest={manifestQuery.data ?? null}
+                  leading={startToggle}
                 />
               ) : selection ? (
                 <ResourcePanel
@@ -130,9 +149,11 @@ export function StorePage(): JSX.Element {
                   tenant={selectedTenant}
                   onTenantChange={setSelectedTenant}
                   runs={runs.data ?? []}
+                  leading={startToggle}
                 />
               ) : (
                 <ExplorerEmpty
+                  leading={startToggle}
                   icon={ELEMENT_ICONS.store.icon}
                   title={
                     list.isLoading

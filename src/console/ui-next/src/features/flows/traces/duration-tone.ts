@@ -1,8 +1,5 @@
 /**
  * Duration severity shading for Traces — a fine ladder from fast → critical.
- *
- * Bands share cutoffs with {@link DURATION_THRESHOLD_OPTIONS} so row colors
- * and the duration filter speak the same language.
  */
 
 /** Latency band for a run duration (cool → hot). */
@@ -29,12 +26,6 @@ export const DURATION_TONE_BOUNDS = [
   { tone: "slow", belowMs: 1_000 },
   { tone: "bad", belowMs: 5_000 },
 ] as const;
-
-/** Duration filter presets (ms). `null` = no threshold. */
-export const DURATION_THRESHOLD_OPTIONS = [null, 10, 25, 50, 100, 250, 500, 1_000, 5_000] as const;
-
-/** One duration-threshold preset value. */
-export type DurationThresholdMs = (typeof DURATION_THRESHOLD_OPTIONS)[number];
 
 /**
  * Classify a duration into a cool→hot tone band.
@@ -72,32 +63,6 @@ export function durationToneClass(tone: DurationTone): string {
       return "text-destructive";
     case "critical":
       return "text-rose-700 dark:text-rose-400";
-  }
-}
-
-/**
- * Tailwind border classes paired with a duration tone.
- *
- * @param tone - Severity band
- */
-export function durationToneBorderClass(tone: DurationTone): string {
-  switch (tone) {
-    case "fast":
-      return "border-emerald-500/45";
-    case "good":
-      return "border-emerald-600/40";
-    case "ok":
-      return "border-lime-500/40";
-    case "elevated":
-      return "border-yellow-500/45";
-    case "warn":
-      return "border-amber-500/45";
-    case "slow":
-      return "border-orange-500/45";
-    case "bad":
-      return "border-destructive/45";
-    case "critical":
-      return "border-rose-600/50";
   }
 }
 
@@ -154,33 +119,10 @@ export function durationToneDotClass(tone: DurationTone): string {
 }
 
 /**
- * Dot fill for a duration-threshold preset (`null` = any / neutral).
- *
- * @param ms - Active threshold, or null for any
- */
-export function durationThresholdDotClass(ms: number | null): string {
-  if (ms === null) return "bg-muted-foreground/45";
-  return durationToneDotClass(durationTone(ms));
-}
-
-/**
  * Tailwind text classes for a duration in ms.
  *
  * @param ms - Duration in milliseconds
  */
 export function durationClassName(ms: number): string {
   return durationToneClass(durationTone(ms));
-}
-
-/**
- * Tailwind classes for the duration-threshold filter control.
- *
- * @param ms - Active threshold, or null for any
- */
-export function durationThresholdFilterClass(ms: number | null): string {
-  if (ms === null) {
-    return "border-border/70 text-foreground";
-  }
-  const tone = durationTone(ms);
-  return `${durationToneBorderClass(tone)} font-medium ${durationToneClass(tone)}`;
 }
