@@ -65,6 +65,12 @@ import {
 import { loadManifest, loadOkeConfig, resolveImages } from "./load-config.ts";
 import { mcpContextFromConsole } from "./mcp-from-console.ts";
 import { resolveDevPorts } from "./ports.ts";
+import {
+  shouldAttachConsoleVite,
+  startConsoleVite,
+  type ConsoleViteHandle,
+  type StartConsoleViteOptions,
+} from "./dev-console-vite.ts";
 import { clearDevSessionLock, writeDevSessionLock } from "./dev-session-lock.ts";
 
 /** Max wait for the `bun --hot` app child to bind a port. */
@@ -264,6 +270,17 @@ export interface DevOptions {
   readonly regenClient?: (appUrl: string) => Promise<void>;
   /** Serve Console (injectable). */
   readonly serveConsole?: (port: number) => Promise<DevConsoleHandle>;
+  /**
+   * Force (`true`) or skip (`false`) Console Vite HMR. Default: attach
+   * on an okengine source checkout so `dev:keel` does not need `bun run build`.
+   */
+  readonly consoleVite?: boolean;
+  /**
+   * Injectable Console Vite sidecar (tests). Default: {@link startConsoleVite}.
+   *
+   * @param options - Kernel port + listen preference
+   */
+  readonly startConsoleVite?: (options: StartConsoleViteOptions) => Promise<ConsoleViteHandle>;
   /**
    * Serve MCP against the live Console context (injectable).
    * Default: {@link serveMcp} on :6535.
@@ -1072,6 +1089,30 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   /** Host → Console WideEvent ingest secret (live Traces bridge). */
   const runsIngestSecret = crypto.randomUUID();
 
+  let consoleVite: ConsoleViteHandle | null = null;
+  const wantConsoleVite =
+    options.dryRun !== true &&
+    (options.consoleVite === true ||
+      (options.consoleVite !== false &&
+        options.serveConsole === undefined &&
+        shouldAttachConsoleVite()));
+  if (wantConsoleVite) {
+    const startVite = options.startConsoleVite ?? startConsoleVite;
+    try {
+      consoleVite = await startVite({
+        consolePort,
+        occupied: new Set([appPort, consolePort, mcpPort, docsMcpPort].filter((p) => p !== 0)),
+      });
+      write(formatStatusLine("Console UI hot reload"));
+    } catch (err) {
+      write(
+        formatStatusLine(
+          `Console UI hot reload skipped — ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      );
+    }
+  }
+
   const serveConsole =
     options.serveConsole ??
     (async (port) => {
@@ -1086,6 +1127,7 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
         runsIngestSecret,
         ...(options.secret !== undefined ? { secret: options.secret } : {}),
         ...(seedManifest !== undefined && seedManifest !== null ? { manifest: seedManifest } : {}),
+        ...(consoleVite ? { spaProxy: { origin: consoleVite.origin } } : {}),
       });
       write(formatServiceLine("Console", `http://127.0.0.1:${server.port}`));
       return {
@@ -1347,6 +1389,9 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     consoleServer.stop();
     mcpServer?.stop();
     docsMcpServer?.stop();
+    const vite = consoleVite;
+    consoleVite = null;
+    void vite?.stop();
     void clearDevSessionLock(cwd);
     if (dockerStarted) {
       const started = dockerStarted;

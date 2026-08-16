@@ -1,0 +1,78 @@
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.ok,
+.down {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.ok {
+  color: #047857;
+}
+
+.down {
+  color: #b45309;
+}
+
+.compose {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+.compose input,
+.compose textarea,
+.compose button,
+.list button {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  background: #fff;
+}
+
+.compose button,
+.list button {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.err {
+  color: #b91c1c;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.list p {
+  margin: 0.25rem 0 0;
+}

@@ -18,6 +18,7 @@ import { CONSOLE_PORT } from "../../runtime/types.ts";
 import { serveConsole, type ConsoleServerHandle } from "../server/serve.ts";
 import {
   isConsoleFresh,
+  isConsoleKernelSkipped,
   UI_NEXT_DEV_OPERATOR,
   seedUiNextDevOperator,
 } from "./ui-next-dev-operator.ts";
@@ -93,6 +94,9 @@ export function okeConsoleKernelPlugin(): Plugin {
     name: "oke-console-kernel",
     apply: "serve",
     async configureServer(server: ViteDevServer) {
+      // `oke dev` already bound the kernel — Vite is SPA / HMR only.
+      if (isConsoleKernelSkipped()) return;
+
       if (typeof Bun === "undefined") {
         server.config.logger.error(
           `\n[oke] Run Vite under Bun:\n` +

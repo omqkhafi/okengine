@@ -18,6 +18,7 @@ oke --help                       # command list (also what bare `oke` prints whe
 oke dev                          # watch · hot reload · Console :6533 · app :6530 · MCP :6535 · docs MCP :6536
                                  #   → always Docker Compose under docker/ + host Bun
                                  #   → client types + domain schema push on save
+                                 #   → Console UI hot-reloads from source (okengine checkout; no bun run build)
 oke dev --no-db-push             #     opt out of auto oke db push on schema input save
 oke dev -d store.sql,signal      #     optional role filter (still Compose; requires Docker)
 oke test                         # bun test with PGLite posture (NODE_ENV=test, OKE_PGLITE_URL=memory://)

@@ -1,6 +1,6 @@
 /**
  * Console router — code-based TanStack Router (Vite SPA).
- * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault`.
+ * Pre-auth `/` and authenticated shell `/overview` | `/flows` | `/store` | `/vault` | `/monitoring`.
  * Authenticated pages are `lazyRouteComponent` so Vite splits them out of the entry.
  * Any other path is a 404 — no legacy rewrites.
  */
@@ -27,6 +27,7 @@ import { ClaimPage } from "./features/setup/claim-page.tsx";
 import { validateFlowsSearch } from "./features/flows/state/flows-selection.ts";
 import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
+import { validateMonitoringSearch } from "./features/monitoring/state/monitoring-selection.ts";
 import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
@@ -110,9 +111,25 @@ const vaultRoute = createRoute({
   component: lazyRouteComponent(() => import("./features/vault/vault-page.tsx"), "VaultPage"),
 });
 
+const monitoringRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: "/monitoring",
+  validateSearch: validateMonitoringSearch,
+  component: lazyRouteComponent(
+    () => import("./features/monitoring/monitoring-page.tsx"),
+    "MonitoringPage",
+  ),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  authenticatedRoute.addChildren([overviewRoute, flowsRoute, storeRoute, vaultRoute]),
+  authenticatedRoute.addChildren([
+    overviewRoute,
+    flowsRoute,
+    storeRoute,
+    vaultRoute,
+    monitoringRoute,
+  ]),
 ]);
 
 /**

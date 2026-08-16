@@ -178,10 +178,11 @@ Durations: `"200ms"` · `"30s"` · `"2m"` · `"1h"` · `"7d"`.
 
 ## Cache
 
-Read-only flows cache automatically from inferred or ledgered `reads` — no `fx.cache`
-call and no `cache:` default on the flow. Writes invalidate those keys. Use
-`cache: false` to opt out, or `cache: "30s"` for a TTL. `fx.cache` is the manual
-(tier-3) surface:
+Read-only flows cache automatically from inferred or ledgered `reads` — no
+`fx.cache` call and no `cache:` default on the flow. Writes invalidate those
+keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
+
+`fx.cache` is the manual (tier-3) surface:
 
 | Signature                              | Notes                                     |
 | -------------------------------------- | ----------------------------------------- |

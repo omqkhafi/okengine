@@ -7,6 +7,7 @@ product — every Flow and table here is real wiring you keep or replace.
 ```bash
 bun install
 oke dev           # auto db push; asks once whether to seed
+bun run web       # Vite SPA — proxies /notes · /health to the app
 ```
 
 | Surface | URL |
@@ -14,6 +15,7 @@ oke dev           # auto db push; asks once whether to seed
 | Backend | http://127.0.0.1:6530 |
 | Console | http://127.0.0.1:6533 |
 | MCP | http://127.0.0.1:6535 |
+| Web | `bun run web` (Vite; API via proxy) |
 
 ## Try it
 
@@ -48,6 +50,7 @@ never anonymous `flow_1`.
 | `src/db/migrations/` | versioned drizzle migrations |
 | `src/flows/notes/` | list · create · get · archive · onCreated |
 | `src/flows/main/` | root · health |
+| `web/` | Vite 8 SPA — `createClient` + proxy to the app |
 | `oke.config.ts` | local env · docker postgres (+ redis/s3/smtp); vault built-in |
 | `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
 

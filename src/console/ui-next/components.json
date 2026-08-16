@@ -20,5 +20,7 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@bklit": "https://ui.bklit.com/r/{name}.json"
+  }
 }

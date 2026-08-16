@@ -2,20 +2,24 @@
  * Post-auth return path — keep the operator on the module they were in
  * after a session expires, instead of always landing on `/overview`.
  *
- * Only `/overview`, `/flows`, `/store`, and `/vault` (plus their search) are legal.
- * Anything else is dropped so `?next=` cannot be an open redirect.
+ * Only `/overview`, `/flows`, `/store`, `/vault`, and `/monitoring` (plus their
+ * search) are legal. Anything else is dropped so `?next=` cannot be an open redirect.
  */
 
 import { validateFlowsSearch, type FlowsSearch } from "../flows/state/flows-selection.ts";
 import { validateStoreSearch, type StoreSearch } from "../store/state/store-selection.ts";
 import { validateUnitsSearch, type UnitsSearch } from "../units/state/units-selection.ts";
+import {
+  validateMonitoringSearch,
+  type MonitoringSearch,
+} from "../monitoring/state/monitoring-selection.ts";
 import { validateVaultSearch, type VaultSearch } from "../vault/state/vault-selection.ts";
 
 /** Default shell module when no safe return path is present. */
 export const DEFAULT_AFTER_AUTH = "/overview" as const;
 
 /** Shell pathnames that may be restored after login. */
-const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault"]);
+const SHELL_PATHS = new Set(["/overview", "/flows", "/store", "/vault", "/monitoring"]);
 
 /** Upper bound so a crafted `next` cannot bloat the login URL. */
 const MAX_RETURN_TO_LENGTH = 1024;
@@ -30,10 +34,11 @@ export type AfterAuthLocation =
   | { readonly to: "/overview"; readonly search: FlowsSearch }
   | { readonly to: "/flows"; readonly search: UnitsSearch }
   | { readonly to: "/store"; readonly search: StoreSearch }
-  | { readonly to: "/vault"; readonly search: VaultSearch };
+  | { readonly to: "/vault"; readonly search: VaultSearch }
+  | { readonly to: "/monitoring"; readonly search: MonitoringSearch };
 
 /**
- * Keep only an in-console shell href (`/overview` | `/flows` | `/store` | `/vault` + search).
+ * Keep only an in-console shell href (`/overview` | `/flows` | `/store` | `/vault` | `/monitoring` + search).
  *
  * @param value - Raw `next` search param or `pathname + search`
  */
@@ -100,6 +105,9 @@ export function afterAuthLocation(value: unknown): AfterAuthLocation {
   if (url.pathname === "/vault") {
     return { to: "/vault", search: validateVaultSearch(raw) };
   }
+  if (url.pathname === "/monitoring") {
+    return { to: "/monitoring", search: validateMonitoringSearch(raw) };
+  }
   return { to: "/overview", search: validateFlowsSearch(raw) };
 }
 
@@ -109,6 +117,7 @@ export type AfterAuthNavigate = {
   (opts: { to: "/flows"; search: UnitsSearch }): unknown;
   (opts: { to: "/store"; search: StoreSearch }): unknown;
   (opts: { to: "/vault"; search: VaultSearch }): unknown;
+  (opts: { to: "/monitoring"; search: MonitoringSearch }): unknown;
 };
 
 /**
@@ -128,6 +137,9 @@ export function goAfterAuth(navigate: AfterAuthNavigate, value: unknown): void {
       return;
     case "/vault":
       void navigate({ to: "/vault", search: dest.search });
+      return;
+    case "/monitoring":
+      void navigate({ to: "/monitoring", search: dest.search });
       return;
     default:
       void navigate({ to: "/overview", search: dest.search });

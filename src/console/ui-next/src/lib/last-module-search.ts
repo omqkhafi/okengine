@@ -1,10 +1,16 @@
 /**
  * Remember each Console module's last URL search so sidebar hops
- * restore Overview / Flows / Store / Vault instead of wiping them.
+ * restore Overview / Flows / Store / Vault / Monitoring instead of wiping them.
  */
 
 /** Authenticated Console modules that own URL search. */
-export const CONSOLE_MODULE_PATHS = ["/overview", "/flows", "/store", "/vault"] as const;
+export const CONSOLE_MODULE_PATHS = [
+  "/overview",
+  "/flows",
+  "/store",
+  "/vault",
+  "/monitoring",
+] as const;
 
 /** Pathname for a Console module. */
 export type ConsoleModulePath = (typeof CONSOLE_MODULE_PATHS)[number];

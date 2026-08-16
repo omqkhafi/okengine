@@ -607,6 +607,39 @@ describe("oke dev default startApp boot", () => {
   }, 60_000);
 });
 
+describe("oke dev Console Vite attach", () => {
+  test("consoleVite: true starts the sidecar even when Console is stubbed", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-dev-console-vite-"));
+    await Bun.write(join(dir, "src/app.ts"), "export {}\n");
+    let started = 0;
+    let stopped = 0;
+    const result = await runDev({
+      cwd: dir,
+      stdinIsTTY: false,
+      appPort: 0,
+      consolePort: 0,
+      mcpPort: 0,
+      consoleVite: true,
+      startConsoleVite: async () => {
+        started++;
+        return {
+          origin: "http://127.0.0.1:9",
+          port: 9,
+          stop: async () => {
+            stopped++;
+          },
+        };
+      },
+      startApp: async () => ({ stop() {} }),
+      ...stubSurfaces(),
+    });
+    expect(result.code).toBe(0);
+    expect(started).toBe(1);
+    result.session?.stop();
+    expect(stopped).toBe(1);
+  });
+});
+
 describe("oke dev hot reload", () => {
   let session: DevSession | undefined;
 

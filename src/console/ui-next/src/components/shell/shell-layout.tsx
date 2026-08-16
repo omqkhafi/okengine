@@ -11,9 +11,9 @@ import type { SessionOperator } from "@/client.ts";
 /**
  * Shell chrome around authenticated panel routes.
  *
- * `/overview`, `/flows`, `/store`, and `/vault` render full-bleed (no padding / gap); other
- * sections keep the padded inset. Desktop sidebar stays icon-collapsed; mobile
- * still uses the sheet trigger.
+ * `/overview`, `/flows`, `/store`, `/vault`, and `/monitoring` render full-bleed
+ * (no padding / gap); other sections keep the padded inset. Desktop sidebar
+ * stays icon-collapsed; mobile still uses the sheet trigger.
  *
  * @param props - Operator from the session guard
  */
@@ -23,7 +23,8 @@ export function ShellLayout({ operator }: { readonly operator: SessionOperator }
     pathname === "/overview" ||
     pathname === "/flows" ||
     pathname === "/store" ||
-    pathname === "/vault";
+    pathname === "/vault" ||
+    pathname === "/monitoring";
 
   return (
     <SidebarProvider

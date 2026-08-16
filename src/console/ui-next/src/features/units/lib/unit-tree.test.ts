@@ -174,6 +174,34 @@ describe("buildUnitTree", () => {
     const billing = groups.find((g) => g.unit === "billing");
     expect(billing?.flows[0]).toMatchObject({ signal: null, delivery: null, method: "POST" });
   });
+
+  test("sorts HTTP flows GET, POST, QUERY, PATCH/PUT, DELETE, then by id", () => {
+    const manifest = {
+      oke: "1.0",
+      app: "test",
+      flows: {
+        "tasks.addTag": { trigger: { http: { method: "POST", path: "/tasks/:id/tags" } } },
+        "tasks.archive": { trigger: { http: { method: "POST", path: "/tasks/:id/archive" } } },
+        "tasks.delete": { trigger: { http: { method: "DELETE", path: "/tasks/:id" } } },
+        "tasks.get": { trigger: { http: { method: "GET", path: "/tasks/:id" } } },
+        "tasks.list": { trigger: { http: { method: "GET", path: "/tasks" } } },
+        "tasks.search": { trigger: { http: { method: "QUERY", path: "/tasks/search" } } },
+        "tasks.update": { trigger: { http: { method: "PATCH", path: "/tasks/:id" } } },
+        "tasks.replace": { trigger: { http: { method: "PUT", path: "/tasks/:id" } } },
+      },
+    } as Manifest;
+    const tasks = buildUnitTree(manifest).find((g) => g.unit === "tasks");
+    expect(tasks?.flows.map((f) => `${f.action} ${f.method}`)).toEqual([
+      "get GET",
+      "list GET",
+      "addTag POST",
+      "archive POST",
+      "search QUERY",
+      "replace PUT",
+      "update PATCH",
+      "delete DELETE",
+    ]);
+  });
 });
 
 describe("countActiveFacets", () => {

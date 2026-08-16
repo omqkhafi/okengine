@@ -19,6 +19,35 @@ import type { ElementHugeIcon } from "@/lib/element-icons.ts";
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" | "QUERY";
 
 /**
+ * Units-tree display rank: GET → POST → QUERY → PATCH/PUT → DELETE.
+ *
+ * PATCH and PUT share a rank. Unknown verbs and missing methods sort last.
+ *
+ * @param method - HTTP method string (case-insensitive) or null for non-HTTP
+ */
+export function httpMethodSortRank(method: string | null | undefined): number {
+  switch ((method ?? "").toUpperCase()) {
+    case "GET":
+      return 0;
+    case "POST":
+      return 1;
+    case "QUERY":
+      return 2;
+    case "PUT":
+    case "PATCH":
+      return 3;
+    case "DELETE":
+      return 4;
+    case "HEAD":
+      return 5;
+    case "OPTIONS":
+      return 6;
+    default:
+      return method ? 7 : 8;
+  }
+}
+
+/**
  * CRUD-shaped glyph per HTTP method — Units tree wells.
  *
  * @param method - HTTP method string (case-insensitive)

@@ -6,7 +6,12 @@ import { effectSummaryChips, effectEventLabel } from "./effect-summary.ts";
 import { effectBarColor, effectKindIcon, effectKindSummaryLabel } from "./effect-kind.ts";
 import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { EDGE_STROKE } from "../graph/flow-graph-theme.ts";
-import { httpMethodBadgeClass, httpMethodIcon, httpMethodRailClass } from "./http-method.ts";
+import {
+  httpMethodBadgeClass,
+  httpMethodIcon,
+  httpMethodRailClass,
+  httpMethodSortRank,
+} from "./http-method.ts";
 import { executeTraceReplay, replayRequestForRun } from "./trace-actions.ts";
 import { FLOWS_TEST_MANIFEST } from "../fixture.ts";
 import { traceRequestMeta } from "./request-meta.ts";
@@ -124,6 +129,18 @@ describe("httpMethodRailClass", () => {
   test("matches solid fills to badge accents", () => {
     expect(httpMethodRailClass("POST")).toContain("sky");
     expect(httpMethodRailClass("GET")).toContain("emerald");
+  });
+});
+
+describe("httpMethodSortRank", () => {
+  test("orders GET, POST, QUERY, PATCH/PUT, DELETE", () => {
+    expect(
+      ["DELETE", "PATCH", "QUERY", "POST", "PUT", "GET"]
+        .sort((a, b) => httpMethodSortRank(a) - httpMethodSortRank(b))
+        .join(" "),
+    ).toBe("GET POST QUERY PATCH PUT DELETE");
+    expect(httpMethodSortRank("PATCH")).toBe(httpMethodSortRank("PUT"));
+    expect(httpMethodSortRank(null)).toBeGreaterThan(httpMethodSortRank("DELETE"));
   });
 });
 

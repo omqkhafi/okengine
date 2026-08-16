@@ -31,12 +31,20 @@ import { openConsolePersistence } from "./operator-db.ts";
 import { handleRunsIngest, RUNS_INGEST_PATH } from "./runs-ingest.ts";
 import {
   CONSOLE_COOKIES,
+  CONSOLE_VITE_DEV_CSP,
   consoleSessionCookie,
   withConsoleSecurityHeaders,
 } from "./security-headers.ts";
 
 /** Console SPA pathnames that receive `index.html`. Anything else is 404. */
-export const CONSOLE_SPA_PATHS = ["/", "/overview", "/flows", "/store", "/vault"] as const;
+export const CONSOLE_SPA_PATHS = [
+  "/",
+  "/overview",
+  "/flows",
+  "/store",
+  "/vault",
+  "/monitoring",
+] as const;
 
 /**
  * Whether `pathname` is a real Console page (not a legacy alias).
@@ -47,6 +55,15 @@ export function isConsoleSpaPath(pathname: string): boolean {
   return (CONSOLE_SPA_PATHS as readonly string[]).includes(pathname);
 }
 
+/**
+ * Whether `pathname` is owned by the Console kernel (never Vite-proxied).
+ *
+ * @param pathname - Request pathname
+ */
+export function isConsoleKernelPath(pathname: string): boolean {
+  return pathname.startsWith("/console/") || pathname.startsWith("/plugin-frame/");
+}
+
 /** Options for {@link serveConsole}. */
 export interface ServeConsoleOptions extends CreateConsoleAppOptions {
   readonly port?: number;
@@ -54,6 +71,13 @@ export interface ServeConsoleOptions extends CreateConsoleAppOptions {
   readonly allowedHosts?: readonly string[];
   /** Directory of prebuilt SPA assets (Vite outDir). */
   readonly staticDir?: string;
+  /**
+   * When set, non-kernel paths (`/`, `/@vite/client`, `/src/…`) are
+   * proxied to a Vite HMR server. Kernel routes stay local.
+   */
+  readonly spaProxy?: {
+    readonly origin: string;
+  };
   /** Boot environment — use `"dev"` / `"prod"` so Bearer auth is production-like. */
   readonly env?: "dev" | "prod" | "test";
   /**
@@ -147,6 +171,13 @@ export async function serveConsole(
 
     if (url.pathname.startsWith("/plugin-frame/")) {
       return withConsoleSecurityHeaders(pluginFrameResponse(url.pathname));
+    }
+
+    if (options.spaProxy && !isConsoleKernelPath(url.pathname)) {
+      const proxied = await proxySpa(options.spaProxy.origin, request);
+      if (proxied) {
+        return withConsoleSecurityHeaders(proxied, { csp: CONSOLE_VITE_DEV_CSP });
+      }
     }
 
     const staticResponse = await serveStatic(staticDir, url.pathname);
@@ -324,6 +355,35 @@ export async function attachSessionCookies(
     status: response.status,
     headers,
   });
+}
+
+/**
+ * Forward a browser request to the Vite HMR origin.
+ *
+ * @param origin - Vite `http://127.0.0.1:<port>`
+ * @param request - Incoming Console request
+ */
+export async function proxySpa(origin: string, request: Request): Promise<Response | null> {
+  const incoming = new URL(request.url);
+  const target = new URL(incoming.pathname + incoming.search, origin);
+  const headers = new Headers();
+  for (const [key, value] of request.headers) {
+    const lower = key.toLowerCase();
+    if (lower === "host" || lower === "connection" || lower === "keep-alive") continue;
+    headers.set(key, value);
+  }
+  headers.set("host", target.host);
+  try {
+    const method = request.method;
+    return await fetch(target, {
+      method,
+      headers,
+      body: method === "GET" || method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+    });
+  } catch {
+    return null;
+  }
 }
 
 async function serveStatic(staticDir: string, pathname: string): Promise<Response | null> {

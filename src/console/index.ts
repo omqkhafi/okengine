@@ -30,6 +30,7 @@ export { consolePlugin } from "./server/plugin.ts";
 export {
   CONSOLE_COOKIES,
   CONSOLE_CSP,
+  CONSOLE_VITE_DEV_CSP,
   PLUGIN_IFRAME_SANDBOX,
   withConsoleSecurityHeaders,
 } from "./server/security-headers.ts";

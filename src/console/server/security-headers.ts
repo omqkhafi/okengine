@@ -17,6 +17,25 @@ export const CONSOLE_CSP: string = [
   "frame-src 'self'",
 ].join("; ");
 
+/**
+ * CSP for Vite-proxied Console UI during `oke dev`.
+ * The React refresh preamble is an inline module script — production
+ * `script-src 'self'` blocks it and the SPA never mounts.
+ */
+export const CONSOLE_VITE_DEV_CSP: string = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self' ws: wss: http://127.0.0.1:* ws://127.0.0.1:*",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "frame-src 'self'",
+].join("; ");
+
 /** CSP for sandboxed plugin panel iframes (no operator session reach). */
 export const PLUGIN_FRAME_CSP: string = [
   "default-src 'none'",
@@ -41,10 +60,10 @@ export const PLUGIN_IFRAME_SANDBOX: string = "allow-scripts allow-forms";
  */
 export function withConsoleSecurityHeaders(
   response: Response,
-  opts?: { readonly contentType?: string },
+  opts?: { readonly contentType?: string; readonly csp?: string },
 ): Response {
   const headers = new Headers(response.headers);
-  headers.set("Content-Security-Policy", CONSOLE_CSP);
+  headers.set("Content-Security-Policy", opts?.csp ?? CONSOLE_CSP);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "no-referrer");

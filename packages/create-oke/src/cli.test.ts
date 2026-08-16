@@ -517,6 +517,23 @@ describe("transformConfigForSqlDriver", () => {
   });
 });
 
+describe("template Vite web", () => {
+  test("proxies API paths and never steals GET / from the SPA", () => {
+    for (const id of TEMPLATES) {
+      const config = readFileSync(join(resolveTemplateDir(id), "web/vite.config.ts"), "utf8");
+      expect(config).toContain('"/health"');
+      expect(config).toContain('"/notes"');
+      expect(config).toContain('"/_oke"');
+      expect(config).toContain("127.0.0.1:6530");
+      expect(config).not.toMatch(/proxy:\s*\{[^}]*["']\/["']/);
+      expect(config).not.toContain("cors: true");
+      expect(config).not.toContain("5173");
+      expect(config).toContain('from "vite"');
+      expect(config).toContain("@vitejs/plugin-react");
+    }
+  });
+});
+
 describe("shouldSkipTemplatePath", () => {
   test("skips node_modules, locks, and monorepo docker test", () => {
     expect(shouldSkipTemplatePath("node_modules/okengine/package.json")).toBe(true);
@@ -593,13 +610,14 @@ describe("scaffold structure", () => {
         expect(appTs).not.toMatch(/Object\.assign/);
         expect(appTs).not.toMatch(/env:\s*["']test["']/);
         expect(appTs).not.toMatch(/stores:\s*\[/);
-        expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']\s*\}\)/);
+        expect(appTs).toMatch(/oke\(\{\s*name:\s*["']notes["']/);
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string; "@duckdb/node-api"?: string };
-          scripts: { typecheck?: string; test?: string };
+          scripts: { typecheck?: string; test?: string; web?: string };
           devDependencies: {
             typescript?: string;
+            vite?: string;
             "@electric-sql/pglite"?: string;
             "@electric-sql/pglite-pgvector"?: string;
           };
@@ -607,9 +625,15 @@ describe("scaffold structure", () => {
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
         expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.2");
-        expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
+        expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
+        expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");
+        expect(pkg.scripts.web).toContain("vite --config web/vite.config.ts");
+        expect(pkg.scripts["web:build"]).toContain("tsc -b -p web/tsconfig.json");
         expect(pkg.scripts.test).toBe("oke test");
+        expect(result.files).toContain("web/vite.config.ts");
+        expect(result.files).toContain("web/src/client.ts");
         expect(pkg.devDependencies.typescript).toBeTruthy();
+        expect(pkg.devDependencies.vite).toBe("^8.2.0");
         expect(pkg.devDependencies["@electric-sql/pglite"]).toBe("^0.5.4");
         expect(pkg.devDependencies["@electric-sql/pglite-pgvector"]).toBe("^0.0.5");
         const drizzle = readFileSync(join(result.targetDir, "drizzle.config.ts"), "utf8");
@@ -904,6 +928,7 @@ describe("non-TTY CLI", () => {
         label: "standard",
       };
       expect(nextStepsText(result)).toContain("oke dev");
+      expect(nextStepsText(result)).toContain("bun run web");
       expect(nextStepsText(result)).toContain("bun install");
       expect(nextStepsText(result)).toContain("oke.omqkhafi.dev");
     } finally {

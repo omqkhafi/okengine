@@ -109,6 +109,7 @@ export { consolePlugin } from "./plugin.ts";
 export {
   CONSOLE_COOKIES,
   CONSOLE_CSP,
+  CONSOLE_VITE_DEV_CSP,
   PLUGIN_FRAME_CSP,
   PLUGIN_IFRAME_SANDBOX,
   consoleSessionCookie,
@@ -116,6 +117,9 @@ export {
 } from "./security-headers.ts";
 export {
   attachSessionCookies,
+  isConsoleKernelPath,
+  isConsoleSpaPath,
+  proxySpa,
   serveConsole,
   startConsoleApp,
   withCookieAuth,

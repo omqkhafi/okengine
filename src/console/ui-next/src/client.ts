@@ -494,6 +494,81 @@ export async function flowsInvoke(
   });
 }
 
+/** Cron health from `GET /console/clock`. */
+export type ClockCronHealth = {
+  readonly driftMs: number | null;
+  readonly overdue: boolean;
+  readonly missedRuns: number;
+  readonly catchUp: "one";
+  readonly leaderInstanceId?: string;
+  readonly leaderLeaseUntil?: number;
+};
+
+/** One cron row from `GET /console/clock`. */
+export type ClockListCron = {
+  readonly name: string;
+  readonly status: "active" | "paused" | "orphaned";
+  readonly health: ClockCronHealth;
+};
+
+/** Clock list payload (`GET /console/clock`). */
+export type ClockListPayload = {
+  readonly now: number;
+  readonly crons: readonly ClockListCron[];
+};
+
+/**
+ * GET /console/clock — cron health + lease holder (not a fleet registry).
+ */
+export async function clockList(): Promise<ConsoleApiResult<ClockListPayload>> {
+  return consoleFetch<ClockListPayload>("/console/clock");
+}
+
+/** One signal row from `GET /console/signals`. */
+export type SignalsListRow = {
+  readonly name: string;
+  readonly pending: number;
+  readonly inflight: number;
+  readonly dead: number;
+  readonly outboxLagMs: number | null;
+};
+
+/** Signals list payload (`GET /console/signals`). */
+export type SignalsListPayload = {
+  readonly signals: readonly SignalsListRow[];
+};
+
+/**
+ * GET /console/signals — queue lag / depth from the Console host bus.
+ */
+export async function signalsList(): Promise<ConsoleApiResult<SignalsListPayload>> {
+  return consoleFetch<SignalsListPayload>("/console/signals");
+}
+
+/** Per-prompt-version metrics from `GET /console/ai`. */
+export type AiListVersion = {
+  readonly prompt: string;
+  readonly version: number;
+  readonly sampleCount: number;
+  readonly cost: {
+    readonly mean: number;
+    readonly p95: number;
+  };
+};
+
+/** AI list payload (`GET /console/ai`). */
+export type AiListPayload = {
+  readonly prompts: ReadonlyArray<{ readonly name: string }>;
+  readonly versions: readonly AiListVersion[];
+};
+
+/**
+ * GET /console/ai — catalogue + journal metrics (often empty on a real host).
+ */
+export async function aiList(): Promise<ConsoleApiResult<AiListPayload>> {
+  return consoleFetch<AiListPayload>("/console/ai");
+}
+
 /** Request body for `POST /console/clock/run-now`. */
 export type ClockRunNowInput = {
   readonly name: string;

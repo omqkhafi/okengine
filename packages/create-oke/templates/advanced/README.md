@@ -8,6 +8,7 @@ Scaffold, not a finished product: keep the Flows you want, replace the rest.
 bun install
 oke mode docker   # seeded by create-oke recommended path
 oke dev           # auto db push; asks once whether to seed
+bun run web       # Vite SPA — proxies /notes · /health to the app
 ```
 
 | Surface | URL |
@@ -15,6 +16,7 @@ oke dev           # auto db push; asks once whether to seed
 | App | http://127.0.0.1:6530 |
 | Console | http://127.0.0.1:6533 |
 | MCP | http://127.0.0.1:6535 |
+| Web | `bun run web` (Vite; API via proxy) |
 
 ## Extra routes (vs standard)
 
@@ -43,6 +45,7 @@ Without AI, summarize returns a local excerpt (`via: "fallback"`).
 | `src/core/` | `store` (db + files) · gates · vault · channels |
 | `src/db/` | schema · seed · migrations |
 | `.github/workflows/ci.yml` | `bun run typecheck` + `bun test` on push/PR |
+| `web/` | Vite 8 SPA — same as standard |
 
 ## Drivers
 

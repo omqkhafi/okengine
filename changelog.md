@@ -14,6 +14,17 @@ needed).
 
 ### ✨ Added
 
+- create-oke `standard` / `advanced` ship a Vite 8 `web/` SPA.
+  Vite owns `index.html` and proxies `/notes` · `/health` ·
+  `/_oke` to the app. `bun run web` after `oke dev`.
+
+- Console **Monitoring** (`/monitoring`) — health strip (Vault seal/KEK,
+  Store drift, Clock overdue/lease, Signal queue lag, window P95 /
+  error rate), top errors from the persisted runs buffer (opens
+  Trace detail), and a Bklit composed chart (request volume, error
+  count, dual-axis P95). AI cost stays empty until `fx.ask` writes
+  run telemetry. No fleet/instance count.
+
 - Boot wires `drivers.runs` (`files` in `dev`/`prod` at
   `.oke/runs`, `memory` in `test`). `oke replay` and host
   recording share that root. create-oke templates install
@@ -455,6 +466,10 @@ needed).
 
 ### ♻️ Changed
 
+- Console Units tree lists HTTP flows by method:
+  GET, POST, QUERY, PATCH/PUT, DELETE (then name).
+  Was alphabetical, so `delete` sat above `get`.
+
 - The `files` runs driver no longer uses a deleted tmpdir:
   default root is `.oke/runs`, `all()` reads every Parquet
   file (not just this process's catalog), and the memory
@@ -761,6 +776,10 @@ needed).
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
 ### 🐛 Fixed
+
+- `oke dev` / `bun run dev:keel` hot-reloads Console UI
+  from source. Vite attaches on an okengine checkout so
+  `ui-next` edits no longer need `bun run build`.
 
 - Console index browse keeps focus while typing. Search no
   longer sits inside a tooltip trigger, the grid stays mounted

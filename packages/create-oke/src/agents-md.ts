@@ -78,9 +78,10 @@ Mnemonic: O·K·E = 6·5·3.
 \`\`\`bash
 bun install
 oke dev          # or: bun run dev
+bun run web      # Vite SPA (proxies Flows to the app)
 \`\`\`
 
-App \`:6530\` · Console \`:6533\` · MCP \`:6535\`.
+App \`:6530\` · Console \`:6533\` · MCP \`:6535\`. Vite web is \`bun run web\`.
 
 ## Common mistakes
 

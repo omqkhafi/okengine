@@ -79,6 +79,9 @@ With the starter, that is `GET /health` on port **6530** when `$routes` are wire
 `oke dev` regenerates `oke-client.d.ts` from `GET /_oke/client.json`. A separate frontend repo
 runs `oke client add <url>` (default out: `oke-client.d.ts`).
 
+create-oke starters ship `web/`: Vite owns `index.html` and proxies `/notes` ·
+`/health` · `/_oke` to the app. Use `createClient("")` so the browser stays same-origin.
+
 ```bash
 oke client add http://localhost:6530
 oke client add https://api.example.com --out ./types/oke-client.d.ts

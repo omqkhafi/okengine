@@ -96,8 +96,10 @@ Four ports come up together (mnemonic: **O·K·E = 6·5·3**):
 
 Open `http://localhost:6533`. Paste the **claim code** from the `oke dev` board
 (or `oke console claim-code`). Password: **≥ 12** with upper, lower, number, and
-special, or **Generate** (copies it). Flows listed means the install worked —
-**derived, not configured.**
+special, or **Generate** (copies it).
+
+Flows listed means the install worked — **derived, not configured.**
+`bun run web` starts the Vite Notes UI (proxies Flows to the app).
 
 </Step>
 
@@ -167,11 +169,9 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Create first operator fails (password / claim code)">
-  Password: ≥ 12 chars with upper, lower, number, and special — or **Generate** to fill and copy.
-  Copy the claim code from the `oke dev` board (30 min TTL; restart mints a new
-  one), or run `oke console claim-code`. The form never receives the code over
-  HTTP. The form and request log show the reason — not a bare `TransportError` /
-  `500`.
+  Password: ≥ 12 with upper, lower, number, and special — or **Generate**.
+  Copy the claim code from the `oke dev` board (30 min TTL) or `oke console claim-code`.
+  The form never gets the code over HTTP; the log shows the reason, not a bare `500`.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">

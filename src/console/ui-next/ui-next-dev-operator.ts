@@ -39,6 +39,14 @@ export function isConsoleFresh(): boolean {
 }
 
 /**
+ * True when `OKE_CONSOLE_KERNEL=0` — Vite is SPA-only because `oke dev`
+ * already owns the Console kernel on :6533.
+ */
+export function isConsoleKernelSkipped(): boolean {
+  return process.env["OKE_CONSOLE_KERNEL"] === "0";
+}
+
+/**
  * Create an {@link OperatorStore} with the fixed Console dev operator.
  * Closing setup (`setupClosed`) follows from `operators.size > 0`.
  *

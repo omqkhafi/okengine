@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { authenticateOperator } from "../../auth/operator.ts";
 import {
   isConsoleFresh,
+  isConsoleKernelSkipped,
   seedUiNextDevOperator,
   UI_NEXT_DEV_OPERATOR,
   UI_NEXT_DEV_OPERATOR_EMAIL,
@@ -14,6 +15,19 @@ import {
 } from "./ui-next-dev-operator.ts";
 
 describe("ui-next dev operator", () => {
+  test("kernel-skip env flag is explicit", () => {
+    const prev = process.env["OKE_CONSOLE_KERNEL"];
+    try {
+      delete process.env["OKE_CONSOLE_KERNEL"];
+      expect(isConsoleKernelSkipped()).toBe(false);
+      process.env["OKE_CONSOLE_KERNEL"] = "0";
+      expect(isConsoleKernelSkipped()).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env["OKE_CONSOLE_KERNEL"];
+      else process.env["OKE_CONSOLE_KERNEL"] = prev;
+    }
+  });
+
   test("fresh env flag is explicit", () => {
     const prev = process.env["OKE_CONSOLE_FRESH"];
     try {

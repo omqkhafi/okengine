@@ -1,6 +1,7 @@
 /**
  * Vite build for the Console SPA.
- * Dev server :6537 with /console → :6533 proxy + ephemeral Console kernel.
+ * Dev server :6537 with /console → kernel proxy.
+ * `oke dev` sets `OKE_CONSOLE_KERNEL=0` so Vite is SPA/HMR only.
  *
  * Scripts:
  * - `dev:console` — fixed operator
@@ -15,7 +16,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import { isConsoleFresh, UI_NEXT_DEV_OPERATOR } from "./ui-next-dev-operator.ts";
+import {
+  isConsoleFresh,
+  isConsoleKernelSkipped,
+  UI_NEXT_DEV_OPERATOR,
+} from "./ui-next-dev-operator.ts";
 import { okeConsoleKernelPlugin } from "./vite-console-kernel-plugin.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -25,10 +30,12 @@ const pkg = JSON.parse(readFileSync(resolve(here, "../../../package.json"), "utf
 
 export default defineConfig(({ command }) => {
   const injectDevOperator = command === "serve" && !isConsoleFresh() ? UI_NEXT_DEV_OPERATOR : null;
+  const attachToOkeDev = isConsoleKernelSkipped();
+  const consoleProxy = process.env["OKE_CONSOLE_PROXY"] ?? "http://127.0.0.1:6533";
 
   return {
     root: here,
-    plugins: [react(), tailwindcss(), okeConsoleKernelPlugin()],
+    plugins: [react(), tailwindcss(), ...(attachToOkeDev ? [] : [okeConsoleKernelPlugin()])],
     define: {
       __OKE_VERSION__: JSON.stringify(pkg.version),
       __OKE_DEV_OPERATOR__: JSON.stringify(injectDevOperator),
@@ -63,8 +70,9 @@ export default defineConfig(({ command }) => {
       strictPort: true,
       proxy: {
         "/console": {
-          target: "http://127.0.0.1:6533",
+          target: consoleProxy,
           changeOrigin: true,
+          ws: true,
         },
       },
     },

@@ -7,18 +7,27 @@
     "okengine": "file:../../../..",
     "@duckdb/node-api": "^1.5.5-r.2",
     "drizzle-orm": "1.0.0-rc.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@electric-sql/pglite-pgvector": "^0.0.5",
     "@types/bun": "latest",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "drizzle-kit": "1.0.0-rc.4",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -b -p web/tsconfig.json",
     "test": "oke test",
-    "dev": "oke dev"
+    "dev": "oke dev",
+    "web": "bunx --bun vite --config web/vite.config.ts",
+    "web:build": "tsc -b -p web/tsconfig.json && bunx --bun vite build --config web/vite.config.ts",
+    "web:preview": "bunx --bun vite preview --config web/vite.config.ts"
   }
 }

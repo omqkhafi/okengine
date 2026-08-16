@@ -1,9 +1,10 @@
 /**
- * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault.
+ * Authenticated Console sidebar — always icon-collapsed: Overview / Flows / Store / Vault / Monitoring.
  */
 
 import {
   AccessIcon,
+  Activity03Icon,
   Archive02Icon,
   Shapes01Icon,
   WorkflowSquare08Icon,
@@ -37,6 +38,7 @@ const navItems: ReadonlyArray<{
   { title: "Flows", to: "/flows", icon: Shapes01Icon },
   { title: "Store", to: "/store", icon: Archive02Icon },
   { title: "Vault", to: "/vault", icon: AccessIcon },
+  { title: "Monitoring", to: "/monitoring", icon: Activity03Icon },
 ];
 
 /**

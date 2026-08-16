@@ -18,6 +18,7 @@ describe("sanitizeReturnTo", () => {
     expect(sanitizeReturnTo("/vault?name=STRIPE_KEY&action=rotate")).toBe(
       "/vault?name=STRIPE_KEY&action=rotate",
     );
+    expect(sanitizeReturnTo("/monitoring?window=7d")).toBe("/monitoring?window=7d");
   });
 
   test("rejects unknown paths including /units", () => {
@@ -65,6 +66,9 @@ describe("validateAuthSearch / authGateSearch", () => {
     expect(authGateSearch("/vault?name=STRIPE_KEY")).toEqual({
       next: "/vault?name=STRIPE_KEY",
     });
+    expect(authGateSearch("/monitoring?window=7d")).toEqual({
+      next: "/monitoring?window=7d",
+    });
   });
 
   test("drops an unsafe next", () => {
@@ -98,6 +102,10 @@ describe("afterAuthLocation", () => {
     expect(afterAuthLocation("/vault?name=STRIPE_KEY&action=rotate-master")).toEqual({
       to: "/vault",
       search: { name: "STRIPE_KEY", action: "rotate-master" },
+    });
+    expect(afterAuthLocation("/monitoring?window=7d&run=r1")).toEqual({
+      to: "/monitoring",
+      search: { window: "7d", run: "r1" },
     });
   });
 });

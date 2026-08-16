@@ -24,6 +24,7 @@ Write your first Flow, call it from a typed client, and prove it with
 bunx create-oke@latest my-app
 cd my-app
 oke dev
+bun run web
 ```
 
 Use `--template advanced` for the same Notes domain with files attach, a daily
@@ -86,9 +87,10 @@ const api = createClient<App>("http://localhost:6530");
 const { data, error } = await api.main.health({});
 ```
 
-`data` and `error` are inferred from the Flow contracts — no separate client
-schema. Bearer: `auth: { getToken, refresh }` (`okengine/client/auth` helpers;
-`useSession` in `okengine/client-react`). Full options: [Client](/docs/reference/client).
+`data` and `error` are inferred from the Flow contracts.
+
+The starter `web/` app uses `createClient("")` so Vite proxies `/notes` and
+`/health` to the app. Bearer: `auth: { getToken, refresh }`. See [Client](/docs/reference/client).
 
 </Step>
 

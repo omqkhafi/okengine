@@ -11,6 +11,7 @@ describe("last-module-search", () => {
   test("only Console modules are remembered", () => {
     expect(isConsoleModulePath("/overview")).toBe(true);
     expect(isConsoleModulePath("/flows")).toBe(true);
+    expect(isConsoleModulePath("/monitoring")).toBe(true);
     expect(isConsoleModulePath("/units")).toBe(false);
     expect(isConsoleModulePath("/")).toBe(false);
     const left = rememberModuleSearch({}, "/overview", { run: "iss-1", flow: "issues.get" });

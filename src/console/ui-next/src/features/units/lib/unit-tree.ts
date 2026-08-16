@@ -9,6 +9,7 @@ import type {
   SignalDelivery,
 } from "../../../../../../manifest/types.ts";
 import { unitOfFlowId } from "@/features/flows/graph/build-flow-graph.ts";
+import { httpMethodSortRank } from "@/features/flows/traces/http-method.ts";
 import {
   FLOW_TRIGGER_KIND_SPECS,
   FLOW_TRIGGER_KINDS,
@@ -157,7 +158,21 @@ export function unitTreeAncestorKeys(bands: readonly UnitTreeBand[], flowId: str
 }
 
 /**
- * Project Manifest flows into unit groups (sorted).
+ * HTTP method rank, then flow id — GET / POST / QUERY / PATCH·PUT / DELETE.
+ *
+ * @param a - Left row
+ * @param b - Right row
+ */
+function compareUnitFlows(a: UnitFlowRow, b: UnitFlowRow): number {
+  const byMethod = httpMethodSortRank(a.method) - httpMethodSortRank(b.method);
+  return byMethod !== 0 ? byMethod : a.id.localeCompare(b.id);
+}
+
+/**
+ * Project Manifest flows into unit groups.
+ *
+ * Units sort by name. Flows sort by HTTP method
+ * (GET → POST → QUERY → PATCH/PUT → DELETE), then by id.
  *
  * @param manifest - Current Manifest
  */
@@ -190,7 +205,7 @@ export function buildUnitTree(manifest: Manifest | null | undefined): readonly U
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([unit, rows]) => ({
       unit,
-      flows: rows.sort((a, b) => a.id.localeCompare(b.id)),
+      flows: rows.sort(compareUnitFlows),
     }));
 }
 
