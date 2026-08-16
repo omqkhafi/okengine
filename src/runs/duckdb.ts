@@ -55,6 +55,47 @@ export async function duckQuery(conn: DuckDBConnection, sql: string): Promise<Ru
   return rows.map(normalizeRow);
 }
 
+/** Thrown when {@link duckQueryWithTimeout} exceeds `timeoutMs`. */
+export class DuckQueryTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(`runs query timed out after ${timeoutMs}ms`);
+    this.name = "DuckQueryTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
+ * Run {@link duckQuery} with a wall-clock timeout and optional interrupt.
+ *
+ * @param conn - DuckDB connection
+ * @param sql - SQL text
+ * @param timeoutMs - Deadline
+ */
+export async function duckQueryWithTimeout(
+  conn: DuckDBConnection,
+  sql: string,
+  timeoutMs: number,
+): Promise<RunsRow[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      try {
+        (conn as { interrupt?: () => void }).interrupt?.();
+      } catch {
+        /* ignore */
+      }
+      reject(new DuckQueryTimeoutError(timeoutMs));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([duckQuery(conn, sql), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /**
  * Escape a filesystem path for use inside a DuckDB string literal.
  *

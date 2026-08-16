@@ -43,9 +43,10 @@ const FLAT_SELECT =
   "h-7 min-w-0 rounded-none border-0 bg-transparent px-0 font-mono text-[11px] text-foreground shadow-none outline-none focus-visible:ring-0 dark:bg-transparent";
 
 const TEXT_ACTION =
-  "rounded-none border-0 bg-transparent p-0 text-[11px] text-foreground/70 shadow-none transition-colors hover:text-foreground";
+  "rounded-none border-0 bg-transparent px-1.5 py-1 text-[11px] text-foreground/70 shadow-none transition-colors hover:bg-muted/50 hover:text-foreground";
 
-const CLAUSE_GRID = "grid grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,1fr)_1.25rem] items-center gap-x-1";
+const CLAUSE_GRID =
+  "grid grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,1fr)_1.25rem] items-center gap-x-1";
 
 /**
  * Advanced filter panel — visual clauses, togglable presets, optional add row.

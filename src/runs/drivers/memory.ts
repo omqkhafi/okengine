@@ -6,9 +6,22 @@
 
 import type { DuckDBConnection } from "@duckdb/node-api";
 
-import { duckLiteral, duckQuery, openDuckDB, type DuckSession } from "../duckdb.ts";
+import {
+  duckLiteral,
+  duckQuery,
+  duckQueryWithTimeout,
+  openDuckDB,
+  type DuckSession,
+} from "../duckdb.ts";
 import { wideEventToRow, type ParquetRow } from "../parquet.ts";
-import type { RunsDriver, RunsOpenOptions, RunsRow, RunsStore, WideEvent } from "../types.ts";
+import type {
+  RunsDriver,
+  RunsOpenOptions,
+  RunsQueryOptions,
+  RunsRow,
+  RunsStore,
+  WideEvent,
+} from "../types.ts";
 
 /**
  * Memory runs driver (DuckDB `:memory:`).
@@ -32,10 +45,30 @@ export const memoryRunsDriver: RunsDriver = {
       async flush(): Promise<void> {
         /* nothing buffered */
       },
-      async query(sql: string): Promise<RunsRow[]> {
+      async query(sql: string, options?: RunsQueryOptions): Promise<RunsRow[]> {
         const conn = await ensureConn();
         await materialiseRunsTable(conn, events);
-        return duckQuery(conn, sql);
+        if (options?.sandbox === true) {
+          await conn.run("SET enable_external_access = false");
+        }
+        try {
+          const rows =
+            options?.timeoutMs !== undefined
+              ? await duckQueryWithTimeout(conn, sql, options.timeoutMs)
+              : await duckQuery(conn, sql);
+          if (options?.maxRows !== undefined && rows.length > options.maxRows) {
+            return rows.slice(0, options.maxRows);
+          }
+          return rows;
+        } finally {
+          if (options?.sandbox === true) {
+            try {
+              await conn.run("SET enable_external_access = true");
+            } catch {
+              /* ignore */
+            }
+          }
+        }
       },
       async all(): Promise<WideEvent[]> {
         return [...events];

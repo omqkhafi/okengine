@@ -31,6 +31,22 @@ export async function readPersistedRuns(localRoot: string): Promise<WideEvent[]>
 }
 
 /**
+ * Union two wide-event sets. Live wins on the same id.
+ *
+ * @param live - In-process / ingest copy
+ * @param persisted - Disk snapshot
+ */
+export function mergeLiveAndPersistedEvents(
+  live: readonly WideEvent[],
+  persisted: readonly WideEvent[],
+): WideEvent[] {
+  const byId = new Map<string, WideEvent>();
+  for (const event of persisted) byId.set(event.id, event);
+  for (const event of live) byId.set(event.id, event);
+  return [...byId.values()].sort((a, b) => b.startedAt - a.startedAt);
+}
+
+/**
  * Union live (in-process) events with disk. Live wins on the same id.
  *
  * @param live - Console memory / ingest copy
@@ -41,8 +57,5 @@ export async function mergeLiveAndPersistedRuns(
   localRoot: string,
 ): Promise<WideEvent[]> {
   const persisted = await readPersistedRuns(localRoot);
-  const byId = new Map<string, WideEvent>();
-  for (const event of persisted) byId.set(event.id, event);
-  for (const event of live) byId.set(event.id, event);
-  return [...byId.values()].sort((a, b) => b.startedAt - a.startedAt);
+  return mergeLiveAndPersistedEvents(live, persisted);
 }

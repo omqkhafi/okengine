@@ -72,18 +72,19 @@ export function AppSidebar({
         <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup className="items-center">
+        <SidebarGroup className="items-stretch p-0">
           <SidebarGroupLabel>Console</SidebarGroupLabel>
-          <SidebarMenu className="items-center gap-3">
+          <SidebarMenu className="items-stretch gap-0">
             {navItems.map((item) => (
-              <SidebarMenuItem key={item.to}>
+              <SidebarMenuItem key={item.to} className="w-full">
                 <SidebarMenuButton
                   render={<Link to={item.to} search={lastSearchFor(memory, item.to) as never} />}
                   isActive={pathname === item.to}
                   tooltip={item.title}
+                  className="rounded-none! justify-center hover:bg-muted/50! hover:text-foreground data-active:bg-muted/70! data-active:text-foreground group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:w-full! group-data-[collapsible=icon]:p-0!"
                 >
                   <HugeiconsIcon icon={item.icon} />
-                  <span>{item.title}</span>
+                  <span className="sr-only">{item.title}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}

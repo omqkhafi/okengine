@@ -145,8 +145,11 @@ export function FilePreview({
                 truncated={object.data?.truncated ?? false}
               />
               <dl className="flex flex-col gap-2 border-t border-border/50 px-4 py-3 text-[11px]">
-                {object.data?.originalName ?? originalName ? (
-                  <MetaRow label="Original name" value={object.data?.originalName ?? originalName ?? ""} />
+                {(object.data?.originalName ?? originalName) ? (
+                  <MetaRow
+                    label="Original name"
+                    value={object.data?.originalName ?? originalName ?? ""}
+                  />
                 ) : null}
                 <MetaRow label="Key" mono value={objectKey} />
                 <MetaRow label="Type" value={object.data?.contentType ?? "—"} />
@@ -246,13 +249,7 @@ function PreviewSurface({
     );
   }
   if (mode === "pdf" && objectUrl) {
-    return (
-      <iframe
-        title={name}
-        src={objectUrl}
-        className="h-80 w-full border-0 bg-background"
-      />
-    );
+    return <iframe title={name} src={objectUrl} className="h-80 w-full border-0 bg-background" />;
   }
   if (mode === "video" && objectUrl) {
     return (
@@ -305,7 +302,7 @@ function DelimitedPreview({
       <table className="w-full text-left font-mono text-[10px]">
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-border/40">
+            <tr key={i} className="border-b border-border/60">
               {row.map((cell, j) => (
                 <td key={j} className="px-2 py-1 whitespace-nowrap text-foreground/80">
                   {cell}

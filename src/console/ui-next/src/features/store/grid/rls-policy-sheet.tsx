@@ -643,7 +643,9 @@ function GateModeButton({
       className={cn(
         "relative inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-none px-2 text-[11px] font-medium outline-none select-none",
         "focus-visible:ring-2 focus-visible:ring-ring/50",
-        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+        active
+          ? "text-foreground"
+          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
       )}
       {...props}
     >

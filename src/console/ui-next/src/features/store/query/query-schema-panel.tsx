@@ -7,7 +7,12 @@ import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/c
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { StoreListChild, StoreListStore } from "@/client.ts";
-import { Button } from "@/components/ui/button";
+import {
+  EXPLORER_ICON_BUTTON_BARE_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_STRIP_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
 import { useStoreQuery } from "../data/use-store-query.ts";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
@@ -53,29 +58,28 @@ export function QuerySchemaPanel({
 
   return (
     <aside
-      className="flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-l border-border/50 bg-muted/10"
+      className="flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-l border-border/60"
       data-slot="store-query-schema-panel"
     >
-      <header className="flex shrink-0 items-center justify-between gap-1 border-b border-border/50 px-2.5 py-2">
-        <p className="min-w-0 truncate font-mono text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <header className={cn(EXPLORER_STRIP_CLASS, "justify-between px-2")}>
+        <p className={cn(SECTION_HEAD_CLASS, "min-w-0 truncate font-mono")}>
           {isSql ? "Schema" : "Namespaces"}
         </p>
         {onCollapse ? (
-          <ToolbarTip label="Collapse schema">
-            <Button
+          <ToolbarTip label="Collapse schema" className="flex self-stretch">
+            <button
               type="button"
-              variant="ghost"
-              size="icon-xs"
               aria-label="Collapse schema"
               data-slot="store-query-schema-collapse"
               onClick={onCollapse}
+              className={EXPLORER_ICON_BUTTON_CLASS}
             >
               <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />
-            </Button>
+            </button>
           </ToolbarTip>
         ) : null}
       </header>
-      <ul className="min-h-0 flex-1 overflow-y-auto p-1">
+      <ul className="min-h-0 flex-1 overflow-y-auto">
         {children.length === 0 ? (
           <li className="px-2 py-4 text-[11px] text-muted-foreground">No resources.</li>
         ) : (
@@ -126,15 +130,15 @@ function SchemaChild({
   const expandable = isSql ? columns.length > 0 : true;
 
   return (
-    <li className="mb-0.5">
-      <div className="flex items-center gap-0.5">
+    <li>
+      <div className="flex items-center">
         {expandable ? (
           <button
             type="button"
             aria-expanded={open}
             aria-label={`${open ? "Collapse" : "Expand"} ${child.name}`}
             onClick={() => setOpen((v) => !v)}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+            className={EXPLORER_ICON_BUTTON_BARE_CLASS}
           >
             <HugeiconsIcon
               icon={ArrowDown01Icon}
@@ -147,20 +151,20 @@ function SchemaChild({
         <button
           type="button"
           onClick={() => onPickTable(child.name)}
-          className="min-w-0 flex-1 truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-foreground hover:bg-muted/70"
+          className="min-w-0 flex-1 truncate px-2 py-1.5 text-left font-mono text-[11px] text-foreground hover:bg-muted/50"
           title={isSql ? `SELECT * FROM "${child.name}"` : `list ${child.name}:`}
         >
           {child.name}
         </button>
       </div>
       {isSql && open && columns.length > 0 ? (
-        <ul className="ml-5 border-l border-border/40 pl-1.5">
+        <ul className="border-l border-border/60 ml-3">
           {columns.map((col) => (
             <li key={col.name}>
               <button
                 type="button"
                 onClick={() => onPickColumn(child.name, col.name)}
-                className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left hover:bg-muted/60"
+                className="flex w-full items-center gap-1.5 px-2 py-1 text-left hover:bg-muted/50"
               >
                 <SchemaColumnMarks
                   primaryKey={col.primaryKey}
@@ -229,7 +233,7 @@ function KvFieldList({
   const fields = fieldsFromKvValues((browse.data?.keys ?? []).map((entry) => entry.value));
 
   return (
-    <ul className="ml-5 border-l border-border/40 pl-1.5">
+    <ul className="ml-3 border-l border-border/60">
       {!tenantReady ? (
         <li className="px-1.5 py-1 font-mono text-[10px] text-muted-foreground">
           Select a tenant.
@@ -248,7 +252,7 @@ function KvFieldList({
             <button
               type="button"
               onClick={() => onPickField(field.name)}
-              className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left hover:bg-muted/60"
+              className="flex w-full items-center gap-1.5 px-2 py-1 text-left hover:bg-muted/50"
             >
               <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
                 {field.name}
@@ -284,10 +288,10 @@ export function QuerySchemaCollapsed({
         aria-label={`Expand ${label.toLowerCase()}`}
         data-slot="store-query-schema-expand"
         onClick={onExpand}
-        className="flex h-full w-7 shrink-0 flex-col items-center gap-2 border-l border-border/50 bg-muted/10 py-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+        className="flex h-full w-7 shrink-0 flex-col items-center gap-2 border-l border-border/60 py-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
       >
         <HugeiconsIcon icon={ArrowLeft01Icon} className="size-3.5" />
-        <span className="font-mono text-[10px] font-semibold tracking-[0.14em] uppercase [writing-mode:vertical-rl]">
+        <span className="font-mono text-[10px] font-semibold tracking-[0.08em] uppercase [writing-mode:vertical-rl]">
           {label}
         </span>
       </button>

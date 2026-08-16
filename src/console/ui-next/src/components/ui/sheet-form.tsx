@@ -129,7 +129,7 @@ export function SheetTextToggle({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center gap-1 rounded-none border-0 bg-transparent p-0 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none transition-colors",
+        "inline-flex items-center gap-1 rounded-none border-0 bg-transparent px-2 py-1 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none transition-colors hover:bg-muted/50",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         className,
       )}

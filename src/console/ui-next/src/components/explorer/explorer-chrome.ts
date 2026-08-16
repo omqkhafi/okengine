@@ -13,19 +13,31 @@ export const EXPLORER_SPLIT = {
 
 /** Flush search field inside {@link EXPLORER_TOOLBAR_CLASS}. */
 export const EXPLORER_SEARCH_CLASS =
-  "h-8 min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 text-xs shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent";
+  "h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 text-xs shadow-none focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent";
 
 /** Search + icon-action row at the top of every left pane. */
-export const EXPLORER_TOOLBAR_CLASS =
-  "flex h-8 shrink-0 items-center gap-1 border-b border-border/60";
+export const EXPLORER_TOOLBAR_CLASS = "flex h-8 shrink-0 items-stretch border-b border-border/60";
 
-/** Bordered 24px toolbar control (expand, visibility, verify). */
+/** h-8 filter / command / results bar — tokens stretch to fill. */
+export const EXPLORER_STRIP_CLASS = "flex h-8 shrink-0 items-stretch border-b border-border/60";
+
+/** Full-height token in {@link EXPLORER_STRIP_CLASS} — hover fills the bar. */
+export const EXPLORER_STRIP_TOKEN_CLASS =
+  "inline-flex h-full items-center gap-1 px-2 text-[10px] font-medium transition-colors hover:bg-muted/50 hover:text-foreground";
+
+/** Pressed strip token — ink only, no well. */
+export const EXPLORER_STRIP_TOKEN_ACTIVE_CLASS = "text-foreground";
+
+/** Idle strip token ink. */
+export const EXPLORER_STRIP_TOKEN_IDLE_CLASS = "text-muted-foreground";
+
+/** Icon-only control on a toolbar or strip — flat fill, no border well. */
 export const EXPLORER_ICON_BUTTON_CLASS =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border/70 text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex h-full min-w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40";
 
 /** Icon-only control on a band / folder row (no chrome). */
 export const EXPLORER_ICON_BUTTON_BARE_CLASS =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex size-6 shrink-0 items-center justify-center border-0 bg-transparent text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40";
 
 /** Facet / trigger / kind band — flush, no fill (Traces language). */
 export const EXPLORER_BAND_CLASS = "overflow-hidden border-b border-border/60 last:border-b-0";

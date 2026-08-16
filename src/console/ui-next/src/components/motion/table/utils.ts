@@ -10,6 +10,16 @@ import type { TableColumn } from "./types.ts";
 export const CHECKBOX_PX = 48;
 export const CHECKBOX_WIDTH = `${CHECKBOX_PX}px`;
 
+/**
+ * Hairline table checkbox — overrides the beUI well without editing the primitive.
+ */
+export const TABLE_CHECKBOX_CLASS = cn(
+  "[&_button]:size-3.5 [&_button]:rounded-[3px] [&_button]:border! [&_button]:border-border! [&_button]:bg-transparent!",
+  "[&_button]:ring-offset-0 [&_button]:hover:border-foreground/50!",
+  "[&_button[data-state=checked]]:border-sky-500! [&_button[data-state=checked]]:bg-sky-500! [&_button[data-state=checked]]:text-white!",
+  "[&_button[data-state=indeterminate]]:border-sky-500! [&_button[data-state=indeterminate]]:bg-sky-500! [&_button[data-state=indeterminate]]:text-white!",
+);
+
 /** Highlights the top edge of the active column's header cell. */
 export const COLUMN_ACTIVE_SHADOW = "inset 0 1px 0 var(--color-sky-500)";
 
@@ -32,7 +42,7 @@ export const CELL_RANGE_FILL = "bg-sky-500/15";
 export function cellHairline(selected: boolean): string {
   return cn(
     "relative after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-[1] after:h-px",
-    selected ? "after:bg-sky-500/25" : "after:bg-border",
+    selected ? "after:bg-sky-500/25" : "after:bg-border/60",
   );
 }
 

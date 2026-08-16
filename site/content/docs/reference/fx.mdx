@@ -41,12 +41,12 @@ See [Store](/docs/elements/store) for the query-builder surface.
 
 Declare `effects: { reads: ["runs"] }`. Powers native SLO checkers (Clock + Channel) without a parallel metrics API.
 
-| Signature                                | Records       | Returns                                       |
-| ---------------------------------------- | ------------- | --------------------------------------------- |
-| `fx.runs.query(sql)`                     | `read` `runs` | SQL rows (`FROM runs` on files/memory)        |
-| `fx.runs.all()`                          | `read` `runs` | All wide events                               |
-| `fx.runs.window(flow, windowMs?)`        | `read` `runs` | Rolling P50/P95/P99 + error rate (default 5m) |
-| `fx.runs.checkSlo(flow, slo, windowMs?)` | `read` `runs` | Availability / latency breaches               |
+| Signature                                | Records       | Returns                                                                                  |
+| ---------------------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `fx.runs.query(sql)`                     | `read` `runs` | SQL rows (`FROM runs` on files/memory). Unrestricted Flow SQL — not the Console sandbox. |
+| `fx.runs.all()`                          | `read` `runs` | All wide events                                                                          |
+| `fx.runs.window(flow, windowMs?)`        | `read` `runs` | Rolling P50/P95/P99 + error rate (default 5m)                                            |
+| `fx.runs.checkSlo(flow, slo, windowMs?)` | `read` `runs` | Availability / latency breaches                                                          |
 
 ```typescript
 on(
@@ -192,13 +192,13 @@ keys. Use `cache: false` to opt out, or `cache: "30s"` for a TTL.
 
 ## Responses
 
-| Helper                         | Status | Body                                                 |
-| ------------------------------ | ------ | ---------------------------------------------------- |
-| `fx.json.ok(value, { meta? })` | 200    | `{ data, meta?, error: null }`                       |
-| `fx.json.create(value)`        | 201    | `{ data, error: null }`                              |
-| `fx.json.empty()`              | 204    | no body                                              |
-| `fx.json.with(page)` / `with(data, meta)` | 200 | `{ data, meta, error: null }` — already-built pager |
-| `fx.json.withQuery(rows, input, spec?)` | 200 | In-memory list page — zero-config `q` / auto-eq / PostgREST |
+| Helper                                    | Status | Body                                                        |
+| ----------------------------------------- | ------ | ----------------------------------------------------------- |
+| `fx.json.ok(value, { meta? })`            | 200    | `{ data, meta?, error: null }`                              |
+| `fx.json.create(value)`                   | 201    | `{ data, error: null }`                                     |
+| `fx.json.empty()`                         | 204    | no body                                                     |
+| `fx.json.with(page)` / `with(data, meta)` | 200    | `{ data, meta, error: null }` — already-built pager         |
+| `fx.json.withQuery(rows, input, spec?)`   | 200    | In-memory list page — zero-config `q` / auto-eq / PostgREST |
 
 Returning a plain value instead answers 200 with `{ data: value, error: null }` — the helpers exist for status and `meta` control.
 

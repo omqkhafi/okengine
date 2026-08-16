@@ -12,6 +12,7 @@ import {
   PlayIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { explorerIconInk } from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
 import type { FileKind } from "../lib/files-meta.ts";
 
@@ -58,8 +59,7 @@ export function FileKindIcon({ kind, className, well = true }: FileKindIconProps
       className={cn(
         "inline-flex shrink-0 items-center justify-center",
         well && "size-7 rounded-md border",
-        well && KIND_WELL[kind],
-        !well && "text-current",
+        well ? KIND_WELL[kind] : explorerIconInk(KIND_WELL[kind]),
         className,
       )}
       aria-hidden

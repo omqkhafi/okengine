@@ -17,6 +17,7 @@ export type {
   RunsStore,
   RunsDriver,
   RunsOpenOptions,
+  RunsQueryOptions,
 } from "./types.ts";
 
 export { createRunTelemetry, cacheDimensionOf, type RunTelemetry } from "./telemetry.ts";
@@ -53,13 +54,24 @@ export {
   type ParquetRow,
 } from "./parquet.ts";
 
-export { openDuckDB, duckQuery, duckPath, duckLiteral } from "./duckdb.ts";
+export {
+  openDuckDB,
+  duckQuery,
+  duckQueryWithTimeout,
+  DuckQueryTimeoutError,
+  duckPath,
+  duckLiteral,
+} from "./duckdb.ts";
 
 export { DEFAULT_RUNS_LOCAL_ROOT } from "./types.ts";
 
 export { retentionKeepMs, partitionDayFromKey, shouldDropPartition } from "./retention.ts";
 
-export { readPersistedRuns, mergeLiveAndPersistedRuns } from "./history.ts";
+export {
+  readPersistedRuns,
+  mergeLiveAndPersistedEvents,
+  mergeLiveAndPersistedRuns,
+} from "./history.ts";
 
 export {
   createRunsRuntime,

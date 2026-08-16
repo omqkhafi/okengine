@@ -19,7 +19,17 @@ import { useColumnResize } from "./use-column-resize.ts";
 import { useColumnSort } from "./use-column-sort.ts";
 import { useRowSelection } from "./use-row-selection.ts";
 import { useCellRange } from "./use-cell-range.ts";
-import { CHECKBOX_WIDTH, CELL_RANGE_FILL, ROW_SELECTED_FILL, alignText, cellHairline, cellRangeFlags, editableCellValue, readCell } from "./utils.ts";
+import {
+  CHECKBOX_WIDTH,
+  CELL_RANGE_FILL,
+  ROW_SELECTED_FILL,
+  TABLE_CHECKBOX_CLASS,
+  alignText,
+  cellHairline,
+  cellRangeFlags,
+  editableCellValue,
+  readCell,
+} from "./utils.ts";
 
 export type { SortDirection, SortState, TableColumn, TableProps } from "./types.ts";
 
@@ -169,7 +179,10 @@ export function Table<T>({
 
   return (
     <div
-      className={cn("w-full overflow-hidden border border-border bg-background text-sm", className)}
+      className={cn(
+        "w-full overflow-hidden border border-border/60 bg-background text-sm",
+        className,
+      )}
     >
       <div
         ref={scrollRef}
@@ -238,10 +251,7 @@ export function Table<T>({
                 />
               ) : (
                 <tr>
-                  <td
-                    colSpan={span}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
+                  <td colSpan={span} className="px-4 py-8 text-center text-muted-foreground">
                     {emptyState}
                   </td>
                 </tr>
@@ -250,10 +260,7 @@ export function Table<T>({
               <>
                 {paddingTop > 0 ? (
                   <tr>
-                    <td
-                      colSpan={span}
-                      style={{ height: paddingTop, padding: 0, border: "none" }}
-                    />
+                    <td colSpan={span} style={{ height: paddingTop, padding: 0, border: "none" }} />
                   </tr>
                 ) : null}
                 {virtualItems.map((vItem) => {
@@ -286,7 +293,7 @@ export function Table<T>({
                         onRowDoubleClick(entry.row, entry.id);
                       }}
                       className={cn(
-                        "transition-colors hover:bg-muted/40",
+                        "transition-colors hover:bg-muted/50",
                         "data-[selected=true]:bg-sky-500/10 data-[selected=true]:hover:bg-sky-500/15",
                       )}
                     >
@@ -306,6 +313,7 @@ export function Table<T>({
                               checked={isSelected}
                               onCheckedChange={() => toggleRow(entry.id)}
                               aria-label={`Select row ${vItem.index + 1}`}
+                              className={TABLE_CHECKBOX_CLASS}
                             />
                           </div>
                         </td>
@@ -324,8 +332,7 @@ export function Table<T>({
                               "relative h-full cursor-cell overflow-hidden p-0",
                               alignText(column.align),
                               cellHairline(isSelected),
-                              !flags.inRange &&
-                                "has-[[data-pending=true]]:bg-amber-500/10",
+                              !flags.inRange && "has-[[data-pending=true]]:bg-amber-500/10",
                               flags.inRange && CELL_RANGE_FILL,
                               flags.isHead &&
                                 "z-[1] shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-sky-500)_45%,transparent)] has-[input]:shadow-none",
@@ -353,10 +360,7 @@ export function Table<T>({
                       {slack ? (
                         <td
                           aria-hidden
-                          className={cn(
-                            cellHairline(isSelected),
-                            isSelected && ROW_SELECTED_FILL,
-                          )}
+                          className={cn(cellHairline(isSelected), isSelected && ROW_SELECTED_FILL)}
                         />
                       ) : null}
                     </tr>

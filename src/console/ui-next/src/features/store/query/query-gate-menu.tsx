@@ -3,10 +3,10 @@
  */
 
 import { useMemo, useState, type JSX } from "react";
-import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import { Button } from "@/components/ui/button";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +23,14 @@ import {
   type QueryGateMode,
 } from "../lib/query-gate.ts";
 import { mergeRlsGateCatalog, rlsGateCatalog } from "../lib/rls-gate-catalog.ts";
-import { GateAsPicker, GateModeCard, GateModeDetail, type GateAsTab } from "./query-gate-parts.tsx";
+import {
+  GateAsPicker,
+  GateModeCard,
+  GateModeDetail,
+  GateModeStrip,
+  GatePickerHeading,
+  type GateAsTab,
+} from "./query-gate-parts.tsx";
 
 /** Props for {@link QueryGateMenu}. */
 export interface QueryGateMenuProps {
@@ -90,22 +97,27 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
           <Button
             {...props}
             type="button"
-            variant={active ? "secondary" : "ghost"}
+            variant="ghost"
             size="sm"
-            className={cn("h-7 text-[11px]", active && "text-sky-800 dark:text-sky-300")}
+            className={cn(
+              "h-8 max-w-44 min-w-0 rounded-none px-2 text-[11px]",
+              active && "text-sky-800 dark:text-sky-300",
+            )}
             aria-label={active ? `View data as Gate ${asGate}` : "View data as Operator (default)"}
             data-slot="store-query-gate"
           >
-            <HugeiconsIcon icon={SecurityCheckIcon} data-icon="inline-start" className="size-3.5" />
-            {queryGateToolbarLabel(asGate)}
+            <HugeiconsIcon
+              icon={ELEMENT_ICONS.gate.icon}
+              data-icon="inline-start"
+              className="size-3.5"
+            />
+            <span className="truncate">{queryGateToolbarLabel(asGate)}</span>
           </Button>
         )}
       />
-      <DropdownMenuContent align="start" className="w-[26rem] p-2.5">
-        <p className="px-0.5 pb-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-          View data as a Gate
-        </p>
-        <div role="radiogroup" aria-label="View data as" className="grid grid-cols-3 gap-1.5">
+      <DropdownMenuContent align="start" className="w-80 overflow-hidden p-0">
+        <GatePickerHeading>View as</GatePickerHeading>
+        <GateModeStrip label="View data as">
           <GateModeCard
             mode="operator"
             title="Operator"
@@ -128,42 +140,38 @@ export function QueryGateMenu({ manifest, asGate, onChange }: QueryGateMenuProps
             disabled={!asEnabled}
             onSelect={() => selectMode("as")}
           />
-        </div>
-        <div className="mt-2.5 border-t border-border/60 pt-2.5">
-          {mode === "operator" ? (
-            <GateModeDetail title="Full admin access" badge="Default">
-              Operator bypasses Row Level Security. Omit <span className="font-mono">asGate</span> —
-              no <span className="font-mono">oke.gate</span> is set.
-            </GateModeDetail>
-          ) : null}
-          {mode === "public" ? (
-            <GateModeDetail title="Public">
-              {publicDetail} Sets <span className="font-mono">oke.gate</span> to{" "}
-              <span className="font-mono">public</span> so policies can use{" "}
-              <span className="font-mono">current_setting('oke.gate', true)</span>.
-            </GateModeDetail>
-          ) : null}
-          {mode === "as" ? (
-            <GateAsPicker
-              tab={asTab}
-              onTabChange={setAsTab}
-              policies={policies}
-              users={users}
-              asGate={asGate}
-              asUserId={selectedUser?.id ?? null}
-              onSelectPolicy={(policy) => {
-                setAsUserId(null);
-                setAsTab("policy");
-                onChange(policy.id);
-              }}
-              onSelectUser={(user) => {
-                setAsUserId(user.id);
-                setAsTab("user");
-                onChange(user.gate);
-              }}
-            />
-          ) : null}
-        </div>
+        </GateModeStrip>
+        {mode === "operator" ? (
+          <GateModeDetail title="Operator" badge="Default">
+            Bypasses RLS. No <span className="font-mono">oke.gate</span> is set.
+          </GateModeDetail>
+        ) : null}
+        {mode === "public" ? (
+          <GateModeDetail title="Public">
+            {publicDetail} Sets <span className="font-mono">oke.gate</span> to{" "}
+            <span className="font-mono">public</span>.
+          </GateModeDetail>
+        ) : null}
+        {mode === "as" ? (
+          <GateAsPicker
+            tab={asTab}
+            onTabChange={setAsTab}
+            policies={policies}
+            users={users}
+            asGate={asGate}
+            asUserId={selectedUser?.id ?? null}
+            onSelectPolicy={(policy) => {
+              setAsUserId(null);
+              setAsTab("policy");
+              onChange(policy.id);
+            }}
+            onSelectUser={(user) => {
+              setAsUserId(user.id);
+              setAsTab("user");
+              onChange(user.gate);
+            }}
+          />
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -5,7 +5,7 @@
 import { Activity03Icon } from "@hugeicons/core-free-icons";
 import type { JSX } from "react";
 import { ExplorerEmpty } from "@/components/explorer/explorer-empty.tsx";
-import { DETAIL_HEADER_CLASS, DETAIL_TITLE_CLASS } from "@/components/explorer/explorer-chrome.ts";
+import { EXPLORER_STRIP_CLASS, SECTION_HEAD_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { formatDuration } from "@/features/flows/traces/format-duration.ts";
 import { durationTone, durationToneClass } from "@/features/flows/traces/duration-tone.ts";
 import { cn } from "@/lib/utils.ts";
@@ -40,9 +40,9 @@ export function MetricsPanel({ series, stats }: MetricsPanelProps): JSX.Element 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="monitoring-metrics">
-      <header className={DETAIL_HEADER_CLASS}>
-        <h2 className={DETAIL_TITLE_CLASS}>Metrics</h2>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+      <header className={EXPLORER_STRIP_CLASS}>
+        <h2 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Metrics</h2>
+        <span className="ml-auto px-2 font-mono text-[10px] text-muted-foreground">
           {series.buckets.length} buckets
         </span>
       </header>

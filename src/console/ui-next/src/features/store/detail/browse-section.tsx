@@ -663,7 +663,7 @@ function BrowseSkeleton(): JSX.Element {
         <Skeleton className="h-5 w-6" />
         <Skeleton className="h-5 w-6" />
       </div>
-      <div className="flex h-8 shrink-0 items-center gap-6 border-b border-border/50 px-3">
+      <div className="flex h-8 shrink-0 items-center gap-6 border-b border-border/60 px-3">
         <Skeleton className="size-3.5" />
         <Skeleton className="h-3 w-20" />
         <Skeleton className="h-3 w-24" />
@@ -675,7 +675,7 @@ function BrowseSkeleton(): JSX.Element {
         {Array.from({ length: 14 }, (_, i) => (
           <div
             key={i}
-            className="flex h-8 items-center gap-6 border-b border-border/30 px-3"
+            className="flex h-8 items-center gap-6 border-b border-border/60 px-3"
             style={{ opacity: 1 - i * 0.05 }}
           >
             <Skeleton className="size-3.5" />

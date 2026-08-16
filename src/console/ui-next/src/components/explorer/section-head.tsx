@@ -23,7 +23,7 @@ export function SectionHead({ title, meta, ruled = true }: SectionHeadProps): JS
     <div
       className={cn(
         "flex items-baseline justify-between gap-2",
-        ruled && "border-b border-border/50 pb-1.5",
+        ruled && "border-b border-border/60 pb-1.5",
       )}
     >
       <h3 className={SECTION_HEAD_CLASS}>{title}</h3>

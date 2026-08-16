@@ -90,11 +90,7 @@ export function StoreRowDetailSheet({
               {facet === "sql" ? `/${childName}` : ""}
             </SheetDescription>
           </div>
-          <div
-            className="flex items-center gap-4"
-            role="tablist"
-            aria-label="Row detail tabs"
-          >
+          <div className="flex items-center gap-4" role="tablist" aria-label="Row detail tabs">
             <TabButton active={tab === "fields"} onClick={() => setTab("fields")} id="fields">
               Fields
             </TabButton>
@@ -218,7 +214,7 @@ function TabButton({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "text-[10px] font-semibold tracking-[0.08em] uppercase transition-colors",
+        "px-2 py-1.5 text-[10px] font-semibold tracking-[0.08em] uppercase transition-colors hover:bg-muted/50",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
       data-slot={`row-tab-${id}`}

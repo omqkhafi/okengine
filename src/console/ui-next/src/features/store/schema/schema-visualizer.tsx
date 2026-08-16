@@ -120,8 +120,8 @@ function Canvas({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center border-b border-border/50">
-        <span className="px-3 font-mono text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+      <div className="flex h-8 shrink-0 items-stretch border-b border-border/60">
+        <span className="flex items-center px-3 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
           Schema
         </span>
         <label className="relative min-w-0 flex-1">
@@ -140,14 +140,15 @@ function Canvas({
             data-slot="store-schema-find"
           />
         </label>
-        <span className="px-2 tabular-nums text-[10px] text-muted-foreground">
+        <span className="flex items-center px-2 tabular-nums text-[10px] text-muted-foreground">
           {tables.length} table{tables.length === 1 ? "" : "s"}
         </span>
-        <div className="flex items-center gap-3 px-3">
+        <div className="ml-auto flex items-stretch">
           <SheetTextToggle
             active={colorize}
             aria-pressed={colorize}
             onClick={() => setColorize((v) => !v)}
+            className="h-full"
             data-slot="store-schema-colorize"
           >
             <HugeiconsIcon icon={ColorsIcon} className="size-3" aria-hidden />
@@ -157,7 +158,7 @@ function Canvas({
             active={copied}
             disabled={tables.length === 0}
             onClick={() => void copySql()}
-            className="disabled:pointer-events-none disabled:opacity-40"
+            className="h-full disabled:pointer-events-none disabled:opacity-40"
             data-slot="store-schema-copy-sql"
           >
             <HugeiconsIcon icon={copied ? Tick02Icon : Copy01Icon} className="size-3" aria-hidden />
@@ -167,7 +168,7 @@ function Canvas({
             active={false}
             disabled={tables.length === 0}
             onClick={() => setLayoutTick((n) => n + 1)}
-            className="disabled:pointer-events-none disabled:opacity-40"
+            className="h-full disabled:pointer-events-none disabled:opacity-40"
             data-slot="store-schema-auto-layout"
           >
             Auto layout

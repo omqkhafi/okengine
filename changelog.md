@@ -14,6 +14,14 @@ needed).
 
 ### ✨ Added
 
+- Console **Runs SQL** (`POST /console/runs/query`, Monitoring
+  SQL tab) — read-only DuckDB over `.oke/runs`. Statement
+  guard rejects DDL/DML/external access; isolated session
+  sets `enable_external_access=false`; 5s timeout; 1000-row
+  cap. Files driver skips re-copy when partition keys are
+  unchanged. PII mask is column-key only
+  (`RunsQueryPiiProjectionGap`).
+
 - Fleet registry (`oke_instances`) — each process
   heartbeats every 5s (30s TTL) on the existing 1s
   scheduler. `GET /console/instances` joins Clock and
@@ -486,6 +494,42 @@ needed).
 - Console Vault list rows are two lines: description + risk on the
   first, env name and readers on the second. Healthy rows drop the
   trailing set/config word. Band hints live on the section title.
+
+- Console data tables drop the muted header fill and use the same
+  hairline / hover as explorers: Store browse, query results, files
+  list, JSON inspect, and Vault fingerprints. Store browse restyles
+  the row checkbox at the table, not the shared control.
+
+- Console Vault detail drops the resolution winner box and filled
+  layer chips. Readers are flush rows with hover-reveal actions.
+
+- Console lookback and facet tokens are flat text (15m / 1h / 24h /
+  7d, Vault posture, Flows filters) — no muted segment well.
+  Filter tokens hover-fill the strip (Traces All / Errors / duration,
+  Call dock, schema toolbar, sheet tabs).
+
+- Console Store Query PII uses the view / view-off glyph. Gate keeps
+  the shield so the two toolbar controls no longer share an icon.
+  The query command strip matches Call API: full-height, square
+  tokens (Gate / PII / Schema / Run). Gate As picker drops the
+  User/Policy tray and rounded rows for flush list chrome.
+
+- Console Gate picker (Store Query and Call API) is a flush
+  strip: Operator / Public / As keep the access diagrams;
+  Operator and Public show a one-line hint; As still opens the
+  user/policy list.
+
+- Console Query results toolbar matches the command strip:
+  h-8 flush tokens, hairline /60, no boxed icon wells.
+
+- Console explorer tokens encode traces chrome: stretch
+  toolbars, `EXPLORER_STRIP_*` bars, flat icon buttons
+  (no bordered wells). Search, filters, Query, Call, Vault,
+  and Monitoring strips use those tokens — selected ink only.
+
+- Console Monitoring Metrics / SQL tabs and the Query header
+  are flush strips (no pill tabs, no blur header). Sidebar
+  module icons are flush in the rail — hover fill, no chip.
 
 - Console Units tree lists HTTP flows by method:
   GET, POST, QUERY, PATCH/PUT, DELETE (then name).

@@ -8,10 +8,13 @@ import { signal as declareSignal } from "../../elements/signal/declare.ts";
 import { createSignalRuntime } from "../../elements/signal/runtime.ts";
 import { oke, type OkeApp } from "../../kernel/index.ts";
 import {
+  createRunsRuntime,
   DEFAULT_RUNS_LOCAL_ROOT,
-  mergeLiveAndPersistedRuns,
+  mergeLiveAndPersistedEvents,
   type RunsRuntime,
 } from "../../runs/index.ts";
+import { piiFieldNamesFromManifest } from "./runs-pii.ts";
+import { runConsoleRunsQuery } from "./runs-query.ts";
 import { createManifestAiRuntime } from "./ai.ts";
 import { CONSOLE_GATES } from "./console-gates.ts";
 import { createConsoleBindings } from "./flows.ts";
@@ -97,6 +100,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
         sessionLogout: routes.session.logout,
         manifestGet: routes.manifest.get,
         runsList: routes.runs.list,
+        runsQuery: routes.runs.query,
         actionPing: routes.action.ping,
         structuralPropose: routes.structural.propose,
         flowsIdentities: routes.flows.identities,
@@ -166,14 +170,42 @@ export async function bootConsoleApp(handle: ConsoleAppHandle): Promise<OkeApp> 
 /**
  * `listRuns` = live Console memory ∪ host Parquet at `.oke/runs`.
  * Live ingest stays in-process; disk keeps host traces across Console restart.
+ * One files runtime is reused for list + sandboxed SQL (Prerequisite C).
  *
  * @param handle - Console app handle
  */
 export function bindConsoleListRuns(handle: ConsoleAppHandle): void {
+  const root = resolve(handle.state.cwd, DEFAULT_RUNS_LOCAL_ROOT);
+  let persisted: RunsRuntime | undefined;
+
+  async function ensurePersisted(): Promise<RunsRuntime> {
+    if (!persisted) {
+      persisted = createRunsRuntime({
+        driver: "files",
+        localRoot: root,
+        retention: { keep: "forever" },
+      });
+      await persisted.open();
+    }
+    return persisted;
+  }
+
   handle.state.listRuns = async () => {
     const live = handle.app.bootResult?.runs ? await handle.app.bootResult.runs.all() : [];
-    const root = resolve(handle.state.cwd, DEFAULT_RUNS_LOCAL_ROOT);
-    return mergeLiveAndPersistedRuns(live, root);
+    const disk = await (await ensurePersisted()).all();
+    return mergeLiveAndPersistedEvents(live, disk);
+  };
+
+  handle.state.queryPersistedRuns = async (input) => {
+    const runtime = await ensurePersisted();
+    return runConsoleRunsQuery({
+      runtime,
+      sql: input.sql,
+      piiFields: piiFieldNamesFromManifest(handle.state.manifest),
+      revealPii: input.revealPii === true,
+      ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+      ...(input.maxRows !== undefined ? { maxRows: input.maxRows } : {}),
+    });
   };
 }
 
@@ -200,7 +232,9 @@ export function wrapConsoleRunsForLive(handle: ConsoleAppHandle): void {
     // back into the same store nests prior list payloads and doubles size
     // each poll (live fallback / React Query), OOMing the Console kernel.
     const recordInput =
-      input.flow.name === "console.runs.list" ? { ...input, output: undefined } : input;
+      input.flow.name === "console.runs.list" || input.flow.name === "console.runs.query"
+        ? { ...input, output: undefined }
+        : input;
     const event = await origRecord(recordInput, archiveCleartext);
     feedRun(state, event);
     return event;

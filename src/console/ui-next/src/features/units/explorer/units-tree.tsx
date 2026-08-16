@@ -24,6 +24,7 @@ import {
   EXPLORER_GROUP_ROW_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
   EXPLORER_LIST_EMPTY_CLASS,
   EXPLORER_RAIL_ACTIVE_CLASS,
   EXPLORER_RAIL_CLASS,
@@ -73,10 +74,10 @@ export interface UnitsTreeProps {
 
 /** Plane facet chips in canonical display order (matches PlaneBadge icons). */
 const PLANE_FACETS: Record<FlowPlane, { readonly icon: ElementHugeIcon; readonly label: string }> =
-{
-  user: { icon: UserIcon, label: "user" },
-  operator: { icon: SecurityCheckIcon, label: "operator" },
-};
+  {
+    user: { icon: UserIcon, label: "user" },
+    operator: { icon: SecurityCheckIcon, label: "operator" },
+  };
 const FLOW_PLANES: readonly FlowPlane[] = ["user", "operator"];
 
 /**
@@ -181,7 +182,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
             aria-label="Search flows"
             data-slot="units-search"
           />
-          <div className="flex shrink-0 items-center gap-1 pr-1.5">
+          <div className="flex shrink-0 items-stretch pr-0.5">
             <Tooltip>
               <TooltipTrigger
                 render={(props) => (
@@ -203,8 +204,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
                     className={cn(
                       EXPLORER_ICON_BUTTON_CLASS,
                       "relative",
-                      (advancedOpen || activeCount > 0) &&
-                      "border-foreground/25 bg-background text-foreground",
+                      (advancedOpen || activeCount > 0) && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
                     )}
                   >
                     <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
@@ -312,7 +312,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
                 type="button"
                 data-slot="units-advanced-clear"
                 onClick={() => setFacets({})}
-                className="self-end text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                className="self-end px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
               >
                 Clear all
               </button>
@@ -367,14 +367,10 @@ function FacetRow({
 }): JSX.Element {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-14 shrink-0 text-[9px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+      <span className="w-14 shrink-0 text-[9px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         {label}
       </span>
-      <div
-        className="flex flex-wrap items-center gap-0.5 rounded-md bg-muted/60 p-0.5"
-        role="group"
-        aria-label={groupLabel}
-      >
+      <div className="flex min-h-7 flex-wrap items-stretch" role="group" aria-label={groupLabel}>
         {children}
       </div>
     </div>
@@ -407,10 +403,8 @@ function FacetChip({
       aria-pressed={pressed}
       onClick={onToggle}
       className={cn(
-        "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-        pressed
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
+        "inline-flex items-center gap-1 px-2 text-[10px] font-medium transition-colors hover:bg-muted/50",
+        pressed ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
       <HugeiconsIcon icon={icon} className="size-3" aria-hidden />

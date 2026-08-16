@@ -947,7 +947,7 @@ export function StoreDataGrid({
       onCopy={onCopy}
       onPaste={onPaste}
     >
-      <div className="relative z-20 flex h-9 shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-border/60 bg-muted/15 px-2">
+      <div className="relative z-20 flex h-9 shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-border/60 px-2">
         {toolbarExtras}
         {toolbarExtras ? (
           <Separator orientation="vertical" className="mx-0.5 my-2 h-4 self-center" />
@@ -967,9 +967,7 @@ export function StoreDataGrid({
             onChange={(e) =>
               indexMode ? indexSearch.onChange(e.target.value) : setFindText(e.target.value)
             }
-            placeholder={
-              indexMode ? "Find by title or id — or paste 1, 0, 0" : "Find in results…"
-            }
+            placeholder={indexMode ? "Find by title or id — or paste 1, 0, 0" : "Find in results…"}
             aria-label={indexMode ? "Search this index" : "Find in results"}
             data-slot={indexMode ? "index-search" : "grid-find"}
             className="h-6 border-0 bg-transparent pl-7 text-[11px] shadow-none focus-visible:border-transparent focus-visible:bg-muted/40 focus-visible:ring-0 md:text-[11px] dark:bg-transparent"
@@ -1358,7 +1356,7 @@ export function StoreDataGrid({
       ) : null}
 
       <div
-        className="flex h-7 shrink-0 items-center gap-2 border-t border-border/50 bg-muted/15 px-2.5 font-mono text-[10px] text-muted-foreground"
+        className="flex h-7 shrink-0 items-center gap-2 border-t border-border/60 px-2.5 font-mono text-[10px] tabular-nums text-muted-foreground"
         data-slot="grid-status"
       >
         <span>

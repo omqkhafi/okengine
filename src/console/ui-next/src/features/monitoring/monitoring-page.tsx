@@ -3,7 +3,15 @@
  */
 
 import { useMemo, useState, type JSX } from "react";
-import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
+import {
+  EXPLORER_PAGE_CLASS,
+  EXPLORER_SPLIT,
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
+import { cn } from "@/lib/utils.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
 import { useRuns } from "@/features/flows/data/use-runs.ts";
@@ -18,6 +26,7 @@ import { useSignalsList } from "./data/use-signals-list.ts";
 import { AiRail } from "./detail/ai-rail.tsx";
 import { InstanceFleetSheet } from "./detail/instance-fleet-sheet.tsx";
 import { MetricsPanel } from "./detail/metrics-panel.tsx";
+import { RunsQueryPanel } from "./query/runs-query-panel.tsx";
 import { ErrorList } from "./explorer/error-list.tsx";
 import { HealthStrip } from "./explorer/health-strip.tsx";
 import { askCountInWindow } from "./lib/ask-count.ts";
@@ -44,10 +53,12 @@ export function MonitoringPage(): JSX.Element {
     window,
     selectedErrorKey,
     query,
+    view,
     setSelectedRun,
     setWindow,
     setSelectedError,
     setQuery,
+    setView,
   } = useMonitoringSelection();
   const [fleetOpen, setFleetOpen] = useState(false);
 
@@ -127,8 +138,48 @@ export function MonitoringPage(): JSX.Element {
           className="min-h-0 overflow-hidden"
         >
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <AiRail ai={ai.data} asks={asks} />
-            <MetricsPanel series={series} stats={stats} />
+            <div className={EXPLORER_STRIP_CLASS} role="tablist" aria-label="Monitoring detail">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "metrics"}
+                className={cn(
+                  EXPLORER_STRIP_TOKEN_CLASS,
+                  "font-semibold tracking-[0.08em] uppercase",
+                  view === "metrics"
+                    ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS
+                    : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                )}
+                onClick={() => setView("metrics")}
+                data-slot="monitoring-view-metrics"
+              >
+                Metrics
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "query"}
+                className={cn(
+                  EXPLORER_STRIP_TOKEN_CLASS,
+                  "font-semibold tracking-[0.08em] uppercase",
+                  view === "query"
+                    ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS
+                    : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+                )}
+                onClick={() => setView("query")}
+                data-slot="monitoring-view-query"
+              >
+                SQL
+              </button>
+            </div>
+            {view === "query" ? (
+              <RunsQueryPanel />
+            ) : (
+              <>
+                <AiRail ai={ai.data} asks={asks} />
+                <MetricsPanel series={series} stats={stats} />
+              </>
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

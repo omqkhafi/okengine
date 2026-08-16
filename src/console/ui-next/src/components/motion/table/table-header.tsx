@@ -19,7 +19,7 @@ import { motion } from "@/lib/motion.ts";
 import { cn } from "@/lib/utils.ts";
 import { TableMenu, type TableMenuItem } from "./table-menu.tsx";
 import type { HeaderCellRefs, InsertPosition, SortState, TableColumn } from "./types.ts";
-import { alignFlex, alignText, COLUMN_ACTIVE_SHADOW } from "./utils.ts";
+import { alignFlex, alignText, COLUMN_ACTIVE_SHADOW, TABLE_CHECKBOX_CLASS } from "./utils.ts";
 
 /** Props for {@link TableHeader}. */
 export interface TableHeaderProps<T> {
@@ -205,13 +205,14 @@ export function TableHeader<T>({
       <thead>
         <tr>
           {selectable ? (
-            <th className="sticky top-0 z-10 border-b border-border bg-muted p-0 font-medium">
+            <th className="sticky top-0 z-10 border-b border-border/60 bg-background p-0 font-medium">
               <div className="flex items-center justify-center" style={{ height: rowHeight }}>
                 <Checkbox
                   checked={allSelected}
                   indeterminate={someSelected && !allSelected}
                   onCheckedChange={() => onToggleAll()}
                   aria-label="Select all rows"
+                  className={TABLE_CHECKBOX_CLASS}
                 />
               </div>
             </th>
@@ -237,7 +238,7 @@ export function TableHeader<T>({
                   dragKey ? dropIndex === columns.length && index === columns.length - 1 : undefined
                 }
                 className={cn(
-                  "group relative sticky top-0 z-10 border-b border-border bg-muted p-0 font-medium text-muted-foreground",
+                  "group relative sticky top-0 z-10 border-b border-border/60 bg-background p-0 font-medium text-muted-foreground",
                   "data-[drop=true]:before:absolute data-[drop=true]:before:inset-y-0 data-[drop=true]:before:left-0 data-[drop=true]:before:w-0.5 data-[drop=true]:before:bg-primary",
                   "data-[dropend=true]:after:absolute data-[dropend=true]:after:inset-y-0 data-[dropend=true]:after:right-0 data-[dropend=true]:after:w-0.5 data-[dropend=true]:after:bg-primary",
                 )}
@@ -324,7 +325,10 @@ export function TableHeader<T>({
             );
           })}
           {slack ? (
-            <th className="sticky top-0 z-10 border-b border-border bg-muted p-0" aria-hidden />
+            <th
+              className="sticky top-0 z-10 border-b border-border/60 bg-background p-0"
+              aria-hidden
+            />
           ) : null}
         </tr>
       </thead>

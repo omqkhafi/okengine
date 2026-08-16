@@ -16,7 +16,14 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
-import { EXPLORER_TOOLBAR_CLASS } from "@/components/explorer/explorer-chrome.ts";
+import {
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+  EXPLORER_TOOLBAR_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
 import { Button } from "@/components/ui/button";
 import {
@@ -900,9 +907,7 @@ function CallDock({
       <div className={cn(EXPLORER_TOOLBAR_CLASS, "min-w-0")}>
         <div className="flex shrink-0 items-center gap-1.5 px-2">
           <HugeiconsIcon icon={PlayIcon} className="size-3.5 text-muted-foreground" aria-hidden />
-          <h3 className="text-[10px] font-semibold tracking-[0.14em] text-foreground uppercase">
-            {title}
-          </h3>
+          <h3 className={cn(SECTION_HEAD_CLASS, "text-foreground")}>{title}</h3>
         </div>
         <div className="ml-auto flex h-full min-w-0 items-stretch">{actions}</div>
       </div>
@@ -925,7 +930,7 @@ function BodyViewToggle({
 }): JSX.Element {
   return (
     <div
-      className="flex h-8 shrink-0 items-center gap-2 px-2"
+      className={EXPLORER_STRIP_CLASS}
       role="group"
       aria-label="Body view"
       data-slot="call-api-body-view-toggle"
@@ -961,8 +966,9 @@ function BodyViewToggleButton({
     <button
       type="button"
       className={cn(
-        "inline-flex h-8 items-center gap-1 rounded-none border-0 bg-transparent text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none transition-colors",
-        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+        EXPLORER_STRIP_TOKEN_CLASS,
+        "font-semibold tracking-[0.08em] uppercase",
+        active ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
       )}
       aria-pressed={active}
       aria-label={label}
@@ -975,7 +981,7 @@ function BodyViewToggleButton({
 }
 
 const DOCK_TOOL =
-  "h-8 rounded-none border-0 bg-transparent px-2 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none hover:bg-transparent";
+  "h-8 rounded-none border-0 bg-transparent px-2 text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none hover:bg-muted/50";
 
 const DOCK_SUBMIT =
   "h-8 rounded-none border-0 px-3 text-[10px] font-semibold tracking-[0.14em] uppercase shadow-none";

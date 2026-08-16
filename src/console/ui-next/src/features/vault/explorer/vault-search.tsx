@@ -77,7 +77,7 @@ export function VaultSearch({ query, secrets, onQueryChange }: VaultSearchProps)
   };
 
   return (
-    <div ref={rootRef} className="relative min-w-0 flex-1" data-slot="vault-search">
+    <div ref={rootRef} className="relative flex h-full min-w-0 flex-1" data-slot="vault-search">
       <ExplorerSearch
         data-slot="vault-search-input"
         value={query}

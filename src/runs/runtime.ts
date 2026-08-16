@@ -13,6 +13,7 @@ import type {
   RunsDriver,
   RunsDriverId,
   RunsOpenOptions,
+  RunsQueryOptions,
   RunsRow,
   RunsStore,
   WideEvent,
@@ -60,7 +61,7 @@ export interface RunsRuntime {
    *
    * @param sql - SQL (`FROM runs` for files/memory)
    */
-  query(sql: string): Promise<RunsRow[]>;
+  query(sql: string, options?: RunsQueryOptions): Promise<RunsRow[]>;
   /** All events (small stores / tests). */
   all(): Promise<WideEvent[]>;
   /**
@@ -169,9 +170,9 @@ export function createRunsRuntime(options: CreateRunsRuntimeOptions = {}): RunsR
       const s = await ensureStore();
       await s.flush();
     },
-    async query(sql) {
+    async query(sql, options) {
       const s = await ensureStore();
-      return s.query(sql);
+      return s.query(sql, options);
     },
     async all() {
       const s = await ensureStore();

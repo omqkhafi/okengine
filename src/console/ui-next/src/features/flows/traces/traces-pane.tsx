@@ -14,6 +14,10 @@ import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { RunRow } from "@/client.ts";
 import {
   EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
   EXPLORER_TOOLBAR_CLASS,
 } from "@/components/explorer/explorer-chrome.ts";
 import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
@@ -166,7 +170,7 @@ export function TracesPane({
             aria-label="Search traces"
             data-slot="traces-search"
           />
-          <div className="flex shrink-0 items-center gap-1 pr-1.5">
+          <div className="flex shrink-0 items-stretch pr-0.5">
             {runs.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger
@@ -189,8 +193,7 @@ export function TracesPane({
                       className={cn(
                         EXPLORER_ICON_BUTTON_CLASS,
                         "relative",
-                        (advancedOpen || advancedActive) &&
-                        "border-foreground/25 bg-background text-foreground",
+                        (advancedOpen || advancedActive) && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
                       )}
                     >
                       <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
@@ -225,14 +228,10 @@ export function TracesPane({
 
         {runs.length > 0 ? (
           <div
-            className="flex h-8 items-center gap-2 border-t border-border/60 px-2"
+            className={cn(EXPLORER_STRIP_CLASS, "border-t border-b-0")}
             data-slot="traces-filters"
           >
-            <div
-              className="flex shrink-0 items-center gap-2"
-              role="group"
-              aria-label="Status filter"
-            >
+            <div className="flex shrink-0 items-stretch" role="group" aria-label="Status filter">
               {STATUS_FILTERS.map(({ value, label, icon }) => {
                 const active = filters.status === value;
                 return (
@@ -242,12 +241,13 @@ export function TracesPane({
                     aria-pressed={active}
                     onClick={() => setStatus(value)}
                     className={cn(
-                      "inline-flex h-8 items-center gap-1 rounded-none border-0 bg-transparent text-[10px] font-semibold tracking-[0.08em] uppercase shadow-none transition-colors",
+                      EXPLORER_STRIP_TOKEN_CLASS,
+                      "font-semibold tracking-[0.08em] uppercase",
                       active
                         ? value === "errors"
                           ? "text-destructive"
-                          : "text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
+                          : EXPLORER_STRIP_TOKEN_ACTIVE_CLASS
+                        : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                     )}
                   >
                     <HugeiconsIcon icon={icon} className="size-3" aria-hidden />
@@ -256,7 +256,7 @@ export function TracesPane({
                 );
               })}
             </div>
-            <span className="h-3 w-px shrink-0 bg-border/60" aria-hidden />
+            <span className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
             <div className="min-w-0 flex-1">
               <Select
                 items={DURATION_SELECT_ITEMS}
@@ -271,9 +271,10 @@ export function TracesPane({
                   size="sm"
                   flat
                   className={cn(
-                    "h-8 w-full gap-1 py-0 pr-0.5 pl-0 text-[10px] font-medium [&_svg:not([class*='size-'])]:size-3",
+                    EXPLORER_STRIP_TOKEN_CLASS,
+                    "h-full w-full justify-start py-0 pr-2 pl-2 hover:bg-muted/50! [&_svg:not([class*='size-'])]:size-3",
                     filters.minDurationMs === null
-                      ? "text-muted-foreground"
+                      ? EXPLORER_STRIP_TOKEN_IDLE_CLASS
                       : durationToneClass(durationTone(filters.minDurationMs)),
                   )}
                 >

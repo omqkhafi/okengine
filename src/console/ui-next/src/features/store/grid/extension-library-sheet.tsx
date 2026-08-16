@@ -545,7 +545,7 @@ function InstallTab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "text-[10px] font-semibold tracking-[0.08em] uppercase transition-colors",
+        "px-2 py-1.5 text-[10px] font-semibold tracking-[0.08em] uppercase transition-colors hover:bg-muted/50",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >

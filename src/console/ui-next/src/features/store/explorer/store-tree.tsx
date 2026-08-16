@@ -32,6 +32,7 @@ import {
   EXPLORER_GROUP_ROW_CLASS,
   EXPLORER_ICON_BUTTON_CLASS,
   EXPLORER_ICON_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
   EXPLORER_LIST_EMPTY_CLASS,
   EXPLORER_RAIL_ACTIVE_CLASS,
   EXPLORER_RAIL_CLASS,
@@ -266,7 +267,7 @@ function FacetVisibilityMenu({
 
   return (
     <DropdownMenu>
-      <ToolbarTip label="Show and hide facets">
+      <ToolbarTip label="Show and hide facets" className="flex self-stretch">
         <DropdownMenuTrigger
           render={(props) => (
             <button
@@ -277,7 +278,7 @@ function FacetVisibilityMenu({
               disabled={bands.length === 0}
               className={cn(
                 EXPLORER_ICON_BUTTON_CLASS,
-                anyHidden && "border-foreground/25 text-foreground",
+                anyHidden && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
               )}
             >
               <HugeiconsIcon
@@ -805,7 +806,7 @@ function TableRlsIcon({ enabled }: { readonly enabled: boolean }): JSX.Element {
             data-rls={enabled ? "on" : "off"}
             aria-label={label}
             className={cn(
-              "flex size-5 shrink-0 items-center justify-center",
+              EXPLORER_ICON_CLASS,
               enabled
                 ? "text-emerald-500"
                 : "text-muted-foreground/35 group-hover/child:text-amber-600 dark:group-hover/child:text-amber-400",

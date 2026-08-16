@@ -12,7 +12,13 @@ import { join, resolve } from "node:path";
 
 import { fsDriver } from "../../drivers/fs.ts";
 import type { FilesBucket } from "../../drivers/types.ts";
-import { duckPath, duckQuery, openDuckDB, type DuckSession } from "../duckdb.ts";
+import {
+  duckPath,
+  duckQuery,
+  duckQueryWithTimeout,
+  openDuckDB,
+  type DuckSession,
+} from "../duckdb.ts";
 import {
   partitionKey,
   partitionObjectKey,
@@ -25,6 +31,7 @@ import {
   DEFAULT_RUNS_LOCAL_ROOT,
   type RunsDriver,
   type RunsOpenOptions,
+  type RunsQueryOptions,
   type RunsRow,
   type RunsStore,
   type WideEvent,
@@ -55,6 +62,8 @@ export const filesRunsDriver: RunsDriver = {
 
     const buffer: WideEvent[] = [];
     let queryScratch: string | undefined;
+    let partitionFingerprint: string | undefined;
+    let viewReady = false;
     const session: DuckSession = await openDuckDB();
 
     function chooseBucket(startedAt: number): {
@@ -109,33 +118,101 @@ export const filesRunsDriver: RunsDriver = {
       }
     }
 
-    async function materialiseAllParquet(): Promise<string[]> {
+    async function listPartitionKeys(): Promise<{
+      readonly localKeys: readonly string[];
+      readonly remoteKeys: readonly string[];
+      readonly fingerprint: string;
+    }> {
+      const localKeys = (await local.list("runs/")).filter((k) => k.endsWith(".parquet")).sort();
+      const remoteKeys = remote
+        ? (await remote.list(`${remotePrefix}runs/`)).filter((k) => k.endsWith(".parquet")).sort()
+        : [];
+      return {
+        localKeys,
+        remoteKeys,
+        fingerprint: `local:${localKeys.join("|")}||remote:${remoteKeys.join("|")}`,
+      };
+    }
+
+    async function materialiseAllParquet(
+      listed: Awaited<ReturnType<typeof listPartitionKeys>>,
+    ): Promise<string[]> {
       if (queryScratch) {
         await rm(queryScratch, { recursive: true, force: true }).catch(() => undefined);
       }
       queryScratch = await mkdtemp(join(tmpdir(), "oke-runs-q-"));
       const paths: string[] = [];
+      const sizes: string[] = [];
 
-      const localKeys = (await local.list("runs/")).filter((k) => k.endsWith(".parquet"));
-      for (const key of localKeys) {
+      for (const key of listed.localKeys) {
         const data = await local.get(key);
         if (!data) continue;
         const dest = join(queryScratch, key.replaceAll("/", "__"));
         await writeFile(dest, data);
         paths.push(dest);
+        sizes.push(`${key}:${data.byteLength}`);
       }
       if (remote) {
-        const prefix = `${remotePrefix}runs/`;
-        const remoteKeys = (await remote.list(prefix)).filter((k) => k.endsWith(".parquet"));
-        for (const key of remoteKeys) {
+        for (const key of listed.remoteKeys) {
           const data = await remote.get(key);
           if (!data) continue;
           const dest = join(queryScratch, `remote__${key.replaceAll("/", "__")}`);
           await writeFile(dest, data);
           paths.push(dest);
+          sizes.push(`remote:${key}:${data.byteLength}`);
         }
       }
+      partitionFingerprint = `${listed.fingerprint}||sizes:${sizes.join(",")}`;
       return paths;
+    }
+
+    async function ensureParquetView(): Promise<string[]> {
+      await flushBuffer();
+      await applyRetention();
+      const listed = await listPartitionKeys();
+      const cached =
+        viewReady &&
+        queryScratch !== undefined &&
+        partitionFingerprint !== undefined &&
+        partitionFingerprint.startsWith(`${listed.fingerprint}||sizes:`);
+      const scratch = queryScratch;
+      if (cached && scratch !== undefined) {
+        const glob = new Bun.Glob("*.parquet");
+        const paths: string[] = [];
+        for await (const match of glob.scan({ cwd: scratch, onlyFiles: true })) {
+          paths.push(join(scratch, match));
+        }
+        if (paths.length > 0) return paths.sort();
+        viewReady = false;
+      }
+      const paths = await materialiseAllParquet(listed);
+      if (paths.length === 0) {
+        viewReady = false;
+        return [];
+      }
+      const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
+      await session.conn.run(`DROP VIEW IF EXISTS runs`);
+      await session.conn.run(
+        `CREATE VIEW runs AS SELECT * FROM read_parquet([${list}], union_by_name = true)`,
+      );
+      viewReady = true;
+      return paths;
+    }
+
+    async function runUserSql(
+      conn: DuckSession["conn"],
+      sql: string,
+      options?: RunsQueryOptions,
+    ): Promise<RunsRow[]> {
+      const timeoutMs = options?.timeoutMs;
+      const rows =
+        timeoutMs !== undefined
+          ? await duckQueryWithTimeout(conn, sql, timeoutMs)
+          : await duckQuery(conn, sql);
+      if (options?.maxRows !== undefined && rows.length > options.maxRows) {
+        return rows.slice(0, options.maxRows);
+      }
+      return rows;
     }
 
     async function applyRetention(): Promise<void> {
@@ -166,28 +243,33 @@ export const filesRunsDriver: RunsDriver = {
         await flushBuffer();
         await applyRetention();
       },
-      async query(sql: string): Promise<RunsRow[]> {
-        await flushBuffer();
-        await applyRetention();
-        const paths = await materialiseAllParquet();
+      async query(sql: string, options?: RunsQueryOptions): Promise<RunsRow[]> {
+        const paths = await ensureParquetView();
         if (paths.length === 0) return [];
-        const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
-        await session.conn.run(`DROP VIEW IF EXISTS runs`);
+        if (options?.sandbox !== true) {
+          return runUserSql(session.conn, sql, options);
+        }
+        const scratch = queryScratch;
+        if (scratch === undefined) return [];
+        const snap = join(scratch, "_console_snap.parquet");
         await session.conn.run(
-          `CREATE VIEW runs AS SELECT * FROM read_parquet([${list}], union_by_name = true)`,
+          `COPY (SELECT * FROM runs) TO '${duckPath(snap)}' (FORMAT PARQUET, COMPRESSION ZSTD)`,
         );
-        return duckQuery(session.conn, sql);
+        const isolated = await openDuckDB();
+        try {
+          await isolated.conn.run(
+            `CREATE TABLE runs AS SELECT * FROM read_parquet('${duckPath(snap)}')`,
+          );
+          await isolated.conn.run("SET enable_external_access = false");
+          return await runUserSql(isolated.conn, sql, options);
+        } finally {
+          isolated.close();
+        }
       },
       async all(): Promise<WideEvent[]> {
-        await flushBuffer();
-        await applyRetention();
-        const paths = await materialiseAllParquet();
+        const paths = await ensureParquetView();
         if (paths.length === 0) return [];
-        const list = paths.map((p) => `'${duckPath(p)}'`).join(", ");
-        const rows = await duckQuery(
-          session.conn,
-          `SELECT * FROM read_parquet([${list}], union_by_name = true)`,
-        );
+        const rows = await duckQuery(session.conn, "SELECT * FROM runs");
         return rows.map((r) => rowToWideEvent(r));
       },
       async close(): Promise<void> {

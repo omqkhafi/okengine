@@ -2,7 +2,7 @@
  * Call API PII toggle — same Include PII control as Store Query.
  */
 
-import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
+import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { JSX } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,10 +32,11 @@ export function CallPiiButton({ piiMasked, disabled, onToggle }: CallPiiButtonPr
           ? "PII hidden. Click to include cleartext (audited)."
           : "PII included. Click to remask."
       }
+      className="flex self-stretch"
     >
       <Button
         type="button"
-        variant={piiMasked ? "ghost" : "secondary"}
+        variant="ghost"
         size="sm"
         disabled={disabled}
         className={cn(
@@ -47,7 +48,11 @@ export function CallPiiButton({ piiMasked, disabled, onToggle }: CallPiiButtonPr
         onClick={onToggle}
         data-slot="call-api-pii"
       >
-        <HugeiconsIcon icon={SecurityCheckIcon} data-icon="inline-start" className="size-3.5" />
+        <HugeiconsIcon
+          icon={piiMasked ? ViewOffSlashIcon : ViewIcon}
+          data-icon="inline-start"
+          className="size-3.5"
+        />
         PII
       </Button>
     </ToolbarTip>

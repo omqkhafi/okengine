@@ -5,8 +5,9 @@
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Button } from "@/components/ui/button";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
+import { cn } from "@/lib/utils.ts";
+import { EXPLORER_ICON_BUTTON_BARE_CLASS } from "./explorer-chrome.ts";
 
 /** Props for {@link CopyInlineButton}. */
 export interface CopyInlineButtonProps {
@@ -32,12 +33,10 @@ export function CopyInlineButton({ value, label }: CopyInlineButtonProps): JSX.E
 
   return (
     <ToolbarTip label={copied ? "Copied" : label}>
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size="icon-xs"
         aria-label={label}
-        className="size-4 text-muted-foreground"
+        className={cn(EXPLORER_ICON_BUTTON_BARE_CLASS, "size-4")}
         onClick={() => {
           if (!navigator.clipboard) return;
           void navigator.clipboard.writeText(value).then(() => {
@@ -52,7 +51,7 @@ export function CopyInlineButton({ value, label }: CopyInlineButtonProps): JSX.E
           className={copied ? "size-3 text-emerald-600 dark:text-emerald-400" : "size-3"}
           aria-hidden
         />
-      </Button>
+      </button>
     </ToolbarTip>
   );
 }

@@ -121,6 +121,19 @@ export interface RunsRetention {
 /** One SQL result row. */
 export type RunsRow = Record<string, unknown>;
 
+/**
+ * Optional execution controls for {@link RunsStore.query}.
+ * Console uses `sandbox` + timeout; Flow `fx.runs.query` omits them.
+ */
+export interface RunsQueryOptions {
+  /** Disable DuckDB filesystem / extension access for the user statement. */
+  readonly sandbox?: boolean;
+  /** Wall-clock timeout in milliseconds. */
+  readonly timeoutMs?: number;
+  /** Slice the result after execute (hard ceiling). */
+  readonly maxRows?: number;
+}
+
 /** Runs store handle — append wide events and query them. */
 export interface RunsStore {
   /** Protocol driver id. */
@@ -139,8 +152,9 @@ export interface RunsStore {
    * Run SQL against all visible partitions (local + object storage).
    *
    * @param sql - DuckDB / driver SQL
+   * @param options - Optional sandbox / timeout / row ceiling
    */
-  query(sql: string): Promise<RunsRow[]>;
+  query(sql: string, options?: RunsQueryOptions): Promise<RunsRow[]>;
   /**
    * Materialise all events (test helper / small stores).
    */

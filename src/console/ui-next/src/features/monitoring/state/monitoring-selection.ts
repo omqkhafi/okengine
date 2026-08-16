@@ -10,12 +10,16 @@ import {
   type MonitoringWindow,
 } from "../lib/window-stats.ts";
 
+/** Right-pane mode on `/monitoring`. */
+export type MonitoringView = "metrics" | "query";
+
 /** Search params for `/monitoring`. */
 export interface MonitoringSearch {
   readonly run?: string;
   readonly window?: MonitoringWindow;
   readonly error?: string;
   readonly q?: string;
+  readonly view?: MonitoringView;
 }
 
 /**
@@ -29,11 +33,13 @@ export function validateMonitoringSearch(search: Record<string, unknown>): Monit
   const error =
     typeof search.error === "string" && search.error.length > 0 ? search.error : undefined;
   const q = typeof search.q === "string" && search.q.length > 0 ? search.q : undefined;
+  const view = search.view === "query" ? "query" : undefined;
   return {
     ...(run !== undefined ? { run } : {}),
     ...(window !== DEFAULT_MONITORING_WINDOW ? { window } : {}),
     ...(error !== undefined ? { error } : {}),
     ...(q !== undefined ? { q } : {}),
+    ...(view !== undefined ? { view } : {}),
   };
 }
 
@@ -48,6 +54,7 @@ export function useMonitoringSelection() {
   const window = parseMonitoringWindow(search.window);
   const selectedErrorKey = typeof search.error === "string" ? search.error : null;
   const query = typeof search.q === "string" ? search.q : "";
+  const view: MonitoringView = search.view === "query" ? "query" : "metrics";
 
   const patch = useCallback(
     (next: Partial<MonitoringSearch>) => {
@@ -91,14 +98,23 @@ export function useMonitoringSelection() {
     [patch],
   );
 
+  const setView = useCallback(
+    (next: MonitoringView) => {
+      patch({ view: next === "metrics" ? undefined : next });
+    },
+    [patch],
+  );
+
   return {
     selectedRunId,
     window,
     selectedErrorKey,
     query,
+    view,
     setSelectedRun,
     setWindow,
     setSelectedError,
     setQuery,
+    setView,
   };
 }

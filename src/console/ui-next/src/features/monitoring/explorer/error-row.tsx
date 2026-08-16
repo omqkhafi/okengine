@@ -57,7 +57,7 @@ export function ErrorRow({ group, selected, nowMs, onSelect }: ErrorRowProps): J
         to="/overview"
         search={{ run: group.latestRunId }}
         className={cn(
-          "flex items-center px-2 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline",
+          "flex items-center px-2 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground",
           "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
         )}
         data-slot="monitoring-error-open-overview"

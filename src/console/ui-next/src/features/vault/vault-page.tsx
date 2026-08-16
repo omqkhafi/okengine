@@ -230,7 +230,7 @@ export function VaultPage(): JSX.Element {
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <div className={cn(EXPLORER_TOOLBAR_CLASS, "relative z-20 pr-1.5")}>
               <VaultSearch query={query} secrets={secrets} onQueryChange={setQuery} />
-              <ToolbarTip label="Add secret or config">
+              <ToolbarTip label="Add secret or config" className="flex self-stretch">
                 <button
                   type="button"
                   aria-label="Add secret or config"
@@ -245,7 +245,7 @@ export function VaultPage(): JSX.Element {
                   {exportNote}
                 </span>
               ) : null}
-              <ToolbarTip label="Verify the audit hash chain">
+              <ToolbarTip label="Verify the audit hash chain" className="flex self-stretch">
                 <button
                   type="button"
                   aria-label="Verify chain"
@@ -257,7 +257,7 @@ export function VaultPage(): JSX.Element {
                 </button>
               </ToolbarTip>
               <DropdownMenu>
-                <ToolbarTip label="Vault security">
+                <ToolbarTip label="Vault security" className="flex self-stretch">
                   <DropdownMenuTrigger
                     render={(props) => (
                       <button

@@ -3,6 +3,11 @@
  */
 
 import type { JSX } from "react";
+import {
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { ToolbarTip } from "@/components/ui/toolbar-tip.tsx";
 import { cn } from "@/lib/utils.ts";
 import type { VaultBackendCard as VaultBackendCardModel } from "../lib/backend.ts";
@@ -89,7 +94,7 @@ export function VaultPostureStrip({
           (facet) => summary[facet.id] > 0 || hasIsToken(query, facet.token),
         ) ? (
           <div
-            className="flex flex-wrap items-center gap-0.5 rounded-md bg-muted/60 p-0.5"
+            className="-mx-2 flex min-h-7 flex-wrap items-stretch"
             role="group"
             aria-label="Posture filter"
           >
@@ -98,16 +103,18 @@ export function VaultPostureStrip({
               const pressed = hasIsToken(query, facet.token);
               if (count === 0 && !pressed) return null;
               return (
-                <ToolbarTip key={facet.id} label={postureHint(facet.id)}>
+                <ToolbarTip
+                  key={facet.id}
+                  label={postureHint(facet.id)}
+                  className="flex self-stretch"
+                >
                   <button
                     type="button"
                     aria-pressed={pressed}
                     onClick={() => onQueryChange(toggleIsToken(query, facet.token))}
                     className={cn(
-                      "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                      pressed
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
+                      EXPLORER_STRIP_TOKEN_CLASS,
+                      pressed ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                       facet.tone === "danger" && !pressed && "text-destructive",
                       facet.tone === "warn" && !pressed && "text-amber-800 dark:text-amber-400",
                     )}
@@ -123,7 +130,7 @@ export function VaultPostureStrip({
       </div>
       {progress ? (
         <p
-          className="border-t border-border/50 px-2 py-1 font-mono text-[11px]"
+          className="border-t border-border/60 px-2 py-1 font-mono text-[11px]"
           style={{ color: VAULT_ACCENT }}
           role="status"
           data-slot="vault-rewrap-progress"

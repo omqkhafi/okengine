@@ -42,7 +42,7 @@ export function TreeExpandToggle({
 }: TreeExpandToggleProps): JSX.Element {
   const label = allOpen ? collapseLabel : expandLabel;
   return (
-    <ToolbarTip label={label}>
+    <ToolbarTip label={label} className={bare ? undefined : "flex self-stretch"}>
       <button
         type="button"
         aria-label={label}

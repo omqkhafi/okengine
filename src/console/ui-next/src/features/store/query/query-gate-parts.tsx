@@ -1,10 +1,20 @@
 /**
- * Shared Operator / Public / As cards for Store Query Gate and Call API.
+ * Shared Operator / Public / As picker for Store Query Gate and Call API.
  */
 
 import { useState, type JSX, type ReactNode } from "react";
 import { Search01Icon, SecurityCheckIcon, Tick02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  EXPLORER_RAIL_ACTIVE_CLASS,
+  EXPLORER_RAIL_CLASS,
+  EXPLORER_ROW_CLASS,
+  EXPLORER_ROW_SELECTED_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils.ts";
 import {
@@ -18,6 +28,40 @@ import { QueryGateViz } from "./query-gate-viz.tsx";
 /** User vs policy list under the As card. */
 export type GateAsTab = "user" | "policy";
 
+/**
+ * Uppercase label at the top of the Gate picker.
+ *
+ * @param props - Heading copy
+ */
+export function GatePickerHeading({ children }: { readonly children: string }): JSX.Element {
+  return (
+    <p className={cn(SECTION_HEAD_CLASS, "border-b border-border/60 px-2 py-1.5")}>{children}</p>
+  );
+}
+
+/**
+ * Operator / Public / As strip under {@link GatePickerHeading}.
+ *
+ * @param props - Radiogroup label + cards
+ */
+export function GateModeStrip({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}): JSX.Element {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex items-stretch border-b border-border/60"
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Props for {@link GateModeCard}. */
 export interface GateModeCardProps {
   readonly mode: QueryGateMode;
@@ -29,7 +73,7 @@ export interface GateModeCardProps {
 }
 
 /**
- * One Operator / Public / As card.
+ * One Operator / Public / As token — access diagram plus label.
  *
  * @param props - Mode + labels + selection
  */
@@ -47,37 +91,29 @@ export function GateModeCard({
       role="radio"
       aria-checked={selected}
       disabled={disabled}
+      title={caption}
       onClick={onSelect}
       data-slot="store-query-gate-card"
       data-mode={mode}
       className={cn(
-        "relative flex flex-col gap-1.5 rounded-lg px-2 pt-2 pb-1.5 text-left ring-1 transition-colors",
-        "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
-        selected
-          ? "bg-background ring-foreground"
-          : "ring-border/70 hover:bg-muted/40 hover:ring-border",
+        "flex min-w-0 flex-1 flex-col items-stretch gap-1 px-1.5 pt-2 pb-1.5 text-left transition-colors hover:bg-muted/50 hover:text-foreground",
+        selected ? "bg-muted/70 text-foreground" : "text-muted-foreground",
         disabled && "pointer-events-none opacity-40",
       )}
     >
-      {selected ? (
-        <span
-          className="absolute top-1.5 right-1.5 flex size-3.5 items-center justify-center rounded-full bg-foreground text-background"
-          aria-hidden
-        >
-          <HugeiconsIcon icon={Tick02Icon} className="size-2.5" />
-        </span>
-      ) : null}
       <QueryGateViz mode={mode} active={selected} />
-      <span className="min-w-0">
-        <span className="block truncate text-[12px] font-medium text-foreground">{title}</span>
-        <span className="block truncate text-[10px] text-muted-foreground">{caption}</span>
+      <span className="flex min-w-0 items-center justify-center gap-1 px-0.5">
+        <span className="truncate text-[10px] font-medium">{title}</span>
+        {selected && mode === "as" ? (
+          <span className="max-w-28 truncate text-[10px] text-muted-foreground">{caption}</span>
+        ) : null}
       </span>
     </button>
   );
 }
 
 /**
- * Title + optional badge + body under the card row.
+ * One-line hint under Operator or Public.
  *
  * @param props - Heading + copy
  */
@@ -91,16 +127,12 @@ export function GateModeDetail({
   readonly children: ReactNode;
 }): JSX.Element {
   return (
-    <div className="px-0.5" data-slot="store-query-gate-detail">
-      <p className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+    <div className="px-2 py-2" data-slot="store-query-gate-detail">
+      <p className="text-[11px] font-medium text-foreground">
         {title}
-        {badge ? (
-          <span className="rounded border border-border/60 px-1 py-px text-[9px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-            {badge}
-          </span>
-        ) : null}
+        {badge ? <span className="ml-1.5 text-[10px] text-muted-foreground">{badge}</span> : null}
       </p>
-      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{children}</p>
+      <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">{children}</p>
     </div>
   );
 }
@@ -146,9 +178,9 @@ export function GateAsPicker({
   const searching = query.trim() !== "";
 
   return (
-    <div className="flex flex-col gap-2" data-slot="store-query-gate-as">
+    <div className="flex flex-col" data-slot="store-query-gate-as">
       <div
-        className="inline-flex w-fit rounded-full bg-muted/70 p-0.5"
+        className="flex h-7 items-stretch border-b border-border/60"
         role="tablist"
         aria-label="As a user or policy"
       >
@@ -167,7 +199,7 @@ export function GateAsPicker({
           Policy
         </AsTabButton>
       </div>
-      <label className="relative block">
+      <label className="relative block border-b border-border/60">
         <HugeiconsIcon
           icon={Search01Icon}
           className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -179,6 +211,7 @@ export function GateAsPicker({
           onKeyDown={(event) => event.stopPropagation()}
           placeholder={tab === "user" ? "Search users" : "Search policies"}
           aria-label={tab === "user" ? "Search users" : "Search policies"}
+          flat
           className="h-8 pl-7 font-mono text-[12px]"
         />
       </label>
@@ -222,18 +255,15 @@ export function GateAsPicker({
       {hint !== undefined ? (
         hint
       ) : selected ? (
-        <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
+        <p className="border-t border-border/60 px-2 py-2 text-[10px] leading-relaxed text-muted-foreground">
           {tab === "user" && asUserId ? (
             <>
               View as <span className="font-medium text-foreground">{selected.label}</span> via{" "}
-              <span className="font-mono">{asGate}</span>. Sets{" "}
-              <span className="font-mono">oke.gate</span> so policies can use{" "}
-              <span className="font-mono">current_setting('oke.gate', true)</span>.
+              <span className="font-mono">{asGate}</span>.
             </>
           ) : (
             <>
-              {selected.detail} Sets <span className="font-mono">oke.gate</span> so policies can use{" "}
-              <span className="font-mono">current_setting('oke.gate', true)</span>.
+              {selected.detail} Sets <span className="font-mono">oke.gate</span> for RLS.
             </>
           )}
         </p>
@@ -261,10 +291,9 @@ function AsTabButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
+        EXPLORER_STRIP_TOKEN_CLASS,
+        "font-semibold tracking-[0.08em] uppercase",
+        active ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
         disabled && "pointer-events-none opacity-40",
       )}
     >
@@ -294,13 +323,18 @@ function AsRow({
         aria-selected={selected}
         onClick={onSelect}
         className={cn(
-          "flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left",
-          selected ? "bg-muted" : "hover:bg-muted/50",
+          EXPLORER_ROW_CLASS,
+          "items-start px-2",
+          selected && EXPLORER_ROW_SELECTED_CLASS,
         )}
       >
+        <span
+          aria-hidden
+          className={cn(EXPLORER_RAIL_CLASS, selected && EXPLORER_RAIL_ACTIVE_CLASS)}
+        />
         <HugeiconsIcon icon={icon} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium">{label}</span>
+          <span className="block truncate text-xs font-medium">{label}</span>
           <span className="block truncate text-[10px] text-muted-foreground">{detail}</span>
         </span>
         {selected ? <HugeiconsIcon icon={Tick02Icon} className="mt-0.5 size-3.5 shrink-0" /> : null}

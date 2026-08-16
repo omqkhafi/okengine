@@ -16,8 +16,13 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { HighlightedJson } from "@/components/highlighted-json";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -129,12 +134,7 @@ export function QueryResults({
       className={cn("flex min-h-0 flex-col overflow-hidden", collapsed ? "shrink-0" : "h-full")}
       data-slot="store-query-results"
     >
-      <div
-        className={cn(
-          "flex shrink-0 items-center gap-1 px-2 py-1",
-          collapsed ? "border-t border-border/50" : "border-b border-border/50",
-        )}
-      >
+      <div className={cn(EXPLORER_STRIP_CLASS, collapsed && "border-t border-b-0")}>
         {sets.length > 1
           ? sets.map((set, index) => (
               <button
@@ -143,100 +143,68 @@ export function QueryResults({
                 aria-pressed={index === activeSet}
                 onClick={() => onSelectSet?.(index)}
                 className={cn(
-                  "h-6 shrink-0 rounded-md px-1.5 font-mono text-[10px]",
+                  EXPLORER_STRIP_TOKEN_CLASS,
+                  "font-mono",
                   index === activeSet
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS
+                    : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                 )}
               >
                 {index + 1} {set.label}
               </button>
             ))
           : null}
-        <ViewToggle
-          active={view === "table"}
+        <StripIcon
           label="Table"
           icon={LeftToRightListBulletIcon}
+          active={view === "table"}
           onClick={() => setView("table")}
         />
-        <ViewToggle
-          active={view === "json"}
+        <StripIcon
           label="JSON"
           icon={SourceCodeIcon}
+          active={view === "json"}
           onClick={() => setView("json")}
         />
-        <ViewToggle
-          active={view === "raw"}
+        <StripIcon
           label="Executed statement"
           icon={FileExportIcon}
+          active={view === "raw"}
           onClick={() => setView("raw")}
         />
-        <span className="min-w-0 flex-1 truncate px-2 text-[11px] text-muted-foreground">
+        <span className="flex min-w-0 flex-1 items-center truncate px-2 text-[11px] text-muted-foreground">
           {error
             ? error
             : pending
               ? "Running…"
               : (meta ?? "No results yet. Run a query to see results here.")}
         </span>
-        <ToolbarTip label={copied === "json" ? "Copied" : "Copy JSON"}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Copy results as JSON"
-            disabled={!hasRows}
-            onClick={() => copy("json")}
-          >
-            <HugeiconsIcon
-              icon={copied === "json" ? Tick02Icon : Copy01Icon}
-              className="size-3.5"
-            />
-          </Button>
-        </ToolbarTip>
-        <ToolbarTip label="Download JSON">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Download results as JSON"
-            disabled={!hasRows}
-            onClick={() => download("json")}
-          >
-            <HugeiconsIcon icon={FileBracesCornerIcon} className="size-3.5" />
-          </Button>
-        </ToolbarTip>
-        <ToolbarTip label={copied === "csv" ? "Copied" : "Copy CSV"}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Copy results as CSV"
-            disabled={!hasRows}
-            onClick={() => copy("csv")}
-          >
-            <HugeiconsIcon
-              icon={copied === "csv" ? Tick02Icon : Csv01Icon}
-              className="size-3.5"
-            />
-          </Button>
-        </ToolbarTip>
+        <StripIcon
+          label={copied === "json" ? "Copied" : "Copy JSON"}
+          icon={copied === "json" ? Tick02Icon : Copy01Icon}
+          disabled={!hasRows}
+          onClick={() => copy("json")}
+        />
+        <StripIcon
+          label="Download JSON"
+          icon={FileBracesCornerIcon}
+          disabled={!hasRows}
+          onClick={() => download("json")}
+        />
+        <StripIcon
+          label={copied === "csv" ? "Copied" : "Copy CSV"}
+          icon={copied === "csv" ? Tick02Icon : Csv01Icon}
+          disabled={!hasRows}
+          onClick={() => copy("csv")}
+        />
         {onToggleCollapse ? (
-          <ToolbarTip label={collapsed ? "Expand results" : "Collapse results"}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={collapsed ? "Expand results" : "Collapse results"}
-              aria-expanded={!collapsed}
-              data-slot="store-query-results-collapse"
-              onClick={onToggleCollapse}
-            >
-              <HugeiconsIcon
-                icon={collapsed ? ArrowUp01Icon : ArrowDown01Icon}
-                className="size-3.5"
-              />
-            </Button>
-          </ToolbarTip>
+          <StripIcon
+            label={collapsed ? "Expand results" : "Collapse results"}
+            icon={collapsed ? ArrowUp01Icon : ArrowDown01Icon}
+            expanded={!collapsed}
+            slot="store-query-results-collapse"
+            onClick={onToggleCollapse}
+          />
         ) : null}
       </div>
 
@@ -287,13 +255,13 @@ export function QueryResults({
             </p>
           ) : (
             <table className="w-full min-w-max border-collapse text-left text-[12px]">
-              <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
+              <thead className="sticky top-0 z-10 bg-background">
                 <tr>
                   {columns.map((col) => (
                     <th
                       key={col}
                       scope="col"
-                      className="border-b border-border/60 px-3 py-1.5 font-mono text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
+                      className="border-b border-border/60 px-3 py-1.5 font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase"
                     >
                       {col}
                     </th>
@@ -302,7 +270,7 @@ export function QueryResults({
               </thead>
               <tbody>
                 {(rows ?? []).map((row, i) => (
-                  <tr key={i} className="border-b border-border/40 hover:bg-muted/30">
+                  <tr key={i} className="border-b border-border/60 hover:bg-muted/50">
                     {columns.map((col) => {
                       const value = row[col];
                       const inspectable = asInspectableJson(value) !== null;
@@ -361,30 +329,41 @@ function columnKeys(rows: readonly QueryResultRow[]): string[] {
   return keys;
 }
 
-function ViewToggle({
-  active,
+function StripIcon({
   label,
   icon,
+  active = false,
+  disabled = false,
+  expanded,
+  slot,
   onClick,
 }: {
-  readonly active: boolean;
   readonly label: string;
   readonly icon: typeof LeftToRightListBulletIcon;
+  readonly active?: boolean;
+  readonly disabled?: boolean;
+  readonly expanded?: boolean;
+  readonly slot?: string;
   readonly onClick: () => void;
 }): JSX.Element {
   return (
-    <ToolbarTip label={label}>
-      <Button
+    <ToolbarTip label={label} className="flex self-stretch">
+      <button
         type="button"
-        variant="ghost"
-        size="icon-xs"
         aria-label={label}
-        aria-pressed={active}
+        aria-pressed={active || undefined}
+        aria-expanded={expanded}
+        disabled={disabled}
+        data-slot={slot}
         onClick={onClick}
-        className={cn(active && "bg-muted text-foreground")}
+        className={cn(
+          EXPLORER_STRIP_TOKEN_CLASS,
+          active ? EXPLORER_STRIP_TOKEN_ACTIVE_CLASS : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
+          disabled && "pointer-events-none opacity-40",
+        )}
       >
         <HugeiconsIcon icon={icon} className="size-3.5" />
-      </Button>
+      </button>
     </ToolbarTip>
   );
 }

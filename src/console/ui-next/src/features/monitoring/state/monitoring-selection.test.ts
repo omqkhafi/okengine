@@ -4,12 +4,19 @@ import { validateMonitoringSearch } from "./monitoring-selection.ts";
 describe("validateMonitoringSearch", () => {
   test("keeps run, non-default window, error, and q", () => {
     expect(
-      validateMonitoringSearch({ run: "r1", window: "7d", error: "FlightFull", q: "book" }),
+      validateMonitoringSearch({
+        run: "r1",
+        window: "7d",
+        error: "FlightFull",
+        q: "book",
+        view: "query",
+      }),
     ).toEqual({
       run: "r1",
       window: "7d",
       error: "FlightFull",
       q: "book",
+      view: "query",
     });
   });
 

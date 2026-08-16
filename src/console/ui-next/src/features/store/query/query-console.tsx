@@ -15,8 +15,9 @@ import {
   Loading03Icon,
   PlayIcon,
   PlusSignIcon,
-  SecurityCheckIcon,
   SourceCodeIcon,
+  ViewIcon,
+  ViewOffSlashIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -29,6 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/motion/select.tsx";
+import {
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -676,7 +682,7 @@ export function QueryConsole({
       </header>
 
       <div
-        className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/50 px-1.5"
+        className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-border/60"
         role="tablist"
         aria-label="Query tabs"
       >
@@ -747,28 +753,26 @@ export function QueryConsole({
             </button>
           </div>
         ))}
-        <ToolbarTip label="New query">
-          <Button
+        <ToolbarTip label="New query" className="flex self-stretch">
+          <button
             type="button"
-            variant="ghost"
-            size="icon-xs"
             aria-label="New query"
             disabled={tabs.length >= 8}
             onClick={addTab}
             data-slot="store-query-tab-add"
-            className="ml-0.5"
+            className={EXPLORER_ICON_BUTTON_CLASS}
           >
             <HugeiconsIcon icon={PlusSignIcon} className="size-3.5" />
-          </Button>
+          </button>
         </ToolbarTip>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-1.5">
+      <div className={EXPLORER_STRIP_CLASS}>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-8 rounded-none px-2 text-[11px]"
           onClick={() => setText(isSql ? prettifySql(text) : prettifyKv(text))}
           data-slot="store-query-prettify"
         >
@@ -779,7 +783,7 @@ export function QueryConsole({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 text-[11px]"
+          className="h-8 rounded-none px-2 text-[11px]"
           onClick={saveActive}
           data-slot="store-query-save"
         >
@@ -804,9 +808,12 @@ export function QueryConsole({
         />
         <Button
           type="button"
-          variant={schemaOpen ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
-          className="h-7 text-[11px]"
+          className={cn(
+            "h-8 rounded-none px-2 text-[11px]",
+            schemaOpen && EXPLORER_STRIP_TOKEN_ACTIVE_CLASS,
+          )}
           aria-pressed={schemaOpen}
           onClick={() => setSchemaOpen((v) => !v)}
           data-slot="store-query-schema"
@@ -821,12 +828,16 @@ export function QueryConsole({
                 ? "PII hidden. Click to include cleartext (audited)."
                 : "PII included. Click to remask."
             }
+            className="flex self-stretch"
           >
             <Button
               type="button"
-              variant={piiMasked ? "ghost" : "secondary"}
+              variant="ghost"
               size="sm"
-              className={cn("h-7 text-[11px]", !piiMasked && "text-amber-800 dark:text-amber-300")}
+              className={cn(
+                "h-8 rounded-none px-2 text-[11px]",
+                !piiMasked && "text-amber-800 dark:text-amber-300",
+              )}
               aria-pressed={!piiMasked}
               aria-label={piiMasked ? "Include PII: disabled" : "Include PII: enabled"}
               onClick={() => {
@@ -839,7 +850,7 @@ export function QueryConsole({
               data-slot="store-query-pii"
             >
               <HugeiconsIcon
-                icon={SecurityCheckIcon}
+                icon={piiMasked ? ViewOffSlashIcon : ViewIcon}
                 data-icon="inline-start"
                 className="size-3.5"
               />
@@ -861,7 +872,7 @@ export function QueryConsole({
         ) : null}
         {unbounded ? (
           <span
-            className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-300"
+            className="inline-flex items-center gap-1 px-2 text-[10px] text-amber-800 dark:text-amber-300"
             title="This SELECT has no LIMIT"
             data-slot="store-query-unbounded"
           >
@@ -870,12 +881,15 @@ export function QueryConsole({
           </span>
         ) : null}
         <span className="flex-1" />
-        <div className="flex items-center">
-          <ToolbarTip label={selected ? `Run selection (${shortcut})` : `Run (${shortcut})`}>
+        <div className="flex items-stretch">
+          <ToolbarTip
+            label={selected ? `Run selection (${shortcut})` : `Run (${shortcut})`}
+            className="flex self-stretch"
+          >
             <Button
               type="button"
               size="sm"
-              className="h-7 gap-1.5 rounded-r-none"
+              className="h-8 gap-1.5 rounded-none"
               disabled={!store || pending}
               onClick={run}
               data-slot="store-query-run"
@@ -897,7 +911,7 @@ export function QueryConsole({
                     {...props}
                     type="button"
                     size="sm"
-                    className="h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5"
+                    className="h-8 rounded-none border-l border-primary-foreground/20 px-1.5"
                     disabled={!store || pending}
                     aria-label="More run options"
                     data-slot="store-query-run-menu"
@@ -1059,7 +1073,7 @@ function HistoryMenu({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 text-[11px]"
+            className="h-8 rounded-none px-2 text-[11px]"
             data-slot="store-query-history"
           >
             <HugeiconsIcon icon={Clock01Icon} data-icon="inline-start" className="size-3.5" />

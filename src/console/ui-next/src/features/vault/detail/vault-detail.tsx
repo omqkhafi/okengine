@@ -18,6 +18,12 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type JSX } from "react";
 import { CopyInlineButton } from "@/components/explorer/copy-inline-button.tsx";
 import { DetailHeader } from "@/components/explorer/detail-header.tsx";
+import {
+  EXPLORER_BAND_ACTIONS_CLASS,
+  EXPLORER_ICON_CLASS,
+  EXPLORER_ROW_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { SectionHead } from "@/components/explorer/section-head.tsx";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -84,8 +90,6 @@ const SOURCE_ICON: Readonly<Record<VaultResolutionSource, ElementHugeIcon>> = {
 };
 
 const WON_INK = "text-emerald-700 dark:text-emerald-400";
-const WON_WASH = "bg-emerald-500/10";
-const WON_WASH_ACTIVE = "bg-emerald-500/15";
 
 const RESOLUTION_ORDER: readonly VaultResolutionSource[] = [
   "driver",
@@ -330,10 +334,8 @@ export function VaultDetail({
                     aria-pressed={active}
                     onClick={() => setLayer(step.source)}
                     className={cn(
-                      "flex w-full flex-col gap-1 rounded-md px-1 py-1.5 text-left hover:bg-muted/50",
-                      step.won && WON_WASH,
-                      active && !step.won && "bg-muted/70",
-                      active && step.won && WON_WASH_ACTIVE,
+                      "flex w-full flex-col gap-1 px-1 py-1.5 text-left transition-colors hover:bg-muted/50",
+                      active && "bg-muted/70",
                     )}
                   >
                     <span className="flex items-center gap-1">
@@ -393,20 +395,22 @@ export function VaultDetail({
               );
             })}
           </ol>
-          <div
-            className={cn(
-              "flex items-center gap-2 rounded-md border px-2.5 py-2",
-              selected.won ? "border-emerald-500/30 bg-emerald-500/5" : "border-border/60",
-            )}
-          >
+          <div className="flex items-start gap-2 border-t border-border/60 pt-2">
             <HugeiconsIcon
               icon={SOURCE_ICON[selected.source]}
-              className={cn("size-3.5 shrink-0", selected.won ? WON_INK : "text-muted-foreground")}
+              className={cn(
+                EXPLORER_ICON_CLASS,
+                "mt-0.5",
+                selected.won ? WON_INK : "text-muted-foreground",
+              )}
               aria-hidden
             />
             <div className="min-w-0 flex-1">
               <p
-                className={cn("font-mono text-[11px]", selected.won ? WON_INK : "text-foreground")}
+                className={cn(
+                  "truncate font-mono text-[11px] font-medium",
+                  selected.won ? WON_INK : "text-foreground",
+                )}
               >
                 {selected.source === "driver" ? vaultDriverTitle(backend) : selected.source}
               </p>
@@ -440,7 +444,12 @@ export function VaultDetail({
         </div>
 
         <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase hover:text-foreground">
+          <CollapsibleTrigger
+            className={cn(
+              SECTION_HEAD_CLASS,
+              "flex w-full items-center justify-between text-left hover:text-foreground",
+            )}
+          >
             Advanced
             <span className="font-mono font-normal tracking-normal normal-case">
               {advancedOpen ? "hide" : "write · meta"}
@@ -484,9 +493,9 @@ export function VaultDetail({
               ).map(([k, v]) => (
                 <div
                   key={k}
-                  className="flex items-baseline justify-between gap-3 border-t border-border/40 py-1 first:border-t-0"
+                  className="flex items-baseline justify-between gap-3 border-t border-border/60 py-1 first:border-t-0"
                 >
-                  <dt className="shrink-0 text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                  <dt className="shrink-0 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
                     {k}
                   </dt>
                   <dd className="min-w-0 truncate text-right font-mono text-[11px]">{v}</dd>
@@ -648,7 +657,7 @@ function Brief({
 }): JSX.Element {
   const inner = (
     <>
-      <dt className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <dt className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         <HugeiconsIcon icon={icon} className="size-3 shrink-0" aria-hidden />
         {label}
       </dt>
@@ -668,7 +677,7 @@ function Brief({
       <button
         type="button"
         onClick={onClick}
-        className="flex flex-col gap-0.5 px-3 py-2 text-left hover:bg-muted/40"
+        className="flex flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-muted/50"
       >
         {inner}
       </button>
@@ -689,7 +698,7 @@ function FingerprintTable({
       <caption className="sr-only">Fingerprints by environment</caption>
       <tbody>
         {slots.map((slot) => (
-          <tr key={slot.env} className="border-t border-border/40 first:border-t-0">
+          <tr key={slot.env} className="border-t border-border/60 first:border-t-0">
             <td className="py-1 pr-3 align-top">
               <span className="font-mono text-[11px] text-muted-foreground">{slot.env}</span>
               {slot.env === env ? (
@@ -768,40 +777,45 @@ function VaultReaders({
       ) : (
         <ul className="flex flex-col">
           {readers.map((id) => (
-            <li
-              key={id}
-              className="flex items-center gap-2 border-t border-border/40 py-1 first:border-t-0"
-            >
-              <span
-                className="flex size-5 shrink-0 items-center justify-center text-sky-500"
-                aria-hidden
-              >
-                <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" />
-              </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[12px]">{id}</span>
-              {onFilterReader ? (
-                <button
-                  type="button"
-                  className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
-                  onClick={() => onFilterReader(id)}
+            <li key={id}>
+              <div className={cn(EXPLORER_ROW_CLASS, "group/reader px-0")}>
+                <HugeiconsIcon
+                  icon={ELEMENT_ICONS.flow.icon}
+                  className={cn(EXPLORER_ICON_CLASS, "text-sky-500")}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">{id}</span>
+                <div
+                  className={cn(
+                    EXPLORER_BAND_ACTIONS_CLASS,
+                    "group-hover/reader:opacity-100 group-focus-within/reader:opacity-100",
+                  )}
                 >
-                  filter
-                </button>
-              ) : null}
-              <Link
-                to="/flows"
-                search={{ flow: id }}
-                className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Flows
-              </Link>
-              <Link
-                to="/overview"
-                search={{ flow: id }}
-                className="shrink-0 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Graph
-              </Link>
+                  {onFilterReader ? (
+                    <button
+                      type="button"
+                      className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
+                      onClick={() => onFilterReader(id)}
+                    >
+                      filter
+                    </button>
+                  ) : null}
+                  <Link
+                    to="/flows"
+                    search={{ flow: id }}
+                    className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    Flows
+                  </Link>
+                  <Link
+                    to="/overview"
+                    search={{ flow: id }}
+                    className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    Graph
+                  </Link>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

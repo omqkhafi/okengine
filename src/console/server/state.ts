@@ -33,6 +33,7 @@ import {
 } from "../../elements/signal/reconcile.ts";
 import type { Manifest } from "../../manifest/types.ts";
 import type { WideEvent } from "../../runs/types.ts";
+import type { ConsoleRunsQueryResult } from "./runs-query.ts";
 import type { ConsoleAiProjection } from "./ai.ts";
 import { createLoginAttemptBag, type LoginAttemptBag } from "./auth-rate.ts";
 import { mintClaimCode, type ClaimCodeState } from "./claim.ts";
@@ -189,6 +190,16 @@ export interface ConsoleState {
   }>;
   /** Bound after Console app boot — reads the runs store. */
   listRuns: () => Promise<WideEvent[]>;
+  /**
+   * Sandboxed SQL over persisted `.oke/runs` Parquet.
+   * Bound after Console app boot; stub rejects until then.
+   */
+  queryPersistedRuns: (input: {
+    readonly sql: string;
+    readonly revealPii?: boolean;
+    readonly timeoutMs?: number;
+    readonly maxRows?: number;
+  }) => Promise<ConsoleRunsQueryResult>;
   /**
    * Shared secret for host → Console WideEvent ingest (`oke dev` bridge).
    * `null` disables `POST /console/runs/ingest`.
@@ -746,6 +757,9 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
       });
     },
     listRuns: async () => [],
+    queryPersistedRuns: async () => {
+      throw new Error("queryPersistedRuns is unbound until Console boot");
+    },
     runsIngestSecret: options.runsIngestSecret ?? null,
     replayTrace: null,
     invokeUserFlow: null,

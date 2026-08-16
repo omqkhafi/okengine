@@ -24,6 +24,8 @@ import { bindHttp } from "./bind.ts";
 import { touchLoginRateLimit } from "./auth-rate.ts";
 import { clearClaimCodeArtifact, verifyClaimCode } from "./claim.ts";
 import { maskPiiValue, maskWideEventForConsole, piiFieldNamesFromManifest } from "./runs-pii.ts";
+import { ConsoleRunsQueryError, RUNS_QUERY_PII_GAP, RUNS_QUERY_TIMEOUT_MS } from "./runs-query.ts";
+import { DuckQueryTimeoutError } from "../../runs/duckdb.ts";
 import { ClockResourceNotFoundError, ScheduleNotOverridableError } from "./clock.ts";
 import { createFileDiff, emitStructuralDiff } from "./structural.ts";
 import type { ConsoleState } from "./state.ts";
@@ -347,6 +349,9 @@ const ClaimFailed = z.object({
   reasons: z.array(z.string()).optional(),
 });
 const AuthFailed = z.object({});
+const QueryRejected = z.object({ reason: z.string() });
+const QueryTimeout = z.object({ timeoutMs: z.number() });
+const QueryFailed = z.object({ reason: z.string() });
 const AuthRateLimited = z.object({ reason: z.string() });
 const NotFound = z.object({ flowId: z.string() });
 const InvokeDenied = z.object({ reason: z.string() });
@@ -1568,6 +1573,21 @@ const StoreSqlOut = z.object({
   gateApplied: z.boolean(),
 });
 
+const RunsQueryIn = z.object({
+  sql: z.string().min(1),
+  revealPii: z.boolean().optional(),
+});
+
+const RunsQueryOut = z.object({
+  rows: z.array(z.record(z.string(), z.unknown())),
+  truncated: z.boolean(),
+  rowCount: z.number(),
+  masked: z.literal("column-keys"),
+  durationMs: z.number(),
+  limitation: z.literal(RUNS_QUERY_PII_GAP),
+  injectedLimit: z.boolean(),
+});
+
 const StorePreviewIn = z.object({
   ref: z.string().min(1),
   child: z.string().optional(),
@@ -1608,7 +1628,7 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly logout: AnyFlowDef;
     };
     readonly manifest: { readonly get: AnyFlowDef };
-    readonly runs: { readonly list: AnyFlowDef };
+    readonly runs: { readonly list: AnyFlowDef; readonly query: AnyFlowDef };
     readonly action: { readonly ping: AnyFlowDef };
     readonly structural: {
       readonly propose: AnyFlowDef;
@@ -1694,6 +1714,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const sessionLogout = createSessionLogout();
   const manifestGet = createManifestGet(state);
   const runsList = createRunsList(state);
+  const runsQuery = createRunsQuery(state);
   const actionPing = createActionPing(state);
   const structuralPropose = createStructuralPropose(state);
   const flowsIdentities = createFlowsIdentities(state);
@@ -1751,6 +1772,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.post("/console/session/logout"), sessionLogout),
     bindHttp(http.get("/console/manifest"), manifestGet),
     bindHttp(http.get("/console/runs"), runsList),
+    bindHttp(http.post("/console/runs/query"), runsQuery),
     bindHttp(http.post("/console/action/ping"), actionPing),
     bindHttp(http.post("/console/structural/propose"), structuralPropose),
     bindHttp(http.get("/console/flows/identities"), flowsIdentities),
@@ -1807,7 +1829,7 @@ export function createConsoleBindings(state: ConsoleState): {
       setup: { status: setupStatus, claim: setupClaim },
       session: { login: sessionLogin, me: sessionMe, logout: sessionLogout },
       manifest: { get: manifestGet },
-      runs: { list: runsList },
+      runs: { list: runsList, query: runsQuery },
       action: { ping: actionPing },
       structural: { propose: structuralPropose },
       flows: { identities: flowsIdentities, invoke: flowsInvoke },
@@ -1997,6 +2019,50 @@ function createManifestGet(state: ConsoleState) {
     do: (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return { manifest: state.manifest };
+    },
+  });
+}
+
+function createRunsQuery(state: ConsoleState) {
+  return flow("console.runs.query", {
+    plane: "operator",
+    in: RunsQueryIn,
+    out: RunsQueryOut,
+    errors: { AuthFailed, QueryRejected, QueryTimeout, QueryFailed },
+    do: async (input: z.infer<typeof RunsQueryIn>, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      if (input.revealPii === true) {
+        fx.log.info("console.runs.query.reveal", {
+          operatorId: fx.operator.id,
+        });
+      }
+      try {
+        const result = await state.queryPersistedRuns({
+          sql: input.sql,
+          revealPii: input.revealPii === true,
+        });
+        fx.log.info("console.runs.query", {
+          operatorId: fx.operator.id,
+          revealPii: input.revealPii === true,
+          rowCount: result.rowCount,
+          truncated: result.truncated,
+        });
+        return result;
+      } catch (err) {
+        if (err instanceof DuckQueryTimeoutError) {
+          return fail("QueryTimeout", { timeoutMs: err.timeoutMs });
+        }
+        if (err instanceof ConsoleRunsQueryError) {
+          if (err.code === "QueryTimeout") {
+            const match = /^timeout:(\d+)$/.exec(err.reason);
+            return fail("QueryTimeout", {
+              timeoutMs: match ? Number(match[1]) : RUNS_QUERY_TIMEOUT_MS,
+            });
+          }
+          return fail(err.code, { reason: err.reason });
+        }
+        return fail("QueryFailed", { reason: err instanceof Error ? err.message : String(err) });
+      }
     },
   });
 }

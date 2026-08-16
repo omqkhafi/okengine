@@ -433,7 +433,7 @@ function FileList({
 }): JSX.Element {
   return (
     <div className="min-h-0 flex-1 overflow-auto" role="list" aria-label="Objects">
-      <div className="sticky top-0 z-10 flex h-7 items-center gap-2 border-b border-border/50 bg-background px-3 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+      <div className="sticky top-0 z-10 flex h-7 items-center gap-2 border-b border-border/60 bg-background px-3 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         <span className="w-5" />
         <span className="min-w-0 flex-1">Name</span>
         <span className="w-20 text-right">Kind</span>
@@ -448,9 +448,9 @@ function FileList({
             role="listitem"
             data-slot={entry.kind === "folder" ? "file-folder" : "file-object"}
             className={cn(
-              "flex h-8 cursor-default items-center gap-2 border-b border-border/30 px-3 text-[12px]",
-              active && "bg-sky-500/10",
-              !active && "hover:bg-muted/40",
+              "flex h-8 cursor-default items-center gap-2 border-b border-border/60 px-3 text-xs",
+              active && "bg-muted/70",
+              !active && "hover:bg-muted/50",
             )}
             onClick={() => onOpen(entry)}
             onDoubleClick={() => onOpen(entry)}

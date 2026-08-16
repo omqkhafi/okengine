@@ -80,7 +80,10 @@ export const postgresRunsDriver: RunsDriver = {
       async flush(): Promise<void> {
         /* row-level writes are immediate */
       },
-      async query(sql: string): Promise<RunsRow[]> {
+      async query(
+        sql: string,
+        _options?: import("../types.ts").RunsQueryOptions,
+      ): Promise<RunsRow[]> {
         return client.query(sql);
       },
       async all(): Promise<WideEvent[]> {

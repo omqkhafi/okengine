@@ -3,7 +3,6 @@
  */
 
 import { useMemo, useState, type JSX } from "react";
-import { SecurityCheckIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Manifest } from "../../../../../../manifest/types.ts";
 import type { FlowIdentity } from "@/client.ts";
@@ -13,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ELEMENT_ICONS } from "@/lib/element-icons.ts";
 import { cn } from "@/lib/utils.ts";
 import { useGates } from "@/features/store/data/use-gates.ts";
 import {
@@ -26,6 +26,8 @@ import {
   GateAsPicker,
   GateModeCard,
   GateModeDetail,
+  GateModeStrip,
+  GatePickerHeading,
   type GateAsTab,
 } from "@/features/store/query/query-gate-parts.tsx";
 
@@ -131,7 +133,7 @@ export function CallIdentityMenu({
           <Button
             {...props}
             type="button"
-            variant={active ? "secondary" : "ghost"}
+            variant="ghost"
             size="sm"
             className={cn(
               "h-8 max-w-44 min-w-0 rounded-none px-2 text-[11px]",
@@ -142,16 +144,18 @@ export function CallIdentityMenu({
             }
             data-slot="call-api-identity"
           >
-            <HugeiconsIcon icon={SecurityCheckIcon} data-icon="inline-start" className="size-3.5" />
+            <HugeiconsIcon
+              icon={ELEMENT_ICONS.gate.icon}
+              data-icon="inline-start"
+              className="size-3.5"
+            />
             <span className="truncate">{callInvokeAsToolbarLabel(value, identities)}</span>
           </Button>
         )}
       />
-      <DropdownMenuContent align="end" className="w-[26rem] p-2.5">
-        <p className="px-0.5 pb-2 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
-          Invoke as a Gate
-        </p>
-        <div role="radiogroup" aria-label="Invoke as" className="grid grid-cols-3 gap-1.5">
+      <DropdownMenuContent align="end" className="w-80 overflow-hidden p-0">
+        <GatePickerHeading>Invoke as</GatePickerHeading>
+        <GateModeStrip label="Invoke as">
           <GateModeCard
             mode="operator"
             title="Operator"
@@ -174,54 +178,48 @@ export function CallIdentityMenu({
             disabled={!asEnabled}
             onSelect={() => selectMode("as")}
           />
-        </div>
-        <div className="mt-2.5 border-t border-border/60 pt-2.5">
-          {mode === "operator" ? (
-            <GateModeDetail title="Full admin access" badge="Default">
-              Operator bypasses application Gates. The handler runs without the flow&apos;s gate
-              chain.
-            </GateModeDetail>
-          ) : null}
-          {mode === "public" ? (
-            <GateModeDetail title="Public">
-              {publicDetail} Anonymous principal — unverified, no scopes. Only{" "}
-              <span className="font-mono">gate.public</span> flows succeed.
-            </GateModeDetail>
-          ) : null}
-          {mode === "as" ? (
-            <GateAsPicker
-              tab={asTab}
-              onTabChange={setAsTab}
-              policies={policies}
-              users={users}
-              asGate={value.asGate}
-              asUserId={selectedUser?.id ?? null}
-              onSelectPolicy={(policy) => {
-                setAsTab("policy");
-                onChange({ asGate: policy.id, asUserId: null });
-              }}
-              onSelectUser={(user) => {
-                setAsTab("user");
-                onChange({ asGate: user.gate, asUserId: user.id });
-              }}
-              hint={
-                selectedUser ? (
-                  <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                    Calls the flow as{" "}
-                    <span className="font-medium text-foreground">{selectedUser.label}</span> via{" "}
-                    <span className="font-mono">{value.asGate}</span>. Sets the user principal for
-                    gates.
-                  </p>
-                ) : selectedPolicy ? (
-                  <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
-                    {selectedPolicy.detail} Sets the user principal scopes for{" "}
-                    <span className="font-mono">{selectedPolicy.id}</span>.
-                  </p>
-                ) : null
-              }
-            />
-          ) : null}
-        </div>
+        </GateModeStrip>
+        {mode === "operator" ? (
+          <GateModeDetail title="Operator" badge="Default">
+            Bypasses the flow&apos;s gate chain.
+          </GateModeDetail>
+        ) : null}
+        {mode === "public" ? (
+          <GateModeDetail title="Public">
+            {publicDetail} Only <span className="font-mono">gate.public</span> flows succeed.
+          </GateModeDetail>
+        ) : null}
+        {mode === "as" ? (
+          <GateAsPicker
+            tab={asTab}
+            onTabChange={setAsTab}
+            policies={policies}
+            users={users}
+            asGate={value.asGate}
+            asUserId={selectedUser?.id ?? null}
+            onSelectPolicy={(policy) => {
+              setAsTab("policy");
+              onChange({ asGate: policy.id, asUserId: null });
+            }}
+            onSelectUser={(user) => {
+              setAsTab("user");
+              onChange({ asGate: user.gate, asUserId: user.id });
+            }}
+            hint={
+              selectedUser ? (
+                <p className="border-t border-border/60 px-2 py-2 text-[10px] leading-relaxed text-muted-foreground">
+                  Calls as <span className="font-medium text-foreground">{selectedUser.label}</span>{" "}
+                  via <span className="font-mono">{value.asGate}</span>.
+                </p>
+              ) : selectedPolicy ? (
+                <p className="border-t border-border/60 px-2 py-2 text-[10px] leading-relaxed text-muted-foreground">
+                  {selectedPolicy.detail} Sets scopes for{" "}
+                  <span className="font-mono">{selectedPolicy.id}</span>.
+                </p>
+              ) : null
+            }
+          />
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

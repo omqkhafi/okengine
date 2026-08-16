@@ -390,6 +390,36 @@ export async function runsList(): Promise<ConsoleApiResult<RunsListPayload>> {
   return consoleFetch<RunsListPayload>("/console/runs");
 }
 
+/** Request body for `POST /console/runs/query`. */
+export type RunsQueryInput = {
+  readonly sql: string;
+  readonly revealPii?: boolean;
+};
+
+/** Success payload from `POST /console/runs/query`. */
+export type RunsQueryResult = {
+  readonly rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly truncated: boolean;
+  readonly rowCount: number;
+  readonly masked: "column-keys";
+  readonly durationMs: number;
+  readonly limitation: "RunsQueryPiiProjectionGap";
+  readonly injectedLimit: boolean;
+};
+
+/**
+ * POST /console/runs/query — sandboxed DuckDB SQL over persisted runs.
+ * PII masking is column-key only (`RunsQueryPiiProjectionGap`).
+ *
+ * @param body - SQL + optional reveal
+ */
+export async function runsQuery(body: RunsQueryInput): Promise<ConsoleApiResult<RunsQueryResult>> {
+  return consoleFetch<RunsQueryResult>("/console/runs/query", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 /** Request body for `POST /console/traces/replay`. */
 export type TracesReplayInput = {
   readonly rootId: string;

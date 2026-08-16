@@ -6,12 +6,15 @@
  */
 
 import { useId, type JSX } from "react";
+import { cn } from "@/lib/utils.ts";
 import type { QueryGateMode } from "../lib/query-gate.ts";
 
 /** Props for {@link QueryGateViz}. */
 export interface QueryGateVizProps {
   readonly mode: QueryGateMode;
   readonly active: boolean;
+  /** Extra classes on the SVG (size defaults to `h-10 w-full`). */
+  readonly className?: string;
 }
 
 /**
@@ -19,7 +22,7 @@ export interface QueryGateVizProps {
  *
  * @param props - Card mode + selected state
  */
-export function QueryGateViz({ mode, active }: QueryGateVizProps): JSX.Element {
+export function QueryGateViz({ mode, active, className }: QueryGateVizProps): JSX.Element {
   const uid = useId().replace(/:/g, "");
   const hatchId = `${uid}-hatch`;
   const tone = active ? "text-foreground" : "text-muted-foreground/70";
@@ -27,7 +30,7 @@ export function QueryGateViz({ mode, active }: QueryGateVizProps): JSX.Element {
   return (
     <svg
       viewBox="0 0 72 40"
-      className={tone}
+      className={cn("h-10 w-full", tone, className)}
       aria-hidden
       data-slot="store-query-gate-viz"
       data-mode={mode}
