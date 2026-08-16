@@ -33,6 +33,7 @@ export default defineConfig({
       files: "rustfs/rustfs:1.0.0-beta.11",
       index: "getmeili/meilisearch:v1.37",
     },
+    pgdog: "ghcr.io/pgdogdev/pgdog:v0.1.51",
     channel: {
       email: "axllent/mailpit:v1.22.3",
     },

@@ -85,10 +85,7 @@ export function ResourcePanel({
         badge={
           <>
             <span
-              className={cn(
-                "inline-flex h-4 shrink-0 items-center rounded px-1.5 font-mono text-[9px] font-semibold tracking-[0.12em] uppercase",
-                spec.wellClass,
-              )}
+              className="shrink-0 font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase"
               data-slot="facet-badge"
             >
               {files ? "Bucket" : spec.label}

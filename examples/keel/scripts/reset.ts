@@ -141,6 +141,9 @@ export function extraEnvSectionTitle(key: string): string | null {
   if (key.startsWith("OKE_STORE_SQL") || key === "DATABASE_URL") {
     return "store.sql — Postgres";
   }
+  if (key === "OKE_PGDOG_URL") {
+    return "pgdog — connection pooler (in front of Postgres)";
+  }
   if (key.startsWith("MEILI_") || key.startsWith("OKE_STORE_INDEX")) {
     return "store.index — Meilisearch";
   }

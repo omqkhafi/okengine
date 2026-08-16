@@ -524,6 +524,54 @@ export async function clockList(): Promise<ConsoleApiResult<ClockListPayload>> {
   return consoleFetch<ClockListPayload>("/console/clock");
 }
 
+/** Clock lease currently held by an instance (`GET /console/instances`). */
+export type InstanceClockLease = {
+  readonly name: string;
+  readonly leaseUntil: number;
+};
+
+/** Journal run lease currently held by an instance (`GET /console/instances`). */
+export type InstanceJournalLease = {
+  readonly runId: string;
+  readonly flow: string;
+  readonly leaseUntil: number;
+};
+
+/** One live instance from `GET /console/instances`. */
+export type InstanceDetail = {
+  readonly id: string;
+  readonly startedAt: number;
+  readonly heartbeatAt: number;
+  readonly leaseExpiresAt: number;
+  readonly env: "dev" | "test" | "prod";
+  readonly pid?: number;
+  readonly clock: readonly InstanceClockLease[];
+  readonly journal: readonly InstanceJournalLease[];
+};
+
+/** Registry unbound — not a zero count. */
+export type InstancesListEmpty = {
+  readonly kind: "empty";
+};
+
+/** Live fleet snapshot. */
+export type InstancesListFleet = {
+  readonly kind: "fleet";
+  readonly now: number;
+  readonly alive: number;
+  readonly instances: readonly InstanceDetail[];
+};
+
+/** Fleet list payload (`GET /console/instances`). */
+export type InstancesListPayload = InstancesListEmpty | InstancesListFleet;
+
+/**
+ * GET /console/instances — live process count + lease ownership snapshot.
+ */
+export async function instancesList(): Promise<ConsoleApiResult<InstancesListPayload>> {
+  return consoleFetch<InstancesListPayload>("/console/instances");
+}
+
 /** One signal row from `GET /console/signals`. */
 export type SignalsListRow = {
   readonly name: string;

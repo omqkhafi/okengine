@@ -190,7 +190,7 @@ export function TracesPane({
                         EXPLORER_ICON_BUTTON_CLASS,
                         "relative",
                         (advancedOpen || advancedActive) &&
-                          "border-foreground/25 bg-background text-foreground",
+                        "border-foreground/25 bg-background text-foreground",
                       )}
                     >
                       <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />

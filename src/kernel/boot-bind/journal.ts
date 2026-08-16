@@ -14,6 +14,7 @@ import { createPostgresJournalStore } from "../../drivers/journal-postgres.ts";
 import { resolveDriverId, type ConfigEnv } from "../../config/index.ts";
 import { JOURNAL_DEFAULTS } from "../../config/driver-defaults.ts";
 import type { BootOptions } from "../boot.ts";
+import { resolveInstanceId } from "../instance-id.ts";
 
 /** Bound journal runtime — store + this instance's lease identity. */
 export interface JournalRuntime {
@@ -53,7 +54,7 @@ export async function bindJournal(
   env: ConfigEnv,
 ): Promise<BindJournalResult> {
   const driver = resolveJournalDriverId(options, env);
-  const instanceId = options.instanceId ?? `inst-${crypto.randomUUID()}`;
+  const instanceId = resolveInstanceId(options.instanceId);
 
   let store: JournalStore;
   if (driver === "memory") {

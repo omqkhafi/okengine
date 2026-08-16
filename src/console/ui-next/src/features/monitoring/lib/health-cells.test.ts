@@ -49,6 +49,7 @@ describe("healthCells", () => {
       liveStatus: "connecting",
     });
     expect(cells.map((c) => [c.id, c.tone, c.value])).toEqual([
+      ["instances", "empty", "no fleet"],
       ["vault", "empty", "no backend"],
       ["drift", "empty", "no stores"],
       ["lag", "empty", "no lag observed"],
@@ -129,6 +130,77 @@ describe("healthCells", () => {
     expect(cells.find((c) => c.id === "signal")).toMatchObject({ tone: "warn", value: "3 dead" });
     expect(cells.find((c) => c.id === "window")?.value).toContain("25% err");
     expect(cells.find((c) => c.id === "live")).toMatchObject({ tone: "ok", value: "live" });
+  });
+
+  test("fleet empty is not a fake zero; 0 alive is a real warn", () => {
+    const empty = healthCells({
+      vaultCard: null,
+      stores: [],
+      runs: [],
+      crons: [],
+      signals: [],
+      window: { kind: "empty" },
+      liveStatus: "connecting",
+      fleet: { kind: "empty" },
+    });
+    expect(empty.find((c) => c.id === "instances")).toMatchObject({
+      tone: "empty",
+      value: "no fleet",
+    });
+
+    const zero = healthCells({
+      vaultCard: null,
+      stores: [],
+      runs: [],
+      crons: [],
+      signals: [],
+      window: { kind: "empty" },
+      liveStatus: "connecting",
+      fleet: { kind: "fleet", now: 1, alive: 0, instances: [] },
+    });
+    expect(zero.find((c) => c.id === "instances")).toMatchObject({
+      tone: "warn",
+      value: "0 alive",
+    });
+
+    const live = healthCells({
+      vaultCard: null,
+      stores: [],
+      runs: [],
+      crons: [],
+      signals: [],
+      window: { kind: "empty" },
+      liveStatus: "connecting",
+      fleet: {
+        kind: "fleet",
+        now: 1,
+        alive: 2,
+        instances: [
+          {
+            id: "inst-a",
+            startedAt: 1,
+            heartbeatAt: 1,
+            leaseExpiresAt: 2,
+            env: "dev",
+            clock: [],
+            journal: [],
+          },
+          {
+            id: "inst-b",
+            startedAt: 1,
+            heartbeatAt: 1,
+            leaseExpiresAt: 2,
+            env: "dev",
+            clock: [],
+            journal: [],
+          },
+        ],
+      },
+    });
+    expect(live.find((c) => c.id === "instances")).toMatchObject({
+      tone: "ok",
+      value: "2 alive",
+    });
   });
 });
 

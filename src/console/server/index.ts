@@ -49,6 +49,7 @@ export {
   type ProjectClocksOptions,
   type WaitingOnCount,
 } from "./clock.ts";
+export { bindHostFleetStores, listConsoleInstances } from "./instances.ts";
 export {
   blastRadiusOf,
   createManifestVaultRuntime,

@@ -15,18 +15,22 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FlowPlane, SignalDelivery } from "../../../../../../manifest/types.ts";
 import {
+  EXPLORER_BAND_ACTIONS_CLASS,
   EXPLORER_BAND_CLASS,
   EXPLORER_BAND_HEADER_CLASS,
   EXPLORER_BAND_LABEL_CLASS,
+  EXPLORER_CHEVRON_CLASS,
   EXPLORER_COUNT_CLASS,
-  EXPLORER_FOLDER_WELL_CLASS,
+  EXPLORER_GROUP_ROW_CLASS,
+  EXPLORER_ICON_BUTTON_CLASS,
+  EXPLORER_ICON_CLASS,
   EXPLORER_LIST_EMPTY_CLASS,
   EXPLORER_RAIL_ACTIVE_CLASS,
   EXPLORER_RAIL_CLASS,
   EXPLORER_ROW_CLASS,
   EXPLORER_ROW_SELECTED_CLASS,
   EXPLORER_TOOLBAR_CLASS,
-  EXPLORER_WELL_CLASS,
+  explorerIconInk,
 } from "@/components/explorer/explorer-chrome.ts";
 import { ExplorerSearch } from "@/components/explorer/explorer-search.tsx";
 import { TreeExpandToggle } from "@/components/explorer/tree-expand-toggle.tsx";
@@ -69,10 +73,10 @@ export interface UnitsTreeProps {
 
 /** Plane facet chips in canonical display order (matches PlaneBadge icons). */
 const PLANE_FACETS: Record<FlowPlane, { readonly icon: ElementHugeIcon; readonly label: string }> =
-  {
-    user: { icon: UserIcon, label: "user" },
-    operator: { icon: SecurityCheckIcon, label: "operator" },
-  };
+{
+  user: { icon: UserIcon, label: "user" },
+  operator: { icon: SecurityCheckIcon, label: "operator" },
+};
 const FLOW_PLANES: readonly FlowPlane[] = ["user", "operator"];
 
 /**
@@ -177,37 +181,54 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
             aria-label="Search flows"
             data-slot="units-search"
           />
-          <button
-            type="button"
-            aria-expanded={advancedOpen}
-            aria-controls="units-advanced-panel"
-            data-slot="units-advanced-toggle"
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className={cn(
-              "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium transition-colors",
-              advancedOpen || activeCount > 0
-                ? "border-foreground/25 bg-background text-foreground shadow-sm"
-                : "border-border/70 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
-            Advanced
-            {activeCount > 0 ? (
-              <span
-                data-slot="units-advanced-count"
-                className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-foreground/10 px-1 text-[9px] font-semibold tabular-nums"
-              >
-                {activeCount}
-              </span>
-            ) : null}
-          </button>
-          <TreeExpandToggle
-            allOpen={allOpen}
-            disabled={keys.length === 0}
-            onToggle={toggleAll}
-            dataSlot="units-tree-expand-toggle"
-            className="mr-1.5"
-          />
+          <div className="flex shrink-0 items-center gap-1 pr-1.5">
+            <Tooltip>
+              <TooltipTrigger
+                render={(props) => (
+                  <button
+                    {...props}
+                    type="button"
+                    aria-expanded={advancedOpen}
+                    aria-controls="units-advanced-panel"
+                    aria-label={
+                      activeCount > 0
+                        ? `Advanced filters, ${activeCount} active`
+                        : "Advanced filters"
+                    }
+                    data-slot="units-advanced-toggle"
+                    onClick={(event) => {
+                      props.onClick?.(event);
+                      setAdvancedOpen((open) => !open);
+                    }}
+                    className={cn(
+                      EXPLORER_ICON_BUTTON_CLASS,
+                      "relative",
+                      (advancedOpen || activeCount > 0) &&
+                      "border-foreground/25 bg-background text-foreground",
+                    )}
+                  >
+                    <HugeiconsIcon icon={FilterHorizontalIcon} className="size-3" aria-hidden />
+                    {activeCount > 0 ? (
+                      <span
+                        data-slot="units-advanced-count"
+                        className="absolute -top-0.5 -inset-e-0.5 flex size-3.5 items-center justify-center rounded-full bg-foreground text-[8px] font-medium text-background"
+                        aria-hidden
+                      >
+                        {activeCount}
+                      </span>
+                    ) : null}
+                  </button>
+                )}
+              />
+              <TooltipContent side="bottom">Advanced</TooltipContent>
+            </Tooltip>
+            <TreeExpandToggle
+              allOpen={allOpen}
+              disabled={keys.length === 0}
+              onToggle={toggleAll}
+              dataSlot="units-tree-expand-toggle"
+            />
+          </div>
         </div>
         {advancedOpen ? (
           <div
@@ -459,32 +480,33 @@ function TriggerBand({
             <div {...props}>
               <HugeiconsIcon
                 icon={ArrowDown01Icon}
-                className={cn(
-                  "size-3 shrink-0 text-muted-foreground transition-transform",
-                  !open && "-rotate-90",
-                )}
+                className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
                 aria-hidden
               />
-              <span className={cn(EXPLORER_WELL_CLASS, kindSpec.wellClass)} aria-hidden>
-                <HugeiconsIcon icon={kindSpec.icon} className="size-3" />
-              </span>
+              <HugeiconsIcon
+                icon={kindSpec.icon}
+                className={cn(EXPLORER_ICON_CLASS, explorerIconInk(kindSpec.wellClass))}
+                aria-hidden
+              />
               <span className={cn(EXPLORER_BAND_LABEL_CLASS, "flex-1")}>{band.label}</span>
               <span className={EXPLORER_COUNT_CLASS}>{flowCount}</span>
-              <TreeExpandToggle
-                allOpen={unitsOpen}
-                disabled={units.length === 0}
-                onToggle={toggleUnits}
-                collapseLabel={`Collapse all in ${band.label}`}
-                expandLabel={`Expand all in ${band.label}`}
-                dataSlot="units-band-expand-toggle"
-                disclose
-                bare
-              />
+              <span className={EXPLORER_BAND_ACTIONS_CLASS}>
+                <TreeExpandToggle
+                  allOpen={unitsOpen}
+                  disabled={units.length === 0}
+                  onToggle={toggleUnits}
+                  collapseLabel={`Collapse all in ${band.label}`}
+                  expandLabel={`Expand all in ${band.label}`}
+                  dataSlot="units-band-expand-toggle"
+                  disclose
+                  bare
+                />
+              </span>
             </div>
           )}
         />
         <CollapsibleContent>
-          <ul className="flex flex-col gap-0.5 p-1">
+          <ul className="flex flex-col">
             {band.groups.map((g) => (
               <UnitGroupItem
                 key={`${band.id}:${g.unit}`}
@@ -523,28 +545,22 @@ function UnitGroupItem({
   return (
     <li data-slot="unit-group" data-unit={group.unit}>
       <Collapsible open={open} onOpenChange={onOpenChange}>
-        <CollapsibleTrigger className="group/unit flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/60">
+        <CollapsibleTrigger className={cn(EXPLORER_GROUP_ROW_CLASS, "pl-4")}>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={cn(
-              "size-3 shrink-0 text-muted-foreground transition-transform",
-              !open && "-rotate-90",
-            )}
+            className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
             aria-hidden
           />
-          <span
-            className={cn(EXPLORER_FOLDER_WELL_CLASS, "group-hover/unit:text-foreground")}
+          <HugeiconsIcon
+            icon={Folder01Icon}
+            className={cn(EXPLORER_ICON_CLASS, "text-muted-foreground")}
             aria-hidden
-          >
-            <HugeiconsIcon icon={Folder01Icon} className="size-3" />
-          </span>
-          <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold tracking-wide text-foreground">
-            {group.unit}
-          </span>
+          />
+          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{group.unit}</span>
           <span className={EXPLORER_COUNT_CLASS}>{group.flows.length}</span>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ul className="mt-0.5 mb-0.5 ml-2 flex flex-col gap-0.5 border-l border-border/50 pl-2">
+          <ul className="flex flex-col">
             {group.flows.map((f) => (
               <FlowListItem
                 key={f.id}
@@ -561,7 +577,7 @@ function UnitGroupItem({
 }
 
 /**
- * One selectable flow row — icon well, action, trailing method badge.
+ * One selectable flow row — icon, action, trailing method badge.
  *
  * @param props - Flow + selection
  */
@@ -576,10 +592,11 @@ function FlowListItem({
 }): JSX.Element {
   const trigger = flowTriggerSpec(flow.flow.trigger);
   const delivery = flow.delivery ? SIGNAL_DELIVERY_SPECS[flow.delivery] : null;
-  const wellIcon = delivery?.icon ?? (flow.method ? httpMethodIcon(flow.method) : trigger.icon);
-  const wellClass =
-    delivery?.wellClass ?? (flow.method ? httpMethodBadgeClass(flow.method) : trigger.wellClass);
-  const wellTitle = delivery
+  const rowIcon = delivery?.icon ?? (flow.method ? httpMethodIcon(flow.method) : trigger.icon);
+  const iconClass = explorerIconInk(
+    delivery?.wellClass ?? (flow.method ? httpMethodBadgeClass(flow.method) : trigger.wellClass),
+  );
+  const iconTitle = delivery
     ? flow.signal
       ? `${delivery.title} · ${flow.signal}`
       : delivery.title
@@ -595,7 +612,11 @@ function FlowListItem({
         data-delivery={flow.delivery ?? undefined}
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(flow.id)}
-        className={cn(EXPLORER_ROW_CLASS, "group/flow", selected && EXPLORER_ROW_SELECTED_CLASS)}
+        className={cn(
+          EXPLORER_ROW_CLASS,
+          "group/flow pl-8",
+          selected && EXPLORER_ROW_SELECTED_CLASS,
+        )}
       >
         <span
           aria-hidden
@@ -607,23 +628,16 @@ function FlowListItem({
         <Tooltip>
           <TooltipTrigger
             render={(props) => (
-              <span {...props} className={cn(EXPLORER_WELL_CLASS, wellClass)} aria-hidden>
-                <HugeiconsIcon icon={wellIcon} className="size-3" />
+              <span {...props} className={cn(EXPLORER_ICON_CLASS, iconClass)} aria-hidden>
+                <HugeiconsIcon icon={rowIcon} className="size-3.5" />
               </span>
             )}
           />
           <TooltipContent side="right" className="text-[11px]">
-            {wellTitle}
+            {iconTitle}
           </TooltipContent>
         </Tooltip>
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate font-mono transition-colors group-hover/flow:text-foreground",
-            selected ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {flow.action}
-        </span>
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{flow.action}</span>
         {flow.method ? (
           <HttpMethodBadge
             method={flow.method}

@@ -31,7 +31,7 @@ export function AiRail({ ai, asks }: AiRailProps): JSX.Element {
       data-slot="monitoring-ai-rail"
       aria-label="AI usage"
     >
-      <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         AI
       </span>
       {mean == null ? (

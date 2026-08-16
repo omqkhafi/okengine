@@ -19,6 +19,28 @@ export {
   type InstallGracefulShutdownOptions,
 } from "./graceful-shutdown.ts";
 
+export { mintInstanceId, resolveInstanceId, INSTANCE_ID_PREFIX } from "./instance-id.ts";
+
+export {
+  createFileInstanceStore,
+  createInstanceRuntime,
+  createMemoryInstanceStore,
+  projectInstancesList,
+  INSTANCE_HEARTBEAT_MS,
+  INSTANCE_LEASE_MS,
+  type CreateInstanceRuntimeOptions,
+  type InstanceClockLease,
+  type InstanceDetail,
+  type InstanceJournalLease,
+  type InstanceRow,
+  type InstanceRuntime,
+  type InstanceStore,
+  type InstancesList,
+  type InstancesListEmpty,
+  type InstancesListFleet,
+  type ProjectInstancesListOptions,
+} from "./instances.ts";
+
 export {
   bootApplication,
   mintCapabilities,

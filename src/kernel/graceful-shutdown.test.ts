@@ -8,6 +8,7 @@ import { createClockRuntime, createMemoryCronStore } from "../elements/clock.ts"
 import { tryAcquireLease } from "../elements/clock/leader.ts";
 import { createMemoryJournalStore, hasJournalLease, JOURNAL_DEFAULT_LEASE_MS } from "./journal.ts";
 import { releaseInstanceLeases } from "./graceful-shutdown.ts";
+import { createInstanceRuntime, createMemoryInstanceStore } from "./instances.ts";
 
 describe("releaseInstanceLeases", () => {
   test("releases Clock cron leases held by this instance", async () => {
@@ -72,5 +73,24 @@ describe("releaseInstanceLeases", () => {
     });
 
     expect((await store.get(runId))!.lockedBy).toBeUndefined();
+  });
+
+  test("releases this process's fleet registry row", async () => {
+    const store = createMemoryInstanceStore();
+    const instances = createInstanceRuntime({
+      instanceId: "inst-a",
+      store,
+      env: "dev",
+      now: () => 1_000,
+    });
+    await instances.heartbeat(1_000);
+    expect(await store.get("inst-a")).toBeDefined();
+
+    await releaseInstanceLeases({
+      bootResult: { instances },
+      stop: async () => {},
+    });
+
+    expect(await store.get("inst-a")).toBeUndefined();
   });
 });

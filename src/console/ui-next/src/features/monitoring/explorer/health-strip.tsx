@@ -14,6 +14,8 @@ export interface HealthStripProps {
   readonly cells: readonly HealthCell[];
   readonly window: MonitoringWindow;
   readonly onWindowChange: (window: MonitoringWindow) => void;
+  /** Open the fleet Sheet (Instances chip). */
+  readonly onInstancesClick?: () => void;
 }
 
 const WINDOW_ORDER = Object.keys(MONITORING_WINDOWS) as MonitoringWindow[];
@@ -23,7 +25,12 @@ const WINDOW_ORDER = Object.keys(MONITORING_WINDOWS) as MonitoringWindow[];
  *
  * @param props - Projected cells + window control
  */
-export function HealthStrip({ cells, window, onWindowChange }: HealthStripProps): JSX.Element {
+export function HealthStrip({
+  cells,
+  window,
+  onWindowChange,
+  onInstancesClick,
+}: HealthStripProps): JSX.Element {
   return (
     <section
       aria-label="System health"
@@ -32,7 +39,11 @@ export function HealthStrip({ cells, window, onWindowChange }: HealthStripProps)
     >
       <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
         {cells.map((cell) => (
-          <HealthChip key={cell.id} cell={cell} />
+          <HealthChip
+            key={cell.id}
+            cell={cell}
+            onClick={cell.id === "instances" ? onInstancesClick : undefined}
+          />
         ))}
         <div
           className="ml-auto flex flex-wrap items-center gap-0.5 rounded-md bg-muted/40 p-0.5"
@@ -65,13 +76,19 @@ export function HealthStrip({ cells, window, onWindowChange }: HealthStripProps)
   );
 }
 
-function HealthChip({ cell }: { readonly cell: HealthCell }): JSX.Element {
+function HealthChip({
+  cell,
+  onClick,
+}: {
+  readonly cell: HealthCell;
+  readonly onClick?: () => void;
+}): JSX.Element {
   const className = cn(
-    "inline-flex h-6 items-center gap-1.5 rounded-md border px-1.5 text-[10px]",
-    cell.tone === "warn" &&
-      "border-destructive/35 bg-destructive/10 text-destructive dark:text-rose-300",
-    cell.tone === "ok" && "border-border/60 bg-background text-foreground/85",
-    cell.tone === "empty" && "border-border/50 bg-transparent text-muted-foreground",
+    "inline-flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[10px] transition-colors",
+    cell.tone === "warn" && "text-destructive dark:text-rose-300",
+    cell.tone === "ok" && "text-foreground/85",
+    cell.tone === "empty" && "text-muted-foreground",
+    onClick || cell.href ? "hover:bg-muted/50" : null,
   );
   const body = (
     <>
@@ -89,6 +106,20 @@ function HealthChip({ cell }: { readonly cell: HealthCell }): JSX.Element {
       <span className="font-mono tabular-nums">{cell.value}</span>
     </>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        data-slot={`health-cell-${cell.id}`}
+        data-tone={cell.tone}
+        className={className}
+        aria-label={`${cell.label} ${cell.value}`}
+        onClick={onClick}
+      >
+        {body}
+      </button>
+    );
+  }
   if (cell.href) {
     return (
       <Link

@@ -6,6 +6,7 @@
  * duplicate (unified-theory · Clone).
  */
 
+import { mintInstanceId } from "../../kernel/instance-id.ts";
 import type { ClockDecl } from "./declare.ts";
 import { detectDstAmbiguity } from "./dst.ts";
 import { parseDurationMs } from "./duration.ts";
@@ -108,7 +109,7 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
   const timeTravel = options.timeTravel;
   const now = (): number => (timeTravel ? timeTravel.now() : (options.now ?? (() => Date.now()))());
   const store = options.store ?? createMemoryCronStore();
-  const instanceId = options.instanceId ?? crypto.randomUUID();
+  const instanceId = options.instanceId ?? mintInstanceId();
   const leaseMs = options.leaseMs ?? 30_000;
   const declarations = new Map<string, ClockDecl>();
   const handlers = new Map<string, CronHandler>();

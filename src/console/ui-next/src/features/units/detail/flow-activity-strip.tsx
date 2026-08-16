@@ -37,12 +37,12 @@ export function FlowActivityStrip({
   const summary = flowActivitySummary(runs ?? [], flowId, nowMs, windowMs);
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 bg-muted/15 px-3 py-1.5"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5"
       data-slot="flow-activity-strip"
       data-kind={summary.kind}
       aria-label="Recent activity"
     >
-      <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+      <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         Activity
       </span>
       <ActivityBody summary={summary} nowMs={nowMs} />

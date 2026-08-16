@@ -11,6 +11,7 @@ export type ConsolePanelId =
   | "signals"
   | "store"
   | "clock"
+  | "instances"
   | "vault"
   | "ai"
   | "channels"

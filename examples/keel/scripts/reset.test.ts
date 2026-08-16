@@ -105,6 +105,7 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
       example,
     );
     expect(extraEnvSectionTitle("OKE_STORE_KV_PASSWORD")).toContain("store.kv");
+    expect(extraEnvSectionTitle("OKE_PGDOG_URL")).toContain("pgdog");
     expect(extraEnvSectionTitle("OKE_AI_MODEL")).toContain("llama.cpp");
     expect(parseEnvExampleSections(example)[0]?.title).toBe("store.kv — Redis");
     const kv = text.slice(text.indexOf("store.kv"));

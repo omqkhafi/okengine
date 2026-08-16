@@ -1090,12 +1090,12 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
   const runsIngestSecret = crypto.randomUUID();
 
   let consoleVite: ConsoleViteHandle | null = null;
+  // Dry-run already returned above — Vite is a live sidecar, never planned.
   const wantConsoleVite =
-    options.dryRun !== true &&
-    (options.consoleVite === true ||
-      (options.consoleVite !== false &&
-        options.serveConsole === undefined &&
-        shouldAttachConsoleVite()));
+    options.consoleVite === true ||
+    (options.consoleVite !== false &&
+      options.serveConsole === undefined &&
+      shouldAttachConsoleVite());
   if (wantConsoleVite) {
     const startVite = options.startConsoleVite ?? startConsoleVite;
     try {

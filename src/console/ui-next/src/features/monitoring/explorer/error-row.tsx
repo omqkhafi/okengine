@@ -4,11 +4,7 @@
 
 import type { JSX } from "react";
 import { Link } from "@tanstack/react-router";
-import {
-  EXPLORER_RAIL_CLASS,
-  EXPLORER_ROW_CLASS,
-  EXPLORER_ROW_SELECTED_CLASS,
-} from "@/components/explorer/explorer-chrome.ts";
+import { EXPLORER_RAIL_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
 import type { TopErrorGroup } from "../lib/top-errors.ts";
 
@@ -32,7 +28,8 @@ export function ErrorRow({ group, selected, nowMs, onSelect }: ErrorRowProps): J
       data-error-key={group.key}
       data-selected={selected ? "true" : "false"}
       className={cn(
-        "group relative flex w-full items-stretch border-b border-border/60 text-xs",
+        "group relative flex w-full items-stretch border-b border-border/60 text-xs transition-colors",
+        "hover:bg-muted/50 focus-within:bg-muted/50",
         selected && "bg-muted/70",
       )}
     >
@@ -40,31 +37,29 @@ export function ErrorRow({ group, selected, nowMs, onSelect }: ErrorRowProps): J
       <button
         type="button"
         onClick={() => onSelect(group)}
-        className={cn(
-          EXPLORER_ROW_CLASS,
-          "min-w-0 flex-1 py-2 pr-2 pl-3",
-          selected && EXPLORER_ROW_SELECTED_CLASS,
-        )}
+        className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 pl-0 text-left outline-none"
       >
-        <span className="min-w-0 flex-1 truncate text-left">
-          <span className="font-mono text-[11px] text-foreground">{group.flow}</span>
+        <span className="ml-2.5 size-1.5 shrink-0 rounded-full bg-destructive" aria-hidden />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-medium text-foreground">{group.flow}</span>
           {group.errorMessage ? (
-            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-              {group.errorMessage}
-            </span>
+            <span className="text-muted-foreground"> · {group.errorMessage}</span>
           ) : null}
         </span>
-        <span className="shrink-0 font-mono tabular-nums text-[10px] text-muted-foreground">
+        <span className="w-8 shrink-0 text-right font-mono tabular-nums text-[10px] text-muted-foreground">
           {group.count}
         </span>
-        <span className="w-12 shrink-0 text-right text-[10px] text-muted-foreground">
+        <span className="w-10 shrink-0 truncate text-right text-[10px] text-muted-foreground">
           {formatAgo(group.latestStartedAt, nowMs)}
         </span>
       </button>
       <Link
         to="/overview"
         search={{ run: group.latestRunId }}
-        className="flex items-center px-2 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        className={cn(
+          "flex items-center px-2 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline",
+          "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
         data-slot="monitoring-error-open-overview"
         onClick={(event) => event.stopPropagation()}
       >

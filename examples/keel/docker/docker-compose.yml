@@ -51,6 +51,30 @@ services:
       timeout: "3s"
       retries: 10
 
+  # pgdog — connection pooler (in front of Postgres)
+  pgdog:
+    image: "ghcr.io/pgdogdev/pgdog:v0.1.51"
+    ports:
+      - "24850:6432"
+    networks:
+      - "oke"
+    env_file:
+      - "../.env.local"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -h 127.0.0.1 -p 6432 || exit 1"
+      interval: "5s"
+      timeout: "3s"
+      retries: 12
+      start_period: "5s"
+    volumes:
+      - "./pgdog/pgdog.toml:/pgdog/pgdog.toml:ro"
+      - "./pgdog/users.toml:/pgdog/users.toml:ro"
+    depends_on:
+      store-sql:
+        condition: "service_healthy"
+
   # store.files — object storage (S3)
   store-files:
     image: "rustfs/rustfs:1.0.0-beta.11"

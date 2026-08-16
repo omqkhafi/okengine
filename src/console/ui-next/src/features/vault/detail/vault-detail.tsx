@@ -50,7 +50,7 @@ import {
   rotatePolicyLabel,
 } from "../lib/posture.ts";
 import { vaultDriverKind, vaultDriverTitle } from "../lib/backend.ts";
-import { VAULT_ACCENT, VAULT_WELL } from "../lib/theme.ts";
+import { VAULT_ACCENT } from "../lib/theme.ts";
 import type {
   VaultBackend,
   VaultRecord,
@@ -159,8 +159,7 @@ export function VaultDetail({
       <DetailHeader
         dataSlot="vault-detail-header"
         icon={<HugeiconsIcon icon={ELEMENT_ICONS.vault.icon} className="size-4" />}
-        wellClassName="border-border/70"
-        wellStyle={{ backgroundColor: VAULT_WELL, color: VAULT_ACCENT }}
+        wellStyle={{ color: VAULT_ACCENT }}
         title={label}
         badge={
           <>
@@ -191,11 +190,11 @@ export function VaultDetail({
                 <button
                   type="button"
                   className={cn(
-                    "rounded-md border px-1.5 py-px text-[10px] hover:bg-muted/60",
-                    risk === "blast" && "border-destructive/30 text-destructive",
+                    "px-1 text-[10px] font-medium hover:bg-muted/50",
+                    risk === "blast" && "text-destructive",
                     (risk === "unset" || risk === "overdue" || risk === "shared") &&
-                      "border-amber-500/30 text-amber-800 dark:text-amber-400",
-                    risk === "dormant" && "border-border/60 text-muted-foreground",
+                      "text-amber-800 dark:text-amber-400",
+                    risk === "dormant" && "text-muted-foreground",
                   )}
                   onClick={() => onQueryChange?.(`is:${risk}`)}
                 >

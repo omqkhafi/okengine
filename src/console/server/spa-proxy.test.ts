@@ -64,7 +64,7 @@ describe("serveConsole spaProxy", () => {
     expect(await html.text()).toContain("vite-spa");
 
     const client = await server.fetch(
-      new Request(new URL("/@vite/client", server.url), {
+      new Request(String(new URL("/@vite/client", server.url)), {
         headers: { host: "127.0.0.1" },
       }),
     );
@@ -74,7 +74,7 @@ describe("serveConsole spaProxy", () => {
 
   test("keeps /console API on the kernel", async () => {
     const res = await server.fetch(
-      new Request(new URL("/console/setup/status", server.url), {
+      new Request(String(new URL("/console/setup/status", server.url)), {
         headers: { host: "127.0.0.1" },
       }),
     );

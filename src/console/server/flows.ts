@@ -573,6 +573,38 @@ const ClockListOut = z.object({
   ),
 });
 
+const InstanceClockLeaseOut = z.object({
+  name: z.string(),
+  leaseUntil: z.number(),
+});
+
+const InstanceJournalLeaseOut = z.object({
+  runId: z.string(),
+  flow: z.string(),
+  leaseUntil: z.number(),
+});
+
+const InstanceDetailOut = z.object({
+  id: z.string(),
+  startedAt: z.number(),
+  heartbeatAt: z.number(),
+  leaseExpiresAt: z.number(),
+  env: z.enum(["dev", "test", "prod"]),
+  pid: z.number().optional(),
+  clock: z.array(InstanceClockLeaseOut),
+  journal: z.array(InstanceJournalLeaseOut),
+});
+
+const InstancesListOut = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("empty") }),
+  z.object({
+    kind: z.literal("fleet"),
+    now: z.number(),
+    alive: z.number(),
+    instances: z.array(InstanceDetailOut),
+  }),
+]);
+
 const ClockRunNowIn = z.object({
   name: z.string().min(1),
   confirmation: z.string().optional(),
@@ -1643,6 +1675,9 @@ export function createConsoleBindings(state: ConsoleState): {
       readonly editSchedule: AnyFlowDef;
       readonly wakeEarly: AnyFlowDef;
     };
+    readonly instances: {
+      readonly list: AnyFlowDef;
+    };
     readonly channel: {
       readonly list: AnyFlowDef;
       readonly preview: AnyFlowDef;
@@ -1697,6 +1732,7 @@ export function createConsoleBindings(state: ConsoleState): {
   const diffList = createDiffList(state);
   const pluginsList = createPluginsList(state);
   const clockList = createClockList(state);
+  const instancesList = createInstancesList(state);
   const clockRunNow = createClockRunNow(state);
   const clockPause = createClockPause(state);
   const clockEditSchedule = createClockEditSchedule(state);
@@ -1753,6 +1789,7 @@ export function createConsoleBindings(state: ConsoleState): {
     bindHttp(http.get("/console/diff"), diffList),
     bindHttp(http.get("/console/plugins"), pluginsList),
     bindHttp(http.get("/console/clock"), clockList),
+    bindHttp(http.get("/console/instances"), instancesList),
     bindHttp(http.post("/console/clock/run-now"), clockRunNow),
     bindHttp(http.post("/console/clock/pause"), clockPause),
     bindHttp(http.post("/console/clock/edit-schedule"), clockEditSchedule),
@@ -1824,6 +1861,7 @@ export function createConsoleBindings(state: ConsoleState): {
         editSchedule: clockEditSchedule,
         wakeEarly: clockWakeEarly,
       },
+      instances: { list: instancesList },
       channel: {
         list: channelsList,
         preview: channelPreview,
@@ -3526,6 +3564,18 @@ function createClockList(state: ConsoleState) {
     do: async (_input, fx) => {
       if (!fx.operator.id) return fail("AuthFailed", {});
       return state.listClocks();
+    },
+  });
+}
+
+function createInstancesList(state: ConsoleState) {
+  return flow("console.instances.list", {
+    plane: "operator",
+    out: InstancesListOut,
+    errors: { AuthFailed },
+    do: async (_input, fx) => {
+      if (!fx.operator.id) return fail("AuthFailed", {});
+      return state.listInstances();
     },
   });
 }

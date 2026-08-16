@@ -4,7 +4,12 @@
 
 import type { CSSProperties, JSX, ReactNode } from "react";
 import { cn } from "@/lib/utils.ts";
-import { DETAIL_HEADER_CLASS, DETAIL_TITLE_CLASS, DETAIL_WELL_CLASS } from "./explorer-chrome.ts";
+import {
+  DETAIL_HEADER_CLASS,
+  DETAIL_TITLE_CLASS,
+  EXPLORER_ICON_CLASS,
+  explorerIconInk,
+} from "./explorer-chrome.ts";
 
 /** Props for {@link DetailHeader}. */
 export interface DetailHeaderProps {
@@ -21,7 +26,7 @@ export interface DetailHeaderProps {
 }
 
 /**
- * Compact identity row: tinted well, title, optional badge / subtitle / actions.
+ * Compact identity row: bare tinted icon, title, optional badge / subtitle / actions.
  *
  * @param props - Identity + actions
  */
@@ -42,7 +47,15 @@ export function DetailHeader({
       className={cn(DETAIL_HEADER_CLASS, sticky && "sticky top-0 z-10", className)}
       data-slot={dataSlot}
     >
-      <span className={cn(DETAIL_WELL_CLASS, wellClassName)} style={wellStyle} aria-hidden>
+      <span
+        className={cn(
+          EXPLORER_ICON_CLASS,
+          "flex size-4 items-center justify-center",
+          explorerIconInk(wellClassName ?? "text-muted-foreground"),
+        )}
+        style={wellStyle?.color ? { color: wellStyle.color } : undefined}
+        aria-hidden
+      >
         {icon}
       </span>
       <div className="min-w-0 flex-1">

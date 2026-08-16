@@ -78,6 +78,7 @@ import {
   type JournalStore,
 } from "./journal.ts";
 import { releaseInstanceLeases } from "./graceful-shutdown.ts";
+import { mintInstanceId } from "./instance-id.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
 import { listBindings, resetBindings, type Binding } from "./on.ts";
 import {
@@ -781,7 +782,8 @@ export function oke(options: OkeOptions): OkeApp {
   // app replaces this with the bound `drivers.journal` store (postgres etc.).
   // Constructed on first use so non-durable HTTP apps skip the alloc.
   let fallbackJournalStore: JournalStore | undefined;
-  const fallbackJournalInstanceId = `app-${crypto.randomUUID()}`;
+  const processInstanceId = mintInstanceId();
+  const fallbackJournalInstanceId = processInstanceId;
   const sleepingRuns = new Map<
     string,
     { readonly flow: AnyFlowDef; readonly input: unknown; readonly wakeAt: number }
@@ -1033,7 +1035,10 @@ export function oke(options: OkeOptions): OkeApp {
       runs: overrides?.runs ?? options.runs,
       runsBridge: overrides?.runsBridge ?? options.runsBridge,
       now: overrides?.now ?? options.fx?.now,
-      instanceId: overrides?.instanceId,
+      instanceId: overrides?.instanceId ?? processInstanceId,
+      instanceStore: overrides?.instanceStore,
+      instanceHeartbeatMs: overrides?.instanceHeartbeatMs,
+      instanceLeaseMs: overrides?.instanceLeaseMs,
       startScheduler: overrides?.startScheduler ?? options.startScheduler,
       schedulerIntervalMs: overrides?.schedulerIntervalMs ?? options.schedulerIntervalMs,
       journalLeaseMs: overrides?.journalLeaseMs ?? options.journalLeaseMs,
@@ -1570,6 +1575,7 @@ export function oke(options: OkeOptions): OkeApp {
         ai: bootResult.ai,
         runs: bootResult.runs,
         ...(bootResult.journal ? { journal: bootResult.journal } : {}),
+        ...(bootResult.instances ? { instances: bootResult.instances } : {}),
       };
     },
     get capabilities() {
@@ -1591,6 +1597,7 @@ export function oke(options: OkeOptions): OkeApp {
         bootResult: {
           clock: bootResult.clock,
           journal: bootResult.journal,
+          instances: bootResult.instances,
         },
         stop: async () => {},
       });

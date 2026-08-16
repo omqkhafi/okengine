@@ -125,6 +125,13 @@ export {
 } from "./journal-postgres.ts";
 
 export {
+  createPostgresInstanceStore,
+  type PostgresInstanceSql,
+  type CreatePostgresInstanceStoreOptions,
+  type BunInstanceClient,
+} from "./instances-postgres.ts";
+
+export {
   redisSignalDriver,
   openRedisSignal,
   createSignalRedisFake,

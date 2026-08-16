@@ -614,7 +614,7 @@ describe("scaffold structure", () => {
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string; "@duckdb/node-api"?: string };
-          scripts: { typecheck?: string; test?: string; web?: string };
+          scripts: { typecheck?: string; test?: string; web?: string; "web:build"?: string };
           devDependencies: {
             typescript?: string;
             vite?: string;

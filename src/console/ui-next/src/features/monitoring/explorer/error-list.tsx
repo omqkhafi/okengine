@@ -10,6 +10,7 @@ import {
   EXPLORER_BAND_CLASS,
   EXPLORER_BAND_HEADER_CLASS,
   EXPLORER_BAND_LABEL_CLASS,
+  EXPLORER_CHEVRON_CLASS,
   EXPLORER_COUNT_CLASS,
   EXPLORER_LIST_EMPTY_CLASS,
   EXPLORER_TOOLBAR_CLASS,
@@ -108,18 +109,12 @@ function ErrorBand({
         className={EXPLORER_BAND_HEADER_CLASS}
         render={(props) => (
           <div {...props}>
-            <span
-              className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground"
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={cn(EXPLORER_CHEVRON_CLASS, !open && "-rotate-90")}
               aria-hidden
-            >
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
-                className={cn("size-3 transition-transform", !open && "-rotate-90")}
-              />
-            </span>
-            <span className="flex size-5 items-center justify-center rounded-md border border-destructive/40 bg-destructive/10 text-destructive">
-              <HugeiconsIcon icon={Alert02Icon} className="size-3" />
-            </span>
+            />
+            <HugeiconsIcon icon={Alert02Icon} className="size-3.5 shrink-0 text-destructive" />
             <span className={EXPLORER_BAND_LABEL_CLASS}>{error}</span>
             <span className={EXPLORER_COUNT_CLASS}>{count}</span>
           </div>

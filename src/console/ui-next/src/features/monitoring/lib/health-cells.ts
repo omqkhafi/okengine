@@ -4,7 +4,12 @@
  * Missing observations render `tone: "empty"` — never a fake zero.
  */
 
-import type { ClockListCron, SignalsListRow, StoreListStore } from "@/client.ts";
+import type {
+  ClockListCron,
+  InstancesListPayload,
+  SignalsListRow,
+  StoreListStore,
+} from "@/client.ts";
 import type { LiveStatus } from "@/features/flows/data/use-console-live.ts";
 import { latestReplicaLagFromRuns } from "@/features/store/lib/replica-lag.ts";
 import type { VaultBackendCard } from "@/features/vault/lib/backend.ts";
@@ -33,6 +38,7 @@ export interface HealthCellsInput {
   readonly signals: readonly SignalsListRow[];
   readonly window: WindowStats;
   readonly liveStatus: LiveStatus;
+  readonly fleet?: InstancesListPayload | null;
 }
 
 /**
@@ -51,12 +57,13 @@ export function latestReplicaLagAcrossStores(
 }
 
 /**
- * Build strip cells. Order is Vault → Store drift → lag → Clock → Signal → window → live.
+ * Build strip cells. Order is Instances → Vault → Store drift → lag → Clock → Signal → window → live.
  *
  * @param input - Already-fetched projections
  */
 export function healthCells(input: HealthCellsInput): readonly HealthCell[] {
   return [
+    instancesCell(input.fleet),
     vaultCell(input.vaultCard),
     driftCell(input.stores),
     lagCell(input.runs, input.stores),
@@ -65,6 +72,21 @@ export function healthCells(input: HealthCellsInput): readonly HealthCell[] {
     windowCell(input.window),
     liveCell(input.liveStatus),
   ];
+}
+
+function instancesCell(fleet: InstancesListPayload | null | undefined): HealthCell {
+  if (!fleet || fleet.kind === "empty") {
+    return { id: "instances", label: "Instances", value: "no fleet", tone: "empty" };
+  }
+  if (fleet.alive === 0) {
+    return { id: "instances", label: "Instances", value: "0 alive", tone: "warn" };
+  }
+  return {
+    id: "instances",
+    label: "Instances",
+    value: `${fleet.alive} alive`,
+    tone: "ok",
+  };
 }
 
 function vaultCell(card: VaultBackendCard | null): HealthCell {

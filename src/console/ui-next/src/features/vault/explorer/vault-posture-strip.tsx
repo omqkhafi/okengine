@@ -41,46 +41,50 @@ export function VaultPostureStrip({
   return (
     <section
       aria-label="Vault posture"
-      className="shrink-0 border-b border-border/60 bg-muted/20"
+      className="shrink-0 border-b border-border/60"
       data-slot="vault-posture-strip"
     >
-      <div className="flex flex-col gap-1.5 px-2 py-1.5">
-        <div className="flex items-center gap-1.5">
+      <div className="flex flex-col gap-1 px-2 py-1.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenSecurity}
             aria-label="Open vault security"
-            className="min-w-0 truncate text-left text-[11px] font-medium text-foreground hover:underline"
+            className="min-w-0 truncate text-left text-xs font-medium text-foreground hover:underline"
           >
             {card?.title ?? "Vault backend"}
           </button>
           <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{env}</span>
+          {card?.badges.map((badge) => (
+            <span
+              key={badge.id}
+              role={badge.tone === "warn" ? "alert" : "status"}
+              className={cn(
+                "inline-flex items-center gap-1 text-[10px]",
+                badge.tone === "warn"
+                  ? "text-amber-800 dark:text-amber-400"
+                  : "text-muted-foreground",
+                badge.id === "rewrap" && "text-[color:var(--vault-accent)]",
+              )}
+              style={
+                badge.id === "rewrap" ? { ["--vault-accent" as string]: VAULT_ACCENT } : undefined
+              }
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 rounded-full",
+                  badge.tone === "warn" ? "bg-amber-500" : "bg-muted-foreground/50",
+                  badge.id === "rewrap" && "bg-[var(--vault-accent)]",
+                )}
+              />
+              {badge.label}
+            </span>
+          ))}
           <span className="ml-auto font-mono text-[10px] text-muted-foreground">
             {verifyNote ?? `${summary.secrets}s · ${summary.config}c`}
           </span>
         </div>
-        {card?.badges.length ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {card.badges.map((badge) => (
-              <span
-                key={badge.id}
-                role={badge.tone === "warn" ? "alert" : "status"}
-                className={cn(
-                  "inline-flex h-5 items-center rounded-md border px-1.5 text-[10px]",
-                  badge.tone === "warn"
-                    ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-400"
-                    : "border-border/60 bg-background/50 text-muted-foreground",
-                  badge.id === "rewrap" && "border-[color:var(--vault-accent)]/40",
-                )}
-                style={
-                  badge.id === "rewrap" ? { ["--vault-accent" as string]: VAULT_ACCENT } : undefined
-                }
-              >
-                {badge.label}
-              </span>
-            ))}
-          </div>
-        ) : null}
         {VAULT_POSTURE_FACETS.some(
           (facet) => summary[facet.id] > 0 || hasIsToken(query, facet.token),
         ) ? (

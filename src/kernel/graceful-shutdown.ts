@@ -1,6 +1,7 @@
 /**
- * Graceful shutdown — release Clock / Journal leases held by this instance,
- * then stop the HTTP server and close element runtimes.
+ * Graceful shutdown — release Clock / Journal leases and the fleet registry
+ * row held by this instance, then stop the HTTP server and close element
+ * runtimes.
  *
  * Reuses existing `releaseLease` APIs. Signal message leases have no release
  * surface today — survivors reclaim after TTL (lazy claim).
@@ -23,12 +24,15 @@ export interface GracefulShutdownApp {
       readonly instanceId: string;
       readonly store: JournalStore;
     };
+    readonly instances?: {
+      release(): Promise<void>;
+    };
   };
   stop(): Promise<void>;
 }
 
 /**
- * Release Clock cron leases and Journal run leases held by this instance.
+ * Release Clock cron leases, Journal run leases, and this process's fleet row.
  *
  * @param app - Booted app
  */
@@ -54,6 +58,8 @@ export async function releaseInstanceLeases(app: GracefulShutdownApp): Promise<v
       }
     }
   }
+
+  await boot.instances?.release();
 }
 
 /** Options for {@link installGracefulShutdown}. */

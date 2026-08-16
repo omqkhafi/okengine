@@ -7,7 +7,8 @@
  * 3. Signals   — register declarations; start consumers
  * 4. Clocks    — reconcile into the Store
  * 4b. Journal  — bind the durable-run store (SKIP LOCKED + lease when shared)
- * 4c. Scheduler — tick clocks + resume due durable runs (leader election)
+ * 4c. Instances — fleet registry heartbeat (TTL liveness; off in test)
+ * 4d. Scheduler — tick clocks + resume due durable runs + fleet heartbeat
  * 5. Channel   — bind channel runtime
  * 6. AI        — bind AI runtime
  * 7. Runs      — open the runs store
@@ -26,7 +27,8 @@
  * never the code directly (console §5).
  */
 
-import type { ConfigEnv, OkeConfig } from "../config/index.ts";
+import { resolveDriverId, type ConfigEnv, type OkeConfig } from "../config/index.ts";
+import { CLOCK_DEFAULTS, JOURNAL_DEFAULTS } from "../config/driver-defaults.ts";
 import type { AiRuntime, CreateAiRuntimeOptions } from "../elements/ai.ts";
 import type { ChannelRuntime, CreateChannelRuntimeOptions } from "../elements/channel.ts";
 import type { ClockDecl, ClockRuntime } from "../elements/clock.ts";
@@ -39,6 +41,8 @@ import type {
   VaultSecretDecl,
 } from "../elements/vault.ts";
 import type { JournalRuntime } from "./boot-bind/journal.ts";
+import type { InstanceRuntime, InstanceStore } from "./instances.ts";
+import { resolveInstanceId } from "./instance-id.ts";
 import {
   resolveRunsConsoleBridge,
   wrapRunsForConsoleIngest,
@@ -65,6 +69,8 @@ export interface ElementRuntimes {
   readonly runs?: RunsRuntime;
   /** Pre-bound durable-run journal (skips driver resolution). */
   readonly journal?: JournalRuntime;
+  /** Pre-bound fleet registry (skips driver resolution). */
+  readonly instances?: InstanceRuntime;
 }
 
 /** Declarations + options consumed by {@link bootApplication}. */
@@ -175,8 +181,17 @@ export interface BootOptions {
     readonly kv?: import("../drivers/types.ts").KvClientLike;
     readonly signalRedis?: import("../drivers/signal-types.ts").SignalRedisClientLike;
   };
-  /** Instance id for leader election. */
+  /**
+   * Process instance id for Clock / Journal / fleet registry.
+   * When unset, boot mints one `inst-<uuid>` and passes it to every binder.
+   */
   readonly instanceId?: string;
+  /** Injected fleet store (chaos / tests — activates the registry in `test`). */
+  readonly instanceStore?: InstanceStore;
+  /** Fleet heartbeat write interval ms (default 5_000). */
+  readonly instanceHeartbeatMs?: number;
+  /** Fleet presence TTL ms (default 30_000 — matches Clock / Journal). */
+  readonly instanceLeaseMs?: number;
   /**
    * Start a background scheduler tick loop.
    * Default: `true` when `env !== "test"`; `false` in test (opt in explicitly).
@@ -199,6 +214,13 @@ export interface BootResult {
   readonly runs?: RunsRuntime;
   /** Durable-run journal (present when any flow declares `durable: true`). */
   readonly journal?: JournalRuntime;
+  /**
+   * Unified process instance id (Clock, Journal, and the fleet registry
+   * share this value).
+   */
+  readonly instanceId: string;
+  /** Fleet registry (absent in `test` unless a store is injected). */
+  readonly instances?: InstanceRuntime;
   /** Per-flow capability tokens minted from declared effects. */
   readonly capabilities: ReadonlyMap<string, CapabilityToken>;
   /** Stop the background scheduler (if started). */
@@ -284,6 +306,34 @@ export function resolveElementNeeds(options: BootOptions): ElementNeeds {
 }
 
 /**
+ * Whether boot should open the fleet registry.
+ *
+ * `test` stays off unless a store is injected. `dev`/`prod` activate when
+ * a shared SQL URL exists and Clock or Journal is actually postgres — or
+ * when the app has neither (HTTP-only replicas still census on Postgres).
+ *
+ * @param options - Boot options
+ * @param env - Active environment
+ * @param needs - Resolved element needs
+ */
+function shouldBindFleetRegistry(
+  options: BootOptions,
+  env: ConfigEnv,
+  needs: ElementNeeds,
+): boolean {
+  if (options.elements?.instances !== undefined) return true;
+  if (options.instanceStore !== undefined) return true;
+  if (env === "test") return false;
+  const url = process.env.DATABASE_URL ?? process.env.OKE_STORE_SQL_URL;
+  if (!url) return false;
+  const clockDriver = resolveDriverId(options.config?.drivers?.clock, env, CLOCK_DEFAULTS);
+  const journalDriver = resolveDriverId(options.config?.drivers?.journal, env, JOURNAL_DEFAULTS);
+  if (needs.clock && clockDriver === "postgres") return true;
+  if (needs.journal && journalDriver === "postgres") return true;
+  return !needs.clock && !needs.journal;
+}
+
+/**
  * Dynamically load a boot-bind module without pulling it into the bundler
  * graph (expression `new URL` — Bun resolves at runtime).
  *
@@ -316,7 +366,8 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       config = undefined;
     }
   }
-  const options: BootOptions = { ...input, config, env, docker };
+  const instanceId = resolveInstanceId(input.instanceId);
+  const options: BootOptions = { ...input, config, env, docker, instanceId };
   const pre = options.elements ?? {};
   const now = options.now ?? (() => Date.now());
   const needs = resolveElementNeeds(options);
@@ -342,6 +393,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   type ChannelBind = typeof import("./boot-bind/channel.ts");
   type AiBind = typeof import("./boot-bind/ai.ts");
   type RunsBind = typeof import("./boot-bind/runs.ts");
+  type InstancesBind = typeof import("./boot-bind/instances.ts");
 
   let storeBind: StoreBind | undefined;
   let signalBind: SignalBind | undefined;
@@ -351,6 +403,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
   let channelBind: ChannelBind | undefined;
   let aiBind: AiBind | undefined;
   let runsBind: RunsBind | undefined;
+  let instancesBind: InstancesBind | undefined;
 
   if (needs.store && !pre.store) {
     binderLoads.push(
@@ -377,6 +430,14 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     binderLoads.push(
       loadBind<JournalBind>("journal").then((m) => {
         journalBind = m;
+      }),
+    );
+  }
+  const wantInstances = shouldBindFleetRegistry(options, env, needs);
+  if (wantInstances && !pre.instances) {
+    binderLoads.push(
+      loadBind<InstancesBind>("instances").then((m) => {
+        instancesBind = m;
       }),
     );
   }
@@ -451,16 +512,25 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     journal = (await journalBind!.bindJournal(options, env)).journal;
   }
 
-  // 4c. Scheduler — one timer drives clock ticks and durable-run resume.
+  // 4c. Fleet registry — one row per process (TTL liveness). Off in `test`
+  // unless a store is injected. Shares the 1s scheduler timer; writes every 5s.
+  let instances = pre.instances;
+  if (!instances && instancesBind) {
+    instances = (await instancesBind.bindInstances(options, env, instanceId, now))?.instances;
+  }
+
+  // 4d. Scheduler — one timer drives clock ticks, durable-run resume, heartbeat.
   let schedulerTimer: ReturnType<typeof setInterval> | undefined;
   const startScheduler = options.startScheduler ?? env !== "test";
-  if (startScheduler && (clock !== undefined || journal !== undefined)) {
+  if (startScheduler && (clock !== undefined || journal !== undefined || instances !== undefined)) {
     const period = options.schedulerIntervalMs ?? 1000;
     const clockRt = clock;
     const durableResume = options.onDurableResume;
+    const fleet = instances;
     schedulerTimer = setInterval(() => {
       if (clockRt) void clockRt.tick();
       if (journal && durableResume) void durableResume();
+      if (fleet) void fleet.maybeHeartbeat();
     }, period);
     schedulerTimer.unref?.();
   }
@@ -529,6 +599,8 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
     ai,
     runs,
     journal,
+    instanceId,
+    instances,
     capabilities,
     stopScheduler() {
       if (schedulerTimer !== undefined) {
@@ -546,6 +618,7 @@ export async function bootApplication(input: BootOptions = {}): Promise<BootResu
       await runs?.flush();
       const journalStore = journal?.store as { close?: () => Promise<void> } | undefined;
       await journalStore?.close?.();
+      await instances?.close();
     },
   };
 }

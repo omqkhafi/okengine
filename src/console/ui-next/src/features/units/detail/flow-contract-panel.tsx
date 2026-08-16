@@ -126,7 +126,7 @@ export function FlowContractPanel({ row, manifest, runs }: FlowContractPanelProp
             to="/overview"
             search={{ flow: row.id }}
             data-slot="open-in-graph"
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-sky-500/35 bg-sky-500/10 px-2 text-[11px] font-medium text-sky-700 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
+            className="inline-flex h-7 shrink-0 items-center gap-1 px-1.5 text-[11px] font-medium text-sky-700 transition-colors hover:bg-muted/50 dark:text-sky-400"
           >
             <HugeiconsIcon icon={ELEMENT_ICONS.flow.icon} className="size-3.5" aria-hidden />
             Open in graph

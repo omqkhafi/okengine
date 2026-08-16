@@ -133,6 +133,7 @@ export function createConsoleApp(options: CreateConsoleAppOptions = {}): Console
         accessSetRoleGrants: routes.access.setRoleGrants,
         diffList: routes.diff.list,
         clockList: routes.clock.list,
+        instancesList: routes.instances.list,
         clockRunNow: routes.clock.runNow,
         clockPause: routes.clock.pause,
         clockEditSchedule: routes.clock.editSchedule,
@@ -312,7 +313,9 @@ export async function bindManifestVaultRuntime(state: ConsoleState): Promise<voi
   if (state.vaultRuntime) return;
   const { loadVaultOverlay } = await import("./vault-overlay.ts");
   const overlay = await loadVaultOverlay(state.cwd);
-  const hasManifest = Boolean(state.manifest?.vault && Object.keys(state.manifest.vault).length > 0);
+  const hasManifest = Boolean(
+    state.manifest?.vault && Object.keys(state.manifest.vault).length > 0,
+  );
   if (!hasManifest && overlay.length === 0) {
     return;
   }

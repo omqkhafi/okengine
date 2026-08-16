@@ -51,6 +51,8 @@ import type { ClockRuntime, EditScheduleInput } from "../../elements/clock.ts";
 import type { StoreRuntime } from "../../elements/store.ts";
 import type { VaultRuntime } from "../../elements/vault.ts";
 import type { JournalStore } from "../../kernel/journal.ts";
+import type { InstanceStore, InstancesList } from "../../kernel/instances.ts";
+import type { CronStore } from "../../elements/clock/reconcile.ts";
 import type { ResourceRef } from "../../manifest/types.ts";
 import type { ConsoleClockList } from "./clock.ts";
 import {
@@ -294,6 +296,12 @@ export interface ConsoleState {
   vaultLayerSeed: VaultLayerSeed | null;
   /** Durable journal for rotation blast radius + Clock waiting-on. */
   journalStore: JournalStore | null;
+  /** Host fleet registry (read-only). Null until bound or confirmed absent. */
+  instanceStore: InstanceStore | null;
+  /** Host `oke_crons` for fleet lease join (not Console's memory clock). */
+  fleetCronStore: CronStore | null;
+  /** Project live instances + Clock / Journal lease snapshot. */
+  listInstances: () => Promise<InstancesList>;
   /** Current environment label for fingerprint columns. */
   vaultEnv: string;
   /** Project operator-plane vault rows (fingerprints only for secrets). */
@@ -503,6 +511,10 @@ export interface CreateConsoleStateOptions {
   readonly vaultLayerSeed?: VaultLayerSeed | null;
   /** Injected journal store for blast-radius / waiting-on queries. */
   readonly journalStore?: JournalStore | null;
+  /** Injected host fleet registry (tests / host). */
+  readonly instanceStore?: InstanceStore | null;
+  /** Injected host cron store for fleet lease join (tests / host). */
+  readonly fleetCronStore?: CronStore | null;
   /** Environment label for vault fingerprints. */
   readonly vaultEnv?: string;
   /** Env map for builtin adapter open / probe (tests). */
@@ -911,6 +923,12 @@ export function createConsoleState(options: CreateConsoleStateOptions = {}): Con
     vaultRuntime: options.vaultRuntime ?? null,
     vaultLayerSeed: options.vaultLayerSeed ?? null,
     journalStore: options.journalStore ?? null,
+    instanceStore: options.instanceStore ?? null,
+    fleetCronStore: options.fleetCronStore ?? null,
+    listInstances: async () => {
+      const instances = await markPanel<typeof import("./instances.ts")>("instances");
+      return instances.listConsoleInstances(state);
+    },
     vaultEnv: options.vaultEnv ?? "dev",
     listVault: async () => {
       const { ensureConsolePanelRuntimes } = await import("./app.ts");

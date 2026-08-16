@@ -2,7 +2,7 @@
  * Monitoring page — health strip, aggregated errors, time-series, AI rail.
  */
 
-import { useMemo, type JSX } from "react";
+import { useMemo, useState, type JSX } from "react";
 import { EXPLORER_PAGE_CLASS, EXPLORER_SPLIT } from "@/components/explorer/explorer-chrome.ts";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useConsoleLive } from "@/features/flows/data/use-console-live.ts";
@@ -13,8 +13,10 @@ import { formatVaultBackend } from "@/features/vault/lib/backend.ts";
 import { useVaultList } from "@/features/vault/data/use-vault-list.ts";
 import { useAiList } from "./data/use-ai-list.ts";
 import { useClockList } from "./data/use-clock-list.ts";
+import { useInstancesList } from "./data/use-instances-list.ts";
 import { useSignalsList } from "./data/use-signals-list.ts";
 import { AiRail } from "./detail/ai-rail.tsx";
+import { InstanceFleetSheet } from "./detail/instance-fleet-sheet.tsx";
 import { MetricsPanel } from "./detail/metrics-panel.tsx";
 import { ErrorList } from "./explorer/error-list.tsx";
 import { HealthStrip } from "./explorer/health-strip.tsx";
@@ -34,6 +36,7 @@ export function MonitoringPage(): JSX.Element {
   const stores = useStoresList();
   const vault = useVaultList();
   const clock = useClockList();
+  const fleet = useInstancesList();
   const signals = useSignalsList();
   const ai = useAiList();
   const {
@@ -46,6 +49,7 @@ export function MonitoringPage(): JSX.Element {
     setSelectedError,
     setQuery,
   } = useMonitoringSelection();
+  const [fleetOpen, setFleetOpen] = useState(false);
 
   const nowMs = Date.now();
   const windowMs = MONITORING_WINDOWS[window];
@@ -72,6 +76,7 @@ export function MonitoringPage(): JSX.Element {
         signals: signals.data?.signals ?? [],
         window: stats,
         liveStatus,
+        fleet: fleet.data,
       }),
     [
       vaultCard,
@@ -81,6 +86,7 @@ export function MonitoringPage(): JSX.Element {
       signals.data?.signals,
       stats,
       liveStatus,
+      fleet.data,
     ],
   );
 
@@ -91,7 +97,12 @@ export function MonitoringPage(): JSX.Element {
 
   return (
     <div className={EXPLORER_PAGE_CLASS} data-slot="monitoring-page">
-      <HealthStrip cells={cells} window={window} onWindowChange={setWindow} />
+      <HealthStrip
+        cells={cells}
+        window={window}
+        onWindowChange={setWindow}
+        onInstancesClick={() => setFleetOpen(true)}
+      />
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
           defaultSize={EXPLORER_SPLIT.start.defaultSize}
@@ -122,6 +133,7 @@ export function MonitoringPage(): JSX.Element {
         </ResizablePanel>
       </ResizablePanelGroup>
       <TraceDetailSheet run={selectedRun} onClose={() => setSelectedRun(null)} />
+      <InstanceFleetSheet fleet={fleet.data} open={fleetOpen} onClose={() => setFleetOpen(false)} />
     </div>
   );
 }

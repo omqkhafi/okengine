@@ -118,6 +118,7 @@ reclaimed after its lease expires and continues at the next unfinished step.
 | Guarantee          | What it means                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------- |
 | Leader election    | Instances that share one CronStore fire a given tick once (lease TTL, default 30s)                 |
+| Process identity   | Boot mints one `instanceId` (`inst-<uuid>`) for Clock, Journal, and the fleet registry             |
 | Catch-up `"one"`   | Health counts every missed slot; the runtime still fires **once** when overdue — not once per miss |
 | Reconciled at boot | Named clocks land in `oke_crons`; the scheduler reads the Store, not the source                    |
 | DST detection      | Ambiguous local times get a Console warning — schedules are not rewritten or blocked               |
@@ -158,7 +159,9 @@ drivers: {
 
 The Console (`:6533` → `/flows`) lists clock-triggered flows in the cron / every bands.
 
-Named clocks still carry health — drift, overdue, missed runs + catch-up `"one"`, and the lease holder. `/monitoring` shows the same overdue / lease chips — not a live process count.
+Named clocks still carry health — drift, overdue, missed runs + catch-up `"one"`, and the lease holder.
+
+`/monitoring` adds an Instances chip from `GET /console/instances` (alive ⇔ presence TTL not expired). A cron lease holder is not a fleet census.
 
 From there you can **pause** any cron, **wake early** a sleeping durable run, or **edit the schedule** when `overridable: true`. Edit on a locked clock throws `ScheduleNotOverridableError` (`clock "…" is not overridable`).
 
@@ -189,6 +192,11 @@ Emit it from inside a flow with `fx.clock.sleep(label, duration)` before the wor
 
 They are not sharing one CronStore. In-memory leases are per process. Point every replica at the same
 `postgres` CronStore (`DATABASE_URL`), or use `file` on a shared volume for single-host multi-process.
+
+</Accordion>
+<Accordion title="Monitoring says no fleet">
+
+The registry is off in `test` and when there is no shared SQL URL. `dev`/`prod` write `oke_instances` on the same Postgres as Clock. Unbound is empty — not `0 alive`.
 
 </Accordion>
 </Accordions>

@@ -14,6 +14,12 @@ needed).
 
 ### ✨ Added
 
+- Fleet registry (`oke_instances`) — each process
+  heartbeats every 5s (30s TTL) on the existing 1s
+  scheduler. `GET /console/instances` joins Clock and
+  Journal leases by the unified boot `instanceId`.
+  Monitoring shows `N alive` (unbound is empty, not 0).
+
 - create-oke `standard` / `advanced` ship a Vite 8 `web/` SPA.
   Vite owns `index.html` and proxies `/notes` · `/health` ·
   `/_oke` to the app. `bun run web` after `oke dev`.
@@ -23,7 +29,8 @@ needed).
   error rate), top errors from the persisted runs buffer (opens
   Trace detail), and a Bklit composed chart (request volume, error
   count, dual-axis P95). AI cost stays empty until `fx.ask` writes
-  run telemetry. No fleet/instance count.
+  run telemetry. Instances chip reads
+  `GET /console/instances` (alive ⇔ TTL).
 
 - Boot wires `drivers.runs` (`files` in `dev`/`prod` at
   `.oke/runs`, `memory` in `test`). `oke replay` and host
@@ -70,9 +77,14 @@ needed).
   different name re-prompts. Not a global seeded flag.
 
 - `examples/keel` is a work-management OKE app (not a create-oke
-  template) for `oke dev` against Compose — Postgres, Redis,
-  RustFS, Mailpit, and Meilisearch. Featured Harbor GA task chain,
-  stub GitHub/Slack ingest, `bun run dev:keel`, then `oke db seed`.
+  template) for `oke dev` against Compose — Postgres, PgDog,
+  Redis, RustFS, Mailpit, Meilisearch, and llama.cpp. Featured
+  Harbor GA task chain, stub GitHub/Slack ingest, `bun run
+  dev:keel`, then `oke db seed`.
+
+- Keel pins `images.pgdog` so Compose puts PgDog in front of
+  Postgres. `DATABASE_URL` is the pooler (`:6432`);
+  `OKE_STORE_SQL_URL` stays the direct host.
 
 - Console Vault **Add** (`+`) creates a secret or config from the
   operator plane as well as from `vault.secret` / `vault.config` in
@@ -466,6 +478,15 @@ needed).
 
 ### ♻️ Changed
 
+- Console explorers share the Overview traces language: flush rows,
+  bare tinted icons, tabular counts, and a full-height selection rail.
+  Flows, Store, Vault, and Monitoring lists plus detail headers drop
+  boxed wells. Advanced on Flows is an icon control like Traces.
+
+- Console Vault list rows are two lines: description + risk on the
+  first, env name and readers on the second. Healthy rows drop the
+  trailing set/config word. Band hints live on the section title.
+
 - Console Units tree lists HTTP flows by method:
   GET, POST, QUERY, PATCH/PUT, DELETE (then name).
   Was alphabetical, so `delete` sat above `get`.
@@ -776,6 +797,10 @@ needed).
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
 ### 🐛 Fixed
+
+- Boot mints one `instanceId` (`inst-<uuid>`) for Clock,
+  Journal, and the fleet registry. They no longer mint
+  independently with different prefixes.
 
 - `oke dev` / `bun run dev:keel` hot-reloads Console UI
   from source. Vite attaches on an okengine checkout so
