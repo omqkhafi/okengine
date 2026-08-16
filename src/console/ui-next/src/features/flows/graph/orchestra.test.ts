@@ -10,6 +10,7 @@ import {
   nextOrchestraDelayMs,
   ORCHESTRA_ID_PREFIX,
   pickOrchestraTemplate,
+  shouldRunOrchestra,
 } from "./orchestra.ts";
 
 function sampleRun(partial: Partial<RunRow> = {}): RunRow {
@@ -75,6 +76,15 @@ describe("materializeOrchestraRun", () => {
     expect(note.effects[0]?.timestamp).toBe(50_002);
     expect(note.logs[0]?.at).toBe(50_003);
     expect(note.flow).toBe("issues.list");
+  });
+});
+
+describe("shouldRunOrchestra", () => {
+  test("mints notes only in the seeded Console", () => {
+    expect(shouldRunOrchestra(true, true)).toBe(true);
+    expect(shouldRunOrchestra(false, true)).toBe(false);
+    expect(shouldRunOrchestra(true, false)).toBe(false);
+    expect(shouldRunOrchestra(false, false)).toBe(false);
   });
 });
 

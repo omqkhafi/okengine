@@ -30,6 +30,7 @@ import { validateStoreSearch } from "./features/store/state/store-selection.ts";
 import { validateUnitsSearch } from "./features/units/state/units-selection.ts";
 import { validateObservabilitySearch } from "./features/observability/state/observability-selection.ts";
 import { validateVaultSearch } from "./features/vault/state/vault-selection.ts";
+import { DocumentTitle } from "./components/document-title.tsx";
 import { ShellLayout } from "./components/shell/shell-layout.tsx";
 
 /**
@@ -64,7 +65,14 @@ async function requireSession({
 }
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: function RootDocument() {
+    return (
+      <>
+        <DocumentTitle />
+        <Outlet />
+      </>
+    );
+  },
 });
 
 const indexRoute = createRoute({

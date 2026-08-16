@@ -453,7 +453,9 @@ function notFoundHtml(): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>404 — oke Console</title>
+<title>404 — okengine Console</title>
+<meta name="description" content="This URL is not a Console page."/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 </head>
 <body>
 <main>
@@ -470,12 +472,14 @@ function fallbackShellHtml(): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>oke Console</title>
+<title>okengine Console</title>
+<meta name="description" content="Operator Console for okengine — Flows, Store, Observability, and Vault."/>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 </head>
 <body>
 <div id="root">
   <main>
-    <h1>oke Console</h1>
+    <h1>okengine Console</h1>
     <p>Shell assets not built — run the Console UI build, or use the API on <code>/console/*</code>.</p>
   </main>
 </div>

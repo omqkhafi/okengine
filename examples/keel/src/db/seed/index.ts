@@ -1,8 +1,9 @@
 /**
- * Featured Harbor story + Console-scale volume.
+ * Featured Harbor story + Console-scale volume + built-in vault stubs.
  * Run with `oke db seed` (never at boot).
  */
 
+import { join } from "node:path";
 import { defineSeed, type Fx } from "okengine";
 import { attachments, db, draftsKv, remindersKv, taskIndex } from "@/core";
 import {
@@ -58,6 +59,7 @@ import {
   FEATURED_UPDATES,
   FEATURED_VIEWS,
 } from "./featured.ts";
+import { seedKeelVault } from "./vault.ts";
 import {
   KEEL_VOLUME,
   type SeedFileEntry,
@@ -159,6 +161,11 @@ async function workspace(fx: Fx) {
   await upsertRows(fx, tags, FEATURED_TAGS);
 }
 
+/** Built-in vault stubs — `dev` only. Other apps leave Vault empty. */
+async function vault(_fx: Fx) {
+  await seedKeelVault({ root: join(import.meta.dir, "../../..") });
+}
+
 /** Featured story + generated volume — `dev` only. */
 async function volume(fx: Fx) {
   await upsertRows(fx, members, KEEL_VOLUME.members);
@@ -197,7 +204,7 @@ async function volume(fx: Fx) {
 
 export default defineSeed({
   name: "keel",
-  description: "Featured Harbor GA story + volume",
+  description: "Featured Harbor GA story + volume + vault stubs",
   essential: workspace,
-  dev: volume,
+  dev: [vault, volume],
 });

@@ -69,7 +69,7 @@ bun run bump        # or: bun run bump -- patch|minor|major
 
 Do **not** invent `## v{next}` yourself during oke-ship. Do **not** re-run oke-ship hoping it will bump — it won't.
 
-Site gate: the newest **versioned** release (`## v…`) must equal `package.json` version. `## Unreleased` is skipped by the parser.
+Site gate: the newest **versioned** release (`## v…`) must equal `package.json` version. `## Unreleased` is skipped by the published-release parser. A second gate fails if a large Unreleased group (`≥8` bullets) has no `####` areas or has loose bullets above them — do not flatten the list.
 
 Rules:
 

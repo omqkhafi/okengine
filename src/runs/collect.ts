@@ -140,6 +140,18 @@ function httpGates(trigger: Trigger): string[] {
 function failureToRunError(failure: FlowFailure | null | undefined): RunError | null {
   if (!failure) return null;
   const code = failure.error?.code ?? "failure";
-  const message = failure.error?.message;
+  const message = failure.error?.message ?? messageFromFailureData(failure.error?.data);
   return message !== undefined ? { code, message } : { code };
+}
+
+/**
+ * App flows often put the human line on `fail(code, { message })` data
+ * instead of `fail(code, data, { message })`. Lift it so Traces can show it.
+ *
+ * @param data - Failure payload
+ */
+function messageFromFailureData(data: unknown): string | undefined {
+  if (data === null || data === undefined || typeof data !== "object") return undefined;
+  const message = (data as { message?: unknown }).message;
+  return typeof message === "string" && message.trim().length > 0 ? message : undefined;
 }

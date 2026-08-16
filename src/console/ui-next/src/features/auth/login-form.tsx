@@ -86,7 +86,7 @@ export function LoginForm() {
     defaultValues: {
       email: __OKE_DEV_OPERATOR__?.email ?? "",
       password: __OKE_DEV_OPERATOR__?.password ?? "",
-    } satisfies LoginValues,
+    } satisfies LoginValues, // prefill only on standalone `dev:console` / `:seed`
     validators: {
       onSubmit: loginSchema,
     },

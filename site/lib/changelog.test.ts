@@ -178,4 +178,20 @@ describe("changelog.md", () => {
       expect(bullets).toBeGreaterThan(0);
     }
   });
+
+  test("Unreleased large groups use #### area headings — no flat dump", async () => {
+    const raw = await Bun.file(join(ROOT, CHANGELOG_SOURCE)).text();
+    const staging = raw.split(/^## v/m)[0]!;
+    const fake = staging.replace(/^## Unreleased\s*$/m, "## v0.0.0 — 2099-01-01");
+    const [release] = parseChangelog(fake);
+    expect(release).toBeDefined();
+
+    for (const group of release!.groups) {
+      const nested = group.subgroups.reduce((total, sub) => total + sub.items.length, 0);
+      const total = group.items.length + nested;
+      if (total < 8) continue;
+      expect(group.subgroups.length).toBeGreaterThan(0);
+      expect(group.items.length).toBe(0);
+    }
+  });
 });

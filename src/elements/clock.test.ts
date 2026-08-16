@@ -326,6 +326,55 @@ describe("reconciliation", () => {
     await rt.tick();
     expect(fired).toHaveLength(2);
   });
+
+  test("stacked ticks do not re-enter a job whose handler is still running", async () => {
+    const store = createMemoryCronStore();
+    const rt = createTestClockRuntime(0, { store, instanceId: "stack" });
+    rt.register(clock("job", { every: "1h" }));
+    await rt.reconcile();
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const startedP = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const fired: number[] = [];
+    rt.onCron("job", async () => {
+      fired.push(rt.now());
+      started();
+      await gate;
+    });
+
+    const first = rt.tick();
+    await startedP;
+    const stacked = rt.tick();
+    expect(fired).toHaveLength(1);
+    release();
+    await Promise.all([first, stacked]);
+    expect(fired).toHaveLength(1);
+    expect((await stacked).ran).toEqual([]);
+
+    await rt.tick();
+    expect(fired).toHaveLength(1);
+  });
+
+  test("a throwing handler still claims the interval so the next tick does not retry", async () => {
+    const store = createMemoryCronStore();
+    const rt = createTestClockRuntime(0, { store, instanceId: "throw" });
+    rt.register(clock("job", { every: "1h" }));
+    await rt.reconcile();
+
+    rt.onCron("job", () => {
+      throw new Error("ask failed");
+    });
+
+    await expect(rt.tick()).rejects.toThrow(/ask failed/);
+    expect((await store.get("job"))?.lastRunAt).toBe(0);
+    await expect(rt.tick()).resolves.toEqual({ ran: [] });
+  });
 });
 
 describe("catch-up policy one", () => {

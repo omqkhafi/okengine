@@ -100,13 +100,17 @@ export async function bindClock(
   for (const c of options.clocks ?? []) {
     clockDecls.set(c.name, c);
   }
+  const coveredEvery = new Set(
+    [...clockDecls.values()].flatMap((c) => (c.every ? [c.every] : [])),
+  );
   for (const b of options.bindings ?? []) {
-    if (b.trigger.kind === "every" && !clockDecls.has(b.trigger.interval)) {
-      clockDecls.set(
-        b.trigger.interval,
-        declareClock(b.trigger.interval, { every: b.trigger.interval }),
-      );
-    }
+    if (b.trigger.kind !== "every") continue;
+    if (clockDecls.has(b.trigger.interval) || coveredEvery.has(b.trigger.interval)) continue;
+    clockDecls.set(
+      b.trigger.interval,
+      declareClock(b.trigger.interval, { every: b.trigger.interval }),
+    );
+    coveredEvery.add(b.trigger.interval);
   }
   for (const decl of clockDecls.values()) {
     clock.register(decl);

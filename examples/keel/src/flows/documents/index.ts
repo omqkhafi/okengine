@@ -79,13 +79,15 @@ export const summarize = on(
             ? (out as { summary: string }).summary.trim()
             : "";
         if (!summary) {
-          return fail("Unavailable", { message: "AI returned no summary." });
+          return fail("Unavailable", { message: "AI returned no summary." }, {
+            message: "AI returned no summary.",
+          });
         }
         return { summary };
       } catch (err) {
-        return fail("Unavailable", {
-          message: err instanceof Error ? err.message : "AI service unavailable. Try again later.",
-        });
+        const message =
+          err instanceof Error ? err.message : "AI service unavailable. Try again later.";
+        return fail("Unavailable", { message }, { message });
       }
     },
   }),

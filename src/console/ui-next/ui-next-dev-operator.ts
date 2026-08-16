@@ -47,6 +47,22 @@ export function isConsoleKernelSkipped(): boolean {
 }
 
 /**
+ * Prefill `dev@oke.dev` only on standalone `dev:console` / `:seed`.
+ * `oke dev` (kernel skipped) and production builds stay empty.
+ *
+ * @param options.serve - Vite `command === "serve"`
+ * @param options.fresh - `OKE_CONSOLE_FRESH=1` (claim open)
+ * @param options.kernelSkipped - Vite is HMR beside `oke dev`
+ */
+export function shouldPrefillDevOperator(options: {
+  readonly serve: boolean;
+  readonly fresh: boolean;
+  readonly kernelSkipped: boolean;
+}): boolean {
+  return options.serve && !options.fresh && !options.kernelSkipped;
+}
+
+/**
  * Create an {@link OperatorStore} with the fixed Console dev operator.
  * Closing setup (`setupClosed`) follows from `operators.size > 0`.
  *

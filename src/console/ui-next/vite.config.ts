@@ -19,6 +19,7 @@ import { defineConfig } from "vite";
 import {
   isConsoleFresh,
   isConsoleKernelSkipped,
+  shouldPrefillDevOperator,
   UI_NEXT_DEV_OPERATOR,
 } from "./ui-next-dev-operator.ts";
 import { okeConsoleKernelPlugin } from "./vite-console-kernel-plugin.ts";
@@ -29,8 +30,14 @@ const pkg = JSON.parse(readFileSync(resolve(here, "../../../package.json"), "utf
 };
 
 export default defineConfig(({ command }) => {
-  const injectDevOperator = command === "serve" && !isConsoleFresh() ? UI_NEXT_DEV_OPERATOR : null;
   const attachToOkeDev = isConsoleKernelSkipped();
+  const injectDevOperator = shouldPrefillDevOperator({
+    serve: command === "serve",
+    fresh: isConsoleFresh(),
+    kernelSkipped: attachToOkeDev,
+  })
+    ? UI_NEXT_DEV_OPERATOR
+    : null;
   const consoleProxy = process.env["OKE_CONSOLE_PROXY"] ?? "http://127.0.0.1:6533";
 
   return {
@@ -39,6 +46,7 @@ export default defineConfig(({ command }) => {
     define: {
       __OKE_VERSION__: JSON.stringify(pkg.version),
       __OKE_DEV_OPERATOR__: JSON.stringify(injectDevOperator),
+      __OKE_CONSOLE_SEEDED__: JSON.stringify(process.env["OKE_CONSOLE_SEEDED"] === "1"),
     },
     resolve: {
       alias: {

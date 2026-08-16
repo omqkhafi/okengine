@@ -113,6 +113,8 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
   const leaseMs = options.leaseMs ?? 30_000;
   const declarations = new Map<string, ClockDecl>();
   const handlers = new Map<string, CronHandler>();
+  /** The 1s boot scheduler must not stack ticks while a handler is still running. */
+  let ticking = false;
   const driverId: ClockRuntime["driverId"] = timeTravel
     ? "frozen"
     : store.kind === "file"
@@ -121,12 +123,13 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
         ? "postgres"
         : "memory";
 
-  async function fire(name: string): Promise<boolean> {
+  async function fire(name: string, opts?: { readonly force?: boolean }): Promise<boolean> {
     const row = await store.get(name);
     if (!row || row.status === "orphaned" || row.status === "paused") {
       return false;
     }
     const t = now();
+    if (!opts?.force && !isDue(row, t)) return false;
     // One execution per lease window — even the leader cannot double-fire.
     if (
       row.leaderLeaseUntil !== undefined &&
@@ -145,13 +148,21 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
     });
     if (!acquired) return false;
 
-    const handler = handlers.get(name);
-    const fresh = (await store.get(name))!;
-    if (handler) await handler(fresh);
+    const fresh = await store.get(name);
+    if (!fresh) return false;
+    if (!opts?.force && !isDue(fresh, now())) return false;
+
+    // Claim the slot before the handler so a stacked 1s tick cannot re-enter.
+    const ranAt = now();
+    const interval = fresh.effectiveEvery ? parseDurationMs(fresh.effectiveEvery) : 0;
     await store.put({
       ...fresh,
-      lastRunAt: now(),
+      lastRunAt: ranAt,
+      nextRunAt: interval > 0 ? ranAt + interval : fresh.nextRunAt,
     });
+
+    const handler = handlers.get(name);
+    if (handler) await handler(fresh);
     return true;
   }
 
@@ -217,16 +228,22 @@ export function createClockRuntime(options: CreateClockRuntimeOptions = {}): Clo
       handlers.set(name, handler);
     },
     async tick(until) {
-      const horizon = until ?? now();
-      const ran: string[] = [];
-      for (const row of await store.list()) {
-        if (!isDue(row, horizon)) continue;
-        if (await fire(row.name)) ran.push(row.name);
+      if (ticking) return { ran: [] };
+      ticking = true;
+      try {
+        const horizon = until ?? now();
+        const ran: string[] = [];
+        for (const row of await store.list()) {
+          if (!isDue(row, horizon)) continue;
+          if (await fire(row.name)) ran.push(row.name);
+        }
+        return { ran };
+      } finally {
+        ticking = false;
       }
-      return { ran };
     },
     async runNow(name) {
-      return fire(name);
+      return fire(name, { force: true });
     },
     async dstAmbiguity(name) {
       const row = await store.get(name);

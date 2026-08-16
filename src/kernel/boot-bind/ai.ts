@@ -51,7 +51,8 @@ export function bindAi(
  * Resolve the configured AI driver for one environment.
  *
  * Dev / test default is `mock`. There is **no** production default — prod must
- * declare. Docker may override via `OKE_AI_DRIVER`.
+ * declare. Docker may override via `OKE_AI_DRIVER`. A live `OKE_AI_URL` never
+ * resolves to mock (Call API attach after `oke keel reset`).
  *
  * @param options - Boot options
  * @param env - Active environment
@@ -59,8 +60,15 @@ export function bindAi(
  */
 export function resolveAiDriverId(options: BootOptions, env: ConfigEnv, docker = false): string {
   const fromEnv = process.env.OKE_AI_DRIVER?.trim();
+  const liveUrl = Boolean(process.env.OKE_AI_URL?.trim() || process.env.OPENAI_BASE_URL?.trim());
   if (docker && fromEnv) return fromEnv;
+  // Compose / `oke dev` writes OKE_AI_URL. Never silently mock that endpoint
+  // just because boot env resolved to `test` (Call API attach after reset).
+  if (liveUrl && fromEnv && fromEnv !== "mock") return fromEnv;
   const resolved = resolveDriverId(options.config?.drivers?.ai, env);
+  if (liveUrl && (resolved === undefined || resolved === "mock")) {
+    return fromEnv === "ollama" ? "ollama" : "openai-compatible";
+  }
   if (resolved) return resolved;
   return "mock";
 }

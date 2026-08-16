@@ -107,10 +107,23 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
     expect(extraEnvSectionTitle("OKE_STORE_KV_PASSWORD")).toContain("store.kv");
     expect(extraEnvSectionTitle("OKE_PGDOG_URL")).toContain("pgdog");
     expect(extraEnvSectionTitle("OKE_AI_MODEL")).toContain("llama.cpp");
+    expect(extraEnvSectionTitle("OKE_VAULT_MASTER_KEY")).toContain("vault");
     expect(parseEnvExampleSections(example)[0]?.title).toBe("store.kv — Redis");
     const kv = text.slice(text.indexOf("store.kv"));
     expect(kv).toContain("REDIS_URL=");
     expect(kv).toContain("OKE_STORE_KV_PASSWORD=");
+  });
+
+  test("materializeEnvExample omits empty OKE_AI_URL so oke dev can mint the stack port", () => {
+    const text = materializeEnvExample(`
+# ── AI — llama.cpp (openai-compatible) ──────────────────────
+# OKE_AI_DRIVER=openai-compatible
+# OKE_AI_URL=
+# OKE_AI_MODEL=granite3.3:2b
+`);
+    expect(text).toContain("OKE_AI_DRIVER=openai-compatible");
+    expect(text).toContain("OKE_AI_MODEL=granite3.3:2b");
+    expect(text).not.toContain("OKE_AI_URL=");
   });
 
   test("resetKeel writes a fresh .env.local from .env.example", async () => {
@@ -148,9 +161,12 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
     );
     await writeFile(
       join(root, ".env.local"),
-      ["PORT=6530", "REDIS_URL=redis://:secret@127.0.0.1:16379", "OKE_STORE_KV_PASSWORD=secret", ""].join(
-        "\n",
-      ),
+      [
+        "PORT=6530",
+        "REDIS_URL=redis://:secret@127.0.0.1:16379",
+        "OKE_STORE_KV_PASSWORD=secret",
+        "",
+      ].join("\n"),
     );
     expect(await regroupKeelEnvLocal(root)).toBe(true);
     const env = await readFile(join(root, ".env.local"), "utf8");
@@ -158,5 +174,20 @@ DATABASE_URL=postgres://oke:password@127.0.0.1:5432/oke
     expect(env.indexOf("PORT=")).toBeLessThan(env.indexOf("REDIS_URL="));
     expect(env.indexOf("REDIS_URL=")).toBeLessThan(env.indexOf("OKE_STORE_KV_PASSWORD="));
     expect(env).toContain("REDIS_URL=redis://:secret@127.0.0.1:16379");
+  });
+
+  test("real .env.example does not pin vault contracts into .env.local", async () => {
+    const example = await readFile(join(import.meta.dir, "../.env.example"), "utf8");
+    const text = materializeEnvExample(example);
+    expect(text).not.toContain("GITHUB_TOKEN=");
+    expect(text).not.toContain("OPENAI_KEY=");
+    expect(text).not.toContain("SLACK_WEBHOOK=");
+    expect(text).not.toContain("SLACK_BOT=");
+    expect(text).not.toContain("WEBHOOK_SECRET=");
+    expect(text).not.toContain("PUBLIC_APP_URL=");
+    expect(text).not.toContain("PUBLIC_API_URL=");
+    expect(text).not.toContain("PUBLIC_DOCS_URL=");
+    expect(text).not.toContain("KEEL_WORKSPACE=");
+    expect(example).toContain("oke db seed");
   });
 });

@@ -50,7 +50,11 @@ export async function attachHostToConsole(
   const host = findBootableApp(mod);
   if (!host) return null;
 
-  const docker = process.env.OKE_DOCKER === "1";
+  const docker =
+    process.env.OKE_DOCKER === "1" || Boolean(process.env.OKE_AI_URL?.trim());
+  // Seed / an earlier import may have booted this singleton with `test` + mock.
+  // Call API must use the live compose driver — stop and boot again.
+  if (host.booted) await host.stop();
   await host.boot({
     env: docker ? "dev" : "test",
     docker,

@@ -327,6 +327,13 @@ A contract has no value in any layer of the chain. Fix by providing it in exactl
 - CI / hosting: set a real environment variable (or the managed provider when `managed`)
 
 </Accordion>
+<Accordion title="Does the keel example put secrets in Vault?">
+
+Yes — this example only. `oke db seed` (dev) writes the nine keel contracts
+into the built-in store. `.env.local` keeps stack URLs and the master key;
+other apps leave Vault empty.
+
+</Accordion>
 <Accordion title="How do I rotate a key safely?">
 
 Set the new value (`oke vault set` or the Console). The Console shows blast

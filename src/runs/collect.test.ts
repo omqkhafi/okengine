@@ -9,6 +9,7 @@ import { flow } from "../kernel/flow.ts";
 import { createFx } from "../kernel/fx.ts";
 import { internal } from "../kernel/triggers.ts";
 import { createRunTelemetry } from "../kernel/run-telemetry.ts";
+import { fail } from "../kernel/errors.ts";
 import { collectWideEvent } from "./collect.ts";
 
 const demo = flow("demo.fast", {
@@ -32,6 +33,25 @@ function collect(over: {
     ...(over.durationMs !== undefined ? { durationMs: over.durationMs } : {}),
   });
 }
+
+describe("collectWideEvent failure message", () => {
+  test("lifts fail(code, { message }) onto the run error", () => {
+    const event = collectWideEvent({
+      flow: demo,
+      trigger: internal,
+      fx: createFx({ flow: "demo.fast", effects: {} }),
+      ledger: createEffectLedger(),
+      telemetry: createRunTelemetry(),
+      startedAt: 1_000,
+      endedAt: 1_006,
+      failure: fail("Unavailable", { message: "openai-compatible: fetch failed" }),
+    });
+    expect(event.error).toEqual({
+      code: "Unavailable",
+      message: "openai-compatible: fetch failed",
+    });
+  });
+});
 
 describe("collectWideEvent duration", () => {
   test("falls back to endedAt - startedAt when durationMs is omitted", () => {

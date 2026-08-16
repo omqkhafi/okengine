@@ -13,6 +13,7 @@ import {
   nextOrchestraDelayMs,
   ORCHESTRA_HOLD_MS,
   pickOrchestraTemplate,
+  shouldRunOrchestra,
 } from "./orchestra.ts";
 
 /** Current orchestra note on the orbit. */
@@ -22,7 +23,7 @@ export type OrchestraNote = {
 };
 
 /**
- * Start the orchestra when Overview is open and idle.
+ * Start the orchestra when Overview is open and idle — seeded Console only.
  *
  * @param options.enabled - Manifest + repertoire are ready
  * @param options.paused - User is inspecting a run or neighborhood
@@ -40,7 +41,7 @@ export function useOverviewOrchestra(options: {
   pausedRef.current = options.paused;
 
   useEffect(() => {
-    if (!options.enabled) return;
+    if (!shouldRunOrchestra(__OKE_CONSOLE_SEEDED__, options.enabled)) return;
 
     const clearHold = () => {
       if (holdTimer.current) {

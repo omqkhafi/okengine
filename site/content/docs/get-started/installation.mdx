@@ -186,9 +186,9 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Want a clean keel stack?">
-  Stop `bun run dev:keel`, then `bun run dev:keel:reset`. That wipes Compose
-  (`oke docker clean --yes`), `.oke/`, Docker extras, and writes `.env.local` from
-  `.env.example`. Next `dev:keel` regenerates stack keys; then `bun run dev:keel:seed`.
+  Stop `bun run dev:keel`, then `bun run dev:keel:reset`. That wipes Compose,
+  `.oke/`, and writes `.env.local` from `.env.example` (stack URLs only). Next
+  `dev:keel` regenerates stack keys; `dev:keel:seed` fills the built-in vault.
 </Accordion>
 
 </Accordions>

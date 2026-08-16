@@ -31,6 +31,26 @@ describe("ai boot binder", () => {
     }
   });
 
+  test("resolveAiDriverId does not mock when OKE_AI_URL is set (oke dev after reset)", () => {
+    const prevUrl = process.env.OKE_AI_URL;
+    const prevDriver = process.env.OKE_AI_DRIVER;
+    process.env.OKE_AI_URL = "http://127.0.0.1:23850/v1";
+    delete process.env.OKE_AI_DRIVER;
+    try {
+      expect(
+        resolveAiDriverId(
+          { config: { drivers: { ai: { test: "mock", dev: "openai-compatible" } } } },
+          "test",
+        ),
+      ).toBe("openai-compatible");
+    } finally {
+      if (prevUrl === undefined) delete process.env.OKE_AI_URL;
+      else process.env.OKE_AI_URL = prevUrl;
+      if (prevDriver === undefined) delete process.env.OKE_AI_DRIVER;
+      else process.env.OKE_AI_DRIVER = prevDriver;
+    }
+  });
+
   test("openDefaultsFor openai-compatible fails loud in docker without OKE_AI_URL", () => {
     const prevUrl = process.env.OKE_AI_URL;
     const prevBase = process.env.OPENAI_BASE_URL;

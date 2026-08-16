@@ -8,11 +8,18 @@ Upcoming work lives under `## Unreleased`. `bun run bump` promotes that
 section into `## v<version> — <YYYY-MM-DD>`. Every bullet belongs to an
 `### ✨ Added` / `### 💥 Breaking Changes` / `### ♻️ Changed` / `### 🐛 Fixed`
 group (also `### ⚠️ Deprecated` · `### 🔥 Removed` · `### 🔒 Security` when
-needed).
+needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
 ### ✨ Added
+
+#### Console — Chrome
+
+- `motion` (Motion for React) reserved for near-future ui-next animations; import via
+  `motion/react`.
+
+#### Console — Observability
 
 - `fx.ask` stamps driver-reported input / output tokens onto
   WideEvent, Parquet, and Console run rows. Observability AI
@@ -33,10 +40,6 @@ needed).
   Journal leases by the unified boot `instanceId`.
   Observability shows `N alive` (unbound is empty, not 0).
 
-- create-oke `standard` / `advanced` ship a Vite 8 `web/` SPA.
-  Vite owns `index.html` and proxies `/notes` · `/health` ·
-  `/_oke` to the app. `bun run web` after `oke dev`.
-
 - Console **Observability** (`/observability`) — health strip (Vault seal/KEK,
   Store drift, Clock overdue/lease, Signal queue lag, window P95 /
   error rate), top errors from the persisted runs buffer (opens
@@ -45,87 +48,33 @@ needed).
   run telemetry. Instances chip reads
   `GET /console/instances` (alive ⇔ TTL).
 
-- Boot wires `drivers.runs` (`files` in `dev`/`prod` at
-  `.oke/runs`, `memory` in `test`). `oke replay` and host
-  recording share that root. create-oke templates install
-  `@duckdb/node-api`. `runs.keep` deletes old Parquet
-  partitions (`7d` in `dev`, `30d` in `prod`). Console
-  `listRuns` unions live ingest with disk so Traces survive
-  a Console restart.
+- `oke dev` live Traces bridge: host-app WideEvents POST to Console
+  `POST /console/runs/ingest` (secret-gated). Console appends into its own
+  runs store → existing `feedRun` / `projectRun` PII mask for
+  `GET /console/runs` and `/console/live`. Prod stays opt-in (`oke({ runs })`);
+  the bridge env is set only by `oke dev`.
 
-- `http.resource(path, ops)` chains `.gate(...)` and `.live()`
-  like `http.get`. Gates apply to every verb; live marks list and get.
+- ui-next trace detail Sheet (shadcn, side=left): row click keeps graph highlight and
+  opens a real breakdown — summary counts from EffectKind + logs, proportional
+  waterfall bars from EffectEntry timestamps/durations (EDGE_STROKE colors),
+  expandable event list, and REQUEST with Manifest method/path plus Shiki-highlighted
+  `WideEvent.input`. No RESPONSE section (WideEvent has no output field today).
+  `GET /console/runs` / live projection now include masked `input`.
 
-- `gate.all(...members)` reuses a gate chain. `.gate(write)` flattens
-  the handle (and plain arrays) left to right. The compiler expands
-  `.gate(write)` and `.gate(...WRITE)` onto `flow.gates`.
+- Console **Kbd** key caps on the command palette, sidebar tooltips,
+  Query run/save, Store grid find/undo/redo, and shortcut sheets.
+  `⌘1`…`⌘5` hop Overview / Flows / Store / Monitoring / Vault;
+  `⌘,` opens Settings; `⌘E` logs out. Caps show ⌘ on Mac and
+  Ctrl on Windows.
 
-- `.gate.public` is the unauthenticated sentinel — same as
-  `.gate(gate.public)`, without importing `gate`.
+- Console explorer pages (Overview, Flows, Store, Observability,
+  Vault) share a start-panel collapse / expand control on the
+  inspector header.
 
-- Keel lists speak PostgREST v16 read grammar: `col=eq|neq|gt|gte|lt|lte|like|ilike|in|is|match|imatch`,
-  `not.`, `like(any).{…}`, nested `or=` / `and=` / `not.and`, `order=col.desc.nullslast`,
-  `select=id,alias:col`. `store.resource` now accepts `not.`, `is.not_null`, quoted `in.()`,
-  and nested `or`/`and` groups.
-
-- Handwritten HTTP lists prefer the Stripe envelope (`out` is the item
-  array, `fx.json.withQuery(rows, input)`). Extra keys auto-eq except
-  path `id`. `fx.json.with(page)` stays for an already-built pager.
-  Any other declared `out` is still valid.
+#### Console — Store
 
 - Call API **PII** matches Store Query: handler responses mask classified
   fields by default. Toggle includes audited cleartext (`revealPii`).
-
-- Console claim **Generate** mints a first-operator password that
-  meets Console policy (12+ upper, lower, number, special) and
-  copies it to the clipboard.
-
-- `bun run dev:keel:reset` tears down the keel Compose stack
-  (`oke docker clean --yes`) and deletes `.oke/`, `.env.local`, and
-  generated Docker extras so the next `dev:keel` is a first boot.
-
-- `defineSeed({ name, description })` labels this app's seed
-  (template or example). `oke dev` asks `Seed keel (Featured
-  Harbor GA story + volume)?` and `.oke/state.json` stores that id — a
-  different name re-prompts. Not a global seeded flag.
-
-- `examples/keel` is a work-management OKE app (not a create-oke
-  template) for `oke dev` against Compose — Postgres, PgDog,
-  Redis, RustFS, Mailpit, Meilisearch, and llama.cpp. Featured
-  Harbor GA task chain, stub GitHub/Slack ingest, `bun run
-  dev:keel`, then `oke db seed`.
-
-- Keel pins `images.pgdog` so Compose puts PgDog in front of
-  Postgres. `DATABASE_URL` is the pooler (`:6432`);
-  `OKE_STORE_SQL_URL` stays the direct host.
-
-- Console Vault **Add** (`+`) creates a secret or config from the
-  operator plane as well as from `vault.secret` / `vault.config` in
-  source. Metadata lands in `.oke/vault-contracts.json`; the value
-  uses the same write path as Set. A review dialog (name +
-  fingerprint) pauses before the write — same as set / rotate.
-  Rows show a `console` chip until the name is declared in the
-  Manifest.
-
-- Official managed vault providers now include Azure Key Vault,
-  GCP Secret Manager, Doppler, and 1Password Connect alongside
-  AWS Secrets Manager. Set `drivers.vault` to `"managed"` and
-  `OKE_VAULT_PROVIDER` to the id. Cloud SDKs stay optional peers;
-  Doppler and 1Password use `fetch`.
-
-- `dev:console-next:seed` Units tree is a full work-management HTTP
-  surface: CRUD on tasks, comments, projects, documents, attachments,
-  spaces, tags, goals, members, views, and forms,
-  plus custom routes (archive, assign, complete, follow, QUERY
-  search, PUT drafts, HEAD health). Call API binds every HTTP flow.
-
-- Console Vault is a security instrument, not a filter-and-empty-state.
-  Deep search (`is:unset`, `is:blast`, `from:.env.local`, `reader:`,
-  `fp:`) ANDs over name, fingerprint, readers, and winner. Posture chips
-  and a scan board surface unset, blast, shared, dormant, and overdue
-  contracts. Resolution is a lock-path. Security (verify chain, rotate
-  master, fingerprint export, CLI copy) lives in one sheet. Values stay
-  write-only.
 
 - Console Files is a folder browser, not a key table. Slash-separated
   keys become folders with breadcrumbs, list/grid views, and an
@@ -149,14 +98,12 @@ needed).
 - Console Store table rows show live RLS: emerald `ShieldEnergy` when
   enabled, muted `ShieldOff` when disabled (`pg_class.relrowsecurity`).
 
-
 - Console Store catalog create sheets expose **Advanced** Postgres knobs:
   Indexes (`CONCURRENTLY`, `INCLUDE`, `NULLS NOT DISTINCT`, `WITH`),
   Functions (`SECURITY DEFINER`, `STRICT`, `PARALLEL`, `LEAKPROOF`,
   `SET search_path`, `COST` / `ROWS`), Triggers (`CONSTRAINT`, `UPDATE OF`,
   transition tables, `TRUNCATE`, function args), and Extensions (`SCHEMA`,
   `VERSION`, `CASCADE` — `pg_catalog` refused).
-
 
 - Console Store **Create policy** Advanced pairs RLS with Gate **policy**
   and **scope** (`gate.public`, `gate.policy`, `gate.scope`) — not the
@@ -264,7 +211,6 @@ needed).
   duration cool→hot palette (emerald → yellow → rose). Falls back to the
   store-list snapshot when the buffer has no lag.
 
-
 - Console Store **PII chip** toggles masking for every classified column on the
   current browse page. Off (amber) sends audited `revealPii: true` on
   `QUERY /console/store/query`; on (sky) remasks. Switching tables remasks.
@@ -288,24 +234,6 @@ needed).
   upserts via `POST /console/store/edit` (no `/console/store/add` endpoint).
   Value-only edits now preserve remaining TTL instead of wiping it.
 
-
-- `http.query()` — RFC 10008 safe, idempotent HTTP trigger that still carries a JSON body.
-  `Content-Type: application/json` is required (missing → 400 `InvalidQuery`; other types → 415
-  `UnsupportedMediaType`). Invalid JSON is 400 with no sniffing. QUERY responses and 405s that
-  allow QUERY advertise `Accept-Query: "application/json"`. CORS default methods include QUERY;
-  CSRF treats QUERY as safe (like GET). The client always sends a JSON body on QUERY (`{}` when
-  only path params remain).
-
-- Browser `GET` (`Accept` prefers `text/html`) paints the JSON envelope in
-  traces chrome — flush h-10 strips, hairline /60, status + handler latency
-  + cache (hit / miss / none), a right-rail Routes tree (static GET links;
-  POST and `:param` listed),
-  line numbers, copy, Pretty / Raw (compact stays on the same page). `curl`,
-  `Accept: application/json`, `?format=json`, and `/_/` · `/_oke/` stay JSON.
-
-- Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
-  and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
-
 - **Console ui-next Store page (v1)** — read-first browse at `/store`: facet
   tree, schema, masked SQL row browser with audited reveal, KV/files/index
   browsers with honest “not PII-classified / no SQL-grade masking” copy, and
@@ -324,7 +252,6 @@ needed).
   - No server-side column WHERE filters yet — v1 find/sort are client-side on
     the fetched page only.
 
-
 - Console Store SQL band **Performance** view — slow queries, cache hit
   rate, and live lock blocking from `pg_stat_statements` / `pg_locks`
   (`QUERY /console/store/sql/stats` and `/locks`). Structured
@@ -341,7 +268,6 @@ needed).
   `Dockerfile.postgres-advisor` (hypopg + index_advisor). Default
   `postgres:18-alpine` is unchanged.
 
-
 - ui-next seed now fills all four Store facets with real data (previously
   schema-only): SQL `bookings` 5 rows / `shipments` 3 rows (with a PII
   `email` column), KV `holds` 4 keys, Files `uploads` 3 objects (one
@@ -349,33 +275,58 @@ needed).
   `seedUiNextStoreData` in both the Vite dev plugin and the Playwright
   fixture.
 
-- ui-next Units ↔ Flows connector: `/flows?flow=<id>` seeds the graph/Traces
-  filter and fitView; Units contract header has **Open in graph**. Recent
-  activity strip shows real buffered call count / error rate for the selected
-  flow (honest empty when the Console runs buffer has nothing in-window). Units
-  subscribes to `useRuns` + `/console/live` like Flows.
+- `fx.store(index).list(limit?)` returns stored documents (id + meta,
+  no embeddings) on every index driver. Console Index browse uses it
+  so an empty search lists the catalog.
 
-- ui-next Units **Platform failure modes**: derived only from this flow's Gates
-  - request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
-    403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
-    Call API chrome's default-400 quirk. Declared Flow errors stay a separate
-    tier.
+- Store query performance: preload vs `CREATE EXTENSION` vs unsupported
+  on Postgres / Timescale / Supabase Docker / Neon / Supabase / Yugabyte
+  / Cockroach pages. Index Advisor opt-in image documented on the
+  Postgres recipe.
 
-- Console `POST /console/flows/invoke` executes the target flow on a bound host via
-  invoke-as (assumed identity scopes) — no more stub `echo` / `inv_*` responses. Fail-closed
-  when the host adapter is unbound. Optional `pathParams`; response includes `status` /
-  `failure` / `runId` when the host provides them. Kernel `execute` accepts
-  `trustedInvoke` for console-trusted principal injection outside `env: "test"`.
+- Store KV **Performance** (`QUERY /console/store/kv/stats`) — Redis-wire
+  `INFO` / `COMMANDSTATS` / `SLOWLOG` / `LATENCY` on the KV band.
+  `memory` returns `KvStatsUnsupported`. INFO is instance-wide
+  (`StoreKvStatsServerWideGap`). SLOWLOG args collapse until reveal
+  (`StoreKvStatsSlowlogArgsGap`). No `MONITOR`, no invented hot-keys.
 
-- ui-next **Units** page (`/units`): Manifest flows grouped by unit, contract panel
-  (request/response schema rows, typed errors, gates, effects), and session-authenticated
-  Call API wired to real invoke-as.
+#### Console — Vault
 
-- `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
-  `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
+- Console Vault **Add** (`+`) creates a secret or config from the
+  operator plane as well as from `vault.secret` / `vault.config` in
+  source. Metadata lands in `.oke/vault-contracts.json`; the value
+  uses the same write path as Set. A review dialog (name +
+  fingerprint) pauses before the write — same as set / rotate.
+  Rows show a `console` chip until the name is declared in the
+  Manifest.
 
-- nginx image recipe (`nginx:1.27-alpine`) — generated `nginx.conf` reverse proxy on :80;
-  companion docs under Recipes → nginx.
+- Console Vault is a security instrument, not a filter-and-empty-state.
+  Deep search (`is:unset`, `is:blast`, `from:.env.local`, `reader:`,
+  `fp:`) ANDs over name, fingerprint, readers, and winner. Posture chips
+  and a scan board surface unset, blast, shared, dormant, and overdue
+  contracts. Resolution is a lock-path. Security (verify chain, rotate
+  master, fingerprint export, CLI copy) lives in one sheet. Values stay
+  write-only.
+
+- Console **Vault** page (`/vault`): fingerprints-only list + backend
+  status, set / rotate via typed confirm, and master rotation through
+  `POST /console/vault/rotate-master` (one batch, `remaining` honest,
+  `ROTATE_MASTER` + reason). Any operator in the same process may
+  continue; overlapping batches return `VaultRotateBusy`. Generated
+  master key is shown once and never logged. Audit verify is
+  `GET /console/vault/audit/verify` (`ok`, `brokenAt`, `reason`, `row`).
+  Backup stays on the CLI. The Console never accepts a master key in
+  the HTTP body.
+
+#### Console — Flows & traces
+
+- Boot wires `drivers.runs` (`files` in `dev`/`prod` at
+  `.oke/runs`, `memory` in `test`). `oke replay` and host
+  recording share that root. create-oke templates install
+  `@duckdb/node-api`. `runs.keep` deletes old Parquet
+  partitions (`7d` in `dev`, `30d` in `prod`). Console
+  `listRuns` unions live ingest with disk so Traces survive
+  a Console restart.
 
 - ui-next Flows split-view is bidirectionally interactive: clicking a flow node filters the
   Traces list (`flow = X` advanced clause), clicking a signal node filters to runs whose flow
@@ -389,24 +340,11 @@ needed).
   crosses them, the hero duration counts up in sync, and
   the Flow graph pulses along the causal chain. All motion respects reduced-motion settings.
 
-- `oke dev` live Traces bridge: host-app WideEvents POST to Console
-  `POST /console/runs/ingest` (secret-gated). Console appends into its own
-  runs store → existing `feedRun` / `projectRun` PII mask for
-  `GET /console/runs` and `/console/live`. Prod stays opt-in (`oke({ runs })`);
-  the bridge env is set only by `oke dev`.
-
 - ui-next Traces pane parity: contextual `formatDuration` (μs / ms / s), status row
   tint + trigger icons (HTTP / Signal / Clock), persistent selected accent, hover
   Replay + Copy run ID, and All/Errors + duration-threshold filters over the scoped
   runs list. `POST /console/traces/replay` now re-invokes through `runReplay` (same
   path as `oke replay --request-id`), not a log-only stub.
-
-- ui-next trace detail Sheet (shadcn, side=left): row click keeps graph highlight and
-  opens a real breakdown — summary counts from EffectKind + logs, proportional
-  waterfall bars from EffectEntry timestamps/durations (EDGE_STROKE colors),
-  expandable event list, and REQUEST with Manifest method/path plus Shiki-highlighted
-  `WideEvent.input`. No RESPONSE section (WideEvent has no output field today).
-  `GET /console/runs` / live projection now include masked `input`.
 
 - ui-next trace detail Sheet surfaces the **Gate** element: summary chip from
   `run.gates`, plus a Gates section with Manifest kind/description (e.g.
@@ -436,9 +374,41 @@ needed).
   so opening http://127.0.0.1:6537 shows a real Flows graph and Traces (click → highlight).
   Terminal prints URL, claim code, and a one-line seed summary.
 
-- `playwright.ui-next.config.ts` always records trace + screenshot + video; after
-  `bun run test:console:setup-ui-next`, `bun run test:console:setup-ui-next:report`
-  opens the HTML timeline report.
+#### Console — Units & Call API
+
+- `dev:console-next:seed` Units tree is a full work-management HTTP
+  surface: CRUD on tasks, comments, projects, documents, attachments,
+  spaces, tags, goals, members, views, and forms,
+  plus custom routes (archive, assign, complete, follow, QUERY
+  search, PUT drafts, HEAD health). Call API binds every HTTP flow.
+
+- ui-next Units ↔ Flows connector: `/flows?flow=<id>` seeds the graph/Traces
+  filter and fitView; Units contract header has **Open in graph**. Recent
+  activity strip shows real buffered call count / error rate for the selected
+  flow (honest empty when the Console runs buffer has nothing in-window). Units
+  subscribes to `useRuns` + `/console/live` like Flows.
+
+- ui-next Units **Platform failure modes**: derived only from this flow's Gates
+  - request schema with HTTP-encoding truth (`Unauthorized` 401 · `Forbidden`
+    403 · `RateLimited` 429 · `ValidationError` 422) — not OKE#### codes and not
+    Call API chrome's default-400 quirk. Declared Flow errors stay a separate
+    tier.
+
+- Console `POST /console/flows/invoke` executes the target flow on a bound host via
+  invoke-as (assumed identity scopes) — no more stub `echo` / `inv_*` responses. Fail-closed
+  when the host adapter is unbound. Optional `pathParams`; response includes `status` /
+  `failure` / `runId` when the host provides them. Kernel `execute` accepts
+  `trustedInvoke` for console-trusted principal injection outside `env: "test"`.
+
+- ui-next **Units** page (`/units`): Manifest flows grouped by unit, contract panel
+  (request/response schema rows, typed errors, gates, effects), and session-authenticated
+  Call API wired to real invoke-as.
+
+#### Console — Auth & shell
+
+- Console claim **Generate** mints a first-operator password that
+  meets Console policy (12+ upper, lower, number, special) and
+  copies it to the clipboard.
 
 - `oke console claim-code` prints the first-admin claim mirrored to `.oke/claim-code`
   (mode 0600) on Console boot while setup is open; cleared after a successful claim.
@@ -447,7 +417,6 @@ needed).
 - `bun run dev:console-next` boots an ephemeral Console kernel on :6533 beside Vite
   and prints the claim code in the same terminal (also mirrored to `.oke/claim-code`).
   Uses `bunx --bun vite` so the Console graph runs under Bun (not Node).
-
 
 - ui-next operator login when setup is closed: Email + Password (TanStack Form + Zod +
   shadcn Field) posts to real `POST /console/session/login`, stores `oke_console_at` on
@@ -473,29 +442,91 @@ needed).
   the theme toggle. **Logout** posts `/console/session/logout` and
   returns to sign-in.
 
-- Console **Kbd** key caps on the command palette, sidebar tooltips,
-  Query run/save, Store grid find/undo/redo, and shortcut sheets.
-  `⌘1`…`⌘5` hop Overview / Flows / Store / Monitoring / Vault;
-  `⌘,` opens Settings; `⌘E` logs out. Caps show ⌘ on Mac and
-  Ctrl on Windows.
+#### Runtime
 
-- `motion` (Motion for React) reserved for near-future ui-next animations; import via
-  `motion/react`.
+- `http.resource(path, ops)` chains `.gate(...)` and `.live()`
+  like `http.get`. Gates apply to every verb; live marks list and get.
 
-- Console **Vault** page (`/vault`): fingerprints-only list + backend
-  status, set / rotate via typed confirm, and master rotation through
-  `POST /console/vault/rotate-master` (one batch, `remaining` honest,
-  `ROTATE_MASTER` + reason). Any operator in the same process may
-  continue; overlapping batches return `VaultRotateBusy`. Generated
-  master key is shown once and never logged. Audit verify is
-  `GET /console/vault/audit/verify` (`ok`, `brokenAt`, `reason`, `row`).
-  Backup stays on the CLI. The Console never accepts a master key in
-  the HTTP body.
+- `gate.all(...members)` reuses a gate chain. `.gate(write)` flattens
+  the handle (and plain arrays) left to right. The compiler expands
+  `.gate(write)` and `.gate(...WRITE)` onto `flow.gates`.
 
-- `fx.store(index).list(limit?)` returns stored documents (id + meta,
-  no embeddings) on every index driver. Console Index browse uses it
-  so an empty search lists the catalog.
+- `.gate.public` is the unauthenticated sentinel — same as
+  `.gate(gate.public)`, without importing `gate`.
 
+- Handwritten HTTP lists prefer the Stripe envelope (`out` is the item
+  array, `fx.json.withQuery(rows, input)`). Extra keys auto-eq except
+  path `id`. `fx.json.with(page)` stays for an already-built pager.
+  Any other declared `out` is still valid.
+
+- Official managed vault providers now include Azure Key Vault,
+  GCP Secret Manager, Doppler, and 1Password Connect alongside
+  AWS Secrets Manager. Set `drivers.vault` to `"managed"` and
+  `OKE_VAULT_PROVIDER` to the id. Cloud SDKs stay optional peers;
+  Doppler and 1Password use `fetch`.
+
+- `http.query()` — RFC 10008 safe, idempotent HTTP trigger that still carries a JSON body.
+  `Content-Type: application/json` is required (missing → 400 `InvalidQuery`; other types → 415
+  `UnsupportedMediaType`). Invalid JSON is 400 with no sniffing. QUERY responses and 405s that
+  allow QUERY advertise `Accept-Query: "application/json"`. CORS default methods include QUERY;
+  CSRF treats QUERY as safe (like GET). The client always sends a JSON body on QUERY (`{}` when
+  only path params remain).
+
+- Browser `GET` (`Accept` prefers `text/html`) paints the JSON envelope in
+  traces chrome — flush h-10 strips, hairline /60, status + handler latency
+  + cache (hit / miss / none), a right-rail Routes tree (static GET links;
+  POST and `:param` listed),
+  line numbers, copy, Pretty / Raw (compact stays on the same page). `curl`,
+  `Accept: application/json`, `?format=json`, and `/_/` · `/_oke/` stay JSON.
+
+- Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
+  and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
+
+#### Dev, Keel & create-oke
+
+- create-oke `standard` / `advanced` ship a Vite 8 `web/` SPA.
+  Vite owns `index.html` and proxies `/notes` · `/health` ·
+  `/_oke` to the app. `bun run web` after `oke dev`.
+
+- Keel lists speak PostgREST v16 read grammar: `col=eq|neq|gt|gte|lt|lte|like|ilike|in|is|match|imatch`,
+  `not.`, `like(any).{…}`, nested `or=` / `and=` / `not.and`, `order=col.desc.nullslast`,
+  `select=id,alias:col`. `store.resource` now accepts `not.`, `is.not_null`, quoted `in.()`,
+  and nested `or`/`and` groups.
+
+- `bun run dev:keel:reset` tears down the keel Compose stack
+  (`oke docker clean --yes`) and deletes `.oke/`, `.env.local`, and
+  generated Docker extras so the next `dev:keel` is a first boot.
+
+- `defineSeed({ name, description })` labels this app's seed
+  (template or example). `oke dev` asks `Seed keel (Featured
+  Harbor GA story + volume + vault stubs)?` and `.oke/state.json`
+  stores that id — a different name re-prompts. Not a global seeded flag.
+
+- `examples/keel` is a work-management OKE app (not a create-oke
+  template) for `oke dev` against Compose — Postgres, PgDog,
+  Redis, RustFS, Mailpit, Meilisearch, and llama.cpp. Featured
+  Harbor GA task chain, stub GitHub/Slack ingest, `bun run
+  dev:keel`, then `oke db seed`.
+
+- Keel pins `images.pgdog` so Compose puts PgDog in front of
+  Postgres. `DATABASE_URL` is the pooler (`:6432`);
+  `OKE_STORE_SQL_URL` stays the direct host.
+
+- `create-oke` asks **Add a reverse proxy…?** (Caddy / Traefik / nginx / No) and persists
+  `proxy` in `~/.oke/create-defaults.json`. Flags: `--proxy <id>` / `--no-proxy`.
+
+- nginx image recipe (`nginx:1.27-alpine`) — generated `nginx.conf` reverse proxy on :80;
+  companion docs under Recipes → nginx.
+
+- `playwright.ui-next.config.ts` always records trace + screenshot + video; after
+  `bun run test:console:setup-ui-next`, `bun run test:console:setup-ui-next:report`
+  opens the HTML timeline report.
+
+- `oke-images` skill (`.agents/skills/oke-images/`) — probe
+  registries and bump Compose pins in catalog, recipes,
+  templates, Keel, and docs without inventing tags.
+
+#### Docs
 
 - Docs site machine surfaces for agents: spec-compliant
   `/llms.txt` (absolute links, curated sections, Optional rest),
@@ -504,29 +535,6 @@ needed).
   including named AI crawlers), and `/sitemap.xml`. Per-page markdown
   is `/llms.mdx/docs/⟨slug⟩`; `/content.md` and `.md` still resolve.
   HTML docs pages advertise `rel="alternate"` `type="text/markdown"`.
-
-
-- Store query performance: preload vs `CREATE EXTENSION` vs unsupported
-  on Postgres / Timescale / Supabase Docker / Neon / Supabase / Yugabyte
-  / Cockroach pages. Index Advisor opt-in image documented on the
-  Postgres recipe.
-
-
-- Store KV **Performance** (`QUERY /console/store/kv/stats`) — Redis-wire
-  `INFO` / `COMMANDSTATS` / `SLOWLOG` / `LATENCY` on the KV band.
-  `memory` returns `KvStatsUnsupported`. INFO is instance-wide
-  (`StoreKvStatsServerWideGap`). SLOWLOG args collapse until reveal
-  (`StoreKvStatsSlowlogArgsGap`). No `MONITOR`, no invented hot-keys.
-
-- Console explorer pages (Overview, Flows, Store, Observability,
-  Vault) share a start-panel collapse / expand control on the
-  inspector header.
-
-
-- `oke-images` skill (`.agents/skills/oke-images/`) — probe
-  registries and bump Compose pins in catalog, recipes,
-  templates, Keel, and docs without inventing tags.
-
 
 ### 💥 Breaking Changes
 
@@ -549,47 +557,47 @@ needed).
 
 ### ♻️ Changed
 
-- Observability SQL Run is a stretch strip token; the PII
-  gap note is hairline text. KPI labels use tracking 0.08em
-  and `/60` hairlines. Error rows open the local Trace sheet
-  instead of navigating to Overview. Leftover `monitoring-*`
-  slots are `observability-*`.
+#### Console — Chrome
 
-- Console Sign in / Create admin expanding-arrow tile uses primary
-  ink, not sky.
-
-- Console Sign in / first-admin claim is a docked lock:
-  wordmark sits on the plate, calibration ticks on the
-  corners, two-column instrument fields, page-ink tile
-  on the key. The submit key sits below the plate, not
-  inside it.
-
-- Console claim / sign-in lock column is `max-w-md`
-  (was `max-w-sm`) so the first-admin plate has room
-  for the password meter and generate control.
-
-- Console explorers share the Overview traces language: flush rows,
-  bare tinted icons, tabular counts, and a full-height selection rail.
-  Flows, Store, Vault, and Observability lists plus detail headers drop
-  boxed wells. Advanced on Flows is an icon control like Traces.
-
-- Console Vault list rows are two lines: description + risk on the
-  first, env name and readers on the second. Healthy rows drop the
-  trailing set/config word. Band hints live on the section title.
+- Console tab chrome uses the O mark favicon, title **okengine Console**,
+  and an operator description meta (was a generic icon and "oke Console").
+  Module routes prefix the page name (`Overview · okengine Console`).
 
 - Console data tables drop the muted header fill and use the same
   hairline / hover as explorers: Store browse, query results, files
   list, JSON inspect, and Vault fingerprints. Store browse restyles
   the row checkbox at the table, not the shared control.
 
-- Console Vault detail is one path: identity, a next-action
-  banner with the verb (Set / Rotate) when something is
-  wrong, a posture strip (from / read / readers / blast),
-  then the lock path as a first-hit-wins spine. Pick a
-  layer to copy its fill command in the row. Fingerprints
-  and readers stay flush lists. Shared and in-flight runs
-  sit on the posture strip / blast banner — no Advanced
-  dump. One Set or Rotate on the page, not two.
+- Console sidebar: the graph/traces page is **Overview** (`/overview`);
+  the Manifest catalog is **Flows** (`/flows`). `/units` redirects to
+  `/flows`. Sign-in lands on Overview. Legacy `?next=/units` rewrites
+  to `/flows`. The Flows explorer search placeholder is **Search
+  flows…** (was units).
+
+- Schema type badges use one hue per type (string teal, integer blue); rose stays on risk pills.
+
+- Console sheets share one flat language: full-bleed fields (no boxed
+  inputs), text toggles instead of chips, and a flush Cancel | action
+  footer. Create policy, index, function, trigger, insert, KV add, edit,
+  confirm, pending changes, and the extension library all use it.
+
+- Console theme toggle is strip tokens (ink when active, icon-only when
+  idle) — no sliding pill, no muted chip. Same control in Settings.
+
+- ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
+
+#### Console — Observability
+
+- Observability SQL Run is a stretch strip token; the PII
+  gap note is hairline text. KPI labels use tracking 0.08em
+  and `/60` hairlines. Error rows open the local Trace sheet
+  instead of navigating to Overview. Leftover `monitoring-*`
+  slots are `observability-*`.
+
+- Console explorers share the Overview traces language: flush rows,
+  bare tinted icons, tabular counts, and a full-height selection rail.
+  Flows, Store, Vault, and Observability lists plus detail headers drop
+  boxed wells. Advanced on Flows is an icon control like Traces.
 
 - Console inspector identity (Vault / Store / Units) matches
   the Observability Query / Metrics header: one h-8 strip.
@@ -597,11 +605,27 @@ needed).
   risk, PII, Set, and Rotate stay full-height strip tokens.
   Vault posture and Units activity use the same stretch bar.
 
-- Console lookback and facet tokens are flat text (15m / 1h / 24h /
-  7d, Vault posture, Flows filters) — no muted segment well.
-  Selected lookback fills the strip (`bg-muted/70`).
-  Filter tokens hover-fill the strip (Traces All / Errors / duration,
-  Call dock, schema toolbar, sheet tabs).
+- Console explorer tokens encode traces chrome: stretch
+  toolbars, `EXPLORER_STRIP_*` bars, flat icon buttons
+  (no bordered wells). Search, filters, Query, Call, Vault,
+  and Monitoring strips use those tokens — selected ink only.
+
+- Console Monitoring Metrics / SQL tabs and the Query header
+  are flush strips (no pill tabs, no blur header). Sidebar
+  module icons are flush in the rail — hover fill, no chip.
+  The brand cell and explorer search / identity / command
+  headers share h-10 — between the old 32px strip and a
+  full 48px rail square.
+
+- Console sidebar order is Overview / Flows / Store / Monitoring /
+  Vault. Monitoring uses the chart-analysis mark.
+
+- Console Monitoring is now **Observability**. Canonical route is
+  `/observability`; `/monitoring` keeps a search-preserving redirect
+  (bookmarks and `?next=`). Sidebar, command palette, and digit `4`
+  point at the new path.
+
+#### Console — Store
 
 - Console Store Query PII uses the view / view-off glyph. Gate keeps
   the shield so the two toolbar controls no longer share an icon.
@@ -617,27 +641,6 @@ needed).
 - Console Query results toolbar matches the command strip:
   h-8 flush tokens, hairline /60, no boxed icon wells.
 
-- Console explorer tokens encode traces chrome: stretch
-  toolbars, `EXPLORER_STRIP_*` bars, flat icon buttons
-  (no bordered wells). Search, filters, Query, Call, Vault,
-  and Monitoring strips use those tokens — selected ink only.
-
-- Console Monitoring Metrics / SQL tabs and the Query header
-  are flush strips (no pill tabs, no blur header). Sidebar
-  module icons are flush in the rail — hover fill, no chip.
-  The brand cell and explorer search / identity / command
-  headers share h-10 — between the old 32px strip and a
-  full 48px rail square.
-
-- Console Units tree lists HTTP flows by method:
-  GET, POST, QUERY, PATCH/PUT, DELETE (then name).
-  Was alphabetical, so `delete` sat above `get`.
-
-- The `files` runs driver no longer uses a deleted tmpdir:
-  default root is `.oke/runs`, `all()` reads every Parquet
-  file (not just this process's catalog), and the memory
-  driver opens DuckDB only when `query()` runs.
-
 - Console index browse Search / topK lives on the grid toolbar
   (one strip — no second search row). Sidebar nav idle icons sit
   at 40% ink; the active module is a solid accent chip.
@@ -647,72 +650,106 @@ needed).
   and wrote one vector blob). Keel `dev` pins `meilisearch`.
   Index browse promotes title / identifier columns.
 
-- `examples/keel` now picks Signal delivery per job: comments,
-  projects, forms, and goals emit `once` + `broadcast` + `live`
-  (notify / search / late-subscriber feed). Tasks add
-  `task-changed` broadcast; `task-assigned` is `live` optional.
+- Console Index browse is a search box, not a vector probe. Type a
+  phrase to rank documents by id and stored meta (Meilisearch uses
+  full-text `q`). Paste `1, 0, 0` to run an ANN probe. Opening the
+  index lists documents immediately.
 
-- Console overview Store spoke shows only SQL / KV / Cache /
-  Files / Index. Named KV namespaces (`drafts`, `reminders`,
-  `view-prefs`, `webhooks`) fan when Store is focused.
+- Console Overview graph is a radial hub, not a spaghetti of every
+  flow × effect. OKE sits at the center; the eight elements orbit it;
+  each element's kinds sit on a middle ring (Store SQL/KV/Files/Index,
+  Gate policy/scope/rate/flag, Channel email/SMS/WA/Push, and the
+  rest); units sit on the outer ring with live heat from Traces. Hover a unit
+  to light the elements it touches. Click a unit or flow for a 1-hop
+  neighborhood; click an element disc to fan its resources. Map
+  breadcrumb returns to the hub. Opening Overview runs the orchestra:
+  random notes from the traces ledger land as new rows and light that
+  request's path on the hub (paused while a run or neighborhood is open).
 
-- Call API Response status uses the same traces cache glyph as
-  the Traces list (`CacheGlyph`: sky flash / amber flash-off /
-  muted unavailable) beside `200`, then duration. Reveal-PII
-  invokes skip auto-cache and do not invent a hit.
+- Console Files treats the **bucket** as the inspectable unit. A
+  singleton `store.files(name, { buckets: [name] })` is one tree leaf
+  (no `attachments → attachments`). The list payload may include
+  `driverId` (`memory` / `fs` / `s3`) so the tree and header can show
+  where bytes live. Click a file to open a right-side sheet (same
+  chrome as SQL / KV row detail) so the folder list stays full width. The sheet previews images, PDF, video, audio, and text (pretty JSON, CSV table).
+  The toolbar is path + find + view + upload + delete + refresh.
 
-- Keel Compose now starts llama.cpp so all eight elements are live.
-  `drivers.ai` is `openai-compatible` in dev/prod (`mock` in test);
-  the hero shows `openai-compatible · granite3.3:2b` instead of `—`.
+- Console Files upload shows the original name (Unicode OK) and a
+  generated ASCII key. The browser lists and searches by original name.
+  Existing non-ASCII objects keep the `non_ascii_key` warning until
+  they are re-uploaded.
 
-- `examples/keel` and Console ui-next seed are work management
-  (spaces, goals, projects, sections, tasks, forms, views) with
-  first-class `project_manager` / `developer` roles — not a Linear
-  issue tracker. Featured walkable id is `ENG-12`. Seed volume is
-  ~500 tasks across SQL, KV, files, and index.
+- Console Store **Create policy** is easier to scan: table and behavior
+  share a row, `FOR` is a compact command strip, Gate / Rows are
+  chaptered, and the SQL preview stays pinned above Create. `USING` and
+  `WITH CHECK` appear only for the commands Postgres accepts.
 
-- Keel scheduled flows drop the repeated unit from the name:
-  `drafts.expire`, `overdue.watch`, `recurring.spawn`,
-  `goals.rollup`, `digest.daily` (was `drafts.expire-drafts`, …).
+- Console Store **Create index**, **New function**, and **New trigger**
+  match that layout: compact template chips, paired fields, chaptered
+  Options, and a pinned editable SQL dock above Create. Choice rows
+  (Language, Method, Timing, FOR) keep the label on the same line as
+  the chips so they do not read as empty field headers.
 
-- `/llms.txt` is a curated llmstxt.org index instead of the raw
-  Fumadocs nav dump. Onboard AI copies `/llms.txt` plus `/llms/agents`
-  on the current origin. The documented Vault curl no longer 404s.
+- Console Store SQL catalog folders use `sql:db/indexes` (and
+  `functions` / `triggers` / `extensions` / `policies`) instead of the
+  `__indexes` reserved prefix. Query still accepts the old `__` names.
 
-- Keel list responses put the item array in `data` and pagination in
-  `meta` (Stripe envelope). `out` is `z.array(Item)`, not `{ items, count }`.
-  create-oke Notes `notes.list` uses the same envelope. Store / Flow docs
-  teach it as the preferred handwritten list, not a requirement.
+- Console Store **Extension library** Install reviews required extensions and the `CREATE EXTENSION` SQL (requires first) before enabling a pack.
 
-- `fx.json.with` accepts a `{ data, meta }` page (`fx.json.with(page)`)
-  as well as the two-arg form. Flow `out` stays the item array — do not
-  put the page object on `out`.
+- Console Store **Extension library** is a marketplace sheet: featured Timescale / Cron / PostGIS cards, search + category select, and an installed badge — not a flat list.
 
-- List `meta.next` / `meta.prev` are the next request (`{ cursor }`),
-  not flags. The typed client walks with `page.next()` or
-  `for await (const page of api.notes.list({ limit: 20 }))` — no
-  `.pages()`, no `if (mode)`, no `hasNext`. `meta.next` /
-  `meta.prev` are typed `{ cursor }` bags for TanStack `pageParam`.
-  Offset and keyset tokens share `?cursor=`. `hasNext` /
-  `nextCursor` / `hasNextPage` / `ClientCall.pages` are gone
-  (unreleased).
+- ui-next Store browse adopts a single toolbar + row-detail Sheet layout (SACP-style chrome):
+  Refresh, find-in-results, sort indicator, Writers/Readers popover, tenant, page size, and row
+  count on one row; column headers carry PK/type glyphs from the Manifest; double-click a row for
+  Fields/JSON detail with the existing audited Reveal, edit, and typed-confirm Delete. No Insert /
+  Export / pagination arrows — those have no real backend endpoints. Seed bookings gain an Arabic
+  `note` so mixed RTL/LTR cells render without breaking column alignment.
 
-- `examples/keel` flow `in` / `out` schemas now come from `drizzle-zod`
-  (`createSelectSchema` / insert / update on generated tables) instead of
-  hand-copied `z.object` column lists.
+- ui-next Store resource pane is now an edge-to-edge explorer workbench: compact identity
+  chrome (status chips on the right, PII copy on the chip tooltip), a command strip with
+  growing find, a spreadsheet grid (PK / PII / numeric headers, cell focus ring, compact
+  audited reveal), and an IDE-style status bar. Instructional banners are gone.
 
-- S3 files (`RustFS` / MinIO) create the configured bucket on first
-  open when `S3_ENDPOINT` is set, so `oke db seed` and uploads no
-  longer fail with `The specified bucket does not exist`.
+- ui-next Store grid is now the beUI editable Table: inline cell edit (commit on
+  blur/Enter), row-handle delete (typed confirm, no Insert), selection, sort,
+  resize, and reorder. PII-masked cells still use audited Reveal; JSON/RTL/numeric
+  cells keep their formatters. Find, undo/redo, column visibility, and the status
+  bar stay on the command strip.
 
-- Console sidebar hops restore the last Flows / Units / Store / Vault
-  URL (selected trace, flow, resource, contract) instead of wiping
-  the module back to its empty landing.
+- ui-next Store grid stages edits locally: dirty cells fill brown with tan
+  text; a selected range is navy with a 2px primary outline on the head cell.
+  Changes opens a Pending Changes sheet (Visual diffs + SQL, Clear All /
+  Commit All, ⌘S). Click selects a cell, click again or type to edit, drag
+  to multi-select (paste/type fills). The row-detail Sheet is gone from
+  browse — edits stay in the grid until Commit All.
 
-- `examples/keel` `oke db seed` now writes the same lived-in Linear
-  story as Console ui-next seed — featured ENG-184 chain plus ~500
-  generated issues, comments, labels, drafts, attachments, and
-  search index documents.
+- Console Store Query / KV performance headers use the shared
+  identity strip: one baseline for title, ref, and actions. The
+  Index Advisor pin note lives in the limitation banner, not the
+  h-10 chrome.
+
+- Console Store Schema find is the explorer search field
+  (flush, no magnifying-glass overlay). Table count stays
+  tabular and unclipped.
+
+- Console Store SQL / KV Query identity uses the shared
+  header strip: one baseline for title, ref, and statement
+  hint. Store / tenant pickers are flush tokens, not pills.
+
+#### Console — Vault
+
+- Console Vault list rows are two lines: description + risk on the
+  first, env name and readers on the second. Healthy rows drop the
+  trailing set/config word. Band hints live on the section title.
+
+- Console Vault detail is one path: identity, a next-action
+  banner with the verb (Set / Rotate) when something is
+  wrong, a posture strip (from / read / readers / blast),
+  then the lock path as a first-hit-wins spine. Pick a
+  layer to copy its fill command in the row. Fingerprints
+  and readers stay flush lists. Shared and in-flight runs
+  sit on the posture strip / blast banner — no Advanced
+  dump. One Set or Rotate on the page, not two.
 
 - Console Vault set / rotate drop the typed `SET` / `ROTATE` phrase.
   Pick a reason chip (`scheduled`, `leak`, `provider`, …) or **other**
@@ -747,11 +784,63 @@ needed).
   that must not rotate declare `rotate: "never"` (omit is the same);
   Console shows `no rotate`.
 
-- Console Index browse is a search box, not a vector probe. Type a
-  phrase to rank documents by id and stored meta (Meilisearch uses
-  full-text `q`). Paste `1, 0, 0` to run an ANN probe. Opening the
-  index lists documents immediately.
+#### Console — Flows & traces
 
+- Overview orchestra (random minted traces) runs only in
+  `dev:console:seed`. Live `oke dev` Traces stay operation-based
+  — Clock, HTTP, Call API — not cloned ledger notes.
+
+- Console lookback and facet tokens are flat text (15m / 1h / 24h /
+  7d, Vault posture, Flows filters) — no muted segment well.
+  Selected lookback fills the strip (`bg-muted/70`).
+  Filter tokens hover-fill the strip (Traces All / Errors / duration,
+  Call dock, schema toolbar, sheet tabs).
+
+- Console overview Store spoke shows only SQL / KV / Cache /
+  Files / Index. Named KV namespaces (`drafts`, `reminders`,
+  `view-prefs`, `webhooks`) fan when Store is focused.
+
+- Console Traces list row no longer shows Replay — that action lives
+  on the trace detail sheet.
+
+- Console Traces list row shows cache status before duration: flash
+  for hit, slashed flash for miss, muted unavailable for not
+  applicable (`run.cache`). The detail sheet repeats the same mark
+  next to the trigger kind.
+
+- Console Traces filters drop the pill well: All / Errors are flat text
+  toggles and duration is a borderless select. Advanced visualizes
+  applied clauses (`trigger  =  signal`) instead of a raw query dump;
+  presets toggle those clauses. `SelectTrigger` now accepts `flat`.
+
+- ui-next Traces filter chrome: title, Advanced (icon + count), and live status share one header; All/Errors + duration sit on a single non-wrapping row with the duration select filling leftover width — no more wrap that stranded Advanced on a second line.
+
+- ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
+  color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,
+  selection glow + desaturated dim, tighter unit-group bounds, and a pannable MiniMap.
+
+- `oke dev` request lines append the WideEvent / run id after the
+  timestamp so a Console `GET /console/vault` line can be pasted
+  into Traces or `oke replay --request-id`.
+
+- Console Trace / Flows Gates heading matches Waterfall:
+  title and count sit together on the strip, not
+  justify-between.
+
+#### Console — Units & Call API
+
+- Console Units tree lists HTTP flows by method:
+  GET, POST, QUERY, PATCH/PUT, DELETE (then name).
+  Was alphabetical, so `delete` sat above `get`.
+
+- Call API Response status uses the same traces cache glyph as
+  the Traces list (`CacheGlyph`: sky flash / amber flash-off /
+  muted unavailable) beside `200`, then duration. Reveal-PII
+  invokes skip auto-cache and do not invent a hit.
+
+- Console sidebar hops restore the last Flows / Units / Store / Vault
+  URL (selected trace, flow, resource, contract) instead of wiping
+  the module back to its empty landing.
 
 - Seeded Console Call API runs against the same Store as browse.
   `issues.list` returns rows, `issues.create` inserts, `attachments.delete`
@@ -768,48 +857,11 @@ needed).
 - Console Call API body fields sit on a container grid that drops from
   five columns to one as the dock narrows.
 
-- Console Overview graph is a radial hub, not a spaghetti of every
-  flow × effect. OKE sits at the center; the eight elements orbit it;
-  each element's kinds sit on a middle ring (Store SQL/KV/Files/Index,
-  Gate policy/scope/rate/flag, Channel email/SMS/WA/Push, and the
-  rest); units sit on the outer ring with live heat from Traces. Hover a unit
-  to light the elements it touches. Click a unit or flow for a 1-hop
-  neighborhood; click an element disc to fan its resources. Map
-  breadcrumb returns to the hub. Opening Overview runs the orchestra:
-  random notes from the traces ledger land as new rows and light that
-  request's path on the hub (paused while a run or neighborhood is open).
-
-- Console Traces list row no longer shows Replay — that action lives
-  on the trace detail sheet.
-
-- Console Traces list row shows cache status before duration: flash
-  for hit, slashed flash for miss, muted unavailable for not
-  applicable (`run.cache`). The detail sheet repeats the same mark
-  next to the trigger kind.
-
 - Console Traces toolbar uses the same explorer search as Units /
   Store / Vault (`Search traces…`) instead of a title. The query
   matches flow, unit, trigger, cache, error, and run id.
 
-- Console Traces filters drop the pill well: All / Errors are flat text
-  toggles and duration is a borderless select. Advanced visualizes
-  applied clauses (`trigger  =  signal`) instead of a raw query dump;
-  presets toggle those clauses. `SelectTrigger` now accepts `flat`.
-
-- Console sidebar: the graph/traces page is **Overview** (`/overview`);
-  the Manifest catalog is **Flows** (`/flows`). `/units` redirects to
-  `/flows`. Sign-in lands on Overview. Legacy `?next=/units` rewrites
-  to `/flows`. The Flows explorer search placeholder is **Search
-  flows…** (was units).
-
-- Schema type badges use one hue per type (string teal, integer blue); rose stays on risk pills.
-
 - Units explorer bands and folders start collapsed (search still expands matches).
-
-- Setup / sign-in is a gate, not an inspector: OKE wordmark in open
-  air, LED eyebrow + display title, underline ledger fields, ink key.
-  The page foot stays traces (brand, theme tokens, version) — no
-  boxed tray, no pill theme well.
 
 - Console Units inspector is a vertical workbench: contract briefing
   above, Call API docked below (always visible). Request/Response sit
@@ -825,48 +877,6 @@ needed).
   rail, sticky identity header, and the same Empty pane. Vault search
   and posture chips live in the left explorer (not a page-wide bar).
 
-- Console Files treats the **bucket** as the inspectable unit. A
-  singleton `store.files(name, { buckets: [name] })` is one tree leaf
-  (no `attachments → attachments`). The list payload may include
-  `driverId` (`memory` / `fs` / `s3`) so the tree and header can show
-  where bytes live. Click a file to open a right-side sheet (same
-  chrome as SQL / KV row detail) so the folder list stays full width. The sheet previews images, PDF, video, audio, and text (pretty JSON, CSV table).
-  The toolbar is path + find + view + upload + delete + refresh.
-
-- Console Files upload shows the original name (Unicode OK) and a
-  generated ASCII key. The browser lists and searches by original name.
-  Existing non-ASCII objects keep the `non_ascii_key` warning until
-  they are re-uploaded.
-
-- Console sheets share one flat language: full-bleed fields (no boxed
-  inputs), text toggles instead of chips, and a flush Cancel | action
-  footer. Create policy, index, function, trigger, insert, KV add, edit,
-  confirm, pending changes, and the extension library all use it.
-- Console Store **Create policy** is easier to scan: table and behavior
-  share a row, `FOR` is a compact command strip, Gate / Rows are
-  chaptered, and the SQL preview stays pinned above Create. `USING` and
-  `WITH CHECK` appear only for the commands Postgres accepts.
-- Console Store **Create index**, **New function**, and **New trigger**
-  match that layout: compact template chips, paired fields, chaptered
-  Options, and a pinned editable SQL dock above Create. Choice rows
-  (Language, Method, Timing, FOR) keep the label on the same line as
-  the chips so they do not read as empty field headers.
-- Console Store SQL catalog folders use `sql:db/indexes` (and
-  `functions` / `triggers` / `extensions` / `policies`) instead of the
-  `__indexes` reserved prefix. Query still accepts the old `__` names.
-
-- Console Store **Extension library** Install reviews required extensions and the `CREATE EXTENSION` SQL (requires first) before enabling a pack.
-- Console Store **Extension library** is a marketplace sheet: featured Timescale / Cron / PostGIS cards, search + category select, and an installed badge — not a flat list.
-
-- Console claim / sign-in drops the nested muted tray. The form is a
-  lock ledger (uppercase labels, underline fields, display title);
-  setup state stays an LED eyebrow, not a strip chip.
-- Console Sign in / Create admin is a sharp expanding-arrow key
-  (primary bar inverted per theme, sky tile, near-black dotted
-  trail) — beUI motion, Console rail color, no lime pill.
-
-- ui-next Traces filter chrome: title, Advanced (icon + count), and live status share one header; All/Errors + duration sit on a single non-wrapping row with the duration select filling leftover width — no more wrap that stranded Advanced on a second line.
-
 - ui-next Units tree: trigger bands (HTTP, Signal, …) are bordered, clearly separated sections with chevron + tinted kind-icon headers; unit folders also show chevrons and nest flows under a guide line — both levels collapse/expand (auto-reopen when the selection is inside). Trigger glyphs are now distinct per kind (API / radio / calendar / timer / store / function) with matching icon wells in Traces.
 
 - ui-next Units Call API is trigger-aware: HTTP keeps method/path + body; call-only keeps
@@ -875,11 +885,144 @@ needed).
   otherwise honest empty-input invoke fallback; signal keeps handler invoke with copy that
   it does not test bus delivery physics.
 
+- `fx.ask` stamps `RunTelemetry.promptVersion` and adds cost only when
+  the driver supplies `usage.cost` greater than zero. Token counts
+  persist on the ask journal. `oke dev` attaches the host AI runtime
+  so Call API asks reach `GET /console/ai`. Child-process HTTP asks
+  still have a separate journal (no ingest bridge).
+
+- Console Call API Response (and Body / Path params
+  chapters) use the shared explorer strip: 0.08em
+  heading, ink status, flush JSON rail — no padded well
+  or status chip.
+
+- Console Call API expanded Response sheet header is the
+  same strip: stretch copy / close, hairline before close,
+  no absolute icon-sm well or pr-12 dodge.
+
+#### Console — Auth & shell
+
+- Sign-in prefills `dev@oke.dev` only on standalone
+  `dev:console` / `:seed`. `oke dev` and production leave
+  email and password empty.
+
+- Console Sign in / Create admin expanding-arrow tile uses primary
+  ink, not sky.
+
+- Console Sign in / first-admin claim is a docked lock:
+  wordmark sits on the plate, calibration ticks on the
+  corners, two-column instrument fields, page-ink tile
+  on the key. The submit key sits below the plate, not
+  inside it.
+
+- Console claim / sign-in lock column is `max-w-md`
+  (was `max-w-sm`) so the first-admin plate has room
+  for the password meter and generate control.
+
+- Setup / sign-in is a gate, not an inspector: OKE wordmark in open
+  air, LED eyebrow + display title, underline ledger fields, ink key.
+  The page foot stays traces (brand, theme tokens, version) — no
+  boxed tray, no pill theme well.
+
+- Console claim / sign-in drops the nested muted tray. The form is a
+  lock ledger (uppercase labels, underline fields, display title);
+  setup state stays an LED eyebrow, not a strip chip.
+
+- Console Sign in / Create admin is a sharp expanding-arrow key
+  (primary bar inverted per theme, sky tile, near-black dotted
+  trail) — beUI motion, Console rail color, no lime pill.
+
 - `dev:console-next` / `:seed` boot a fixed operator (`dev@oke.dev` / `Okengine123!`) so restarts skip claim; login form prefills in Vite serve. `dev:console-next:fresh` / `:fresh:seed` keep first-admin claim open. Renamed `dev:console-next:seeded` → `:seed`.
 
-- ui-next Flow graph visual craft: per-kind HugeIcons + accents (Flow/Store/Signal/AI),
-  color-coded bezier edges for reads/writes/emits/calls, `@dagrejs/dagre` LR layout,
-  selection glow + desaturated dim, tighter unit-group bounds, and a pannable MiniMap.
+- Console first-operator claim keeps a stricter minLength **12** with the same character classes
+  (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
+
+- ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
+  out mid-progress in dark mode).
+
+- ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
+
+- Console sidebar footer drops the operator avatar. Icon actions are
+  Fast (command palette), Settings, and Logout.
+
+- ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
+
+- Console is the ui-next SPA. `oke dev` / `oke start` serve
+  `src/console/ui-next/dist/`. Initial-load budget is 700 kB gzip
+  (no legacy `panel-*` split).
+
+- Access, Manifest Diff, Plugins, and standalone Runs are not in this
+  Console yet — named backlog, not silently dropped. Backend
+  projections remain.
+
+- `oke dev` Notices and 4xx/5xx request follow-ups use the Claim
+  house block: a colored `◇  Notice` / `◇  401` chip on its own
+  row, then the body — yellow for warnings, red for 5xx. No dim
+  `↳` line.
+
+#### Runtime
+
+- The `files` runs driver no longer uses a deleted tmpdir:
+  default root is `.oke/runs`, `all()` reads every Parquet
+  file (not just this process's catalog), and the memory
+  driver opens DuckDB only when `query()` runs.
+
+- `fx.json.with` accepts a `{ data, meta }` page (`fx.json.with(page)`)
+  as well as the two-arg form. Flow `out` stays the item array — do not
+  put the page object on `out`.
+
+- List `meta.next` / `meta.prev` are the next request (`{ cursor }`),
+  not flags. The typed client walks with `page.next()` or
+  `for await (const page of api.notes.list({ limit: 20 }))` — no
+  `.pages()`, no `if (mode)`, no `hasNext`. `meta.next` /
+  `meta.prev` are typed `{ cursor }` bags for TanStack `pageParam`.
+  Offset and keyset tokens share `?cursor=`. `hasNext` /
+  `nextCursor` / `hasNextPage` / `ClientCall.pages` are gone
+  (unreleased).
+
+#### Dev, Keel & create-oke
+
+- Keel `oke db seed` (dev) initializes the built-in vault and writes
+  the nine stub contracts (GitHub / Slack / OpenAI + public URLs +
+  workspace). `.env.local` keeps stack URLs and `OKE_VAULT_MASTER_KEY`
+  only — other apps still leave Vault empty.
+
+- `examples/keel` now picks Signal delivery per job: comments,
+  projects, forms, and goals emit `once` + `broadcast` + `live`
+  (notify / search / late-subscriber feed). Tasks add
+  `task-changed` broadcast; `task-assigned` is `live` optional.
+
+- Keel Compose now starts llama.cpp so all eight elements are live.
+  `drivers.ai` is `openai-compatible` in dev/prod (`mock` in test);
+  the hero shows `openai-compatible · granite3.3:2b` instead of `—`.
+
+- `examples/keel` and Console ui-next seed are work management
+  (spaces, goals, projects, sections, tasks, forms, views) with
+  first-class `project_manager` / `developer` roles — not a Linear
+  issue tracker. Featured walkable id is `ENG-12`. Seed volume is
+  ~500 tasks across SQL, KV, files, and index.
+
+- Keel scheduled flows drop the repeated unit from the name:
+  `drafts.expire`, `overdue.watch`, `recurring.spawn`,
+  `goals.rollup`, `digest.daily` (was `drafts.expire-drafts`, …).
+
+- Keel list responses put the item array in `data` and pagination in
+  `meta` (Stripe envelope). `out` is `z.array(Item)`, not `{ items, count }`.
+  create-oke Notes `notes.list` uses the same envelope. Store / Flow docs
+  teach it as the preferred handwritten list, not a requirement.
+
+- `examples/keel` flow `in` / `out` schemas now come from `drizzle-zod`
+  (`createSelectSchema` / insert / update on generated tables) instead of
+  hand-copied `z.object` column lists.
+
+- S3 files (`RustFS` / MinIO) create the configured bucket on first
+  open when `S3_ENDPOINT` is set, so `oke db seed` and uploads no
+  longer fail with `The specified bucket does not exist`.
+
+- `examples/keel` `oke db seed` now writes the same lived-in Linear
+  story as Console ui-next seed — featured ENG-184 chain plus ~500
+  generated issues, comments, labels, drafts, attachments, and
+  search index documents.
 
 - ui-next seeded mode (`dev:console-next:seed`) is a Linear-shaped **keel** workspace:
   github.ingest → issues.create → notify.onIssue, `CycleClosed` failure, live
@@ -891,110 +1034,6 @@ needed).
   auth + `oke schema generate` system tables (`oke_identities`, sessions, roles,
   crons, vault stubs) — distinct from the Console `oke_console` operator folder.
 
-
-- Console first-operator claim keeps a stricter minLength **12** with the same character classes
-  (`CONSOLE_PASSWORD_POLICY`), shared by the claim flow, ui-next meter/Zod, and setup docs.
-
-- ui-next password strength bar uses a red → amber → lime → emerald ladder (theme primary washed
-  out mid-progress in dark mode).
-
-- Console theme toggle is strip tokens (ink when active, icon-only when
-  idle) — no sliding pill, no muted chip. Same control in Settings.
-
-- ui-next theme tokens match SACP web zinc (tuned dark card/muted + chart/sidebar).
-
-- ui-next authenticated sidebar stays always icon-collapsed on desktop (no expand / rail / header trigger); mobile sheet trigger unchanged.
-
-- Console sidebar footer drops the operator avatar. Icon actions are
-  Fast (command palette), Settings, and Logout.
-
-- Console sidebar order is Overview / Flows / Store / Monitoring /
-  Vault. Monitoring uses the chart-analysis mark.
-
-- ui-next authenticated shell drops the inset top header (page title breadcrumb); content uses the full inset area.
-
-- Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
-
-- ui-next Store browse adopts a single toolbar + row-detail Sheet layout (SACP-style chrome):
-  Refresh, find-in-results, sort indicator, Writers/Readers popover, tenant, page size, and row
-  count on one row; column headers carry PK/type glyphs from the Manifest; double-click a row for
-  Fields/JSON detail with the existing audited Reveal, edit, and typed-confirm Delete. No Insert /
-  Export / pagination arrows — those have no real backend endpoints. Seed bookings gain an Arabic
-  `note` so mixed RTL/LTR cells render without breaking column alignment.
-
-- ui-next Store resource pane is now an edge-to-edge explorer workbench: compact identity
-  chrome (status chips on the right, PII copy on the chip tooltip), a command strip with
-  growing find, a spreadsheet grid (PK / PII / numeric headers, cell focus ring, compact
-  audited reveal), and an IDE-style status bar. Instructional banners are gone.
-
-- ui-next Store grid is now the beUI editable Table: inline cell edit (commit on
-  blur/Enter), row-handle delete (typed confirm, no Insert), selection, sort,
-  resize, and reorder. PII-masked cells still use audited Reveal; JSON/RTL/numeric
-  cells keep their formatters. Find, undo/redo, column visibility, and the status
-  bar stay on the command strip.
-
-- ui-next Store grid stages edits locally: dirty cells fill brown with tan
-  text; a selected range is navy with a 2px primary outline on the head cell.
-  Changes opens a Pending Changes sheet (Visual diffs + SQL, Clear All /
-  Commit All, ⌘S). Click selects a cell, click again or type to edit, drag
-  to multi-select (paste/type fills). The row-detail Sheet is gone from
-  browse — edits stay in the grid until Commit All.
-
-- Console is the ui-next SPA. `oke dev` / `oke start` serve
-  `src/console/ui-next/dist/`. Initial-load budget is 700 kB gzip
-  (no legacy `panel-*` split).
-
-- Access, Manifest Diff, Plugins, and standalone Runs are not in this
-  Console yet — named backlog, not silently dropped. Backend
-  projections remain.
-
-- `oke dev` request lines append the WideEvent / run id after the
-  timestamp so a Console `GET /console/vault` line can be pasted
-  into Traces or `oke replay --request-id`.
-
-- `oke dev` Notices and 4xx/5xx request follow-ups use the Claim
-  house block: a colored `◇  Notice` / `◇  401` chip on its own
-  row, then the body — yellow for warnings, red for 5xx. No dim
-  `↳` line.
-
-- Console Monitoring is now **Observability**. Canonical route is
-  `/observability`; `/monitoring` keeps a search-preserving redirect
-  (bookmarks and `?next=`). Sidebar, command palette, and digit `4`
-  point at the new path.
-
-- `fx.ask` stamps `RunTelemetry.promptVersion` and adds cost only when
-  the driver supplies `usage.cost` greater than zero. Token counts
-  persist on the ask journal. `oke dev` attaches the host AI runtime
-  so Call API asks reach `GET /console/ai`. Child-process HTTP asks
-  still have a separate journal (no ingest bridge).
-
-- Console Store Query / KV performance headers use the shared
-  identity strip: one baseline for title, ref, and actions. The
-  Index Advisor pin note lives in the limitation banner, not the
-  h-10 chrome.
-
-- Console Store Schema find is the explorer search field
-  (flush, no magnifying-glass overlay). Table count stays
-  tabular and unclipped.
-
-- Console Store SQL / KV Query identity uses the shared
-  header strip: one baseline for title, ref, and statement
-  hint. Store / tenant pickers are flush tokens, not pills.
-
-- Console Trace / Flows Gates heading matches Waterfall:
-  title and count sit together on the strip, not
-  justify-between.
-
-- Console Call API Response (and Body / Path params
-  chapters) use the shared explorer strip: 0.08em
-  heading, ink status, flush JSON rail — no padded well
-  or status chip.
-
-- Console Call API expanded Response sheet header is the
-  same strip: stretch copy / close, hairline before close,
-  no absolute icon-sm well or pr-12 dodge.
-
-
 - Default Compose image pins: RustFS `1.0.0-rc.2`, Mailpit
   `v1.30.7`, PgDog `v0.1.53`, Meilisearch `v1.53`, llama.cpp
   `server-b10450`, Ollama `0.32.13`, vLLM `v0.27.1`, SGLang
@@ -1002,6 +1041,13 @@ needed).
   Floating tags (`postgres:18-alpine`, `redis:8-alpine`,
   `caddy:2-alpine`) stay.
 
+#### Docs
+
+- `/llms.txt` is a curated llmstxt.org index instead of the raw
+  Fumadocs nav dump. Onboard AI copies `/llms.txt` plus `/llms/agents`
+  on the current origin. The documented Vault curl no longer 404s.
+
+- Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
 
 ### 🔥 Removed
 
@@ -1015,161 +1061,49 @@ needed).
 
 ### 🐛 Fixed
 
-- OKE1005 no longer fires when a flow asks a prompt by name
-  and the Manifest stamped `effects.asks` as `name@version`
-  (compiler pin). `documents.summarize` → `document-summary`
-  matches `document-summary@1`. Distinct pins still deny.
-
-- `fx.ask` now converts Zod / shorthand `out` to JSON Schema
-  (validate + `response_format`). Mock fills that shape
-  instead of `{ ok, echo }`, so Call API
-  `documents.summarize` returns a summary instead of
-  generic Unavailable. Docker openai-compatible fails
-  loud without `OKE_AI_URL`. Concurrent `/console/ai`
-  no longer 500s on a duplicate DuckDB `runs` view.
-
-- Console Gates list no longer 500s on apps that use
-  `gate.public`. Reconstructing the Manifest used
-  `gate.policy("public")`, which is reserved.
-
-- Tier-1 cache hits record the real `computed:…` lookup on
-  the effect ledger. Trace Waterfall shows that cache read
-  instead of "No effects recorded". Miss runs still show
-  the store reads that actually ran.
-
-- Console Trace request / response body fills leftover
-  sheet height. Raw JSON is no longer capped at 14rem
-  with empty space below. The sheet is `max-w-2xl`
-  (was `max-w-xl`) so the payload has more room.
-
-- Console Traces / Runs no longer 500 after a failed login
-  sits next to a successful run. All-null `error_code`
-  Parquet batches were JSON; `Unauthorized` was VARCHAR —
-  DuckDB refused the union.
+#### Console — Chrome
 
 - Console shortcut caps use ⌘ on Mac and Ctrl on Windows.
   Detection reads Client Hints / userAgent, not only
   `navigator.platform`.
 
-- Command palette search mark is `size-3.5`, same as
-  explorer row icons — it no longer fills the 40px strip.
-
 - Sidebar Logout hover is destructive ink + wash. Tooltip
   and palette show `⌘E` / `Ctrl+E`.
-
-- Boot mints one `instanceId` (`inst-<uuid>`) for Clock,
-  Journal, and the fleet registry. They no longer mint
-  independently with different prefixes.
-
-- `oke dev` / `bun run dev:keel` hot-reloads Console UI
-  from source. Vite attaches on an okengine checkout so
-  `ui-next` edits no longer need `bun run build`.
-
-- Console index browse keeps focus while typing. Search no
-  longer sits inside a tooltip trigger, the grid stays mounted
-  across keystrokes, and the query waits 280ms of quiet.
 
 - Console icon-rail selection is readable: idle icons sit
   at 30% ink, the active chip uses a stronger
   `--sidebar-accent`, and hover no longer clears the
   selected fill.
 
-- Console Overview no longer paints Cache as a fifth Store type.
-  Store kinds are `sql` · `kv` · `files` · `index`. Cache is a
-  KV namespace (and HTTP read cache), not a facet.
+- Console Flow and Store schema MiniMaps were blank: graph nodes only
+  set `style.width` / `style.height`, and xyflow MiniMap skips user
+  nodes without top-level `width` / `height`.
 
-- Console Overview element discs are name-only: no `N live`
-  caption and no live-heat pulse. Center edge handles stay
-  invisible. Hubs are 56px and show the two-letter lattice
-  symbol (`Fl` · `Sg` · `St` · `Ck` · `Gt` · `Vt` · `Ch` ·
-  `Ai`). Hover still names the element.
+#### Console — Observability
+
+- Console `GET /console/runs` no longer nests each list response back into the runs
+  store (`console.runs.list` output elided on record; prior list polls filtered from the
+  projection). Live/poll fallbacks were doubling payload size every tick and OOMing the
+  ui-next kernel (~GB RSS).
+
+#### Console — Store
+
+- Console index browse keeps focus while typing. Search no
+  longer sits inside a tooltip trigger, the grid stays mounted
+  across keystrokes, and the query waits 280ms of quiet.
 
 - Console Store browse no longer shows classified emails in
   cleartext. `ownerEmail` / `owner_email` (and the same JS/SQL
   spelling split) mask as `[redacted]` unless the operator
   enables Include PII.
 
-- Call API Response no longer flashes cleartext then remasks, or drops
-  the 200 chip on a PII toggle. Hide PII remasks in place; reveal
-  refetches. The JSON viewer never paints a stale highlight.
-
-- Call API **PII** now opens the host store session with cleartext when
-  Include PII is on, and skips auto-cache so a prior masked list is not
-  reused. Classified columns the handler reads (`ownerEmail`) were
-  already `[redacted]` at the driver.
-
-- `bun run dev:keel:reset` writes a fresh `.env.local` from `.env.example`
-  (PUBLIC_APP_URL and the other vault / app defaults). The next
-  `dev:keel` regenerates stack passwords. Keel now passes KV / index
-  stores, vault configs, and clocks into `oke()` so Call API and KV
-  Query resolve after a wipe.
-
-- `oke dev` under Compose no longer refuses keel CRUD with OKE1008.
-  `bindCrud` stamps `sql:<table>` on each verb; extract expands the
-  same. Authors do not declare `effects` at the call site.
-- Read-only flows cache automatically from inferred or ledgered
-  `reads` — no `cache: "30s"` and no `fx.cache`. The first GET is a
-  miss; the next identical GET is a hit. `cache: false` opts out; a
-  duration string adds a TTL. Writes invalidate matching keys.
-
-- A fresh `oke dev` hero now shows the effective driver map
-  (signal Redis, clock Postgres, files S3, channel SMTP) even when
-  `oke.config.ts` only pins overrides. `dev:keel:reset` SIGTERMs
-  leftover listeners on `:6530` / `:6533` / `:6535`. Chrome inspector
-  probes on MCP (`GET /`, `/json/version`) no longer paint as 404s.
-
-- `oke dev` keeps the first-admin claim code on the live board
-  (paste URL + `oke console claim-code`). The code is TTY-only —
-  never returned from `GET /console/setup/status`. After surfaces
-  bind, the TTY reprints one Ready board (elements, Docker, claim,
-  notices, Backend / Console / MCP) so mid-boot db-push lines and
-  health ticks cannot tear the claim box. The `bun --hot` child
-  no longer clears the screen on schema reload. The pane drops
-  after the first operator.
-
-- Keel `oke db seed` no longer inserts sections before projects
-  (`sections_project_id` FK). Essential seed is spaces / members /
-  tags; sections land with projects in the volume step.
-
-- `GET /_oke/client.json` wraps the runtime route map as
-  `{ routes }` so `oke dev` can regenerate `oke-client.d.ts`.
-  Chrome `GET /json/version` probes are silent on Backend as well
-  as MCP.
-
 - Store Query editors paint SQL and KV with their own token colors
   (keywords / commands, strings, keys, numbers, comments) instead of
   a single gray overlay. KV is no longer highlighted as bash.
 
-- Overview Store spoke always shows **Cache** (engine `fx.cache` — not a
-  Call API / trace) and fans declared KV namespaces (`drafts`,
-  `triage-snooze`, `webhooks`) so keel does not hide them behind a
-  Store click.
-
 - Console Store KV browse on a dedicated namespace (`store.kv("drafts")`)
   lists root keys (`ENG-184`) instead of looking for `drafts:*`. Extract
   stamps `namespaces` so Overview Store resources include KV.
-
-- Call API **PII** now renders on the toolbar. The panel imported
-  `runs-pii` from a path Vite could not resolve, so `:6533` kept
-  the last bundle without the control.
-
-- Clock traces like `drafts.expire` no longer fail with a bare
-  `OkeError` and no message. `fx.store(kv).delete(key)` now
-  extracts `kv:<namespace>` (not `kv:key`), `ttlMs` is a read,
-  and thrown `OkeError`s record as `OKE1002` plus the cause.
-
-- Tables with a `name` column (teams, labels, cycles, …) no longer
-  fail Call API with OKE1001 `sql:db`. The kernel now reads
-  `tableName` so the capability matches extracted `sql:<table>`.
-
-- Console Traces now lists Call API invokes (`issues.list` and
-  other host flows). The in-process attach used by `oke dev`
-  posts WideEvents to the same ingest bridge as the app child,
-  so they sit next to clock ticks like `drafts.expire`.
-
-- Console Vault **Set** on Simulated env no longer returns
-  `VaultNotFound`. The panel boots with gaps so the first
-  write can land in `.env.local`.
 
 - Console Units Call no longer paints a thrown host error as
   `200` + `response: null`. A 500 envelope or `OkeError`
@@ -1194,53 +1128,10 @@ needed).
   as Store Query Gate (name, email, scopes) instead of a
   plain select.
 
-- Console Units Call Response shows the handler output JSON
-  on success. Invoke-as also unwraps `fx.json` and HTTP
-  `{ data }` envelopes when `execute` left `output` empty.
-
 - `oke dev` Console Call API and Store SQL now use the live host
   app (compose Postgres / Redis), not the empty Manifest memory
   sandbox. Invoke-as no longer returns `InvokeDenied: host invoke
   not configured`.
-
-- `oke dev` no longer crashes when an app binds `http.query`
-  (RFC 10008). Bun.serve native `routes` reject QUERY; those
-  verbs stay on the fetch fallback. An invalid route table
-  retries fetch-only — Bun's HTML-bundling example is not
-  printed.
-
-- `bun run dev:keel` no longer dies with OKE1008 on
-  `cycles.list`. Extract expands `bindNamedTableCrud` into
-  unit-prefixed CRUD flows so effects are inferred, not
-  hand-declared.
-
-- `store.schema.table` with a `name` column no longer throws
-  `Unable to resolve table name from value` on insert, select,
-  or Drizzle emit.
-
-- Console Traces Advanced clause and preset labels use stronger ink
-  so they stay readable on the dark pane (no muted-on-muted greys).
-
-- Console Units Call path-param fields show the route token as a
-  placeholder (`:id`) and stamp the path on the Path params chapter.
-
-- Console Traces list always shows relative time in the right column.
-  Failed runs keep the rail / dot; hover still carries the error code.
-
-- Console Flows graph keeps node cards (ships) above effect ribbons.
-  Parent-group edges no longer inherit a child z-index that paints
-  lines over store / signal / AI targets.
-
-- Console setup chrome footer no longer draws hairline rules against
-  the theme toggle. Brand sits left, theme center, version right.
-
-- Console Flow and Store schema MiniMaps were blank: graph nodes only
-  set `style.width` / `style.height`, and xyflow MiniMap skips user
-  nodes without top-level `width` / `height`.
-
-- Console Sign in after an expired session returns to the module you
-  were on (`/store`, `/units`, `/flows` plus search) instead of always
-  opening Flows. `?next=` only accepts those three paths.
 
 - Console SQL query console **Gate** menu no longer crashes on open
   (`MenuGroupContext` — label now sits inside `DropdownMenuGroup`).
@@ -1264,7 +1155,6 @@ needed).
   `kv:triage-snooze`). Selecting one no longer highlights both, and browse
   lists only that namespace's keys.
 
-
 - ui-next Store cell edit no longer draws a focus ring; pending brown fill
   covers the whole cell. Escape or clicking empty space clears the cell range.
 
@@ -1272,69 +1162,22 @@ needed).
   (the memory driver has no generic UPDATE/DELETE on `query`), so ui-next
   Commit All actually writes rows instead of returning `InternalError`.
 
-- Wrong-method hits on a registered path return **405** with `Allow` listing bound methods
-  (was a generic 404). CORS preflight still answers first. Raw Console ingest 405s now include
-  `Allow: POST`.
-
 - Console Manifest StoreRuntime now derives SQL `classify` maps from
   `tables.*.columns` PII/sensitive tags (and `table.column` keys on
   `store.classifications`), so browse masking matches list `piiColumns` without a
   hand-registered classify map. Store query/edit/delete/sql paths also bind the
   panel-lazy runtime (previously only list did).
 
-- Console `GET /console/runs` no longer nests each list response back into the runs
-  store (`console.runs.list` output elided on record; prior list polls filtered from the
-  projection). Live/poll fallbacks were doubling payload size every tick and OOMing the
-  ui-next kernel (~GB RSS).
-
-- `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
-  saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
-
-- First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
-  stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
-  re-wrapping a body already consumed by `parseValidate`.
-
-- ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
-  DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
-
-- Password policy special-character rule is canonical as `requireSpecial` on both
-  `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
-  password missing only a special is rejected and that ui-next’s 5 checklist criteria match
-  server validation.
-
-- Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
-  `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
-
-- `/flows` renders the graph + Traces page and `/units` renders the
-  explorer — the path names now match the pages.
-
-- Traces no longer show `0μs` for a handler that finished in the
-  same millisecond. Duration uses `performance.now()` when the app
-  clock did not tick. Call API shows that handler time (same clock
-  as Traces) and labels the browser round-trip as `rtt`.
-
 - Console Store browse of a Meilisearch index no longer fails with
   InternalError after the index already exists. Open is idempotent
   (GET then create; `index_already_exists` / HTTP 409 is success).
   Browse errors show the driver message, not a bare code.
 
-- `bun run build` no longer warns that Console chunks exceed
-  500 kB. Highlighting loads five grammars through the JS engine
-  (no Oniguruma WASM / unused C++ bundle), and Overview / Flows /
-  Store / Vault are lazy route chunks.
+#### Console — Vault
 
-- Kernel edge and Store-only `oke()` no longer statically import
-  PostgREST `listPage`, i18n catalogs, `http.resource`, or auto-cache.
-  Those load through computed `import.meta.require` when the feature
-  actually runs, so unused graphs stay under budget.
-
-- Docs Signal and AI figures no longer ask Motion to interpolate
-  `oklch` / `lab` theme tokens (`stroke` / `fill` stay attributes;
-  Motion animates opacity and position only).
-
-- Docs `GET /sw.js` is no longer a 404. A leftover service worker
-  on localhost:3000 was still asking for the script; the site now
-  serves an unregistering worker and drops the registration.
+- Console Vault **Set** on Simulated env no longer returns
+  `VaultNotFound`. The panel boots with gaps so the first
+  write can land in `.env.local`.
 
 - Console Vault lock-path no longer shows `simulate` under
   `oke dev` when `drivers.vault.dev` is `"vault"`. The Console
@@ -1342,10 +1185,130 @@ needed).
   `oke dev` now passes the loaded config; `serveConsole` loads
   `oke.config.ts` from cwd when it is omitted.
 
+#### Console — Flows & traces
+
+- Tier-1 cache hits record the real `computed:…` lookup on
+  the effect ledger. Trace Waterfall shows that cache read
+  instead of "No effects recorded". Miss runs still show
+  the store reads that actually ran.
+
+- Console Trace request / response body fills leftover
+  sheet height. Raw JSON is no longer capped at 14rem
+  with empty space below. The sheet is `max-w-2xl`
+  (was `max-w-xl`) so the payload has more room.
+
+- Console Traces / Runs no longer 500 after a failed login
+  sits next to a successful run. All-null `error_code`
+  Parquet batches were JSON; `Unauthorized` was VARCHAR —
+  DuckDB refused the union.
+
+- Console Overview no longer paints Cache as a fifth Store type.
+  Store kinds are `sql` · `kv` · `files` · `index`. Cache is a
+  KV namespace (and HTTP read cache), not a facet.
+
+- Console Overview element discs are name-only: no `N live`
+  caption and no live-heat pulse. Center edge handles stay
+  invisible. Hubs are 56px and show the two-letter lattice
+  symbol (`Fl` · `Sg` · `St` · `Ck` · `Gt` · `Vt` · `Ch` ·
+  `Ai`). Hover still names the element.
+
+- Console Traces Advanced clause and preset labels use stronger ink
+  so they stay readable on the dark pane (no muted-on-muted greys).
+
+- Console Traces list always shows relative time in the right column.
+  Failed runs keep the rail / dot; hover still carries the error code.
+
+- Console Flows graph keeps node cards (ships) above effect ribbons.
+  Parent-group edges no longer inherit a child z-index that paints
+  lines over store / signal / AI targets.
+
+- `/flows` renders the graph + Traces page and `/units` renders the
+  explorer — the path names now match the pages.
+
 - HTTP API-key Bearer now authenticates through `onAuth`. WideEvent
   `principal` is the key id and `dimensions.api_key` is stamped.
   Session JWTs stay `claims.sub` with no key dimension. Forged /
   revoked / expired keys are 401.
+
+#### Console — Units & Call API
+
+- `fx.ask` now converts Zod / shorthand `out` to JSON Schema
+  (validate + `response_format`). Mock fills that shape
+  instead of `{ ok, echo }`, so Call API
+  `documents.summarize` returns a summary instead of
+  generic Unavailable. Docker openai-compatible fails
+  loud without `OKE_AI_URL`. Concurrent `/console/ai`
+  no longer 500s on a duplicate DuckDB `runs` view.
+
+- Call API Response no longer flashes cleartext then remasks, or drops
+  the 200 chip on a PII toggle. Hide PII remasks in place; reveal
+  refetches. The JSON viewer never paints a stale highlight.
+
+- Call API **PII** now opens the host store session with cleartext when
+  Include PII is on, and skips auto-cache so a prior masked list is not
+  reused. Classified columns the handler reads (`ownerEmail`) were
+  already `[redacted]` at the driver.
+
+- `bun run dev:keel:reset` writes a fresh `.env.local` from `.env.example`
+  (PUBLIC_APP_URL and the other vault / app defaults). The next
+  `dev:keel` regenerates stack passwords. Keel now passes KV / index
+  stores, vault configs, and clocks into `oke()` so Call API and KV
+  Query resolve after a wipe.
+
+- Overview Store spoke always shows **Cache** (engine `fx.cache` — not a
+  Call API / trace) and fans declared KV namespaces (`drafts`,
+  `triage-snooze`, `webhooks`) so keel does not hide them behind a
+  Store click.
+
+- Call API **PII** now renders on the toolbar. The panel imported
+  `runs-pii` from a path Vite could not resolve, so `:6533` kept
+  the last bundle without the control.
+
+- Tables with a `name` column (teams, labels, cycles, …) no longer
+  fail Call API with OKE1001 `sql:db`. The kernel now reads
+  `tableName` so the capability matches extracted `sql:<table>`.
+
+- Console Traces now lists Call API invokes (`issues.list` and
+  other host flows). The in-process attach used by `oke dev`
+  posts WideEvents to the same ingest bridge as the app child,
+  so they sit next to clock ticks like `drafts.expire`.
+
+- Console Units Call Response shows the handler output JSON
+  on success. Invoke-as also unwraps `fx.json` and HTTP
+  `{ data }` envelopes when `execute` left `output` empty.
+
+- Console Units Call path-param fields show the route token as a
+  placeholder (`:id`) and stamp the path on the Path params chapter.
+
+- Traces no longer show `0μs` for a handler that finished in the
+  same millisecond. Duration uses `performance.now()` when the app
+  clock did not tick. Call API shows that handler time (same clock
+  as Traces) and labels the browser round-trip as `rtt`.
+
+#### Console — Auth & shell
+
+- Command palette search mark is `size-3.5`, same as
+  explorer row icons — it no longer fills the 40px strip.
+
+- `oke dev` keeps the first-admin claim code on the live board
+  (paste URL + `oke console claim-code`). The code is TTY-only —
+  never returned from `GET /console/setup/status`. After surfaces
+  bind, the TTY reprints one Ready board (elements, Docker, claim,
+  notices, Backend / Console / MCP) so mid-boot db-push lines and
+  health ticks cannot tear the claim box. The `bun --hot` child
+  no longer clears the screen on schema reload. The pane drops
+  after the first operator.
+
+- Console setup chrome footer no longer draws hairline rules against
+  the theme toggle. Brand sits left, theme center, version right.
+
+- Console Sign in after an expired session returns to the module you
+  were on (`/store`, `/units`, `/flows` plus search) instead of always
+  opening Flows. `?next=` only accepts those three paths.
+
+- First-admin claim/login no longer 500 with `ReadableStream has already been used` when a
+  stale `oke_console_at` cookie (or Bearer) is present — public-flow `onRequest` skips
+  re-wrapping a body already consumed by `parseValidate`.
 
 - Console fields stay transparent when the browser autofills.
   `html` uses Tailwind `scheme-light` / `scheme-dark`; autofill
@@ -1356,12 +1319,125 @@ needed).
   the gate keeps the Created plate and uses the new
   session instead of swapping to login.
 
+#### Runtime
+
+- After `oke keel reset`, Console Call API no longer mocks `fx.ask`
+  when `OKE_AI_URL` is set. Traces also show `fail(code, { message })`
+  on the run (Unavailable was a code with no reason).
+
+- Clock `every` jobs no longer re-enter on the 1s
+  scheduler tick. The slot (`lastRunAt`) is claimed
+  before the handler, stacked ticks are skipped, and
+  a named clock covers its interval so keel does not
+  register both `watch-overdue` and `15m`.
+
+- OKE1005 no longer fires when a flow asks a prompt by name
+  and the Manifest stamped `effects.asks` as `name@version`
+  (compiler pin). `documents.summarize` → `document-summary`
+  matches `document-summary@1`. Distinct pins still deny.
+
+- Console Gates list no longer 500s on apps that use
+  `gate.public`. Reconstructing the Manifest used
+  `gate.policy("public")`, which is reserved.
+
+- Boot mints one `instanceId` (`inst-<uuid>`) for Clock,
+  Journal, and the fleet registry. They no longer mint
+  independently with different prefixes.
+
+- Read-only flows cache automatically from inferred or ledgered
+  `reads` — no `cache: "30s"` and no `fx.cache`. The first GET is a
+  miss; the next identical GET is a hit. `cache: false` opts out; a
+  duration string adds a TTL. Writes invalidate matching keys.
+
+- `GET /_oke/client.json` wraps the runtime route map as
+  `{ routes }` so `oke dev` can regenerate `oke-client.d.ts`.
+  Chrome `GET /json/version` probes are silent on Backend as well
+  as MCP.
+
+- Clock traces like `drafts.expire` no longer fail with a bare
+  `OkeError` and no message. `fx.store(kv).delete(key)` now
+  extracts `kv:<namespace>` (not `kv:key`), `ttlMs` is a read,
+  and thrown `OkeError`s record as `OKE1002` plus the cause.
+
+- `store.schema.table` with a `name` column no longer throws
+  `Unable to resolve table name from value` on insert, select,
+  or Drizzle emit.
+
+- Wrong-method hits on a registered path return **405** with `Allow` listing bound methods
+  (was a generic 404). CORS preflight still answers first. Raw Console ingest 405s now include
+  `Allow: POST`.
+
+- Password policy special-character rule is canonical as `requireSpecial` on both
+  `DEFAULT_PASSWORD_POLICY` and `CONSOLE_PASSWORD_POLICY`, with regression tests that a
+  password missing only a special is rejected and that ui-next’s 5 checklist criteria match
+  server validation.
+
+- Kernel edge and Store-only `oke()` no longer statically import
+  PostgREST `listPage`, i18n catalogs, `http.resource`, or auto-cache.
+  Those load through computed `import.meta.require` when the feature
+  actually runs, so unused graphs stay under budget.
+
+#### Dev, Keel & create-oke
+
+- Keel reset no longer pins `OKE_AI_URL=http://127.0.0.1:8080/v1`.
+  `oke dev` writes the published llama.cpp port (`:23xxx`).
+
+- `oke dev` / `bun run dev:keel` hot-reloads Console UI
+  from source. Vite attaches on an okengine checkout so
+  `ui-next` edits no longer need `bun run build`.
+
+- `oke dev` under Compose no longer refuses keel CRUD with OKE1008.
+  `bindCrud` stamps `sql:<table>` on each verb; extract expands the
+  same. Authors do not declare `effects` at the call site.
+
+- A fresh `oke dev` hero now shows the effective driver map
+  (signal Redis, clock Postgres, files S3, channel SMTP) even when
+  `oke.config.ts` only pins overrides. `dev:keel:reset` SIGTERMs
+  leftover listeners on `:6530` / `:6533` / `:6535`. Chrome inspector
+  probes on MCP (`GET /`, `/json/version`) no longer paint as 404s.
+
+- Keel `oke db seed` no longer inserts sections before projects
+  (`sections_project_id` FK). Essential seed is spaces / members /
+  tags; sections land with projects in the volume step.
+
+- `oke dev` no longer crashes when an app binds `http.query`
+  (RFC 10008). Bun.serve native `routes` reject QUERY; those
+  verbs stay on the fetch fallback. An invalid route table
+  retries fetch-only — Bun's HTML-bundling example is not
+  printed.
+
+- `bun run dev:keel` no longer dies with OKE1008 on
+  `cycles.list`. Extract expands `bindNamedTableCrud` into
+  unit-prefixed CRUD flows so effects are inferred, not
+  hand-declared.
+
+- `create-oke` **reuse previous settings** no longer re-asks locales / PgDog / proxy —
+  saved answers from `~/.oke/create-defaults.json` apply directly (CLI flags still override).
+
+- ui-next `tsconfig` no longer typechecks the Vite Console kernel plugin (SPA stays
+  DOM-only); root `tsconfig` covers `vite.config.ts` + the kernel plugin.
+
+- Typecheck for `tests/console/setup-ui-next.spec.ts` via a DOM-scoped
+  `tests/console/tsconfig.ui-next.json` (root stays ESNext-only for kernel/server tests).
+
+- `bun run build` no longer warns that Console chunks exceed
+  500 kB. Highlighting loads five grammars through the JS engine
+  (no Oniguruma WASM / unused C++ bundle), and Overview / Flows /
+  Store / Vault are lazy route chunks.
+
+#### Docs
+
+- Docs Signal and AI figures no longer ask Motion to interpolate
+  `oklch` / `lab` theme tokens (`stroke` / `fill` stay attributes;
+  Motion animates opacity and position only).
+
+- Docs `GET /sw.js` is no longer a 404. A leftover service worker
+  on localhost:3000 was still asking for the script; the site now
+  serves an unregistering worker and drops the registration.
+
 ### 🔒 Security
 
-- Console login `?next=` is allow-listed to `/overview`, `/flows`,
-  `/store`, `/vault`, and `/observability` (plus their search).
-  `/monitoring` rewrites to `/observability`. Other values (including
-  `/units`) are dropped so an expired session cannot be an open redirect.
+#### Console — Store
 
 - Console Store hides `oke_console` (operators, sessions, credential hashes) unless
   `OKE_CONSOLE_AUTH_STORE=1`. Query is refused when the flag is off.
@@ -1379,27 +1455,38 @@ needed).
   Gate (rate gates refused). The pick is audited as
   `console.store.sql.asGate` (operatorId, ref, gate).
 
-
 - Store SQL performance query text is a named limitation
   `StoreSqlStatsQueryTextGap` — engine-native fingerprints, not Store
   browse masking. Live `pg_stat_activity.query` is collapsed until
   `revealPii: true`, which writes `console.store.sql.stats.reveal`.
   Documented in security.md §10.4.
 
-- Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
-  scopes; host gates enforce the assumed principal.
-
-- Host → Console runs ingest never returns WideEvent bodies; operator
-  reads stay on the masked `projectRun` path (adversarial PII gate covered).
-
 - Store KV SLOWLOG args (keys and values) stay collapsed until
   `revealPii: true`, which writes `console.store.kv.stats.reveal`
   (operator, ref). Named limitation `StoreKvStatsSlowlogArgsGap`.
 
+#### Console — Flows & traces
+
+- Host → Console runs ingest never returns WideEvent bodies; operator
+  reads stay on the masked `projectRun` path (adversarial PII gate covered).
+
+#### Console — Units & Call API
+
+- Console invoke-as adversarial coverage: assumed identity A never executes with identity B's
+  scopes; host gates enforce the assumed principal.
+
+#### Console — Auth & shell
+
+- Console login `?next=` is allow-listed to `/overview`, `/flows`,
+  `/store`, `/vault`, and `/observability` (plus their search).
+  `/monitoring` rewrites to `/observability`. Other values (including
+  `/units`) are dropped so an expired session cannot be an open redirect.
+
+#### Runtime
+
 - Host HTTP API-key authentication stamps `principal` as the bare
   key id (and `dimensions.api_key`) so Access per-key matching is
   real when a request is key-authenticated.
-
 
 ## v0.11.2 — 2026-08-10
 

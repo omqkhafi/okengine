@@ -1,7 +1,8 @@
 /**
  * Wipe keel Compose + local artefacts so the next `oke dev` is a first boot.
  *
- * Writes a fresh `.env.local` from `.env.example` (vault / app defaults).
+ * Writes a fresh `.env.local` from `.env.example` (stack / app defaults).
+ * Vault contracts are seeded into the built-in store on `oke db seed`.
  * `oke dev` then regenerates stack passwords and URLs into that file.
  *
  * Run via `bun run reset` / `bun run dev:keel:reset`.
@@ -150,6 +151,9 @@ export function extraEnvSectionTitle(key: string): string | null {
   if (key.startsWith("OKE_AI_") || key === "OPENAI_API_KEY" || key === "OLLAMA_HOST") {
     return "AI — llama.cpp (openai-compatible)";
   }
+  if (key === "OKE_VAULT_MASTER_KEY" || key.startsWith("OKE_VAULT_")) {
+    return "vault — built-in encrypted-at-rest store";
+  }
   if (
     key === "PORT" ||
     key.startsWith("OKE_APP") ||
@@ -199,7 +203,9 @@ export function formatGroupedEnvLocal(
       claimed.add(key);
       continue;
     }
-    let section = sections.find((s) => s.title === title || s.title.startsWith(title.split(" — ")[0]!));
+    let section = sections.find(
+      (s) => s.title === title || s.title.startsWith(title.split(" — ")[0]!),
+    );
     if (!section) {
       section = { title, keys: [] };
       sections.push(section);
@@ -373,9 +379,7 @@ export async function freeKeelDevPorts(
     }
   }
   if (killed.length > 0) {
-    write(
-      `oke keel reset: stopped leftover listeners on ${KEEL_DEV_PORTS.join("/")}\n`,
-    );
+    write(`oke keel reset: stopped leftover listeners on ${KEEL_DEV_PORTS.join("/")}\n`);
   }
   return killed;
 }

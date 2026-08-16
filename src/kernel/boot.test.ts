@@ -174,10 +174,11 @@ describe("boot — cron fires without manual dispatch", () => {
     });
 
     const rt = app.bootResult!.clock!;
-    // First tick — due (never ran).
+    expect((await rt.store.list()).map((r) => r.name)).toEqual(["expire-stale"]);
+    // First tick — due (never ran). Named clock covers `every("1h")` — no twin `1h` row.
     const { ran: names } = await rt.tick();
-    expect(names.length).toBeGreaterThan(0);
-    expect(ran).toBeGreaterThanOrEqual(1);
+    expect(names).toEqual(["expire-stale"]);
+    expect(ran).toBe(1);
 
     // Advance past the effective every; tick again without dispatchEvery.
     rt.advance("1h");

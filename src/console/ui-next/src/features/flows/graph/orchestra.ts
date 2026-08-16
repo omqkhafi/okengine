@@ -2,6 +2,9 @@
  * Overview orchestra — pick a real request from the traces ledger and
  * replay it as a new note. The orbit lights that path; the list grows.
  * Does not invoke host flows.
+ *
+ * Seeded Console only (`dev:console:seed`). Live `oke dev` traces stay
+ * operation-based — Clock, HTTP, Call API — never minted notes.
  */
 
 import type { RunRow } from "@/client.ts";
@@ -16,6 +19,16 @@ export const ORCHESTRA_ID_PREFIX = "orch-";
  */
 export function isOrchestraRunId(id: string): boolean {
   return id.startsWith(ORCHESTRA_ID_PREFIX);
+}
+
+/**
+ * Whether Overview may mint random notes into Traces.
+ *
+ * @param seeded - `OKE_CONSOLE_SEEDED=1` Vite serve
+ * @param ready - Manifest loaded and the ledger has at least one real run
+ */
+export function shouldRunOrchestra(seeded: boolean, ready: boolean): boolean {
+  return seeded && ready;
 }
 
 /**

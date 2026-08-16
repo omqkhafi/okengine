@@ -8,6 +8,7 @@ import {
   isConsoleFresh,
   isConsoleKernelSkipped,
   seedUiNextDevOperator,
+  shouldPrefillDevOperator,
   UI_NEXT_DEV_OPERATOR,
   UI_NEXT_DEV_OPERATOR_EMAIL,
   UI_NEXT_DEV_OPERATOR_NAME,
@@ -39,6 +40,21 @@ describe("ui-next dev operator", () => {
       if (prev === undefined) delete process.env["OKE_CONSOLE_FRESH"];
       else process.env["OKE_CONSOLE_FRESH"] = prev;
     }
+  });
+
+  test("login prefill is standalone Vite console only", () => {
+    expect(
+      shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: false }),
+    ).toBe(true);
+    expect(
+      shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: true }),
+    ).toBe(false);
+    expect(
+      shouldPrefillDevOperator({ serve: true, fresh: true, kernelSkipped: false }),
+    ).toBe(false);
+    expect(
+      shouldPrefillDevOperator({ serve: false, fresh: false, kernelSkipped: false }),
+    ).toBe(false);
   });
 
   test("seeded operator authenticates with documented credentials", async () => {
