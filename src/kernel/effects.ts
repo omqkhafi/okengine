@@ -118,14 +118,42 @@ export async function recordEffect<T>(
   try {
     return await body();
   } finally {
-    ledger.record({
+    recordObservedEffect(
+      ledger,
       kind,
       resource,
       timestamp,
-      duration: resolveDurationMs(now() - timestamp, performance.now() - t0),
-      reversibility: reversibilityOf(kind),
-    });
+      resolveDurationMs(now() - timestamp, performance.now() - t0),
+    );
   }
+}
+
+/**
+ * Append a completed observation that was already timed.
+ *
+ * Used when the work must not be re-entered (tier-1 cache hit already
+ * called `storeRt.cache.get`) but the ledger still needs an honest entry.
+ *
+ * @param ledger - Target ledger
+ * @param kind - Effect kind
+ * @param resource - Resource ref (or kernel cache key)
+ * @param timestamp - Epoch-ms when the call started
+ * @param duration - Measured duration in milliseconds
+ */
+export function recordObservedEffect(
+  ledger: EffectLedger,
+  kind: EffectKind,
+  resource: string,
+  timestamp: number,
+  duration: number,
+): void {
+  ledger.record({
+    kind,
+    resource,
+    timestamp,
+    duration,
+    reversibility: reversibilityOf(kind),
+  });
 }
 
 /**

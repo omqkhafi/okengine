@@ -20,9 +20,9 @@ export interface RunLogLine {
  * Cache hits/misses, gates, cost, and logs accumulate here automatically.
  */
 export interface RunTelemetry {
-  /** Cache hit count via `fx.cache`. */
+  /** Cache hit count via tier-1 auto-cache and `fx.cache`. */
   cacheHits: number;
-  /** Cache miss count via `fx.cache`. */
+  /** Cache miss count via tier-1 auto-cache and `fx.cache`. */
   cacheMisses: number;
   /** Gate names evaluated (when a gate runtime records them). */
   gates: string[];
@@ -32,6 +32,10 @@ export interface RunTelemetry {
   replicaLagMs?: number;
   /** Accumulated AI cost. */
   cost: number;
+  /** Accumulated driver-reported input tokens. */
+  inputTokens: number;
+  /** Accumulated driver-reported output tokens. */
+  outputTokens: number;
   /** Last prompt version seen. */
   promptVersion?: number;
   /** Subject for crypto-shredding when known. */
@@ -51,6 +55,8 @@ export function createRunTelemetry(): RunTelemetry {
     cacheMisses: 0,
     gates: [],
     cost: 0,
+    inputTokens: 0,
+    outputTokens: 0,
     dimensions: {},
     logs: [],
   };

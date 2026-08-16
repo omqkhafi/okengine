@@ -3,7 +3,6 @@
  */
 
 import type { JSX } from "react";
-import { Link } from "@tanstack/react-router";
 import { EXPLORER_RAIL_CLASS } from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
 import type { TopErrorGroup } from "../lib/top-errors.ts";
@@ -24,7 +23,7 @@ export interface ErrorRowProps {
 export function ErrorRow({ group, selected, nowMs, onSelect }: ErrorRowProps): JSX.Element {
   return (
     <div
-      data-slot="monitoring-error-row"
+      data-slot="observability-error-row"
       data-error-key={group.key}
       data-selected={selected ? "true" : "false"}
       className={cn(
@@ -53,18 +52,20 @@ export function ErrorRow({ group, selected, nowMs, onSelect }: ErrorRowProps): J
           {formatAgo(group.latestStartedAt, nowMs)}
         </span>
       </button>
-      <Link
-        to="/overview"
-        search={{ run: group.latestRunId }}
+      <button
+        type="button"
         className={cn(
           "flex items-center px-2 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground",
           "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
         )}
-        data-slot="monitoring-error-open-overview"
-        onClick={(event) => event.stopPropagation()}
+        data-slot="observability-error-open-trace"
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(group);
+        }}
       >
-        Overview
-      </Link>
+        Trace
+      </button>
     </div>
   );
 }

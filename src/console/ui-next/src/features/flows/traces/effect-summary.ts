@@ -3,7 +3,8 @@
  *
  * SQL store work is elevated as "DB queries" (resource prefix `sql:`), matching
  * the compact scan language of professional trace sheets — without inventing an
- * EffectKind. Non-SQL reads/writes still surface as EffectKind chips.
+ * EffectKind. Tier-1 cache lookups (`computed:…`) are "cache reads". Other
+ * reads/writes still surface as EffectKind chips.
  */
 
 import type { RunEffect, RunRow } from "@/client.ts";
@@ -11,7 +12,14 @@ import { formatDuration } from "./format-duration.ts";
 import { effectKindSummaryLabel, type RunEffectKind } from "./effect-kind.ts";
 
 /** Visual variant for a summary chip (drives icon + accent). */
-export type EffectSummaryVariant = "duration" | "api" | "gate" | "db" | "logs" | RunEffectKind;
+export type EffectSummaryVariant =
+  | "duration"
+  | "api"
+  | "gate"
+  | "cache"
+  | "db"
+  | "logs"
+  | RunEffectKind;
 
 /** One chip in the Sheet summary row. */
 export type EffectSummaryChip = {
@@ -45,6 +53,15 @@ const KIND_ORDER: readonly RunEffectKind[] = [
  */
 export function isSqlResource(resource: string): boolean {
   return resource.startsWith("sql:");
+}
+
+/**
+ * True when an effect is a tier-1 auto-cache lookup (`computed:…`).
+ *
+ * @param resource - Effect resource ref
+ */
+export function isComputedCacheKey(resource: string): boolean {
+  return resource.startsWith("computed:");
 }
 
 /**
@@ -93,6 +110,17 @@ export function effectSummaryChips(
     });
   }
 
+  const cacheCount = run.effects.filter((e) => isComputedCacheKey(e.resource)).length;
+  if (cacheCount > 0) {
+    chips.push({
+      key: "cache",
+      label: `${cacheCount} cache ${cacheCount === 1 ? "read" : "reads"}`,
+      shortLabel: `${cacheCount} cache`,
+      variant: "cache",
+      detail: `${cacheCount} effect${cacheCount === 1 ? "" : "s"} targeting computed:… cache keys.`,
+    });
+  }
+
   const dbCount = run.effects.filter((e) => isSqlResource(e.resource)).length;
   if (dbCount > 0) {
     chips.push({
@@ -104,7 +132,7 @@ export function effectSummaryChips(
     });
   }
 
-  const counts = countByKindExcludingSql(run.effects);
+  const counts = countByKindExcludingSpecial(run.effects);
   for (const kind of KIND_ORDER) {
     const n = counts.get(kind) ?? 0;
     if (n === 0) continue;
@@ -137,6 +165,9 @@ export function effectSummaryChips(
  * @param effect - Ledger entry
  */
 export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): string {
+  if (isComputedCacheKey(effect.resource)) {
+    return "Cache read";
+  }
   if (isSqlResource(effect.resource)) {
     return effect.kind === "write" ? "DB write" : "DB query";
   }
@@ -152,10 +183,10 @@ export function effectEventLabel(effect: Pick<RunEffect, "kind" | "resource">): 
   return labels[effect.kind];
 }
 
-function countByKindExcludingSql(effects: readonly RunEffect[]): Map<RunEffectKind, number> {
+function countByKindExcludingSpecial(effects: readonly RunEffect[]): Map<RunEffectKind, number> {
   const counts = new Map<RunEffectKind, number>();
   for (const e of effects) {
-    if (isSqlResource(e.resource)) continue;
+    if (isSqlResource(e.resource) || isComputedCacheKey(e.resource)) continue;
     counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
   }
   return counts;

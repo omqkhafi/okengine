@@ -54,6 +54,8 @@ describe("fx.ask RunTelemetry", () => {
     await fx.ask("ticket-triage", { subject: "x" });
     expect(telemetry.promptVersion).toBe(3);
     expect(telemetry.cost).toBe(0);
+    expect(telemetry.inputTokens).toBe(12);
+    expect(telemetry.outputTokens).toBe(7);
 
     const event = collectWideEvent({
       flow: triageFlow,
@@ -67,6 +69,10 @@ describe("fx.ask RunTelemetry", () => {
     expect(event.promptVersion).toBe(3);
     expect(event.cost).toBeUndefined();
     expect(event.dimensions.cost).toBeNull();
+    expect(event.inputTokens).toBe(12);
+    expect(event.outputTokens).toBe(7);
+    expect(event.dimensions.input_tokens).toBe(12);
+    expect(event.dimensions.output_tokens).toBe(7);
   });
 
   test("adds journaled cost only when the driver supplies a value greater than zero", async () => {
@@ -102,5 +108,7 @@ describe("fx.ask RunTelemetry", () => {
     await fx.ask("ticket-triage", { subject: "x" });
     expect(telemetry.promptVersion).toBe(1);
     expect(telemetry.cost).toBe(0.42);
+    expect(telemetry.inputTokens).toBe(4);
+    expect(telemetry.outputTokens).toBe(2);
   });
 });

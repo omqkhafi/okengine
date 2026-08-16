@@ -14,6 +14,11 @@ needed).
 
 ### ✨ Added
 
+- `fx.ask` stamps driver-reported input / output tokens onto
+  WideEvent, Parquet, and Console run rows. Observability AI
+  rail shows window totals when present — never a 0-token
+  placeholder.
+
 - Console **Runs SQL** (`POST /console/runs/query`, Observability
   SQL tab) — read-only DuckDB over `.oke/runs`. Statement
   guard rejects DDL/DML/external access; isolated session
@@ -534,6 +539,12 @@ needed).
 
 ### ♻️ Changed
 
+- Observability SQL Run is a stretch strip token; the PII
+  gap note is hairline text. KPI labels use tracking 0.08em
+  and `/60` hairlines. Error rows open the local Trace sheet
+  instead of navigating to Overview. Leftover `monitoring-*`
+  slots are `observability-*`.
+
 - Console Sign in / Create admin expanding-arrow tile uses primary
   ink, not sky.
 
@@ -542,6 +553,10 @@ needed).
   corners, two-column instrument fields, page-ink tile
   on the key. The submit key sits below the plate, not
   inside it.
+
+- Console claim / sign-in lock column is `max-w-md`
+  (was `max-w-sm`) so the first-admin plate has room
+  for the password meter and generate control.
 
 - Console explorers share the Overview traces language: flush rows,
   bare tinted icons, tabular counts, and a full-height selection rail.
@@ -645,6 +660,10 @@ needed).
   first-class `project_manager` / `developer` roles — not a Linear
   issue tracker. Featured walkable id is `ENG-12`. Seed volume is
   ~500 tasks across SQL, KV, files, and index.
+
+- Keel scheduled flows drop the repeated unit from the name:
+  `drafts.expire`, `overdue.watch`, `recurring.spawn`,
+  `goals.rollup`, `digest.daily` (was `drafts.expire-drafts`, …).
 
 - `/llms.txt` is a curated llmstxt.org index instead of the raw
   Fumadocs nav dump. Onboard AI copies `/llms.txt` plus `/llms/agents`
@@ -947,6 +966,16 @@ needed).
 - Legacy `src/console/ui/` Console SPA (15 `panel-*` chunks, Vite `:6534`).
 
 ### 🐛 Fixed
+
+- Tier-1 cache hits record the real `computed:…` lookup on
+  the effect ledger. Trace Waterfall shows that cache read
+  instead of "No effects recorded". Miss runs still show
+  the store reads that actually ran.
+
+- Console Trace request / response body fills leftover
+  sheet height. Raw JSON is no longer capped at 14rem
+  with empty space below. The sheet is `max-w-2xl`
+  (was `max-w-xl`) so the payload has more room.
 
 - Console Traces / Runs no longer 500 after a failed login
   sits next to a successful run. All-null `error_code`

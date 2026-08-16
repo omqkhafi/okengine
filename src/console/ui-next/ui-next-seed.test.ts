@@ -42,7 +42,7 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.ai).toBeDefined();
 
     expect(UI_NEXT_SEEDED_MANIFEST.flows?.["my.plan"]?.effects?.asks).toContain("form-classify");
-    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["drafts.expire-drafts"]?.trigger?.every).toBe("10m");
+    expect(UI_NEXT_SEEDED_MANIFEST.flows?.["drafts.expire"]?.trigger?.every).toBe("10m");
     expect(UI_NEXT_SEEDED_MANIFEST.flows?.["tasks.onStatus"]?.trigger?.cdc).toEqual({
       table: "tasks",
       column: "status",
@@ -184,8 +184,8 @@ describe("ui-next seed", () => {
       "notify.onComment",
       "search.index",
       "tasks.onStatus",
-      "drafts.expire-drafts",
-      "overdue.watch-overdue",
+      "drafts.expire",
+      "overdue.watch",
     ];
     for (const id of featured) {
       expect(KEEL_SURFACE_FLOWS[id]).toBeUndefined();
@@ -266,7 +266,7 @@ describe("ui-next seed", () => {
     expect(flows.has("tasks.list")).toBe(true);
     expect(flows.has("notify.onTask")).toBe(true);
     expect(flows.has("github.ingest")).toBe(true);
-    expect(flows.has("my.plan") || flows.has("drafts.expire-drafts")).toBe(true);
+    expect(flows.has("my.plan") || flows.has("drafts.expire")).toBe(true);
     expect(
       [...flows].some((id) =>
         ["tasks.get", "tasks.archive", "tasks.assign", "search.query", "drafts.save"].includes(id),

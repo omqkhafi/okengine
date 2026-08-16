@@ -27,6 +27,8 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     replica: null,
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     startedAt: 1_000,

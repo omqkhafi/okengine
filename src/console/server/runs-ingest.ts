@@ -32,6 +32,8 @@ const WideEventIngestSchema = z
     replica: z.enum(["primary", "replica"]).optional(),
     replicaLagMs: z.number().optional(),
     cost: z.number().optional(),
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
     promptVersion: z.number().optional(),
     buildVersion: z.string().optional(),
     error: z

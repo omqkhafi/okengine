@@ -63,6 +63,10 @@ export interface WideEvent {
   readonly replicaLagMs?: number;
   /** AI cost accrued during the run. */
   readonly cost?: number;
+  /** Driver-reported input tokens when `fx.ask` supplied them. */
+  readonly inputTokens?: number;
+  /** Driver-reported output tokens when `fx.ask` supplied them. */
+  readonly outputTokens?: number;
   /** Prompt version when `fx.ask` was used. */
   readonly promptVersion?: number;
   /** Build / release version when known. */

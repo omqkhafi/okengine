@@ -22,7 +22,7 @@ type ConsoleChromeProps = {
 export function ConsoleChrome({ children }: ConsoleChromeProps) {
   return (
     <div className="flex min-h-dvh w-full flex-col bg-background" data-slot="console-chrome">
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10">
         <div className="flex flex-col items-stretch gap-10">
           <OkeLogo className="h-7 w-auto self-center" />
           {children}

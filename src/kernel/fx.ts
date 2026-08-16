@@ -866,9 +866,9 @@ export interface FxContext {
 }
 
 /**
- * Stamp prompt version and driver-supplied cost onto run telemetry after ask.
- * Cost is added only when the journal recorded a value greater than zero —
- * token-only drivers must not invent a $0 WideEvent field.
+ * Stamp prompt version, cost, and driver-supplied tokens onto run telemetry.
+ * Cost and tokens are added only when the journal recorded a value greater
+ * than zero — token-only drivers must not invent a $0 WideEvent field.
  *
  * @param telemetry - Per-run collector
  * @param runtime - AI runtime that just ran the ask
@@ -886,6 +886,10 @@ function stampAskTelemetry(
   if (typeof version === "number") telemetry.promptVersion = version;
   const cost = fromJournal?.cost ?? 0;
   if (cost > 0) telemetry.cost += cost;
+  const inputTokens = fromJournal?.inputTokens ?? 0;
+  if (inputTokens > 0) telemetry.inputTokens += inputTokens;
+  const outputTokens = fromJournal?.outputTokens ?? 0;
+  if (outputTokens > 0) telemetry.outputTokens += outputTokens;
 }
 
 /**

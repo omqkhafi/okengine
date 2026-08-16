@@ -8,6 +8,7 @@ import { z } from "zod";
 import { gate } from "../elements/gate.ts";
 import { field, id, now, store } from "../elements/store.ts";
 import { createTestApp, type TestApiCall, type TestApp } from "../test/create-test-app.ts";
+import { isStoreResourceRef } from "../elements/store/cache.ts";
 import { oke } from "./app.ts";
 import { resetNoEffectsWarnForTests } from "./boot.ts";
 import { flow, resetFlowSeq } from "./flow.ts";
@@ -168,9 +169,19 @@ describe("automatic tier-1 cache from effects", () => {
     expect(lists).toBe(1);
 
     const runs = await t.runs();
-    const caches = runs.filter((r) => r.flow === "notes.list").map((r) => r.cache);
-    expect(caches).toContain("miss");
-    expect(caches).toContain("hit");
+    const listRuns = runs.filter((r) => r.flow === "notes.list");
+    const miss = listRuns.find((r) => r.cache === "miss");
+    const hit = listRuns.find((r) => r.cache === "hit");
+    expect(miss).toBeDefined();
+    expect(hit).toBeDefined();
+    expect(miss!.id).not.toBe(hit!.id);
+    expect(miss!.effects.length).toBeGreaterThanOrEqual(1);
+    expect(miss!.effects.some((e) => e.kind === "read" && isStoreResourceRef(e.resource))).toBe(
+      true,
+    );
+    expect(hit!.effects.length).toBeGreaterThanOrEqual(1);
+    expect(hit!.effects.every((e) => e.resource.startsWith("computed:"))).toBe(true);
+    expect(hit!.effects.every((e) => !isStoreResourceRef(e.resource))).toBe(true);
     await t.close();
   });
 

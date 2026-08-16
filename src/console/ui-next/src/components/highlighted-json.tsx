@@ -12,7 +12,7 @@ export interface HighlightedJsonProps {
   readonly json: string;
   /** `data-slot` for tests / a11y. */
   readonly dataSlot: string;
-  /** Optional max height class (default matches Traces). */
+  /** Optional layout class (default is a compact 14rem cap). */
   readonly className?: string;
 }
 
@@ -54,7 +54,7 @@ export function HighlightedJson({ json, dataSlot, className }: HighlightedJsonPr
       }
     >
       <div
-        className="sticky left-0 select-none border-r border-border/40 bg-muted/30 px-1.5 py-1.5 text-right font-mono text-[10px] leading-snug text-muted-foreground/80"
+        className="sticky left-0 self-stretch select-none border-r border-border/40 bg-muted/30 px-1.5 py-1.5 text-right font-mono text-[10px] leading-snug text-muted-foreground/80"
         aria-hidden
       >
         {lines.map((_, i) => (

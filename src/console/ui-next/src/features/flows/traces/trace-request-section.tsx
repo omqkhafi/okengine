@@ -66,6 +66,10 @@ export type TraceRequestSectionProps = {
 
 type BodyView = "fields" | "raw";
 
+const FILL_COL_CLASS = "flex min-h-0 flex-1 flex-col";
+const JSON_FILL_CLASS =
+  "flex min-h-0 flex-1 overflow-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
 /**
  * Request + Response — method rail + endpoint, then return-value frame.
  *
@@ -86,10 +90,20 @@ export function TraceRequestSection({
 }: TraceRequestSectionProps): JSX.Element {
   const endpoint = method && path ? `${method} ${path}` : headline;
   const failed = error !== null;
+  const hasInput = input !== null && input !== undefined;
+  const hasOutput = output !== null && output !== undefined;
+  const responseFills = outputOpen && !failed && hasOutput;
+  const requestFills = inputOpen && hasInput && !responseFills;
 
   return (
     <>
-      <section className="border-b border-border/60 last:border-b-0" data-slot="trace-request">
+      <section
+        className={cn(
+          "border-b border-border/60 last:border-b-0",
+          requestFills && cn(FILL_COL_CLASS, "pb-3"),
+        )}
+        data-slot="trace-request"
+      >
         <div className={EXPLORER_STRIP_CLASS}>
           <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Request</h3>
           {endpoint ? (
@@ -103,10 +117,10 @@ export function TraceRequestSection({
           ) : null}
         </div>
 
-        <div data-slot="trace-request-frame">
-          <div className="flex min-w-0">
+        <div data-slot="trace-request-frame" className={requestFills ? FILL_COL_CLASS : undefined}>
+          <div className={cn("flex min-w-0", requestFills && "min-h-0 flex-1")}>
             <MethodRail method={method} />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className={cn("flex min-w-0 flex-1 flex-col", requestFills && "min-h-0")}>
               <RequestEndpoint method={method} path={path} headline={headline} />
               <PayloadPanel
                 value={input}
@@ -119,13 +133,20 @@ export function TraceRequestSection({
                 toggleSlot="trace-input-toggle"
                 fieldsSlot="trace-request-fields"
                 jsonSlot="trace-input-json"
+                fill={requestFills}
               />
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-border/60 last:border-b-0" data-slot="trace-response">
+      <section
+        className={cn(
+          "border-b border-border/60 last:border-b-0",
+          responseFills && cn(FILL_COL_CLASS, "pb-3"),
+        )}
+        data-slot="trace-response"
+      >
         <div className={EXPLORER_STRIP_CLASS}>
           <h3 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Response</h3>
           <div className="ml-auto flex h-full items-stretch">
@@ -174,14 +195,17 @@ export function TraceRequestSection({
             </div>
           </div>
         ) : (
-          <div data-slot="trace-response-frame">
-            <div className="flex min-w-0">
+          <div
+            data-slot="trace-response-frame"
+            className={responseFills ? FILL_COL_CLASS : undefined}
+          >
+            <div className={cn("flex min-w-0", responseFills && "min-h-0 flex-1")}>
               <div
                 className="w-1 shrink-0 self-stretch bg-emerald-500"
                 aria-hidden
                 data-slot="trace-response-rail"
               />
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className={cn("flex min-w-0 flex-1 flex-col", responseFills && "min-h-0")}>
                 <PayloadPanel
                   value={output}
                   open={outputOpen}
@@ -193,6 +217,7 @@ export function TraceRequestSection({
                   toggleSlot="trace-response-toggle"
                   fieldsSlot="trace-response-fields"
                   jsonSlot="trace-response-json"
+                  fill={responseFills}
                 />
               </div>
             </div>
@@ -219,6 +244,7 @@ function PayloadPanel({
   toggleSlot,
   fieldsSlot,
   jsonSlot,
+  fill = false,
 }: {
   readonly value: unknown;
   readonly open: boolean;
@@ -230,6 +256,8 @@ function PayloadPanel({
   readonly toggleSlot: string;
   readonly fieldsSlot: string;
   readonly jsonSlot: string;
+  /** Grow to fill leftover sheet height instead of capping at 14rem. */
+  readonly fill?: boolean;
 }): JSX.Element {
   const hasValue = value !== null && value !== undefined;
   const json = useMemo(() => (hasValue ? JSON.stringify(value, null, 2) : ""), [hasValue, value]);
@@ -251,7 +279,11 @@ function PayloadPanel({
   }
 
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className={fill ? FILL_COL_CLASS : undefined}
+    >
       <div className={cn(EXPLORER_STRIP_CLASS, "border-t")}>
         <CollapsibleTrigger
           className={cn(EXPLORER_STRIP_TOKEN_CLASS, "min-w-0 flex-1 justify-start")}
@@ -274,12 +306,18 @@ function PayloadPanel({
         {rows ? <BodyViewToggle view={view} onChange={setView} /> : null}
         <CopyIconButton label={copyLabel} text={json} dataSlot={copySlot} />
       </div>
-      <CollapsibleContent>
-        <div className="border-t border-border/60">
+      <CollapsibleContent className={fill ? cn(FILL_COL_CLASS, "overflow-hidden") : undefined}>
+        <div className={cn("border-t border-border/60", fill && FILL_COL_CLASS)}>
           {view === "fields" && rows ? (
-            <FieldsTable rows={rows} dataSlot={fieldsSlot} />
+            <div className={fill ? "min-h-0 flex-1 overflow-auto pb-3" : undefined}>
+              <FieldsTable rows={rows} dataSlot={fieldsSlot} />
+            </div>
           ) : (
-            <HighlightedJson json={json} dataSlot={jsonSlot} />
+            <HighlightedJson
+              json={json}
+              dataSlot={jsonSlot}
+              className={fill ? JSON_FILL_CLASS : undefined}
+            />
           )}
         </div>
       </CollapsibleContent>

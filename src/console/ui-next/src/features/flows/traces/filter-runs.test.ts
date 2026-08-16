@@ -20,6 +20,8 @@ function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "flow" | "durationMs
     replica: null,
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     startedAt: 1,

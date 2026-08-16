@@ -39,7 +39,7 @@ export function MetricsPanel({ series, stats }: MetricsPanelProps): JSX.Element 
   const errorPct = Math.round(stats.errorRate * 100);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="monitoring-metrics">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="observability-metrics">
       <header className={EXPLORER_STRIP_CLASS}>
         <h2 className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>Metrics</h2>
         <span className="ml-auto px-2 font-mono text-[10px] text-muted-foreground">
@@ -48,7 +48,7 @@ export function MetricsPanel({ series, stats }: MetricsPanelProps): JSX.Element 
       </header>
       <div
         className="grid shrink-0 grid-cols-4 border-b border-border/60"
-        data-slot="monitoring-kpis"
+        data-slot="observability-kpis"
       >
         <Kpi label="Runs" value={String(stats.total)} />
         <Kpi
@@ -69,7 +69,7 @@ export function MetricsPanel({ series, stats }: MetricsPanelProps): JSX.Element 
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex items-center gap-3 px-3 pt-3" data-slot="monitoring-legend">
+        <div className="flex items-center gap-3 px-3 pt-3" data-slot="observability-legend">
           <LegendSwatch
             color={OBSERVABILITY_SERIES.requests.color}
             label={OBSERVABILITY_SERIES.requests.label}
@@ -86,7 +86,7 @@ export function MetricsPanel({ series, stats }: MetricsPanelProps): JSX.Element 
             shape="area"
           />
         </div>
-        <div className="px-1 pb-2" data-slot="monitoring-chart">
+        <div className="px-1 pb-2" data-slot="observability-chart">
           <MetricsChart data={data} />
         </div>
       </div>
@@ -108,10 +108,8 @@ function Kpi({
   readonly toneClassName?: string;
 }): JSX.Element {
   return (
-    <div className="flex flex-col gap-0.5 border-r border-border/50 px-3 py-2.5 last:border-r-0">
-      <span className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {label}
-      </span>
+    <div className="flex flex-col gap-0.5 border-r border-border/60 px-3 py-2.5 last:border-r-0">
+      <span className={cn(SECTION_HEAD_CLASS, "text-muted-foreground")}>{label}</span>
       <span
         className={cn(
           "font-mono text-lg leading-none font-semibold tabular-nums tracking-tight",

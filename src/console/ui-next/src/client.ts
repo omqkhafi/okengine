@@ -367,6 +367,8 @@ export type RunRow = {
   readonly replica: "primary" | "replica" | null;
   readonly replicaLagMs: number | null;
   readonly cost: number | null;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
   readonly promptVersion: number | null;
   readonly buildVersion: string | null;
   readonly startedAt: number;

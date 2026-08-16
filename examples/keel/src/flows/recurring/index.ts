@@ -8,7 +8,7 @@ import { create as createTask } from "@/flows/tasks/index";
 /** Spawn due recurring tasks — named clock `spawn-recurring`. */
 export const spawn = on(
   every("1h"),
-  flow("recurring.spawn-recurring", {
+  flow("recurring.spawn", {
     plane: "operator",
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(recurrence);

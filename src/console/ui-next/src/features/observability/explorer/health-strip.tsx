@@ -40,7 +40,7 @@ export function HealthStrip({
     <section
       aria-label="System health"
       className="shrink-0 border-b border-border/60 bg-background"
-      data-slot="monitoring-health-strip"
+      data-slot="observability-health-strip"
     >
       <div className="flex min-h-10 flex-wrap items-stretch">
         {cells.map((cell) => (

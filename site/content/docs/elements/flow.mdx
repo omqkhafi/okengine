@@ -71,16 +71,16 @@ curl -X POST localhost:6530/orders -d '{"sku":"SKU-1","qty":2}' -H 'content-type
 
 ## Anatomy of a Flow
 
-| Part         | Role                                                                       |
-| ------------ | -------------------------------------------------------------------------- |
-| trigger      | What starts the flow — `http`, a signal, `every`, a row change             |
-| `in`         | Input contract — validated before `do` runs; bad input is a 422            |
-| `out`        | Output contract — the return value is checked against it                   |
-| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown                 |
-| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)                |
+| Part         | Role                                                                              |
+| ------------ | --------------------------------------------------------------------------------- |
+| trigger      | What starts the flow — `http`, a signal, `every`, a row change                    |
+| `in`         | Input contract — validated before `do` runs; bad input is a 422                   |
+| `out`        | Output contract — the return value is checked against it                          |
+| `errors`     | Typed failures — **returned** with `fx.fail`, never thrown                        |
+| `retry`      | Optional whole-`do` backoff on thrown errors (same journal)                       |
 | `cache`      | Optional — `false` opts out; `"30s"` adds a TTL. Read-only flows cache by default |
-| `do`         | The work — every read, write, emit, and call goes through `fx`             |
-| `compensate` | Durable only — optional hook after auto per-step `{ undo }` (same journal) |
+| `do`         | The work — every read, write, emit, and call goes through `fx`                    |
+| `compensate` | Durable only — optional hook after auto per-step `{ undo }` (same journal)        |
 
 Failures are values, not exceptions:
 
@@ -223,14 +223,16 @@ Read-only flows cache automatically from those inferred `reads`. A write to the 
 resource invalidates the entry. You do not declare `effects` or set `cache: "30s"`
 unless you want a TTL or to opt out.
 
-| On the flow | What happens |
-| --- | --- |
+| On the flow      | What happens                            |
+| ---------------- | --------------------------------------- |
 | omitted / `true` | Tier-1 cache when the flow only `reads` |
-| `cache: "30s"` | Same, plus a TTL |
-| `cache: false` | Skip cache (live SQL every time) |
+| `cache: "30s"`   | Same, plus a TTL                        |
+| `cache: false`   | Skip cache (live SQL every time)        |
 
 Mutations, `fx.ask`, and `durable: true` stay uncached. Console Traces shows **hit** /
 **miss** on cached reads, and **not applicable** only when the flow never used the cache.
+A hit records the cache lookup on the waterfall (`computed:…` reads), not a replay of
+the original store reads.
 
 ## Durability — flows that survive the process
 

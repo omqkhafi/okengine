@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState, type JSX, type MouseEvent } from "react";
 import {
   ApiIcon,
+  FlashIcon,
   ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowReloadHorizontalIcon,
@@ -256,7 +257,7 @@ export function TraceDetailSheet({
         side="left"
         showOverlay={false}
         data-slot="trace-detail-sheet"
-        className="inset-y-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl md:left-12! data-[side=left]:sm:max-w-xl"
+        className="inset-y-0 h-dvh w-full max-w-none gap-0 rounded-none p-0 shadow-xl md:left-12! data-[side=left]:sm:max-w-2xl"
         // left-12 = icon rail (3rem). Important beats SheetContent's left-0;
         // the portal is outside the wrapper that defines --sidebar-width-icon.
       >
@@ -687,6 +688,8 @@ function summaryIcon(variant: EffectSummaryVariant) {
       return ApiIcon;
     case "gate":
       return ELEMENT_ICONS.gate.icon;
+    case "cache":
+      return FlashIcon;
     case "db":
       return ELEMENT_ICONS.store.icon;
     case "logs":
@@ -704,6 +707,8 @@ function summaryAccent(variant: EffectSummaryVariant): string {
       return "var(--foreground)";
     case "gate":
       return NODE_ACCENT.gate.accent;
+    case "cache":
+      return "var(--color-sky-500)";
     case "db":
       return NODE_ACCENT.store.accent;
     case "logs":

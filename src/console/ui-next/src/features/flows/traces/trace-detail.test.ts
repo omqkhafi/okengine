@@ -34,6 +34,8 @@ function sampleRun(partial: Partial<RunRow> = {}): RunRow {
     replica: null,
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     startedAt: 1_000,
@@ -220,6 +222,25 @@ describe("effectSummaryChips", () => {
     );
     expect(chips.map((c) => c.label)).toEqual(["56ms", "1 API call", "1 DB query", "1 read"]);
   });
+
+  test("elevates computed: cache keys as cache reads, not DB or generic reads", () => {
+    const chips = effectSummaryChips(
+      sampleRun({
+        effects: [
+          {
+            kind: "read",
+            resource: "computed:sql:notes/notes.list/-",
+            timestamp: 1_003,
+            duration: 0.2,
+            reversibility: "none",
+          },
+        ],
+        logs: [],
+      }),
+    );
+    expect(chips.map((c) => c.label)).toEqual(["56ms", "1 API call", "1 cache read"]);
+    expect(chips.find((c) => c.key === "cache")?.detail).toContain("computed:");
+  });
 });
 
 describe("traceGateInfos", () => {
@@ -284,6 +305,12 @@ describe("effectEventLabel", () => {
     expect(effectEventLabel({ kind: "read", resource: "sql:bookings" })).toBe("DB query");
     expect(effectEventLabel({ kind: "write", resource: "sql:bookings" })).toBe("DB write");
     expect(effectEventLabel({ kind: "emit", resource: "order-placed" })).toBe("Emit");
+  });
+
+  test("labels computed: cache keys as Cache read, not DB query", () => {
+    expect(effectEventLabel({ kind: "read", resource: "computed:sql:notes/notes.list/-" })).toBe(
+      "Cache read",
+    );
   });
 });
 

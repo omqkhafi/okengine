@@ -45,6 +45,8 @@ const PARQUET_VARCHAR_COLUMNS = [
 const PARQUET_DOUBLE_COLUMNS = [
   "replica_lag_ms",
   "cost",
+  "input_tokens",
+  "output_tokens",
   "prompt_version",
   "duration_ms",
   "started_at",
@@ -78,6 +80,8 @@ export function wideEventToRow(event: WideEvent): ParquetRow {
     replica: event.replica ?? null,
     replica_lag_ms: event.replicaLagMs ?? null,
     cost: event.cost ?? null,
+    input_tokens: event.inputTokens ?? null,
+    output_tokens: event.outputTokens ?? null,
     prompt_version: event.promptVersion ?? null,
     build_version: event.buildVersion ?? null,
     error_code: event.error?.code ?? null,
@@ -136,6 +140,8 @@ export function rowToWideEvent(row: Record<string, unknown>): WideEvent {
     ...(row.replica != null ? { replica: row.replica as "primary" | "replica" } : {}),
     ...(row.replica_lag_ms != null ? { replicaLagMs: Number(row.replica_lag_ms) } : {}),
     ...(row.cost != null ? { cost: Number(row.cost) } : {}),
+    ...(row.input_tokens != null ? { inputTokens: Number(row.input_tokens) } : {}),
+    ...(row.output_tokens != null ? { outputTokens: Number(row.output_tokens) } : {}),
     ...(row.prompt_version != null ? { promptVersion: Number(row.prompt_version) } : {}),
     ...(row.build_version != null ? { buildVersion: String(row.build_version) } : {}),
     error:

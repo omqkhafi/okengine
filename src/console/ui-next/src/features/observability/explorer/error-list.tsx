@@ -53,10 +53,13 @@ export function ErrorList({
   const bands = useMemo(() => bandErrorGroups(filtered), [filtered]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-slot="monitoring-error-list">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      data-slot="observability-error-list"
+    >
       <div className={EXPLORER_TOOLBAR_CLASS}>
         <ExplorerSearch
-          data-slot="monitoring-error-search"
+          data-slot="observability-error-search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Filter errors…"
@@ -65,7 +68,7 @@ export function ErrorList({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {errors.kind === "empty" ? (
-          <p className={EXPLORER_LIST_EMPTY_CLASS} data-slot="monitoring-errors-empty">
+          <p className={EXPLORER_LIST_EMPTY_CLASS} data-slot="observability-errors-empty">
             No errors in the Console buffer for this window.
           </p>
         ) : filtered.length === 0 ? (

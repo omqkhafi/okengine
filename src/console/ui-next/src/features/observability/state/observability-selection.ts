@@ -60,7 +60,8 @@ export function useObservabilitySelection() {
     (next: Partial<ObservabilitySearch>) => {
       void navigate({
         to: ".",
-        search: (prev: Record<string, unknown>) => validateObservabilitySearch({ ...prev, ...next }),
+        search: (prev: Record<string, unknown>) =>
+          validateObservabilitySearch({ ...prev, ...next }),
         replace: true,
       });
     },

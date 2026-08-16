@@ -87,6 +87,8 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
     replica: input.telemetry.replica ?? null,
     replica_lag_ms: input.telemetry.replicaLagMs ?? null,
     cost: input.telemetry.cost || null,
+    input_tokens: input.telemetry.inputTokens || null,
+    output_tokens: input.telemetry.outputTokens || null,
     prompt_version: input.telemetry.promptVersion ?? null,
     build_version: input.buildVersion ?? null,
     error_code: error?.code ?? null,
@@ -111,6 +113,8 @@ export function collectWideEvent(input: CollectWideEventInput): WideEvent {
       ? { replicaLagMs: input.telemetry.replicaLagMs }
       : {}),
     ...(input.telemetry.cost > 0 ? { cost: input.telemetry.cost } : {}),
+    ...(input.telemetry.inputTokens > 0 ? { inputTokens: input.telemetry.inputTokens } : {}),
+    ...(input.telemetry.outputTokens > 0 ? { outputTokens: input.telemetry.outputTokens } : {}),
     ...(input.telemetry.promptVersion !== undefined
       ? { promptVersion: input.telemetry.promptVersion }
       : {}),

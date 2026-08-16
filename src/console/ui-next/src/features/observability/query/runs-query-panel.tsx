@@ -5,8 +5,11 @@
 import { useState, type JSX } from "react";
 import { PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { EXPLORER_STRIP_CLASS, SECTION_HEAD_CLASS } from "@/components/explorer/explorer-chrome.ts";
-import { Button } from "@/components/ui/button";
+import {
+  EXPLORER_STRIP_CLASS,
+  EXPLORER_STRIP_TOKEN_CLASS,
+  SECTION_HEAD_CLASS,
+} from "@/components/explorer/explorer-chrome.ts";
 import { cn } from "@/lib/utils.ts";
 import { QueryEditor } from "@/features/store/query/query-editor.tsx";
 import { QueryResults } from "@/features/store/query/query-results.tsx";
@@ -37,20 +40,22 @@ export function RunsQueryPanel(): JSX.Element {
           disabled={query.isPending}
           onToggle={() => setPiiMasked((v) => !v)}
         />
-        <Button
+        <button
           type="button"
-          size="sm"
-          className="ml-auto h-full rounded-none"
+          className={cn(
+            EXPLORER_STRIP_TOKEN_CLASS,
+            "ml-auto font-semibold disabled:pointer-events-none disabled:opacity-40",
+          )}
           disabled={query.isPending || sql.trim().length === 0}
           onClick={() => query.mutate({ sql, ...(piiMasked ? {} : { revealPii: true }) })}
           data-slot="runs-query-run"
         >
           <HugeiconsIcon icon={PlayIcon} className="size-3.5" />
           Run
-        </Button>
+        </button>
       </header>
       <p
-        className="shrink-0 border-b border-border/60 bg-amber-500/8 px-3 py-1.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200"
+        className="shrink-0 border-b border-border/60 px-3 py-1.5 text-[11px] leading-relaxed text-muted-foreground"
         data-slot="runs-query-pii-gap"
         role="note"
       >

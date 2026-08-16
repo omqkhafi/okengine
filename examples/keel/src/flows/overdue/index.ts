@@ -6,7 +6,7 @@ import { inbox, taskAssignees, tasks } from "@/db/schema.decl";
 /** Scan overdue tasks — named clock `watch-overdue`. */
 export const watch = on(
   every("15m"),
-  flow("overdue.watch-overdue", {
+  flow("overdue.watch", {
     plane: "operator",
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(tasks);

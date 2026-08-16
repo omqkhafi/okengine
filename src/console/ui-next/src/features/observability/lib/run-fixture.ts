@@ -24,6 +24,8 @@ export function monitoringRun(
     replica: null,
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     endedAt: partial.startedAt + (partial.durationMs ?? 1),

@@ -6,7 +6,7 @@ import { goals, tasks } from "@/db/schema.decl";
 /** Morning inbox + goal digest — named clock `daily-digest`. */
 export const daily = on(
   every("1d"),
-  flow("digest.daily-digest", {
+  flow("digest.daily", {
     plane: "operator",
     do: async (_input, fx) => {
       await fx.vault.get(slackWebhook);

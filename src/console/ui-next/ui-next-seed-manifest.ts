@@ -213,7 +213,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       },
       source: "src/flows/tasks/index.ts:461",
     },
-    "drafts.expire-drafts": {
+    "drafts.expire": {
       trigger: { every: "10m" },
       plane: "operator",
       effects: {
@@ -223,7 +223,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       },
       source: "src/flows/drafts/index.ts:62",
     },
-    "overdue.watch-overdue": {
+    "overdue.watch": {
       trigger: { every: "15m" },
       plane: "operator",
       effects: {

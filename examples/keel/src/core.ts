@@ -316,7 +316,7 @@ export const rollupGoalsClock = clock("rollup-goals", {
   description: "Weekly goal rollup",
 });
 
-/** Clocks passed to `oke()` — wired as `on(every(interval), flow("unit.clock-name"))`. */
+/** Clocks passed to `oke()` — each unit's scheduled flow uses a short verb (`drafts.expire`). */
 export const KEEL_CLOCKS = [
   expireDraftsClock,
   watchOverdueClock,

@@ -21,6 +21,8 @@ function run(
     replica: null,
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     startedAt: 1,

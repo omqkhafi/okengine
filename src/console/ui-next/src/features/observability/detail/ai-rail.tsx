@@ -1,54 +1,64 @@
 /**
- * AI usage rail — journal cost when present, otherwise honest empty.
+ * AI usage rail — journal cost when present, window tokens when stamped.
  *
- * Token counts are not on EffectEntry. Cost on WideEvent is not populated
- * from fx.ask today. This rail must not invent $0.
+ * Must not invent $0 or 0-token placeholders.
  */
 
 import type { JSX } from "react";
 import type { AiListPayload } from "@/client.ts";
 import type { AskCount } from "../lib/ask-count.ts";
+import { formatTokenRail, type TokenCount } from "../lib/token-count.ts";
 
 /** Props for {@link AiRail}. */
 export interface AiRailProps {
   readonly ai: AiListPayload | undefined;
   readonly asks: AskCount;
+  readonly tokens: TokenCount;
 }
 
 /**
  * Compact AI strip above the charts.
  *
- * @param props - GET /console/ai payload + ask-effect count
+ * @param props - GET /console/ai payload + window ask / token counts
  */
-export function AiRail({ ai, asks }: AiRailProps): JSX.Element {
+export function AiRail({ ai, asks, tokens }: AiRailProps): JSX.Element {
   const sampled = (ai?.versions ?? []).filter((v) => v.sampleCount > 0);
   const mean =
     sampled.length === 0 ? null : sampled.reduce((sum, v) => sum + v.cost.mean, 0) / sampled.length;
+  const tokenLabel = tokens.kind === "summary" ? formatTokenRail(tokens) : null;
 
   return (
     <div
       className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-1.5"
-      data-slot="monitoring-ai-rail"
+      data-slot="observability-ai-rail"
       aria-label="AI usage"
     >
       <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         AI
       </span>
       {mean == null ? (
-        <p className="text-[11px] text-muted-foreground" data-slot="monitoring-ai-empty">
+        <p className="text-[11px] text-muted-foreground" data-slot="observability-ai-empty">
           No cost samples in the Console AI journal.
         </p>
       ) : (
-        <p className="text-[11px] text-foreground/85" data-slot="monitoring-ai-cost">
+        <p className="text-[11px] text-foreground/85" data-slot="observability-ai-cost">
           <span className="tabular-nums">mean {formatCost(mean)}</span>
           <span className="text-muted-foreground"> · </span>
           <span className="tabular-nums">{sampled.length} version</span>
         </p>
       )}
+      {tokenLabel ? (
+        <p
+          className="font-mono text-[10px] text-muted-foreground"
+          data-slot="observability-ai-tokens"
+        >
+          {tokenLabel}
+        </p>
+      ) : null}
       {asks.kind === "summary" ? (
         <span
           className="ml-auto font-mono text-[10px] text-muted-foreground"
-          data-slot="monitoring-ai-asks"
+          data-slot="observability-ai-asks"
         >
           {asks.asks} ask{asks.asks === 1 ? "" : "s"} in window
         </span>

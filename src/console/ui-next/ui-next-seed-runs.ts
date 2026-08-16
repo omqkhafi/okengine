@@ -414,6 +414,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     cache: "none",
     replica: "primary",
     cost: 0.004,
+    inputTokens: 820,
+    outputTokens: 140,
     promptVersion: 1,
     buildVersion: BUILD,
     output: { open: 24, at: digestStart },
@@ -488,6 +490,8 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     gates: ["member"],
     cache: "none",
     cost: 0.014,
+    inputTokens: 1_240,
+    outputTokens: 86,
     promptVersion: 1,
     buildVersion: BUILD,
     input: {
@@ -571,7 +575,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
   const draftsEnd = draftsStart + 55;
   const drafts: WideEvent = {
     id: UI_NEXT_SEED_DRAFTS_RUN_ID,
-    flow: "drafts.expire-drafts",
+    flow: "drafts.expire",
     unit: "drafts",
     trigger: "every",
     plane: "operator",
@@ -616,7 +620,7 @@ export function createUiNextSeedRuns(now: number = Date.now()): readonly WideEve
     startedAt: draftsStart,
     endedAt: draftsEnd,
     dimensions: {
-      flow: "drafts.expire-drafts",
+      flow: "drafts.expire",
       unit: "drafts",
       plane: "operator",
       cache: "none",
@@ -1242,7 +1246,7 @@ export function createUiNextOperationRuns(
         const endedAt = startedAt + durationMs;
         out.push({
           id: `pw-ops-drafts-${seq}`,
-          flow: "drafts.expire-drafts",
+          flow: "drafts.expire",
           unit: "drafts",
           trigger: "every",
           plane: "operator",
@@ -1287,7 +1291,7 @@ export function createUiNextOperationRuns(
           startedAt,
           endedAt,
           dimensions: {
-            flow: "drafts.expire-drafts",
+            flow: "drafts.expire",
             unit: "drafts",
             plane: "operator",
             clock: "expire-drafts",
@@ -1303,7 +1307,7 @@ export function createUiNextOperationRuns(
       const endedAt = startedAt + durationMs;
       out.push({
         id: `pw-ops-overdue-${seq}`,
-        flow: "overdue.watch-overdue",
+        flow: "overdue.watch",
         unit: "overdue",
         trigger: "every",
         plane: "operator",
@@ -1341,7 +1345,7 @@ export function createUiNextOperationRuns(
         startedAt,
         endedAt,
         dimensions: {
-          flow: "overdue.watch-overdue",
+          flow: "overdue.watch",
           unit: "overdue",
           plane: "operator",
           clock: "watch-overdue",

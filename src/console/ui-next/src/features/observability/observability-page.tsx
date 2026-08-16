@@ -30,6 +30,7 @@ import { RunsQueryPanel } from "./query/runs-query-panel.tsx";
 import { ErrorList } from "./explorer/error-list.tsx";
 import { HealthStrip } from "./explorer/health-strip.tsx";
 import { askCountInWindow } from "./lib/ask-count.ts";
+import { tokenCountInWindow } from "./lib/token-count.ts";
 import { healthCells } from "./lib/health-cells.ts";
 import { timeBuckets } from "./lib/time-buckets.ts";
 import { topErrors } from "./lib/top-errors.ts";
@@ -73,6 +74,10 @@ export function ObservabilityPage(): JSX.Element {
   const errors = useMemo(() => topErrors(buffer, nowMs, windowMs), [buffer, nowMs, windowMs]);
   const series = useMemo(() => timeBuckets(buffer, nowMs, windowMs), [buffer, nowMs, windowMs]);
   const asks = useMemo(() => askCountInWindow(buffer, nowMs, windowMs), [buffer, nowMs, windowMs]);
+  const tokens = useMemo(
+    () => tokenCountInWindow(buffer, nowMs, windowMs),
+    [buffer, nowMs, windowMs],
+  );
   const vaultCard = useMemo(
     () => formatVaultBackend(vault.data?.backend ?? null),
     [vault.data?.backend],
@@ -151,7 +156,7 @@ export function ObservabilityPage(): JSX.Element {
                     : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                 )}
                 onClick={() => setView("metrics")}
-                data-slot="monitoring-view-metrics"
+                data-slot="observability-view-metrics"
               >
                 Metrics
               </button>
@@ -167,7 +172,7 @@ export function ObservabilityPage(): JSX.Element {
                     : EXPLORER_STRIP_TOKEN_IDLE_CLASS,
                 )}
                 onClick={() => setView("query")}
-                data-slot="monitoring-view-query"
+                data-slot="observability-view-query"
               >
                 SQL
               </button>
@@ -176,7 +181,7 @@ export function ObservabilityPage(): JSX.Element {
               <RunsQueryPanel />
             ) : (
               <>
-                <AiRail ai={ai.data} asks={asks} />
+                <AiRail ai={ai.data} asks={asks} tokens={tokens} />
                 <MetricsPanel series={series} stats={stats} />
               </>
             )}

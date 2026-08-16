@@ -32,7 +32,7 @@ export const { list, create, get, update, remove } = bindCrud({
 /** Weekly goal rollup — named clock `rollup-goals`. */
 export const rollup = on(
   every("7d"),
-  flow("goals.rollup-goals", {
+  flow("goals.rollup", {
     plane: "operator",
     do: async (_input, fx) => {
       const rows = await fx.store(db).select().from(goals);

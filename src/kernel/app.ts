@@ -123,6 +123,7 @@ import type {
   SignalAsTrigger,
   Trigger,
 } from "./triggers.ts";
+import { recordObservedEffect } from "./effects.ts";
 import { cacheDimensionOf, createRunTelemetry } from "./run-telemetry.ts";
 import type { RunsRuntime } from "../runs/runtime.ts";
 import type { Effects, ResourceRef } from "../manifest/types.ts";
@@ -1264,8 +1265,7 @@ export function oke(options: OkeOptions): OkeApp {
           : {}),
         verifyBearer:
           binding && wiredAuth
-            ? async (token) =>
-                wiredAuth.verifyBearerOrApiKey(binding, token, apiKeyStore)
+            ? async (token) => wiredAuth.verifyBearerOrApiKey(binding, token, apiKeyStore)
             : undefined,
         // Phase 1a: opt-in cookie → Bearer when Authorization is absent.
         resolveToken:
@@ -1395,8 +1395,22 @@ export function oke(options: OkeOptions): OkeApp {
                 : undefined;
             if (cacheOk && cache && dims && storeRt) {
               const keys = cache.tier1KeysForReads(cacheEffects, dims);
-              const cached = cache.tier1Lookup((key) => storeRt.cache.get(key), keys);
+              const probes: { key: string; timestamp: number; duration: number }[] = [];
+              const cached = cache.tier1Lookup((key) => {
+                const timestamp = now();
+                const t0 = performance.now();
+                const value = storeRt.cache.get(key);
+                probes.push({
+                  key,
+                  timestamp,
+                  duration: resolveDurationMs(now() - timestamp, performance.now() - t0),
+                });
+                return value;
+              }, keys);
               if (cached !== undefined) {
+                for (const probe of probes) {
+                  recordObservedEffect(ledger, "read", probe.key, probe.timestamp, probe.duration);
+                }
                 telemetry.cacheHits += 1;
                 return cached;
               }

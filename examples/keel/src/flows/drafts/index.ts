@@ -61,7 +61,7 @@ export const discard = on(
 /** Expire stale drafts — named clock `expire-drafts`. */
 export const expire = on(
   every("10m"),
-  flow("drafts.expire-drafts", {
+  flow("drafts.expire", {
     plane: "operator",
     do: async (_input, fx) => {
       const keys = await fx.store(draftsKv).list();

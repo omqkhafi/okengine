@@ -22,6 +22,8 @@ function run(
     replica: "replica",
     replicaLagMs: null,
     cost: null,
+    inputTokens: null,
+    outputTokens: null,
     promptVersion: null,
     buildVersion: null,
     endedAt: partial.startedAt + 1,

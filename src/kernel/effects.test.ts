@@ -3,6 +3,7 @@ import {
   createEffectLedger,
   EFFECT_KIND_TIERS,
   recordEffect,
+  recordObservedEffect,
   reversibilityOf,
   type EffectKind,
   type ReversibilityTier,
@@ -68,6 +69,20 @@ describe("effects — ledger", () => {
       duration: 1,
       reversibility: "deferred",
     });
+  });
+
+  test("recordObservedEffect appends a completed observation without re-entering work", () => {
+    const ledger = createEffectLedger();
+    recordObservedEffect(ledger, "read", "computed:sql:notes/notes.list/-", 1_000, 0.4);
+    expect(ledger.entries).toEqual([
+      {
+        kind: "read",
+        resource: "computed:sql:notes/notes.list/-",
+        timestamp: 1_000,
+        duration: 0.4,
+        reversibility: "none",
+      },
+    ]);
   });
 
   test("clear empties the ledger", () => {
