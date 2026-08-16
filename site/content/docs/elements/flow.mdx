@@ -231,6 +231,7 @@ unless you want a TTL or to opt out.
 
 Mutations, `fx.ask`, and `durable: true` stay uncached. Console Traces shows **hit** /
 **miss** on cached reads, and **not applicable** only when the flow never used the cache.
+
 A hit records the cache lookup on the waterfall (`computed:…` reads), not a replay of
 the original store reads.
 

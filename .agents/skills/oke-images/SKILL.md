@@ -80,16 +80,16 @@ curl -sL "https://hub.docker.com/v2/repositories/<ns>/<name>/tags?page_size=20&n
 
 **Before writing**, classify each proposed bump:
 
-| Signal                                              | Action                                                              |
-| --------------------------------------------------- | ------------------------------------------------------------------- |
-| Newer tag, same pin style and channel               | OK to take                                                          |
-| `:latest` / untagged `server` / `main` / `nightly`  | **Reject**                                                          |
-| Current is `beta` / `rc`                            | Stay on that channel; newest **non-preview** (`rc.2` not `rc.2-preview.1`) |
-| Stable `latest` older than current prerelease       | **Reject** — keep the prerelease                                    |
-| `*-rc0` / canary when a stable exists on that minor | Skip — take the stable                                              |
-| Floating family (`18-alpine`, `8-alpine`, `2-alpine`) | Leave unless user asked for a family bump                         |
-| GitHub release ahead of the registry                | Pin the **published image**, not the git tag                        |
-| Test-only matcher (`traefik:v3.1`, `library/nginx:1.27`, Cockroach `v24…`) | Leave — not a default pin                          |
+| Signal                                                                     | Action                                                                     |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Newer tag, same pin style and channel                                      | OK to take                                                                 |
+| `:latest` / untagged `server` / `main` / `nightly`                         | **Reject**                                                                 |
+| Current is `beta` / `rc`                                                   | Stay on that channel; newest **non-preview** (`rc.2` not `rc.2-preview.1`) |
+| Stable `latest` older than current prerelease                              | **Reject** — keep the prerelease                                           |
+| `*-rc0` / canary when a stable exists on that minor                        | Skip — take the stable                                                     |
+| Floating family (`18-alpine`, `8-alpine`, `2-alpine`)                      | Leave unless user asked for a family bump                                  |
+| GitHub release ahead of the registry                                       | Pin the **published image**, not the git tag                               |
+| Test-only matcher (`traefik:v3.1`, `library/nginx:1.27`, Cockroach `v24…`) | Leave — not a default pin                                                  |
 
 llama.cpp: GitHub `bNNNN` often leads GHCR. Walk down from the latest release
 until `docker manifest inspect ghcr.io/ggml-org/llama.cpp:server-bNNNN` succeeds.

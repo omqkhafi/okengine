@@ -11,9 +11,7 @@ import {
 export { validateTypedConfirm };
 
 /** Confirmation strategy for a vault write. */
-export type VaultConfirmationPattern =
-  | StoreConfirmationPattern
-  | { readonly kind: "review" };
+export type VaultConfirmationPattern = StoreConfirmationPattern | { readonly kind: "review" };
 
 /**
  * Confirmation for adding a contract from Console — review dialog.

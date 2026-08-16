@@ -8,10 +8,7 @@ import { LINE_LOADING_PULSE_EASE } from "./line-loading-timing";
 import { resolveReferenceDataRange } from "./reference-area-geometry";
 import type { YAxisOrientation } from "./y-axis-scales";
 import { normalizeYAxisId } from "./y-axis-scales";
-import {
-  resolveYAxisTickCount,
-  Y_AXIS_DEFAULT_TICK_COUNT,
-} from "./y-axis-ticks";
+import { resolveYAxisTickCount, Y_AXIS_DEFAULT_TICK_COUNT } from "./y-axis-ticks";
 
 const Y_AXIS_POSITION_TWEEN_MS = DEFAULT_Y_DOMAIN_TWEEN_MS;
 
@@ -34,7 +31,7 @@ export interface YAxisProps {
 function formatLabel(
   value: number,
   formatLargeNumbers: boolean,
-  formatValue?: (value: number) => string
+  formatValue?: (value: number) => string,
 ): string {
   if (formatValue) {
     return formatValue(value);
@@ -49,7 +46,7 @@ function resolveTickLabelColor(
   tickY: number,
   axisId: string,
   yScale: ReturnType<typeof useYScale>,
-  referenceAreas: ReturnType<typeof useChartStable>["referenceAreas"]
+  referenceAreas: ReturnType<typeof useChartStable>["referenceAreas"],
 ): string | undefined {
   for (const area of referenceAreas) {
     if (!area.axisLabelColor) {
@@ -61,7 +58,7 @@ function resolveTickLabelColor(
     const [low, high] = resolveReferenceDataRange(
       area.y1,
       area.y2,
-      yScale.domain() as [number, number]
+      yScale.domain() as [number, number],
     );
     const topPixel = yScale(high) ?? 0;
     const bottomPixel = yScale(low) ?? 0;
@@ -111,33 +108,16 @@ const YAxisInner = memo(function YAxisInner({
         value,
         y,
         label: formatLabel(value, formatLargeNumbers, formatValue),
-        labelColor: resolveTickLabelColor(
-          y - margin.top,
-          axisId,
-          yScale,
-          referenceAreas
-        ),
+        labelColor: resolveTickLabelColor(y - margin.top, axisId, yScale, referenceAreas),
       };
     });
-  }, [
-    yScale,
-    margin.top,
-    numTicks,
-    formatLargeNumbers,
-    formatValue,
-    axisId,
-    referenceAreas,
-  ]);
+  }, [yScale, margin.top, numTicks, formatLargeNumbers, formatValue, axisId, referenceAreas]);
 
   return createPortal(
     <div className="pointer-events-none absolute inset-0">
       <div
         className="absolute top-0 bottom-0"
-        style={
-          isLeft
-            ? { left: 0, width: margin.left }
-            : { right: 0, width: margin.right }
-        }
+        style={isLeft ? { left: 0, width: margin.left } : { right: 0, width: margin.right }}
       >
         {ticks.map((tick) => (
           <div
@@ -162,7 +142,7 @@ const YAxisInner = memo(function YAxisInner({
         ))}
       </div>
     </div>,
-    container
+    container,
   );
 });
 

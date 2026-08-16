@@ -99,10 +99,7 @@ function TooltipBoxInner({
   const th = tooltipHeightRef.current;
   const shouldFlipX = x + tw + offset > containerWidth;
   const targetX = shouldFlipX ? x - offset - tw : x + offset;
-  const targetY = Math.max(
-    offset,
-    Math.min(y - th / 2, containerHeight - th - offset)
-  );
+  const targetY = Math.max(offset, Math.min(y - th / 2, containerHeight - th - offset));
 
   const animatedLeft = useSpring(targetX, effectiveSpring);
   const animatedTop = useSpring(targetY, effectiveSpring);
@@ -131,10 +128,7 @@ function TooltipBoxInner({
     const h2 = tooltipHeightRef.current;
     const flip = x + w2 + offset > containerWidth;
     const tx = flip ? x - offset - w2 : x + offset;
-    const ty = Math.max(
-      offset,
-      Math.min(y - h2 / 2, containerHeight - h2 - offset)
-    );
+    const ty = Math.max(offset, Math.min(y - h2 / 2, containerHeight - h2 - offset));
     if (!animate) {
       setStaticPosition({ left: tx, top: ty });
       return;
@@ -168,9 +162,7 @@ function TooltipBoxInner({
     }
   }, [shouldFlipX]);
 
-  const finalLeft = animate
-    ? (leftOverride ?? animatedLeft)
-    : staticPosition.left;
+  const finalLeft = animate ? (leftOverride ?? animatedLeft) : staticPosition.left;
   const finalTop = animate ? (topOverride ?? animatedTop) : staticPosition.top;
   const isFlipped = flippedOverride ?? shouldFlipX;
   const transformOrigin = isFlipped ? "right top" : "left top";
@@ -180,7 +172,7 @@ function TooltipBoxInner({
     panelStyle?.backgroundColor === undefined &&
       backgroundColor === chartCssVars.tooltipBackground &&
       "bg-chart-tooltip-background",
-    panelStyle?.backdropFilter === undefined && "backdrop-blur-md"
+    panelStyle?.backdropFilter === undefined && "backdrop-blur-md",
   );
   const panelStyleResolved = {
     transformOrigin,
@@ -201,7 +193,7 @@ function TooltipBoxInner({
           {children}
         </div>
       </div>,
-      container
+      container,
     );
   }
 
@@ -226,7 +218,7 @@ function TooltipBoxInner({
         {children}
       </motion.div>
     </motion.div>,
-    container
+    container,
   );
 }
 

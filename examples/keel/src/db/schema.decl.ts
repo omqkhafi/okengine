@@ -34,7 +34,10 @@ export const goals = store.schema.table("goals", {
 
 export const projects = store.schema.table("projects", {
   id: field.text().primaryKey().defaultFn(id),
-  spaceId: field.text().notNull().references(() => spaces.id),
+  spaceId: field
+    .text()
+    .notNull()
+    .references(() => spaces.id),
   goalId: field.text().references(() => goals.id, { onDelete: "set null" }),
   name: field.text().notNull(),
   status: field.text().notNull(),
@@ -48,7 +51,10 @@ export const projects = store.schema.table("projects", {
 
 export const sections = store.schema.table("sections", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: field
+    .text()
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
   sortOrder: field.integer().notNull(),
 });
@@ -62,7 +68,10 @@ export const tasks = store.schema.table("tasks", {
   priority: field.integer().notNull(),
   estimate: field.integer(),
   status: field.text().notNull(),
-  spaceId: field.text().notNull().references(() => spaces.id),
+  spaceId: field
+    .text()
+    .notNull()
+    .references(() => spaces.id),
   projectId: field.text().references(() => projects.id, { onDelete: "set null" }),
   sectionId: field.text().references(() => sections.id, { onDelete: "set null" }),
   parentId: field.text(),
@@ -78,20 +87,32 @@ export const tasks = store.schema.table("tasks", {
 
 export const taskAssignees = store.schema.table("task_assignees", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
   assigneeEmail: field.text().notNull(),
 });
 
 export const taskFollowers = store.schema.table("task_followers", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
   followerEmail: field.text().notNull(),
 });
 
 export const taskDependencies = store.schema.table("task_dependencies", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
-  blocksTaskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  blocksTaskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
 });
 
 export const tags = store.schema.table("tags", {
@@ -102,27 +123,45 @@ export const tags = store.schema.table("tags", {
 
 export const taskTags = store.schema.table("task_tags", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
-  tagId: field.text().notNull().references(() => tags.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  tagId: field
+    .text()
+    .notNull()
+    .references(() => tags.id, { onDelete: "cascade" }),
 });
 
 export const customFields = store.schema.table("custom_fields", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: field
+    .text()
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
   type: field.text().notNull(),
 });
 
 export const customFieldValues = store.schema.table("custom_field_values", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
-  fieldId: field.text().notNull().references(() => customFields.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  fieldId: field
+    .text()
+    .notNull()
+    .references(() => customFields.id, { onDelete: "cascade" }),
   value: field.text().notNull(),
 });
 
 export const comments = store.schema.table("comments", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
   authorEmail: field.text().pii(),
   body: field.text().notNull(),
   resolvedAt: field.text(),
@@ -159,7 +198,10 @@ export const fileObjects = store.schema.table("file_objects", {
 
 export const projectUpdates = store.schema.table("project_updates", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: field
+    .text()
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
   health: field.text().notNull(),
   body: field.text().notNull(),
   authorEmail: field.text().pii(),
@@ -168,7 +210,10 @@ export const projectUpdates = store.schema.table("project_updates", {
 
 export const views = store.schema.table("views", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: field
+    .text()
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
   kind: field.text().notNull(),
   filtersJson: field.text(),
@@ -178,7 +223,10 @@ export const views = store.schema.table("views", {
 
 export const forms = store.schema.table("forms", {
   id: field.text().primaryKey().defaultFn(id),
-  projectId: field.text().notNull().references(() => projects.id, { onDelete: "cascade" }),
+  projectId: field
+    .text()
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
   name: field.text().notNull(),
   schemaJson: field.text().notNull(),
   createdAt: field.integer().notNull().defaultFn(now),
@@ -186,7 +234,10 @@ export const forms = store.schema.table("forms", {
 
 export const formSubmissions = store.schema.table("form_submissions", {
   id: field.text().primaryKey().defaultFn(id),
-  formId: field.text().notNull().references(() => forms.id, { onDelete: "cascade" }),
+  formId: field
+    .text()
+    .notNull()
+    .references(() => forms.id, { onDelete: "cascade" }),
   taskId: field.text().references(() => tasks.id, { onDelete: "set null" }),
   payloadJson: field.text().notNull(),
   customerName: field.text().notNull(),
@@ -205,7 +256,10 @@ export const inbox = store.schema.table("inbox", {
 
 export const recurrence = store.schema.table("recurrence", {
   id: field.text().primaryKey().defaultFn(id),
-  taskId: field.text().notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  taskId: field
+    .text()
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
   every: field.text().notNull(),
   nextAt: field.text().notNull(),
 });

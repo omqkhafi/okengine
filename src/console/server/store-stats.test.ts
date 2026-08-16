@@ -36,7 +36,7 @@ const MANIFEST: Manifest = {
 describe("classifyPgStatStatementsError", () => {
   test("PgStatStatementsNotPreloaded is structured — not a generic 500", () => {
     const err = classifyPgStatStatementsError(
-      new Error('pg_stat_statements must be loaded via shared_preload_libraries'),
+      new Error("pg_stat_statements must be loaded via shared_preload_libraries"),
     );
     expect(err).toBeInstanceOf(StoreSqlStatsError);
     expect(err.code).toBe(PG_STAT_STATEMENTS_NOT_PRELOADED);
@@ -45,7 +45,7 @@ describe("classifyPgStatStatementsError", () => {
 
   test("must be preloaded wording maps to the same code", () => {
     expect(
-      classifyPgStatStatementsError(new Error("extension \"pg_stat_statements\" must be preloaded"))
+      classifyPgStatStatementsError(new Error('extension "pg_stat_statements" must be preloaded'))
         .code,
     ).toBe(PG_STAT_STATEMENTS_NOT_PRELOADED);
   });
@@ -60,9 +60,7 @@ describe("classifyPgStatStatementsError", () => {
 
   test("missing relation is not-created (CREATE EXTENSION still possible)", () => {
     expect(
-      classifyPgStatStatementsError(
-        new Error('relation "pg_stat_statements" does not exist'),
-      ).code,
+      classifyPgStatStatementsError(new Error('relation "pg_stat_statements" does not exist')).code,
     ).toBe(PG_STAT_STATEMENTS_NOT_CREATED);
   });
 });

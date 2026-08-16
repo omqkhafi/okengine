@@ -224,7 +224,12 @@ async function readJsonSilent(response: Response): Promise<unknown> {
  */
 export function remoteErrorCode(error: unknown): string | number | undefined {
   if (typeof error !== "object" || error === null) return undefined;
-  const record = error as { name?: unknown; code?: unknown; statusCode?: unknown; status?: unknown };
+  const record = error as {
+    name?: unknown;
+    code?: unknown;
+    statusCode?: unknown;
+    status?: unknown;
+  };
   // Numeric status/code first — GCP gRPC uses `code: 7` on a generic `Error`.
   if (typeof record.code === "number") return record.code;
   if (typeof record.statusCode === "number") return record.statusCode;

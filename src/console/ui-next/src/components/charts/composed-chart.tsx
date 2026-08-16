@@ -49,9 +49,7 @@ const DEFAULT_MARGIN: Margin = { top: 40, right: 40, bottom: 40, left: 40 };
 
 function getChildComponentName(child: ReactElement): string {
   const childType = child.type as { displayName?: string; name?: string };
-  return typeof child.type === "function"
-    ? childType.displayName || childType.name || ""
-    : "";
+  return typeof child.type === "function" ? childType.displayName || childType.name || "" : "";
 }
 
 function upsertLineConfig(lines: LineConfig[], config: LineConfig): void {
@@ -67,7 +65,7 @@ function upsertLineConfig(lines: LineConfig[], config: LineConfig): void {
 function tryAppendSeriesBar(
   child: ReactElement,
   lines: LineConfig[],
-  barDataKeys: string[]
+  barDataKeys: string[],
 ): boolean {
   const name = getChildComponentName(child);
   if (!(child.type === SeriesBar || name === "SeriesBar")) {
@@ -146,7 +144,7 @@ function extractComposedSeries(children: ReactNode): {
 function computeComposedYScaleDomainMax(
   data: Record<string, unknown>[],
   lines: LineConfig[],
-  barDataKeys: string[]
+  barDataKeys: string[],
 ): number | undefined {
   const barSet = new Set(barDataKeys);
   let max = 0;
@@ -212,10 +210,7 @@ function ChartInner({
   stackGap = 0,
   onPhaseChange,
 }: ChartInnerProps) {
-  const { lines, barDataKeys } = useMemo(
-    () => extractComposedSeries(children),
-    [children]
-  );
+  const { lines, barDataKeys } = useMemo(() => extractComposedSeries(children), [children]);
 
   const composedStackOffsets = useMemo(() => {
     if (!(stacked && barDataKeys.length > 0)) {
@@ -246,7 +241,7 @@ function ChartInner({
       stacked && barDataKeys.length > 0
         ? computeComposedYScaleDomainMax(data, lines, barDataKeys)
         : undefined,
-    [data, lines, barDataKeys, stacked]
+    [data, lines, barDataKeys, stacked],
   );
 
   return (

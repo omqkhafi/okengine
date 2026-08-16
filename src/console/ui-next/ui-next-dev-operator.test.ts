@@ -43,18 +43,18 @@ describe("ui-next dev operator", () => {
   });
 
   test("login prefill is standalone Vite console only", () => {
-    expect(
-      shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: false }),
-    ).toBe(true);
-    expect(
-      shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: true }),
-    ).toBe(false);
-    expect(
-      shouldPrefillDevOperator({ serve: true, fresh: true, kernelSkipped: false }),
-    ).toBe(false);
-    expect(
-      shouldPrefillDevOperator({ serve: false, fresh: false, kernelSkipped: false }),
-    ).toBe(false);
+    expect(shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: false })).toBe(
+      true,
+    );
+    expect(shouldPrefillDevOperator({ serve: true, fresh: false, kernelSkipped: true })).toBe(
+      false,
+    );
+    expect(shouldPrefillDevOperator({ serve: true, fresh: true, kernelSkipped: false })).toBe(
+      false,
+    );
+    expect(shouldPrefillDevOperator({ serve: false, fresh: false, kernelSkipped: false })).toBe(
+      false,
+    );
   });
 
   test("seeded operator authenticates with documented credentials", async () => {

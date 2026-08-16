@@ -24,8 +24,10 @@ describe("openDuckDB", () => {
     for (const tier of ["standard", "advanced"] as const) {
       const pkg = JSON.parse(readFileSync(join(root, tier, "package.json"), "utf8")) as {
         dependencies?: { "@duckdb/node-api"?: string };
+        trustedDependencies?: readonly string[];
       };
       expect(pkg.dependencies?.["@duckdb/node-api"]).toMatch(/^\^1\.5\./);
+      expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
     }
   });
 });

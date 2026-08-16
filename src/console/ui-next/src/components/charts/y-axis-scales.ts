@@ -13,9 +13,7 @@ export function normalizeYAxisId(id?: string | number): string {
   return String(id);
 }
 
-export function groupLinesByYAxisId(
-  lines: LineConfig[]
-): Map<string, LineConfig[]> {
+export function groupLinesByYAxisId(lines: LineConfig[]): Map<string, LineConfig[]> {
   const groups = new Map<string, LineConfig[]>();
   for (const line of lines) {
     const axisId = normalizeYAxisId(line.yAxisId);
@@ -28,10 +26,7 @@ export function groupLinesByYAxisId(
 
 type YScale = ReturnType<typeof scaleLinear<number>>;
 
-export function getPrimaryYScale(
-  yScales: Record<string, YScale>,
-  fallback: YScale
-): YScale {
+export function getPrimaryYScale(yScales: Record<string, YScale>, fallback: YScale): YScale {
   const primary = yScales[DEFAULT_Y_AXIS_ID];
   if (primary) {
     return primary;
@@ -90,9 +85,7 @@ export function buildYScalesFromDomains({
 
   for (const [axisId] of groups) {
     const domain =
-      domainsByAxis[axisId] ??
-      domainsByAxis[DEFAULT_Y_AXIS_ID] ??
-      ([0, 100] as [number, number]);
+      domainsByAxis[axisId] ?? domainsByAxis[DEFAULT_Y_AXIS_ID] ?? ([0, 100] as [number, number]);
     scales[axisId] = scaleLinear({
       range: [innerHeight, 0],
       domain,

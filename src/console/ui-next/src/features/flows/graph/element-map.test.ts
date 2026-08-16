@@ -238,11 +238,11 @@ describe("resourcesOfElement", () => {
       "type:store:files",
       "type:store:index",
     ]);
-    expect(resourcesOfElement(withCacheKv, "store").map((r) => r.id).sort()).toEqual([
-      "kv:cache",
-      "sql:bookings",
-      "sql:shipments",
-    ]);
+    expect(
+      resourcesOfElement(withCacheKv, "store")
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["kv:cache", "sql:bookings", "sql:shipments"]);
   });
 });
 

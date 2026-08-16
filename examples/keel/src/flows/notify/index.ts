@@ -1,12 +1,6 @@
 import { on, flow } from "okengine";
 
-import {
-  db,
-  formReceivedMail,
-  goalAtRiskMail,
-  mentionReplyMail,
-  taskAssignedMail,
-} from "@/core";
+import { db, formReceivedMail, goalAtRiskMail, mentionReplyMail, taskAssignedMail } from "@/core";
 import { comments, inbox, taskAssignees } from "@/db/schema.decl";
 import { commentAdded } from "@/flows/comments/signals";
 import { draftExpired } from "@/flows/drafts/signals";

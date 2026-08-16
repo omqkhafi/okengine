@@ -261,16 +261,16 @@ Flow that returns the current state.
 
 ## Exports
 
-| Export                                       | Kind      | Role                                              |
-| -------------------------------------------- | --------- | ------------------------------------------------- |
-| `createClient`                               | function  | Typed proxy `api.unit.flow(input?)`               |
-| `flattenRoutes`                              | function  | `$routes` → flat `unit.flow` REST table           |
-| `createTransport`                            | function  | Low-level HTTP transport (timeout / retry / auth) |
-| `isOk` / `isFail`                            | function  | Envelope predicates                               |
-| `isErrorCode` / `isTransportError`           | function  | Error narrowing                                   |
-| `Client`, `ClientCall`, `ClientResult`, …    | types     | Contracts, `page.next()` / `for await` of `list()` |
-| `Register`                                   | interface | Module-augmentation slot for ambient App types    |
-| `AppOf`                                      | type      | Brand a bare route map as an App                  |
+| Export                                    | Kind      | Role                                               |
+| ----------------------------------------- | --------- | -------------------------------------------------- |
+| `createClient`                            | function  | Typed proxy `api.unit.flow(input?)`                |
+| `flattenRoutes`                           | function  | `$routes` → flat `unit.flow` REST table            |
+| `createTransport`                         | function  | Low-level HTTP transport (timeout / retry / auth)  |
+| `isOk` / `isFail`                         | function  | Envelope predicates                                |
+| `isErrorCode` / `isTransportError`        | function  | Error narrowing                                    |
+| `Client`, `ClientCall`, `ClientResult`, … | types     | Contracts, `page.next()` / `for await` of `list()` |
+| `Register`                                | interface | Module-augmentation slot for ambient App types     |
+| `AppOf`                                   | type      | Brand a bare route map as an App                   |
 
 Budget: the `./client` export stays under the measured client-runtime cap (hard gate in CI).
 

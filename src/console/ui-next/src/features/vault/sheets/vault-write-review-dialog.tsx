@@ -125,7 +125,9 @@ function ReviewFact({
       <dt className="shrink-0 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className={mono ? "min-w-0 truncate font-mono text-[11px]" : "min-w-0 truncate text-[12px]"}>
+      <dd
+        className={mono ? "min-w-0 truncate font-mono text-[11px]" : "min-w-0 truncate text-[12px]"}
+      >
         {value}
       </dd>
     </div>

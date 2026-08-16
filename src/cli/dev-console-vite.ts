@@ -6,7 +6,7 @@
  * SPA and `serveConsole` proxies non-kernel paths through to it.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findFreePort } from "./ports.ts";
@@ -60,7 +60,8 @@ export function resolveOkenginePackageRoot(): string {
 /**
  * Whether `oke dev` should start Vite for Console UI HMR.
  *
- * On for an okengine source checkout (not `node_modules/okengine`).
+ * On for the okengine monorepo checkout only. Published installs and the
+ * create-oke `file:` stage (`~/.oke/create-oke/okengine`) serve `ui-next/dist`.
  * `OKE_CONSOLE_VITE=0` disables; `=1` forces when the Vite config exists.
  *
  * @param options - Package root / env overrides (tests)
@@ -74,7 +75,7 @@ export function shouldAttachConsoleVite(options: ShouldAttachConsoleViteOptions 
   const flag = env[CONSOLE_VITE_ENV];
   if (flag === "0") return false;
   if (flag === "1") return true;
-  return !isNodeModulesPackageRoot(root);
+  return isOkengineSourceCheckout(root);
 }
 
 /**
@@ -141,4 +142,23 @@ function isNodeModulesPackageRoot(root: string): boolean {
     normalized.endsWith(`${sep}node_modules${sep}okengine`) ||
     normalized.includes(`${sep}node_modules${sep}`)
   );
+}
+
+/**
+ * True only for the monorepo checkout. The create-oke stage copies `src`
+ * (including `ui-next/vite.config.ts`) but strips `workspaces` — treat it
+ * like a published install and serve `ui-next/dist`.
+ *
+ * @param root - okengine package root
+ */
+function isOkengineSourceCheckout(root: string): boolean {
+  if (isNodeModulesPackageRoot(root)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      workspaces?: unknown;
+    };
+    return Array.isArray(pkg.workspaces);
+  } catch {
+    return false;
+  }
 }

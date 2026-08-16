@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -29,6 +29,20 @@ describe("shouldAttachConsoleVite", () => {
         env: {},
       }),
     ).toBe(false);
+  });
+
+  test("skips a publish-shaped stage (vite config, no workspaces)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oke-stage-vite-"));
+    await mkdir(join(dir, "src/console/ui-next"), { recursive: true });
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "okengine" }));
+    await writeFile(join(dir, "src/console/ui-next/vite.config.ts"), "export default {}\n");
+    expect(shouldAttachConsoleVite({ packageRoot: dir, env: {} })).toBe(false);
+    expect(
+      shouldAttachConsoleVite({
+        packageRoot: dir,
+        env: { [CONSOLE_VITE_ENV]: "1" },
+      }),
+    ).toBe(true);
   });
 
   test("skips when the Vite config is missing", async () => {

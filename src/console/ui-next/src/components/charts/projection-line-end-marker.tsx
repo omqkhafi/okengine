@@ -23,19 +23,11 @@ export function ProjectionLineEndMarker({
   const { xScale, chartPhase, innerWidth } = useChartStable();
   const yScale = useYScale(yAxisId);
 
-  const getX = useCallback(
-    (point: ProjectionPoint) => xScale(point.date) ?? 0,
-    [xScale]
-  );
-  const getY = useCallback(
-    (point: ProjectionPoint) => yScale(point.value) ?? 0,
-    [yScale]
-  );
+  const getX = useCallback((point: ProjectionPoint) => xScale(point.date) ?? 0, [xScale]);
+  const getY = useCallback((point: ProjectionPoint) => yScale(point.value) ?? 0, [yScale]);
 
   const showStroke =
-    chartPhase === "revealing" ||
-    chartPhase === "ready" ||
-    chartPhase === "exitingReady";
+    chartPhase === "revealing" || chartPhase === "ready" || chartPhase === "exitingReady";
 
   if (!showStroke || data.length < 2) {
     return null;
@@ -49,21 +41,11 @@ export function ProjectionLineEndMarker({
   const endX = Math.min(getX(endPoint), Math.max(0, innerWidth - edgePadding));
   const endY = getY(endPoint);
 
-  return (
-    <circle
-      cx={endX}
-      cy={endY}
-      fill={stroke}
-      fillOpacity={strokeOpacity}
-      r={radius * 0.85}
-    />
-  );
+  return <circle cx={endX} cy={endY} fill={stroke} fillOpacity={strokeOpacity} r={radius * 0.85} />;
 }
 
 ProjectionLineEndMarker.displayName = "ProjectionLineEndMarker";
 
-(
-  ProjectionLineEndMarker as unknown as Record<string, boolean>
-).__isPostOverlay = true;
+(ProjectionLineEndMarker as unknown as Record<string, boolean>).__isPostOverlay = true;
 
 export default ProjectionLineEndMarker;

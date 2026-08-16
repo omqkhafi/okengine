@@ -183,20 +183,27 @@ export function bindConsoleListRuns(handle: ConsoleAppHandle): void {
 
   async function ensurePersisted(): Promise<RunsRuntime> {
     if (!persisted) {
-      persisted = createRunsRuntime({
+      const runtime = createRunsRuntime({
         driver: "files",
         localRoot: root,
         retention: { keep: "forever" },
       });
-      await persisted.open();
+      await runtime.open();
+      persisted = runtime;
     }
     return persisted;
   }
 
   handle.state.listRuns = async () => {
     const live = handle.app.bootResult?.runs ? await handle.app.bootResult.runs.all() : [];
-    const disk = await (await ensurePersisted()).all();
-    return mergeLiveAndPersistedEvents(live, disk);
+    try {
+      const disk = await (await ensurePersisted()).all();
+      return mergeLiveAndPersistedEvents(live, disk);
+    } catch {
+      // Optional `@duckdb/node-api` missing or native postinstall blocked —
+      // live in-process runs still list; SQL tab fails closed on query.
+      return live;
+    }
   };
 
   handle.state.queryPersistedRuns = async (input) => {

@@ -110,7 +110,11 @@ function idFromKey(requested: string): string {
  * @param prefix - Folder prefix (ASCII segments kept as-is)
  * @param id - Optional 8-hex suffix; generated when omitted
  */
-export function safeFileObjectKey(originalName: string, prefix = "", id = shortId()): string {
+export function safeFileObjectKey(
+  originalName: string,
+  prefix: string = "",
+  id: string = shortId(),
+): string {
   const ext = asciiExtension(originalName);
   const trimmed = originalName.replace(/\/+$/, "");
   const slash = trimmed.lastIndexOf("/");

@@ -103,23 +103,23 @@ Built-in defaults (`DRIVER_DEFAULTS`) when a key is omitted:
 
 ## Driver keys and ids
 
-| Key                | Shape          | Driver ids                                                                   |
-| ------------------ | -------------- | ---------------------------------------------------------------------------- |
-| `store.sql`        | env driver map | `postgres` · `pglite` · `memory`                                             |
-| `store.kv`         | env driver map | `memory` · `redis`                                                           |
-| `store.files`      | env driver map | `memory` · `fs` · `s3`                                                       |
-| `store.index`      | env driver map | `memory` · `pgvector` · `meilisearch`                                        |
-| `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind  |
-| `clock`            | env driver map | `memory` · `postgres` · `file` · `frozen`                                    |
-| `journal`          | env driver map | `memory` · `file` · `postgres`                                               |
-| `vault`            | env driver map | `env` · `vault` · `memory` · `managed`                                       |
-| `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`                      |
-| `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                |
-| `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                       |
-| `channel.push`     | env driver map | `console` · `webpush` · `fcm`                                                |
-| `ai`               | env driver map | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama` |
+| Key                | Shape          | Driver ids                                                                       |
+| ------------------ | -------------- | -------------------------------------------------------------------------------- |
+| `store.sql`        | env driver map | `postgres` · `pglite` · `memory`                                                 |
+| `store.kv`         | env driver map | `memory` · `redis`                                                               |
+| `store.files`      | env driver map | `memory` · `fs` · `s3`                                                           |
+| `store.index`      | env driver map | `memory` · `pgvector` · `meilisearch`                                            |
+| `signal`           | env driver map | `memory` · `redis` (boot); `postgres` · `nats` fail loud until clients bind      |
+| `clock`            | env driver map | `memory` · `postgres` · `file` · `frozen`                                        |
+| `journal`          | env driver map | `memory` · `file` · `postgres`                                                   |
+| `vault`            | env driver map | `env` · `vault` · `memory` · `managed`                                           |
+| `channel.email`    | env driver map | `console` · `smtp` · `resend` · `sndr` · `taqnyat-mail`                          |
+| `channel.sms`      | env driver map | `console` · `taqnyat` · `msegat` · `unifonic`                                    |
+| `channel.whatsapp` | env driver map | `console` · `wa-cloud`                                                           |
+| `channel.push`     | env driver map | `console` · `webpush` · `fcm`                                                    |
+| `ai`               | env driver map | `mock` · `anthropic` · `openai-compatible` · `bedrock` · `vertex` · `ollama`     |
 | `runs`             | env driver map | `memory` · `files` (Parquet + DuckDB at `.oke/runs`) · `postgres` · `clickhouse` |
-| `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred              |
+| `prod`             | `string[]`     | flat protocol list for the Manifest — nested maps are preferred                  |
 
 ### Safety rules
 
@@ -196,10 +196,10 @@ privacy: {},
 
 Runs retention and redaction — **not** the same key as `drivers.runs`.
 
-| Option   | Type                     | Meaning                                                                 |
-| -------- | ------------------------ | ----------------------------------------------------------------------- |
+| Option   | Type                     | Meaning                                                                    |
+| -------- | ------------------------ | -------------------------------------------------------------------------- |
 | `keep`   | `string` \| `"forever"`  | Delete Parquet partitions older than this (`7d` in `dev`, `30d` in `prod`) |
-| `redact` | `Record<string, string>` | Field → retention duration; presence turns privacy on                   |
+| `redact` | `Record<string, string>` | Field → retention duration; presence turns privacy on                      |
 
 ## db
 
@@ -255,8 +255,8 @@ Domain schema sync for `oke db push | generate | migrate` (Drizzle). Unrelated t
 </Accordion>
 
 <Accordion title="Runs DuckDB / Parquet queries requires @duckdb/node-api">
-  The `files` driver needs `@duckdb/node-api`. create-oke templates add it. Install with
-  `bun add @duckdb/node-api` if an older app is missing the peer.
+  The `files` driver needs `@duckdb/node-api`. create-oke templates add it. Install with `bun add
+  @duckdb/node-api` if an older app is missing the peer.
 </Accordion>
 
 </Accordions>

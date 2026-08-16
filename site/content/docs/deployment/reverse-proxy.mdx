@@ -89,9 +89,9 @@ Emits `docker/Caddyfile`:
 }
 ```
 
-| Setting                | What it does                                                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OKE_PROXY_HOST`       | Site address. `localhost` → local TLS; a public DNS name → Let's Encrypt HTTP-01                                                              |
+| Setting                | What it does                                                                                                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OKE_PROXY_HOST`       | Site address. `localhost` → local TLS; a public DNS name → Let's Encrypt HTTP-01                                                             |
 | `OKE_PROXY_ACME_EMAIL` | Written into `.env.local` for the proxy role. Traefik consumes it; for Caddy, add a global `email` block if you want a specific ACME contact |
 
 Custom domain:
@@ -193,6 +193,13 @@ reachable. Set `OKE_PROXY_ACME_EMAIL` for Traefik. For localhost-only smoke test
 Confirm app labels are present (`traefik.enable=true`) in `compose.proxy.yml`,
 containers share the `oke` network, and `socket-proxy` is healthy. Traefik must
 not mount `docker.sock` itself.
+
+</Accordion>
+<Accordion title="oke dev: service app has neither an image nor a build context">
+
+`oke dev` starts infra only; the app stays on the host at `:6530`.
+Proxy recipes route to a Compose `app` service — use `oke docker` for that.
+Re-run `oke dev` after upgrading so compose drops the label-only `app`.
 
 </Accordion>
 <Accordion title="Host header rejected (403)">

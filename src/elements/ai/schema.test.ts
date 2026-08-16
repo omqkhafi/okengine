@@ -104,6 +104,24 @@ describe("fx.ask Zod out", () => {
     const out = await runtime.ask("document-summary", { title: "API", body: "down" });
     expect(out.summary).toBe("ok");
   });
+
+  test("resolves fx.ask name@version against the bare prompt id", async () => {
+    const fast = ai.model("fast", { provider: "mock" });
+    const prompt = fast.prompt("document-summary", {
+      version: 1,
+      out: z.object({ summary: z.string() }),
+    });
+    const runtime = createAiRuntime({
+      models: [fast],
+      prompts: [prompt],
+      defaultDriver: mockAiDriver,
+    });
+    const out = await runtime.ask("document-summary@1", { title: "API", body: "down" });
+    expect(out.summary).toBe("ok");
+    await expect(runtime.ask("document-summary@2", { title: "API" })).rejects.toThrow(
+      'ai: unknown prompt "document-summary@2"',
+    );
+  });
 });
 
 describe("matchOutSchema", () => {

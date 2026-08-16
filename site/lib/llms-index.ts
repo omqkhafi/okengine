@@ -101,13 +101,18 @@ export function absoluteDocsUrl(path: string, origin: string = DOCS_ORIGIN): str
 }
 
 /**
- * Per-page markdown path (`/llms.mdx/docs/…`, no `content.md` suffix).
+ * Per-page markdown path (`/llms.mdx/docs/⟨slug⟩.md`).
  *
  * @param slugs - Docs slug segments
  */
 export function markdownPathForSlugs(slugs: readonly string[]): string {
-  if (slugs.length === 0) return docsContentRoute;
-  return `${docsContentRoute}/${slugs.join("/")}`;
+  if (slugs.length === 0) return `${docsContentRoute}/index.md`;
+  const last = slugs.at(-1);
+  if (last === undefined) return `${docsContentRoute}/index.md`;
+  const head = slugs.slice(0, -1);
+  return head.length > 0
+    ? `${docsContentRoute}/${head.join("/")}/${last}.md`
+    : `${docsContentRoute}/${last}.md`;
 }
 
 /**
@@ -139,7 +144,7 @@ export function buildLlmsTxt(
     "",
     "> One law. Eight elements. Ten exports. The batteries-included TypeScript backend for the Bun era. This file is the machine-readable map of the handbook.",
     "",
-    "Fetch `/llms.mdx/docs/⟨slug⟩` for one page as markdown, `/llms-full.txt` for everything, `/llms/agents` for the agent contract.",
+    "Fetch `/llms.mdx/docs/⟨slug⟩.md` for one page as markdown, `/llms-full.txt` for everything, `/llms/agents` for the agent contract.",
     "",
   ];
 

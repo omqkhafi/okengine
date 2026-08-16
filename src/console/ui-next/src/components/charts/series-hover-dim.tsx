@@ -39,11 +39,8 @@ export function SeriesHoverDim({
   const { hoveredIndex: legendHoveredIndex } = useChartLegendHover();
   const isChartHovering = tooltipData !== null || selection?.active === true;
   const isLegendDimmed =
-    legendHoveredIndex !== null &&
-    seriesIndex !== undefined &&
-    legendHoveredIndex !== seriesIndex;
-  const opacity =
-    enabled && (isChartHovering || isLegendDimmed) ? dimOpacity : 1;
+    legendHoveredIndex !== null && seriesIndex !== undefined && legendHoveredIndex !== seriesIndex;
+  const opacity = enabled && (isChartHovering || isLegendDimmed) ? dimOpacity : 1;
   return (
     <motion.g
       animate={{ opacity }}

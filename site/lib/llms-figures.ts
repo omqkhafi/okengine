@@ -20,7 +20,8 @@ export const TEACHING_FIGURE_FALLBACKS: Readonly<Record<string, string>> = {
     "live retains every payload; a late bus.live() subscriber replays the full history (placed → fulfilling → shipped).",
   StoreFacets:
     "Four store facets — SQL tables, key-value cache, file blobs, and search index — behind one fx.store handle, drivers swapped per environment.",
-  StoreKvTtl: "KV TTL physics: redis drains the TTL and expires the key; memory ignores TTL and the key stays.",
+  StoreKvTtl:
+    "KV TTL physics: redis drains the TTL and expires the key; memory ignores TTL and the key stays.",
   StoreFilesVariants:
     "putImage fans one upload into the original object plus named variant keys; optional placeholder returns a ThumbHash data URL, not another object.",
   StoreIndexModes:

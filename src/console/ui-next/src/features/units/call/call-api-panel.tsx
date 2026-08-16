@@ -735,7 +735,10 @@ function ResponseBlock({
       {responseJson ? (
         <div className="flex min-h-0 flex-1 overflow-hidden" data-slot="call-api-response-frame">
           <div
-            className={cn("w-1 shrink-0 self-stretch", failed ? "bg-destructive" : "bg-emerald-500")}
+            className={cn(
+              "w-1 shrink-0 self-stretch",
+              failed ? "bg-destructive" : "bg-emerald-500",
+            )}
             aria-hidden
             data-slot="call-api-response-rail"
           />
@@ -756,7 +759,9 @@ function ResponseBlock({
             className="gap-0 p-0 data-[side=right]:w-[min(48rem,calc(100vw-2rem))] data-[side=right]:sm:max-w-[min(48rem,calc(100vw-2rem))]"
             data-slot="call-api-response-dialog"
           >
-            <SheetHeader className={cn(EXPLORER_STRIP_CLASS, "flex-row gap-0 border-border/60 p-0")}>
+            <SheetHeader
+              className={cn(EXPLORER_STRIP_CLASS, "flex-row gap-0 border-border/60 p-0")}
+            >
               <SheetTitle className={cn(SECTION_HEAD_CLASS, "flex items-center px-2")}>
                 Response
               </SheetTitle>
@@ -960,7 +965,7 @@ function BodyViewToggle({
 }): JSX.Element {
   return (
     <div
-      className={EXPLORER_STRIP_CLASS}
+      className="flex h-full shrink-0 items-stretch"
       role="group"
       aria-label="Body view"
       data-slot="call-api-body-view-toggle"

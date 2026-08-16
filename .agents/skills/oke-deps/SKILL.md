@@ -121,12 +121,12 @@ If install pulled an unwanted canary for a pinned RC, reinstall the exact versio
 
 Per [oke-ship](../oke-ship/SKILL.md): append under `## Unreleased` → `### ♻️ Changed` → the matching `####` area, short bullets (root vs site vs others).
 
-| Workspace    | `####` area            |
-| ------------ | ---------------------- |
-| root         | Runtime                |
-| site         | Docs                   |
-| create-oke   | Dev, Keel & create-oke |
-| templates    | Dev, Keel & create-oke |
+| Workspace  | `####` area            |
+| ---------- | ---------------------- |
+| root       | Runtime                |
+| site       | Docs                   |
+| create-oke | Dev, Keel & create-oke |
+| templates  | Dev, Keel & create-oke |
 
 If the user says merge into a shipped `## v…` section, do that only when they explicitly ask.
 

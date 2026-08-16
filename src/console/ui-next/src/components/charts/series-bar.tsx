@@ -68,8 +68,7 @@ function computeSeriesBarLayout(input: {
     };
   }
 
-  const groupWidth =
-    seriesCount * barWidth + (seriesCount > 1 ? (seriesCount - 1) * gap : 0);
+  const groupWidth = seriesCount * barWidth + (seriesCount > 1 ? (seriesCount - 1) * gap : 0);
   const valueY = yScale(value) ?? innerHeight;
   return {
     barLeft: xCenter - groupWidth / 2 + seriesIndex * (barWidth + gap),
@@ -160,30 +159,19 @@ export function SeriesBar({
         composedBarGap: gap,
         stacked,
       }),
-    [
-      columnWidth,
-      composedBarSize,
-      composedMaxBarSize,
-      data.length,
-      gap,
-      innerWidth,
-      n,
-      stacked,
-    ]
+    [columnWidth, composedBarSize, composedMaxBarSize, data.length, gap, innerWidth, n, stacked],
   );
 
   const totalAnimDuration = animationDuration || 1100;
   const staggerSpread = totalAnimDuration * 0.4;
-  const calculatedStaggerDelay =
-    data.length > 1 ? staggerSpread / 1000 / data.length : 0;
+  const calculatedStaggerDelay = data.length > 1 ? staggerSpread / 1000 / data.length : 0;
   const { hoveredIndex: legendHoveredIndex } = useChartLegendHover();
-  const isLegendDimmed =
-    legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
+  const isLegendDimmed = legendHoveredIndex !== null && legendHoveredIndex !== seriesIndex;
   const hoveredIndex = tooltipData?.index ?? null;
 
   if (barScale) {
     console.warn(
-      "SeriesBar is for time-based ComposedChart / LineChart context. Use Bar inside BarChart for categorical x."
+      "SeriesBar is for time-based ComposedChart / LineChart context. Use Bar inside BarChart for categorical x.",
     );
     return null;
   }
@@ -198,28 +186,26 @@ export function SeriesBar({
 
         const xCenter = xScale(xAccessor(d)) ?? 0;
 
-        const { barLeft, valueY, barHeight, effectiveRadius } =
-          computeSeriesBarLayout({
-            stacked,
-            composedStackOffsets,
-            rowIndex: i,
-            dataKey,
-            value,
-            yScale,
-            innerHeight,
-            xCenter,
-            barWidth,
-            seriesCount: n,
-            gap,
-            seriesIndex,
-            stackGap,
-            isLastSeries,
-            radius,
-          });
+        const { barLeft, valueY, barHeight, effectiveRadius } = computeSeriesBarLayout({
+          stacked,
+          composedStackOffsets,
+          rowIndex: i,
+          dataKey,
+          value,
+          yScale,
+          innerHeight,
+          xCenter,
+          barWidth,
+          seriesCount: n,
+          gap,
+          seriesIndex,
+          stackGap,
+          isLastSeries,
+          radius,
+        });
 
         const categoryLabel = String(xAccessor(d).getTime());
-        const isFaded =
-          (hoveredIndex !== null && hoveredIndex !== i) || isLegendDimmed;
+        const isFaded = (hoveredIndex !== null && hoveredIndex !== i) || isLegendDimmed;
 
         if (animate && !isLoaded) {
           return (
@@ -294,10 +280,7 @@ function SeriesBarRect({
   isFaded,
   fadedOpacity,
 }: SeriesBarRectProps) {
-  const enterAnim = transitionWithDelay(
-    enterTransition,
-    index * calculatedStaggerDelay
-  );
+  const enterAnim = transitionWithDelay(enterTransition, index * calculatedStaggerDelay);
 
   return (
     <motion.rect

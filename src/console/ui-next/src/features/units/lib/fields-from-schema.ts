@@ -160,10 +160,9 @@ export function schemaFieldFlags(
  *
  * @param name - Property name (`id`, `userId`, `teamKey`, `identifier`)
  */
-export function inferFieldConstraints(name: string): Pick<
-  FormField,
-  "primaryKey" | "foreignKey" | "unique"
-> {
+export function inferFieldConstraints(
+  name: string,
+): Pick<FormField, "primaryKey" | "foreignKey" | "unique"> {
   if (name === "id") return { primaryKey: true };
   if (/(?:Id|_id)$/.test(name)) return { foreignKey: true };
   if (/(?:Key|_key)$/.test(name) && name !== "key") return { foreignKey: true };
@@ -228,7 +227,9 @@ export function fieldsWithValidation(fields: readonly FormField[]): FormField[] 
   );
 }
 
-function valueMeaningsFromProp(prop: Record<string, unknown>): readonly FieldValueMeaning[] | undefined {
+function valueMeaningsFromProp(
+  prop: Record<string, unknown>,
+): readonly FieldValueMeaning[] | undefined {
   const variants = Array.isArray(prop.oneOf)
     ? prop.oneOf
     : Array.isArray(prop.anyOf)

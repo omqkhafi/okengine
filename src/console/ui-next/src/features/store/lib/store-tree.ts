@@ -141,6 +141,19 @@ export function findByEffectRef(
 }
 
 /**
+ * True when the store is one child that shares the store name.
+ * The tree shows a single leaf — not `comments` → `comments`.
+ * SQL stays grouped (tables + catalog).
+ *
+ * @param store - Projected store row
+ */
+export function isSingletonStoreLeaf(store: StoreListStore): boolean {
+  if (store.facet === "sql") return false;
+  const only = store.children[0];
+  return store.children.length === 1 && only !== undefined && only.name === store.name;
+}
+
+/**
  * Open-state key for a facet band in {@link StoreTree}.
  *
  * @param facet - Band facet
@@ -183,6 +196,7 @@ export function storeTreeOpenKeys(bands: readonly StoreFacetBand[]): string[] {
   for (const band of bands) {
     keys.push(storeTreeFacetKey(band.facet));
     for (const node of band.stores) {
+      if (isSingletonStoreLeaf(node.store)) continue;
       keys.push(node.store.ref);
       if (node.store.facet === "sql") keys.push(storeTreeTablesKey(node.store.ref));
     }
@@ -202,7 +216,9 @@ export function storeTreeAncestorKeys(
 ): string[] {
   const found = findByEffectRef(stores, effectRef);
   if (!found) return [];
-  const keys = [storeTreeFacetKey(found.store.facet), found.store.ref];
+  const keys = [storeTreeFacetKey(found.store.facet)];
+  if (isSingletonStoreLeaf(found.store)) return keys;
+  keys.push(found.store.ref);
   if (found.store.facet === "sql" && !isSqlCatalogChild(found.child)) {
     keys.push(storeTreeTablesKey(found.store.ref));
   }

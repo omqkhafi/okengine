@@ -26,10 +26,7 @@ export interface TooltipDotProps {
   animate?: boolean;
 }
 
-function ringCornerRadius(
-  halfExtent: number,
-  cornerRadiusFraction: number
-): number {
+function ringCornerRadius(halfExtent: number, cornerRadiusFraction: number): number {
   const side = halfExtent * 2;
   return side * Math.max(0, Math.min(0.5, cornerRadiusFraction));
 }

@@ -1,13 +1,7 @@
 import "@/core";
 
 import { oke } from "okengine/http";
-import {
-  KEEL_CLOCKS,
-  KEEL_EXTRA_STORES,
-  KEEL_GATES,
-  KEEL_TEMPLATES,
-  KEEL_VAULT,
-} from "@/core";
+import { KEEL_CLOCKS, KEEL_EXTRA_STORES, KEEL_GATES, KEEL_TEMPLATES, KEEL_VAULT } from "@/core";
 import * as routes from "@/flows/generated";
 
 export const app = oke({

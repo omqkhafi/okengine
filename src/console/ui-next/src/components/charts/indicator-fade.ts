@@ -6,9 +6,7 @@ export interface VerticalFadeSides {
   any: boolean;
 }
 
-export function resolveVerticalFadeSides(
-  fade: IndicatorFadeEdges | boolean
-): VerticalFadeSides {
+export function resolveVerticalFadeSides(fade: IndicatorFadeEdges | boolean): VerticalFadeSides {
   if (fade === false || fade === "none") {
     return { top: false, bottom: false, any: false };
   }
@@ -29,7 +27,7 @@ export interface IndicatorFadeGradientStop {
 /** Opacity stops for the crosshair vertical gradient. */
 export function indicatorFadeGradientStops(
   sides: VerticalFadeSides,
-  fadeLengthPercent = 10
+  fadeLengthPercent = 10,
 ): IndicatorFadeGradientStop[] {
   const fade = Math.min(40, Math.max(2, fadeLengthPercent));
   const innerEnd = 100 - fade;

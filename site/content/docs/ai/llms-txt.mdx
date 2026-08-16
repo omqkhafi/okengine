@@ -7,15 +7,15 @@ source: "docs/spec/unified-theory.md"
 
 This documentation site serves machine-readable twins of every page, following the `llms.txt` convention — so an agent can pull exactly the docs it needs (or all of them) instead of scraping HTML.
 
-| Endpoint                | Contains                                                          | Pull it when                                 |
-| ----------------------- | ----------------------------------------------------------------- | -------------------------------------------- |
-| `/llms.txt`             | Spec map — H1, summary, curated links, Optional rest              | The agent needs the map                      |
-| `/llms.json`            | Same catalogue as JSON (`slug`, `html`, `markdown`)               | Structured clients                           |
-| `/llms-full.txt`        | All pages concatenated; teaching figures as blockquotes           | Whole-docs context                           |
-| `/llms.mdx/docs/⟨slug⟩` | One page as source markdown                                       | One page — e.g. Vault                        |
-| `/llms/agents`          | The `AGENTS.md` contract                                          | Session bootstrap                            |
-| `/robots.txt`           | Allow-all, including named AI crawlers                            | Crawler policy                               |
-| `/sitemap.xml`          | HTML pages plus the machine endpoints                             | Crawler map                                  |
+| Endpoint                   | Contains                                                | Pull it when            |
+| -------------------------- | ------------------------------------------------------- | ----------------------- |
+| `/llms.txt`                | Spec map — H1, summary, curated links, Optional rest    | The agent needs the map |
+| `/llms.json`               | Same catalogue as JSON (`slug`, `html`, `markdown`)     | Structured clients      |
+| `/llms-full.txt`           | All pages concatenated; teaching figures as blockquotes | Whole-docs context      |
+| `/llms.mdx/docs/⟨slug⟩.md` | One page as source markdown                             | One page — e.g. Vault   |
+| `/llms/agents`             | The `AGENTS.md` contract                                | Session bootstrap       |
+| `/robots.txt`              | Allow-all, including named AI crawlers                  | Crawler policy          |
+| `/sitemap.xml`             | HTML pages plus the machine endpoints                   | Crawler map             |
 
 ## Use them
 
@@ -23,7 +23,7 @@ This documentation site serves machine-readable twins of every page, following t
 curl https://oke.omqkhafi.dev/llms.txt
 curl https://oke.omqkhafi.dev/llms.json
 curl https://oke.omqkhafi.dev/llms-full.txt
-curl https://oke.omqkhafi.dev/llms.mdx/docs/elements/vault
+curl https://oke.omqkhafi.dev/llms.mdx/docs/elements/vault.md
 curl https://oke.omqkhafi.dev/llms/agents
 ```
 

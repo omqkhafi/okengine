@@ -34,6 +34,22 @@ const AI_SAME_MODEL_RETRY_BACKOFF_MS = 250;
 /** Default bound for tool / agent loops. */
 export const AI_DEFAULT_MAX_STEPS = 6;
 
+/**
+ * Split `name` / `name@version` the same way capability pins do.
+ *
+ * @param ref - Prompt id from `fx.ask`
+ */
+export function parsePromptRef(ref: string): {
+  readonly name: string;
+  readonly version?: number;
+} {
+  const at = ref.lastIndexOf("@");
+  if (at <= 0) return { name: ref };
+  const tail = ref.slice(at + 1);
+  if (!/^\d+$/.test(tail)) return { name: ref };
+  return { name: ref.slice(0, at), version: Number(tail) };
+}
+
 /** Recorded agent tool denial (containment proof — not an error). */
 export interface AgentDenial {
   readonly agent: string;
@@ -569,8 +585,12 @@ export function createAiRuntime(options: CreateAiRuntimeOptions = {}): AiRuntime
     agentRuns,
     journal,
     async ask(prompt, input, opts) {
-      const decl = prompts.get(prompt);
+      const pin = parsePromptRef(prompt);
+      const decl = prompts.get(pin.name) ?? prompts.get(prompt);
       if (!decl) throw new Error(`ai: unknown prompt "${prompt}"`);
+      if (pin.version !== undefined && decl.version !== undefined && pin.version !== decl.version) {
+        throw new Error(`ai: unknown prompt "${prompt}"`);
+      }
       const version = decl.version;
       const started = now();
       const tools = opts?.tools ?? [];

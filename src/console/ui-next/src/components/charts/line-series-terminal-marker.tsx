@@ -29,8 +29,7 @@ export function LineSeriesTerminalMarker({
   ringGap = 0,
   strokeWidth = 1.5,
 }: LineSeriesTerminalMarkerProps) {
-  const { data, xScale, xAccessor, chartPhase, revealEpoch, enterTransition } =
-    useChartStable();
+  const { data, xScale, xAccessor, chartPhase, revealEpoch, enterTransition } = useChartStable();
   const yScale = useYScale(yAxisId);
 
   const point = useMemo(() => {
@@ -87,8 +86,6 @@ export function LineSeriesTerminalMarker({
 
 LineSeriesTerminalMarker.displayName = "LineSeriesTerminalMarker";
 
-(
-  LineSeriesTerminalMarker as unknown as Record<string, boolean>
-).__isPostOverlay = true;
+(LineSeriesTerminalMarker as unknown as Record<string, boolean>).__isPostOverlay = true;
 
 export default LineSeriesTerminalMarker;

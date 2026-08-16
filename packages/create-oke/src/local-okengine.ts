@@ -33,6 +33,7 @@ type ConsumerOkenginePackageJson = {
   readonly peerDependencies?: Record<string, string>;
   readonly peerDependenciesMeta?: Record<string, unknown>;
   readonly engines?: unknown;
+  readonly trustedDependencies?: readonly string[];
 };
 
 /**
@@ -92,6 +93,8 @@ export function materializeLocalOkengineDependency(localOkengineRoot: string): s
     ...(raw["exports"] !== undefined ? { exports: raw["exports"] } : {}),
     ...(Object.keys(stageDependencies).length > 0 ? { dependencies: stageDependencies } : {}),
     ...(raw["engines"] !== undefined ? { engines: raw["engines"] } : {}),
+    // Bun blocks native postinstalls unless listed — DuckDB runs queries need it.
+    trustedDependencies: ["@duckdb/node-api"],
   };
 
   const stage = localOkengineStageDir();

@@ -15,8 +15,7 @@ import { LineChart } from "./line-chart";
 
 const LOADING_DATA_KEY = DEFAULT_SKELETON_DATA_KEY;
 const DEFAULT_LOADING_STROKE = "var(--foreground)";
-const DEFAULT_LOADING_GRID_STROKE =
-  "color-mix(in oklch, var(--chart-grid) 50%, transparent)";
+const DEFAULT_LOADING_GRID_STROKE = "color-mix(in oklch, var(--chart-grid) 50%, transparent)";
 const DEFAULT_LOADING_GRID_SHIMMER_STROKE =
   "color-mix(in oklch, var(--foreground) 68%, transparent)";
 const DEFAULT_LOADING_STROKE_OPACITY = 0.5;
@@ -72,7 +71,7 @@ export function LineChartLoading({
         dataKey: DEFAULT_SKELETON_DATA_KEY,
         pointCount: DEFAULT_SKELETON_POINT_COUNT,
       }),
-    []
+    [],
   );
 
   return (

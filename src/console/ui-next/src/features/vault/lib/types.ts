@@ -3,11 +3,7 @@
  */
 
 /** Resolution layer id — matches VaultRuntime sources. */
-export type VaultResolutionSource =
-  | "process.env"
-  | ".env.local"
-  | "driver"
-  | "dev-fallback";
+export type VaultResolutionSource = "process.env" | ".env.local" | "driver" | "dev-fallback";
 
 /** One step in the full resolution chain. */
 export interface VaultResolutionStep {

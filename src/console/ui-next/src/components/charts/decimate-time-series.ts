@@ -1,7 +1,7 @@
 export function decimateTimeSeries<T extends Record<string, unknown>>(
   data: T[],
   maxPoints: number,
-  valueKeys: string[] = []
+  valueKeys: string[] = [],
 ): T[] {
   const len = data.length;
   if (maxPoints >= len || maxPoints < 3) {
@@ -64,9 +64,7 @@ export function decimateTimeSeries<T extends Record<string, unknown>>(
 
     for (let j = rangeStart; j < rangeEnd; j++) {
       const area =
-        Math.abs(
-          (ax - avgX) * (getY(data[j] as T, j) - ay) - (ax - j) * (avgY - ay)
-        ) * 0.5;
+        Math.abs((ax - avgX) * (getY(data[j] as T, j) - ay) - (ax - j) * (avgY - ay)) * 0.5;
       if (area > maxArea) {
         maxArea = area;
         maxIndex = j;
@@ -89,7 +87,7 @@ export function maxRenderPointsForWidth(innerWidth: number): number {
 /** Bucket OHLC rows into fewer candles while preserving high/low extremes. */
 export function decimateOhlcData<T extends Record<string, unknown>>(
   data: T[],
-  maxPoints: number
+  maxPoints: number,
 ): T[] {
   const len = data.length;
   if (maxPoints >= len || maxPoints < 2) {

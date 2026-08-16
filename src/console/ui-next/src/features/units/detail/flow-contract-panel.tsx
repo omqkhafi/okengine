@@ -3,7 +3,12 @@
  */
 
 import type { JSX, ReactNode } from "react";
-import { Radio01Icon, SecurityCheckIcon, Timer01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import {
+  InternetAntenna03Icon,
+  SecurityCheckIcon,
+  Timer01Icon,
+  UserIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import type { Manifest, Signal } from "../../../../../../manifest/types.ts";
@@ -152,7 +157,11 @@ export function FlowContractPanel({
           />
         ) : null}
         {row.flow.live ? (
-          <MetaPill icon={Radio01Icon} label="live" title="Live — subscribes to realtime updates" />
+          <MetaPill
+            icon={InternetAntenna03Icon}
+            label="live"
+            title="Live — subscribes to realtime updates"
+          />
         ) : null}
       </FlowActivityStrip>
 

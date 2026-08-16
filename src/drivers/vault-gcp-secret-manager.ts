@@ -52,8 +52,7 @@ export interface OpenGcpSecretManagerOptions {
 export async function openGcpSecretManagerBag(
   options: OpenGcpSecretManagerOptions = {},
 ): Promise<VaultBag> {
-  const client =
-    options.client ?? (await connectGcpSecretManager(options.mount, options.region));
+  const client = options.client ?? (await connectGcpSecretManager(options.mount, options.region));
   return openRemoteSecretBag({
     client,
     ...(options.secrets === undefined ? {} : { secrets: options.secrets }),
@@ -78,12 +77,11 @@ interface GcpSdkClient {
   >;
   accessSecretVersion(req: {
     name: string;
-  }): Promise<readonly [{ readonly payload?: { readonly data?: Uint8Array | string | null } | null }]>;
+  }): Promise<
+    readonly [{ readonly payload?: { readonly data?: Uint8Array | string | null } | null }]
+  >;
   createSecret(req: { parent: string; secretId: string; secret: unknown }): Promise<unknown>;
-  addSecretVersion(req: {
-    parent: string;
-    payload: { data: Uint8Array };
-  }): Promise<unknown>;
+  addSecretVersion(req: { parent: string; payload: { data: Uint8Array } }): Promise<unknown>;
   deleteSecret(req: { name: string }): Promise<unknown>;
   close?(): Promise<void>;
 }

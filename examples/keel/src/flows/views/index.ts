@@ -40,14 +40,17 @@ export const create = on(
     out: IdOut,
     do: async (input, fx) => {
       const id = fx.id();
-      await fx.store(db).insert(views).values({
-        id,
-        projectId: input.projectId,
-        name: input.name,
-        kind: input.kind,
-        filtersJson: input.filtersJson ?? "{}",
-        ownerEmail: fx.auth.userId ?? input.ownerEmail ?? null,
-      });
+      await fx
+        .store(db)
+        .insert(views)
+        .values({
+          id,
+          projectId: input.projectId,
+          name: input.name,
+          kind: input.kind,
+          filtersJson: input.filtersJson ?? "{}",
+          ownerEmail: fx.auth.userId ?? input.ownerEmail ?? null,
+        });
       await fx.store(viewPrefsKv).set(id, { kind: input.kind, projectId: input.projectId });
       return { id };
     },

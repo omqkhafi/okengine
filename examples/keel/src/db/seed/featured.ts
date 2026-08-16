@@ -513,7 +513,7 @@ export const SEED_PNG = Uint8Array.from(
   (ch) => ch.charCodeAt(0),
 );
 
-/** Featured file objects. */
+/** Featured file objects — one `keel` bucket, folders per job. */
 export const FEATURED_FILES: ReadonlyArray<{
   key: string;
   originalName: string;
@@ -524,6 +524,38 @@ export const FEATURED_FILES: ReadonlyArray<{
     key: "attachments/tsk_eng_12/screenshot.png",
     originalName: "screenshot.png",
     data: SEED_PNG,
+  },
+  {
+    key: "documents/doc_prd_api/prd.md",
+    originalName: "prd.md",
+    data: "# Harbor API PRD\n\nSSO + billing webhook before freeze.\n",
+  },
+  {
+    key: "documents/doc_spec_12/impl-spec.md",
+    originalName: "impl-spec.md",
+    data: "# ENG-12\n\nClaim rotate must keep the session cookie.\n",
+  },
+  { key: "avatars/mem_aria.png", originalName: "aria.png", data: SEED_PNG },
+  { key: "avatars/mem_ben.png", originalName: "ben.png", data: SEED_PNG },
+  {
+    key: "projects/proj_api/brief.md",
+    originalName: "brief.md",
+    data: "# Harbor API\n\nLead: Ben. Target 2026-08-29.\n",
+  },
+  {
+    key: "projects/proj_web/cover.png",
+    originalName: "cover.png",
+    data: SEED_PNG,
+  },
+  {
+    key: "exports/harbor-ga.csv",
+    originalName: "harbor-ga.csv",
+    data: "identifier,title,status\nENG-12,SSO login fails,started\n",
+  },
+  {
+    key: "forms/form_customer/intake.json",
+    originalName: "intake.json",
+    data: '{"title":"SSO login fails","body":"Form intake"}\n',
   },
 ];
 

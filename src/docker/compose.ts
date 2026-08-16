@@ -185,12 +185,13 @@ export function emitComposeLayers(
       if (Object.keys(deps).length > 0) service.depends_on = deps;
     }
 
+    const extraServices = peerServices(applied.services, includeApp);
     const namedVolumes = namedVolumeDecls([
       ...(applied.volumes ?? []),
-      ...extraServiceVolumes(applied.services),
+      ...extraServiceVolumes(extraServices),
     ]);
     const doc: Record<string, unknown> = {
-      services: { [spec.serviceName]: service, ...applied.services },
+      services: { [spec.serviceName]: service, ...extraServices },
       networks: { oke: { external: false } },
     };
     if (Object.keys(namedVolumes).length > 0) {
@@ -716,6 +717,23 @@ function namedVolumeDecls(
     if (name) out[name] = {};
   }
   return out;
+}
+
+/**
+ * Recipe extra services, minus peer overlays that only exist when `app` is
+ * in the stack (Traefik routing labels). A label-only `app` with no image
+ * or build is invalid Compose — `oke dev` is infra-only (`includeApp: false`).
+ *
+ * @param services - Extra compose service fragments from a recipe
+ * @param includeApp - Whether the stack includes the `app` service
+ */
+function peerServices(
+  services: Readonly<Record<string, Record<string, unknown>>> | undefined,
+  includeApp: boolean,
+): Record<string, Record<string, unknown>> {
+  const extra = { ...(services ?? {}) };
+  if (!includeApp) delete extra.app;
+  return extra;
 }
 
 /**

@@ -10,7 +10,7 @@ import { DOCS_ORIGIN } from "./agent-onboard";
 import { expandTeachingFigures, TEACHING_FIGURE_FALLBACKS } from "./llms-figures";
 import { buildLlmsCatalog, buildLlmsTxt, markdownPathForSlugs } from "./llms-index";
 import { DOCS_CONTENT_DIR } from "./markdown-source";
-import { resolveMarkdownPage, source } from "./source";
+import { getPageMarkdownUrl, resolveMarkdownPage, source } from "./source";
 
 describe("buildLlmsTxt", () => {
   test("matches the llmstxt.org skeleton", () => {
@@ -21,7 +21,7 @@ describe("buildLlmsTxt", () => {
     expect(body).toContain("## Start here");
     expect(body).toContain("## Optional");
     expect(body.lastIndexOf("## Optional")).toBeGreaterThan(body.lastIndexOf("## Reference"));
-    expect(body).toContain(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault`);
+    expect(body).toContain(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault.md`);
     expect(body).not.toMatch(/\]\(\/docs\//);
   });
 
@@ -42,7 +42,7 @@ describe("buildLlmsCatalog", () => {
     expect(catalog.pages.length).toBe(source.getPages().length);
     const vault = catalog.pages.find((p) => p.slug === "elements/vault");
     expect(vault?.html).toBe(`${DOCS_ORIGIN}/docs/elements/vault`);
-    expect(vault?.markdown).toBe(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault`);
+    expect(vault?.markdown).toBe(`${DOCS_ORIGIN}/llms.mdx/docs/elements/vault.md`);
   });
 });
 
@@ -77,18 +77,22 @@ describe("llms/agents contract route", () => {
 
 describe("markdownPathForSlugs", () => {
   test("omits the content.md suffix", () => {
-    expect(markdownPathForSlugs([])).toBe("/llms.mdx/docs");
-    expect(markdownPathForSlugs(["elements", "vault"])).toBe("/llms.mdx/docs/elements/vault");
+    expect(markdownPathForSlugs([])).toBe("/llms.mdx/docs/index.md");
+    expect(markdownPathForSlugs(["elements", "vault"])).toBe("/llms.mdx/docs/elements/vault.md");
+  });
+
+  test("docs index markdown is index.md so static export has no file/dir clash", () => {
+    const index = source.getPages().find((page) => page.slugs.length === 0);
+    expect(index).toBeDefined();
+    expect(getPageMarkdownUrl(index!).url).toBe("/llms.mdx/docs/index.md");
   });
 });
 
 describe("expandTeachingFigures", () => {
   test("inlines every mapped void figure and StoreFacetMark", () => {
-    const body = [
-      "<FlowTriggers />",
-      '<StoreFacetMark facet="sql" />',
-      "<VaultResolution />",
-    ].join("\n");
+    const body = ["<FlowTriggers />", '<StoreFacetMark facet="sql" />', "<VaultResolution />"].join(
+      "\n",
+    );
     const expanded = expandTeachingFigures(body);
     expect(expanded).toContain(TEACHING_FIGURE_FALLBACKS.FlowTriggers);
     expect(expanded).toContain("sql facet —");

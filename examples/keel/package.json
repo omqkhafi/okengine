@@ -3,10 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "oke test",
+    "dev": "oke dev",
+    "seed": "oke db seed",
+    "reset": "bun scripts/reset.ts"
+  },
   "dependencies": {
-    "okengine": "file:../..",
     "drizzle-orm": "1.0.0-rc.4",
     "drizzle-zod": "^0.8.3",
+    "okengine": "file:../..",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -15,12 +22,5 @@
     "@types/bun": "latest",
     "drizzle-kit": "1.0.0-rc.4",
     "typescript": "^7.0.2"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "oke test",
-    "dev": "oke dev",
-    "seed": "oke db seed",
-    "reset": "bun scripts/reset.ts"
   }
 }

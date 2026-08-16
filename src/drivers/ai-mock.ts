@@ -50,10 +50,8 @@ export const mockAiDriver: AiDriver = {
           }
         }
         if (payload === undefined) {
-          payload =
-            canned["*"] ??
-            fixtureFromResponseFormat(opts.responseFormat) ??
-            { ok: true, echo: last };
+          payload = canned["*"] ??
+            fixtureFromResponseFormat(opts.responseFormat) ?? { ok: true, echo: last };
         }
 
         // Scripted tool calls: `{ __toolCalls: [...] }` or MockToolCallScript shape
@@ -149,7 +147,9 @@ function fixtureFromResponseFormat(responseFormat: unknown): Record<string, unkn
   for (const key of required) {
     const spec = props[key];
     const type =
-      spec && typeof spec === "object" && "type" in spec ? String((spec as { type?: unknown }).type) : "string";
+      spec && typeof spec === "object" && "type" in spec
+        ? String((spec as { type?: unknown }).type)
+        : "string";
     out[key] =
       type === "number" || type === "integer"
         ? 0

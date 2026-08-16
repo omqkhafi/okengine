@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  FEATURED_COMMENTS,
+  FEATURED_DOCUMENTS,
   FEATURED_MEMBERS,
   FEATURED_PROJECTS,
   FEATURED_SECTIONS,
@@ -36,6 +38,15 @@ describe("keel volume seed", () => {
     expect(KEEL_VOLUME.drafts.length + KEEL_VOLUME.reminders.length).toBe(GENERATED.kvKeys);
     expect(KEEL_VOLUME.files).toHaveLength(GENERATED.files);
     expect(KEEL_VOLUME.index).toHaveLength(GENERATED.index);
+    expect(KEEL_SEED_COUNTS.indexDocuments).toBe(
+      FEATURED_DOCUMENTS.length + KEEL_VOLUME.documents.length,
+    );
+    expect(KEEL_SEED_COUNTS.indexComments).toBe(
+      FEATURED_COMMENTS.length + KEEL_VOLUME.comments.length,
+    );
+    expect(KEEL_SEED_COUNTS.indexProjects).toBe(
+      FEATURED_PROJECTS.length + KEEL_VOLUME.projects.length,
+    );
     expect(KEEL_SEED_COUNTS.tasks).toBeGreaterThanOrEqual(500);
     expect(KEEL_SEED_COUNTS.tasks).toBe(FEATURED_TASKS.length + GENERATED.tasks);
   });
@@ -44,7 +55,11 @@ describe("keel volume seed", () => {
     const featuredIds = new Set<string>(FEATURED_TASKS.map((task) => task.id));
     expect(KEEL_VOLUME.tasks.some((task) => featuredIds.has(task.id))).toBe(false);
     expect(KEEL_VOLUME.tasks[0]?.id).toMatch(/^tsk_(eng|des|gtm)_200$/);
-    expect(KEEL_VOLUME.files[0]?.key.startsWith("attachments/tsk_")).toBe(true);
+    const fileRoots = new Set(KEEL_VOLUME.files.map((file) => file.key.split("/")[0]));
+    expect(fileRoots).toEqual(
+      new Set(["attachments", "documents", "avatars", "projects", "exports", "forms"]),
+    );
+    expect(KEEL_VOLUME.files.some((file) => file.key.startsWith("attachments/tsk_"))).toBe(true);
   });
 
   test("generator is deterministic", () => {

@@ -119,14 +119,11 @@ function parseListCommand(statement: string): KvQueryParse {
     return { kind: "list", prefix: prefix.value };
   }
   const list = /^list(?:\s+(\S.*))?$/i.exec(lastCommandLine(statement) ?? statement);
-  if (!list) return { kind: "error", message: "Use `list [prefix]` or `list(\"prefix\")`." };
+  if (!list) return { kind: "error", message: 'Use `list [prefix]` or `list("prefix")`.' };
   return { kind: "list", prefix: list[1]?.trim() ?? "" };
 }
 
-function parseKeyedCommand(
-  kind: "get" | "delete" | "ttl",
-  statement: string,
-): KvQueryParse {
+function parseKeyedCommand(kind: "get" | "delete" | "ttl", statement: string): KvQueryParse {
   if (statement.includes("(")) {
     const parsed = parseParenArgs(statement, kind);
     if (parsed.kind === "error") return parsed;

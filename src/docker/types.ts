@@ -96,7 +96,7 @@ export interface RecipeApplyResult {
   /**
    * Extra `services` entries merged into this role's compose layer —
    * companions (e.g. Docker socket proxy) or overlays on peers
-   * (e.g. Traefik routing labels on `app`).
+   * (e.g. Traefik routing labels on `app` when `includeApp` is true).
    */
   readonly services?: Readonly<Record<string, Record<string, unknown>>>;
   /**
@@ -181,7 +181,8 @@ export interface DeriveOptions {
   readonly serverMemoryGb?: number;
   /**
    * Include the `app` service in the compose document (default true).
-   * `oke dev --docker` sets false — host Bun runs the app; Docker is infra only.
+   * `oke dev` sets false — host Bun runs the app; Docker is infra only.
+   * Recipe overlays on `app` (Traefik labels) are dropped in that mode.
    */
   readonly includeApp?: boolean;
   /**

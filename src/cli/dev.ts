@@ -1015,9 +1015,11 @@ export async function runDev(options: DevOptions = {}): Promise<DevResult> {
     const { syncDevSchema } = await import("./dev-schema-sync.ts");
     const configEnv = "dev" as const;
     try {
+      const injectedPush = options.dbPush;
       const result = await syncDevSchema(cwd, configEnv, {
         write: chromeWrite,
         quietComposeReady: true,
+        ...(injectedPush ? { pushFn: async (projectCwd: string) => injectedPush(projectCwd) } : {}),
       });
       write(
         formatStatusLine(

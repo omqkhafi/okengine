@@ -44,17 +44,20 @@ export const create = on(
     out: IdOut,
     do: async (input, fx) => {
       const id = fx.id();
-      await fx.store(db).insert(projects).values({
-        id,
-        spaceId: input.spaceId,
-        goalId: input.goalId ?? null,
-        name: input.name,
-        status: input.status ?? "planned",
-        leadEmail: input.leadEmail ?? null,
-        startDate: input.startDate ?? null,
-        targetDate: input.targetDate ?? null,
-        color: input.color ?? null,
-      });
+      await fx
+        .store(db)
+        .insert(projects)
+        .values({
+          id,
+          spaceId: input.spaceId,
+          goalId: input.goalId ?? null,
+          name: input.name,
+          status: input.status ?? "planned",
+          leadEmail: input.leadEmail ?? null,
+          startDate: input.startDate ?? null,
+          targetDate: input.targetDate ?? null,
+          color: input.color ?? null,
+        });
       return { id };
     },
   }),
@@ -104,13 +107,16 @@ export const postUpdate = on(
       if (!row) return fail("NotFound", { id: input.id });
       const id = fx.id();
       const health = input.health ?? "on_track";
-      await fx.store(db).insert(projectUpdates).values({
-        id,
-        projectId: input.id,
-        health,
-        body: input.body,
-        authorEmail: fx.auth.userId ?? "ops@keel.dev",
-      });
+      await fx
+        .store(db)
+        .insert(projectUpdates)
+        .values({
+          id,
+          projectId: input.id,
+          health,
+          body: input.body,
+          authorEmail: fx.auth.userId ?? "ops@keel.dev",
+        });
       const payload = {
         projectId: input.id,
         name: String(row.name),

@@ -7,7 +7,7 @@ import {
   ArrowDown01Icon,
   FilterHorizontalIcon,
   Folder01Icon,
-  Radio01Icon,
+  InternetAntenna03Icon,
   SecurityCheckIcon,
   Timer01Icon,
   UserIcon,
@@ -298,7 +298,7 @@ export function UnitsTree({ groups, selectedFlowId, onSelect }: UnitsTreeProps):
                 ) : null}
                 {hasLive ? (
                   <FacetChip
-                    icon={Radio01Icon}
+                    icon={InternetAntenna03Icon}
                     label="live"
                     pressed={facets.liveOnly ?? false}
                     onToggle={() => toggleFlag("liveOnly")}

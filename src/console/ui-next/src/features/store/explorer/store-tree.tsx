@@ -65,6 +65,7 @@ import {
   loadHiddenFacets,
   saveHiddenFacets,
   STORE_FACET_SPECS,
+  isSingletonStoreLeaf,
   storeTreeAncestorKeys,
   storeTreeFacetKey,
   storeTreeIsOpen,
@@ -383,7 +384,9 @@ function FacetBand({
     if (s.store.facet === "sql") return n + groupSqlChildren(s.children).tables.length;
     return n + s.children.length;
   }, 0);
-  const storeRefs = band.stores.map((n) => n.store.ref);
+  const storeRefs = band.stores
+    .filter((n) => !isSingletonStoreLeaf(n.store))
+    .map((n) => n.store.ref);
   const storesOpen = storeRefs.length > 0 && storeRefs.every((ref) => storeOpen(ref));
 
   const toggleStores = (): void => {
@@ -515,6 +518,18 @@ function StoreGroupItem({
         child={only}
         selected={selectedEffectRef === only.effectRef}
         onSelect={onSelect}
+      />
+    );
+  }
+  if (isSingletonStoreLeaf(node.store) && only) {
+    return (
+      <ChildListItem
+        child={only}
+        wellClass={facetWellClass}
+        icon={facetIcon}
+        selected={selectedEffectRef === only.effectRef}
+        onSelect={onSelect}
+        nest="store"
       />
     );
   }
@@ -985,7 +1000,7 @@ function ChildListItem({
   readonly selected: boolean;
   readonly onSelect: (effectRef: string) => void;
   readonly hint?: string;
-  readonly nest?: "child" | "deep";
+  readonly nest?: "store" | "child" | "deep";
 }): JSX.Element {
   return (
     <li>
@@ -998,7 +1013,7 @@ function ChildListItem({
         className={cn(
           EXPLORER_ROW_CLASS,
           "group/child",
-          nest === "deep" ? "pl-12" : "pl-8",
+          nest === "store" ? "pl-4" : nest === "deep" ? "pl-12" : "pl-8",
           selected && EXPLORER_ROW_SELECTED_CLASS,
         )}
       >

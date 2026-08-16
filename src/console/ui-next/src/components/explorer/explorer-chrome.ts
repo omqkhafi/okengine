@@ -72,7 +72,7 @@ export const EXPLORER_RAIL_ACTIVE_CLASS = "bg-sky-500";
 
 /** Folder / group row (same density as a leaf). */
 export const EXPLORER_GROUP_ROW_CLASS =
-  "group/folder flex w-full items-center gap-2 border-b border-border/60 px-2 py-1.5 text-left transition-colors hover:bg-muted/50";
+  "group/folder flex w-full items-center gap-2 border-b border-border/60 px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/50";
 
 /** Bare chevron on a band or folder. */
 export const EXPLORER_CHEVRON_CLASS = "size-3 shrink-0 text-muted-foreground transition-transform";

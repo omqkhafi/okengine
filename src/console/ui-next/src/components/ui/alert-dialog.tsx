@@ -96,10 +96,7 @@ function AlertDialogFooter({ className, ...props }: ComponentProps<"div">): JSX.
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={cn(
-        "flex flex-row items-stretch border-t border-border/50 p-0",
-        className,
-      )}
+      className={cn("flex flex-row items-stretch border-t border-border/50 p-0", className)}
       {...props}
     />
   );

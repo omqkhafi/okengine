@@ -31,7 +31,7 @@ export const MANAGED_VAULT_PROVIDER_IDS = [
 export type ManagedVaultProviderId = (typeof MANAGED_VAULT_PROVIDER_IDS)[number];
 
 /** Supported provider ids, for error messages. */
-export const MANAGED_VAULT_PROVIDER_LIST = MANAGED_VAULT_PROVIDER_IDS.join(" · ");
+export const MANAGED_VAULT_PROVIDER_LIST: string = MANAGED_VAULT_PROVIDER_IDS.join(" · ");
 
 /** Options for {@link createManagedVaultBag}. */
 export interface ManagedVaultOptions extends VaultOpenOptions {

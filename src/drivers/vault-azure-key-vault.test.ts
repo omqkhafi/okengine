@@ -4,11 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { isVaultError } from "../elements/vault/errors.ts";
-import {
-  fromAzureName,
-  openAzureKeyVaultBag,
-  toAzureName,
-} from "./vault-azure-key-vault.ts";
+import { fromAzureName, openAzureKeyVaultBag, toAzureName } from "./vault-azure-key-vault.ts";
 import type { RemoteSecretClient } from "./vault-remote-bag.ts";
 
 /** One recorded call against the fake API. */

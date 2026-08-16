@@ -101,9 +101,7 @@ function TooltipIndicatorInner({
   const effectiveSpring = springConfig ?? tooltipSpring;
 
   const pixelWidth =
-    span !== undefined && columnWidth !== undefined
-      ? span * columnWidth
-      : resolveWidth(width);
+    span !== undefined && columnWidth !== undefined ? span * columnWidth : resolveWidth(width);
 
   const rectX = x - pixelWidth / 2;
   const lineX = x;
@@ -152,21 +150,9 @@ function TooltipIndicatorInner({
 
   if (!fadeSides.any) {
     return animate ? (
-      <motion.rect
-        fill={indicatorFill}
-        height={height}
-        width={pixelWidth}
-        x={animatedX}
-        y={0}
-      />
+      <motion.rect fill={indicatorFill} height={height} width={pixelWidth} x={animatedX} y={0} />
     ) : (
-      <rect
-        fill={indicatorFill}
-        height={height}
-        width={pixelWidth}
-        x={rectX}
-        y={0}
-      />
+      <rect fill={indicatorFill} height={height} width={pixelWidth} x={rectX} y={0} />
     );
   }
 
@@ -194,13 +180,7 @@ function TooltipIndicatorInner({
           y={0}
         />
       ) : (
-        <rect
-          fill={`url(#${gradientId})`}
-          height={height}
-          width={pixelWidth}
-          x={rectX}
-          y={0}
-        />
+        <rect fill={`url(#${gradientId})`} height={height} width={pixelWidth} x={rectX} y={0} />
       )}
     </g>
   );

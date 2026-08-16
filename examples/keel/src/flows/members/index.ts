@@ -45,13 +45,16 @@ export const invite = on(
         if (!space) return fail("NotFound", { id: input.spaceId });
       }
       const id = fx.id();
-      await fx.store(db).insert(members).values({
-        id,
-        spaceId: input.spaceId ?? null,
-        name: input.email.split("@")[0] ?? input.email,
-        email: input.email,
-        role: input.role,
-      });
+      await fx
+        .store(db)
+        .insert(members)
+        .values({
+          id,
+          spaceId: input.spaceId ?? null,
+          name: input.email.split("@")[0] ?? input.email,
+          email: input.email,
+          role: input.role,
+        });
       return { id };
     },
   }),

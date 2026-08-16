@@ -62,15 +62,15 @@ Task:
 
 ## Reject on sight
 
-| Smell | Fix |
-| --- | --- |
-| `rounded-md` + `bg-muted` tab / chip | Strip token, ink when active |
-| `size="icon-xs"` / `variant="secondary"` on a bar | Stretch token / ghost + ink |
-| `backdrop-blur` / `bg-background/95` on a header | `DETAIL_HEADER_CLASS` or `EXPLORER_STRIP_CLASS` |
-| `border-border/50` on explorer chrome | `/60` |
-| `tracking-[0.14em]` | `0.08em` / `SECTION_HEAD_CLASS` |
-| Hover is a rounded square inside an `h-10` | `items-stretch` + full-height token |
-| Collapsed nav shows `O…` / `Fl…` | `sr-only` label, keep icon box |
+| Smell                                             | Fix                                             |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `rounded-md` + `bg-muted` tab / chip              | Strip token, ink when active                    |
+| `size="icon-xs"` / `variant="secondary"` on a bar | Stretch token / ghost + ink                     |
+| `backdrop-blur` / `bg-background/95` on a header  | `DETAIL_HEADER_CLASS` or `EXPLORER_STRIP_CLASS` |
+| `border-border/50` on explorer chrome             | `/60`                                           |
+| `tracking-[0.14em]`                               | `0.08em` / `SECTION_HEAD_CLASS`                 |
+| Hover is a rounded square inside an `h-10`        | `items-stretch` + full-height token             |
+| Collapsed nav shows `O…` / `Fl…`                  | `sr-only` label, keep icon box                  |
 
 ## Close-out
 

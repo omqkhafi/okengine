@@ -53,9 +53,7 @@ server.console.state.replayTrace = async ({ event, dryRun }) => ({
 
 const { bootUiNextSeedInvoke } = await import("../../src/console/ui-next/seed-invoke-host.ts");
 const seedInvoke = await bootUiNextSeedInvoke({
-  ...(server.console.state.storeRuntime
-    ? { storeRuntime: server.console.state.storeRuntime }
-    : {}),
+  ...(server.console.state.storeRuntime ? { storeRuntime: server.console.state.storeRuntime } : {}),
   manifest: UI_NEXT_SEEDED_MANIFEST,
 });
 server.console.state.invokeUserFlow = seedInvoke.invokeUserFlow;

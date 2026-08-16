@@ -12,4 +12,9 @@ coverageSkipTestFiles = true
 preload = ["./src/test/reset-element-registries.ts"]
 # Playwright specs use @playwright/test — run via `bun run test:console:smoke`.
 # The bundled create-oke starter is not a workspace app.
-pathIgnorePatterns = ["tests/console/**", "packages/create-oke/templates/**", "examples/**", "site/**"]
+pathIgnorePatterns = [
+  "tests/console/**",
+  "packages/create-oke/templates/**",
+  "examples/**",
+  "site/**",
+]

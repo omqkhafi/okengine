@@ -175,9 +175,7 @@ export function matchOutSchema(
   const keys = new Set(Object.keys(value));
   const missing = required.filter((k) => !keys.has(k));
   const extra =
-    Object.keys(props).length > 0
-      ? [...keys].filter((k) => k !== "via" && !(k in props))
-      : [];
+    Object.keys(props).length > 0 ? [...keys].filter((k) => k !== "via" && !(k in props)) : [];
   const typeMismatches: string[] = [];
   for (const [key, propSchema] of Object.entries(props)) {
     if (!(key in value)) continue;
@@ -226,7 +224,8 @@ export function validatePromptOut(
 
 function hasToJSONSchema(value: object): value is { toJSONSchema: () => unknown } {
   return (
-    "toJSONSchema" in value && typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function"
+    "toJSONSchema" in value &&
+    typeof (value as { toJSONSchema?: unknown }).toJSONSchema === "function"
   );
 }
 
@@ -254,7 +253,10 @@ function textFromChatEnvelope(value: object): string | undefined {
   if (typeof message.content === "string" && message.content.trim().length > 0) {
     return message.content;
   }
-  if (typeof message.reasoning_content === "string" && message.reasoning_content.trim().length > 0) {
+  if (
+    typeof message.reasoning_content === "string" &&
+    message.reasoning_content.trim().length > 0
+  ) {
     return message.reasoning_content;
   }
   return undefined;

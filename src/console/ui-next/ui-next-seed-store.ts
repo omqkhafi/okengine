@@ -2,7 +2,9 @@
  * Lived-in keel Store rows for Console ui-next seed.
  *
  * Workspace ENG / DES / GTM — spaces, goals, projects, sections, tasks,
- * comments, plus KV drafts/reminders, file attachments, and semantic task index.
+ * comments, plus KV drafts/reminders, keel workspace files
+ * (attachments / documents / avatars / projects / exports / forms),
+ * and task / document / comment / project indexes.
  */
 
 import { defineTable } from "../../elements/store.ts";
@@ -172,7 +174,13 @@ type TaskRow = {
   role_needed: string | null;
 };
 
-function task(row: Omit<TaskRow, "kind" | "estimate" | "parent_id" | "due_date" | "completed_at" | "archived_at" | "role_needed"> & Partial<TaskRow>): TaskRow {
+function task(
+  row: Omit<
+    TaskRow,
+    "kind" | "estimate" | "parent_id" | "due_date" | "completed_at" | "archived_at" | "role_needed"
+  > &
+    Partial<TaskRow>,
+): TaskRow {
   return {
     kind: "task",
     estimate: null,
@@ -454,6 +462,34 @@ const SEED_FILES: ReadonlyArray<{
     originalName: "screenshot.png",
     data: SEED_PNG,
   },
+  {
+    key: "documents/doc_prd_api/prd.md",
+    originalName: "prd.md",
+    data: "# Harbor API PRD\n\nSSO + billing webhook before freeze.\n",
+  },
+  {
+    key: "documents/doc_spec_12/impl-spec.md",
+    originalName: "impl-spec.md",
+    data: "# ENG-12\n\nClaim rotate must keep the session cookie.\n",
+  },
+  { key: "avatars/mem_aria.png", originalName: "aria.png", data: SEED_PNG },
+  { key: "avatars/mem_ben.png", originalName: "ben.png", data: SEED_PNG },
+  {
+    key: "projects/proj_api/brief.md",
+    originalName: "brief.md",
+    data: "# Harbor API\n\nLead: Ben. Target 2026-08-29.\n",
+  },
+  { key: "projects/proj_web/cover.png", originalName: "cover.png", data: SEED_PNG },
+  {
+    key: "exports/harbor-ga.csv",
+    originalName: "harbor-ga.csv",
+    data: "identifier,title,status\nENG-12,SSO login fails,started\n",
+  },
+  {
+    key: "forms/form_customer/intake.json",
+    originalName: "intake.json",
+    data: '{"title":"SSO login fails","body":"Form intake"}\n',
+  },
 ];
 
 const SEED_INDEX: ReadonlyArray<{
@@ -697,11 +733,47 @@ function generateKeelVolume(): {
 
   const files = Array.from({ length: GENERATED.files }, (_, i) => {
     const row = tasks[i]!;
-    return {
-      key: `attachments/${row.identifier}/note-${i}.txt`,
-      originalName: `note-${i}.txt`,
-      data: `bytes:${row.identifier}`,
-    };
+    const member = members[i % members.length]!;
+    const project = projects[i % projects.length]!;
+    const document = documents[i % documents.length]!;
+    switch (i % 6) {
+      case 1:
+        return {
+          key: `documents/${document.id}/notes-${i}.md`,
+          originalName: `notes-${i}.md`,
+          data: `# ${document.title}\n\n${document.body}\n`,
+        };
+      case 2:
+        return {
+          key: `avatars/${member.id}/photo-${i}.txt`,
+          originalName: `photo-${i}.txt`,
+          data: `avatar:${member.email}`,
+        };
+      case 3:
+        return {
+          key: `projects/${project.id}/asset-${i}.md`,
+          originalName: `asset-${i}.md`,
+          data: `# ${project.name}\n\nStatus ${project.status}.\n`,
+        };
+      case 4:
+        return {
+          key: `exports/${row.identifier}.csv`,
+          originalName: `${row.identifier}.csv`,
+          data: `identifier,title\n${row.identifier},${row.title}\n`,
+        };
+      case 5:
+        return {
+          key: `forms/form_customer/sub-${i}.json`,
+          originalName: `sub-${i}.json`,
+          data: `{"title":${JSON.stringify(row.title)}}\n`,
+        };
+      default:
+        return {
+          key: `attachments/${row.identifier}/note-${i}.txt`,
+          originalName: `note-${i}.txt`,
+          data: `bytes:${row.identifier}`,
+        };
+    }
   });
 
   const index = Array.from({ length: GENERATED.index }, (_, i) => {
@@ -743,6 +815,9 @@ export const UI_NEXT_SEED_STORE_COUNTS = {
   kvKeys: SEED_KV.length + KEEL_VOLUME.kv.length,
   filesAttachments: SEED_FILES.length + KEEL_VOLUME.files.length,
   indexTasks: SEED_INDEX.length + KEEL_VOLUME.index.length,
+  indexDocuments: SEED_DOCUMENTS.length + KEEL_VOLUME.documents.length,
+  indexComments: SEED_COMMENTS.length + KEEL_VOLUME.comments.length,
+  indexProjects: SEED_PROJECTS.length + KEEL_VOLUME.projects.length,
   sqlIdentities: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_identities?.length ?? 0,
   sqlAppSessions: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_sessions?.length ?? 0,
   sqlCrons: UI_NEXT_SEED_APP_SYSTEM_ROWS.oke_crons?.length ?? 0,
@@ -914,7 +989,7 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
               ? "text/x-patch"
               : "text/plain",
         size_bytes: typeof entry.data === "string" ? entry.data.length : entry.data.byteLength,
-        store_ref: "files:attachments",
+        store_ref: "files:keel",
       })),
     ],
   ];
@@ -955,8 +1030,8 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
     );
   }
 
-  const files = (await runtime.openRef("files:attachments", {
-    effects: { writes: ["files:attachments"] },
+  const files = (await runtime.openRef("files:keel", {
+    effects: { writes: ["files:keel"] },
   })) as FilesStoreFxHandle;
   const allFiles = [...SEED_FILES, ...KEEL_VOLUME.files];
   for (const entry of allFiles) {
@@ -984,10 +1059,67 @@ export async function seedUiNextStoreData(runtime: StoreRuntime): Promise<void> 
   };
   await files.put(".oke/catalog.json", JSON.stringify(catalog));
 
-  const index = (await runtime.openRef("index:search", {
-    effects: { writes: ["index:search"] },
+  await seedIndexRef(runtime, "index:search", [...SEED_INDEX, ...KEEL_VOLUME.index]);
+  await seedIndexRef(runtime, "index:documents", [
+    ...SEED_DOCUMENTS.map((row, i) =>
+      toIndexEntry(row.id, i, { title: row.title, parentKind: row.parent_kind }),
+    ),
+    ...KEEL_VOLUME.documents.map((row, i) =>
+      toIndexEntry(row.id, SEED_DOCUMENTS.length + i, {
+        title: row.title,
+        parentKind: row.parent_kind,
+      }),
+    ),
+  ]);
+  await seedIndexRef(runtime, "index:comments", [
+    ...SEED_COMMENTS.map((row, i) =>
+      toIndexEntry(row.id, i, { taskId: row.task_id, body: row.body }),
+    ),
+    ...KEEL_VOLUME.comments.map((row, i) =>
+      toIndexEntry(row.id, SEED_COMMENTS.length + i, {
+        taskId: row.task_id,
+        body: row.body,
+      }),
+    ),
+  ]);
+  await seedIndexRef(runtime, "index:projects", [
+    ...SEED_PROJECTS.map((row, i) =>
+      toIndexEntry(row.id, i, { name: row.name, status: row.status }),
+    ),
+    ...KEEL_VOLUME.projects.map((row, i) =>
+      toIndexEntry(row.id, SEED_PROJECTS.length + i, {
+        name: row.name,
+        status: row.status,
+      }),
+    ),
+  ]);
+}
+
+function indexVector(i: number): readonly [number, number, number] {
+  return [i % 3 === 0 ? 1 : 0, i % 3 === 1 ? 1 : 0, i % 3 === 2 ? 1 : 0];
+}
+
+function toIndexEntry(
+  id: string,
+  i: number,
+  meta: Record<string, unknown>,
+): { id: string; vector: readonly number[]; meta: Record<string, unknown> } {
+  return { id, vector: indexVector(i), meta };
+}
+
+async function seedIndexRef(
+  runtime: StoreRuntime,
+  ref: `index:${string}`,
+  entries: ReadonlyArray<{
+    id: string;
+    vector: readonly number[];
+    meta: Record<string, unknown>;
+  }>,
+): Promise<void> {
+  const index = (await runtime.openRef(ref, {
+    effects: { writes: [ref] },
   })) as VectorIndexStoreFxHandle;
-  for (const entry of [...SEED_INDEX, ...KEEL_VOLUME.index]) {
+  for (const entry of entries) {
     await index.upsert(entry.id, entry.vector, entry.meta);
   }
 }

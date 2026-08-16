@@ -12,6 +12,8 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 ## Unreleased
 
+## v0.12.0 — 2026-08-16
+
 ### ✨ Added
 
 #### Console — Chrome
@@ -474,10 +476,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - Browser `GET` (`Accept` prefers `text/html`) paints the JSON envelope in
   traces chrome — flush h-10 strips, hairline /60, status + handler latency
-  + cache (hit / miss / none), a right-rail Routes tree (static GET links;
-  POST and `:param` listed),
-  line numbers, copy, Pretty / Raw (compact stays on the same page). `curl`,
-  `Accept: application/json`, `?format=json`, and `/_/` · `/_oke/` stay JSON.
+  - cache (hit / miss / none), a right-rail Routes tree (static GET links;
+    POST and `:param` listed),
+    line numbers, copy, Pretty / Raw (compact stays on the same page). `curl`,
+    `Accept: application/json`, `?format=json`, and `/_/` · `/_oke/` stay JSON.
 
 - Console operator reads `store/query`, `gates/simulate`, `gates/powers`, `access/effective`,
   and `channels/preview` now bind QUERY. `store/preview` stays POST (audited dry-run).
@@ -499,14 +501,14 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 - `defineSeed({ name, description })` labels this app's seed
   (template or example). `oke dev` asks `Seed keel (Featured
-  Harbor GA story + volume + vault stubs)?` and `.oke/state.json`
+Harbor GA story + volume + vault stubs)?` and `.oke/state.json`
   stores that id — a different name re-prompts. Not a global seeded flag.
 
 - `examples/keel` is a work-management OKE app (not a create-oke
   template) for `oke dev` against Compose — Postgres, PgDog,
   Redis, RustFS, Mailpit, Meilisearch, and llama.cpp. Featured
   Harbor GA task chain, stub GitHub/Slack ingest, `bun run
-  dev:keel`, then `oke db seed`.
+dev:keel`, then `oke db seed`.
 
 - Keel pins `images.pgdog` so Compose puts PgDog in front of
   Postgres. `DATABASE_URL` is the pooler (`:6432`);
@@ -558,6 +560,12 @@ needed). Large groups add `####` area headings so the list stays scannable.
 ### ♻️ Changed
 
 #### Console — Chrome
+
+- Explorer folder rows (`db`, Tables, unit folders) use the same
+  `text-xs` as leaf rows — the group token had no size and read larger.
+
+- Signal uses Hugeicons `InternetAntenna03` everywhere (Units
+  bands, live flags, traces, graph) — was the slashed `Radio01`.
 
 - Console tab chrome uses the O mark favicon, title **okengine Console**,
   and an operator description meta (was a generic icon and "oke Console").
@@ -626,6 +634,15 @@ needed). Large groups add `####` area headings so the list stays scannable.
   point at the new path.
 
 #### Console — Store
+
+- Store KV uses Hugeicons `Braces` on the band (same `{ }` mark
+  as site Store docs). Leaves use a job glyph — drafts,
+  reminders, view prefs, webhooks — instead of the same key on
+  every row.
+
+- Store Index / KV leaves skip the folder wrap when a store has
+  one child with the same name (`comments` → `comments`). Files
+  already did this for a single bucket.
 
 - Console Store Query PII uses the view / view-off glyph. Gate keeps
   the shield so the two toolbar controls no longer share an icon.
@@ -982,10 +999,19 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Keel Files is one `keel` bucket (was `attachments`). Seed lays
+  out workspace folders — attachments, documents, avatars,
+  projects, exports, forms — so Console browse matches the app.
+
+- Keel and Console seed now declare four `store.index` facets —
+  tasks, documents, comments, and projects — and fill each from
+  featured + volume rows (was tasks only).
+
 - Keel `oke db seed` (dev) initializes the built-in vault and writes
-  the nine stub contracts (GitHub / Slack / OpenAI + public URLs +
-  workspace). `.env.local` keeps stack URLs and `OKE_VAULT_MASTER_KEY`
-  only — other apps still leave Vault empty.
+  the keel stubs plus minted stack URLs (Postgres / Redis / S3 /
+  Meilisearch / Mailpit / AI) so `/vault` looks like production.
+  `.env.local` keeps `OKE_VAULT_MASTER_KEY` and `PORT` — other apps
+  still leave Vault empty.
 
 - `examples/keel` now picks Signal delivery per job: comments,
   projects, forms, and goals emit `once` + `broadcast` + `live`
@@ -1048,6 +1074,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
   on the current origin. The documented Vault curl no longer 404s.
 
 - Landing CollapseDiagram shows the zoo and okengine rings side by side on one shared step (no tab switch).
+
+- AI docs: `fx.ask` resolves capability pins `name@version`
+  against the declared prompt; a mismatched pin is
+  `ai: unknown prompt`.
 
 ### 🔥 Removed
 
@@ -1131,7 +1161,7 @@ needed). Large groups add `####` area headings so the list stays scannable.
 - `oke dev` Console Call API and Store SQL now use the live host
   app (compose Postgres / Redis), not the empty Manifest memory
   sandbox. Invoke-as no longer returns `InvokeDenied: host invoke
-  not configured`.
+not configured`.
 
 - Console SQL query console **Gate** menu no longer crashes on open
   (`MenuGroupContext` — label now sits inside `DropdownMenuGroup`).
@@ -1232,6 +1262,9 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Console — Units & Call API
 
+- Call API Fields / Raw no longer draws a second hairline under
+  the dock toolbar (the toggle sat in its own strip).
+
 - `fx.ask` now converts Zod / shorthand `out` to JSON Schema
   (validate + `response_format`). Mock fills that shape
   instead of `{ ok, echo }`, so Call API
@@ -1321,6 +1354,10 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Runtime
 
+- `fx.ask` with a versioned prompt handle (`document-summary@1`)
+  resolves the bare prompt id. Call API `documents.summarize`
+  no longer returns Unavailable `ai: unknown prompt`.
+
 - After `oke keel reset`, Console Call API no longer mocks `fx.ask`
   when `OKE_AI_URL` is set. Traces also show `fail(code, { message })`
   on the run (Unavailable was a code with no reason).
@@ -1379,6 +1416,16 @@ needed). Large groups add `####` area headings so the list stays scannable.
 
 #### Dev, Keel & create-oke
 
+- Keel `oke db seed` no longer fails vault boot on empty
+  `OKE_CONSOLE_SECRET` / `MEILI_MASTER_KEY` / `OPENAI_API_KEY`.
+  Those contracts (and the other stack configs) now have `dev`
+  fallbacks so the app can boot before seed writes the store.
+  Compose `OKE_STORE_INDEX_KEY` still maps to `MEILI_MASTER_KEY`.
+
+- `oke db seed` no longer crashes tallying Meilisearch `upsert`
+  (`undefined is not an object (evaluating 'result.status')`).
+  Index upserts return void; only SQL `{ status }` is counted.
+
 - Keel reset no longer pins `OKE_AI_URL=http://127.0.0.1:8080/v1`.
   `oke dev` writes the published llama.cpp port (`:23xxx`).
 
@@ -1424,6 +1471,27 @@ needed). Large groups add `####` area headings so the list stays scannable.
   500 kB. Highlighting loads five grammars through the JS engine
   (no Oniguruma WASM / unused C++ bundle), and Overview / Flows /
   Store / Vault are lazy route chunks.
+
+- `oke dev` no longer writes a label-only Compose `app` service
+  when Traefik is pinned. That stub had no image or build, so
+  `docker compose up` failed with `service "app" has neither an
+image nor a build context`. Laptop `oke dev` stays infra-only;
+  Traefik labels still apply when `oke docker` includes `app`.
+
+- `oke dev` no longer attaches Console Vite HMR to the create-oke
+  `file:` stage (`~/.oke/create-oke/okengine`). That copy has
+  `ui-next` source but is not the monorepo, so the browser requested
+  `/src/features/flows/flows-page.tsx` and failed. Scaffolded apps
+  serve `ui-next/dist` like a published install. Vite attach stays
+  on for the okengine checkout (`workspaces` in package.json).
+
+- create-oke templates and the local okengine stage list
+  `@duckdb/node-api` in `trustedDependencies` so Bun runs its
+  native postinstall. Console run history falls back to in-process
+  events when DuckDB is missing instead of crashing the kernel.
+
+- `oke db push` `missing_hints` now prints the unresolved
+  statements instead of only the status line.
 
 #### Docs
 

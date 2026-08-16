@@ -44,12 +44,15 @@ export const create = on(
       const project = await fx.store(db).findById(projects, input.projectId);
       if (!project) return fail("NotFound", { id: input.projectId });
       const id = fx.id();
-      await fx.store(db).insert(forms).values({
-        id,
-        projectId: input.projectId,
-        name: input.name,
-        schemaJson: input.schemaJson ?? "{}",
-      });
+      await fx
+        .store(db)
+        .insert(forms)
+        .values({
+          id,
+          projectId: input.projectId,
+          name: input.name,
+          schemaJson: input.schemaJson ?? "{}",
+        });
       return { id };
     },
   }),
@@ -104,13 +107,16 @@ export const submit = on(
         priority,
       })) as { id: string; identifier: string };
       const submissionId = fx.id();
-      await fx.store(db).insert(formSubmissions).values({
-        id: submissionId,
-        formId: input.id,
-        taskId: created.id,
-        payloadJson: JSON.stringify({ title, body: input.body ?? "" }),
-        customerName: input.customerName,
-      });
+      await fx
+        .store(db)
+        .insert(formSubmissions)
+        .values({
+          id: submissionId,
+          formId: input.id,
+          taskId: created.id,
+          payloadJson: JSON.stringify({ title, body: input.body ?? "" }),
+          customerName: input.customerName,
+        });
       const payload = {
         formId: input.id,
         taskId: created.id,

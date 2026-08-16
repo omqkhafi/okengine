@@ -55,7 +55,13 @@ function asTask(row: Record<string, unknown>): TaskRow {
 }
 
 async function nextIdentifier(
-  fx: { store: typeof db extends infer _D ? (ref: unknown) => { select: () => { from: (t: unknown) => Promise<Record<string, unknown>[]> } } : never },
+  fx: {
+    store: typeof db extends infer _D
+      ? (ref: unknown) => {
+          select: () => { from: (t: unknown) => Promise<Record<string, unknown>[]> };
+        }
+      : never;
+  },
   spaceKey: string,
 ): Promise<string> {
   const existing = await fx.store(db).select().from(tasks);
@@ -71,7 +77,13 @@ async function nextIdentifier(
 }
 
 async function writeActivity(
-  fx: { id: () => string; auth: { userId: string | null }; store: (ref: unknown) => { insert: (t: unknown) => { values: (row: Record<string, unknown>) => Promise<unknown> } } },
+  fx: {
+    id: () => string;
+    auth: { userId: string | null };
+    store: (ref: unknown) => {
+      insert: (t: unknown) => { values: (row: Record<string, unknown>) => Promise<unknown> };
+    };
+  },
   parentId: string,
   kind: string,
   body: string,
@@ -100,26 +112,29 @@ export const create = on(
       if (!space) return fail("NotFound", { id: input.spaceKey });
       const identifier = await nextIdentifier(fx as never, input.spaceKey);
       const id = fx.id();
-      await fx.store(db).insert(tasks).values({
-        id,
-        identifier,
-        title: input.title,
-        description: input.description ?? "",
-        kind: input.kind ?? "task",
-        priority: input.priority ?? 3,
-        estimate: null,
-        status: "todo",
-        spaceId: String(space.id),
-        projectId: input.projectId ?? null,
-        sectionId: input.sectionId ?? null,
-        parentId: input.parentId ?? null,
-        startDate: input.startDate ?? null,
-        dueDate: input.dueDate ?? null,
-        completedAt: null,
-        archivedAt: null,
-        creatorEmail: fx.auth.userId ?? null,
-        roleNeeded: input.roleNeeded ?? null,
-      });
+      await fx
+        .store(db)
+        .insert(tasks)
+        .values({
+          id,
+          identifier,
+          title: input.title,
+          description: input.description ?? "",
+          kind: input.kind ?? "task",
+          priority: input.priority ?? 3,
+          estimate: null,
+          status: "todo",
+          spaceId: String(space.id),
+          projectId: input.projectId ?? null,
+          sectionId: input.sectionId ?? null,
+          parentId: input.parentId ?? null,
+          startDate: input.startDate ?? null,
+          dueDate: input.dueDate ?? null,
+          completedAt: null,
+          archivedAt: null,
+          creatorEmail: fx.auth.userId ?? null,
+          roleNeeded: input.roleNeeded ?? null,
+        });
       if (input.assigneeEmail) {
         await fx.store(db).insert(taskAssignees).values({
           id: fx.id(),
@@ -348,7 +363,10 @@ export const unfollow = on(
         (r) => String(r.taskId) === input.id && String(r.followerEmail) === email,
       );
       if (hit) {
-        await fx.store(db).delete(taskFollowers).where(eq(taskFollowers.id, String(hit.id)));
+        await fx
+          .store(db)
+          .delete(taskFollowers)
+          .where(eq(taskFollowers.id, String(hit.id)));
       }
       return { ok: true as const };
     },

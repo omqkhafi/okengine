@@ -579,6 +579,30 @@ function parseConfigEnv(value: string | undefined): ConfigEnv | undefined {
   return undefined;
 }
 
+/**
+ * Print drizzle-kit `unresolved` statements so `missing_hints` is actionable.
+ *
+ * @param unresolved - Kit payload (strings or `{ sql | statement | message }`)
+ */
+function formatUnresolvedHints(unresolved: readonly unknown[] | undefined): string {
+  if (!unresolved || unresolved.length === 0) return "";
+  const lines: string[] = [];
+  for (const item of unresolved) {
+    if (typeof item === "string") {
+      lines.push(`  ${item}`);
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const rec = item as Record<string, unknown>;
+      const text = rec.sql ?? rec.statement ?? rec.message;
+      lines.push(`  ${typeof text === "string" ? text : JSON.stringify(item)}`);
+      continue;
+    }
+    lines.push(`  ${String(item)}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function reportKitResult(verb: string, result: DbKitResult, write: (text: string) => void): number {
   if (result.status === "ok" || result.status === "no_changes") {
     write(`oke db ${verb}: ${result.status}\n`);
@@ -588,6 +612,8 @@ function reportKitResult(verb: string, result: DbKitResult, write: (text: string
     write(
       `oke db ${verb}: missing_hints — resolve destructive changes manually (not auto-applied)\n`,
     );
+    const detail = formatUnresolvedHints(result.unresolved);
+    if (detail) write(detail);
     return EXIT_RUNTIME;
   }
   write(

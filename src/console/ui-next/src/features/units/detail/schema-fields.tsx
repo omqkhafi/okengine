@@ -69,19 +69,11 @@ function SchemaFieldRow({
   return (
     <Tag className={cell ? "min-w-0 border-b border-border/50" : undefined}>
       <div
-        className={
-          cell
-            ? "flex items-center gap-1.5 px-2 py-1.5"
-            : "flex items-center gap-2 py-1"
-        }
+        className={cell ? "flex items-center gap-1.5 px-2 py-1.5" : "flex items-center gap-2 py-1"}
         style={cell ? undefined : { paddingLeft: depth * 14 }}
         data-slot="schema-field-row"
       >
-        <span
-          className="shrink-0"
-          data-slot="schema-field-keys"
-          title={constraintTitle(field)}
-        >
+        <span className="shrink-0" data-slot="schema-field-keys" title={constraintTitle(field)}>
           <SchemaColumnMarks
             primaryKey={field.primaryKey}
             foreignKey={field.foreignKey}

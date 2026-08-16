@@ -10,9 +10,9 @@ import {
   Clock01Icon,
   Database01Icon,
   FlowCircleIcon,
+  InternetAntenna03Icon,
   Key01Icon,
   Mail01Icon,
-  Radio01Icon,
   SecurityCheckIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -46,7 +46,7 @@ export type ElementIconSpec = {
  * | Element | Site Lucide | HugeIcons |
  * |---|---|---|
  * | flow | Workflow | FlowCircle |
- * | signal | Radio | Radio01 |
+ * | signal | Radio | InternetAntenna03 |
  * | store | Database | Database01 |
  * | clock | Clock | Clock01 |
  * | gate | ShieldCheck | SecurityCheck |
@@ -56,7 +56,7 @@ export type ElementIconSpec = {
  */
 export const ELEMENT_ICONS: Record<OkeElement, ElementIconSpec> = {
   flow: { icon: FlowCircleIcon, label: "Flow", symbol: "Fl" },
-  signal: { icon: Radio01Icon, label: "Signal", symbol: "Sg" },
+  signal: { icon: InternetAntenna03Icon, label: "Signal", symbol: "Sg" },
   store: { icon: Database01Icon, label: "Store", symbol: "St" },
   clock: { icon: Clock01Icon, label: "Clock", symbol: "Ck" },
   gate: { icon: SecurityCheckIcon, label: "Gate", symbol: "Gt" },

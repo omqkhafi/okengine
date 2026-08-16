@@ -2,7 +2,7 @@ import { on, flow, http, fail } from "okengine";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { attachments, db, filesWrite, member, taskWrite } from "@/core";
+import { db, filesWrite, keelFiles, member, taskWrite } from "@/core";
 import { fileObjects, tasks } from "@/db/schema.decl";
 import { fileObjectsZod } from "@/db/zod";
 import { listIn, pageOut } from "@/lib/http";
@@ -32,15 +32,18 @@ export const upload = on(
       if (!task) return fail("NotFound", { id: taskId });
       const id = fx.id();
       const key = `attachments/${taskId}/${input.name}`;
-      await fx.store(attachments).put(key, input.text);
-      await fx.store(db).insert(fileObjects).values({
-        id,
-        objectKey: key,
-        originalName: input.name,
-        contentType: input.contentType ?? "text/plain",
-        sizeBytes: new TextEncoder().encode(input.text).byteLength,
-        storeRef: "files:attachments",
-      });
+      await fx.store(keelFiles).put(key, input.text);
+      await fx
+        .store(db)
+        .insert(fileObjects)
+        .values({
+          id,
+          objectKey: key,
+          originalName: input.name,
+          contentType: input.contentType ?? "text/plain",
+          sizeBytes: new TextEncoder().encode(input.text).byteLength,
+          storeRef: keelFiles.ref,
+        });
       return { id };
     },
   }),
@@ -88,7 +91,7 @@ export const remove = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(fileObjects, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      await fx.store(attachments).delete(String(row.objectKey));
+      await fx.store(keelFiles).delete(String(row.objectKey));
       await fx.store(db).delete(fileObjects).where(eq(fileObjects.id, input.id));
       return { ok: true as const };
     },

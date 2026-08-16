@@ -74,6 +74,7 @@ export const traefik: ImageRecipe = {
         volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"],
         networks: ["oke"],
       },
+      // Overlay — compose drops this when `includeApp` is false (`oke dev`).
       app: {
         labels: traefikAppLabels(),
       },

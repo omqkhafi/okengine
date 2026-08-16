@@ -4,23 +4,14 @@ import { animate, motion, useMotionValue, useTransform } from "motion/react";
 import { useEffect, useId } from "react";
 import { chartCssVars, useChartStable } from "./chart-context";
 import type { ChartPhase } from "./chart-phase";
-import {
-  fadeGradientStops,
-  resolveFadeSides,
-  viewportFadeGradientAttrs,
-} from "./fade-edges";
-import {
-  LINE_LOADING_PULSE_CYCLE_S,
-  LINE_LOADING_PULSE_EASE,
-} from "./line-loading-timing";
+import { fadeGradientStops, resolveFadeSides, viewportFadeGradientAttrs } from "./fade-edges";
+import { LINE_LOADING_PULSE_CYCLE_S, LINE_LOADING_PULSE_EASE } from "./line-loading-timing";
 
 const CLIP_PADDING = 10;
 
 export type LineLoadingPulseMode = "loop" | "exit" | "enter";
 
-export function resolveLineLoadingPulseMode(
-  phase: ChartPhase
-): LineLoadingPulseMode | null {
+export function resolveLineLoadingPulseMode(phase: ChartPhase): LineLoadingPulseMode | null {
   switch (phase) {
     case "loading":
       return "loop";
@@ -49,7 +40,7 @@ function useGrowExitClip(
   innerWidth: number,
   mode: LineLoadingPulseMode,
   loopEpoch: number,
-  onComplete?: () => void
+  onComplete?: () => void,
 ) {
   const progress = useMotionValue(0);
   const paddedFullWidth = innerWidth + CLIP_PADDING * 2;
@@ -165,12 +156,7 @@ export function LineLoadingPulseStroke({
   const gradientId = `line-loading-gradient-${reactId}`;
   const fadeStops = fadeGradientStops(resolveFadeSides(true));
   const clipHeight = innerHeight + CLIP_PADDING * 2;
-  const { clipX, clipWidth } = useGrowExitClip(
-    innerWidth,
-    mode,
-    loopEpoch,
-    onCycleComplete
-  );
+  const { clipX, clipWidth } = useGrowExitClip(innerWidth, mode, loopEpoch, onCycleComplete);
 
   if (innerWidth <= 0) {
     return null;
@@ -186,10 +172,7 @@ export function LineLoadingPulseStroke({
             y={-CLIP_PADDING}
           />
         </clipPath>
-        <linearGradient
-          id={gradientId}
-          {...viewportFadeGradientAttrs(innerWidth)}
-        >
+        <linearGradient id={gradientId} {...viewportFadeGradientAttrs(innerWidth)}>
           {fadeStops.map((stop) => (
             <stop
               key={stop.offset}

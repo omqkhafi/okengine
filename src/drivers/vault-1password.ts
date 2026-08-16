@@ -7,11 +7,7 @@
  */
 
 import { VaultError } from "../elements/vault/errors.ts";
-import {
-  openRemoteSecretBag,
-  vaultHttpJson,
-  type RemoteSecretClient,
-} from "./vault-remote-bag.ts";
+import { openRemoteSecretBag, vaultHttpJson, type RemoteSecretClient } from "./vault-remote-bag.ts";
 import type { VaultBag } from "./vault-types.ts";
 
 /** Options for {@link openOnePasswordBag}. */
@@ -36,9 +32,7 @@ export interface OpenOnePasswordOptions {
  * @param options - Host / token / vault / injected client / fetch
  * @throws VaultError `BACKEND_ERROR` when connection fields are missing or the API rejects the read
  */
-export async function openOnePasswordBag(
-  options: OpenOnePasswordOptions = {},
-): Promise<VaultBag> {
+export async function openOnePasswordBag(options: OpenOnePasswordOptions = {}): Promise<VaultBag> {
   const client =
     options.client ??
     (await connectOnePassword({
@@ -294,11 +288,14 @@ function newCredentialItem(title: string, value: string): ConnectItem {
  */
 function itemValue(item: ConnectItem): string | undefined {
   const fields = item.fields ?? [];
-  const concealed = fields.find((field) => field.type === "CONCEALED" && typeof field.value === "string");
+  const concealed = fields.find(
+    (field) => field.type === "CONCEALED" && typeof field.value === "string",
+  );
   if (concealed?.value !== undefined) return concealed.value;
   const labeled = fields.find(
     (field) =>
-      (field.label === "credential" || field.label === "password") && typeof field.value === "string",
+      (field.label === "credential" || field.label === "password") &&
+      typeof field.value === "string",
   );
   if (labeled?.value !== undefined) return labeled.value;
   return fields.find((field) => typeof field.value === "string" && field.value.length > 0)?.value;
@@ -313,7 +310,8 @@ function itemValue(item: ConnectItem): string | undefined {
 function replaceItemValue(item: ConnectItem, value: string): ConnectItem {
   const fields = [...(item.fields ?? [])];
   const index = fields.findIndex(
-    (field) => field.type === "CONCEALED" || field.label === "credential" || field.label === "password",
+    (field) =>
+      field.type === "CONCEALED" || field.label === "credential" || field.label === "password",
   );
   if (index === -1) {
     fields.push({ id: "credential", type: "CONCEALED", label: "credential", value });

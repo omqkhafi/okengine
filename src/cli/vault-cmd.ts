@@ -60,6 +60,11 @@ export interface VaultCmdOptions {
    */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /**
+   * Override stdin TTY detection (tests). Default: `process.stdin.isTTY`.
+   * Non-interactive runs must not block on a hidden master-key prompt.
+   */
+  readonly stdinIsTTY?: boolean;
+  /**
    * Pre-opened SQL connection for the builtin loop. Injected by tests so a
    * sequence of subcommands shares one in-memory database; the CLI never
    * closes a connection it did not open.
@@ -368,7 +373,7 @@ async function resolveMasterKey(
     return prompted.length > 0 ? prompted : null;
   }
   // Never block a non-interactive pipe waiting for a hidden prompt.
-  if (!process.stdin.isTTY) return null;
+  if (!(options.stdinIsTTY ?? Boolean(process.stdin.isTTY))) return null;
   const prompted = (
     await promptHidden("Enter current master key: ", { write: options.write })
   ).trim();
@@ -405,7 +410,7 @@ async function resolveNewMasterKey(
     const prompted = (await options.readSecret("Enter new master key: ")).trim();
     return prompted.length > 0 ? prompted : undefined;
   }
-  if (!process.stdin.isTTY) return undefined;
+  if (!(options.stdinIsTTY ?? Boolean(process.stdin.isTTY))) return undefined;
   const prompted = (await promptHidden("Enter new master key: ", { write: options.write })).trim();
   return prompted.length > 0 ? prompted : undefined;
 }

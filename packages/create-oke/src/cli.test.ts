@@ -614,6 +614,7 @@ describe("scaffold structure", () => {
         const pkg = JSON.parse(readFileSync(join(result.targetDir, "package.json"), "utf8")) as {
           name: string;
           dependencies: { okengine: string; "@duckdb/node-api"?: string };
+          trustedDependencies?: readonly string[];
           scripts: { typecheck?: string; test?: string; web?: string; "web:build"?: string };
           devDependencies: {
             typescript?: string;
@@ -625,6 +626,7 @@ describe("scaffold structure", () => {
         expect(pkg.name).toBe(`app-${id}`);
         expect(pkg.dependencies.okengine).not.toMatch(/^file:\.\./);
         expect(pkg.dependencies["@duckdb/node-api"]).toBe("^1.5.5-r.2");
+        expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
         expect(pkg.scripts.typecheck).toContain("tsc --noEmit");
         expect(pkg.scripts.typecheck).toContain("tsc -b -p web/tsconfig.json");
         expect(pkg.scripts.web).toContain("vite --config web/vite.config.ts");
@@ -783,7 +785,7 @@ describe("scaffold structure", () => {
       });
       expect(nginx.proxy).toBe("nginx");
       expect(readFileSync(join(nginx.targetDir, "oke.config.ts"), "utf8")).toMatch(
-        /proxy:\s*"nginx:1\.27-alpine"/,
+        /proxy:\s*"nginx:1\.31-alpine"/,
       );
       expect(existsSync(join(nginx.targetDir, "docker/nginx.conf"))).toBe(true);
     } finally {

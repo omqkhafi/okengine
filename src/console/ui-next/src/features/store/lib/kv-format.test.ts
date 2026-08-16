@@ -11,9 +11,7 @@ describe("prettifyKv", () => {
   });
 
   test("keeps comments and formats list / get", () => {
-    expect(prettifyKv("// list  ·  get\nlist holds:")).toBe(
-      '// list  ·  get\nlist("holds:")',
-    );
+    expect(prettifyKv("// list  ·  get\nlist holds:")).toBe('// list  ·  get\nlist("holds:")');
     expect(prettifyKv("get drafts:a")).toBe('get("drafts:a")');
   });
 
@@ -24,9 +22,7 @@ describe("prettifyKv", () => {
   });
 
   test("keeps set TTL and the value identifier", () => {
-    expect(prettifyKv('set("drafts:a", value, "30m")')).toBe(
-      'set("drafts:a", value, "30m")',
-    );
+    expect(prettifyKv('set("drafts:a", value, "30m")')).toBe('set("drafts:a", value, "30m")');
     expect(prettifyKv('set("drafts:a", { "n": 2 }, "10m")')).toBe(
       `set("drafts:a", {\n  "n": 2\n}, "10m")`,
     );
@@ -37,9 +33,7 @@ describe("prettifyKv", () => {
   });
 
   test("keeps a comment after a multiline set", () => {
-    expect(prettifyKv('set("k", {"n":1})\n// keep')).toBe(
-      `set("k", {\n  "n": 1\n})\n// keep`,
-    );
+    expect(prettifyKv('set("k", {"n":1})\n// keep')).toBe(`set("k", {\n  "n": 1\n})\n// keep`);
   });
 });
 

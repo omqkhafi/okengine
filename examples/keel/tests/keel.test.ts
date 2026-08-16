@@ -8,7 +8,9 @@ let developer: Awaited<ReturnType<TestApp<App>["auth"]["loginAs"]>>;
 let guest: Awaited<ReturnType<TestApp<App>["auth"]["loginAs"]>>;
 
 beforeAll(async () => {
-  t = await createTestApp(app);
+  t = await createTestApp(app, {
+    vaultSecrets: { OKE_AI_URL: "http://127.0.0.1:8080" },
+  });
   pm = await t.auth.loginAs({
     id: "aria@keel.dev",
     scopes: [
@@ -39,7 +41,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await t.close();
+  await t?.close();
 });
 
 test("boots — health flow is named main.health", async () => {
@@ -63,16 +65,18 @@ test("form submit → task create → assign → mail + inbox", async () => {
   expect(project.error).toBeNull();
   const projectId = (project.data as { id: string }).id;
 
-  const form = await t.api.forms!.create!(
-    { projectId, name: "Customer request" },
-    { as: pm },
-  );
+  const form = await t.api.forms!.create!({ projectId, name: "Customer request" }, { as: pm });
   expect(form.error).toBeNull();
   const formId = (form.data as { id: string }).id;
 
   t.ai.mock("form-classify", { title: "SSO login fails", roleNeeded: "developer", priority: 1 });
   const submitted = await t.api.forms!.submit!(
-    { id: formId, title: "SSO login fails", body: "Cannot sign in", customerName: "Harbor Logistics" },
+    {
+      id: formId,
+      title: "SSO login fails",
+      body: "Cannot sign in",
+      customerName: "Harbor Logistics",
+    },
     { as: pm },
   );
   expect(submitted.error).toBeNull();
@@ -102,10 +106,7 @@ test("PM can create project/view/form; developer cannot; guest cannot write task
   const spaces = await t.api.spaces!.list!({}, { as: pm });
   const spaceId = (spaces.data as { id: string; key: string }[]).find((s) => s.key === "ENG")!.id;
 
-  const asDev = await t.api.projects!.create!(
-    { spaceId, name: "Should fail" },
-    { as: developer },
-  );
+  const asDev = await t.api.projects!.create!({ spaceId, name: "Should fail" }, { as: developer });
   expect(asDev.error).not.toBeNull();
 
   const asGuest = await t.api.tasks!.create!(
@@ -152,10 +153,7 @@ test("comment / project / goal use once + broadcast + live", async () => {
   const spaces = await t.api.spaces!.list!({}, { as: pm });
   const spaceId = (spaces.data as { id: string; key: string }[]).find((s) => s.key === "ENG")!.id;
 
-  const project = await t.api.projects!.create!(
-    { spaceId, name: "Signal Harbor" },
-    { as: pm },
-  );
+  const project = await t.api.projects!.create!({ spaceId, name: "Signal Harbor" }, { as: pm });
   expect(project.error).toBeNull();
   const projectId = (project.data as { id: string }).id;
 

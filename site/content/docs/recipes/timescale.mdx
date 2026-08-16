@@ -86,26 +86,26 @@ Managed time-series hosts still use `DATABASE_URL` and
 
 ## What the recipe configures
 
-| Field          | Value                                   |
-| -------------- | --------------------------------------- |
-| Match          | `timescale` ahead of generic `postgres` |
-| Container port | `5432`                                  |
-| Healthcheck    | `pg_isready -U $POSTGRES_USER`          |
-| Connection URL | `postgres://user:pass@host:5432/db`     |
+| Field          | Value                                                  |
+| -------------- | ------------------------------------------------------ |
+| Match          | `timescale` ahead of generic `postgres`                |
+| Container port | `5432`                                                 |
+| Healthcheck    | `pg_isready -U $POSTGRES_USER`                         |
+| Connection URL | `postgres://user:pass@host:5432/db`                    |
 | Preload        | `timescaledb,pg_stat_statements` — Timescale **first** |
 
 ## Query performance
 
 <Callout title="Keep timescaledb first">
-  Overwriting `command` with only `pg_stat_statements` breaks hypertables. This recipe
-  preloads `timescaledb,pg_stat_statements`. Then `CREATE EXTENSION pg_stat_statements`.
+  Overwriting `command` with only `pg_stat_statements` breaks hypertables. This recipe preloads
+  `timescaledb,pg_stat_statements`. Then `CREATE EXTENSION pg_stat_statements`.
 </Callout>
 
-| Step    | What you do                                                                 |
-| ------- | --------------------------------------------------------------------------- |
-| Preload | Recipe sets `shared_preload_libraries=timescaledb,pg_stat_statements`       |
-| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`                         |
-| Console | Store → SQL band → **Performance**                                          |
+| Step    | What you do                                                           |
+| ------- | --------------------------------------------------------------------- |
+| Preload | Recipe sets `shared_preload_libraries=timescaledb,pg_stat_statements` |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`                   |
+| Console | Store → SQL band → **Performance**                                    |
 
 Index Advisor is not in the Timescale image. Pin
 `oke-postgres-advisor:18-alpine` only if you drop Timescale — or enable

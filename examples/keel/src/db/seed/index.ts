@@ -5,7 +5,16 @@
 
 import { join } from "node:path";
 import { defineSeed, type Fx } from "okengine";
-import { attachments, db, draftsKv, remindersKv, taskIndex } from "@/core";
+import {
+  commentIndex,
+  db,
+  documentIndex,
+  draftsKv,
+  keelFiles,
+  projectIndex,
+  remindersKv,
+  taskIndex,
+} from "@/core";
 import {
   activity,
   comments,
@@ -115,7 +124,7 @@ async function seedFiles(
   fx: Fx,
   entries: ReadonlyArray<{ key: string; originalName: string; data: string | Uint8Array }>,
 ): Promise<void> {
-  const files = fx.store(attachments);
+  const files = fx.store(keelFiles);
   for (const entry of entries) {
     await files.put(entry.key, entry.data);
   }
@@ -128,7 +137,7 @@ async function seedFiles(
       originalName: entry.originalName,
       contentType: contentTypeForName(entry.originalName),
       sizeBytes: payloadBytes(entry.data),
-      storeRef: "files:attachments",
+      storeRef: keelFiles.ref,
     })),
   );
 }
@@ -138,8 +147,20 @@ function metaString(meta: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-async function seedIndex(fx: Fx, entries: readonly SeedIndexEntry[]): Promise<void> {
-  const idx = fx.store(taskIndex);
+function indexVector(i: number): readonly [number, number, number] {
+  return [i % 3 === 0 ? 1 : 0, i % 3 === 1 ? 1 : 0, i % 3 === 2 ? 1 : 0];
+}
+
+function toIndexEntry(id: string, i: number, meta: Record<string, unknown>): SeedIndexEntry {
+  return { id, vector: indexVector(i), meta };
+}
+
+async function seedIndex(
+  fx: Fx,
+  decl: typeof taskIndex,
+  entries: readonly SeedIndexEntry[],
+): Promise<void> {
+  const idx = fx.store(decl);
   for (const entry of entries) {
     if (idx.driverId === "meilisearch") {
       await idx.upsert(entry.id, {
@@ -147,6 +168,8 @@ async function seedIndex(fx: Fx, entries: readonly SeedIndexEntry[]): Promise<vo
         title: metaString(entry.meta, "title"),
         identifier: metaString(entry.meta, "identifier"),
         description: metaString(entry.meta, "description"),
+        body: metaString(entry.meta, "body"),
+        name: metaString(entry.meta, "name"),
       });
     } else {
       await idx.upsert(entry.id, entry.vector, entry.meta);
@@ -199,7 +222,40 @@ async function volume(fx: Fx) {
     [...FEATURED_DRAFTS, ...KEEL_VOLUME.drafts],
     [...FEATURED_REMINDERS, ...KEEL_VOLUME.reminders],
   );
-  await seedIndex(fx, [...FEATURED_INDEX, ...KEEL_VOLUME.index]);
+  await seedIndex(fx, taskIndex, [...FEATURED_INDEX, ...KEEL_VOLUME.index]);
+  await seedIndex(fx, documentIndex, [
+    ...FEATURED_DOCUMENTS.map((row, i) =>
+      toIndexEntry(row.id, i, { title: row.title, parentKind: row.parentKind }),
+    ),
+    ...KEEL_VOLUME.documents.map((row, i) =>
+      toIndexEntry(row.id, FEATURED_DOCUMENTS.length + i, {
+        title: row.title,
+        parentKind: row.parentKind,
+      }),
+    ),
+  ]);
+  await seedIndex(fx, commentIndex, [
+    ...FEATURED_COMMENTS.map((row, i) =>
+      toIndexEntry(row.id, i, { taskId: row.taskId, body: row.body }),
+    ),
+    ...KEEL_VOLUME.comments.map((row, i) =>
+      toIndexEntry(row.id, FEATURED_COMMENTS.length + i, {
+        taskId: row.taskId,
+        body: row.body,
+      }),
+    ),
+  ]);
+  await seedIndex(fx, projectIndex, [
+    ...FEATURED_PROJECTS.map((row, i) =>
+      toIndexEntry(row.id, i, { name: row.name, status: row.status }),
+    ),
+    ...KEEL_VOLUME.projects.map((row, i) =>
+      toIndexEntry(row.id, FEATURED_PROJECTS.length + i, {
+        name: row.name,
+        status: row.status,
+      }),
+    ),
+  ]);
 }
 
 export default defineSeed({

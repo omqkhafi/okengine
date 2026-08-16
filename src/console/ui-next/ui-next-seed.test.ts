@@ -80,8 +80,16 @@ describe("ui-next seed", () => {
     expect(UI_NEXT_SEEDED_MANIFEST.signals?.["task-assigned"]?.delivery).toBe("live");
     expect(UI_NEXT_SEEDED_MANIFEST.signals?.["comment-added"]?.delivery).toBe("once");
     expect(UI_NEXT_SEEDED_MANIFEST.signals?.["draft-expired"]?.delivery).toBe("once");
-    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["attachments"]?.facet).toBe("files");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["keel"]?.facet).toBe("files");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["keel"]?.buckets).toEqual(["keel"]);
     expect(UI_NEXT_SEEDED_MANIFEST.stores?.["search"]?.facet).toBe("index");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["documents"]?.facet).toBe("index");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["comments"]?.facet).toBe("index");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["projects"]?.facet).toBe("index");
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["search"]?.indexes).toEqual(["tasks"]);
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["documents"]?.indexes).toEqual(["documents"]);
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["comments"]?.indexes).toEqual(["comments"]);
+    expect(UI_NEXT_SEEDED_MANIFEST.stores?.["projects"]?.indexes).toEqual(["projects"]);
     expect(
       UI_NEXT_SEEDED_MANIFEST.stores?.["db"]?.tables?.["tasks"]?.columns?.["creator_email"],
     ).toMatchObject({ pii: true });
@@ -443,11 +451,17 @@ describe("ui-next seed", () => {
       expect(reminders.keys?.every((k) => k.key.startsWith("reminders:"))).toBe(true);
 
       const files = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
-        ref: "files:attachments",
-        child: "attachments",
+        ref: "files:keel",
+        child: "keel",
         limit: 2000,
       });
       expect(files.keys?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.filesAttachments);
+      const fileRoots = new Set(
+        (files.keys ?? []).map((row) => row.key.split("/")[0]).filter((name) => name !== ".oke"),
+      );
+      expect(fileRoots).toEqual(
+        new Set(["attachments", "documents", "avatars", "projects", "exports", "forms"]),
+      );
 
       const index = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
         ref: "index:search",
@@ -465,6 +479,31 @@ describe("ui-next seed", () => {
       });
       expect(text.hits?.[0]?.id).toBe("tsk_eng_12");
       expect(text.hits?.[0]?.meta).toMatchObject({ identifier: "ENG-12" });
+
+      const documents = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "index:documents",
+        child: "documents",
+        q: "Harbor API PRD",
+        topK: 5,
+      });
+      expect(documents.hits?.length).toBeGreaterThan(0);
+      expect(documents.hits?.[0]?.id).toBe("doc_prd_api");
+
+      const commentsIdx = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "index:comments",
+        child: "comments",
+        vector: [1, 0, 0],
+        topK: 500,
+      });
+      expect(commentsIdx.hits?.length).toBe(UI_NEXT_SEED_STORE_COUNTS.indexComments);
+
+      const projectsIdx = await queryStore(runtime, UI_NEXT_SEEDED_MANIFEST, {
+        ref: "index:projects",
+        child: "projects",
+        q: "Harbor API",
+        topK: 5,
+      });
+      expect(projectsIdx.hits?.[0]?.id).toBe("proj_api");
     } finally {
       await runtime.close();
     }

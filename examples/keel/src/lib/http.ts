@@ -195,15 +195,20 @@ export function queryPage<T extends Record<string, unknown>>(
   const limit = Math.min(Math.max(Math.trunc(limitRaw), 1), maxLimit);
   const offsetRaw = typeof bag.offset === "number" ? bag.offset : 0;
   const offset = Math.max(Math.trunc(offsetRaw), 0);
-  const q =
-    (typeof bag.q === "string" ? bag.q : typeof bag.search === "string" ? bag.search : "").trim();
+  const q = (
+    typeof bag.q === "string" ? bag.q : typeof bag.search === "string" ? bag.search : ""
+  ).trim();
   let rows = [...items];
   if (q.length > 0) {
     const needle = q.toLowerCase();
     const fields = spec.search;
     rows = rows.filter((row) => {
       const keys = fields ?? Object.keys(row);
-      return keys.some((key) => String(row[key] ?? "").toLowerCase().includes(needle));
+      return keys.some((key) =>
+        String(row[key] ?? "")
+          .toLowerCase()
+          .includes(needle),
+      );
     });
   }
   const total = rows.length;

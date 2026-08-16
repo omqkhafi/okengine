@@ -102,7 +102,11 @@ export const update = on(
     do: async (input, fx) => {
       const row = await fx.store(db).findById(comments, input.id);
       if (!row) return fail("NotFound", { id: input.id });
-      await fx.store(db).update(comments).set({ body: input.body }).where(eq(comments.id, input.id));
+      await fx
+        .store(db)
+        .update(comments)
+        .set({ body: input.body })
+        .where(eq(comments.id, input.id));
       const payload = { id: input.id, taskId: String(row.taskId), body: input.body };
       await fx.emit(commentChanged, payload);
       await fx.emit(commentThread, payload);

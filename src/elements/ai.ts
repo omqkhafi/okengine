@@ -37,6 +37,7 @@ export type { AiErrorFields } from "./ai/errors.ts";
 
 export {
   createAiRuntime,
+  parsePromptRef,
   AiSchemaValidationError,
   promptContentFromInput,
   AI_DEFAULT_MAX_STEPS,

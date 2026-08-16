@@ -14,7 +14,7 @@ export function computeSeriesPathPoints(
   xAccessor: (datum: Record<string, unknown>) => Date,
   xScale: (value: Date) => number | undefined,
   yScale: (value: number) => number | undefined,
-  dataKey: string
+  dataKey: string,
 ): SeriesPathPoint[] {
   return data.map((datum, index) => {
     const xValue = xAccessor(datum);
@@ -30,7 +30,7 @@ export function computeSeriesPathPoints(
 export function interpolateSeriesPathPoints(
   from: SeriesPathPoint[],
   to: SeriesPathPoint[],
-  progress: number
+  progress: number,
 ): SeriesPathPoint[] {
   if (progress >= 1) {
     return to;
@@ -52,9 +52,7 @@ export function interpolateSeriesPathPoints(
     }
 
     const previousTarget = index > 0 ? to[index - 1] : undefined;
-    const previousSource = previousTarget
-      ? fromByKey.get(previousTarget.key)
-      : undefined;
+    const previousSource = previousTarget ? fromByKey.get(previousTarget.key) : undefined;
     const nextTarget = index < to.length - 1 ? to[index + 1] : undefined;
     const nextSource = nextTarget ? fromByKey.get(nextTarget.key) : undefined;
     const anchor = previousSource ?? nextSource ?? from[0] ?? target;
@@ -67,10 +65,7 @@ export function interpolateSeriesPathPoints(
   });
 }
 
-export function seriesPathFromPoints(
-  points: SeriesPathPoint[],
-  curve: CurveFactory
-): string {
+export function seriesPathFromPoints(points: SeriesPathPoint[], curve: CurveFactory): string {
   if (points.length === 0) {
     return "";
   }

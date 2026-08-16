@@ -382,9 +382,13 @@ function instrumentUpsertHandle<T>(handle: T, tally: SeedTally): T {
       if (prop === "upsert") {
         return async (...args: unknown[]) => {
           const result = await orig(...args);
-          if (result.status === "upserted") tally.upserted += 1;
-          else if (result.status === "changed") tally.changed += 1;
-          else if (result.status === "already-existed") tally.alreadyExisted += 1;
+          const status =
+            result && typeof result === "object" && "status" in result
+              ? (result as { status: UpsertStatus }).status
+              : undefined;
+          if (status === "upserted") tally.upserted += 1;
+          else if (status === "changed") tally.changed += 1;
+          else if (status === "already-existed") tally.alreadyExisted += 1;
           return result;
         };
       }

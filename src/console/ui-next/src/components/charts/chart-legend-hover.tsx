@@ -7,8 +7,7 @@ interface ChartLegendHoverContextValue {
   setHoveredIndex: (index: number | null) => void;
 }
 
-const ChartLegendHoverContext =
-  createContext<ChartLegendHoverContextValue | null>(null);
+const ChartLegendHoverContext = createContext<ChartLegendHoverContextValue | null>(null);
 
 export function ChartLegendHoverProvider({
   hoveredIndex,
@@ -21,13 +20,11 @@ export function ChartLegendHoverProvider({
 }) {
   const value = useMemo(
     () => ({ hoveredIndex, setHoveredIndex: onHoverChange }),
-    [hoveredIndex, onHoverChange]
+    [hoveredIndex, onHoverChange],
   );
 
   return (
-    <ChartLegendHoverContext.Provider value={value}>
-      {children}
-    </ChartLegendHoverContext.Provider>
+    <ChartLegendHoverContext.Provider value={value}>{children}</ChartLegendHoverContext.Provider>
   );
 }
 

@@ -9,14 +9,14 @@ Tools alone don't make a good operator — an agent also needs to know the _voca
 
 ## The layers
 
-| Layer              | Path                       | Loaded when                                       | Teaches                                                               |
-| ------------------ | -------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
-| **Agent contract** | `AGENTS.md` (repo root)    | Every agent session, automatically                | The one law, eight elements, ten exports, the fx rule, ports, budgets |
-| **Element skill**  | `.agents/skills/oke/`      | Building or changing an okengine app              | The element contract in depth — declaration patterns per element      |
-| **Docs skill**     | `.agents/skills/oke-docs/` | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
-| **Ship skill**     | `.agents/skills/oke-ship/` | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`            |
-| **Deps skill**     | `.agents/skills/oke-deps/` | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)       |
-| **Images skill**   | `.agents/skills/oke-images/` | Updating Compose image pins                    | Registry probe, pin style, catalog + recipes + Keel + docs lockstep   |
+| Layer              | Path                         | Loaded when                                       | Teaches                                                               |
+| ------------------ | ---------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| **Agent contract** | `AGENTS.md` (repo root)      | Every agent session, automatically                | The one law, eight elements, ten exports, the fx rule, ports, budgets |
+| **Element skill**  | `.agents/skills/oke/`        | Building or changing an okengine app              | The element contract in depth — declaration patterns per element      |
+| **Docs skill**     | `.agents/skills/oke-docs/`   | Writing or editing docs under `site/content/docs` | The documentation information-architecture standard and its gates     |
+| **Ship skill**     | `.agents/skills/oke-ship/`   | After any implementation, before claiming done    | Changelog under `## Unreleased` + docs sync via `oke-docs`            |
+| **Deps skill**     | `.agents/skills/oke-deps/`   | Updating `package.json` dependencies              | Scoped bumps, Bun install, pins (Drizzle RC, fumadocs alias, …)       |
+| **Images skill**   | `.agents/skills/oke-images/` | Updating Compose image pins                       | Registry probe, pin style, catalog + recipes + Keel + docs lockstep   |
 
 ## AGENTS.md — the root contract
 
@@ -26,11 +26,11 @@ Every OKE app's repo carries an `AGENTS.md` that agents (Cursor, Claude Code, an
 
 Skills are `SKILL.md` packages an agent loads when the work matches their description. OKE ships:
 
-| Skill      | Use it for                                   | Inside                                                                    |
-| ---------- | -------------------------------------------- | ------------------------------------------------------------------------- |
-| `oke`      | App work — flows, elements, drivers          | The agent contract, element patterns, the fx invariants                   |
-| `oke-docs` | Docs work — new pages, rewrites              | The page skeleton, verification sources, the density gate                 |
-| `oke-ship` | Closing an implementation — changelog + docs | Append under `## Unreleased`; `bun run bump` promotes it into `## vX.Y.Z` |
+| Skill        | Use it for                                   | Inside                                                                    |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------------- |
+| `oke`        | App work — flows, elements, drivers          | The agent contract, element patterns, the fx invariants                   |
+| `oke-docs`   | Docs work — new pages, rewrites              | The page skeleton, verification sources, the density gate                 |
+| `oke-ship`   | Closing an implementation — changelog + docs | Append under `## Unreleased`; `bun run bump` promotes it into `## vX.Y.Z` |
 | `oke-deps`   | Dependency updates — one package or all      | Scope map, `ncu` + Bun, reject downgrades / protect RC and aliases        |
 | `oke-images` | Compose image pins — one image or all        | Registry probe, keep pin style, never `:latest`, sync catalog → docs      |
 

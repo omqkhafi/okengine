@@ -22,11 +22,7 @@ export interface PatternAreaProps {
  * Filled area using an SVG pattern (`url(#id)`).
  * Pair with `PatternLines` in `AreaChart` children and an `Area` with `fillOpacity={0}` for the stroke line.
  */
-export function PatternArea({
-  dataKey,
-  fill,
-  curve = curveMonotoneX,
-}: PatternAreaProps) {
+export function PatternArea({ dataKey, fill, curve = curveMonotoneX }: PatternAreaProps) {
   const { renderData, xScale, yScale, xAccessor } = useChartStable();
 
   return (

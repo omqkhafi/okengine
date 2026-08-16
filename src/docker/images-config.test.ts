@@ -15,6 +15,7 @@ import { describe, expect, test } from "bun:test";
 import { flattenImagesConfig, type ImagesConfig } from "../config/index.ts";
 import { deriveInfrastructure } from "./derive.ts";
 import { builtinRecipes, recipeFor } from "./recipes/index.ts";
+import { POSTGRES_ADVISOR_IMAGE } from "./recipes/postgres-advisor.ts";
 import type { ServiceCredentials } from "./types.ts";
 
 describe("ImagesConfig nesting — recipe coverage", () => {
@@ -45,6 +46,11 @@ describe("ImagesConfig nesting — recipe coverage", () => {
         images: { store: { sql: "supabase/postgres:15.1.0.117" } },
         role: "store.sql",
         image: "supabase/postgres:15.1.0.117",
+      },
+      {
+        images: { store: { sql: POSTGRES_ADVISOR_IMAGE } },
+        role: "store.sql",
+        image: POSTGRES_ADVISOR_IMAGE,
       },
       // store.kv — redis-family
       { images: { store: { kv: "redis:8-alpine" } }, role: "store.kv", image: "redis:8-alpine" },

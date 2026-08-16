@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { StoreListStore } from "@/client.ts";
-import {
-  filesDriverLabel,
-  filesDriverOrigin,
-  isSingletonFilesBucket,
-} from "./files-origin.ts";
+import { filesDriverLabel, filesDriverOrigin, isSingletonFilesBucket } from "./files-origin.ts";
 
 const emptyWillNot = {
   writerFlowIds: [] as string[],
@@ -48,7 +44,9 @@ function bucket(name: string) {
 describe("isSingletonFilesBucket", () => {
   test("true when the only child shares the store name", () => {
     expect(
-      isSingletonFilesBucket(filesStore({ name: "attachments", children: [bucket("attachments")] })),
+      isSingletonFilesBucket(
+        filesStore({ name: "attachments", children: [bucket("attachments")] }),
+      ),
     ).toBe(true);
   });
 

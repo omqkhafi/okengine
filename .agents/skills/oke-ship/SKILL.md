@@ -77,18 +77,18 @@ Rules:
 - Large groups add `####` area headings (only when that area has bullets), in order: `Console — Chrome` · `Console — Observability` · `Console — Store` · `Console — Vault` · `Console — Flows & traces` · `Console — Units & Call API` · `Console — Auth & shell` · `Runtime` · `Dev, Keel & create-oke` · `Docs`
 - Pick the area from where the change lives (do not invent new area names):
 
-  | Change lives in…                                      | `####` area              |
-  | ----------------------------------------------------- | ------------------------ |
-  | Console chrome, sidebar, theme, explorer tokens, sheets | Console — Chrome       |
-  | `/observability`, runs SQL, fleet / instances         | Console — Observability  |
-  | Store browse, query, files, schema, RLS, catalog      | Console — Store          |
-  | Vault page / lock-path                                | Console — Vault          |
-  | Flows graph, traces, overview hub                     | Console — Flows & traces |
-  | Units tree, Call API, invoke-as                       | Console — Units & Call API |
-  | Claim, login, shell, ui-next SPA                      | Console — Auth & shell   |
-  | Kernel, `fx`, HTTP, gate, drivers, runs               | Runtime                  |
-  | `oke` CLI, create-oke, keel, examples, Playwright     | Dev, Keel & create-oke   |
-  | site docs, `/llms.txt`, teaching figures              | Docs                     |
+  | Change lives in…                                        | `####` area                |
+  | ------------------------------------------------------- | -------------------------- |
+  | Console chrome, sidebar, theme, explorer tokens, sheets | Console — Chrome           |
+  | `/observability`, runs SQL, fleet / instances           | Console — Observability    |
+  | Store browse, query, files, schema, RLS, catalog        | Console — Store            |
+  | Vault page / lock-path                                  | Console — Vault            |
+  | Flows graph, traces, overview hub                       | Console — Flows & traces   |
+  | Units tree, Call API, invoke-as                         | Console — Units & Call API |
+  | Claim, login, shell, ui-next SPA                        | Console — Auth & shell     |
+  | Kernel, `fx`, HTTP, gate, drivers, runs                 | Runtime                    |
+  | `oke` CLI, create-oke, keel, examples, Playwright       | Dev, Keel & create-oke     |
+  | site docs, `/llms.txt`, teaching figures                | Docs                       |
 
 - Small groups (a few bullets) stay flat — no `####` until the group needs scanning.
 - Bullets: user/product impact, not a file dump. Match existing voice (short, wrapped lines OK).

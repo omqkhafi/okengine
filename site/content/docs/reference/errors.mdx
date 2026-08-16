@@ -60,36 +60,36 @@ Returned, not thrown — the request never reached `do`:
 
 ## Framework validation failures
 
-| Code              | When                                                                                       |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| `ValidationError`       | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`) |
-| `NotFound`              | A `store.resource` get/update/remove hit a missing row                                     |
-| `InvalidQuery`          | QUERY missing `Content-Type` (`reason: missing_content_type`) or body isn't JSON (`inconsistent_content`) — **400** |
-| `UnsupportedMediaType`  | QUERY `Content-Type` is present but not `application/json` — **415**, `Accept-Query` lists JSON |
+| Code                   | When                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `ValidationError`      | Input failed the `in` schema, or a list param isn't whitelisted (`unknown list param "x"`)                          |
+| `NotFound`             | A `store.resource` get/update/remove hit a missing row                                                              |
+| `InvalidQuery`         | QUERY missing `Content-Type` (`reason: missing_content_type`) or body isn't JSON (`inconsistent_content`) — **400** |
+| `UnsupportedMediaType` | QUERY `Content-Type` is present but not `application/json` — **415**, `Accept-Query` lists JSON                     |
 
 ## Subsystem errors
 
 Thrown by specific subsystems — each names its own cause:
 
-| Error                         | Thrown when                                                        | What to do                                             |
-| ----------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
-| `VaultBootError`              | A vault contract has no value in any resolution layer              | Set the missing names — the error lists every gap      |
-| `VaultError` (`UNSUPPORTED`)  | Managed provider unknown                                           | Use an official id, built-in `vault`, or `env`         |
-| `VaultSealed`                 | Console rotate-master while this process holds no master key       | Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal` |
+| Error                         | Thrown when                                                        | What to do                                                            |
+| ----------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `VaultBootError`              | A vault contract has no value in any resolution layer              | Set the missing names — the error lists every gap                     |
+| `VaultError` (`UNSUPPORTED`)  | Managed provider unknown                                           | Use an official id, built-in `vault`, or `env`                        |
+| `VaultSealed`                 | Console rotate-master while this process holds no master key       | Export `OKE_VAULT_MASTER_KEY` or run `oke vault unseal`               |
 | `VaultRotateBusy`             | Master-rotation lease held or a batch is already in flight         | Wait and continue, or resume with `oke vault rotate-master --new-key` |
-| `VaultUnsupported`            | Console vault action on a non-builtin backend or missing SQL       | Use `drivers.vault = "vault"` and set `DATABASE_URL`   |
-| `AiPiiBuildError`             | Build: a flow sends PII fields to a third-party model              | Drop the fields or add `allowPii: true` — fields named |
-| `AiSchemaValidationError`     | A model response failed the prompt's `out` schema                  | Fix the prompt or the schema — response didn't conform |
-| `ScheduleNotOverridableError` | Console tried to edit a clock declared without `overridable: true` | Declare it overridable and redeploy                    |
-| `ClockResourceNotFoundError`  | Console action targeted an unknown clock name                      | Check the name against your `clock()` declarations     |
-| `DryRunWriteIsolationError`   | A write attempted inside a dry run                                 | Dry runs never write — use a real run                  |
-| `ManifestValidationError`     | The compiled Manifest failed schema validation                     | Re-run the build; the error names the offending entry  |
-| `CrossPlaneError`             | A user-plane token was used on the operator plane (or vice versa)  | Use the correct principal for the plane                |
-| `AttenuationError`            | A token was used beyond its attenuated scope                       | Re-issue with the needed scope                         |
-| `SessionError`                | Session token invalid, expired, or malformed                       | Re-authenticate                                        |
-| `OperatorError`               | Operator-plane operation failed its checks                         | Error message names the failed check                   |
-| `AccessGrantError`            | Console access grant rejected                                      | Re-request access with a valid grant                   |
-| `UnsupportedPathError`        | A route path shape the router can't compile                        | Simplify the path pattern                              |
+| `VaultUnsupported`            | Console vault action on a non-builtin backend or missing SQL       | Use `drivers.vault = "vault"` and set `DATABASE_URL`                  |
+| `AiPiiBuildError`             | Build: a flow sends PII fields to a third-party model              | Drop the fields or add `allowPii: true` — fields named                |
+| `AiSchemaValidationError`     | A model response failed the prompt's `out` schema                  | Fix the prompt or the schema — response didn't conform                |
+| `ScheduleNotOverridableError` | Console tried to edit a clock declared without `overridable: true` | Declare it overridable and redeploy                                   |
+| `ClockResourceNotFoundError`  | Console action targeted an unknown clock name                      | Check the name against your `clock()` declarations                    |
+| `DryRunWriteIsolationError`   | A write attempted inside a dry run                                 | Dry runs never write — use a real run                                 |
+| `ManifestValidationError`     | The compiled Manifest failed schema validation                     | Re-run the build; the error names the offending entry                 |
+| `CrossPlaneError`             | A user-plane token was used on the operator plane (or vice versa)  | Use the correct principal for the plane                               |
+| `AttenuationError`            | A token was used beyond its attenuated scope                       | Re-issue with the needed scope                                        |
+| `SessionError`                | Session token invalid, expired, or malformed                       | Re-authenticate                                                       |
+| `OperatorError`               | Operator-plane operation failed its checks                         | Error message names the failed check                                  |
+| `AccessGrantError`            | Console access grant rejected                                      | Re-request access with a valid grant                                  |
+| `UnsupportedPathError`        | A route path shape the router can't compile                        | Simplify the path pattern                                             |
 
 ## Learn more
 

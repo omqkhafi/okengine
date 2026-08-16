@@ -116,9 +116,7 @@ describe("hero-meta", () => {
       },
       { docker: true, sqlDriver: "postgres", kvDriver: "redis", aiModel: "granite3.3:2b" },
     );
-    expect(rows.find((r) => r.element === "ai")?.detail).toBe(
-      "openai-compatible · granite3.3:2b",
-    );
+    expect(rows.find((r) => r.element === "ai")?.detail).toBe("openai-compatible · granite3.3:2b");
     expect(rows.find((r) => r.element === "ai")?.status).not.toBe("idle");
   });
 

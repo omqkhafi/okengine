@@ -9,7 +9,9 @@ describe("agent onboard prompt", () => {
   test("uses canonical llms.txt and site-hosted agent contract URLs", () => {
     expect(llmsTxtUrl()).toBe(`${DOCS_ORIGIN}/llms.txt`);
     expect(agentsMdUrl()).toBe(`${DOCS_ORIGIN}/llms/agents`);
-    expect(agentOnboardPrompt()).toBe(`Read ${DOCS_ORIGIN}/llms.txt and ${DOCS_ORIGIN}/llms/agents…`);
+    expect(agentOnboardPrompt()).toBe(
+      `Read ${DOCS_ORIGIN}/llms.txt and ${DOCS_ORIGIN}/llms/agents…`,
+    );
   });
 
   test("honors a custom origin for llms.txt and the contract (local / preview)", () => {

@@ -74,6 +74,8 @@ async function harness(options: HarnessOptions = {}): Promise<Harness> {
         sql,
         // Never inherit a real OKE_VAULT_MASTER_KEY from the developer's shell.
         env: {},
+        // `bun test` from a TTY must not block on the hidden master-key prompt.
+        stdinIsTTY: false,
         ...(cwd === undefined ? {} : { cwd }),
         write: (text) => {
           captured += text;

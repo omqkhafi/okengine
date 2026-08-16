@@ -176,8 +176,7 @@ export async function loadExistingStackControls(
   const text = await file.text();
   const parsed = parseStackControls(text);
   const model = readEnvAssignment(text, "OKE_AI_MODEL");
-  const controls =
-    model && !parsed.OKE_AI_MODEL ? { ...parsed, OKE_AI_MODEL: model } : parsed;
+  const controls = model && !parsed.OKE_AI_MODEL ? { ...parsed, OKE_AI_MODEL: model } : parsed;
   return Object.keys(controls).length > 0 ? controls : undefined;
 }
 

@@ -6,9 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { RunRow } from "@/client.ts";
 import { latestReplicaLagFromRuns } from "./replica-lag.ts";
 
-function run(
-  partial: Partial<RunRow> & Pick<RunRow, "id" | "startedAt">,
-): RunRow {
+function run(partial: Partial<RunRow> & Pick<RunRow, "id" | "startedAt">): RunRow {
   return {
     parentId: null,
     flow: "bookings.create",
@@ -53,7 +51,15 @@ describe("latestReplicaLagFromRuns", () => {
         id: "a",
         startedAt: 10,
         replicaLagMs: 400,
-        effects: [{ kind: "read", resource: "sql:other", timestamp: 10, duration: 1, reversibility: "none" }],
+        effects: [
+          {
+            kind: "read",
+            resource: "sql:other",
+            timestamp: 10,
+            duration: 1,
+            reversibility: "none",
+          },
+        ],
       }),
     ];
     expect(latestReplicaLagFromRuns(rows, refs)).toBeNull();
@@ -65,13 +71,29 @@ describe("latestReplicaLagFromRuns", () => {
         id: "old",
         startedAt: 10,
         replicaLagMs: 180,
-        effects: [{ kind: "read", resource: "sql:bookings", timestamp: 10, duration: 1, reversibility: "none" }],
+        effects: [
+          {
+            kind: "read",
+            resource: "sql:bookings",
+            timestamp: 10,
+            duration: 1,
+            reversibility: "none",
+          },
+        ],
       }),
       run({
         id: "new",
         startedAt: 50,
         replicaLagMs: 12,
-        effects: [{ kind: "write", resource: "sql:bookings", timestamp: 50, duration: 1, reversibility: "none" }],
+        effects: [
+          {
+            kind: "write",
+            resource: "sql:bookings",
+            timestamp: 50,
+            duration: 1,
+            reversibility: "none",
+          },
+        ],
       }),
     ];
     expect(latestReplicaLagFromRuns(rows, refs)).toBe(12);

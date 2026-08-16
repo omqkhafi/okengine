@@ -100,13 +100,8 @@ const DateTickerInner = memo(function DateTickerInner({
           <div className="relative h-6 overflow-hidden">
             <motion.div className="flex flex-col" style={{ y: monthY }}>
               {monthSegments.map((segment) => (
-                <div
-                  className="flex h-6 shrink-0 items-center justify-center"
-                  key={segment.key}
-                >
-                  <span className="whitespace-nowrap font-medium text-sm">
-                    {segment.month}
-                  </span>
+                <div className="flex h-6 shrink-0 items-center justify-center" key={segment.key}>
+                  <span className="whitespace-nowrap font-medium text-sm">{segment.month}</span>
                 </div>
               ))}
             </motion.div>
@@ -116,13 +111,8 @@ const DateTickerInner = memo(function DateTickerInner({
           <div className="relative h-6 overflow-hidden">
             <motion.div className="flex flex-col" style={{ y: dayY }}>
               {parsedLabels.map((label) => (
-                <div
-                  className="flex h-6 shrink-0 items-center justify-center"
-                  key={label.key}
-                >
-                  <span className="whitespace-nowrap font-medium text-sm">
-                    {label.day}
-                  </span>
+                <div className="flex h-6 shrink-0 items-center justify-center" key={label.key}>
+                  <span className="whitespace-nowrap font-medium text-sm">{label.day}</span>
                 </div>
               ))}
             </motion.div>

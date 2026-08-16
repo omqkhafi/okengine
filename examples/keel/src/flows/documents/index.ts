@@ -75,13 +75,19 @@ export const summarize = on(
           body: String(row.body),
         });
         const summary =
-          out && typeof out === "object" && typeof (out as { summary?: unknown }).summary === "string"
+          out &&
+          typeof out === "object" &&
+          typeof (out as { summary?: unknown }).summary === "string"
             ? (out as { summary: string }).summary.trim()
             : "";
         if (!summary) {
-          return fail("Unavailable", { message: "AI returned no summary." }, {
-            message: "AI returned no summary.",
-          });
+          return fail(
+            "Unavailable",
+            { message: "AI returned no summary." },
+            {
+              message: "AI returned no summary.",
+            },
+          );
         }
         return { summary };
       } catch (err) {

@@ -25,15 +25,18 @@ export const watch = on(
           title: String(row.title),
         };
         await fx.send(taskOverdueMail, { to: String(email), data: payload });
-        await fx.store(db).insert(inbox).values({
-          id: fx.id(),
-          memberEmail: String(email),
-          kind: "overdue",
-          title: payload.title,
-          refId: payload.id,
-          readAt: null,
-          createdAt: now,
-        });
+        await fx
+          .store(db)
+          .insert(inbox)
+          .values({
+            id: fx.id(),
+            memberEmail: String(email),
+            kind: "overdue",
+            title: payload.title,
+            refId: payload.id,
+            readAt: null,
+            createdAt: now,
+          });
       }
     },
   }),

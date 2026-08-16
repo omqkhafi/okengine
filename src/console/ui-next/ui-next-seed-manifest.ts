@@ -26,7 +26,7 @@ import {
  * | ------- | ------------ |
  * | flow    | featured github→create→notify plus full CRUD + custom routes (archive, assign, QUERY search, …) |
  * | signal  | `task-created` · `task-completed` · `task-assigned` · `comment-added` · `form-submitted` · `goal-at-risk` · `draft-expired` |
- * | store   | sql spaces…form_submissions + Gate auth / oke_* system · kv drafts/reminders · files attachments · index tasks |
+ * | store   | sql spaces…form_submissions + Gate auth / oke_* system · kv drafts/reminders · files keel · index tasks/documents/comments/projects |
  * | clock   | `expire-drafts` every · `watch-overdue` every · `daily-digest` cron |
  * | gate    | member · task:write · project:admin · comment:write |
  * | vault   | keel secrets + public config (origin, API, docs, workspace) |
@@ -158,7 +158,7 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       gates: ["member", "task:write"],
       effects: {
         reads: ["sql:tasks"],
-        writes: ["files:attachments"],
+        writes: ["files:keel"],
       },
       source: "src/flows/attachments/index.ts:22",
     },
@@ -448,15 +448,30 @@ export const UI_NEXT_SEEDED_MANIFEST: Manifest = {
       description: "Compose drafts + view prefs + due-date reminders",
       namespaces: ["drafts", "view-prefs", "reminders"],
     },
-    attachments: {
+    keel: {
       facet: "files",
-      description: "Task attachments (specs, screenshots)",
-      buckets: ["attachments"],
+      description: "Keel workspace files",
+      buckets: ["keel"],
     },
     search: {
       facet: "index",
-      description: "Semantic task search",
+      description: "Task search",
       indexes: ["tasks"],
+    },
+    documents: {
+      facet: "index",
+      description: "Document search",
+      indexes: ["documents"],
+    },
+    comments: {
+      facet: "index",
+      description: "Comment search",
+      indexes: ["comments"],
+    },
+    projects: {
+      facet: "index",
+      description: "Project search",
+      indexes: ["projects"],
     },
   },
   clocks: {

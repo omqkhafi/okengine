@@ -111,7 +111,8 @@ export function renameQueryTab(
   title: string,
 ): readonly QueryTab[] {
   const trimmed = title.trim().replace(/\s+/g, " ");
-  const nextTitle = trimmed.length > 0 ? trimmed.slice(0, 48) : nextQueryTitle(tabs.filter((t) => t.id !== id));
+  const nextTitle =
+    trimmed.length > 0 ? trimmed.slice(0, 48) : nextQueryTitle(tabs.filter((t) => t.id !== id));
   return tabs.map((t) => (t.id === id ? { ...t, title: nextTitle } : t));
 }
 

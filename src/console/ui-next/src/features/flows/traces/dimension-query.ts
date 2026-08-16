@@ -274,10 +274,7 @@ function parseValue(dimension: string, raw: string): string | number | boolean |
  * @param dimension - Dimension name
  * @param value - Raw clause value
  */
-export function formatClauseValue(
-  dimension: string,
-  value: string | number | boolean,
-): string {
+export function formatClauseValue(dimension: string, value: string | number | boolean): string {
   return formatValue(dimension, value);
 }
 

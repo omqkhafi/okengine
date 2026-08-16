@@ -205,7 +205,10 @@ export function importHits(options: {
   return { hits, unmatched };
 }
 
-function matchRowId(rec: Readonly<Record<string, string>>, rowIds: ReadonlySet<string>): string | null {
+function matchRowId(
+  rec: Readonly<Record<string, string>>,
+  rowIds: ReadonlySet<string>,
+): string | null {
   for (const key of ROW_ID_KEYS) {
     const value = rec[key]?.trim();
     if (value && rowIds.has(value)) return value;

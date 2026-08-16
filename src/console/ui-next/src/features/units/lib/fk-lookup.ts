@@ -28,10 +28,7 @@ export type FkOption = {
  * @param field - Contract field
  * @param manifest - Live Manifest
  */
-export function resolveFkLookup(
-  field: FormField,
-  manifest: Manifest | null,
-): FkLookup | null {
+export function resolveFkLookup(field: FormField, manifest: Manifest | null): FkLookup | null {
   if (!field.foreignKey || !manifest) return null;
   const stores = sqlStores(manifest);
   if (stores.length === 0) return null;

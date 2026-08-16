@@ -29,6 +29,7 @@ describe("materializeLocalOkengineDependency", () => {
         workspaces?: unknown;
         peerDependencies?: Record<string, string>;
         exports?: Record<string, string>;
+        trustedDependencies?: readonly string[];
       };
       expect(pkg.name).toBe("okengine");
       expect(pkg.devDependencies).toBeUndefined();
@@ -40,6 +41,7 @@ describe("materializeLocalOkengineDependency", () => {
       expect(pkg.dependencies?.["drizzle-kit"]).toBe("1.0.0-rc.4");
       expect(pkg.dependencies?.["zod"]).toBeDefined();
       expect(pkg.exports?.["./config"]).toBe("./src/config/index.ts");
+      expect(pkg.trustedDependencies).toContain("@duckdb/node-api");
 
       // Real copies — Bun file: install drops directory symlinks.
       const src = join(stage, "src");

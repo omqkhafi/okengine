@@ -81,7 +81,11 @@ export function deriveInfrastructure(options: DeriveOptions): DeriveResult {
   ];
 
   for (const f of files) {
-    if (f.path.endsWith(".yml") || f.path === "Dockerfile" || f.path === POSTGRES_ADVISOR_DOCKERFILE) {
+    if (
+      f.path.endsWith(".yml") ||
+      f.path === "Dockerfile" ||
+      f.path === POSTGRES_ADVISOR_DOCKERFILE
+    ) {
       assertNoCredentialsInYaml(
         f.content,
         specs.map((s) => s.credentials),

@@ -65,11 +65,7 @@ export type DevRequestLogInput = {
  * @param path - URL pathname
  * @param surface - Optional surface (MCP hides Chrome inspector probes)
  */
-export function isSilentDevRequest(
-  method: string,
-  path: string,
-  surface?: DevLogSurface,
-): boolean {
+export function isSilentDevRequest(method: string, path: string, surface?: DevLogSurface): boolean {
   if (path === "/console/live") return true;
   // Client-types regen — lands between hero and Logs and breaks the separator.
   if (path === "/_oke/client.json") return true;
@@ -125,11 +121,7 @@ export async function failureDetailFromResponse(response: Response): Promise<str
 export function logDevRequest(input: DevRequestLogInput): void {
   if (!shouldLogDevRequests()) return;
   if (
-    isSilentDevRequest(
-      input.method.toUpperCase(),
-      input.path,
-      input.surface ?? currentDevSurface(),
-    )
+    isSilentDevRequest(input.method.toUpperCase(), input.path, input.surface ?? currentDevSurface())
   ) {
     return;
   }

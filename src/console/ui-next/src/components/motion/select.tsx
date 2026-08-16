@@ -427,7 +427,9 @@ export function SelectItem({
         )}
       >
         {children}
-        {selected ? <HugeiconsIcon icon={Tick02Icon} className="size-3.5 shrink-0" aria-hidden /> : null}
+        {selected ? (
+          <HugeiconsIcon icon={Tick02Icon} className="size-3.5 shrink-0" aria-hidden />
+        ) : null}
       </button>
     </motion.li>
   );

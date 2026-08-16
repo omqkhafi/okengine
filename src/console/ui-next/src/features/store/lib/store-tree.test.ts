@@ -17,6 +17,7 @@ import {
   storeTreeFacetKey,
   storeTreeIsOpen,
   storeTreeOpenKeys,
+  isSingletonStoreLeaf,
   storeTreeTablesKey,
   toggleHiddenFacet,
   visibleFacetBands,
@@ -82,6 +83,16 @@ const STORES: readonly StoreListStore[] = [
     contentAddressed: false,
     warnings: [],
   },
+  {
+    ref: "index:comments",
+    facet: "index",
+    name: "comments",
+    children: [child("comments", "index:comments")],
+    replicaLagMs: null,
+    migrationDrift: null,
+    contentAddressed: false,
+    warnings: [],
+  },
 ];
 
 describe("parseResourceRef", () => {
@@ -100,7 +111,7 @@ describe("parseResourceRef", () => {
 describe("store-tree", () => {
   test("bands by facet and finds by effectRef", () => {
     const bands = bandStoreTree(STORES);
-    expect(bands.map((b) => b.facet)).toEqual(["sql", "kv"]);
+    expect(bands.map((b) => b.facet)).toEqual(["sql", "kv", "index"]);
     expect(findByEffectRef(STORES, "sql:shipments")?.child.name).toBe("shipments");
     expect(findByEffectRef(STORES, "sql:shipments")?.store.ref).toBe("sql:db");
     expect(firstEffectRef(STORES)).toBe("sql:bookings");
@@ -121,7 +132,15 @@ describe("store-tree", () => {
       storeTreeTablesKey("sql:db"),
       "facet:kv",
       "kv:cache",
+      "facet:index",
     ]);
+  });
+
+  test("singleton index / kv / files skip the folder wrap", () => {
+    expect(isSingletonStoreLeaf(STORES[2]!)).toBe(true);
+    expect(isSingletonStoreLeaf(STORES[1]!)).toBe(false);
+    expect(isSingletonStoreLeaf(STORES[0]!)).toBe(false);
+    expect(storeTreeAncestorKeys(STORES, "index:comments")).toEqual(["facet:index"]);
   });
 
   test("ancestor keys open the facet, store, and Tables folder for a table", () => {
@@ -163,8 +182,8 @@ describe("store-tree", () => {
   test("visibleFacetBands omits hidden facets from expand-all keys", () => {
     const bands = bandStoreTree(STORES);
     const visible = visibleFacetBands(bands, new Set(["sql"]));
-    expect(visible.map((b) => b.facet)).toEqual(["kv"]);
-    expect(storeTreeOpenKeys(visible)).toEqual(["facet:kv", "kv:cache"]);
+    expect(visible.map((b) => b.facet)).toEqual(["kv", "index"]);
+    expect(storeTreeOpenKeys(visible)).toEqual(["facet:kv", "kv:cache", "facet:index"]);
   });
 });
 

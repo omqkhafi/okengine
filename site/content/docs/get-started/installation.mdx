@@ -169,9 +169,9 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Create first operator fails (password / claim code)">
-  Password: ≥ 12 with upper, lower, number, and special — or **Generate**.
-  Copy the claim code from the `oke dev` board (30 min TTL) or `oke console claim-code`.
-  The form never gets the code over HTTP; the log shows the reason, not a bare `500`.
+  Password: ≥ 12 with upper, lower, number, and special — or **Generate**. Copy the claim code from
+  the `oke dev` board (30 min TTL) or `oke console claim-code`. The form never gets the code over
+  HTTP; the log shows the reason, not a bare `500`.
 </Accordion>
 
 <Accordion title="Database out of sync after editing schema">
@@ -186,9 +186,9 @@ See [Migrating environments](/docs/reference/migrating-environments).
 </Accordion>
 
 <Accordion title="Want a clean keel stack?">
-  Stop `bun run dev:keel`, then `bun run dev:keel:reset`. That wipes Compose,
-  `.oke/`, and writes `.env.local` from `.env.example` (stack URLs only). Next
-  `dev:keel` regenerates stack keys; `dev:keel:seed` fills the built-in vault.
+  Stop `bun run dev:keel`, then `bun run dev:keel:reset`. That wipes Compose, `.oke/`, and writes
+  `.env.local` from `.env.example`. Next `dev:keel` regenerates stack keys; seed copies them into
+  the built-in vault.
 </Accordion>
 
 </Accordions>

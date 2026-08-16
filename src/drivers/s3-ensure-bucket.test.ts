@@ -73,7 +73,8 @@ describe("s3 ensure bucket", () => {
         endpoint: "http://127.0.0.1:18850",
         accessKeyId: "AKIA",
         secretAccessKey: "secret",
-        fetch: (async () => new Response("AccessDenied", { status: 403 })) as unknown as typeof fetch,
+        fetch: (async () =>
+          new Response("AccessDenied", { status: 403 })) as unknown as typeof fetch,
       }),
     ).rejects.toThrow(/create bucket "oke" failed \(403\)/);
   });

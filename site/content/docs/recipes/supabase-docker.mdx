@@ -103,14 +103,14 @@ cloud pausing does not apply to this Docker image — you own uptime.
 ## Query performance
 
 <Callout title="Do not overwrite command">
-  `supabase/postgres` already preloads `pg_stat_statements`. This recipe leaves
-  `command` unset so vendor startup stays intact.
+  `supabase/postgres` already preloads `pg_stat_statements`. This recipe leaves `command` unset so
+  vendor startup stays intact.
 </Callout>
 
-| Step    | What you do                                         |
-| ------- | --------------------------------------------------- |
-| Preload | Image `postgresql.conf` (not an oke `command`)      |
-| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements` |
+| Step    | What you do                                                        |
+| ------- | ------------------------------------------------------------------ |
+| Preload | Image `postgresql.conf` (not an oke `command`)                     |
+| Create  | `CREATE EXTENSION IF NOT EXISTS pg_stat_statements`                |
 | Advisor | `CREATE EXTENSION IF NOT EXISTS index_advisor CASCADE` when listed |
 
 Console **Performance** then reads engine stats. Enable Index Advisor from the

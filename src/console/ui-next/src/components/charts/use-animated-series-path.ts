@@ -40,9 +40,7 @@ export function useAnimatedSeriesPath({
   enabled,
 }: UseAnimatedSeriesPathOptions) {
   const reducedMotion = useReducedMotion();
-  const [animatedPoints, setAnimatedPoints] = useState<
-    SeriesPathPoint[] | null
-  >(null);
+  const [animatedPoints, setAnimatedPoints] = useState<SeriesPathPoint[] | null>(null);
   const displayedPointsRef = useRef<SeriesPathPoint[] | null>(null);
   const animatingRef = useRef(false);
 
@@ -61,13 +59,12 @@ export function useAnimatedSeriesPath({
         xDomainMin: xScaleDomain[0]?.getTime?.() ?? 0,
         xDomainMax: xScaleDomain[1]?.getTime?.() ?? 0,
       }),
-    [renderData, xAccessor, dataKey, innerWidth, xScaleDomain]
+    [renderData, xAccessor, dataKey, innerWidth, xScaleDomain],
   );
 
   const targetPoints = useMemo(
-    () =>
-      computeSeriesPathPoints(renderData, xAccessor, xScale, yScale, dataKey),
-    [renderData, xAccessor, xScale, yScale, dataKey]
+    () => computeSeriesPathPoints(renderData, xAccessor, xScale, yScale, dataKey),
+    [renderData, xAccessor, xScale, yScale, dataKey],
   );
 
   const prevTransitionSignatureRef = useRef(transitionSignature);
@@ -117,13 +114,9 @@ export function useAnimatedSeriesPath({
           xAccessor,
           xScale,
           yScale,
-          dataKey
+          dataKey,
         );
-        const next = interpolateSeriesPathPoints(
-          fromSnapshot,
-          currentTarget,
-          progress
-        );
+        const next = interpolateSeriesPathPoints(fromSnapshot, currentTarget, progress);
         displayedPointsRef.current = next;
         setAnimatedPoints(next);
       },
@@ -153,10 +146,7 @@ export function useAnimatedSeriesPath({
   ]);
 
   const activePoints = animatedPoints ?? targetPoints;
-  const pathD = useMemo(
-    () => seriesPathFromPoints(activePoints, curve),
-    [activePoints, curve]
-  );
+  const pathD = useMemo(() => seriesPathFromPoints(activePoints, curve), [activePoints, curve]);
 
   return {
     pathD,

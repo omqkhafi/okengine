@@ -2,50 +2,50 @@
 
 Published numbers from [`budgets.json`](budgets.json). Refresh with `bun run budgets`.
 
-_okengine v0.11.2 · measured 2026-08-13T15:04:26.192Z_
+_okengine v0.12.0 · measured 2026-08-16T19:20:37.757Z_
 
 Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports, Plugins, and Drivers fail on regression vs the prior [`budgets.json`](budgets.json) (max +256 B or +2%). Export gzip excludes peers/optionals (`zod`, `sently`, `oxc-parser`, `ajv`, DuckDB, FormatJS). The `okengine` export row is the **thin root** (gzip); use `okengine/full` for the legacy mega-barrel and `okengine/http` for HTTP-only apps.
 
 ## Core
 
-|                                 | Measured  | Limit     |
-| ------------------------------- | --------- | --------- |
-| Kernel (edge profile)           | 14.99 kB  | 15.00 kB  |
-| Client runtime                  | 1.70 kB   | 3.00 kB   |
-| Console initial load            | 86.39 kB  | 300.00 kB |
-| Cold start on Bun               | 8.116 ms  | 75.000 ms |
-| p99 routing overhead            | 0.001 ms  | 1.000 ms  |
-| HTTP ping app (gzip, externals) | 37.04 kB  | 37.25 kB  |
-| HTTP ping app (raw, externals)  | 110.15 kB | 110.96 kB |
+|                                          | Measured  | Limit     |
+| ---------------------------------------- | --------- | --------- |
+| Kernel (edge profile)                    | 13.61 kB  | 15.00 kB  |
+| Client runtime                           | 2.06 kB   | 3.00 kB   |
+| Console initial load                     | 347.25 kB | 700.00 kB |
+| Cold start on Bun                        | 9.744 ms  | 75.000 ms |
+| p99 routing overhead                     | 0.001 ms  | 1.000 ms  |
+| HTTP ping app (gzip, externals) **FAIL** | 43.41 kB  | 37.78 kB  |
+| HTTP ping app (raw, externals) **FAIL**  | 125.49 kB | 112.36 kB |
 
 ## Exports
 
-|                  | Measured  | Ceiling   |
-| ---------------- | --------- | --------- |
-| okengine         | 63.59 kB  | 64.29 kB  |
-| ai               | 6.04 kB   | 6.29 kB   |
-| auth             | 13.90 kB  | 14.05 kB  |
-| channel          | 6.55 kB   | 6.80 kB   |
-| client           | 1.83 kB   | 2.08 kB   |
-| client-react     | 7.82 kB   | 8.07 kB   |
-| client/auth      | 573 B     | 829 B     |
-| clock            | 16.64 kB  | 16.97 kB  |
-| compiler         | 13.97 kB  | 14.24 kB  |
-| config           | 1.25 kB   | 1.50 kB   |
-| console **FAIL** | 113.66 kB | 107.69 kB |
-| full             | 73.63 kB  | 74.13 kB  |
-| gate             | 4.96 kB   | 5.21 kB   |
-| http             | 37.52 kB  | 37.70 kB  |
-| i18n             | 3.63 kB   | 3.88 kB   |
-| journal          | 2.21 kB   | 2.46 kB   |
-| kernel           | 37.48 kB  | 37.67 kB  |
-| mcp              | 9.41 kB   | 9.65 kB   |
-| plugins          | 17.90 kB  | 18.13 kB  |
-| runs **FAIL**    | 7.39 kB   | 7.24 kB   |
-| signal           | 919 B     | 1.15 kB   |
-| store            | 17.40 kB  | 17.75 kB  |
-| test             | 12.96 kB  | 13.21 kB  |
-| vault            | 12.26 kB  | 12.51 kB  |
+|                   | Measured  | Ceiling   |
+| ----------------- | --------- | --------- |
+| okengine **FAIL** | 75.23 kB  | 64.87 kB  |
+| ai **FAIL**       | 6.80 kB   | 6.29 kB   |
+| auth              | 12.15 kB  | 14.18 kB  |
+| channel           | 6.55 kB   | 6.80 kB   |
+| client **FAIL**   | 2.21 kB   | 2.08 kB   |
+| client-react      | 7.82 kB   | 8.07 kB   |
+| client/auth       | 573 B     | 829 B     |
+| clock             | 15.14 kB  | 16.97 kB  |
+| compiler          | 12.59 kB  | 14.25 kB  |
+| config            | 1.25 kB   | 1.50 kB   |
+| console **FAIL**  | 147.24 kB | 115.93 kB |
+| full **FAIL**     | 86.92 kB  | 75.10 kB  |
+| gate              | 5.15 kB   | 5.21 kB   |
+| http **FAIL**     | 44.29 kB  | 38.27 kB  |
+| i18n              | 3.63 kB   | 3.88 kB   |
+| journal           | 2.21 kB   | 2.46 kB   |
+| kernel **FAIL**   | 44.33 kB  | 38.23 kB  |
+| mcp **FAIL**      | 9.67 kB   | 9.66 kB   |
+| plugins           | 15.70 kB  | 18.26 kB  |
+| runs **FAIL**     | 9.13 kB   | 7.64 kB   |
+| signal            | 919 B     | 1.15 kB   |
+| store **FAIL**    | 18.06 kB  | 17.75 kB  |
+| test **FAIL**     | 13.99 kB  | 13.21 kB  |
+| vault             | 12.40 kB  | 12.51 kB  |
 
 ## Plugins
 
@@ -53,21 +53,21 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |           | Measured | Ceiling |
 | --------- | -------- | ------- |
-| username  | 8.05 kB  | 8.16 kB |
-| anonymous | 3.31 kB  | 3.55 kB |
-| magicLink | 7.11 kB  | 7.34 kB |
-| otp       | 8.85 kB  | 9.07 kB |
-| twoFactor | 7.03 kB  | 7.26 kB |
-| passkey   | 7.33 kB  | 7.57 kB |
+| username  | 5.78 kB  | 8.30 kB |
+| anonymous | 3.49 kB  | 3.56 kB |
+| magicLink | 4.87 kB  | 7.36 kB |
+| otp       | 6.57 kB  | 9.10 kB |
+| twoFactor | 4.73 kB  | 7.28 kB |
+| passkey   | 5.06 kB  | 7.58 kB |
 
 ### Security
 
 |             | Measured | Ceiling |
 | ----------- | -------- | ------- |
 | headers     | 2.34 kB  | 2.59 kB |
-| cors        | 2.17 kB  | 2.41 kB |
-| csrf        | 4.23 kB  | 4.47 kB |
-| ipAllowlist | 4.34 kB  | 4.59 kB |
+| cors        | 2.17 kB  | 2.42 kB |
+| csrf        | 1.81 kB  | 4.48 kB |
+| ipAllowlist | 1.92 kB  | 4.59 kB |
 
 ### Ops
 
@@ -85,11 +85,11 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 
 |                           | Measured | Ceiling  |
 | ------------------------- | -------- | -------- |
-| drivers                   | 62.77 kB | 64.03 kB |
+| drivers **FAIL**          | 72.07 kB | 64.03 kB |
 | ai-anthropic              | 972 B    | 1.20 kB  |
-| ai-mock                   | 896 B    | 1.13 kB  |
+| ai-mock                   | 1.10 kB  | 1.13 kB  |
 | ai-ollama                 | 1.97 kB  | 2.22 kB  |
-| ai-openai-compatible      | 1.79 kB  | 2.04 kB  |
+| ai-openai-compatible      | 1.84 kB  | 2.04 kB  |
 | channel-console           | 734 B    | 990 B    |
 | channel-fcm               | 964 B    | 1.19 kB  |
 | channel-msegat            | 740 B    | 996 B    |
@@ -106,24 +106,33 @@ Core rows are absolute AGENTS caps (plus HTTP-ping regression samples). Exports,
 | clock-postgres            | 2.45 kB  | 2.70 kB  |
 | drizzle-dialect           | 314 B    | 570 B    |
 | fs                        | 701 B    | 957 B    |
+| instances-postgres        | 1.07 kB  | 1.32 kB  |
 | journal-postgres          | 2.88 kB  | 3.13 kB  |
 | kv-lua                    | 1.01 kB  | 1.26 kB  |
-| meilisearch               | 1.38 kB  | 1.63 kB  |
-| memory                    | 4.12 kB  | 4.37 kB  |
+| meilisearch **FAIL**      | 1.72 kB  | 1.63 kB  |
+| memory **FAIL**           | 9.91 kB  | 4.37 kB  |
 | ollama                    | 1.96 kB  | 2.21 kB  |
+| pg-extensions             | 6.76 kB  | 7.01 kB  |
+| pg-rls                    | 1.39 kB  | 1.64 kB  |
 | pglite                    | 726 B    | 982 B    |
-| pgvector                  | 23.11 kB | 23.57 kB |
+| pgvector                  | 23.20 kB | 23.57 kB |
 | postgres                  | 1.38 kB  | 1.63 kB  |
-| redis                     | 2.00 kB  | 2.25 kB  |
-| s3                        | 958 B    | 1.19 kB  |
-| signal-engine             | 7.03 kB  | 7.28 kB  |
-| signal-memory             | 7.08 kB  | 7.33 kB  |
-| signal-nats               | 7.56 kB  | 7.81 kB  |
-| signal-postgres           | 9.21 kB  | 9.46 kB  |
-| signal-redis              | 8.18 kB  | 8.43 kB  |
-| vault-aws-secrets-manager | 1.46 kB  | 1.71 kB  |
-| vault-builtin             | 10.74 kB | 10.99 kB |
-| vault-dotenv-parse        | 562 B    | 818 B    |
-| vault-env                 | 894 B    | 1.12 kB  |
-| vault-managed             | 1.95 kB  | 2.20 kB  |
+| redis                     | 2.07 kB  | 2.25 kB  |
+| s3 **FAIL**               | 1.87 kB  | 1.19 kB  |
+| s3-ensure-bucket          | 1.15 kB  | 1.40 kB  |
+| signal-engine             | 5.16 kB  | 7.28 kB  |
+| signal-memory             | 5.20 kB  | 7.33 kB  |
+| signal-nats               | 5.69 kB  | 7.81 kB  |
+| signal-postgres           | 7.33 kB  | 9.46 kB  |
+| signal-redis              | 6.30 kB  | 8.43 kB  |
+| vault-1password           | 1.98 kB  | 2.23 kB  |
+| vault-aws-secrets-manager | 1.60 kB  | 1.71 kB  |
+| vault-azure-key-vault     | 1.60 kB  | 1.85 kB  |
+| vault-builtin             | 10.80 kB | 10.99 kB |
+| vault-doppler             | 1.62 kB  | 1.87 kB  |
+| vault-dotenv-parse        | 746 B    | 818 B    |
+| vault-env                 | 895 B    | 1.12 kB  |
+| vault-gcp-secret-manager  | 1.86 kB  | 2.11 kB  |
+| vault-managed **FAIL**    | 5.03 kB  | 2.20 kB  |
 | vault-memory              | 375 B    | 631 B    |
+| vault-remote-bag          | 1.03 kB  | 1.28 kB  |

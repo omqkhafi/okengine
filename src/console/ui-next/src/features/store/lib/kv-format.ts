@@ -49,7 +49,10 @@ export function prettifyKv(text: string): string {
     out.push(...trailing);
     i = end;
   }
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function formatKvStatement(statement: string): string {

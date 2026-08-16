@@ -104,6 +104,13 @@ Logs showing Docker provider connection errors point at the socket-proxy, not Tr
 config syntax.
 
 </Accordion>
+<Accordion title="oke dev: service app has neither an image nor a build context">
+
+`oke dev` starts infra only; the app stays on the host at `:6530`.
+Traefik labels apply when `app` is in Compose — use `oke docker` for that.
+Re-run `oke dev` after upgrading so compose drops the label-only `app`.
+
+</Accordion>
 <Accordion title="ACME email rejected / rate limited">
 
 Replace the default `admin@example.com` with a real `OKE_PROXY_ACME_EMAIL`. If you wiped

@@ -81,14 +81,14 @@ export const triage = smart.prompt("ticket-triage", {
 
 ### Prompt options
 
-| Option       | Type                  | Meaning                                                        |
-| ------------ | --------------------- | -------------------------------------------------------------- |
-| `in` / `out` | zod / Standard Schema | Input and output contracts — responses validated against `out` |
-| `version`    | number                | Artifact version — diffs and regressions tracked per version   |
-| `evals`      | string                | Path to a `.jsonl` eval set, regression-gated via `oke eval`   |
-| `budget`     | object                | `maxCostPerCall` / `maxCostPerRun` — cost, not time            |
-| `via`        | `string[]`            | Ordered recovery chain of logical model names for this prompt  |
-| `timeout`    | `string \| number`    | Deadline — clock duration (`"30s"`) or milliseconds            |
+| Option       | Type                  | Meaning                                                                                |
+| ------------ | --------------------- | -------------------------------------------------------------------------------------- |
+| `in` / `out` | zod / Standard Schema | Input and output contracts — responses validated against `out`                         |
+| `version`    | number                | Artifact version — diffs and regressions tracked per version. Pins use `name@version`. |
+| `evals`      | string                | Path to a `.jsonl` eval set, regression-gated via `oke eval`                           |
+| `budget`     | object                | `maxCostPerCall` / `maxCostPerRun` — cost, not time                                    |
+| `via`        | `string[]`            | Ordered recovery chain of logical model names for this prompt                          |
+| `timeout`    | `string \| number`    | Deadline — clock duration (`"30s"`) or milliseconds                                    |
 
 ## Recovery chain + per-command timeout
 
@@ -297,6 +297,13 @@ Docker mode writes `OKE_AI_URL` into `.env.local` when `images.ai` is pinned. Le
 <Accordion title="A prompt edit made answers worse — how do I catch that pre-merge?">
 
 Attach `evals: "./evals/<name>.jsonl"` to the prompt and run `oke eval` in CI. The suite replays the eval cases and fails on regressions, per prompt version.
+
+</Accordion>
+<Accordion title="Call API returns Unavailable ai: unknown prompt">
+
+Capability pins and Call API pass `name@version`. `fx.ask` resolves the bare
+prompt id. A pin that does not match `prompt.version` throws
+`ai: unknown prompt "name@version"`.
 
 </Accordion>
 <Accordion title="An agent looped and burned budget">

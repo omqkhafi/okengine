@@ -302,7 +302,9 @@ describe("image recipes", () => {
       "-c",
       "shared_preload_libraries=timescaledb,pg_stat_statements",
     ]);
-    const joined = Array.isArray(applied.command) ? applied.command.join(" ") : String(applied.command);
+    const joined = Array.isArray(applied.command)
+      ? applied.command.join(" ")
+      : String(applied.command);
     expect(joined.indexOf("timescaledb")).toBeGreaterThanOrEqual(0);
     expect(joined.indexOf("timescaledb")).toBeLessThan(joined.indexOf("pg_stat_statements"));
     const derived = deriveInfrastructure({
@@ -349,7 +351,7 @@ describe("image recipes", () => {
       credentials: { "store.sql": fixedCreds["store.sql"] },
     });
     const yml = derived.files.find((f) => f.path === DOCKER_COMPOSE)?.content ?? "";
-    expect(yml).toContain("dockerfile: \"Dockerfile.postgres-advisor\"");
+    expect(yml).toContain('dockerfile: "Dockerfile.postgres-advisor"');
     expect(yml).toContain("shared_preload_libraries=pg_stat_statements");
     const dockerfile = derived.files.find((f) => f.path === POSTGRES_ADVISOR_DOCKERFILE);
     expect(dockerfile?.content).toContain("FROM postgres:18-alpine");
@@ -823,6 +825,25 @@ describe("deriveInfrastructure", () => {
     expect(base).toContain("networks:");
     expect(base).not.toContain("app:");
     expect(base).not.toContain("build:");
+  });
+
+  test("includeApp false + Traefik omits the label-only app overlay", () => {
+    const result = deriveInfrastructure({
+      images: {
+        "store.sql": "postgres:16",
+        proxy: "traefik:v3.7",
+      },
+      credentials: { "store.sql": fixedCreds["store.sql"] },
+      includeApp: false,
+      app: "dev",
+    });
+    const yml = result.files.find((f) => f.path === DOCKER_COMPOSE)!.content;
+    const services = serviceNamesFromComposeYaml(yml);
+    expect(services.has("app")).toBe(false);
+    expect(services.has("proxy")).toBe(true);
+    expect(services.has(SOCKET_PROXY_SERVICE)).toBe(true);
+    expect(yml).toContain("traefik:v3.7");
+    expect(yml).not.toContain("build:");
   });
 
   test("prod folds readiness + budgeted deploy into docker-compose.yml", () => {

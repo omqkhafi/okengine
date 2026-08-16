@@ -301,9 +301,7 @@ describe("PII masking survives SELECT *", () => {
       declaredFingerprint: "x",
       appliedFingerprint: "x",
     });
-    const child = stores
-      .find((s) => s.ref === "sql:db")
-      ?.children.find((c) => c.name === "views");
+    const child = stores.find((s) => s.ref === "sql:db")?.children.find((c) => c.name === "views");
     expect(child?.piiColumns).toContain("ownerEmail");
     expect(child?.piiColumns).toContain("owner_email");
 

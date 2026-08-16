@@ -13,8 +13,7 @@ export const CHART_CLIP_PASSTHROUGH = "__chartClipPassthrough" as const;
 export function isChartClipPassthrough(type: unknown): boolean {
   return (
     typeof type === "function" &&
-    (type as { [CHART_CLIP_PASSTHROUGH]?: boolean })[CHART_CLIP_PASSTHROUGH] ===
-      true
+    (type as { [CHART_CLIP_PASSTHROUGH]?: boolean })[CHART_CLIP_PASSTHROUGH] === true
   );
 }
 
@@ -32,7 +31,7 @@ export function resolveChartChildElement(child: ReactElement): ReactElement {
 /** Walk chart children, flattening React fragments (studio often groups layers in `<>...</>`). */
 export function forEachChartChild(
   children: ReactNode,
-  callback: (child: ReactElement, index: number) => void
+  callback: (child: ReactElement, index: number) => void,
 ) {
   let index = 0;
   const visit = (nodes: ReactNode) => {
@@ -78,9 +77,7 @@ export function isPostOverlayComponent(child: ReactElement): boolean {
   }
 
   const componentName =
-    typeof child.type === "function"
-      ? childType.displayName || childType.name || ""
-      : "";
+    typeof child.type === "function" ? childType.displayName || childType.name || "" : "";
 
   return (
     componentName === "ChartMarkers" ||
@@ -93,9 +90,7 @@ export function isPostOverlayComponent(child: ReactElement): boolean {
 export function isUnderlayComponent(child: ReactElement): boolean {
   const childType = child.type as { displayName?: string; name?: string };
   const componentName =
-    typeof child.type === "function"
-      ? childType.displayName || childType.name || ""
-      : "";
+    typeof child.type === "function" ? childType.displayName || childType.name || "" : "";
   return UNDERLAY_COMPONENT_NAMES.has(componentName);
 }
 
@@ -103,15 +98,13 @@ export function isUnderlayComponent(child: ReactElement): boolean {
 export function isClipExcludedComponent(child: ReactElement): boolean {
   const childType = child.type as { displayName?: string; name?: string };
   const componentName =
-    typeof child.type === "function"
-      ? childType.displayName || childType.name || ""
-      : "";
+    typeof child.type === "function" ? childType.displayName || childType.name || "" : "";
   return CLIP_EXCLUDED_COMPONENT_NAMES.has(componentName);
 }
 
 /** SVG layer lists from chart shells need stable keys when rendered as arrays. */
 export function renderKeyedChartLayers(children: ReactElement[]) {
   return children.map((child, index) =>
-    cloneElement(child, { key: child.key ?? `chart-layer-${index}` })
+    cloneElement(child, { key: child.key ?? `chart-layer-${index}` }),
   );
 }

@@ -5,13 +5,7 @@
  * Featured flow ids stay in `ui-next-seed-manifest.ts` and must not appear here.
  */
 
-import type {
-  ChannelMedium,
-  Effects,
-  Flow,
-  JsonSchema,
-  Manifest,
-} from "../../manifest/types.ts";
+import type { ChannelMedium, Effects, Flow, JsonSchema, Manifest } from "../../manifest/types.ts";
 
 const ID = {
   type: "object",
@@ -486,7 +480,7 @@ export const KEEL_SURFACE_FLOWS: Record<string, Flow> = {
     path: "/attachments/:id",
     gates: FILES_WRITE,
     out: OK,
-    effects: { reads: ["sql:file_objects"], writes: ["sql:file_objects", "files:attachments"] },
+    effects: { reads: ["sql:file_objects"], writes: ["sql:file_objects", "files:keel"] },
     source: "src/flows/attachments/index.ts:82",
   }),
 

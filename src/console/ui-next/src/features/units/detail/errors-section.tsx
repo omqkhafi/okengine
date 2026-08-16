@@ -35,9 +35,7 @@ export function ErrorsSection({ errors }: ErrorsSectionProps): JSX.Element | nul
               key={e.code}
               className="inline-flex items-center gap-1 rounded-md border border-destructive/25 bg-destructive/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-destructive"
               title={
-                fieldHint
-                  ? `{ code, data: { ${fieldHint} } }`
-                  : "Typed error — { code, data }"
+                fieldHint ? `{ code, data: { ${fieldHint} } }` : "Typed error — { code, data }"
               }
               data-slot="error-code"
               data-code={e.code}

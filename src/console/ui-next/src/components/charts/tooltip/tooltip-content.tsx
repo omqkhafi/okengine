@@ -36,9 +36,7 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: row.color }}
                 />
-                <span className="text-chart-tooltip-muted text-sm">
-                  {row.label}
-                </span>
+                <span className="text-chart-tooltip-muted text-sm">{row.label}</span>
               </div>
               <span className="font-medium text-chart-tooltip-foreground text-sm tabular-nums">
                 {typeof row.value === "number" ? intFmt(row.value) : row.value}
@@ -48,9 +46,7 @@ export function TooltipContent({ title, rows, children }: TooltipContentProps) {
         </div>
 
         {children && (
-          <div className="mt-2 transition-opacity duration-200 ease-out">
-            {children}
-          </div>
+          <div className="mt-2 transition-opacity duration-200 ease-out">{children}</div>
         )}
       </div>
     </div>

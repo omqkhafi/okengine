@@ -92,7 +92,7 @@ export type SeedFileEntry = {
   data: string;
 };
 
-/** Task index document. */
+/** Vector index document (tasks, documents, comments, or projects). */
 export type SeedIndexEntry = {
   id: string;
   vector: readonly number[];
@@ -296,13 +296,7 @@ export function generateKeelVolume(): {
     name: sectionNames[i % sectionNames.length]!,
     sortOrder: i % 3,
   }));
-  const sectionIds = [
-    "sec_api_0",
-    "sec_api_2",
-    "sec_web_1",
-    ...sections.map((s) => s.id),
-    null,
-  ];
+  const sectionIds = ["sec_api_0", "sec_api_2", "sec_web_1", ...sections.map((s) => s.id), null];
 
   const tasks: SeedTaskRow[] = [];
   for (let i = 0; i < GENERATED.tasks; i += 1) {
@@ -476,11 +470,47 @@ export function generateKeelVolume(): {
 
   const files = Array.from({ length: GENERATED.files }, (_, i) => {
     const issue = tasks[i]!;
-    return {
-      key: `attachments/${issue.id}/note-${i}.txt`,
-      originalName: `note-${i}.txt`,
-      data: `bytes:${issue.identifier}`,
-    };
+    const member = members[i % members.length]!;
+    const project = projects[i % projects.length]!;
+    const document = documents[i % documents.length]!;
+    switch (i % 6) {
+      case 1:
+        return {
+          key: `documents/${document.id}/notes-${i}.md`,
+          originalName: `notes-${i}.md`,
+          data: `# ${document.title}\n\n${document.body}\n`,
+        };
+      case 2:
+        return {
+          key: `avatars/${member.id}/photo-${i}.txt`,
+          originalName: `photo-${i}.txt`,
+          data: `avatar:${member.email}`,
+        };
+      case 3:
+        return {
+          key: `projects/${project.id}/asset-${i}.md`,
+          originalName: `asset-${i}.md`,
+          data: `# ${project.name}\n\nStatus ${project.status}.\n`,
+        };
+      case 4:
+        return {
+          key: `exports/${issue.identifier}.csv`,
+          originalName: `${issue.identifier}.csv`,
+          data: `identifier,title\n${issue.identifier},${issue.title}\n`,
+        };
+      case 5:
+        return {
+          key: `forms/form_customer/sub-${i}.json`,
+          originalName: `sub-${i}.json`,
+          data: `{"title":${JSON.stringify(issue.title)}}\n`,
+        };
+      default:
+        return {
+          key: `attachments/${issue.id}/note-${i}.txt`,
+          originalName: `note-${i}.txt`,
+          data: `bytes:${issue.identifier}`,
+        };
+    }
   });
 
   const index = Array.from({ length: GENERATED.index }, (_, i) => {
@@ -548,4 +578,7 @@ export const KEEL_SEED_COUNTS = {
   drafts: FEATURED_DRAFTS.length + KEEL_VOLUME.drafts.length,
   reminders: FEATURED_REMINDERS.length + KEEL_VOLUME.reminders.length,
   index: FEATURED_INDEX.length + KEEL_VOLUME.index.length,
+  indexDocuments: FEATURED_DOCUMENTS.length + KEEL_VOLUME.documents.length,
+  indexComments: FEATURED_COMMENTS.length + KEEL_VOLUME.comments.length,
+  indexProjects: FEATURED_PROJECTS.length + KEEL_VOLUME.projects.length,
 } as const;

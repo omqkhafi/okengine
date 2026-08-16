@@ -42,7 +42,12 @@ const navItems: ReadonlyArray<{
   { title: "Overview", to: "/overview", icon: WorkflowSquare08Icon, shortcut: "overview" },
   { title: "Flows", to: "/flows", icon: Shapes01Icon, shortcut: "flows" },
   { title: "Store", to: "/store", icon: Archive02Icon, shortcut: "store" },
-  { title: "Observability", to: "/observability", icon: ChartAnalysisIcon, shortcut: "observability" },
+  {
+    title: "Observability",
+    to: "/observability",
+    icon: ChartAnalysisIcon,
+    shortcut: "observability",
+  },
   { title: "Vault", to: "/vault", icon: AccessIcon, shortcut: "vault" },
 ];
 

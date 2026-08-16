@@ -14,6 +14,7 @@ import {
   dbCli,
   emitAbstractSchemaPrestep,
   executeSeedDef,
+  runSeedFns,
   runDb,
   runGenerate,
   runPush,
@@ -116,12 +117,18 @@ describe("oke db", () => {
   });
 
   test("missing_hints exits runtime", async () => {
+    const out: string[] = [];
     const code = await runDb("push", {
-      pushFn: async () => ({ status: "missing_hints", unresolved: [] }),
-      write: () => {},
+      pushFn: async () => ({
+        status: "missing_hints",
+        unresolved: [{ sql: "DROP TABLE leftover" }],
+      }),
+      write: (t) => out.push(t),
       skipEmit: true,
     });
     expect(code).toBe(EXIT_RUNTIME);
+    expect(out.join("")).toContain("missing_hints");
+    expect(out.join("")).toContain("DROP TABLE leftover");
   });
 
   test("resolveDrizzleConfigPath uses db.config from oke.config", async () => {
@@ -514,6 +521,34 @@ describe("oke db seed", () => {
     expect(code).toBe(EXIT_OK);
     expect(order).toEqual(["a", "b", "dev"]);
     expect(out.join("")).toContain("oke db seed:");
+  });
+
+  test("runSeedFns ignores void index upserts when tallying", async () => {
+    const out: string[] = [];
+    const fx = {
+      store: (ref: unknown) =>
+        ref === "sql"
+          ? { upsert: async () => ({ status: "changed" as const }) }
+          : { upsert: async () => undefined },
+    } as unknown as ReturnType<typeof createFx>;
+    await runSeedFns(
+      "dev",
+      [
+        async function volume(seedFx) {
+          const sql = seedFx.store("sql" as never) as unknown as {
+            upsert: () => Promise<unknown>;
+          };
+          const index = seedFx.store("index" as never) as unknown as {
+            upsert: () => Promise<unknown>;
+          };
+          await sql.upsert();
+          await index.upsert();
+        },
+      ],
+      fx,
+      (t) => out.push(t),
+    );
+    expect(out.join("")).toContain("dev volume — upserted 0 · changed 1 · already-existed 0");
   });
 
   test("executeSeedDef is the category source of truth", async () => {

@@ -7,11 +7,7 @@
  */
 
 import { VaultError } from "../elements/vault/errors.ts";
-import {
-  openRemoteSecretBag,
-  vaultHttpJson,
-  type RemoteSecretClient,
-} from "./vault-remote-bag.ts";
+import { openRemoteSecretBag, vaultHttpJson, type RemoteSecretClient } from "./vault-remote-bag.ts";
 import type { VaultBag } from "./vault-types.ts";
 
 /** Default Doppler API origin. */
@@ -157,7 +153,7 @@ function dopplerQuery(mount: string | undefined): string {
   if (slash <= 0 || slash === raw.length - 1) {
     throw new VaultError(
       "INVALID_PATH",
-      'vault: doppler OKE_VAULT_MOUNT must be project/config (or omit it for a service token)',
+      "vault: doppler OKE_VAULT_MOUNT must be project/config (or omit it for a service token)",
     );
   }
   const project = raw.slice(0, slash);
